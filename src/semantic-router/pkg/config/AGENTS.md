@@ -12,11 +12,22 @@
 - Keep canonical import/export and normalization in `canonical_*.go` instead of drifting that logic back into `config.go`.
 - Keep plugin-family-specific contracts and backend decoders in dedicated files; do not let one plugin hotspot become a second schema table.
 - Keep semantic validation split by family; `validator.go` can coordinate shared checks, but broad type-specific logic should move to focused support files.
-- Treat canonical `version/listeners/providers/routing/global` parsing as the only steady-state runtime contract.
-- Keep migration-only compatibility out of the runtime parser; legacy user layouts belong in explicit migration tooling, not in normal config loading.
-- Keep canonical `providers` split readable:
-  - `providers.defaults` owns default selection and reasoning-family metadata
-  - `providers.models[]` owns concrete backend access bindings directly
+- Treat canonical `version/billing_currency/listeners/models/recipes/entrypoints/global`
+  parsing as the only steady-state runtime contract.
+- Accept only the current v0.4 human authoring contract. Removed layouts have
+  no runtime or offline config-conversion path in this package.
+- Keep the v0.4 routing-resource boundary explicit:
+  - human-authored `models[]` owns one logical Model through readable
+    `name`, `card`, `connections`, `runtime`, and `pricing` fields only;
+    provider/protocol identity, immutable revisions, and compiled physical
+    backends exist only in the strict routing snapshot
+  - `recipes[].document` owns model-free signals, projections, decisions,
+    algorithms, and plugins
+  - the common Entrypoint form owns readable `recipe` and `assignments`
+    fields; advanced `rules[]` uses the same readable fields, including
+    priority fallback, without an `action` wrapper or generated IDs
+  - Model pools and mixtures are derived views, not stored resources; no
+    detached model-binding authority is allowed
 - Keep canonical `global` layered, not flat:
   - `global.router` for router-engine control knobs
   - `global.services` for shared APIs and control-plane services
@@ -40,7 +51,7 @@
 - Config-contract changes must update the relevant public docs and proposal in the same change:
   - `config/README.md`
   - `website/docs/installation/configuration.md`
-  - `website/docs/proposals/unified-config-contract-v0-3.md`
+  - `website/docs/proposals/router-native-access-control.md`
   - `website/docs/tutorials/{signal,decision,algorithm,plugin,global}/`
 - Preferred split:
   - core schema tables in `config.go`

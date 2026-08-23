@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -15,6 +16,24 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
 )
+
+const evaluationAuthorizationEnv = "VLLM_SR_EVALUATION_BEARER_TOKEN"
+
+// InferenceAuthorization is an in-memory, run-scoped credential. Its secret is
+// deliberately unexported so it cannot become part of a task, result, or API
+// response by accident.
+type InferenceAuthorization struct {
+	bearerToken string
+}
+
+// NewInferenceAuthorization validates a Router-issued delegated inference
+// credential before it crosses into the task runner.
+func NewInferenceAuthorization(bearerToken string) (InferenceAuthorization, error) {
+	if strings.TrimSpace(bearerToken) == "" || strings.ContainsAny(bearerToken, "\r\n\t ") {
+		return InferenceAuthorization{}, errors.New("evaluation inference credential is invalid")
+	}
+	return InferenceAuthorization{bearerToken: bearerToken}, nil
+}
 
 // Runner executes evaluation benchmarks.
 type Runner struct {
@@ -97,7 +116,14 @@ func (r *Runner) sendProgress(taskID string, percent int, step, message string) 
 }
 
 // RunTask executes an evaluation task.
-func (r *Runner) RunTask(ctx context.Context, taskID string) error {
+func (r *Runner) RunTask(
+	ctx context.Context,
+	taskID string,
+	authorization InferenceAuthorization,
+) error {
+	if authorization.bearerToken == "" {
+		return errors.New("evaluation inference authorization is required")
+	}
 	task, err := r.db.GetTask(taskID)
 	if err != nil {
 		return fmt.Errorf("failed to get task: %w", err)
@@ -108,8 +134,8 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 
 	// Update status to running when the caller has not already transitioned the task.
 	if task.Status != models.StatusRunning {
-		if err := r.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); err != nil {
-			return fmt.Errorf("failed to update task status: %w", err)
+		if statusErr := r.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); statusErr != nil {
+			return fmt.Errorf("failed to update task status: %w", statusErr)
 		}
 	}
 
@@ -117,85 +143,97 @@ func (r *Runner) RunTask(ctx context.Context, taskID string) error {
 
 	// Create task-specific output directory
 	taskOutputDir := filepath.Join(r.resultsDir, taskID)
-	if err := os.MkdirAll(taskOutputDir, 0o755); err != nil {
-		_ = r.db.UpdateTaskStatus(taskID, models.StatusFailed, fmt.Sprintf("Failed to create output directory: %v", err))
-		return fmt.Errorf("failed to create output directory: %w", err)
+	if mkdirErr := os.MkdirAll(taskOutputDir, 0o755); mkdirErr != nil {
+		_ = r.db.UpdateTaskStatus(taskID, models.StatusFailed, fmt.Sprintf("Failed to create output directory: %v", mkdirErr))
+		return fmt.Errorf("failed to create output directory: %w", mkdirErr)
 	}
 
-	totalDimensions := len(task.Config.Dimensions)
-	completedDimensions := 0
-	var runErrors []string
-
-	for _, dimension := range task.Config.Dimensions {
-		select {
-		case <-ctx.Done():
-			_ = r.db.UpdateTaskStatus(taskID, models.StatusCancelled, "Task cancelled")
-			return ctx.Err()
-		default:
-		}
-
-		progressBase := (completedDimensions * 100) / totalDimensions
-		step := fmt.Sprintf("Evaluating %s", dimension)
-		r.sendProgress(taskID, progressBase, step, fmt.Sprintf("Starting %s evaluation", dimension))
-
-		// Get datasets for this dimension
-		datasets := task.Config.Datasets[string(dimension)]
-		if len(datasets) == 0 {
-			// Use default dataset based on dimension
-			datasets = []string{getDefaultDataset(dimension)}
-		}
-
-		// Evaluate each dataset for this dimension
-		for _, dataset := range datasets {
-			var result *models.EvaluationResult
-			var runErr error
-
-			switch dimension {
-			case models.DimensionDomain, models.DimensionFactCheck, models.DimensionUserFeedback:
-				result, runErr = r.runSignalEvaluation(ctx, taskID, task.Config, string(dimension), dataset, taskOutputDir)
-			case models.DimensionAccuracy:
-				result, runErr = r.runSystemEvaluation(ctx, taskID, task.Config, dataset, taskOutputDir)
-			default:
-				log.Printf("Unknown dimension: %s", dimension)
-				continue
-			}
-
-			if runErr != nil {
-				log.Printf("Error running %s evaluation on dataset %s: %v", dimension, dataset, runErr)
-				runErrors = append(runErrors, fmt.Sprintf("%s/%s: %v", dimension, dataset, runErr))
-				// Continue with other datasets
-				continue
-			}
-
-			if result != nil {
-				if err := r.db.SaveResult(result); err != nil {
-					log.Printf("Failed to save result: %v", err)
-				}
-
-				// Save historical entries for key metrics
-				r.saveHistoricalMetrics(result)
-			}
-		}
-
-		completedDimensions++
-		progress := (completedDimensions * 100) / totalDimensions
-		r.sendProgress(taskID, progress, step, fmt.Sprintf("Completed %s evaluation", dimension))
+	runErrors, err := r.runTaskDimensions(ctx, task, taskOutputDir, authorization)
+	if err != nil {
+		return err
 	}
 
 	if len(runErrors) > 0 {
 		errorMessage := strings.Join(runErrors, "\n")
-		if err := r.db.UpdateTaskStatus(taskID, models.StatusFailed, errorMessage); err != nil {
-			return fmt.Errorf("failed to update task status after evaluation errors: %w", err)
+		if statusErr := r.db.UpdateTaskStatus(taskID, models.StatusFailed, errorMessage); statusErr != nil {
+			return fmt.Errorf("failed to update task status after evaluation errors: %w", statusErr)
 		}
 		return fmt.Errorf("evaluation task failed:\n%s", errorMessage)
 	}
 
 	r.sendProgress(taskID, 100, "Completed", "All evaluations finished")
-	if err := r.db.UpdateTaskStatus(taskID, models.StatusCompleted, ""); err != nil {
-		return fmt.Errorf("failed to update task status: %w", err)
+	if statusErr := r.db.UpdateTaskStatus(taskID, models.StatusCompleted, ""); statusErr != nil {
+		return fmt.Errorf("failed to update task status: %w", statusErr)
 	}
 
 	return nil
+}
+
+func (r *Runner) runTaskDimensions(
+	ctx context.Context,
+	task *models.EvaluationTask,
+	taskOutputDir string,
+	authorization InferenceAuthorization,
+) ([]string, error) {
+	totalDimensions := len(task.Config.Dimensions)
+	completedDimensions := 0
+	var runErrors []string
+	for _, dimension := range task.Config.Dimensions {
+		select {
+		case <-ctx.Done():
+			_ = r.db.UpdateTaskStatus(task.ID, models.StatusCancelled, "Task cancelled")
+			return nil, ctx.Err()
+		default:
+		}
+		progressBase := (completedDimensions * 100) / totalDimensions
+		step := fmt.Sprintf("Evaluating %s", dimension)
+		r.sendProgress(task.ID, progressBase, step, fmt.Sprintf("Starting %s evaluation", dimension))
+		datasets := task.Config.Datasets[string(dimension)]
+		if len(datasets) == 0 {
+			datasets = []string{getDefaultDataset(dimension)}
+		}
+		for _, dataset := range datasets {
+			result, runErr := r.runDimensionDataset(
+				ctx, task, dimension, dataset, taskOutputDir, authorization,
+			)
+			if runErr != nil {
+				log.Printf("Error running %s evaluation on dataset %s: %v", dimension, dataset, runErr)
+				runErrors = append(runErrors, fmt.Sprintf("%s/%s: %v", dimension, dataset, runErr))
+				continue
+			}
+			if result != nil {
+				if err := r.db.SaveResult(result); err != nil {
+					log.Printf("Failed to save result: %v", err)
+				}
+				r.saveHistoricalMetrics(result)
+			}
+		}
+		completedDimensions++
+		progress := (completedDimensions * 100) / totalDimensions
+		r.sendProgress(task.ID, progress, step, fmt.Sprintf("Completed %s evaluation", dimension))
+	}
+	return runErrors, nil
+}
+
+func (r *Runner) runDimensionDataset(
+	ctx context.Context,
+	task *models.EvaluationTask,
+	dimension models.EvaluationDimension,
+	dataset string,
+	taskOutputDir string,
+	authorization InferenceAuthorization,
+) (*models.EvaluationResult, error) {
+	switch dimension {
+	case models.DimensionDomain, models.DimensionFactCheck, models.DimensionUserFeedback:
+		return r.runSignalEvaluation(
+			ctx, task.ID, task.Config, string(dimension), dataset, taskOutputDir, authorization,
+		)
+	case models.DimensionAccuracy:
+		return r.runSystemEvaluation(ctx, task.ID, task.Config, dataset, taskOutputDir, authorization)
+	default:
+		log.Printf("Unknown dimension: %s", dimension)
+		return nil, nil
+	}
 }
 
 // CancelTask cancels a running evaluation task.
@@ -230,7 +268,15 @@ func getDefaultDataset(dimension models.EvaluationDimension) string {
 }
 
 // runSignalEvaluation runs the signal evaluation for a specific dataset.
-func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, dimension, datasetID, outputDir string) (*models.EvaluationResult, error) {
+func (r *Runner) runSignalEvaluation(
+	ctx context.Context,
+	taskID string,
+	cfg models.EvaluationConfig,
+	dimension string,
+	datasetID string,
+	outputDir string,
+	authorization InferenceAuthorization,
+) (*models.EvaluationResult, error) {
 	outputPath := filepath.Join(outputDir, fmt.Sprintf("signal_eval_%s.json", datasetID))
 
 	// Use endpoint as-is for eval API
@@ -255,7 +301,7 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup, not user input
 	cmd.Dir = r.projectRoot
-	cmd.Env = r.pythonEnv()
+	cmd.Env = r.pythonEnv(authorization)
 
 	r.activeProcesses.Store(taskID, cmd)
 	defer r.activeProcesses.Delete(taskID)
@@ -281,7 +327,14 @@ func (r *Runner) runSignalEvaluation(ctx context.Context, taskID string, cfg mod
 }
 
 // runSystemEvaluation runs system-level (MoM) evaluation, e.g. MMLU-Pro accuracy against an endpoint.
-func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg models.EvaluationConfig, datasetID, outputDir string) (*models.EvaluationResult, error) {
+func (r *Runner) runSystemEvaluation(
+	ctx context.Context,
+	taskID string,
+	cfg models.EvaluationConfig,
+	datasetID string,
+	outputDir string,
+	authorization InferenceAuthorization,
+) (*models.EvaluationResult, error) {
 	// Only mmlu-pro is supported for accuracy dimension
 	if datasetID != "mmlu-pro" {
 		log.Printf("Unsupported system eval dataset: %s, using mmlu-pro", datasetID)
@@ -313,7 +366,7 @@ func (r *Runner) runSystemEvaluation(ctx context.Context, taskID string, cfg mod
 
 	cmd := exec.CommandContext(ctx, r.pythonPath, args...) //nolint:gosec // pythonPath is configured at startup
 	cmd.Dir = r.projectRoot
-	cmd.Env = r.pythonEnv()
+	cmd.Env = r.pythonEnv(authorization)
 
 	r.activeProcesses.Store(taskID, cmd)
 	defer r.activeProcesses.Delete(taskID)
@@ -394,13 +447,24 @@ func (r *Runner) modelEvalScriptPath(scriptName string) string {
 	return filepath.Join(r.projectRoot, "src", "training", "model_eval", scriptName)
 }
 
-func (r *Runner) pythonEnv() []string {
+func (r *Runner) pythonEnv(authorization InferenceAuthorization) []string {
 	pythonPath := r.projectRoot
 	if existing := os.Getenv("PYTHONPATH"); existing != "" {
 		pythonPath += string(os.PathListSeparator) + existing
 	}
 
-	return append(os.Environ(), "PYTHONPATH="+pythonPath)
+	environment := make([]string, 0, len(os.Environ())+2)
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, evaluationAuthorizationEnv+"=") &&
+			!strings.HasPrefix(entry, "PYTHONPATH=") {
+			environment = append(environment, entry)
+		}
+	}
+	return append(
+		environment,
+		"PYTHONPATH="+pythonPath,
+		evaluationAuthorizationEnv+"="+authorization.bearerToken,
+	)
 }
 
 // saveHistoricalMetrics saves key metrics to the history table.

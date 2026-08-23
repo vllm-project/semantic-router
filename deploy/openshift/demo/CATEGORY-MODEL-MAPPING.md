@@ -25,6 +25,7 @@ Use [`curl-examples.sh`](curl-examples.sh) for a live classification check and
 record the current config, model revision, and Router image when comparing
 results. A small list of demo prompts is not an accuracy benchmark.
 
-To change the mapping, update the corresponding `routing.decisions` entry in
-the canonical config. Keep `providers.models`, `routing.modelCards`, decision
-`modelRefs`, and the backend served-model names aligned.
+To change the mapping, edit the corresponding decision in the `default`
+Recipe. Model cards and connections remain under top-level `models`; the
+Entrypoint's decision assignments select those Models. Keep assignment names
+and backend served-model names aligned.

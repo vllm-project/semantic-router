@@ -21,6 +21,8 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestToolFreeLooperRequestRemovesCallableSchemasWithoutMutatingOriginal(t *testing.T) {
@@ -46,23 +48,22 @@ func TestToolFreeLooperRequestRemovesCallableSchemasWithoutMutatingOriginal(t *t
 	assertRequestToolFields(t, stripped, false)
 }
 
-func TestNormalizeCompletionToolFinishReasonRepairsBackendStop(t *testing.T) {
-	completion := map[string]interface{}{
-		"choices": []interface{}{
-			map[string]interface{}{
-				"message": map[string]interface{}{
-					"tool_calls": []interface{}{map[string]interface{}{"id": "call-1"}},
-				},
-				"finish_reason": "stop",
-			},
-		},
+func TestTaggedToolSemanticResponseUsesToolStopReason(t *testing.T) {
+	response, ok := newTaggedToolSemanticResponse(
+		"response-test",
+		"model-a",
+		`<tool_call>{"name":"search","arguments":{"query":"neutral"}}</tool_call>`,
+		NewActualTokenUsage(4, 2, 6),
+	)
+	if !ok {
+		t.Fatal("tagged tool call was not recognized")
 	}
-
-	normalizeCompletionToolFinishReason(completion)
-
-	choice := completion["choices"].([]interface{})[0].(map[string]interface{})
-	if choice["finish_reason"] != "tool_calls" {
-		t.Fatalf("finish_reason = %v, want tool_calls", choice["finish_reason"])
+	if response.StopReason != llmprotocol.StopToolCall {
+		t.Fatalf("stop reason = %q, want %q", response.StopReason, llmprotocol.StopToolCall)
+	}
+	if len(response.Output) != 1 || len(response.Output[0].Content) != 1 ||
+		response.Output[0].Content[0].ToolCall == nil {
+		t.Fatalf("neutral tool response = %+v", response)
 	}
 }
 

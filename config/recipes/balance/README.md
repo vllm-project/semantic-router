@@ -21,8 +21,8 @@ operators calibrate against their own models and traffic.
 | Premium legal analysis | `anthropic/claude-opus-4.6` |
 | Secondary high-care health reviewer | `anthropic/claude-opus-4.6` |
 
-These are routing aliases, not required vendor choices. The checked-in backend
-bindings are development placeholders and should be replaced before use.
+These are routing aliases, not required vendor choices. Connect the Models you
+operate, then review each decision assignment before publishing the Entrypoint.
 
 ## Intended use
 
@@ -73,9 +73,13 @@ replay or body capture when the deployment must not retain request content.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/balance/config.yaml
-vllm-sr serve --config config/recipes/balance/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Balanced Routing** in
+**Recipes**, assign a Model to each decision, and publish the resulting
+Mixture-of-Model Entrypoint. The checked-in YAML and probes remain the
+maintainer-facing source and conformance fixtures for this built-in Recipe.
 
 ## Evaluation
 

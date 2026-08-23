@@ -422,42 +422,9 @@ func TestProvisionAsyncRequested(t *testing.T) {
 	}
 }
 
-func TestResolveOpenClawModelBaseURL_UsesRouterListeners(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-	configYAML := `
-listeners:
-  - address: 0.0.0.0
-    port: 18889
-`
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
-		t.Fatalf("failed to write config file: %v", err)
-	}
-
-	h := newTestOpenClawHandler(t, tempDir, false)
-	h.SetRouterConfigPath(configPath)
-	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
-
-	if got := h.resolveOpenClawModelBaseURL(); got != "http://127.0.0.1:18889/v1" {
-		t.Fatalf("expected listener-derived model base URL, got %q", got)
-	}
-}
-
 func TestResolveOpenClawModelBaseURL_EnvOverrideWins(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-	configYAML := `
-api_server:
-  listeners:
-    - address: ::1
-      port: 18890
-`
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
-		t.Fatalf("failed to write config file: %v", err)
-	}
-
 	h := newTestOpenClawHandler(t, tempDir, false)
-	h.SetRouterConfigPath(configPath)
 	t.Setenv("OPENCLAW_MODEL_BASE_URL", "http://localhost:19999/v1")
 
 	if got := h.resolveOpenClawModelBaseURL(); got != "http://localhost:19999/v1" {

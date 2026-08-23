@@ -90,24 +90,18 @@ Bind the served model in your canonical config. For the local Docker stack,
 the Router can reach a host-published port through `host.docker.internal`:
 
 ```yaml
-providers:
-  defaults:
-    default_model: local/qwen
-  models:
-    - name: local/qwen
-      provider_model_id: Qwen/Qwen3-0.6B
-      api_format: openai
-      backend_refs:
-        - name: nvidia-vllm
-          endpoint: host.docker.internal:8000
-          protocol: http
-          type: vllm
-          weight: 1
+models:
+  - name: local/qwen
+    card: {capabilities: [chat]}
+    connections:
+      - provider: vllm
+        endpoint: http://host.docker.internal:8000/v1
+        model: Qwen/Qwen3-0.6B
 ```
 
-This is a provider fragment, not a complete Router config. Add the matching
-model card and route to your existing recipe, or configure the endpoint in the
-Dashboard. The `provider_model_id` must match a model returned by vLLM's
+This is a Model fragment, not a complete Router config. Add a Recipe and
+Entrypoint, or configure the connection in the Dashboard. The connection's
+`model` must match a model returned by vLLM's
 `/v1/models` endpoint. See [Configuration](configuration) for a complete
 minimal document and
 [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
@@ -124,7 +118,7 @@ If vLLM should own all GPU memory, keep the Router on CPU:
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve
 ```
 
 To run supported Router-side ONNX embeddings and classifiers on CUDA, use
@@ -133,7 +127,7 @@ To run supported Router-side ONNX embeddings and classifiers on CUDA, use
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --platform nvidia --config config.yaml
+vllm-sr serve --platform nvidia
 ```
 
 For a source checkout, build the maintained CUDA image first. The
@@ -144,7 +138,6 @@ to obtain missing companion images:
 VLLM_SR_PLATFORM=nvidia make vllm-sr-build
 vllm-sr serve \
   --platform nvidia \
-  --config config.yaml \
   --image-pull-policy ifnotpresent
 ```
 
@@ -205,7 +198,7 @@ meets the same latency target.
 ### The backend works directly but routed requests fail
 
 Check that the backend endpoint is reachable from the Router container and
-that `provider_model_id` exactly matches `/v1/models`. Inside the Router
+that the connection's `model` exactly matches `/v1/models`. Inside the Router
 container, `localhost:8000` refers to the Router itself; use
 `host.docker.internal:8000`, container DNS on a shared network, or a reachable
 service address.

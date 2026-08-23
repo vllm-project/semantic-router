@@ -1,53 +1,57 @@
-import type { DecisionRule, RouterConfig } from './dashboardPageTypes'
+import type { DecisionRule } from './dashboardPageTypes'
 import {
-  collectScopedDecisions,
-  countSignalsAcrossScopes,
-  type RoutingScopedConfigLike,
-} from '../utils/routingScopes'
+  listManagedRecipeScopes,
+  type ManagedRoutingScope,
+  type ManagedRoutingSummary,
+} from '../utils/managedRoutingSnapshot'
+import { countSignalsInProfile } from '../utils/routingScopes'
 
-const scopedConfig = (config: RouterConfig): RoutingScopedConfigLike =>
-  config as RouterConfig & RoutingScopedConfigLike
+const recipeScopes = (config: ManagedRoutingSummary): ManagedRoutingScope[] =>
+  listManagedRecipeScopes(config)
 
-export function countSignals(cfg: RouterConfig): { total: number; byType: Record<string, number> } {
-  return countSignalsAcrossScopes(scopedConfig(cfg))
+export function countSignals(cfg: ManagedRoutingSummary): {
+  total: number
+  byType: Record<string, number>
+} {
+  const byType: Record<string, number> = {}
+  let total = 0
+  for (const scope of recipeScopes(cfg)) {
+    const counts = countSignalsInProfile(scope.document)
+    total += counts.total
+    for (const [type, count] of Object.entries(counts.byType)) {
+      byType[type] = (byType[type] ?? 0) + count
+    }
+  }
+  return { total, byType }
 }
 
-export function countDecisions(cfg: RouterConfig): number {
+export function countDecisions(cfg: ManagedRoutingSummary): number {
   return getAllDecisions(cfg).length
 }
 
-export function countModels(cfg: RouterConfig): number {
-  const models = cfg.providers?.models
-  if (Array.isArray(models)) {
-    return models.length
-  }
-
-  const legacyRootEndpoints = cfg.vllm_endpoints
-  if (Array.isArray(legacyRootEndpoints)) return legacyRootEndpoints.length
-
-  const legacyProviderEndpoints = cfg.providers?.vllm_endpoints
-  return Array.isArray(legacyProviderEndpoints) ? legacyProviderEndpoints.length : 0
+export function countModels(cfg: ManagedRoutingSummary): number {
+  return cfg.models.length
 }
 
-export function countPlugins(cfg: RouterConfig): number {
+export function countPlugins(cfg: ManagedRoutingSummary): number {
   const decisions = getAllDecisions(cfg)
   if (decisions.length > 0) {
     return decisions.reduce(
-      (count, decision) =>
-        count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0),
+      (count, decision) => count + (Array.isArray(decision.plugins) ? decision.plugins.length : 0),
       0,
     )
   }
-  if (!cfg.plugins || typeof cfg.plugins !== 'object') return 0
-  return Object.keys(cfg.plugins).length
+  return 0
 }
 
-export function getAllDecisions(cfg: RouterConfig): DecisionRule[] {
-  return collectScopedDecisions<DecisionRule>(scopedConfig(cfg)).map(({ scope, value }) => ({
-    ...value,
-    routingScope: scope.id,
-    routingEntrypoints: scope.entrypointModelNames,
-  }))
+export function getAllDecisions(cfg: ManagedRoutingSummary): DecisionRule[] {
+  return recipeScopes(cfg).flatMap((scope) =>
+    (scope.document.decisions ?? []).map((decision) => ({
+      ...(decision as DecisionRule),
+      routingScope: scope.id,
+      routingEntrypoints: scope.entrypointModelNames,
+    })),
+  )
 }
 
 /** Classify decision by priority range */
@@ -76,7 +80,7 @@ export const SIGNAL_COLORS: Record<string, string> = {
   pii: '#FF6B6B',
 }
 
-export function categorizeDecisions(config: RouterConfig | null): {
+export function categorizeDecisions(config: ManagedRoutingSummary | null): {
   guardrails: DecisionRule[]
   routing: DecisionRule[]
   fallbacks: DecisionRule[]

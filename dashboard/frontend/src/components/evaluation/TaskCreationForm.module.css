@@ -425,3 +425,17 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+.footer button,
+.datasetError button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.footer button > svg,
+.datasetError button > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}

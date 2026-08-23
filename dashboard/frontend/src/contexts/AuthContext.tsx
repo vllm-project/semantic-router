@@ -1,26 +1,31 @@
-import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react'
+import React, {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import {
-  clearStoredAuthToken,
-  getStoredAuthToken,
   installAuthenticatedFetch,
-  normalizeAuthToken,
   notifyUnauthorized,
-  storeAuthToken,
   UNAUTHORIZED_EVENT,
 } from '../utils/authFetch'
 import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+  assertManagementMe,
+  managementOperationRequest,
+  setManagementNamespace,
+} from '../utils/managementApiContract'
+import { clearInvitationOnboarding } from '../utils/invitationOnboarding'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 interface AuthContextValue {
-  token: string | null
   user: AuthUser | null
   isLoading: boolean
   isAuthenticated: boolean
   login: (email: string, password: string) => Promise<void>
-  setSession: (token: string, user?: AuthUser | null) => void
+  setSession: (user?: AuthUser | null) => void
   logout: () => void
   refreshSession: () => Promise<void>
 }
@@ -44,46 +49,106 @@ const readErrorMessage = async (response: Response): Promise<string> => {
 installAuthenticatedFetch()
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => getStoredAuthToken())
   const [user, setUser] = useState<AuthUser | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const sessionGeneration = useRef(0)
 
   const clearSession = useCallback(() => {
-    setToken(null)
+    sessionGeneration.current += 1
+    clearInvitationOnboarding()
+    setManagementNamespace(null)
     setUser(null)
-    clearStoredAuthToken()
   }, [])
 
-  const setSession = useCallback((nextToken: string, nextUser?: AuthUser | null) => {
-    const storedToken = storeAuthToken(nextToken)
-    setToken(storedToken)
-    setUser(storedToken ? (nextUser ?? null) : null)
+  const attachManagementIdentity = useCallback(async (nextUser: AuthUser | null) => {
+    if (!nextUser) return null
+    setManagementNamespace(null)
+    try {
+      const identity = assertManagementMe(
+        await managementOperationRequest('getMe', { namespace: null }),
+      )
+      const namespace = identity.namespaces.find((scope) => scope.namespace.status === 'active')
+      if (!namespace) {
+        throw new Error('No active Router namespace is available for this account.')
+      }
+      setManagementNamespace(namespace.namespace.namespaceId)
+      return {
+        ...nextUser,
+        managementIdentityStatus: 'ready' as const,
+        managementIdentityError: undefined,
+        managementPrincipalId: identity.principal.principalId,
+        managementNamespaceId: namespace.namespace.namespaceId,
+        managementUserId: namespace.user?.userId,
+        managementTeams: namespace.teams,
+        managementSelfServicePolicy: namespace.selfServicePolicy,
+        managementPermissions: [
+          ...new Set([
+            ...(Array.isArray(identity.clusterPermissions) ? identity.clusterPermissions : []),
+            ...(Array.isArray(namespace.permissions) ? namespace.permissions : []),
+          ]),
+        ],
+        managementScopes: identity.namespaces.map((scope) => scope.namespace),
+      }
+    } catch (cause) {
+      // Local Dashboard access may remain available, but every Router-owned
+      // control and inference surface fails closed without scoped permissions.
+      const detail =
+        cause instanceof Error && cause.message.trim()
+          ? cause.message.trim()
+          : 'Router Management identity is unavailable.'
+      return {
+        ...nextUser,
+        managementIdentityStatus: 'error' as const,
+        managementIdentityError: detail,
+        managementPrincipalId: undefined,
+        managementNamespaceId: undefined,
+        managementUserId: undefined,
+        managementTeams: [],
+        managementSelfServicePolicy: undefined,
+        managementPermissions: [],
+        managementScopes: [],
+      }
+    }
   }, [])
+
+  const setSession = useCallback(
+    (nextUser?: AuthUser | null) => {
+      const generation = sessionGeneration.current + 1
+      sessionGeneration.current = generation
+      setManagementNamespace(null)
+      if (!nextUser) {
+        setUser(null)
+        setIsLoading(false)
+        return
+      }
+      setIsLoading(true)
+      void attachManagementIdentity(nextUser).then((attached) => {
+        if (sessionGeneration.current !== generation) return
+        setUser(attached)
+        setIsLoading(false)
+      })
+    },
+    [attachManagementIdentity],
+  )
 
   const refreshSession = useCallback(async () => {
     setIsLoading(true)
     try {
       const result = await fetchCurrentAuthUser()
-      if (result.clearLocalToken) {
+      if (result.unauthorized) {
         clearSession()
         return
       }
-      setUser(result.user)
+      const generation = sessionGeneration.current + 1
+      sessionGeneration.current = generation
+      const nextUser = await attachManagementIdentity(result.user)
+      if (sessionGeneration.current === generation) setUser(nextUser)
     } catch {
       notifyUnauthorized()
     } finally {
       setIsLoading(false)
     }
-  }, [clearSession])
-
-  useEffect(() => {
-    if (token) {
-      const storedToken = storeAuthToken(token)
-      if (storedToken !== token) {
-        setToken(storedToken)
-      }
-    }
-  }, [token])
+  }, [attachManagementIdentity, clearSession])
 
   useEffect(() => {
     void refreshSession()
@@ -112,14 +177,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         throw new Error(await readErrorMessage(response))
       }
 
-      const payload = (await response.json()) as { token: string; user?: AuthUser }
-      const nextToken = normalizeAuthToken(payload.token)
-      if (!nextToken) {
-        throw new Error('Login response did not include a valid session token')
-      }
-      setSession(nextToken, payload.user ?? null)
-    } finally {
+      const payload = (await response.json()) as { user?: AuthUser }
+      if (!payload.user) throw new Error('Login response did not include a user session')
+      setSession(payload.user)
+    } catch (cause) {
       setIsLoading(false)
+      throw cause
     }
   }
 
@@ -133,10 +196,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   return (
     <AuthContext.Provider
       value={{
-        token,
         user,
         isLoading,
-        isAuthenticated: hasAuthenticatedSession(token, user),
+        isAuthenticated: hasAuthenticatedSession(user),
         login,
         setSession,
         logout,

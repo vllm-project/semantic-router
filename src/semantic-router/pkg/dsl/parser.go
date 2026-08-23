@@ -175,14 +175,18 @@ func rawToProgram(raw *rawProgram) (*Program, []error) {
 			}
 		case entry.Route != nil:
 			hasDirectRoutes = true
-			prog.Routes = append(prog.Routes, rawToRoute(entry.Route))
+			route, routeErrs := rawToRoute(entry.Route)
+			prog.Routes = append(prog.Routes, route)
+			errs = append(errs, routeErrs...)
 		case entry.DecisionTree != nil:
 			treeCount++
 			routes, treeErrs := rawDecisionTreeToRoutes(entry.DecisionTree, treeCount-1)
 			prog.Routes = append(prog.Routes, routes...)
 			errs = append(errs, treeErrs...)
 		case entry.Model != nil:
-			prog.Models = append(prog.Models, rawToModelDecl(entry.Model))
+			model, modelErrs := rawToModelDecl(entry.Model)
+			prog.Models = append(prog.Models, model)
+			errs = append(errs, modelErrs...)
 		case entry.Plugin != nil:
 			prog.Plugins = append(prog.Plugins, rawToPlugin(entry.Plugin))
 		case entry.TestBlock != nil:
@@ -373,16 +377,22 @@ func rawToSignal(r *rawSignalDecl) *SignalDecl {
 	}
 }
 
-func rawToRoute(r *rawRouteDecl) *RouteDecl {
+func rawToRoute(r *rawRouteDecl) (*RouteDecl, []error) {
 	route := &RouteDecl{
 		Name: unquoteIdent(r.Name),
 		Pos:  posFromLexer(r.Pos),
 	}
+	var errs []error
 
 	// Process options
 	for _, opt := range r.Opts {
-		if opt.Key == "description" && opt.Value != nil && opt.Value.Str != nil {
-			route.Description = unquote(*opt.Value.Str)
+		switch opt.Key {
+		case "description":
+			if opt.Value != nil && opt.Value.Str != nil {
+				route.Description = unquote(*opt.Value.Str)
+			}
+		default:
+			errs = append(errs, fmt.Errorf("%s: ROUTE contains unknown option %q", posFromLexer(opt.Pos), opt.Key))
 		}
 	}
 
@@ -412,15 +422,40 @@ func rawToRoute(r *rawRouteDecl) *RouteDecl {
 		}
 	}
 
-	return route
+	return route, errs
 }
 
-func rawToModelDecl(r *rawModelDecl) *ModelDecl {
-	return &ModelDecl{
+func rawToModelDecl(r *rawModelDecl) (*ModelDecl, []error) {
+	decl := &ModelDecl{
 		Name:   unquoteIdent(r.Name),
 		Fields: entriesToMap(r.Fields),
 		Pos:    posFromLexer(r.Pos),
 	}
+	allowed := []string{
+		"aliases", "param_size", "context_window_size", "description",
+		"capabilities", "reasoning", "loras", "quality_score", "modality", "tags",
+	}
+	if unknown := unknownEntrypointObjectField(decl.Fields, allowed...); unknown != "" {
+		return decl, []error{fmt.Errorf("%s: MODEL contains unknown ModelCard field %q", decl.Pos, unknown)}
+	}
+	if rawReasoning, exists := decl.Fields["reasoning"]; exists {
+		reasoning, ok := rawReasoning.(ObjectValue)
+		if !ok {
+			return decl, []error{fmt.Errorf("%s: MODEL reasoning must be an object", decl.Pos)}
+		}
+		if unknown := unknownEntrypointObjectField(reasoning.Fields, "type", "efforts"); unknown != "" {
+			return decl, []error{fmt.Errorf("%s: MODEL reasoning contains unknown field %q", decl.Pos, unknown)}
+		}
+		if _, ok := getStringField(reasoning.Fields, "type"); !ok {
+			return decl, []error{fmt.Errorf("%s: MODEL reasoning requires a string type", decl.Pos)}
+		}
+		if _, exists := reasoning.Fields["efforts"]; exists {
+			if _, ok := getStringArrayField(reasoning.Fields, "efforts"); !ok {
+				return decl, []error{fmt.Errorf("%s: MODEL reasoning efforts must be an array of strings", decl.Pos)}
+			}
+		}
+	}
+	return decl, nil
 }
 
 func rawToPlugin(r *rawPluginDecl) *PluginDecl {
@@ -447,8 +482,6 @@ func rawToPluginRef(r *rawPluginRef) *PluginRef {
 // underscore form. Only known inline types are normalized; template names pass
 // through unchanged so "PLUGIN my-template system_prompt {}" keeps its name.
 var knownInlinePluginAliases = map[string]string{
-	"semantic-cache":      "response_cache",
-	"response-cache":      "response_cache",
 	"context-compression": "context_compression",
 	"system-prompt":       "system_prompt",
 	"header-mutation":     "header_mutation",
@@ -496,6 +529,10 @@ func rawToModelRef(r *rawModelRef) *ModelRef {
 		case "effort":
 			if v.Str != nil {
 				m.Effort = unquote(*v.Str)
+			}
+		case "reasoning_description":
+			if v.Str != nil {
+				m.ReasoningDescription = unquote(*v.Str)
 			}
 		case "lora":
 			if v.Str != nil {

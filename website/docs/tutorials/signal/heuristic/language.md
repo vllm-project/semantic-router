@@ -33,7 +33,7 @@ Use `language` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     language:
       - name: zh

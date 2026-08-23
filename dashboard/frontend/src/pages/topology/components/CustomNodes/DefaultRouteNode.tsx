@@ -3,6 +3,7 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import styles from './CustomNodes.module.css'
+import ProductIcon from '../../../../components/ProductIcon'
 
 interface DefaultRouteNodeData {
   label?: string
@@ -14,14 +15,14 @@ export const DefaultRouteNode = memo<NodeProps<DefaultRouteNodeData>>(({ data })
   const { label = 'Default Route', defaultModel, isHighlighted } = data
 
   return (
-    <div
-      className={`${styles.defaultRouteNode} ${isHighlighted ? styles.highlighted : ''}`}
-    >
+    <div className={`${styles.defaultRouteNode} ${isHighlighted ? styles.highlighted : ''}`}>
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.defaultRouteHeader}>
-        <span className={styles.decisionIcon}>↪</span>
-        <span className={styles.decisionName} title={label}>{label}</span>
+        <ProductIcon className={styles.decisionIcon} name="chevron-right" aria-hidden="true" />
+        <span className={styles.decisionName} title={label}>
+          {label}
+        </span>
         <span className={styles.decisionPriority}>Default</span>
       </div>
 

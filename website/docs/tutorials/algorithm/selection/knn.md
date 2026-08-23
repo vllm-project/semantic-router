@@ -73,21 +73,17 @@ When routing should follow precedent from similar historical prompts, hand-writt
 ```yaml
 algorithm:
   type: knn
+  ml:
+    models_path: ".cache/ml-models"
+    embedding_dim: 768
+    knn:
+      k: 5
+      pretrained_path: .cache/ml-models/knn_model.json
 ```
 
-### Global ML Settings
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        models_path: ".cache/ml-models"
-        embedding_dim: 768
-        knn:
-          k: 5
-          pretrained_path: .cache/ml-models/knn_model.json
-```
+`algorithm.ml` belongs to this Decision. Decisions in the same Recipe must
+agree on `models_path`, `embedding_dim`, and repeated family settings;
+different Recipes can use independent selector artifacts.
 
 ### Parameters
 

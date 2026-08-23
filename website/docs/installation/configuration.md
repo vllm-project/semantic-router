@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Understand the canonical v0.3 YAML document and where routing, providers, recipes, services, and secrets belong.
+description: Understand the canonical v0.4 YAML document and where Models, Recipes, Entrypoints, services, and secrets belong.
 ---
 
 # Configuration
@@ -11,28 +11,25 @@ Helm, and Operator. The top-level structure is:
 ```yaml
 version:
 listeners:
-providers:
-routing:
-entrypoints:
+models:
 recipes:
+entrypoints:
 global:
 ```
 
-Most deployments begin with `version`, `listeners`, `providers`, and one
-top-level `routing` profile. Add `entrypoints` and `recipes` when one deployment
-needs several isolated policies. Add `global` settings only for shared services
-or runtime behavior that differs from the built-in defaults.
+Every runnable standalone manifest uses top-level `models`, `recipes`, and
+`entrypoints`. Add `global` only for shared services, stores, integrations, or
+runtime behavior that differs from the built-in defaults.
 
 ## What belongs where
 
 | Section | Owns |
 | --- | --- |
-| `version` | Canonical schema version. Use `v0.3`. |
+| `version` | Canonical schema version. Use `v0.4`. |
 | `listeners` | Public Router listeners and timeouts. |
-| `providers` | Logical provider models, physical backend endpoints, pricing, capabilities, and defaults. |
-| `routing` | The default recipe: model cards, signals, projections, decisions, strategy, algorithms, and route plugins. |
-| `entrypoints` | Public virtual model aliases mapped to named recipes. |
-| `recipes` | Additional isolated routing profiles that share providers and global infrastructure. |
+| `models` | Logical Models with a readable card, provider connections, execution policy, and pricing. |
+| `recipes` | Model-free routing documents containing signals, projections, decisions, strategy, algorithms, and route plugins. |
+| `entrypoints` | Public virtual model aliases, rule matches, Recipe references, and complete decision-to-Model assignments. |
 | `global` | Router services, stores, integrations, observability, learning, and router-owned model assets. |
 
 Keep these boundaries clear:
@@ -42,7 +39,39 @@ Keep these boundaries clear:
 - decisions define eligibility and route policy;
 - algorithms choose or coordinate candidate models;
 - plugins add behavior at route-specific hook points; and
-- providers bind logical model names to inference endpoints.
+- Entrypoints bind each Recipe decision to one or more Models.
+
+In standalone mode, a backend can select an operator-owned secret by name:
+
+```yaml
+global:
+  services:
+    backend_credentials:
+      private_provider:
+        credential_adapter_id: bearer
+        secret_env: MODEL_API_KEY
+models:
+  - name: remote/model
+    card:
+      description: General-purpose remote model.
+      capabilities: [chat, tools]
+    connections:
+      - provider: private
+        interface: chat
+        endpoint: https://models.example.com
+        model: provider/model
+        credential: private_provider
+```
+
+The control plane resolves the provider integration, compiles the connection,
+and pins the resulting immutable routing snapshot. The Router injects the named
+credential only after it selects that connection. Literal credentials do not
+belong in authoring YAML. Managed mode uses versioned ProviderCredential
+resources published through the Management API instead.
+
+`connections[].interface` selects one Provider-owned API style. Use the
+catalog's readable interface ID, such as `chat`, `responses`, or `messages`.
+It is optional only when the Provider declares exactly one default interface.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -62,7 +91,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 
 | Family and type | Use it to | Reusable fragment | Guide |
 | --- | --- | --- | --- |
-| `authz` — heuristic signal | `authz` turns identity and policy bindings into reusable routing inputs under `routing.signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
+| `authz` — heuristic signal | `authz` turns trusted routing claims into reusable routing inputs under `routing.signals.role_bindings`. | [`config/fragments/signal/authz/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/authz/) | [Guide](../tutorials/signal/heuristic/authz) |
 | `classifier` — learned signal | `classifier` exposes reusable label scores from a local native sequence classifier or a configured external LLM. | [`config/fragments/signal/classifier/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/classifier/) | [Guide](../tutorials/signal/learned/classifier) |
 | `complexity` — learned signal | `complexity` estimates whether a request is `easy`, `medium`, or `hard` by comparing it with configured example sets. | [`config/fragments/signal/complexity/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/complexity/) | [Guide](../tutorials/signal/learned/complexity) |
 | `context` — heuristic signal | `context` detects requests that need a larger effective context window. | [`config/fragments/signal/context/`](https://github.com/vllm-project/semantic-router/tree/main/config/fragments/signal/context/) | [Guide](../tutorials/signal/heuristic/context) |
@@ -94,7 +123,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 | `latency-aware` — selection algorithm | `latency_aware` ranks eligible candidates using observed TTFT and TPOT percentiles and selects the lowest relative-latency score. | [`config/fragments/algorithm/selection/latency-aware.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/latency-aware.yaml) | [Guide](../tutorials/algorithm/selection/latency-aware) |
 | `mlp` — selection algorithm | `mlp` runs a trained neural classifier on CPU to map a request to a candidate model. | [`config/fragments/algorithm/selection/mlp.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/mlp.yaml) | [Guide](../tutorials/algorithm/selection/mlp) |
 | `multi-factor` — selection algorithm | `multi_factor` ranks candidates by a configurable combination of quality, latency, cost, and load, then rejects any candidate that violates a hard limit. | [`config/fragments/algorithm/selection/multi-factor.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/multi-factor.yaml) | [Guide](../tutorials/algorithm/selection/multi-factor) |
-| `prompt` — selection algorithm | `prompt` uses a concrete helper model to select exactly one model from the matched decision's `modelRefs`. | [`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml) | [Guide](../tutorials/algorithm/selection/prompt) |
+| `prompt` — selection algorithm | `prompt` selects exactly one Model from the matched decision's Entrypoint assignment. | [`config/fragments/algorithm/selection/prompt.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/prompt.yaml) | [Guide](../tutorials/algorithm/selection/prompt) |
 | `router-dc` — selection algorithm | `router_dc` embeds the request and each model description, then selects the candidate with the strongest semantic similarity. | [`config/fragments/algorithm/selection/router-dc.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/router-dc.yaml) | [Guide](../tutorials/algorithm/selection/router-dc) |
 | `static` — selection algorithm | `static` provides deterministic model choice without metrics or learned state. | [`config/fragments/algorithm/selection/static.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/static.yaml) | [Guide](../tutorials/algorithm/selection/static) |
 | `svm` — selection algorithm | `svm` uses a trained linear or RBF support-vector classifier to map request features to a candidate model. | [`config/fragments/algorithm/selection/svm.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/algorithm/selection/svm.yaml) | [Guide](../tutorials/algorithm/selection/svm) |
@@ -134,7 +163,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 ## Minimal example
 
 ```yaml
-version: v0.3
+version: v0.4
 
 listeners:
   - name: http-8899
@@ -142,39 +171,44 @@ listeners:
     port: 8899
     timeout: 300s
 
-providers:
-  defaults:
-    default_model: local/general
-  models:
-    - name: local/general
-      provider_model_id: my-served-model
-      backend_refs:
-        - name: primary
-          endpoint: host.docker.internal:8000
-          protocol: http
-
-routing:
-  strategy: priority
-  modelCards:
-    - name: local/general
-      modality: text
+models:
+  - name: local/general
+    card:
+      description: General chat model.
       capabilities: [chat]
-  signals:
-    keywords:
-      - name: needs_explanation
-        operator: OR
-        keywords: ["explain", "walk me through"]
-  decisions:
-    - name: explanatory_answer
-      description: Prefer an explanatory answer when the request asks for one.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: needs_explanation
-      modelRefs:
-        - model: local/general
+      modality: text
+    connections:
+      - provider: vllm
+        interface: chat
+        endpoint: http://host.docker.internal:8000/v1
+        model: my-served-model
+    runtime:
+      max_retries: 1
+
+recipes:
+  - name: explain
+    document:
+      strategy: priority
+      signals:
+        keywords:
+          - name: needs_explanation
+            operator: OR
+            keywords: ["explain", "walk me through"]
+      decisions:
+        - name: explanatory_answer
+          description: Prefer an explanatory answer when the request asks for one.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: [{type: keyword, name: needs_explanation}]
+
+entrypoints:
+  - name: vllm-sr/explain
+    aliases: [explain]
+    recipe: explain
+    assignments:
+      explanatory_answer:
+        models: [{model: local/general}]
 
 global:
   services:
@@ -183,27 +217,37 @@ global:
         enabled: true
 ```
 
-Requests using an automatic model alias enter the default `routing` profile.
-A concrete provider model name is a direct pass-through request and bypasses
-recipe signals, decisions, route plugins, cache, learning, and session routing.
+Requests enter a Recipe only through an explicit Entrypoint alias. A concrete
+Model name selects that Model directly; there is no implicit default Recipe or
+hidden automatic alias.
 
 ## Validate and serve
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve
+# Or select another immutable bootstrap manifest.
+vllm-sr serve --config /path/to/config.yaml
 ```
 
 Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
-settings before the Router starts.
+settings before the Router starts. The ordinary local command reads
+`config.yaml` from the current workspace; `--config` selects another immutable
+v0.4 bootstrap manifest. It is not a Model, Recipe, or routing-policy operand.
 
 ## Environment references and secrets
 
-Keep credentials outside the YAML file:
+Keep credential values outside the YAML file. Reference an environment variable
+from a named standalone credential:
 
 ```yaml
-api_key: ${MODEL_API_KEY}
+global:
+  services:
+    backend_credentials:
+      private_provider:
+        credential_adapter_id: bearer
+        secret_env: MODEL_API_KEY
 ```
 
 Supported string substitutions are:
@@ -213,29 +257,159 @@ Supported string substitutions are:
 - `${VAR-default}` when `VAR` is unset; and
 - `$$` for a literal `$`.
 
-For a custom Recipe, authorize required host variables explicitly with
-`--recipe-env NAME`. Kubernetes deployments place sensitive environment values
-in Secrets rather than ConfigMaps or Helm values. See
+The local Docker target forwards variables referenced by the selected bootstrap
+config. Kubernetes deployments place sensitive environment values in Secrets
+rather than ConfigMaps or Helm values. See
 [Security Hardening](security-hardening).
+
+## Secure the managed listener
+
+Managed control-plane mode requires Router-terminated TLS. Reference PEM
+material through absolute secret-file paths or through environment-variable
+names; do not place certificate or private-key literals in Router YAML.
+
+```yaml
+version: v0.4
+global:
+  control_plane:
+    mode: managed
+  services:
+    management_api:
+      bind_address: 0.0.0.0
+      port: 8080
+      tls:
+        certificate_file: /run/secrets/management-server.pem
+        private_key_file: /run/secrets/management-server-key.pem
+        # Optional. When present, every client must present a certificate
+        # issued by this CA.
+        client_ca_bundle_file: /run/secrets/management-client-ca.pem
+      auth:
+        mode: router
+```
+
+Each TLS value accepts exactly one `_file` or `_env` reference. An environment
+source contains the PEM payload, not another file path. At startup the Router
+parses the certificate chain, verifies that the private key matches, requires a
+DNS or IP subject alternative name, and enforces a validity margin. Missing or
+invalid material prevents the listener from binding. Managed connections use
+TLS 1.3 or newer; plaintext connections are rejected. Standalone mode keeps its
+existing local plaintext listener behavior.
+
+Mount private-key files with owner-only permissions (`0400` or `0600`); a
+group- or world-readable key fails startup. Rotate mounted
+material through an atomic Secret replacement. The Router reloads each
+listener context on a bounded interval. A failed replacement retains the last
+valid context but makes readiness fail until valid material is installed;
+replicas also leave readiness before the active certificate expires.
+
+### Bind Agent calls to the public inference front door
+
+Managed Router replicas run Agent workers without another Agent container. Give
+them a stable address for the deployment's ordinary public inference listener:
+
+```yaml
+global:
+  services:
+    agent:
+      public_inference_endpoint: https://inference.example.com/v1/chat/completions
+```
+
+The URL must use HTTP or HTTPS and end exactly at `/v1/chat/completions`. It is
+operator-owned bootstrap configuration: it never comes from an Agent profile,
+Tool Source, Dashboard setting, or published routing snapshot. Do not point it
+at a physical model backend. Agent turns use short-lived delegated API keys at
+this endpoint, preserving Model visibility, quota enforcement, request logs,
+and actual usage settlement.
+
+### Usage storage lifecycle
+
+Managed access uses fixed UTC-month PostgreSQL partitions for request, dispatch,
+and attempt facts. The safe default retains raw usage indefinitely:
+
+```yaml
+global:
+  services:
+    access:
+      usage_storage:
+        create_ahead_months: 2
+        maintenance_interval: 5m
+        # raw_retention: 2160h # optional explicit 90-day policy
+```
+
+`create_ahead_months` is between 1 and 24, and `maintenance_interval` is between
+one minute and 24 hours. `raw_retention` is empty unless an operator explicitly
+chooses a duration. Retention never removes settlement digest tombstones,
+rollups, audit history, replay-referenced facts, or facts needed by unresolved
+usage reconciliation. See
+[API Keys, Access, and Usage](../tutorials/global/access-and-usage#operate-usage-storage)
+for the lifecycle and preview-schema migration procedure.
+
+### Provider integrations in managed mode
+
+Managed mode does not load provider definitions from Router YAML, ConfigMaps,
+custom resources, or the Dashboard. The control-plane application composes an
+immutable Provider Integration Registry, and the Management API exposes its safe
+catalog to every client. A Model create or import request selects a Provider and
+submits only schema-approved connection values; the control plane compiles them into
+the provider-neutral backend stored in the Model revision.
+
+The data plane receives only immutable compiled snapshots with canonical
+origins, non-secret connection values, ProviderCredential references, and
+stable protocol adapters. Product names, logos, forms, discovery rules, and
+compiler plugins stay in the control plane. Standalone loading runs the same
+compiler over the readable source manifest. See the
+[Provider catalog proposal](../proposals/router-native-access-control-provider-catalog)
+for the extension and rollout contract.
 
 ## Entrypoints and recipes
 
-An entrypoint maps one or more public model aliases to a recipe. A recipe owns
+An Entrypoint maps one or more public model aliases to a Recipe and its complete
+decision assignments. A Recipe owns
 its signal, projection, decision, algorithm, plugin, cache, replay, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
-In the schema, `entrypoints[].model_names` lists the public aliases,
-`entrypoints[].recipe` selects a named recipe, and `recipes[].routing` contains
-that recipe's policy.
+In the common schema, `entrypoints[].aliases` lists additional public names,
+`entrypoints[].recipe` selects a Recipe by name, and `recipes[].document`
+contains that Recipe's policy. Conditional `rules` are available when path or
+claim matching is required. The compiler resolves readable names to immutable
+snapshot identities; generated identities never appear in authoring YAML.
 
-If no decision matches, the recipe uses `providers.defaults.default_model`.
-The virtual entrypoint name never reaches a backend.
+Each Entrypoint assigns Models to every Decision name without copying the Recipe:
+
+```yaml
+entrypoints:
+  - name: company/assistant
+    recipe: assistant
+    assignments:
+      quick:
+        models:
+          - model: local/fast
+      complex:
+        models:
+          - model: remote/frontier
+            reasoning: {enabled: true, effort: high}
+```
+
+`assignments` is keyed by Decision name. Each value is an assignment set
+with a non-empty `models` list. `priority`, `weight`, `lora_name`, and typed
+`reasoning` controls are optional assignment values. A single-dispatch decision
+can also define a closed priority `fallback` policy. URLs, credentials,
+execution settings, and pricing stay on the Model.
+
+Validation rejects an unknown Recipe or Model name, missing decision assignment,
+unknown Decision name, invalid LoRA/reasoning control, ambiguous rule, or
+cross-namespace reference. A claimed alias with no matching rule fails
+closed; it never falls through to a concrete Model.
+
+Each Recipe should contain an unconditional lowest-priority decision. Every
+Entrypoint rule must assign that decision explicitly; there is no hidden
+default Model. The virtual Entrypoint name never reaches a backend.
 
 See
 [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-for built-in virtual models, CLI serving, backend binding, forking, packaging,
-and migration. See
+for built-in Recipes, CLI serving, connections, assignments, and
+packaging. See
 [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the complete schema.
 
@@ -260,8 +434,8 @@ owns which part of the document and how to avoid competing sources of truth.
   contains reusable signal, decision, algorithm, and plugin fragments.
 - [Providers and routing tutorials](../tutorials/global/overview) describe
   shared runtime configuration.
-- [Unified Config Contract v0.3](../proposals/unified-config-contract-v0-3)
-  records the design behind the current contract.
+- [Upgrade and rollback](upgrade-rollback) explains the strict offline conversion
+  from a retained v0.3 manifest to the current v0.4 contract.
 
 Avoid copying the exhaustive example as an application config. Start with the
 smallest document that describes the deployment, then add only the capabilities

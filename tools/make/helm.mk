@@ -167,6 +167,20 @@ helm-safety-validate: helm-ci-setup
 		-f "$(HELM_CHART_PATH)/values-prod.yaml" \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/prod.yaml"; \
 	grep -q "kind: HorizontalPodAutoscaler" "$$tmp_dir/prod.yaml"; \
+	grep -q "immutable: true" "$$tmp_dir/prod.yaml"; \
+	grep -Eq "name: .*config-[0-9a-f]{12}" "$$tmp_dir/prod.yaml"; \
+	grep -q "name: CONFIG_FILE" "$$tmp_dir/prod.yaml"; \
+	grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/prod.yaml"; \
+	echo "Validating chart-owned bootstrap environment rejection..."; \
+	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set 'extraEnv[0].name=CONFIG_FILE' \
+		--set 'extraEnv[0].value=/tmp/other.yaml' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/config-env.out" 2>&1; then \
+		echo "Expected CONFIG_FILE override to fail template validation"; \
+		cat "$$tmp_dir/config-env.out"; \
+		exit 1; \
+	fi; \
+	grep -q "chart-owned and cannot be overridden" "$$tmp_dir/config-env.out"; \
 	echo "Validating schema rejection for invalid learning guard type..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set safetyGuards.rejectMultiReplicaLocalLearningState=maybe \

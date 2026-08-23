@@ -238,12 +238,12 @@ def container_image_exists(image_name):
     runtime = get_container_runtime()
     try:
         result = subprocess.run(
-            [runtime, "images", "-q", image_name],
+            [runtime, "image", "inspect", "--format", "{{.Id}}", image_name],
             capture_output=True,
             text=True,
             check=False,
         )
-        return bool(result.stdout.strip())
+        return result.returncode == 0 and bool(result.stdout.strip())
     except Exception as exc:
         log.warning(f"Failed to check container image: {exc}")
         return False

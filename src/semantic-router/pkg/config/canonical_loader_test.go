@@ -5,24 +5,15 @@ import (
 	"testing"
 )
 
+func strictV04WithGlobal(fragment string) []byte {
+	return []byte(strings.Replace(entrypointRulesYAML, "global:\n", "global:\n"+fragment, 1))
+}
+
 func TestParseYAMLBytesRejectsLegacyUserConfigLayout(t *testing.T) {
 	legacyYAML := []byte(`
-version: v0.3
-signals:
-  keywords:
-    - name: urgent_keywords
-      operator: OR
-      keywords: ["urgent"]
-decisions:
-  - name: urgent_route
-    rules:
-      operator: AND
-      conditions:
-        - type: keyword
-          name: urgent_keywords
-    modelRefs:
-      - model: qwen2.5:3b
-        use_reasoning: false
+version: v0.4
+signals: {}
+decisions: []
 providers:
   default_model: qwen2.5:3b
   models:
@@ -31,807 +22,246 @@ providers:
         - endpoint: 127.0.0.1:11434
 `)
 
-	_, err := ParseYAMLBytes(legacyYAML)
+	_, err := testAuthoringParser(t).ParseYAMLBytes(legacyYAML)
 	if err == nil {
 		t.Fatal("expected legacy user config layout to be rejected")
 	}
-
-	message := err.Error()
 	for _, fragment := range []string{
-		"deprecated config fields are no longer supported",
-		"providers.default_model",
-		"providers.models[0].endpoints",
-		"vllm-sr config migrate --config old-config.yaml",
+		"current v0.4",
+		"unexpected top-level keys: decisions, providers, signals",
 	} {
-		if !strings.Contains(message, fragment) {
-			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("expected error to mention %q, got: %s", fragment, err)
 		}
 	}
 }
 
 func TestParseYAMLBytesRejectsTopLevelLegacyRuntimeLayout(t *testing.T) {
-	legacyYAML := []byte(`
-version: v0.3
+	_, err := testAuthoringParser(t).ParseYAMLBytes([]byte(`
+version: v0.4
 default_model: qwen2.5:3b
-semantic_cache:
-  enabled: false
-`)
-
-	_, err := ParseYAMLBytes(legacyYAML)
+semantic_cache: {enabled: false}
+`))
 	if err == nil {
 		t.Fatal("expected top-level legacy runtime layout to be rejected")
 	}
-
-	message := err.Error()
 	for _, fragment := range []string{
-		"config file must use canonical v0.3 version/listeners/providers/routing/global",
+		"config file must use the current v0.4 version/listeners/models/recipes/entrypoints/global authoring schema",
 		"unexpected top-level keys: default_model, semantic_cache",
-		"vllm-sr config migrate --config old-config.yaml",
 	} {
-		if !strings.Contains(message, fragment) {
-			t.Fatalf("expected error to mention %q, got: %s", fragment, message)
+		if !strings.Contains(err.Error(), fragment) {
+			t.Fatalf("expected error to mention %q, got: %s", fragment, err)
 		}
 	}
 }
 
-func TestParseYAMLBytesRejectsDeprecatedGlobalModulesLayout(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: qwen2.5:3b
-  models:
-    - name: qwen2.5:3b
-      backend_refs:
-        - endpoint: 127.0.0.1:11434
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-  decisions:
-    - name: default-route
-      description: fallback
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen2.5:3b
-global:
-  modules:
-    prompt_guard:
-      model_ref: prompt_guard
-`)
-
-	_, err := ParseYAMLBytes(canonicalYAML)
-	if err == nil {
-		t.Fatal("expected deprecated global.modules layout to be rejected")
-	}
-	if !strings.Contains(err.Error(), "global.modules") {
-		t.Fatalf("expected error to mention global.modules, got: %v", err)
+func TestParseYAMLBytesRejectsUnknownGlobalModulesField(t *testing.T) {
+	document := strictV04WithGlobal("  modules:\n    prompt_guard:\n      model_ref: prompt_guard\n")
+	_, err := testAuthoringParser(t).ParseYAMLBytes(document)
+	if err == nil || !strings.Contains(err.Error(), "field modules") {
+		t.Fatalf("expected global.modules rejection, got: %v", err)
 	}
 }
 
-func TestParseYAMLBytesRejectsDeprecatedGlobalModelCatalogEmbeddingsBertLayout(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: qwen2.5:3b
-  models:
-    - name: qwen2.5:3b
-      backend_refs:
-        - endpoint: 127.0.0.1:11434
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-  decisions:
-    - name: default-route
-      description: fallback
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen2.5:3b
-global:
-  model_catalog:
-    embeddings:
-      bert:
-        model_id: models/mom-embedding-light
-        threshold: 0.6
-        use_cpu: true
-`)
-
-	_, err := ParseYAMLBytes(canonicalYAML)
-	if err == nil {
-		t.Fatal("expected deprecated global.model_catalog.embeddings.bert layout to be rejected")
-	}
-	if !strings.Contains(err.Error(), "global.model_catalog.embeddings.bert") {
-		t.Fatalf("expected error to mention global.model_catalog.embeddings.bert, got: %v", err)
+func TestParseYAMLBytesRejectsUnknownEmbeddingCatalogField(t *testing.T) {
+	document := strictV04WithGlobal("  model_catalog:\n    embeddings:\n      bert:\n        model_id: old-bert\n")
+	_, err := testAuthoringParser(t).ParseYAMLBytes(document)
+	if err == nil || !strings.Contains(err.Error(), "field bert") {
+		t.Fatalf("expected deprecated embeddings.bert rejection, got: %v", err)
 	}
 }
 
 func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: qwen2.5:3b
-  models:
-    - name: qwen2.5:3b
-      backend_refs:
-        - endpoint: 127.0.0.1:11434
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-  decisions:
-    - name: support-route
-      description: fallback
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelSelectionAlgorithm:
-        enabled: true
-        method: router_dc
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
-global:
-  router:
-    strategy: priority
-`)
-
-	_, err := ParseYAMLBytes(canonicalYAML)
-	if err == nil {
-		t.Fatal("expected deprecated decision modelSelectionAlgorithm field to be rejected")
-	}
-	if !strings.Contains(err.Error(), "routing.decisions[0].modelSelectionAlgorithm") {
-		t.Fatalf("expected error to mention deprecated decision field, got: %v", err)
+	document := []byte(strings.Replace(
+		entrypointRulesYAML,
+		"          rules: {}",
+		"          rules: {}\n          modelSelectionAlgorithm: {enabled: true, method: router_dc}",
+		1,
+	))
+	_, err := testAuthoringParser(t).ParseYAMLBytes(document)
+	if err == nil || !strings.Contains(err.Error(), "modelSelectionAlgorithm") {
+		t.Fatalf("expected deprecated decision field rejection, got: %v", err)
 	}
 }
 
-func TestParseYAMLBytesParsesNestedCanonicalModelCatalogModules(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: qwen2.5:3b
-    default_reasoning_effort: low
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: qwen2.5:3b
-      reasoning_family: qwen3
-      provider_model_id: served-qwen
-      backend_refs:
-        - name: primary
-          endpoint: 127.0.0.1:11434
-          protocol: http
-routing:
-  modelCards:
-    - name: qwen2.5:3b
-      param_size: 3b
-global:
-  router:
-    auto_model_name: auto
+func TestParseYAMLBytesParsesNestedCanonicalGlobalModules(t *testing.T) {
+	document := strictV04WithGlobal(`  router:
     clear_route_cache: false
-    streamed_body:
-      enabled: true
-      max_bytes: 4096
-      timeout_sec: 12
+    streamed_body: {enabled: true, max_bytes: 4096, timeout_sec: 12}
   stores:
-    semantic_cache:
-      enabled: false
+    response_cache: {enabled: false}
   model_catalog:
     embeddings:
       semantic:
         qwen3_model_path: models/mom-embedding-pro
         bert_model_path: models/mom-embedding-light
         use_cpu: true
-        embedding_config:
-          min_score_threshold: 0.6
+        embedding_config: {min_score_threshold: 0.6}
     system:
       prompt_guard: models/custom-jailbreak
     modules:
-      prompt_guard:
-        enabled: true
-        model_ref: prompt_guard
-        threshold: 0.8
+      prompt_guard: {enabled: true, model_ref: prompt_guard, threshold: 0.8}
 `)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-
-	if cfg.DefaultModel != "qwen2.5:3b" {
-		t.Fatalf("expected default model to be preserved, got %q", cfg.DefaultModel)
-	}
-	if cfg.DefaultReasoningEffort != "low" {
-		t.Fatalf("expected default reasoning effort to be preserved, got %q", cfg.DefaultReasoningEffort)
-	}
-	if cfg.AutoModelName != "auto" {
-		t.Fatalf("expected auto model name override, got %q", cfg.AutoModelName)
-	}
 	if cfg.ClearRouteCache {
-		t.Fatal("expected clear_route_cache override to be false")
+		t.Fatalf("router overrides were not applied: %+v", cfg.RouterOptions)
 	}
 	if !cfg.StreamedBodyMode || cfg.MaxStreamedBodyBytes != 4096 || cfg.StreamedBodyTimeoutSec != 12 {
-		t.Fatalf("expected streamed body runtime override, got enabled=%v max=%d timeout=%d", cfg.StreamedBodyMode, cfg.MaxStreamedBodyBytes, cfg.StreamedBodyTimeoutSec)
+		t.Fatalf("streamed body override was not applied: %+v", cfg.RouterOptions)
 	}
 	if cfg.Enabled {
-		t.Fatal("expected semantic cache enabled override to be false")
+		t.Fatal("expected response cache override to disable the cache")
 	}
-	if cfg.PromptGuard.ModelID != "models/custom-jailbreak" {
-		t.Fatalf("expected prompt guard model to follow system override, got %q", cfg.PromptGuard.ModelID)
+	if cfg.PromptGuard.ModelID != "models/custom-jailbreak" || cfg.Qwen3ModelPath != "models/mom-embedding-pro" || cfg.BertModelPath != "models/mom-embedding-light" {
+		t.Fatalf("model catalog overrides were not applied: prompt_guard=%+v qwen=%q bert=%q", cfg.PromptGuard, cfg.Qwen3ModelPath, cfg.BertModelPath)
 	}
-	if cfg.Qwen3ModelPath != "models/mom-embedding-pro" {
-		t.Fatalf("expected semantic embedding model override, got %q", cfg.Qwen3ModelPath)
-	}
-	if cfg.BertModelPath != "models/mom-embedding-light" {
-		t.Fatalf("expected bert embedding path override, got %q", cfg.BertModelPath)
-	}
-	if got := cfg.ModelConfig["qwen2.5:3b"].ReasoningFamily; got != "qwen3" {
-		t.Fatalf("expected provider model reasoning family, got %q", got)
-	}
-	if len(cfg.VLLMEndpoints) != 1 || cfg.VLLMEndpoints[0].Name != "qwen2.5:3b_primary" {
-		t.Fatalf("expected canonical provider endpoint to normalize, got %#v", cfg.VLLMEndpoints)
+	if cfg.ModelConfig["model-c"].ReasoningFamily == "" {
+		t.Fatal("native Model reasoning family was not compiled")
 	}
 }
 
-func TestParseYAMLBytesPreservesGlobalServiceDefaultsForSparseCanonicalOverrides(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: qwen3
-      modality: text
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-global:
-  stores:
-    memory:
-      enabled: true
-      auto_store: true
+func TestParseYAMLBytesPreservesGlobalServiceDefaultsForSparseOverrides(t *testing.T) {
+	document := strictV04WithGlobal(`  stores:
+    memory: {enabled: true, auto_store: true}
   model_catalog:
     embeddings:
-      semantic:
-        bert_model_path: models/mom-embedding-light
-        use_cpu: true
+      semantic: {bert_model_path: models/mom-embedding-light, use_cpu: true}
 `)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-
-	if !cfg.ResponseAPI.Enabled {
-		t.Fatal("expected sparse global override to preserve default response_api.enabled=true")
+	if !cfg.ResponseAPI.Enabled || cfg.ResponseAPI.StoreBackend != "memory" || cfg.ResponseAPI.TTLSeconds != 86400 {
+		t.Fatalf("sparse override lost response API defaults: %+v", cfg.ResponseAPI)
 	}
-	if cfg.ResponseAPI.StoreBackend != "redis" {
-		t.Fatalf("expected response api backend to keep default, got %q", cfg.ResponseAPI.StoreBackend)
-	}
-	if cfg.ResponseAPI.TTLSeconds != 86400 {
-		t.Fatalf("expected response api ttl default to be preserved, got %d", cfg.ResponseAPI.TTLSeconds)
-	}
-	if cfg.RouterReplay.Enabled {
-		t.Fatal("expected sparse global override to preserve default router_replay.enabled=false")
-	}
-	if cfg.RouterReplay.StoreBackend != "memory" {
-		t.Fatalf("expected router replay backend to keep default, got %q", cfg.RouterReplay.StoreBackend)
-	}
-	if cfg.RouterReplay.TTLSeconds != 2592000 {
-		t.Fatalf("expected router replay ttl default to be preserved, got %d", cfg.RouterReplay.TTLSeconds)
+	if cfg.RouterReplay.Enabled || cfg.RouterReplay.StoreBackend != "memory" || cfg.RouterReplay.TTLSeconds != 2592000 {
+		t.Fatalf("sparse override changed router replay defaults: %+v", cfg.RouterReplay)
 	}
 	if !cfg.Memory.Enabled || !cfg.Memory.AutoStore {
-		t.Fatalf("expected memory override to still apply, got enabled=%v auto_store=%v", cfg.Memory.Enabled, cfg.Memory.AutoStore)
+		t.Fatalf("memory override was not applied: %+v", cfg.Memory)
 	}
 }
 
 func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: qwen3
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-global:
-  model_catalog:
+	document := strictV04WithGlobal(`  model_catalog:
     modules:
       classifier:
-        domain:
-          threshold: 0.6
-          use_cpu: true
-          model_ref: domain_classifier
-        pii:
-          threshold: 0.7
-          use_cpu: true
-          model_ref: pii_classifier
-      prompt_guard:
-        enabled: true
-        threshold: 0.7
-        use_cpu: true
-        model_ref: prompt_guard
+        domain: {threshold: 0.6, use_cpu: true, model_ref: domain_classifier}
+        pii: {threshold: 0.7, use_cpu: true, model_ref: pii_classifier}
+      prompt_guard: {enabled: true, threshold: 0.7, use_cpu: true, model_ref: prompt_guard}
 `)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-
-	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" {
-		t.Fatalf("expected sparse category override to keep default system model, got %q", cfg.CategoryModel.ModelID)
+	if cfg.CategoryModel.ModelID != "models/mmbert32k-intent-classifier-merged" || !cfg.CategoryModel.UseMmBERT32K {
+		t.Fatalf("domain classifier defaults were not preserved: %+v", cfg.CategoryModel)
 	}
-	if !cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected sparse category override to keep mmBERT-32K enabled")
+	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" || !cfg.PIIModel.UseMmBERT32K {
+		t.Fatalf("PII defaults were not preserved: %+v", cfg.PIIModel)
 	}
-	if cfg.PIIModel.ModelID != "models/mmbert32k-pii-detector-merged" {
-		t.Fatalf("expected sparse PII override to keep default system model, got %q", cfg.PIIModel.ModelID)
+	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" || cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
+		t.Fatalf("prompt guard defaults were not preserved: %+v", cfg.PromptGuard)
 	}
-	if !cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected sparse PII override to keep mmBERT-32K enabled")
-	}
-	if cfg.PromptGuard.ModelID != "models/mmbert32k-jailbreak-detector-merged" {
-		t.Fatalf("expected sparse prompt-guard override to keep default system model, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.PromptGuard.Variant != PromptGuardVariantMmBERT32K {
-		t.Fatal("expected sparse prompt-guard override to keep mmBERT-32K enabled")
-	}
-	if !cfg.Classifier.PreferenceModel.ContrastiveEnabled() {
-		t.Fatal("expected sparse classifier override to preserve default preference contrastive mode")
+	if !cfg.PreferenceModel.ContrastiveEnabled() {
+		t.Fatal("preference classifier default mode was not preserved")
 	}
 }
 
-func TestParseYAMLBytesPreservesProviderModelPricing(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      pricing:
-        currency: USD
-        prompt_per_1m: 0.24
-        cached_input_per_1m: 0.06
-        cache_write_per_1m: 0.30
-        completion_per_1m: 0.96
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: qwen3
-      modality: text
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
+func TestParseYAMLBytesPreservesNativeModelPricing(t *testing.T) {
+	document := strings.Replace(entrypointRulesYAML, "version: v0.4\n", "version: v0.4\nbilling_currency: USD\n", 1)
+	document = strings.Replace(document, "  - name: model-a\n", `  - name: model-a
+    pricing:
+      input_cost_per_million_tokens: "0.24"
+      output_cost_per_million_tokens: "0.96"
+      cache_read_cost_per_million_tokens: "0.06"
+      cache_write_cost_per_million_tokens: "0.30"
+`, 1)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-
-	pricing := cfg.ModelConfig["qwen3"].Pricing
-	if pricing.PromptPer1M != 0.24 || pricing.CachedInputPer1M != 0.06 || pricing.CacheWritePer1M == nil || *pricing.CacheWritePer1M != 0.30 || pricing.CompletionPer1M != 0.96 || pricing.Currency != "USD" {
-		t.Fatalf("expected provider pricing to be preserved in model config, got %#v", pricing)
-	}
-
-	promptPer1M, completionPer1M, currency, ok := cfg.GetModelPricing("qwen3")
-	if !ok {
-		t.Fatal("expected GetModelPricing to resolve provider pricing")
-	}
-	if promptPer1M != 0.24 || completionPer1M != 0.96 || currency != "USD" {
-		t.Fatalf(
-			"expected GetModelPricing to return provider pricing, got prompt=%v completion=%v currency=%q",
-			promptPer1M,
-			completionPer1M,
-			currency,
-		)
-	}
-}
-
-func TestGetModelPricingResolvesProviderModelIDFromCanonicalConfig(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: claude-haiku
-  models:
-    - name: claude-haiku
-      provider_model_id: eu.anthropic.claude-haiku-4-5-20251001-v1:0
-      pricing:
-        currency: USD
-        prompt_per_1m: 1.00
-        completion_per_1m: 5.00
-routing:
-  modelCards:
-    - name: claude-haiku
-      modality: ar
-  decisions:
-    - name: default
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: claude-haiku
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	// Model with no backend_refs should still have ExternalModelIDs populated
-	params := cfg.ModelConfig["claude-haiku"]
-	if len(params.ExternalModelIDs) == 0 {
-		t.Fatal("expected ExternalModelIDs to be populated for metadata-only model")
-	}
-
-	// Pricing lookup by provider model ID should work
-	prompt, completion, currency, ok := cfg.GetModelPricing("eu.anthropic.claude-haiku-4-5-20251001-v1:0")
-	if !ok {
-		t.Fatal("expected pricing lookup by provider model ID to succeed")
-	}
-	if prompt != 1.00 || completion != 5.00 || currency != "USD" {
-		t.Fatalf("provider ID lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
-	}
-}
-
-func TestProviderBackendRefProviderDrivesEndpointTypeForModelIDRewrite(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-providers:
-  defaults:
-    default_model: gpt-worker
-  models:
-    - name: gpt-worker
-      provider_model_id: openai/gpt-5.5
-      backend_refs:
-        - name: openrouter
-          base_url: https://openrouter.ai/api/v1
-          provider: openai
-routing:
-  modelCards:
-    - name: gpt-worker
-  decisions:
-    - name: default
-      priority: 1
-      rules:
-        operator: OR
-        conditions: []
-      modelRefs:
-        - model: gpt-worker
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-
-	endpointName := cfg.ModelConfig["gpt-worker"].PreferredEndpoints[0]
-	endpoint, ok := cfg.GetEndpointByName(endpointName)
-	if !ok {
-		t.Fatalf("endpoint %q not found", endpointName)
-	}
-	if endpoint.Type != "openai" {
-		t.Fatalf("endpoint.Type = %q, want openai", endpoint.Type)
-	}
-	if got := cfg.ResolveExternalModelID("gpt-worker", endpointName); got != "openai/gpt-5.5" {
-		t.Fatalf("ResolveExternalModelID() = %q, want openai/gpt-5.5", got)
+	pricing := cfg.ModelConfig["model-a"].RuntimePricing
+	if pricing.InputCostPerMillionTokens == nil || *pricing.InputCostPerMillionTokens != "0.24" ||
+		pricing.OutputCostPerMillionTokens == nil || *pricing.OutputCostPerMillionTokens != "0.96" ||
+		pricing.CacheReadCostPerMillionTokens == nil || *pricing.CacheReadCostPerMillionTokens != "0.06" ||
+		pricing.CacheWriteCostPerMillionTokens == nil || *pricing.CacheWriteCostPerMillionTokens != "0.3" ||
+		cfg.BillingCurrency != "USD" {
+		t.Fatalf("native Model pricing was not preserved: currency=%q pricing=%+v", cfg.BillingCurrency, pricing)
 	}
 }
 
 func TestGetModelPricingTreatsExplicitZeroPricingAsConfigured(t *testing.T) {
-	cfg := &RouterConfig{
-		BackendModels: BackendModels{
-			ModelConfig: map[string]ModelParams{
-				"qwen-rocm": {
-					Pricing: ModelPricing{
-						Currency:        "USD",
-						PromptPer1M:     0,
-						CompletionPer1M: 0,
-					},
-				},
-			},
-		},
-	}
-
-	promptPer1M, completionPer1M, currency, ok := cfg.GetModelPricing("qwen-rocm")
-	if !ok {
-		t.Fatal("expected explicit zero pricing to be treated as configured")
-	}
-	if promptPer1M != 0 || completionPer1M != 0 || currency != "USD" {
-		t.Fatalf(
-			"expected zero pricing with USD currency, got prompt=%v completion=%v currency=%q",
-			promptPer1M,
-			completionPer1M,
-			currency,
-		)
+	cfg := &RouterConfig{BackendModels: BackendModels{ModelConfig: map[string]ModelParams{
+		"qwen-rocm": {Pricing: ModelPricing{Currency: "USD"}},
+	}}}
+	prompt, completion, currency, ok := cfg.GetModelPricing("qwen-rocm")
+	if !ok || prompt != 0 || completion != 0 || currency != "USD" {
+		t.Fatalf("zero pricing lookup = (%v, %v, %q, %v)", prompt, completion, currency, ok)
 	}
 }
 
-func TestGetModelPricingResolvesProviderModelID(t *testing.T) {
-	cfg := &RouterConfig{
-		BackendModels: BackendModels{
-			ModelConfig: map[string]ModelParams{
-				"claude-opus-4-6": {
-					Pricing: ModelPricing{
-						Currency:        "USD",
-						PromptPer1M:     5.50,
-						CompletionPer1M: 27.50,
-					},
-					ExternalModelIDs: map[string]string{
-						"default": "eu.anthropic.claude-opus-4-6-v1",
-					},
-				},
-			},
+func TestGetModelPricingResolvesExternalModelID(t *testing.T) {
+	cfg := &RouterConfig{BackendModels: BackendModels{ModelConfig: map[string]ModelParams{
+		"claude": {
+			Pricing:          ModelPricing{Currency: "USD", PromptPer1M: 5.5, CompletionPer1M: 27.5},
+			ExternalModelIDs: map[string]string{"default": "provider/claude"},
 		},
+	}}}
+	for _, name := range []string{"claude", "provider/claude"} {
+		prompt, completion, currency, ok := cfg.GetModelPricing(name)
+		if !ok || prompt != 5.5 || completion != 27.5 || currency != "USD" {
+			t.Fatalf("pricing lookup for %q = (%v, %v, %q, %v)", name, prompt, completion, currency, ok)
+		}
 	}
-
-	// Lookup by short name should work as before
-	prompt, completion, currency, ok := cfg.GetModelPricing("claude-opus-4-6")
-	if !ok {
-		t.Fatal("expected pricing lookup by short name to succeed")
-	}
-	if prompt != 5.50 || completion != 27.50 || currency != "USD" {
-		t.Fatalf("short name lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
-	}
-
-	// Lookup by provider model ID (Envoy AI Gateway rewrites to this)
-	prompt, completion, currency, ok = cfg.GetModelPricing("eu.anthropic.claude-opus-4-6-v1")
-	if !ok {
-		t.Fatal("expected pricing lookup by provider model ID to succeed")
-	}
-	if prompt != 5.50 || completion != 27.50 || currency != "USD" {
-		t.Fatalf("provider ID lookup: got prompt=%v completion=%v currency=%q", prompt, completion, currency)
-	}
-
-	// Unknown model should still return false
-	_, _, _, ok = cfg.GetModelPricing("nonexistent-model")
-	if ok {
-		t.Fatal("expected pricing lookup for unknown model to return false")
-	}
-}
-
-func TestParseYAMLBytesAppliesCanonicalRouterConfigSource(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults: {}
-routing:
-  signals: {}
-global:
-  router:
-    config_source: kubernetes
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes returned error: %v", err)
-	}
-	if cfg.ConfigSource != ConfigSourceKubernetes {
-		t.Fatalf("expected ConfigSourceKubernetes, got %q", cfg.ConfigSource)
+	if _, _, _, ok := cfg.GetModelPricing("missing"); ok {
+		t.Fatal("unknown model unexpectedly had pricing")
 	}
 }
 
 func TestParseYAMLBytesAllowsClearingRouterOwnedClassifierDefaults(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults:
-    default_model: openai/gpt-oss-20b
-  models:
-    - name: openai/gpt-oss-20b
-      backend_refs:
-        - name: primary
-          endpoint: localhost:8000
-          protocol: http
-          weight: 1
-routing:
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-20b
-  modelCards:
-    - name: openai/gpt-oss-20b
-global:
-  model_catalog:
+	document := strictV04WithGlobal(`  model_catalog:
     modules:
       prompt_guard:
         enabled: false
         model_ref: ""
         model_id: ""
         jailbreak_mapping_path: ""
-        use_mmbert_32k: false
       classifier:
-        domain:
-          model_ref: ""
-          model_id: ""
-          category_mapping_path: ""
-          use_mmbert_32k: false
-        pii:
-          model_ref: ""
-          model_id: ""
-          pii_mapping_path: ""
-          use_mmbert_32k: false
+        domain: {model_ref: "", model_id: "", category_mapping_path: "", use_mmbert_32k: false}
+        pii: {model_ref: "", model_id: "", pii_mapping_path: "", use_mmbert_32k: false}
 `)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-
-	if cfg.CategoryModel.ModelID != "" {
-		t.Fatalf("expected domain classifier model to be cleared, got %q", cfg.CategoryModel.ModelID)
+	if cfg.CategoryModel.ModelID != "" || cfg.CategoryMappingPath != "" || cfg.CategoryModel.UseMmBERT32K {
+		t.Fatalf("domain classifier defaults were not cleared: %+v", cfg.CategoryModel)
 	}
-	if cfg.CategoryMappingPath != "" {
-		t.Fatalf("expected category mapping path to be cleared, got %q", cfg.CategoryMappingPath)
+	if cfg.PIIModel.ModelID != "" || cfg.PIIMappingPath != "" || cfg.PIIModel.UseMmBERT32K {
+		t.Fatalf("PII classifier defaults were not cleared: %+v", cfg.PIIModel)
 	}
-	if cfg.CategoryModel.UseMmBERT32K {
-		t.Fatal("expected domain classifier mmBERT-32K default to be disabled")
-	}
-	if cfg.PIIModel.ModelID != "" {
-		t.Fatalf("expected PII classifier model to be cleared, got %q", cfg.PIIModel.ModelID)
-	}
-	if cfg.PIIMappingPath != "" {
-		t.Fatalf("expected PII mapping path to be cleared, got %q", cfg.PIIMappingPath)
-	}
-	if cfg.PIIModel.UseMmBERT32K {
-		t.Fatal("expected PII classifier mmBERT-32K default to be disabled")
-	}
-	if cfg.PromptGuard.Enabled {
-		t.Fatal("expected prompt guard to be disabled")
-	}
-	if cfg.PromptGuard.ModelID != "" {
-		t.Fatalf("expected prompt guard model to be cleared, got %q", cfg.PromptGuard.ModelID)
-	}
-	if cfg.PromptGuard.JailbreakMappingPath != "" {
-		t.Fatalf("expected prompt guard mapping path to be cleared, got %q", cfg.PromptGuard.JailbreakMappingPath)
+	if cfg.PromptGuard.Enabled || cfg.PromptGuard.ModelID != "" || cfg.PromptGuard.JailbreakMappingPath != "" {
+		t.Fatalf("prompt guard defaults were not cleared: %+v", cfg.PromptGuard)
 	}
 }
 
 func TestParseYAMLBytesParsesCanonicalLoRACatalog(t *testing.T) {
-	canonicalYAML := []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: qwen3
-  models:
-    - name: qwen3
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: qwen3
-      loras:
-        - name: sql-expert
-          description: SQL-specialized adapter
-        - name: code-review
-  signals:
-    domains:
-      - name: other
-        description: fallback
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3
-          lora_name: sql-expert
-`)
-
-	cfg, err := ParseYAMLBytes(canonicalYAML)
+	document := strings.Replace(entrypointRulesYAML, "    card: {}\n", "    card: {loras: [sql-expert, code-review]}\n", 1)
+	document = strings.Replace(document, "          finish: {models: [{model: model-a}]}", "          finish: {models: [{model: model-a, lora: sql-expert}]}", 1)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-
-	loras := cfg.ModelConfig["qwen3"].LoRAs
-	if len(loras) != 2 {
-		t.Fatalf("expected 2 LoRA adapters, got %#v", loras)
+	loras := cfg.ModelConfig["model-a"].LoRAs
+	if len(loras) != 2 || loras[0].Name != "code-review" || loras[1].Name != "sql-expert" {
+		t.Fatalf("unexpected LoRA catalog: %#v", loras)
 	}
-	if loras[0].Name != "sql-expert" || loras[0].Description != "SQL-specialized adapter" {
-		t.Fatalf("unexpected first LoRA adapter: %#v", loras[0])
-	}
-	if cfg.Decisions[0].ModelRefs[0].LoRAName != "sql-expert" {
-		t.Fatalf("expected lora_name to survive parse, got %q", cfg.Decisions[0].ModelRefs[0].LoRAName)
+	recipe, found := cfg.RecipeForRequestModel("vllm-sr/edge")
+	if !found || recipe.Profile.Decisions[1].ModelRefs[0].LoRAName != "sql-expert" {
+		t.Fatalf("LoRA assignment was not compiled: %+v", recipe)
 	}
 }

@@ -1,6 +1,8 @@
 package dsl
 
 import (
+	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -10,12 +12,10 @@ import (
 )
 
 type routingYAMLDocument struct {
-	Routing     config.CanonicalRouting      `yaml:"routing"`
-	Entrypoints []config.CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes     []config.CanonicalRecipe     `yaml:"recipes,omitempty"`
+	Document config.CanonicalRouting `yaml:"document"`
 }
 
-// EmitRoutingYAML compiles DSL source and emits the v0.3 routing fragment.
+// EmitRoutingYAML compiles DSL source and emits the v0.4 routing fragment.
 func EmitRoutingYAML(input string) ([]byte, []error) {
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -30,13 +30,59 @@ func EmitRoutingYAML(input string) ([]byte, []error) {
 
 // EmitRoutingYAMLFromConfig marshals only the DSL-owned routing surface.
 func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
-	canonical := config.CanonicalConfigFromRouterConfig(cfg)
-	doc := routingYAMLDocument{
-		Routing:     canonical.Routing,
-		Entrypoints: canonical.Entrypoints,
-		Recipes:     canonical.Recipes,
+	document, err := canonicalRecipeDocument(cfg)
+	if err != nil {
+		return nil, err
 	}
+	doc := routingYAMLDocument{Document: document}
 	return yaml.Marshal(doc)
+}
+
+// canonicalRecipeDocument selects exactly one DSL-owned Recipe document and
+// runs it through the same strict, model-free contract accepted by the
+// Management API. Keeping this projection in one place prevents the YAML and
+// base-merge paths from silently diverging.
+func canonicalRecipeDocument(cfg *config.RouterConfig) (config.CanonicalRouting, error) {
+	document, err := selectRoutingDocument(cfg)
+	if err != nil {
+		return config.CanonicalRouting{}, err
+	}
+	raw, err := config.MarshalManagedRecipeDocument(document)
+	if err != nil {
+		return config.CanonicalRouting{}, err
+	}
+	parsed, _, err := config.ParseManagedRecipeDocument(raw)
+	if err != nil {
+		return config.CanonicalRouting{}, err
+	}
+	// Decision identity is publication state. Recipe DSL addresses Decisions by
+	// their human name, so no generated snapshot ID belongs in authoring output.
+	for index := range parsed.Decisions {
+		parsed.Decisions[index].ID = ""
+	}
+	return config.CanonicalRouting(parsed), nil
+}
+
+// selectRoutingDocument keeps the routing-only helper deliberately narrow:
+// one invocation emits exactly one model-free Recipe document. A narrow
+// Recipe program is represented by the flat routing view; a complete manifest
+// must contain exactly one Recipe to use this emitter.
+func selectRoutingDocument(cfg *config.RouterConfig) (config.CanonicalRouting, error) {
+	if cfg == nil {
+		return config.CanonicalRouting{}, fmt.Errorf("cannot emit a nil routing config")
+	}
+	if len(cfg.Recipes) == 0 {
+		return config.CanonicalRoutingFromRouterConfig(cfg), nil
+	}
+	if len(cfg.Recipes) != 1 {
+		return config.CanonicalRouting{}, fmt.Errorf("routing-only export requires exactly one Recipe")
+	}
+	selected := &cfg.Recipes[0]
+	scoped := cfg.ConfigForRecipe(selected)
+	if scoped == nil {
+		return config.CanonicalRouting{}, fmt.Errorf("cannot construct routing view for Recipe %q", selected.Name)
+	}
+	return config.CanonicalRoutingFromRouterConfig(scoped), nil
 }
 
 // DecompileRouting converts runtime config to the routing-only DSL contract.
@@ -49,7 +95,7 @@ func DecompileRouting(cfg *config.RouterConfig) (string, error) {
 	d.writeSection("SIGNALS")
 	d.decompileSignals()
 
-	models := config.CanonicalRoutingFromRouterConfig(cfg).ModelCards
+	models := canonicalDSLModels(cfg)
 	if len(models) > 0 {
 		d.writeSection("MODELS")
 		d.decompileRoutingModels(models)
@@ -217,9 +263,36 @@ func (d *decompiler) appendSafetySignals(prog *Program) {
 }
 
 func (d *decompiler) appendModelsToProgram(prog *Program) {
-	for _, model := range config.CanonicalRoutingFromRouterConfig(d.cfg).ModelCards {
+	for _, model := range canonicalDSLModels(d.cfg) {
 		prog.Models = append(prog.Models, routingModelToDecl(model))
 	}
+}
+
+func canonicalDSLModels(cfg *config.RouterConfig) []config.AuthoringModel {
+	models := append([]config.AuthoringModel(nil), config.CanonicalConfigFromRouterConfig(cfg).Models...)
+	if len(models) == 0 && cfg != nil {
+		models = make([]config.AuthoringModel, 0, len(cfg.ModelConfig))
+		for name, params := range cfg.ModelConfig {
+			loras := make([]string, 0, len(params.LoRAs))
+			for _, adapter := range params.LoRAs {
+				loras = append(loras, adapter.Name)
+			}
+			models = append(models, config.AuthoringModel{
+				Name: name,
+				Card: config.AuthoringModelCard{
+					Aliases: append([]string(nil), params.Aliases...), Reasoning: params.Reasoning,
+					ParamSize: params.ParamSize, ContextWindowSize: params.ContextWindowSize,
+					Description: params.Description, Capabilities: append([]string(nil), params.Capabilities...),
+					LoRAs: loras, QualityScore: params.QualityScore,
+					Modality: params.Modality, Tags: append([]string(nil), params.Tags...),
+				},
+			})
+		}
+	}
+	sort.SliceStable(models, func(i, j int) bool {
+		return models[i].Name < models[j].Name
+	})
+	return models
 }
 
 func (d *decompiler) appendRoutesToProgram(prog *Program) {
@@ -228,7 +301,7 @@ func (d *decompiler) appendRoutesToProgram(prog *Program) {
 	}
 }
 
-func (d *decompiler) decompileRoutingModels(models []config.RoutingModel) {
+func (d *decompiler) decompileRoutingModels(models []config.AuthoringModel) {
 	for _, model := range models {
 		d.write("MODEL %s {\n", quoteName(model.Name))
 		d.writeRoutingModelFields(model)
@@ -236,22 +309,30 @@ func (d *decompiler) decompileRoutingModels(models []config.RoutingModel) {
 	}
 }
 
-func (d *decompiler) writeRoutingModelFields(model config.RoutingModel) {
-	d.writeOptionalRoutingModelString("param_size", model.ParamSize)
-	if model.ContextWindowSize > 0 {
-		d.write("  context_window_size: %d\n", model.ContextWindowSize)
+func (d *decompiler) writeRoutingModelFields(model config.AuthoringModel) {
+	d.writeOptionalRoutingModelArray("aliases", model.Card.Aliases)
+	d.writeOptionalRoutingModelString("param_size", model.Card.ParamSize)
+	if model.Card.ContextWindowSize > 0 {
+		d.write("  context_window_size: %d\n", model.Card.ContextWindowSize)
 	}
-	d.writeOptionalRoutingModelString("description", model.Description)
-	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
-	d.writeRoutingModelLoRAs(model.LoRAs)
-	d.writeOptionalRoutingModelArray("tags", model.Tags)
-	if model.QualityScore != 0 {
+	d.writeOptionalRoutingModelString("description", model.Card.Description)
+	d.writeOptionalRoutingModelArray("capabilities", model.Card.Capabilities)
+	if model.Card.Reasoning.Type != "" {
+		d.write("  reasoning: { type: %q", model.Card.Reasoning.Type)
+		if len(model.Card.Reasoning.Efforts) > 0 {
+			d.write(", efforts: %s", quotedStringArray(model.Card.Reasoning.Efforts))
+		}
+		d.write(" }\n")
+	}
+	d.writeOptionalRoutingModelArray("loras", model.Card.LoRAs)
+	d.writeOptionalRoutingModelArray("tags", model.Card.Tags)
+	if model.Card.QualityScore != 0 {
 		d.write(
 			"  quality_score: %s\n",
-			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
+			strconv.FormatFloat(model.Card.QualityScore, 'f', -1, 64),
 		)
 	}
-	d.writeOptionalRoutingModelString("modality", model.Modality)
+	d.writeOptionalRoutingModelString("modality", model.Card.Modality)
 }
 
 func (d *decompiler) writeOptionalRoutingModelString(key, value string) {
@@ -268,56 +349,41 @@ func (d *decompiler) writeOptionalRoutingModelArray(key string, values []string)
 	d.write("  %s: %s\n", key, quotedStringArray(values))
 }
 
-func (d *decompiler) writeRoutingModelLoRAs(adapters []config.LoRAAdapter) {
-	if len(adapters) == 0 {
-		return
-	}
-	d.write("  loras: [\n")
-	for _, adapter := range adapters {
-		d.write("    { name: %q", adapter.Name)
-		if adapter.Description != "" {
-			d.write(", description: %q", adapter.Description)
-		}
-		d.write(" },\n")
-	}
-	d.write("  ]\n")
-}
-
-func routingModelToDecl(model config.RoutingModel) *ModelDecl {
+func routingModelToDecl(model config.AuthoringModel) *ModelDecl {
 	fields := make(map[string]Value)
-	if model.ParamSize != "" {
-		fields["param_size"] = StringValue{V: model.ParamSize}
+	if len(model.Card.Aliases) > 0 {
+		fields["aliases"] = stringsToArray(model.Card.Aliases)
 	}
-	if model.ContextWindowSize > 0 {
-		fields["context_window_size"] = IntValue{V: model.ContextWindowSize}
+	if model.Card.ParamSize != "" {
+		fields["param_size"] = StringValue{V: model.Card.ParamSize}
 	}
-	if model.Description != "" {
-		fields["description"] = StringValue{V: model.Description}
+	if model.Card.ContextWindowSize > 0 {
+		fields["context_window_size"] = IntValue{V: model.Card.ContextWindowSize}
 	}
-	if len(model.Capabilities) > 0 {
-		fields["capabilities"] = stringsToArray(model.Capabilities)
+	if model.Card.Description != "" {
+		fields["description"] = StringValue{V: model.Card.Description}
 	}
-	if len(model.LoRAs) > 0 {
-		items := make([]Value, 0, len(model.LoRAs))
-		for _, adapter := range model.LoRAs {
-			loraFields := map[string]Value{
-				"name": StringValue{V: adapter.Name},
-			}
-			if adapter.Description != "" {
-				loraFields["description"] = StringValue{V: adapter.Description}
-			}
-			items = append(items, ObjectValue{Fields: loraFields})
+	if len(model.Card.Capabilities) > 0 {
+		fields["capabilities"] = stringsToArray(model.Card.Capabilities)
+	}
+	if model.Card.Reasoning.Type != "" {
+		reasoningFields := map[string]Value{"type": StringValue{V: model.Card.Reasoning.Type}}
+		if len(model.Card.Reasoning.Efforts) > 0 {
+			reasoningFields["efforts"] = stringsToArray(model.Card.Reasoning.Efforts)
 		}
-		fields["loras"] = ArrayValue{Items: items}
+		fields["reasoning"] = ObjectValue{Fields: reasoningFields}
 	}
-	if len(model.Tags) > 0 {
-		fields["tags"] = stringsToArray(model.Tags)
+	if len(model.Card.LoRAs) > 0 {
+		fields["loras"] = stringsToArray(model.Card.LoRAs)
 	}
-	if model.QualityScore != 0 {
-		fields["quality_score"] = FloatValue{V: model.QualityScore}
+	if len(model.Card.Tags) > 0 {
+		fields["tags"] = stringsToArray(model.Card.Tags)
 	}
-	if model.Modality != "" {
-		fields["modality"] = StringValue{V: model.Modality}
+	if model.Card.QualityScore != 0 {
+		fields["quality_score"] = FloatValue{V: model.Card.QualityScore}
+	}
+	if model.Card.Modality != "" {
+		fields["modality"] = StringValue{V: model.Card.Modality}
 	}
 	return &ModelDecl{Name: model.Name, Fields: fields}
 }

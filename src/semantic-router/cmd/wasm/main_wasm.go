@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"syscall/js"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -12,11 +13,20 @@ import (
 
 // CompileResult is the JSON structure returned by signalCompile.
 type CompileResult struct {
-	YAML        string           `json:"yaml"`
-	CRD         string           `json:"crd,omitempty"`
-	Diagnostics []DiagnosticJSON `json:"diagnostics"`
-	AST         interface{}      `json:"ast,omitempty"`
-	Error       string           `json:"error,omitempty"`
+	YAML            string                   `json:"yaml"`
+	RecipeDocuments []CompiledRecipeDocument `json:"recipeDocuments,omitempty"`
+	Diagnostics     []DiagnosticJSON         `json:"diagnostics"`
+	AST             interface{}              `json:"ast,omitempty"`
+	Error           string                   `json:"error,omitempty"`
+}
+
+// CompiledRecipeDocument is the exact Router Management Recipe payload
+// produced from one DSL Recipe scope. Physical Models and Entrypoints are
+// deliberately absent because those are independent managed resources.
+type CompiledRecipeDocument struct {
+	Name        string          `json:"name"`
+	Description string          `json:"description,omitempty"`
+	Document    json.RawMessage `json:"document"`
 }
 
 // DiagnosticJSON is a JSON-serializable diagnostic.
@@ -89,7 +99,7 @@ func main() {
 }
 
 // compile implements signalCompile(dslSource: string) → string (JSON).
-// Full pipeline: DSL → parse → validate → compile → emit YAML + CRD.
+// Full pipeline: DSL → parse → validate → compile → emit Recipe documents.
 func compile(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(CompileResult{Error: "signalCompile requires 1 argument: dslSource"})
@@ -129,26 +139,50 @@ func compile(_ js.Value, args []js.Value) interface{} {
 		})
 	}
 
-	// 4. Emit CRD (with default name/namespace).
-	crdBytes, crdErr := dsl.EmitCRD(cfg, "router", "default")
-	crdStr := ""
-	if crdErr == nil {
-		crdStr = string(crdBytes)
-	}
-
 	// If there were validation parse errors, include them but still return output.
 	errStr := ""
 	if len(valErrs) > 0 {
 		errStr = joinErrors(valErrs)
 	}
+	recipeDocuments, recipeErr := compileRecipeDocuments(cfg)
+	if recipeErr != nil {
+		return marshalJSON(CompileResult{
+			YAML:        string(yamlBytes),
+			Diagnostics: diagnostics,
+			AST:         astJSON,
+			Error:       recipeErr.Error(),
+		})
+	}
 
 	return marshalJSON(CompileResult{
-		YAML:        string(yamlBytes),
-		CRD:         crdStr,
-		Diagnostics: diagnostics,
-		AST:         astJSON,
-		Error:       errStr,
+		YAML:            string(yamlBytes),
+		RecipeDocuments: recipeDocuments,
+		Diagnostics:     diagnostics,
+		AST:             astJSON,
+		Error:           errStr,
 	})
+}
+
+func compileRecipeDocuments(cfg *config.RouterConfig) ([]CompiledRecipeDocument, error) {
+	documents := make([]CompiledRecipeDocument, 0, len(cfg.Recipes))
+	for index := range cfg.Recipes {
+		recipe := &cfg.Recipes[index]
+		scoped := cfg.ConfigForRecipe(recipe)
+		if scoped == nil {
+			return nil, fmt.Errorf("construct Recipe document for %q", recipe.Name)
+		}
+		document, err := config.MarshalManagedRecipeDocument(
+			config.CanonicalRoutingFromRouterConfig(scoped),
+		)
+		if err != nil {
+			return nil, err
+		}
+		documents = append(documents, CompiledRecipeDocument{
+			Name: string(recipe.Name), Description: recipe.Description,
+			Document: document,
+		})
+	}
+	return documents, nil
 }
 
 // validate implements signalValidate(dslSource: string) → string (JSON).
@@ -198,22 +232,19 @@ func validate(_ js.Value, args []js.Value) interface{} {
 }
 
 // decompile implements signalDecompile(yamlSource: string) → string (JSON).
-// Converts a full router config YAML or routing fragment YAML back to the
-// complete DSL-owned surface, including entrypoints and recipes.
+// Converts the provider-neutral Recipe document owned by the browser Builder
+// back to DSL. Full standalone manifests require the application composition
+// root to inject a Provider Integration compiler and are intentionally not
+// parsed inside the browser runtime.
 func decompile(_ js.Value, args []js.Value) interface{} {
 	if len(args) < 1 {
 		return marshalJSON(DecompileResult{Error: "signalDecompile requires 1 argument: yamlSource"})
 	}
 	yamlSource := args[0].String()
 
-	cfg, err := config.ParseYAMLBytes([]byte(yamlSource))
+	dslText, err := dsl.DecompileYAML([]byte(yamlSource), nil)
 	if err != nil {
 		return marshalJSON(DecompileResult{Error: "YAML parse error: " + err.Error()})
-	}
-
-	dslText, err := dsl.Decompile(cfg)
-	if err != nil {
-		return marshalJSON(DecompileResult{Error: err.Error()})
 	}
 
 	return marshalJSON(DecompileResult{DSL: dslText})

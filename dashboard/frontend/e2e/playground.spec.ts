@@ -1,1780 +1,948 @@
-import { test, expect } from '@playwright/test';
-import { mockAuthenticatedAppShell } from './support/auth';
-import { openComposerAddMenu } from './support/playground';
+import { expect, test, type Page, type Route } from '@playwright/test'
 
-function chatStreamChunk(delta: Record<string, unknown>): string {
-  return `data: ${JSON.stringify({ choices: [{ index: 0, delta }] })}\n\n`;
+import { mockAuthenticatedAppShell } from './support/auth'
+import { openComposerAddMenu } from './support/playground'
+
+const mediaType = 'application/vnd.vllm-semantic-router.management.v1+json'
+const sessionId = '20000000-0000-4000-8000-000000000001'
+const profileId = '20000000-0000-4000-8000-000000000002'
+const turnId = '20000000-0000-4000-8000-000000000003'
+const planId = '20000000-0000-4000-8000-000000000004'
+const entrypointId = '20000000-0000-4000-8000-000000000005'
+const artifactId = '20000000-0000-4000-8000-000000000006'
+const digest = `sha256:${'a'.repeat(64)}`
+const onePixelGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64')
+
+type AgentEvent = {
+  sessionId: string
+  turnId?: string
+  sequence: number
+  type: string
+  createdAt: string
+  payload: Record<string, unknown>
 }
 
-function chatStreamBody(content: string, reasoning = ''): string {
-  const initialLine = chatStreamChunk({ role: 'assistant', content: '' });
-  const reasoningLines = reasoning
-    ? reasoning.split('').map((char) => chatStreamChunk({ reasoning: char }))
-    : [];
+const now = '2026-08-23T00:00:00Z'
 
-  const contentLines = content.split('').map((char) => chatStreamChunk({ content: char }));
-
-  return initialLine + [...reasoningLines, ...contentLines].join('') + 'data: [DONE]\n\n';
+function session(mode: 'chat' | 'builder' = 'chat') {
+  return {
+    id: sessionId,
+    namespaceId: '20000000-0000-4000-8000-000000000010',
+    ownerPrincipalId: '20000000-0000-4000-8000-000000000011',
+    profileId,
+    profileRevision: 1,
+    target: { kind: 'entrypoint', id: 'blend' },
+    mode,
+    title: mode === 'builder' ? 'Build a support router' : 'Existing chat',
+    status: 'active',
+    revision: 1,
+    createdAt: now,
+    updatedAt: now,
+  }
 }
 
-function chatToolCallBody(
-  toolName: string,
-  args: Record<string, unknown>,
-  callId = 'call_open_web_1',
-): string {
-  return JSON.stringify({
-    choices: [
+function userEvent(sequence: number, text: string): AgentEvent {
+  return {
+    sessionId,
+    turnId,
+    sequence,
+    type: 'user_input',
+    createdAt: now,
+    payload: { content: [{ type: 'text', text }] },
+  }
+}
+
+function assistantEvent(sequence: number, text: string): AgentEvent {
+  return {
+    sessionId,
+    turnId,
+    sequence,
+    type: 'assistant_delta',
+    createdAt: now,
+    payload: {
+      modelStepId: '83edbd6c-f8a3-4cab-935a-5ab28b52bd9f',
+      chunkIndex: sequence - 1,
+      delta: { kind: 'text', text },
+    },
+  }
+}
+
+function terminalEvent(sequence: number): AgentEvent {
+  return {
+    sessionId,
+    turnId,
+    sequence,
+    type: 'terminal',
+    createdAt: now,
+    payload: { status: 'completed' },
+  }
+}
+
+function sse(events: AgentEvent[]): string {
+  if (!events.length) return ': ready\n\n'
+  return events
+    .map(
+      (event) => `id: ${event.sequence}\nevent: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+    )
+    .join('')
+}
+
+async function fulfillJSON(route: Route, body: unknown, headers: Record<string, string> = {}) {
+  await route.fulfill({
+    status: 200,
+    headers: { 'Content-Type': mediaType, ...headers },
+    body: JSON.stringify(body),
+  })
+}
+
+interface AgentMockOptions {
+  initialEvents?: AgentEvent[]
+  existingMode?: 'chat' | 'builder'
+  expireFirstResume?: boolean
+  publishedModel?: boolean
+  profilePages?: boolean
+  profileSearchRace?: boolean
+  connectionApproval?: boolean
+  connectionManagement?: boolean
+  capabilityLoadFailure?: boolean
+  profileCapability?: string
+  builtinSkill?: boolean
+}
+
+async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
+  let activeSession = options.initialEvents ? session(options.existingMode) : null
+  let events = options.initialEvents ?? []
+  let expired = false
+  let published = options.publishedModel ?? false
+  let modelReads = 0
+  let publicationCommits = 0
+  let artifactContentReads = 0
+  let connectionApprovals = 0
+  let connectionStatus: 'active' | 'disabled' = 'active'
+  let connectionCredentialId: string | undefined = options.connectionManagement
+    ? '50000000-0000-4000-8000-000000000001'
+    : undefined
+  const resumeHeaders: string[] = []
+  const turnBodies: unknown[] = []
+  const profileQueries: string[] = []
+  const connectionPatches: Array<Record<string, unknown>> = []
+
+  await page.route('**/v1/models*', async (route) => {
+    modelReads += 1
+    const virtualModels = [
       {
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: '',
-          tool_calls: [
+        id: 'blend',
+        description: 'Balanced model path',
+        routing: { resolution: 'virtual', selectable: true, default_route: false, recipe: 'blend' },
+      },
+      ...(published
+        ? [
             {
-              id: callId,
-              type: 'function',
-              function: {
-                name: toolName,
-                arguments: JSON.stringify(args),
+              id: 'blend-v2',
+              description: 'Published model path',
+              routing: {
+                resolution: 'virtual',
+                selectable: true,
+                default_route: false,
+                recipe: 'blend-v2',
               },
             },
-          ],
-        },
-        finish_reason: 'tool_calls',
-      },
-    ],
-  });
-}
-
-function chatJsonBody(content: string): string {
-  return JSON.stringify({
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: 'assistant',
-          content,
-        },
-        finish_reason: 'stop',
-      },
-    ],
-  });
-}
-
-async function mockStreamingChatFetch(
-  page: import('@playwright/test').Page,
-  chunks: string[],
-  delayMs = 250,
-): Promise<void> {
-  await page.evaluate(
-    async ({ chunks: streamChunks, delayMs: streamDelayMs }) => {
-      const originalFetch = window.fetch.bind(window);
-      const encoder = new TextEncoder();
-
-      window.fetch = async (input, init) => {
-        const url =
-          typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-
-        if (!url.includes('/api/router/v1/chat/completions')) {
-          return originalFetch(input, init);
-        }
-
-        let chunkIndex = 0;
-        return new Response(
-          new ReadableStream({
-            start(controller) {
-              const pushChunk = () => {
-                if (chunkIndex >= streamChunks.length) {
-                  controller.close();
-                  return;
-                }
-
-                controller.enqueue(encoder.encode(streamChunks[chunkIndex]));
-                chunkIndex += 1;
-                window.setTimeout(pushChunk, streamDelayMs);
-              };
-
-              pushChunk();
-            },
-          }),
-          {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-            },
-          },
-        );
-      };
-    },
-    { chunks, delayMs },
-  );
-}
-
-async function mockPlaygroundBootstrap(page: import('@playwright/test').Page): Promise<void> {
-  await mockAuthenticatedAppShell(page);
-  await page.route('**/api/router/v1/models*', async (route) => {
+          ]
+        : []),
+    ]
     await route.fulfill({
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        object: 'list',
         data: [
+          ...virtualModels,
           {
-            id: 'vllm-sr/auto',
-            object: 'model',
-            owned_by: 'vllm-semantic-router',
-            description: 'Intelligent Router for Mixture-of-Models',
-            routing: { resolution: 'virtual', selectable: true, default_route: true },
+            id: 'local/qwen',
+            description: 'Connected model',
+            routing: { resolution: 'passthrough', selectable: true, default_route: false },
           },
         ],
       }),
-    });
-  });
-}
+    })
+  })
 
-async function readStoredQueuePrompts(page: import('@playwright/test').Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const raw = window.localStorage.getItem('sr:playground:queue');
-    if (!raw) {
-      return [];
+  await page.route('**/api/router/management/v1/routing/model-cards*', async (route) => {
+    if (options.capabilityLoadFailure) {
+      await route.fulfill({
+        status: 503,
+        headers: { 'Content-Type': mediaType },
+        body: JSON.stringify({
+          error: { code: 'catalog_unavailable', message: 'Model capabilities are unavailable.' },
+        }),
+      })
+      return
     }
+    await fulfillJSON(route, {
+      data: [
+        {
+          id: '60000000-0000-4000-8000-000000000001',
+          name: 'Qwen',
+          card: {
+            aliases: [],
+            capabilities: ['text', 'tools', 'images'],
+            loras: [],
+            tags: [],
+          },
+        },
+      ],
+      page: { hasMore: false, pageSize: 100 },
+    })
+  })
 
-    const parsed = JSON.parse(raw) as Record<string, Array<{ prompt?: string }>>;
-    return Object.values(parsed).flatMap((tasks) =>
-      Array.isArray(tasks) ? tasks.map((task) => task.prompt || '').filter(Boolean) : [],
-    );
-  });
-}
+  await page.route('**/api/router/management/v1/agent-sessions**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const path = url.pathname
+    const method = request.method()
+    const accept = request.headers().accept ?? ''
 
-test.describe('Playground Chat Component', () => {
-  test.beforeEach(async ({ page }) => {
-    await mockPlaygroundBootstrap(page);
-    await page.goto('/playground');
-  });
-
-  test('defaults HireClaw mode off for a fresh session', async ({ page }) => {
-    const menu = await openComposerAddMenu(page);
-    const hireClawToggle = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
-
-    await expect(hireClawToggle).toBeVisible();
-    await expect(hireClawToggle).toHaveAttribute('aria-checked', 'false');
-    await expect(
-      menu.getByRole('menuitemcheckbox', { name: /Open ClawRoom view|Exit ClawRoom view/i }),
-    ).toHaveCount(0);
-
-    const storedValue = await page.evaluate(() =>
-      window.localStorage.getItem('sr:playground:claw-mode'),
-    );
-    expect(storedValue).toBe('false');
-  });
-
-  test('renders chat interface', async ({ page }) => {
-    // Verify main elements are present
-    await expect(page.getByPlaceholder('Ask me anything...')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Send message' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'New conversation' })).toBeVisible();
-    await expect(page.getByTestId('playground-routing-status')).toHaveCount(0);
-
-    const motionBackground = page.getByTestId('playground-motion-background');
-    await expect(motionBackground).toBeVisible();
-    await expect(motionBackground).toHaveCSS('pointer-events', 'none');
-    await expect(motionBackground).toHaveAttribute('data-motion', 'animated');
-  });
-
-  test('uses explicit routing metadata and keeps the model selector vendor-neutral', async ({
-    page,
-  }) => {
-    await page.unroute('**/api/router/v1/models*');
-    await page.route('**/api/router/v1/models*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          object: 'list',
-          data: [
-            {
-              id: 'vllm-sr/mom-v1-blend',
-              object: 'model',
-              owned_by: 'vllm-semantic-router',
-              description: 'Intelligent Router for Mixture-of-Models',
-              routing: { resolution: 'virtual', selectable: true, recipe: 'balanced' },
+    if (path.endsWith('/events') && accept.includes('text/event-stream')) {
+      const resume =
+        request.headers()['last-event-id'] ?? url.searchParams.get('afterSequence') ?? ''
+      resumeHeaders.push(resume)
+      if (options.expireFirstResume && !expired) {
+        expired = true
+        events = [...events, assistantEvent(events.length + 1, 'Recovered')]
+        await route.fulfill({
+          status: 410,
+          headers: { 'Content-Type': mediaType },
+          body: JSON.stringify({
+            error: { code: 'event_history_expired', message: 'History archived' },
+            recovery: {
+              checkpointId: 'checkpoint-1',
+              throughSequence: events.at(-1)?.sequence ?? 0,
             },
-            {
-              id: 'vllm-sr/mom-v1-flash',
-              object: 'model',
-              owned_by: 'vllm-semantic-router',
-              description: 'Latency-first routing profile',
-              routing: {
-                resolution: 'virtual',
-                selectable: true,
-                mode: 'future-orchestrator',
-                recipe: 'speed-first',
-              },
-            },
-            {
-              id: 'vllm-sr/auto',
-              object: 'model',
-              owned_by: 'vllm-semantic-router',
-              description: 'Automatic model routing',
-              routing: { resolution: 'virtual', selectable: true, default_route: true },
-            },
-            {
-              id: 'partner/backend',
-              object: 'model',
-              owned_by: 'upstream-endpoint',
-              routing: { resolution: 'passthrough', selectable: false },
-            },
-          ],
-        }),
-      });
-    });
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    const selector = page.getByTestId('playground-composer-model-select');
-    await expect(selector).toContainText('vllm-sr/mom-v1-blend');
-    await expect(selector).not.toContainText('MoM');
-    await selector.click();
-
-    await expect(page.getByText('Choose a model', { exact: true })).toBeVisible();
-    await expect(page.getByText('speed-first', { exact: true })).toBeVisible();
-    await expect(page.getByText('Latency-first routing profile', { exact: true })).toHaveCount(0);
-    await expect(page.getByRole('option')).toHaveCount(2);
-    await page.getByRole('option', { name: /vllm-sr\/mom-flash-v1/ }).click();
-    await expect(selector).toContainText('vllm-sr/mom-v1-flash');
-  });
-
-  test('consolidates composer tools into an accessible mobile add menu', async ({ page }) => {
-    await page.setViewportSize({ width: 320, height: 700 });
-
-    const trigger = page.getByRole('button', { name: 'Add to prompt' });
-    await expect(trigger).toBeVisible();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
-    await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
-
-    await trigger.focus();
-    await trigger.press('Enter');
-
-    const menu = page.getByRole('menu', { name: 'Add to prompt' });
-    const attachFiles = menu.getByRole('menuitem', { name: 'Attach files' });
-    const webSearch = menu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' });
-    const hireClaw = menu.getByRole('menuitemcheckbox', { name: 'Enable HireClaw' });
-
-    await expect(menu).toBeVisible();
-    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
-    await expect(attachFiles).toBeFocused();
-    await expect(webSearch).toHaveAttribute('aria-checked', 'true');
-
-    await page.keyboard.press('End');
-    await expect(hireClaw).toBeFocused();
-    await page.keyboard.press('Home');
-    await expect(attachFiles).toBeFocused();
-
-    const menuBox = await menu.boundingBox();
-    expect(menuBox).not.toBeNull();
-    expect(menuBox!.x).toBeGreaterThanOrEqual(0);
-    expect(menuBox!.x + menuBox!.width).toBeLessThanOrEqual(320);
-    expect(menuBox!.y).toBeGreaterThanOrEqual(0);
-    expect(menuBox!.y + menuBox!.height).toBeLessThanOrEqual(700);
-
-    await page.keyboard.press('Escape');
-    await expect(menu).toHaveCount(0);
-    await expect(trigger).toBeFocused();
-
-    const togglesMenu = await openComposerAddMenu(page);
-    await togglesMenu.getByRole('menuitemcheckbox', { name: 'Disable Web Search' }).click();
-    await expect(
-      togglesMenu.getByRole('menuitemcheckbox', { name: 'Enable Web Search' }),
-    ).toHaveAttribute('aria-checked', 'false');
-    await page.mouse.click(380, 100);
-    await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
-
-    const reopenedMenu = await openComposerAddMenu(page);
-    const fileChooserPromise = page.waitForEvent('filechooser');
-    await reopenedMenu.getByRole('menuitem', { name: 'Attach files' }).click();
-    const fileChooser = await fileChooserPromise;
-    await fileChooser.setFiles({
-      name: 'routing-notes.txt',
-      mimeType: 'text/plain',
-      buffer: Buffer.from('Prefer the most suitable heterogeneous model path.'),
-    });
-
-    await expect(page.getByTestId('playground-attachment-list')).toContainText('routing-notes.txt');
-    await expect(page.getByRole('menu', { name: 'Add to prompt' })).toHaveCount(0);
-    await expect(trigger).toBeFocused();
-
-    const layoutWidth = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      innerWidth: window.innerWidth,
-    }));
-    expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth);
-  });
-
-  test('keeps the mobile composer readable and clear of the guide control', async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    await expect.poll(async () => (await input.boundingBox())?.width ?? 0).toBeGreaterThan(250);
-    await input.click();
-    await input.fill('The animated surface keeps the composer interactive');
-
-    const motionBackground = page.getByTestId('playground-motion-background');
-    const backgroundBox = await motionBackground.boundingBox();
-    expect(backgroundBox).not.toBeNull();
-    expect(backgroundBox?.width ?? 0).toBeLessThanOrEqual(390);
-    await expect(motionBackground).toHaveCSS('pointer-events', 'none');
-
-    const layoutWidth = await page.evaluate(() => ({
-      scrollWidth: document.documentElement.scrollWidth,
-      innerWidth: window.innerWidth,
-    }));
-    expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth);
-
-    const composerBox = await page.getByTestId('chat-composer').boundingBox();
-    const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox();
-    expect(composerBox).not.toBeNull();
-    expect(guideBox).not.toBeNull();
-    expect((guideBox?.y ?? 0) + (guideBox?.height ?? 0)).toBeLessThanOrEqual(
-      (composerBox?.y ?? 0) + 1,
-    );
-  });
-
-  test('uses the live alias and blocks a restored task with a retired model', async ({ page }) => {
-    await page.unroute('**/api/router/v1/models*');
-    await page.route('**/api/router/v1/models*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          object: 'list',
-          data: [
-            {
-              id: 'router/production',
-              object: 'model',
-              owned_by: 'vllm-semantic-router',
-              description: 'Intelligent Router for Mixture-of-Models',
-              routing: { resolution: 'virtual', selectable: true, default_route: true },
-            },
-          ],
-        }),
-      });
-    });
-
-    const requestModels: string[] = [];
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestModels.push((route.request().postDataJSON() as { model?: string }).model ?? '');
+          }),
+        })
+        return
+      }
+      const after = Number(resume || 0)
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'text/event-stream' },
-        body: chatStreamBody('Custom route is live.'),
-      });
-    });
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByTestId('playground-routing-status')).toHaveCount(0);
-    await page.getByPlaceholder('Ask me anything...').fill('Use the effective runtime alias');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('Custom route is live.')).toBeVisible();
-    expect(requestModels).toEqual(['router/production']);
-
-    await page.evaluate(() => {
-      const conversationId = 'restored-legacy-conversation';
-      window.localStorage.setItem(
-        'sr:playground:queue',
-        JSON.stringify({
-          [conversationId]: [
-            {
-              id: 'restored-legacy-task',
-              conversationId,
-              prompt: 'Restore this legacy task',
-              createdAt: Date.now(),
-              requestOptions: {
-                enableClawMode: false,
-                enableWebSearch: false,
-                model: 'MoM',
-              },
-            },
-          ],
-        }),
-      );
-    });
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await expect(page.getByText(/Queued model "MoM" is no longer available/)).toBeVisible();
-    expect(requestModels).toEqual(['router/production']);
-  });
-
-  test('blocks sending and offers retry when model discovery fails', async ({ page }) => {
-    await page.unroute('**/api/router/v1/models*');
-    await page.route('**/api/router/v1/models*', async (route) => {
-      await route.fulfill({ status: 503, body: 'router unavailable' });
-    });
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await page.getByPlaceholder('Ask me anything...').fill('Do not send this request');
-    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
-  });
-
-  test('rejects a MoM-only discovery response and never submits the retired alias', async ({
-    page,
-  }) => {
-    await page.unroute('**/api/router/v1/models*');
-    await page.route('**/api/router/v1/models*', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          object: 'list',
-          data: [
-            {
-              id: 'MoM',
-              object: 'model',
-              owned_by: 'vllm-semantic-router',
-              description: 'Intelligent Router for Mixture-of-Models',
-              routing: { resolution: 'virtual', selectable: true, default_route: true },
-            },
-          ],
-        }),
-      });
-    });
-
-    let completionRequests = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      completionRequests += 1;
-      await route.abort();
-    });
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    const composer = page.getByPlaceholder('Ask me anything...');
-    await composer.fill('Do not fall back to MoM');
-    await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'Retry discovery' })).toBeVisible();
-    await composer.press('Enter');
-    expect(completionRequests).toBe(0);
-  });
-
-  test('opens and collapses the left history rail', async ({ page }) => {
-    await page.evaluate(() => {
-      const now = Date.now();
-      window.localStorage.setItem(
-        'sr:chat:conversations',
-        JSON.stringify([
-          {
-            id: 'saved-conversation',
-            createdAt: now - 300000,
-            updatedAt: now,
-            payload: [
-              {
-                id: 'saved-user-message',
-                role: 'user',
-                content: 'Saved conversation preview',
-                timestamp: new Date(now - 120000).toISOString(),
-              },
-            ],
-          },
-        ]),
-      );
-    });
-
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
-
-    const shell = page.getByTestId('playground-sidebar-shell');
-    await expect(shell).toBeVisible();
-    const sidebarItem = shell.getByRole('button', { name: 'Saved conversation preview' });
-
-    await page.getByRole('button', { name: 'Open sidebar' }).click();
-    await expect(sidebarItem).toBeVisible();
-
-    await page.getByRole('button', { name: 'Close sidebar' }).click();
-    await expect(sidebarItem).not.toBeVisible();
-  });
-
-  test('keeps the account control in the lower-left rail on playground', async ({ page }) => {
-    const shell = page.getByTestId('playground-sidebar-shell');
-    const accountButton = page.getByTestId('playground-account-control');
-
-    await expect(shell).toBeVisible();
-    await expect(accountButton).toBeVisible();
-    await expect(
-      page.getByRole('button', { name: /Open account menu for Admin User/i }),
-    ).toHaveCount(1);
-
-    await accountButton.click();
-
-    const dialog = page.getByTestId('layout-account-dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog).toContainText('Admin User');
-    await expect(dialog).toContainText('admin@example.com');
-
-    const dialogBox = await dialog.boundingBox();
-    const viewport = page.viewportSize();
-
-    expect(dialogBox).not.toBeNull();
-    expect(viewport).not.toBeNull();
-
-    expect(dialogBox!.x).toBeLessThan(120);
-    expect(Math.abs(dialogBox!.y + dialogBox!.height - viewport!.height)).toBeLessThan(40);
-    expect(dialogBox!.width).toBeLessThanOrEqual(400);
-  });
-
-  test('hides the guide button permanently after finishing onboarding', async ({ page }) => {
-    const onboardingStatusKey = 'vllm-sr.onboarding.status';
-
-    await page.evaluate((key) => {
-      window.localStorage.setItem(key, 'pending');
-    }, onboardingStatusKey);
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
-
-    await expect(page.getByText('Product guide')).toBeVisible();
-    await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page.getByText('Step 2 of 5')).toBeVisible();
-    await page.getByRole('button', { name: 'Pause tour' }).click();
-    await page.getByRole('button', { name: 'Resume guide' }).click();
-    await expect(page.getByText('Step 2 of 5')).toBeVisible();
-
-    while ((await page.getByRole('button', { name: 'Finish' }).count()) === 0) {
-      await page.getByRole('button', { name: 'Next' }).click();
+        body: sse(events.filter((event) => event.sequence > after)),
+      })
+      return
     }
 
-    await page.getByRole('button', { name: 'Finish' }).click();
-    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
-
-    await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('button', { name: 'Guide' })).toHaveCount(0);
-  });
-
-  test('keeps guide actions anchored while step copy changes', async ({ page }) => {
-    await page.setViewportSize({ width: 768, height: 500 });
-    await page.evaluate(() => {
-      window.localStorage.setItem('vllm-sr.onboarding.status', 'pending');
-      window.localStorage.setItem('vllm-sr.onboarding.step', '0');
-    });
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
-
-    const actions = page.getByTestId('onboarding-guide-actions');
-    const body = page.getByTestId('onboarding-guide-body');
-    await expect(actions).toBeVisible();
-    await expect(body).toBeVisible();
-
-    const initialActionsBox = await actions.boundingBox();
-    expect(initialActionsBox).not.toBeNull();
-
-    for (let index = 0; index < 3; index += 1) {
-      await page.getByRole('button', { name: 'Next' }).click();
-      const nextActionsBox = await actions.boundingBox();
-      expect(nextActionsBox).not.toBeNull();
-      expect(Math.abs((nextActionsBox?.y ?? 0) - (initialActionsBox?.y ?? 0))).toBeLessThan(2);
+    if (path.endsWith('/events') && method === 'GET') {
+      await fulfillJSON(route, {
+        data: events,
+        page: { hasMore: false, pageSize: 100 },
+      })
+      return
     }
 
-    const viewport = page.viewportSize();
-    const finalActionsBox = await actions.boundingBox();
-    expect(viewport).not.toBeNull();
-    expect(finalActionsBox).not.toBeNull();
-    expect((finalActionsBox?.y ?? 0) + (finalActionsBox?.height ?? 0)).toBeLessThanOrEqual(
-      viewport?.height ?? 0,
-    );
-    await expect(body).toHaveCSS('overflow-y', 'auto');
-  });
-
-  test('can type message', async ({ page }) => {
-    const input = page.getByPlaceholder('Ask me anything...');
-    await input.fill('Hello, this is a test message');
-    await expect(input).toHaveValue('Hello, this is a test message');
-  });
-
-  test('shows a copy button for user messages and copies their content', async ({ page }) => {
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: chatJsonBody('Assistant reply'),
-      });
-    });
-
-    await page.evaluate(() => {
-      let copiedText = '';
-      Object.defineProperty(window, '__copiedUserMessage', {
-        configurable: true,
-        get: () => copiedText,
-        set: (value: string) => {
-          copiedText = value;
-        },
-      });
-
-      Object.defineProperty(navigator, 'clipboard', {
-        configurable: true,
-        value: {
-          writeText: async (text: string) => {
-            (window as typeof window & { __copiedUserMessage?: string }).__copiedUserMessage = text;
-          },
-        },
-      });
-    });
-
-    await page.getByPlaceholder('Ask me anything...').fill('Copy my user message');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    const userMessage = page.locator('[data-message-role="user"]').last();
-    await expect(userMessage).toContainText('Copy my user message');
-
-    await userMessage.getByRole('button', { name: 'Copy' }).click();
-
-    await expect
-      .poll(() =>
-        page.evaluate(
-          () =>
-            (window as typeof window & { __copiedUserMessage?: string }).__copiedUserMessage ?? '',
-        ),
-      )
-      .toBe('Copy my user message');
-  });
-
-  test('preserves markdown list formatting when citations are present', async ({ page }) => {
-    await page.evaluate(() => {
-      const now = Date.now();
-      window.localStorage.setItem(
-        'sr:chat:conversations',
-        JSON.stringify([
-          {
-            id: 'citation-conversation',
-            createdAt: now - 60_000,
-            updatedAt: now,
-            payload: [
-              {
-                id: 'citation-user',
-                role: 'user',
-                content: 'Show me the summary',
-                timestamp: new Date(now - 30_000).toISOString(),
-              },
-              {
-                id: 'citation-assistant',
-                role: 'assistant',
-                content: '## Summary\n- First cited point [1]\n- Second cited point [2]',
-                timestamp: new Date(now - 20_000).toISOString(),
-                toolResults: [
-                  {
-                    callId: 'search-call-1',
-                    name: 'search_web',
-                    content: [
-                      {
-                        title: 'Source One',
-                        url: 'https://example.com/source-one',
-                        snippet: 'One',
-                      },
-                      {
-                        title: 'Source Two',
-                        url: 'https://example.com/source-two',
-                        snippet: 'Two',
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        ]),
-      );
-    });
-
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
-
-    const assistantMessage = page.locator('[data-message-role="assistant"]').last();
-    await expect(assistantMessage.getByRole('heading', { name: 'Summary' })).toBeVisible();
-    await expect(assistantMessage.locator('li')).toHaveCount(2);
-    await expect(assistantMessage.getByRole('link', { name: '[1]' })).toHaveAttribute(
-      'href',
-      'https://example.com/source-one',
-    );
-    await expect(assistantMessage.getByRole('link', { name: '[2]' })).toHaveAttribute(
-      'href',
-      'https://example.com/source-two',
-    );
-  });
-
-  test('renders markdown while the response is still streaming', async ({ page }) => {
-    await mockStreamingChatFetch(
-      page,
-      [
-        chatStreamChunk({ role: 'assistant', content: '' }),
-        chatStreamChunk({ content: '# Live heading\n' }),
-        chatStreamChunk({ content: '\n\nStreaming body text keeps arriving.' }),
-        chatStreamChunk({ content: '\n\nMore markdown-friendly content follows.' }),
-        'data: [DONE]\n\n',
-      ],
-      500,
-    );
-
-    await page.getByPlaceholder('Ask me anything...').fill('Stream markdown formatting');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    const assistantMessage = page.locator('[data-message-role="assistant"]').last();
-
-    await expect(assistantMessage.getByRole('heading', { name: 'Live heading' })).toBeVisible({
-      timeout: 5000,
-    });
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
-  });
-
-  test('does not send on Enter while IME composition is active', async ({ page }) => {
-    let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestCount += 1;
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: chatJsonBody('IME-safe response'),
-      });
-    });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    await input.fill('你好');
-    await input.dispatchEvent('compositionstart');
-    await input.press('Enter');
-
-    await page.waitForTimeout(200);
-    expect(requestCount).toBe(0);
-    await expect(page.locator('[data-message-role="user"]')).toHaveCount(0);
-
-    await input.dispatchEvent('compositionend');
-    await input.press('Enter');
-
-    await expect.poll(() => requestCount).toBe(1);
-    await expect(page.locator('[data-message-role="user"]').last()).toContainText('你好');
-  });
-
-  test('send button disabled when input empty', async ({ page }) => {
-    const sendButton = page.getByRole('button', { name: 'Send message' });
-    // Button should be disabled when input is empty
-    await expect(sendButton).toBeDisabled();
-
-    // Type something
-    await page.getByPlaceholder('Ask me anything...').fill('test');
-
-    // Button should be enabled
-    await expect(sendButton).toBeEnabled();
-  });
-
-  test('new conversation clears messages', async ({ page }) => {
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        body: chatStreamBody('Hello! This is a mock response.'),
-      });
-    });
-
-    await page.getByPlaceholder('Ask me anything...').fill('Clear me');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.locator('[data-message-role="user"]').last()).toContainText('Clear me', {
-      timeout: 10000,
-    });
-
-    await page.getByRole('button', { name: 'New conversation' }).click();
-
-    await expect(
-      page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' }),
-    ).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
-  });
-
-  test('keeps streaming in the original session after switching away and shows progress when switching back', async ({
-    page,
-  }) => {
-    await mockStreamingChatFetch(
-      page,
-      [
-        chatStreamChunk({ role: 'assistant', content: '' }),
-        chatStreamChunk({ content: 'First visible chunk. ' }),
-        chatStreamChunk({ content: 'Continues while hidden. ' }),
-        chatStreamChunk({ content: 'Final background chunk.' }),
-        'data: [DONE]\n\n',
-      ],
-      250,
-    );
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    const sessionAPrompt = 'Keep session A streaming';
-
-    await input.fill(sessionAPrompt);
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect(page.getByText('First visible chunk.')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
-
-    await page.getByRole('button', { name: 'New conversation' }).click();
-    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toHaveCount(0);
-    await expect(page.getByText('First visible chunk.')).toHaveCount(0);
-
-    await page.waitForTimeout(900);
-
-    const sidebarShell = page.getByTestId('playground-sidebar-shell');
-    const sessionAButton = sidebarShell.getByRole('button', { name: sessionAPrompt });
-    if (
-      (await sessionAButton.count()) === 0 ||
-      !(await sessionAButton
-        .first()
-        .isVisible()
-        .catch(() => false))
-    ) {
-      await page.getByRole('button', { name: 'Open sidebar' }).click();
-    }
-
-    await expect(sessionAButton).toBeVisible();
-    await sessionAButton.click();
-
-    await expect(page.getByText('Continues while hidden.')).toBeVisible({ timeout: 5000 });
-    await expect(page.getByText('Final background chunk.')).toBeVisible({ timeout: 5000 });
-  });
-
-  test('switching back to a saved session snaps the transcript to the latest messages', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 560 });
-
-    await page.evaluate(() => {
-      const now = Date.now();
-      const longHistory = Array.from({ length: 12 }, (_, index) => {
-        const offset = (12 - index) * 90_000;
-        return [
-          {
-            id: `long-user-${index + 1}`,
-            role: 'user',
-            content: index === 0 ? 'Long history session' : `Long history follow-up ${index + 1}`,
-            timestamp: new Date(now - 4_000_000 + offset).toISOString(),
-          },
-          {
-            id: `long-assistant-${index + 1}`,
-            role: 'assistant',
-            content: Array.from(
-              { length: 8 },
-              (_, paragraphIndex) =>
-                `Long history answer ${index + 1}, paragraph ${paragraphIndex + 1}: the transcript should reopen near the latest content.`,
-            ).join('\n\n'),
-            timestamp: new Date(now - 4_000_000 + offset + 15_000).toISOString(),
-          },
-        ];
-      }).flat();
-
-      const recentConversation = [
+    if (path.endsWith('/turns') && method === 'POST') {
+      const input = request.postDataJSON() as { input?: { content?: Array<{ text?: string }> } }
+      turnBodies.push(input)
+      const text = input.input?.content?.find((item) => item.text)?.text ?? 'Hello'
+      events = [
+        userEvent(1, text),
         {
-          id: 'recent-user',
-          role: 'user',
-          content: 'Recent short session',
-          timestamp: new Date(now - 30_000).toISOString(),
+          sessionId,
+          turnId,
+          sequence: 2,
+          type: 'tool_request',
+          createdAt: now,
+          payload: {
+            invocationId: 'tool-1',
+            toolName: 'routing.validate_recipe',
+            arguments: { recipeId: 'blend' },
+            class: 'read',
+          },
         },
         {
-          id: 'recent-assistant',
-          role: 'assistant',
-          content: 'Short reply for the currently selected session.',
-          timestamp: new Date(now - 15_000).toISOString(),
+          sessionId,
+          turnId,
+          sequence: 3,
+          type: 'tool_result',
+          createdAt: now,
+          payload: {
+            invocationId: 'tool-1',
+            toolName: 'routing.validate_recipe',
+            status: 'completed',
+            result: { recipeId: 'blend' },
+            artifactId,
+          },
         },
-      ];
-
-      window.localStorage.setItem(
-        'sr:chat:conversations',
-        JSON.stringify([
-          {
-            id: 'recent-conversation',
-            createdAt: now - 60_000,
-            updatedAt: now - 10_000,
-            payload: recentConversation,
-          },
-          {
-            id: 'long-history-conversation',
-            createdAt: now - 5_000_000,
-            updatedAt: now - 20_000,
-            payload: longHistory,
-          },
-        ]),
-      );
-    });
-
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByText('Short reply for the currently selected session.')).toBeVisible();
-
-    const sidebarShell = page.getByTestId('playground-sidebar-shell');
-    const longHistoryButton = sidebarShell.getByRole('button', { name: 'Long history session' });
-    if (
-      (await longHistoryButton.count()) === 0 ||
-      !(await longHistoryButton
-        .first()
-        .isVisible()
-        .catch(() => false))
-    ) {
-      await page.getByRole('button', { name: 'Open sidebar' }).click();
+        assistantEvent(4, 'The model path is ready.'),
+        terminalEvent(5),
+      ]
+      await fulfillJSON(route, { resource: { kind: 'agent-turn', id: turnId, revision: 1 } })
+      return
     }
 
-    await longHistoryButton.click();
-    await expect(
-      page.getByText(
-        'Long history answer 12, paragraph 8: the transcript should reopen near the latest content.',
-      ),
-    ).toBeVisible();
+    if (path.endsWith(':cancel') && method === 'POST') {
+      await fulfillJSON(route, { resource: { kind: 'agent-turn', id: turnId, revision: 2 } })
+      return
+    }
 
-    const transcript = page.getByTestId('chat-transcript');
-    await expect
-      .poll(
-        async () => {
-          return transcript.evaluate((node) => {
-            const container = node as HTMLDivElement;
-            return container.scrollHeight - container.scrollTop - container.clientHeight;
-          });
+    if (path.endsWith(`/${sessionId}`) && method === 'GET') {
+      await fulfillJSON(route, { data: activeSession ?? session() }, { ETag: '"session-1"' })
+      return
+    }
+
+    if (path.endsWith(`/${sessionId}`) && method === 'DELETE') {
+      activeSession = null
+      await route.fulfill({ status: 204 })
+      return
+    }
+
+    if (path.endsWith('/agent-sessions') && method === 'POST') {
+      const input = request.postDataJSON() as {
+        mode: 'chat' | 'builder'
+        target: { kind: string; id: string }
+        title?: string
+      }
+      activeSession = {
+        ...session(input.mode),
+        target: input.target,
+        title: input.title ?? 'New conversation',
+      }
+      await fulfillJSON(route, { resource: { kind: 'agent-session', id: sessionId, revision: 1 } })
+      return
+    }
+
+    if (path.endsWith('/agent-sessions') && method === 'GET') {
+      const query = url.searchParams.get('search')?.toLowerCase() ?? ''
+      const data =
+        activeSession && (!query || activeSession.title.toLowerCase().includes(query))
+          ? [activeSession]
+          : []
+      await fulfillJSON(route, { data, page: { hasMore: false, pageSize: 50 } })
+      return
+    }
+
+    await route.fulfill({ status: 404 })
+  })
+
+  await page.route('**/api/router/management/v1/agent-profiles*', async (route) => {
+    const url = new URL(route.request().url())
+    profileQueries.push(url.search)
+    const profiles = ['General', 'Builder'].map((name, index) => ({
+      id: `30000000-0000-4000-8000-00000000000${index + 1}`,
+      namespaceId: '20000000-0000-4000-8000-000000000010',
+      name,
+      status: 'active',
+      revision: 1,
+      contentRevision: 1,
+      createdAt: now,
+      updatedAt: now,
+      minimumTargetCapabilities: options.profileCapability ? [options.profileCapability] : [],
+      supportedModes: index === 0 ? ['chat'] : ['builder'],
+      defaultForModes: [],
+      skills: [],
+      toolPolicy: { allow: [] },
+      approvalPolicy: 'required',
+      maximumTurnSeconds: 900,
+      maximumToolSteps: 24,
+      contextTokenBudget: 32768,
+    }))
+    const detail = profiles.find((profile) => url.pathname.endsWith(`/${profile.id}`))
+    if (detail) {
+      await fulfillJSON(route, { data: detail }, { ETag: '"profile-1"' })
+      return
+    }
+    const search = url.searchParams.get('search')?.toLowerCase()
+    if (options.profileSearchRace && search === 'general') {
+      await new Promise((resolve) => setTimeout(resolve, 450))
+    }
+    const cursor = url.searchParams.get('cursor')
+    const data = search
+      ? profiles.filter((profile) => profile.name.toLowerCase().includes(search))
+      : options.profilePages
+        ? [profiles[cursor ? 1 : 0]]
+        : []
+    await fulfillJSON(route, {
+      data,
+      page: {
+        hasMore: Boolean(options.profilePages && !search && !cursor),
+        ...(options.profilePages && !search && !cursor ? { nextCursor: 'profiles-page-2' } : {}),
+        pageSize: 50,
+      },
+    })
+  })
+  await page.route('**/api/router/management/v1/agent-skills*', async (route) => {
+    const skill = {
+      id: '30000000-0000-4000-8000-000000000010',
+      name: 'Recipe designer',
+      description: 'Build and validate model paths',
+      status: 'active',
+      revision: 1,
+      contentRevision: 1,
+      builtin: true,
+      instructions: 'Design a recipe.',
+      requiredTools: [],
+      minimumCapabilities: [],
+      contentDigest: digest,
+      createdAt: now,
+      updatedAt: now,
+    }
+    if (options.builtinSkill && new URL(route.request().url()).pathname.endsWith(`/${skill.id}`)) {
+      await fulfillJSON(route, { data: skill }, { ETag: '"skill-1"' })
+      return
+    }
+    await fulfillJSON(route, {
+      data: options.builtinSkill ? [skill] : [],
+      page: { hasMore: false, pageSize: 50 },
+    })
+  })
+  await page.route('**/api/router/management/v1/agent-tools*', async (route) => {
+    await fulfillJSON(route, {
+      data: [],
+      page: { hasMore: false, pageSize: 50 },
+      registryRevision: digest,
+    })
+  })
+  await page.route('**/api/router/management/v1/agent-tool-sources*', async (route) => {
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    const source = {
+      id: '40000000-0000-4000-8000-000000000001',
+      namespaceId: '20000000-0000-4000-8000-000000000010',
+      name: 'Knowledge tools',
+      description: 'Search internal references',
+      status: connectionStatus,
+      revision: connectionApprovals + connectionPatches.length + 1,
+      contentRevision: connectionApprovals + connectionPatches.length + 1,
+      createdAt: now,
+      updatedAt: now,
+      kind: 'remote',
+      transport: 'streamable_http',
+      endpoint: 'https://tools.example.com/connect',
+      ...(connectionCredentialId ? { credentialId: connectionCredentialId } : {}),
+      egressPolicy: { allowedHosts: ['tools.example.com'], allowedPorts: [443] },
+      discoveredTools: [
+        {
+          name: 'knowledge.search',
+          description: 'Search references',
+          inputSchema: { type: 'object' },
+          outputSchema: { type: 'object' },
+          requiredPermissions: ['tool.invoke'],
+          class: 'read',
+          idempotency: 'invocation',
+          timeoutMilliseconds: 10_000,
         },
-        { timeout: 5000 },
-      )
-      .toBeLessThan(24);
-  });
-
-  test('sends message and receives response (mocked API)', async ({ page }) => {
-    // Mock the chat API endpoint
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      const request = route.request();
-      const postData = request.postDataJSON();
-
-      // Verify request structure
-      expect(postData).toHaveProperty('messages');
-      expect(postData).toHaveProperty('model', 'vllm-sr/auto');
-      expect(postData).toHaveProperty('stream');
-
-      // Return mock streaming response
-      const responseText = 'Hello! This is a mock response.';
-
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        body: chatStreamBody(responseText),
-      });
-    });
-
-    // Type a message
-    const input = page.getByPlaceholder('Ask me anything...');
-    await input.fill('Hello, how are you?');
-
-    // Send the message
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    // User message should appear
-    await expect(
-      page.getByTestId('chat-transcript').getByText('Hello, how are you?'),
-    ).toBeVisible();
-
-    // Wait for response to appear (the mocked response)
-    await expect(page.getByText('Hello! This is a mock response.')).toBeVisible({ timeout: 10000 });
-
-    // Input should be cleared after sending
-    await expect(input).toHaveValue('');
-  });
-
-  test('routes open_web through the backend proxy', async ({ page }) => {
-    let chatRequestCount = 0;
-    let openWebRequestBody: Record<string, unknown> | null = null;
-
-    await page.route('**/api/tools/open-web', async (route) => {
-      openWebRequestBody = route.request().postDataJSON() as Record<string, unknown>;
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          url: 'https://example.com/article',
-          title: 'Example Article',
-          content: 'Example content returned by the backend proxy.',
-          length: 46,
-          truncated: false,
-          method: 'direct',
-        }),
-      });
-    });
-
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      chatRequestCount += 1;
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body:
-          chatRequestCount === 1
-            ? chatToolCallBody('open_web', {
-                url: 'https://example.com/article',
-                format: 'markdown',
-                max_length: 15000,
-              })
-            : chatJsonBody('The page was fetched through the backend proxy.'),
-      });
-    });
-
-    await page.getByPlaceholder('Ask me anything...').fill('Open an article for me');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect(page.getByText('The page was fetched through the backend proxy.')).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(page.getByText('Example Article')).toBeVisible({ timeout: 10000 });
-
-    expect(openWebRequestBody).toMatchObject({
-      url: 'https://example.com/article',
-      timeout: 30,
-      force_jina: false,
-      format: 'markdown',
-      max_length: 15000,
-      with_images: false,
-    });
-    expect(chatRequestCount).toBe(2);
-  });
-
-  test('sends tool failures back to the model during follow-up loops', async ({ page }) => {
-    await page.evaluate(async () => {
-      const originalFetch = window.fetch.bind(window);
-      const encoder = new TextEncoder();
-      let completionRequestCount = 0;
-
-      const streamResponse = (chunks: string[]) =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              for (const chunk of chunks) {
-                controller.enqueue(encoder.encode(chunk));
-              }
-              controller.close();
-            },
-          }),
-          {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-            },
-          },
-        );
-
-      window.fetch = async (input, init) => {
-        const url =
-          typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-
-        if (url.includes('/api/router/v1/chat/completions')) {
-          completionRequestCount += 1;
-
-          if (completionRequestCount === 1) {
-            return streamResponse([
-              'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_open_web_1","type":"function","function":{"name":"open_web","arguments":"{\\"url\\":\\"https://example.com/article\\"}"}}]}}]}\n\n',
-              'data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}\n\n',
-              'data: [DONE]\n\n',
-            ]);
-          }
-
-          if (completionRequestCount === 2) {
-            const requestBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
-            (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest =
-              requestBody;
-
-            return streamResponse([
-              'data: {"choices":[{"index":0,"delta":{"content":"Follow',
-              ' up stream recovered."}}]}\n\n',
-              'data: [DONE]\n\n',
-            ]);
-          }
-        }
-
-        if (url.includes('/api/tools/open-web') || url.startsWith('https://r.jina.ai/')) {
-          return new Response('upstream failure', {
-            status: 500,
-            statusText: 'Internal Server Error',
-          });
-        }
-
-        return originalFetch(input, init);
-      };
-    });
-
-    await page.getByPlaceholder('Ask me anything...').fill('Trigger a tool failure');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect
-      .poll(
-        async () => {
-          return await page.evaluate(() =>
-            (window as typeof window & { __lastFollowUpRequest?: unknown }).__lastFollowUpRequest
-              ? 1
-              : 0,
-          );
-        },
-        { timeout: 10000 },
-      )
-      .toBe(1);
-
-    await expect
-      .poll(
-        async () => {
-          const request = await page.evaluate(
-            () =>
-              (
-                window as typeof window & {
-                  __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>> };
-                }
-              ).__lastFollowUpRequest,
-          );
-          return request?.messages?.find((message) => message.role === 'tool')?.content ?? null;
-        },
-        { timeout: 10000 },
-      )
-      .not.toBeNull();
-
-    const refreshedFollowUpRequest = await page.evaluate(
-      () =>
-        (
-          window as typeof window & {
-            __lastFollowUpRequest?: { messages?: Array<Record<string, unknown>>; model?: string };
-          }
-        ).__lastFollowUpRequest,
-    );
-
-    expect(refreshedFollowUpRequest?.model).toBe('vllm-sr/auto');
-    expect(
-      refreshedFollowUpRequest?.messages?.some((message) => message.role === 'tool'),
-    ).toBeTruthy();
-    const resolvedToolMessage = refreshedFollowUpRequest?.messages?.find(
-      (message) => message.role === 'tool',
-    );
-    expect(resolvedToolMessage?.content).toContain('Tool execution failed:');
-    expect(resolvedToolMessage?.content).not.toBe('null');
-  });
-
-  test('executes the built-in calculate tool and forwards the structured result', async ({
-    page,
-  }) => {
-    await page.evaluate(async () => {
-      const originalFetch = window.fetch.bind(window);
-      const encoder = new TextEncoder();
-      let completionRequestCount = 0;
-
-      const streamResponse = (chunks: string[]) =>
-        new Response(
-          new ReadableStream({
-            start(controller) {
-              for (const chunk of chunks) {
-                controller.enqueue(encoder.encode(chunk));
-              }
-              controller.close();
-            },
-          }),
-          {
-            headers: {
-              'Content-Type': 'text/event-stream',
-              'Cache-Control': 'no-cache',
-            },
-          },
-        );
-
-      window.fetch = async (input, init) => {
-        const url =
-          typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
-
-        if (url.includes('/api/router/v1/chat/completions')) {
-          completionRequestCount += 1;
-
-          if (completionRequestCount === 1) {
-            return streamResponse([
-              'data: {"choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_calculate_1","type":"function","function":{"name":"calculate","arguments":"{\\"expression\\":\\"2 + 2 * 3\\"}"}}]}}]}\n\n',
-              'data: {"choices":[{"index":0,"finish_reason":"tool_calls"}]}\n\n',
-              'data: [DONE]\n\n',
-            ]);
-          }
-
-          if (completionRequestCount === 2) {
-            const requestBody = typeof init?.body === 'string' ? JSON.parse(init.body) : null;
-            (
-              window as typeof window & { __lastCalculateFollowUp?: unknown }
-            ).__lastCalculateFollowUp = requestBody;
-
-            return streamResponse([
-              'data: {"choices":[{"index":0,"delta":{"content":"The answer is 8."}}]}\n\n',
-              'data: [DONE]\n\n',
-            ]);
-          }
-        }
-
-        return originalFetch(input, init);
-      };
-    });
-
-    await page.getByPlaceholder('Ask me anything...').fill('What is 2 + 2 * 3?');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect(page.getByText('The answer is 8.')).toBeVisible({ timeout: 10000 });
-
-    const followUpRequest = await page.evaluate(
-      () =>
-        (
-          window as typeof window & {
-            __lastCalculateFollowUp?: { messages?: Array<Record<string, unknown>> };
-          }
-        ).__lastCalculateFollowUp,
-    );
-
-    const toolMessage = followUpRequest?.messages?.find((message) => message.role === 'tool');
-
-    expect(toolMessage).toBeTruthy();
-    expect(typeof toolMessage?.content).toBe('string');
-    expect(toolMessage?.content).toContain('"formatted_result":"8"');
-  });
-
-  test('handles API error gracefully', async ({ page }) => {
-    // Mock API to return an error
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      await route.fulfill({
-        status: 500,
-        body: JSON.stringify({ error: 'Internal server error' }),
-      });
-    });
-
-    // Type and send a message
-    await page.getByPlaceholder('Ask me anything...').fill('Test error handling');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    // User message should still appear
-    await expect(
-      page.getByTestId('chat-transcript').getByText('Test error handling'),
-    ).toBeVisible();
-
-    // Error should be displayed (specific API error message)
-    await expect(page.getByText('API error:')).toBeVisible({ timeout: 5000 });
-  });
-
-  test('stop button appears during streaming', async ({ page }) => {
-    // Mock a slow streaming response
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      // Delay response to allow stop button to appear
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      await route.fulfill({
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-        body: 'data: {"choices":[{"delta":{"content":"Test"}}]}\n\ndata: [DONE]\n\n',
-      });
-    });
-
-    // Send a message
-    await page.getByPlaceholder('Ask me anything...').fill('Test streaming');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    // Stop button should appear (look for it quickly before response completes)
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({
-      timeout: 5000,
-    });
-  });
-
-  test('queues prompts during streaming, restores them after reload, and lets queued tasks be removed', async ({
-    page,
-  }) => {
-    let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 6000));
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        body: chatStreamBody(`Response ${requestCount}`),
-      });
-    });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    await input.fill('First queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect.poll(() => requestCount).toBe(1);
-    const queue = page.getByTestId('playground-task-queue');
-
-    await input.fill('Second queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await input.fill('Third queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect(queue).toContainText('Second queued task');
-    await expect(queue).toContainText('Third queued task');
-    await expect(queue).not.toContainText('First queued task');
-    await expect
-      .poll(() => readStoredQueuePrompts(page))
-      .toEqual(['Second queued task', 'Third queued task']);
-
-    await page.reload({ waitUntil: 'domcontentloaded' });
-
-    const restoredQueue = page.getByTestId('playground-task-queue');
-    await expect(restoredQueue).toContainText('Third queued task', { timeout: 10000 });
-    await expect(restoredQueue).not.toContainText('Second queued task');
-    await expect(restoredQueue).toContainText('Third queued task');
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['Third queued task']);
-
-    const thirdQueuedTask = restoredQueue
-      .locator('[data-testid^="playground-task-queue-item-"]')
-      .filter({ hasText: 'Third queued task' })
-      .first();
-    await thirdQueuedTask.getByRole('button', { name: /Remove queued task:/ }).click();
-
-    await expect(restoredQueue).toHaveCount(0);
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
-  });
-
-  test('isolates queued work per conversation so a new conversation can run immediately', async ({
-    page,
-  }) => {
-    let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestCount += 1;
-      const body = route.request().postDataJSON() as {
-        messages?: Array<{ role?: string; content?: string }>;
-      };
-      const prompt =
-        [...(body.messages ?? [])].reverse().find((message) => message.role === 'user')?.content ??
-        `Request ${requestCount}`;
-
-      const delayMs = prompt === 'A first task' ? 6000 : 600;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        body: chatStreamBody(`Response for ${prompt}`),
-      });
-    });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-
-    await input.fill('A first task');
-    await input.press('Enter');
-    await expect.poll(() => requestCount).toBe(1);
-
-    await input.fill('A queued task');
-    await input.press('Enter');
-    await expect(page.getByTestId('playground-task-queue')).toContainText('A queued task');
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['A queued task']);
-
-    await page.getByRole('button', { name: 'New conversation' }).click();
-    await input.fill('B direct task');
-    await input.press('Enter');
-
-    await expect.poll(() => requestCount).toBe(2);
-    await expect(page.getByText('Response for B direct task')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByTestId('playground-task-queue')).toHaveCount(0);
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual(['A queued task']);
-  });
-
-  test('allows queued prompts to be edited from the overflow menu', async ({ page }) => {
-    let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 6000));
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        body: chatStreamBody('Streaming response for queued editing'),
-      });
-    });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    await input.fill('First queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect.poll(() => requestCount).toBe(1);
-
-    await input.fill('Editable queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    const queue = page.getByTestId('playground-task-queue');
-    const queuedTask = queue
-      .locator('[data-testid^="playground-task-queue-item-"]')
-      .filter({ hasText: 'Editable queued task' })
-      .first();
-
-    await queuedTask.getByRole('button', { name: /More actions for queued task:/ }).click();
-    await page.getByRole('menuitem', { name: 'Edit prompt' }).click();
-
-    await expect(input).toHaveValue('Editable queued task');
-    await expect(queue).toHaveCount(0);
-    await expect.poll(() => readStoredQueuePrompts(page)).toEqual([]);
-  });
-
-  test('allows queued tasks to be reordered by dragging', async ({ page }) => {
-    let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestCount += 1;
-      await new Promise((resolve) => setTimeout(resolve, 6000));
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-        },
-        body: chatStreamBody('Streaming response for queue ordering'),
-      });
-    });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    await input.fill('First queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect.poll(() => requestCount).toBe(1);
-    const queue = page.getByTestId('playground-task-queue');
-
-    await input.fill('Second queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await input.fill('Third queued task');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect(queue).toContainText('Second queued task');
-    await expect(queue).toContainText('Third queued task');
-    await expect(queue).not.toContainText('First queued task');
-    const secondQueuedTask = queue
-      .locator('[data-testid^="playground-task-queue-item-"]')
-      .filter({ hasText: 'Second queued task' })
-      .first();
-    const thirdQueuedTask = queue
-      .locator('[data-testid^="playground-task-queue-item-"]')
-      .filter({ hasText: 'Third queued task' })
-      .first();
-
-    await thirdQueuedTask.dragTo(secondQueuedTask);
-
-    await expect
-      .poll(() => readStoredQueuePrompts(page))
-      .toEqual(['Third queued task', 'Second queued task']);
-  });
-
-  test('anchors the current user turn near the top and respects manual scrolling during streaming', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 560 });
-
-    await page.evaluate(() => {
-      const now = Date.now();
-      const history = Array.from({ length: 10 }, (_, index) => {
-        const offset = (10 - index) * 60_000;
-        return [
-          {
-            id: `seed-user-${index + 1}`,
-            role: 'user',
-            content: `Earlier question ${index + 1}`,
-            timestamp: new Date(now - offset).toISOString(),
-          },
-          {
-            id: `seed-assistant-${index + 1}`,
-            role: 'assistant',
-            content: Array.from(
-              { length: 8 },
-              (_, paragraphIndex) =>
-                `Earlier answer ${index + 1}, paragraph ${paragraphIndex + 1}: seeded history keeps the transcript tall.`,
-            ).join('\n\n'),
-            timestamp: new Date(now - offset + 15_000).toISOString(),
-          },
-        ];
-      }).flat();
-
-      window.localStorage.setItem(
-        'sr:chat:conversations',
-        JSON.stringify([
-          {
-            id: 'seeded-conversation',
-            createdAt: now - 3600_000,
-            updatedAt: now,
-            payload: history,
-          },
-        ]),
-      );
-    });
-    await page.goto('/playground', { waitUntil: 'domcontentloaded' });
-
-    const chunks = [
-      chatStreamChunk({ role: 'assistant', content: '' }),
-      ...Array.from({ length: 140 }, (_, index) =>
-        chatStreamChunk({ content: `Paragraph ${index + 1}: streaming output keeps growing.\n\n` }),
-      ),
-      'data: [DONE]\n\n',
-    ];
-
-    await mockStreamingChatFetch(page, chunks, 25);
-
-    await page.getByPlaceholder('Ask me anything...').fill('Show a long streamed answer');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible({
-      timeout: 5000,
-    });
-    const currentAssistant = page.locator('[data-message-role="assistant"]').last();
-    await expect(currentAssistant).toContainText('Paragraph 40: streaming output keeps growing.', {
-      timeout: 10000,
-    });
-
-    const transcript = page.locator('[data-testid="chat-transcript"]');
-    await expect
-      .poll(
-        async () => {
-          return transcript.evaluate((node) => {
-            const container = node as HTMLDivElement;
-            const userMessages = container.querySelectorAll<HTMLElement>(
-              '[data-message-role="user"]',
-            );
-            const currentQuestion = userMessages[userMessages.length - 1];
-
-            if (!currentQuestion) {
-              return Number.POSITIVE_INFINITY;
-            }
-
-            return (
-              currentQuestion.getBoundingClientRect().top - container.getBoundingClientRect().top
-            );
-          });
-        },
-        { timeout: 5000 },
-      )
-      .toBeLessThan(120);
-
-    const scrollTopBeforeManualScroll = await transcript.evaluate(
-      (node) => (node as HTMLDivElement).scrollTop,
-    );
-    const manualScrollTop = await transcript.evaluate((node) => {
-      const container = node as HTMLDivElement;
-      container.style.scrollBehavior = 'auto';
-      const target = Math.max(0, container.scrollTop - container.clientHeight * 1.5);
-      container.scrollTop = target;
-      container.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: -1 }));
-      return container.scrollTop;
-    });
-    expect(manualScrollTop).toBeLessThan(scrollTopBeforeManualScroll - 300);
-
-    await expect(currentAssistant).toContainText('Paragraph 140: streaming output keeps growing.', {
-      timeout: 10000,
-    });
-  });
-
-  test('keeps the assistant rail centered and stable during streaming and after completion', async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 1280, height: 720 });
-
-    await mockStreamingChatFetch(
-      page,
-      [
-        chatStreamChunk({ role: 'assistant', content: '' }),
-        chatStreamChunk({ content: 'This starts the streamed response. ' }),
-        chatStreamChunk({ content: 'More text arrives while the layout stays stable. ' }),
-        chatStreamChunk({
-          content: 'The final chunk lands without the message suddenly widening.',
-        }),
-        'data: [DONE]\n\n',
       ],
-      220,
-    );
-
-    await page.getByPlaceholder('Ask me anything...').fill('Check the assistant layout rail');
-    await page.getByRole('button', { name: 'Send message' }).click();
-
-    const assistantContent = page
-      .locator('[data-message-role="assistant"] [data-message-content]')
-      .last();
-
-    await expect(assistantContent).toBeVisible({ timeout: 5000 });
-
-    const boxWhileStreaming = await assistantContent.evaluate((node) => {
-      const rect = node.getBoundingClientRect();
-      return {
-        center: rect.left + rect.width / 2,
-        width: rect.width,
-      };
-    });
-    expect(boxWhileStreaming.width).toBeGreaterThan(560);
-    expect(boxWhileStreaming.width).toBeLessThan(900);
-    expect(Math.abs(boxWhileStreaming.center - 640)).toBeLessThan(120);
-
-    await expect(
-      page.getByText('The final chunk lands without the message suddenly widening.'),
-    ).toBeVisible({
-      timeout: 10000,
-    });
-
-    const boxAfterCompletion = await assistantContent.evaluate((node) => {
-      const rect = node.getBoundingClientRect();
-      return {
-        center: rect.left + rect.width / 2,
-        width: rect.width,
-      };
-    });
-    expect(boxAfterCompletion.width).toBeGreaterThan(560);
-    expect(boxAfterCompletion.width).toBeLessThan(900);
-    expect(Math.abs(boxAfterCompletion.center - 640)).toBeLessThan(120);
-    expect(Math.abs(boxAfterCompletion.width - boxWhileStreaming.width)).toBeLessThan(48);
-  });
-
-  test('keeps the composer pinned to the bottom on the second turn', async ({ page }) => {
-    await page.setViewportSize({ width: 1280, height: 900 });
-
-    let requestCount = 0;
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      requestCount += 1;
-      const body =
-        requestCount === 1
-          ? chatStreamBody('First answer closes out the opening turn.')
-          : chatStreamBody(
-              Array.from(
-                { length: 28 },
-                (_, index) => `Second-turn paragraph ${index + 1} keeps the response growing.`,
-              ).join('\n\n'),
-            );
-
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+      discoveryDigest: digest,
+      availability:
+        connectionStatus === 'disabled'
+          ? 'disabled'
+          : connectionApprovals
+            ? 'ready'
+            : 'pending_approval',
+      ...(connectionApprovals ? { approvedDiscoveryDigest: digest } : {}),
+    }
+    if (options.connectionApproval && path.endsWith(':approve')) {
+      expect(request.headers()['if-match']).toBe('"source-1"')
+      expect(request.headers()['idempotency-key']).toBeTruthy()
+      expect(request.postDataJSON()).toEqual({ discoveryDigest: digest })
+      connectionApprovals += 1
+      await fulfillJSON(route, {
+        resource: { kind: 'agent-tool-source', id: source.id, revision: 2 },
+      })
+      return
+    }
+    if (
+      (options.connectionApproval || options.connectionManagement) &&
+      path.endsWith(`/${source.id}`) &&
+      request.method() === 'PATCH'
+    ) {
+      const patch = request.postDataJSON() as Record<string, unknown>
+      connectionPatches.push(patch)
+      if (Object.prototype.hasOwnProperty.call(patch, 'credentialId')) {
+        connectionCredentialId =
+          typeof patch.credentialId === 'string' ? patch.credentialId : undefined
+      }
+      if (patch.status === 'active' || patch.status === 'disabled') connectionStatus = patch.status
+      await fulfillJSON(route, {
+        resource: {
+          kind: 'agent-tool-source',
+          id: source.id,
+          revision: connectionPatches.length + 1,
         },
-        body,
-      });
-    });
-
-    const input = page.getByPlaceholder('Ask me anything...');
-    const composer = page.getByTestId('chat-composer');
-
-    await input.fill('Start the first turn');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(page.getByText('First answer closes out the opening turn.')).toBeVisible({
-      timeout: 10000,
-    });
-
-    await input.fill('Start the second turn');
-    await page.getByRole('button', { name: 'Send message' }).click();
-    await expect(
-      page.getByText('Second-turn paragraph 16 keeps the response growing.'),
-    ).toBeVisible({ timeout: 10000 });
-
-    const composerBox = await composer.boundingBox();
-    expect(composerBox).not.toBeNull();
-    expect(composerBox!.y + composerBox!.height).toBeGreaterThan(820);
-
-    const secondTurnMessage = page.locator('[data-message-role="user"]').last();
-    const secondTurnBox = await secondTurnMessage.boundingBox();
-    expect(secondTurnBox).not.toBeNull();
-    expect(secondTurnBox!.y + secondTurnBox!.height).toBeLessThan(composerBox!.y - 24);
-  });
-
-  test('renders thinking block from streaming reasoning field', async ({ page }) => {
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
+      })
+      return
+    }
+    if (
+      (options.connectionApproval || options.connectionManagement) &&
+      path.endsWith(`/${source.id}`)
+    ) {
+      await fulfillJSON(route, { data: source }, { ETag: '"source-1"' })
+      return
+    }
+    await fulfillJSON(route, {
+      data: options.connectionApproval || options.connectionManagement ? [source] : [],
+      page: { hasMore: false, pageSize: 50 },
+    })
+  })
+  await page.route('**/api/router/management/v1/agent-tool-credentials*', async (route) => {
+    const credential = {
+      id: '50000000-0000-4000-8000-000000000001',
+      namespaceId: '20000000-0000-4000-8000-000000000010',
+      name: 'Knowledge token',
+      status: 'active',
+      revision: 1,
+      createdAt: now,
+      updatedAt: now,
+    }
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith(`/${credential.id}`)) {
+      await fulfillJSON(route, { data: credential }, { ETag: '"credential-1"' })
+      return
+    }
+    await fulfillJSON(route, {
+      data: options.connectionManagement ? [credential] : [],
+      page: { hasMore: false, pageSize: 50 },
+    })
+  })
+  await page.route('**/api/router/management/v1/agent-artifacts/**', async (route) => {
+    const path = new URL(route.request().url()).pathname
+    if (path.endsWith('/content')) {
+      artifactContentReads += 1
+      await fulfillJSON(route, {
+        data: {
+          id: artifactId,
+          mediaType: 'application/json',
+          encoding: 'base64',
+          content: Buffer.from(JSON.stringify({ score: 0.97 })).toString('base64'),
+          digest,
         },
-        body: chatStreamBody('Final streamed answer.', 'Step 1: inspect the prompt.'),
-      });
-    });
+      })
+      return
+    }
+    await fulfillJSON(route, {
+      data: {
+        id: artifactId,
+        sessionId,
+        turnId,
+        kind: 'probe_result',
+        mediaType: 'application/json',
+        digest,
+        safePreview: { status: 'Passed', score: 0.97 },
+        expiresAt: '2099-08-23T00:00:00Z',
+        createdAt: now,
+      },
+    })
+  })
 
-    await page.getByPlaceholder('Ask me anything...').fill('Show your work');
-    await page.getByRole('button', { name: 'Send message' }).click();
+  await page.route(
+    `**/api/router/management/v1/publication-plans/${planId}:commit`,
+    async (route) => {
+      publicationCommits += 1
+      expect(route.request().headers()['if-match']).toBe('"opaque-plan-7"')
+      expect(route.request().headers()['idempotency-key']).toBeTruthy()
+      published = true
+      await fulfillJSON(route, {
+        operation: { operationId: 'publish-operation-1', state: 'pending' },
+      })
+    },
+  )
+  await page.route('**/api/router/management/v1/operations/publish-operation-1', async (route) => {
+    await fulfillJSON(route, { data: { operationId: 'publish-operation-1', state: 'succeeded' } })
+  })
+  await page.route(
+    `**/api/router/management/v1/routing/entrypoints/${entrypointId}`,
+    async (route) => {
+      await fulfillJSON(route, {
+        data: {
+          id: entrypointId,
+          name: 'blend-v2',
+          status: 'active',
+          revision: 1,
+          entrypointRevision: 1,
+          aliases: [],
+          ruleCount: 1,
+          assignedModelCount: 2,
+          createdAt: now,
+          updatedAt: now,
+        },
+      })
+    },
+  )
 
-    await expect(page.getByText('Final streamed answer.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Step 1: inspect the prompt.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
-  });
+  return {
+    modelReads: () => modelReads,
+    publicationCommits: () => publicationCommits,
+    artifactContentReads: () => artifactContentReads,
+    connectionApprovals: () => connectionApprovals,
+    connectionPatches,
+    resumeHeaders,
+    turnBodies,
+    profileQueries,
+  }
+}
 
-  test('shows streaming reasoning in thinking overlay before completion', async ({ page }) => {
-    await mockStreamingChatFetch(page, [
-      chatStreamChunk({ role: 'assistant', content: '' }),
-      chatStreamChunk({ reasoning: 'The' }),
-      chatStreamChunk({ reasoning: ' answer' }),
-      chatStreamChunk({ content: 'Done.' }),
-      'data: [DONE]\n\n',
-    ]);
+async function bootstrap(page: Page, options: AgentMockOptions = {}) {
+  await mockAuthenticatedAppShell(page)
+  return mockAgentRuntime(page, options)
+}
 
-    await page.getByPlaceholder('Ask me anything...').fill('Stream reasoning');
-    await page.getByRole('button', { name: 'Send message' }).click();
+test.describe('Router Agent Playground', () => {
+  test('groups authorized Mixture-of-Models and Single Models for an operator', async ({
+    page,
+  }) => {
+    await bootstrap(page)
+    await page.goto('/playground')
 
-    const thinkingGrid = page.getByTestId('thinking-grid');
-    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
-    await expect(thinkingGrid.locator('span')).toHaveCount(120);
-    await expect(page.getByText('Classifying intent')).toHaveCount(0);
-    await expect(page.getByText('Selecting route')).toHaveCount(0);
-    await expect(page.getByText('Preparing response')).toHaveCount(0);
-    await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({
-      timeout: 5000,
-    });
-    await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
-  });
+    await page.getByTestId('playground-composer-model-select').click()
+    await expect(page.getByText('Mixture-of-Models', { exact: true })).toBeVisible()
+    await expect(page.getByText('Single Model', { exact: true })).toBeVisible()
+    await expect(page.getByRole('option', { name: /blend/ })).toBeVisible()
+    await expect(page.getByRole('option', { name: /local\/qwen/ })).toBeVisible()
+  })
 
-  test('keeps the restored thinking matrix static with reduced motion', async ({ page }) => {
-    await page.emulateMedia({ reducedMotion: 'reduce' });
-    await page.reload({ waitUntil: 'domcontentloaded' });
-    await mockStreamingChatFetch(
-      page,
-      [
-        chatStreamChunk({ role: 'assistant', content: '' }),
-        chatStreamChunk({ reasoning: 'Inspecting' }),
-        chatStreamChunk({ reasoning: ' route' }),
-        chatStreamChunk({ reasoning: ' state' }),
-        chatStreamChunk({ content: 'Reduced motion complete.' }),
-        'data: [DONE]\n\n',
+  test('streams a durable turn and collapses completed tool work', async ({ page }) => {
+    const mock = await bootstrap(page)
+    await page.goto('/playground')
+
+    await page.getByRole('textbox', { name: 'Message' }).fill('Design a support route')
+    await page.getByRole('button', { name: 'Send message' }).click()
+
+    await expect(page.getByTestId('agent-message-user')).toContainText('Design a support route')
+    await expect(page.getByTestId('agent-message-assistant')).toContainText(
+      'The model path is ready.',
+    )
+    const toolRow = page.getByRole('button', { name: /Validate Recipe/ })
+    await expect(toolRow).toContainText('Done')
+    await toolRow.click()
+    await page.getByRole('button', { name: 'View result' }).click()
+    await expect(page.getByText('Passed', { exact: false })).toBeVisible()
+    expect(mock.artifactContentReads()).toBe(0)
+    await page.getByRole('button', { name: 'Load original' }).click()
+    await expect(page.getByText('"score":0.97', { exact: false })).toBeVisible()
+    expect(mock.artifactContentReads()).toBe(1)
+  })
+
+  test('sends an image as durable Agent content instead of a browser-owned chat request', async ({
+    page,
+  }) => {
+    const mock = await bootstrap(page)
+    await page.goto('/playground')
+
+    const menu = await openComposerAddMenu(page)
+    const chooserPromise = page.waitForEvent('filechooser')
+    await menu.getByRole('menuitem', { name: /Attach files/ }).click()
+    const chooser = await chooserPromise
+    await chooser.setFiles({ name: 'vision.gif', mimeType: 'image/gif', buffer: onePixelGif })
+    await expect(page.getByAltText('Preview of vision.gif')).toBeVisible()
+    await page.getByRole('textbox', { name: 'Message' }).fill('What is visible?')
+    await page.getByRole('button', { name: 'Send message' }).click()
+
+    await expect.poll(() => mock.turnBodies.length).toBe(1)
+    expect(mock.turnBodies[0]).toMatchObject({
+      input: {
+        content: [
+          { type: 'text', text: 'What is visible?' },
+          {
+            type: 'image_url',
+            url: expect.stringMatching(/^data:image\/gif;base64,/),
+            detail: 'auto',
+          },
+        ],
+      },
+    })
+  })
+
+  test('resumes after archived history and keeps search from changing the active session', async ({
+    page,
+  }) => {
+    const mock = await bootstrap(page, {
+      initialEvents: [userEvent(1, 'Earlier question'), assistantEvent(2, 'Earlier answer')],
+      expireFirstResume: true,
+    })
+    await page.goto('/playground')
+    await page.getByRole('button', { name: /Existing chat/ }).click()
+
+    await expect(page.getByRole('alert')).toContainText('Earlier events were archived')
+    await expect(page.getByTestId('agent-message-assistant')).toContainText('Recovered')
+    await expect.poll(() => mock.resumeHeaders).toContain('3')
+
+    await page.getByRole('searchbox', { name: 'Search conversations' }).fill('no match')
+    await expect(
+      page
+        .getByTestId('agent-playground')
+        .locator('header')
+        .first()
+        .getByText('Existing chat', { exact: true }),
+    ).toBeVisible()
+  })
+
+  test('keeps publication separate and proves the model through Entrypoint and model discovery', async ({
+    page,
+  }) => {
+    const approval: AgentEvent = {
+      sessionId,
+      turnId,
+      sequence: 1,
+      type: 'approval_request',
+      createdAt: now,
+      payload: {
+        planId,
+        planDigest: digest,
+        planRevision: 7,
+        planEtag: '"opaque-plan-7"',
+        expiresAt: '2099-08-23T00:00:00Z',
+        summary: {
+          recipeName: 'Support Blend',
+          entrypointId,
+          entrypointName: 'blend-v2',
+          changedResources: ['Recipe', 'Mixture-of-Models'],
+        },
+      },
+    }
+    const mock = await bootstrap(page, { initialEvents: [approval], existingMode: 'builder' })
+    await page.goto('/playground')
+    await page.getByRole('button', { name: /Build a support router/ }).click()
+
+    await expect(page.getByRole('dialog', { name: 'Publish blend-v2' })).toBeVisible()
+    expect(mock.publicationCommits()).toBe(0)
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: 'Publish blend-v2' })).toBeHidden()
+    expect(mock.publicationCommits()).toBe(0)
+    await page.getByRole('button', { name: 'Review' }).click()
+    const readsBefore = mock.modelReads()
+    await page.getByTestId('agent-publish-confirm').click()
+    await expect(page.getByRole('dialog', { name: 'Publish blend-v2' })).toBeHidden()
+    expect(mock.publicationCommits()).toBe(1)
+    expect(mock.modelReads()).toBeGreaterThan(readsBefore)
+
+    await page.getByRole('button', { name: 'New chat' }).click()
+    await page.getByTestId('playground-composer-model-select').click()
+    await expect(page.getByRole('option', { name: /blend-v2/ })).toBeVisible()
+  })
+
+  test('hides Builder and Single Models without routing manage permission', async ({ page }) => {
+    await mockAuthenticatedAppShell(page, {
+      user: {
+        id: 'consumer-1',
+        email: 'consumer@example.com',
+        name: 'Consumer',
+        role: 'viewer',
+        permissions: ['config.read'],
+      },
+      managementPermissions: [
+        'agent.read',
+        'agent.use',
+        'delegation.use',
+        'routing.read',
+        'tool.read',
+        'tool.invoke',
       ],
-      300,
-    );
+    })
+    await mockAgentRuntime(page, { profilePages: true })
+    await page.goto('/playground')
 
-    await page.getByPlaceholder('Ask me anything...').fill('Respect reduced motion');
-    await page.getByRole('button', { name: 'Send message' }).click();
+    const addMenu = await openComposerAddMenu(page)
+    await expect(addMenu.getByRole('menuitemcheckbox', { name: /Builder/ })).toHaveCount(0)
+    await page.keyboard.press('Escape')
+    await page.getByTestId('playground-composer-model-select').click()
+    await expect(page.getByText('Single Model', { exact: true })).toHaveCount(0)
+    await expect(page.getByRole('option', { name: /local\/qwen/ })).toHaveCount(0)
 
-    const thinkingGrid = page.getByTestId('thinking-grid');
-    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
-    await expect(thinkingGrid).toHaveAttribute('data-motion', 'static');
-    await expect(page.getByTestId('playground-motion-background')).toHaveAttribute(
-      'data-motion',
-      'static',
-    );
-    await expect(thinkingGrid.locator('span').first()).toHaveCSS('animation-name', 'none');
+    await page.goto('/config/agent')
+    await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
+    await expect(page.getByRole('button', { name: /New profile/ })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Open General' }).click()
+    const detail = page.getByRole('dialog', { name: 'General' })
+    await expect(detail.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: /Delete/ })).toHaveCount(0)
+  })
 
-    const characters = await thinkingGrid.textContent();
-    await page.waitForTimeout(220);
-    expect(await thinkingGrid.textContent()).toBe(characters);
-    await expect(page.getByText('Reduced motion complete.')).toBeVisible({ timeout: 10000 });
-  });
+  test('rejects a direct Agent management URL without Agent or Tool read access', async ({
+    page,
+  }) => {
+    await mockAuthenticatedAppShell(page, {
+      user: {
+        id: 'limited-1',
+        email: 'limited@example.com',
+        name: 'Limited user',
+        role: 'viewer',
+        permissions: [],
+      },
+      managementPermissions: ['delegation.use', 'routing.read'],
+    })
+    await mockAgentRuntime(page)
+    await page.goto('/config/agent')
 
-  test('renders thinking block from non-stream reasoning field', async ({ page }) => {
-    await page.route('**/api/router/v1/chat/completions', async (route) => {
-      await route.fulfill({
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          choices: [
-            {
-              message: {
-                role: 'assistant',
-                content: 'Final JSON answer.',
-                reasoning: 'Step 1: parse message.reasoning.',
-              },
-            },
-          ],
-        }),
-      });
-    });
+    await expect(page).toHaveURL(/\/dashboard$/)
+    await page.goto('/playground/fullscreen')
+    await expect(page).toHaveURL(/\/dashboard$/)
+  })
 
-    await page.getByPlaceholder('Ask me anything...').fill('Return JSON');
-    await page.getByRole('button', { name: 'Send message' }).click();
+  test('searches and paginates Agent resources on the Router', async ({ page }) => {
+    const mock = await bootstrap(page, { profilePages: true })
+    await page.goto('/config/agent')
 
-    await expect(page.getByText('Final JSON answer.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('Step 1: parse message.reasoning.')).toBeVisible({
-      timeout: 10000,
-    });
-    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
-  });
-});
+    await expect(page.getByRole('button', { name: 'Open General' })).toBeVisible()
+    await page.getByRole('button', { name: 'Load more' }).click()
+    await expect(page.getByRole('button', { name: 'Open Builder' })).toBeVisible()
+    expect(mock.profileQueries.some((query) => query.includes('cursor=profiles-page-2'))).toBe(true)
+
+    await page.getByRole('searchbox', { name: 'Search Profiles' }).fill('Builder')
+    await expect(page.getByRole('button', { name: 'Open General' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'Open Builder' })).toBeVisible()
+    expect(mock.profileQueries.some((query) => query.includes('search=Builder'))).toBe(true)
+  })
+
+  test('ignores an aborted stale resource search', async ({ page }) => {
+    await bootstrap(page, { profilePages: true, profileSearchRace: true })
+    await page.goto('/config/agent')
+
+    const search = page.getByRole('searchbox', { name: 'Search Profiles' })
+    await search.fill('General')
+    await page.waitForTimeout(250)
+    await search.fill('Builder')
+
+    await expect(page.getByRole('button', { name: 'Open Builder' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Open General' })).toHaveCount(0)
+  })
+
+  test('selects target capabilities from authorized Model Cards', async ({ page }) => {
+    await bootstrap(page, { profilePages: true, profileCapability: 'legacy-audio' })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'Open General' }).click()
+    const dialog = page.getByRole('dialog', { name: 'General' })
+    await dialog.getByRole('button', { name: 'Edit' }).click()
+    await dialog.getByText('Advanced settings', { exact: true }).click()
+
+    await expect(dialog.getByRole('checkbox', { name: /legacy-audio/ })).toBeChecked()
+    await expect(dialog.getByText('Not currently advertised', { exact: true })).toBeVisible()
+    await expect(dialog.getByRole('checkbox', { name: 'images' })).toBeVisible()
+    await expect(dialog.getByRole('checkbox', { name: 'tools' })).toBeVisible()
+    await dialog.getByRole('checkbox', { name: /legacy-audio/ }).uncheck()
+    await expect(dialog.getByRole('checkbox', { name: /legacy-audio/ })).toHaveCount(0)
+  })
+
+  test('shows catalog failure in the editor and prevents a destructive save', async ({ page }) => {
+    await bootstrap(page, { capabilityLoadFailure: true })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'New profile' }).click()
+    const dialog = page.getByRole('dialog', { name: 'Create profile' })
+    await dialog.getByText('Advanced settings', { exact: true }).click()
+
+    await expect(dialog.getByRole('alert')).toContainText('Model capabilities are unavailable.')
+    await expect(dialog.getByRole('button', { name: 'Create profile' })).toBeDisabled()
+  })
+
+  test('requires explicit approval when a Connection discovers tools', async ({ page }) => {
+    const mock = await bootstrap(page, { connectionApproval: true })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'Connections' }).click()
+    await page.getByRole('button', { name: 'Open Knowledge tools' }).click()
+    const detail = page.getByRole('dialog', { name: 'Knowledge tools' })
+    await expect(detail.getByText('Pending approval', { exact: true })).toBeVisible()
+    await detail.getByRole('button', { name: 'Approve tools' }).click()
+    const confirmation = page.getByRole('dialog', { name: 'Approve discovered tools?' })
+    await expect(confirmation).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Approve tools' }).click()
+    await expect(confirmation).toBeHidden()
+    await expect(detail.getByText('Ready', { exact: true })).toBeVisible()
+    expect(mock.connectionApprovals()).toBe(1)
+  })
+
+  test('keeps built-in Skills read-only', async ({ page }) => {
+    await bootstrap(page, { builtinSkill: true })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'Skills' }).click()
+    await page.getByRole('button', { name: 'Open Recipe designer' }).click()
+    const detail = page.getByRole('dialog', { name: 'Recipe designer' })
+    await expect(detail.getByText('Built in', { exact: true })).toBeVisible()
+    await expect(detail.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: /Delete/ })).toHaveCount(0)
+  })
+
+  test('clears a Connection credential explicitly and supports disabling it', async ({ page }) => {
+    const mock = await bootstrap(page, { connectionManagement: true })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'Connections' }).click()
+    await page.getByRole('button', { name: 'Open Knowledge tools' }).click()
+    const detail = page.getByRole('dialog', { name: 'Knowledge tools' })
+    await detail.getByRole('button', { name: 'Edit' }).click()
+    await detail.getByRole('checkbox', { name: /Knowledge token/ }).uncheck()
+    await detail.getByRole('button', { name: 'Save connection' }).click()
+
+    await expect.poll(() => mock.connectionPatches.length).toBe(1)
+    expect(mock.connectionPatches[0]).toMatchObject({ credentialId: null })
+    await detail.getByRole('button', { name: 'Disable' }).click()
+    await expect.poll(() => mock.connectionPatches.length).toBe(2)
+    expect(mock.connectionPatches[1]).toEqual({ status: 'disabled' })
+    await expect(detail.getByRole('button', { name: 'Enable' })).toBeVisible()
+  })
+
+  test('rejects unsafe Connection URLs before saving', async ({ page }) => {
+    const mock = await bootstrap(page, { connectionManagement: true })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'Connections' }).click()
+    await page.getByRole('button', { name: 'Open Knowledge tools' }).click()
+    const detail = page.getByRole('dialog', { name: 'Knowledge tools' })
+    await detail.getByRole('button', { name: 'Edit' }).click()
+    await detail
+      .getByRole('textbox', { name: /HTTPS endpoint/ })
+      .fill('https://tools.example.com/connect?token=secret')
+    await detail.getByRole('button', { name: 'Save connection' }).click()
+
+    await expect(detail.getByRole('alert')).toContainText(
+      'Use an HTTPS URL without credentials, query parameters, or fragments.',
+    )
+    expect(mock.connectionPatches).toHaveLength(0)
+  })
+
+  test('keeps Connection mutations hidden for a read-only Tool user', async ({ page }) => {
+    await mockAuthenticatedAppShell(page, {
+      user: {
+        id: 'tool-reader-1',
+        email: 'reader@example.com',
+        name: 'Tool reader',
+        role: 'viewer',
+        permissions: [],
+      },
+      managementPermissions: ['tool.read'],
+    })
+    await mockAgentRuntime(page, { connectionManagement: true })
+    await page.goto('/config/agent')
+
+    await page.getByRole('button', { name: 'Connections' }).click()
+    await page.getByRole('button', { name: 'Open Knowledge tools' }).click()
+    const detail = page.getByRole('dialog', { name: 'Knowledge tools' })
+    await expect(detail.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: 'Disable' })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: 'Test connection' })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: 'Approve tools' })).toHaveCount(0)
+    await expect(detail.getByRole('button', { name: /Delete/ })).toHaveCount(0)
+  })
+
+  test('supports keyboard menus and removes sidebar controls when collapsed on mobile', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await bootstrap(page)
+    await page.goto('/playground')
+
+    await expect(page.getByRole('searchbox', { name: 'Search conversations' })).toHaveCount(0)
+    await page.getByRole('button', { name: 'Open conversations' }).click()
+    await expect(page.getByRole('searchbox', { name: 'Search conversations' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('searchbox', { name: 'Search conversations' })).toHaveCount(0)
+
+    await page.getByTestId('playground-composer-add').focus()
+    await page.keyboard.press('Enter')
+    await expect(page.getByRole('menuitem', { name: /Attach files/ })).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(page.getByRole('menuitemcheckbox', { name: /Builder/ })).toBeFocused()
+    await page.keyboard.press('Escape')
+    await expect(page.getByTestId('playground-composer-add')).toBeFocused()
+  })
+})

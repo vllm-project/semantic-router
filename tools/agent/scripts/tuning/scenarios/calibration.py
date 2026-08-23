@@ -5,18 +5,18 @@ policy where only beneficial categories escalate.  Severity weights reflect
 per-category net uplift from escalation.
 
 Usage:
-    from tuning import RouterClient, TuningLoop
+    from tuning import CandidateTuner, RouterClient
     from tuning.scenarios import CalibrationScenario
 
     scenario = CalibrationScenario()
-    loop = TuningLoop(
+    tuner = CandidateTuner(
         scenario=scenario,
         router=RouterClient(),
         config_path=Path("config.yaml"),
         probes_path=Path("probes.yaml"),
-        max_iterations=15,
+        candidate_path=Path("candidate.yaml"),
     )
-    output = loop.run()
+    output = tuner.run()
 """
 
 from __future__ import annotations

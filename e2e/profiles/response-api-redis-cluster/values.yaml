@@ -4,41 +4,49 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: openai/gpt-oss-20b
-    models:
-      - name: openai/gpt-oss-20b
-        backend_refs:
-          - name: test-endpoint
-            endpoint: mock-vllm.default.svc.cluster.local:8000
-            weight: 1
-  routing:
-    decisions:
+  models:
+  - name: openai/gpt-oss-20b
+    card: {}
+    connections:
+    - provider: vllm
+      endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
+      model: openai/gpt-oss-20b
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        domains:
+        - name: other
+          description: General knowledge and miscellaneous topics
+          mmlu_categories:
+          - other
+      decisions:
       - name: default_decision
         description: Default catch-all decision
         priority: 1
         rules:
           operator: OR
           conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals:
-      domains:
-        - name: other
-          description: General knowledge and miscellaneous topics
-          mmlu_categories:
-            - other
-    modelCards:
-      - name: openai/gpt-oss-20b
+          - type: domain
+            name: other
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      default_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
   global:
-    router:
-      strategy: priority
+    router: {}
     services:
       response_api:
         enabled: true
@@ -48,9 +56,9 @@ config:
         redis:
           cluster_mode: true
           cluster_addresses:
-            - redis-cluster-0.redis-cluster.default.svc.cluster.local:6379
-            - redis-cluster-1.redis-cluster.default.svc.cluster.local:6379
-            - redis-cluster-2.redis-cluster.default.svc.cluster.local:6379
+          - redis-cluster-0.redis-cluster.default.svc.cluster.local:6379
+          - redis-cluster-1.redis-cluster.default.svc.cluster.local:6379
+          - redis-cluster-2.redis-cluster.default.svc.cluster.local:6379
           key_prefix: 'sr:'
           pool_size: 10
           min_idle_conns: 2
@@ -71,6 +79,14 @@ config:
       observability:
         tracing:
           enabled: false
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
         embedding_model: mmbert
@@ -84,20 +100,22 @@ config:
       modules:
         prompt_guard:
           enabled: false
-          model_ref: ""
-          model_id: ""
-          jailbreak_mapping_path: ""
+          model_ref: ''
+          model_id: ''
+          jailbreak_mapping_path: ''
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
-            category_mapping_path: ""
+            model_ref: ''
+            model_id: ''
+            category_mapping_path: ''
             use_mmbert_32k: false
           pii:
-            model_ref: ""
-            model_id: ""
-            pii_mapping_path: ""
+            model_ref: ''
+            model_id: ''
+            pii_mapping_path: ''
             use_mmbert_32k: false
+        hallucination_mitigation: {}
+      embeddings: {}
 resources:
   limits:
     cpu: '2'
@@ -105,7 +123,5 @@ resources:
   requests:
     cpu: 500m
     memory: 1Gi
-
-# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false

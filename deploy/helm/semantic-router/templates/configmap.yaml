@@ -1,24 +1,9 @@
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
-{{- $router := (get $global "router") | default (dict) -}}
 {{- $stores := (get $global "stores") | default (dict) -}}
 {{- $services := (get $global "services") | default (dict) -}}
 
-{{- $skipProcessing := (get $router "skip_processing") | default (dict) -}}
-{{- $skipProcessingEnabled := (get $skipProcessing "enabled") | default false -}}
-{{- $routerValues := .Values.router | default (dict) -}}
-{{- $skipProcessingValues := (get $routerValues "skipProcessing") | default (dict) -}}
-{{- if and (hasKey $skipProcessingValues "enabled") (ne (get $skipProcessingValues "enabled") nil) -}}
-{{-   $skipProcessingEnabled = (get $skipProcessingValues "enabled") -}}
-{{- end -}}
-{{- $_ := set $skipProcessing "enabled" $skipProcessingEnabled -}}
-{{- $_ := set $router "skip_processing" $skipProcessing -}}
-{{- $_ := set $global "router" $router -}}
-{{- $responseCache := (get $stores "response_cache") | default (get $stores "semantic_cache") | default (dict) -}}
-{{- $_ := unset $stores "semantic_cache" -}}
-{{- $_ := unset $responseCache "use_hnsw" -}}
-{{- $_ := unset $responseCache "hnsw_m" -}}
-{{- $_ := unset $responseCache "hnsw_ef_construction" -}}
+{{- $responseCache := (get $stores "response_cache") | default (dict) -}}
 {{- $responseAPI := (get $services "response_api") | default (dict) -}}
 {{- $observability := (get $services "observability") | default (dict) -}}
 {{- $tracing := (get $observability "tracing") | default (dict) -}}
@@ -75,15 +60,16 @@
 {{- $_ := set $global "services" $services -}}
 {{- $_ := set $config "global" $global -}}
 {{- if not (get $config "version") -}}
-{{- $_ := set $config "version" "v0.3" -}}
+{{- $_ := set $config "version" "v0.4" -}}
 {{- end -}}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "semantic-router.fullname" . }}-config
+  name: {{ include "semantic-router.configMapName" . }}
   namespace: {{ include "semantic-router.namespace" . }}
   labels:
     {{- include "semantic-router.labels" . | nindent 4 }}
+immutable: true
 data:
   config.yaml: |
     {{- toYaml $config | nindent 4 }}

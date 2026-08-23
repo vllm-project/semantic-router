@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type FocusEvent, type KeyboardEvent } fro
 import { NavLink } from 'react-router-dom'
 import type { LayoutMenuCategory, LayoutMenuItem } from './LayoutNavSupport'
 import { getLayoutMegaMenuGeometry } from './LayoutMegaMenuSupport'
+import ProductIcon from './ProductIcon'
 import styles from './LayoutMegaMenu.module.css'
 
 interface LayoutMegaMenuProps {
@@ -155,17 +156,7 @@ const LayoutMegaMenu = ({
                   {String(categoryIndex + 1).padStart(2, '0')}
                 </span>
                 <span>{category.label}</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  aria-hidden="true"
-                >
-                  <path d="M4.5 2.75L8.75 7L4.5 11.25" strokeLinecap="round" />
-                </svg>
+                <ProductIcon name="chevron-right" aria-hidden="true" />
               </button>
             )
           })}
@@ -205,9 +196,12 @@ const LayoutMegaMenu = ({
                         onPointerEnter={() => onItemIntent(item)}
                         onClick={() => onConfigSelect(item)}
                       >
-                        <span>{item.label}</span>
+                        <span className={styles.itemLabel}>
+                          <ProductIcon name={item.icon} />
+                          <span>{item.label}</span>
+                        </span>
                         <span className={styles.itemArrow} aria-hidden="true">
-                          ↗
+                          <ProductIcon name="chevron-right" />
                         </span>
                       </button>
                     )
@@ -223,9 +217,12 @@ const LayoutMegaMenu = ({
                       onPointerEnter={() => onItemIntent(item)}
                       onClick={onNavigate}
                     >
-                      <span>{item.label}</span>
+                      <span className={styles.itemLabel}>
+                        <ProductIcon name={item.icon} />
+                        <span>{item.label}</span>
+                      </span>
                       <span className={styles.itemArrow} aria-hidden="true">
-                        ↗
+                        <ProductIcon name="chevron-right" />
                       </span>
                     </NavLink>
                   )

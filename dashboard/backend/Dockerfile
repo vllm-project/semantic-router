@@ -40,14 +40,6 @@ RUN npm config set registry https://registry.npmjs.org/ && \
     npm ci --include=dev  # Use npm ci for deterministic, lockfile-based installs in CI
 RUN npm run build
 
-FROM ${IMAGE_REGISTRY}library/node:20-alpine AS wizmap-builder
-WORKDIR /app/wizmap
-COPY dashboard/wizmap/package.json dashboard/wizmap/package-lock.json ./
-RUN npm config set registry https://registry.npmjs.org/ && \
-    npm ci --include=dev
-COPY dashboard/wizmap/ ./
-RUN npm run build -- --outDir /app/wizmap-dist
-
 # Stage 2: Build backend with Go
 FROM ${IMAGE_REGISTRY}library/golang:1.25-bookworm AS backend-builder
 WORKDIR /app
@@ -75,18 +67,12 @@ RUN set -eux; \
     }; \
     apt_get_install_with_retry build-essential
 
-# Copy src/semantic-router first (required by dashboard/backend/go.mod replace directive)
-# Only copy the packages we actually need for dashboard backend builds - NOT pkg/cli which has extra deps
+# Copy the Router package tree required by the dashboard/backend replace
+# directive. Keeping one package boundary here avoids a second, fragile import
+# allowlist whenever a Management contract gains a new narrow package.
 COPY src/semantic-router/go.mod src/semantic-router/go.sum /app/src/semantic-router/
 COPY src/vllm-sr/pyproject.toml /app/src/vllm-sr/pyproject.toml
-COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/
-COPY src/semantic-router/pkg/config/ /app/src/semantic-router/pkg/config/
-COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/
-COPY src/semantic-router/pkg/modelinventory/ /app/src/semantic-router/pkg/modelinventory/
-COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/
-COPY src/semantic-router/pkg/observability/ /app/src/semantic-router/pkg/observability/
-COPY src/semantic-router/pkg/routerreplay/redaction/ /app/src/semantic-router/pkg/routerreplay/redaction/
-COPY src/semantic-router/pkg/startupstatus/ /app/src/semantic-router/pkg/startupstatus/
+COPY src/semantic-router/pkg/ /app/src/semantic-router/pkg/
 
 # Copy go.mod and go.sum first for better caching
 COPY dashboard/backend/go.mod dashboard/backend/go.sum /app/dashboard/backend/
@@ -127,13 +113,11 @@ WORKDIR /app
 COPY --from=backend-builder /app/dashboard-backend /app/dashboard-backend
 COPY --from=backend-builder /app/dashboard-backend /usr/local/bin/dashboard-backend
 COPY --from=frontend-builder /app/frontend/dist /app/frontend
-COPY --from=wizmap-builder /app/wizmap-dist /app/frontend/embedded/wizmap
 COPY src/vllm-sr/requirements.txt /app/requirements.txt
 COPY src/vllm-sr/pyproject.toml /app/pyproject.toml
 COPY src/training/model_eval/ /app/src/training/model_eval/
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-dashboard.sh /app/start-dashboard.sh
-COPY src/vllm-sr/cli/templates/tools_db.json /app/config/tools_db.json
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
 COPY dashboard/backend/config/openclaw-skills.json /app/config/openclaw-skills.json
 COPY dashboard/backend/skillpacks/ /app/skills/

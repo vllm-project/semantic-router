@@ -1,2419 +1,2394 @@
-version: v0.3
-
+version: v0.4
 listeners:
-  - name: http-8899
-    address: 0.0.0.0
-    port: 8899
-    timeout: 300s
-
-providers:
-  defaults:
-    default_model: qwen3-8b
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning.effort
-      mistral:
-        type: top_level_reasoning_effort
-        parameter: reasoning_effort
-  models:
-    - name: qwen3-8b
-      reasoning_family: qwen3
-      provider_model_id: qwen3-8b-instruct
-      api_format: openai
-      reliability:
-        lb_policy: least_request
-        retry_count: 2
-        retry_on: connect-failure,refused-stream
-        consecutive_5xx: 5
-        base_ejection_time: 30s
-        max_ejection_percent: 50
-        health_check_path: /health
-        health_check_interval: 10s
-        health_check_timeout: 2s
-      pricing:
-        currency: USD
-        prompt_per_1m: 0.18
-        cached_input_per_1m: 0.04
-        cache_write_per_1m: 0.225
-        completion_per_1m: 0.42
-      external_model_ids:
-        openai: qwen3-8b
-        analytics: qwen3-routing
-      backend_refs:
-        - name: local-primary
-          endpoint: 127.0.0.1:8000
-          protocol: http
-          weight: 80
-          type: chat
-          api_key_env: VLLM_SR_PRIMARY_API_KEY
-        - name: remote-secondary
-          base_url: https://api.example.com/v1
-          provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          extra_headers:
-            X-Tenant: reference-config
-          api_version: "2025-03-01"
-          chat_path: /chat/completions
-          api_key: static-demo-key
-          weight: 20
-    - name: qwen3-32b
-      reasoning_family: gpt
-      provider_model_id: qwen3-32b-instruct
-      api_format: anthropic
-      pricing:
-        currency: USD
-        prompt_per_1m: 1.2
-        cached_input_per_1m: 0.3
-        completion_per_1m: 3.4
-      external_model_ids:
-        internal: qwen3-32b
-      backend_refs:
-        - name: large-primary
-          endpoint: 127.0.0.1:8001
-          protocol: http
-          weight: 100
-    - name: llava-omni
-      provider_model_id: llava-omni-preview
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 2.5
-        cached_input_per_1m: 0.5
-        completion_per_1m: 4.0
-      external_model_ids:
-        openai: llava-omni-preview
-      backend_refs:
-        - name: omni-primary
-          endpoint: 127.0.0.1:8002
-          protocol: http
-          weight: 100
-    - name: sdxl-image
-      provider_model_id: sdxl-image
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 4.0
-        completion_per_1m: 4.0
-      external_model_ids:
-        openai: gpt-image-1
-      backend_refs:
-        - name: image-primary
-          endpoint: 127.0.0.1:8003
-          protocol: http
-          weight: 100
-
-routing:
-  strategy: priority
-  modelCards:
-    - name: qwen3-8b
-      param_size: 8B
-      context_window_size: 131072
-      description: General-purpose text model for the default routing tier.
-      capabilities: [chat, reasoning, tools]
-      quality_score: 0.83
-      modality: ar
-      tags: [default, fast]
-    - name: qwen3-32b
-      param_size: 32B
-      context_window_size: 131072
-      description: Higher-quality text model for complex and verified requests.
-      capabilities: [chat, reasoning, long-context]
-      loras:
-        - name: computer-science-expert
-          description: Adapter specialized for advanced computer science and software design prompts.
-      quality_score: 0.96
-      modality: ar
-      tags: [premium, analysis]
-    - name: llava-omni
-      param_size: 13B
-      context_window_size: 65536
-      description: Omni model that can satisfy both text and multimodal orchestration paths.
-      capabilities: [chat, vision, multimodal]
-      quality_score: 0.88
-      modality: omni
-      tags: [multimodal, omni]
-    - name: sdxl-image
-      param_size: 3B
-      context_window_size: 8192
-      description: Diffusion-style image generation backend used by image routes.
-      capabilities: [image_generation]
-      quality_score: 0.79
-      modality: diffusion
-      tags: [image, diffusion]
-
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        method: bm25
-        keywords: ["code", "function", "debug", "algorithm", "refactor"]
-        case_sensitive: false
-        bm25_threshold: 0.1
-      - name: machine_learning
-        operator: OR
-        method: bm25
-        keywords: ["machine learning", "model training", "gradient", "neural network", "classifier"]
-        case_sensitive: false
-        bm25_threshold: 0.1
-      - name: urgent_keywords
-        operator: OR
-        method: ngram
-        keywords: ["urgent", "immediate", "asap", "emergency"]
-        case_sensitive: false
-        ngram_threshold: 0.4
-        ngram_arity: 3
-      - name: fuzzy_sensitive_keywords
-        operator: OR
-        method: fuzzy
-        keywords: ["social security", "credit card", "password", "api key"]
-        case_sensitive: false
-        fuzzy_match: true
-        fuzzy_threshold: 82
-
-    embeddings:
-      - name: technical_support
-        threshold: 0.75
-        aggregation_method: max
-        candidates:
-          - how to configure the system
-          - installation guide
-          - troubleshooting steps
-          - error message explanation
-      - name: account_management
-        threshold: 0.72
-        aggregation_method: any
-        candidates:
-          - password reset
-          - account settings
-          - billing information
-          - subscription management
-      # query_modality declares which modality of incoming request payload the
-      # embedding rule's query is computed from. Defaults to "text" when
-      # omitted. Setting it to "image" or "audio" requires
-      # global.model_catalog.embeddings.semantic.embedding_config.model_type=multimodal
-      # so the query and candidate embeddings land in the same shared space;
-      # see website/docs/tutorials/signal/learned/embedding.md for the worked
-      # multimodal example.
-      - name: clinical_query_intent
-        query_modality: text
-        threshold: 0.72
-        aggregation_method: max
-        candidates:
-          - patient symptoms or clinical question
-          - medication interaction or dosage question
-          - test result interpretation request
-
-    domains:
-      - name: business
-        description: Business and management related queries.
-        mmlu_categories: [business]
-        model_scores:
-          - model: qwen3-32b
-            score: 0.96
-            use_reasoning: true
-      - name: law
-        description: Legal questions and policy topics.
-        mmlu_categories: [law]
-      - name: psychology
-        description: Psychology and mental-health oriented prompts.
-        mmlu_categories: [psychology]
-      - name: health
-        description: Health and medical information requests.
-        mmlu_categories: [health]
-      - name: "computer science"
-        description: Computer science and engineering prompts.
-        mmlu_categories: ["computer science"]
-      - name: other
-        description: General fallback traffic.
-        mmlu_categories: [other]
-
-    fact_check:
-      - name: needs_fact_check
-        description: Prompts with factual claims that should be verified.
-      - name: no_fact_check_needed
-        description: Creative prompts that do not need factual verification.
-
-    user_feedbacks:
-      - name: wrong_answer
-        description: The user indicates the previous answer was incorrect.
-      - name: need_clarification
-        description: The user asks for a clearer or more detailed answer.
-
-    reasks:
-      - name: likely_dissatisfied
-        description: The current user turn closely repeats the immediately previous user turn.
-        threshold: 0.8
-        lookback_turns: 1
-      - name: persistently_dissatisfied
-        description: The current user turn repeats the last two user turns in a row.
-        threshold: 0.8
-        lookback_turns: 2
-
-    preferences:
-      - name: terse_answers
-        description: Users who prefer short, direct responses.
-        examples:
-          - keep it concise
-          - bullet points only
-          - answer in one paragraph
-        threshold: 0.7
-
-    language:
-      - name: zh
-        description: Chinese-language requests.
-        # threshold: minimum lingua-go confidence required (0 = built-in default 0.3)
-        threshold: 0.0
-      - name: es
-        description: Spanish-language requests.
-
-    context:
-      - name: long_context
-        min_tokens: 32K
-        max_tokens: 256K
-        description: Requests that need larger effective context windows.
-
-    structure:
-      - name: many_questions
-        description: Prompts that contain many explicit questions.
-        feature:
-          type: count
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          gte: 4
-      - name: at_most_one_question
-        description: Prompts with one or fewer explicit questions.
-        feature:
-          type: count
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          lte: 1
-      - name: numbered_steps
-        description: Prompts that contain numbered list items such as "1. ..."
-        feature:
-          type: exists
-          source:
-            type: regex
-            pattern: '(?m)^\s*\d+\.\s+'
-      - name: first_then_flow
-        description: Prompts that express an ordered workflow.
-        feature:
-          type: sequence
-          source:
-            type: sequence
-            case_sensitive: false
-            sequences:
-              - ["first", "then"]
-              - ["first", "next", "finally"]
-              - ["首先", "然后"]
-              - ["先", "再"]
-      - name: constraint_dense
-        description: Prompts with dense explicit constraints relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: keyword_set
-            case_sensitive: false
-            keywords:
-              - under
-              - at most
-              - at least
-              - within
-              - no more than
-              - 不超过
-              - 至少
-              - 最多
-        predicate:
-          gt: 0.08
-      - name: format_directive_dense
-        description: Prompts with dense output-format directives relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: keyword_set
-            keywords: ["table", "bullet", "json", "markdown", "表格", "列表", "JSON"]
-        predicate:
-          gt: 0.08
-      - name: low_question_density
-        description: Prompts with very low question density relative to multilingual text units.
-        feature:
-          type: density
-          source:
-            type: regex
-            pattern: '[?？]'
-        predicate:
-          lt: 0.05
-      - name: long_current_turn_bytes
-        description: Current user turn is at least four thousand UTF-8 bytes.
-        feature:
-          type: count
-          source:
-            type: text_bytes
-        predicate:
-          gte: 4000
-
-    complexity:
-      - name: needs_reasoning
-        threshold: 0.75
+- address: 0.0.0.0
+  name: http-8899
+  port: 8899
+  timeout: 300s
+models:
+- name: qwen3-8b
+  card:
+    aliases:
+    - qwen3-routing
+    param_size: 8B
+    context_window_size: 32768
+    description: Fast general-purpose chat and tool model.
+    capabilities:
+    - chat
+    - reasoning
+    - tools
+    - ar
+    reasoning:
+      type: chat_template_kwargs
+      efforts:
+      - medium
+    modality: ar
+    quality_score: 0.78
+    tags:
+    - local
+    - fast
+  connections:
+  - provider: vllm
+    interface: chat
+    endpoint: http://127.0.0.1:8000/v1
+    model: qwen3-8b-instruct
+    weight: '80'
+  - provider: openai-compatible
+    endpoint: https://api.example.com/v1
+    model: qwen3-8b-instruct
+    credential: reference_api_key
+    weight: '20'
+  runtime:
+    max_retries: 2
+    request_timeout: 180s
+    stream_timeout: 900s
+  pricing:
+    input_cost_per_million_tokens: '0.18'
+    output_cost_per_million_tokens: '0.42'
+    cache_read_cost_per_million_tokens: '0.04'
+    cache_write_cost_per_million_tokens: '0.225'
+- name: qwen3-32b
+  card:
+    description: High-capacity reasoning and long-context model.
+    capabilities:
+    - chat
+    - reasoning
+    - long-context
+    - ar
+    reasoning:
+      type: reasoning_effort
+      efforts:
+      - high
+      - medium
+    loras:
+    - computer-science-expert
+    modality: ar
+  connections:
+  - provider: anthropic-compatible
+    endpoint: http://127.0.0.1:8001
+    model: qwen3-32b-instruct
+    weight: '100'
+  pricing:
+    input_cost_per_million_tokens: '1.2'
+    output_cost_per_million_tokens: '3.4'
+    cache_read_cost_per_million_tokens: '0.3'
+- name: llava-omni
+  card:
+    aliases:
+    - llava-omni-preview
+    capabilities:
+    - chat
+    - vision
+    - multimodal
+    - omni
+    modality: omni
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8002/v1
+    model: llava-omni-preview
+    weight: '100'
+  pricing:
+    input_cost_per_million_tokens: '2.5'
+    output_cost_per_million_tokens: '4'
+    cache_read_cost_per_million_tokens: '0.5'
+- name: sdxl-image
+  card:
+    aliases:
+    - gpt-image-1
+    capabilities:
+    - image_generation
+    - diffusion
+    modality: diffusion
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8003/v1
+    model: sdxl-image
+    weight: '100'
+  pricing:
+    input_cost_per_million_tokens: '4'
+    output_cost_per_million_tokens: '4'
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      classifiers:
+      - description: Generic binary safety classification head.
+        labels:
+        - SAFE
+        - JAILBREAK
+        model_path: models/mmbert32k-jailbreak-detector-merged
+        name: generic-safety-score
+        type: local
+        use_cpu: true
+      - description: Prompted tool execution risk labeler.
+        instructions: Choose RISKY only for destructive, privileged, or irreversible
+          tool operations.
+        labels:
+        - SAFE
+        - RISKY
+        model: external-classifier
+        name: tool-risk
+        type: llm
+      complexity:
+      - composer:
+          conditions:
+          - name: long_context
+            type: context
+          - name: computer science
+            type: domain
+          operator: OR
         description: Escalate multi-step reasoning or synthesis-heavy prompts.
-        hard:
-          candidates:
-            - solve this step by step
-            - compare multiple tradeoffs
-            - analyze the root cause
-          image_candidates:
-            - generate a detailed architecture diagram
         easy:
           candidates:
-            - answer briefly
-            - quick summary
-            - simple rewrite
+          - answer briefly
+          - quick summary
+          - simple rewrite
           image_candidates:
-            - make a simple icon
-        composer:
-          operator: OR
-          conditions:
-            - type: context
-              name: long_context
-            - type: domain
-              name: "computer science"
-
-    modality:
-      - name: AR
-        description: Text-only autoregressive requests.
-      - name: DIFFUSION
-        description: Image-generation requests.
-      - name: BOTH
-        description: Requests that need both text and image generation.
-
-    role_bindings:
-      - name: admin
-        description: Requests from platform administrators.
-        role: admin
-        subjects:
-          - kind: Group
-            name: platform-admins
-      - name: premium_user
-        description: Requests from paid end users.
-        role: premium_user
-        subjects:
-          - kind: Group
-            name: premium-tier
-
-    jailbreak:
-      - name: prompt_injection
-        method: hybrid
-        threshold: 0.8
-        include_history: true
-        description: Detect common prompt-injection or jailbreak attempts.
-        jailbreak_patterns:
-          - ignore previous instructions
-          - reveal the hidden prompt
-          - jailbreak mode
-        benign_patterns:
-          - explain the policy
-          - summarize the safety rules
-
-    pii:
-      - name: restricted_pii
-        threshold: 0.85
-        include_history: true
-        pii_types_allowed:
-          - EMAIL_ADDRESS
-        description: Sensitive prompts where only low-risk identifiers may pass through.
-
-    kb:
-      - name: privacy_policy
-        kb: privacy_kb
-        target:
-          kind: group
-          value: privacy_policy
-        match: best
-      - name: security_containment
-        kb: privacy_kb
-        target:
-          kind: group
-          value: security_containment
-        match: best
-      - name: frontier_reasoning
-        kb: privacy_kb
-        target:
-          kind: group
-          value: frontier_reasoning
-        match: best
-      - name: local_standard
-        kb: privacy_kb
-        target:
-          kind: group
-          value: local_standard
-        match: best
-
-    conversation:
-      - name: multi_turn_user
-        description: At least two user messages.
+          - make a simple icon
+        hard:
+          candidates:
+          - solve this step by step
+          - compare multiple tradeoffs
+          - analyze the root cause
+          image_candidates:
+          - generate a detailed architecture diagram
+        name: needs_reasoning
+        threshold: 0.75
+      context:
+      - description: Requests that need larger effective context windows.
+        max_tokens: 256K
+        min_tokens: 32K
+        name: long_context
+      conversation:
+      - description: At least two user messages.
         feature:
-          type: count
           source:
-            type: message
             role: user
+            type: message
+          type: count
+        name: multi_turn_user
         predicate:
           gte: 2
-      - name: has_tools
-        description: Request defines at least one tool.
+      - description: Request defines at least one tool.
         feature:
-          type: count
           source:
             type: tool_definition
+          type: count
+        name: has_tools
         predicate:
           gte: 1
-      - name: active_tool_use
-        description: Tool-result continuation inside an agent loop.
+      - description: Tool-result continuation inside an agent loop.
         feature:
-          type: exists
           source:
             type: active_tool_loop
-      - name: has_developer_msg
-        description: Request contains a developer message.
-        feature:
           type: exists
-          source:
-            type: message
-            role: developer
-      - name: heavy_non_user
-        description: Non-user messages exceed threshold.
+        name: active_tool_use
+      - description: Request contains a developer message.
         feature:
-          type: count
           source:
+            role: developer
             type: message
+          type: exists
+        name: has_developer_msg
+      - description: Non-user messages exceed threshold.
+        feature:
+          source:
             role: non_user
+            type: message
+          type: count
+        name: heavy_non_user
         predicate:
           gt: 5
           lte: 99
-      - name: has_images
-        description: Request contains at least one image content part.
+      - description: Request contains at least one image content part.
         feature:
-          type: exists
           source:
             type: image_content
-
-    events:
-      - name: critical_payment_event
-        description: Critical payment or transaction events that need incident-grade routing.
+          type: exists
+        name: has_images
+      domains:
+      - description: Business and management related queries.
+        mmlu_categories:
+        - business
+        model_scores:
+        - model: qwen3-32b
+          score: 0.96
+          use_reasoning: true
+        name: business
+      - description: Legal questions and policy topics.
+        mmlu_categories:
+        - law
+        name: law
+      - description: Psychology and mental-health oriented prompts.
+        mmlu_categories:
+        - psychology
+        name: psychology
+      - description: Health and medical information requests.
+        mmlu_categories:
+        - health
+        name: health
+      - description: Computer science and engineering prompts.
+        mmlu_categories:
+        - computer science
+        name: computer science
+      - description: General fallback traffic.
+        mmlu_categories:
+        - other
+        name: other
+      embeddings:
+      - aggregation_method: max
+        candidates:
+        - how to configure the system
+        - installation guide
+        - troubleshooting steps
+        - error message explanation
+        name: technical_support
+        threshold: 0.75
+      - aggregation_method: any
+        candidates:
+        - password reset
+        - account settings
+        - billing information
+        - subscription management
+        name: account_management
+        threshold: 0.72
+      - aggregation_method: max
+        candidates:
+        - patient symptoms or clinical question
+        - medication interaction or dosage question
+        - test result interpretation request
+        name: clinical_query_intent
+        query_modality: text
+        threshold: 0.72
+      events:
+      - action_codes:
+        - TXN_DECLINE
+        description: Critical payment or transaction events that need incident-grade
+          routing.
         event_types:
-          - payment_failed
-          - transaction_declined
+        - payment_failed
+        - transaction_declined
+        name: critical_payment_event
         severities:
-          - critical
-          - high
-        action_codes:
-          - TXN_DECLINE
+        - critical
+        - high
         temporal: true
-
-    metadata:
-      - name: consent_denied
-        description: Caller explicitly denied remote processing consent.
+      fact_check:
+      - description: Prompts with factual claims that should be verified.
+        name: needs_fact_check
+      - description: Creative prompts that do not need factual verification.
+        name: no_fact_check_needed
+      jailbreak:
+      - benign_patterns:
+        - explain the policy
+        - summarize the safety rules
+        description: Detect common prompt-injection or jailbreak attempts.
+        include_history: true
+        jailbreak_patterns:
+        - ignore previous instructions
+        - reveal the hidden prompt
+        - jailbreak mode
+        method: hybrid
+        name: prompt_injection
+        threshold: 0.8
+      kb:
+      - kb: privacy_kb
+        match: best
+        name: privacy_policy
+        target:
+          kind: group
+          value: privacy_policy
+      - kb: privacy_kb
+        match: best
+        name: security_containment
+        target:
+          kind: group
+          value: security_containment
+      - kb: privacy_kb
+        match: best
+        name: frontier_reasoning
+        target:
+          kind: group
+          value: frontier_reasoning
+      - kb: privacy_kb
+        match: best
+        name: local_standard
+        target:
+          kind: group
+          value: local_standard
+      keywords:
+      - bm25_threshold: 0.1
+        case_sensitive: false
+        keywords:
+        - code
+        - function
+        - debug
+        - algorithm
+        - refactor
+        method: bm25
+        name: code_keywords
+        operator: OR
+      - bm25_threshold: 0.1
+        case_sensitive: false
+        keywords:
+        - machine learning
+        - model training
+        - gradient
+        - neural network
+        - classifier
+        method: bm25
+        name: machine_learning
+        operator: OR
+      - case_sensitive: false
+        keywords:
+        - urgent
+        - immediate
+        - asap
+        - emergency
+        method: ngram
+        name: urgent_keywords
+        ngram_arity: 3
+        ngram_threshold: 0.4
+        operator: OR
+      - case_sensitive: false
+        fuzzy_match: true
+        fuzzy_threshold: 82
+        keywords:
+        - social security
+        - credit card
+        - password
+        - api key
+        method: fuzzy
+        name: fuzzy_sensitive_keywords
+        operator: OR
+      language:
+      - description: Chinese-language requests.
+        name: zh
+        threshold: 0
+      - description: Spanish-language requests.
+        name: es
+      metadata:
+      - description: Caller explicitly denied remote processing consent.
         key: consent
+        name: consent_denied
         predicate:
           equals: denied
-
-    classifiers:
-      - name: generic-safety-score
-        description: Generic binary safety classification head.
-        type: local
-        model_path: models/mmbert32k-jailbreak-detector-merged
-        labels: [SAFE, JAILBREAK]
-        use_cpu: true
-      - name: tool-risk
-        description: Prompted tool execution risk labeler.
-        type: llm
-        model: external-classifier
-        labels: [SAFE, RISKY]
-        instructions: >-
-          Choose RISKY only for destructive, privileged, or irreversible tool
-          operations.
-
-  projections:
-    partitions:
-      - name: support_intents
+      modality:
+      - description: Text-only autoregressive requests.
+        name: AR
+      - description: Image-generation requests.
+        name: DIFFUSION
+      - description: Requests that need both text and image generation.
+        name: BOTH
+      pii:
+      - description: Sensitive prompts where only low-risk identifiers may pass through.
+        include_history: true
+        name: restricted_pii
+        pii_types_allowed:
+        - EMAIL_ADDRESS
+        threshold: 0.85
+      preferences:
+      - description: Users who prefer short, direct responses.
+        examples:
+        - keep it concise
+        - bullet points only
+        - answer in one paragraph
+        name: terse_answers
+        threshold: 0.7
+      reasks:
+      - description: The current user turn closely repeats the immediately previous
+          user turn.
+        lookback_turns: 1
+        name: likely_dissatisfied
+        threshold: 0.8
+      - description: The current user turn repeats the last two user turns in a row.
+        lookback_turns: 2
+        name: persistently_dissatisfied
+        threshold: 0.8
+      role_bindings:
+      - description: Requests from platform administrators.
+        name: admin
+        role: admin
+        subjects:
+        - kind: Group
+          name: platform-admins
+      - description: Requests from paid end users.
+        name: premium_user
+        role: premium_user
+        subjects:
+        - kind: Group
+          name: premium-tier
+      structure:
+      - description: Prompts that contain many explicit questions.
+        feature:
+          source:
+            pattern: "[?\uFF1F]"
+            type: regex
+          type: count
+        name: many_questions
+        predicate:
+          gte: 4
+      - description: Prompts with one or fewer explicit questions.
+        feature:
+          source:
+            pattern: "[?\uFF1F]"
+            type: regex
+          type: count
+        name: at_most_one_question
+        predicate:
+          lte: 1
+      - description: Prompts that contain numbered list items such as "1. ..."
+        feature:
+          source:
+            pattern: (?m)^\s*\d+\.\s+
+            type: regex
+          type: exists
+        name: numbered_steps
+      - description: Prompts that express an ordered workflow.
+        feature:
+          source:
+            case_sensitive: false
+            sequences:
+            - - first
+              - then
+            - - first
+              - next
+              - finally
+            - - "\u9996\u5148"
+              - "\u7136\u540E"
+            - - "\u5148"
+              - "\u518D"
+            type: sequence
+          type: sequence
+        name: first_then_flow
+      - description: Prompts with dense explicit constraints relative to multilingual
+          text units.
+        feature:
+          source:
+            case_sensitive: false
+            keywords:
+            - under
+            - at most
+            - at least
+            - within
+            - no more than
+            - "\u4E0D\u8D85\u8FC7"
+            - "\u81F3\u5C11"
+            - "\u6700\u591A"
+            type: keyword_set
+          type: density
+        name: constraint_dense
+        predicate:
+          gt: 0.08
+      - description: Prompts with dense output-format directives relative to multilingual
+          text units.
+        feature:
+          source:
+            keywords:
+            - table
+            - bullet
+            - json
+            - markdown
+            - "\u8868\u683C"
+            - "\u5217\u8868"
+            - JSON
+            type: keyword_set
+          type: density
+        name: format_directive_dense
+        predicate:
+          gt: 0.08
+      - description: Prompts with very low question density relative to multilingual
+          text units.
+        feature:
+          source:
+            pattern: "[?\uFF1F]"
+            type: regex
+          type: density
+        name: low_question_density
+        predicate:
+          lt: 0.05
+      - description: Current user turn is at least four thousand UTF-8 bytes.
+        feature:
+          source:
+            type: text_bytes
+          type: count
+        name: long_current_turn_bytes
+        predicate:
+          gte: 4000
+      user_feedbacks:
+      - description: The user indicates the previous answer was incorrect.
+        name: wrong_answer
+      - description: The user asks for a clearer or more detailed answer.
+        name: need_clarification
+    projections:
+      mappings:
+      - calibration:
+          method: sigmoid_distance
+          slope: 10
+        method: threshold_bands
+        name: request_band
+        outputs:
+        - lte: 0.2
+          name: support_fast
+        - gt: 0.2
+          lt: 0.45
+          name: support_balanced
+        - gte: 0.45
+          name: support_escalated
+        source: request_difficulty
+      partitions:
+      - default: technical_support
+        members:
+        - technical_support
+        - account_management
+        name: support_intents
         semantics: exclusive
         temperature: 0.3
-        members:
-          - technical_support
-          - account_management
-        default: technical_support
-    scores:
-      - name: request_difficulty
+      scores:
+      - inputs:
+        - match: 1
+          miss: 0
+          name: technical_support
+          type: embedding
+          value_source: confidence
+          weight: 0.18
+        - name: account_management
+          type: embedding
+          value_source: confidence
+          weight: -0.08
+        - name: needs_reasoning:medium
+          type: complexity
+          weight: 0.18
+        - name: needs_reasoning:hard
+          type: complexity
+          weight: 0.36
+        - name: long_context
+          type: context
+          weight: 0.18
+        - name: first_then_flow
+          type: structure
+          weight: 0.12
         method: weighted_sum
-        inputs:
-          - type: embedding
-            name: technical_support
-            weight: 0.18
-            value_source: confidence
-            match: 1.0
-            miss: 0.0
-          - type: embedding
-            name: account_management
-            weight: -0.08
-            value_source: confidence
-          - type: complexity
-            name: needs_reasoning:medium
-            weight: 0.18
-          - type: complexity
-            name: needs_reasoning:hard
-            weight: 0.36
-          - type: context
-            name: long_context
-            weight: 0.18
-          - type: structure
-            name: first_then_flow
-            weight: 0.12
-      - name: privacy_kb_bias
+        name: request_difficulty
+      - inputs:
+        - kb: privacy_kb
+          metric: private_vs_public
+          type: kb_metric
+          value_source: score
+          weight: 1
         method: weighted_sum
-        inputs:
-          - type: kb_metric
-            kb: privacy_kb
-            metric: private_vs_public
-            weight: 1.0
-            value_source: score
-    mappings:
-      - name: request_band
-        source: request_difficulty
-        method: threshold_bands
-        calibration:
-          method: sigmoid_distance
-          slope: 10.0
-        outputs:
-          - name: support_fast
-            lte: 0.20
-          - name: support_balanced
-            gt: 0.20
-            lt: 0.45
-          - name: support_escalated
-            gte: 0.45
-
-  decisions:
-    - name: static_business_route
-      description: Static fallback for standard business traffic.
-      priority: 200
-      tier: 2
-      output_contract: Preserve any explicit user-requested output format exactly.
-      annotations:
-        policy_class: business
-        owner: routing-platform
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-          reasoning_description: Prefer fast, direct business answers.
-      candidateIterations:
-        - variable: candidate
-          source: models
-          models:
-            - model: qwen3-8b
-              lora_name: business-adapter
-              weight: 1.0
-              use_reasoning: false
-              reasoning_description: Candidate iteration reference model for DSL authoring coverage.
-              reasoning_effort: low
-          outputs:
-            - type: model
-              value: candidate
-      algorithm:
+        name: privacy_kb_bias
+    decisions:
+    - algorithm:
         type: static
-      plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            mode: insert
-            system_prompt: You are a senior business consultant. Give practical recommendations and clear tradeoffs.
-        - type: response_cache
-          configuration:
-            enabled: true
-            mode: exact_then_semantic
-            scope: user
-            semantic:
-              similarity_threshold: 0.82
-            ttl_seconds: 7200
-            request_controls:
-              enabled: true
-              header: x-vsr-cache-control
-              allowed:
-                - no-cache
-                - no-store
-                - bypass
-                - max-age
-                - ttl
-              max_ttl_seconds: 7200
-            personalized:
-              mode: disabled
-            revision:
-              cache_epoch: "2026-08"
-              model_revision: "model-catalog-v1"
-              prompt_revision: "prompts-v1"
-              policy_revision: "policy-v1"
-        - type: context_compression
-          configuration:
-            enabled: true
-            mode: auto
-            budget:
-              trigger_tokens: auto
-              target_tokens: auto
-              reserve_output_tokens: auto
-            targets:
-              tool_outputs:
-                mode: extractive
-                min_tokens: 2000
-                target_tokens: 1000
-              history:
-                mode: preserve
-              rag:
-                mode: preserve
-              memory:
-                mode: preserve
-            scoring:
-              method: bm25
-              embedding_model_ref: ""
-            recovery:
-              enabled: false
-              store: response_cache
-              ttl_seconds: 900
-              max_bytes_per_request: 10485760
-              max_total_bytes: 268435456
-              max_retrievals: 8
-            request_controls:
-              enabled: false
-              header: x-vsr-compression-control
-              allowed:
-                - bypass
-                - target
-              max_target_tokens: 16000
-            failure_mode: fail_open
-        - type: tools
-          configuration:
-            enabled: true
-            mode: filtered
-            semantic_selection: true
-            allow_tools:
-              - search_web
-            block_tools:
-              - exec_cmd
-        # Disabled sample: add mode only (filter fields belong under mode: filter; see legal_confidence_route).
-        - type: tool_selection
-          configuration:
-            enabled: false
-            mode: add
-            tools_db_path: config/tools_db.json
-            top_k: 5
-            similarity_threshold: 0.30
-            strategy: default
-            fallback_to_empty: false
-            advanced_filtering:
-              enabled: true
-              candidate_pool_size: 30
-              min_combined_score: 0.4
+      annotations:
+        owner: routing-platform
+        policy_class: business
+      description: Static fallback for standard business traffic.
       emits:
-        - kind: retention
-          retention:
-            drop: false
-            ttl_turns: 4
-            keep_current_model: true
-            prefer_prefix_retention: true
-
-    - name: legal_confidence_route
-      description: Confidence-routed legal and factual traffic.
-      priority: 190
+      - kind: retention
+        retention:
+          drop: false
+          keep_current_model: true
+          prefer_prefix_retention: true
+          ttl_turns: 4
+      name: static_business_route
+      candidateIterations:
+      - variable: candidate
+        source: decision.candidates
+        outputs:
+        - type: model
+          value: candidate
+      output_contract: Preserve any explicit user-requested output format exactly.
+      plugins:
+      - configuration:
+          enabled: true
+          mode: insert
+          system_prompt: You are a senior business consultant. Give practical recommendations
+            and clear tradeoffs.
+        type: system_prompt
+      - configuration:
+          enabled: true
+          mode: exact_then_semantic
+          personalized:
+            mode: disabled
+          request_controls:
+            allowed:
+            - no-cache
+            - no-store
+            - bypass
+            - max-age
+            - ttl
+            enabled: true
+            header: x-vsr-cache-control
+            max_ttl_seconds: 7200
+          revision:
+            cache_epoch: 2026-08
+            model_revision: model-catalog-v1
+            policy_revision: policy-v1
+            prompt_revision: prompts-v1
+          scope: user
+          semantic:
+            similarity_threshold: 0.82
+          ttl_seconds: 7200
+        type: response_cache
+      - configuration:
+          budget:
+            reserve_output_tokens: auto
+            target_tokens: auto
+            trigger_tokens: auto
+          enabled: true
+          failure_mode: fail_open
+          mode: auto
+          recovery:
+            enabled: false
+            max_bytes_per_request: 10485760
+            max_retrievals: 8
+            max_total_bytes: 268435456
+            store: response_cache
+            ttl_seconds: 900
+          request_controls:
+            allowed:
+            - bypass
+            - target
+            enabled: false
+            header: x-vsr-compression-control
+            max_target_tokens: 16000
+          scoring:
+            embedding_model_ref: ''
+            method: bm25
+          targets:
+            history:
+              mode: preserve
+            memory:
+              mode: preserve
+            rag:
+              mode: preserve
+            tool_outputs:
+              min_tokens: 2000
+              mode: extractive
+              target_tokens: 1000
+        type: context_compression
+      - configuration:
+          allow_tools:
+          - search_web
+          block_tools:
+          - exec_cmd
+          enabled: true
+          mode: filtered
+          semantic_selection: true
+        type: tools
+      - configuration:
+          advanced_filtering:
+            candidate_pool_size: 30
+            enabled: true
+            min_combined_score: 0.4
+          enabled: false
+          fallback_to_empty: false
+          mode: add
+          similarity_threshold: 0.3
+          strategy: default
+          tools_db_path: config/tools_db.json
+          top_k: 5
+        type: tool_selection
+      priority: 200
       rules:
-        operator: OR
         conditions:
-          - type: domain
-            name: law
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_effort: medium
-          weight: 0.4
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_description: Escalate when confidence is weak.
-          reasoning_effort: high
-          weight: 0.6
-      algorithm:
-        type: confidence
-        on_error: fallback
+        - name: business
+          type: domain
+        operator: AND
+      tier: 2
+    - algorithm:
         confidence:
           confidence_method: hybrid
-          threshold: 0.72
+          cost_quality_tradeoff: 0.45
+          escalation_order: small_to_large
           hybrid_weights:
             logprob_weight: 0.65
             margin_weight: 0.35
           on_error: skip
-          escalation_order: small_to_large
-          cost_quality_tradeoff: 0.45
+          threshold: 0.72
           token_filter: tool_call_args
-          verifier_server_url: ""
+          verifier_server_url: ''
           verifier_timeout_seconds: 0
+        on_error: fallback
+        type: confidence
+      description: Confidence-routed legal and factual traffic.
+      name: legal_confidence_route
       plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            use_nli: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: true
-        # Disabled sample: filter mode only (reference config union coverage for ToolSelectionPluginConfig filter fields).
-        - type: tool_selection
-          configuration:
-            enabled: false
-            mode: filter
-            relevance_threshold: 0.25
-            preserve_count: 2
-
-    - name: health_ratings_route
-      description: Ratings-based route for health requests that need fact verification.
-      priority: 180
+      - configuration:
+          enabled: true
+          hallucination_action: header
+          include_hallucination_details: true
+          unverified_factual_action: header
+          use_nli: true
+        type: hallucination
+      - configuration:
+          enabled: false
+          mode: filter
+          preserve_count: 2
+          relevance_threshold: 0.25
+        type: tool_selection
+      priority: 190
       rules:
-        operator: AND
         conditions:
-          - type: domain
-            name: health
-          - type: fact_check
-            name: needs_fact_check
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_effort: medium
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_effort: high
+        - name: law
+          type: domain
+        - name: needs_fact_check
+          type: fact_check
+        operator: OR
+    - adaptations:
+        mode: bypass
       algorithm:
-        type: ratings
         ratings:
           max_concurrent: 3
           on_error: skip
-      adaptations:
-        mode: bypass
+        type: ratings
+      description: Ratings-based route for health requests that need fact verification.
+      name: health_ratings_route
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 4096
-            # 0 = no truncation (the documented default). Set to a positive
-            # byte cap to independently limit structured tool-trace fields
-            # (prompt, tool_definitions, and each tool-call's arguments/output)
-            # without having to shrink max_body_bytes.
-            max_tool_trace_bytes: 0
-            # Cap the number of tool-trace steps retained per record. Long
-            # agent sessions (many sequential tool calls) can otherwise grow
-            # the trace unbounded and OOM the router (#1835). 0 = no cap.
-            max_tool_trace_steps: 100
-
-    - name: computer-science-remom-route
-      description: ReMoM route for complex computer science prompts.
-      priority: 170
-      output_contract_spec:
-        type: reference_selection
-        reference:
-          source: candidate_responses
-          id_format: index
-        extract:
-          mode: exact
-          sources: [content]
-        postprocess:
-          - type: dereference_selected_reference
+      - configuration:
+          capture_request_body: true
+          capture_response_body: true
+          enabled: true
+          max_body_bytes: 4096
+          max_records: 10000
+          max_tool_trace_bytes: 0
+          max_tool_trace_steps: 100
+        type: router_replay
+      priority: 180
       rules:
-        operator: AND
         conditions:
-          - type: domain
-            name: "computer science"
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_description: Use the strongest text model for synthesis.
-          reasoning_effort: high
-          lora_name: computer-science-expert
-          weight: 0.5
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_effort: medium
-          weight: 0.2
-        - model: llava-omni
-          use_reasoning: true
-          reasoning_effort: high
-          weight: 0.3
-      algorithm:
-        type: remom
+        - name: health
+          type: domain
+        - name: needs_fact_check
+          type: fact_check
+        operator: AND
+    - algorithm:
         remom:
-          breadth_schedule: [3, 2]
-          model_distribution: round_robin
-          temperature: 0.7
-          include_reasoning: true
+          breadth_schedule:
+          - 3
+          - 2
           compaction_strategy: last_n_tokens
           compaction_tokens: 512
-          synthesis_template: Fuse the strongest technical findings into a final answer.
-          synthesis_model: qwen3-32b
-          max_concurrent: 3
+          include_intermediate_responses: true
+          include_reasoning: true
           max_completion_tokens: 1024
-          round_timeout_seconds: 120
-          min_successful_responses: 2
-          on_error: skip
-          shuffle_seed: 7
-          include_intermediate_responses: true
+          max_concurrent: 3
           max_responses_per_round: 2
-      plugins:
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 6
-            similarity_threshold: 0.72
-            auto_store: true
-            hybrid_search: true
-            hybrid_mode: rerank
-            reflection:
-              enabled: true
-              algorithm: recency_semantic
-              max_inject_tokens: 384
-              recency_decay_days: 14
-              dedup_threshold: 0.9
-              block_patterns:
-                - api key
-                - password
-
-    - name: deliberation-fusion-route
-      description: Fusion route for prompts that benefit from panel deliberation.
-      priority: 165
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: business
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_effort: medium
-          weight: 0.5
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_effort: high
-          weight: 0.5
-      algorithm:
-        type: fusion
-        fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-8b
-            - qwen3-32b
-          analysis_overrides:
-            - model: qwen3-8b
-              temperature: 0.2
-              max_completion_tokens: 384
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-          max_concurrent: 2
-          max_completion_tokens: 512
-          round_timeout_seconds: 90
-          min_successful_responses: 1
-          temperature: 0.2
-          include_analysis: true
-          include_intermediate_responses: true
+          min_successful_responses: 2
+          model_distribution: round_robin
           on_error: skip
-          analysis_template: ""
-          synthesis_template: ""
-          judge_prompt_version: fusion-v1
-          # Grounding-aware synthesis: score panel responses for faithfulness
-          # (hallucination detector against context, else cross-model NLI) and
-          # use the scores to guide the judge. Disabled by default.
+          round_timeout_seconds: 120
+          shuffle_seed: 7
+          synthesis_template: Fuse the strongest technical findings into a final answer.
+          temperature: 0.7
+        type: remom
+      description: ReMoM route for complex computer science prompts.
+      name: computer-science-remom-route
+      output_contract_spec:
+        extract:
+          mode: exact
+          sources:
+          - content
+        postprocess:
+        - type: dereference_selected_reference
+        reference:
+          id_format: index
+          source: candidate_responses
+        type: reference_selection
+      plugins:
+      - configuration:
+          auto_store: true
+          enabled: true
+          hybrid_mode: rerank
+          hybrid_search: true
+          reflection:
+            algorithm: recency_semantic
+            block_patterns:
+            - api key
+            - password
+            dedup_threshold: 0.9
+            enabled: true
+            max_inject_tokens: 384
+            recency_decay_days: 14
+          retrieval_limit: 6
+          similarity_threshold: 0.72
+        type: memory
+      priority: 170
+      rules:
+        conditions:
+        - name: computer science
+          type: domain
+        - name: needs_reasoning:hard
+          type: complexity
+        operator: AND
+    - algorithm:
+        fusion:
+          analysis_template: ''
           grounding:
             enabled: false
-            reference: hybrid          # hybrid | context | panel
-            policy: weight             # weight | annotate | filter (see below)
-            min_score: 0.0             # filter policy only: drop below this (0-1)
-            min_keep: 1                # filter policy only: keep at least this many
-            nli_contradiction_penalty: 1.0
-            on_error: skip             # skip (fall back to plain fusion) | fail
-            # policy controls how the scores are used:
-            #   weight   (default) keep every response; tell the judge to weight
-            #            each answer by its score (a correct lone dissenter is kept).
-            #   annotate keep every response; pass the scores to the judge as notes.
-            #   filter   hard-drop responses below min_score (keep min_keep).
-            # filter regresses quality on contested factual questions because it
-            # deletes the correct dissenter; see bench/grounded_fusion/FINDINGS.md.
-
-    - name: router-flow-workflow-route
-      description: Router Flow route for bounded static or dynamic micro-agent workflows.
-      priority: 164
+            min_keep: 1
+            min_score: 0
+            nli_contradiction_penalty: 1
+            on_error: skip
+            policy: weight
+            reference: hybrid
+          include_analysis: true
+          include_intermediate_responses: true
+          judge_prompt_version: fusion-v1
+          max_completion_tokens: 512
+          max_concurrent: 2
+          min_successful_responses: 1
+          on_error: skip
+          round_timeout_seconds: 90
+          synthesis_template: ''
+          temperature: 0.2
+        type: fusion
+      description: Fusion route for prompts that benefit from panel deliberation.
+      name: deliberation-fusion-route
+      priority: 165
       rules:
-        operator: AND
         conditions:
-          - type: domain
-            name: business
-          - type: complexity
-            name: needs_reasoning:hard
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-          reasoning_effort: medium
-          weight: 0.5
-        - model: qwen3-32b
-          use_reasoning: true
-          reasoning_effort: high
-          weight: 0.5
-      algorithm:
+        - name: business
+          type: domain
+        - name: needs_reasoning:hard
+          type: complexity
+        operator: AND
+    - algorithm:
         type: workflows
         workflows:
-          mode: dynamic
-          template: micro_agent
-          planner:
-            model: qwen3-32b
-          max_steps: 6
-          max_parallel: 2
-          max_completion_tokens: 1024
-          round_timeout_seconds: 90
-          min_successful_responses: 1
-          temperature: 0.2
           include_intermediate_responses: true
+          max_completion_tokens: 1024
+          max_parallel: 2
+          max_steps: 6
+          min_successful_responses: 1
+          mode: dynamic
           on_error: fail
-
-    - name: terse_feedback_route
-      description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
-      priority: 160
+          planner: {}
+          round_timeout_seconds: 90
+          temperature: 0.2
+          template: micro_agent
+      description: Router Flow route for bounded static or dynamic micro-agent workflows.
+      name: router-flow-workflow-route
+      priority: 164
       rules:
-        operator: AND
         conditions:
-          - type: preference
-            name: terse_answers
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: false
-      adaptations:
+        - name: business
+          type: domain
+        - name: needs_reasoning:hard
+          type: complexity
+        operator: AND
+    - adaptations:
         adaptation:
           mode: apply
+      description: Terse-answer route that allows Router Learning adaptation to adjust
+        feedback-driven routing.
+      name: terse_feedback_route
       plugins:
-        - type: fast_response
-          configuration:
-            message: The primary model is saturated, so a lightweight response was returned immediately.
-        - type: request_params
-          configuration:
-            blocked_params:
-              - logprobs
-              - top_logprobs
-            max_tokens_limit: 8192
-            max_n: 4
-            strip_unknown: false
-
-    - name: support_router_dc_route
-      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
-      priority: 150
+      - configuration:
+          message: The primary model is saturated, so a lightweight response was returned
+            immediately.
+        type: fast_response
+      - configuration:
+          blocked_params:
+          - logprobs
+          - top_logprobs
+          max_n: 4
+          max_tokens_limit: 8192
+          strip_unknown: false
+        type: request_params
+      priority: 160
       rules:
-        operator: AND
         conditions:
-          - type: embedding
-            name: technical_support
-          - type: projection
-            name: support_escalated
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: router_dc
+        - name: terse_answers
+          type: preference
+        operator: AND
+    - algorithm:
         router_dc:
-          temperature: 0.2
           dimension_size: 384
           min_similarity: 0.7
-          use_query_contrastive: true
-          use_model_contrastive: true
           require_descriptions: true
+          temperature: 0.2
           use_capabilities: true
+          use_model_contrastive: true
+          use_query_contrastive: true
+        type: router_dc
+      description: Embedding-driven support route that escalates only when the derived
+        projection band says the request is not a simple support query.
+      name: support_router_dc_route
       plugins:
-        - type: header_mutation
-          configuration:
-            add:
-              - name: X-Tenant-Tier
-                value: premium
-            update:
-              - name: X-Route-Source
-                value: semantic-router
-            delete:
-              - X-Debug-Trace
-
-    - name: urgent_automix_route
-      description: Cost-aware urgent handling with AutoMix.
-      priority: 145
+      - configuration:
+          add:
+          - name: X-Tenant-Tier
+            value: premium
+          delete:
+          - X-Debug-Trace
+          update:
+          - name: X-Route-Source
+            value: semantic-router
+        type: header_mutation
+      priority: 150
       rules:
-        operator: AND
         conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: automix
+        - name: technical_support
+          type: embedding
+        - name: support_escalated
+          type: projection
+        operator: AND
+    - algorithm:
         automix:
-          verification_threshold: 0.78
-          max_escalations: 2
           cost_aware_routing: true
           cost_quality_tradeoff: 0.35
           discount_factor: 0.9
+          max_escalations: 2
           use_logprob_verification: true
+          verification_threshold: 0.78
+        type: automix
+      description: Cost-aware urgent handling with AutoMix.
+      name: urgent_automix_route
       plugins:
-        - type: response_jailbreak
-          configuration:
-            enabled: true
-            threshold: 0.85
-            action: header
-
-    - name: safe_hybrid_route
-      description: Composite route combining AND, OR, and NOT with Hybrid selection.
-      priority: 140
+      - configuration:
+          action: header
+          enabled: true
+          threshold: 0.85
+        type: response_jailbreak
+      priority: 145
       rules:
-        operator: AND
         conditions:
-          - type: domain
-            name: business
-          - operator: OR
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-              - type: complexity
-                name: needs_reasoning:hard
-          - operator: NOT
-            conditions:
-              - type: jailbreak
-                name: prompt_injection
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: hybrid
+        - name: urgent_keywords
+          type: keyword
+        operator: AND
+    - algorithm:
         hybrid:
-          experience_weight: 0.4
-          router_dc_weight: 0.3
           automix_weight: 0.2
           cost_weight: 0.1
-          quality_gap_threshold: 0.08
+          experience_weight: 0.4
           normalize_scores: true
+          quality_gap_threshold: 0.08
+          router_dc_weight: 0.3
+        type: hybrid
+      description: Composite route combining AND, OR, and NOT with Hybrid selection.
+      name: safe_hybrid_route
       plugins:
-        - type: tools
-          configuration:
-            enabled: true
-            mode: none
-            strip_tool_history: true
-    - name: spanish_adaptive_route
-      description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
-      priority: 135
+      - configuration:
+          enabled: true
+          mode: none
+          strip_tool_history: true
+        type: tools
+      priority: 140
       rules:
-        operator: AND
         conditions:
-          - type: language
-            name: es
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      adaptations:
+        - name: business
+          type: domain
+        - conditions:
+          - name: urgent_keywords
+            type: keyword
+          - name: needs_reasoning:hard
+            type: complexity
+          operator: OR
+        - conditions:
+          - name: prompt_injection
+            type: jailbreak
+          operator: NOT
+        operator: AND
+    - adaptations:
         adaptation:
           mode: observe
         protection:
           stability_weight: 1.2
           switch_margin: 0.04
+      description: Spanish-language route that observes Router Learning adaptation
+        with Milvus RAG.
+      name: spanish_adaptive_route
       plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: milvus
-            similarity_threshold: 0.78
-            top_k: 5
-            max_context_length: 12000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: true
-            cache_ttl_seconds: 600
-            min_confidence_threshold: 0.55
-            backend_config:
-              collection: docs
-              reuse_cache_connection: true
-              content_field: content
-              metadata_field: metadata
-              filter_expression: locale == "es"
-
-    - name: admin_adaptive_route
-      description: Admin route with Router Learning adaptation and external API RAG.
-      priority: 130
+      - configuration:
+          backend: milvus
+          backend_config:
+            collection: docs
+            content_field: content
+            filter_expression: locale == "es"
+            metadata_field: metadata
+            reuse_cache_connection: true
+          cache_results: true
+          cache_ttl_seconds: 600
+          enabled: true
+          injection_mode: tool_role
+          max_context_length: 12000
+          min_confidence_threshold: 0.55
+          on_failure: warn
+          similarity_threshold: 0.78
+          top_k: 5
+        type: rag
+      priority: 135
       rules:
-        operator: AND
         conditions:
-          - type: authz
-            name: admin
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-      adaptations:
+        - name: es
+          type: language
+        operator: AND
+    - adaptations:
         adaptation:
           mode: apply
+      description: Admin route with Router Learning adaptation and external API RAG.
+      name: admin_adaptive_route
       plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: external_api
-            similarity_threshold: 0.7
-            top_k: 6
-            max_context_length: 8000
-            injection_mode: system_prompt
-            on_failure: block
-            cache_results: false
-            min_confidence_threshold: 0.5
-            backend_config:
-              endpoint: https://search.example.com/query
-              api_key: search-api-key
-              auth_header: X-API-Key
-              request_format: custom
-              request_template: "{\"query\":\"{{.Query}}\",\"top_k\":{{.TopK}},\"threshold\":{{.Threshold}}}"
-              timeout_seconds: 15
-              headers:
-                X-Environment: admin
-
-    - name: long_context_latency_route
-      description: Long-context route with latency-aware policy and MCP-backed RAG.
-      priority: 125
+      - configuration:
+          backend: external_api
+          backend_config:
+            api_key: search-api-key
+            auth_header: X-API-Key
+            endpoint: https://search.example.com/query
+            headers:
+              X-Environment: admin
+            request_format: custom
+            request_template: '{"query":"{{.Query}}","top_k":{{.TopK}},"threshold":{{.Threshold}}}'
+            timeout_seconds: 15
+          cache_results: false
+          enabled: true
+          injection_mode: system_prompt
+          max_context_length: 8000
+          min_confidence_threshold: 0.5
+          on_failure: block
+          similarity_threshold: 0.7
+          top_k: 6
+        type: rag
+      priority: 130
       rules:
-        operator: AND
         conditions:
-          - type: context
-            name: long_context
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: latency_aware
+        - name: admin
+          type: authz
+        operator: AND
+    - algorithm:
         latency_aware:
+          description: Balance throughput and first-token latency for long prompts.
           tpot_percentile: 90
           ttft_percentile: 95
-          description: Balance throughput and first-token latency for long prompts.
+        type: latency_aware
+      description: Long-context route with latency-aware policy and MCP-backed RAG.
+      name: long_context_latency_route
       plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: mcp
-            similarity_threshold: 0.74
-            top_k: 4
-            max_context_length: 10000
-            injection_mode: tool_role
-            on_failure: skip
-            cache_results: false
-            min_confidence_threshold: 0.5
-            backend_config:
-              server_name: docs-server
-              tool_name: retrieve_docs
-              tool_arguments:
-                query: ${user_content}
-                top_k: ${top_k}
-              timeout_seconds: 20
-
-    # multi_factor example: composes quality/latency/cost/load into one
-    # weighted score with optional SLO ceilings. Issue #37.
-    - name: prompt_selected_route
-      description: Prompt-driven selection among bounded decision candidates.
-      priority: 126
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: prompt
-        on_error: fallback
-        prompt:
-          model: qwen3-8b
-          instructions: >-
-            Choose qwen3-8b for ordinary requests and qwen3-32b for hard
-            reasoning, coding, or multi-step analysis.
-          timeout_seconds: 5
-
-    - name: classifier_band_route
-      description: Route a bounded generic classifier score to a local model.
+      - configuration:
+          backend: mcp
+          backend_config:
+            server_name: docs-server
+            timeout_seconds: 20
+            tool_arguments:
+              query: ${user_content}
+              top_k: ${top_k}
+            tool_name: retrieve_docs
+          cache_results: false
+          enabled: true
+          injection_mode: tool_role
+          max_context_length: 10000
+          min_confidence_threshold: 0.5
+          on_failure: skip
+          similarity_threshold: 0.74
+          top_k: 4
+        type: rag
       priority: 125
       rules:
-        operator: AND
         conditions:
-          - type: classifier
-            name: generic-safety-score
-            label: JAILBREAK
-            predicate:
-              gte: 0.5
-            on_error: no_match
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-
-    - name: multi_factor_route
-      description: Compose quality, latency, cost, and load signals into a single weighted score.
-      priority: 124
+        - name: long_context
+          type: context
+        operator: AND
+    - algorithm:
+        on_error: fallback
+        prompt:
+          instructions: Choose qwen3-8b for ordinary requests and qwen3-32b for hard
+            reasoning, coding, or multi-step analysis.
+          timeout_seconds: 5
+        type: prompt
+      description: Prompt-driven selection among bounded decision candidates.
+      name: prompt_selected_route
+      priority: 126
       rules:
-        operator: AND
         conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-        - model: qwen3-32b
-      algorithm:
-        type: multi_factor
+        - name: other
+          type: domain
+        operator: AND
+    - description: Route a bounded generic classifier score to a local model.
+      name: classifier_band_route
+      priority: 125
+      rules:
+        conditions:
+        - label: JAILBREAK
+          name: generic-safety-score
+          on_error: no_match
+          predicate:
+            gte: 0.5
+          type: classifier
+        operator: AND
+    - algorithm:
         multi_factor:
-          weights:
-            quality: 0.4
-            latency: 0.2
-            cost: 0.2
-            load: 0.2
-          slo:
-            max_tpot_ms: 200
-            max_ttft_ms: 800
-            max_cost_per_1m: 5.0
-            max_inflight: 50
           latency_percentile: 95
           on_no_candidates: cheapest
-
-    - name: fallback_knn_route
-      description: KNN fallback route for general traffic with OpenAI vector-store RAG.
+          slo:
+            max_cost_per_1m: 5
+            max_inflight: 50
+            max_tpot_ms: 200
+            max_ttft_ms: 800
+          weights:
+            cost: 0.2
+            latency: 0.2
+            load: 0.2
+            quality: 0.4
+        type: multi_factor
+      description: Compose quality, latency, cost, and load signals into a single
+        weighted score.
+      name: multi_factor_route
+      priority: 124
+      rules:
+        conditions:
+        - name: other
+          type: domain
+        operator: AND
+    - algorithm:
+        ml:
+          embedding_dim: 1024
+          knn:
+            k: 5
+            pretrained_path: /models/selection/knn_model.json
+          models_path: /models/selection
+        type: knn
+      description: KNN fallback route for general traffic with OpenAI vector-store
+        RAG.
+      name: fallback_knn_route
+      plugins:
+      - configuration:
+          backend: openai
+          backend_config:
+            api_key: openai-file-search-key
+            base_url: https://api.openai.com
+            file_ids:
+            - file_a
+            - file_b
+            filter:
+              doc_type: manual
+            max_num_results: 12
+            timeout_seconds: 20
+            vector_store_id: vs_docs_prod
+            workflow_mode: tool_based
+          cache_results: true
+          cache_ttl_seconds: 300
+          enabled: true
+          injection_mode: tool_role
+          max_context_length: 9000
+          min_confidence_threshold: 0.35
+          on_failure: warn
+          similarity_threshold: 0.73
+          top_k: 8
+        type: rag
       priority: 120
       rules:
-        operator: AND
         conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-      algorithm:
-        type: knn
+        - name: other
+          type: domain
+        operator: AND
+    - algorithm:
+        ml:
+          embedding_dim: 1024
+          kmeans:
+            efficiency_weight: 0.1
+            num_clusters: 8
+            pretrained_path: /models/selection/kmeans_model.json
+          models_path: /models/selection
+        type: kmeans
+      description: KMeans route for clarification requests with local vector-store
+        RAG.
+      name: clarification_kmeans_route
       plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: openai
-            similarity_threshold: 0.73
-            top_k: 8
-            max_context_length: 9000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: true
-            cache_ttl_seconds: 300
-            min_confidence_threshold: 0.35
-            backend_config:
-              vector_store_id: vs_docs_prod
-              base_url: https://api.openai.com
-              api_key: openai-file-search-key
-              max_num_results: 12
-              file_ids: [file_a, file_b]
-              filter:
-                doc_type: manual
-              timeout_seconds: 20
-              workflow_mode: tool_based
-
-    - name: clarification_kmeans_route
-      description: KMeans route for clarification requests with local vector-store RAG.
+      - configuration:
+          backend: vectorstore
+          backend_config:
+            file_ids:
+            - kb-001
+            - kb-002
+            vector_store_id: local-vs
+          cache_results: true
+          cache_ttl_seconds: 900
+          enabled: true
+          injection_mode: tool_role
+          max_context_length: 7000
+          min_confidence_threshold: 0.25
+          on_failure: skip
+          similarity_threshold: 0.69
+          top_k: 5
+        type: rag
       priority: 115
       rules:
-        operator: AND
         conditions:
-          - type: user_feedback
-            name: need_clarification
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: kmeans
+        - name: need_clarification
+          type: user_feedback
+        operator: AND
+    - algorithm:
+        type: static
+      description: Escalate when the user repeats the same question after an unsatisfying
+        answer.
+      name: repeat_question_escalation
       plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: vectorstore
-            similarity_threshold: 0.69
-            top_k: 5
-            max_context_length: 7000
-            injection_mode: tool_role
-            on_failure: skip
-            cache_results: true
-            cache_ttl_seconds: 900
-            min_confidence_threshold: 0.25
-            backend_config:
-              vector_store_id: local-vs
-              file_ids: [kb-001, kb-002]
-
-    - name: repeat_question_escalation
-      description: Escalate when the user repeats the same question after an unsatisfying answer.
+      - configuration:
+          add:
+          - name: x-escalation-reason
+            value: repeated-question
+        type: header_mutation
       priority: 114
       rules:
-        operator: AND
         conditions:
-          - type: reask
-            name: likely_dissatisfied
-      modelRefs:
-        - model: qwen3-32b
-          use_reasoning: true
-      algorithm:
-        type: static
-      plugins:
-        - type: header_mutation
-          configuration:
-            add:
-              - name: x-escalation-reason
-                value: repeated-question
-
-    - name: safe_only_svm_route
+        - name: likely_dissatisfied
+          type: reask
+        operator: AND
+    - algorithm:
+        ml:
+          embedding_dim: 1024
+          models_path: /models/selection
+          svm:
+            gamma: 1
+            kernel: rbf
+            pretrained_path: /models/selection/svm_model.json
+        type: svm
       description: SVM route that only matches when prompt-injection signals are absent.
+      name: safe_only_svm_route
+      plugins:
+      - configuration:
+          backend: hybrid
+          backend_config:
+            fallback: external_api
+            fallback_config:
+              endpoint: https://search.example.com/query
+              request_format: pinecone
+            primary: milvus
+            primary_config:
+              collection: docs
+              reuse_cache_connection: true
+            strategy: parallel
+          cache_results: false
+          enabled: true
+          injection_mode: tool_role
+          max_context_length: 9000
+          min_confidence_threshold: 0.45
+          on_failure: warn
+          similarity_threshold: 0.76
+          top_k: 6
+        type: rag
       priority: 110
       rules:
-        operator: NOT
         conditions:
-          - type: jailbreak
-            name: prompt_injection
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-      algorithm:
-        type: svm
-      plugins:
-        - type: rag
-          configuration:
-            enabled: true
-            backend: hybrid
-            similarity_threshold: 0.76
-            top_k: 6
-            max_context_length: 9000
-            injection_mode: tool_role
-            on_failure: warn
-            cache_results: false
-            min_confidence_threshold: 0.45
-            backend_config:
-              primary: milvus
-              fallback: external_api
-              strategy: parallel
-              primary_config:
-                collection: docs
-                reuse_cache_connection: true
-              fallback_config:
-                endpoint: https://search.example.com/query
-                request_format: pinecone
-
-    - name: mlp_experimental_route
+        - name: prompt_injection
+          type: jailbreak
+        operator: NOT
+    - algorithm:
+        ml:
+          embedding_dim: 1024
+          mlp:
+            device: cpu
+            pretrained_path: /models/selection/mlp_model.json
+          models_path: /models/selection
+        type: mlp
       description: Experimental MLP-based model selection route.
+      name: mlp_experimental_route
       priority: 103
       rules:
-        operator: AND
         conditions:
-          - type: keyword
-            name: machine_learning
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-      algorithm:
-        type: mlp
-
-    - name: image_generation_route
-      description: Dedicated image-generation route using the OpenAI image backend.
+        - name: machine_learning
+          type: keyword
+        operator: AND
+    - description: Dedicated image-generation route using the OpenAI image backend.
+      name: image_generation_route
+      plugins:
+      - configuration:
+          backend: openai
+          backend_config:
+            api_key: openai-image-key
+            base_url: https://api.openai.com/v1
+            model: gpt-image-1
+            quality: hd
+            style: vivid
+          default_height: 1024
+          default_width: 1024
+          enabled: true
+          max_inference_steps: 30
+          modality_detection:
+            both_keywords:
+            - explain and illustrate
+            - describe with an image
+            classifier:
+              model_path: models/mmbert32k-modality-router-merged
+              use_cpu: true
+            confidence_threshold: 0.7
+            keywords:
+            - generate an image
+            - draw
+            - create a picture
+            lower_threshold_ratio: 0.7
+            method: hybrid
+          timeout_seconds: 60
+        type: image_gen
       priority: 105
       rules:
-        operator: AND
         conditions:
-          - type: modality
-            name: DIFFUSION
-      modelRefs:
-        - model: sdxl-image
-          use_reasoning: false
+        - name: DIFFUSION
+          type: modality
+        operator: AND
+    - description: BOTH-modality route requiring text and image-capable execution.
+      name: multimodal_route
       plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: openai
-            backend_config:
-              api_key: openai-image-key
-              base_url: https://api.openai.com/v1
-              model: gpt-image-1
-              quality: hd
-              style: vivid
-            modality_detection:
-              method: hybrid
-              classifier:
-                model_path: models/mmbert32k-modality-router-merged
-                use_cpu: true
-              keywords:
-                - generate an image
-                - draw
-                - create a picture
-              both_keywords:
-                - explain and illustrate
-                - describe with an image
-              confidence_threshold: 0.7
-              lower_threshold_ratio: 0.7
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 30
-            timeout_seconds: 60
-
-    - name: multimodal_route
-      description: BOTH-modality route requiring text and image-capable execution.
+      - configuration:
+          backend: vllm_omni
+          backend_config:
+            base_url: http://image-router:8005
+            cfg_scale: 4.5
+            model: Qwen/Qwen-Image
+            num_inference_steps: 28
+            seed: 42
+          default_height: 1024
+          default_width: 1024
+          enabled: true
+          max_inference_steps: 28
+          timeout_seconds: 90
+        type: image_gen
       priority: 100
       rules:
-        operator: AND
         conditions:
-          - type: modality
-            name: BOTH
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: true
-        - model: sdxl-image
-          use_reasoning: false
-      plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: http://image-router:8005
-              model: Qwen/Qwen-Image
-              num_inference_steps: 28
-              cfg_scale: 4.5
-              seed: 42
-            default_width: 1024
-            default_height: 1024
-            max_inference_steps: 28
-            timeout_seconds: 90
-
-entrypoints:
-  - model_names: ["vllm-sr/exhaustive-default"]
-    recipe: default
-  - model_names: ["vllm-sr/exhaustive-privacy"]
-    recipe: privacy-first
-
-recipes:
-  - name: privacy-first
-    description: Keeps privacy-sensitive traffic on the local default-tier model.
-    routing:
-      strategy: confidence
-      signals:
-        keywords:
-          - name: privacy_recipe_keywords
-            operator: OR
-            method: bm25
-            keywords: ["ssn", "passport number", "credit card number"]
-            case_sensitive: false
-            bm25_threshold: 0.1
-      decisions:
-        - name: privacy_recipe_route
-          description: Route privacy-sensitive prompts to the local model.
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: privacy_recipe_keywords
-          modelRefs:
-            - model: qwen3-8b
-              use_reasoning: false
-          algorithm:
-            type: static
-
-global:
-  router:
-    config_source: file
+        - name: BOTH
+          type: modality
+        operator: AND
     strategy: priority
-    auto_model_name: exhaustive-reference
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - exhaustive-reference
-    include_config_models_in_list: true
+- name: privacy-first
+  description: Keeps privacy-sensitive traffic on the local default-tier model.
+  document:
+    signals:
+      keywords:
+      - bm25_threshold: 0.1
+        case_sensitive: false
+        keywords:
+        - ssn
+        - passport number
+        - credit card number
+        method: bm25
+        name: privacy_recipe_keywords
+        operator: OR
+    decisions:
+    - algorithm:
+        type: static
+      description: Route privacy-sensitive prompts to the local model.
+      name: privacy_recipe_route
+      priority: 100
+      rules:
+        conditions:
+        - name: privacy_recipe_keywords
+          type: keyword
+        operator: AND
+    strategy: confidence
+entrypoints:
+- name: vllm-sr/exhaustive-default
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    static_business_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+    legal_confidence_route:
+      models:
+      - model: qwen3-8b
+        weight: '0.4'
+        reasoning:
+          effort: medium
+          enabled: true
+      - model: qwen3-32b
+        weight: '0.6'
+        reasoning:
+          description: Escalate when confidence is weak.
+          effort: high
+          enabled: true
+    health_ratings_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+        reasoning:
+          effort: medium
+          enabled: true
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          effort: high
+          enabled: true
+    computer-science-remom-route:
+      models:
+      - model: qwen3-32b
+        weight: '0.5'
+        lora: computer-science-expert
+        reasoning:
+          description: Use the strongest text model for synthesis.
+          effort: high
+          enabled: true
+      - model: qwen3-8b
+        weight: '0.2'
+        reasoning:
+          effort: medium
+          enabled: true
+      - model: llava-omni
+        weight: '0.3'
+    deliberation-fusion-route:
+      models:
+      - model: qwen3-8b
+        weight: '0.5'
+        reasoning:
+          effort: medium
+          enabled: true
+      - model: qwen3-32b
+        weight: '0.5'
+        reasoning:
+          effort: high
+          enabled: true
+    router-flow-workflow-route:
+      models:
+      - model: qwen3-8b
+        weight: '0.5'
+        reasoning:
+          effort: medium
+          enabled: true
+      - model: qwen3-32b
+        weight: '0.5'
+        reasoning:
+          effort: high
+          enabled: true
+    terse_feedback_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+    support_router_dc_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    urgent_automix_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    safe_hybrid_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+        reasoning:
+          enabled: true
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    spanish_adaptive_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    admin_adaptive_route:
+      models:
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    long_context_latency_route:
+      models:
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    prompt_selected_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    classifier_band_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+    multi_factor_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+    fallback_knn_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+    clarification_kmeans_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    repeat_question_escalation:
+      models:
+      - model: qwen3-32b
+        weight: '1'
+        reasoning:
+          enabled: true
+    safe_only_svm_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+    mlp_experimental_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+    image_generation_route:
+      models:
+      - model: sdxl-image
+        weight: '1'
+    multimodal_route:
+      models:
+      - model: qwen3-8b
+        weight: '1'
+        reasoning:
+          enabled: true
+      - model: sdxl-image
+        weight: '1'
+- name: vllm-sr/exhaustive-privacy
+  rules:
+  - name: private-path
+    matches:
+    - path:
+        prefix: /private
+    recipe: privacy-first
+    assignments:
+      privacy_recipe_route:
+        models:
+        - model: qwen3-8b
+  - name: default
+    recipe: privacy-first
+    assignments:
+      privacy_recipe_route:
+        models:
+        - model: qwen3-8b
+billing_currency: USD
+global:
+  integrations:
+    looper:
+      endpoint: http://localhost:8899/v1/chat/completions
+      flow:
+        model_names:
+        - vllm-sr/flow
+        state:
+          file:
+            directory: .vllm-sr/flow-state
+          redis:
+            address: localhost:6379
+            db: 0
+            key_prefix: 'vllm-sr:flow:state:'
+            max_retries: 3
+            password: ''
+            pool_size: 10
+            tls_skip_verify: false
+            use_tls: false
+          store_backend: file
+          ttl_seconds: 1800
+      fusion:
+        model_names:
+        - vllm-sr/fusion
+      grpc_max_msg_size_mb: 16
+      headers:
+        X-Trace-Source: looper
+      max_response_bytes_mb: 32
+      remom:
+        model_names:
+        - vllm-sr/remom
+      retry_count: 2
+      timeout_seconds: 120
+    tools:
+      advanced_filtering:
+        allow_tools:
+        - docs.search
+        - tickets.lookup
+        block_tools:
+        - admin.delete
+        candidate_pool_size: 50
+        category_confidence_threshold: 0.7
+        enabled: true
+        hybrid_history:
+          history_confidence_threshold: 0
+          history_horizon: 8
+          min_history_steps: 1
+          repetition_penalty_strength: 0
+          weight_decision_prior: 1
+          weight_history_transition: 1
+          weight_semantic: 1
+        min_combined_score: 0.42
+        min_lexical_overlap: 1
+        retrieval_strategy: weighted
+        use_category_filter: true
+        weights:
+          category: 0.1
+          embed: 0.5
+          lexical: 0.2
+          name: 0.1
+          tag: 0.1
+      enabled: true
+      fallback_to_empty: true
+      similarity_threshold: 0.35
+      tools_db_path: config/runtime/tools/tools_db.json
+      top_k: 5
+  model_catalog:
+    embeddings:
+      semantic:
+        bert_model_path: models/mom-embedding-light
+        embedding_config:
+          backend: candle
+          enable_soft_matching: true
+          min_score_threshold: 0.45
+          model_type: mmbert
+          preload_embeddings: true
+          prototype_scoring:
+            best_weight: 0.75
+            cluster_similarity_threshold: 0.9
+            enabled: true
+            margin_threshold: 0
+            max_prototypes: 8
+            top_m: 2
+          target_dimension: 768
+          target_layer: 22
+          top_k: 1
+        endpoint:
+          api_key_env: EMBEDDING_API_KEY
+          base_url: http://embedding-service:8000/v1
+          dimensions: 1024
+          max_retries: 2
+          model: BAAI/bge-m3
+          timeout_seconds: 5
+        gemma_model_path: models/mom-embedding-flash
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        multimodal_model_path: models/mom-embedding-multimodal
+        qwen3_model_path: models/mom-embedding-pro
+        use_cpu: true
+    external:
+    - access_key: external-guardrail-key
+      llm_endpoint:
+        address: openai-proxy
+        name: openai-guardrail
+        port: 443
+        prompt_template: '{{ .Prompt }}'
+        protocol: https
+        use_chat_template: true
+      llm_model_name: gpt-4.1-mini
+      llm_provider: openai
+      llm_timeout_seconds: 30
+      max_tokens: 2048
+      model_role: guardrail
+      name: external-guardrail
+      parser_type: json
+      temperature: 0.2
+      threshold: 0.65
+    - access_key: external-classifier-key
+      llm_endpoint:
+        address: openai-proxy
+        name: openai-classifier
+        port: 443
+        prompt_template: '{{ .Prompt }}'
+        protocol: https
+        use_chat_template: true
+      llm_model_name: gpt-4.1-mini
+      llm_provider: openai
+      llm_timeout_seconds: 15
+      max_tokens: 128
+      model_role: classification
+      name: external-classifier
+      parser_type: json
+      temperature: 0
+    kbs:
+    - groups:
+        frontier_reasoning:
+        - architecture_analysis
+        - root_cause_analysis
+        - multi_step_tradeoffs
+        local_standard:
+        - generic_coding
+        - simple_task
+        - general_knowledge
+        privacy_policy:
+        - proprietary_code
+        - internal_document
+        - pii
+        - business_strategy
+        - trade_secret_ip
+        - operational_infrastructure
+        - locality_directive
+        - customer_data
+        private:
+        - prompt_injection
+        - credential_exfiltration
+        - jailbreak_role
+        - system_prompt_extraction
+        - proprietary_code
+        - internal_document
+        - pii
+        - business_strategy
+        - trade_secret_ip
+        - operational_infrastructure
+        - locality_directive
+        - customer_data
+        public:
+        - architecture_analysis
+        - root_cause_analysis
+        - multi_step_tradeoffs
+        - generic_coding
+        - simple_task
+        - general_knowledge
+        security_containment:
+        - prompt_injection
+        - credential_exfiltration
+        - jailbreak_role
+        - system_prompt_extraction
+      label_thresholds:
+        prompt_injection: 0.7
+      metrics:
+      - name: private_vs_public
+        negative_group: public
+        positive_group: private
+        type: group_margin
+      name: privacy_kb
+      prototype_scoring:
+        best_weight: 0.75
+        cluster_similarity_threshold: 0.9
+        enabled: true
+        margin_threshold: 0
+        max_prototypes: 8
+        top_m: 2
+      source:
+        manifest: labels.json
+        path: knowledge_bases/privacy/
+      threshold: 0.55
+    - groups:
+        escalate:
+        - biology
+        - business
+        - computer science
+        - economics
+        - history
+        - math
+        - other
+        - philosophy
+        - psychology
+        keep:
+        - chemistry
+        - engineering
+        - health
+        - law
+        - physics
+      metrics:
+      - name: escalate_vs_keep
+        negative_group: keep
+        positive_group: escalate
+        type: group_margin
+      name: mmlu_kb
+      source:
+        manifest: labels.json
+        path: knowledge_bases/mmlu/
+      threshold: 0.25
+    modules:
+      classifier:
+        domain:
+          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
+          enabled: true
+          fallback_category: other
+          model_id: models/mmbert32k-intent-classifier-merged
+          model_ref: domain_classifier
+          threshold: 0.5
+          use_cpu: true
+          use_mmbert_32k: true
+          use_modernbert: false
+        mcp:
+          args:
+          - -m
+          - mcp_classifier
+          command: python
+          enabled: true
+          env:
+            MCP_MODE: local
+          threshold: 0.6
+          timeout_seconds: 15
+          tool_name: classify
+          transport_type: stdio
+          url: http://localhost:9010
+        pii:
+          enabled: true
+          model_id: models/mmbert32k-pii-detector-merged
+          model_ref: pii_classifier
+          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
+          threshold: 0.9
+          use_cpu: true
+          use_mmbert_32k: true
+        preference:
+          embedding_model: models/preference-encoder
+          prototype_scoring:
+            best_weight: 0.75
+            cluster_similarity_threshold: 0.9
+            enabled: true
+            margin_threshold: 0
+            max_prototypes: 8
+            top_m: 2
+          use_contrastive: true
+      complexity:
+        prototype_scoring:
+          best_weight: 0.75
+          cluster_similarity_threshold: 0.9
+          enabled: true
+          margin_threshold: 0
+          max_prototypes: 6
+          top_m: 2
+      feedback_detector:
+        enabled: true
+        feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
+        model_id: models/mmbert32k-feedback-detector-merged
+        model_ref: feedback_detector
+        threshold: 0.7
+        use_cpu: true
+        use_mmbert_32k: true
+        use_modernbert: false
+      hallucination_mitigation:
+        detector:
+          backend: candle
+          context_window_size: 50
+          enable_nli_filtering: true
+          endpoint: ''
+          include_explanation: false
+          min_span_confidence: 0.6
+          min_span_length: 2
+          model_id: models/mom-halugate-detector
+          model_ref: hallucination_detector
+          nli_entailment_threshold: 0.75
+          threshold: 0.82
+          use_cpu: true
+        enabled: true
+        explainer:
+          model_id: models/mom-halugate-explainer
+          model_ref: hallucination_explainer
+          threshold: 0.9
+          use_cpu: true
+        fact_check:
+          model_id: models/mmbert32k-factcheck-classifier-merged
+          model_ref: fact_check_classifier
+          threshold: 0.65
+          use_cpu: true
+          use_mmbert_32k: true
+        on_hallucination_detected: annotate
+      modality_detector:
+        both_keywords:
+        - explain and illustrate
+        - describe with an image
+        classifier:
+          model_path: models/mmbert32k-modality-router-merged
+          use_cpu: true
+        confidence_threshold: 0.7
+        enabled: true
+        keywords:
+        - image
+        - picture
+        - illustration
+        lower_threshold_ratio: 0.7
+        method: hybrid
+        prompt_prefixes:
+        - generate an image of
+        - draw
+        - create a picture of
+      prompt_compression:
+        enabled: true
+        max_tokens: 4096
+        min_length: 512
+        novelty_weight: 0.1
+        position_depth: 0.1
+        position_weight: 0.2
+        preserve_first_n: 3
+        preserve_last_n: 2
+        profile: default
+        skip_signals:
+        - jailbreak
+        - pii
+        textrank_weight: 0.4
+        tfidf_weight: 0.3
+      prompt_guard:
+        enabled: true
+        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+        model_id: models/mmbert32k-jailbreak-detector-merged
+        model_ref: prompt_guard
+        on_error: allow
+        positive_labels:
+        - jailbreak
+        threshold: 0.7
+        use_cpu: true
+        variant: mmbert32k
+    system:
+      domain_classifier: models/mmbert32k-intent-classifier-merged
+      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
+      feedback_detector: models/mmbert32k-feedback-detector-merged
+      hallucination_detector: models/mom-halugate-detector
+      hallucination_explainer: models/mom-halugate-explainer
+      pii_classifier: models/mmbert32k-pii-detector-merged
+      prompt_guard: models/mmbert32k-jailbreak-detector-merged
+  router:
     clear_route_cache: false
+    learning:
+      adaptation:
+        candidate_set: decision
+        enabled: true
+        strategy: routing_sampling
+      enabled: true
+      protection:
+        enabled: true
+        identity:
+          headers:
+            conversation: x-conversation-id
+            session: x-session-id
+        scope: conversation
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          stability_weight: 1
+          switch_margin: 0.05
+      state_store:
+        backend: redis
+        redis:
+          address: redis:6379
+          database: 2
+          key_prefix: 'vsr:router-session:v1:'
+          password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+        timeout_ms: 50
+        ttl_seconds: 86400
     streamed_body:
       enabled: true
       max_bytes: 1048576
       timeout_sec: 15
-    skip_processing:
-      enabled: false
-    model_selection:
-      method: hybrid
-      enabled: true
-      router_dc:
-        temperature: 0.2
-        dimension_size: 384
-        min_similarity: 0.7
-        use_query_contrastive: true
-        use_model_contrastive: true
-        require_descriptions: true
-        use_capabilities: true
-      automix:
-        verification_threshold: 0.8
-        max_escalations: 2
-        cost_aware_routing: true
-        cost_quality_tradeoff: 0.4
-        discount_factor: 0.9
-        use_logprob_verification: true
-      hybrid:
-        experience_weight: 0.4
-        router_dc_weight: 0.25
-        automix_weight: 0.25
-        cost_weight: 0.1
-        quality_gap_threshold: 0.08
-        normalize_scores: true
-      momentum:
-        enabled: false
-        attack: 0.7
-        release: 0.3
-        threshold: 0.6
-      ml:
-        models_path: models/model-selection
-        embedding_dim: 384
-        knn:
-          k: 5
-          pretrained_path: models/model-selection/knn.bin
-        kmeans:
-          num_clusters: 8
-          efficiency_weight: 0.35
-          pretrained_path: models/model-selection/kmeans.bin
-        svm:
-          kernel: rbf
-          gamma: 0.12
-          pretrained_path: models/model-selection/svm.bin
-        mlp:
-          device: cpu
-          pretrained_path: models/model-selection/mlp.pt
-    learning:
-      enabled: true
-      adaptation:
-        enabled: true
-        candidate_set: decision
-        strategy: routing_sampling
-      protection:
-        enabled: true
-        scope: conversation
-        identity:
-          headers:
-            session: x-session-id
-            conversation: x-conversation-id
-        tuning:
-          idle_timeout_seconds: 300
-          min_turns_before_switch: 1
-          switch_margin: 0.05
-          stability_weight: 1.0
-      state_store:
-        backend: redis
-        ttl_seconds: 86400
-        timeout_ms: 50
-        redis:
-          address: redis:6379
-          password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
-          database: 2
-          key_prefix: "vsr:router-session:v1:"
-
   services:
+    agent:
+      public_inference_endpoint: ''
+    backend_credentials:
+      reference_api_key:
+        credential_adapter_id: bearer
+        secret_env: REFERENCE_API_KEY
     api:
       batch_classification:
-        max_batch_size: 100
         concurrency_threshold: 5
+        max_batch_size: 100
         max_concurrency: 8
         metrics:
-          sample_rate: 1.0
           batch_size_ranges:
-            - min: 1
-              max: 4
-              label: tiny
-            - min: 5
-              max: 16
-              label: standard
-          duration_buckets: [0.01, 0.05, 0.1, 0.5, 1.0]
-          size_buckets: [128, 512, 2048, 8192]
-          enabled: true
+          - label: tiny
+            max: 4
+            min: 1
+          - label: standard
+            max: 16
+            min: 5
           detailed_goroutine_tracking: true
+          duration_buckets:
+          - 0.01
+          - 0.05
+          - 0.1
+          - 0.5
+          - 1
+          enabled: true
           high_resolution_timing: true
-    response_api:
-      enabled: true
-      store_backend: redis
-      ttl_seconds: 86400
-      max_responses: 2000
-      redis:
-        address: redis:6379
-        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
-        db: 1
-        key_prefix: "vsr:responses:"
-        cluster_mode: false
-        cluster_addresses: [redis-a:6379, redis-b:6379]
-        pool_size: 10
-        min_idle_conns: 2
-        max_retries: 3
-        dial_timeout: 5
-        read_timeout: 5
-        write_timeout: 5
-        tls_enabled: false
-        tls_cert_path: certs/redis.crt
-        tls_key_path: certs/redis.key
-        tls_ca_path: certs/ca.crt
-        config_path: config/backends/response-api-redis.yaml
+          sample_rate: 1
+          size_buckets:
+          - 128
+          - 512
+          - 2048
+          - 8192
+    backend_dispatch:
+      audience: vllm-sr.backend-dispatch
+      bind_address: 0.0.0.0
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+      port: 8180
+    management_api:
+      auth:
+        control_plane_hmac_keyring_env: ''
+        control_plane_hmac_keyring_file: ''
+        mode: disabled
+        roles:
+          admin:
+          - '*'
+          operator:
+          - health.read
+          - ready.read
+          - docs.read
+          - metrics.read
+          - classify.invoke
+          - config.read
+          - replay.read
+          - replay.detail
+          - data.read
+          - data.write
+          - cache.read
+          - cache.invalidate
+          - compression.read
+          - compression.preview
+          viewer:
+          - health.read
+          - ready.read
+          - docs.read
+          - metrics.read
+          - classify.invoke
+          - config.read
+          - replay.read
+          - data.read
+          - cache.read
+          - compression.read
+        tokens:
+        - env: VSR_MGMT_TOKEN
+          role: admin
+      bind_address: 127.0.0.1
+      port: 8080
+      remote_exposure: false
+      tls:
+        certificate_env: ''
+        certificate_file: ''
+        client_ca_bundle_env: ''
+        client_ca_bundle_file: ''
+        private_key_env: ''
+        private_key_file: ''
     observability:
-      tracing:
-        enabled: true
-        provider: opentelemetry
-        exporter:
-          type: otlp
-          endpoint: jaeger:4317
-          insecure: true
-        sampling:
-          type: probabilistic
-          rate: 0.5
-        resource:
-          service_name: vllm-sr
-          service_version: v0.3.0
-          deployment_environment: development
       metrics:
         enabled: true
         windowed_metrics:
           enabled: true
-          time_windows: [1m, 5m, 1h]
-          update_interval: 30s
+          max_models: 50
           model_metrics: true
           queue_depth_estimation: true
-          max_models: 50
-    authz:
-      fail_open: false
-      identity:
-        user_id_header: x-user-id
-        user_groups_header: x-user-groups
-      providers:
-        - type: header-injection
-          headers:
-            X-Plan: premium
-            X-Role: admin
-    ratelimit:
-      fail_open: false
-      providers:
-        - type: envoy-ratelimit
-          address: ratelimit.default.svc.cluster.local:8081
-          domain: api
-        - type: local-limiter
-          rules:
-            - name: premium-per-minute
-              match:
-                group: premium-tier
-                model: qwen3-32b
-              requests_per_unit: 120
-              tokens_per_unit: 300000
-              unit: minute
-            - name: user-per-hour
-              match:
-                user: demo-user
-              requests_per_unit: 1000
-              tokens_per_unit: 2000000
-              unit: hour
-    management_api:
-      bind_address: 127.0.0.1
-      port: 8080
-      remote_exposure: false
-      auth:
-        mode: disabled
-        tokens:
-          - env: VSR_MGMT_TOKEN
-            role: admin
-        roles:
-          viewer:
-            - health.read
-            - ready.read
-            - docs.read
-            - metrics.read
-            - classify.invoke
-            - config.read
-            - replay.read
-            - data.read
-            - cache.read
-            - compression.read
-          operator:
-            - health.read
-            - ready.read
-            - docs.read
-            - metrics.read
-            - classify.invoke
-            - config.read
-            - config.write
-            - learning.ingest
-            - replay.read
-            - replay.detail
-            - data.read
-            - data.write
-            - cache.read
-            - cache.invalidate
-            - compression.read
-            - compression.preview
-          admin:
-            - "*"
-    startup_status:
-      store_backend: file
-    router_replay:
+          time_windows:
+          - 1m
+          - 5m
+          - 1h
+          update_interval: 30s
+      tracing:
+        enabled: true
+        exporter:
+          endpoint: jaeger:4317
+          insecure: true
+          type: otlp
+        provider: opentelemetry
+        resource:
+          deployment_environment: development
+          service_name: vllm-sr
+          service_version: v0.4.0
+        sampling:
+          rate: 0.5
+          type: probabilistic
+    response_api:
       enabled: true
-      store_backend: postgres
-      ttl_seconds: 2592000
+      max_responses: 2000
+      redis:
+        address: redis:6379
+        cluster_addresses:
+        - redis-a:6379
+        - redis-b:6379
+        cluster_mode: false
+        config_path: config/backends/response-api-redis.yaml
+        db: 1
+        dial_timeout: 5
+        key_prefix: 'vsr:responses:'
+        max_retries: 3
+        min_idle_conns: 2
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+        pool_size: 10
+        read_timeout: 5
+        tls_ca_path: certs/ca.crt
+        tls_cert_path: certs/redis.crt
+        tls_enabled: false
+        tls_key_path: certs/redis.key
+        write_timeout: 5
+      store_backend: redis
+      ttl_seconds: 86400
+    router_replay:
       async_writes: true
+      enabled: true
+      milvus:
+        address: milvus:19530
+        collection_name: router_replay
+        consistency_level: Bounded
+        password: "${MILVUS_PASSWORD}"
+        shard_num: 2
+        username: root
+      postgres:
+        conn_max_lifetime: 300
+        database: vsr
+        host: postgres
+        max_idle_conns: 10
+        max_open_conns: 20
+        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
+        port: 5432
+        ssl_mode: disable
+        table_name: router_replay
+        user: router
+      qdrant:
+        api_key: ''
+        collection_name: router_replay
+        host: qdrant
+        port: 6334
+        use_tls: false
       redis:
         address: redis:6379
         db: 2
-        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
-        use_tls: false
-        tls_skip_verify: false
+        key_prefix: 'vsr:replay:'
         max_retries: 3
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
         pool_size: 20
-        key_prefix: "vsr:replay:"
-      postgres:
-        host: postgres
-        port: 5432
-        database: vsr
-        user: router
-        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
-        ssl_mode: disable
-        max_open_conns: 20
-        max_idle_conns: 10
-        conn_max_lifetime: 300
-        table_name: router_replay
-      milvus:
-        address: milvus:19530
-        username: root
-        password: "${MILVUS_PASSWORD}"
-        collection_name: router_replay
-        consistency_level: Bounded
-        shard_num: 2
-      qdrant:
-        host: qdrant
-        port: 6334
-        api_key: ""
+        tls_skip_verify: false
         use_tls: false
-        collection_name: router_replay
-
+      store_backend: postgres
+      ttl_seconds: 2592000
+    startup_status:
+      store_backend: file
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
-    response_cache:
-      backend_type: milvus
-      enabled: true
-      similarity_threshold: 0.86
-      max_entries: 50000
-      ttl_seconds: 7200
-      eviction_policy: lru
-      embedding_model: mmbert
-      milvus:
-        connection:
-          host: milvus
-          port: 19530
-          database: default
-          timeout: 30
-          auth:
-            enabled: true
-            username: root
-            password: "${MILVUS_PASSWORD}"
-          tls:
-            enabled: false
-            cert_file: certs/milvus.crt
-            key_file: certs/milvus.key
-            ca_file: certs/ca.crt
-        collection:
-          name: semantic_cache
-          description: Semantic cache vectors.
-          vector_field:
-            name: embedding
-            dimension: 768
-            metric_type: COSINE
-          index:
-            type: HNSW
-            params:
-              M: 16
-              efConstruction: 200
-        search:
-          params:
-            ef: 64
-          topk: 10
-          consistency_level: Bounded
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 128
-            timeout: 30
-        data_management:
-          ttl:
-            enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
-          compaction:
-            enabled: true
-            interval: 86400
-        logging:
-          level: info
-          enable_query_log: true
-          enable_metrics: true
-        development:
-          drop_collection_on_startup: false
-          auto_create_collection: true
-          verbose_errors: true
     memory:
-      enabled: true
-      backend: milvus
+      adaptive_threshold: true
       auto_store: true
-      disabled_routes: []
+      backend: milvus
+      default_retrieval_limit: 10
+      default_similarity_threshold: 0.74
       disabled_models: []
-      valkey:
-        host: valkey
-        port: 6379
-        database: 0
-        password: valkey-secret
-        timeout: 10
-        collection_prefix: "mem:"
-        index_name: mem_idx
-        dimension: 384
-        metric_type: COSINE
-        index_m: 16
-        index_ef_construction: 200
-        tls_enabled: false
-        tls_ca_path: ""
-        tls_insecure_skip_verify: false
+      disabled_routes: []
+      embedding_model: bert
+      enabled: true
+      extraction_batch_size: 16
+      hybrid_mode: rerank
+      hybrid_search: true
       milvus:
         address: milvus:19530
         collection: agentic_memory
         dimension: 384
         num_partitions: 32
       qdrant:
+        api_key: ''
+        collection: agentic_memory
+        connect_timeout: 10
+        dimension: 384
         host: qdrant
         port: 6334
-        api_key: ""
         use_tls: false
-        connect_timeout: 10
-        collection: agentic_memory
-        dimension: 384
-      redis_cache:
-        enabled: false
-        address: "localhost:6379"
-        ttl_seconds: 300
-        db: 0
-        key_prefix: "memory_cache:"
-        password: ""
-      embedding_model: bert
-      extraction_batch_size: 16
-      default_retrieval_limit: 10
-      default_similarity_threshold: 0.74
-      hybrid_search: true
-      hybrid_mode: rerank
-      adaptive_threshold: true
       quality_scoring:
         initial_strength_days: 30
-        prune_threshold: 0.15
         max_memories_per_user: 200
+        prune_threshold: 0.15
+      redis_cache:
+        address: localhost:6379
+        db: 0
+        enabled: false
+        key_prefix: 'memory_cache:'
+        password: ''
+        ttl_seconds: 300
       reflection:
-        enabled: true
         algorithm: recency_semantic
+        block_patterns:
+        - api key
+        - password
+        dedup_threshold: 0.9
+        enabled: true
         max_inject_tokens: 512
         recency_decay_days: 14
-        dedup_threshold: 0.9
-        block_patterns:
-          - api key
-          - password
-    vector_store:
+      valkey:
+        collection_prefix: 'mem:'
+        database: 0
+        dimension: 384
+        host: valkey
+        index_ef_construction: 200
+        index_m: 16
+        index_name: mem_idx
+        metric_type: COSINE
+        password: "${VALKEY_PASSWORD}"
+        port: 6379
+        timeout: 10
+        tls_ca_path: ''
+        tls_enabled: false
+        tls_insecure_skip_verify: false
+    response_cache:
+      backend_type: milvus
+      embedding_model: mmbert
       enabled: true
-      backend_type: llama_stack
-      file_storage_dir: /var/lib/vsr/data
-      max_file_size_mb: 100
-      embedding_model: multimodal
-      embedding_dimension: 384
-      ingestion_workers: 4
-      ingestion_drain_timeout_seconds: 30
-      supported_formats: [.txt, .md, .json, .csv, .html, .pdf]
+      eviction_policy: lru
+      max_entries: 50000
       milvus:
-        connection:
-          host: milvus
-          port: 19530
-          database: vector_store
-          timeout: 30
-          auth:
-            enabled: true
-            username: root
-            password: "${MILVUS_PASSWORD}"
-          tls:
-            enabled: false
-            cert_file: certs/milvus.crt
-            key_file: certs/milvus.key
-            ca_file: certs/ca.crt
         collection:
-          name: vector_store
-          description: Uploaded document embeddings.
-          vector_field:
-            name: embedding
-            dimension: 384
-            metric_type: COSINE
+          description: Semantic cache vectors.
           index:
-            type: HNSW
             params:
               M: 16
               efConstruction: 200
-        search:
-          params:
-            ef: 64
-          topk: 10
-          consistency_level: Strong
-        performance:
-          connection_pool:
-            max_connections: 20
-            max_idle_connections: 10
-            acquire_timeout: 10
-          batch:
-            insert_batch_size: 64
-            timeout: 30
-        data_management:
-          ttl:
+            type: HNSW
+          name: semantic_cache
+          vector_field:
+            dimension: 768
+            metric_type: COSINE
+            name: embedding
+        connection:
+          auth:
             enabled: true
-            timestamp_field: created_at
-            cleanup_interval: 3600
+            password: "${MILVUS_PASSWORD}"
+            username: root
+          database: default
+          host: milvus
+          port: 19530
+          timeout: 30
+          tls:
+            ca_file: certs/ca.crt
+            cert_file: certs/milvus.crt
+            enabled: false
+            key_file: certs/milvus.key
+        data_management:
           compaction:
             enabled: true
             interval: 86400
-        logging:
-          level: info
-          enable_query_log: true
-          enable_metrics: true
+          ttl:
+            cleanup_interval: 3600
+            enabled: true
+            timestamp_field: created_at
         development:
-          drop_collection_on_startup: false
           auto_create_collection: true
+          drop_collection_on_startup: false
           verbose_errors: true
-      memory:
-        max_entries_per_store: 5000
+        logging:
+          enable_metrics: true
+          enable_query_log: true
+          level: info
+        performance:
+          batch:
+            insert_batch_size: 128
+            timeout: 30
+          connection_pool:
+            acquire_timeout: 10
+            max_connections: 20
+            max_idle_connections: 10
+        search:
+          consistency_level: Bounded
+          params:
+            ef: 64
+          topk: 10
+      similarity_threshold: 0.86
+      ttl_seconds: 7200
+    vector_store:
+      backend_type: llama_stack
+      embedding_dimension: 384
+      embedding_model: multimodal
+      enabled: true
+      file_storage_dir: /var/lib/vsr/data
+      ingestion_drain_timeout_seconds: 30
+      ingestion_workers: 4
       llama_stack:
-        endpoint: http://llama-stack:8321
-        auth_token: llama-stack-token
+        auth_token: "${LLAMA_STACK_AUTH_TOKEN}"
         embedding_model: all-MiniLM-L6-v2
+        endpoint: http://llama-stack:8321
         request_timeout_seconds: 30
         search_type: hybrid
-      valkey:
-        host: valkey
-        port: 6379
-        database: 0
-        password: valkey-secret
-        connect_timeout: 5
-        collection_prefix: "vsr_vs_"
-        metric_type: COSINE
-        index_m: 16
-        index_ef_construction: 200
+      max_file_size_mb: 100
+      memory:
+        max_entries_per_store: 5000
+      metadata_postgres:
+        conn_max_lifetime: 300
+        database: vsr
+        host: postgres
+        max_idle_conns: 5
+        max_open_conns: 25
+        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
+        port: 5432
+        ssl_mode: disable
+        table_name: vector_store_registry
+        user: router
+      metadata_store: memory
+      milvus:
+        collection:
+          description: Uploaded document embeddings.
+          index:
+            params:
+              M: 16
+              efConstruction: 200
+            type: HNSW
+          name: vector_store
+          vector_field:
+            dimension: 384
+            metric_type: COSINE
+            name: embedding
+        connection:
+          auth:
+            enabled: true
+            password: "${MILVUS_PASSWORD}"
+            username: root
+          database: vector_store
+          host: milvus
+          port: 19530
+          timeout: 30
+          tls:
+            ca_file: certs/ca.crt
+            cert_file: certs/milvus.crt
+            enabled: false
+            key_file: certs/milvus.key
+        data_management:
+          compaction:
+            enabled: true
+            interval: 86400
+          ttl:
+            cleanup_interval: 3600
+            enabled: true
+            timestamp_field: created_at
+        development:
+          auto_create_collection: true
+          drop_collection_on_startup: false
+          verbose_errors: true
+        logging:
+          enable_metrics: true
+          enable_query_log: true
+          level: info
+        performance:
+          batch:
+            insert_batch_size: 64
+            timeout: 30
+          connection_pool:
+            acquire_timeout: 10
+            max_connections: 20
+            max_idle_connections: 10
+        search:
+          consistency_level: Strong
+          params:
+            ef: 64
+          topk: 10
       qdrant:
+        api_key: ''
+        collection_prefix: vsr_vs_
+        connect_timeout: 10
         host: qdrant
         port: 6334
-        api_key: ""
         use_tls: false
-        connect_timeout: 10
-        collection_prefix: "vsr_vs_"
-      metadata_store: memory
-      metadata_postgres:
-        host: postgres
-        port: 5432
-        database: vsr
-        user: router
-        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
-        ssl_mode: disable
-        max_open_conns: 25
-        max_idle_conns: 5
-        conn_max_lifetime: 300
-        table_name: vector_store_registry
-
-  integrations:
-    tools:
-      enabled: true
-      top_k: 5
-      similarity_threshold: 0.35
-      tools_db_path: config/runtime/tools/tools_db.json
-      fallback_to_empty: true
-      advanced_filtering:
-        enabled: true
-        retrieval_strategy: weighted
-        candidate_pool_size: 50
-        min_lexical_overlap: 1
-        min_combined_score: 0.42
-        weights:
-          embed: 0.5
-          lexical: 0.2
-          tag: 0.1
-          name: 0.1
-          category: 0.1
-        use_category_filter: true
-        category_confidence_threshold: 0.7
-        allow_tools: [docs.search, tickets.lookup]
-        block_tools: [admin.delete]
-        hybrid_history:
-          history_horizon: 8
-          min_history_steps: 1
-          history_confidence_threshold: 0
-          weight_semantic: 1
-          weight_history_transition: 1
-          weight_decision_prior: 1
-          repetition_penalty_strength: 0
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      grpc_max_msg_size_mb: 16
-      max_response_bytes_mb: 32
-      timeout_seconds: 120
-      retry_count: 2
-      headers:
-        X-Trace-Source: looper
-      remom:
-        model_names:
-          - vllm-sr/remom
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-      flow:
-        model_names:
-          - vllm-sr/flow
-        state:
-          store_backend: file
-          ttl_seconds: 1800
-          file:
-            directory: .vllm-sr/flow-state
-          redis:
-            address: localhost:6379
-            db: 0
-            password: ""
-            use_tls: false
-            tls_skip_verify: false
-            max_retries: 3
-            pool_size: 10
-            key_prefix: "vllm-sr:flow:state:"
-
-  model_catalog:
-    embeddings:
-      semantic:
-        qwen3_model_path: models/mom-embedding-pro
-        gemma_model_path: models/mom-embedding-flash
-        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
-        multimodal_model_path: models/mom-embedding-multimodal
-        bert_model_path: models/mom-embedding-light
-        use_cpu: true
-        embedding_config:
-          backend: candle
-          model_type: mmbert
-          preload_embeddings: true
-          target_dimension: 768
-          target_layer: 22
-          enable_soft_matching: true
-          top_k: 1
-          min_score_threshold: 0.45
-          prototype_scoring:
-            enabled: true
-            cluster_similarity_threshold: 0.9
-            max_prototypes: 8
-            best_weight: 0.75
-            top_m: 2
-            margin_threshold: 0.0
-        endpoint:
-          base_url: http://embedding-service:8000/v1
-          model: BAAI/bge-m3
-          api_key_env: EMBEDDING_API_KEY
-          timeout_seconds: 5
-          max_retries: 2
-          dimensions: 1024
-    system:
-      prompt_guard: models/mmbert32k-jailbreak-detector-merged
-      domain_classifier: models/mmbert32k-intent-classifier-merged
-      pii_classifier: models/mmbert32k-pii-detector-merged
-      fact_check_classifier: models/mmbert32k-factcheck-classifier-merged
-      hallucination_detector: models/mom-halugate-detector
-      hallucination_explainer: models/mom-halugate-explainer
-      feedback_detector: models/mmbert32k-feedback-detector-merged
-    external:
-      - name: external-guardrail
-        llm_provider: openai
-        model_role: guardrail
-        llm_endpoint:
-          address: openai-proxy
-          port: 443
-          protocol: https
-          name: openai-guardrail
-          use_chat_template: true
-          prompt_template: "{{ .Prompt }}"
-        llm_model_name: gpt-4.1-mini
-        llm_timeout_seconds: 30
-        parser_type: json
-        threshold: 0.65
-        access_key: external-guardrail-key
-        max_tokens: 2048
-        temperature: 0.2
-      - name: external-classifier
-        llm_provider: openai
-        model_role: classification
-        llm_endpoint:
-          address: openai-proxy
-          port: 443
-          protocol: https
-          name: openai-classifier
-          use_chat_template: true
-          prompt_template: "{{ .Prompt }}"
-        llm_model_name: gpt-4.1-mini
-        llm_timeout_seconds: 15
-        parser_type: json
-        access_key: external-classifier-key
-        max_tokens: 128
-        temperature: 0
-    kbs:
-      - name: privacy_kb
-        source:
-          path: knowledge_bases/privacy/
-          manifest: labels.json
-        threshold: 0.55
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 8
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-        label_thresholds:
-          prompt_injection: 0.7
-        groups:
-          security_containment:
-            - prompt_injection
-            - credential_exfiltration
-            - jailbreak_role
-            - system_prompt_extraction
-          privacy_policy:
-            - proprietary_code
-            - internal_document
-            - pii
-            - business_strategy
-            - trade_secret_ip
-            - operational_infrastructure
-            - locality_directive
-            - customer_data
-          frontier_reasoning:
-            - architecture_analysis
-            - root_cause_analysis
-            - multi_step_tradeoffs
-          local_standard:
-            - generic_coding
-            - simple_task
-            - general_knowledge
-          private:
-            - prompt_injection
-            - credential_exfiltration
-            - jailbreak_role
-            - system_prompt_extraction
-            - proprietary_code
-            - internal_document
-            - pii
-            - business_strategy
-            - trade_secret_ip
-            - operational_infrastructure
-            - locality_directive
-            - customer_data
-          public:
-            - architecture_analysis
-            - root_cause_analysis
-            - multi_step_tradeoffs
-            - generic_coding
-            - simple_task
-            - general_knowledge
-        metrics:
-          - name: private_vs_public
-            type: group_margin
-            positive_group: private
-            negative_group: public
-      - name: mmlu_kb
-        source:
-          path: knowledge_bases/mmlu/
-          manifest: labels.json
-        threshold: 0.25
-        groups:
-          escalate:
-            - biology
-            - business
-            - computer science
-            - economics
-            - history
-            - math
-            - other
-            - philosophy
-            - psychology
-          keep:
-            - chemistry
-            - engineering
-            - health
-            - law
-            - physics
-        metrics:
-          - name: escalate_vs_keep
-            type: group_margin
-            positive_group: escalate
-            negative_group: keep
-    modules:
-      prompt_compression:
-        enabled: true
-        # Built-in profile for scoring/preserve defaults: default, coding, medical,
-        # security, or multi_turn. The multi-turn alias is normalized to multi_turn.
-        # Unknown profiles fail config validation. Explicit weights override the profile.
-        profile: default
-        max_tokens: 4096
-        min_length: 512
-        skip_signals: [jailbreak, pii]
-        textrank_weight: 0.4
-        position_weight: 0.2
-        tfidf_weight: 0.3
-        novelty_weight: 0.1
-        position_depth: 0.1
-        preserve_first_n: 3
-        preserve_last_n: 2
-      prompt_guard:
-        enabled: true
-        model_ref: prompt_guard
-        model_id: models/mmbert32k-jailbreak-detector-merged
-        threshold: 0.7
-        use_cpu: true
-        variant: mmbert32k
-        jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-        positive_labels: [jailbreak]
-        # allow (default) tolerates a classifier-backend failure and treats the
-        # affected content as not matching; block treats it as a match instead,
-        # since an inference failure means the content could not be verified safe.
-        on_error: allow
-      classifier:
-        domain:
-          # Omit to keep the historical behaviour of running whenever a model is
-          # configured; false disables the classifier outright.
-          enabled: true
-          model_ref: domain_classifier
-          model_id: models/mmbert32k-intent-classifier-merged
-          threshold: 0.5
-          use_cpu: true
-          use_modernbert: false
-          use_mmbert_32k: true
-          category_mapping_path: models/mmbert32k-intent-classifier-merged/category_mapping.json
-          fallback_category: other
-        mcp:
-          enabled: true
-          transport_type: stdio
-          command: python
-          args: [-m, mcp_classifier]
-          env:
-            MCP_MODE: local
-          url: http://localhost:9010
-          tool_name: classify
-          threshold: 0.6
-          timeout_seconds: 15
-        pii:
-          # Omit to keep the historical behaviour of running whenever a model is
-          # configured; false disables the classifier outright.
-          enabled: true
-          model_ref: pii_classifier
-          model_id: models/mmbert32k-pii-detector-merged
-          threshold: 0.9
-          use_cpu: true
-          use_mmbert_32k: true
-          pii_mapping_path: models/mmbert32k-pii-detector-merged/pii_type_mapping.json
-        preference:
-          use_contrastive: true
-          embedding_model: models/preference-encoder
-          prototype_scoring:
-            enabled: true
-            cluster_similarity_threshold: 0.9
-            max_prototypes: 8
-            best_weight: 0.75
-            top_m: 2
-            margin_threshold: 0.0
-      complexity:
-        prototype_scoring:
-          enabled: true
-          cluster_similarity_threshold: 0.9
-          max_prototypes: 6
-          best_weight: 0.75
-          top_m: 2
-          margin_threshold: 0.0
-      hallucination_mitigation:
-        enabled: true
-        on_hallucination_detected: annotate
-        fact_check:
-          model_ref: fact_check_classifier
-          model_id: models/mmbert32k-factcheck-classifier-merged
-          threshold: 0.65
-          use_cpu: true
-          use_mmbert_32k: true
-        detector:
-          backend: candle
-          endpoint: ""
-          include_explanation: false
-          model_ref: hallucination_detector
-          model_id: models/mom-halugate-detector
-          threshold: 0.82
-          use_cpu: true
-          min_span_length: 2
-          min_span_confidence: 0.6
-          context_window_size: 50
-          enable_nli_filtering: true
-          nli_entailment_threshold: 0.75
-        explainer:
-          model_ref: hallucination_explainer
-          model_id: models/mom-halugate-explainer
-          threshold: 0.9
-          use_cpu: true
-      feedback_detector:
-        enabled: true
-        model_ref: feedback_detector
-        model_id: models/mmbert32k-feedback-detector-merged
-        threshold: 0.7
-        use_cpu: true
-        use_modernbert: false
-        use_mmbert_32k: true
-        feedback_mapping_path: models/mmbert32k-feedback-detector-merged/feedback_mapping.json
-      modality_detector:
-        enabled: true
-        prompt_prefixes:
-          - generate an image of
-          - draw
-          - create a picture of
-        method: hybrid
-        classifier:
-          model_path: models/mmbert32k-modality-router-merged
-          use_cpu: true
-        keywords:
-          - image
-          - picture
-          - illustration
-        both_keywords:
-          - explain and illustrate
-          - describe with an image
-        confidence_threshold: 0.7
-        lower_threshold_ratio: 0.7
+      supported_formats:
+      - .txt
+      - .md
+      - .json
+      - .csv
+      - .html
+      - .pdf
+      valkey:
+        collection_prefix: vsr_vs_
+        connect_timeout: 5
+        database: 0
+        host: valkey
+        index_ef_construction: 200
+        index_m: 16
+        metric_type: COSINE
+        password: "${VALKEY_PASSWORD}"
+        port: 6379

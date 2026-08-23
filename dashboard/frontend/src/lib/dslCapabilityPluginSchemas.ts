@@ -3,9 +3,6 @@ import type { FieldSchema } from './dslSchemas'
 export function getCapabilityPluginFieldSchema(pluginType: string): FieldSchema[] | null {
   switch (pluginType) {
     case 'response_cache':
-    case 'response-cache':
-    case 'semantic_cache':
-    case 'semantic-cache':
       return [
         { key: 'enabled', label: 'Enabled', type: 'boolean' },
         {

@@ -32,7 +32,7 @@ final say on whether learning may apply, observe, or bypass.
 - A matched decision must not be changed by online learning.
 - You want to compare learning diagnostics before allowing route changes.
 - One decision should search the whole route tier while most decisions stay
-  inside their own `modelRefs`.
+  inside their own Entrypoint assignments.
 - One decision needs a stronger or weaker protection margin than the default.
 - Adaptation and protection need different modes for the same decision.
 
@@ -41,13 +41,11 @@ final say on whether learning may apply, observe, or bypass.
 Use `bypass` for hard boundaries:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: local_privacy_policy
       description: Keep privacy-sensitive traffic on the local model.
       priority: 200
-      modelRefs:
-        - model: local-private-model
       adaptations:
         mode: bypass
 ```

@@ -2,24 +2,80 @@
 
 import os
 import tempfile
+
 import yaml
 
-from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
 
 
-def _parse_config(config_yaml: str):
-    data = yaml.safe_load(config_yaml)
-    providers = data.get("providers") if isinstance(data, dict) else None
-    models = providers.get("models", []) if isinstance(providers, dict) else []
-    if isinstance(data, dict) and (
-        "signals" in data
-        or "decisions" in data
-        or any(isinstance(model, dict) and "endpoints" in model for model in models)
-    ):
-        data = migrate_config_data(data)
-
+def _parse_config(*, conditions: list[dict], latency_aware: dict):
+    data = {
+        "version": "v0.4",
+        "listeners": [{"name": "http-8888", "address": "0.0.0.0", "port": 8888}],
+        "models": [
+            {
+                "name": "test_model",
+                "card": {
+                    "description": "Test model",
+                    "capabilities": ["chat"],
+                },
+                "connections": [
+                    {
+                        "provider": "vllm",
+                        "endpoint": "http://localhost:8000/v1",
+                        "model": "test_model",
+                    }
+                ],
+            }
+        ],
+        "recipes": [
+            {
+                "name": "test_recipe",
+                "document": {
+                    "signals": {
+                        "domains": [{"name": "math", "description": "Math domain"}]
+                    },
+                    "decisions": [
+                        {
+                            "name": "math_decision",
+                            "description": "Math decision",
+                            "priority": 100,
+                            "rules": {
+                                "operator": "AND",
+                                "conditions": conditions,
+                            },
+                            "algorithm": {
+                                "type": "latency_aware",
+                                "latency_aware": latency_aware,
+                            },
+                        }
+                    ],
+                },
+            }
+        ],
+        "entrypoints": [
+            {
+                "name": "test_entrypoint",
+                "recipe": "test_recipe",
+                "assignments": {"math_decision": {"models": [{"model": "test_model"}]}},
+            }
+        ],
+        "global": {
+            "services": {
+                "backend_dispatch": {
+                    "bind_address": "127.0.0.1",
+                    "port": 8180,
+                    "audience": "vllm-sr.backend-dispatch",
+                    "capability_ttl": "30s",
+                    "max_request_body_bytes": 64 << 20,
+                },
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
+                },
+            }
+        },
+    }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.safe_dump(data, f, sort_keys=False)
         temp_path = f.name
@@ -31,44 +87,13 @@ def _parse_config(config_yaml: str):
 
 
 def test_validate_rejects_unsupported_signal_condition():
-    config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  domains:
-    - name: "math"
-      description: "Math domain"
-decisions:
-  - name: "math_decision"
-    description: "Math decision"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "math"
-        - type: "latency"
-          name: "low_latency"
-    modelRefs:
-      - model: "test_model"
-    algorithm:
-      type: "latency_aware"
-      latency_aware:
-        tpot_percentile: 20
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-    config = _parse_config(config_yaml)
+    config = _parse_config(
+        conditions=[
+            {"type": "domain", "name": "math"},
+            {"type": "latency", "name": "low_latency"},
+        ],
+        latency_aware={"tpot_percentile": 20},
+    )
     errors = validate_user_config(config)
 
     assert any(
@@ -77,43 +102,10 @@ providers:
 
 
 def test_validate_accepts_latency_aware_configuration():
-    config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  domains:
-    - name: "math"
-      description: "Math domain"
-decisions:
-  - name: "math_decision"
-    description: "Math decision"
-    priority: 100
-    rules:
-      operator: "AND"
-      conditions:
-        - type: "domain"
-          name: "math"
-    modelRefs:
-      - model: "test_model"
-    algorithm:
-      type: "latency_aware"
-      latency_aware:
-        tpot_percentile: 20
-        ttft_percentile: 20
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-    config = _parse_config(config_yaml)
+    config = _parse_config(
+        conditions=[{"type": "domain", "name": "math"}],
+        latency_aware={"tpot_percentile": 20, "ttft_percentile": 20},
+    )
     errors = validate_user_config(config)
 
     assert errors == []

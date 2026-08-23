@@ -3,11 +3,8 @@
 package apiserver
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -123,75 +120,9 @@ func TestRedactSensitiveConfigValue(t *testing.T) {
 	}
 }
 
-func TestConfigGetRedactsSecretsForViewerAndOperator(t *testing.T) {
-	const canary = "redact-me-canary-value-0001"
-	configPath := writeConfigWithPlaintextSecret(t, canary)
-
-	cases := []struct {
-		name       string
-		role       string
-		wantLeak   bool
-		wantRedact bool
-	}{
-		{name: "viewer", role: "viewer", wantLeak: false, wantRedact: true},
-		{name: "operator", role: "operator", wantLeak: false, wantRedact: true},
-		{name: "admin", role: "admin", wantLeak: true, wantRedact: false},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			envName := "VSR_MGMT_TOKEN_" + strings.ToUpper(tc.role)
-			token := tc.role + "-token"
-			t.Setenv(envName, token)
-
-			server := &ClassificationAPIServer{
-				classificationSvc: services.NewPlaceholderClassificationService(),
-				configPath:        configPath,
-				config: &config.RouterConfig{
-					ManagementAPI: config.ManagementAPIConfig{
-						Auth: config.ManagementAPIAuthConfig{
-							Mode: config.ManagementAuthModeBearer,
-							Tokens: []config.ManagementAPITokenRef{
-								{Env: envName, Role: tc.role},
-							},
-							Roles: config.DefaultManagementAPIRoles(),
-						},
-					},
-				},
-			}
-			mux := server.setupRoutes()
-
-			req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
-			req.Header.Set("Authorization", "Bearer "+token)
-			rr := httptest.NewRecorder()
-			mux.ServeHTTP(rr, req)
-			if rr.Code != http.StatusOK {
-				t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
-			}
-
-			body := rr.Body.String()
-			leaked := strings.Contains(body, canary)
-			if leaked != tc.wantLeak {
-				t.Fatalf("canary leak=%v want=%v body=%s", leaked, tc.wantLeak, body)
-			}
-			if tc.wantRedact && !strings.Contains(body, redactedConfigValue) {
-				t.Fatalf("expected redacted placeholder in body, got %s", body)
-			}
-		})
-	}
-}
-
 func TestClassifierInfoRedactsSecretsWithoutSecretView(t *testing.T) {
 	const canary = "redact-me-canary-value-0001"
 	cfg := &config.RouterConfig{
-		BackendModels: config.BackendModels{
-			VLLMEndpoints: []config.VLLMEndpoint{
-				{Address: "10.0.0.1", Port: 8000, APIKey: canary},
-			},
-			ModelConfig: map[string]config.ModelParams{
-				"m1": {AccessKey: canary},
-			},
-		},
 		ManagementAPI: config.ManagementAPIConfig{
 			Auth: config.ManagementAPIAuthConfig{
 				Mode: config.ManagementAuthModeBearer,
@@ -203,8 +134,8 @@ func TestClassifierInfoRedactsSecretsWithoutSecretView(t *testing.T) {
 		},
 	}
 	// Plant a json-visible password so redaction (not only json:"-") is required.
-	cfg.SemanticCache.Redis = &config.RedisConfig{}
-	cfg.SemanticCache.Redis.Connection.Password = canary
+	cfg.Redis = &config.RedisConfig{}
+	cfg.Redis.Connection.Password = canary
 
 	t.Setenv("VSR_MGMT_TOKEN", "viewer-token")
 
@@ -242,8 +173,8 @@ func TestAdminCanViewSecretsInClassifierInfo(t *testing.T) {
 			},
 		},
 	}
-	cfg.SemanticCache.Redis = &config.RedisConfig{}
-	cfg.SemanticCache.Redis.Connection.Password = canary
+	cfg.Redis = &config.RedisConfig{}
+	cfg.Redis.Connection.Password = canary
 
 	t.Setenv("VSR_MGMT_TOKEN", "admin-token")
 	server := &ClassificationAPIServer{
@@ -280,18 +211,6 @@ func TestDefaultAdminRoleIncludesSecretView(t *testing.T) {
 	}
 }
 
-func writeConfigWithPlaintextSecret(t *testing.T, canary string) string {
-	t.Helper()
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	// Minimal YAML map — handleConfigGet unmarshals generically, no full schema needed.
-	content := "providers:\n  models:\n    - name: demo\n      backend_refs:\n        - api_key: " + canary + "\n          api_key_env: OPENAI_API_KEY\n"
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write config: %v", err)
-	}
-	return path
-}
-
 func TestSecretViewSensitivityRoutesStayOnConfigRead(t *testing.T) {
 	for _, route := range apiRoutes() {
 		if route.Sensitivity != SensitivitySecretView {
@@ -301,38 +220,5 @@ func TestSecretViewSensitivityRoutesStayOnConfigRead(t *testing.T) {
 			t.Fatalf("secret_view sensitivity route %s should keep config.read for access; got %s",
 				route.pattern(), route.Permission)
 		}
-	}
-}
-
-// Ensure response JSON shape still parses after redaction.
-func TestConfigGetRedactedBodyIsJSON(t *testing.T) {
-	const canary = "redact-me-canary-value-0001"
-	configPath := writeConfigWithPlaintextSecret(t, canary)
-	t.Setenv("VSR_MGMT_TOKEN", "viewer-token")
-
-	server := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
-		configPath:        configPath,
-		config: &config.RouterConfig{
-			ManagementAPI: config.ManagementAPIConfig{
-				Auth: config.ManagementAPIAuthConfig{
-					Mode: config.ManagementAuthModeBearer,
-					Tokens: []config.ManagementAPITokenRef{
-						{Env: "VSR_MGMT_TOKEN", Role: "viewer"},
-					},
-					Roles: config.DefaultManagementAPIRoles(),
-				},
-			},
-		},
-	}
-	mux := server.setupRoutes()
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
-	req.Header.Set("Authorization", "Bearer viewer-token")
-	rr := httptest.NewRecorder()
-	mux.ServeHTTP(rr, req)
-
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &parsed); err != nil {
-		t.Fatalf("redacted body must remain valid JSON: %v", err)
 	}
 }

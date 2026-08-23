@@ -215,6 +215,11 @@
   background: rgba(255, 255, 255, 0.06);
 }
 
+.closeButton > svg {
+  width: 15px;
+  height: 15px;
+}
+
 .closeButton:focus-visible,
 .logoutButton:focus-visible {
   outline: 2px solid var(--focus-ring, rgba(255, 255, 255, 0.72));
@@ -228,9 +233,7 @@
   overscroll-behavior: contain;
 }
 
-.permissionsSection,
-.permissionGroups,
-.permissionGroup {
+.permissionsSection {
   display: flex;
   flex-direction: column;
 }
@@ -284,51 +287,6 @@
   letter-spacing: normal;
   background: #202023;
   border-radius: 5px;
-}
-
-.permissionGroups {
-  gap: 0.8rem;
-}
-
-.permissionGroup {
-  gap: 0.45rem;
-}
-
-.permissionGroup h3 {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.68rem;
-  font-weight: 680;
-}
-
-.permissionList {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.permissionPill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0.3rem 0.55rem;
-  color: rgba(255, 255, 255, 0.76);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  line-height: 1.2;
-  background: #18181b;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 5px;
-}
-
-.emptyState {
-  margin: 0;
-  color: rgba(255, 255, 255, 0.5);
-  font-size: 0.76rem;
-  line-height: 1.5;
 }
 
 .footer {

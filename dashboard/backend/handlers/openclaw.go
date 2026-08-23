@@ -14,7 +14,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -56,7 +55,6 @@ type TeamEntry struct {
 type OpenClawHandler struct {
 	dataDir          string
 	readOnly         bool
-	routerConfigPath string
 	wf               *workflowstore.Store
 	mu               sync.RWMutex
 	roomWSClients    sync.Map
@@ -72,10 +70,6 @@ func NewOpenClawHandler(dataDir string, readOnly bool, wf *workflowstore.Store) 
 		panic("openclaw: workflow store is required")
 	}
 	return &OpenClawHandler{dataDir: dataDir, readOnly: readOnly, wf: wf}
-}
-
-func (h *OpenClawHandler) SetRouterConfigPath(configPath string) {
-	h.routerConfigPath = strings.TrimSpace(configPath)
 }
 
 func (h *OpenClawHandler) roomMessagesPath(roomID string) string {
@@ -323,9 +317,6 @@ func (h *OpenClawHandler) resolveOpenClawModelBaseURL() string {
 	if candidate := openClawModelBaseURLFromTargetEnvoy(); candidate != "" {
 		return candidate
 	}
-	if candidate := h.discoverOpenClawModelBaseURLFromRouterConfig(); candidate != "" {
-		return candidate
-	}
 	return defaultOpenClawModelBaseURL()
 }
 
@@ -334,35 +325,6 @@ func openClawModelBaseURLFromTargetEnvoy() string {
 		return appendOpenClawV1Path(candidate)
 	}
 	return ""
-}
-
-func (h *OpenClawHandler) discoverOpenClawModelBaseURLFromRouterConfig() string {
-	configPath := strings.TrimSpace(h.routerConfigPath)
-	if configPath == "" {
-		return ""
-	}
-
-	endpoint, ok, err := routercontract.ReadFirstListenerEndpoint(configPath)
-	if err != nil || !ok {
-		return ""
-	}
-
-	host := formatOpenClawURLHost(normalizeOpenClawListenerHost(endpoint.Address))
-	return fmt.Sprintf("http://%s:%d/v1", host, endpoint.Port)
-}
-
-func normalizeOpenClawListenerHost(host string) string {
-	if host == "" || host == "0.0.0.0" || host == "::" || host == "[::]" {
-		return "127.0.0.1"
-	}
-	return host
-}
-
-func formatOpenClawURLHost(host string) string {
-	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") && !strings.HasSuffix(host, "]") {
-		return "[" + host + "]"
-	}
-	return host
 }
 
 func isContainerImageMissingError(output string) bool {

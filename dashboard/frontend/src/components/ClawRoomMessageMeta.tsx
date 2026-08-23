@@ -31,7 +31,9 @@ export default function ClawRoomMessageMeta({
             data-room-sender-logo
           />
         ) : null}
-        <span className={`${styles.senderName} ${isLeader ? styles.senderNameLeader : ''}`}>{displayName}</span>
+        <span className={`${styles.senderName} ${isLeader ? styles.senderNameLeader : ''}`}>
+          {displayName}
+        </span>
       </span>
       <span
         className={`${styles.senderType} ${isLeader ? styles.senderTypeLeader : ''} ${isWorker ? styles.senderTypeWorker : ''}`}

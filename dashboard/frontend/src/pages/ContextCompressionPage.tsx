@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canWriteConfig } from '../utils/accessControl'
-import styles from './ResponseCachePage.module.css'
+import styles from './ContextCompressionPage.module.css'
 
 interface CompressionCapabilities {
   strategies: string[]

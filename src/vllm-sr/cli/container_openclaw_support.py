@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import os
 import stat
-from contextlib import suppress
 
 from cli.utils import get_logger
 
 log = get_logger(__name__)
 
 OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV = "OPENCLAW_CONTAINER_RUNTIME_DISABLED"
+CONTAINER_SOCKET_ENV = "VLLM_SR_CONTAINER_SOCKET"
 
 
 def configure_openclaw_support(
@@ -44,112 +44,108 @@ def configure_openclaw_support(
         openclaw_network_name or stack_layout.network_name,
     )
 
-    env_vars.pop(OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV, None)
+    env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "true"
+    socket_path = _explicit_container_socket_path()
+    if socket_path is None:
+        log.info(
+            "Dashboard OpenClaw container management is disabled by default. "
+            f"Set {CONTAINER_SOCKET_ENV} to an absolute daemon socket path to opt "
+            "in; daemon access grants host-equivalent privilege."
+        )
+        return
+
     if runtime == "docker":
-        if _attach_container_socket(mount_specs, runtime):
+        if _attach_container_socket(mount_specs, runtime, socket_path):
+            env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "false"
             _attach_container_cli(
                 mount_specs,
                 env_vars,
                 resolve_container_cli=resolve_container_cli,
             )
-        else:
-            env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "true"
     elif runtime == "podman":
         # Podman exposes a Docker-Engine-API-compatible socket. The dashboard
         # image already ships a real `docker` CLI; mounting podman.sock at the
         # canonical /var/run/docker.sock path lets the in-image docker CLI
         # drive container lifecycle (start/stop/inspect/logs) through podman
         # transparently — no Go-side changes needed.
-        if _attach_container_socket(mount_specs, runtime):
+        if _attach_container_socket(mount_specs, runtime, socket_path):
+            env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "false"
             env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
             log.info(
                 "Podman runtime: dashboard will use the in-image Docker CLI against "
                 "the mounted podman.sock for container lifecycle"
             )
-        else:
-            env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "true"
 
 
-def _attach_container_socket(mount_specs, runtime: str = "docker"):
-    """Mount the active runtime's daemon socket at /var/run/docker.sock.
+def _explicit_container_socket_path() -> str | None:
+    """Return the explicitly opted-in daemon socket, or disable the feature."""
+
+    raw_path = os.getenv(CONTAINER_SOCKET_ENV)
+    if raw_path is None or raw_path == "":
+        return None
+    if raw_path != raw_path.strip():
+        raise ValueError(f"{CONTAINER_SOCKET_ENV} must not contain whitespace padding")
+    if not os.path.isabs(raw_path) or os.path.normpath(raw_path) != raw_path:
+        raise ValueError(
+            f"{CONTAINER_SOCKET_ENV} must be an absolute canonical socket path"
+        )
+    return raw_path
+
+
+def _attach_container_socket(mount_specs, runtime: str, socket_path: str) -> bool:
+    """Mount one explicitly selected daemon socket at /var/run/docker.sock.
 
     Both Docker and Podman expose a Docker-Engine-API-compatible UNIX socket.
     We always mount it at the canonical container path /var/run/docker.sock so
     the dashboard's in-image docker CLI works without runtime-specific config.
+    This opt-in grants the Dashboard host-equivalent daemon privileges; the
+    filesystem checks below constrain socket sharing, not daemon capabilities.
     """
-    socket_candidates = _socket_candidates(runtime)
-
-    resolved_socket = next(
-        (
-            candidate
-            for candidate in socket_candidates
-            if candidate and os.path.exists(candidate)
-        ),
-        None,
-    )
-    if resolved_socket:
-        if not _runtime_socket_is_group_safe(resolved_socket):
-            log.warning(
-                "Dashboard OpenClaw container management is unavailable because "
-                f"the {runtime} socket cannot be shared with the non-root Dashboard "
-                "without granting unsafe permissions; Router and Dashboard startup "
-                "will continue without the socket"
-            )
-            return False
-        mount_specs.append(f"{resolved_socket}:/var/run/docker.sock")
-        log.info(
-            f"Mounting {runtime} socket for dashboard OpenClaw: "
-            f"{resolved_socket} -> /var/run/docker.sock"
+    if not os.path.exists(socket_path):
+        log.warning(
+            f"Configured {runtime} socket does not exist: {socket_path}; Dashboard "
+            "OpenClaw container management remains disabled"
         )
-        return True
-
+        return False
+    if not _runtime_socket_is_group_safe(socket_path):
+        log.warning(
+            "Dashboard OpenClaw container management is unavailable because "
+            f"the explicitly configured {runtime} socket has an unsafe owner, "
+            "type, group, or mode; Router and Dashboard startup will continue "
+            "without the socket"
+        )
+        return False
+    mount_specs.append(f"{socket_path}:/var/run/docker.sock")
     log.warning(
-        f"{runtime.capitalize()} socket not found (checked: "
-        f"{', '.join(socket_candidates)}); dashboard OpenClaw container management "
-        "is unavailable while Router and Dashboard startup continues"
+        f"Explicitly mounting {runtime} socket {socket_path} for Dashboard OpenClaw. "
+        "Daemon access grants host-equivalent privilege."
     )
-    return False
+    return True
 
 
 def _runtime_socket_is_group_safe(path: str, *, lstat_path=os.lstat) -> bool:
-    """Return whether a non-root supplemental group can safely use the socket."""
+    """Validate socket identity and sharing mode before the privileged opt-in.
+
+    Passing this check does not reduce the daemon's host-equivalent capability.
+    """
 
     try:
         info = lstat_path(path)
     except OSError:
         return False
-    required_group_access = stat.S_IRGRP | stat.S_IWGRP
+    current_uid = None
+    get_effective_uid = getattr(os, "geteuid", None)
+    if get_effective_uid is not None:
+        current_uid = get_effective_uid()
+    allowed_owners = {0}
+    if current_uid is not None:
+        allowed_owners.add(current_uid)
     return (
         stat.S_ISSOCK(info.st_mode)
+        and info.st_uid in allowed_owners
         and info.st_gid != 0
-        and info.st_mode & required_group_access == required_group_access
-        and info.st_mode & (stat.S_IROTH | stat.S_IWOTH) == 0
+        and stat.S_IMODE(info.st_mode) == 0o660
     )
-
-
-def _socket_candidates(runtime: str) -> list[str]:
-    """Return ordered candidate paths for the runtime's API socket."""
-    override = os.getenv("VLLM_SR_CONTAINER_SOCKET")
-    if override:
-        return [override]
-
-    if runtime == "podman":
-        candidates: list[str] = []
-        candidates.append("/run/podman/podman.sock")  # rootful systemd socket
-        xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
-        if xdg_runtime_dir:
-            candidates.append(os.path.join(xdg_runtime_dir, "podman", "podman.sock"))
-        with suppress(Exception):
-            candidates.append(f"/run/user/{os.getuid()}/podman/podman.sock")
-        return candidates
-
-    candidates = ["/var/run/docker.sock"]
-    xdg_runtime_dir = os.getenv("XDG_RUNTIME_DIR")
-    if xdg_runtime_dir:
-        candidates.append(os.path.join(xdg_runtime_dir, "docker.sock"))
-    with suppress(Exception):
-        candidates.append(f"/run/user/{os.getuid()}/docker.sock")
-    return candidates
 
 
 def _attach_container_cli(mount_specs, env_vars, *, resolve_container_cli):

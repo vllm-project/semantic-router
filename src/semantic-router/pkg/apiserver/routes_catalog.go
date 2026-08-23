@@ -141,12 +141,6 @@ func apiInfoRoutes() []apiRoute {
 			routePolicy{Permission: PermMetricsRead, Sensitivity: SensitivityOperational},
 			(*ClassificationAPIServer).handleClassificationMetrics,
 		),
-		managedRoute(
-			EndpointMetadata{Path: "/v1/router/outcomes", Method: "POST", Description: "Submit Router Learning outcome feedback linked to a replay record"},
-			routePolicy{Permission: PermLearningIngest, Sensitivity: SensitivityMutation, AuditAction: AuditActionOutcomeIngest},
-			(*ClassificationAPIServer).handleRouterOutcome,
-			jsonBody(),
-		),
 	}
 }
 
@@ -221,123 +215,6 @@ func apiContextCompressionRoutes() []apiRoute {
 			routePolicy{Permission: PermCompressionManage, Sensitivity: SensitivityMutation, AuditAction: AuditActionCompressionInvalidate},
 			(*ClassificationAPIServer).handleContextCompressionRecoveryInvalidate,
 			jsonBody(),
-		),
-	}
-}
-
-func apiConfigRoutes() []apiRoute {
-	return append(apiRecipeRoutes(), apiNonRecipeConfigRoutes()...)
-}
-
-func apiRecipeRoutes() []apiRoute {
-	return []apiRoute{
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes", Method: "GET", Description: "List the default and named routing recipes with their entrypoints"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
-			(*ClassificationAPIServer).handleListRecipes,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes/validate", Method: "POST", Description: "Validate a recipe mutation without writing or reloading config"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
-			(*ClassificationAPIServer).handleValidateRecipe,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "GET", Description: "Read one routing recipe and its entrypoints"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
-			(*ClassificationAPIServer).handleGetRecipe,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "PUT", Description: "Atomically create or replace one routing recipe; requires If-Match"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeSave},
-			(*ClassificationAPIServer).handlePutRecipe,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/recipes/{name}", Method: "DELETE", Description: "Delete an unreferenced named routing recipe; requires If-Match"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionRecipeDelete},
-			(*ClassificationAPIServer).handleDeleteRecipe,
-		),
-	}
-}
-
-func apiNonRecipeConfigRoutes() []apiRoute {
-	return []apiRoute{
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs", Method: "GET", Description: "List configured knowledge bases"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleListKnowledgeBases,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs", Method: "POST", Description: "Create a managed knowledge base"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseSave},
-			(*ClassificationAPIServer).handleCreateKnowledgeBase,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs/{name}", Method: "GET", Description: "Read a knowledge base"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleGetKnowledgeBase,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs/{name}/map/metadata", Method: "GET", Description: "Read generated knowledge-base map metadata"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleGetKnowledgeBaseMapMetadata,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs/{name}/map/data.ndjson", Method: "GET", Description: "Stream generated knowledge-base map data as NDJSON"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleGetKnowledgeBaseMapData,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs/{name}", Method: "PUT", Description: "Update a managed knowledge base"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseSave},
-			(*ClassificationAPIServer).handleUpdateKnowledgeBase,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/kbs/{name}", Method: "DELETE", Description: "Delete a managed knowledge base"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionKnowledgeBaseDel},
-			(*ClassificationAPIServer).handleDeleteKnowledgeBase,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router", Method: "GET", Description: "Get the current router config as JSON (secrets redacted without secret_view)"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivitySecretView},
-			(*ClassificationAPIServer).handleConfigGet,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/validate", Method: "POST", Description: "Validate and normalize a router config without writing it"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleConfigValidate,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router", Method: "PATCH", Description: "Merge a router config update (validates, backs up, writes, triggers hot-reload)"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigPatch},
-			(*ClassificationAPIServer).handleConfigPatch,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router", Method: "PUT", Description: "Replace the router config (validates, backs up, writes, triggers hot-reload)"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigPut},
-			(*ClassificationAPIServer).handleConfigPut,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/rollback", Method: "POST", Description: "Rollback to a previous router config version"},
-			routePolicy{Permission: PermConfigWrite, Sensitivity: SensitivityMutation, AuditAction: AuditActionConfigRollback},
-			(*ClassificationAPIServer).handleConfigRollback,
-			jsonBody(),
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/router/versions", Method: "GET", Description: "List available router config backup versions"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleConfigVersions,
-		),
-		managedRoute(
-			EndpointMetadata{Path: "/config/hash", Method: "GET", Description: "Compare persisted source, generated runtime, and active router config hashes"},
-			routePolicy{Permission: PermConfigRead, Sensitivity: SensitivityConfig},
-			(*ClassificationAPIServer).handleConfigHash,
 		),
 	}
 }

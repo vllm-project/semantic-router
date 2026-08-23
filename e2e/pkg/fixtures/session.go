@@ -11,6 +11,7 @@ import (
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // ServiceSession owns a port-forwarded local endpoint for an in-cluster service.
@@ -23,12 +24,26 @@ type ServiceSession struct {
 
 // OpenServiceSession establishes a port-forward to the profile service described by opts.
 func OpenServiceSession(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (*ServiceSession, error) {
-	svcConfig := opts.ServiceConfig
+	return OpenServiceSessionForConfig(ctx, client, opts.RestConfig, opts.ServiceConfig, opts.Verbose)
+}
+
+// OpenServiceSessionForConfig establishes a service session for profile setup
+// code that has not entered the testcase runner yet.
+func OpenServiceSessionForConfig(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	restConfig *rest.Config,
+	svcConfig pkgtestcases.ServiceConfig,
+	verbose bool,
+) (*ServiceSession, error) {
+	if client == nil || restConfig == nil {
+		return nil, fmt.Errorf("Kubernetes client and REST config are required")
+	}
 	if svcConfig.LabelSelector == "" && svcConfig.Name == "" {
 		return nil, fmt.Errorf("service configuration is required: either LabelSelector or Name must be provided")
 	}
 
-	serviceName, err := resolveServiceName(ctx, client, svcConfig, opts.Verbose)
+	serviceName, err := resolveServiceName(ctx, client, svcConfig, verbose)
 	if err != nil {
 		return nil, err
 	}
@@ -40,11 +55,11 @@ func OpenServiceSession(ctx context.Context, client *kubernetes.Clientset, opts 
 	stop, err := helpers.StartPortForward(
 		ctx,
 		client,
-		opts.RestConfig,
+		restConfig,
 		svcConfig.Namespace,
 		serviceName,
 		fmt.Sprintf("%s:%s", localPort, servicePort),
-		opts.Verbose,
+		verbose,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to start port forwarding: %w", err)

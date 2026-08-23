@@ -5,50 +5,53 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMetadataDecisionEvaluatesWithoutTextContent(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
-providers:
-  defaults:
-    default_model: model-a
-  models:
-    - name: model-a
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: model-a
-  signals:
-    metadata:
-      - name: canary
-        key: cohort
-        predicate:
-          equals: canary
-  decisions:
-    - name: canary-route
-      priority: 10
-      rules:
-        type: metadata
-        name: canary
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
-`))
+	cfg, err := parseExtProcAuthoringConfig(t, `
+version: v0.4
+models:
+  - name: model-a
+    card: {}
+    connections:
+      - provider: vllm
+        endpoint: http://127.0.0.1:8000
+        model: model-a
+recipes:
+  - name: canary
+    document:
+      signals:
+        metadata:
+          - name: canary
+            key: cohort
+            predicate:
+              equals: canary
+      decisions:
+        - name: canary-route
+          priority: 10
+          rules:
+            type: metadata
+            name: canary
+entrypoints:
+  - name: vllm-sr/auto
+    recipe: canary
+    assignments:
+      canary-route:
+        models: [{model: model-a}]
+`)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("NewClassifier() error = %v", err)
+		t.Fatalf("BuildRecipeClassifiers() error = %v", err)
 	}
-	router := &OpenAIRouter{Config: cfg, Classifier: classifier}
+	router := &OpenAIRouter{Config: cfg, Classifier: classifiers.Default(), RecipeClassifiers: classifiers}
 	requestContext := &RequestContext{
 		TraceContext: context.Background(),
 		Headers:      map[string]string{},
 	}
+	router.resolveEntrypointForRequest("vllm-sr/auto", requestContext)
 
 	decision, _, _, selectedModel, err := router.performDecisionEvaluation(
 		"vllm-sr/auto",

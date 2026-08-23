@@ -210,49 +210,53 @@ func TestRedisStoreValidation(t *testing.T) {
 	defer store.Close()
 
 	ctx := context.Background()
+	owner := responseapi.ResponseOwner{
+		Mode:        responseapi.ResponseOwnerAuthenticated,
+		NamespaceID: "namespace-test", APIKeyID: "key-test", UserID: "user-test",
+	}
 
 	t.Run("store nil response", func(t *testing.T) {
-		err := store.StoreResponse(ctx, nil)
+		err := store.StoreResponse(ctx, owner, nil)
 		assert.Error(t, err)
 		assert.Equal(t, ErrInvalidInput, err)
 	})
 
 	t.Run("store response with empty ID", func(t *testing.T) {
 		resp := &responseapi.StoredResponse{
-			ID: "",
+			Owner: owner, ID: "",
 		}
-		err := store.StoreResponse(ctx, resp)
+		err := store.StoreResponse(ctx, owner, resp)
 		assert.Error(t, err)
 		assert.Equal(t, ErrInvalidInput, err)
 	})
 
 	t.Run("get response with empty ID", func(t *testing.T) {
-		_, err := store.GetResponse(ctx, "")
+		_, err := store.GetResponse(ctx, owner, "")
 		assert.Error(t, err)
 		assert.Equal(t, ErrInvalidInput, err)
 	})
 
 	t.Run("delete response with empty ID", func(t *testing.T) {
-		err := store.DeleteResponse(ctx, "")
+		err := store.DeleteResponse(ctx, owner, "")
 		assert.Error(t, err)
 		assert.Equal(t, ErrInvalidInput, err)
 	})
 
 	t.Run("get non-existent response", func(t *testing.T) {
-		_, err := store.GetResponse(ctx, "resp_nonexistent")
+		_, err := store.GetResponse(ctx, owner, "resp_nonexistent")
 		assert.Equal(t, ErrNotFound, err)
 	})
 
 	t.Run("update non-existent response", func(t *testing.T) {
 		resp := &responseapi.StoredResponse{
-			ID: "resp_nonexistent",
+			Owner: owner, ID: "resp_nonexistent",
 		}
-		err := store.UpdateResponse(ctx, resp)
+		err := store.UpdateResponse(ctx, owner, resp)
 		assert.Equal(t, ErrNotFound, err)
 	})
 
 	t.Run("delete non-existent response", func(t *testing.T) {
-		err := store.DeleteResponse(ctx, "resp_nonexistent")
+		err := store.DeleteResponse(ctx, owner, "resp_nonexistent")
 		assert.Equal(t, ErrNotFound, err)
 	})
 }

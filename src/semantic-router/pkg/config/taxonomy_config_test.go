@@ -253,27 +253,23 @@ func TestCanonicalSignalsKBRoundTrip(t *testing.T) {
 }
 
 func TestParseYAMLBytesRejectsLegacyCategoryKBSignal(t *testing.T) {
-	legacyYAML := `
-version: v0.3
-listeners: []
-providers:
-  defaults: {}
-  models: []
-routing:
-  signals:
-    category_kb:
-      - name: legacy_privacy_classifier
-        kb_dir: knowledge_bases/
-        taxonomy_path: knowledge_bases/taxonomy.json
-        threshold: 0.5
-  decisions: []
-`
+	legacyYAML := canonicalRecipeFixture(`
+signals:
+  category_kb:
+    - name: legacy_privacy_classifier
+      kb_dir: knowledge_bases/
+      taxonomy_path: knowledge_bases/taxonomy.json
+      threshold: 0.5
+decisions:
+  - name: route
+    rules: {}
+`, "")
 
-	_, err := ParseYAMLBytes([]byte(legacyYAML))
+	_, err := testAuthoringParser(t).ParseYAMLBytes(legacyYAML)
 	if err == nil {
 		t.Fatal("expected legacy category_kb signal to be rejected")
 	}
-	if !strings.Contains(err.Error(), "routing.signals.category_kb is no longer supported") {
+	if !strings.Contains(err.Error(), "recipes[0].document.signals.category_kb is no longer supported") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
@@ -538,29 +534,18 @@ func TestToolsPluginConfigValidate(t *testing.T) {
 }
 
 func TestParseYAMLBytesRejectsLegacyDecisionToolFields(t *testing.T) {
-	legacyYAML := `
-version: v0.3
-listeners: []
-providers:
-  defaults: {}
-  models: []
-routing:
-  signals: {}
-  decisions:
-    - name: local_policy
-      priority: 10
-      tool_scope: standard
-      allow_tools: [search_web]
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: qwen3-8b
-          use_reasoning: false
-global: {}
-`
+	legacyYAML := canonicalRecipeFixture(`
+decisions:
+  - name: local_policy
+    priority: 10
+    tool_scope: standard
+    allow_tools: [search_web]
+    rules:
+      operator: AND
+      conditions: []
+`, "")
 
-	_, err := ParseYAMLBytes([]byte(legacyYAML))
+	_, err := testAuthoringParser(t).ParseYAMLBytes(legacyYAML)
 	if err == nil {
 		t.Fatal("expected legacy decision tool fields to be rejected")
 	}

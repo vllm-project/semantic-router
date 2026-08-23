@@ -50,92 +50,6 @@ class CalibrationHTTPTest(unittest.TestCase):
         self.assertNotIn(b"private-token", sent_request.data)
 
 
-class DeployConfigTest(unittest.TestCase):
-    def test_deploy_config_uses_put_replace_semantics(self) -> None:
-        with tempfile.TemporaryDirectory() as tempdir:
-            yaml_path = Path(tempdir) / "router.yaml"
-            dsl_path = Path(tempdir) / "router.dsl"
-            yaml_path.write_text("version: v0.3\n", encoding="utf-8")
-            dsl_path.write_text('ROUTE fallback { MODEL "qwen" }\n', encoding="utf-8")
-
-            with mock.patch.object(
-                router_calibration_support,
-                "http_json",
-                return_value=(200, {"status": "success"}),
-            ) as http_json:
-                result = router_calibration_support.deploy_config(
-                    "http://router.example:8080",
-                    yaml_path,
-                    dsl_path,
-                )
-
-            self.assertEqual(result, {"status": "success"})
-            http_json.assert_called_once_with(
-                "PUT",
-                "http://router.example:8080/config/router",
-                {
-                    "yaml": "version: v0.3\n",
-                    "dsl": 'ROUTE fallback { MODEL "qwen" }\n',
-                },
-            )
-
-    def test_wait_for_config_activation_observes_exact_runtime_hash(self) -> None:
-        with mock.patch.object(
-            router_calibration_support,
-            "http_json",
-            side_effect=[
-                (
-                    200,
-                    {
-                        "status": "pending",
-                        "runtime_hash": "next-runtime",
-                        "active_hash": "old-runtime",
-                    },
-                ),
-                (
-                    200,
-                    {
-                        "status": "active",
-                        "runtime_hash": "next-runtime",
-                        "active_hash": "next-runtime",
-                    },
-                ),
-            ],
-        ) as http_json:
-            result = router_calibration_support.wait_for_config_activation(
-                "http://router.example:8080",
-                "next-runtime",
-                timeout_seconds=1,
-                interval_seconds=0.001,
-            )
-
-        self.assertEqual(result["payload"]["status"], "active")
-        self.assertEqual(http_json.call_count, 2)
-
-    def test_wait_for_config_activation_rejects_superseded_deploy(self) -> None:
-        with (
-            mock.patch.object(
-                router_calibration_support,
-                "http_json",
-                return_value=(
-                    200,
-                    {
-                        "status": "pending",
-                        "runtime_hash": "newer-runtime",
-                        "active_hash": "old-runtime",
-                    },
-                ),
-            ),
-            self.assertRaisesRegex(RuntimeError, "superseded"),
-        ):
-            router_calibration_support.wait_for_config_activation(
-                "http://router.example:8080",
-                "expected-runtime",
-                timeout_seconds=1,
-                interval_seconds=0.001,
-            )
-
-
 class RecipeScopedProbeTest(unittest.TestCase):
     def test_write_json_creates_parent_directories(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
@@ -641,6 +555,20 @@ decisions:
         self.assertEqual(report["request_timeout_seconds"], 90)
         self.assertEqual(report["results"][0]["error"], "request timed out")
         self.assertTrue(report["results"][1]["matched"])
+
+    def test_http_transport_normalizes_remote_disconnect(self) -> None:
+        with (
+            mock.patch(
+                "urllib.request.urlopen",
+                side_effect=ConnectionResetError("remote closed connection"),
+            ),
+            self.assertRaisesRegex(RuntimeError, "remote closed connection"),
+        ):
+            router_calibration_support.http_json(
+                "POST",
+                "http://router.example:8080/api/v1/eval",
+                {"text": "probe"},
+            )
 
     def test_evaluate_probes_scopes_trace_inventory_by_recipe(self) -> None:
         probes = [

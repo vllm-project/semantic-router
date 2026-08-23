@@ -19,6 +19,11 @@ __pycache__/
 .venv/
 .venv-agent/
 .agent-harness/
+tmp/
+output/
+artifacts/
+.env
+.env.*
 venv/
 env/
 ENV/

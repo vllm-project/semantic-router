@@ -9,10 +9,7 @@ import (
 
 func TestDecompileRoutingPreservesRawPluginConfigMaps(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "test-model"
+document:
   signals:
     domains:
       - name: test
@@ -25,13 +22,12 @@ routing:
         conditions:
           - type: domain
             name: test
-      modelRefs:
-        - model: test-model
       plugins:
-        - type: semantic-cache
+        - type: response_cache
           configuration:
             enabled: true
-            similarity_threshold: 0.81
+            semantic:
+              similarity_threshold: 0.81
         - type: router_replay
           configuration:
             enabled: true
@@ -51,7 +47,7 @@ routing:
 		`max_body_bytes: 4096`,
 	})
 	compiled := mustCompileRoutingPluginConfigTest(t, dslText)
-	assertSemanticCachePluginRoundTrip(t, compiled.Decisions[0])
+	assertResponseCachePluginRoundTrip(t, compiled.Decisions[0])
 	assertRouterReplayPluginRoundTrip(t, compiled.Decisions[0])
 }
 
@@ -99,10 +95,7 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 
 func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "test-model"
+document:
   signals:
     domains:
       - name: test
@@ -115,8 +108,6 @@ routing:
         conditions:
           - type: domain
             name: test
-      modelRefs:
-        - model: test-model
       plugins:
         - type: tools
           configuration:
@@ -156,9 +147,9 @@ routing:
 func mustParseRoutingPluginConfigTest(t *testing.T, configYAML string) *config.RouterConfig {
 	t.Helper()
 
-	cfg, err := config.ParseYAMLBytes([]byte(configYAML))
+	cfg, err := config.ParseRoutingYAMLBytes([]byte(configYAML))
 	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
+		t.Fatalf("ParseRoutingYAMLBytes error: %v", err)
 	}
 	return cfg
 }
@@ -196,19 +187,20 @@ func mustCompileRoutingPluginConfigTest(t *testing.T, dslText string) *config.Ro
 	return compiled
 }
 
-func assertSemanticCachePluginRoundTrip(t *testing.T, decision config.Decision) {
+func assertResponseCachePluginRoundTrip(t *testing.T, decision config.Decision) {
 	t.Helper()
 
-	plugin := findDecisionPluginForTest(t, decision, "semantic-cache")
-	var pluginConfig config.SemanticCachePluginConfig
+	plugin := findDecisionPluginForTest(t, decision, config.DecisionPluginResponseCache)
+	var pluginConfig config.ResponseCachePluginConfig
 	if err := config.UnmarshalPluginConfig(plugin.Configuration, &pluginConfig); err != nil {
-		t.Fatalf("semantic-cache decode error: %v", err)
+		t.Fatalf("response_cache decode error: %v", err)
 	}
 	if !pluginConfig.Enabled {
-		t.Fatalf("semantic-cache.enabled = false, want true")
+		t.Fatalf("response_cache.enabled = false, want true")
 	}
-	if pluginConfig.SimilarityThreshold == nil || *pluginConfig.SimilarityThreshold != 0.81 {
-		t.Fatalf("semantic-cache.similarity_threshold = %#v", pluginConfig.SimilarityThreshold)
+	if pluginConfig.Semantic == nil || pluginConfig.Semantic.SimilarityThreshold == nil ||
+		*pluginConfig.Semantic.SimilarityThreshold != 0.81 {
+		t.Fatalf("response_cache.semantic.similarity_threshold = %#v", pluginConfig.Semantic)
 	}
 }
 
@@ -307,15 +299,10 @@ func assertRoundTripToolsPluginBasics(t *testing.T, cfg *config.ToolsPluginConfi
 
 func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-version: v0.3
-routing:
-  modelCards:
-    - name: "local-guard"
+document:
   decisions:
     - name: privacy_route
       priority: 100
-      modelRefs:
-        - model: local-guard
       plugins:
         - type: tools
           configuration:

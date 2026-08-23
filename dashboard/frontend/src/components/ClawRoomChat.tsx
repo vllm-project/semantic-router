@@ -569,7 +569,7 @@ const ClawRoomChat = ({
 
       if (message.senderType === 'system') {
         return {
-          displayName: message.senderName || 'ClawOS',
+          displayName: message.senderName || 'OpenClaw',
           roleLabel: 'SYSTEM',
         }
       }

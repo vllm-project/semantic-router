@@ -23,6 +23,13 @@ const (
 	typeAvailableSemanticRouter   = "Available"
 	typeProgressingSemanticRouter = "Progressing"
 	typeDegradedSemanticRouter    = "Degraded"
+	typeBootstrapReady            = "BootstrapReady"
+	typeMigrationReady            = "MigrationReady"
+)
+
+const (
+	gatewayModeSidecar  = "sidecar"
+	gatewayModeExternal = "external"
 )
 
 // Default values for SemanticRouter resources
@@ -40,6 +47,11 @@ const (
 	DefaultGRPCPort    = int32(50051)
 	DefaultAPIPort     = int32(8080)
 	DefaultMetricsPort = int32(9190)
+
+	DefaultBackendDispatchPort = int32(8180)
+	backendDispatchPortName    = "backend-dsp"
+	DefaultManagementPort      = int32(8080)
+	DefaultEnvoyPort           = int32(8801)
 
 	// Probe defaults
 	DefaultStartupProbePeriod           = int32(10)

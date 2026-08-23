@@ -6,7 +6,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/router"
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func main() {
@@ -18,24 +17,8 @@ func main() {
 
 	log.Printf("Config file path: %s", cfg.AbsConfigPath)
 
-	if cfg.SetupMode {
-		log.Printf("DEPRECATED: --setup-mode / DASHBOARD_SETUP_MODE no longer decides setup mode; " +
-			"it is read only so a disagreement with the config file's setup.mode block can be detected and reported.")
-	}
-
-	// One setup-mode source for the whole process, built once and passed down.
-	setupResolver := setupmode.New(cfg.AbsConfigPath, cfg.SetupMode)
-	resolution := setupResolver.Resolve()
-	if resolution.Active {
-		log.Printf("Setup mode: ACTIVE (source: %s), first-run bootstrap is open", resolution.Source)
-	} else if resolution.LegacyFlag {
-		log.Printf("Setup mode: inactive")
-	}
-	// A conflict warning is logged by the resolver itself, on this first call.
-	// Repeating it here would duplicate the line.
-
 	// Setup routes
-	srv := router.Setup(cfg, setupResolver)
+	srv := router.Setup(cfg)
 
 	// Log configuration
 	addr := ":" + cfg.Port
@@ -51,18 +34,32 @@ func main() {
 		log.Printf("Jaeger: %s → /embedded/jaeger/", cfg.JaegerURL)
 	}
 	if cfg.EnvoyURL != "" {
-		log.Printf("Envoy: %s → /api/router/v1/chat/completions", cfg.EnvoyURL)
+		log.Printf("Router inference endpoint configured for trusted Dashboard workflows")
 	}
 	if cfg.FleetSimURL != "" {
 		log.Printf("Fleet Sim: %s → /api/fleet-sim/*", cfg.FleetSimURL)
 	}
-	log.Printf("Router API: %s → /api/router/*", cfg.RouterAPIURL)
+	log.Printf("Router Management API: %s → /api/router/management/v1/*", cfg.RouterAPIURL)
 	log.Printf("Router Metrics: %s → /metrics/router", cfg.RouterMetrics)
 	if cfg.ReadonlyMode {
 		log.Printf("Read-only mode: ENABLED (config editing disabled)")
 	}
 
 	// Start server
+	if cfg.DashboardIssuerTLSListenAddr != "" {
+		go func() {
+			log.Printf("Dashboard private issuer listener enabled")
+			err := http.ListenAndServeTLS(
+				cfg.DashboardIssuerTLSListenAddr,
+				cfg.DashboardIssuerTLSCertificateFile,
+				cfg.DashboardIssuerTLSPrivateKeyFile,
+				srv.Handler,
+			)
+			if err != nil {
+				log.Fatalf("Dashboard private issuer listener: %v", err)
+			}
+		}()
+	}
 	serveErr := http.ListenAndServe(addr, srv.Handler)
 	if closeErr := srv.Close(); closeErr != nil {
 		log.Printf("Warning: dashboard store shutdown: %v", closeErr)

@@ -63,8 +63,8 @@ chart version and review its values rather than copying development defaults.
 
 ## Configure response cache
 
-Use the canonical `response_cache` key. `semantic_cache` is a deprecated input
-alias retained only for migration compatibility.
+Use the canonical `response_cache` key. Removed spellings such as
+`semantic_cache` are rejected so configuration errors surface immediately.
 
 ```yaml
 global:
@@ -111,7 +111,7 @@ inserts or searches to fail.
 Enable the route plugin on decisions that may read or populate the cache:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: general-chat
       description: General requests that may use response cache.
@@ -119,8 +119,6 @@ routing:
       rules:
         operator: AND
         conditions: []
-      modelRefs:
-        - model: local/general
       plugins:
         - type: response_cache
           configuration:
@@ -128,6 +126,9 @@ routing:
             semantic:
               similarity_threshold: 0.86
 ```
+
+The Entrypoint action assigns one or more Models to `general-chat`; the Recipe
+only owns matching and cache policy.
 
 Run configuration validation before rollout:
 

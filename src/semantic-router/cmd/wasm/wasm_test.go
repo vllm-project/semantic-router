@@ -39,11 +39,46 @@ func TestCompileValidDSL(t *testing.T) {
 	if cr.YAML == "" {
 		t.Error("expected non-empty YAML output")
 	}
-	if cr.CRD == "" {
-		t.Error("expected non-empty CRD output")
-	}
 	if cr.Error != "" {
 		t.Errorf("unexpected error: %s", cr.Error)
+	}
+}
+
+func TestCompileReturnsModelFreeManagementRecipeDocument(t *testing.T) {
+	input := js.ValueOf(`MODEL backend {}
+
+ENTRYPOINT {
+  name: "router/support"
+  recipe: "support"
+  assignments: [{ decision: "urgent_answer", models: [{ model: "backend" }] }]
+}
+
+RECIPE support (description = "Support routing") {
+  SIGNAL keyword urgent { keywords: ["urgent"] }
+  ROUTE urgent_answer {
+    WHEN keyword("urgent")
+  }
+}`)
+	result := compile(js.Undefined(), []js.Value{input})
+	var compiled CompileResult
+	if err := json.Unmarshal([]byte(result.(string)), &compiled); err != nil {
+		t.Fatalf("unmarshal compile result: %v", err)
+	}
+	if compiled.Error != "" {
+		t.Fatalf("compile error: %s", compiled.Error)
+	}
+	if len(compiled.RecipeDocuments) != 1 {
+		t.Fatalf("Recipe document count = %d, want 1", len(compiled.RecipeDocuments))
+	}
+	recipe := compiled.RecipeDocuments[0]
+	if recipe.Name != "support" || recipe.Description != "Support routing" {
+		t.Fatalf("Recipe identity changed: %+v", recipe)
+	}
+	if strings.Contains(string(recipe.Document), "backend") || strings.Contains(string(recipe.Document), "modelRefs") {
+		t.Fatalf("Recipe document leaked physical Model selection: %s", recipe.Document)
+	}
+	if !strings.Contains(string(recipe.Document), "urgent_answer") {
+		t.Fatalf("Recipe document omitted Decision: %s", recipe.Document)
 	}
 }
 
@@ -185,20 +220,7 @@ func TestValidateNoArgs(t *testing.T) {
 }
 
 func TestDecompileValidYAML(t *testing.T) {
-	yamlInput := js.ValueOf(`version: v0.3
-providers:
-  defaults:
-    default_model: qwen
-  models:
-    - name: qwen
-      backend_refs:
-        - name: primary
-          endpoint: localhost:8000
-          protocol: http
-routing:
-  modelCards:
-    - name: qwen
-      modality: text
+	yamlInput := js.ValueOf(`document:
   signals:
     keywords:
       - name: s1
@@ -212,29 +234,7 @@ routing:
         conditions:
           - type: keyword
             name: s1
-      modelRefs:
-        - model: qwen
-entrypoints:
-  - model_names: [vllm-sr/private]
-    recipe: private
-recipes:
-  - name: private
-    routing:
-      signals:
-        keywords:
-          - name: private-signal
-            operator: any
-            keywords: ["private"]
-      decisions:
-        - name: private-route
-          priority: 10
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: private-signal
-          modelRefs:
-            - model: qwen`)
+`)
 
 	result := decompile(js.Undefined(), []js.Value{yamlInput})
 	str := result.(string)
@@ -247,11 +247,8 @@ recipes:
 	if dr.Error != "" {
 		t.Errorf("unexpected error: %s", dr.Error)
 	}
-	if !strings.Contains(dr.DSL, "MODEL qwen") {
-		t.Errorf("expected routing model catalog in decompiled DSL, got:\n%s", dr.DSL)
-	}
-	if !strings.Contains(dr.DSL, "ENTRYPOINT {") || !strings.Contains(dr.DSL, "RECIPE private") {
-		t.Errorf("expected entrypoints and recipes in decompiled DSL, got:\n%s", dr.DSL)
+	if !strings.Contains(dr.DSL, "SIGNAL keyword s1") || !strings.Contains(dr.DSL, "ROUTE r1") {
+		t.Errorf("expected Recipe document in decompiled DSL, got:\n%s", dr.DSL)
 	}
 }
 

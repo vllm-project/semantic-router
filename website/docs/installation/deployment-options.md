@@ -26,9 +26,10 @@ GPU-backed model servers or accelerating Router-side models.
 services. It is the fastest path for configuration work, evaluation, and a
 single-host deployment.
 
-The command does not normally provision the provider models referenced by a
-custom config or built-in virtual model. Start those endpoints first, or bind
-the config to endpoints that already exist.
+The command does not provision the provider Models used by a custom Entrypoint.
+Start those endpoints first, or connect endpoints that already exist. Built-in
+Recipes remain model-free until a control plane assigns Models and publishes an
+Entrypoint.
 
 Follow [Deploy with Docker](docker) for the stack lifecycle and backend
 networking. If you want a small local model server, add

@@ -15,7 +15,7 @@ class DeploymentBackend(Protocol):
         *,
         image: str | None = None,
         pull_policy: str | None = None,
-        enable_observability: bool = True,
+        enable_observability: bool = False,
         **kwargs: Any,
     ) -> None:
         """Deploy the full vLLM Semantic Router stack."""

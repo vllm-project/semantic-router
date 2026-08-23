@@ -61,7 +61,7 @@ func TestCallModel_RejectsOversizedResponseBody(t *testing.T) {
 
 	c := NewClient(&config.LooperConfig{Endpoint: server.URL, MaxResponseBytesMB: 1})
 
-	if _, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil, ""); err == nil {
+	if _, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil); err == nil {
 		t.Fatal("expected CallModel to reject a response body larger than the configured cap, got nil error")
 	}
 }
@@ -74,7 +74,7 @@ func TestCallModel_AcceptsResponseWithinCap(t *testing.T) {
 
 	c := NewClient(&config.LooperConfig{Endpoint: server.URL})
 
-	resp, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil, "")
+	resp, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil)
 	if err != nil {
 		t.Fatalf("unexpected error for a within-cap response: %v", err)
 	}
@@ -95,7 +95,7 @@ func TestCallModel_RejectsOversizedStreamingBody(t *testing.T) {
 
 	c := NewClient(&config.LooperConfig{Endpoint: server.URL, MaxResponseBytesMB: 1})
 
-	if _, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", true, 1, nil, ""); err == nil {
+	if _, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", true, 1, nil); err == nil {
 		t.Fatal("expected CallModel to reject an oversized streaming body, got nil error")
 	}
 }
@@ -114,7 +114,7 @@ func TestCallModel_TruncatesOversizedErrorBody(t *testing.T) {
 
 	c := NewClient(&config.LooperConfig{Endpoint: server.URL})
 
-	_, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil, "")
+	_, err := c.CallModel(context.Background(), readLimitTestRequest(), "model-a", false, 1, nil)
 	if err == nil {
 		t.Fatal("expected an error for a 500 response, got nil")
 	}

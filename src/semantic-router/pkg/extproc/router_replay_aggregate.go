@@ -84,8 +84,12 @@ func (r *OpenAIRouter) handleRouterReplayAggregateAPI(
 	}
 
 	allRecords := r.collectRouterReplayRecords()
-	filteredRecords := filterRouterReplayRecords(allRecords, filters)
-	payload := buildRouterReplayAggregatePayload(allRecords, filteredRecords)
+	visibleRecords := filterRouterReplayRecords(allRecords, routerReplayFilters{
+		userIDs: filters.userIDs,
+		teamIDs: filters.teamIDs,
+	})
+	filteredRecords := filterRouterReplayRecords(visibleRecords, filters)
+	payload := buildRouterReplayAggregatePayload(visibleRecords, filteredRecords)
 	return r.createRouterReplayJSONResponse(200, payload)
 }
 

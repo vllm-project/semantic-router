@@ -112,6 +112,7 @@ export interface ASTProjectionMappingDecl {
 export interface ASTModelRef {
   model: string
   reasoning?: boolean
+  reasoningDescription?: string
   effort?: string
   lora?: string
   paramSize?: string
@@ -170,8 +171,38 @@ export interface ASTTestBlockDecl {
 }
 
 export interface ASTEntrypointDecl {
-  modelNames: string[]
+  name: string
+  aliases?: string[]
+  recipe?: string
+  assignments?: Record<string, ASTEntrypointAssignmentSetDecl>
+  rules?: ASTEntrypointRuleDecl[]
+  pos: ASTPosition
+}
+
+export interface ASTEntrypointRuleDecl {
+  name: string
+  matches?: ASTEntrypointMatchDecl[]
   recipe: string
+  assignments: Record<string, ASTEntrypointAssignmentSetDecl>
+  pos: ASTPosition
+}
+
+export interface ASTEntrypointMatchDecl {
+  claim?: { name: string; exact: DSLFieldValue }
+  path?: { exact?: string; prefix?: string }
+}
+
+export interface ASTEntrypointAssignmentSetDecl {
+  models: ASTEntrypointAssignmentDecl[]
+  fallback?: { strategy: string; on: string[] }
+}
+
+export interface ASTEntrypointAssignmentDecl {
+  model: string
+  priority: number
+  weight?: string
+  loraName?: string
+  reasoning?: { enabled: boolean; effort?: string; description?: string }
   pos: ASTPosition
 }
 
@@ -201,6 +232,12 @@ export interface ASTProgram {
 export interface CompileResult {
   yaml: string
   crd?: string
+  recipeDocuments?: Array<{
+    id: string
+    name: string
+    description?: string
+    document: Record<string, unknown>
+  }>
   diagnostics: Diagnostic[]
   ast?: ASTProgram
   error?: string
@@ -231,115 +268,9 @@ export interface FormatResult {
   error?: string
 }
 
-// ---------- Deploy Types ----------
-
-export type DeployStep = 'compiling' | 'validating' | 'backing_up' | 'writing' | 'reloading' | 'done' | 'error'
-
-export interface DeployProgress {
-  step: DeployStep
-  message: string
-}
-
-export interface DeployResult {
-  status: 'success' | 'error'
-  version?: string
-  message: string
-}
-
-export interface ConfigVersion {
-  version: string
-  timestamp: string
-  source: string
-  filename: string
-}
-
-// ---------- Natural Language Builder ----------
-
-export type BuilderNLConnectionMode = 'default' | 'custom'
-export type BuilderNLProviderKind = 'vllm' | 'openai-compatible' | 'anthropic'
-
-export interface BuilderNLConnection {
-  providerKind: BuilderNLProviderKind
-  modelName: string
-  baseUrl: string
-  accessKey?: string
-  endpointName?: string
-}
-
-export interface BuilderNLGenerateRequest {
-  prompt: string
-  currentDsl?: string
-  connectionMode: BuilderNLConnectionMode
-  customConnection?: BuilderNLConnection
-  temperature?: number
-  maxRetries?: number
-  timeoutSeconds?: number
-}
-
-export interface BuilderNLVerifyRequest {
-  connectionMode: BuilderNLConnectionMode
-  customConnection?: BuilderNLConnection
-  timeoutSeconds?: number
-}
-
-export interface BuilderNLReview {
-  ready: boolean
-  summary: string
-  warnings: string[]
-  checks: string[]
-}
-
-export type BuilderNLProgressLevel = 'info' | 'success' | 'warning' | 'error'
-
-export interface BuilderNLProgressEvent {
-  phase: string
-  level: BuilderNLProgressLevel
-  message: string
-  attempt?: number
-  kind?: 'stage' | 'heartbeat'
-  elapsedSeconds?: number
-  timestamp: number
-}
-
-export interface BuilderNLValidation {
-  ready: boolean
-  diagnostics: Diagnostic[]
-  errorCount: number
-  compileError?: string
-}
-
-export interface BuilderNLStagedDraft {
-  prompt: string
-  dsl: string
-  baseYaml: string
-  summary: string
-  suggestedTestQuery?: string
-  review: BuilderNLReview
-  validation: BuilderNLValidation
-}
-
-export interface BuilderNLVerifyResponse {
-  ready: boolean
-  summary: string
-  connectionMode: BuilderNLConnectionMode
-  providerKind?: BuilderNLProviderKind
-  modelName?: string
-  targetModelName?: string
-  endpoint?: string
-}
-
-export interface BuilderNLGenerateResponse {
-  dsl: string
-  baseYaml: string
-  summary: string
-  suggestedTestQuery?: string
-  review: BuilderNLReview
-  validation: BuilderNLValidation
-}
-
 // ---------- Editor State ----------
 
-export type EditorMode = 'dsl' | 'visual' | 'nl'
+export type EditorMode = 'dsl' | 'visual'
 
 export interface EditorState {
   /** Current DSL source text in the editor */

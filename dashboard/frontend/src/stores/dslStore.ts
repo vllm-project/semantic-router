@@ -4,7 +4,7 @@
  * Manages:
  * - DSL source text, YAML/CRD output, diagnostics
  * - WASM lifecycle (init, ready state)
- * - Editor mode switching (DSL / Visual / NL)
+ * - Editor mode switching (DSL / Visual)
  * - Debounced validation on keystroke
  * - Full compile on demand
  * - Decompile router YAML → DSL-owned models, routing, entrypoints, and recipes
@@ -13,11 +13,7 @@
 
 import { create } from 'zustand'
 import { wasmBridge } from '@/lib/wasm'
-import { generateBuilderNLDraftStreaming } from '@/utils/builderNLApi'
 import {
-  updateModel,
-  addModel as addModelMut,
-  deleteModel as deleteModelMut,
   updateSignal,
   addSignal as addSignalMut,
   deleteSignal as deleteSignalMut,
@@ -35,29 +31,14 @@ import {
   addRoute as addRouteMut,
 } from '@/lib/dslMutations'
 import type { RouteInput } from '@/lib/dslMutations'
-import type {
-  BuilderNLGenerateRequest,
-  BuilderNLStagedDraft,
-  EditorMode,
-  CompileResult,
-  ValidateResult,
-  DSLFieldObject,
-} from '@/types/dsl'
+import type { EditorMode, CompileResult, ValidateResult, DSLFieldObject } from '@/types/dsl'
 import type { DSLStore } from './dslStoreTypes'
-import {
-  appendBuilderNLProgress,
-  initialDSLState,
-  normalizeBuilderNLReview,
-  normalizeBuilderNLValidation,
-  type DeployStatusResponse,
-} from './dslStoreSupport'
-import { renderCanonicalYaml } from './dslStoreYamlSupport'
+import { initialDSLState } from './dslStoreSupport'
 
 // ---------- Debounce helper ----------
 
 let validateTimer: ReturnType<typeof setTimeout> | null = null
 const VALIDATE_DEBOUNCE_MS = 300
-let renderedYamlRequestId = 0
 
 // ---------- Store ----------
 
@@ -91,16 +72,14 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
   },
 
   compile() {
-    const { dslSource, wasmReady, baseConfigYaml } = get()
+    const { dslSource, wasmReady } = get()
     if (!wasmReady) return
     if (!dslSource.trim()) {
       set({
-        renderedYamlOutput: '',
         yamlOutput: '',
         crdOutput: '',
         diagnostics: [],
         compileError: null,
-        dirty: false,
       })
       return
     }
@@ -133,27 +112,14 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
       const compiledYaml = result.yaml || ''
       set({
-        renderedYamlOutput: compiledYaml,
         yamlOutput: compiledYaml,
         crdOutput: result.crd || '',
         diagnostics: result.diagnostics || [],
         ast: result.ast || null,
         compileError: result.error || null,
-        dirty: false,
         lastCompileAt: Date.now(),
         loading: false,
       })
-      if (compiledYaml) {
-        const requestId = ++renderedYamlRequestId
-        void renderCanonicalYaml(compiledYaml, dslSource, baseConfigYaml)
-          .then((renderedYamlOutput) => {
-            if (requestId !== renderedYamlRequestId || get().yamlOutput !== compiledYaml) return
-            set({ renderedYamlOutput })
-          })
-          .catch((error) => {
-            console.warn('[dslStore.compile] Full YAML preview unavailable:', error)
-          })
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       console.error('[dslStore.compile] Compile threw error:', msg)
@@ -245,8 +211,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
       dirty: false,
       diagnostics: [],
       compileError: null,
-      baseConfigYaml: '',
-      renderedYamlOutput: '',
     })
     // Trigger validation after load
     const state = get()
@@ -257,62 +221,11 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
 
   importYaml(yaml: string) {
     const dsl = get().decompile(yaml)
-    if (!dsl) {
-      throw new Error('Failed to decompile YAML')
-    }
-    set({
-      dslSource: dsl,
-      dirty: false,
-      diagnostics: [],
-      compileError: null,
-      baseConfigYaml: yaml,
-      renderedYamlOutput: yaml,
-    })
-    const state = get()
-    if (state.wasmReady && dsl.trim()) {
-      state.validate()
-    }
-  },
-
-  async loadFromRouter() {
-    const { wasmReady } = get()
-    if (!wasmReady) throw new Error('WASM not ready')
-
-    const resp = await fetch('/api/router/config/yaml')
-    if (!resp.ok) {
-      throw new Error(`Failed to fetch config: HTTP ${resp.status}`)
-    }
-    const yaml = await resp.text()
-    if (!yaml.trim()) {
-      throw new Error('Router config is empty')
-    }
-    get().importYaml(yaml)
+    if (!dsl) throw new Error('Failed to decompile document')
+    get().loadDsl(dsl)
   },
 
   // --- Visual Builder mutations (Phase 2) ---
-
-  mutateModel(name: string, fields: DSLFieldObject) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = updateModel(dslSource, name, fields)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  addModel(name: string, fields: DSLFieldObject) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = addModelMut(dslSource, name, fields)
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
-
-  deleteModel(name: string) {
-    const { dslSource, wasmReady } = get()
-    const newSrc = deleteModelMut(dslSource, name)
-    if (newSrc === dslSource) return
-    set({ dslSource: newSrc, dirty: true })
-    if (wasmReady) get().parseAST()
-  },
 
   mutateSignal(signalType: string, name: string, fields: DSLFieldObject) {
     const { dslSource, wasmReady } = get()
@@ -450,342 +363,6 @@ export const useDSLStore = create<DSLStore>((set, get) => ({
     const newSrc = addRouteMut(dslSource, name, input)
     set({ dslSource: newSrc, dirty: true })
     if (wasmReady) get().parseAST()
-  },
-
-  // --- Deploy actions ---
-
-  requestDeploy() {
-    const { yamlOutput, dslSource, wasmReady, dirty, baseConfigYaml } = get()
-    if (!wasmReady || !dslSource.trim()) return
-
-    // Re-compile if DSL was modified since last compile, or never compiled
-    if (!yamlOutput || dirty) {
-      get().compile()
-    }
-
-    // Check for compile errors
-    const { diagnostics: diags, yamlOutput: yaml } = get()
-    const hasErrors = diags.some((d) => d.level === 'error')
-    if (hasErrors || !yaml) {
-      set({
-        deployResult: {
-          status: 'error',
-          message: 'Cannot deploy: DSL has compilation errors. Fix errors and compile first.',
-        },
-        showDeployConfirm: false,
-      })
-      return
-    }
-
-    // Show modal and fetch preview diff
-    set({
-      showDeployConfirm: true,
-      deployResult: null,
-      deployPreviewCurrent: '',
-      deployPreviewMerged: '',
-      deployPreviewLoading: true,
-      deployPreviewError: null,
-    })
-
-    // Fetch preview asynchronously
-    fetch('/api/router/config/deploy/preview', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ yaml, dsl: dslSource, baseYaml: baseConfigYaml, mode: 'replace' }),
-    })
-      .then(async (resp) => {
-        if (!resp.ok) {
-          const data = await resp.json().catch(() => ({}))
-          throw new Error(data.message || data.error || 'Failed to fetch preview')
-        }
-        return resp.json()
-      })
-      .then((data: { current: string; preview: string }) => {
-        set({
-          deployPreviewCurrent: data.current,
-          deployPreviewMerged: data.preview,
-          deployPreviewLoading: false,
-        })
-      })
-      .catch((err) => {
-        set({
-          deployPreviewLoading: false,
-          deployPreviewError: err instanceof Error ? err.message : String(err),
-        })
-      })
-  },
-
-  async executeDeploy() {
-    const { yamlOutput, dslSource, baseConfigYaml } = get()
-    if (!yamlOutput) return
-
-    console.log(
-      '[dslStore.executeDeploy] Sending deploy: YAML size=%d, DSL size=%d',
-      yamlOutput.length,
-      dslSource.length,
-    )
-
-    set({ deploying: true, deployStep: 'validating', showDeployConfirm: false, deployResult: null })
-
-    try {
-      // Step: validating → backing_up → writing → reloading → done
-      set({ deployStep: 'backing_up' })
-      await new Promise((r) => setTimeout(r, 200)) // Small delay for UX
-
-      set({ deployStep: 'writing' })
-      const resp = await fetch('/api/router/config/deploy', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          yaml: yamlOutput,
-          dsl: dslSource,
-          baseYaml: baseConfigYaml,
-          mode: 'replace',
-        }),
-      })
-
-      const responseText = await resp.text()
-      let data: { version?: string; message?: string; error?: string } = {}
-      try {
-        data = responseText ? (JSON.parse(responseText) as typeof data) : {}
-      } catch {
-        data = responseText ? { message: responseText } : {}
-      }
-
-      if (!resp.ok) {
-        set({
-          deploying: false,
-          deployStep: 'error',
-          deployResult: {
-            status: 'error',
-            message: data.message || data.error || 'Deploy failed',
-          },
-        })
-        return
-      }
-
-      // Wait for runtime reload (poll actual health status)
-      set({ deployStep: 'reloading' })
-      let healthy = false
-      for (let i = 0; i < 10; i++) {
-        await new Promise((r) => setTimeout(r, 500))
-        try {
-          const statusResp = await fetch('/api/status')
-          if (!statusResp.ok) continue
-
-          const statusData = (await statusResp.json()) as DeployStatusResponse
-          const routerHealthy =
-            statusData.services?.find((service) => service.name === 'Router')?.healthy === true
-          const envoyService = statusData.services?.find((service) => service.name === 'Envoy')
-          const envoyHealthy = envoyService ? envoyService.healthy === true : true
-
-          if (statusData.overall === 'healthy' && routerHealthy && envoyHealthy) {
-            healthy = true
-            break
-          }
-        } catch {
-          // continue polling
-        }
-      }
-
-      set({
-        deploying: false,
-        deployStep: 'done',
-        deployResult: {
-          status: 'success',
-          version: data.version,
-          message: healthy
-            ? `Deployed v${data.version} — Router and Envoy reloaded successfully.`
-            : `Deployed v${data.version} — Runtime reload status unknown (check logs).`,
-        },
-        dirty: false,
-      })
-
-      // Refresh versions list
-      get().fetchVersions()
-
-      // Notify other components (e.g. DashboardPage) to refresh config
-      window.dispatchEvent(new CustomEvent('config-deployed'))
-    } catch (err) {
-      set({
-        deploying: false,
-        deployStep: 'error',
-        deployResult: {
-          status: 'error',
-          message: `Deploy failed: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      })
-    }
-  },
-
-  dismissDeploy() {
-    set({
-      showDeployConfirm: false,
-      deployResult: null,
-      deployStep: null,
-      deployPreviewCurrent: '',
-      deployPreviewMerged: '',
-      deployPreviewLoading: false,
-      deployPreviewError: null,
-    })
-  },
-
-  async rollback(version: string) {
-    set({ deploying: true, deployStep: 'writing', deployResult: null })
-
-    try {
-      const resp = await fetch('/api/router/config/rollback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ version }),
-      })
-
-      const data = await resp.json()
-
-      if (!resp.ok) {
-        set({
-          deploying: false,
-          deployStep: 'error',
-          deployResult: {
-            status: 'error',
-            message: data.message || 'Rollback failed',
-          },
-        })
-        return
-      }
-
-      set({ deployStep: 'reloading' })
-      await new Promise((r) => setTimeout(r, 2000))
-
-      set({
-        deploying: false,
-        deployStep: 'done',
-        deployResult: {
-          status: 'success',
-          version: data.version,
-          message: `Rolled back to v${data.version}. Router will reload automatically.`,
-        },
-      })
-
-      get().fetchVersions()
-    } catch (err) {
-      set({
-        deploying: false,
-        deployStep: 'error',
-        deployResult: {
-          status: 'error',
-          message: `Rollback failed: ${err instanceof Error ? err.message : String(err)}`,
-        },
-      })
-    }
-  },
-
-  async fetchVersions() {
-    try {
-      const resp = await fetch('/api/router/config/versions')
-      if (resp.ok) {
-        const versions = await resp.json()
-        set({ configVersions: versions || [] })
-      }
-    } catch {
-      // silently fail
-    }
-  },
-
-  async generateFromNaturalLanguage(input: BuilderNLGenerateRequest) {
-    const prompt = input.prompt.trim()
-    if (!prompt) {
-      set({ nlGenerateError: 'Describe the routing behavior you want to build.' })
-      return
-    }
-
-    set({
-      nlGenerating: true,
-      nlGenerateError: null,
-      nlStagedDraft: null,
-      nlProgressEvents: [
-        {
-          phase: 'request',
-          level: 'info',
-          message: 'Sending Builder NL request to the streaming backend.',
-          timestamp: Date.now(),
-        },
-      ],
-    })
-
-    try {
-      const liveBaseYaml = get().baseConfigYaml
-      const data = await generateBuilderNLDraftStreaming(
-        {
-          ...input,
-          prompt,
-          currentDsl: input.currentDsl?.trim() || '',
-        },
-        (event) => appendBuilderNLProgress(set, event),
-      )
-      const stagedDraft: BuilderNLStagedDraft = {
-        prompt,
-        dsl: data.dsl,
-        baseYaml: liveBaseYaml.trim() ? liveBaseYaml : data.baseYaml || '',
-        summary: data.summary || '',
-        suggestedTestQuery: data.suggestedTestQuery || '',
-        review: normalizeBuilderNLReview(data.review),
-        validation: normalizeBuilderNLValidation(data.validation),
-      }
-      set({
-        nlGenerating: false,
-        nlGenerateError: null,
-        nlStagedDraft: stagedDraft,
-      })
-    } catch (err) {
-      appendBuilderNLProgress(set, {
-        phase: 'error',
-        level: 'error',
-        message: err instanceof Error ? err.message : String(err),
-        timestamp: Date.now(),
-      })
-      set({
-        nlGenerating: false,
-        nlGenerateError: err instanceof Error ? err.message : String(err),
-        nlStagedDraft: null,
-      })
-    }
-  },
-
-  applyNaturalLanguageDraft() {
-    const stagedDraft = get().nlStagedDraft
-    if (!stagedDraft) return
-    const liveBaseYaml = get().baseConfigYaml
-
-    set({
-      dslSource: stagedDraft.dsl,
-      // Keep the live deploy base intact so global/providers/listeners do not
-      // get replaced by the staged NL draft handoff payload.
-      baseConfigYaml: liveBaseYaml.trim() ? liveBaseYaml : stagedDraft.baseYaml,
-      dirty: false,
-      diagnostics: [],
-      compileError: null,
-      ast: null,
-      symbols: null,
-      renderedYamlOutput: '',
-      yamlOutput: '',
-      crdOutput: '',
-      mode: 'visual',
-      nlGenerateError: null,
-      nlStagedDraft: null,
-    })
-
-    const state = get()
-    if (state.wasmReady && stagedDraft.dsl.trim()) {
-      state.compile()
-    }
-  },
-
-  discardNaturalLanguageDraft() {
-    set({
-      nlGenerateError: null,
-      nlStagedDraft: null,
-    })
   },
 }))
 

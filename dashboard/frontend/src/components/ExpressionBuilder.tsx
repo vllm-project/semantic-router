@@ -8,6 +8,7 @@ import { ReactFlowProvider } from 'reactflow'
 import 'reactflow/dist/style.css'
 import styles from './ExpressionBuilder.module.css'
 import ExpressionBuilderInner, { type ExpressionBuilderInnerProps } from './ExpressionBuilderInner'
+import ProductIcon from './ProductIcon'
 import {
   boolExprToRuleNode,
   parseExprText,
@@ -24,10 +25,16 @@ interface ExpressionBuilderProps {
 }
 
 const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
-  value, onChange, initialAstExpr, availableSignals,
+  value,
+  onChange,
+  initialAstExpr,
+  availableSignals,
 }) => {
   const [tree, setTree] = useState<RuleNode | null>(() => {
-    if (initialAstExpr) { const n = boolExprToRuleNode(initialAstExpr); if (n) return n }
+    if (initialAstExpr) {
+      const n = boolExprToRuleNode(initialAstExpr)
+      if (n) return n
+    }
     return parseExprText(value)
   })
 
@@ -40,14 +47,20 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
   const [historyIdx, setHistoryIdx] = useState(-1)
   const skipHistoryRef = useRef(false)
 
-  const pushHistory = useCallback((prev: RuleNode | null) => {
-    if (skipHistoryRef.current) { skipHistoryRef.current = false; return }
-    setHistory(h => {
-      const trimmed = h.slice(0, historyIdx + 1)
-      return [...trimmed, prev].slice(-50)
-    })
-    setHistoryIdx(i => Math.min(i + 1, 49))
-  }, [historyIdx])
+  const pushHistory = useCallback(
+    (prev: RuleNode | null) => {
+      if (skipHistoryRef.current) {
+        skipHistoryRef.current = false
+        return
+      }
+      setHistory((h) => {
+        const trimmed = h.slice(0, historyIdx + 1)
+        return [...trimmed, prev].slice(-50)
+      })
+      setHistoryIdx((i) => Math.min(i + 1, 49))
+    },
+    [historyIdx],
+  )
 
   const canUndo = historyIdx >= 0
   const canRedo = historyIdx < history.length - 1
@@ -55,19 +68,19 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
   const handleUndo = useCallback(() => {
     if (!canUndo) return
     skipHistoryRef.current = true
-    setHistory(h => {
+    setHistory((h) => {
       const trimmed = h.slice(0, historyIdx + 1)
       return [...trimmed, tree]
     })
     setTree(history[historyIdx])
-    setHistoryIdx(i => i - 1)
+    setHistoryIdx((i) => i - 1)
   }, [canUndo, history, historyIdx, tree])
 
   const handleRedo = useCallback(() => {
     if (!canRedo) return
     skipHistoryRef.current = true
     setTree(history[historyIdx + 1])
-    setHistoryIdx(i => i + 1)
+    setHistoryIdx((i) => i + 1)
   }, [canRedo, history, historyIdx])
 
   const prevValueRef = useRef(value)
@@ -81,7 +94,11 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
       }
       if (initialAstExpr) {
         const n = boolExprToRuleNode(initialAstExpr)
-        if (n) { setTree(n); setRawText(value); return }
+        if (n) {
+          setTree(n)
+          setRawText(value)
+          return
+        }
       }
       const parsed = parseExprText(value)
       if (parsed) {
@@ -92,9 +109,23 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
   }, [value, initialAstExpr])
 
   const innerProps: ExpressionBuilderInnerProps = {
-    tree, setTree, rawText, setRawText, isRawMode, setIsRawMode,
-    maximized, setMaximized, availableSignals, onChange, pushHistory,
-    canUndo, canRedo, handleUndo, handleRedo, selectedPath, setSelectedPath,
+    tree,
+    setTree,
+    rawText,
+    setRawText,
+    isRawMode,
+    setIsRawMode,
+    maximized,
+    setMaximized,
+    availableSignals,
+    onChange,
+    pushHistory,
+    canUndo,
+    canRedo,
+    handleUndo,
+    handleRedo,
+    selectedPath,
+    setSelectedPath,
     internalChangeRef,
   }
 
@@ -110,12 +141,20 @@ const ExpressionBuilder: React.FC<ExpressionBuilderProps> = ({
         <div className={styles.fullscreenContainer}>
           <div className={styles.fullscreenHeader}>
             <span className={styles.fullscreenTitle}>Expression Builder</span>
-            <button type="button" className={styles.fullscreenCloseBtn} onClick={() => setMaximized(false)} title="Exit fullscreen (Esc)">✕</button>
+            <button
+              type="button"
+              className={styles.fullscreenCloseBtn}
+              onClick={() => setMaximized(false)}
+              title="Exit fullscreen (Esc)"
+              aria-label="Exit fullscreen expression builder"
+            >
+              <ProductIcon name="close" />
+            </button>
           </div>
           {content}
         </div>
       </div>,
-      document.body
+      document.body,
     )
   }
 

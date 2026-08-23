@@ -25,9 +25,60 @@ type ProgramJSON struct {
 
 // EntrypointDeclJSON is the JSON form of a request-facing recipe binding.
 type EntrypointDeclJSON struct {
-	ModelNames []string `json:"modelNames"`
-	Recipe     string   `json:"recipe"`
-	Pos        Position `json:"pos"`
+	Name        string                                      `json:"name"`
+	Aliases     []string                                    `json:"aliases,omitempty"`
+	Recipe      string                                      `json:"recipe,omitempty"`
+	Assignments map[string]*EntrypointAssignmentSetDeclJSON `json:"assignments,omitempty"`
+	Rules       []*EntrypointRuleDeclJSON                   `json:"rules,omitempty"`
+	Pos         Position                                    `json:"pos"`
+}
+
+type EntrypointRuleDeclJSON struct {
+	Name        string                                      `json:"name"`
+	Matches     []*EntrypointMatchDeclJSON                  `json:"matches,omitempty"`
+	Recipe      string                                      `json:"recipe"`
+	Assignments map[string]*EntrypointAssignmentSetDeclJSON `json:"assignments"`
+	Pos         Position                                    `json:"pos"`
+}
+
+type EntrypointMatchDeclJSON struct {
+	Claim *EntrypointClaimMatchDeclJSON `json:"claim,omitempty"`
+	Path  *EntrypointPathMatchDeclJSON  `json:"path,omitempty"`
+}
+
+type EntrypointClaimMatchDeclJSON struct {
+	Name  string    `json:"name"`
+	Exact JSONValue `json:"exact"`
+}
+
+type EntrypointPathMatchDeclJSON struct {
+	Exact  string `json:"exact,omitempty"`
+	Prefix string `json:"prefix,omitempty"`
+}
+
+type EntrypointAssignmentSetDeclJSON struct {
+	Models   []*EntrypointAssignmentDeclJSON `json:"models"`
+	Fallback *EntrypointFallbackDeclJSON     `json:"fallback,omitempty"`
+}
+
+type EntrypointAssignmentDeclJSON struct {
+	Model     string                       `json:"model"`
+	Priority  int                          `json:"priority"`
+	Weight    string                       `json:"weight,omitempty"`
+	LoRAName  string                       `json:"loraName,omitempty"`
+	Reasoning *EntrypointReasoningDeclJSON `json:"reasoning,omitempty"`
+	Pos       Position                     `json:"pos"`
+}
+
+type EntrypointFallbackDeclJSON struct {
+	Strategy string   `json:"strategy"`
+	On       []string `json:"on"`
+}
+
+type EntrypointReasoningDeclJSON struct {
+	Enabled     bool   `json:"enabled"`
+	Effort      string `json:"effort,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // RecipeDeclJSON is the JSON form of one isolated recipe program.
@@ -152,13 +203,14 @@ type ModelDeclJSON struct {
 
 // ModelRefJSON is the JSON form of ModelRef.
 type ModelRefJSON struct {
-	Model     string   `json:"model"`
-	Reasoning *bool    `json:"reasoning,omitempty"`
-	Effort    string   `json:"effort,omitempty"`
-	LoRA      string   `json:"lora,omitempty"`
-	ParamSize string   `json:"paramSize,omitempty"`
-	Weight    float64  `json:"weight,omitempty"`
-	Pos       Position `json:"pos"`
+	Model                string   `json:"model"`
+	Reasoning            *bool    `json:"reasoning,omitempty"`
+	ReasoningDescription string   `json:"reasoningDescription,omitempty"`
+	Effort               string   `json:"effort,omitempty"`
+	LoRA                 string   `json:"lora,omitempty"`
+	ParamSize            string   `json:"paramSize,omitempty"`
+	Weight               float64  `json:"weight,omitempty"`
+	Pos                  Position `json:"pos"`
 }
 
 // AlgoSpecJSON is the JSON form of AlgoSpec.
@@ -245,9 +297,9 @@ func ProgramToJSON(prog *Program) *ProgramJSON {
 	}
 	for _, entrypoint := range prog.Entrypoints {
 		result.Entrypoints = append(result.Entrypoints, &EntrypointDeclJSON{
-			ModelNames: append([]string(nil), entrypoint.ModelNames...),
-			Recipe:     entrypoint.Recipe,
-			Pos:        entrypoint.Pos,
+			Name: entrypoint.Name, Aliases: append([]string(nil), entrypoint.Aliases...),
+			Recipe: entrypoint.Recipe, Assignments: entrypointAssignmentsToJSON(entrypoint.Assignments),
+			Rules: entrypointRulesToJSON(entrypoint.Rules), Pos: entrypoint.Pos,
 		})
 	}
 	for _, recipe := range prog.Recipes {
@@ -392,6 +444,87 @@ func appendTestBlockDecls(result *ProgramJSON, blocks []*TestBlockDecl) {
 	}
 }
 
+func entrypointRulesToJSON(rules []*EntrypointRuleDecl) []*EntrypointRuleDeclJSON {
+	result := make([]*EntrypointRuleDeclJSON, 0, len(rules))
+	for _, rule := range rules {
+		if rule == nil {
+			continue
+		}
+		converted := &EntrypointRuleDeclJSON{
+			Name: rule.Name, Recipe: rule.Recipe,
+			Assignments: entrypointAssignmentsToJSON(rule.Assignments), Pos: rule.Pos,
+		}
+		for _, match := range rule.Matches {
+			if match == nil {
+				continue
+			}
+			convertedMatch := &EntrypointMatchDeclJSON{}
+			if match.Claim != nil {
+				convertedMatch.Claim = &EntrypointClaimMatchDeclJSON{Name: match.Claim.Name, Exact: marshalValue(match.Claim.Exact)}
+			}
+			if match.Path != nil {
+				convertedMatch.Path = &EntrypointPathMatchDeclJSON{Exact: match.Path.Exact, Prefix: match.Path.Prefix}
+			}
+			converted.Matches = append(converted.Matches, convertedMatch)
+		}
+		result = append(result, converted)
+	}
+	return result
+}
+
+func entrypointAssignmentsToJSON(input map[string]*EntrypointAssignmentSetDecl) map[string]*EntrypointAssignmentSetDeclJSON {
+	if input == nil {
+		return nil
+	}
+	output := make(map[string]*EntrypointAssignmentSetDeclJSON, len(input))
+	for decisionName, assignmentSet := range input {
+		if assignmentSet == nil {
+			continue
+		}
+		convertedSet := &EntrypointAssignmentSetDeclJSON{Models: make([]*EntrypointAssignmentDeclJSON, 0, len(assignmentSet.Models))}
+		for _, assignment := range assignmentSet.Models {
+			if assignment == nil {
+				continue
+			}
+			converted := &EntrypointAssignmentDeclJSON{
+				Model: assignment.Model, Priority: assignment.Priority, Weight: assignment.Weight,
+				LoRAName: assignment.LoRAName, Pos: assignment.Pos,
+			}
+			if assignment.Reasoning != nil {
+				converted.Reasoning = &EntrypointReasoningDeclJSON{
+					Enabled: assignment.Reasoning.Enabled, Effort: assignment.Reasoning.Effort,
+					Description: assignment.Reasoning.Description,
+				}
+			}
+			convertedSet.Models = append(convertedSet.Models, converted)
+		}
+		if assignmentSet.Fallback != nil {
+			convertedSet.Fallback = &EntrypointFallbackDeclJSON{
+				Strategy: assignmentSet.Fallback.Strategy,
+				On:       append([]string(nil), assignmentSet.Fallback.On...),
+			}
+		}
+		output[decisionName] = convertedSet
+	}
+	return output
+}
+
+func modelRefToJSON(model *ModelRef) *ModelRefJSON {
+	if model == nil {
+		return nil
+	}
+	return &ModelRefJSON{
+		Model:                model.Model,
+		Reasoning:            model.Reasoning,
+		ReasoningDescription: model.ReasoningDescription,
+		Effort:               model.Effort,
+		LoRA:                 model.LoRA,
+		ParamSize:            model.ParamSize,
+		Weight:               model.Weight,
+		Pos:                  model.Pos,
+	}
+}
+
 func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 	rj := &RouteDeclJSON{
 		Name:        r.Name,
@@ -404,15 +537,7 @@ func routeDeclToJSON(r *RouteDecl) *RouteDeclJSON {
 		Pos:         r.Pos,
 	}
 	for _, m := range r.Models {
-		rj.Models = append(rj.Models, &ModelRefJSON{
-			Model:     m.Model,
-			Reasoning: m.Reasoning,
-			Effort:    m.Effort,
-			LoRA:      m.LoRA,
-			ParamSize: m.ParamSize,
-			Weight:    m.Weight,
-			Pos:       m.Pos,
-		})
+		rj.Models = append(rj.Models, modelRefToJSON(m))
 	}
 	if r.Algorithm != nil {
 		rj.Algorithm = &AlgoSpecJSON{

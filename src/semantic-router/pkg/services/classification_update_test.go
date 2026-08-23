@@ -15,21 +15,13 @@ import (
 )
 
 func TestClassificationServiceRefreshRuntimeConfigRefreshesClassifierConfig(t *testing.T) {
-	oldConfig := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "old_route"}},
-		},
+	oldConfig := classificationRefreshConfig("old_route")
+	newConfig := classificationRefreshConfig("new_route")
+	classifiers, err := classification.BuildRecipeClassifiers(oldConfig, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("build classifiers: %v", err)
 	}
-	newConfig := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "new_route"}},
-		},
-	}
-
-	service := &ClassificationService{
-		classifier: &classification.Classifier{Config: oldConfig},
-		config:     oldConfig,
-	}
+	service := NewRecipeClassificationService(classifiers, oldConfig)
 
 	service.RefreshRuntimeConfig(newConfig)
 
@@ -39,8 +31,8 @@ func TestClassificationServiceRefreshRuntimeConfigRefreshesClassifierConfig(t *t
 	if service.classifier == nil {
 		t.Fatalf("expected classifier to remain available")
 	}
-	if service.classifier.Config != newConfig {
-		t.Fatalf("expected classifier config to be updated")
+	if got := service.classifier.Config.Decisions[0].Name; got != "new_route" {
+		t.Fatalf("classifier decision = %q, want new_route", got)
 	}
 }
 
@@ -50,21 +42,17 @@ func TestClassificationServiceRefreshRuntimeConfigDoesNotReplaceGlobalConfig(t *
 			Decisions: []config.Decision{{Name: "global_route"}},
 		},
 	}
-	oldConfig := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "old_route"}},
-		},
-	}
-	newConfig := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "new_route"}},
-		},
-	}
+	oldConfig := classificationRefreshConfig("old_route")
+	newConfig := classificationRefreshConfig("new_route")
 
 	restoreGlobalConfig := replaceGlobalConfigForServiceTest(globalConfig)
 	t.Cleanup(restoreGlobalConfig)
 
-	service := NewClassificationService(nil, oldConfig)
+	classifiers, err := classification.BuildRecipeClassifiers(oldConfig, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("build classifiers: %v", err)
+	}
+	service := NewRecipeClassificationService(classifiers, oldConfig)
 	service.RefreshRuntimeConfig(newConfig)
 
 	if got := service.GetConfig(); got != newConfig {
@@ -79,16 +67,13 @@ func TestClassificationServiceRefreshRuntimeConfigDoesNotReplaceGlobalConfig(t *
 }
 
 func TestClassificationServiceRefreshRuntimeConfigRetainsSnapshotOnFailure(t *testing.T) {
-	oldConfig := &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{Name: "old_route"}},
-		},
+	oldConfig := classificationRefreshConfig("old_route")
+	classifiers, err := classification.BuildRecipeClassifiers(oldConfig, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("build classifiers: %v", err)
 	}
-	oldClassifier := &classification.Classifier{Config: oldConfig}
-	service := &ClassificationService{
-		classifier: oldClassifier,
-		config:     oldConfig,
-	}
+	service := NewRecipeClassificationService(classifiers, oldConfig)
+	oldClassifier := service.classifier
 
 	service.RefreshRuntimeConfig(nil)
 
@@ -101,12 +86,13 @@ func TestClassificationServiceRefreshRuntimeConfigRetainsSnapshotOnFailure(t *te
 }
 
 func TestClassificationServiceConcurrentClassifyAndRefresh(t *testing.T) {
-	oldConfig := &config.RouterConfig{}
-	newConfig := &config.RouterConfig{}
-	service := &ClassificationService{
-		classifier: &classification.Classifier{Config: oldConfig},
-		config:     oldConfig,
+	oldConfig := classificationRefreshConfig("old_route")
+	newConfig := classificationRefreshConfig("new_route")
+	classifiers, err := classification.BuildRecipeClassifiers(oldConfig, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("build classifiers: %v", err)
 	}
+	service := NewRecipeClassificationService(classifiers, oldConfig)
 
 	var wg sync.WaitGroup
 	for range 8 {
@@ -125,6 +111,29 @@ func TestClassificationServiceConcurrentClassifyAndRefresh(t *testing.T) {
 		}()
 	}
 	wg.Wait()
+}
+
+func TestClassificationServiceWithoutRecipeGraphRejectsRefresh(t *testing.T) {
+	oldConfig := &config.RouterConfig{}
+	service := NewClassificationService(nil, oldConfig)
+
+	err := service.TryRefreshRuntimeConfig(classificationRefreshConfig("new_route"))
+	if err == nil || !strings.Contains(err.Error(), "classifier graph is unavailable") {
+		t.Fatalf("TryRefreshRuntimeConfig() error = %v", err)
+	}
+	if service.GetConfig() != oldConfig {
+		t.Fatal("failed refresh replaced the service config")
+	}
+}
+
+func classificationRefreshConfig(decisionName string) *config.RouterConfig {
+	return &config.RouterConfig{Recipes: []config.RoutingRecipe{{
+		Name: config.DefaultRecipeName,
+		Profile: config.RoutingProfile{Decisions: []config.Decision{{
+			Name:  decisionName,
+			Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
+		}}},
+	}}}
 }
 
 func TestUpdateConfigDoesNotWaitForRemoteClassification(t *testing.T) {

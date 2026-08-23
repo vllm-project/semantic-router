@@ -89,6 +89,11 @@
   pointer-events: none;
 }
 
+.zoomBtn > svg {
+  width: 13px;
+  height: 13px;
+}
+
 .zoomHint {
   font-size: 0.5625rem;
   color: var(--color-primary);
@@ -355,7 +360,7 @@
   height: 36px;
   padding: 0 14px;
   background: rgba(143, 148, 156, 0.12);
-  border: 2px solid rgba(143, 148, 156, 0.40);
+  border: 2px solid rgba(143, 148, 156, 0.4);
   border-radius: 10px;
   font-family: var(--font-mono);
   font-weight: 600;
@@ -370,7 +375,7 @@
 .rfSignalNode:hover {
   border-color: var(--color-primary);
   box-shadow: 0 0 0 3px rgba(143, 148, 156, 0.18);
-  background: rgba(143, 148, 156, 0.20);
+  background: rgba(143, 148, 156, 0.2);
 }
 
 .rfNodeSelected {
@@ -447,8 +452,7 @@
   padding: 2rem 1rem;
   width: 100%;
   background:
-    radial-gradient(circle, var(--color-border) 0.8px, transparent 0.8px),
-    var(--color-bg-tertiary);
+    radial-gradient(circle, var(--color-border) 0.8px, transparent 0.8px), var(--color-bg-tertiary);
   background-size: 20px 20px;
 }
 
@@ -539,12 +543,17 @@
 }
 
 .toolboxHeader {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 0.5rem 0.625rem;
   background: var(--color-bg-secondary);
+  border: 0;
   border-bottom: 1px solid var(--color-border);
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   user-select: none;
 }
@@ -554,10 +563,18 @@
 }
 
 .toolboxHeaderTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.6875rem;
   font-weight: 700;
   color: var(--color-text);
   letter-spacing: 0.02em;
+}
+
+.toolboxHeaderTitle > svg {
+  width: 12px;
+  height: 12px;
 }
 
 .toolboxHeaderCount {
@@ -616,8 +633,8 @@
 /* AND — indigo */
 .toolboxOpAND {
   color: #a5b4fc;
-  background: rgba(129, 140, 248, 0.10);
-  border-color: rgba(129, 140, 248, 0.30);
+  background: rgba(129, 140, 248, 0.1);
+  border-color: rgba(129, 140, 248, 0.3);
 }
 .toolboxOpAND:hover {
   border-color: #818cf8;
@@ -628,8 +645,8 @@
 /* OR — emerald */
 .toolboxOpOR {
   color: #6ee7b7;
-  background: rgba(52, 211, 153, 0.10);
-  border-color: rgba(52, 211, 153, 0.30);
+  background: rgba(52, 211, 153, 0.1);
+  border-color: rgba(52, 211, 153, 0.3);
 }
 .toolboxOpOR:hover {
   border-color: #34d399;
@@ -640,8 +657,8 @@
 /* NOT — rose */
 .toolboxOpNOT {
   color: #fca5a5;
-  background: rgba(248, 113, 113, 0.10);
-  border-color: rgba(248, 113, 113, 0.30);
+  background: rgba(248, 113, 113, 0.1);
+  border-color: rgba(248, 113, 113, 0.3);
 }
 .toolboxOpNOT:hover {
   border-color: #f87171;
@@ -725,6 +742,11 @@
   background: var(--color-bg-tertiary);
 }
 
+.toolboxSearchClear > svg {
+  width: 11px;
+  height: 11px;
+}
+
 /* Signal groups */
 .toolboxSignals {
   display: flex;
@@ -747,10 +769,16 @@
 }
 
 .signalGroupHeader {
+  width: 100%;
   display: flex;
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.625rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   user-select: none;
   transition: background var(--transition-fast);
@@ -761,9 +789,10 @@
 }
 
 .signalGroupToggle {
-  font-size: 0.5rem;
   color: var(--color-text-muted);
-  width: 0.75rem;
+  width: 12px;
+  height: 12px;
+  flex: 0 0 12px;
 }
 
 .signalGroupName {
@@ -914,6 +943,14 @@
   color: var(--color-danger);
 }
 
+.validationOk > svg,
+.validationWarn > svg,
+.validationError > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
 /* ── Context Menu ── */
 
 .ctxMenu {
@@ -974,8 +1011,12 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .fullscreenContainer {
@@ -985,7 +1026,9 @@
   background: var(--color-bg);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(143, 148, 156, 0.1);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(143, 148, 156, 0.1);
   overflow: hidden;
   min-height: 0;
 }
@@ -1026,6 +1069,11 @@
   border-color: var(--color-danger);
   background: rgba(239, 68, 68, 0.1);
   color: var(--color-danger);
+}
+
+.fullscreenCloseBtn > svg {
+  width: 14px;
+  height: 14px;
 }
 
 /* Container in maximized mode fills the fullscreen panel */
@@ -1074,8 +1122,8 @@
   position: fixed;
   inset: 0;
   z-index: 10001;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(2px);
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1110,11 +1158,12 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-sm);
-  border: none;
-  background: transparent;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--color-text-muted);
   cursor: pointer;
   font-size: 1rem;
@@ -1124,6 +1173,11 @@
 .editDialogClose:hover {
   background: var(--color-bg-tertiary);
   color: var(--color-text);
+}
+
+.editDialogClose > svg {
+  width: 16px;
+  height: 16px;
 }
 
 .editDialogBody {
@@ -1228,12 +1282,21 @@
 
 .editBtnCancel,
 .editBtnSave {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   padding: 0.375rem 0.75rem;
   border-radius: var(--radius-sm);
   font-size: 0.6875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
+}
+
+.editBtnSave > svg {
+  width: 14px;
+  height: 14px;
 }
 
 .editBtnCancel {
@@ -1395,6 +1458,12 @@
 }
 
 @keyframes toastIn {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }

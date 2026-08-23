@@ -5,14 +5,8 @@ from pathlib import Path
 from typing import Dict, Any
 from pydantic import ValidationError
 
-from cli.config_contract import (
-    LEGACY_PROVIDER_DEFAULT_KEYS,
-    LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
-    LEGACY_SIGNAL_KEY_TO_CANONICAL,
-    iter_named_signal_entries,
-    iter_routing_profiles,
-)
-from cli.models import RouterLearningConfig, UserConfig
+from cli.config_contract import iter_named_signal_entries, iter_routing_profiles
+from cli.models import RecipeDistribution, RouterLearningConfig, UserConfig
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -24,42 +18,33 @@ class ConfigParseError(Exception):
     pass
 
 
-def _deprecated_config_fields(data: Dict[str, Any]) -> list[str]:
+def _removed_config_fields(data: Dict[str, Any]) -> list[str]:
     fields: list[str] = []
-
-    for field_name in ("signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL):
-        if field_name in data:
-            fields.append(field_name)
-
-    routing = data.get("routing")
-    if isinstance(routing, dict) and "models" in routing:
-        fields.append("routing.models")
-
-    providers = data.get("providers")
-    if isinstance(providers, dict):
-        for field_name in (
-            "model_targets",
-            "backends",
-            "auth_profiles",
-            *LEGACY_PROVIDER_DEFAULT_KEYS,
-        ):
-            if field_name in providers:
-                fields.append(f"providers.{field_name}")
-
-        models = providers.get("models")
-        if isinstance(models, list):
-            for index, model in enumerate(models):
-                if not isinstance(model, dict):
-                    continue
-                if "access" in model:
-                    fields.append(f"providers.models[{index}].access")
-                for field_name in LEGACY_PROVIDER_MODEL_SURFACE_KEYS:
-                    if field_name in model:
-                        fields.append(f"providers.models[{index}].{field_name}")
 
     global_config = data.get("global")
     if isinstance(global_config, dict) and "modules" in global_config:
         fields.append("global.modules")
+    if isinstance(global_config, dict):
+        router = global_config.get("router")
+        if isinstance(router, dict):
+            for field_name in (
+                "auto_model_name",
+                "auto_model_names",
+                "include_config_models_in_list",
+                "strategy",
+                "model_selection",
+            ):
+                if field_name in router:
+                    fields.append(f"global.router.{field_name}")
+        integrations = global_config.get("integrations")
+        looper = integrations.get("looper") if isinstance(integrations, dict) else None
+        if isinstance(looper, dict):
+            for family_name in ("remom", "fusion", "flow"):
+                family = looper.get(family_name)
+                if isinstance(family, dict) and "model_names" in family:
+                    fields.append(
+                        f"global.integrations.looper.{family_name}.model_names"
+                    )
 
     return fields
 
@@ -97,9 +82,12 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 }:
                     fields.append(f"global.router.model_selection.method={method}")
 
-    routing = data.get("routing")
-    if isinstance(routing, dict):
-        decisions = routing.get("decisions")
+    for recipe_index, recipe in enumerate(data.get("recipes") or []):
+        document = recipe.get("document") if isinstance(recipe, dict) else None
+        if isinstance(document, dict):
+            decisions = document.get("decisions")
+        else:
+            decisions = None
         if isinstance(decisions, list):
             for index, decision in enumerate(decisions):
                 if not isinstance(decision, dict):
@@ -110,7 +98,7 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 algorithm_type = str(algorithm.get("type", "")).strip().lower()
                 if algorithm_type == "session_aware":
                     fields.append(
-                        f"routing.decisions[{index}].algorithm.type=session_aware"
+                        f"recipes[{recipe_index}].document.decisions[{index}].algorithm.type=session_aware"
                     )
                 if algorithm_type in {
                     "elo",
@@ -120,10 +108,12 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                     "personalization",
                 }:
                     fields.append(
-                        f"routing.decisions[{index}].algorithm.type={algorithm_type}"
+                        f"recipes[{recipe_index}].document.decisions[{index}].algorithm.type={algorithm_type}"
                     )
                 if "session_aware" in algorithm:
-                    fields.append(f"routing.decisions[{index}].algorithm.session_aware")
+                    fields.append(
+                        f"recipes[{recipe_index}].document.decisions[{index}].algorithm.session_aware"
+                    )
                 for field_name in (
                     "elo",
                     "rl_driven",
@@ -133,7 +123,7 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 ):
                     if field_name in algorithm:
                         fields.append(
-                            f"routing.decisions[{index}].algorithm.{field_name}"
+                            f"recipes[{recipe_index}].document.decisions[{index}].algorithm.{field_name}"
                         )
 
     return fields
@@ -300,37 +290,39 @@ def _invalid_router_learning_values(data: Dict[str, Any]) -> list[str]:
 
 def _invalid_decision_adaptation_values(data: Dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    routing = data.get("routing")
-    if not isinstance(routing, dict):
-        return errors
-    decisions = routing.get("decisions")
-    if not isinstance(decisions, list):
-        return errors
-    for index, decision in enumerate(decisions):
-        if not isinstance(decision, dict):
+    for recipe_index, recipe in enumerate(data.get("recipes") or []):
+        document = recipe.get("document") if isinstance(recipe, dict) else None
+        decisions = document.get("decisions") if isinstance(document, dict) else None
+        if not isinstance(decisions, list):
             continue
-        adaptations = decision.get("adaptations")
-        if not isinstance(adaptations, dict):
-            continue
-        decision_mode = str(adaptations.get("mode") or "apply").strip() or "apply"
-        if decision_mode not in {"apply", "observe", "bypass"}:
-            continue
-        for component_name in ("adaptation", "protection"):
-            component = adaptations.get(component_name)
-            if not isinstance(component, dict):
+        for index, decision in enumerate(decisions):
+            if not isinstance(decision, dict):
                 continue
-            component_mode = str(component.get("mode") or "").strip()
-            if not component_mode:
+            adaptations = decision.get("adaptations")
+            if not isinstance(adaptations, dict):
                 continue
-            path = f"routing.decisions[{index}].adaptations.{component_name}.mode"
-            if decision_mode == "bypass" and component_mode != "bypass":
-                errors.append(
-                    f"{path} cannot be {component_mode} when adaptations.mode is bypass"
+            decision_mode = str(adaptations.get("mode") or "apply").strip() or "apply"
+            if decision_mode not in {"apply", "observe", "bypass"}:
+                continue
+            for component_name in ("adaptation", "protection"):
+                component = adaptations.get(component_name)
+                if not isinstance(component, dict):
+                    continue
+                component_mode = str(component.get("mode") or "").strip()
+                if not component_mode:
+                    continue
+                path = (
+                    f"recipes[{recipe_index}].document.decisions[{index}]"
+                    f".adaptations.{component_name}.mode"
                 )
-            elif decision_mode == "observe" and component_mode == "apply":
-                errors.append(
-                    f"{path} cannot be apply when adaptations.mode is observe"
-                )
+                if decision_mode == "bypass" and component_mode != "bypass":
+                    errors.append(
+                        f"{path} cannot be {component_mode} when adaptations.mode is bypass"
+                    )
+                elif decision_mode == "observe" and component_mode == "apply":
+                    errors.append(
+                        f"{path} cannot be apply when adaptations.mode is observe"
+                    )
     return errors
 
 
@@ -386,14 +378,12 @@ def _validate_non_negative_number(
         errors.append(f"{path} must be >= 0")
 
 
-def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> None:
-    deprecated_fields = _deprecated_config_fields(data)
-    if deprecated_fields:
-        joined_fields = ", ".join(deprecated_fields)
+def _reject_invalid_config_surfaces(data: Dict[str, Any]) -> None:
+    removed_fields = _removed_config_fields(data)
+    if removed_fields:
+        joined_fields = ", ".join(removed_fields)
         raise ConfigParseError(
-            "Deprecated config fields are no longer supported: "
-            f"{joined_fields}. Use `vllm-sr config migrate --config {config_path}` "
-            "or rewrite the file to canonical v0.3 `providers/routing/global`."
+            f"Removed config fields are not supported: {joined_fields}."
         )
 
     removed_router_learning_fields = _removed_router_learning_fields(data)
@@ -403,7 +393,8 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "Removed Router Learning config fields are no longer supported: "
             f"{joined_fields}. Use `global.router.learning.adaptation` for online "
             "model-choice learning, `global.router.learning.protection` for "
-            "session or conversation protection, and `routing.decisions[].adaptations` "
+            "session or conversation protection, and "
+            "`recipes[].document.decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
         )
@@ -418,7 +409,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
             "`global.router.learning.adaptation`, "
             "`global.router.learning.protection`, and "
             "`global.router.learning.state_store`, plus "
-            "`routing.decisions[].adaptations`."
+            "`recipes[].document.decisions[].adaptations`."
         )
 
     invalid_router_learning_values = _invalid_router_learning_values(data)
@@ -436,28 +427,14 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any], config_path: str) -> N
         )
 
 
-def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConfig:
-    """
-    Parse and validate user configuration file.
+ConfigArtifact = UserConfig | RecipeDistribution
 
-    Args:
-        config_path: Path to config.yaml
-        log_summary: Emit the human-readable parse summary. Machine-readable
-            callers disable this so stdout remains a valid document.
 
-    Returns:
-        UserConfig: Validated user configuration
-
-    Raises:
-        ConfigParseError: If configuration is invalid
-    """
+def _read_config_document(config_path: str) -> Dict[str, Any]:
     config_file = Path(config_path)
-
-    # Check if file exists
     if not config_file.exists():
         raise ConfigParseError(f"Configuration file not found: {config_path}")
 
-    # Load YAML
     try:
         with open(config_file, "r") as f:
             data = yaml.safe_load(f)
@@ -468,61 +445,78 @@ def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConf
 
     if not data:
         raise ConfigParseError("Configuration file is empty")
+    if not isinstance(data, dict):
+        raise ConfigParseError("Configuration root must be a YAML mapping")
+    return data
 
-    _reject_invalid_config_surfaces(data, config_path)
 
-    # Validate with Pydantic
+def _validate_config_document(
+    model: type[UserConfig] | type[RecipeDistribution],
+    data: Dict[str, Any],
+) -> ConfigArtifact:
     try:
-        config = UserConfig(**data)
-        if log_summary:
-            log.info("Configuration parsed successfully")
-            log.info(f"  Version: {config.version}")
-            log.info(f"  Listeners: {len(config.listeners)}")
-            recipe_decisions = sum(
-                len(profile.decisions)
-                for name, profile in iter_routing_profiles(config)
-                if name != "default"
-            )
-            log.info(f"  Entrypoints: {len(config.entrypoints)}")
-            log.info(f"  Recipes: {len(config.recipes)}")
-            log.info(
-                f"  Decisions: {len(config.decisions) + recipe_decisions} total "
-                f"({len(config.decisions)} default, {recipe_decisions} recipe-owned)"
-            )
-            log.info(f"  Models: {len(config.providers.models)}")
-        return config
+        return model.model_validate(data)
     except ValidationError as e:
-        # Format validation errors nicely
         errors = []
         for error in e.errors():
             loc = " -> ".join(str(x) for x in error["loc"])
-            msg = error["msg"]
-            errors.append(f"  • {loc}: {msg}")
-
+            errors.append(f"  • {loc}: {error['msg']}")
         error_msg = "Configuration validation failed:\n" + "\n".join(errors)
-        raise ConfigParseError(error_msg)
+        raise ConfigParseError(error_msg) from e
     except Exception as e:
-        raise ConfigParseError(f"Unexpected error during validation: {e}")
+        raise ConfigParseError(f"Unexpected error during validation: {e}") from e
 
 
-def detect_config_format(data: Dict[str, Any]) -> str:
+def _log_config_summary(config: ConfigArtifact) -> None:
+    log.info("Configuration parsed successfully")
+    log.info(f"  Version: {config.version}")
+    listeners = config.listeners if isinstance(config, UserConfig) else []
+    entrypoints = config.entrypoints if isinstance(config, UserConfig) else []
+    models = config.models if isinstance(config, UserConfig) else []
+    log.info(f"  Listeners: {len(listeners)}")
+    decisions = sum(len(recipe.document.decisions) for recipe in config.recipes)
+    log.info(f"  Entrypoints: {len(entrypoints)}")
+    log.info(f"  Recipes: {len(config.recipes)}")
+    log.info(f"  Decisions: {decisions}")
+    log.info(f"  Models: {len(models)}")
+
+
+def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConfig:
+    """Parse one complete v0.4 runtime manifest."""
+
+    data = _read_config_document(config_path)
+
+    _reject_invalid_config_surfaces(data)
+    config = _validate_config_document(UserConfig, data)
+    if not isinstance(config, UserConfig):  # pragma: no cover - type narrowing
+        raise ConfigParseError("Expected a runtime manifest")
+    if log_summary:
+        _log_config_summary(config)
+    return config
+
+
+def parse_config_artifact(
+    config_path: str, *, log_summary: bool = True
+) -> ConfigArtifact:
+    """Parse a runtime manifest or a portable Recipe-only distribution.
+
+    Recipe distributions have exactly the public ``version`` and ``recipes``
+    top-level fields. Any runtime-owned field makes the document a runtime
+    manifest, which remains subject to the complete standalone or managed
+    runtime contract.
     """
-    Detect configuration format (new vs legacy).
 
-    Args:
-        data: Configuration data dictionary
-
-    Returns:
-        str: "new" or "legacy"
-    """
-    # New format has 'version' field starting with 'v'
-    if (
-        "version" in data
-        and isinstance(data["version"], str)
-        and data["version"].startswith("v")
-    ):
-        return "new"
-    return "legacy"
+    data = _read_config_document(config_path)
+    _reject_invalid_config_surfaces(data)
+    model = (
+        RecipeDistribution
+        if "recipes" in data and set(data).issubset({"version", "recipes"})
+        else UserConfig
+    )
+    config = _validate_config_document(model, data)
+    if log_summary:
+        _log_config_summary(config)
+    return config
 
 
 def load_config_file(config_path: str) -> Dict[str, Any]:
@@ -566,16 +560,15 @@ def validate_signal_uniqueness(config: UserConfig) -> list:
     errors = []
     seen = {}
 
-    if not config.signals:
-        return errors
-
-    for family, signal_name in iter_named_signal_entries(config.signals):
-        if signal_name in seen:
-            errors.append(
-                f"Duplicate signal name '{signal_name}' in {family} "
-                f"(already defined in {seen[signal_name]})"
-            )
-        seen[signal_name] = family
+    for recipe_name, document in iter_routing_profiles(config):
+        seen = {}
+        for family, signal_name in iter_named_signal_entries(document.signals):
+            if signal_name in seen:
+                errors.append(
+                    f"Duplicate signal name '{signal_name}' in Recipe "
+                    f"'{recipe_name}' {family} (already defined in {seen[signal_name]})"
+                )
+            seen[signal_name] = family
 
     return errors
 
@@ -592,14 +585,14 @@ def validate_domain_uniqueness(config: UserConfig) -> list:
     """
     errors = []
 
-    if not config.signals or not config.signals.domains:
-        return errors
-
-    seen = set()
-    for domain in config.signals.domains:
-        if domain.name in seen:
-            errors.append(f"Duplicate domain name '{domain.name}'")
-        seen.add(domain.name)
+    for recipe_name, document in iter_routing_profiles(config):
+        seen = set()
+        for domain in document.signals.domains or []:
+            if domain.name in seen:
+                errors.append(
+                    f"Duplicate domain name '{domain.name}' in Recipe '{recipe_name}'"
+                )
+            seen.add(domain.name)
 
     return errors
 
@@ -617,7 +610,7 @@ def validate_model_uniqueness(config: UserConfig) -> list:
     errors = []
     seen = set()
 
-    for model in config.providers.models:
+    for model in config.models:
         if model.name in seen:
             errors.append(f"Duplicate model name '{model.name}'")
         seen.add(model.name)

@@ -54,7 +54,7 @@ user-invocable: true
 8. If the user wants runtime verification after validation, suggest:
 
    ```bash
-   vllm-sr serve --config config.yaml
+   vllm-sr serve
    curl http://127.0.0.1:8899/v1/models
    ```
 

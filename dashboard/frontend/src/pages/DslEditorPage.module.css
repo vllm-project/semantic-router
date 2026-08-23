@@ -605,33 +605,6 @@
   line-height: 1.5;
 }
 
-.importUrlRow {
-  display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-sm);
-}
-
-.importUrlInput {
-  flex: 1;
-  padding: 0.375rem 0.625rem;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
-  color: var(--color-text);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  outline: none;
-  transition: border-color var(--transition-fast);
-}
-
-.importUrlInput:focus {
-  border-color: var(--color-primary);
-}
-
-.importUrlInput::placeholder {
-  color: var(--color-text-muted);
-}
-
 .importTextarea {
   width: 100%;
   height: 280px;

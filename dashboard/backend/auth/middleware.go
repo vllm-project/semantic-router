@@ -20,10 +20,14 @@ const (
 
 // AuthContext contains authenticated user metadata.
 type AuthContext struct {
-	UserID string
-	Email  string
-	Role   string
-	Perms  map[string]bool
+	UserID          string
+	Email           string
+	Name            string
+	Role            string
+	SessionID       string
+	AuthenticatedAt time.Time
+	ExpiresAt       time.Time
+	Perms           map[string]bool
 }
 
 func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
@@ -45,6 +49,12 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
+			now := time.Now().UTC()
+			if claims.ExpiresAt == nil || !now.Before(claims.ExpiresAt.Time.UTC()) {
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
+				return
+			}
+
 			user, perms, err := service.ResolveSessionUser(r.Context(), claims)
 			if err != nil {
 				log.Printf("permission load failed for user %s: %v", claims.UserID, err)
@@ -58,11 +68,14 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
+			authenticatedAt := now
+			if claims.IssuedAt != nil {
+				authenticatedAt = claims.IssuedAt.Time.UTC()
+			}
 			ctx := context.WithValue(r.Context(), authContextKey, AuthContext{
-				UserID: user.ID,
-				Email:  user.Email,
-				Role:   user.Role,
-				Perms:  perms,
+				UserID: user.ID, Email: user.Email, Name: user.Name, Role: user.Role,
+				SessionID: claims.ID, AuthenticatedAt: authenticatedAt,
+				ExpiresAt: claims.ExpiresAt.Time.UTC(), Perms: perms,
 			})
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
@@ -72,8 +85,8 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 // ServiceUnavailableGuard returns middleware that fails closed when the auth
 // service could not be initialized. It rejects every request to a route that
 // normally requires authentication with 503 Service Unavailable, while still
-// allowing public routes (login/bootstrap endpoints, setup state, embedded
-// assets, and the static frontend) through so the dashboard can render and
+// allowing public routes (login/bootstrap endpoints, embedded assets, and the
+// static frontend) through so the dashboard can render and
 // surface the "authentication service is not configured" state.
 //
 // This is the deny-by-default counterpart to AuthenticateRequest: it shares
@@ -97,10 +110,7 @@ func RequiredPermission(method, path string) string {
 		adminPermission,
 		settingsPermission,
 		routerPermission,
-		knowledgePermission,
-		toolsPermission,
 		observabilityPermission,
-		recipePermission,
 		fleetSimPermission,
 		featurePermission,
 	} {
@@ -114,39 +124,6 @@ func RequiredPermission(method, path string) string {
 	}
 
 	return ""
-}
-
-func recipePermission(_ string, path string) (string, bool) {
-	path = strings.TrimRight(path, "/")
-	if matchesRoute(path, "/api/recipe/import") {
-		return PermConfigWrite, true
-	}
-	if matchesAnyRoute(path, "/api/recipe/activate", "/api/recipe/deactivate") {
-		return PermConfigDeploy, true
-	}
-	if matchesRoute(path, "/api/recipe/packages") {
-		return PermConfigRead, true
-	}
-	if path == "/api/recipe" || matchesRoute(path, "/api/recipe/probes") {
-		if strings.HasSuffix(path, "/validate") {
-			return PermTopologyRead, true
-		}
-		return PermConfigRead, true
-	}
-	return "", false
-}
-
-func matchesAnyRoute(path string, bases ...string) bool {
-	for _, base := range bases {
-		if matchesRoute(path, base) {
-			return true
-		}
-	}
-	return false
-}
-
-func matchesRoute(path, base string) bool {
-	return path == base || strings.HasPrefix(path, base+"/")
 }
 
 func adminPermission(method, path string) (string, bool) {
@@ -174,70 +151,20 @@ func settingsPermission(method, path string) (string, bool) {
 			return PermConfigWrite, true
 		}
 		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/setup/validate"),
-		strings.HasPrefix(path, "/api/setup/activate"),
-		strings.HasPrefix(path, "/api/setup/import-remote"):
-		return PermConfigWrite, true
 	default:
 		return "", false
 	}
 }
 
-func routerPermission(method, path string) (string, bool) {
+func routerPermission(_ string, path string) (string, bool) {
 	switch {
-	case path == "/api/models/catalog":
-		return PermConfigRead, true
-	case path == "/api/models/verify":
-		return PermEvalRun, true
-	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
-		return PermFeedbackSubmit, true
-	case strings.HasPrefix(path, "/api/router/v1/router_replay"):
-		return PermReplayRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/response-cache/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/api/v1/context-compression/preview":
-		return PermConfigRead, true
-	case strings.HasPrefix(path, "/api/router/api/v1/context-compression/"):
-		return readOrManagePermission(method, PermConfigRead, PermConfigWrite), true
-	case path == "/api/router/config/deploy",
-		path == "/api/router/config/deploy/preview",
-		path == "/api/router/config/rollback":
-		return PermConfigDeploy, true
-	case strings.HasPrefix(path, "/api/router/config/"):
-		if method == http.MethodGet {
-			return PermConfigRead, true
-		}
-		return PermConfigWrite, true
+	case path == "/api/router/management/v1" || strings.HasPrefix(path, "/api/router/management/v1/"):
+		// The Dashboard authenticates the browser session, then the Router
+		// authorizes the exchanged principal and resource scope. Dashboard roles
+		// must never broaden or replace Router Management permissions.
+		return "", true
 	case strings.HasPrefix(path, "/api/router/"):
 		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
-func knowledgePermission(_ string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/embedded/wizmap/"), path == "/embedded/wizmap":
-		return PermConfigRead, true
-	default:
-		return "", false
-	}
-}
-
-func toolsPermission(method string, path string) (string, bool) {
-	switch {
-	case strings.HasPrefix(path, "/api/mcp/tools/execute"):
-		return PermToolsUse, true
-	case path == "/api/mcp/tools":
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case path == "/api/mcp/servers":
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case strings.HasPrefix(path, "/api/mcp/servers/") && strings.HasSuffix(path, "/status"):
-		return readOrManagePermission(method, PermMcpRead, PermMcpManage), true
-	case strings.HasPrefix(path, "/api/tools"):
-		return PermToolsUse, true
-	case strings.HasPrefix(path, "/api/mcp/"):
-		return PermMcpManage, true
 	default:
 		return "", false
 	}
@@ -253,13 +180,11 @@ func readOrManagePermission(method, readPermission, managePermission string) str
 func observabilityPermission(_ string, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/api/status"):
-		return PermTopologyRead, true
+		return PermStatusRead, true
 	case strings.HasPrefix(path, "/api/logs"):
 		return PermLogsRead, true
 	case strings.HasPrefix(path, "/embedded/grafana/"), strings.HasPrefix(path, "/embedded/jaeger"):
 		return PermLogsRead, true
-	case strings.HasPrefix(path, "/api/topology"):
-		return PermTopologyRead, true
 	default:
 		return "", false
 	}
@@ -286,26 +211,15 @@ func featurePermission(method, path string) (string, bool) {
 		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
-	case strings.HasPrefix(path, "/api/security/"):
-		return securityPermission(method), true
 	default:
 		return "", false
 	}
-}
-
-func securityPermission(method string) string {
-	if method == http.MethodGet {
-		return PermConfigRead
-	}
-	return PermSecurityManage
 }
 
 func openclawPermission(method, path string) (string, bool) {
 	switch {
 	case strings.HasPrefix(path, "/embedded/openclaw/"):
 		return PermOpenClawRead, true
-	case strings.HasPrefix(path, "/api/openclaw/mcp"):
-		return PermMcpManage, true
 	case hasAnyPrefix(path,
 		"/api/openclaw/provision",
 		"/api/openclaw/start",
@@ -397,32 +311,13 @@ func AuditMiddleware(store *Store, action, resource string, next http.HandlerFun
 	}
 }
 
-func extractBearer(raw string) string {
-	if raw == "" {
-		return ""
-	}
-	parts := strings.SplitN(raw, " ", 2)
-	if len(parts) != 2 {
-		return ""
-	}
-	if !strings.EqualFold(parts[0], "bearer") {
-		return ""
-	}
-	return normalizeAccessToken(parts[1])
-}
-
 func extractAccessToken(r *http.Request) string {
-	if token := extractBearer(r.Header.Get("Authorization")); token != "" {
-		return token
-	}
-
 	if cookie, err := r.Cookie(authSessionCookieName); err == nil {
 		if token := normalizeAccessToken(cookie.Value); token != "" {
 			return token
 		}
 	}
-
-	return normalizeAccessToken(r.URL.Query().Get("authToken"))
+	return ""
 }
 
 func normalizeAccessToken(raw string) string {
@@ -448,12 +343,12 @@ func requiresAuthentication(path string) bool {
 		return false
 	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
 		return false
+	case strings.HasPrefix(path, "/api/auth/invitations/"):
+		return false
+	case path == "/api/status":
+		return false
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true
-	case strings.HasPrefix(path, "/api/setup/state"):
-		return false
-	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
-		return false
 	case strings.HasPrefix(path, "/api/"):
 		return true
 	case strings.HasPrefix(path, "/embedded/"):

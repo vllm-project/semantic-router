@@ -7,108 +7,114 @@ metadata:
     component: config
 data:
   config.yaml: |
-    version: v0.3
-    providers:
-      defaults:
-        default_model: granite32-8b
-        reasoning_families:
-          qwen3:
-            type: chat_template_kwargs
-            parameter: enable_thinking
-        default_reasoning_effort: medium
-      models:
-        - name: granite32-8b
-          reasoning_family: qwen3
-          provider_model_id: granite32-8b
-          backend_refs:
-            - name: granite32-8b-endpoint
-              endpoint: granite32-8b-predictor.<namespace>.svc.cluster.local:80
-              weight: 1
-        - name: granite32-78b
-          reasoning_family: qwen3
-          provider_model_id: granite32-78b
-          backend_refs:
-            - name: granite32-78b-endpoint
-              endpoint: granite32-78b-predictor.<namespace>.svc.cluster.local:80
-              weight: 1
-    routing:
-      modelCards:
-        - name: granite32-8b
-          param_size: 8B
-          capabilities:
-            - chat
-            - reasoning
-        - name: granite32-78b
-          param_size: 78B
-          capabilities:
-            - chat
-            - reasoning
-            - long-context
-      signals:
-        domains:
+    version: v0.4
+    listeners: []
+    models:
+    - name: granite32-8b
+      card:
+        param_size: 8B
+        capabilities:
+        - chat
+        - reasoning
+        reasoning:
+          type: chat_template_kwargs
+          efforts:
+          - medium
+      connections:
+      - provider: vllm
+        endpoint: http://granite32-8b-predictor.<namespace>.svc.cluster.local:80/v1
+        model: granite32-8b
+    - name: granite32-78b
+      card:
+        param_size: 78B
+        capabilities:
+        - chat
+        - reasoning
+        - long-context
+        reasoning:
+          type: chat_template_kwargs
+          efforts:
+          - medium
+      connections:
+      - provider: vllm
+        endpoint: http://granite32-78b-predictor.<namespace>.svc.cluster.local:80/v1
+        model: granite32-78b
+    recipes:
+    - name: default
+      description: Default routing recipe.
+      document:
+        signals:
+          domains:
           - name: business
             description: Business and management related queries
             mmlu_categories:
-              - business
+            - business
           - name: math
             description: Mathematics and quantitative reasoning
             mmlu_categories:
-              - math
+            - math
           - name: other
             description: General knowledge and miscellaneous topics
             mmlu_categories:
-              - other
-        complexity:
+            - other
+          complexity:
           - name: needs_reasoning
             threshold: 0.7
             description: Escalate difficult or multi-step prompts.
             hard:
               candidates:
-                - solve this step by step
-                - analyze the tradeoffs
+              - solve this step by step
+              - analyze the tradeoffs
             easy:
               candidates:
-                - quick summary
-                - answer briefly
-      decisions:
+              - quick summary
+              - answer briefly
+        decisions:
         - name: business_default
           description: Business traffic stays on the fast Granite tier.
           priority: 100
           rules:
             operator: AND
             conditions:
-              - type: domain
-                name: business
-          modelRefs:
-            - model: granite32-8b
-              use_reasoning: false
+            - type: domain
+              name: business
         - name: math_escalation
           description: Math and other hard requests escalate to the larger model.
           priority: 110
           rules:
             operator: OR
             conditions:
-              - type: domain
-                name: math
-              - type: complexity
-                name: needs_reasoning:hard
-          modelRefs:
-            - model: granite32-78b
-              use_reasoning: true
+            - type: domain
+              name: math
+            - type: complexity
+              name: needs_reasoning:hard
         - name: general_fallback
           description: Fallback route for general prompts.
           priority: 10
           rules:
             operator: AND
             conditions:
-              - type: domain
-                name: other
-          modelRefs:
-            - model: granite32-8b
-              use_reasoning: false
+            - type: domain
+              name: other
+    entrypoints:
+    - name: vllm-sr/auto
+      aliases:
+      - auto
+      recipe: default
+      assignments:
+        business_default:
+          models:
+          - model: granite32-8b
+        math_escalation:
+          models:
+          - model: granite32-78b
+            reasoning:
+              enabled: true
+        general_fallback:
+          models:
+          - model: granite32-8b
     global:
-      router:
-        strategy: priority
+      router: {}
       stores:
         response_cache:
           enabled: true
@@ -123,3 +129,17 @@ data:
           similarity_threshold: 0.2
           tools_db_path: config/tools_db.json
           fallback_to_empty: true
+      model_catalog:
+        embeddings: {}
+        modules:
+          classifier: {}
+          hallucination_mitigation: {}
+      services:
+        backend_dispatch:
+          bind_address: 0.0.0.0
+          port: 8180
+          audience: vllm-sr.backend-dispatch
+          capability_ttl: 30s
+          max_request_body_bytes: 67108864
+        backend_egress:
+          policy_file: /app/config/backend-egress-policy.yaml

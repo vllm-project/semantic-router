@@ -32,9 +32,7 @@ const ViewModal: React.FC<ViewModalProps> = ({
 
   if (!isOpen) return null
 
-  const handleEdit = onEdit
-    ? () => transitionFromViewToEdit(onClose, onEdit)
-    : undefined
+  const handleEdit = onEdit ? () => transitionFromViewToEdit(onClose, onEdit) : undefined
 
   return (
     <div className={styles.overlay} onClick={onClose}>

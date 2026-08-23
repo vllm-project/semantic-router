@@ -83,6 +83,11 @@ The full integration is defined in two config files.
 
 This tells Semantic Router about the models and how to route between them:
 
+> The following configuration is the v0.3 form used when this article was
+> published. Current v0.4 authoring keeps Model cards and connections under
+> `models`, routing behavior inside a Recipe, and decision assignments on an
+> Entrypoint.
+
 ```yaml
 version: v0.3
 

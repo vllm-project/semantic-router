@@ -27,6 +27,8 @@ type routerReplayFilters struct {
 	model       string
 	cacheStatus string
 	sessionID   string
+	userIDs     []string
+	teamIDs     []string
 }
 
 type routerReplayListQuery struct {
@@ -67,7 +69,7 @@ func (r *OpenAIRouter) handleRouterReplayAPI(method string, path string) *ext_pr
 		return r.handleRouterReplayTrajectoryAPI(method, rawQuery)
 	case strings.HasPrefix(normalizedPath, routerReplayAPIBasePath+"/"):
 		replayID := strings.TrimPrefix(normalizedPath, routerReplayAPIBasePath+"/")
-		return r.handleRouterReplayRecordAPI(method, replayID)
+		return r.handleRouterReplayRecordAPI(method, replayID, rawQuery)
 	default:
 		return nil
 	}
@@ -136,7 +138,7 @@ func sortRouterReplayRecords(records []routerreplay.RoutingRecord) []routerrepla
 	return records
 }
 
-func (r *OpenAIRouter) handleRouterReplayRecordAPI(method string, replayID string) *ext_proc.ProcessingResponse {
+func (r *OpenAIRouter) handleRouterReplayRecordAPI(method string, replayID string, rawQuery string) *ext_proc.ProcessingResponse {
 	if method != "GET" {
 		return r.createErrorResponse(405, "method not allowed")
 	}
@@ -148,7 +150,18 @@ func (r *OpenAIRouter) handleRouterReplayRecordAPI(method string, replayID strin
 	if !ok {
 		return r.createErrorResponse(404, "replay record not found")
 	}
-	return r.createRouterReplayJSONResponse(200, record)
+	values, err := url.ParseQuery(rawQuery)
+	if err != nil {
+		return r.createErrorResponse(400, "invalid router replay query")
+	}
+	filters, err := parseRouterReplayFilters(values)
+	if err != nil {
+		return r.createErrorResponse(400, err.Error())
+	}
+	if !doesRouterReplayRecordMatchFilters(record, filters, strings.ToLower(filters.search)) {
+		return r.createErrorResponse(404, "replay record not found")
+	}
+	return r.createRouterReplayJSONResponse(200, publicRouterReplayRecord(record))
 }
 
 func (r *OpenAIRouter) findRouterReplayRecord(replayID string) (routerreplay.RoutingRecord, bool) {
@@ -220,6 +233,8 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 		decision:  strings.TrimSpace(values.Get("decision")),
 		model:     strings.TrimSpace(values.Get("model")),
 		sessionID: strings.TrimSpace(values.Get("session_id")),
+		userIDs:   normalizedReplayScopeValues(values["scope_user_id"]),
+		teamIDs:   normalizedReplayScopeValues(values["scope_team_id"]),
 	}
 
 	cacheStatus := strings.TrimSpace(values.Get("cache_status"))
@@ -233,6 +248,23 @@ func parseRouterReplayFilters(values url.Values) (routerReplayFilters, error) {
 	}
 
 	return filters, nil
+}
+
+func normalizedReplayScopeValues(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }
 
 func parseRouterReplayQueryInt(values url.Values, key string, positiveOnly bool) (int, error) {
@@ -253,7 +285,7 @@ func filterRouterReplayRecords(
 	records []routerreplay.RoutingRecord,
 	filters routerReplayFilters,
 ) []routerreplay.RoutingRecord {
-	if filters == (routerReplayFilters{}) {
+	if replayFiltersEmpty(filters) {
 		return records
 	}
 
@@ -268,12 +300,19 @@ func filterRouterReplayRecords(
 	return filtered
 }
 
+func replayFiltersEmpty(filters routerReplayFilters) bool {
+	return filters.search == "" && filters.recipe == "" && filters.decision == "" &&
+		filters.model == "" && filters.cacheStatus == "" && filters.sessionID == "" &&
+		len(filters.userIDs) == 0 && len(filters.teamIDs) == 0
+}
+
 func doesRouterReplayRecordMatchFilters(
 	record routerreplay.RoutingRecord,
 	filters routerReplayFilters,
 	search string,
 ) bool {
 	matches := [...]bool{
+		matchesReplayPrincipalScope(record, filters.userIDs, filters.teamIDs),
 		matchesOptionalCacheStatus(record, filters.cacheStatus),
 		matchesOptionalValue(record.Decision, filters.decision),
 		matchesOptionalValue(record.Recipe, filters.recipe),
@@ -287,6 +326,25 @@ func doesRouterReplayRecordMatchFilters(
 		}
 	}
 	return true
+}
+
+func matchesReplayPrincipalScope(record routerreplay.RoutingRecord, userIDs, teamIDs []string) bool {
+	if len(userIDs) == 0 && len(teamIDs) == 0 {
+		return true
+	}
+	return stringInReplayScope(record.UserID, userIDs) || stringInReplayScope(record.TeamID, teamIDs)
+}
+
+func stringInReplayScope(value string, scope []string) bool {
+	if value == "" {
+		return false
+	}
+	for _, candidate := range scope {
+		if value == candidate {
+			return true
+		}
+	}
+	return false
 }
 
 func matchesOptionalCacheStatus(record routerreplay.RoutingRecord, cacheStatus string) bool {
@@ -339,13 +397,12 @@ func buildRouterReplayListPayload(
 		end = total
 	}
 
-	page := records[offset:end]
-	if !query.showDetails {
-		summarized := make([]routerreplay.RoutingRecord, len(page))
-		for i := range page {
-			summarized[i] = routerreplay.ListSummaryRecord(page[i])
+	page := make([]routerreplay.RoutingRecord, end-offset)
+	for i, record := range records[offset:end] {
+		if !query.showDetails {
+			record = routerreplay.ListSummaryRecord(record)
 		}
-		page = summarized
+		page[i] = publicRouterReplayRecord(record)
 	}
 	payload := routerReplayListResponse{
 		Object:  "router_replay.list",
@@ -361,6 +418,11 @@ func buildRouterReplayListPayload(
 		payload.NextOffset = &nextOffset
 	}
 	return payload
+}
+
+func publicRouterReplayRecord(record routerreplay.RoutingRecord) routerreplay.RoutingRecord {
+	record.RoutingScope = ""
+	return record
 }
 
 func (r *OpenAIRouter) createRouterReplayJSONResponse(

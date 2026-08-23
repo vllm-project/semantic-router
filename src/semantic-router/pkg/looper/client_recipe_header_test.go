@@ -41,7 +41,7 @@ func TestExecuteWithLatencyPropagatesParentRecipeHeader(t *testing.T) {
 	defer server.Close()
 
 	request := &Request{
-		OriginalRequest: &openai.ChatCompletionNewParams{
+		executionRequest: &openai.ChatCompletionNewParams{
 			Model:    "entrypoint",
 			Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 		},

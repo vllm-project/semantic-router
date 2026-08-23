@@ -291,9 +291,10 @@ fixtures:
                 fixture: pixel
 """
         for item_type in ("IMAGE_FIXTURE", "' image_fixture '"):
-            with self.subTest(
-                item_type=item_type
-            ), tempfile.TemporaryDirectory() as tempdir:
+            with (
+                self.subTest(item_type=item_type),
+                tempfile.TemporaryDirectory() as tempdir,
+            ):
                 manifest_path = Path(tempdir) / "probes.yaml"
                 _write_probe_manifest(
                     manifest_path,
@@ -608,11 +609,11 @@ fixtures:
 
         _, probes = router_calibration_manifest.load_probe_manifest(manifest_path)
         receipt = _mom_materialization_receipt(probes)
-        self.assertEqual(len(probes), 222)
-        self.assertEqual(receipt["message_probes"], 82)
+        self.assertEqual(len(probes), 226)
+        self.assertEqual(receipt["message_probes"], 85)
         self.assertEqual(receipt["generated_probes"], 50)
-        self.assertEqual(receipt["image_parts"], 54)
-        self.assertEqual(receipt["text_bytes"], 26_229_486)
+        self.assertEqual(receipt["image_parts"], 57)
+        self.assertEqual(receipt["text_bytes"], 26_229_731)
         self.assertEqual(len(receipt["image_urls"]), 1)
         image_url = next(iter(receipt["image_urls"]))
         self.assertEqual(
@@ -632,11 +633,11 @@ fixtures:
         )
         self.assertEqual(
             receipt["text_sha256"],
-            "9e13c34c1497843f92ca7f8f1d681fcf8655d2c45ca2ae9530d56360f745a6e5",
+            "17e56c0457f3ffd9419a25ad8b8e0de60c21fbcf62a88d31fced47c2d1a189b7",
         )
         self.assertEqual(
             receipt["semantic_sha256"],
-            "775a18c7987097efb4b53539747eeb7ee408ede125be7444ebe3e765b840137e",
+            "83e3b91d616567bd6f0bc0825c0523108d85a05c802dd6d1139cf3b9c265fac3",
         )
 
 

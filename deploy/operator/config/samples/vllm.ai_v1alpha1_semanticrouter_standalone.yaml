@@ -1,0 +1,45 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-standalone-v1
+immutable: true
+data:
+  config.yaml: |
+    version: v0.4
+    models:
+      - name: example-model
+        card: {}
+        connections:
+          - provider: openai-compatible
+            endpoint: http://example-model.default.svc.cluster.local:8000
+            model: example-model
+    recipes:
+      - name: default
+        document:
+          decisions:
+            - name: answer
+              rules: {}
+    entrypoints:
+      - name: example
+        rules:
+          - name: default
+            matches: []
+            recipe: default
+            assignments:
+              answer:
+                models:
+                  - model: example-model
+    global:
+      control_plane:
+        mode: standalone
+---
+apiVersion: vllm.ai/v1alpha1
+kind: SemanticRouter
+metadata:
+  name: semantic-router-standalone
+spec:
+  bootstrap:
+    configMapRef:
+      name: semantic-router-standalone-v1
+      key: config.yaml
+  replicas: 1

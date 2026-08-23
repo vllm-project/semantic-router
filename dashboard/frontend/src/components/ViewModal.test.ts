@@ -17,7 +17,7 @@ describe('ViewModal edit transition', () => {
     expect(onEdit).toHaveBeenCalledOnce()
   })
 
-  it('exposes the detail drawer as a labelled modal dialog', () => {
+  it('exposes the centered detail surface as a labelled modal dialog', () => {
     const markup = renderToStaticMarkup(
       createElement(ViewModal, {
         isOpen: true,

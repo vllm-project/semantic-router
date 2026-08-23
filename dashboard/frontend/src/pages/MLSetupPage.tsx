@@ -1,24 +1,24 @@
-import React, { useRef, useState } from 'react';
-import styles from './MLSetupPage.module.css';
-import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor';
-import { StringListEditor } from '../components/StringListEditor';
-import { useMLPipelineWizard } from '../hooks/useMLPipeline';
+import React, { useRef, useState } from 'react'
+import styles from './MLSetupPage.module.css'
+import { ObjectListEditor, type ObjectEditorField } from '../components/ObjectListEditor'
+import { StringListEditor } from '../components/StringListEditor'
+import { useMLPipelineWizard } from '../hooks/useMLPipeline'
 import {
   ML_ALGORITHM_INFO,
   PIPELINE_STEPS,
   type MLAlgorithm,
   type SvmKernel,
-} from '../types/mlPipeline';
-import { getDownloadUrl } from '../utils/mlPipelineApi';
+} from '../types/mlPipeline'
+import { getDownloadUrl } from '../utils/mlPipelineApi'
 import {
   getDecisionEntriesError,
   getMlpHiddenLayersError,
   parseMlpHiddenLayers,
   serializeMlpHiddenLayers,
   type HiddenLayerEntry,
-} from './mlSetupStructuredFieldSupport';
-import MLSetupBenchmarkStep from './MLSetupBenchmarkStep';
-import MLSetupProgressDisplay from './MLSetupProgressDisplay';
+} from './mlSetupStructuredFieldSupport'
+import MLSetupBenchmarkStep from './MLSetupBenchmarkStep'
+import MLSetupProgressDisplay from './MLSetupProgressDisplay'
 
 const HIDDEN_LAYER_FIELDS: ObjectEditorField<HiddenLayerEntry>[] = [
   {
@@ -30,10 +30,10 @@ const HIDDEN_LAYER_FIELDS: ObjectEditorField<HiddenLayerEntry>[] = [
     required: true,
     placeholder: '256',
   },
-];
+]
 
 const MLSetupPage: React.FC = () => {
-  const wizard = useMLPipelineWizard();
+  const wizard = useMLPipelineWizard()
 
   return (
     <div className={styles.page}>
@@ -60,14 +60,21 @@ const MLSetupPage: React.FC = () => {
             <button
               className={`${styles.stepItem} ${
                 idx === wizard.currentStep ? styles.stepActive : ''
-              } ${
-                idx < wizard.currentStep ? styles.stepCompleted : ''
-              }`}
+              } ${idx < wizard.currentStep ? styles.stepCompleted : ''}`}
               onClick={() => wizard.goToStep(idx)}
             >
               <div className={styles.stepCircle}>
                 {idx < wizard.currentStep ? (
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
                 ) : (
@@ -120,27 +127,26 @@ const MLSetupPage: React.FC = () => {
         </div>
       </div>
     </div>
-  );
-};
-
-interface StepProps {
-  wizard: ReturnType<typeof useMLPipelineWizard>;
+  )
 }
 
+interface StepProps {
+  wizard: ReturnType<typeof useMLPipelineWizard>
+}
 
 /* ============================================================
    Step 1: Train
    ============================================================ */
 const TrainStep: React.FC<StepProps> = ({ wizard }) => {
-  const trainingDataInputRef = useRef<HTMLInputElement>(null);
-  const jobDone = wizard.trainProgress.completed && wizard.trainProgress.job?.status === 'completed';
-  const jobFailed = wizard.trainProgress.job?.status === 'failed';
+  const trainingDataInputRef = useRef<HTMLInputElement>(null)
+  const jobDone = wizard.trainProgress.completed && wizard.trainProgress.job?.status === 'completed'
+  const jobFailed = wizard.trainProgress.job?.status === 'failed'
 
-  const algorithms: MLAlgorithm[] = ['knn', 'kmeans', 'svm', 'mlp'];
-  const hasDataSource = wizard.benchmarkJobId !== null || wizard.trainingDataFile !== null;
+  const algorithms: MLAlgorithm[] = ['knn', 'kmeans', 'svm', 'mlp']
+  const hasDataSource = wizard.benchmarkJobId !== null || wizard.trainingDataFile !== null
   const hiddenLayersError = wizard.selectedAlgorithms.includes('mlp')
     ? getMlpHiddenLayersError(wizard.mlpHiddenSizes)
-    : null;
+    : null
 
   return (
     <div className={styles.stepContent}>
@@ -153,11 +159,22 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
       {/* Training data source section */}
       {wizard.benchmarkJobId ? (
         <div className={styles.dataSourceBanner}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#22c55e"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <polyline points="16 8 10 16 7 13" />
           </svg>
-          <span>Using benchmark output from job <code>{wizard.benchmarkJobId}</code></span>
+          <span>
+            Using benchmark output from job <code>{wizard.benchmarkJobId}</code>
+          </span>
         </div>
       ) : (
         <div className={styles.formGroup}>
@@ -181,7 +198,16 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
             ) : (
               <>
                 <div className={styles.fileDropIcon}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                     <polyline points="17 8 12 3 7 8" />
                     <line x1="12" y1="3" x2="12" y2="15" />
@@ -199,8 +225,8 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
         <label className={styles.formLabel}>Algorithms</label>
         <div className={styles.algorithmGrid}>
           {algorithms.map((alg) => {
-            const info = ML_ALGORITHM_INFO[alg];
-            const selected = wizard.selectedAlgorithms.includes(alg);
+            const info = ML_ALGORITHM_INFO[alg]
+            const selected = wizard.selectedAlgorithms.includes(alg)
             return (
               <div
                 key={alg}
@@ -213,7 +239,7 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
                 </div>
                 <div className={styles.algorithmDesc}>{info.description}</div>
               </div>
-            );
+            )
           })}
         </div>
       </div>
@@ -249,7 +275,7 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
         <button
           className={styles.btnPrimary}
           onClick={() => {
-            if (!hiddenLayersError) void wizard.startTraining();
+            if (!hiddenLayersError) void wizard.startTraining()
           }}
           disabled={
             wizard.actionLoading ||
@@ -273,7 +299,16 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
       {jobDone && (
         <div className={styles.successCard}>
           <div className={styles.successIcon}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#22c55e"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="12" r="10" />
               <polyline points="16 8 10 16 7 13" />
             </svg>
@@ -306,17 +341,18 @@ const TrainStep: React.FC<StepProps> = ({ wizard }) => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
 /* ============================================================
    Step 2: Config
    ============================================================ */
 const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
-  const jobDone = wizard.configProgress.completed && wizard.configProgress.job?.status === 'completed';
-  const jobFailed = wizard.configProgress.job?.status === 'failed';
-  const algorithms: MLAlgorithm[] = ['knn', 'kmeans', 'svm', 'mlp'];
-  const decisionsError = getDecisionEntriesError(wizard.decisions);
+  const jobDone =
+    wizard.configProgress.completed && wizard.configProgress.job?.status === 'completed'
+  const jobFailed = wizard.configProgress.job?.status === 'failed'
+  const algorithms: MLAlgorithm[] = ['knn', 'kmeans', 'svm', 'mlp']
+  const decisionsError = getDecisionEntriesError(wizard.decisions)
 
   return (
     <div className={styles.stepContent}>
@@ -431,7 +467,7 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
         <button
           className={styles.btnSuccess}
           onClick={() => {
-            if (!decisionsError) void wizard.startConfigGeneration();
+            if (!decisionsError) void wizard.startConfigGeneration()
           }}
           disabled={wizard.actionLoading || Boolean(decisionsError)}
         >
@@ -450,7 +486,16 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
       {jobDone && wizard.configJobId && (
         <div className={styles.successCard}>
           <div className={styles.successIcon}>
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg
+              width="48"
+              height="48"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#22c55e"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <circle cx="12" cy="12" r="10" />
               <polyline points="16 8 10 16 7 13" />
             </svg>
@@ -459,12 +504,17 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
           <div className={styles.successMessage}>
             Your deployment-ready configuration file is ready for download.
           </div>
-          <a
-            href={getDownloadUrl(wizard.configJobId)}
-            className={styles.downloadBtn}
-            download
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <a href={getDownloadUrl(wizard.configJobId)} className={styles.downloadBtn} download>
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
               <polyline points="7 10 12 15 17 10" />
               <line x1="12" y1="15" x2="12" y2="3" />
@@ -476,29 +526,37 @@ const ConfigStep: React.FC<StepProps> = ({ wizard }) => {
 
       {jobFailed && (
         <div className={styles.errorAlert}>
-          <span>Config generation failed: {wizard.configProgress.job?.error || 'Unknown error'}</span>
+          <span>
+            Config generation failed: {wizard.configProgress.job?.error || 'Unknown error'}
+          </span>
         </div>
       )}
     </div>
-  );
-};
-
+  )
+}
 
 /* ============================================================
    Advanced Settings: Training
    ============================================================ */
 const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
-  const [open, setOpen] = useState(false);
-  const showKnn = wizard.selectedAlgorithms.includes('knn');
-  const showKmeans = wizard.selectedAlgorithms.includes('kmeans');
-  const showSvm = wizard.selectedAlgorithms.includes('svm');
-  const showMlp = wizard.selectedAlgorithms.includes('mlp');
+  const [open, setOpen] = useState(false)
+  const showKnn = wizard.selectedAlgorithms.includes('knn')
+  const showKmeans = wizard.selectedAlgorithms.includes('kmeans')
+  const showSvm = wizard.selectedAlgorithms.includes('svm')
+  const showMlp = wizard.selectedAlgorithms.includes('mlp')
 
   return (
     <div className={styles.advancedSection}>
       <button className={styles.advancedToggle} onClick={() => setOpen(!open)}>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s' }}>
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          style={{ transform: open ? 'rotate(90deg)' : 'rotate(0)', transition: 'transform 0.2s' }}
+        >
           <polyline points="9 18 15 12 9 6" />
         </svg>
         Advanced Settings
@@ -510,7 +568,12 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
           <div className={styles.advancedGrid}>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Quality Weight</label>
-              <input type="number" className={styles.numberInput} min={0} max={1} step={0.05}
+              <input
+                type="number"
+                className={styles.numberInput}
+                min={0}
+                max={1}
+                step={0.05}
                 value={wizard.qualityWeight}
                 onChange={(e) => wizard.setQualityWeight(parseFloat(e.target.value) || 0.9)}
               />
@@ -518,7 +581,11 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
             </div>
             <div className={styles.formGroup}>
               <label className={styles.formLabel}>Batch Size</label>
-              <input type="number" className={styles.numberInput} min={1} max={256}
+              <input
+                type="number"
+                className={styles.numberInput}
+                min={1}
+                max={256}
                 value={wizard.batchSize}
                 onChange={(e) => wizard.setBatchSize(parseInt(e.target.value) || 32)}
               />
@@ -533,7 +600,11 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
               <div className={styles.advancedGrid}>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>K (neighbors)</label>
-                  <input type="number" className={styles.numberInput} min={1} max={50}
+                  <input
+                    type="number"
+                    className={styles.numberInput}
+                    min={1}
+                    max={50}
                     value={wizard.knnK}
                     onChange={(e) => wizard.setKnnK(parseInt(e.target.value) || 5)}
                   />
@@ -549,7 +620,11 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
               <div className={styles.advancedGrid}>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Clusters</label>
-                  <input type="number" className={styles.numberInput} min={2} max={64}
+                  <input
+                    type="number"
+                    className={styles.numberInput}
+                    min={2}
+                    max={64}
                     value={wizard.kmeansClusters}
                     onChange={(e) => wizard.setKmeansClusters(parseInt(e.target.value) || 8)}
                   />
@@ -565,15 +640,23 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
               <div className={styles.advancedGrid}>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Kernel</label>
-                  <select className={styles.selectInput} value={wizard.svmKernel}
-                    onChange={(e) => wizard.setSvmKernel(e.target.value as SvmKernel)}>
+                  <select
+                    className={styles.selectInput}
+                    value={wizard.svmKernel}
+                    onChange={(e) => wizard.setSvmKernel(e.target.value as SvmKernel)}
+                  >
                     <option value="rbf">RBF (Radial Basis Function)</option>
                     <option value="linear">Linear</option>
                   </select>
                 </div>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Gamma</label>
-                  <input type="number" className={styles.numberInput} min={0.001} max={100} step={0.1}
+                  <input
+                    type="number"
+                    className={styles.numberInput}
+                    min={0.001}
+                    max={100}
+                    step={0.1}
                     value={wizard.svmGamma}
                     onChange={(e) => wizard.setSvmGamma(parseFloat(e.target.value) || 1.0)}
                   />
@@ -608,25 +691,41 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
                         : ['Layer width must be a positive integer.']
                     }
                   />
-                  <div className={styles.formHint}>Layer order follows the list from input to output.</div>
+                  <div className={styles.formHint}>
+                    Layer order follows the list from input to output.
+                  </div>
                 </div>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Epochs</label>
-                  <input type="number" className={styles.numberInput} min={1} max={1000}
+                  <input
+                    type="number"
+                    className={styles.numberInput}
+                    min={1}
+                    max={1000}
                     value={wizard.mlpEpochs}
                     onChange={(e) => wizard.setMlpEpochs(parseInt(e.target.value) || 100)}
                   />
                 </div>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Learning Rate</label>
-                  <input type="number" className={styles.numberInput} min={0.0001} max={1} step={0.0001}
+                  <input
+                    type="number"
+                    className={styles.numberInput}
+                    min={0.0001}
+                    max={1}
+                    step={0.0001}
                     value={wizard.mlpLearningRate}
                     onChange={(e) => wizard.setMlpLearningRate(parseFloat(e.target.value) || 0.001)}
                   />
                 </div>
                 <div className={styles.formGroup}>
                   <label className={styles.formLabel}>Dropout</label>
-                  <input type="number" className={styles.numberInput} min={0} max={0.9} step={0.05}
+                  <input
+                    type="number"
+                    className={styles.numberInput}
+                    min={0}
+                    max={0.9}
+                    step={0.05}
                     value={wizard.mlpDropout}
                     onChange={(e) => wizard.setMlpDropout(parseFloat(e.target.value) || 0.1)}
                   />
@@ -637,8 +736,7 @@ const TrainAdvancedSettings: React.FC<StepProps> = ({ wizard }) => {
         </div>
       )}
     </div>
-  );
-};
+  )
+}
 
-
-export default MLSetupPage;
+export default MLSetupPage

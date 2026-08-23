@@ -11,7 +11,7 @@ import (
 // evaluation of unused local signals.
 // Returns a map with keys in format "type:name" (e.g., "keyword:math_keywords").
 func (c *Classifier) getUsedSignals() map[string]bool {
-	return c.getUsedSignalsForDecisions(c.Config.AllRoutingDecisions())
+	return c.getUsedSignalsForDecisions(c.Config.Decisions)
 }
 
 // getUsedSignalsForDecisions computes usage for an explicit local decision

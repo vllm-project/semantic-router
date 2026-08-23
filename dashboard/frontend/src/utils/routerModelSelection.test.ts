@@ -41,12 +41,12 @@ describe('router model selection', () => {
     ).toBe('router/production')
   })
 
-  it('accepts a case-insensitive bare auto alias advertised by the router', () => {
+  it('rejects model records that omit the routing contract', () => {
     expect(
       selectRouterAutoModel({
         data: [{ id: 'AUTO', owned_by: 'vllm-semantic-router' }],
       }),
-    ).toBe('AUTO')
+    ).toBeNull()
   })
 
   it('does not mistake a backend model for the automatic router', () => {
@@ -165,6 +165,29 @@ describe('router model selection', () => {
     ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
   })
 
+  it('lists only passthrough models authorized by the Router', () => {
+    expect(
+      listRouterModels({
+        data: [
+          { id: CANONICAL_AUTO_MODEL, routing: routingMetadata.defaultRoute },
+          {
+            id: 'local/qwen',
+            description: 'Qwen backend',
+            routing: { resolution: 'passthrough', selectable: true },
+          },
+          { id: 'hidden/model', routing: routingMetadata.passthrough },
+        ],
+      }),
+    ).toEqual([
+      { id: CANONICAL_AUTO_MODEL, description: '' },
+      {
+        id: 'local/qwen',
+        description: 'Qwen backend',
+        kind: 'individual',
+      },
+    ])
+  })
+
   it('rejects model records without valid routing metadata', () => {
     const payload = {
       data: [
@@ -185,10 +208,10 @@ describe('router model selection', () => {
   })
 
   it('derives the models endpoint from local and absolute chat endpoints', () => {
-    expect(getRouterModelsEndpoint('/api/router/v1/chat/completions')).toBe('/api/router/v1/models')
+    expect(getRouterModelsEndpoint('/v1/chat/completions')).toBe('/v1/models')
     expect(getRouterModelsEndpoint('http://localhost:8080/v1/chat/completions')).toBe(
       'http://localhost:8080/v1/models',
     )
-    expect(getRouterModelsEndpoint('/custom/chat')).toBe('/api/router/v1/models')
+    expect(getRouterModelsEndpoint('/custom/chat')).toBe('/v1/models')
   })
 })

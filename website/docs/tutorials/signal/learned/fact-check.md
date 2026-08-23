@@ -32,7 +32,7 @@ Use `fact-check` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     fact_check:
       - name: needs_fact_check

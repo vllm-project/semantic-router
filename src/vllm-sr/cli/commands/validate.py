@@ -3,9 +3,14 @@
 import sys
 
 from cli.config_contract import iter_routing_profiles
-from cli.parser import ConfigParseError, parse_user_config
+from cli.models import RecipeDistribution, UserConfig
+from cli.parser import ConfigParseError, parse_config_artifact
 from cli.terminal import echo, error, fields, heading, success
-from cli.validator import print_validation_errors, validate_user_config
+from cli.validator import (
+    print_validation_errors,
+    validate_recipe_distribution,
+    validate_user_config,
+)
 
 _SIGNAL_SUMMARY_FIELDS = (
     ("Keyword signals", "keywords"),
@@ -36,7 +41,7 @@ def _count_items(value) -> int:
 
 
 def _signal_summary_lines(signals) -> list[str]:
-    """Return non-empty signal summary lines for the canonical v0.3 surface."""
+    """Return non-empty signal summary lines for the canonical v0.4 surface."""
     if not signals:
         return []
 
@@ -128,13 +133,16 @@ def validate_command(config_path: str):
     """
     # Parse config
     try:
-        user_config = parse_user_config(config_path, log_summary=False)
+        config = parse_config_artifact(config_path, log_summary=False)
     except ConfigParseError as e:
         error(f"Configuration parsing failed: {e}")
         sys.exit(1)
 
-    # Validate config
-    errors = validate_user_config(user_config, log_summary=False)
+    errors = (
+        validate_user_config(config, log_summary=False)
+        if isinstance(config, UserConfig)
+        else validate_recipe_distribution(config, log_summary=False)
+    )
 
     if errors:
         print_validation_errors(errors)
@@ -145,12 +153,23 @@ def validate_command(config_path: str):
     fields(
         (
             ("Path", config_path),
-            ("Version", user_config.version),
-            ("Listeners", len(user_config.listeners)),
+            ("Version", config.version),
+            (
+                "Artifact",
+                (
+                    "Recipe distribution"
+                    if isinstance(config, RecipeDistribution)
+                    else "Runtime manifest"
+                ),
+            ),
         )
     )
 
-    routing_profiles = list(iter_routing_profiles(user_config))
+    routing_profiles = (
+        [(recipe.name, recipe.document) for recipe in config.recipes]
+        if isinstance(config, RecipeDistribution)
+        else list(iter_routing_profiles(config))
+    )
     signal_lines = _aggregate_signal_summary_lines(routing_profiles)
     if signal_lines:
         for line in signal_lines:
@@ -163,24 +182,17 @@ def validate_command(config_path: str):
     for line in _aggregate_projection_summary_lines(routing_profiles):
         echo(line)
 
-    default_decisions = len(user_config.decisions)
-    recipe_decisions = sum(
-        len(profile.decisions)
-        for name, profile in routing_profiles
-        if name != "default"
-    )
     all_decisions = [
         decision for _, profile in routing_profiles for decision in profile.decisions
     ]
-    echo(f"  Entrypoints: {len(user_config.entrypoints)}")
-    echo(f"  Recipes: {len(user_config.recipes)}")
-    echo(
-        f"  Decisions: {len(all_decisions)} total "
-        f"({default_decisions} default, {recipe_decisions} recipe-owned)"
-    )
+    if isinstance(config, UserConfig):
+        echo(f"  Listeners: {len(config.listeners)}")
+        echo(f"  Entrypoints: {len(config.entrypoints)}")
+    echo(f"  Recipes: {len(config.recipes)}")
+    echo(f"  Decisions: {len(all_decisions)}")
 
     for line in _plugin_summary_lines(all_decisions):
         echo(line)
 
-    echo(f"  Models: {len(user_config.providers.models)}")
-    echo(f"  Default model: {user_config.providers.default_model}")
+    if isinstance(config, UserConfig):
+        echo(f"  Models: {len(config.models)}")

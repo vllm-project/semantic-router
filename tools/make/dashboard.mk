@@ -5,7 +5,6 @@
 DASHBOARD_DIR := dashboard
 DASHBOARD_FRONTEND_DIR := $(DASHBOARD_DIR)/frontend
 DASHBOARD_BACKEND_DIR := $(DASHBOARD_DIR)/backend
-DASHBOARD_WIZMAP_DIR := $(DASHBOARD_DIR)/wizmap
 DASHBOARD_WASM_DIR := src/semantic-router/cmd/wasm
 
 ##@ Dashboard
@@ -16,8 +15,6 @@ dashboard-install: ## Install dashboard dependencies (frontend npm + backend go 
 	@$(LOG_TARGET)
 	@echo "Installing frontend dependencies..."
 	cd $(DASHBOARD_FRONTEND_DIR) && npm install
-	@echo "Installing Knowledge Map dependencies..."
-	cd $(DASHBOARD_WIZMAP_DIR) && npm install
 	@echo "Tidying backend dependencies..."
 	cd $(DASHBOARD_BACKEND_DIR) && go mod tidy
 	@echo "dashboard dependencies installed"
@@ -42,7 +39,6 @@ dashboard-dev-backend: ## Start dashboard backend in dev mode
 dashboard-build-frontend: dashboard-install dashboard-build-wasm ## Build dashboard frontend for production
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm run build
-	cd $(DASHBOARD_WIZMAP_DIR) && npm run build:embedded
 	@echo "dashboard/frontend build completed"
 
 dashboard-build-backend: ## Build dashboard backend binary
@@ -94,7 +90,6 @@ dashboard-lint-fix: ## Auto-fix lint issues in dashboard (frontend + backend)
 dashboard-type-check: ## Run TypeScript type checking for dashboard frontend
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_FRONTEND_DIR) && npm install 2>/dev/null && npm run type-check
-	cd $(DASHBOARD_WIZMAP_DIR) && npm install 2>/dev/null && npm run build >/dev/null
 	@echo "dashboard/frontend type-check passed"
 
 dashboard-test-frontend: ## Run dashboard frontend unit tests
@@ -117,7 +112,7 @@ dashboard-test-backend: ## Run dashboard backend Go tests (run from repo root: m
 	@$(LOG_TARGET)
 	cd $(DASHBOARD_BACKEND_DIR) && go test ./...
 
-dashboard-check: dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (lint, type-check, frontend + backend tests, go mod tidy)
+dashboard-check: management-api-contract-check dashboard-lint dashboard-type-check dashboard-test-frontend dashboard-test-backend dashboard-go-mod-tidy ## Run all dashboard checks (generated contract drift, lint, type-check, frontend + backend tests, go mod tidy)
 	@$(LOG_TARGET)
 	@echo "All dashboard checks passed"
 
@@ -127,8 +122,6 @@ dashboard-clean: ## Clean dashboard build artifacts (frontend dist + backend bin
 	@$(LOG_TARGET)
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/dist
 	rm -rf $(DASHBOARD_FRONTEND_DIR)/node_modules
-	rm -rf $(DASHBOARD_WIZMAP_DIR)/dist
-	rm -rf $(DASHBOARD_WIZMAP_DIR)/node_modules
 	rm -f $(DASHBOARD_FRONTEND_DIR)/public/signal-compiler.wasm
 	rm -f $(DASHBOARD_FRONTEND_DIR)/public/wasm_exec.js
 	rm -rf $(DASHBOARD_BACKEND_DIR)/bin

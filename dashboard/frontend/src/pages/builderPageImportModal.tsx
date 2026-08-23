@@ -1,58 +1,42 @@
-import React, { useId } from "react";
+import React, { useId } from 'react'
 
-import useAccessibleDialog from "@/hooks/useAccessibleDialog";
+import useAccessibleDialog from '@/hooks/useAccessibleDialog'
 
-import styles from "./BuilderPage.module.css";
+import styles from './BuilderPage.module.css'
 
 interface BuilderImportModalProps {
-  open: boolean;
-  importUrl: string;
-  importText: string;
-  importError: string | null;
-  importUrlLoading: boolean;
-  loadingFromRouter: boolean;
-  importTextareaRef: React.Ref<HTMLTextAreaElement>;
-  onClose: () => void;
-  onImportUrlChange: (value: string) => void;
-  onImportTextChange: (value: string) => void;
-  onImportUrl: () => void;
-  onSelectFile: () => void;
-  onLoadFromRouter: () => void;
-  onConfirm: () => void;
+  open: boolean
+  importText: string
+  importError: string | null
+  importTextareaRef: React.Ref<HTMLTextAreaElement>
+  onClose: () => void
+  onImportTextChange: (value: string) => void
+  onSelectFile: () => void
+  onConfirm: () => void
 }
 
 const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
   open,
-  importUrl,
   importText,
   importError,
-  importUrlLoading,
-  loadingFromRouter,
   importTextareaRef,
   onClose,
-  onImportUrlChange,
   onImportTextChange,
-  onImportUrl,
   onSelectFile,
-  onLoadFromRouter,
   onConfirm,
 }) => {
-  const dialogId = useId();
-  const titleId = `${dialogId}-title`;
-  const descriptionId = `${dialogId}-description`;
+  const dialogId = useId()
+  const titleId = `${dialogId}-title`
+  const descriptionId = `${dialogId}-description`
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
     isOpen: open,
     onClose,
-  });
+  })
 
-  if (!open) return null;
+  if (!open) return null
 
   return (
-    <div
-      className={styles.modalOverlay}
-      role="presentation"
-      onMouseDown={onClose}
-    >
+    <div className={styles.modalOverlay} role="presentation" onMouseDown={onClose}>
       <div
         ref={dialogRef}
         className={styles.modal}
@@ -60,13 +44,12 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
-        aria-busy={importUrlLoading || loadingFromRouter}
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.modalHeader}>
           <h3 id={titleId} className={styles.modalTitle}>
-            Import Config
+            Import Recipe
           </h3>
           <button
             type="button"
@@ -88,59 +71,16 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
         </div>
         <div className={styles.modalBody}>
           <p id={descriptionId} className={styles.modalHint}>
-            Paste a full router config YAML or routing fragment below, load from
-            a file, fetch from a URL, or load the current router config
-            directly. Only the routing section will be decompiled into DSL.
+            Replace the current draft with one Recipe from a file or pasted document. Models and
+            Entrypoints are ignored.
           </p>
-          <div className={styles.importUrlRow}>
-            <input
-              className={styles.importUrlInput}
-              type="url"
-              aria-label="Router config URL"
-              value={importUrl}
-              onChange={(event) => onImportUrlChange(event.target.value)}
-              placeholder="https://example.com/config.yaml"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") onImportUrl();
-              }}
-            />
-            <button
-              type="button"
-              className={styles.toolbarBtn}
-              onClick={onImportUrl}
-              disabled={importUrlLoading || !importUrl.trim()}
-            >
-              {importUrlLoading ? (
-                <>
-                  <span className={styles.dotPulse} />
-                  Fetching…
-                </>
-              ) : (
-                <>
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <path d="M6 2a4 4 0 100 8 4 4 0 000-8z" />
-                    <path d="M2 6h8M6 2v8" strokeLinecap="round" />
-                    <path d="M14 14l-3.5-3.5" strokeLinecap="round" />
-                  </svg>
-                  Fetch
-                </>
-              )}
-            </button>
-          </div>
           <textarea
             ref={importTextareaRef}
             className={styles.importTextarea}
-            aria-label="Router config YAML"
+            aria-label="Recipe document"
             value={importText}
             onChange={(event) => onImportTextChange(event.target.value)}
-            placeholder="Paste YAML config here..."
+            placeholder="Paste a Recipe document…"
             spellCheck={false}
             data-dialog-initial-focus
           />
@@ -152,11 +92,7 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
         </div>
         <div className={styles.modalFooter}>
           <div className={styles.modalFooterImportActions}>
-            <button
-              type="button"
-              className={styles.toolbarBtn}
-              onClick={onSelectFile}
-            >
+            <button type="button" className={styles.toolbarBtn} onClick={onSelectFile}>
               <svg
                 width="12"
                 height="12"
@@ -165,45 +101,13 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
                 stroke="currentColor"
                 strokeWidth="1.5"
               >
-                <path
-                  d="M2 14h12M8 2v9M5 5l3-3 3 3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                <path d="M2 14h12M8 2v9M5 5l3-3 3 3" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               Load File
             </button>
-            <button
-              type="button"
-              className={styles.toolbarBtnPrimary}
-              onClick={onLoadFromRouter}
-              disabled={loadingFromRouter}
-              title="Load the current router config and import only its routing section into DSL"
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <rect x="2" y="2" width="12" height="12" rx="2" />
-                <path
-                  d="M8 5v6M5 8l3 3 3-3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              {loadingFromRouter ? "Loading…" : "Load from Router"}
-            </button>
           </div>
           <div className={styles.modalFooterPrimaryActions}>
-            <button
-              type="button"
-              className={styles.toolbarBtn}
-              onClick={onClose}
-            >
+            <button type="button" className={styles.toolbarBtn} onClick={onClose}>
               Cancel
             </button>
             <button
@@ -218,7 +122,7 @@ const BuilderImportModal: React.FC<BuilderImportModalProps> = ({
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
-export { BuilderImportModal };
+export { BuilderImportModal }

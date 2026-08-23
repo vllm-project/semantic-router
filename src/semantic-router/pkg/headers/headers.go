@@ -41,11 +41,6 @@ const (
 	// This header is set during the routing decision phase.
 	SelectedModel = "x-selected-model"
 
-	// VSRSkipProcessing opts the request out of all router processing when
-	// global.router.skip_processing.enabled is true. Value: "true" (case-insensitive).
-	// See https://github.com/vllm-project/semantic-router/issues/1808.
-	VSRSkipProcessing = "x-vsr-skip-processing"
-
 	// VSRDebug opts a request into verbose/debug response headers. Value: "true"
 	// (case-insensitive). When set, headers that the v0.4 contract otherwise
 	// omits or demotes to replay are emitted inline for that request — the
@@ -305,59 +300,6 @@ const (
 	ResponseWarningJailbreak         = "response_jailbreak"
 )
 
-// Auth Backend Injected Headers
-// These headers are set by the external authorization service (Authorino, Envoy Gateway JWT,
-// oauth2-proxy, etc.) after successful user authentication.
-// They carry per-user provider API keys and identity for routing.
-const (
-	// UserOpenAIKey carries the user's OpenAI API key, injected by the auth backend.
-	// Used by the ext_proc when routing requests to OpenAI models.
-	UserOpenAIKey = "x-user-openai-key"
-
-	// UserAnthropicKey carries the user's Anthropic API key, injected by the auth backend.
-	// Used by the ext_proc when routing requests to Anthropic models.
-	UserAnthropicKey = "x-user-anthropic-key"
-
-	// UserAzureOpenAIKey carries the user's Azure OpenAI API key, injected by the auth backend.
-	UserAzureOpenAIKey = "x-user-azure-openai-key"
-
-	// UserBedrockKey carries the user's AWS Bedrock bearer token, injected by the auth backend.
-	UserBedrockKey = "x-user-bedrock-key"
-
-	// UserGeminiKey carries the user's Google Gemini API key, injected by the auth backend.
-	UserGeminiKey = "x-user-gemini-key"
-
-	// UserVertexAIKey carries the user's Vertex AI OAuth token, injected by the auth backend.
-	UserVertexAIKey = "x-user-vertex-ai-key"
-
-	// UserMiniMaxKey carries the user's MiniMax API key, injected by the auth backend.
-	// Used by the ext_proc when routing requests to MiniMax models.
-	UserMiniMaxKey = "x-user-minimax-key"
-
-	// AuthzUserID is the default header for the authenticated user's identity.
-	// Default for Authorino (K8s Secret metadata.name).
-	// Override via authz.identity.user_id_header for other backends:
-	//   Envoy Gateway JWT: "x-jwt-sub" (from claim_to_headers)
-	//   oauth2-proxy:      "x-forwarded-user"
-	// Used by the authz signal classifier for user-level routing,
-	// and by memory operations for secure per-user isolation.
-	AuthzUserID = "x-authz-user-id"
-
-	// AuthzUserGroups is the default header for comma-separated group memberships.
-	// Default for Authorino (K8s Secret annotation authz-groups).
-	// Override via authz.identity.user_groups_header for other backends:
-	//   Envoy Gateway JWT: "x-jwt-groups" (from claim_to_headers)
-	//   oauth2-proxy:      "x-forwarded-groups"
-	// Used by the authz signal classifier for group-level routing.
-	AuthzUserGroups = "x-authz-user-groups"
-
-	// AuthzTeamID and AuthzTenantID are trusted ext_authz outputs used for
-	// response-cache partitioning. Client-provided values must be stripped by
-	// the gateway before authorization.
-	AuthzTeamID   = "x-authz-team-id"
-	AuthzTenantID = "x-authz-tenant-id"
-)
-
 // Internal Request Authentication
 const (
 	// VSRInternalAuth authenticates in-process request context that must not
@@ -385,6 +327,19 @@ const (
 
 	// VSRFusionDepth marks internal Fusion subrequests to prevent recursive Fusion execution.
 	VSRFusionDepth = "x-vsr-fusion-depth"
+
+	// The remaining headers pin an authenticated internal subrequest to the
+	// exact managed Router generation that created it. They are honored only
+	// together with VSRInternalAuth and are removed before upstream dispatch.
+	VSRRoutingNamespace        = "x-vsr-routing-namespace"
+	VSRRoutingQuotaPartition   = "x-vsr-routing-quota-partition"
+	VSRRoutingPublication      = "x-vsr-routing-publication"
+	VSRRoutingRuntimeEpoch     = "x-vsr-routing-runtime-epoch"
+	VSRRoutingSnapshotRevision = "x-vsr-routing-snapshot-revision"
+	VSRRoutingDigest           = "x-vsr-routing-digest"
+	// VSRDispatchGrant carries a short-lived signed authorization for one
+	// internal Looper dispatch. It is consumed before request-body processing.
+	VSRDispatchGrant = "x-vsr-dispatch-grant"
 )
 
 // Looper Response Headers

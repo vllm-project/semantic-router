@@ -9,9 +9,8 @@ type SessionUser = {
 }
 
 type BootstrapOptions = {
-  token?: string
   user?: SessionUser
-  setupState?: Record<string, unknown>
+  managementPermissions?: string[]
   settings?: Record<string, unknown>
 }
 
@@ -27,15 +26,10 @@ const defaultUser: SessionUser = {
     'evaluation.read',
     'evaluation.run',
     'evaluation.write',
-    'feedback.submit',
     'logs.read',
-    'mcp.manage',
-    'mcp.read',
     'mlpipeline.manage',
     'openclaw.manage',
     'openclaw.read',
-    'replay.read',
-    'security.manage',
     'tools.use',
     'topology.read',
     'users.manage',
@@ -43,35 +37,55 @@ const defaultUser: SessionUser = {
   ],
 }
 
-const defaultSetupState = {
-  setupMode: false,
-  listenerPort: 8700,
-  models: 1,
-  decisions: 1,
-  hasModels: true,
-  hasDecisions: true,
-  canActivate: true,
-}
-
 const defaultSettings = {
   readonlyMode: false,
-  setupMode: false,
+  serverReadonly: false,
   platform: '',
   envoyUrl: '',
+  routerPublicUrl: '',
   routerEvalEndpoint: '',
 }
 
+const managementMediaType = 'application/vnd.vllm-semantic-router.management.v1+json'
+const namespaceId = '10000000-0000-4000-8000-000000000001'
+const routerPrincipalId = '10000000-0000-4000-8000-000000000010'
+const routerUserId = '10000000-0000-4000-8000-000000000011'
+const defaultManagementPermissions = [
+  'access_policy.manage',
+  'access_policy.read',
+  'agent.manage',
+  'agent.read',
+  'agent.use',
+  'audit.read',
+  'key.manage',
+  'key.read',
+  'delegation.use',
+  'log.read',
+  'log_payload.read',
+  'quota.read',
+  'rate_policy.manage',
+  'rate_policy.read',
+  'routing.manage',
+  'routing.publish',
+  'routing.read',
+  'team.manage',
+  'team.read',
+  'tool.invoke',
+  'tool.manage',
+  'tool.read',
+  'usage.internal_dimensions.read',
+  'usage.read',
+  'user.manage',
+  'user.read',
+]
+
 export async function mockAuthenticatedSession(
   page: Page,
-  { token = 'test-auth-token', user = defaultUser }: BootstrapOptions = {},
-): Promise<{ token: string; user: SessionUser }> {
-  await page.addInitScript(
-    ({ storedToken }) => {
-      window.localStorage.setItem('vsr_auth_token', storedToken)
-    },
-    { storedToken: token },
-  )
-
+  {
+    user = defaultUser,
+    managementPermissions = defaultManagementPermissions,
+  }: BootstrapOptions = {},
+): Promise<{ user: SessionUser }> {
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({
       status: 200,
@@ -80,46 +94,102 @@ export async function mockAuthenticatedSession(
     })
   })
 
-  return { token, user }
+  await page.route('**/api/router/management/v1/me', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': managementMediaType },
+      body: JSON.stringify({
+        principal: {
+          principalId: routerPrincipalId,
+          displayName: user.name,
+          kind: 'human',
+          status: 'active',
+        },
+        session: {
+          sessionId: '10000000-0000-4000-8000-000000000002',
+          authenticatedAt: '2026-08-23T00:00:00Z',
+          expiresAt: '2099-08-23T00:00:00Z',
+          evidenceKind: 'human',
+        },
+        clusterPermissions: [],
+        namespaces: [
+          {
+            namespace: {
+              namespaceId,
+              name: 'Test',
+              status: 'active',
+              desiredRevision: 1,
+              appliedRevision: 1,
+            },
+            permissions: managementPermissions,
+            roleBindings: [],
+            user: {
+              userId: routerUserId,
+              email: user.email,
+              displayName: user.name,
+              status: 'active',
+            },
+            teams: [],
+            selfServicePolicy: {
+              maxKeysPerUser: 1,
+              maxDelegatedSessions: 3,
+              delegatedSessionTtlSeconds: 900,
+              allowTeamKeyDelegation: false,
+              automaticFirstKey: true,
+              revision: 1,
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await page.route('**/api/router/management/v1/self/inference-keys*', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': managementMediaType },
+      body: JSON.stringify({
+        data: [
+          {
+            keyId: '10000000-0000-4000-8000-000000000003',
+            name: 'Playground',
+            owner: { type: 'user', id: routerUserId },
+            expiresAt: '2099-08-23T00:00:00Z',
+          },
+        ],
+        page: { hasMore: false, pageSize: 100 },
+      }),
+    })
+  })
+
+  await page.route('**/api/router/management/v1/self/inference-sessions', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': managementMediaType, 'Cache-Control': 'no-store' },
+      body: JSON.stringify({
+        resourceId: '10000000-0000-4000-8000-000000000004',
+        kind: 'delegated_inference_credential',
+        secret: 'vsd_test-delegated-credential',
+        expiresAt: '2099-08-23T00:00:00Z',
+      }),
+    })
+  })
+
+  return { user }
 }
 
 export async function mockAuthenticatedAppShell(
   page: Page,
   options: BootstrapOptions = {},
-): Promise<{ token: string; user: SessionUser }> {
+): Promise<{ user: SessionUser }> {
   const session = await mockAuthenticatedSession(page, options)
-  const setupState = { ...defaultSetupState, ...(options.setupState ?? {}) }
   const settings = { ...defaultSettings, ...(options.settings ?? {}) }
-
-  await page.route('**/api/setup/state', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(setupState),
-    })
-  })
 
   await page.route('**/api/settings', async (route) => {
     await route.fulfill({
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
-    })
-  })
-
-  await page.route('**/api/mcp/servers', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify([]),
-    })
-  })
-
-  await page.route('**/api/mcp/tools', async (route) => {
-    await route.fulfill({
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ tools: [] }),
     })
   })
 

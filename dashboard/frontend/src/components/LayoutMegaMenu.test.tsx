@@ -17,7 +17,7 @@ describe('layout mega-menu accessibility contract', () => {
           triggerId: 'analyze-trigger',
           label: 'Analyze',
           categories: ANALYZE_MENU_CATEGORIES,
-          activeCategoryKey: 'outcomes',
+          activeCategoryKey: 'fleet-simulation',
           isItemActive: () => false,
           onConfigSelect: vi.fn(),
           onItemIntent: vi.fn(),

@@ -61,7 +61,7 @@ const useCaseTabs: UseCaseTab[] = [
         detail: translate({ id: 'homepage.useCases.tab.routing.flow3.detail', message: 'router_dc · multi_factor' }),
       },
       {
-        label: translate({ id: 'homepage.useCases.tab.routing.flow4', message: 'Model pool' }),
+        label: translate({ id: 'homepage.useCases.tab.routing.flow4', message: 'Models' }),
         detail: translate({ id: 'homepage.useCases.tab.routing.flow4.detail', message: 'Target model' }),
       },
     ],
@@ -396,7 +396,7 @@ export default function UseCaseExplorer(): JSX.Element {
               <Translate id="homepage.useCases.title">One router, three use cases</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.useCases.subtitle">See how signals, policies, and model pools connect inside a recipe.</Translate>
+              <Translate id="homepage.useCases.subtitle">See how signals, policies, and models connect inside a recipe.</Translate>
             </p>
           </header>
         </ScrollReveal>

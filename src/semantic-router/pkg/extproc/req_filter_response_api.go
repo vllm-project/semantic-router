@@ -8,29 +8,25 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/openai/openai-go"
-	"github.com/tidwall/sjson"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responsestore"
 )
 
-// ResponseAPIFilter handles Response API request/response translation.
-// It translates /v1/responses requests to /v1/chat/completions format
-// and translates responses back, managing conversation history via previous_response_id.
+// ResponseAPIFilter owns optional Responses object CRUD. Generation is handled
+// by the neutral codec runtime and never depends on this store.
 type ResponseAPIFilter struct {
-	store      responsestore.ResponseStore
-	translator *responseapi.Translator
-	enabled    bool
+	store   responsestore.ResponseStore
+	enabled bool
 }
 
 // NewResponseAPIFilter creates a new Response API filter.
 func NewResponseAPIFilter(store responsestore.ResponseStore) *ResponseAPIFilter {
 	return &ResponseAPIFilter{
-		store:      store,
-		translator: responseapi.NewTranslator(),
-		enabled:    store != nil && store.IsEnabled(),
+		store:   store,
+		enabled: store != nil && store.IsEnabled(),
 	}
 }
 
@@ -39,13 +35,12 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
-// ResponseAPIContext holds context for a Response API request during processing.
-type ResponseAPIContext struct {
-	// IsResponseAPIRequest indicates this is a /v1/responses request
-	IsResponseAPIRequest bool
-
-	// OriginalRequest is the parsed Response API request
-	OriginalRequest *responseapi.ResponseAPIRequest
+// ResponseObjectState is request-scoped state for optional Responses object
+// persistence. It is not part of generation or protocol translation.
+type ResponseObjectState struct {
+	// Owner is derived from process-local authentication or the immutable public
+	// Router generation. No request field or header can populate it.
+	Owner responseapi.ResponseOwner
 
 	// PreviousResponseID from the request (for conversation chaining)
 	PreviousResponseID string
@@ -53,282 +48,64 @@ type ResponseAPIContext struct {
 	// ConversationHistory fetched from store
 	ConversationHistory []*responseapi.StoredResponse
 
-	// GeneratedResponseID is the ID generated for this response
-	GeneratedResponseID string
-
 	// ConversationID is the determined ConversationID for this request.
-	// Set early during TranslateRequest to ensure consistent tracking.
+	// Set during neutral request preparation to ensure consistent tracking.
 	// Sources (in priority order):
 	//   1. Request's conversation_id field
 	//   2. First response in conversation chain (via previous_response_id)
 	//   3. Newly generated (for new conversations)
 	ConversationID string
 
-	// TranslatedBody is the Chat Completions request body after translation
-	TranslatedBody []byte
+	// Input, Instructions, and Metadata are immutable ingress snapshots used for
+	// retention. Later routing and plugin mutations must not alter stored input.
+	Input        []responseapi.InputItem
+	Instructions string
+	Metadata     map[string]string
+	ShouldStore  bool
 
-	// HasImageGenerationTool is true when the request includes
-	// tools: [{"type": "image_generation"}]. This signals that the client
-	// explicitly requests image generation capability.
-	HasImageGenerationTool bool
-
-	// ImageGenToolParams holds the parameters from the image_generation tool
-	// definition (model, quality, size, output_format, background, action).
-	// Non-nil only when HasImageGenerationTool is true.
-	ImageGenToolParams *responseapi.ImageGenerationToolParams
+	// PersistenceAttempted prevents multiple terminal response paths from
+	// retaining the same object twice.
+	PersistenceAttempted bool
 }
 
-// detectImageGenTool scans the request tools for an image_generation entry and
-// populates the context accordingly.
-func detectImageGenTool(req *responseapi.ResponseAPIRequest, respCtx *ResponseAPIContext) {
-	for i := range req.Tools {
-		if req.Tools[i].Type == responseapi.ToolTypeImageGeneration {
-			respCtx.HasImageGenerationTool = true
-			respCtx.ImageGenToolParams = req.Tools[i].ExtractImageGenParams()
-			if respCtx.ImageGenToolParams != nil {
-				logging.Debugf("Response API: image_generation tool (model=%s, size=%s)", respCtx.ImageGenToolParams.Model, respCtx.ImageGenToolParams.Size)
-			}
-			return
-		}
-	}
-}
-
-// TranslateRequest translates a Response API request to Chat Completions format.
-// Returns the translated request body and context, or nil if not a Response API request.
-func (f *ResponseAPIFilter) TranslateRequest(ctx context.Context, body []byte) (*ResponseAPIContext, []byte, error) {
-	if !f.enabled {
-		return nil, nil, nil
-	}
-
-	var req responseapi.ResponseAPIRequest
-	if err := json.Unmarshal(body, &req); err != nil {
-		return nil, nil, nil
-	}
-
-	if len(req.Input) == 0 {
-		return nil, nil, nil
-	}
-
-	respCtx := &ResponseAPIContext{
-		IsResponseAPIRequest: true,
-		OriginalRequest:      &req,
-		PreviousResponseID:   req.PreviousResponseID,
-		GeneratedResponseID:  responseapi.GenerateResponseID(),
-	}
-
-	detectImageGenTool(&req, respCtx)
-
-	if req.PreviousResponseID != "" {
-		history, err := f.store.GetConversationChain(ctx, req.PreviousResponseID)
-		if err != nil && !errors.Is(err, responsestore.ErrNotFound) {
-			logging.Warnf("Failed to fetch conversation history for %s: %v", req.PreviousResponseID, err)
-		}
-		respCtx.ConversationHistory = history
-	}
-
-	respCtx.ConversationID = f.determineConversationID(&req, respCtx.ConversationHistory)
-
-	completionReq, err := f.translator.TranslateToCompletionRequest(&req, respCtx.ConversationHistory)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	translatedBody, err := json.Marshal(completionReq)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	translatedBody = injectResponseAPITransportFields(translatedBody, &req)
-
-	respCtx.TranslatedBody = translatedBody
-
-	return respCtx, translatedBody, nil
-}
-
-func injectResponseAPITransportFields(
-	body []byte,
-	req *responseapi.ResponseAPIRequest,
-) []byte {
-	if req.Stream {
-		if updated, err := sjson.SetBytes(body, "stream", true); err == nil {
-			body = updated
-		}
-	}
-	if len(req.Metadata) > 0 {
-		if updated, err := sjson.SetBytes(
-			body,
-			"metadata",
-			req.Metadata,
-		); err == nil {
-			body = updated
-		}
-	}
-	return body
-}
-
-// TranslateResponse translates a Chat Completions response back to Response API format.
-func (f *ResponseAPIFilter) TranslateResponse(ctx context.Context, respCtx *ResponseAPIContext, body []byte) ([]byte, error) {
-	if !f.enabled || respCtx == nil || !respCtx.IsResponseAPIRequest {
-		return body, nil
-	}
-
-	if isResponseAPIErrorBody(body) {
-		logging.Warnf("Response API: Backend returned error response, passing through")
-		return body, nil
-	}
-
-	completionResp, ok := parseChatCompletionResponse(body)
-	if !ok {
-		return body, nil
-	}
-
-	responseAPIResp := f.buildTranslatedResponse(respCtx, completionResp)
-	f.maybeStoreTranslatedResponse(ctx, respCtx, responseAPIResp)
-
-	translatedBody, ok := marshalTranslatedResponse(body, responseAPIResp)
-	if !ok {
-		return body, nil
-	}
-
-	return translatedBody, nil
-}
-
-func isResponseAPIErrorBody(body []byte) bool {
-	var errorCheck map[string]interface{}
-	if err := json.Unmarshal(body, &errorCheck); err != nil {
-		return false
-	}
-	_, hasError := errorCheck["error"]
-	return hasError
-}
-
-func parseChatCompletionResponse(body []byte) (*openai.ChatCompletion, bool) {
-	var completionResp openai.ChatCompletion
-	if err := json.Unmarshal(body, &completionResp); err != nil {
-		logging.Errorf("Response API: Failed to parse completion response: %v", err)
-		return nil, false
-	}
-
-	if completionResp.ID == "" && len(completionResp.Choices) == 0 {
-		logging.Warnf("Response API: Invalid completion response (no id or choices), passing through")
-		return nil, false
-	}
-
-	return &completionResp, true
-}
-
-func (f *ResponseAPIFilter) buildTranslatedResponse(
-	respCtx *ResponseAPIContext,
-	completionResp *openai.ChatCompletion,
-) *responseapi.ResponseAPIResponse {
-	responseAPIResp := f.translator.TranslateToResponseAPIResponse(
-		respCtx.OriginalRequest,
-		completionResp,
-		respCtx.PreviousResponseID,
-	)
-
-	responseAPIResp.ID = respCtx.GeneratedResponseID
-
-	if respCtx.ConversationID != "" {
-		responseAPIResp.ConversationID = respCtx.ConversationID
-	}
-
-	return responseAPIResp
-}
-
-func (f *ResponseAPIFilter) maybeStoreTranslatedResponse(
+// PrepareGeneration derives optional object-history state from an already
+// validated neutral request. A missing object store never disables POST
+// generation; it only makes a requested history lookup unavailable.
+func (f *ResponseAPIFilter) PrepareObjectState(
 	ctx context.Context,
-	respCtx *ResponseAPIContext,
-	responseAPIResp *responseapi.ResponseAPIResponse,
-) {
-	shouldStore := respCtx.OriginalRequest.Store == nil || *respCtx.OriginalRequest.Store
-	if shouldStore && f.store.IsEnabled() {
-		stored := f.toStoredResponse(respCtx.OriginalRequest, responseAPIResp)
-		if err := f.store.StoreResponse(ctx, stored); err != nil {
-			logging.Warnf("Response API: Failed to store response: %v", err)
+	owner responseapi.ResponseOwner,
+	request llmprotocol.Request,
+	sourceBody []byte,
+) *ResponseObjectState {
+	state := &ResponseObjectState{
+		PreviousResponseID: request.PreviousResponseID,
+		Owner:              owner,
+		Metadata:           cloneResponseMetadata(request.Metadata),
+		ShouldStore:        request.Store == nil || *request.Store,
+	}
+	state.Input, state.Instructions = snapshotResponseObjectRequest(sourceBody, request)
+	if request.PreviousResponseID != "" && owner.Valid() && f != nil && f.enabled {
+		history, err := f.store.GetConversationChain(ctx, owner, request.PreviousResponseID)
+		if err != nil && !errors.Is(err, responsestore.ErrNotFound) {
+			logging.Warnf("Failed to fetch response history: %v", err)
 		}
+		state.ConversationHistory = history
 	}
-}
-
-func marshalTranslatedResponse(
-	originalBody []byte,
-	responseAPIResp *responseapi.ResponseAPIResponse,
-) ([]byte, bool) {
-	translatedBody, err := json.Marshal(responseAPIResp)
-	if err != nil {
-		logging.Errorf("Response API: Failed to marshal response: %v", err)
-		return originalBody, false
-	}
-
-	return translatedBody, true
-}
-
-// toStoredResponse converts request and response to a StoredResponse for storage.
-func (f *ResponseAPIFilter) toStoredResponse(req *responseapi.ResponseAPIRequest, resp *responseapi.ResponseAPIResponse) *responseapi.StoredResponse {
-	inputItems := parseResponseAPIInputItems(req.Input)
-
-	return &responseapi.StoredResponse{
-		ID:                 resp.ID,
-		Object:             resp.Object,
-		CreatedAt:          resp.CreatedAt,
-		Model:              resp.Model,
-		Status:             resp.Status,
-		Input:              inputItems,
-		Output:             resp.Output,
-		OutputText:         resp.OutputText,
-		PreviousResponseID: resp.PreviousResponseID,
-		ConversationID:     resp.ConversationID,
-		Usage:              resp.Usage,
-		Instructions:       resp.Instructions,
-		Metadata:           resp.Metadata,
-	}
-}
-
-func parseResponseAPIInputItems(input json.RawMessage) []responseapi.InputItem {
-	if len(input) == 0 {
-		return nil
-	}
-
-	// Try parsing as array of input items first.
-	var items []responseapi.InputItem
-	if err := json.Unmarshal(input, &items); err == nil {
-		for i := range items {
-			if items[i].ID == "" {
-				items[i].ID = responseapi.GenerateItemID()
-			}
-			if items[i].Status == "" {
-				items[i].Status = responseapi.StatusCompleted
-			}
-		}
-		return items
-	}
-
-	// Fallback: input can also be a string; store as a user message item.
-	var inputStr string
-	if err := json.Unmarshal(input, &inputStr); err == nil {
-		return []responseapi.InputItem{{
-			ID:      responseapi.GenerateItemID(),
-			Type:    responseapi.ItemTypeMessage,
-			Role:    responseapi.RoleUser,
-			Content: input,
-			Status:  responseapi.StatusCompleted,
-		}}
-	}
-
-	return nil
+	state.ConversationID = determineConversationID(request.ConversationID, state.ConversationHistory)
+	return state
 }
 
 // HandleGetResponse handles GET /v1/responses/{id} requests.
-func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, responseID string) (*ext_proc.ProcessingResponse, error) {
-	if !f.enabled {
-		return createResponseAPIError(404, "Response API not enabled"), nil
+func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) (*ext_proc.ProcessingResponse, error) {
+	if f == nil || !f.enabled || !owner.Valid() {
+		return responseObjectNotFound(responseID), nil
 	}
 
 	// Get response from store
-	stored, err := f.store.GetResponse(ctx, responseID)
+	stored, err := f.store.GetResponse(ctx, owner, responseID)
 	if err != nil {
 		if errors.Is(err, responsestore.ErrNotFound) {
-			return createResponseAPIError(404, "Response not found: "+responseID), nil
+			return responseObjectNotFound(responseID), nil
 		}
 		logging.Errorf("Response API: Error getting response %s: %v", responseID, err)
 		return createResponseAPIError(500, "Error retrieving response"), nil
@@ -348,16 +125,16 @@ func (f *ResponseAPIFilter) HandleGetResponse(ctx context.Context, responseID st
 }
 
 // HandleDeleteResponse handles DELETE /v1/responses/{id} requests.
-func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, responseID string) (*ext_proc.ProcessingResponse, error) {
-	if !f.enabled {
-		return createResponseAPIError(404, "Response API not enabled"), nil
+func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) (*ext_proc.ProcessingResponse, error) {
+	if f == nil || !f.enabled || !owner.Valid() {
+		return responseObjectNotFound(responseID), nil
 	}
 
 	// Delete response from store
-	err := f.store.DeleteResponse(ctx, responseID)
+	err := f.store.DeleteResponse(ctx, owner, responseID)
 	if err != nil {
 		if errors.Is(err, responsestore.ErrNotFound) {
-			return createResponseAPIError(404, "Response not found: "+responseID), nil
+			return responseObjectNotFound(responseID), nil
 		}
 		logging.Errorf("Response API: Error deleting response %s: %v", responseID, err)
 		return createResponseAPIError(500, "Error deleting response"), nil
@@ -380,16 +157,16 @@ func (f *ResponseAPIFilter) HandleDeleteResponse(ctx context.Context, responseID
 }
 
 // HandleGetInputItems handles GET /v1/responses/{id}/input_items requests.
-func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, responseID string) (*ext_proc.ProcessingResponse, error) {
-	if !f.enabled {
-		return createResponseAPIError(404, "Response API not enabled"), nil
+func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, owner responseapi.ResponseOwner, responseID string) (*ext_proc.ProcessingResponse, error) {
+	if f == nil || !f.enabled || !owner.Valid() {
+		return responseObjectNotFound(responseID), nil
 	}
 
 	// Get response from store
-	stored, err := f.store.GetResponse(ctx, responseID)
+	stored, err := f.store.GetResponse(ctx, owner, responseID)
 	if err != nil {
 		if errors.Is(err, responsestore.ErrNotFound) {
-			return createResponseAPIError(404, "Response not found: "+responseID), nil
+			return responseObjectNotFound(responseID), nil
 		}
 		logging.Errorf("Response API: Error getting response %s: %v", responseID, err)
 		return createResponseAPIError(500, "Error retrieving response"), nil
@@ -419,6 +196,83 @@ func (f *ResponseAPIFilter) HandleGetInputItems(ctx context.Context, responseID 
 	}
 
 	return createImmediateJSONResponse(200, body), nil
+}
+
+func responseObjectNotFound(responseID string) *ext_proc.ProcessingResponse {
+	return createResponseAPIError(404, "Response not found: "+responseID)
+}
+
+func snapshotResponseObjectRequest(sourceBody []byte, request llmprotocol.Request) ([]responseapi.InputItem, string) {
+	var wire struct {
+		Input        json.RawMessage `json:"input"`
+		Instructions json.RawMessage `json:"instructions"`
+	}
+	if json.Unmarshal(sourceBody, &wire) == nil {
+		items := parseResponseAPIInputItems(wire.Input)
+		var instructions string
+		if json.Unmarshal(wire.Instructions, &instructions) == nil {
+			return items, instructions
+		}
+		return items, responseObjectInstructionText(request.Instructions)
+	}
+	return nil, responseObjectInstructionText(request.Instructions)
+}
+
+func parseResponseAPIInputItems(input json.RawMessage) []responseapi.InputItem {
+	if len(input) == 0 {
+		return nil
+	}
+	var items []responseapi.InputItem
+	if json.Unmarshal(input, &items) == nil {
+		for index := range items {
+			if items[index].ID == "" {
+				items[index].ID = responseapi.GenerateItemID()
+			}
+			if items[index].Status == "" {
+				items[index].Status = responseapi.StatusCompleted
+			}
+			if items[index].Type == "" {
+				items[index].Type = responseapi.ItemTypeMessage
+			}
+		}
+		return items
+	}
+	var text string
+	if json.Unmarshal(input, &text) == nil {
+		return []responseapi.InputItem{{
+			ID: responseapi.GenerateItemID(), Type: responseapi.ItemTypeMessage,
+			Role: responseapi.RoleUser, Content: append(json.RawMessage(nil), input...),
+			Status: responseapi.StatusCompleted,
+		}}
+	}
+	return nil
+}
+
+func responseObjectInstructionText(blocks []llmprotocol.InstructionBlock) string {
+	var text string
+	for _, block := range blocks {
+		for _, content := range block.Content {
+			if content.Kind != llmprotocol.ContentText || content.Text == "" {
+				continue
+			}
+			if text != "" {
+				text += "\n"
+			}
+			text += content.Text
+		}
+	}
+	return text
+}
+
+func cloneResponseMetadata(metadata map[string]string) map[string]string {
+	if len(metadata) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(metadata))
+	for key, value := range metadata {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 // buildInputItemsList builds the input items list from a stored response.
@@ -467,10 +321,10 @@ func (f *ResponseAPIFilter) storedToResponseAPIResponse(stored *responseapi.Stor
 //  1. Request's conversation_id field (explicit)
 //  2. First response in conversation chain (continuation via previous_response_id)
 //  3. Newly generated (new conversation)
-func (f *ResponseAPIFilter) determineConversationID(req *responseapi.ResponseAPIRequest, history []*responseapi.StoredResponse) string {
+func determineConversationID(explicit string, history []*responseapi.StoredResponse) string {
 	// Priority 1: Request explicitly provides conversation_id
-	if req.ConversationID != "" {
-		return req.ConversationID
+	if explicit != "" {
+		return explicit
 	}
 
 	// Priority 2: Get from conversation history (continuation)

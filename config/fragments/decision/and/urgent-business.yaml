@@ -1,4 +1,4 @@
-routing:
+document:
   decisions:
     - name: urgent_business_route
       description: Match only when business intent and urgent language appear together.
@@ -10,7 +10,3 @@ routing:
             name: business
           - type: keyword
             name: urgent_keywords
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
-

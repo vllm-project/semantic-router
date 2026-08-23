@@ -33,7 +33,7 @@ const minAccuracyThreshold = 0.33
 
 func init() {
 	pkgtestcases.Register("embedding-signal-image-routing", pkgtestcases.TestCase{
-		Description: "Test IntelligentRoute with image-modality EmbeddingSignal for content-aware multimodal routing",
+		Description: "Test manifest-authored image embedding signals for content-aware multimodal routing",
 		Tags:        []string{"signal-decision", "embedding", "routing", "semantic", "multimodal", "image"},
 		Fn:          testEmbeddingSignalImageRouting,
 	})
@@ -74,15 +74,15 @@ type EmbeddingSignalImageResult struct {
 	Category              string
 }
 
-// testEmbeddingSignalImageRouting tests IntelligentRoute with image-modality
-// EmbeddingSignal configuration. Unlike the text-only embedding signal test,
+// testEmbeddingSignalImageRouting tests image-modality embedding signal
+// configuration. Unlike the text-only embedding signal test,
 // this constructs OpenAI-shape chat completion content arrays containing
 // image_url parts so the router's request-path extractor pulls the image
 // out and feeds it to the embedding signal evaluator's image-modality
 // dispatch.
 func testEmbeddingSignalImageRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing IntelligentRoute with image-modality EmbeddingSignal routing")
+		fmt.Println("[Test] Testing image-modality embedding signal routing")
 	}
 
 	localPort, stopPortForward, err := setupServiceConnection(ctx, client, opts)

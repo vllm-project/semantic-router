@@ -2,6 +2,7 @@ package config
 
 // Decision represents a routing decision that combines multiple rules with boolean logic.
 type Decision struct {
+	ID                  string                     `yaml:"id,omitempty" json:"id,omitempty"`
 	Name                string                     `yaml:"name"`
 	Description         string                     `yaml:"description,omitempty"`
 	Priority            int                        `yaml:"priority,omitempty"`
@@ -34,7 +35,7 @@ type EmitDirective struct {
 // response/cache surface. All fields are tri-state pointers so we can
 // distinguish "unset" from an explicit zero value.
 //
-// Runtime consumes Drop (semantic-cache write skip), TTLTurns (per-entry
+// Runtime consumes Drop (response-cache write skip), TTLTurns (per-entry
 // cache TTL override), and KeepCurrentModel (model-switch-gate forced stay).
 // PreferPrefixRetention is emitted to the pool as an x-vsr-retention-prefer-prefix
 // header; its session-aware scoring bias and KV-cache eviction integration are
@@ -76,6 +77,7 @@ type AlgorithmConfig struct {
 	RouterDC     *RouterDCSelectionConfig     `yaml:"router_dc,omitempty"`
 	AutoMix      *AutoMixSelectionConfig      `yaml:"automix,omitempty"`
 	Hybrid       *HybridSelectionConfig       `yaml:"hybrid,omitempty"`
+	ML           *MLSelectionConfig           `yaml:"ml,omitempty"`
 	RLDriven     *RLDrivenSelectionConfig     `yaml:"-"`
 	GMTRouter    *GMTRouterSelectionConfig    `yaml:"-"`
 	LatencyAware *LatencyAwareAlgorithmConfig `yaml:"latency_aware,omitempty"`
@@ -147,16 +149,16 @@ type ReMoMAlgorithmConfig struct {
 }
 
 type ModelReasoningControl struct {
-	UseReasoning         *bool  `yaml:"use_reasoning"`
-	ReasoningDescription string `yaml:"reasoning_description,omitempty"`
-	ReasoningEffort      string `yaml:"reasoning_effort,omitempty"`
+	UseReasoning         *bool  `yaml:"use_reasoning" json:"use_reasoning"`
+	ReasoningDescription string `yaml:"reasoning_description,omitempty" json:"reasoning_description,omitempty"`
+	ReasoningEffort      string `yaml:"reasoning_effort,omitempty" json:"reasoning_effort,omitempty"`
 }
 
 type ModelRef struct {
-	Model                 string  `yaml:"model"`
-	LoRAName              string  `yaml:"lora_name,omitempty"`
-	Weight                float64 `yaml:"weight,omitempty"`
-	ModelReasoningControl `yaml:",inline"`
+	Model                 string  `yaml:"model" json:"model"`
+	LoRAName              string  `yaml:"lora_name,omitempty" json:"lora_name,omitempty"`
+	Weight                float64 `yaml:"weight,omitempty" json:"weight,omitempty"`
+	ModelReasoningControl `yaml:",inline" json:",inline"`
 }
 
 // RuleNode is a recursive boolean expression tree over signal references.

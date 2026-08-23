@@ -17,19 +17,19 @@ import (
 
 // ClassificationAPIServer holds the server state and dependencies
 type ClassificationAPIServer struct {
-	classificationSvc     classificationService
-	configMu              sync.RWMutex
-	config                *config.RouterConfig
-	runtimeConfig         *liveRuntimeConfig
-	runtimeRegistry       *routerruntime.Registry
-	configPath            string // path to the router config file (for read/update/rollback)
-	memoryStore           memory.Store
-	knowledgeBaseMapCache *knowledgeBaseMapCache
-	startupStateLoader    func() *startupstatus.State
+	classificationSvc  classificationService
+	config             *config.RouterConfig
+	runtimeConfig      *liveRuntimeConfig
+	runtimeRegistry    *routerruntime.Registry
+	configPath         string // path used to resolve startup-status state
+	memoryStore        memory.Store
+	startupStateLoader func() *startupstatus.State
 	// The startup-status writer is created once during process bootstrap. Keep
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
 	startupStatusConfig     *config.StartupStatusConfig
+	managedAPI              ManagedAPI
+	managementTLS           *managementListenerTLS
 	responseCache           *cache.ResponseCacheService
 	contextCompression      *contextcompression.Service
 	compressionRecovery     contextcompression.RecoveryStore
@@ -37,9 +37,6 @@ type ClassificationAPIServer struct {
 	managementAuditEntries  []managementAuditEntry
 	managementAuditLastHash string
 	managementAuditSequence uint64
-	// learningOutcomePolicy gates POST /v1/router/outcomes (idempotency + rate limit).
-	learningOutcomePolicyOnce sync.Once
-	learningOutcomePolicy     *learningOutcomeIngestPolicy
 }
 
 func (s *ClassificationAPIServer) currentContextCompression() (

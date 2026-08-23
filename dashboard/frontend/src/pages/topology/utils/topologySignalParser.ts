@@ -1,6 +1,6 @@
 // topology/utils/topologySignalParser.ts - Signal extraction helpers
 
-import type { ConfigData, KBSignalConfig, SignalConfig } from '../types'
+import type { KBSignalConfig, ManagedTopologyConfig, SignalConfig } from '../types'
 import { SIGNAL_LATENCY } from '../constants'
 
 type AddSignal = (signal: SignalConfig) => void
@@ -11,7 +11,7 @@ function addRuleSignals<T>(
   rules: readonly T[] | undefined,
   buildSignal: SignalBuilder<T>,
 ) {
-  rules?.forEach(rule => {
+  rules?.forEach((rule) => {
     const signal = buildSignal(rule)
     if (signal) {
       addSignal(signal)
@@ -19,19 +19,13 @@ function addRuleSignals<T>(
   })
 }
 
-function mergeRules<T>(...rules: Array<readonly T[] | undefined>): T[] {
-  return rules.flatMap((list) => list ?? [])
-}
-
 /**
- * Extract all signal definitions from config.
- * Supports both Go/router format (keyword_rules, embedding_rules, etc.)
- * and Python CLI format (signals.keywords, signals.embeddings, etc.).
+ * Extract signal definitions from one native Recipe document.
  */
-export function extractSignals(config: ConfigData): SignalConfig[] {
+export function extractSignals(config: ManagedTopologyConfig): SignalConfig[] {
   const signals: SignalConfig[] = []
   const addedSignals = new Set<string>()
-  const routingSignals = config.routing?.signals ?? config.signals
+  const routingSignals = config.document.signals
 
   const addSignal: AddSignal = (signal) => {
     const key = `${signal.type}:${signal.name}`
@@ -41,17 +35,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     }
   }
 
-  addRuleSignals(addSignal, config.keyword_rules, rule => ({
-    type: 'keyword',
-    name: rule.name,
-    latency: SIGNAL_LATENCY.keyword,
-    config: {
-      operator: rule.operator,
-      keywords: rule.keywords,
-      case_sensitive: rule.case_sensitive ?? false,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.keywords, rule => ({
+  addRuleSignals(addSignal, routingSignals?.keywords, (rule) => ({
     type: 'keyword',
     name: rule.name,
     latency: SIGNAL_LATENCY.keyword,
@@ -62,17 +46,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.embedding_rules, rule => ({
-    type: 'embedding',
-    name: rule.name,
-    latency: SIGNAL_LATENCY.embedding,
-    config: {
-      threshold: rule.threshold,
-      candidates: rule.candidates,
-      aggregation_method: rule.aggregation_method || 'max',
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.embeddings, rule => ({
+  addRuleSignals(addSignal, routingSignals?.embeddings, (rule) => ({
     type: 'embedding',
     name: rule.name,
     latency: SIGNAL_LATENCY.embedding,
@@ -83,7 +57,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, routingSignals?.domains, domain => ({
+  addRuleSignals(addSignal, routingSignals?.domains, (domain) => ({
     type: 'domain',
     name: domain.name,
     description: domain.description,
@@ -92,26 +66,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
       mmlu_categories: domain.mmlu_categories,
     },
   }))
-  addRuleSignals(addSignal, config.categories, category => category.mmlu_categories
-    ? {
-      type: 'domain',
-      name: category.name,
-      description: category.description,
-      latency: SIGNAL_LATENCY.domain,
-      config: {
-        mmlu_categories: category.mmlu_categories,
-      },
-    }
-    : null)
-
-  addRuleSignals(addSignal, config.fact_check_rules, rule => ({
-    type: 'fact_check',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.fact_check,
-    config: {},
-  }))
-  addRuleSignals(addSignal, routingSignals?.fact_check, rule => ({
+  addRuleSignals(addSignal, routingSignals?.fact_check, (rule) => ({
     type: 'fact_check',
     name: rule.name,
     description: rule.description,
@@ -119,14 +74,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     config: {},
   }))
 
-  addRuleSignals(addSignal, config.user_feedback_rules, rule => ({
-    type: 'user_feedback',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.user_feedback,
-    config: {},
-  }))
-  addRuleSignals(addSignal, routingSignals?.user_feedbacks, rule => ({
+  addRuleSignals(addSignal, routingSignals?.user_feedbacks, (rule) => ({
     type: 'user_feedback',
     name: rule.name,
     description: rule.description,
@@ -134,17 +82,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     config: {},
   }))
 
-  addRuleSignals(addSignal, config.reask_rules, rule => ({
-    type: 'reask',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.reask,
-    config: {
-      threshold: rule.threshold,
-      lookback_turns: rule.lookback_turns,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.reasks, rule => ({
+  addRuleSignals(addSignal, routingSignals?.reasks, (rule) => ({
     type: 'reask',
     name: rule.name,
     description: rule.description,
@@ -155,17 +93,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.preference_rules, rule => ({
-    type: 'preference',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.preference,
-    config: {
-      examples: rule.examples,
-      threshold: rule.threshold,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.preferences, rule => ({
+  addRuleSignals(addSignal, routingSignals?.preferences, (rule) => ({
     type: 'preference',
     name: rule.name,
     description: rule.description,
@@ -176,13 +104,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.language_rules, rule => ({
-    type: 'language',
-    name: rule.name,
-    latency: SIGNAL_LATENCY.language,
-    config: {},
-  }))
-  addRuleSignals(addSignal, routingSignals?.language, rule => ({
+  addRuleSignals(addSignal, routingSignals?.language, (rule) => ({
     type: 'language',
     name: rule.name,
     description: rule.description,
@@ -190,16 +112,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     config: {},
   }))
 
-  addRuleSignals(addSignal, config.context_rules, rule => ({
-    type: 'context',
-    name: rule.name,
-    latency: SIGNAL_LATENCY.context,
-    config: {
-      min_tokens: rule.min_tokens,
-      max_tokens: rule.max_tokens,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.context, rule => ({
+  addRuleSignals(addSignal, routingSignals?.context, (rule) => ({
     type: 'context',
     name: rule.name,
     latency: SIGNAL_LATENCY.context,
@@ -209,17 +122,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.structure_rules, rule => ({
-    type: 'structure',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.structure,
-    config: {
-      feature: rule.feature,
-      predicate: rule.predicate,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.structure, rule => ({
+  addRuleSignals(addSignal, routingSignals?.structure, (rule) => ({
     type: 'structure',
     name: rule.name,
     description: rule.description,
@@ -230,18 +133,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.complexity_rules, rule => ({
-    type: 'complexity',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.complexity,
-    config: {
-      threshold: rule.threshold,
-      hard: rule.hard,
-      easy: rule.easy,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.complexity, rule => ({
+  addRuleSignals(addSignal, routingSignals?.complexity, (rule) => ({
     type: 'complexity',
     name: rule.name,
     description: rule.description,
@@ -253,14 +145,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.modality_rules, rule => ({
-    type: 'modality',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.modality,
-    config: {},
-  }))
-  addRuleSignals(addSignal, routingSignals?.modality, rule => ({
+  addRuleSignals(addSignal, routingSignals?.modality, (rule) => ({
     type: 'modality',
     name: rule.name,
     description: rule.description,
@@ -268,16 +153,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     config: {},
   }))
 
-  addRuleSignals(addSignal, config.role_bindings, rule => ({
-    type: 'authz',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.authz,
-    config: {
-      role: rule.role,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.role_bindings, rule => ({
+  addRuleSignals(addSignal, routingSignals?.role_bindings, (rule) => ({
     type: 'authz',
     name: rule.name,
     description: rule.description,
@@ -287,17 +163,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.jailbreak, rule => ({
-    type: 'jailbreak',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.jailbreak,
-    config: {
-      threshold: rule.threshold,
-      include_history: rule.include_history,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.jailbreak, rule => ({
+  addRuleSignals(addSignal, routingSignals?.jailbreak, (rule) => ({
     type: 'jailbreak',
     name: rule.name,
     description: rule.description,
@@ -308,18 +174,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, config.pii, rule => ({
-    type: 'pii',
-    name: rule.name,
-    description: rule.description,
-    latency: SIGNAL_LATENCY.pii,
-    config: {
-      threshold: rule.threshold,
-      pii_types_allowed: rule.pii_types_allowed,
-      include_history: rule.include_history,
-    },
-  }))
-  addRuleSignals(addSignal, routingSignals?.pii, rule => ({
+  addRuleSignals(addSignal, routingSignals?.pii, (rule) => ({
     type: 'pii',
     name: rule.name,
     description: rule.description,
@@ -331,7 +186,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, mergeRules(config.kb, routingSignals?.kb), rule => ({
+  addRuleSignals(addSignal, routingSignals?.kb, (rule) => ({
     type: 'kb',
     name: rule.name,
     description: rule.description || `KB bind ${rule.kb} ${rule.target.kind}=${rule.target.value}`,
@@ -343,7 +198,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     } satisfies KBSignalConfig,
   }))
 
-  addRuleSignals(addSignal, mergeRules(config.conversation, routingSignals?.conversation), rule => ({
+  addRuleSignals(addSignal, routingSignals?.conversation, (rule) => ({
     type: 'conversation',
     name: rule.name,
     description: rule.description,
@@ -354,7 +209,7 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
     },
   }))
 
-  addRuleSignals(addSignal, mergeRules(config.events, routingSignals?.events), rule => ({
+  addRuleSignals(addSignal, routingSignals?.events, (rule) => ({
     type: 'event',
     name: rule.name,
     latency: SIGNAL_LATENCY.event,
@@ -371,9 +226,9 @@ export function extractSignals(config: ConfigData): SignalConfig[] {
   return signals
 }
 
-function extractProjectionSignals(config: ConfigData): SignalConfig[] {
+function extractProjectionSignals(config: ManagedTopologyConfig): SignalConfig[] {
   const projectionSignals: SignalConfig[] = []
-  const projections = config.routing?.projections ?? config.projections
+  const projections = config.document.projections
   const scoreInputsByName = new Map(
     (projections?.scores ?? []).map((score) => [
       score.name,
@@ -386,8 +241,8 @@ function extractProjectionSignals(config: ConfigData): SignalConfig[] {
     ]),
   )
 
-  projections?.mappings?.forEach(mapping => {
-    mapping.outputs?.forEach(output => {
+  projections?.mappings?.forEach((mapping) => {
+    mapping.outputs?.forEach((output) => {
       projectionSignals.push({
         type: 'projection',
         name: output.name,

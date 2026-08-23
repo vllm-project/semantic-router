@@ -83,7 +83,10 @@ function parseOr(src: string, ctx: ParseCtx): RuleNode {
   let left = parseAnd(src, ctx)
   while (true) {
     skipWhitespace(src, ctx)
-    if (src.slice(ctx.pos, ctx.pos + 2).toUpperCase() === 'OR' && /\s/.test(src[ctx.pos + 2] ?? '')) {
+    if (
+      src.slice(ctx.pos, ctx.pos + 2).toUpperCase() === 'OR' &&
+      /\s/.test(src[ctx.pos + 2] ?? '')
+    ) {
       ctx.pos += 2
       skipWhitespace(src, ctx)
       const right = parseAnd(src, ctx)
@@ -103,7 +106,10 @@ function parseAnd(src: string, ctx: ParseCtx): RuleNode {
   let left = parseNot(src, ctx)
   while (true) {
     skipWhitespace(src, ctx)
-    if (src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'AND' && /[\s(]/.test(src[ctx.pos + 3] ?? '')) {
+    if (
+      src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'AND' &&
+      /[\s(]/.test(src[ctx.pos + 3] ?? '')
+    ) {
       ctx.pos += 3
       skipWhitespace(src, ctx)
       const right = parseNot(src, ctx)
@@ -121,7 +127,10 @@ function parseAnd(src: string, ctx: ParseCtx): RuleNode {
 
 function parseNot(src: string, ctx: ParseCtx): RuleNode {
   skipWhitespace(src, ctx)
-  if (src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'NOT' && /[\s(]/.test(src[ctx.pos + 3] ?? '')) {
+  if (
+    src.slice(ctx.pos, ctx.pos + 3).toUpperCase() === 'NOT' &&
+    /[\s(]/.test(src[ctx.pos + 3] ?? '')
+  ) {
     ctx.pos += 3
     skipWhitespace(src, ctx)
     const child = parseNot(src, ctx)
@@ -228,7 +237,12 @@ export function removeAtPath(root: RuleNode, path: NodePath): RuleNode | null {
   return { ...root, conditions: newConditions } as RuleNode
 }
 
-export function insertAtPath(root: RuleNode, path: NodePath, insertIdx: number, node: RuleNode): RuleNode {
+export function insertAtPath(
+  root: RuleNode,
+  path: NodePath,
+  insertIdx: number,
+  node: RuleNode,
+): RuleNode {
   if (path.length === 0) {
     if (isOperator(root)) {
       const conditions = [...root.conditions]
@@ -281,7 +295,11 @@ export function validateTree(node: RuleNode | null, signals: SignalDescriptor[])
   const warnings: string[] = []
   if (!node) return warnings
   if (isLeaf(node)) {
-    if (!signals.some((signal) => signal.signalType === node.signalType && signal.name === node.signalName)) {
+    if (
+      !signals.some(
+        (signal) => signal.signalType === node.signalType && signal.name === node.signalName,
+      )
+    ) {
       warnings.push(`Signal ${node.signalType}("${node.signalName}") is not defined`)
     }
   } else {

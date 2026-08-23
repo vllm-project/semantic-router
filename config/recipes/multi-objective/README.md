@@ -80,12 +80,13 @@ database, or disable replay or body capture when content must not be retained.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/multi-objective/config.yaml
-vllm-sr serve --config config/recipes/multi-objective/config.yaml
+vllm-sr serve
 ```
 
-Clients then send one of the five virtual model IDs in the OpenAI-compatible
-request body.
+In the Dashboard, connect the physical Models, choose **Multi-Objective
+Routing** in **Recipes**, assign every objective lane, and publish the desired
+Mixture-of-Model Entrypoints. Clients then send one of those published model
+IDs in the OpenAI-compatible request body.
 
 ## Evaluation
 

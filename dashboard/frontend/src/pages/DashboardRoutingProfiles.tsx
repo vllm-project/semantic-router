@@ -1,14 +1,12 @@
-import type { RouterConfig } from './dashboardPageTypes'
 import {
-  countProjectionsInProfile,
-  countSignalsInProfile,
-  listRoutingScopes,
-  type RoutingScopedConfigLike,
-} from '../utils/routingScopes'
+  listManagedRecipeScopes,
+  type ManagedRoutingSummary,
+} from '../utils/managedRoutingSnapshot'
+import { countProjectionsInProfile, countSignalsInProfile } from '../utils/routingScopes'
 import styles from './DashboardRoutingProfiles.module.css'
 
 interface DashboardRoutingProfilesProps {
-  config: RouterConfig
+  config: ManagedRoutingSummary
   onOpenTopology: (scopeId: string) => void
 }
 
@@ -16,7 +14,7 @@ export default function DashboardRoutingProfiles({
   config,
   onOpenTopology,
 }: DashboardRoutingProfilesProps) {
-  const scopes = listRoutingScopes(config as RouterConfig & RoutingScopedConfigLike)
+  const scopes = listManagedRecipeScopes(config)
   if (scopes.length === 0) return null
 
   return (
@@ -31,10 +29,10 @@ export default function DashboardRoutingProfiles({
       </div>
       <div className={styles.grid}>
         {scopes.map((scope) => {
-          const signals = countSignalsInProfile(scope.routing).total
-          const projections = countProjectionsInProfile(scope.routing)
-          const decisions = Array.isArray(scope.routing.decisions)
-            ? scope.routing.decisions.length
+          const signals = countSignalsInProfile(scope.document).total
+          const projections = countProjectionsInProfile(scope.document)
+          const decisions = Array.isArray(scope.document.decisions)
+            ? scope.document.decisions.length
             : 0
           return (
             <article key={scope.id} className={styles.card}>

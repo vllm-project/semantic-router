@@ -17,8 +17,7 @@ import (
 )
 
 type fakeResolvedClassificationService struct {
-	batchErr      error
-	updatedConfig *config.RouterConfig
+	batchErr error
 }
 
 func (s *fakeResolvedClassificationService) ClassifyIntent(req services.IntentRequest) (*services.IntentResponse, error) {
@@ -64,14 +63,6 @@ func (s *fakeResolvedClassificationService) HasFactCheckClassifier() bool    { r
 func (s *fakeResolvedClassificationService) HasHallucinationDetector() bool  { return true }
 func (s *fakeResolvedClassificationService) HasHallucinationExplainer() bool { return true }
 func (s *fakeResolvedClassificationService) HasFeedbackDetector() bool       { return true }
-func (s *fakeResolvedClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
-	s.updatedConfig = newConfig
-}
-
-func (s *fakeResolvedClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
-	s.updatedConfig = newConfig
-}
-
 func TestHandleBatchClassificationUsesResolvedClassificationService(t *testing.T) {
 	resolvedSvc := &fakeResolvedClassificationService{}
 	apiServer := &ClassificationAPIServer{
@@ -110,7 +101,6 @@ func TestHandleOpenAIModelsUsesResolvedRuntimeConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			staleCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -133,10 +123,10 @@ func TestHandleOpenAIModelsUsesResolvedRuntimeConfig(t *testing.T) {
 	}
 
 	if !got["LiveRouter"] {
-		t.Fatalf("expected live auto model name, got %+v", resp.Data)
+		t.Fatalf("expected live Entrypoint name, got %+v", resp.Data)
 	}
 	if got["StaleRouter"] {
-		t.Fatalf("did not expect stale auto model name in response: %+v", resp.Data)
+		t.Fatalf("did not expect stale Entrypoint name in response: %+v", resp.Data)
 	}
 	if !got["live-model"] {
 		t.Fatalf("expected live config models to be included, got %+v", resp.Data)
@@ -146,6 +136,8 @@ func TestHandleOpenAIModelsUsesResolvedRuntimeConfig(t *testing.T) {
 func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 	staleCfg := testModelListConfig("StaleRouter", false, nil)
 	liveCfg := testModelListConfig("LiveRouter", false, nil)
+	staleCfg.StreamedBodyTimeoutSec = 3
+	liveCfg.StreamedBodyTimeoutSec = 17
 
 	apiServer := &ClassificationAPIServer{
 		classificationSvc: services.NewPlaceholderClassificationService(),
@@ -153,7 +145,6 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			staleCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -175,8 +166,8 @@ func TestHandleClassifierInfoUsesResolvedRuntimeConfig(t *testing.T) {
 		t.Fatalf("failed to decode config payload: %v", err)
 	}
 
-	if cfg["AutoModelName"] != "LiveRouter" {
-		t.Fatalf("expected live config payload, got %#v", cfg["AutoModelName"])
+	if cfg["StreamedBodyTimeoutSec"] != float64(17) {
+		t.Fatalf("expected live config payload, got %#v", cfg["StreamedBodyTimeoutSec"])
 	}
 }
 
@@ -207,7 +198,6 @@ func TestHandleClassifierInfoNormalizesYAMLStylePluginConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			liveCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -262,7 +252,6 @@ func TestBuildModelsInfoResponseUsesResolvedRuntimeConfig(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			staleCfg,
 			func() *config.RouterConfig { return liveCfg },
-			nil,
 		),
 	}
 
@@ -319,15 +308,26 @@ func TestRuntimeRegistryResolvesSharedDependencies(t *testing.T) {
 	}
 }
 
-func testModelListConfig(autoModelName string, includeConfigModels bool, models []string) *config.RouterConfig {
+func testModelListConfig(entrypointName string, includeConfigModels bool, models []string) *config.RouterConfig {
 	modelConfig := make(map[string]config.ModelParams, len(models))
 	for _, model := range models {
 		modelConfig[model] = config.ModelParams{
+			ResourceID:         "model-" + model,
+			ResourceRevision:   1,
+			PreferredEndpoints: []string{"primary"},
+		}
+	}
+	routeModel := "routing-backend"
+	if len(models) > 0 {
+		routeModel = models[0]
+	} else {
+		modelConfig[routeModel] = config.ModelParams{
+			ResourceID: "model-" + routeModel, ResourceRevision: 1,
 			PreferredEndpoints: []string{"primary"},
 		}
 	}
 
-	return &config.RouterConfig{
+	cfg := &config.RouterConfig{
 		BackendModels: config.BackendModels{
 			VLLMEndpoints: []config.VLLMEndpoint{
 				{
@@ -340,10 +340,33 @@ func testModelListConfig(autoModelName string, includeConfigModels bool, models 
 			ModelConfig: modelConfig,
 		},
 		RouterOptions: config.RouterOptions{
-			AutoModelName:             autoModelName,
 			IncludeConfigModelsInList: includeConfigModels,
 		},
 	}
+	if entrypointName != "" {
+		cfg.Entrypoints = []config.EntrypointMapping{{
+			ID: "entrypoint-runtime-test", Revision: 1, Name: entrypointName, ModelNames: []string{entrypointName},
+			Rules: []config.EntrypointRule{{
+				ID: "rule-runtime-test", Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: "recipe-runtime-test", RecipeRevision: 1, Recipe: "runtime-test",
+					Assignments: map[string]config.RoutingAssignmentSet{
+						"decision-runtime-test": {Models: []config.RoutingModelAssignment{{
+							ModelID: "model-" + routeModel, ModelRevision: 1, ModelName: routeModel, Weight: "1",
+						}}},
+					},
+				},
+			}},
+		}}
+		cfg.Recipes = []config.RoutingRecipe{{
+			ID: "recipe-runtime-test", Revision: 1, Name: "runtime-test", Description: "Runtime test",
+			Profile: config.RoutingProfile{Decisions: []config.Decision{{ID: "decision-runtime-test", Name: "runtime-test"}}},
+		}}
+		if err := cfg.PrepareEntrypointRecipes(); err != nil {
+			panic(err)
+		}
+	}
+	return cfg
 }
 
 func decodeJSONObject(t *testing.T, body []byte) map[string]interface{} {

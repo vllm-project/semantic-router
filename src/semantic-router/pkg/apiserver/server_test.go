@@ -9,8 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-// TestSetupRoutesConfigEndpoints verifies the config API surface exposed by setupRoutes.
-func TestSetupRoutesConfigEndpoints(t *testing.T) {
+func TestStandaloneListenerHasNoRoutingConfigMutationAuthority(t *testing.T) {
 	apiServer := &ClassificationAPIServer{
 		classificationSvc: services.NewPlaceholderClassificationService(),
 		config:            &config.RouterConfig{},
@@ -24,16 +23,25 @@ func TestSetupRoutesConfigEndpoints(t *testing.T) {
 		shouldExist bool
 	}{
 		{method: http.MethodGet, path: "/health", shouldExist: true},
-		{method: http.MethodGet, path: "/config/router", shouldExist: true},
-		{method: http.MethodPatch, path: "/config/router", shouldExist: true},
-		{method: http.MethodPut, path: "/config/router", shouldExist: true},
-		{method: http.MethodPost, path: "/config/router/rollback", shouldExist: true},
-		{method: http.MethodGet, path: "/config/router/versions", shouldExist: true},
-		{method: http.MethodGet, path: "/config/router/recipes", shouldExist: true},
-		{method: http.MethodPost, path: "/config/router/recipes/validate", shouldExist: true},
-		{method: http.MethodGet, path: "/config/router/recipes/managed", shouldExist: true},
-		{method: http.MethodPut, path: "/config/router/recipes/managed", shouldExist: true},
-		{method: http.MethodDelete, path: "/config/router/recipes/managed", shouldExist: true},
+		{method: http.MethodPost, path: "/api/v1/classify/intent", shouldExist: true},
+		{method: http.MethodGet, path: "/info/models", shouldExist: true},
+		{method: http.MethodGet, path: "/config/router", shouldExist: false},
+		{method: http.MethodPost, path: "/config/router/validate", shouldExist: false},
+		{method: http.MethodPatch, path: "/config/router", shouldExist: false},
+		{method: http.MethodPut, path: "/config/router", shouldExist: false},
+		{method: http.MethodPost, path: "/config/router/rollback", shouldExist: false},
+		{method: http.MethodGet, path: "/config/router/versions", shouldExist: false},
+		{method: http.MethodGet, path: "/config/router/recipes", shouldExist: false},
+		{method: http.MethodPost, path: "/config/router/recipes/validate", shouldExist: false},
+		{method: http.MethodGet, path: "/config/router/recipes/managed", shouldExist: false},
+		{method: http.MethodPut, path: "/config/router/recipes/managed", shouldExist: false},
+		{method: http.MethodDelete, path: "/config/router/recipes/managed", shouldExist: false},
+		{method: http.MethodGet, path: "/config/hash", shouldExist: false},
+		{method: http.MethodGet, path: "/config/kbs", shouldExist: false},
+		{method: http.MethodPost, path: "/config/kbs", shouldExist: false},
+		{method: http.MethodGet, path: "/config/kbs/example", shouldExist: false},
+		{method: http.MethodPut, path: "/config/kbs/example", shouldExist: false},
+		{method: http.MethodDelete, path: "/config/kbs/example", shouldExist: false},
 		{method: http.MethodGet, path: "/config/classification", shouldExist: false},
 		{method: http.MethodPut, path: "/config/classification", shouldExist: false},
 		{method: http.MethodGet, path: "/config/system-prompts", shouldExist: false},

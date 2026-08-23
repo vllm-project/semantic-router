@@ -7,14 +7,13 @@ import (
 )
 
 // resolveEntrypointForRequest resolves the routing profile before any signal
-// evaluation. Auto and direct-looper aliases select the default recipe, named
-// entrypoints select their mapped recipe, and concrete backend models keep a
-// nil recipe so they bypass recipe routing entirely.
+// evaluation. Only an explicit Entrypoint selects a Recipe; concrete backend
+// Models and unknown names keep a nil Recipe and bypass Recipe routing.
 func (r *OpenAIRouter) resolveEntrypointForRequest(originalModel string, ctx *RequestContext) {
 	if r == nil || r.Config == nil || ctx == nil {
 		return
 	}
-	recipe, ok := r.Config.RecipeForRoutingModel(originalModel)
+	recipe, ok := r.Config.RecipeForRequestModel(originalModel)
 	if !ok {
 		ctx.Routing.SelectPassthrough()
 		return
@@ -32,12 +31,11 @@ func (r *OpenAIRouter) classifierForRequest(ctx *RequestContext) *classification
 		return nil
 	}
 	recipe := ctx.Routing.SelectedRecipe()
-	// Programmatic single-profile routers may provide only the default
-	// classifier. Named recipes never fall back across the isolation boundary.
+	// Entrypoint bindings only replace physical decision targets. Signals and
+	// projections remain the reusable recipe's read-only policy, so derived
+	// views intentionally share its compiled classifier. Mutable selection,
+	// replay, learning, cache, and session state are keyed by RuntimeScope.
 	if r.RecipeClassifiers == nil {
-		if recipe.Name == config.DefaultRecipeName {
-			return r.Classifier
-		}
 		return nil
 	}
 	classifier, ok := r.RecipeClassifiers.ForRecipe(recipe.Name)
@@ -47,28 +45,23 @@ func (r *OpenAIRouter) classifierForRequest(ctx *RequestContext) *classification
 	return classifier
 }
 
-// requestModelActsAsAuto reports whether the inbound model name is resolved by
-// the router (auto slugs and entrypoint virtual names) rather than forwarded
-// as a concrete backend model.
-func (r *OpenAIRouter) requestModelActsAsAuto(modelName string) bool {
+// requestModelIsEntrypoint reports whether the inbound Model is an explicit
+// request-facing Entrypoint rather than a concrete backend Model.
+func (r *OpenAIRouter) requestModelIsEntrypoint(modelName string) bool {
 	if r == nil || r.Config == nil {
 		return false
 	}
-	return r.Config.IsAutoModelName(modelName) || r.Config.IsEntrypointModelName(modelName)
+	return r.Config.IsEntrypointModelName(modelName)
 }
 
-// decisionCandidatesForRequest scopes evaluation to exactly one recipe. Direct
-// looper aliases additionally filter the default recipe by algorithm type.
-func (r *OpenAIRouter) decisionCandidatesForRequest(originalModel string, ctx *RequestContext) []config.Decision {
+// decisionCandidatesForRequest scopes evaluation to exactly one Recipe.
+func (r *OpenAIRouter) decisionCandidatesForRequest(ctx *RequestContext) []config.Decision {
 	if ctx != nil && ctx.Routing.SelectedRecipe() != nil {
 		recipe := ctx.Routing.SelectedRecipe()
-		if r.Config.IsReMoMModelName(originalModel) || r.Config.IsFusionModelName(originalModel) || r.Config.IsFlowModelName(originalModel) {
-			return r.decisionCandidatesForRequestModel(originalModel)
-		}
 		if recipe.Profile.Decisions == nil {
 			// A recipe with no decisions still scopes evaluation: an empty,
-			// non-nil slice keeps runDecisionEngine from falling back to the
-			// default profile's decisions.
+			// non-nil slice keeps runDecisionEngine from escaping the selected
+			// Recipe.
 			return []config.Decision{}
 		}
 		return recipe.Profile.Decisions

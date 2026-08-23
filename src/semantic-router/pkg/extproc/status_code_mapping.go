@@ -13,6 +13,8 @@ func statusCodeToImmediateResponseCode(statusCode int) typev3.StatusCode {
 	}
 
 	switch statusCode {
+	case http.StatusCreated:
+		return typev3.StatusCode_Created
 	case http.StatusUnauthorized:
 		return typev3.StatusCode_Unauthorized
 	case http.StatusForbidden:
@@ -21,6 +23,8 @@ func statusCodeToImmediateResponseCode(statusCode int) typev3.StatusCode {
 		return typev3.StatusCode_MethodNotAllowed
 	case http.StatusRequestEntityTooLarge:
 		return typev3.StatusCode_PayloadTooLarge
+	case http.StatusConflict:
+		return typev3.StatusCode_Conflict
 	case http.StatusUnprocessableEntity:
 		return typev3.StatusCode_UnprocessableEntity
 	case http.StatusTooManyRequests:

@@ -60,7 +60,7 @@ Current methods are:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     embeddings:
       - name: technical-support
@@ -110,8 +110,6 @@ routing:
         conditions:
           - type: projection
             name: support-escalated
-      modelRefs:
-        - model: support-large
 ```
 
 Only mapping output names are referenced with `type: projection`. Decisions do

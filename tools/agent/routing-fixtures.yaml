@@ -22,7 +22,7 @@ cases:
       - src/vllm-sr/cli/models.py
       - dashboard/frontend/src/pages/BuilderPage.tsx
       - src/semantic-router/pkg/dsl/compiler.go
-      - src/semantic-router/pkg/k8s/converter.go
+      - deploy/operator/controllers/bootstrap_config.go
     expected_primary_skill: config-platform-change
   - name: classification-signal-with-shared-config-surfaces
     changed_files:
@@ -38,9 +38,9 @@ cases:
     changed_files:
       - src/semantic-router/pkg/memory/extractor.go
     expected_primary_skill: router-service-platform-change
-  - name: router-service-authz
+  - name: router-service-access-runtime
     changed_files:
-      - src/semantic-router/pkg/authz/chain.go
+      - src/semantic-router/pkg/accessruntime/runtime.go
     expected_primary_skill: router-service-platform-change
   - name: fleet-sim-runtime
     changed_files:

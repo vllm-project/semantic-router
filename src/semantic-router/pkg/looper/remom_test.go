@@ -220,8 +220,8 @@ func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
 		MaxCompletionTokens: &completionLimit,
 		OnError:             config.ReMoMOnErrorSkip,
 	}, true, []config.ModelRef{{Model: "model-a"}})
-	request.OriginalRequest.MaxTokens = openai.Int(128)
-	request.OriginalRequest.MaxCompletionTokens = openai.Int(256)
+	request.executionRequest.MaxTokens = openai.Int(128)
+	request.executionRequest.MaxCompletionTokens = openai.Int(256)
 	var toolRequest openai.ChatCompletionNewParams
 	require.NoError(t, json.Unmarshal([]byte(`{
 		"tools": [{
@@ -234,8 +234,8 @@ func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
 		}],
 		"tool_choice": "auto"
 	}`), &toolRequest))
-	request.OriginalRequest.Tools = toolRequest.Tools
-	request.OriginalRequest.ToolChoice = toolRequest.ToolChoice
+	request.executionRequest.Tools = toolRequest.Tools
+	request.executionRequest.ToolChoice = toolRequest.ToolChoice
 
 	response, err := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(
 		context.Background(),
@@ -244,7 +244,7 @@ func TestReMoMInternalCallsAreNonStreamingAndUseCompletionLimit(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, response)
-	assert.Equal(t, "text/event-stream", response.ContentType)
+	assert.Equal(t, "text/event-stream", responseContentTypeForTest(response))
 	require.Len(t, requests, 2)
 	for _, request := range requests {
 		require.NotNil(t, request.Stream)
@@ -270,7 +270,7 @@ func TestReMoMWithoutCompletionLimitPreservesRequestTokenField(t *testing.T) {
 		ModelDistribution: remomDistributionFirstOnly,
 		OnError:           config.ReMoMOnErrorSkip,
 	}, false, []config.ModelRef{{Model: "model-a"}})
-	request.OriginalRequest.MaxTokens = openai.Int(320)
+	request.executionRequest.MaxTokens = openai.Int(320)
 
 	_, err := NewReMoMLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(
 		context.Background(),
@@ -314,8 +314,8 @@ func TestReMoMUsesReasoningOnlyReplyForSynthesisWithoutPublishingIt(t *testing.T
 	)
 
 	require.NoError(t, err)
-	assert.Contains(t, string(response.Body), "public synthesized answer")
-	assert.NotContains(t, string(response.Body), privateReasoning)
+	assert.Contains(t, semanticTextForTest(t, response), "public synthesized answer")
+	assert.NotContains(t, semanticTextForTest(t, response), privateReasoning)
 }
 
 func TestReMoMUsageIncludesUnusableAttemptedReply(t *testing.T) {
@@ -390,7 +390,7 @@ func TestReMoMEmptyFinalFallsBackToBestPreviousOutput(t *testing.T) {
 			} `json:"message"`
 		} `json:"choices"`
 	}
-	require.NoError(t, json.Unmarshal(response.Body, &completion))
+	require.NoError(t, json.Unmarshal(wireResponseForTest(t, response), &completion))
 	require.Len(t, completion.Choices, 1)
 	assert.Equal(t, "model-detailed", completion.Model)
 	assert.Equal(t, "more complete candidate answer", completion.Choices[0].Message.Content)
@@ -487,7 +487,7 @@ func writeReMoMTestCompletionWithReasoning(
 			"message":       message,
 			"finish_reason": "stop",
 		}},
-		"usage": usage.Map(),
+		"usage": tokenUsageMapForTest(usage),
 	}))
 }
 
@@ -501,7 +501,7 @@ func lastReMoMTestMessageContent(payload remomTestRequestPayload) string {
 
 func newReMoMTestRequest(cfg *config.ReMoMAlgorithmConfig, streaming bool, modelRefs []config.ModelRef) *Request {
 	return &Request{
-		OriginalRequest: &openai.ChatCompletionNewParams{
+		executionRequest: &openai.ChatCompletionNewParams{
 			Model:    "routing-alias",
 			Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("solve the task")},
 		},

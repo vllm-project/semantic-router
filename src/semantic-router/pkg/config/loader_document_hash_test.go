@@ -7,10 +7,10 @@ import (
 )
 
 func TestParseYAMLBytesRecordsExactDocumentHash(t *testing.T) {
-	document := []byte(recipeTestBaseYAML)
-	cfg, err := ParseYAMLBytes(document)
+	document := []byte(entrypointRulesYAML)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err != nil {
-		t.Fatalf("ParseYAMLBytes() error = %v", err)
+		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes() error = %v", err)
 	}
 
 	digest := sha256.Sum256(document)
@@ -21,13 +21,13 @@ func TestParseYAMLBytesRecordsExactDocumentHash(t *testing.T) {
 }
 
 func TestParseYAMLBytesDocumentHashTracksFormattingChanges(t *testing.T) {
-	first, err := ParseYAMLBytes([]byte(recipeTestBaseYAML))
+	first, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML))
 	if err != nil {
-		t.Fatalf("ParseYAMLBytes(first) error = %v", err)
+		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes(first) error = %v", err)
 	}
-	second, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + "\n"))
+	second, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML + "\n"))
 	if err != nil {
-		t.Fatalf("ParseYAMLBytes(second) error = %v", err)
+		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes(second) error = %v", err)
 	}
 	if first.DocumentHash == second.DocumentHash {
 		t.Fatal("document hash should identify the exact runtime file, including formatting")

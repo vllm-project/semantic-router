@@ -22,16 +22,10 @@ describe('getDecisionReachability', () => {
     const configured = new Set(['keyword:known'])
 
     expect(
-      getDecisionReachability(
-        decision([{ type: 'keyword', name: 'known' }]),
-        configured,
-      ),
+      getDecisionReachability(decision([{ type: 'keyword', name: 'known' }]), configured),
     ).toMatchObject({ isFallback: false, isUnreachable: false })
     expect(
-      getDecisionReachability(
-        decision([{ type: 'keyword', name: 'missing' }]),
-        configured,
-      ),
+      getDecisionReachability(decision([{ type: 'keyword', name: 'missing' }]), configured),
     ).toEqual({
       isFallback: false,
       isUnreachable: true,

@@ -1,59 +1,129 @@
-# Semantic Router Configuration for Dashboard E2E Profile
-# Minimal config — dashboard tests exercise the dashboard API, not routing logic.
-config:
-  model_config:
-    "base-model":
-      reasoning_family: "qwen3"
-      loras:
-        - name: "general-expert"
-          description: "General-purpose adapter"
+replicaCount: 2
 
-  categories:
-    - name: other
-      description: "General knowledge and miscellaneous topics"
-
-  decisions:
-    - name: "other_decision"
-      description: "Default decision for all requests"
-      priority: 1
-      rules:
-        operator: "OR"
-        conditions:
-          - type: "domain"
-            name: "other"
-      modelRefs:
-        - model: base-model
-          lora_name: general-expert
-          use_reasoning: false
-
-  strategy: "priority"
-  default_model: general-expert
-
-  bert_model:
-    model_id: models/mom-embedding-light
-    threshold: 0.6
-    use_cpu: true
-
-  classifier:
-    category_model:
-      model_id: "models/mom-domain-classifier"
-      use_modernbert: true
-      threshold: 0.6
-      use_cpu: true
-      category_mapping_path: "models/mom-domain-classifier/category_mapping.json"
-    pii_model:
-      model_id: "models/mom-pii-classifier"
-      use_modernbert: false
-      threshold: 0.9
-      use_cpu: true
-      pii_mapping_path: "models/mom-pii-classifier/pii_type_mapping.json"
-
-  prompt_guard:
-    enabled: false
-
-  response_cache:
-    enabled: false
-
+configOverride:
+  version: v0.4
   global:
-    model_catalog:
-      kbs: []
+    control_plane:
+      mode: managed
+      provider_catalog:
+        replica_id_env: VLLM_SR_REPLICA_ID
+        rollout_groups:
+        - plane: control
+          id: management
+        - plane: data
+          id: router
+        required_rollout_groups:
+        - plane: control
+          id: management
+        - plane: data
+          id: router
+    stores:
+      access:
+        type: postgres
+        postgres:
+          dsn_env: VLLM_SR_ACCESS_DATABASE_URL
+          max_connections: 20
+      access_runtime:
+        type: redis
+        redis:
+          url_env: VLLM_SR_ACCESS_REDIS_URL
+          key_prefix: vllm-sr:e2e:access
+    services:
+      agent:
+        public_inference_endpoint: http://semantic-router-public.vllm-semantic-router-system.svc.cluster.local/v1/chat/completions
+      access:
+        enabled: true
+        credentials:
+          api_key_hmac_keyring_env: VLLM_SR_API_KEY_HMAC_KEYRING
+          delegation_hmac_keyring_env: VLLM_SR_DELEGATION_HMAC_KEYRING
+        tenant_context:
+          signing_key_env: VLLM_SR_TENANT_CONTEXT_KEYRING
+        enforcement:
+          failure_mode: deny
+          request_accounting: admission
+          token_accounting: response_actual
+          unknown_usage_action: freeze
+          settle_on: stream_done
+          deduplicate_by: admission_id
+      backend_credentials:
+        provider_kek_keyring_env: VLLM_SR_PROVIDER_KEK_KEYRING
+      backend_egress:
+        policy_file: /run/config/vllm-sr/backend-egress/policy.yaml
+      management_api:
+        bind_address: 0.0.0.0
+        port: 8080
+        remote_exposure: false
+        tls:
+          certificate_env: VLLM_SR_MANAGEMENT_TLS_CERTIFICATE
+          private_key_env: VLLM_SR_MANAGEMENT_TLS_PRIVATE_KEY
+        auth:
+          mode: router
+          token_signing_keyring_env: VLLM_SR_MANAGEMENT_TOKEN_KEYRING
+          service_account_hmac_keyring_env: VLLM_SR_SERVICE_ACCOUNT_HMAC_KEYRING
+          invitation_hmac_keyring_env: VLLM_SR_INVITATION_HMAC_KEYRING
+          control_plane_hmac_keyring_env: VLLM_SR_CONTROL_PLANE_HMAC_KEYRING
+          response_kek_keyring_env: VLLM_SR_RESPONSE_KEK_KEYRING
+          bootstrap:
+            token_file: /run/secrets/vllm-sr/bootstrap/bootstrap/router-token
+            disable_after_first_cluster_admin: true
+      observability:
+        metrics:
+          enabled: true
+        tracing:
+          enabled: false
+      api:
+        batch_classification:
+          max_batch_size: 100
+          concurrency_threshold: 5
+          max_concurrency: 8
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+    integrations: {}
+
+envFromSecrets:
+- semantic-router-dashboard-e2e-router
+extraEnv:
+- name: VLLM_SR_REPLICA_ID
+  valueFrom:
+    fieldRef:
+      fieldPath: metadata.name
+- name: SSL_CERT_FILE
+  value: /run/secrets/vllm-sr/router-trust/ca.crt
+extraVolumes:
+- name: dashboard-e2e-router-trust
+  secret:
+    secretName: semantic-router-dashboard-e2e-router
+    items:
+    - key: ca.crt
+      path: ca.crt
+- name: dashboard-e2e-bootstrap
+  persistentVolumeClaim:
+    claimName: semantic-router-dashboard-e2e-data
+- name: dashboard-e2e-backend-egress
+  configMap:
+    name: semantic-router-dashboard-e2e-egress
+    items:
+    - key: policy.yaml
+      path: policy.yaml
+extraVolumeMounts:
+- name: dashboard-e2e-router-trust
+  mountPath: /run/secrets/vllm-sr/router-trust
+  readOnly: true
+- name: dashboard-e2e-bootstrap
+  mountPath: /run/secrets/vllm-sr/bootstrap
+  readOnly: true
+- name: dashboard-e2e-backend-egress
+  mountPath: /run/config/vllm-sr/backend-egress
+  readOnly: true
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 8Gi
+  requests:
+    cpu: 500m
+    memory: 2Gi

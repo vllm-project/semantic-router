@@ -8,7 +8,7 @@ func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) erro
 	modelParams, exists := cfg.ModelConfig[modelName]
 	if !exists {
 		return fmt.Errorf(
-			"lora_name %q specified but model %q is not declared in routing.modelCards",
+			"lora_name %q specified but model %q is not declared in the compiled Model set",
 			loraName,
 			modelName,
 		)
@@ -16,7 +16,7 @@ func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) erro
 
 	if len(modelParams.LoRAs) == 0 {
 		return fmt.Errorf(
-			"lora_name %q specified but model %q declares no routing.modelCards[].loras entries",
+			"lora_name %q specified but model %q declares no LoRA adapters",
 			loraName,
 			modelName,
 		)
@@ -33,7 +33,7 @@ func validateLoRAName(cfg *RouterConfig, modelName string, loraName string) erro
 		availableLoRAs[i] = lora.Name
 	}
 	return fmt.Errorf(
-		"lora_name %q is not declared in routing.modelCards[%q].loras. Available LoRAs: %v",
+		"lora_name %q is not declared for model %q. Available LoRAs: %v",
 		loraName,
 		modelName,
 		availableLoRAs,

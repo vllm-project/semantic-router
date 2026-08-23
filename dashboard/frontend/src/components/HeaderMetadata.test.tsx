@@ -37,15 +37,17 @@ describe('chat routing metadata', () => {
     expect(markup).toContain('RESPONSE PATH')
   })
 
-  it('uses the looper algorithm as a compatibility fallback', () => {
+  it('ignores obsolete looper algorithm metadata', () => {
     const headers = {
       ...routingHeaders,
       'x-vsr-selected-algorithm': '',
       'x-vsr-looper-algorithm': 'confidence',
     }
-    const markup = renderToStaticMarkup(createElement(HeaderReveal, { headers }))
+    const displayMarkup = renderToStaticMarkup(createElement(HeaderDisplay, { headers }))
+    const revealMarkup = renderToStaticMarkup(createElement(HeaderReveal, { headers }))
 
-    expect(markup).toContain('Confidence')
+    expect(displayMarkup).not.toContain('Confidence')
+    expect(revealMarkup).not.toContain('Confidence')
   })
 
   it('renders internal decision and signal identifiers as human-friendly labels', () => {

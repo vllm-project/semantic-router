@@ -1,81 +1,95 @@
----
-version: v0.3
-
-routing:
-  decisions:
+version: v0.4
+listeners: []
+models:
+- name: test-model
+  card: {}
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8000
+    model: test-model
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals: {}
+    decisions:
     - name: default-route
       rules:
         operator: AND
         conditions: []
-
+- name: verification
+  document:
+    signals:
+      fact_check:
+      - name: verification-needed
+        description: Requests that require verification.
+    projections:
+      scores:
+      - name: verification-score
+        method: weighted_sum
+        inputs:
+        - type: fact_check
+          name: verification-needed
+          weight: 1
+      mappings:
+      - name: verification-band
+        source: verification-score
+        method: threshold_bands
+        outputs:
+        - name: verify
+          gte: 0.5
+    decisions:
+    - name: verification-route
+      rules:
+        type: projection
+        name: verify
+      plugins:
+      - type: hallucination
+        configuration:
+          enabled: true
+          use_nli: true
+- name: feedback
+  document:
+    signals:
+      user_feedbacks:
+      - name: correction-needed
+        description: Requests that correct an earlier response.
+    projections:
+      scores:
+      - name: feedback-score
+        method: weighted_sum
+        inputs:
+        - type: user_feedback
+          name: correction-needed
+          weight: 1
+      mappings:
+      - name: feedback-band
+        source: feedback-score
+        method: threshold_bands
+        outputs:
+        - name: recover
+          gte: 0.5
+    decisions:
+    - name: feedback-route
+      rules:
+        type: projection
+        name: recover
 entrypoints:
-  - model_names:
-      - vllm-sr/verification
-    recipe: verification
-  - model_names:
-      - vllm-sr/feedback
-    recipe: feedback
-
-recipes:
-  - name: verification
-    routing:
-      signals:
-        fact_check:
-          - name: verification-needed
-            description: Requests that require verification.
-      projections:
-        scores:
-          - name: verification-score
-            method: weighted_sum
-            inputs:
-              - type: fact_check
-                name: verification-needed
-                weight: 1
-        mappings:
-          - name: verification-band
-            source: verification-score
-            method: threshold_bands
-            outputs:
-              - name: verify
-                gte: 0.5
-      decisions:
-        - name: verification-route
-          rules:
-            type: projection
-            name: verify
-          plugins:
-            - type: hallucination
-              configuration:
-                enabled: true
-                use_nli: true
-
-  - name: feedback
-    routing:
-      signals:
-        user_feedbacks:
-          - name: correction-needed
-            description: Requests that correct an earlier response.
-      projections:
-        scores:
-          - name: feedback-score
-            method: weighted_sum
-            inputs:
-              - type: user_feedback
-                name: correction-needed
-                weight: 1
-        mappings:
-          - name: feedback-band
-            source: feedback-score
-            method: threshold_bands
-            outputs:
-              - name: recover
-                gte: 0.5
-      decisions:
-        - name: feedback-route
-          rules:
-            type: projection
-            name: recover
-
+- name: vllm-sr/verification
+  recipe: verification
+  assignments:
+    verification-route:
+      models:
+      - model: test-model
+- name: vllm-sr/feedback
+  recipe: feedback
+  assignments:
+    feedback-route:
+      models:
+      - model: test-model
 global:
   model_catalog:
     system:
@@ -96,3 +110,17 @@ global:
         enabled: true
         model_ref: feedback_detector
         feedback_mapping_path: models/test-feedback/feedback_mapping.json
+      classifier: {}
+    embeddings: {}
+  router: {}
+  stores: {}
+  integrations: {}
+  services:
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml

@@ -1,3 +1,12 @@
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
+{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $managementAPI := (get $services "management_api") | default (dict) -}}
+{{- $managementPort := (get $managementAPI "port") | default .Values.service.management.port -}}
+{{- $backendDispatch := (get $services "backend_dispatch") | default (dict) -}}
+{{- $backendDispatchPort := (get $backendDispatch "port") | default 8180 -}}
 apiVersion: v1
 kind: Service
 metadata:
@@ -12,14 +21,62 @@ spec:
     targetPort: {{ .Values.service.grpc.targetPort }}
     protocol: {{ .Values.service.grpc.protocol }}
     name: grpc
+  {{- if not $managedMode }}
   - port: {{ .Values.service.api.port }}
     targetPort: {{ .Values.service.api.targetPort }}
     protocol: {{ .Values.service.api.protocol }}
     name: classify-api
+  {{- end }}
   selector:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router
 ---
+{{- if $managedMode }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-management
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: management
+spec:
+  type: ClusterIP
+  # Bootstrap and recovery use the private Management listener before the
+  # inference readiness gate can succeed. This Service is authenticated and
+  # never carries public inference traffic.
+  publishNotReadyAddresses: true
+  ports:
+  - port: {{ .Values.service.management.port }}
+    targetPort: {{ $managementPort }}
+    protocol: TCP
+    name: https-management
+  selector:
+    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: router
+---
+{{- end }}
+{{- if $managedMode }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "semantic-router.fullname" . }}-backend-dispatch
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    service: backend-dispatch
+spec:
+  type: ClusterIP
+  ports:
+  - port: {{ $backendDispatchPort }}
+    targetPort: {{ $backendDispatchPort }}
+    protocol: TCP
+    name: backend-dsp
+  selector:
+    {{- include "semantic-router.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: router
+---
+{{- end }}
 # Headless per-pod DNS for gRPC ext_proc client-side load balancing (issue #2417).
 apiVersion: v1
 kind: Service

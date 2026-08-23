@@ -75,14 +75,14 @@ var _ = Describe("validateLoRAName", func() {
 		cfg := &RouterConfig{BackendModels: BackendModels{ModelConfig: map[string]ModelParams{}}}
 		err := validateLoRAName(cfg, "ghost", "adapter")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
+		Expect(err.Error()).To(ContainSubstring("is not declared in the compiled Model set"))
 	})
 
 	It("rejects model with no loras", func() {
 		cfg := loraConfig("qwen3") // zero adapters
 		err := validateLoRAName(cfg, "qwen3", "adapter")
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("declares no routing.modelCards[].loras"))
+		Expect(err.Error()).To(ContainSubstring("declares no LoRA adapters"))
 	})
 
 	It("rejects unknown name and lists available", func() {
@@ -101,36 +101,7 @@ func registerValidateConfigStructureCoreSpecs() {
 }
 
 func registerValidateConfigStructureCoreDispatchSpecs() {
-	It("skips everything in k8s mode", func() {
-		cfg := &RouterConfig{
-			ConfigSource: ConfigSourceKubernetes,
-			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{{Name: "bad", ModelRefs: nil}},
-			},
-		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
-	})
-
-	It("validates shared family contracts after k8s CRD conversion", func() {
-		cfg := &RouterConfig{
-			ConfigSource: ConfigSourceKubernetes,
-			IntelligentRouting: IntelligentRouting{
-				Decisions: []Decision{{
-					Name: "bad",
-					ModelRefs: []ModelRef{{
-						Model:                 "",
-						ModelReasoningControl: ModelReasoningControl{UseReasoning: boolPtr(false)},
-					}},
-				}},
-			},
-		}
-
-		err := ValidateKubernetesConfigContracts(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("model name cannot be empty"))
-	})
-
-	It("keeps the shared dispatch table wired for file and k8s validation", func() {
+	It("keeps the shared dispatch table wired", func() {
 		for _, validators := range [][]configContractValidator{
 			globalConfigContractValidators,
 			routingProfileContractValidators,
@@ -158,7 +129,7 @@ func registerValidateConfigStructureCoreDispatchSpecs() {
 				}},
 			},
 		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 }
 
@@ -187,7 +158,7 @@ func registerValidateConfigStructureOutputContractAcceptSpecs() {
 				}},
 			},
 		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("accepts typed terminal action output contract spec", func() {
@@ -212,7 +183,7 @@ func registerValidateConfigStructureOutputContractAcceptSpecs() {
 				}},
 			},
 		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("accepts typed reference selection output contract spec", func() {
@@ -241,7 +212,7 @@ func registerValidateConfigStructureOutputContractAcceptSpecs() {
 				}},
 			},
 		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 }
 
@@ -263,7 +234,7 @@ func registerValidateConfigStructureOutputContractRejectSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("requires type=reference_selection"))
 	})
@@ -281,7 +252,7 @@ func registerValidateConfigStructureOutputContractRejectSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("choice type requires choice_set.values"))
 	})
@@ -305,7 +276,7 @@ func registerValidateConfigStructureOutputContractRejectSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("only supported for structured_json"))
 	})
@@ -328,7 +299,7 @@ func registerValidateConfigStructureOutputContractRejectSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unsupported json_schema.schema_ref"))
 	})
@@ -341,7 +312,7 @@ func registerValidateConfigStructureModelRefSpecs() {
 				Decisions: []Decision{{Name: "x", ModelRefs: []ModelRef{}}},
 			},
 		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects blank model name", func() {
@@ -356,7 +327,7 @@ func registerValidateConfigStructureModelRefSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("model name cannot be empty"))
 	})
@@ -370,7 +341,7 @@ func registerValidateConfigStructureModelRefSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("missing required field 'use_reasoning'"))
 	})
@@ -395,7 +366,7 @@ func registerValidateConfigStructureLoRASpecs() {
 				},
 			},
 		}
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects bad lora ref", func() {
@@ -416,9 +387,9 @@ func registerValidateConfigStructureLoRASpecs() {
 				},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("is not declared in routing.modelCards"))
+		Expect(err.Error()).To(ContainSubstring("is not declared for model"))
 	})
 }
 
@@ -447,7 +418,7 @@ func registerValidateConfigStructureAlgorithmSchemaSpecs() {
 				}},
 			},
 		}
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.type=latency_aware requires algorithm.latency_aware configuration"))
 	})
@@ -469,7 +440,7 @@ func registerValidateConfigStructureAlgorithmSchemaSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects multiple algorithm config blocks in one decision", func() {
@@ -490,7 +461,7 @@ func registerValidateConfigStructureAlgorithmSchemaSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("cannot be combined with multiple algorithm config blocks"))
 	})
@@ -506,7 +477,6 @@ func registerValidateConfigStructureReMoMRuntimeSpecs() {
 		cfg := &RouterConfig{}
 
 		Expect(cfg.Looper.ReMoM.EffectiveModelNames()).To(Equal([]string{DefaultReMoMModelName}))
-		Expect(cfg.IsReMoMModelName(DefaultReMoMModelName)).To(BeTrue())
 	})
 
 	It("rejects invalid ReMoM direct model aliases", func() {
@@ -518,7 +488,7 @@ func registerValidateConfigStructureReMoMRuntimeSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("global.integrations.looper.remom: model_names[1] cannot be empty"))
 	})
@@ -547,7 +517,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid remom model_distribution", func() {
@@ -570,7 +540,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.remom: model_distribution must be one of"))
 	})
@@ -596,7 +566,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.remom: round_timeout_seconds must be >= 1 when set"))
 	})
@@ -621,7 +591,7 @@ func registerValidateConfigStructureReMoMDecisionSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.remom: synthesis_model \"model-b\" must reference a decision modelRef"))
 	})
@@ -632,8 +602,6 @@ func registerValidateConfigStructureFusionSpecs() {
 		cfg := &RouterConfig{}
 
 		Expect(cfg.Looper.Fusion.EffectiveModelNames()).To(Equal([]string{DefaultFusionModelName}))
-		Expect(cfg.IsFusionModelName(DefaultFusionModelName)).To(BeTrue())
-		Expect(cfg.IsFusionModelName(OpenRouterFusionModelAlias)).To(BeFalse())
 	})
 
 	It("allows OpenRouter Fusion alias only when configured", func() {
@@ -652,8 +620,6 @@ func registerValidateConfigStructureFusionSpecs() {
 			DefaultFusionModelName,
 			OpenRouterFusionModelAlias,
 		}))
-		Expect(cfg.IsFusionModelName(DefaultFusionModelName)).To(BeTrue())
-		Expect(cfg.IsFusionModelName(OpenRouterFusionModelAlias)).To(BeTrue())
 	})
 
 	It("accepts fusion with decision modelRefs and no fusion block", func() {
@@ -670,7 +636,7 @@ func registerValidateConfigStructureFusionSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects invalid decision fusion on_error", func() {
@@ -692,7 +658,7 @@ func registerValidateConfigStructureFusionSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.fusion: on_error must be one of"))
 	})
@@ -709,7 +675,6 @@ func registerValidateConfigStructureFlowDefaultsSpecs() {
 		cfg := &RouterConfig{}
 
 		Expect(cfg.Looper.Flow.EffectiveModelNames()).To(Equal([]string{DefaultFlowModelName}))
-		Expect(cfg.IsFlowModelName(DefaultFlowModelName)).To(BeTrue())
 	})
 }
 
@@ -746,7 +711,7 @@ func registerValidateConfigStructureDynamicWorkflowPlannerSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflows with invalid planner max completion tokens", func() {
@@ -772,7 +737,7 @@ func registerValidateConfigStructureDynamicWorkflowPlannerSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("planner.max_completion_tokens must be >= 1"))
 	})
@@ -799,7 +764,7 @@ func registerValidateConfigStructureDynamicWorkflowPlannerSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("round_timeout_seconds must be >= 1"))
 	})
@@ -833,7 +798,7 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects dynamic workflow final model outside modelRefs", func() {
@@ -857,13 +822,14 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.workflows.final.model references model \"final-a\" outside decision modelRefs"))
 	})
 
-	It("rejects dynamic workflows without planner model", func() {
+	It("accepts model-free dynamic workflows before Entrypoint materialization", func() {
 		cfg := &RouterConfig{
+			BackendEgress: BackendEgressConfig{PolicyFile: "/app/config/backend-egress-policy.yaml"},
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{{
 					Name: "dynamic-flow-no-planner",
@@ -881,9 +847,8 @@ func registerValidateConfigStructureDynamicWorkflowFinalSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("algorithm.workflows: planner.model is required"))
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
+		Expect(err).NotTo(HaveOccurred())
 	})
 }
 
@@ -918,7 +883,7 @@ func registerValidateConfigStructureStaticWorkflowsSpecs() {
 			},
 		}
 
-		Expect(validateConfigStructure(cfg)).To(Succeed())
+		Expect(validateConfigStructure(scopedRoutingProfileForTest(cfg))).To(Succeed())
 	})
 
 	It("rejects static workflows without roles", func() {
@@ -938,7 +903,7 @@ func registerValidateConfigStructureStaticWorkflowsSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.workflows: roles is required when mode=static"))
 	})
@@ -966,7 +931,7 @@ func registerValidateConfigStructureStaticWorkflowsSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("references model \"worker-b\" outside decision modelRefs"))
 	})
@@ -990,7 +955,7 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("requires algorithm.automix configuration; found algorithm.hybrid"))
 	})
@@ -1012,7 +977,7 @@ func registerValidateConfigStructureAlgorithmTypeMismatchSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("algorithm.type=static cannot be used with algorithm.automix configuration"))
 	})
@@ -1039,7 +1004,7 @@ func registerValidateConfigStructureSignalReferenceSpecs() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("unsupported signal type \"unknown\""))
 	})

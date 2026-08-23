@@ -18,16 +18,9 @@ var entrypointsRecipesRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
 			"`entrypoints[].recipe`",
-			"`entrypoints[].model_names`",
-			"`recipes[].routing`",
-		},
-	},
-	{
-		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
-		needles: []string{
-			"Entrypoints and multi-recipe routing",
-			"`entrypoints[]`",
-			"`recipes[]`",
+			"`assignments`",
+			"`entrypoints[].aliases`",
+			"`recipes[].document`",
 		},
 	},
 	{
@@ -35,9 +28,10 @@ var entrypointsRecipesRequiredDocs = []docNeedles{
 		needles: []string{
 			"`entrypoints`",
 			"`recipes`",
-			"`vllm-sr/auto`",
+			"aliases",
+			"connections:",
 			"`/v1/models`",
-			"`providers.defaults.default_model`",
+			"There is no implicit default Recipe or automatic alias",
 		},
 	},
 }

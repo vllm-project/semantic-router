@@ -24,6 +24,9 @@
   - `algorithm` chooses among models after a decision matches
   - `plugin` applies post-decision processing
   - `global` is reserved for intentionally cross-cutting behavior
+- Resolve Recipe routing only through an explicit Entrypoint. Automatic or
+  orchestration pseudo-model names must not bypass Entrypoint resolution into
+  a default Recipe.
 
 ## Change Rules
 

@@ -109,19 +109,7 @@ var indexGroups = []indexGroup{
 		heading: "Models and metrics",
 		match: func(p string) bool {
 			return strings.HasPrefix(p, "/info/") || strings.HasPrefix(p, "/metrics/") ||
-				p == "/api/v1/embeddings/models" || p == "/v1/models" || p == "/v1/router/outcomes"
-		},
-	},
-	{
-		heading: "Router config and recipes",
-		match: func(p string) bool {
-			return strings.HasPrefix(p, "/config/router") || p == "/config/hash"
-		},
-	},
-	{
-		heading: "Knowledge bases",
-		match: func(p string) bool {
-			return strings.HasPrefix(p, "/config/kbs")
+				p == "/api/v1/embeddings/models" || p == "/v1/models"
 		},
 	},
 	{

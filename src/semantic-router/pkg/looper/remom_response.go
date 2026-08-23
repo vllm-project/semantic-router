@@ -1,10 +1,8 @@
 package looper
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -89,43 +87,9 @@ func (l *ReMoMLooper) formatReMoMJSONResponse(
 	if strings.TrimSpace(finalResponse.Content) == "" {
 		return nil, fmt.Errorf("remom produced no assistant content")
 	}
-	completion := map[string]interface{}{
-		"id":      fmt.Sprintf("chatcmpl-remom-%d", time.Now().UnixNano()),
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   finalResponse.Model,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": finalResponse.Content,
-				},
-				"finish_reason": "stop",
-			},
-		},
-		"usage": usage.Map(),
-	}
-
-	if cfg.IncludeIntermediateResponses {
-		completion["reasoning_mom_responses"] = allRoundResponses
-	}
-
-	responseBody, err := json.Marshal(completion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &Response{
-		Body:                  responseBody,
-		ContentType:           "application/json",
-		Model:                 finalResponse.Model,
-		ModelsUsed:            modelsUsed,
-		Iterations:            iterations,
-		AlgorithmType:         "remom",
-		IntermediateResponses: allRoundResponses,
-		Usage:                 usage,
-	}, nil
+	_ = cfg
+	semantic := newTextSemanticResponse("response-remom", finalResponse.Model, finalResponse.Content, usage)
+	return newLooperResponse(semantic, false, true, finalResponse.Model, modelsUsed, iterations, "remom", usage, allRoundResponses), nil
 }
 
 // formatReMoMStreamingResponse creates an SSE streaming response.
@@ -136,16 +100,12 @@ func (l *ReMoMLooper) formatReMoMStreamingResponse(
 	iterations int,
 	usage TokenUsage,
 	cfg *config.ReMoMAlgorithmConfig,
+	includeUsage bool,
 ) (*Response, error) {
 	if strings.TrimSpace(finalResponse.Content) == "" {
 		return nil, fmt.Errorf("remom produced no assistant content")
 	}
-	timestamp := time.Now().Unix()
-	id := fmt.Sprintf("chatcmpl-remom-%d", timestamp)
-	sseBody := buildReMoMStreamingSSE(id, timestamp, finalResponse, allRoundResponses, cfg.IncludeIntermediateResponses)
-
-	resp := streamingLooperResponse(sseBody, finalResponse.Model, modelsUsed, iterations, "remom")
-	resp.IntermediateResponses = allRoundResponses
-	resp.Usage = usage
-	return resp, nil
+	_ = cfg
+	semantic := newTextSemanticResponse("response-remom", finalResponse.Model, finalResponse.Content, usage)
+	return newLooperResponse(semantic, true, includeUsage, finalResponse.Model, modelsUsed, iterations, "remom", usage, allRoundResponses), nil
 }

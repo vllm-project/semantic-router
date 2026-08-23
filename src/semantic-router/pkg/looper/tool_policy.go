@@ -26,28 +26,3 @@ import "github.com/openai/openai-go"
 func toolFreeLooperRequest(req *openai.ChatCompletionNewParams) *openai.ChatCompletionNewParams {
 	return stripFusionToolUse(cloneRequest(req))
 }
-
-// normalizeCompletionToolFinishReason repairs OpenAI-compatible backends that
-// return structured tool_calls with finish_reason="stop". Clients use
-// finish_reason to decide whether they must execute tools, so the wrapper must
-// publish the canonical value even when the upstream omits it.
-func normalizeCompletionToolFinishReason(completion map[string]interface{}) {
-	choices, ok := completion["choices"].([]interface{})
-	if !ok {
-		return
-	}
-	for _, rawChoice := range choices {
-		choice, ok := rawChoice.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		message, ok := choice["message"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		toolCalls, ok := message["tool_calls"].([]interface{})
-		if ok && len(toolCalls) > 0 {
-			choice["finish_reason"] = "tool_calls"
-		}
-	}
-}

@@ -1,4 +1,5 @@
 import styles from './EvaluationPagination.module.css'
+import ProductIcon from '../ProductIcon'
 
 interface EvaluationPaginationProps {
   page: number
@@ -27,19 +28,32 @@ export function EvaluationPagination({
         {start + 1}–{end} of {total} {itemLabel}
       </span>
       <div className={styles.controls}>
-        <button type="button" onClick={() => onPageChange(1)} disabled={page === 1} aria-label="First page">
-          «
+        <button
+          type="button"
+          onClick={() => onPageChange(1)}
+          disabled={page === 1}
+          aria-label="First page"
+        >
+          <ProductIcon name="chevron-left" />
+          <ProductIcon name="chevron-left" />
         </button>
-        <button type="button" onClick={() => onPageChange(Math.max(1, page - 1))} disabled={page === 1}>
-          Previous
+        <button
+          type="button"
+          onClick={() => onPageChange(Math.max(1, page - 1))}
+          disabled={page === 1}
+          aria-label="Previous page"
+        >
+          <ProductIcon name="chevron-left" /> Previous
         </button>
-        <span>Page {page} of {totalPages}</span>
+        <span>
+          Page {page} of {totalPages}
+        </span>
         <button
           type="button"
           onClick={() => onPageChange(Math.min(totalPages, page + 1))}
           disabled={page === totalPages}
         >
-          Next
+          Next <ProductIcon name="chevron-right" />
         </button>
         <button
           type="button"
@@ -47,7 +61,8 @@ export function EvaluationPagination({
           disabled={page === totalPages}
           aria-label="Last page"
         >
-          »
+          <ProductIcon name="chevron-right" />
+          <ProductIcon name="chevron-right" />
         </button>
       </div>
     </nav>

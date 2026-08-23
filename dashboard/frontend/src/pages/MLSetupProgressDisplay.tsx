@@ -1,36 +1,33 @@
-import { useRef } from 'react';
-import { useMLPipelineWizard } from '../hooks/useMLPipeline';
-import styles from './MLSetupPage.module.css';
+import { useRef } from 'react'
+import { useMLPipelineWizard } from '../hooks/useMLPipeline'
+import styles from './MLSetupPage.module.css'
 
 interface MLSetupProgressDisplayProps {
-  progress: ReturnType<typeof useMLPipelineWizard>['benchmarkProgress']['progress'];
-  job: ReturnType<typeof useMLPipelineWizard>['benchmarkProgress']['job'];
-  completed: boolean;
+  progress: ReturnType<typeof useMLPipelineWizard>['benchmarkProgress']['progress']
+  job: ReturnType<typeof useMLPipelineWizard>['benchmarkProgress']['job']
+  completed: boolean
 }
 
-export default function MLSetupProgressDisplay({
-  progress,
-  job,
-}: MLSetupProgressDisplayProps) {
-  const rawPercent = progress?.percent ?? job?.progress ?? 0;
-  const rawStep = progress?.step ?? job?.current_step ?? '';
-  const rawMessage = progress?.message ?? '';
-  const isFailed = job?.status === 'failed';
-  const isComplete = job?.status === 'completed';
+export default function MLSetupProgressDisplay({ progress, job }: MLSetupProgressDisplayProps) {
+  const rawPercent = progress?.percent ?? job?.progress ?? 0
+  const rawStep = progress?.step ?? job?.current_step ?? ''
+  const rawMessage = progress?.message ?? ''
+  const isFailed = job?.status === 'failed'
+  const isComplete = job?.status === 'completed'
 
   // Never let displayed progress go backwards (prevents flicker during SSE reconnect)
-  const highWaterRef = useRef({ percent: 0, step: '', message: '' });
+  const highWaterRef = useRef({ percent: 0, step: '', message: '' })
   if (rawPercent > highWaterRef.current.percent || isComplete || isFailed) {
-    highWaterRef.current = { percent: rawPercent, step: rawStep, message: rawMessage };
+    highWaterRef.current = { percent: rawPercent, step: rawStep, message: rawMessage }
   }
   // Reset high water mark when job resets (new job at 0%)
   if (rawPercent === 0 && highWaterRef.current.percent >= 100) {
-    highWaterRef.current = { percent: 0, step: '', message: '' };
+    highWaterRef.current = { percent: 0, step: '', message: '' }
   }
 
-  const percent = highWaterRef.current.percent;
-  const step = highWaterRef.current.step;
-  const message = highWaterRef.current.message;
+  const percent = highWaterRef.current.percent
+  const step = highWaterRef.current.step
+  const message = highWaterRef.current.message
 
   return (
     <div className={styles.progressContainer}>
@@ -48,5 +45,5 @@ export default function MLSetupProgressDisplay({
       </div>
       {message && <div className={styles.progressMessage}>{message}</div>}
     </div>
-  );
+  )
 }

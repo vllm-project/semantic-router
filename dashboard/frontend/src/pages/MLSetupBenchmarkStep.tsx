@@ -1,19 +1,19 @@
-import { useRef, useState } from 'react';
-import { useMLPipelineWizard } from '../hooks/useMLPipeline';
-import MLSetupProgressDisplay from './MLSetupProgressDisplay';
-import styles from './MLSetupPage.module.css';
+import { useRef, useState } from 'react'
+import { useMLPipelineWizard } from '../hooks/useMLPipeline'
+import MLSetupProgressDisplay from './MLSetupProgressDisplay'
+import styles from './MLSetupPage.module.css'
 
 interface MLSetupBenchmarkStepProps {
-  wizard: ReturnType<typeof useMLPipelineWizard>;
+  wizard: ReturnType<typeof useMLPipelineWizard>
 }
 
 export default function MLSetupBenchmarkStep({ wizard }: MLSetupBenchmarkStepProps) {
-  const modelsInputRef = useRef<HTMLInputElement>(null);
-  const queriesInputRef = useRef<HTMLInputElement>(null);
+  const modelsInputRef = useRef<HTMLInputElement>(null)
+  const queriesInputRef = useRef<HTMLInputElement>(null)
 
   const jobDone =
-    wizard.benchmarkProgress.completed && wizard.benchmarkProgress.job?.status === 'completed';
-  const jobFailed = wizard.benchmarkProgress.job?.status === 'failed';
+    wizard.benchmarkProgress.completed && wizard.benchmarkProgress.job?.status === 'completed'
+  const jobFailed = wizard.benchmarkProgress.job?.status === 'failed'
 
   return (
     <div className={styles.stepContent}>
@@ -183,17 +183,15 @@ export default function MLSetupBenchmarkStep({ wizard }: MLSetupBenchmarkStepPro
 
       {jobFailed && (
         <div className={styles.errorAlert}>
-          <span>
-            Benchmark failed: {wizard.benchmarkProgress.job?.error || 'Unknown error'}
-          </span>
+          <span>Benchmark failed: {wizard.benchmarkProgress.job?.error || 'Unknown error'}</span>
         </div>
       )}
     </div>
-  );
+  )
 }
 
 function MLSetupBenchmarkAdvancedSettings({ wizard }: MLSetupBenchmarkStepProps) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false)
 
   return (
     <div className={styles.advancedSection}>
@@ -294,5 +292,5 @@ function MLSetupBenchmarkAdvancedSettings({ wizard }: MLSetupBenchmarkStepProps)
         </div>
       )}
     </div>
-  );
+  )
 }

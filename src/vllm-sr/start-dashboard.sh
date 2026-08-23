@@ -1,7 +1,7 @@
 #!/bin/sh
 # Start dashboard with dynamically determined Envoy port from config.yaml
 
-CONFIG_FILE="${1:-${VLLM_SR_RUNTIME_CONFIG_PATH:-/app/.vllm-sr/runtime-config.yaml}}"
+CONFIG_FILE="${1:-/app/.vllm-sr/compiled-bootstrap.yaml}"
 
 # Check if dashboard is disabled (minimal mode)
 if [ "${DISABLE_DASHBOARD}" = "true" ]; then

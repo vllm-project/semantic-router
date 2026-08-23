@@ -343,9 +343,9 @@ type MemoryQdrantConfig struct {
 }
 
 // ResponseAPIConfig controls response and conversation history storage.
-// StoreBackend defaults to "redis" for durable storage that survives router
-// restarts. Set to "memory" only for local development — all history is lost
-// when the router process exits.
+// StoreBackend defaults to "memory" so standalone startup has no external
+// storage dependency. Managed and multi-replica deployments should configure
+// Redis explicitly when history must be durable and shared.
 type ResponseAPIConfig struct {
 	Enabled      bool                   `yaml:"enabled"`
 	StoreBackend string                 `yaml:"store_backend,omitempty"`

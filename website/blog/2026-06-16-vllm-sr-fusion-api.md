@@ -238,15 +238,16 @@ In that request, the panel produces independent text analysis, the judge compare
 
 ### Configure Entrypoints and Decisions
 
-The global config registers API entry aliases only:
+An Entrypoint publishes the request-facing name and selects a Recipe:
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - name: vllm-sr/auto
+    aliases: [auto, MoM]
+    recipe: blend
+    assignments:
+      simple: [local-fast]
+      complex: [frontier]
 ```
 
 Fusion slugs are registered under the looper integration:

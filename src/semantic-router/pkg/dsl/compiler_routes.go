@@ -14,6 +14,7 @@ func (c *Compiler) compileRoutes() {
 
 func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 	decision := config.Decision{
+		ID:          config.DeterministicRoutingResourceID("dec", r.Name),
 		Name:        r.Name,
 		Description: r.Description,
 		Priority:    r.Priority,
@@ -51,7 +52,7 @@ func (c *Compiler) compileRoute(r *RouteDecl) config.Decision {
 
 func (c *Compiler) compileRouteRules(r *RouteDecl) config.RuleCombination {
 	if r.When == nil {
-		return config.RuleCombination{Operator: "AND", Conditions: []config.RuleNode{}}
+		return config.RuleCombination{Operator: "AND"}
 	}
 	rules := c.compileBoolExpr(r.When)
 	if rules.Operator == "" && rules.Type != "" {
@@ -89,6 +90,9 @@ func (c *Compiler) appendModelRef(decision *config.Decision, m *ModelRef) {
 		Model:    m.Model,
 		LoRAName: m.LoRA,
 		Weight:   m.Weight,
+		ModelReasoningControl: config.ModelReasoningControl{
+			ReasoningDescription: m.ReasoningDescription,
+		},
 	}
 	if m.Reasoning != nil {
 		ref.UseReasoning = m.Reasoning
@@ -134,6 +138,9 @@ func (c *Compiler) compileCandidateIteration(iter *CandidateIterationDecl) confi
 			Model:    model.Model,
 			LoRAName: model.LoRA,
 			Weight:   model.Weight,
+			ModelReasoningControl: config.ModelReasoningControl{
+				ReasoningDescription: model.ReasoningDescription,
+			},
 		}
 		if model.Reasoning != nil {
 			ref.UseReasoning = model.Reasoning

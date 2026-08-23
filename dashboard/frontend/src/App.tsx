@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
-import { SetupProvider } from './contexts/SetupContext'
 import { AuthProvider } from './contexts/AuthContext'
 import AppRouter from './app/AppRouter'
+import ProductIcon from './components/ProductIcon'
 
 const App: React.FC = () => {
   const [isInIframe, setIsInIframe] = useState(false)
@@ -33,16 +33,19 @@ const App: React.FC = () => {
           color: 'var(--color-text)',
         }}
       >
-        <div style={{ fontSize: '4rem', marginBottom: '1rem' }}>⚠️</div>
+        <ProductIcon
+          name="alert"
+          aria-hidden="true"
+          style={{ width: '3rem', height: '3rem', marginBottom: '1rem' }}
+        />
         <h1 style={{ fontSize: '1.5rem', marginBottom: '1rem', color: 'var(--color-danger)' }}>
           Nested Dashboard Detected
         </h1>
         <p style={{ maxWidth: '600px', lineHeight: '1.6', color: 'var(--color-text-secondary)' }}>
-          The dashboard has detected that it is running inside an iframe. This usually indicates a
-          configuration error where the dashboard is trying to embed itself.
+          This page cannot open inside another dashboard window.
         </p>
         <p style={{ marginTop: '1rem', color: 'var(--color-text-secondary)' }}>
-          Please check your Grafana dashboard path and backend proxy configuration.
+          Open it directly to continue.
         </p>
         <button
           onClick={() => {
@@ -60,7 +63,7 @@ const App: React.FC = () => {
             cursor: 'pointer',
           }}
         >
-          Open Dashboard in New Tab
+          Open dashboard
         </button>
       </div>
     )
@@ -69,9 +72,7 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <ReadonlyProvider>
-        <SetupProvider>
-          <AppRouter />
-        </SetupProvider>
+        <AppRouter />
       </ReadonlyProvider>
     </AuthProvider>
   )

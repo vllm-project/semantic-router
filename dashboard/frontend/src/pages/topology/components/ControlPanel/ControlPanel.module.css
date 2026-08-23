@@ -194,7 +194,7 @@
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #4CAF50;
+  background: #4caf50;
   color: white;
 }
 
@@ -202,7 +202,7 @@
   font-size: 10px;
   padding: 2px 6px;
   border-radius: 4px;
-  background: #FF9800;
+  background: #ff9800;
   color: white;
 }
 
@@ -265,13 +265,13 @@
 }
 
 .decisionResult.fallbackDecision {
-  color: #FF9800;
+  color: #ff9800;
 }
 
 .fallbackBadge {
   display: inline-block;
   font-size: 9px;
-  background: #FF9800;
+  background: #ff9800;
   color: white;
   padding: 2px 6px;
   border-radius: 4px;
@@ -286,7 +286,7 @@
   padding: 4px 8px;
   background: rgba(255, 152, 0, 0.1);
   border-radius: 4px;
-  border-left: 2px solid #FF9800;
+  border-left: 2px solid #ff9800;
 }
 
 .modelTags {
@@ -313,7 +313,7 @@
   border: 1px solid rgba(255, 152, 0, 0.3);
   border-radius: 4px;
   font-size: 11px;
-  color: #FF9800;
+  color: #ff9800;
   margin-top: 8px;
 }
 
@@ -325,6 +325,10 @@
 }
 
 .collapseBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.45rem;
   padding: 10px 16px;
   border: 1px solid var(--border-color, #333);
   background: var(--bg-primary, #1a1a1a);
@@ -334,6 +338,12 @@
   border-radius: 8px;
   transition: all 0.2s;
   white-space: nowrap;
+}
+
+.collapseBtn > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .collapseBtn:hover {
@@ -453,7 +463,6 @@
     font-size: 9px !important;
     padding: 6px !important;
   }
-
 }
 
 @media (max-width: 480px) {

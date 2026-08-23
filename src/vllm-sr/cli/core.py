@@ -1,9 +1,20 @@
 """Core management functions for vLLM Semantic Router."""
 
 import os
+from pathlib import Path
 
-from cli.commands.runtime_paths import resolve_state_root_dir
+from cli.commands.runtime_paths import (
+    _compiled_bootstrap_output_path,
+    resolve_state_root_dir,
+)
 from cli.consts import IMAGE_PULL_POLICY_NEVER
+from cli.control_plane_deployment import (
+    LocalControlPlanePlan,
+    plan_local_control_plane,
+    required_storage_secret_backends,
+    resolve_local_router_bindings,
+)
+from cli.control_plane_migration import run_control_plane_migration
 from cli.container_cli import (
     container_logs,
     container_logs_output,
@@ -12,26 +23,19 @@ from cli.container_cli import (
     container_remove_network,
     container_start_vllm_sr,
     container_status,
-    container_status_strict,
     container_stop_container,
     load_openclaw_registry,
 )
 from cli.container_images import get_fleet_sim_container_image, get_runtime_images
 from cli.logo import print_vllm_logo
-from cli.recipe_activation_recovery import (
-    active_recipe_package_for_stack,
-    recover_pending_recipe_activation_for_stack,
-)
-from cli.recipe_directory import resolve_active_recipe_directory
-from cli.runtime_config_coordination import runtime_config_lock_scope
-from cli.runtime_config_lock import RuntimeConfigLock
+from cli.runtime_config_coordination import compiled_bootstrap_lock_scope
+from cli.runtime_config_lock import CompiledBootstrapLock
 from cli.runtime_lifecycle import (
     connect_runtime_container,
     ensure_clean_runtime_container,
     ensure_shared_network,
     log_runtime_summary,
     log_startup_banner,
-    maybe_finish_setup_mode,
     recover_openclaw_containers,
     resolve_openclaw_data_dir,
     start_fleet_sim_sidecar,
@@ -43,6 +47,7 @@ from cli.runtime_lifecycle import (
 from cli.runtime_management_config import (
     _configured_management_port,
     _configured_management_readiness_token_env,
+    _configured_management_tls_certificate_file,
 )
 from cli.runtime_service_status import (
     report_service_status,
@@ -55,6 +60,7 @@ from cli.storage_backends import (
     provision_storage_backends,
     storage_data_volume_is_recorded,
 )
+from cli.storage_secrets import load_storage_secrets
 from cli.terminal import echo, fields, heading, hint, success, warning
 from cli.utils import get_logger, load_config
 
@@ -64,8 +70,8 @@ MANAGED_STORAGE_BACKENDS_ENV = "VLLM_SR_MANAGED_STORAGE_BACKENDS"
 RUNTIME_LOG_SERVICES = ("router", "dashboard", "envoy")
 
 
-def _load_runtime_config(runtime_config_file):
-    user_config = load_config(runtime_config_file) or {}
+def _load_compiled_bootstrap(compiled_bootstrap_file):
+    user_config = load_config(compiled_bootstrap_file) or {}
     listeners = user_config.get("listeners", [])
     if not listeners:
         log.error("No listeners configured in config.yaml")
@@ -149,27 +155,37 @@ def start_vllm_sr(
     sim_image=None,
     topology=None,
     pull_policy=None,
-    enable_observability=True,
+    enable_observability=False,
     source_config_file=None,
-    runtime_config_file=None,
-    runtime_config_lock: RuntimeConfigLock | None = None,
+    compiled_bootstrap_file=None,
+    compiled_bootstrap_lock: CompiledBootstrapLock | None = None,
 ):
     """Start vLLM Semantic Router."""
     env_vars = env_vars if env_vars is not None else {}
     stack_layout = resolve_runtime_stack()
     runtime_topology = resolve_runtime_topology(topology)
     source_config_file = source_config_file or config_file
-    runtime_config_file = runtime_config_file or config_file
     state_root_dir = resolve_state_root_dir(source_config_file, env_vars)
-    with runtime_config_lock_scope(
-        runtime_config_lock,
-        runtime_config_file,
+    if compiled_bootstrap_file is not None:
+        expected_bootstrap = _compiled_bootstrap_output_path(
+            Path(source_config_file),
+            state_root_dir=state_root_dir,
+            stack_name=stack_layout.stack_name,
+        )
+        if Path(compiled_bootstrap_file).expanduser().absolute() != expected_bootstrap:
+            raise ValueError(
+                "compiled_bootstrap_file must match this stack's CLI-compiled bootstrap"
+            )
+    compiled_bootstrap_file = compiled_bootstrap_file or config_file
+    with compiled_bootstrap_lock_scope(
+        compiled_bootstrap_lock,
+        compiled_bootstrap_file,
         state_root_dir,
         stack_layout,
     ):
         return _start_vllm_sr_locked(
             source_config_file=source_config_file,
-            runtime_config_file=runtime_config_file,
+            compiled_bootstrap_file=compiled_bootstrap_file,
             env_vars=env_vars,
             stack_layout=stack_layout,
             runtime_topology=runtime_topology,
@@ -184,34 +200,17 @@ def start_vllm_sr(
         )
 
 
-def _preflight_runtime_config(
-    source_config_file,
-    runtime_config_file,
-    state_root_dir,
-    stack_layout,
+def _preflight_compiled_bootstrap(
+    compiled_bootstrap_file,
 ):
     print_vllm_logo()
-    recover_pending_recipe_activation_for_stack(
-        runtime_config_path=runtime_config_file,
-        state_root_dir=state_root_dir,
-        stack_name=stack_layout.stack_name,
-        managed_container_names=stack_layout.runtime_container_names,
-        status_provider=container_status_strict,
-    )
-    active_recipe_package_for_stack(
-        state_root_dir=state_root_dir,
-        stack_name=stack_layout.stack_name,
-    )
-    # Reject an incomplete managed Recipe before stopping an existing stack or
-    # provisioning any support services.
-    resolve_active_recipe_directory(source_config_file)
-    return _load_runtime_config(runtime_config_file)
+    return _load_compiled_bootstrap(compiled_bootstrap_file)
 
 
 def _start_vllm_sr_locked(
     *,
     source_config_file,
-    runtime_config_file,
+    compiled_bootstrap_file,
     env_vars,
     stack_layout,
     runtime_topology,
@@ -224,13 +223,11 @@ def _start_vllm_sr_locked(
     pull_policy,
     enable_observability,
 ):
-    user_config, listeners = _preflight_runtime_config(
-        source_config_file,
-        runtime_config_file,
-        state_root_dir,
-        stack_layout,
-    )
+    user_config, listeners = _preflight_compiled_bootstrap(compiled_bootstrap_file)
     management_port = _configured_management_port(user_config)
+    management_tls_certificate = _configured_management_tls_certificate_file(
+        user_config
+    )
     readiness_token_env = _configured_management_readiness_token_env(
         user_config, env_vars
     )
@@ -254,6 +251,58 @@ def _start_vllm_sr_locked(
         dashboard_disabled,
     )
 
+    control_plane_plan = plan_local_control_plane(user_config, env_vars, stack_layout)
+    _start_runtime_stack(
+        source_config_file=source_config_file,
+        compiled_bootstrap_file=compiled_bootstrap_file,
+        user_config=user_config,
+        listeners=listeners,
+        runtime_topology=runtime_topology,
+        shared_network_name=shared_network_name,
+        stack_layout=stack_layout,
+        state_root_dir=state_root_dir,
+        dashboard_disabled=dashboard_disabled,
+        env_vars=env_vars,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        dashboard_image=dashboard_image,
+        sim_image=sim_image,
+        pull_policy=pull_policy,
+        enable_observability=enable_observability,
+        management_port=management_port,
+        management_tls_certificate=management_tls_certificate,
+        readiness_token_env=readiness_token_env,
+        control_plane_plan=control_plane_plan,
+    )
+
+
+def _start_runtime_stack(
+    *,
+    source_config_file,
+    compiled_bootstrap_file,
+    user_config,
+    listeners,
+    runtime_topology,
+    shared_network_name,
+    stack_layout,
+    state_root_dir,
+    dashboard_disabled,
+    env_vars,
+    image,
+    router_image,
+    envoy_image,
+    dashboard_image,
+    sim_image,
+    pull_policy,
+    enable_observability,
+    management_port,
+    management_tls_certificate,
+    readiness_token_env,
+    control_plane_plan,
+):
+    """Provision stores, bind committed state, then start runtime roles."""
+
     started_backends, runtime_network_name, fleet_sim_enabled = _start_support_services(
         user_config,
         shared_network_name,
@@ -263,12 +312,27 @@ def _start_vllm_sr_locked(
         sim_image,
         pull_policy,
         enable_observability,
+        control_plane_backends=control_plane_plan.required_backends,
+    )
+    router_child_env = _resolve_router_child_environment(
+        control_plane_plan,
+        started_backends,
+        state_root_dir,
+        stack_layout,
+    )
+    run_control_plane_migration(
+        user_config,
+        env_vars={**env_vars, **router_child_env},
+        network_name=shared_network_name,
+        image=image,
+        router_image=router_image,
+        envoy_image=envoy_image,
+        pull_policy=pull_policy,
     )
 
-    setup_mode = str(env_vars.get("VLLM_SR_SETUP_MODE", "")).lower() == "true"
     return_code, _stdout, stderr = _start_runtime_containers(
         source_config_file,
-        runtime_config_file,
+        compiled_bootstrap_file,
         listeners,
         runtime_topology,
         runtime_network_name,
@@ -282,6 +346,7 @@ def _start_vllm_sr_locked(
         envoy_image,
         dashboard_image,
         pull_policy,
+        router_child_env,
     )
     if return_code != 0:
         log.error(f"Failed to start container: {stderr}")
@@ -289,11 +354,12 @@ def _start_vllm_sr_locked(
 
     log.info("vLLM Semantic Router container started successfully")
     connect_runtime_container(shared_network_name, stack_layout)
-    if maybe_finish_setup_mode(setup_mode, dashboard_disabled, stack_layout):
-        return
-
     _wait_and_verify_runtime(
-        stack_layout, dashboard_disabled, management_port, readiness_token_env
+        stack_layout,
+        dashboard_disabled,
+        management_port,
+        readiness_token_env,
+        management_tls_certificate,
     )
     recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
     log_runtime_summary(
@@ -315,9 +381,15 @@ def _start_support_services(
     sim_image,
     pull_policy,
     enable_observability,
+    *,
+    control_plane_backends=frozenset(),
 ):
     started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
+        user_config,
+        shared_network_name,
+        stack_layout,
+        state_root_dir=state_root_dir,
+        additional_backends=control_plane_backends,
     )
     env_vars[MANAGED_STORAGE_BACKENDS_ENV] = ",".join(sorted(started_backends))
     observability_network_name = start_observability_stack(
@@ -340,9 +412,31 @@ def _start_support_services(
     return started_backends, runtime_network_name, fleet_sim_enabled
 
 
+def _resolve_router_child_environment(
+    plan: LocalControlPlanePlan,
+    started_backends: set[str],
+    state_root_dir: str,
+    stack_layout: RuntimeStackLayout,
+) -> dict[str, str]:
+    """Resolve Router-only values after the storage transaction commits."""
+
+    required = required_storage_secret_backends(plan, started_backends)
+    secrets = (
+        load_storage_secrets(state_root_dir, stack_layout=stack_layout)
+        if required
+        else None
+    )
+    return resolve_local_router_bindings(
+        plan,
+        started_backends,
+        secrets,
+        stack_layout,
+    )
+
+
 def _start_runtime_containers(
     source_config_file,
-    runtime_config_file,
+    compiled_bootstrap_file,
     listeners,
     runtime_topology,
     runtime_network_name,
@@ -356,6 +450,7 @@ def _start_runtime_containers(
     envoy_image,
     dashboard_image,
     pull_policy,
+    router_child_env,
 ):
     return container_start_vllm_sr(
         config_file=source_config_file,
@@ -372,7 +467,8 @@ def _start_runtime_containers(
         minimal=dashboard_disabled,
         stack_layout=stack_layout,
         state_root_dir=state_root_dir,
-        runtime_config_file=runtime_config_file,
+        compiled_bootstrap_file=compiled_bootstrap_file,
+        router_child_env=router_child_env,
     )
 
 

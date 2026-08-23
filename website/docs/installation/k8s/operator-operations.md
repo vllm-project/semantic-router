@@ -6,9 +6,8 @@ description: Monitor, update, scale, and troubleshoot a SemanticRouter managed b
 
 # Operate an Operator Deployment
 
-This guide covers the day-two tasks for a `SemanticRouter` resource. For
-installation and a first deployment, see
-[Deploy with the Kubernetes Operator](operator).
+This guide covers day-two work for a `SemanticRouter`. For installation and a
+first deployment, see [Deploy with the Kubernetes Operator](operator).
 
 ## Read reconciliation status
 
@@ -19,32 +18,38 @@ kubectl get semanticrouter <name> -o jsonpath='{.status.conditions}'
 ```
 
 Use `metadata.generation`, `status.observedGeneration`, status conditions, and
-ready replicas together. A running controller does not mean the latest custom
-resource generation has been applied successfully.
-
-Inspect the owned workload when reconciliation stalls:
+ready replicas together. Inspect the workload when reconciliation stalls:
 
 ```bash
-kubectl get deployment,pod,service,configmap,pvc \
+kubectl get deployment,pod,service,configmap,pvc,job,pdb,networkpolicy \
   -l app.kubernetes.io/instance=<name>
 kubectl logs -n semantic-router-operator-system \
   deployment/semantic-router-operator-controller-manager
 ```
 
-## Update safely
+## Change configuration safely
 
-1. Export the current custom resource and record the deployed image reference.
-2. Review CRD and release notes for schema changes.
-3. Apply the new custom resource or Operator version in a non-production
-   environment.
-4. Wait for the observed generation and ready replicas to converge.
-5. Send real requests through every important entrypoint.
-6. Roll back the custom resource or image reference if readiness or routing
-   regresses.
+`spec.bootstrap.configMapRef` points to the only Router startup manifest. The
+referenced ConfigMap must be immutable, so configuration changes are explicit
+releases:
 
-Pin image tags or digests. Avoid changing the Operator, Router image, routing
-policy, model pool, and storage backend in one rollout unless those changes are
-intentionally coupled and tested together.
+1. copy the current manifest into a newly named ConfigMap;
+2. validate the v0.4 manifest before applying it;
+3. create the new immutable ConfigMap;
+4. update `spec.bootstrap.configMapRef.name` or `.key`;
+5. in managed mode, wait for the content-addressed migration Job and
+   `MigrationReady=True`;
+6. wait for the Deployment rollout and Router readiness; and
+7. send real requests through each important Entrypoint.
+
+Keep the old immutable ConfigMap until rollback is no longer needed. Rolling
+back means restoring the previous reference. The Router and Operator do not
+reload a changed file in place.
+
+In managed mode this bootstrap contains infrastructure only. Use the Router
+Management API for Model, Recipe, Entrypoint, identity, key, policy, and quota
+changes. Those resources publish immutable generations without changing the
+Pod bootstrap reference.
 
 ## Scale and availability
 
@@ -59,45 +64,104 @@ spec:
     targetCPUUtilizationPercentage: 70
 ```
 
-Use node affinity, tolerations, topology spread or anti-affinity, and a
-separately managed PodDisruptionBudget to match your availability target.
-Learning or other replica-local mutable state may require additional design;
-do not assume that adding replicas makes every stateful routing feature
-consistent.
+Managed replicas share PostgreSQL desired state and ledger data plus Valkey
+projections and counters. Do not scale managed mode without both stores being
+healthy and reachable from every replica.
+
+Managed mode creates a PodDisruptionBudget and topology-spread constraint by
+default. Tune or disable them explicitly when the availability target requires
+different behavior:
+
+```yaml
+spec:
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  topologySpread:
+    enabled: true
+    maxSkew: 1
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+```
+
+The disruption budget protects voluntary evictions; it does not replace
+multiple replicas or failure-domain placement.
+
+## Listener isolation
+
+The inference Service follows `spec.service.type`. Managed Management,
+backend-dispatch, and metrics Services remain private `ClusterIP` Services.
+Managed mode also creates an ingress NetworkPolicy by default.
+
+Peer lists are listener-specific and fail closed. An empty `managementPeers`
+list keeps the Management listener unreachable through the Pod network. The
+backend-dispatch listener always accepts only same-`SemanticRouter` Pods. Test
+both intended access and denied cross-namespace access after policy changes.
 
 ## Metrics and tracing
 
-The Router exposes Prometheus metrics on the configured metrics Service port
-(9190 by default):
+Router metrics are available on port 9190 by default:
 
 ```bash
 kubectl port-forward service/<name> 9190:9190
 curl -sS http://localhost:9190/metrics | head
 ```
 
-Configure a `ServiceMonitor` or equivalent scraper with the labels used by your
-deployment. Enable OpenTelemetry through `spec.config.observability` and send
-traces to a collector reachable from the Router namespace. Keep trace sampling
-and captured attributes appropriate for the sensitivity of request data.
+Prometheus scraping and OpenTelemetry export are optional. Configure them in
+the selected Router manifest; the Operator does not install a monitoring stack.
+Keep trace sampling and captured attributes appropriate for request-data
+sensitivity.
 
 ## Common failures
 
-### Backend discovery fails
+### Bootstrap ConfigMap is rejected
 
-For `service` backends, verify the Service name, namespace, port, endpoints, and
-network policy. For KServe, verify that the `InferenceService` is ready and its
-predictor Service exists. For Llama Stack, inspect the labels on candidate
-Services.
+Confirm the reference, immutability bit, and selected key:
 
 ```bash
-kubectl get service,endpoints -n <backend-namespace>
-kubectl describe inferenceservice <name> -n <backend-namespace>
+kubectl get semanticrouter <name> -o \
+  jsonpath='{.spec.bootstrap.configMapRef}'
+kubectl get configmap <bootstrap-name> -o yaml
 ```
+
+Managed bootstrap rejects top-level `models`, `recipes`, and `entrypoints`.
+Standalone bootstrap may contain them. Full manifest errors appear in Router
+startup logs after the Operator's deployment-boundary checks pass.
+
+### Pod did not roll after a change
+
+An immutable ConfigMap cannot be edited. Verify that the
+`spec.bootstrap.configMapRef` value itself changed and that the Deployment Pod
+template references the new object:
+
+```bash
+kubectl get deployment <name> -o \
+  jsonpath='{.spec.template.spec.volumes[?(@.name=="config-volume")].configMap}'
+kubectl rollout status deployment/<name>
+```
+
+### Managed Router is not ready
+
+Inspect the explicit migration gate first:
+
+```bash
+kubectl get semanticrouter <name> -o jsonpath='{.status.migration}'
+kubectl get job -l app.kubernetes.io/instance=<name>
+kubectl logs job/<migration-job-name>
+```
+
+Then check PostgreSQL, Valkey, referenced Secrets, schema migration completion,
+Management listener TLS, provider-catalog rollout groups, and backend egress
+policy. On a fresh installation, also confirm that an authorized Management client
+completed bootstrap and published the first coupled routing and policy revision. The
+private Management Service remains reachable for this step while `/ready` is false;
+the inference Service does not. Managed startup fails closed when shared authority is
+unavailable.
 
 ### Gateway mode has no route
 
-The Operator currently does not create an `HTTPRoute`. Verify the referenced
-Gateway, then apply a route that targets the Router Service on its API port.
+The Operator does not create an `HTTPRoute`. Verify the referenced Gateway and
+apply a route targeting the Router Service:
 
 ```bash
 kubectl get gateway -A
@@ -106,44 +170,27 @@ kubectl get httproute -A
 
 ### Pod is in `ImagePullBackOff`
 
-Inspect pod events, confirm that the image exists, and provide an
-`imagePullSecret` when the registry requires authentication.
+Inspect pod events, verify the image reference, and provide an image pull
+Secret when required:
 
 ```bash
 kubectl describe pod <pod-name>
 ```
 
-See [Restricted Network Environments](../../troubleshooting/network-tips) for
-registry-mirror and cluster-egress guidance.
-
 ### PVC remains pending
 
-Check that the requested StorageClass and access mode exist in the cluster and
-that the provisioner can satisfy the requested size:
+Check the StorageClass, access mode, size, and provisioner:
 
 ```bash
 kubectl get storageclass
 kubectl describe pvc <pvc-name>
 ```
 
-Changing storage settings can affect existing data. Back up durable state and
-follow the storage provider's migration procedure before replacing a claim.
-
-### Model artifact download fails
-
-Reference the download token from a Secret, check egress and certificate
-configuration, and inspect Router logs. Do not put the token directly in
-`spec.env` or a ConfigMap.
-
 ## Deletion and data
 
-Before deleting a `SemanticRouter`, identify which state is ephemeral, which is
-stored in a PVC, and which is held by external Redis, Valkey, Milvus, Qdrant, or
-Postgres services. Deleting the custom resource removes managed Kubernetes
-objects according to their ownership and retention policy; it does not
-necessarily remove external data stores.
-
-Back up durable data first, and inspect PVC reclaim policies before deleting
+Deleting a `SemanticRouter` removes Operator-owned Kubernetes resources. It
+does not delete external PostgreSQL, Valkey, model-serving, or observability
+systems. Back up durable state and inspect PVC reclaim policies before deleting
 claims or namespaces.
 
 ## References

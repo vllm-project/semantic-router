@@ -4,56 +4,66 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: openai/mock-model
-    models:
-      - name: openai/mock-model
-        backend_refs:
-          - name: mock-vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
-            weight: 1
-  routing:
-    decisions:
-      # #2918: PromptGuardOnErrorBlock forces every request to match this
-      # rule, because prompt_guard.protocol points at an endpoint nothing
-      # listens on (127.0.0.1:1 inside the router pod) - the classify call
-      # always errors, and on_error: block treats that as a positive
-      # detection instead of silently letting the request through.
+  models:
+  - name: openai/mock-model
+    card: {}
+    connections:
+    - provider: vllm
+      endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
+      model: openai/mock-model
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        jailbreak:
+        - name: guardrail_unreachable
+          threshold: 0.5
+          include_history: false
+          description: Signal rule bound to the deliberately-unreachable guardrail
+            endpoint
+      decisions:
       - name: block_on_classifier_error
-        description: Blocks every request because the guardrail classifier is unreachable and on_error is block
+        description: Blocks every request because the guardrail classifier is unreachable
+          and on_error is block
         priority: 100
         rules:
           operator: OR
           conditions:
-            - type: jailbreak
-              name: guardrail_unreachable
+          - type: jailbreak
+            name: guardrail_unreachable
         plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
+        - type: fast_response
+          configuration:
+            message: Your request has been declined due to a policy violation.
       - name: default_decision
-        description: Default catch-all decision (should not be reached - on_error:block always matches first)
+        description: Default catch-all decision (should not be reached - on_error:block
+          always matches first)
         priority: 1
         rules:
           operator: AND
           conditions: []
-        modelRefs:
-          - model: openai/mock-model
-            use_reasoning: false
-    signals:
-      jailbreak:
-        - name: guardrail_unreachable
-          threshold: 0.5
-          include_history: false
-          description: Signal rule bound to the deliberately-unreachable guardrail endpoint
-    modelCards:
-      - name: openai/mock-model
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      block_on_classifier_error:
+        models:
+        - model: openai/mock-model
+          weight: '1'
+      default_decision:
+        models:
+        - model: openai/mock-model
+          weight: '1'
   global:
-    router:
-      strategy: priority
+    router: {}
     services:
       api:
         batch_classification:
@@ -68,15 +78,15 @@ config:
       observability:
         tracing:
           enabled: false
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
-      # Caching is unrelated to on_error, so it stays off - this profile only
-      # needs the jailbreak signal path.
-      #
-      # Note this does NOT stop the startup embedding-model download: that is
-      # gated only on !EmbeddingModels.UsesRemoteEmbeddingBackend() and the
-      # model_catalog.embeddings *_model_path values
-      # (pkg/modeldownload/feature_gates.go), which never consult
-      # stores.response_cache. See the resources comment below.
       response_cache:
         enabled: false
         embedding_model: mmbert
@@ -88,81 +98,56 @@ config:
     model_catalog:
       kbs: []
       external:
-        # Deliberately unreachable: nothing listens on 127.0.0.1:1 inside the
-        # router pod, so every http_classify call fails with a connection
-        # error - this profile exists to exercise on_error: block against a
-        # real classify failure, not to exercise a working classifier.
-        - name: unreachable-guardrail
-          llm_provider: openai
-          model_role: guardrail
-          llm_model_name: unreachable-guardrail
-          llm_endpoint:
-            address: 127.0.0.1
-            port: 1
-            protocol: http
-          llm_timeout_seconds: 2
+      - name: unreachable-guardrail
+        llm_provider: openai
+        model_role: guardrail
+        llm_model_name: unreachable-guardrail
+        llm_endpoint:
+          address: 127.0.0.1
+          port: 1
+          protocol: http
+        llm_timeout_seconds: 2
       modules:
         prompt_guard:
           enabled: true
-          model_ref: ""
-          model_id: ""
-          variant: ""
+          model_ref: ''
+          model_id: ''
+          variant: ''
           protocol: http_classify
           on_error: block
           threshold: 0.5
-          positive_labels: [jailbreak]
+          positive_labels:
+          - jailbreak
           jailbreak_mapping_path: models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
-            category_mapping_path: ""
+            model_ref: ''
+            model_id: ''
+            category_mapping_path: ''
             use_mmbert_32k: false
           pii:
-            model_ref: ""
-            model_id: ""
-            pii_mapping_path: ""
+            model_ref: ''
+            model_id: ''
+            pii_mapping_path: ''
             use_mmbert_32k: false
         hallucination_mitigation:
           enabled: false
-# The router requires a jailbreak_type_mapping.json on disk even for
-# protocol: http_classify (IsJailbreakEnabled/LoadJailbreakMapping don't
-# special-case the external-classifier path) - this profile deliberately
-# never calls into local candle inference, so a minimal stand-in mapping
-# (from the ConfigMap in jailbreak-mapping-configmap.yaml, applied as a
-# prerequisite) is enough; no need to bake/download the real model.
+      embeddings: {}
 extraVolumes:
-  - name: jailbreak-mapping
-    configMap:
-      name: jailbreak-onerror-mapping
+- name: jailbreak-mapping
+  configMap:
+    name: jailbreak-onerror-mapping
 extraVolumeMounts:
-  - name: jailbreak-mapping
-    mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
-    subPath: jailbreak_type_mapping.json
-    readOnly: true
-
+- name: jailbreak-mapping
+  mountPath: /app/models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json
+  subPath: jailbreak_type_mapping.json
+  readOnly: true
 resources:
-  # 2Gi (copied from the hallucination profile) OOMKilled the router
-  # (exit 137, confirmed via `kubectl get pod -o json` lastState) while it
-  # downloaded and loaded the local mmbert embedding model at startup. That
-  # load is what needs the headroom, and it happens because this profile uses
-  # a local embedding backend with non-empty *_model_path values - the
-  # tools_db warmup then embeds through it (mmbert, target_dimension 768).
-  # The actively-CI-running envoy-ai-gateway profile uses 12Gi/5Gi.
-  #
-  # A leaner option exists but is not taken here: remote-embedding's profile
-  # empties all five *_model_path values and points at a mock embedding
-  # service, which flips the download gate off entirely and lets it run in
-  # 2Gi. That needs an extra mock deployment and would change what the
-  # tools_db warmup exercises, so it is left as a possible follow-up rather
-  # than bundled into an on_error test.
   limits:
     cpu: '2'
     memory: 6Gi
   requests:
     cpu: 500m
     memory: 2Gi
-
-# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false

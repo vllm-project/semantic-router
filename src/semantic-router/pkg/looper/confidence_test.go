@@ -43,20 +43,21 @@ func TestFormatConfidenceStreamingResponsePublishesOnlySelectedCandidate(t *test
 	if err != nil {
 		t.Fatalf("format confidence streaming response: %v", err)
 	}
-	if strings.Contains(string(resp.Body), "first candidate") {
-		t.Fatalf("confidence stream leaked a rejected candidate: %s", resp.Body)
+	body := wireResponseForTest(t, resp)
+	if strings.Contains(string(body), "first candidate") {
+		t.Fatalf("confidence stream leaked a rejected candidate: %s", body)
 	}
-	if !strings.Contains(string(resp.Body), "selected candidate") {
-		t.Fatalf("confidence stream omitted the selected candidate: %s", resp.Body)
+	if !strings.Contains(string(body), "selected candidate") {
+		t.Fatalf("confidence stream omitted the selected candidate: %s", body)
 	}
 	if resp.Usage.TotalTokens != 35 {
 		t.Fatalf("confidence usage = %+v, want aggregate total 35", resp.Usage)
 	}
-	if got := strings.Count(string(resp.Body), `"usage":`); got != 1 {
-		t.Fatalf("confidence stream usage chunks = %d, want exactly one: %s", got, resp.Body)
+	if got := strings.Count(string(body), `"usage":`); got != 1 {
+		t.Fatalf("confidence stream usage chunks = %d, want exactly one: %s", got, body)
 	}
-	if usageAt, doneAt := strings.Index(string(resp.Body), `"usage":`), strings.Index(string(resp.Body), "data: [DONE]"); usageAt < 0 || doneAt < 0 || usageAt > doneAt {
-		t.Fatalf("aggregate usage must precede DONE: %s", resp.Body)
+	if usageAt, doneAt := strings.Index(string(body), `"usage":`), strings.Index(string(body), "data: [DONE]"); usageAt < 0 || doneAt < 0 || usageAt > doneAt {
+		t.Fatalf("aggregate usage must precede DONE: %s", body)
 	}
 }
 
@@ -92,20 +93,21 @@ func TestFormatConfidenceStreamingResponseReplacesUpstreamUsage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("format confidence stream: %v", err)
 	}
-	if got := strings.Count(string(resp.Body), `"usage":`); got != 1 {
-		t.Fatalf("usage chunks = %d, want one replacement: %s", got, resp.Body)
+	body := wireResponseForTest(t, resp)
+	if got := strings.Count(string(body), `"usage":`); got != 1 {
+		t.Fatalf("usage chunks = %d, want one replacement: %s", got, body)
 	}
-	if got := parseStreamingUsage(resp.Body); got != (TokenUsage{PromptTokens: 30, CompletionTokens: 5, TotalTokens: 35}) {
+	if got := parseStreamingUsage(body); got != (TokenUsage{PromptTokens: 30, CompletionTokens: 5, TotalTokens: 35}) {
 		t.Fatalf("stream usage = %+v, want aggregate", got)
 	}
-	if strings.Contains(string(resp.Body), `"total_tokens":23`) {
-		t.Fatalf("selected upstream usage leaked into final stream: %s", resp.Body)
+	if strings.Contains(string(body), `"total_tokens":23`) {
+		t.Fatalf("selected upstream usage leaked into final stream: %s", body)
 	}
-	if got := strings.Count(string(resp.Body), "[DONE]"); got != 1 {
-		t.Fatalf("DONE markers = %d, want exactly one: %s", got, resp.Body)
+	if got := strings.Count(string(body), "[DONE]"); got != 1 {
+		t.Fatalf("DONE markers = %d, want exactly one: %s", got, body)
 	}
-	if !strings.Contains(string(resp.Body), "data: [DONE]") || strings.Contains(string(resp.Body), "data:[DONE]") {
-		t.Fatalf("stream did not normalize the no-space terminal marker: %s", resp.Body)
+	if !strings.Contains(string(body), "data: [DONE]") || strings.Contains(string(body), "data:[DONE]") {
+		t.Fatalf("stream did not normalize the no-space terminal marker: %s", body)
 	}
 }
 
@@ -130,10 +132,11 @@ func TestFormatConfidenceStreamingResponseAddsUsageToSimulatedStream(t *testing.
 	if err != nil {
 		t.Fatalf("format simulated confidence stream: %v", err)
 	}
-	if got := strings.Count(string(resp.Body), `"usage":`); got != 1 {
-		t.Fatalf("simulated usage chunks = %d, want one: %s", got, resp.Body)
+	body := wireResponseForTest(t, resp)
+	if got := strings.Count(string(body), `"usage":`); got != 1 {
+		t.Fatalf("simulated usage chunks = %d, want one: %s", got, body)
 	}
-	if got := parseStreamingUsage(resp.Body); got != selected.Usage {
+	if got := parseStreamingUsage(body); got != selected.Usage {
 		t.Fatalf("simulated usage = %+v, want %+v", got, selected.Usage)
 	}
 }
@@ -164,8 +167,9 @@ func TestFormatConfidenceStreamingResponseSuppressesUsageUnlessRequested(t *test
 	if err != nil {
 		t.Fatalf("format confidence stream: %v", err)
 	}
-	if strings.Contains(string(resp.Body), `"usage":`) {
-		t.Fatalf("stream emitted usage without client opt-in: %s", resp.Body)
+	body := wireResponseForTest(t, resp)
+	if strings.Contains(string(body), `"usage":`) {
+		t.Fatalf("stream emitted usage without client opt-in: %s", body)
 	}
 	if resp.Usage != selected.Usage {
 		t.Fatalf("internal accounting = %+v, want %+v", resp.Usage, selected.Usage)
@@ -319,17 +323,17 @@ func TestConfidenceModelCallStreamingRequiresNoLogprobs(t *testing.T) {
 }
 
 func TestConfidenceStreamUsageRequested(t *testing.T) {
-	if confidenceStreamUsageRequested(nil) {
+	if streamUsageRequested(nil) {
 		t.Fatal("nil request unexpectedly requested usage")
 	}
-	request := &Request{OriginalRequest: &openai.ChatCompletionNewParams{}}
-	if confidenceStreamUsageRequested(request) {
+	request := &Request{executionRequest: &openai.ChatCompletionNewParams{}}
+	if streamUsageRequested(request) {
 		t.Fatal("omitted stream_options unexpectedly requested usage")
 	}
-	request.OriginalRequest.StreamOptions = openai.ChatCompletionStreamOptionsParam{
+	request.executionRequest.StreamOptions = openai.ChatCompletionStreamOptionsParam{
 		IncludeUsage: openai.Bool(true),
 	}
-	if !confidenceStreamUsageRequested(request) {
+	if !streamUsageRequested(request) {
 		t.Fatal("stream_options.include_usage=true was not honored")
 	}
 }
@@ -574,7 +578,7 @@ func TestConfidenceLooperSkipsMissingLogprobsAndEscalates(t *testing.T) {
 	var completion struct {
 		Usage TokenUsage `json:"usage"`
 	}
-	if err := json.Unmarshal(response.Body, &completion); err != nil {
+	if err := json.Unmarshal(wireResponseForTest(t, response), &completion); err != nil {
 		t.Fatalf("decode response body: %v", err)
 	}
 	if completion.Usage.TotalTokens != 6 {
@@ -599,7 +603,7 @@ func TestConfidenceLooperFailsFastOnMissingLogprobs(t *testing.T) {
 	if !slices.Equal(*calls, []string{"small"}) {
 		t.Fatalf("backend calls = %v, want fail-fast [small]", *calls)
 	}
-	evidence, ok := ConfidenceEvidenceFromError(err)
+	evidence, ok := ExecutionEvidenceFromError(err)
 	if !ok {
 		t.Fatalf("Execute() error type = %T, want partial confidence evidence", err)
 	}
@@ -631,7 +635,7 @@ func TestConfidenceLooperFailsWhenEveryCandidateOmitsLogprobs(t *testing.T) {
 	if !slices.Equal(*calls, []string{"small", "large"}) {
 		t.Fatalf("backend calls = %v, want [small large]", *calls)
 	}
-	evidence, ok := ConfidenceEvidenceFromError(err)
+	evidence, ok := ExecutionEvidenceFromError(err)
 	if !ok || evidence.Iterations != 2 || evidence.Usage.TotalTokens != 6 || !slices.Equal(evidence.ModelsUsed, []string{"small", "large"}) {
 		t.Fatalf("partial evidence = %+v (present=%v), want both paid attempts", evidence, ok)
 	}
@@ -673,7 +677,7 @@ func assertMissingMarginResult(t *testing.T, response *Response, err error, want
 		if err == nil || !strings.Contains(err.Error(), "top-logprob alternatives") {
 			t.Fatalf("Execute() error = %v, want missing alternatives", err)
 		}
-		evidence, ok := ConfidenceEvidenceFromError(err)
+		evidence, ok := ExecutionEvidenceFromError(err)
 		if !ok || evidence.Usage.TotalTokens != 3 || evidence.Iterations != 1 {
 			t.Fatalf("partial evidence = %+v (present=%v), want first paid call", evidence, ok)
 		}
@@ -699,7 +703,7 @@ func confidenceRequest(onError, method string) *Request {
 		},
 	}
 	return &Request{
-		OriginalRequest: &params,
+		executionRequest: &params,
 		ModelRefs: []config.ModelRef{
 			{Model: "small"},
 			{Model: "large"},

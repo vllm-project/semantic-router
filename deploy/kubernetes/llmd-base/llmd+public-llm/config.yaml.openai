@@ -1,90 +1,140 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: gpt-4o-mini
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
-  models:
-    - name: llama3-8b
-      backend_refs:
-        - name: llama-8b-service
-          endpoint: llama-8b:80
-          weight: 1
-    - name: gpt-4o-mini
-      backend_refs:
-        - name: openai
-          base_url: https://api.openai.com/v1
-          provider: openai
-          type: openai
-routing:
-  decisions:
+models:
+- name: llama3-8b
+  card:
+    aliases: []
+    param_size: ''
+    context_window_size: 0
+    description: ''
+    capabilities: []
+    reasoning: {}
+    loras: []
+    quality_score: 0
+    modality: ''
+    tags: []
+  connections:
+  - provider: vllm
+    endpoint: http://llama-8b:80/v1
+    model: llama3-8b
+    weight: '1'
+  runtime:
+    max_retries: 0
+    request_timeout: 300s
+    stream_timeout: 300s
+  pricing: {}
+- name: gpt-4o-mini
+  card:
+    aliases: []
+    param_size: ''
+    context_window_size: 0
+    description: ''
+    capabilities: []
+    reasoning: {}
+    loras: []
+    quality_score: 0
+    modality: ''
+    tags: []
+  connections:
+  - provider: openai-compatible
+    endpoint: https://api.openai.com/v1
+    model: gpt-4o-mini
+    weight: '1'
+  runtime:
+    max_retries: 0
+    request_timeout: 300s
+    stream_timeout: 300s
+  pricing: {}
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
+      - name: business
+        description: business routing domain.
+      - name: law
+        description: law routing domain.
+      - name: psychology
+        description: psychology routing domain.
+      - name: biology
+        description: biology routing domain.
+      - name: chemistry
+        description: chemistry routing domain.
+      - name: history
+        description: history routing domain.
+      - name: other
+        description: other routing domain.
+      - name: health
+        description: health routing domain.
+      - name: economics
+        description: economics routing domain.
+      - name: math
+        description: math routing domain.
+      - name: physics
+        description: physics routing domain.
+      - name: computer science
+        description: computer science routing domain.
+      - name: philosophy
+        description: philosophy routing domain.
+      - name: engineering
+        description: engineering routing domain.
+    decisions:
     - name: business
       description: Route business and management queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: business
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy,
+            operations management, financial analysis, marketing, and organizational development. Provide practical, actionable
+            business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive
+            landscape, and stakeholder interests in your recommendations.
+          mode: replace
     - name: law
       description: Route legal queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: law
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: law
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law,
+            statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information
+            and analysis while clearly stating that your responses are for informational purposes only and do not constitute
+            legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
+          mode: replace
     - name: psychology
       description: Route psychology queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: psychology
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: psychology
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
-            mode: replace
-        - type: semantic-cache
-          configuration:
-            enabled: false
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental
+            health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights
+            grounded in psychological research and theory. When discussing mental health topics, emphasize the importance
+            of professional consultation and avoid providing diagnostic or therapeutic advice.
+          mode: replace
+      - type: response_cache
+        configuration:
+          enabled: false
+          semantic:
             similarity_threshold: 0.92
     - name: biology
       description: Route biology queries
@@ -92,71 +142,66 @@ routing:
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: biology
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: biology
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell
+            biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific
+            accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles
+            to real-world applications and emphasize the interconnectedness of biological systems.
+          mode: replace
     - name: chemistry
       description: Route chemistry queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: chemistry
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: true
+        - type: domain
+          name: chemistry
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory
+            techniques. Provide detailed, step-by-step explanations.
+          mode: replace
     - name: history
       description: Route history queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: history
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: history
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical
+            context and analysis.
+          mode: replace
     - name: other
       description: Route general queries
       priority: 5
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: other
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-            mode: replace
-        - type: semantic-cache
-          configuration:
-            enabled: false
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide
+            range of topics.
+          mode: replace
+      - type: response_cache
+        configuration:
+          enabled: false
+          semantic:
             similarity_threshold: 0.75
     - name: health
       description: Route health and medical queries
@@ -164,20 +209,22 @@ routing:
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: health
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: health
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
-            mode: replace
-        - type: semantic-cache
-          configuration:
-            enabled: false
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases,
+            treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while
+            emphasizing that your responses are for educational purposes only and should never replace professional medical
+            advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns
+            and emergencies.
+          mode: replace
+      - type: response_cache
+        configuration:
+          enabled: false
+          semantic:
             similarity_threshold: 0.95
     - name: economics
       description: Route economics queries
@@ -185,121 +232,160 @@ routing:
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: economics
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: economics
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics,
+            financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic
+            phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts
+            in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
+          mode: replace
     - name: math
       description: Route mathematics queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: gpt-4o-mini
-          use_reasoning: false
+        - type: domain
+          name: math
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain
+            mathematical concepts in an understandable way.
+          mode: replace
     - name: physics
       description: Route physics queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: physics
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: true
+        - type: domain
+          name: physics
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations
+            with mathematical derivations when appropriate.
+          mode: replace
     - name: computer-science
       description: Route computer science queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: computer science
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages,
+            and software engineering. Provide clear, practical solutions with code examples when helpful.
+          mode: replace
     - name: philosophy
       description: Route philosophy queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: philosophy
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: philosophy
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories,
+            logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with
+            complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging
+            critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual
+            honesty about the complexity and ongoing nature of philosophical debates.
+          mode: replace
     - name: engineering
       description: Route engineering queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: engineering
-      modelRefs:
-        - model: llama3-8b
-          use_reasoning: false
+        - type: domain
+          name: engineering
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: false
-            system_prompt: You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards.
-            mode: replace
-  signals:
-    domains:
-      - name: business
-      - name: law
-      - name: psychology
-      - name: biology
-      - name: chemistry
-      - name: history
-      - name: other
-      - name: health
-      - name: economics
-      - name: math
-      - name: physics
-      - name: computer science
-      - name: philosophy
-      - name: engineering
-  modelCards:
-    - name: llama3-8b
-    - name: gpt-4o-mini
+      - type: system_prompt
+        configuration:
+          enabled: false
+          system_prompt: You are an engineering expert with knowledge across multiple engineering disciplines including mechanical,
+            electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies,
+            and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and
+            cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize
+            the importance of proper engineering practices and standards.
+          mode: replace
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    business:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    law:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    psychology:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    biology:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    chemistry:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    history:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    other:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    health:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    economics:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    math:
+      models:
+      - model: gpt-4o-mini
+        weight: '1'
+    physics:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    computer-science:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    philosophy:
+      models:
+      - model: llama3-8b
+        weight: '1'
+    engineering:
+      models:
+      - model: llama3-8b
+        weight: '1'
 global:
   router:
     clear_route_cache: true
@@ -315,28 +401,28 @@ global:
           high_resolution_timing: false
           sample_rate: 1.0
           duration_buckets:
-            - 0.001
-            - 0.005
-            - 0.01
-            - 0.025
-            - 0.05
-            - 0.1
-            - 0.25
-            - 0.5
-            - 1
-            - 2.5
-            - 5
-            - 10
-            - 30
+          - 0.001
+          - 0.005
+          - 0.01
+          - 0.025
+          - 0.05
+          - 0.1
+          - 0.25
+          - 0.5
+          - 1
+          - 2.5
+          - 5
+          - 10
+          - 30
           size_buckets:
-            - 1
-            - 2
-            - 5
-            - 10
-            - 20
-            - 50
-            - 100
-            - 200
+          - 1
+          - 2
+          - 5
+          - 10
+          - 20
+          - 50
+          - 100
+          - 200
     observability:
       tracing:
         enabled: false
@@ -352,18 +438,26 @@ global:
           service_name: vllm-semantic-router
           service_version: v0.1.0
           deployment_environment: development
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
-    semantic_cache:
+    memory:
+      embedding_model: mmbert
+    vector_store:
+      embedding_model: mmbert
+    response_cache:
       enabled: false
       backend_type: memory
       similarity_threshold: 0.8
       max_entries: 1000
       ttl_seconds: 3600
       eviction_policy: fifo
-      embedding_model: mmbert
-    memory:
-      embedding_model: mmbert
-    vector_store:
       embedding_model: mmbert
   integrations:
     tools:
@@ -372,3 +466,8 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

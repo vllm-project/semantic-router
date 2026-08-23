@@ -1,7 +1,13 @@
 import Dagre from '@dagrejs/dagre'
 import { MarkerType, type Edge, type Node } from 'reactflow'
 
-import { isLeaf, isOperator, type DragData, type NodePath, type RuleNode } from './ExpressionBuilderSupport'
+import {
+  isLeaf,
+  isOperator,
+  type DragData,
+  type NodePath,
+  type RuleNode,
+} from './ExpressionBuilderSupport'
 
 export interface FlowNodeData {
   ruleNode: RuleNode
@@ -79,10 +85,7 @@ export function treeToFlowElements(
   return { nodes, edges }
 }
 
-export function applyDagreLayout(
-  nodes: Node<FlowNodeData>[],
-  edges: Edge[],
-): Node<FlowNodeData>[] {
+export function applyDagreLayout(nodes: Node<FlowNodeData>[], edges: Edge[]): Node<FlowNodeData>[] {
   const graph = new Dagre.graphlib.Graph().setDefaultEdgeLabel(() => ({}))
   graph.setGraph({
     rankdir: 'TB',

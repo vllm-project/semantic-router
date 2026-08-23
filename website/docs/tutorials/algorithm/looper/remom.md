@@ -5,10 +5,8 @@
 `remom` runs several candidate models across bounded rounds and synthesizes
 their responses into one answer.
 
-The runtime also supports a direct ReMoM model slug through
-`global.integrations.looper.remom.model_names`. The built-in default is
-`vllm-sr/remom`. Direct ReMoM calls evaluate only decisions with
-`algorithm.type=remom`, matching the direct Fusion and Flow model surfaces.
+Expose ReMoM through an Entrypoint alias such as `vllm-sr/remom`. That
+Entrypoint assigns the candidate Models to every ReMoM decision it can invoke.
 
 **Inspired by**: [PaCoRe](https://arxiv.org/abs/2601.05593) — extended to support mixture of models.
 
@@ -62,7 +60,7 @@ flowchart TD
 
 | Strategy | Description |
 |----------|-------------|
-| `weighted` | Distribute calls proportional to model weights in `modelRefs` |
+| `weighted` | Distribute calls proportional to Entrypoint assignment weights |
 | `equal` | Distribute calls equally across all candidate models |
 | `round_robin` | Cycle through candidate models in configured order |
 | `first_only` | All calls go to the first declared model |
@@ -87,23 +85,24 @@ Some tasks benefit from parallel exploration and later synthesis rather than one
 
 ## Configuration
 
-Register the direct model slug:
+Assign Models and expose the Recipe through an Entrypoint:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      remom:
-        model_names:
-          - vllm-sr/remom
+entrypoints:
+  - name: vllm-sr/remom
+    recipe: deliberation
+    assignments:
+      reasoning-panel:
+        models:
+          - model: local/fast
+            weight: "2"
+          - model: hosted/deep
 ```
 
 Configure a ReMoM decision:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: reasoning_panel
       description: Combine a bounded reasoning panel into one answer.
@@ -119,9 +118,6 @@ routing:
           sources: [content]
         postprocess:
           - type: dereference_selected_reference
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
       algorithm:
         type: remom
         remom:

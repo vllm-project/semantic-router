@@ -1,70 +1,59 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  getStoredAuthToken,
-  normalizeAuthToken,
-  storeAuthToken,
-  STORAGE_KEY,
-} from './authFetch'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-class MemoryStorage {
-  private readonly values = new Map<string, string>()
+import { installAuthenticatedFetch, UNAUTHORIZED_EVENT, withAuthQuery } from './authFetch'
 
-  getItem(key: string): string | null {
-    return this.values.get(key) ?? null
-  }
-
-  setItem(key: string, value: string): void {
-    this.values.set(key, value)
-  }
-
-  removeItem(key: string): void {
-    this.values.delete(key)
-  }
-}
-
-describe('auth token storage', () => {
-  let storage: MemoryStorage
-
-  beforeEach(() => {
-    storage = new MemoryStorage()
-    vi.stubGlobal('window', {
-      location: {
-        origin: 'https://dashboard.example.test',
-        protocol: 'https:',
-      },
-      localStorage: storage,
-    })
-    vi.stubGlobal('document', { cookie: '' })
-  })
-
+describe('cookie-backed authenticated fetch', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
   })
 
-  it('normalizes bounded cookie-safe tokens', () => {
-    expect(normalizeAuthToken(' header.payload.signature ')).toBe('header.payload.signature')
-    expect(normalizeAuthToken('')).toBeNull()
-    expect(normalizeAuthToken('header payload')).toBeNull()
-    expect(normalizeAuthToken('header;payload')).toBeNull()
-    expect(normalizeAuthToken(`header\npayload`)).toBeNull()
-    expect(normalizeAuthToken('x'.repeat(8193))).toBeNull()
+  it('never puts a Dashboard credential in a URL', () => {
+    expect(withAuthQuery('/embedded/trace?id=one')).toBe('/embedded/trace?id=one')
   })
 
-  it('stores trimmed tokens in localStorage and session cookie', () => {
-    const token = storeAuthToken(' header.payload.signature ')
+  it('uses same-origin cookies without adding Authorization', async () => {
+    const underlying = vi.fn(async () => new Response(null, { status: 204 }))
+    const dispatchEvent = vi.fn()
+    vi.stubGlobal('window', {
+      location: { origin: 'https://dashboard.example.test' },
+      fetch: underlying,
+      dispatchEvent,
+    })
 
-    expect(token).toBe('header.payload.signature')
-    expect(storage.getItem(STORAGE_KEY)).toBe('header.payload.signature')
-    expect(document.cookie).toBe(
-      'vsr_session=header.payload.signature; Path=/; SameSite=Lax; Secure',
+    installAuthenticatedFetch()
+    await window.fetch('/api/settings', { headers: { Accept: 'application/json' } })
+
+    const [, init] = underlying.mock.calls[0] as unknown as [
+      RequestInfo | URL,
+      RequestInit | undefined,
+    ]
+    expect(init?.credentials).toBe('same-origin')
+    expect(new Headers(init?.headers).has('Authorization')).toBe(false)
+    expect(dispatchEvent).not.toHaveBeenCalled()
+  })
+
+  it('logs out only when the local session probe is unauthorized', async () => {
+    const underlying = vi.fn(async () => new Response(null, { status: 401 }))
+    const events: string[] = []
+    vi.stubGlobal(
+      'CustomEvent',
+      class CustomEventStub {
+        type: string
+        constructor(type: string) {
+          this.type = type
+        }
+      },
     )
-  })
+    vi.stubGlobal('window', {
+      location: { origin: 'https://dashboard.example.test' },
+      fetch: underlying,
+      dispatchEvent: (event: Event) => events.push(event.type),
+    })
 
-  it('clears malformed stored tokens before reuse', () => {
-    storage.setItem(STORAGE_KEY, 'bad token')
-
-    expect(getStoredAuthToken()).toBeNull()
-    expect(storage.getItem(STORAGE_KEY)).toBeNull()
-    expect(document.cookie).toBe('vsr_session=; Path=/; SameSite=Lax; Max-Age=0; Secure')
+    installAuthenticatedFetch()
+    await window.fetch('/api/router/management/v1/me')
+    expect(events).toEqual([])
+    await window.fetch('/api/auth/me')
+    expect(events).toEqual([UNAUTHORIZED_EVENT])
   })
 })

@@ -14,10 +14,7 @@ interface ServiceNotConfiguredProps {
   onRetry?: () => void
 }
 
-const ServiceNotConfigured: React.FC<ServiceNotConfiguredProps> = ({
-  service,
-  onRetry,
-}) => {
+const ServiceNotConfigured: React.FC<ServiceNotConfiguredProps> = ({ service, onRetry }) => {
   return (
     <div className={styles.container}>
       <div className={styles.card}>

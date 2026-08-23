@@ -1,180 +1,24 @@
 import { describe, expect, it } from 'vitest'
 
-import { updateSignal } from '@/lib/dslMutations'
-import type { ASTProgram } from '@/types/dsl'
-import {
-  chooseDefaultBuilderRoutingScope,
-  listBuilderRoutingScopes,
-  mutateBuilderRecipeSource,
-  resolveBuilderRoutingScope,
-  summarizeBuilderRoutingScopes,
-} from './builderPageRoutingScopeSupport'
+import { mutateBuilderRecipeSource } from './builderPageRoutingScopeSupport'
 
-const emptyProgram = (): ASTProgram => ({
-  signals: [],
-  routes: [],
-  plugins: [],
-  models: [],
-})
-
-describe('summarizeBuilderRoutingScopes', () => {
-  it('includes recipe-owned entities and scoped declarations', () => {
-    const ast: ASTProgram = {
-      ...emptyProgram(),
-      models: [{ name: 'shared-model', fields: {}, pos: { Line: 1, Column: 1 } }],
-      entrypoints: [
-        {
-          modelNames: ['vllm-sr/balanced'],
-          recipe: 'balanced',
-          pos: { Line: 2, Column: 1 },
-        },
-      ],
-      recipes: [
-        {
-          name: 'balanced',
-          pos: { Line: 3, Column: 1 },
-          program: {
-            ...emptyProgram(),
-            signals: [
-              {
-                signalType: 'keyword',
-                name: 'balanced-keyword',
-                fields: {},
-                pos: { Line: 4, Column: 1 },
-              },
-            ],
-            routes: [
-              {
-                name: 'balanced-route',
-                priority: 100,
-                when: null,
-                models: [],
-                plugins: [],
-                pos: { Line: 5, Column: 1 },
-              },
-            ],
-          },
-        },
-      ],
-    }
-
-    expect(summarizeBuilderRoutingScopes(ast, null)).toMatchObject({
-      signalCount: 1,
-      routeCount: 1,
-      recipeCount: 1,
-      entrypointCount: 1,
-    })
-  })
-
-  it('treats WASM null collections as empty arrays', () => {
-    const ast = {
-      signals: null,
-      routes: null,
-      plugins: null,
-      models: [],
-      entrypoints: null,
-      recipes: [
-        {
-          name: 'balanced',
-          program: {
-            signals: null,
-            routes: null,
-            plugins: null,
-          },
-        },
-      ],
-    } as unknown as ASTProgram
-
-    const source = `
-ENTRYPOINT { model_names: ["vllm-sr/balanced"] recipe: "balanced" }
-RECIPE balanced {
-  SIGNAL keyword intent { keywords: ["hello"] }
-  PROJECTION score effort { method: "weighted_sum" }
-  ROUTE balanced_route { MODEL shared }
-}`
-    expect(() => summarizeBuilderRoutingScopes(ast, null, source)).not.toThrow()
-    expect(summarizeBuilderRoutingScopes(ast, null, source)).toMatchObject({
-      signalCount: 1,
-      routeCount: 1,
-      pluginCount: 0,
-      recipeCount: 1,
-      entrypointCount: 1,
-      projectionScoreCount: 1,
-    })
-  })
-})
-
-describe('Builder routing scope navigation', () => {
-  const scopedAst: ASTProgram = {
-    ...emptyProgram(),
-    models: [{ name: 'shared-model', fields: {}, pos: { Line: 1, Column: 1 } }],
-    entrypoints: [
-      {
-        modelNames: ['vllm-sr/mom-v1-blend'],
-        recipe: 'balanced',
-        pos: { Line: 2, Column: 1 },
-      },
-    ],
-    recipes: [
-      {
-        name: 'balanced',
-        pos: { Line: 3, Column: 1 },
-        program: {
-          ...emptyProgram(),
-          signals: [
-            {
-              signalType: 'keyword',
-              name: 'balanced-keyword',
-              fields: {},
-              pos: { Line: 4, Column: 1 },
-            },
-          ],
-        },
-      },
-    ],
-  }
-
-  it('maps recipe scopes to entrypoint model names and shared models', () => {
-    expect(listBuilderRoutingScopes(scopedAst)).toEqual([
-      {
-        id: 'global',
-        label: 'Global catalog',
-        recipeName: null,
-        modelNames: [],
-      },
-      {
-        id: 'recipe:balanced',
-        label: 'balanced',
-        recipeName: 'balanced',
-        modelNames: ['vllm-sr/mom-v1-blend'],
-      },
-    ])
-    expect(resolveBuilderRoutingScope(scopedAst, 'recipe:balanced')).toMatchObject({
-      models: [{ name: 'shared-model' }],
-      signals: [{ name: 'balanced-keyword' }],
-      recipes: [],
-    })
-    expect(chooseDefaultBuilderRoutingScope(scopedAst)).toBe('recipe:balanced')
-  })
-
-  it('applies mutations only inside the selected recipe', () => {
-    const source = `MODEL shared {}
-RECIPE balanced {
-  SIGNAL keyword balanced-keyword {
-    keywords: ["before"]
-  }
-}
-RECIPE speed {
-  SIGNAL keyword speed-keyword {
-    keywords: ["unchanged"]
-  }
-}`
-
-    const mutated = mutateBuilderRecipeSource(source, 'balanced', (program) =>
-      updateSignal(program, 'keyword', 'balanced-keyword', { keywords: ['after'] }),
+describe('mutateBuilderRecipeSource', () => {
+  it('changes only the selected Recipe body', () => {
+    const source = `MODEL physical {}\n\nRECIPE balanced {\n  ROUTE simple {\n    PRIORITY 1\n  }\n}\n\nENTRYPOINT {\n  MODEL_NAME "auto"\n  USE_RECIPE balanced\n}`
+    const result = mutateBuilderRecipeSource(
+      source,
+      'balanced',
+      (body) => `${body}\n\nROUTE complex {\n  PRIORITY 2\n}`,
     )
 
-    expect(mutated).toContain('keywords: ["after"]')
-    expect(mutated).toContain('keywords: ["unchanged"]')
+    expect(result).toContain('ROUTE complex')
+    expect(result).toContain('MODEL physical')
+    expect(result).toContain('ENTRYPOINT')
+  })
+
+  it('fails closed when the Recipe is not present', () => {
+    expect(mutateBuilderRecipeSource('ROUTE global {}', 'missing', () => '')).toBe(
+      'ROUTE global {}',
+    )
   })
 })

@@ -6,12 +6,27 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
+
+func neutralUserMessage(text string) llmprotocol.Message {
+	return llmprotocol.Message{
+		Role:    llmprotocol.RoleUser,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+	}
+}
+
+func neutralAssistantMessage(text string) llmprotocol.Message {
+	return llmprotocol.Message{
+		Role:    llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
+	}
+}
 
 type failingMemoryStore struct {
 	*InMemoryStore
@@ -261,22 +276,22 @@ func TestGenerateMemoryID(t *testing.T) {
 // =============================================================================
 
 func TestCountTurns(t *testing.T) {
-	history := []openai.ChatCompletionMessageParamUnion{
-		sdkUserMessage("q1"),
-		sdkAssistantMessage("a1"),
-		sdkUserMessage("q2"),
-		sdkAssistantMessage("a2"),
+	history := []llmprotocol.Message{
+		neutralUserMessage("q1"),
+		neutralAssistantMessage("a1"),
+		neutralUserMessage("q2"),
+		neutralAssistantMessage("a2"),
 	}
 	assert.Equal(t, 2, countTurns(history))
 	assert.Equal(t, 0, countTurns(nil))
 }
 
 func TestBuildSessionChunk(t *testing.T) {
-	history := []openai.ChatCompletionMessageParamUnion{
-		sdkUserMessage("What is Go?"),
-		sdkAssistantMessage("Go is a programming language."),
-		sdkUserMessage("Who created it?"),
-		sdkAssistantMessage("Rob Pike and others at Google."),
+	history := []llmprotocol.Message{
+		neutralUserMessage("What is Go?"),
+		neutralAssistantMessage("Go is a programming language."),
+		neutralUserMessage("Who created it?"),
+		neutralAssistantMessage("Rob Pike and others at Google."),
 	}
 
 	chunk := buildSessionChunk(history, "Is it fast?", "Yes, Go is very fast.", 3)
@@ -289,9 +304,9 @@ func TestBuildSessionChunk(t *testing.T) {
 }
 
 func TestBuildSessionChunk_WindowLargerThanHistory(t *testing.T) {
-	history := []openai.ChatCompletionMessageParamUnion{
-		sdkUserMessage("Hi"),
-		sdkAssistantMessage("Hello!"),
+	history := []llmprotocol.Message{
+		neutralUserMessage("Hi"),
+		neutralAssistantMessage("Hello!"),
 	}
 
 	chunk := buildSessionChunk(history, "Bye", "Goodbye!", 10)
@@ -306,11 +321,11 @@ func TestProcessResponseWithHistory_SessionChunkAtStride(t *testing.T) {
 	ctx := context.Background()
 
 	// Build 2 turns of history; +1 current = 3 turns total = stride triggers
-	history := []openai.ChatCompletionMessageParamUnion{
-		sdkUserMessage("What is your name?"),
-		sdkAssistantMessage("I am an AI assistant."),
-		sdkUserMessage("What languages do you know?"),
-		sdkAssistantMessage("I can help with Go, Python, and more."),
+	history := []llmprotocol.Message{
+		neutralUserMessage("What is your name?"),
+		neutralAssistantMessage("I am an AI assistant."),
+		neutralUserMessage("What languages do you know?"),
+		neutralAssistantMessage("I can help with Go, Python, and more."),
 	}
 
 	// 3rd turn triggers session chunk (stride=3)
@@ -351,15 +366,15 @@ func TestProcessResponseWithHistory_OverlappingWindows(t *testing.T) {
 		{"Q6?", "A6"},
 	}
 
-	var history []openai.ChatCompletionMessageParamUnion
+	var history []llmprotocol.Message
 	for i, turn := range turns {
 		err := extractor.ProcessResponseWithHistory(
 			ctx, "s1", "user1", turn.user, turn.assistant, history,
 		)
 		require.NoError(t, err, "turn %d", i+1)
 		history = append(history,
-			sdkUserMessage(turn.user),
-			sdkAssistantMessage(turn.assistant),
+			neutralUserMessage(turn.user),
+			neutralAssistantMessage(turn.assistant),
 		)
 	}
 
@@ -382,9 +397,9 @@ func TestProcessResponseWithHistory_NoSessionChunkBeforeStride(t *testing.T) {
 	ctx := context.Background()
 
 	// 1 turn in history + 1 current = 2 turns total (< stride=3)
-	history := []openai.ChatCompletionMessageParamUnion{
-		sdkUserMessage("Hello"),
-		sdkAssistantMessage("Hi there!"),
+	history := []llmprotocol.Message{
+		neutralUserMessage("Hello"),
+		neutralAssistantMessage("Hi there!"),
 	}
 
 	err := extractor.ProcessResponseWithHistory(
@@ -436,7 +451,7 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 		name       string
 		user       string
 		assistant  string
-		history    []openai.ChatCompletionMessageParamUnion
+		history    []llmprotocol.Message
 		store      Store
 		wantStored int
 		wantErr    bool
@@ -451,11 +466,11 @@ func TestProcessResponseWithHistory_RecordsStoredChunkCountMetric(t *testing.T) 
 			name:      "per turn plus session window",
 			user:      "Tell me about Go concurrency.",
 			assistant: "Go uses goroutines and channels for concurrency.",
-			history: []openai.ChatCompletionMessageParamUnion{
-				sdkUserMessage("What is your name?"),
-				sdkAssistantMessage("I am an AI assistant."),
-				sdkUserMessage("What languages do you know?"),
-				sdkAssistantMessage("I can help with Go, Python, and more."),
+			history: []llmprotocol.Message{
+				neutralUserMessage("What is your name?"),
+				neutralAssistantMessage("I am an AI assistant."),
+				neutralUserMessage("What languages do you know?"),
+				neutralAssistantMessage("I can help with Go, Python, and more."),
 			},
 			wantStored: 2,
 		},

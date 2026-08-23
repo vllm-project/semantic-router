@@ -472,8 +472,8 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 	)
 
 	Describe("IsFactCheckEnabled", func() {
-		It("should return true when properly configured", func() {
-			cfg = &config.RouterConfig{}
+		It("returns true for an explicitly scoped default Recipe API", func() {
+			cfg = &config.RouterConfig{RoutingScope: config.DefaultRecipeName}
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "test-model"
 			cfg.FactCheckRules = []config.FactCheckRule{{Name: "verification-needed"}}
 			cfg.Decisions = []config.Decision{{
@@ -486,7 +486,7 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 		})
 
 		It("should return false when disabled", func() {
-			cfg = &config.RouterConfig{}
+			cfg = &config.RouterConfig{RoutingScope: "verification"}
 			cfg.HallucinationMitigation.Enabled = false
 
 			classifier = &Classifier{Config: cfg}
@@ -496,7 +496,7 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 
 	Describe("IsHallucinationDetectionEnabled", func() {
 		It("should return true when properly configured", func() {
-			cfg = &config.RouterConfig{}
+			cfg = &config.RouterConfig{RoutingScope: "verification"}
 			cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "test-model"
 			cfg.Decisions = []config.Decision{{
@@ -514,7 +514,7 @@ var _ = Describe("Classifier with Hallucination Mitigation", func() {
 		})
 
 		It("should return false when disabled", func() {
-			cfg = &config.RouterConfig{}
+			cfg = &config.RouterConfig{RoutingScope: "verification"}
 			cfg.HallucinationMitigation.Enabled = false
 
 			classifier = &Classifier{Config: cfg}

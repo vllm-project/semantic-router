@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
 
-import type { ToolCall, ToolResult } from '../tools'
+import type { ToolCall, ToolResult, WebSearchResult } from '../tools/types'
 
-import styles from './ChatComponent.module.css'
-import type { SearchResult } from './ChatComponentTypes'
+import styles from './ClawRoomToolCards.module.css'
 
 export function WebSearchCard({
   toolCall,
@@ -28,14 +27,20 @@ export function WebSearchCard({
   const results = useMemo(() => {
     if (!toolResult?.content) return undefined
     if (Array.isArray(toolResult.content)) {
-      return toolResult.content as SearchResult[]
+      return toolResult.content as WebSearchResult[]
     }
     return undefined
   }, [toolResult?.content])
 
   return (
     <div className={styles.webSearchCard}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
+      <button
+        type="button"
+        className={styles.webSearchHeader}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} Web Search details`}
+      >
         <div className={styles.webSearchIcon}>
           {toolCall.status === 'running' ? (
             <svg
@@ -78,7 +83,7 @@ export function WebSearchCard({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
-      </div>
+      </button>
 
       {isExpanded && toolCall.status === 'completed' && results && results.length > 0 && (
         <div className={styles.webSearchResults}>
@@ -178,7 +183,13 @@ export function OpenWebCard({
 
   return (
     <div className={styles.webSearchCard}>
-      <div className={styles.webSearchHeader} onClick={onToggle}>
+      <button
+        type="button"
+        className={styles.webSearchHeader}
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        aria-label={`${isExpanded ? 'Collapse' : 'Expand'} Web Page details`}
+      >
         <div className={styles.webSearchIcon}>
           {toolCall.status === 'running' ? (
             <svg
@@ -229,7 +240,7 @@ export function OpenWebCard({
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </div>
-      </div>
+      </button>
 
       {isExpanded && toolCall.status === 'completed' && resultData && (
         <div className={styles.webSearchResults}>

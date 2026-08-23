@@ -128,7 +128,7 @@ const MarkdownRenderer = ({ content, allowImages = true }: MarkdownRendererProps
     img({ alt, ...props }) {
       if (!allowImages) {
         return (
-          <span title="Images are not loaded from managed Recipe documentation">
+          <span title="Images are not loaded from untrusted Markdown content">
             Image omitted{alt ? `: ${alt}` : ''}
           </span>
         )

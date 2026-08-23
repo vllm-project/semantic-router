@@ -1,0 +1,182 @@
+.backdrop {
+  position: fixed;
+  z-index: 1600;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem;
+  background: rgba(3, 3, 4, 0.66);
+  backdrop-filter: blur(18px);
+}
+
+.dialog {
+  position: relative;
+  width: min(560px, 100%);
+  height: min(442px, calc(100dvh - 2.8rem));
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 2.25rem;
+  color: var(--text-primary);
+  text-align: center;
+  border: 2px solid rgba(255, 255, 255, 0.76);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.88);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(28px) saturate(140%);
+}
+
+.dialog:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.66);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.close:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.085);
+}
+
+.close svg {
+  width: 17px;
+  height: 17px;
+}
+
+.logo {
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.065);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.logo img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.eyebrow {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.64rem;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.dialog h2 {
+  margin: 0.3rem 0 0;
+  font-size: 1.45rem;
+  font-weight: 660;
+  letter-spacing: -0.035em;
+}
+
+.dialog > p {
+  max-width: 430px;
+  margin: 0.42rem 0 0;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.content {
+  width: 100%;
+  margin-top: 1.15rem;
+}
+
+.actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+  margin-top: 1.2rem;
+}
+
+.actions[data-action-count='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.actions button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  padding: 0 1rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 730;
+}
+
+.actions button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.primary {
+  color: #08090b;
+  border: 1px solid rgba(255, 255, 255, 0.86);
+  background: #f5f7fb;
+}
+
+.primary:hover {
+  background: #fff;
+  transform: translateY(-1px);
+}
+
+.secondary {
+  color: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.secondary:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.085);
+}
+
+.close:focus-visible,
+.actions button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+@media (max-width: 620px) {
+  .dialog {
+    height: auto;
+    min-height: 420px;
+    padding: 2rem 1.25rem 1.4rem;
+  }
+
+  .actions {
+    grid-template-columns: 1fr;
+  }
+}

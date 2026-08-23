@@ -11,32 +11,34 @@ import (
 )
 
 // ResponseStore defines the interface for storing and retrieving responses.
-// Implementations must be thread-safe.
+// Every operation is scoped to one exact process-derived owner;
+// implementations must be thread-safe and return ErrNotFound for an object
+// outside that owner.
 type ResponseStore interface {
 	// StoreResponse stores a new response.
 	// Returns error if the response ID already exists.
-	StoreResponse(ctx context.Context, response *responseapi.StoredResponse) error
+	StoreResponse(ctx context.Context, owner responseapi.ResponseOwner, response *responseapi.StoredResponse) error
 
 	// GetResponse retrieves a response by ID.
 	// Returns nil and ErrNotFound if the response doesn't exist.
-	GetResponse(ctx context.Context, responseID string) (*responseapi.StoredResponse, error)
+	GetResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) (*responseapi.StoredResponse, error)
 
 	// UpdateResponse updates an existing response.
 	// Returns ErrNotFound if the response doesn't exist.
-	UpdateResponse(ctx context.Context, response *responseapi.StoredResponse) error
+	UpdateResponse(ctx context.Context, owner responseapi.ResponseOwner, response *responseapi.StoredResponse) error
 
 	// DeleteResponse deletes a response by ID.
 	// Returns ErrNotFound if the response doesn't exist.
-	DeleteResponse(ctx context.Context, responseID string) error
+	DeleteResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) error
 
 	// GetConversationChain retrieves all responses in a conversation chain
 	// starting from the given response ID and going back via previous_response_id.
 	// Returns responses in chronological order (oldest first).
-	GetConversationChain(ctx context.Context, responseID string) ([]*responseapi.StoredResponse, error)
+	GetConversationChain(ctx context.Context, owner responseapi.ResponseOwner, responseID string) ([]*responseapi.StoredResponse, error)
 
 	// ListResponsesByConversation lists all responses for a conversation.
 	// Returns responses in chronological order.
-	ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error)
+	ListResponsesByConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error)
 
 	// Close releases resources held by the store.
 	Close() error
@@ -52,22 +54,22 @@ type ResponseStore interface {
 // This is optional - implementations may combine this with ResponseStore.
 type ConversationStore interface {
 	// CreateConversation creates a new conversation.
-	CreateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error
+	CreateConversation(ctx context.Context, owner responseapi.ResponseOwner, conversation *responseapi.StoredConversation) error
 
 	// GetConversation retrieves a conversation by ID.
-	GetConversation(ctx context.Context, conversationID string) (*responseapi.StoredConversation, error)
+	GetConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string) (*responseapi.StoredConversation, error)
 
 	// UpdateConversation updates an existing conversation.
-	UpdateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error
+	UpdateConversation(ctx context.Context, owner responseapi.ResponseOwner, conversation *responseapi.StoredConversation) error
 
 	// DeleteConversation deletes a conversation and optionally its responses.
-	DeleteConversation(ctx context.Context, conversationID string, deleteResponses bool) error
+	DeleteConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string, deleteResponses bool) error
 
 	// ListConversations lists conversations with pagination.
-	ListConversations(ctx context.Context, opts ListOptions) ([]*responseapi.StoredConversation, error)
+	ListConversations(ctx context.Context, owner responseapi.ResponseOwner, opts ListOptions) ([]*responseapi.StoredConversation, error)
 
 	// AddResponseToConversation adds a response ID to a conversation.
-	AddResponseToConversation(ctx context.Context, conversationID, responseID string) error
+	AddResponseToConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID, responseID string) error
 }
 
 // CombinedStore combines ResponseStore and ConversationStore interfaces.
@@ -146,7 +148,8 @@ type RedisStoreConfig struct {
 	DB int `yaml:"db" json:"db"`
 
 	// KeyPrefix is the base prefix for all Redis keys (e.g., "sr:").
-	// Combined with type prefixes to create keys like: sr:response:xxx, sr:conversation:xxx
+	// Combined with type and owner partitions to create keys like:
+	// sr:response:<owner>:xxx, sr:conversation:<owner>:xxx
 	// Default: "sr:"
 	KeyPrefix string `yaml:"key_prefix,omitempty" json:"key_prefix,omitempty"`
 

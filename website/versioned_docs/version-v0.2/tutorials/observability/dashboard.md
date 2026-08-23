@@ -43,13 +43,12 @@ Pages:
 
 - Serves the frontend build (SPA routing)
 - Reverse proxies upstream services with header normalization for iframe embedding
-- Exposes a small set of dashboard APIs for config and tools database
+- Exposes focused Dashboard APIs and proxies Router Management
 
 Key routes:
 
 - Health: `GET /healthz`
-- Config (read): `GET /api/router/config/all` (reads YAML, returns JSON)
-- Config (write): `POST /api/router/config/update` (writes YAML back to file)
+- Router Management: `/api/router/management/v1/*` (Router-owned resources and authorization)
 - Tools DB: `GET /api/tools-db` (serves tools_db.json next to the config)
 - Router API: `GET/POST /api/router/*` (Authorization header forwarded)
 - Grafana (embed): `GET /embedded/grafana/*`
@@ -67,10 +66,7 @@ Supply upstream targets and runtime settings via env vars (defaults in parenthes
 - `TARGET_PROMETHEUS_URL`
 - `TARGET_ROUTER_API_URL` (http://localhost:8080)
 - `TARGET_ROUTER_METRICS_URL` (http://localhost:9190/metrics)
-- `ROUTER_CONFIG_PATH` (../../config/config.yaml)
 - `DASHBOARD_STATIC_DIR` (../frontend)
-
-Note: The config update API writes to `ROUTER_CONFIG_PATH`. In containers/Kubernetes, this path must be writable (not a read-only ConfigMap). Mount a writable volume if you need runtime edits to persist.
 
 ## Quick start
 

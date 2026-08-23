@@ -16,28 +16,88 @@ limitations under the License.
 
 package looper
 
-// TokenUsage holds OpenAI-compatible token counts. For multi-model looper
-// algorithms it represents the aggregate across every model call made during a
-// single execution (panel + judge + synthesis, rounds, candidates, etc.).
+import (
+	"math"
+)
+
+// TokenUsage is Looper's compact aggregate presentation of neutral input,
+// output, and total usage. It never drives quota settlement; BackendInvoker's
+// per-dispatch response terminals are the accounting authority.
 type TokenUsage struct {
 	PromptTokens     int64 `json:"prompt_tokens"`
 	CompletionTokens int64 `json:"completion_tokens"`
 	TotalTokens      int64 `json:"total_tokens"`
+	invalid          bool
 }
+
+// NewActualTokenUsage constructs usage from provider-reported token counts.
+// Invalid counts produce an unknown value instead of silently becoming zero.
+func NewActualTokenUsage(promptTokens, completionTokens, totalTokens int64) TokenUsage {
+	return validatedTokenUsage(TokenUsage{
+		PromptTokens: promptTokens, CompletionTokens: completionTokens, TotalTokens: totalTokens,
+	})
+}
+
+// UnknownTokenUsage returns a non-authoritative usage value. Callers that
+// persist TokenUsage outside this package must preserve Authoritative().
+func UnknownTokenUsage() TokenUsage { return unknownTokenUsage() }
+
+// Authoritative reports whether all token counts came from valid provider
+// usage rather than an absent, malformed, or overflowing observation.
+func (u TokenUsage) Authoritative() bool { return u.isValid() }
 
 // Add returns u with the usage of the given responses added to it. It is
 // nil-safe: nil responses contribute nothing, so callers can accumulate across
 // rounds or skip failed calls without guarding. The receiver is not mutated.
 func (u TokenUsage) Add(resps ...*ModelResponse) TokenUsage {
+	if !u.isValid() {
+		return unknownTokenUsage()
+	}
 	for _, resp := range resps {
 		if resp == nil {
 			continue
 		}
-		u.PromptTokens += resp.Usage.PromptTokens
-		u.CompletionTokens += resp.Usage.CompletionTokens
-		u.TotalTokens += resp.Usage.TotalTokens
+		usage := validatedTokenUsage(resp.Usage)
+		if !usage.isValid() {
+			return unknownTokenUsage()
+		}
+		u = mergeTokenUsage(u, usage)
+		if !u.isValid() {
+			return u
+		}
 	}
 	return u
+}
+
+func validatedTokenUsage(usage TokenUsage) TokenUsage {
+	if !usage.isValid() {
+		return unknownTokenUsage()
+	}
+	return usage
+}
+
+func (u TokenUsage) isValid() bool {
+	return !u.invalid && u.PromptTokens >= 0 && u.CompletionTokens >= 0 && u.TotalTokens >= 0
+}
+
+func unknownTokenUsage() TokenUsage {
+	return TokenUsage{invalid: true}
+}
+
+func mergeTokenUsage(first, second TokenUsage) TokenUsage {
+	if !first.isValid() || !second.isValid() {
+		return unknownTokenUsage()
+	}
+	if first.PromptTokens > math.MaxInt64-second.PromptTokens ||
+		first.CompletionTokens > math.MaxInt64-second.CompletionTokens ||
+		first.TotalTokens > math.MaxInt64-second.TotalTokens {
+		return unknownTokenUsage()
+	}
+	return TokenUsage{
+		PromptTokens:     first.PromptTokens + second.PromptTokens,
+		CompletionTokens: first.CompletionTokens + second.CompletionTokens,
+		TotalTokens:      first.TotalTokens + second.TotalTokens,
+	}
 }
 
 // SumUsage sums the per-call usage of the given responses. nil responses are
@@ -46,15 +106,4 @@ func (u TokenUsage) Add(resps ...*ModelResponse) TokenUsage {
 // recomputed so it matches the upstream accounting.
 func SumUsage(resps ...*ModelResponse) TokenUsage {
 	return TokenUsage{}.Add(resps...)
-}
-
-// Map renders the usage as the OpenAI-compatible block embedded in a
-// chat.completion response body. This is the single seam every looper uses in
-// place of the legacy hardcoded {0,0,0} literal.
-func (u TokenUsage) Map() map[string]interface{} {
-	return map[string]interface{}{
-		"prompt_tokens":     u.PromptTokens,
-		"completion_tokens": u.CompletionTokens,
-		"total_tokens":      u.TotalTokens,
-	}
 }

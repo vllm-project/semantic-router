@@ -16,6 +16,7 @@ Usage:
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -39,6 +40,19 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("SignalEval")
+
+EVALUATION_BEARER_TOKEN_ENV = "VLLM_SR_EVALUATION_BEARER_TOKEN"
+
+
+def evaluation_authorization_headers() -> Dict[str, str]:
+    """Return the in-memory delegated credential without logging or persisting it."""
+    token = os.environ.get(EVALUATION_BEARER_TOKEN_ENV, "")
+    if not token:
+        return {}
+    if any(character.isspace() for character in token):
+        raise ValueError("invalid evaluation inference credential")
+    return {"Authorization": f"Bearer {token}"}
+
 
 # Dataset registry - each dataset has a unique ID
 # To add new datasets (e.g., multilingual), just add new entries here
@@ -536,6 +550,7 @@ def call_eval_api(query: str, endpoint: str, timeout: int) -> Optional[Dict]:
         response = requests.post(
             endpoint,
             json={"text": query},
+            headers=evaluation_authorization_headers(),
             timeout=timeout,
         )
         response.raise_for_status()

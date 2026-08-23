@@ -251,7 +251,7 @@ const OpenClawPage: React.FC = () => {
             <span className={styles.titleLinePrimary}>
               <span className={styles.titleLead}>Semantic Router</span> Powered
             </span>
-            <span className={styles.titleLineSecondary}>ClawOS</span>
+            <span className={styles.titleLineSecondary}>OpenClaw</span>
           </h1>
           <p className={styles.subtitle}>
             Evolved from vLLM-SR built on Semantic Router with System Intelligence.

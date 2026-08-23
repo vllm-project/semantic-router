@@ -83,7 +83,6 @@ func apiRoutes() []apiRoute {
 		apiRouterReplayRoutes(),
 		apiResponseCacheRoutes(),
 		apiContextCompressionRoutes(),
-		apiConfigRoutes(),
 		apiMemoryRoutes(),
 		apiVectorStoreRoutes(),
 		apiFileRoutes(),

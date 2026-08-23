@@ -11,8 +11,8 @@ more information than a fixed priority order or a small set of hand-written
 rules.
 
 The selector runs after a routing decision has matched. It can choose only from
-that decision's `modelRefs`; it does not discover, deploy, or authenticate
-provider models.
+the Models assigned to that decision name by the Entrypoint; it does not
+discover, deploy, or authenticate backends.
 
 ## Available selectors
 
@@ -57,12 +57,10 @@ Dashboard's ML data directory.
 
 :::caution Current configuration export
 
-The generated `ml-model-selection-values.yaml` is a migration fragment, not a
-standalone canonical Router configuration. Its `config.model_selection`,
-`config.strategy`, and `config.decisions` fields must be reviewed and mapped to
-`global.router.model_selection`, `global.router.strategy`, and
-`routing.decisions` in a complete config. Add the required listeners and
-providers, then run `vllm-sr validate --config ...` before deployment.
+The generated `ml-model-selection-values.yaml` is an authoring fragment, not a
+standalone Router manifest. Move selector settings into a Recipe document,
+create the Models separately, and assign their readable names through an
+Entrypoint. Then run `vllm-sr validate --config ...` before deployment.
 
 :::
 
@@ -141,40 +139,44 @@ specific to the benchmarked model names, embedding model, and feature layout.
 ### 6. Configure the Router
 
 Merge the selector settings into a complete canonical config. This example is a
-fragment; the full file still needs listeners, providers, and any signals used
-by the decision.
+Recipe fragment; the full manifest still needs Models, an Entrypoint, and any
+signals used by the decision. Each ML Decision owns its `algorithm.ml` block.
 
 ```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        models_path: /models/selection
-        embedding_dim: 1024
-        knn:
-          k: 5
-          pretrained_path: /models/selection/knn_model.json
+recipes:
+  - name: ml-selection
+    document:
+      decisions:
+        - name: math
+          description: Route math requests with the trained KNN selector.
+          priority: 100
+          rules:
+            operator: AND
+            conditions:
+              - type: domain
+                name: math
+          algorithm:
+            type: knn
+            ml:
+              models_path: /models/selection
+              embedding_dim: 1024
+              knn:
+                k: 5
+                pretrained_path: /models/selection/knn_model.json
 
-routing:
-  decisions:
-    - name: math
-      description: Route math requests with the trained KNN selector.
-      priority: 100
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      algorithm:
-        type: knn
-      modelRefs:
-        - model: local-small
-        - model: hosted-model
+entrypoints:
+  - name: ml-router
+    recipe: ml-selection
+    assignments:
+      math:
+        models:
+          - model: local/small
+          - model: hosted/frontier
 ```
 
 The configured `embedding_dim` and online embedding model must match the
-training artifacts. Model names in `modelRefs` must match the names recorded in
-the benchmark data and the configured provider aliases.
+training artifacts. Assigned Model names must match the candidate labels
+recorded in the benchmark data.
 
 ```bash
 vllm-sr validate --config config.yaml

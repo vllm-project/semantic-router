@@ -94,15 +94,12 @@ These files are existing structural debt, not acceptable targets for new growth:
 - `src/fleet-sim/fleet_sim/optimizer/base.py`
 - `deploy/operator/api/v1alpha1/semanticrouter_types.go`
 - `deploy/operator/controllers/canonical_config_builder.go`
-- `dashboard/backend/handlers/config.go`
-- `dashboard/backend/handlers/deploy.go`
 - `dashboard/backend/handlers/status.go`
 - `dashboard/backend/handlers/status_modes.go`
 - `dashboard/frontend/src/App.tsx`
 - `dashboard/frontend/src/pages/DashboardPage.tsx`
 - `dashboard/frontend/src/pages/BuilderPage.tsx`
 - `dashboard/frontend/src/pages/ConfigPage.tsx`
-- `dashboard/frontend/src/pages/SetupWizardPage.tsx`
 - `dashboard/frontend/src/components/ChatComponent.tsx`
 - `dashboard/frontend/src/components/ExpressionBuilder.tsx`
 

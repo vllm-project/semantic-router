@@ -23,7 +23,7 @@ func TestValidateSemanticCacheThresholdRange(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &RouterConfig{}
-			cfg.SemanticCache.SimilarityThreshold = tc.threshold
+			cfg.SimilarityThreshold = tc.threshold
 			err := validateSemanticCacheContracts(cfg)
 			if tc.wantErr != (err != nil) {
 				t.Fatalf("threshold=%v: wantErr=%v, got err=%v", tc.threshold, tc.wantErr, err)
@@ -37,10 +37,12 @@ func TestValidateSemanticCachePerDecisionThreshold(t *testing.T) {
 		return Decision{
 			Name: name,
 			Plugins: []DecisionPlugin{{
-				Type: "semantic-cache",
+				Type: DecisionPluginResponseCache,
 				Configuration: MustStructuredPayload(map[string]interface{}{
-					"enabled":              true,
-					"similarity_threshold": threshold,
+					"enabled": true,
+					"semantic": map[string]interface{}{
+						"similarity_threshold": threshold,
+					},
 				}),
 			}},
 		}
@@ -74,15 +76,15 @@ func TestValidateSemanticCacheNilConfig(t *testing.T) {
 func TestValidateSemanticCacheMode(t *testing.T) {
 	for _, mode := range []string{
 		"",
-		SemanticCacheModeSemantic,
-		SemanticCacheModeExact,
-		SemanticCacheModeExactThenSemantic,
+		ResponseCacheModeSemantic,
+		ResponseCacheModeExact,
+		ResponseCacheModeExactThenSemantic,
 	} {
 		cfg := &RouterConfig{}
 		cfg.Decisions = []Decision{{
 			Name: "route",
 			Plugins: []DecisionPlugin{{
-				Type: "semantic-cache",
+				Type: DecisionPluginResponseCache,
 				Configuration: MustStructuredPayload(map[string]interface{}{
 					"enabled": true,
 					"mode":    mode,
@@ -98,7 +100,7 @@ func TestValidateSemanticCacheMode(t *testing.T) {
 	cfg.Decisions = []Decision{{
 		Name: "route",
 		Plugins: []DecisionPlugin{{
-			Type: "semantic-cache",
+			Type: DecisionPluginResponseCache,
 			Configuration: MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
 				"mode":    "unsafe",
@@ -106,6 +108,6 @@ func TestValidateSemanticCacheMode(t *testing.T) {
 		}},
 	}}
 	if err := validateSemanticCacheContracts(cfg); err == nil {
-		t.Fatal("unknown semantic-cache mode must be rejected")
+		t.Fatal("unknown response_cache mode must be rejected")
 	}
 }

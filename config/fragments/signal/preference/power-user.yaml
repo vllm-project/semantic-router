@@ -1,4 +1,4 @@
-routing:
+document:
   signals:
     preferences:
       - name: terse_answers

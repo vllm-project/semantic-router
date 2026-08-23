@@ -19,6 +19,7 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(CLI_ROOT)
+    environment["PYDANTIC_DISABLE_PLUGINS"] = "__all__"
     return subprocess.run(
         [sys.executable, "-m", "cli.main", *args],
         cwd=tmp_path,

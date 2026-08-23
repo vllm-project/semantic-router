@@ -1,42 +1,43 @@
-import { useEffect } from 'react';
-import { DIMENSION_INFO, STATUS_INFO, LEVEL_INFO, formatDuration } from '../../types/evaluation';
-import { useProgress, useTask } from '../../hooks/useEvaluation';
-import styles from './ProgressTracker.module.css';
+import { useEffect } from 'react'
+import { DIMENSION_INFO, STATUS_INFO, LEVEL_INFO, formatDuration } from '../../types/evaluation'
+import { useProgress, useTask } from '../../hooks/useEvaluation'
+import ProductIcon from '../ProductIcon'
+import styles from './ProgressTracker.module.css'
 
 interface ProgressTrackerProps {
-  taskId: string;
-  onComplete?: () => void;
-  onCancel?: () => void;
+  taskId: string
+  onComplete?: () => void
+  onCancel?: () => void
 }
 
 export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTrackerProps) {
-  const { task, loading, error: taskError, refresh: refreshTask } = useTask(taskId, true, 1000);
+  const { task, loading, error: taskError, refresh: refreshTask } = useTask(taskId, true, 1000)
   const { progress, connected, completed, error, disconnect } = useProgress(
     taskId,
     task?.status === 'running',
-  );
+  )
 
   useEffect(() => {
     if (completed) {
-      refreshTask();
+      refreshTask()
     }
-  }, [completed, refreshTask]);
+  }, [completed, refreshTask])
 
   useEffect(() => {
     if (!task) {
-      return;
+      return
     }
 
     if (task.status === 'completed') {
-      disconnect();
-      onComplete?.();
-      return;
+      disconnect()
+      onComplete?.()
+      return
     }
 
     if (task.status === 'failed' || task.status === 'cancelled') {
-      disconnect();
+      disconnect()
     }
-  }, [task, disconnect, onComplete]);
+  }, [task, disconnect, onComplete])
 
   if (taskError && !task) {
     return (
@@ -44,10 +45,12 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         <div className={styles.loadError} role="alert">
           <h3>Evaluation progress is unavailable</h3>
           <p>{taskError}</p>
-          <button type="button" onClick={() => void refreshTask()}>Retry</button>
+          <button type="button" onClick={() => void refreshTask()}>
+            <ProductIcon name="refresh" /> Retry
+          </button>
         </div>
       </div>
-    );
+    )
   }
 
   if (!task) {
@@ -58,18 +61,18 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
           <span>{loading ? 'Loading task…' : 'Waiting for task state…'}</span>
         </div>
       </div>
-    );
+    )
   }
 
   const displayProgress = progress || {
     progress_percent: task.progress_percent,
     current_step: task.current_step || '',
     message: '',
-  };
+  }
 
-  const statusInfo = STATUS_INFO[task.status];
+  const statusInfo = STATUS_INFO[task.status]
   const streamLabel =
-    task.status === 'running' ? (connected ? 'Connected' : 'Reconnecting') : 'Not active';
+    task.status === 'running' ? (connected ? 'Connected' : 'Reconnecting') : 'Not active'
 
   return (
     <div className={styles.container}>
@@ -107,7 +110,10 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
       <div className={styles.details}>
         <div className={styles.detailItem}>
           <span className={styles.detailLabel}>Level</span>
-          <span className={styles.detailValue} style={{ color: LEVEL_INFO[task.config.level].color }}>
+          <span
+            className={styles.detailValue}
+            style={{ color: LEVEL_INFO[task.config.level].color }}
+          >
             {LEVEL_INFO[task.config.level].label}
           </span>
         </div>
@@ -125,7 +131,9 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         </div>
         <div className={styles.detailItem}>
           <span className={styles.detailLabel}>Connection</span>
-          <span className={`${styles.detailValue} ${connected ? styles.connected : styles.disconnected}`}>
+          <span
+            className={`${styles.detailValue} ${connected ? styles.connected : styles.disconnected}`}
+          >
             {streamLabel}
           </span>
         </div>
@@ -135,18 +143,21 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
         <h4>Evaluation Dimensions</h4>
         <div className={styles.dimensionList}>
           {task.config.dimensions.map((dim) => {
-            const info = DIMENSION_INFO[dim];
-            const isActive = displayProgress.current_step?.toLowerCase().includes(dim);
+            const info = DIMENSION_INFO[dim]
+            const isActive = displayProgress.current_step?.toLowerCase().includes(dim)
             return (
               <div
                 key={dim}
                 className={`${styles.dimension} ${isActive ? styles.activeDimension : ''}`}
                 style={{ '--dim-color': info.color } as React.CSSProperties}
               >
-                <span className={styles.dimensionIndicator} style={{ backgroundColor: info.color }} />
+                <span
+                  className={styles.dimensionIndicator}
+                  style={{ backgroundColor: info.color }}
+                />
                 <span className={styles.dimensionName}>{info.label}</span>
               </div>
-            );
+            )
           })}
         </div>
       </div>
@@ -173,12 +184,12 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
       {task.status === 'running' && onCancel && (
         <div className={styles.actions}>
           <button type="button" className={styles.cancelButton} onClick={onCancel}>
-            Cancel Evaluation
+            <ProductIcon name="stop" /> Cancel Evaluation
           </button>
         </div>
       )}
     </div>
-  );
+  )
 }
 
-export default ProgressTracker;
+export default ProgressTracker

@@ -18,7 +18,7 @@ func TestConfiguredGRPCMaxMessageSizePrefersRouterConfig(t *testing.T) {
 		Looper: config.LooperConfig{GRPCMaxMsgSizeMB: 8},
 	}
 	server := &Server{
-		service: NewRouterService(&OpenAIRouter{Config: routerCfg}),
+		service: newRouterServiceWithRequestRuntimes(&OpenAIRouter{Config: routerCfg}, nil, nil),
 	}
 
 	if got, want := server.configuredGRPCMaxMessageSize(), 8*1024*1024; got != want {
@@ -72,71 +72,6 @@ func TestConfiguredGRPCMaxMessageSizePreservesLegacyGlobalFallback(t *testing.T)
 	}
 }
 
-func TestUsesKubernetesConfigSourcePrefersRouterConfig(t *testing.T) {
-	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
-		ConfigSource: config.ConfigSourceKubernetes,
-	})
-	defer restoreGlobalConfig()
-
-	server := &Server{
-		service: NewRouterService(&OpenAIRouter{
-			Config: &config.RouterConfig{ConfigSource: config.ConfigSourceFile},
-		}),
-		runtime: routerruntime.NewRegistry(&config.RouterConfig{
-			ConfigSource: config.ConfigSourceKubernetes,
-		}),
-	}
-
-	if server.usesKubernetesConfigSource() {
-		t.Fatal("usesKubernetesConfigSource() = true, want router config to override runtime/global source")
-	}
-}
-
-func TestUsesKubernetesConfigSourceUsesRuntimeRegistryBeforeGlobal(t *testing.T) {
-	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
-		ConfigSource: config.ConfigSourceFile,
-	})
-	defer restoreGlobalConfig()
-
-	server := &Server{
-		runtime: routerruntime.NewRegistry(&config.RouterConfig{
-			ConfigSource: config.ConfigSourceKubernetes,
-		}),
-	}
-
-	if !server.usesKubernetesConfigSource() {
-		t.Fatal("usesKubernetesConfigSource() = false, want runtime registry config source")
-	}
-}
-
-func TestUsesKubernetesConfigSourceWithEmptyRuntimeRegistryDoesNotUseGlobal(t *testing.T) {
-	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
-		ConfigSource: config.ConfigSourceKubernetes,
-	})
-	defer restoreGlobalConfig()
-
-	server := &Server{
-		runtime: routerruntime.NewRegistry(nil),
-	}
-
-	if server.usesKubernetesConfigSource() {
-		t.Fatal("usesKubernetesConfigSource() = true, want empty runtime registry to avoid legacy global source")
-	}
-}
-
-func TestUsesKubernetesConfigSourcePreservesLegacyGlobalFallback(t *testing.T) {
-	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(&config.RouterConfig{
-		ConfigSource: config.ConfigSourceKubernetes,
-	})
-	defer restoreGlobalConfig()
-
-	server := &Server{}
-
-	if !server.usesKubernetesConfigSource() {
-		t.Fatal("usesKubernetesConfigSource() = false, want legacy global config source")
-	}
-}
-
 func replaceExtProcGlobalConfigForTest(newCfg *config.RouterConfig) func() {
 	previous := config.Get()
 	config.Replace(newCfg)
@@ -151,19 +86,18 @@ func replaceExtProcGlobalConfigForTest(newCfg *config.RouterConfig) func() {
 
 func TestResolveInitialRouterConfigPrefersRuntimeRegistryBeforeGlobal(t *testing.T) {
 	globalCfg := &config.RouterConfig{
-		ConfigSource: config.ConfigSourceKubernetes,
-		Looper:       config.LooperConfig{GRPCMaxMsgSizeMB: 64},
+		Looper: config.LooperConfig{GRPCMaxMsgSizeMB: 64},
 	}
 	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(globalCfg)
 	defer restoreGlobalConfig()
 
 	runtimeCfg := &config.RouterConfig{
-		ConfigSource: config.ConfigSourceFile,
-		Looper:       config.LooperConfig{GRPCMaxMsgSizeMB: 8},
+		Looper: config.LooperConfig{GRPCMaxMsgSizeMB: 8},
 	}
 	cfg, publishGlobal, err := resolveInitialRouterConfig(
 		filepath.Join(t.TempDir(), "missing-config.yaml"),
 		routerruntime.NewRegistry(runtimeCfg),
+		config.NewParser(nil).Parse,
 	)
 	if err != nil {
 		t.Fatalf("resolveInitialRouterConfig() error = %v", err)
@@ -176,27 +110,5 @@ func TestResolveInitialRouterConfigPrefersRuntimeRegistryBeforeGlobal(t *testing
 	}
 	if got := config.Get(); got != globalCfg {
 		t.Fatalf("config.Get() = %p, want unchanged global cfg %p", got, globalCfg)
-	}
-}
-
-func TestResolveInitialRouterConfigPreservesLegacyKubernetesGlobalFallback(t *testing.T) {
-	globalCfg := &config.RouterConfig{
-		ConfigSource: config.ConfigSourceKubernetes,
-	}
-	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(globalCfg)
-	defer restoreGlobalConfig()
-
-	cfg, publishGlobal, err := resolveInitialRouterConfig(
-		filepath.Join(t.TempDir(), "missing-config.yaml"),
-		nil,
-	)
-	if err != nil {
-		t.Fatalf("resolveInitialRouterConfig() error = %v", err)
-	}
-	if cfg != globalCfg {
-		t.Fatalf("resolveInitialRouterConfig() cfg = %p, want global cfg %p", cfg, globalCfg)
-	}
-	if !publishGlobal {
-		t.Fatal("resolveInitialRouterConfig() publishGlobal = false, want true for legacy config path")
 	}
 }

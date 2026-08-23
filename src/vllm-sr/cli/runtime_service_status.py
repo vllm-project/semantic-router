@@ -10,8 +10,17 @@ Every probe reports "not ready" rather than raising: status output must survive
 a container that is up but not answering yet.
 """
 
-from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT
+from pathlib import Path
+
+import yaml
+
+from cli.commands.runtime_paths import _container_compiled_bootstrap_path
+from cli.consts import DEFAULT_ENVOY_PORT
 from cli.container_cli import container_exec, container_status
+from cli.runtime_management_config import (
+    _configured_management_port,
+    _configured_management_tls_certificate_file,
+)
 from cli.runtime_stack import RuntimeStackLayout
 from cli.terminal import fields
 from cli.utils import get_logger
@@ -29,7 +38,11 @@ def runtime_service_container_name(
 
 def report_service_status(service: str, stack_layout) -> None:
     checkers = {
-        "router": ("Router", _check_router_status, None),
+        "router": (
+            "Router",
+            lambda container_name: _check_router_status(container_name, stack_layout),
+            None,
+        ),
         "envoy": (
             "Envoy",
             lambda container_name: _check_envoy_status(container_name, stack_layout),
@@ -59,10 +72,27 @@ def report_service_status(service: str, stack_layout) -> None:
         log.error(f"Failed to check {service} status: {exc}")
 
 
-def _check_router_status(container_name: str) -> bool:
+def _check_router_status(container_name: str, stack_layout: RuntimeStackLayout) -> bool:
+    config_path = _container_compiled_bootstrap_path(
+        Path("config.yaml"), stack_name=stack_layout.stack_name
+    )
+    return_code, stdout, _stderr = container_exec(container_name, ["cat", config_path])
+    if return_code != 0:
+        return False
+    config = yaml.safe_load(stdout) or {}
+    management_port = _configured_management_port(config)
+    certificate_file = _configured_management_tls_certificate_file(config)
+    scheme = "https" if certificate_file is not None else "http"
+    tls_arguments = ["--cacert", certificate_file] if certificate_file else []
     return_code, _stdout, _stderr = container_exec(
         container_name,
-        ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
+        [
+            "curl",
+            "-f",
+            "-s",
+            *tls_arguments,
+            f"{scheme}://localhost:{management_port}/health",
+        ],
     )
     return return_code == 0
 

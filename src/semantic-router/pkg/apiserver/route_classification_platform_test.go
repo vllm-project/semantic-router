@@ -7,63 +7,11 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
-
-func TestHandleConfigGetReturnsFullRouterConfig(t *testing.T) {
-	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-	cfg := minimalDeployTestConfig("math_route")
-	cfg.Projections.Partitions = []config.ProjectionPartition{{
-		Name:        "subject_partition",
-		Semantics:   "softmax_exclusive",
-		Temperature: 0.1,
-		Members:     []string{"math"},
-		Default:     "math",
-	}}
-	if err := os.WriteFile(configPath, mustMarshalCanonicalConfigYAML(t, cfg), 0o644); err != nil {
-		t.Fatalf("write router config: %v", err)
-	}
-
-	apiServer := &ClassificationAPIServer{
-		classificationSvc: services.NewPlaceholderClassificationService(),
-		configPath:        configPath,
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
-	rr := httptest.NewRecorder()
-
-	apiServer.handleConfigGet(rr, req)
-
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200 OK, got %d: %s", rr.Code, rr.Body.String())
-	}
-
-	var payload map[string]interface{}
-	if err := json.Unmarshal(rr.Body.Bytes(), &payload); err != nil {
-		t.Fatalf("json.Unmarshal error: %v", err)
-	}
-
-	routing, ok := payload["routing"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected routing block, got %#v", payload)
-	}
-	if _, hasSignals := routing["signals"].(map[string]interface{}); !hasSignals {
-		t.Fatalf("expected routing.signals, got %#v", routing)
-	}
-	projections, ok := routing["projections"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("expected routing.projections, got %#v", routing)
-	}
-	if _, ok := projections["partitions"]; !ok {
-		t.Fatalf("expected routing.projections.partitions in response, got %#v", projections)
-	}
-}
 
 func TestHandleCombinedClassificationReturnsAllSubResponses(t *testing.T) {
 	apiServer := &ClassificationAPIServer{

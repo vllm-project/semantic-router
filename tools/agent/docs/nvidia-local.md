@@ -53,7 +53,7 @@ Do not continue if `CUDAExecutionProvider` is absent.
 Use the normal local stack path:
 
 ```bash
-vllm-sr serve --platform nvidia --config config/recipes/RECIPE/config.yaml
+vllm-sr serve --platform nvidia
 ```
 
 The platform option:

@@ -177,42 +177,11 @@ def connect_runtime_container(
         log.info(f"Connected {container_name} to {shared_network_name}")
 
 
-def maybe_finish_setup_mode(
-    setup_mode: bool,
-    dashboard_disabled: bool,
-    stack_layout: RuntimeStackLayout,
-) -> bool:
-    """Wait for dashboard-only setup mode and print next-step guidance."""
-    if not setup_mode:
-        return False
-    if dashboard_disabled:
-        log.error("Setup mode started without dashboard enabled")
-        raise SystemExit(1)
-
-    log.info("Setup mode detected: skipping Router and Envoy health checks")
-    log.info("Waiting for Dashboard to become healthy...")
-    dashboard_container = _runtime_service_container_name(stack_layout, "dashboard")
-    _wait_for_setup_dashboard(dashboard_container)
-    ensure_runtime_container_not_exited(dashboard_container, phase="during setup mode")
-
-    success("vLLM Semantic Router setup mode is running")
-    echo()
-    heading("Next steps")
-    fields(
-        (
-            ("Dashboard", stack_layout.dashboard_url),
-            ("Configure", "Add your first model in the dashboard"),
-            ("Activate", "Activate a runnable config to enable routing"),
-        )
-    )
-    _log_runtime_commands(dashboard_disabled=False, fleet_sim_enabled=False)
-    return True
-
-
 def wait_for_router_health(
     stack_layout: RuntimeStackLayout,
     management_port: int = DEFAULT_API_PORT,
     readiness_token_env: str | None = None,
+    management_tls_certificate: str | None = None,
 ) -> None:
     """Block until the router readiness endpoint responds or the timeout elapses."""
     log.info("Waiting for Router to become ready...")
@@ -241,7 +210,9 @@ def wait_for_router_health(
 
         return_code, _stdout, _stderr = container_exec(
             router_container,
-            _router_readiness_command(management_port, readiness_token_env),
+            _router_readiness_command(
+                management_port, readiness_token_env, management_tls_certificate
+            ),
         )
         if return_code == 0:
             elapsed = int(time.time() - start_time)
@@ -266,17 +237,31 @@ def wait_for_router_health(
 
 
 def _router_readiness_command(
-    management_port: int, readiness_token_env: str | None
+    management_port: int,
+    readiness_token_env: str | None,
+    management_tls_certificate: str | None = None,
 ) -> list[str]:
-    endpoint = f"http://localhost:{management_port}/ready"
-    if readiness_token_env is None:
-        return ["curl", "-f", "-s", endpoint]
-    script = (
-        'set -eu; token="$(printenv "$1")"; test -n "$token"; '
-        "printf 'Authorization: Bearer %s\\n' \"$token\" | "
-        'curl -f -s -H @- "$2"'
+    scheme = "https" if management_tls_certificate is not None else "http"
+    endpoint = f"{scheme}://localhost:{management_port}/ready"
+    tls_arguments = (
+        ["--cacert", management_tls_certificate] if management_tls_certificate else []
     )
-    return ["sh", "-c", script, "vllm-sr-readiness", readiness_token_env, endpoint]
+    if readiness_token_env is None:
+        return ["curl", "-f", "-s", *tls_arguments, endpoint]
+    script = (
+        'set -eu; token="$(printenv "$1")"; test -n "$token"; shift; '
+        "printf 'Authorization: Bearer %s\\n' \"$token\" | "
+        'curl -f -s -H @- "$@"'
+    )
+    return [
+        "sh",
+        "-c",
+        script,
+        "vllm-sr-readiness",
+        readiness_token_env,
+        *tls_arguments,
+        endpoint,
+    ]
 
 
 def wait_and_verify_runtime(
@@ -284,12 +269,14 @@ def wait_and_verify_runtime(
     dashboard_disabled: bool,
     management_port: int = DEFAULT_API_PORT,
     readiness_token_env: str | None = None,
+    management_tls_certificate: str | None = None,
 ) -> None:
     """Wait for readiness and verify every required runtime container."""
     wait_for_router_health(
         stack_layout,
         management_port=management_port,
         readiness_token_env=readiness_token_env,
+        management_tls_certificate=management_tls_certificate,
     )
     for service in ("router", "envoy"):
         ensure_runtime_container_not_exited(
@@ -424,22 +411,6 @@ def _start_named_service(service_name: str, starter: ServiceStarter) -> None:
         log.error(f"Failed to start {service_name}: {stderr}")
         raise SystemExit(1)
     log.info(f"{service_name} started successfully")
-
-
-def _wait_for_setup_dashboard(container_name: str) -> None:
-    start_time = time.time()
-    while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
-        return_code, _stdout, _stderr = container_exec(
-            container_name,
-            ["curl", "-f", "-s", "http://localhost:8700/healthz"],
-        )
-        if return_code == 0:
-            return
-        time.sleep(HEALTH_CHECK_INTERVAL)
-
-    log.error("Dashboard failed to become healthy in setup mode")
-    container_logs(container_name, follow=False, tail=100)
-    raise SystemExit(1)
 
 
 def _emit_router_startup_logs(container_name: str, since_timestamp: int) -> None:

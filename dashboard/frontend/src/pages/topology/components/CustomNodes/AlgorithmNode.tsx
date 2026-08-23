@@ -3,7 +3,8 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { AlgorithmConfig } from '../../types'
-import { ALGORITHM_ICONS, ALGORITHM_COLORS } from '../../constants'
+import { ALGORITHM_COLORS } from '../../constants'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './CustomNodes.module.css'
 
 interface AlgorithmNodeData {
@@ -15,7 +16,6 @@ interface AlgorithmNodeData {
 export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
   const { algorithm, isHighlighted } = data
   const colors = ALGORITHM_COLORS[algorithm.type] || { background: '#607D8B', border: '#455A64' }
-  const icon = ALGORITHM_ICONS[algorithm.type] || '🔄'
 
   // Get algorithm-specific config display
   const getConfigDisplay = () => {
@@ -55,7 +55,7 @@ export const AlgorithmNode = memo<NodeProps<AlgorithmNodeData>>(({ data }) => {
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.algorithmHeader}>
-        <span className={styles.algorithmIcon}>{icon}</span>
+        <ProductIcon className={styles.algorithmIcon} name="settings" aria-hidden="true" />
         <span className={styles.algorithmType}>{algorithm.type}</span>
       </div>
 

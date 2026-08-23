@@ -127,7 +127,9 @@
 .expandIcon {
   flex-shrink: 0;
   opacity: 0.5;
-  transition: transform 0.2s, opacity 0.2s;
+  transition:
+    transform 0.2s,
+    opacity 0.2s;
 }
 
 .expandIcon.expanded {

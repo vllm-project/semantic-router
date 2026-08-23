@@ -18,9 +18,9 @@ type RecipeClassifiers struct {
 	routingOrder []config.RecipeName
 }
 
-// BuildRecipeClassifiers compiles one classifier per normalized recipe without
-// performing runtime initialization. Configs created programmatically without
-// recipes use their single routing profile under the default name.
+// BuildRecipeClassifiers compiles one classifier per explicit Recipe without
+// performing runtime initialization. An empty managed snapshot produces an
+// empty set; it never creates a classifier from root-level scoped fields.
 func BuildRecipeClassifiers(
 	cfg *config.RouterConfig,
 	categoryMapping *CategoryMapping,
@@ -36,20 +36,6 @@ func BuildRecipeClassifiers(
 		runtimeOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
 		routingOrder: make([]config.RecipeName, 0, len(cfg.Recipes)),
 	}
-	if len(cfg.Recipes) == 0 {
-		classifier, err := BuildClassifier(cfg, categoryMapping, piiMapping, jailbreakMapping)
-		if err != nil {
-			return nil, fmt.Errorf("build routing recipe %q: %w", config.DefaultRecipeName, err)
-		}
-		set.byRecipe[config.DefaultRecipeName] = classifier
-		set.order = append(set.order, config.DefaultRecipeName)
-		set.runtimeOrder = append(set.runtimeOrder, config.DefaultRecipeName)
-		if cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
-			set.routingOrder = append(set.routingOrder, config.DefaultRecipeName)
-		}
-		return set, nil
-	}
-
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
 		scopedConfig := cfg.ConfigForRecipe(recipe)

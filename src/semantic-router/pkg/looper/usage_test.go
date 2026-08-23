@@ -18,6 +18,7 @@ package looper
 
 import (
 	"encoding/json"
+	"math"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -84,9 +85,42 @@ func TestTokenUsageAdd_DoesNotMutateReceiver(t *testing.T) {
 	}
 }
 
+func TestTokenUsageAddRejectsNegativeProviderCounters(t *testing.T) {
+	usage := SumUsage(&ModelResponse{Usage: TokenUsage{
+		PromptTokens:     -10,
+		CompletionTokens: 4,
+		TotalTokens:      -6,
+	}})
+
+	if usage.isValid() || usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("SumUsage() = %+v, want the complete provider usage rejected", usage)
+	}
+}
+
+func TestTokenUsageAddKeepsInvalidAggregatePoisoned(t *testing.T) {
+	usage := SumUsage(
+		resp(5, 3, 8),
+		&ModelResponse{Usage: TokenUsage{PromptTokens: -1, CompletionTokens: 4, TotalTokens: 3}},
+		resp(12, 8, 20),
+	)
+
+	if usage.isValid() || usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("SumUsage() = %+v, want one invalid response to poison the complete aggregate", usage)
+	}
+}
+
+func TestTokenUsageAddRejectsAggregateOverflow(t *testing.T) {
+	usage := TokenUsage{PromptTokens: math.MaxInt64, CompletionTokens: 1, TotalTokens: math.MaxInt64}.
+		Add(resp(1, 1, 1))
+
+	if usage.isValid() || usage.PromptTokens != 0 || usage.CompletionTokens != 0 || usage.TotalTokens != 0 {
+		t.Fatalf("TokenUsage.Add() = %+v, want overflowed aggregate rejected", usage)
+	}
+}
+
 func TestTokenUsageMap(t *testing.T) {
 	u := TokenUsage{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10}
-	m := u.Map()
+	m := tokenUsageMapForTest(u)
 
 	// Round-trip through JSON to confirm the OpenAI-compatible shape.
 	body, err := json.Marshal(m)
@@ -126,9 +160,76 @@ func TestParseNonStreamingResponse_PopulatesUsage(t *testing.T) {
 	}
 }
 
-// TestBaseLooper_FormatJSONResponse_AggregatesUsage verifies the wired path:
-// per-call usages are summed and reported in both the response body and the
-// Response.Usage field (no more hardcoded zeros).
+func TestParseNonStreamingResponseRejectsNegativeProviderCounters(t *testing.T) {
+	c := &Client{}
+	body := []byte(`{
+		"id": "chatcmpl-negative",
+		"object": "chat.completion",
+		"model": "backend-model",
+		"choices": [{"index": 0, "message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}],
+		"usage": {"prompt_tokens": 9, "completion_tokens": 4, "total_tokens": -13}
+	}`)
+
+	if _, err := c.parseNonStreamingResponse(body, "logical-model"); err == nil {
+		t.Fatal("negative provider usage was accepted")
+	}
+}
+
+func TestParseNonStreamingResponseTreatsMissingUsageAsUnknown(t *testing.T) {
+	c := &Client{}
+	body := []byte(`{
+		"id": "chatcmpl-missing-usage",
+		"object": "chat.completion",
+		"choices": [{"index": 0, "message": {"role": "assistant", "content": "hi"}, "finish_reason": "stop"}]
+	}`)
+
+	resp, err := c.parseNonStreamingResponse(body, "logical-model")
+	if err != nil {
+		t.Fatalf("parseNonStreamingResponse failed: %v", err)
+	}
+	if resp.Usage.isValid() {
+		t.Fatalf("ModelResponse.Usage = %+v, want unknown", resp.Usage)
+	}
+	if tokenUsageMapForTest(resp.Usage) != nil {
+		t.Fatalf("unknown usage must serialize as null, got %#v", tokenUsageMapForTest(resp.Usage))
+	}
+}
+
+func TestExternalTokenUsageConstructionPreservesAuthority(t *testing.T) {
+	actual := NewActualTokenUsage(7, 3, 10)
+	if !actual.Authoritative() || tokenUsageMapForTest(actual)["total_tokens"] != int64(10) {
+		t.Fatalf("actual usage = %+v, map = %#v", actual, tokenUsageMapForTest(actual))
+	}
+	invalid := NewActualTokenUsage(7, -1, 6)
+	if invalid.Authoritative() || tokenUsageMapForTest(invalid) != nil {
+		t.Fatalf("invalid actual usage = %+v, map = %#v", invalid, tokenUsageMapForTest(invalid))
+	}
+	unknown := UnknownTokenUsage()
+	if unknown.Authoritative() || tokenUsageMapForTest(unknown) != nil {
+		t.Fatalf("unknown usage = %+v, map = %#v", unknown, tokenUsageMapForTest(unknown))
+	}
+}
+
+func TestParseNonStreamingResponseRejectsPartialUsage(t *testing.T) {
+	for _, test := range []struct {
+		name  string
+		usage string
+	}{
+		{name: "prompt only", usage: `{"prompt_tokens":4}`},
+		{name: "completion only", usage: `{"completion_tokens":3}`},
+		{name: "total only", usage: `{"total_tokens":7}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			body := []byte(`{"id":"chatcmpl-partial","model":"backend-model","choices":[{"index":0,"message":{"role":"assistant","content":"hi"},"finish_reason":"stop"}],"usage":` + test.usage + `}`)
+			if _, err := (&Client{}).parseNonStreamingResponse(body, "logical-model"); err == nil {
+				t.Fatal("partial provider usage was accepted")
+			}
+		})
+	}
+}
+
+// TestBaseLooper_FormatJSONResponse_AggregatesUsage verifies that per-call
+// usages are summed in the neutral response and its Chat rendering.
 func TestBaseLooper_FormatJSONResponse_AggregatesUsage(t *testing.T) {
 	l := NewBaseLooper(&config.LooperConfig{Endpoint: "http://localhost:8000"})
 
@@ -152,7 +253,7 @@ func TestBaseLooper_FormatJSONResponse_AggregatesUsage(t *testing.T) {
 	var parsed struct {
 		Usage TokenUsage `json:"usage"`
 	}
-	if err := json.Unmarshal(out.Body, &parsed); err != nil {
+	if err := json.Unmarshal(wireResponseForTest(t, out), &parsed); err != nil {
 		t.Fatalf("unmarshal body: %v", err)
 	}
 	if parsed.Usage != wantUsage {

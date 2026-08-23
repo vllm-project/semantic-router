@@ -32,18 +32,18 @@ describe('clawRoomChatSupport collaboration events', () => {
 
     applyCollaborationOutboundEvent(
       { type: 'message_chunk', messageId: 'stream-1', chunk: 'hel' },
-      handlers
+      handlers,
     )
     applyCollaborationOutboundEvent(
       { type: 'message_chunk', messageId: 'stream-1', chunk: 'lo' },
-      handlers
+      handlers,
     )
 
     expect(streaming.get('stream-1')).toBe('hello')
 
     applyCollaborationOutboundEvent(
       { type: 'message_updated', message: { ...baseMessage, id: 'stream-1', content: 'hello' } },
-      handlers
+      handlers,
     )
 
     expect(state.persisted?.content).toBe('hello')
@@ -63,8 +63,8 @@ describe('clawRoomChatSupport collaboration events', () => {
         upsertMessage: (message: RoomMessage) => {
           state.persisted = message
         },
-        setStreamingMessages: update => update(new Map()),
-      }
+        setStreamingMessages: (update) => update(new Map()),
+      },
     )
 
     expect(state.persisted?.id).toBe('msg-1')
@@ -78,11 +78,12 @@ describe('clawRoomChatSupport collaboration events', () => {
       upsertMessage: (message: RoomMessage) => {
         state.persisted = message
       },
-      setStreamingMessages: (update: (previous: Map<string, string>) => Map<string, string>) => update(new Map()),
+      setStreamingMessages: (update: (previous: Map<string, string>) => Map<string, string>) =>
+        update(new Map()),
       setStreamingToolTraces: (
         update: (
-          previous: Map<string, ClawRoomStreamingToolTraceEntry>
-        ) => Map<string, ClawRoomStreamingToolTraceEntry>
+          previous: Map<string, ClawRoomStreamingToolTraceEntry>,
+        ) => Map<string, ClawRoomStreamingToolTraceEntry>,
       ) => {
         toolTraces = update(toolTraces)
       },
@@ -97,7 +98,7 @@ describe('clawRoomChatSupport collaboration events', () => {
           steps: [{ id: 'call_1', name: 'exec', status: 'running' }],
         },
       },
-      handlers
+      handlers,
     )
     applyCollaborationOutboundEvent(
       {
@@ -108,7 +109,7 @@ describe('clawRoomChatSupport collaboration events', () => {
           steps: [{ id: 'call_1', name: 'exec', status: 'completed', result: '/workspace' }],
         },
       },
-      handlers
+      handlers,
     )
 
     expect(toolTraces.get('stream-1')?.steps).toHaveLength(1)
@@ -124,7 +125,7 @@ describe('clawRoomChatSupport collaboration events', () => {
           steps: [{ id: 'call_1', name: 'exec', status: 'running' }],
         },
       },
-      handlers
+      handlers,
     )
 
     expect(toolTraces.get('stream-1')?.revision).toBe(2)
@@ -143,7 +144,7 @@ describe('clawRoomChatSupport collaboration events', () => {
           },
         },
       },
-      handlers
+      handlers,
     )
 
     expect(toolTraces.has('stream-1')).toBe(false)

@@ -1,8 +1,6 @@
 import type {
-  ConfigData,
   DecisionCondition,
   NumericPredicate,
-  RecipeRoutingConfig,
   RoutingConfig,
   SignalType,
   StructureFeature,
@@ -260,46 +258,8 @@ function countReferences(value: unknown, type: string, name: string): number {
   )
 }
 
-export function getSignalReferenceCount(
-  config: ConfigData | null,
-  signalType: SignalType,
-  signalName: string,
-): number {
-  if (!config) return 0
-  const defaultRouting: RoutingConfig = config.routing ?? {
-    signals: config.signals,
-    projections: config.projections,
-    decisions: config.decisions,
-  }
-  const legacyReferences = config.routing
-    ? 0
-    : countReferences(
-        config.complexity_rules?.map((signal) => signal.composer),
-        SIGNAL_CONFIG_TYPES[signalType],
-        signalName,
-      )
-  return (
-    getSignalReferenceCountInRoutingProfile(
-      defaultRouting,
-      signalType,
-      signalName,
-    ) +
-    (config.recipes ?? []).reduce(
-      (total, recipe) =>
-        total +
-        getSignalReferenceCountInRoutingProfile(
-          recipe.routing,
-          signalType,
-          signalName,
-        ),
-      0,
-    ) +
-    legacyReferences
-  )
-}
-
 export function getSignalReferenceCountInRoutingProfile(
-  routing: RecipeRoutingConfig | RoutingConfig | undefined,
+  routing: RoutingConfig | undefined,
   signalType: SignalType,
   signalName: string,
 ): number {

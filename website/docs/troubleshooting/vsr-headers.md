@@ -33,7 +33,6 @@ Cache-hit responses can emit cache headers, but they do not re-run routing and t
 | `x-conversation-id` | request | Stable client-provided conversation or agent-run identifier. Router Learning protection uses this by default when `scope: conversation`. |
 | `x-claude-code-session-id` | request | Conversation identifier supplied by Claude Code on Messages API requests. `x-session-id` takes precedence when both are present. |
 | `x-disable-router-memory` | request | Set to `true` when the client already injects memory and router-managed memory would duplicate it. |
-| `x-vsr-skip-processing` | request | Opts a request out of router processing when `global.router.skip_processing.enabled` is enabled. Use value `true`. |
 | `x-vsr-debug` | request | Opts the request into verbose/debug response headers — headers the contract otherwise omits or demotes to replay are emitted inline for that request. Use value `true`. |
 
 ## Protocol and replay headers

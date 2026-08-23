@@ -22,8 +22,8 @@ export function normalizeStructuredObject(value: unknown): DSLFieldObject {
 export function normalizeStructuredObjectList(value: unknown): DSLFieldObject[] {
   const parsed = parseLegacyStructuredValue(value)
   if (!Array.isArray(parsed)) return []
-  return parsed.filter(
-    (item): item is DSLFieldObject => Boolean(item && typeof item === 'object' && !Array.isArray(item)),
+  return parsed.filter((item): item is DSLFieldObject =>
+    Boolean(item && typeof item === 'object' && !Array.isArray(item)),
   )
 }
 
@@ -97,7 +97,5 @@ export function requiredStructuredFieldErrors(
 }
 
 export function supportsSharedObjectList(fields: readonly FieldSchema[]): boolean {
-  return fields.every((field) =>
-    ['string', 'number', 'select', 'key-value'].includes(field.type),
-  )
+  return fields.every((field) => ['string', 'number', 'select', 'key-value'].includes(field.type))
 }

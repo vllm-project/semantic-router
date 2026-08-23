@@ -14,6 +14,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
@@ -93,8 +94,7 @@ func TestHandleListMemories_UserIDInjectionAttempt(t *testing.T) {
 	}
 
 	for _, payload := range injectionPayloads {
-		req := httptest.NewRequest(http.MethodGet, "/v1/memory", nil)
-		req.Header.Set("x-authz-user-id", payload)
+		req := httptest.NewRequest(http.MethodGet, "/v1/memory?user_id="+url.QueryEscape(payload), nil)
 		w := httptest.NewRecorder()
 
 		server.handleListMemories(w, req)
@@ -167,8 +167,7 @@ func TestHandleDeleteMemoriesByScope_UserIDInjection(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
-	req := httptest.NewRequest(http.MethodDelete, "/v1/memory", nil)
-	req.Header.Set("x-authz-user-id", `alice" || user_id != "`)
+	req := httptest.NewRequest(http.MethodDelete, "/v1/memory?user_id="+url.QueryEscape(`alice" || user_id != "`), nil)
 	w := httptest.NewRecorder()
 
 	server.handleDeleteMemoriesByScope(w, req)

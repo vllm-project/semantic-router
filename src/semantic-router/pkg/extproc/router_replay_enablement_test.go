@@ -9,55 +9,58 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
-func TestInitializeReplayRecordersUsesGlobalReplayDefault(t *testing.T) {
-	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
-				{
-					Name:      "opt-out",
-					ModelRefs: []config.ModelRef{{Model: "m"}},
-					Plugins: []config.DecisionPlugin{
-						{Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(map[string]interface{}{
-							"enabled": false,
-						})},
-					},
+func TestInitializeReplayRecordersUsesGlobalReplayDefaultWithinEntrypoint(t *testing.T) {
+	cfg, recipe := replayEntrypointConfig(t,
+		config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		[]config.Decision{
+			{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
+			{
+				Name:      "opt-out",
+				ModelRefs: []config.ModelRef{{Model: "m"}},
+				Plugins: []config.DecisionPlugin{
+					{Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": false,
+					})},
 				},
 			},
 		},
-	}
+	)
 
 	recorders := initializeReplayRecorders(cfg)
-	if _, ok := recorders["inherits-global"]; !ok {
+	if _, ok := recorders[config.RoutingDecisionKey(recipe.RuntimeScope(), "inherits-global")]; !ok {
 		t.Fatalf("expected global replay to create a recorder for decisions without an explicit plugin")
 	}
-	if _, ok := recorders["opt-out"]; ok {
+	if _, ok := recorders[config.RoutingDecisionKey(recipe.RuntimeScope(), "opt-out")]; ok {
 		t.Fatalf("expected per-decision enabled=false to disable router replay")
 	}
 }
 
-func TestInitializeReplayRecordersIncludesNamedRecipeDecisions(t *testing.T) {
-	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
-		Recipes: []config.RoutingRecipe{
-			{
-				Name: "balanced",
-				Profile: config.RoutingProfile{Decisions: []config.Decision{
-					{Name: "shared-route", ModelRefs: []config.ModelRef{{Model: "m"}}},
-				}},
-			},
-			{
-				Name: "speed",
-				Profile: config.RoutingProfile{Decisions: []config.Decision{
-					{Name: "shared-route", ModelRefs: []config.ModelRef{{Model: "m"}}},
-				}},
-			},
-		},
+func TestInitializeReplayRecordersIsolatesEntrypointBindings(t *testing.T) {
+	cfg, _ := replayEntrypointConfig(t,
+		config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		[]config.Decision{{Name: "shared-route"}},
+	)
+	second := cfg.Entrypoints[0]
+	second.ID = "entrypoint-replay-second"
+	second.Name = "router/replay-second"
+	second.ModelNames = []string{"router/replay-second"}
+	second.Rules = append([]config.EntrypointRule(nil), second.Rules...)
+	second.Rules[0].ID = "rule-replay-second"
+	cfg.Entrypoints = append(cfg.Entrypoints, second)
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare second replay Entrypoint: %v", err)
+	}
+	firstRecipe, firstOK := cfg.RecipeForRequestModel("router/replay")
+	secondRecipe, secondOK := cfg.RecipeForRequestModel("router/replay-second")
+	if !firstOK || !secondOK {
+		t.Fatal("resolve replay Entrypoints")
 	}
 
 	recorders := initializeReplayRecorders(cfg)
-	for _, key := range []string{"balanced::shared-route", "speed::shared-route"} {
+	for _, key := range []string{
+		config.RoutingDecisionKey(firstRecipe.RuntimeScope(), "shared-route"),
+		config.RoutingDecisionKey(secondRecipe.RuntimeScope(), "shared-route"),
+	} {
 		if _, ok := recorders[key]; !ok {
 			t.Fatalf("expected isolated replay recorder %q, got keys %+v", key, recorders)
 		}
@@ -80,19 +83,15 @@ func TestNamedRecipeRecorderNeverFallsBackToBareDecisionKey(t *testing.T) {
 }
 
 func TestApplyDecisionResultToContextUsesEffectiveRouterReplayConfig(t *testing.T) {
-	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
-				{Name: "inherits-global", ModelRefs: []config.ModelRef{{Model: "m"}}},
-			},
-		},
-	}
+	cfg, recipe := replayEntrypointConfig(t,
+		config.RouterReplayConfig{Enabled: true, StoreBackend: "memory"},
+		[]config.Decision{{Name: "inherits-global"}},
+	)
 	router := &OpenAIRouter{Config: cfg}
 	ctx := &RequestContext{}
 
 	router.applyDecisionResultToContext(&decision.DecisionResult{
-		Decision: &cfg.Decisions[0],
+		Decision: &recipe.Profile.Decisions[0],
 	}, ctx)
 
 	if ctx.RouterReplayPluginConfig == nil {
@@ -168,12 +167,10 @@ func TestResolveReplayStoreBackend(t *testing.T) {
 }
 
 func TestCreateReplayRuntimeFailsClosedWhenEnabledSharedStoreIsInvalid(t *testing.T) {
-	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: true, StoreBackend: "redis"},
-		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
-			{Name: "replay-required", ModelRefs: []config.ModelRef{{Model: "m"}}},
-		}},
-	}
+	cfg, _ := replayEntrypointConfig(t,
+		config.RouterReplayConfig{Enabled: true, StoreBackend: "redis"},
+		[]config.Decision{{Name: "replay-required"}},
+	)
 
 	_, _, _, err := createReplayRuntime(cfg)
 	if err == nil || !strings.Contains(err.Error(), "redis config required") {
@@ -182,20 +179,19 @@ func TestCreateReplayRuntimeFailsClosedWhenEnabledSharedStoreIsInvalid(t *testin
 }
 
 func TestCreateReplayRuntimeAllowsExplicitDecisionOptInWithSafeDefaults(t *testing.T) {
-	cfg := &config.RouterConfig{
-		RouterReplay: config.RouterReplayConfig{Enabled: false, StoreBackend: "memory"},
-		IntelligentRouting: config.IntelligentRouting{Decisions: []config.Decision{
+	cfg, recipe := replayEntrypointConfig(t,
+		config.RouterReplayConfig{Enabled: false, StoreBackend: "memory"},
+		[]config.Decision{
 			{
-				Name:      "replay-opt-in",
-				ModelRefs: []config.ModelRef{{Model: "m"}},
+				Name: "replay-opt-in",
 				Plugins: []config.DecisionPlugin{
 					{Type: config.DecisionPluginRouterReplay, Configuration: config.MustStructuredPayload(map[string]interface{}{
 						"enabled": true,
 					})},
 				},
 			},
-		}},
-	}
+		},
+	)
 
 	recorders, shared, sharedStore, err := createReplayRuntime(cfg)
 	if err != nil {
@@ -204,9 +200,52 @@ func TestCreateReplayRuntimeAllowsExplicitDecisionOptInWithSafeDefaults(t *testi
 	if shared != nil || sharedStore {
 		t.Fatalf("memory replay must remain decision-scoped, shared=%v sharedStore=%v", shared, sharedStore)
 	}
-	if recorders["replay-opt-in"] == nil {
+	if recorders[config.RoutingDecisionKey(recipe.RuntimeScope(), "replay-opt-in")] == nil {
 		t.Fatalf("expected explicit decision opt-in to create an in-memory recorder")
 	}
+}
+
+func replayEntrypointConfig(
+	t *testing.T,
+	replay config.RouterReplayConfig,
+	decisions []config.Decision,
+) (*config.RouterConfig, *config.RoutingRecipe) {
+	t.Helper()
+	assignments := make(map[string]config.RoutingAssignmentSet, len(decisions))
+	for index := range decisions {
+		decision := &decisions[index]
+		decision.ID = "decision-" + decision.Name
+		decision.ModelRefs = nil
+		assignments[decision.ID] = config.RoutingAssignmentSet{Models: []config.RoutingModelAssignment{{
+			ModelID: "model-replay", ModelRevision: 1, ModelName: "backend/replay", Weight: "1",
+		}}}
+	}
+	cfg := &config.RouterConfig{
+		RouterReplay: replay,
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"backend/replay": {ResourceID: "model-replay", ResourceRevision: 1},
+		}},
+		Recipes: []config.RoutingRecipe{{
+			ID: "recipe-replay", Revision: 1, Name: "replay", Profile: config.RoutingProfile{Decisions: decisions},
+		}},
+		Entrypoints: []config.EntrypointMapping{{
+			ID: "entrypoint-replay", Revision: 1, Name: "router/replay", ModelNames: []string{"router/replay"},
+			Rules: []config.EntrypointRule{{
+				ID: "rule-replay", Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: "recipe-replay", RecipeRevision: 1, Recipe: "replay", Assignments: assignments,
+				},
+			}},
+		}},
+	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare replay Entrypoint: %v", err)
+	}
+	recipe, ok := cfg.RecipeForRequestModel("router/replay")
+	if !ok {
+		t.Fatal("resolve replay Entrypoint")
+	}
+	return cfg, recipe
 }
 
 func TestBuildReplayPostgresConfigUsesUnifiedTableName(t *testing.T) {

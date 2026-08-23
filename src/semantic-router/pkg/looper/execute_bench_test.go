@@ -63,7 +63,7 @@ func BenchmarkBase_Execute(b *testing.B) {
 
 	for _, n := range []int{1, 3, 5} {
 		b.Run(fmt.Sprintf("models_%d", n), func(b *testing.B) {
-			req := &Request{OriginalRequest: benchExecuteOriginal(), ModelRefs: benchExecuteModelRefs(n), DecisionName: "bench"}
+			req := &Request{executionRequest: benchExecuteOriginal(), ModelRefs: benchExecuteModelRefs(n), DecisionName: "bench"}
 			b.ReportAllocs()
 			for b.Loop() {
 				if _, err := looper.Execute(context.Background(), req); err != nil {
@@ -83,7 +83,7 @@ func BenchmarkFusion_Execute(b *testing.B) {
 
 	for _, n := range []int{2, 3, 5} {
 		b.Run(fmt.Sprintf("panel_%d", n), func(b *testing.B) {
-			req := &Request{OriginalRequest: benchExecuteOriginal(), ModelRefs: benchExecuteModelRefs(n), DecisionName: "bench"}
+			req := &Request{executionRequest: benchExecuteOriginal(), ModelRefs: benchExecuteModelRefs(n), DecisionName: "bench"}
 			b.ReportAllocs()
 			for b.Loop() {
 				if _, err := looper.Execute(context.Background(), req); err != nil {
@@ -114,10 +114,10 @@ func BenchmarkReMoM_Execute(b *testing.B) {
 			cfg := getDefaultReMoMConfig()
 			cfg.BreadthSchedule = tc.sched
 			req := &Request{
-				OriginalRequest: benchExecuteOriginal(),
-				ModelRefs:       refs,
-				DecisionName:    "bench",
-				Algorithm:       &config.AlgorithmConfig{Type: "remom", ReMoM: cfg},
+				executionRequest: benchExecuteOriginal(),
+				ModelRefs:        refs,
+				DecisionName:     "bench",
+				Algorithm:        &config.AlgorithmConfig{Type: "remom", ReMoM: cfg},
 			}
 			b.ReportAllocs()
 			for b.Loop() {
@@ -144,9 +144,9 @@ func BenchmarkFlow_Execute(b *testing.B) {
 				workerModels[i] = fmt.Sprintf("model-%d", i)
 			}
 			req := &Request{
-				OriginalRequest: benchExecuteOriginal(),
-				ModelRefs:       benchExecuteModelRefs(n),
-				DecisionName:    "bench",
+				executionRequest: benchExecuteOriginal(),
+				ModelRefs:        benchExecuteModelRefs(n),
+				DecisionName:     "bench",
 				Algorithm: &config.AlgorithmConfig{
 					Type: "workflows",
 					Workflows: &config.WorkflowsAlgorithmConfig{

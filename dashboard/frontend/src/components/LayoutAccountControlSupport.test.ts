@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   formatAccountRole,
+  formatPermissionAction,
   getAccountInitials,
   groupAccountPermissions,
 } from './LayoutAccountControlSupport'
@@ -17,6 +18,12 @@ describe('account control presentation support', () => {
     expect(formatAccountRole('platform_admin')).toBe('Platform Admin')
     expect(formatAccountRole('read-only.user')).toBe('Read Only User')
     expect(formatAccountRole()).toBe('Unknown role')
+  })
+
+  it('turns permission actions into concise product labels', () => {
+    expect(formatPermissionAction('config.read')).toBe('Read')
+    expect(formatPermissionAction('users:manage')).toBe('Manage')
+    expect(formatPermissionAction('health')).toBe('Health')
   })
 
   it('deduplicates and groups permissions without changing their order', () => {

@@ -1,294 +1,196 @@
-import React from "react";
+import ProductIcon from '@/components/ProductIcon'
+import type { EditorMode } from '@/types/dsl'
+import type { RoutingRecipe } from '@/utils/routingManagementApi'
 
-import type { EditorMode } from "@/types/dsl";
-
-import styles from "./BuilderPage.module.css";
+import styles from './BuilderPage.module.css'
 
 interface BuilderToolbarProps {
-  dirty: boolean;
-  mode: EditorMode;
-  wasmReady: boolean;
-  wasmError: string | null;
-  dslSource: string;
-  loading: boolean;
-  deploying: boolean;
-  deployDisabled: boolean;
-  deployDisabledReason?: string;
-  showBuilderSecondaryActions?: boolean;
-  guideOpen: boolean;
-  outputPanelOpen: boolean;
-  onModeSwitch: (mode: EditorMode) => void;
-  onImport: () => void;
-  onCompile: () => void;
-  onRequestDeploy: () => void;
-  onFormat: () => void;
-  onValidate: () => void;
-  onToggleGuide: () => void;
-  onToggleOutput: () => void;
-  onReset: () => void;
+  readOnly: boolean
+  immutable: boolean
+  dirty: boolean
+  mode: EditorMode
+  wasmReady: boolean
+  wasmError: string | null
+  dslSource: string
+  loading: boolean
+  saving: boolean
+  recipes: RoutingRecipe[]
+  selectedRecipeId: string
+  guideOpen: boolean
+  outputPanelOpen: boolean
+  onRecipeChange: (recipeId: string) => void
+  onModeSwitch: (mode: EditorMode) => void
+  onImport: () => void
+  onCompile: () => void
+  onSave: () => void
+  onDuplicate: () => void
+  onFormat: () => void
+  onValidate: () => void
+  onToggleGuide: () => void
+  onToggleOutput: () => void
+  onRevert: () => void
 }
 
-const BuilderToolbar: React.FC<BuilderToolbarProps> = ({
+export function BuilderToolbar({
+  readOnly,
+  immutable,
   dirty,
   mode,
   wasmReady,
   wasmError,
   dslSource,
   loading,
-  deploying,
-  deployDisabled,
-  deployDisabledReason,
-  showBuilderSecondaryActions = true,
+  saving,
+  recipes,
+  selectedRecipeId,
   guideOpen,
   outputPanelOpen,
+  onRecipeChange,
   onModeSwitch,
   onImport,
   onCompile,
-  onRequestDeploy,
+  onSave,
+  onDuplicate,
   onFormat,
   onValidate,
   onToggleGuide,
   onToggleOutput,
-  onReset,
-}) => {
+  onRevert,
+}: BuilderToolbarProps) {
+  const editable = !readOnly && !immutable
+  const ready = wasmReady && Boolean(dslSource.trim()) && !loading && !saving
+
   return (
-    <div className={styles.toolbar}>
+    <div className={styles.toolbar} aria-label="Recipe Builder toolbar">
       <div className={styles.toolbarTitle}>
-        <svg
-          width="16"
-          height="16"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <rect x="2" y="2" width="5" height="5" rx="1" />
-          <rect x="9" y="2" width="5" height="5" rx="1" />
-          <rect x="2" y="9" width="5" height="5" rx="1" />
-          <rect x="9" y="9" width="5" height="5" rx="1" />
-        </svg>
-        Config Builder
-        {dirty && (
-          <span style={{ color: "var(--color-text-muted)", fontWeight: 400 }}>
-            (unsaved)
-          </span>
-        )}
+        <ProductIcon name="mixture" />
+        Recipe Builder
+        {dirty && editable ? <span className={styles.builderUnsaved}>Unsaved</span> : null}
       </div>
+
+      <label className={styles.builderRecipePicker}>
+        <span>Recipe</span>
+        <select
+          value={selectedRecipeId}
+          onChange={(event) => onRecipeChange(event.target.value)}
+          aria-label="Recipe"
+        >
+          {recipes.map((recipe) => (
+            <option key={recipe.id} value={recipe.id}>
+              {recipe.name}
+              {recipe.immutable ? ' · Built-in' : ''}
+            </option>
+          ))}
+        </select>
+      </label>
 
       <span className={styles.divider} />
 
-      <div className={styles.modeSwitcher}>
+      <div className={styles.modeSwitcher} aria-label="Editor mode">
         <button
-          className={mode === "visual" ? styles.modeBtnActive : styles.modeBtn}
-          onClick={() => onModeSwitch("visual")}
+          type="button"
+          className={mode === 'visual' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => onModeSwitch('visual')}
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <rect x="1" y="1" width="6" height="6" rx="1" />
-            <rect x="9" y="1" width="6" height="6" rx="1" />
-            <rect x="1" y="9" width="6" height="6" rx="1" />
-            <rect x="9" y="9" width="6" height="6" rx="1" />
-          </svg>
-          Visual
+          <ProductIcon name="mixture" /> Visual
         </button>
         <button
-          className={mode === "dsl" ? styles.modeBtnActive : styles.modeBtn}
-          onClick={() => onModeSwitch("dsl")}
+          type="button"
+          className={mode === 'dsl' ? styles.modeBtnActive : styles.modeBtn}
+          onClick={() => onModeSwitch('dsl')}
         >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M2 3h12M2 8h8M2 13h10" strokeLinecap="round" />
-          </svg>
-          DSL
-        </button>
-        <button
-          className={mode === "nl" ? styles.modeBtnActive : styles.modeBtn}
-          onClick={() => onModeSwitch("nl")}
-          title="Natural language mode"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M2 4h12M2 8h9M2 12h6" strokeLinecap="round" />
-            <circle cx="13" cy="11" r="2" />
-          </svg>
-          NL
+          <ProductIcon name="code" /> DSL
         </button>
       </div>
-
-      <span className={styles.divider} />
 
       {wasmError ? (
-        <span className={styles.statusError}>
-          <span className={styles.dot} /> WASM Error
-        </span>
-      ) : wasmReady ? (
-        <span className={styles.statusReady}>
-          <span className={styles.dot} /> Ready
-        </span>
-      ) : (
-        <span className={styles.statusLoading}>
-          <span className={styles.dotPulse} /> Loading WASM…
-        </span>
-      )}
+        <span className={styles.statusError}>Compiler unavailable</span>
+      ) : !wasmReady ? (
+        <span className={styles.statusLoading}>Loading compiler…</span>
+      ) : null}
 
       <div className={styles.toolbarRight}>
-        <button
-          className={styles.toolbarBtnPrimary}
-          onClick={onImport}
-          disabled={!wasmReady}
-          title="Import router config"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path
-              d="M8 2v8M5 7l3 3 3-3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 11v2a1 1 0 001 1h10a1 1 0 001-1v-2"
-              strokeLinecap="round"
-            />
-          </svg>
-          Import
-        </button>
-        <button
-          className={styles.toolbarBtnPrimary}
-          onClick={onCompile}
-          disabled={!wasmReady || !dslSource.trim() || loading}
-          title="Compile (Ctrl+Enter)"
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path d="M4 2l8 6-8 6V2z" fill="currentColor" />
-          </svg>
-          {loading ? "Compiling…" : "Compile"}
-        </button>
-        <button
-          className={styles.toolbarBtnDeploy}
-          onClick={onRequestDeploy}
-          disabled={!wasmReady || !dslSource.trim() || loading || deploying || deployDisabled}
-          title={deployDisabledReason || "Deploy config to router"}
-        >
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-          >
-            <path
-              d="M8 2v8M5 7l3 3 3-3"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            <path
-              d="M2 12v1a1 1 0 001 1h10a1 1 0 001-1v-1"
-              strokeLinecap="round"
-            />
-          </svg>
-          {deploying ? "Deploying…" : "Deploy"}
-        </button>
-        {showBuilderSecondaryActions ? (
+        {editable ? (
           <>
             <button
+              type="button"
+              className={styles.toolbarBtn}
+              onClick={onImport}
+              disabled={!wasmReady}
+            >
+              <ProductIcon name="download" /> Import
+            </button>
+            <button
+              type="button"
+              className={styles.toolbarBtn}
+              onClick={onCompile}
+              disabled={!ready}
+            >
+              <ProductIcon name="check" /> Compile
+            </button>
+            <button
+              type="button"
+              className={styles.toolbarBtnPrimary}
+              onClick={onSave}
+              disabled={!ready || !dirty}
+            >
+              <ProductIcon name="check" /> {saving ? 'Saving…' : 'Save'}
+            </button>
+          </>
+        ) : null}
+        {!readOnly ? (
+          <button
+            type="button"
+            className={styles.toolbarBtn}
+            onClick={onDuplicate}
+            disabled={!ready}
+          >
+            <ProductIcon name="copy" /> Duplicate
+          </button>
+        ) : null}
+        {editable ? (
+          <>
+            <button
+              type="button"
               className={styles.toolbarBtn}
               onClick={onFormat}
-              disabled={!wasmReady || !dslSource.trim()}
-              title="Format DSL"
+              disabled={!ready}
             >
               Format
             </button>
             <button
+              type="button"
               className={styles.toolbarBtn}
               onClick={onValidate}
-              disabled={!wasmReady || !dslSource.trim()}
-              title="Validate"
+              disabled={!ready}
             >
               Validate
             </button>
-            <span className={styles.divider} />
             <button
+              type="button"
+              className={styles.toolbarBtn}
+              onClick={onRevert}
+              disabled={!dirty || saving}
+            >
+              <ProductIcon name="undo" /> Revert
+            </button>
+            <button
+              type="button"
               className={guideOpen ? styles.toolbarBtnActive : styles.toolbarBtn}
               onClick={onToggleGuide}
-              title={guideOpen ? "Close DSL Guide" : "Open DSL Guide"}
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path
-                  d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z"
-                  strokeLinejoin="round"
-                />
-                <path d="M5 6h5M5 9h3" strokeLinecap="round" />
-              </svg>
               Guide
-            </button>
-            <button
-              className={
-                outputPanelOpen ? styles.toolbarBtnActive : styles.toolbarBtn
-              }
-              onClick={onToggleOutput}
-              title={outputPanelOpen ? "Hide Output Panel" : "Show Output Panel"}
-            >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <rect x="1" y="1" width="14" height="14" rx="2" />
-                <path d="M10 1v14" />
-              </svg>
-              Output
-            </button>
-            <span className={styles.divider} />
-            <button className={styles.toolbarBtnDanger} onClick={onReset} title="Reset">
-              Reset
             </button>
           </>
         ) : null}
+        <button
+          type="button"
+          className={outputPanelOpen ? styles.toolbarBtnActive : styles.toolbarBtn}
+          onClick={onToggleOutput}
+        >
+          <ProductIcon name="code" /> Recipe
+        </button>
       </div>
     </div>
-  );
-};
-
-export { BuilderToolbar };
+  )
+}

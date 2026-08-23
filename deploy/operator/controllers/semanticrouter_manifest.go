@@ -63,69 +63,123 @@ func (r *SemanticRouterReconciler) generatePVC(sr *vllmv1alpha1.SemanticRouter) 
 	return pvc, nil
 }
 
-func (r *SemanticRouterReconciler) generateService(sr *vllmv1alpha1.SemanticRouter, gatewayMode string) *corev1.Service {
-	labels := map[string]string{
-		"app.kubernetes.io/name":     "semantic-router",
-		"app.kubernetes.io/instance": sr.Name,
-	}
-
+func (r *SemanticRouterReconciler) generateServices(
+	sr *vllmv1alpha1.SemanticRouter,
+	gatewayMode string,
+	bootstrap bootstrapDeploymentContract,
+) []*corev1.Service {
 	serviceType := corev1.ServiceTypeClusterIP
 	if sr.Spec.Service.Type != "" {
 		serviceType = sr.Spec.Service.Type
 	}
-
-	ports := []corev1.ServicePort{
+	publicPorts := []corev1.ServicePort{
 		{
 			Name:       "grpc",
 			Port:       r.getInt32OrDefault(&sr.Spec.Service.GRPC.Port, DefaultGRPCPort),
 			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.GRPC.TargetPort, DefaultGRPCPort))),
-			Protocol:   corev1.ProtocolTCP,
+			Protocol:   portProtocol(sr.Spec.Service.GRPC.Protocol),
 		},
-		{
+	}
+	if bootstrap.Mode == controlPlaneModeStandalone {
+		publicPorts = append(publicPorts, corev1.ServicePort{
 			Name:       "api",
 			Port:       r.getInt32OrDefault(&sr.Spec.Service.API.Port, DefaultAPIPort),
 			TargetPort: intstr.FromInt(int(r.getInt32OrDefault(&sr.Spec.Service.API.TargetPort, DefaultAPIPort))),
-			Protocol:   corev1.ProtocolTCP,
-		},
+			Protocol:   portProtocol(sr.Spec.Service.API.Protocol),
+		})
 	}
-
-	if gatewayMode == "standalone" {
-		ports = append(ports, corev1.ServicePort{
+	if gatewayMode == gatewayModeSidecar {
+		publicPorts = append(publicPorts, corev1.ServicePort{
 			Name:       "envoy-http",
-			Port:       8801,
-			TargetPort: intstr.FromInt(8801),
+			Port:       DefaultEnvoyPort,
+			TargetPort: intstr.FromInt(int(DefaultEnvoyPort)),
 			Protocol:   corev1.ProtocolTCP,
 		})
 	}
 
-	if sr.Spec.Service.Metrics.Enabled == nil || *sr.Spec.Service.Metrics.Enabled {
-		metricsPort := sr.Spec.Service.Metrics.Port
-		if metricsPort == 0 {
-			metricsPort = DefaultMetricsPort
+	services := []*corev1.Service{newRouterService(
+		sr,
+		sr.Name,
+		"inference",
+		serviceType,
+		publicPorts,
+	)}
+	if bootstrap.Mode == controlPlaneModeManaged {
+		managementPort := sr.Spec.Service.Management.Port
+		if managementPort == 0 {
+			managementPort = DefaultManagementPort
 		}
-		metricsTargetPort := sr.Spec.Service.Metrics.TargetPort
-		if metricsTargetPort == 0 {
-			metricsTargetPort = DefaultMetricsPort
-		}
-		ports = append(ports, corev1.ServicePort{
-			Name:       "metrics",
-			Port:       metricsPort,
-			TargetPort: intstr.FromInt(int(metricsTargetPort)),
-			Protocol:   corev1.ProtocolTCP,
-		})
+		managementService := newRouterService(sr, sr.Name+"-management", "management", corev1.ServiceTypeClusterIP, []corev1.ServicePort{{
+			Name: "https-management", Port: managementPort,
+			TargetPort: intstr.FromInt(int(bootstrap.ManagementPort)), Protocol: corev1.ProtocolTCP,
+		}})
+		// The authenticated Management listener is the only path needed to
+		// complete a fresh managed bootstrap while inference readiness remains
+		// false. Public inference and internal dispatch stay readiness-gated.
+		managementService.Spec.PublishNotReadyAddresses = true
+		services = append(services,
+			managementService,
+			newRouterService(sr, sr.Name+"-backend-dispatch", "backend-dispatch", corev1.ServiceTypeClusterIP, []corev1.ServicePort{{
+				Name: backendDispatchPortName, Port: bootstrap.BackendDispatchPort,
+				TargetPort: intstr.FromInt(int(bootstrap.BackendDispatchPort)), Protocol: corev1.ProtocolTCP,
+			}}),
+		)
 	}
+	if metricsEnabled(sr) {
+		services = append(services, newRouterService(sr, sr.Name+"-metrics", "metrics", corev1.ServiceTypeClusterIP, []corev1.ServicePort{{
+			Name: "metrics", Port: metricsServicePort(sr), TargetPort: intstr.FromInt(int(metricsTargetPort(sr))),
+			Protocol: portProtocol(sr.Spec.Service.Metrics.Protocol),
+		}}))
+	}
+	return services
+}
 
+func newRouterService(
+	sr *vllmv1alpha1.SemanticRouter,
+	name string,
+	component string,
+	serviceType corev1.ServiceType,
+	ports []corev1.ServicePort,
+) *corev1.Service {
+	labels := semanticRouterLabels(sr)
+	labels["app.kubernetes.io/component"] = component
 	return &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      sr.Name,
+			Name:      name,
 			Namespace: sr.Namespace,
+			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Type:     serviceType,
 			Ports:    ports,
-			Selector: labels,
+			Selector: semanticRouterLabels(sr),
 		},
 	}
+}
+
+func portProtocol(protocol corev1.Protocol) corev1.Protocol {
+	if protocol == "" {
+		return corev1.ProtocolTCP
+	}
+	return protocol
+}
+
+func metricsEnabled(sr *vllmv1alpha1.SemanticRouter) bool {
+	return sr.Spec.Service.Metrics.Enabled == nil || *sr.Spec.Service.Metrics.Enabled
+}
+
+func metricsServicePort(sr *vllmv1alpha1.SemanticRouter) int32 {
+	if sr.Spec.Service.Metrics.Port != 0 {
+		return sr.Spec.Service.Metrics.Port
+	}
+	return DefaultMetricsPort
+}
+
+func metricsTargetPort(sr *vllmv1alpha1.SemanticRouter) int32 {
+	if sr.Spec.Service.Metrics.TargetPort != 0 {
+		return sr.Spec.Service.Metrics.TargetPort
+	}
+	return DefaultMetricsPort
 }
 
 func (r *SemanticRouterReconciler) generateHPA(sr *vllmv1alpha1.SemanticRouter) *autoscalingv2.HorizontalPodAutoscaler {

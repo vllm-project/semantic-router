@@ -109,39 +109,15 @@ func parseLegacyRuntimeConfigForTest(data []byte) (*RouterConfig, error) {
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
-	if err := validateConfigStructure(cfg); err != nil {
+	scoped := scopedRoutingProfileForTest(cfg)
+	if err := validateConfigStructure(scoped); err != nil {
 		return nil, err
 	}
-	return cfg, nil
+	return scoped, nil
 }
 
 func writeCanonicalLoadTestConfig(path string) error {
-	return os.WriteFile(path, []byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: test-model
-  models:
-    - name: test-model
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
-          use_reasoning: false
-`), 0o644)
+	return os.WriteFile(path, []byte(validManagedBootstrapYAML), 0o644)
 }
 
 func TestConfig(t *testing.T) {
@@ -194,6 +170,11 @@ classifier:
 categories:
   - name: "general"
     description: "General purpose tasks"
+
+keyword_rules:
+  - name: general_keywords
+    operator: OR
+    keywords: ["general"]
 
 decisions:
   - name: "general"
@@ -337,6 +318,11 @@ bert_model:
   threshold: 0.8
   use_cpu: true
 
+keyword_rules:
+  - name: general_keywords
+    operator: OR
+    keywords: ["general"]
+
 decisions:
   - name: "general"
     priority: 100
@@ -407,6 +393,11 @@ tools:
 		Context("with invalid advanced tool filtering configuration", func() {
 			BeforeEach(func() {
 				configContent := `
+keyword_rules:
+  - name: general_keywords
+    operator: OR
+    keywords: ["general"]
+
 decisions:
   - name: "general"
     priority: 100
@@ -618,6 +609,15 @@ semantic_cache:
 	Describe("GetModelForDecisionIndex", func() {
 		BeforeEach(func() {
 			configContent := `
+keyword_rules:
+  - name: rule1
+    operator: OR
+    keywords: ["first"]
+embedding_rules:
+  - name: rule2
+    threshold: 0.5
+    candidates: ["second"]
+
 decisions:
   - name: "decision1"
     priority: 100
@@ -679,6 +679,11 @@ default_model: "default-model"
 		Context("with decision having no models", func() {
 			BeforeEach(func() {
 				configContent := `
+keyword_rules:
+  - name: rule1
+    operator: OR
+    keywords: ["fallback"]
+
 decisions:
   - name: "empty_decision"
     priority: 50
@@ -1080,93 +1085,6 @@ default_model: "model-b"
 				models := cfg.GetAllModels()
 				Expect(models).To(HaveLen(3))
 				Expect(models).To(ContainElements("model-a", "model-b", "model-c"))
-			})
-		})
-
-		Describe("ResolvePrimaryBackendForModel", func() {
-			It("should return address and endpoint name for model with single endpoint", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				// model-b has a single preferred endpoint: endpoint2
-				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-b")
-				Expect(detailErr).NotTo(HaveOccurred())
-				Expect(found).To(BeTrue())
-				Expect(address).To(Equal("127.0.0.1:8000"))
-				Expect(endpointName).To(Equal("endpoint2"))
-			})
-
-			It("should return the highest-weight endpoint for model with multiple endpoints", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				// model-a has endpoint1 (weight 1) and endpoint3 (weight 1)
-				// Both have the same weight, so we get one of them
-				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-a")
-				Expect(detailErr).NotTo(HaveOccurred())
-				Expect(found).To(BeTrue())
-				Expect(address).To(Equal("127.0.0.1:8000"))
-				Expect(endpointName).To(BeElementOf("endpoint1", "endpoint3"))
-			})
-
-			It("should return false for non-existent model", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("non-existent-model")
-				Expect(detailErr).NotTo(HaveOccurred())
-				Expect(found).To(BeFalse())
-				Expect(address).To(BeEmpty())
-				Expect(endpointName).To(BeEmpty())
-			})
-
-			It("should return false for model with no preferred endpoints", func() {
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				// model-c has no preferred endpoints configured
-				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("model-c")
-				Expect(detailErr).NotTo(HaveOccurred())
-				Expect(found).To(BeFalse())
-				Expect(address).To(BeEmpty())
-				Expect(endpointName).To(BeEmpty())
-			})
-
-			It("should resolve the highest-weight backend metadata when weights differ", func() {
-				configContent := `
-vllm_endpoints:
-  - name: "ep-low"
-    address: "10.0.0.1"
-    port: 9000
-    weight: 1
-  - name: "ep-high"
-    address: "10.0.0.2"
-    port: 9001
-    weight: 10
-
-model_config:
-  "weighted-model":
-    preferred_endpoints: ["ep-low", "ep-high"]
-
-categories:
-  - name: "test"
-    model_scores:
-      - model: "weighted-model"
-        score: 0.9
-
-default_model: "weighted-model"
-`
-				err := os.WriteFile(configFile, []byte(configContent), 0o644)
-				Expect(err).NotTo(HaveOccurred())
-
-				cfg, err := loadLegacyRuntimeConfigForTest(configFile)
-				Expect(err).NotTo(HaveOccurred())
-
-				address, endpointName, found, detailErr := cfg.ResolvePrimaryBackendForModel("weighted-model")
-				Expect(detailErr).NotTo(HaveOccurred())
-				Expect(found).To(BeTrue())
-				Expect(address).To(Equal("10.0.0.2:9001"))
-				Expect(endpointName).To(Equal("ep-high"))
 			})
 		})
 
@@ -2236,118 +2154,17 @@ api:
 		})
 	})
 
-	Describe("AutoModelName Configuration", func() {
-		Context("GetEffectiveAutoModelName", func() {
-			It("should return configured AutoModelName when set", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "CustomAuto",
-					},
-				}
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomAuto"))
-			})
-
-			It("should return default 'MoM' when AutoModelName is not set", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "",
-					},
-				}
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
-			})
-
-			It("should return default 'MoM' for empty RouterConfig", func() {
-				cfg := &RouterConfig{}
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
-			})
-		})
-
-		Context("IsAutoModelName", func() {
-			It("should recognize 'auto' as auto model name for backward compatibility", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "MoM",
-					},
-				}
-				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
-			})
-
-			It("should recognize configured AutoModelName", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "CustomAuto",
-					},
-				}
-				Expect(cfg.IsAutoModelName("CustomAuto")).To(BeTrue())
-			})
-
-			It("should recognize default 'MoM' when AutoModelName is not set", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "",
-					},
-				}
-				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
-			})
-
-			It("should not recognize other model names as auto", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "MoM",
-					},
-				}
-				Expect(cfg.IsAutoModelName("gpt-4")).To(BeFalse())
-				Expect(cfg.IsAutoModelName("claude")).To(BeFalse())
-			})
-
-			It("should support both 'auto' and configured name", func() {
-				cfg := &RouterConfig{
-					RouterOptions: RouterOptions{
-						AutoModelName: "MoM",
-					},
-				}
-				Expect(cfg.IsAutoModelName("auto")).To(BeTrue())
-				Expect(cfg.IsAutoModelName("MoM")).To(BeTrue())
-				Expect(cfg.IsAutoModelName("other")).To(BeFalse())
-			})
-		})
-
-		Context("YAML parsing with AutoModelName", func() {
-			It("should parse AutoModelName from YAML", func() {
-				yamlContent := `
-auto_model_name: "CustomRouter"
-default_model: "test-model"
-`
-				var cfg RouterConfig
-				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.RouterOptions.AutoModelName).To(Equal("CustomRouter"))
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("CustomRouter"))
-			})
-
-			It("should handle missing AutoModelName in YAML", func() {
-				yamlContent := `
-default_model: "test-model"
-`
-				var cfg RouterConfig
-				err := yaml.Unmarshal([]byte(yamlContent), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(cfg.RouterOptions.AutoModelName).To(Equal(""))
-				Expect(cfg.GetEffectiveAutoModelName()).To(Equal("MoM"))
-			})
-		})
-	})
-
 	Describe("IsCacheEnabledForDecision", func() {
 		Context("per-decision plugin scoping", func() {
-			It("should return false for decision without explicit semantic-cache plugin (even if global is enabled)", func() {
+			It("should return false for decision without an explicit response_cache plugin even if the store is enabled", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
-					// No semantic-cache plugin configured
+					// No response_cache plugin configured.
 				}
 
 				cfg := &RouterConfig{
+					RoutingScope: "test-recipe",
 					SemanticCache: SemanticCache{
 						Enabled: true, // Global enabled, but should not affect decisions without plugin
 					},
@@ -2360,13 +2177,13 @@ default_model: "test-model"
 				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeFalse())
 			})
 
-			It("should return false when decision explicitly disables semantic-cache", func() {
+			It("should return false when a decision disables response_cache", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: DecisionPluginResponseCache,
 							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": false,
 							}),
@@ -2375,6 +2192,7 @@ default_model: "test-model"
 				}
 
 				cfg := &RouterConfig{
+					RoutingScope: "test-recipe",
 					SemanticCache: SemanticCache{
 						Enabled: true,
 					},
@@ -2386,13 +2204,13 @@ default_model: "test-model"
 				Expect(cfg.IsCacheEnabledForDecision("test")).To(BeFalse())
 			})
 
-			It("should return true when decision explicitly enables semantic-cache", func() {
+			It("should return true when a decision enables response_cache", func() {
 				decision := Decision{
 					Name:      "test",
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: DecisionPluginResponseCache,
 							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled": true,
 							}),
@@ -2401,6 +2219,7 @@ default_model: "test-model"
 				}
 
 				cfg := &RouterConfig{
+					RoutingScope: "test-recipe",
 					SemanticCache: SemanticCache{
 						Enabled: false, // Global disabled, but decision enables it
 					},
@@ -2414,6 +2233,7 @@ default_model: "test-model"
 
 			It("should return false for non-existent decision", func() {
 				cfg := &RouterConfig{
+					RoutingScope: "test-recipe",
 					SemanticCache: SemanticCache{
 						Enabled: true,
 					},
@@ -2429,10 +2249,12 @@ default_model: "test-model"
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: DecisionPluginResponseCache,
 							Configuration: MustStructuredPayload(map[string]interface{}{
-								"enabled":              true,
-								"similarity_threshold": threshold,
+								"enabled": true,
+								"semantic": map[string]interface{}{
+									"similarity_threshold": threshold,
+								},
 							}),
 						},
 					},
@@ -2440,6 +2262,7 @@ default_model: "test-model"
 
 				globalThreshold := float32(0.80)
 				cfg := &RouterConfig{
+					RoutingScope: "test-recipe",
 					SemanticCache: SemanticCache{
 						Enabled:             true,
 						SimilarityThreshold: &globalThreshold,
@@ -2460,7 +2283,7 @@ default_model: "test-model"
 					ModelRefs: []ModelRef{{Model: "test"}},
 					Plugins: []DecisionPlugin{
 						{
-							Type: "semantic-cache",
+							Type: DecisionPluginResponseCache,
 							Configuration: MustStructuredPayload(map[string]interface{}{
 								"enabled":     true,
 								"ttl_seconds": ttl,
@@ -2470,6 +2293,7 @@ default_model: "test-model"
 				}
 
 				cfg := &RouterConfig{
+					RoutingScope: "test-recipe",
 					SemanticCache: SemanticCache{
 						Enabled:    true,
 						TTLSeconds: 3600, // Global TTL
@@ -2534,28 +2358,7 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 
 		// Create real config target
 		target := filepath.Join(tempDir, "real-config.yaml")
-		content := []byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults:
-    default_model: test-model
-  models:
-    - name: test-model
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: test-model
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: test-model
-`)
+		content := []byte(validManagedBootstrapYAML)
 		Expect(os.WriteFile(target, content, 0o644)).To(Succeed())
 
 		// Create symlink pointing to target
@@ -2565,7 +2368,7 @@ routing:
 		cfg, err := Parse(link)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
-		Expect(cfg.DefaultModel).To(Equal("test-model"))
+		Expect(cfg.ControlPlane.Mode).To(Equal(ControlPlaneModeManaged))
 	})
 
 	It("should return error when file does not exist", func() {
@@ -3176,7 +2979,7 @@ default_model: "test-model"
 
 	Describe("IsFactCheckClassifierEnabled", func() {
 		It("should return true when routing uses the configured model", func() {
-			cfg := &RouterConfig{}
+			cfg := &RouterConfig{RoutingScope: "verification"}
 			cfg.HallucinationMitigation.FactCheckModel.ModelID = "models/fact_check"
 			cfg.FactCheckRules = []FactCheckRule{{Name: "needs_fact_check"}}
 			cfg.Decisions = []Decision{{
@@ -3188,7 +2991,7 @@ default_model: "test-model"
 		})
 
 		It("should return true for default API rules even when routing does not reference them", func() {
-			cfg := &RouterConfig{}
+			cfg := &RouterConfig{RoutingScope: DefaultRecipeName}
 			cfg.FactCheckRules = []FactCheckRule{
 				{Name: "needs_fact_check", Description: "Query needs fact verification"},
 				{Name: "no_fact_check_needed", Description: "Query does not need fact verification"},
@@ -3216,7 +3019,7 @@ default_model: "test-model"
 
 	Describe("IsFeedbackDetectorEnabled", func() {
 		It("should return true when enabled with rules and model_id", func() {
-			cfg := &RouterConfig{}
+			cfg := &RouterConfig{RoutingScope: "feedback"}
 			cfg.FeedbackDetector.Enabled = true
 			cfg.FeedbackDetector.ModelID = "models/feedback"
 			cfg.UserFeedbackRules = []UserFeedbackRule{{Name: "satisfied"}}
@@ -3261,7 +3064,7 @@ default_model: "test-model"
 
 	Describe("IsHallucinationModelEnabled", func() {
 		It("should return true when a decision enables the plugin", func() {
-			cfg := &RouterConfig{}
+			cfg := &RouterConfig{RoutingScope: "verification"}
 			cfg.HallucinationMitigation.HallucinationModel.ModelID = "models/hallucination"
 			cfg.Decisions = []Decision{{
 				Name: "verified-route",
@@ -3434,349 +3237,6 @@ default_model: "test-model"
 	})
 
 	// -----------------------------------------------------------------
-	// Provider profiles
-	// -----------------------------------------------------------------
-	Describe("Provider Profiles", func() {
-		Context("YAML parsing", func() {
-			It("should parse provider_profiles and endpoint references", func() {
-				yamlData := `
-provider_profiles:
-  openai-prod:
-    type: "openai"
-    base_url: "https://api.openai.com/v1"
-  azure-east:
-    type: "azure-openai"
-    base_url: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"
-    api_version: "2024-10-21"
-  anthropic-prod:
-    type: "anthropic"
-    base_url: "https://api.anthropic.com"
-    extra_headers:
-      anthropic-version: "2023-06-01"
-  bedrock-west:
-    type: "bedrock"
-    base_url: "https://bedrock-mantle.us-west-2.api.aws/v1"
-vllm_endpoints:
-  - name: "openai"
-    provider_profile: "openai-prod"
-  - name: "azure"
-    provider_profile: "azure-east"
-  - name: "local-vllm"
-    address: "127.0.0.1"
-    port: 8000
-model_config:
-  "gpt-4o":
-    preferred_endpoints: ["openai", "azure"]
-  "Qwen/Qwen2.5-14B":
-    preferred_endpoints: ["local-vllm"]
-`
-				var cfg RouterConfig
-				err := yaml.Unmarshal([]byte(yamlData), &cfg)
-				Expect(err).NotTo(HaveOccurred())
-
-				// provider_profiles parsed
-				Expect(cfg.ProviderProfiles).To(HaveLen(4))
-				Expect(cfg.ProviderProfiles["openai-prod"].Type).To(Equal("openai"))
-				Expect(cfg.ProviderProfiles["azure-east"].APIVersion).To(Equal("2024-10-21"))
-				Expect(cfg.ProviderProfiles["anthropic-prod"].ExtraHeaders).To(HaveKeyWithValue("anthropic-version", "2023-06-01"))
-
-				// endpoint references
-				Expect(cfg.VLLMEndpoints).To(HaveLen(3))
-				Expect(cfg.VLLMEndpoints[0].ProviderProfileName).To(Equal("openai-prod"))
-				Expect(cfg.VLLMEndpoints[2].ProviderProfileName).To(BeEmpty())
-			})
-		})
-
-		Context("ResolveAddress", func() {
-			It("should extract host:port from base_url", func() {
-				profiles := map[string]ProviderProfile{
-					"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
-					"azure-east":  {Type: "azure-openai", BaseURL: "https://myresource.openai.azure.com/openai/deployments/gpt-4o"},
-				}
-
-				ep := VLLMEndpoint{Name: "openai", ProviderProfileName: "openai-prod"}
-				addr, err := ep.ResolveAddress(profiles)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(addr).To(Equal("api.openai.com:443"))
-
-				ep2 := VLLMEndpoint{Name: "azure", ProviderProfileName: "azure-east"}
-				addr2, err2 := ep2.ResolveAddress(profiles)
-				Expect(err2).NotTo(HaveOccurred())
-				Expect(addr2).To(Equal("myresource.openai.azure.com:443"))
-			})
-
-			It("should use address:port for legacy endpoints (no provider_profile)", func() {
-				ep := VLLMEndpoint{Name: "local", Address: "127.0.0.1", Port: 8000}
-				addr, err := ep.ResolveAddress(nil)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(addr).To(Equal("127.0.0.1:8000"))
-			})
-
-			It("should error when profile is set but has no base_url", func() {
-				profiles := map[string]ProviderProfile{
-					"minimal": {Type: "openai"},
-				}
-				ep := VLLMEndpoint{Name: "ep1", Address: "10.0.0.1", Port: 9000, ProviderProfileName: "minimal"}
-				_, err := ep.ResolveAddress(profiles)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("no base_url"))
-			})
-
-			It("should error when profile is set but does not exist", func() {
-				profiles := map[string]ProviderProfile{}
-				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "missing"}
-				_, err := ep.ResolveAddress(profiles)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
-			})
-
-			It("should error when profile is set but profiles map is nil", func() {
-				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "some-profile"}
-				_, err := ep.ResolveAddress(nil)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("no provider_profiles map"))
-			})
-
-			It("should handle explicit port in base_url", func() {
-				profiles := map[string]ProviderProfile{
-					"custom": {Type: "openai", BaseURL: "http://localhost:8080/v1"},
-				}
-				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "custom"}
-				addr, err := ep.ResolveAddress(profiles)
-				Expect(err).NotTo(HaveOccurred())
-				Expect(addr).To(Equal("localhost:8080"))
-			})
-
-			It("should error on unsupported URL scheme", func() {
-				profiles := map[string]ProviderProfile{
-					"ftp": {Type: "openai", BaseURL: "ftp://files.example.com/v1"},
-				}
-				ep := VLLMEndpoint{Name: "ep1", ProviderProfileName: "ftp"}
-				_, err := ep.ResolveAddress(profiles)
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unsupported scheme"))
-			})
-		})
-
-		Context("ProviderType", func() {
-			It("should return correct provider type", func() {
-				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
-					pt, err := (&ProviderProfile{Type: t}).ProviderType()
-					Expect(err).NotTo(HaveOccurred())
-					Expect(pt).To(Equal(t))
-				}
-			})
-
-			It("should error on unknown type", func() {
-				_, err := (&ProviderProfile{Type: "unknown"}).ProviderType()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider profile type"))
-			})
-
-			It("should error on empty type", func() {
-				_, err := (&ProviderProfile{}).ProviderType()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("empty type"))
-			})
-
-			It("should error on nil profile", func() {
-				var nilProfile *ProviderProfile
-				_, err := nilProfile.ProviderType()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("nil"))
-			})
-		})
-
-		Context("ResolveAuthHeader", func() {
-			It("should return type-specific defaults", func() {
-				h, p, err := (&ProviderProfile{Type: "openai"}).ResolveAuthHeader()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(h).To(Equal("Authorization"))
-				Expect(p).To(Equal("Bearer"))
-
-				h, p, err = (&ProviderProfile{Type: "anthropic"}).ResolveAuthHeader()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(h).To(Equal("x-api-key"))
-				Expect(p).To(BeEmpty())
-
-				h, p, err = (&ProviderProfile{Type: "azure-openai"}).ResolveAuthHeader()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(h).To(Equal("api-key"))
-				Expect(p).To(BeEmpty())
-
-				h, p, err = (&ProviderProfile{Type: "bedrock"}).ResolveAuthHeader()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(h).To(Equal("Authorization"))
-				Expect(p).To(Equal("Bearer"))
-
-				h, p, err = (&ProviderProfile{Type: "minimax"}).ResolveAuthHeader()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(h).To(Equal("Authorization"))
-				Expect(p).To(Equal("Bearer"))
-			})
-
-			It("should allow explicit overrides", func() {
-				profile := &ProviderProfile{
-					Type:       "openai",
-					AuthHeader: "X-Custom-Auth",
-					AuthPrefix: "Token",
-				}
-				h, p, err := profile.ResolveAuthHeader()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(h).To(Equal("X-Custom-Auth"))
-				Expect(p).To(Equal("Token"))
-			})
-
-			It("should error on unknown type", func() {
-				_, _, err := (&ProviderProfile{Type: "bogus"}).ResolveAuthHeader()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
-			})
-		})
-
-		Context("ResolveChatPath", func() {
-			It("should return type-specific default paths", func() {
-				path, err := (&ProviderProfile{Type: "openai", BaseURL: "https://api.openai.com/v1"}).ResolveChatPath()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(path).To(Equal("/v1/chat/completions"))
-
-				path, err = (&ProviderProfile{Type: "anthropic", BaseURL: "https://api.anthropic.com"}).ResolveChatPath()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(path).To(Equal("/v1/messages"))
-
-				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(path).To(Equal("/v1/chat/completions"))
-			})
-
-			It("should append api-version for azure-openai", func() {
-				profile := &ProviderProfile{
-					Type:       "azure-openai",
-					BaseURL:    "https://myresource.openai.azure.com/openai/deployments/gpt-4o",
-					APIVersion: "2024-10-21",
-				}
-				path, err := profile.ResolveChatPath()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(path).To(Equal("/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"))
-			})
-
-			It("should error for unrecognised type", func() {
-				_, err := (&ProviderProfile{Type: "vllm"}).ResolveChatPath()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("unknown provider type"))
-			})
-
-			It("should use explicit ChatPath override", func() {
-				profile := &ProviderProfile{Type: "openai", ChatPath: "/custom/path"}
-				path, err := profile.ResolveChatPath()
-				Expect(err).NotTo(HaveOccurred())
-				Expect(path).To(Equal("/custom/path"))
-			})
-
-			It("should error for nil profile", func() {
-				var nilProfile *ProviderProfile
-				_, err := nilProfile.ResolveChatPath()
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("nil"))
-			})
-		})
-
-		Context("ExtraHeaders", func() {
-			It("should pass through explicit extra_headers only", func() {
-				profile := &ProviderProfile{
-					Type:         "anthropic",
-					ExtraHeaders: map[string]string{"anthropic-version": "2023-06-01", "custom": "value"},
-				}
-				Expect(profile.ExtraHeaders).To(HaveKeyWithValue("anthropic-version", "2023-06-01"))
-				Expect(profile.ExtraHeaders).To(HaveKeyWithValue("custom", "value"))
-			})
-
-			It("should be nil when not configured", func() {
-				profile := &ProviderProfile{Type: "openai"}
-				Expect(profile.ExtraHeaders).To(BeNil())
-			})
-		})
-
-		Context("GetProviderProfileForEndpoint", func() {
-			It("should resolve endpoint to profile", func() {
-				cfg := &RouterConfig{
-					BackendModels: BackendModels{
-						VLLMEndpoints: []VLLMEndpoint{
-							{Name: "openai", ProviderProfileName: "openai-prod"},
-							{Name: "local", Address: "127.0.0.1", Port: 8000},
-						},
-						ProviderProfiles: map[string]ProviderProfile{
-							"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
-						},
-					},
-				}
-				profile, err := cfg.GetProviderProfileForEndpoint("openai")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(profile).NotTo(BeNil())
-				Expect(profile.Type).To(Equal("openai"))
-
-				// Endpoint without profile — valid, returns nil profile and no error
-				profile, err = cfg.GetProviderProfileForEndpoint("local")
-				Expect(err).NotTo(HaveOccurred())
-				Expect(profile).To(BeNil())
-			})
-
-			It("should error on non-existent endpoint", func() {
-				cfg := &RouterConfig{
-					BackendModels: BackendModels{
-						VLLMEndpoints: []VLLMEndpoint{
-							{Name: "local", Address: "127.0.0.1", Port: 8000},
-						},
-					},
-				}
-				_, err := cfg.GetProviderProfileForEndpoint("nonexistent")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("not found"))
-			})
-
-			It("should error on dangling profile reference", func() {
-				cfg := &RouterConfig{
-					BackendModels: BackendModels{
-						VLLMEndpoints: []VLLMEndpoint{
-							{Name: "openai", ProviderProfileName: "missing-profile"},
-						},
-						ProviderProfiles: map[string]ProviderProfile{
-							"other-profile": {Type: "openai"},
-						},
-					},
-				}
-				_, err := cfg.GetProviderProfileForEndpoint("openai")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(ContainSubstring("does not exist"))
-				Expect(err.Error()).To(ContainSubstring("missing-profile"))
-			})
-		})
-
-		Context("ResolvePrimaryBackendForModel with profiles", func() {
-			It("should use base_url for address resolution", func() {
-				cfg := &RouterConfig{
-					BackendModels: BackendModels{
-						ModelConfig: map[string]ModelParams{
-							"gpt-4o": {PreferredEndpoints: []string{"openai"}},
-						},
-						VLLMEndpoints: []VLLMEndpoint{
-							{Name: "openai", ProviderProfileName: "openai-prod"},
-						},
-						ProviderProfiles: map[string]ProviderProfile{
-							"openai-prod": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
-						},
-					},
-				}
-
-				addr, name, found, detailErr := cfg.ResolvePrimaryBackendForModel("gpt-4o")
-				Expect(detailErr).NotTo(HaveOccurred())
-				Expect(found).To(BeTrue())
-				Expect(name).To(Equal("openai"))
-				Expect(addr).To(Equal("api.openai.com:443"))
-			})
-		})
-	})
-
 	// -----------------------------------------------------------------------
 	// PromptCompressionConfig
 	// -----------------------------------------------------------------------
@@ -3807,7 +3267,7 @@ model_config:
 						},
 					},
 				}
-				err := validateConfigContracts(cfg)
+				err := validateConfigContracts(scopedRoutingProfileForTest(cfg))
 				Expect(err).To(MatchError(ContainSubstring("unknown prompt_compression.profile")))
 				Expect(err).To(MatchError(ContainSubstring("default, coding, medical, security, multi_turn")))
 			})
@@ -3822,7 +3282,7 @@ model_config:
 						},
 					},
 				}
-				Expect(validateConfigContracts(cfg)).To(Succeed())
+				Expect(validateConfigContracts(scopedRoutingProfileForTest(cfg))).To(Succeed())
 			})
 		})
 

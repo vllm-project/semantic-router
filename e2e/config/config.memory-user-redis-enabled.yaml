@@ -1,59 +1,64 @@
-# Same as config.memory-user.yaml but with Redis hot cache ENABLED for testing.
-# Use this when the router runs in a container on the same network as Redis
-# (e.g. semantic-router-redis). For host-only runs use address: "localhost:6379".
-#
-# Usage: point your router's CONFIG_FILE to this file (or merge redis_cache into your config).
-
-version: v0.3
+version: v0.4
 listeners:
-  - name: http-8888
-    address: 0.0.0.0
-    port: 8888
-    timeout: 300s
-providers:
-  defaults:
-    default_model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      backend_refs:
-        - name: llm_katan
-          weight: 1
-          endpoint: host.docker.internal:8000
-          protocol: http
-routing:
-  modelCards:
-    - name: qwen3
-      modality: text
-  signals:
-    domains:
+- name: http-8888
+  address: 0.0.0.0
+  port: 8888
+  timeout: 300s
+models:
+- name: qwen3
+  card:
+    capabilities:
+    - text
+  connections:
+  - provider: vllm
+    endpoint: http://host.docker.internal:8000/v1
+    model: qwen3
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
       - name: general
         description: General queries for memory testing
-        mmlu_categories: [other]
-    keywords: []
-  decisions:
+        mmlu_categories:
+        - other
+      keywords: []
+    decisions:
     - name: default_route
       description: Default route for memory testing
       priority: 1
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-          use_reasoning: false
+        - type: domain
+          name: general
       plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are MoM, a helpful AI assistant with memory. You remember important facts about users and use this context to provide personalized assistance.
-            mode: insert
-        - type: memory
-          configuration:
-            enabled: true
-            retrieval_limit: 5
-            similarity_threshold: 0.60
-            auto_store: false
+      - type: system_prompt
+        configuration:
+          system_prompt: You are MoM, a helpful AI assistant with memory. You remember
+            important facts about users and use this context to provide personalized
+            assistance.
+          mode: insert
+      - type: memory
+        configuration:
+          enabled: true
+          retrieval_limit: 5
+          similarity_threshold: 0.6
+          auto_store: false
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    default_route:
+      models:
+      - model: qwen3
+        weight: '1'
 global:
   stores:
     memory:
@@ -65,30 +70,45 @@ global:
         dimension: 384
       embedding_model: bert
       default_retrieval_limit: 5
-      default_similarity_threshold: 0.60
+      default_similarity_threshold: 0.6
       extraction_batch_size: 1
       redis_cache:
         enabled: true
         address: semantic-router-redis:6379
         ttl_seconds: 900
         db: 0
-        key_prefix: "memory_cache:"
-        password: ""
+        key_prefix: 'memory_cache:'
+        password: ''
   model_catalog:
     external:
-      - llm_provider: vllm
-        model_role: memory_rewrite
-        llm_endpoint:
-          address: host.docker.internal
-          port: 8000
-          protocol: http
-        llm_model_name: qwen3
-        llm_timeout_seconds: 30
-      - llm_provider: vllm
-        model_role: memory_extraction
-        llm_endpoint:
-          address: host.docker.internal
-          port: 8000
-          protocol: http
-        llm_model_name: qwen3
-        llm_timeout_seconds: 30
+    - llm_provider: vllm
+      model_role: memory_rewrite
+      llm_endpoint:
+        address: host.docker.internal
+        port: 8000
+        protocol: http
+      llm_model_name: qwen3
+      llm_timeout_seconds: 30
+    - llm_provider: vllm
+      model_role: memory_extraction
+      llm_endpoint:
+        address: host.docker.internal
+        port: 8000
+        protocol: http
+      llm_model_name: qwen3
+      llm_timeout_seconds: 30
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}
+  router: {}
+  integrations: {}
+  services:
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml

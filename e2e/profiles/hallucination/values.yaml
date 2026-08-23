@@ -4,60 +4,69 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: openai/gpt-oss-20b
-    models:
-      - name: openai/gpt-oss-20b
-        backend_refs:
-          - name: mock-vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
-            weight: 1
-  routing:
-    decisions:
-      # Fact-checkable questions route here and, because the response carries
-      # tool context, trigger the endpoint hallucination detector.
+  models:
+  - name: openai/gpt-oss-20b
+    card: {}
+    connections:
+    - provider: vllm
+      endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
+      model: openai/gpt-oss-20b
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        fact_check:
+        - name: needs_fact_check
+          description: Query contains factual claims that should be verified against
+            context
+        - name: no_fact_check_needed
+          description: Query is creative, code, or opinion based - no fact verification
+            needed
+      decisions:
       - name: fact_check_decision
         description: Verify factual answers and run endpoint hallucination detection
         priority: 100
         rules:
           operator: OR
           conditions:
-            - type: fact_check
-              name: needs_fact_check
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
+          - type: fact_check
+            name: needs_fact_check
         plugins:
-          - type: hallucination
-            configuration:
-              enabled: true
-              use_nli: false
-              hallucination_action: header
-              unverified_factual_action: header
-              include_hallucination_details: true
+        - type: hallucination
+          configuration:
+            enabled: true
+            use_nli: false
+            hallucination_action: header
+            unverified_factual_action: header
+            include_hallucination_details: true
       - name: default_decision
         description: Default catch-all decision
         priority: 1
         rules:
           operator: AND
           conditions: []
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
-    signals:
-      fact_check:
-        - name: needs_fact_check
-          description: Query contains factual claims that should be verified against context
-        - name: no_fact_check_needed
-          description: Query is creative, code, or opinion based - no fact verification needed
-    modelCards:
-      - name: openai/gpt-oss-20b
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      fact_check_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
+      default_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
   global:
-    router:
-      strategy: priority
+    router: {}
     services:
       api:
         batch_classification:
@@ -72,6 +81,14 @@ config:
       observability:
         tracing:
           enabled: false
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
         embedding_model: mmbert
@@ -85,38 +102,34 @@ config:
       modules:
         prompt_guard:
           enabled: false
-          model_ref: ""
-          model_id: ""
-          jailbreak_mapping_path: ""
+          model_ref: ''
+          model_id: ''
+          jailbreak_mapping_path: ''
         classifier:
           domain:
-            model_ref: ""
-            model_id: ""
-            category_mapping_path: ""
+            model_ref: ''
+            model_id: ''
+            category_mapping_path: ''
             use_mmbert_32k: false
           pii:
-            model_ref: ""
-            model_id: ""
-            pii_mapping_path: ""
+            model_ref: ''
+            model_id: ''
+            pii_mapping_path: ''
             use_mmbert_32k: false
         hallucination_mitigation:
           enabled: true
           on_hallucination_detected: annotate
-          # Candle fact-check classifier gates when detection runs (same model
-          # the reference config uses).
           fact_check:
             model_id: models/mmbert32k-factcheck-classifier-merged
             threshold: 0.65
             use_cpu: true
             use_mmbert_32k: true
-          # Pluggable endpoint backend under test: the detector is served by an
-          # OpenAI-compatible endpoint (mock stands in for a vLLM-hosted
-          # KRLabsOrg/lettucedect-v2-qwen-2b) instead of an in-process model.
           detector:
             backend: endpoint
             endpoint: http://mock-hallucination-detector.default.svc.cluster.local:8000/v1
             include_explanation: false
             model_id: KRLabsOrg/lettucedect-v2-qwen-2b
+      embeddings: {}
 resources:
   limits:
     cpu: '2'
@@ -124,7 +137,5 @@ resources:
   requests:
     cpu: 500m
     memory: 1Gi
-
-# E2E/Kind: disable PVC for reliable CI (same as other e2e profiles).
 persistence:
   enabled: false

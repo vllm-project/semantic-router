@@ -5,18 +5,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMaintainedPrivacyRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "privacy", "config.yaml")
-	cfg, err := config.Parse(assetPath)
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	cfg := parseMaintainedConfig(t, assetPath)
+	scoped := mustOnlyRecipeConfig(t, cfg)
 
-	dslText, err := DecompileRouting(cfg)
+	dslText, err := DecompileRouting(scoped)
 	if err != nil {
 		t.Fatalf("DecompileRouting error: %v", err)
 	}
@@ -42,6 +38,7 @@ func TestMaintainedPrivacyRecipeDSLRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
+	cfg = mustOnlyRecipeConfig(t, cfg)
 
 	if len(cfg.KBRules) == 0 {
 		t.Error("expected at least one kb rule from privacy recipe")

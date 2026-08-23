@@ -855,6 +855,10 @@
 }
 
 .btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.625rem 1.5rem;
   background: var(--color-bg);
   color: var(--color-text);
@@ -864,6 +868,12 @@
   font-weight: 500;
   cursor: pointer;
   transition: all 0.15s;
+}
+
+.btnSecondary > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .btnSecondary:hover:not(:disabled) {
@@ -1880,6 +1890,12 @@
   flex-shrink: 0;
 }
 
+.agentAvatar > svg {
+  width: 19px;
+  height: 19px;
+  color: var(--color-text-secondary);
+}
+
 .agentHeaderMeta {
   min-width: 0;
   flex: 1;
@@ -2040,8 +2056,8 @@
 .ocModalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(9, 9, 10, 0.7);
-  backdrop-filter: blur(3px);
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
   z-index: 50;
   display: flex;
   align-items: center;
@@ -2052,12 +2068,18 @@
 .ocModal {
   width: min(960px, 100%);
   max-height: min(92vh, 980px);
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
 }
 
 .ocModalWide {
@@ -2071,7 +2093,7 @@
   gap: 0.75rem;
   padding: 0.9rem 1rem;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: transparent;
 }
 
 .ocModalTitleRow {
@@ -2106,6 +2128,12 @@
   cursor: pointer;
   font-size: 1.2rem;
   line-height: 1;
+}
+
+.ocModalClose > svg {
+  width: 15px;
+  height: 15px;
+  margin: auto;
 }
 
 .ocModalClose:hover:not(:disabled) {
@@ -2224,6 +2252,9 @@
 
 .enterprisePageButtons button,
 .enterpriseNoticeActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 32px;
   min-height: 30px;
   border: 1px solid var(--color-border);
@@ -2242,6 +2273,16 @@
 .enterprisePageButtons button:disabled {
   opacity: 0.38;
   cursor: not-allowed;
+}
+
+.enterprisePageButtons button > svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.enterprisePageButtons button > svg + svg {
+  margin-left: -7px;
 }
 
 .enterpriseRequestNotice {

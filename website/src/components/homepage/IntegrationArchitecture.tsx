@@ -705,7 +705,7 @@ export default function IntegrationArchitecture(): JSX.Element {
               <Translate id="homepage.integration.title">Route queries to the right model</Translate>
             </h2>
             <p className={shared.sectionSubtitle}>
-              <Translate id="homepage.integration.extproc.summary">Resolve each request-facing model ID to an isolated recipe, then route within that recipe's model pool.</Translate>
+              <Translate id="homepage.integration.extproc.summary">Resolve each request-facing model ID to an isolated recipe, then select from its assigned models.</Translate>
             </p>
           </header>
         </ScrollReveal>
@@ -765,7 +765,7 @@ export default function IntegrationArchitecture(): JSX.Element {
                 onStageRef={handleStageRowRef}
               />
               <ModelColumn
-                title={translate({ id: 'homepage.integration.models', message: 'Model pools' })}
+                title={translate({ id: 'homepage.integration.models', message: 'Models' })}
                 activeModelId={activeModel.id}
                 onRowRef={handleModelRowRef}
               />

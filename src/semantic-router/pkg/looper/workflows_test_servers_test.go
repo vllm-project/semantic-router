@@ -114,7 +114,7 @@ func assertWorkflowPayloadHasNoCallableSchemas(t *testing.T, payload map[string]
 
 func assertWorkflowPayloadHasCallableSchemas(t *testing.T, payload map[string]interface{}) {
 	t.Helper()
-	for _, field := range []string{"tools", "tool_choice", "functions", "function_call"} {
+	for _, field := range []string{"tools", "tool_choice"} {
 		if !payloadHasTopLevelField(payload, field) {
 			t.Fatalf("worker missing %s in tool-capable step: %#v", field, payload)
 		}

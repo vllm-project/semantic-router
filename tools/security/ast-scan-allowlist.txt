@@ -5,3 +5,35 @@ github\.com
 ml.energy
 r.jina.ai
 vllm-sr.ai
+
+# Reviewed service endpoints exposed by the built-in Integration catalog.
+ai-gateway.vercel.sh
+api.cerebras.ai
+api.cohere.com
+api.cometapi.com
+api.deepinfra.com
+api.deepseek.com
+api.featherless.ai
+api.fireworks.ai
+api.friendli.ai
+api.groq.com
+api.minimax.io
+api.mistral.ai
+api.moonshot.ai
+api.novita.ai
+api.perplexity.ai
+api.sakana.ai
+api.sambanova.ai
+api.studio.nebius.com
+api.together.ai
+api.x.ai
+api.z.ai
+console.sakana.ai
+dashscope-intl.aliyuncs.com
+integrate.api.nvidia.com
+openrouter.ai
+
+# Reviewed protocol constants and local contract fixtures.
+management.local
+schemas.openid.net
+vllm-semantic-router.com

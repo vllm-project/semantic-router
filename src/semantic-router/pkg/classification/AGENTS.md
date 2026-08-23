@@ -8,7 +8,8 @@
 
 - Keep request-time classification orchestration separate from model discovery and bootstrap.
 - Keep per-family concerns such as category, jailbreak, and PII inference behind narrow seams instead of one giant shared state table.
-- Keep the unified batch path and any legacy or fallback path composable behind explicit interfaces or dedicated helpers.
+- Keep the unified batch path composable with the explicit Recipe classifier
+  graph; never construct a fallback classifier from root routing fields.
 - Treat the package as classification runtime code, not as a dumping ground for service assembly, config migration, or unrelated routing policy.
 
 ## Change Rules

@@ -1,7 +1,7 @@
 ---
 name: router-service-platform-change
 category: primary
-description: Modifies router-side API, authz, memory, provider, storage, or runtime service modules outside config, decision, selection, and extproc plugin chains. Use when changing apiserver endpoints, authz or rate-limit policy code, memory or response storage flows, provider adapters, or other router service-platform modules.
+description: Modifies router-side API, access, memory, provider, storage, or runtime service modules outside config, decision, selection, and extproc plugin chains. Use when changing apiserver endpoints, access or quota policy code, memory or response storage flows, provider adapters, or other router service-platform modules.
 ---
 
 # Router Service Platform Change
@@ -9,7 +9,7 @@ description: Modifies router-side API, authz, memory, provider, storage, or runt
 ## Trigger
 
 - Change router-side API, service, storage, provider, or support modules outside config, decision, selection, and extproc plugin chains
-- Change apiserver, authz, rate-limit, memory, response API, storage, or provider-adapter behavior
+- Change apiserver, access, quota, memory, response API, storage, or provider-adapter behavior
 
 ## Workflow
 
@@ -22,7 +22,7 @@ description: Modifies router-side API, authz, memory, provider, storage, or runt
 ## Gotchas
 
 - These modules are not generic fallback territory anymore; if the change is in this surface, keep the service contract explicit instead of hand-waving it as cross-stack glue.
-- Storage, authz, and API seams often look local in code but still change E2E behavior through response-api, memory, or authz-rbac profiles.
+- Storage, access, and API seams often look local in code but still change E2E behavior through response-api, memory, or managed-access profiles.
 
 ## Must Read
 

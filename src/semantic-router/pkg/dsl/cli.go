@@ -8,12 +8,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// CLICompile reads a DSL file, compiles it, and writes the output in the specified format.
-// format can be "yaml" (default), "crd", or "helm".
+// ConfigBytesParser is the application-owned standalone Config parser used by
+// decompile. pkg/dsl stays Provider-neutral; the command composition root
+// injects the Provider Integration compiler installed in that binary.
+type ConfigBytesParser func([]byte) (*config.RouterConfig, error)
+
+// CLICompile reads a DSL file, compiles it, and writes one model-free Recipe
+// document. There is deliberately no CRD or Helm translation here: those
+// deployment surfaces own their complete v0.4 resource contracts.
 // basePath, when non-empty, points to a YAML file with infrastructure config
-// (version, listeners, providers) that the compiled routing is merged into,
-// producing a complete runnable config.
-func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath string) error {
+// and exactly one Recipe whose document is replaced by the compiled value.
+func CLICompile(inputPath, outputPath, basePath string) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("failed to read input file: %w", err)
@@ -27,34 +32,20 @@ func CLICompile(inputPath, outputPath, format, crdName, crdNamespace, basePath s
 		return fmt.Errorf("%d compilation error(s)", len(errs))
 	}
 
-	output, err := emitFormat(cfg, format, crdName, crdNamespace, basePath)
+	var output []byte
+	if basePath == "" {
+		output, err = EmitRoutingYAMLFromConfig(cfg)
+	} else {
+		output, err = emitMergedConfig(cfg, basePath)
+	}
 	if err != nil {
 		return err
 	}
 	return writeOutput(output, outputPath)
 }
 
-func emitFormat(cfg *config.RouterConfig, format, crdName, crdNamespace, basePath string) ([]byte, error) {
-	switch format {
-	case "yaml", "":
-		if basePath != "" {
-			return emitMergedConfig(cfg, basePath)
-		}
-		return EmitRoutingYAMLFromConfig(cfg)
-	case "crd":
-		if crdName == "" {
-			crdName = "router"
-		}
-		return EmitCRD(cfg, crdName, crdNamespace)
-	case "helm":
-		return EmitHelm(cfg)
-	default:
-		return nil, fmt.Errorf("unsupported output format %q (supported: yaml, crd, helm)", format)
-	}
-}
-
-// emitMergedConfig reads a base YAML (version, listeners, providers) and
-// overlays the DSL-compiled routing into it, producing a complete config.
+// emitMergedConfig reads a complete v0.4 base manifest and replaces its sole
+// Recipe document with the DSL-compiled document.
 func emitMergedConfig(cfg *config.RouterConfig, basePath string) ([]byte, error) {
 	baseData, err := os.ReadFile(basePath)
 	if err != nil {
@@ -67,25 +58,53 @@ func emitMergedConfig(cfg *config.RouterConfig, basePath string) ([]byte, error)
 // CLIDecompile reads a YAML config file and converts its default routing
 // profile plus entrypoint and recipe scopes to DSL text.
 func CLIDecompile(inputPath, outputPath string) error {
+	return CLIDecompileWithParser(inputPath, outputPath, nil)
+}
+
+// CLIDecompileWithParser decompiles either a complete v0.4 manifest through
+// the injected application parser or a narrow model-free Recipe document.
+func CLIDecompileWithParser(inputPath, outputPath string, parseConfig ConfigBytesParser) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
 		return fmt.Errorf("failed to read input file: %w", err)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
+	dslText, err := DecompileYAML(data, parseConfig)
 	if err != nil {
+		return err
+	}
+	return writeOutput([]byte(dslText), outputPath)
+}
+
+// DecompileYAML converts either a complete v0.4 manifest through an
+// application-provided parser or the provider-neutral Recipe document that
+// the DSL Builder owns. Callers without a Provider Integration compiler can
+// only decompile the narrow document form.
+func DecompileYAML(data []byte, parseConfig ConfigBytesParser) (string, error) {
+	var cfg *config.RouterConfig
+	var manifestErr error
+	var err error
+	if parseConfig != nil {
+		cfg, manifestErr = parseConfig(data)
+	}
+	if cfg == nil {
+		cfg, _ = parseRecipeBundleYAML(data)
+	}
+	if cfg == nil {
 		cfg, err = config.ParseRoutingYAMLBytes(data)
 		if err != nil {
-			return fmt.Errorf("failed to parse YAML: %w", err)
+			if manifestErr != nil {
+				return "", fmt.Errorf("failed to parse v0.4 manifest: %w", manifestErr)
+			}
+			return "", fmt.Errorf("failed to parse Recipe document: %w", err)
 		}
 	}
 
 	dslText, err := Decompile(cfg)
 	if err != nil {
-		return fmt.Errorf("decompilation failed: %w", err)
+		return "", fmt.Errorf("decompilation failed: %w", err)
 	}
-
-	return writeOutput([]byte(dslText), outputPath)
+	return dslText, nil
 }
 
 // TestBlockRunnerFactory constructs a TEST block runner for a parsed program.

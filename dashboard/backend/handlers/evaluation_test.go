@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,9 +12,46 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/evaluation"
 	"github.com/vllm-project/semantic-router/dashboard/backend/models"
 )
+
+type testEvaluationScopeResolver map[string][]string
+
+func (resolver testEvaluationScopeResolver) ResolveEvaluationScope(
+	_ context.Context,
+	principal auth.AuthContext,
+) ([]string, map[string]string, error) {
+	teamUsers := make(map[string]string, len(resolver[principal.UserID]))
+	for _, teamID := range resolver[principal.UserID] {
+		teamUsers[teamID] = principal.UserID
+	}
+	return []string{principal.UserID}, teamUsers, nil
+}
+
+type evaluationScopeResolverFunc func(
+	context.Context,
+	auth.AuthContext,
+) ([]string, map[string]string, error)
+
+func (resolver evaluationScopeResolverFunc) ResolveEvaluationScope(
+	ctx context.Context,
+	principal auth.AuthContext,
+) ([]string, map[string]string, error) {
+	return resolver(ctx, principal)
+}
+
+type testEvaluationRunAuthorizer string
+
+func (authorizer testEvaluationRunAuthorizer) IssueEvaluationInferenceToken(
+	context.Context,
+	auth.AuthContext,
+	string,
+	string,
+) (string, error) {
+	return string(authorizer), nil
+}
 
 type testEvaluationHarness struct {
 	handler *EvaluationHandler
@@ -36,7 +74,15 @@ func newTestEvaluationHarness(t *testing.T) *testEvaluationHarness {
 		ResultsDir:  filepath.Join(dir, "results"),
 	})
 	return &testEvaluationHarness{
-		handler: NewEvaluationHandler(evalDB, runner, false, "http://router:8080", "http://envoy:8801"),
+		handler: NewEvaluationHandler(
+			evalDB,
+			runner,
+			false,
+			"http://router:8080",
+			"http://envoy:8801",
+			nil,
+			nil,
+		),
 		db:      evalDB,
 		rootDir: dir,
 	}
@@ -45,6 +91,118 @@ func newTestEvaluationHarness(t *testing.T) *testEvaluationHarness {
 func newTestEvaluationHandler(t *testing.T) *EvaluationHandler {
 	t.Helper()
 	return newTestEvaluationHarness(t).handler
+}
+
+func TestEvaluationReadScopeIncludesOwnAndTeamTasksOnly(t *testing.T) {
+	t.Parallel()
+	harness := newTestEvaluationHarness(t)
+	harness.handler.scopeResolver = testEvaluationScopeResolver{"user-a": {"team-a"}}
+	for _, task := range []*models.EvaluationTask{
+		{ID: "own", Name: "Own", OwnerUserID: "user-a", Config: models.EvaluationConfig{}},
+		{ID: "team", Name: "Team", OwnerUserID: "user-b", OwnerTeamID: "team-a", Config: models.EvaluationConfig{}},
+		{ID: "other", Name: "Other", OwnerUserID: "user-b", OwnerTeamID: "team-b", Config: models.EvaluationConfig{}},
+		{ID: "global", Name: "Global", Config: models.EvaluationConfig{}},
+	} {
+		if err := harness.db.CreateTask(task); err != nil {
+			t.Fatalf("CreateTask(%s): %v", task.ID, err)
+		}
+	}
+	principal := auth.AuthContext{
+		UserID: "user-a",
+		Role:   auth.RoleRead,
+		Perms:  map[string]bool{auth.PermEvalRead: true, auth.PermEvalRun: true},
+	}
+	request := httptest.NewRequest(http.MethodGet, "/api/evaluation/tasks", nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(), principal))
+	response := httptest.NewRecorder()
+	harness.handler.ListTasksHandler().ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("list status=%d body=%s", response.Code, response.Body.String())
+	}
+	var tasks []*models.EvaluationTask
+	if err := json.NewDecoder(response.Body).Decode(&tasks); err != nil {
+		t.Fatalf("decode tasks: %v", err)
+	}
+	if len(tasks) != 2 {
+		t.Fatalf("visible tasks=%v, want own and team", tasks)
+	}
+
+	request = httptest.NewRequest(http.MethodGet, "/api/evaluation/tasks/other", nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(), principal))
+	response = httptest.NewRecorder()
+	harness.handler.GetTaskHandler().ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("cross-team detail status=%d, want 404", response.Code)
+	}
+
+	runBody, err := json.Marshal(map[string]string{"task_id": "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request = httptest.NewRequest(http.MethodPost, "/api/evaluation/run", bytes.NewReader(runBody))
+	request = request.WithContext(auth.WithAuthContext(request.Context(), principal))
+	response = httptest.NewRecorder()
+	harness.handler.RunTaskHandler().ServeHTTP(response, request)
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("cross-team run status=%d, want 404", response.Code)
+	}
+}
+
+func TestEvaluationScopeDoesNotUseDashboardLocalUserID(t *testing.T) {
+	t.Parallel()
+	harness := newTestEvaluationHarness(t)
+	harness.handler.scopeResolver = evaluationScopeResolverFunc(func(
+		_ context.Context,
+		principal auth.AuthContext,
+	) ([]string, map[string]string, error) {
+		if principal.UserID != "dashboard-user" {
+			t.Fatalf("dashboard principal = %q", principal.UserID)
+		}
+		return []string{"router-user"}, map[string]string{"router-team": "router-user"}, nil
+	})
+	request := httptest.NewRequest(http.MethodGet, "/api/evaluation/tasks", nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(), auth.AuthContext{
+		UserID: "dashboard-user", Role: auth.RoleRead,
+		Perms: map[string]bool{auth.PermEvalRead: true},
+	}))
+	scope, err := harness.handler.principalScope(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if scope.allows(&models.EvaluationTask{OwnerUserID: "dashboard-user"}) {
+		t.Fatal("Dashboard-local user ID was accepted as Router evaluation ownership")
+	}
+	if !scope.allows(&models.EvaluationTask{OwnerUserID: "router-user"}) ||
+		!scope.allows(&models.EvaluationTask{OwnerTeamID: "router-team"}) {
+		t.Fatalf("Router-owned scope was not applied: %+v", scope)
+	}
+}
+
+func TestEvaluationWriterCreatesRouterOwnedTask(t *testing.T) {
+	t.Parallel()
+	harness := newTestEvaluationHarness(t)
+	harness.handler.scopeResolver = evaluationScopeResolverFunc(func(
+		_ context.Context,
+		principal auth.AuthContext,
+	) ([]string, map[string]string, error) {
+		if principal.UserID != "dashboard-writer" {
+			t.Fatalf("dashboard principal = %q", principal.UserID)
+		}
+		return []string{"router-user"}, map[string]string{"router-team": "router-user"}, nil
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/evaluation/tasks", nil)
+	request = request.WithContext(auth.WithAuthContext(request.Context(), auth.AuthContext{
+		UserID: "dashboard-writer",
+		Perms:  map[string]bool{auth.PermConfigWrite: true, auth.PermEvalWrite: true},
+	}))
+	scope, err := harness.handler.principalScope(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ownerUserID, ownerTeamID, ok := scope.taskOwner("")
+	if !ok || ownerUserID != "router-user" || ownerTeamID != "router-team" {
+		t.Fatalf("task owner = (%q, %q, %t), want Router team ownership", ownerUserID, ownerTeamID, ok)
+	}
 }
 
 func TestEvaluationMutationsHonorServerReadonly(t *testing.T) {
@@ -328,7 +486,8 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 	}
 
 	task := &models.EvaluationTask{
-		Name: "rerun-system-eval",
+		Name:        "rerun-system-eval",
+		OwnerUserID: "router-user",
 		Config: models.EvaluationConfig{
 			Level:         models.LevelMoM,
 			Dimensions:    []models.EvaluationDimension{models.DimensionAccuracy},
@@ -348,6 +507,17 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 
 	bodyBytes, _ := json.Marshal(map[string]string{"task_id": task.ID})
 	req := httptest.NewRequest(http.MethodPost, "/api/evaluation/run", bytes.NewReader(bodyBytes))
+	harness.handler.scopeResolver = evaluationScopeResolverFunc(func(
+		context.Context,
+		auth.AuthContext,
+	) ([]string, map[string]string, error) {
+		return []string{"router-user"}, nil, nil
+	})
+	harness.handler.runAuthorizer = testEvaluationRunAuthorizer("vsd_test_delegated_credential")
+	req = req.WithContext(auth.WithAuthContext(req.Context(), auth.AuthContext{
+		UserID: "dashboard-user",
+		Perms:  map[string]bool{auth.PermEvalRun: true},
+	}))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	harness.handler.RunTaskHandler().ServeHTTP(rec, req)
@@ -373,6 +543,9 @@ func TestRunTaskHandlerMarksRerunTaskRunningBeforeBackgroundExecution(t *testing
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d; body = %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	if strings.Contains(rec.Body.String(), "vsd_test_delegated_credential") {
+		t.Fatal("RunTask response exposed the delegated bearer")
 	}
 
 	updatedTask, err := harness.db.GetTask(task.ID)

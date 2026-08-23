@@ -23,14 +23,25 @@ const (
 
 	dashboardRestartRecoveryTimeout  = 5 * time.Minute
 	dashboardRestartRecoveryInterval = 5 * time.Second
-
-	dashboardRestartMCPServerID   = "e2e00001-0000-4000-8000-000000000001"
-	dashboardRestartMCPServerName = "E2E Restart Recovery MCP"
+	dashboardManagementMediaType     = "application/vnd.vllm-semantic-router.management.v1+json"
+	dashboardManagementNamespace     = "VLLM-SR-Namespace"
+	dashboardManagementIdempotency   = "Idempotency-Key"
+	dashboardRestartAgentMessage     = "Keep this Router Agent context across the Dashboard restart."
 )
+
+type dashboardRestartAgentState struct {
+	namespaceID string
+	profileID   string
+	profileName string
+	sessionID   string
+	turnID      string
+	targetKind  string
+	targetID    string
+}
 
 func init() {
 	pkgtestcases.Register("dashboard-restart-recovery", pkgtestcases.TestCase{
-		Description: "Dashboard workflow SQLite state survives a dashboard pod restart",
+		Description: "Router Agent session and transcript survive a dashboard pod restart",
 		Tags:        []string{"dashboard", "functional", "restart"},
 		Fn:          testDashboardRestartRecovery,
 	})
@@ -38,7 +49,7 @@ func init() {
 
 func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing Dashboard: restart recovery (workflow SQLite persistence)")
+		fmt.Println("[Test] Testing Dashboard: Router Agent continuity across a Dashboard restart")
 	}
 
 	localPort, stop, err := setupServiceConnection(ctx, client, opts)
@@ -49,7 +60,8 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 	baseURL := fmt.Sprintf("http://localhost:%s", localPort)
 	httpClient := &http.Client{Timeout: 30 * time.Second}
 
-	if err := seedDashboardWorkflowState(ctx, httpClient, baseURL, opts.Verbose); err != nil {
+	state, err := seedDashboardAgentState(ctx, httpClient, baseURL, opts.Verbose)
+	if err != nil {
 		stop()
 		return err
 	}
@@ -69,76 +81,147 @@ func testDashboardRestartRecovery(ctx context.Context, client *kubernetes.Client
 	}
 	defer stop()
 
-	return verifyDashboardWorkflowStateAfterRestart(
+	return verifyDashboardAgentStateAfterRestart(
 		ctx,
 		&http.Client{Timeout: 30 * time.Second},
 		fmt.Sprintf("http://localhost:%s", localPort),
+		state,
 		opts,
 	)
 }
 
-func seedDashboardWorkflowState(ctx context.Context, client *http.Client, baseURL string, verbose bool) error {
-	token, err := dashboardAuthToken(ctx, client, baseURL, verbose)
-	if err != nil {
-		return fmt.Errorf("pre-restart login: %w", err)
-	}
-
-	if err := createRestartTestMCPServer(ctx, client, baseURL, token, verbose); err != nil {
-		return err
-	}
-
-	return assertMCPServerPresent(ctx, client, baseURL, token, verbose, "before restart")
-}
-
-func createRestartTestMCPServer(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) error {
-	payload := map[string]interface{}{
-		"id":          dashboardRestartMCPServerID,
-		"name":        dashboardRestartMCPServerName,
-		"description": "Created by dashboard-restart-recovery E2E",
-		"transport":   "stdio",
-		"connection": map[string]string{
-			"command": "echo",
-		},
-		"enabled": false,
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal MCP server payload: %w", err)
-	}
-
-	url := strings.TrimRight(baseURL, "/") + "/api/mcp/servers"
-	if verbose {
-		fmt.Printf("[Dashboard] POST %s (seed MCP server)\n", url)
-	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("create MCP server request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	setDashboardAuth(req, token)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("create MCP server request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("create MCP server: expected 201, got %d: %s", resp.StatusCode, truncateString(string(respBody), 200))
-	}
-
-	if verbose {
-		fmt.Printf("[Dashboard] MCP server %s seeded\n", dashboardRestartMCPServerID)
-	}
-	return nil
-}
-
-func verifyDashboardWorkflowStateAfterRestart(
+func seedDashboardAgentState(
 	ctx context.Context,
 	client *http.Client,
 	baseURL string,
+	verbose bool,
+) (dashboardRestartAgentState, error) {
+	token, err := dashboardAuthToken(ctx, client, baseURL, verbose)
+	if err != nil {
+		return dashboardRestartAgentState{}, fmt.Errorf("pre-restart login: %w", err)
+	}
+	namespaceID, userID, err := dashboardAgentIdentity(ctx, client, baseURL, token, verbose)
+	if err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	targetKind, targetID, err := ensureDashboardAgentFixture(
+		ctx, client, baseURL, token, namespaceID, userID, verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	seed := fmt.Sprintf("dashboard-restart-%d", time.Now().UTC().UnixNano())
+	profileName := "Dashboard restart " + strings.TrimPrefix(seed, "dashboard-restart-")
+	profileReceipt, err := dashboardManagementMutation(
+		ctx, client, baseURL, token, namespaceID,
+		http.MethodPost, "/agent-profiles", seed+"-profile",
+		map[string]interface{}{
+			"name":           profileName,
+			"description":    "E2E Agent continuity contract",
+			"supportedModes": []string{"chat"},
+			"toolPolicy": map[string]interface{}{
+				"allow": []string{"router.catalog.describe"},
+			},
+			"approvalPolicy":     "required",
+			"maximumTurnSeconds": 300,
+			"maximumToolSteps":   4,
+			"contextTokenBudget": 8192,
+		},
+		verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, fmt.Errorf("create pre-restart Agent Profile: %w", err)
+	}
+	if profileReceipt.Resource == nil || profileReceipt.Resource.ID == "" {
+		return dashboardRestartAgentState{}, fmt.Errorf("create Agent Profile returned no resource")
+	}
+	sessionReceipt, err := dashboardManagementMutation(
+		ctx, client, baseURL, token, namespaceID,
+		http.MethodPost, "/agent-sessions", seed+"-session",
+		map[string]interface{}{
+			"profileId": profileReceipt.Resource.ID,
+			"mode":      "chat",
+			"target": map[string]string{
+				"kind": targetKind,
+				"id":   targetID,
+			},
+			"title": "Dashboard restart recovery",
+		},
+		verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, fmt.Errorf("create pre-restart Agent Session: %w", err)
+	}
+	if sessionReceipt.Resource == nil || sessionReceipt.Resource.ID == "" {
+		return dashboardRestartAgentState{}, fmt.Errorf("create Agent Session returned no resource")
+	}
+	turnReceipt, err := dashboardManagementMutation(
+		ctx, client, baseURL, token, namespaceID,
+		http.MethodPost, "/agent-sessions/"+sessionReceipt.Resource.ID+"/turns", seed+"-turn",
+		map[string]interface{}{
+			"input": map[string]interface{}{
+				"content": []map[string]string{{"type": "text", "text": dashboardRestartAgentMessage}},
+			},
+		},
+		verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, fmt.Errorf("create pre-restart Agent Turn: %w", err)
+	}
+	if turnReceipt.Resource == nil || turnReceipt.Resource.ID == "" {
+		return dashboardRestartAgentState{}, fmt.Errorf("create Agent Turn returned no resource")
+	}
+	state := dashboardRestartAgentState{
+		namespaceID: namespaceID,
+		profileID:   profileReceipt.Resource.ID,
+		profileName: profileName,
+		sessionID:   sessionReceipt.Resource.ID,
+		turnID:      turnReceipt.Resource.ID,
+		targetKind:  targetKind,
+		targetID:    targetID,
+	}
+	if err := waitForDashboardAgentState(
+		ctx, client, baseURL, token, state, verbose, "before restart", 90*time.Second,
+	); err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	return state, nil
+}
+
+func waitForDashboardAgentState(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	state dashboardRestartAgentState,
+	verbose bool,
+	phase string,
+	timeout time.Duration,
+) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		if err := assertDashboardAgentState(ctx, client, baseURL, token, state, verbose, phase); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		timer := time.NewTimer(time.Second)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+	return fmt.Errorf("Router Agent turn did not complete %s within %s: %w", phase, timeout, lastErr)
+}
+
+func verifyDashboardAgentStateAfterRestart(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	state dashboardRestartAgentState,
 	opts pkgtestcases.TestCaseOptions,
 ) error {
 	const verifyTimeout = 90 * time.Second
@@ -153,114 +236,314 @@ func verifyDashboardWorkflowStateAfterRestart(
 			continue
 		}
 
-		if err := assertMCPServerPresent(ctx, client, baseURL, token, opts.Verbose, "after restart"); err != nil {
+		if err := assertDashboardAgentState(
+			ctx, client, baseURL, token, state, opts.Verbose, "after restart",
+		); err != nil {
 			lastErr = err
 			time.Sleep(3 * time.Second)
 			continue
 		}
-
-		if err := assertWorkflowHealthOK(ctx, client, baseURL, token, opts.Verbose); err != nil {
-			lastErr = err
-			time.Sleep(3 * time.Second)
-			continue
-		}
-
 		if opts.Verbose {
-			fmt.Printf("[Test] Dashboard workflow state survived restart (mcp_server_id=%s)\n", dashboardRestartMCPServerID)
+			fmt.Printf("[Test] Router Agent state survived Dashboard restart (session_id=%s)\n", state.sessionID)
 		}
 		if opts.SetDetails != nil {
 			opts.SetDetails(map[string]interface{}{
-				"mcp_server_id":   dashboardRestartMCPServerID,
-				"mcp_server_name": dashboardRestartMCPServerName,
-				"survived":        true,
+				"agent_profile_id": state.profileID,
+				"agent_session_id": state.sessionID,
+				"agent_turn_id":    state.turnID,
+				"survived":         true,
 			})
 		}
 		return nil
 	}
 
-	return fmt.Errorf("dashboard workflow state not recoverable after %s: %w", verifyTimeout, lastErr)
+	return fmt.Errorf("Router Agent state not recoverable through Dashboard after %s: %w", verifyTimeout, lastErr)
 }
 
-func assertMCPServerPresent(ctx context.Context, client *http.Client, baseURL, token string, verbose bool, phase string) error {
-	url := strings.TrimRight(baseURL, "/") + "/api/mcp/servers"
-	if verbose {
-		fmt.Printf("[Dashboard] GET %s (%s)\n", url, phase)
+func assertDashboardAgentState(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	state dashboardRestartAgentState,
+	verbose bool,
+	phase string,
+) error {
+	var profile struct {
+		Data struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := dashboardManagementJSON(
+		ctx, client, baseURL, token, state.namespaceID, http.MethodGet,
+		"/agent-profiles/"+state.profileID, "", nil, http.StatusOK, &profile, verbose,
+	); err != nil {
+		return fmt.Errorf("read Agent Profile %s: %w", phase, err)
+	}
+	if profile.Data.ID != state.profileID || profile.Data.Name != state.profileName {
+		return fmt.Errorf("Agent Profile changed %s", phase)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("create MCP list request: %w", err)
-	}
-	setDashboardAuth(req, token)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("list MCP servers failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("list MCP servers: expected 200, got %d: %s", resp.StatusCode, truncateString(string(body), 200))
-	}
-
-	var result struct {
-		Servers []struct {
-			Config struct {
+	var session struct {
+		Data struct {
+			ID     string `json:"id"`
+			Mode   string `json:"mode"`
+			Target struct {
+				Kind string `json:"kind"`
 				ID   string `json:"id"`
-				Name string `json:"name"`
-			} `json:"config"`
-		} `json:"servers"`
+			} `json:"target"`
+		} `json:"data"`
 	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return fmt.Errorf("MCP servers response is not valid JSON: %w", err)
+	if err := dashboardManagementJSON(
+		ctx, client, baseURL, token, state.namespaceID, http.MethodGet,
+		"/agent-sessions/"+state.sessionID, "", nil, http.StatusOK, &session, verbose,
+	); err != nil {
+		return fmt.Errorf("read Agent Session %s: %w", phase, err)
+	}
+	if session.Data.ID != state.sessionID || session.Data.Mode != "chat" ||
+		session.Data.Target.Kind != state.targetKind || session.Data.Target.ID != state.targetID {
+		return fmt.Errorf("Agent Session identity or target changed %s", phase)
 	}
 
-	for _, server := range result.Servers {
-		if server.Config.ID == dashboardRestartMCPServerID {
-			if server.Config.Name != dashboardRestartMCPServerName {
-				return fmt.Errorf("MCP server name mismatch: got %q, expected %q", server.Config.Name, dashboardRestartMCPServerName)
+	var events struct {
+		Data []struct {
+			TurnID  string          `json:"turnId"`
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
+		} `json:"data"`
+	}
+	if err := dashboardManagementJSON(
+		ctx, client, baseURL, token, state.namespaceID, http.MethodGet,
+		"/agent-sessions/"+state.sessionID+"/events?pageSize=100", "", nil,
+		http.StatusOK, &events, verbose,
+	); err != nil {
+		return fmt.Errorf("read Agent transcript %s: %w", phase, err)
+	}
+	foundUserInput := false
+	foundAssistantOutput := false
+	foundCompletedTerminal := false
+	for _, event := range events.Data {
+		if event.TurnID != state.turnID {
+			continue
+		}
+		switch event.Type {
+		case "user_input":
+			var payload struct {
+				Content []struct {
+					Type string `json:"type"`
+					Text string `json:"text"`
+				} `json:"content"`
 			}
-			return nil
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return fmt.Errorf("Agent user event %s is invalid: %w", phase, err)
+			}
+			for _, block := range payload.Content {
+				if block.Type == "text" && block.Text == dashboardRestartAgentMessage {
+					foundUserInput = true
+				}
+			}
+		case "assistant_delta":
+			var payload struct {
+				Delta struct {
+					Kind string `json:"kind"`
+					Text string `json:"text"`
+				} `json:"delta"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return fmt.Errorf("Agent assistant event %s is invalid: %w", phase, err)
+			}
+			if payload.Delta.Kind == "text" && strings.TrimSpace(payload.Delta.Text) != "" {
+				foundAssistantOutput = true
+			}
+		case "terminal":
+			var payload struct {
+				Status string `json:"status"`
+			}
+			if err := json.Unmarshal(event.Payload, &payload); err != nil {
+				return fmt.Errorf("Agent terminal event %s is invalid: %w", phase, err)
+			}
+			foundCompletedTerminal = payload.Status == "completed"
 		}
 	}
-
-	return fmt.Errorf("MCP server %s not found in list (%s)", dashboardRestartMCPServerID, phase)
-}
-
-func assertWorkflowHealthOK(ctx context.Context, client *http.Client, baseURL, token string, verbose bool) error {
-	url := strings.TrimRight(baseURL, "/") + "/api/workflows/health"
-	if verbose {
-		fmt.Printf("[Dashboard] GET %s (workflow health)\n", url)
+	if !foundUserInput {
+		return fmt.Errorf("Agent user input event is missing %s", phase)
 	}
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return fmt.Errorf("create workflow health request: %w", err)
+	if !foundAssistantOutput {
+		return fmt.Errorf("Agent assistant output is missing %s", phase)
 	}
-	setDashboardAuth(req, token)
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return fmt.Errorf("workflow health request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	body, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("workflow health: expected 200, got %d: %s", resp.StatusCode, truncateString(string(body), 200))
-	}
-
-	var health struct {
-		Store string `json:"store"`
-	}
-	if err := json.Unmarshal(body, &health); err != nil {
-		return fmt.Errorf("workflow health response is not valid JSON: %w", err)
-	}
-	if strings.TrimSpace(health.Store) != "ok" {
-		return fmt.Errorf("workflow health store: got %q, expected ok", health.Store)
+	if !foundCompletedTerminal {
+		return fmt.Errorf("Agent completed terminal event is missing %s", phase)
 	}
 	return nil
+}
+
+func dashboardAgentIdentity(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	verbose bool,
+) (string, string, error) {
+	var me struct {
+		Namespaces []struct {
+			Namespace struct {
+				ID string `json:"namespaceId"`
+			} `json:"namespace"`
+			Permissions []string `json:"permissions"`
+			User        *struct {
+				UserID string `json:"userId"`
+			} `json:"user,omitempty"`
+		} `json:"namespaces"`
+	}
+	if err := dashboardManagementJSON(
+		ctx, client, baseURL, token, "", http.MethodGet, "/me", "", nil,
+		http.StatusOK, &me, verbose,
+	); err != nil {
+		return "", "", fmt.Errorf("read Management identity: %w", err)
+	}
+	for _, scope := range me.Namespaces {
+		if scope.Namespace.ID != "" && scope.User != nil && scope.User.UserID != "" &&
+			hasDashboardAgentPermissions(scope.Permissions) {
+			return scope.Namespace.ID, scope.User.UserID, nil
+		}
+	}
+	return "", "", fmt.Errorf("Dashboard test principal has no linked User and namespace with Agent and routing authority")
+}
+
+func hasDashboardAgentPermissions(permissions []string) bool {
+	required := map[string]bool{
+		"agent.read": false, "agent.use": false, "agent.manage": false, "routing.read": false,
+	}
+	for _, permission := range permissions {
+		if _, tracked := required[permission]; tracked {
+			required[permission] = true
+		}
+	}
+	for _, present := range required {
+		if !present {
+			return false
+		}
+	}
+	return true
+}
+
+type dashboardMutationReceipt struct {
+	Resource *struct {
+		Kind     string `json:"kind"`
+		ID       string `json:"id"`
+		Revision int64  `json:"revision"`
+	} `json:"resource,omitempty"`
+}
+
+func dashboardManagementMutation(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	method string,
+	path string,
+	idempotencyKey string,
+	payload interface{},
+	verbose bool,
+) (dashboardMutationReceipt, error) {
+	var receipt dashboardMutationReceipt
+	err := dashboardManagementJSON(
+		ctx, client, baseURL, token, namespaceID, method, path,
+		idempotencyKey, payload, http.StatusCreated, &receipt, verbose,
+	)
+	return receipt, err
+}
+
+func dashboardManagementJSON(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	method string,
+	path string,
+	idempotencyKey string,
+	payload interface{},
+	expectedStatus int,
+	result interface{},
+	verbose bool,
+) error {
+	_, err := dashboardManagementJSONWithHeaders(
+		ctx, client, baseURL, token, namespaceID, method, path, idempotencyKey,
+		payload, expectedStatus, result, nil, verbose,
+	)
+	return err
+}
+
+func dashboardManagementJSONWithHeaders(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	method string,
+	path string,
+	idempotencyKey string,
+	payload interface{},
+	expectedStatus int,
+	result interface{},
+	requestHeaders http.Header,
+	verbose bool,
+) (http.Header, error) {
+	var requestBody io.Reader
+	if payload != nil {
+		body, err := json.Marshal(payload)
+		if err != nil {
+			return nil, fmt.Errorf("marshal Management request: %w", err)
+		}
+		requestBody = bytes.NewReader(body)
+	}
+	url := strings.TrimRight(baseURL, "/") + "/api/router/management/v1" + path
+	if verbose {
+		fmt.Printf("[Dashboard] %s %s\n", method, url)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, requestBody)
+	if err != nil {
+		return nil, fmt.Errorf("create Management request: %w", err)
+	}
+	req.Header.Set("Accept", dashboardManagementMediaType)
+	if payload != nil {
+		req.Header.Set("Content-Type", dashboardManagementMediaType)
+	}
+	if namespaceID != "" {
+		req.Header.Set(dashboardManagementNamespace, namespaceID)
+	}
+	if idempotencyKey != "" {
+		req.Header.Set(dashboardManagementIdempotency, idempotencyKey)
+	}
+	for name, values := range requestHeaders {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
+	}
+	setDashboardAuth(req, token)
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Management request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	body, _ := io.ReadAll(resp.Body)
+	defer clear(body)
+	if resp.StatusCode != expectedStatus {
+		return nil, fmt.Errorf(
+			"Management request: expected %d, got %d: %s",
+			expectedStatus, resp.StatusCode, truncateString(string(body), 300),
+		)
+	}
+	if result == nil {
+		return resp.Header.Clone(), nil
+	}
+	if err := json.Unmarshal(body, result); err != nil {
+		return nil, fmt.Errorf("Management response is not valid JSON: %w", err)
+	}
+	return resp.Header.Clone(), nil
 }
 
 func deleteDashboardPod(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

@@ -21,8 +21,6 @@ import (
 	"testing"
 
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
-	routerconfig "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"gopkg.in/yaml.v3"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv2 "k8s.io/api/autoscaling/v2"
 	corev1 "k8s.io/api/core/v1"
@@ -35,71 +33,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-func TestGenerateConfigYAMLIncludesLoRACatalogFromVLLMEndpoints(t *testing.T) {
-	s := runtime.NewScheme()
-	_ = scheme.AddToScheme(s)
-	_ = vllmv1alpha1.AddToScheme(s)
-
-	sr := &vllmv1alpha1.SemanticRouter{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-router",
-			Namespace: "default",
-		},
-		Spec: vllmv1alpha1.SemanticRouterSpec{
-			VLLMEndpoints: []vllmv1alpha1.VLLMEndpointSpec{
-				{
-					Name:            "qwen3-primary",
-					Model:           "qwen3-32b",
-					ReasoningFamily: "qwen3",
-					LoRAs: []vllmv1alpha1.LoRAAdapterSpec{
-						{
-							Name:        "computer-science-expert",
-							Description: "Adapter for advanced computer science prompts",
-						},
-					},
-					Backend: vllmv1alpha1.VLLMBackend{
-						Type: "service",
-						Service: &vllmv1alpha1.ServiceBackend{
-							Name: "qwen3-svc",
-							Port: 8000,
-						},
-					},
-					Weight: 100,
-				},
-			},
-		},
-	}
-
-	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).Build()
-	r := &SemanticRouterReconciler{
-		Client: cl,
-		Scheme: s,
-	}
-
-	configYAML, err := r.generateConfigYAML(context.Background(), sr)
-	if err != nil {
-		t.Fatalf("generateConfigYAML failed: %v", err)
-	}
-
-	var parsed routerconfig.CanonicalConfig
-	if err := yaml.Unmarshal([]byte(configYAML), &parsed); err != nil {
-		t.Fatalf("failed to parse generated YAML: %v", err)
-	}
-
-	if len(parsed.Routing.ModelCards) != 1 {
-		t.Fatalf("expected one generated modelCard, got %#v", parsed.Routing.ModelCards)
-	}
-	modelCard := parsed.Routing.ModelCards[0]
-	if len(modelCard.LoRAs) != 1 {
-		t.Fatalf("expected one generated LoRA adapter, got %#v", modelCard.LoRAs)
-	}
-	lora := modelCard.LoRAs[0]
-	if lora.Name != "computer-science-expert" {
-		t.Fatalf("unexpected LoRA name: %#v", lora)
-	}
-	if lora.Description != "Adapter for advanced computer science prompts" {
-		t.Fatalf("unexpected LoRA description: %#v", lora)
-	}
+var testStandaloneBootstrap = bootstrapDeploymentContract{
+	Mode:                controlPlaneModeStandalone,
+	Revision:            "sha256:test",
+	ManagementPort:      DefaultManagementPort,
+	BackendDispatchPort: DefaultBackendDispatchPort,
 }
 
 func TestReconcileSemanticRouter(t *testing.T) {
@@ -253,7 +191,7 @@ func TestGenerateDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := r.generateDeployment(sr, "standalone")
+	deployment := r.generateDeployment(sr, gatewayModeSidecar, testStandaloneBootstrap)
 
 	if deployment == nil {
 		t.Fatal("generateDeployment() returned nil")
@@ -547,7 +485,11 @@ func TestGenerateService(t *testing.T) {
 		Spec: vllmv1alpha1.SemanticRouterSpec{},
 	}
 
-	svc := r.generateService(sr, "gateway-integration")
+	services := r.generateServices(sr, gatewayModeExternal, testStandaloneBootstrap)
+	if len(services) == 0 {
+		t.Fatal("generateServices() returned no Services")
+	}
+	svc := services[0]
 
 	if svc == nil {
 		t.Fatal("generateService() returned nil")
@@ -561,8 +503,8 @@ func TestGenerateService(t *testing.T) {
 		t.Errorf("expected namespace 'default', got '%s'", svc.Namespace)
 	}
 
-	if len(svc.Spec.Ports) != 3 {
-		t.Errorf("expected 3 ports, got %d", len(svc.Spec.Ports))
+	if len(svc.Spec.Ports) != 2 {
+		t.Errorf("expected 2 public ports, got %d", len(svc.Spec.Ports))
 	}
 }
 
@@ -698,7 +640,7 @@ func TestGenerateContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			containers := r.generateContainers(tt.sr, "gateway-integration")
+			containers := r.generateContainers(tt.sr, gatewayModeExternal, testStandaloneBootstrap)
 
 			if len(containers) != 1 {
 				t.Fatalf("expected 1 container, got %d", len(containers))
@@ -750,7 +692,7 @@ func TestGenerateVolumes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			volumes := r.generateVolumes(tt.sr, "gateway-integration")
+			volumes := r.generateVolumes(tt.sr, gatewayModeExternal)
 
 			if len(volumes) != tt.expectedVolume {
 				t.Errorf("expected %d volumes, got %d", tt.expectedVolume, len(volumes))
@@ -791,7 +733,8 @@ func TestReconcileService(t *testing.T) {
 	}
 
 	// Test service creation
-	err := r.reconcileService(context.Background(), sr, "gateway-integration")
+	desired := r.generateServices(sr, gatewayModeExternal, testStandaloneBootstrap)[0]
+	err := r.reconcileService(context.Background(), sr, desired)
 	if err != nil {
 		t.Fatalf("reconcileService() failed: %v", err)
 	}
@@ -803,8 +746,8 @@ func TestReconcileService(t *testing.T) {
 		t.Fatalf("service not found: %v", err)
 	}
 
-	if len(svc.Spec.Ports) != 3 {
-		t.Errorf("expected 3 ports, got %d", len(svc.Spec.Ports))
+	if len(svc.Spec.Ports) != 2 {
+		t.Errorf("expected 2 ports, got %d", len(svc.Spec.Ports))
 	}
 }
 
@@ -956,47 +899,6 @@ func TestReconcileServiceAccount(t *testing.T) {
 
 	if sa.Name != "test" {
 		t.Errorf("expected name 'test', got '%s'", sa.Name)
-	}
-}
-
-func TestReconcileConfigMap(t *testing.T) {
-	s := runtime.NewScheme()
-	_ = scheme.AddToScheme(s)
-	_ = vllmv1alpha1.AddToScheme(s)
-
-	sr := &vllmv1alpha1.SemanticRouter{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test",
-			Namespace: "default",
-		},
-		Spec: vllmv1alpha1.SemanticRouterSpec{},
-	}
-
-	cl := fake.NewClientBuilder().WithScheme(s).WithObjects(sr).Build()
-	r := &SemanticRouterReconciler{
-		Client: cl,
-		Scheme: s,
-	}
-
-	// Test configmap creation
-	err := r.reconcileConfigMap(context.Background(), sr)
-	if err != nil {
-		t.Fatalf("reconcileConfigMap() failed: %v", err)
-	}
-
-	// Verify configmap was created
-	cm := &corev1.ConfigMap{}
-	err = cl.Get(context.Background(), types.NamespacedName{Name: sr.Name + "-config", Namespace: sr.Namespace}, cm)
-	if err != nil {
-		t.Fatalf("configmap not found: %v", err)
-	}
-
-	if _, ok := cm.Data["config.yaml"]; !ok {
-		t.Error("expected config.yaml key in configmap")
-	}
-
-	if _, ok := cm.Data["tools_db.json"]; !ok {
-		t.Error("expected tools_db.json key in configmap")
 	}
 }
 

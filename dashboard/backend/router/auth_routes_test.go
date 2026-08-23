@@ -19,7 +19,7 @@ func TestWrapWithAuthFailsClosedWhenAuthUnavailable(t *testing.T) {
 	publicHit := false
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/api/router/config", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/api/router/management/v1/routing/models", func(w http.ResponseWriter, _ *http.Request) {
 		protectedHit = true
 		w.WriteHeader(http.StatusOK)
 	})
@@ -31,7 +31,7 @@ func TestWrapWithAuthFailsClosedWhenAuthUnavailable(t *testing.T) {
 	handler := wrapWithAuth(mux, nil) // nil => auth store failed to initialize
 
 	t.Run("protected route denied without executing handler", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/router/config", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/router/management/v1/routing/models", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
 

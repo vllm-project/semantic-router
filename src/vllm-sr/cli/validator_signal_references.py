@@ -30,7 +30,7 @@ def _validate_profile_signal_references(profile_name, routing):
 
     for decision in routing.decisions:
         field = (
-            f"recipes.{profile_name}.routing.decisions."
+            f"recipes.{profile_name}.document.decisions."
             f"{decision.name}.rules.conditions"
         )
         decision_context = f"Decision '{decision.name}' in recipe '{profile_name}'"

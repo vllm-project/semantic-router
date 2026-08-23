@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,7 +12,10 @@ from typing import Any
 import yaml
 from pydantic import ValidationError as PydanticValidationError
 
-from cli.config_migration import migrate_config_data
+from cli.config_contract import (
+    DEFAULT_BACKEND_DISPATCH,
+    DEFAULT_BACKEND_EGRESS_POLICY_FILE,
+)
 from cli.consts import DEFAULT_LISTENER_PORT
 from cli.models import UserConfig
 from cli.parser import ConfigParseError, load_config_file
@@ -20,6 +24,7 @@ from cli.validator import validate_user_config
 
 OPENCLAW_CONFIG_ENV = "OPENCLAW_CONFIG_PATH"
 SUPPORTED_OPENCLAW_API_PREFIXES = ("openai",)
+_ENV_REFERENCE = re.compile(r"^\$\{([A-Za-z_][A-Za-z0-9_]*)\}$")
 
 
 class ConfigImportError(RuntimeError):
@@ -68,6 +73,12 @@ def import_config_command(
     imported_models = collect_openclaw_models(source_data)
     resolved_target = Path(target_path).expanduser()
     target = load_or_bootstrap_target_config(resolved_target)
+
+    if is_managed_config(target):
+        raise ConfigImportError(
+            "Managed configuration is published through the Management API; "
+            "config import will not rewrite a mounted runtime bootstrap file."
+        )
 
     merge_openclaw_models_into_target(target, imported_models)
     rewritten_base_url = build_listener_base_url(target)
@@ -264,13 +275,17 @@ def load_or_bootstrap_target_config(target_path: Path) -> dict[str, Any]:
             raise ConfigImportError(
                 f"Failed to read target config {target_path}: {exc}"
             ) from exc
-        target = migrate_config_data(data)
+        target = data
     else:
         target = build_minimal_target_config()
 
     if not isinstance(target, dict):
         raise ConfigImportError(
             f"Target config {target_path} did not resolve to a mapping."
+        )
+    if target.get("version") != "v0.4":
+        raise ConfigImportError(
+            f"Target config {target_path} must use the v0.4 authoring contract."
         )
 
     normalize_target_shape(target)
@@ -281,16 +296,16 @@ def build_minimal_target_config() -> dict[str, Any]:
     """Build the minimal canonical config used when the target does not exist."""
 
     return {
-        "version": "v0.3",
+        "version": "v0.4",
         "listeners": [default_listener()],
-        "providers": {
-            "defaults": {},
-            "models": [],
-        },
-        "routing": {
-            "modelCards": [],
-            "signals": {},
-            "decisions": [],
+        "models": [],
+        "recipes": [],
+        "entrypoints": [],
+        "global": {
+            "services": {
+                "backend_dispatch": dict(DEFAULT_BACKEND_DISPATCH),
+                "backend_egress": {"policy_file": DEFAULT_BACKEND_EGRESS_POLICY_FILE},
+            }
         },
     }
 
@@ -312,106 +327,151 @@ def merge_openclaw_models_into_target(
 ) -> None:
     """Merge imported models into the canonical target config."""
 
-    providers = target["providers"]
-    routing = target["routing"]
-    provider_models = providers["models"]
-    routing_cards = routing["modelCards"]
-    defaults = providers["defaults"]
-
-    provider_models_by_name = {
+    models = target["models"]
+    models_by_name = {
         str(model.get("name", "")).strip(): model
-        for model in provider_models
+        for model in models
         if isinstance(model, dict) and str(model.get("name", "")).strip()
-    }
-    routing_cards_by_name = {
-        str(card.get("name", "")).strip(): card
-        for card in routing_cards
-        if isinstance(card, dict) and str(card.get("name", "")).strip()
     }
 
     for imported_model in imported_models:
-        provider_model = provider_models_by_name.get(imported_model.logical_name)
-        if provider_model is None:
-            provider_model = {"name": imported_model.logical_name}
-            provider_models.append(provider_model)
-            provider_models_by_name[imported_model.logical_name] = provider_model
-
-        provider_model["provider_model_id"] = imported_model.source_model_id
-        provider_model["api_format"] = provider_model.get("api_format") or "openai"
-
-        external_model_ids = provider_model.get("external_model_ids")
-        if not isinstance(external_model_ids, dict):
-            external_model_ids = {}
-            provider_model["external_model_ids"] = external_model_ids
-        external_model_ids["openai"] = imported_model.source_model_id
-
-        provider_model["backend_refs"] = [build_backend_ref(imported_model)]
-
-        routing_card = routing_cards_by_name.get(imported_model.logical_name)
-        if routing_card is None:
-            routing_card = {"name": imported_model.logical_name}
-            routing_cards.append(routing_card)
-            routing_cards_by_name[imported_model.logical_name] = routing_card
-
-        routing_card["name"] = imported_model.logical_name
-        context_window = positive_int(imported_model.model_config.get("contextWindow"))
-        if context_window is not None:
-            routing_card["context_window_size"] = context_window
-        capabilities = build_capabilities(imported_model.model_config)
-        if capabilities:
-            routing_card["capabilities"] = capabilities
-        routing_card.setdefault(
-            "description",
-            f"Imported from OpenClaw provider '{imported_model.provider_key}'.",
-        )
-
-    provider_names = [
-        str(model.get("name", "")).strip()
-        for model in provider_models
-        if isinstance(model, dict) and str(model.get("name", "")).strip()
-    ]
-    default_model = str(defaults.get("default_model", "") or "").strip()
-    if not default_model or default_model not in provider_names:
-        defaults["default_model"] = imported_models[0].logical_name
-
-    decisions = routing["decisions"]
-    if not decisions:
-        routing["decisions"] = [build_default_decision(defaults["default_model"])]
+        compiled = build_model(target, imported_model)
+        current = models_by_name.get(imported_model.logical_name)
+        if current is None:
+            models.append(compiled)
+        else:
+            current.clear()
+            current.update(compiled)
+        models_by_name[imported_model.logical_name] = compiled
+        ensure_import_entrypoint(target, compiled)
 
 
-def build_backend_ref(imported_model: ImportedModel) -> dict[str, Any]:
-    """Build one canonical backend ref from an OpenClaw provider definition."""
+def build_model(
+    target: dict[str, Any], imported_model: ImportedModel
+) -> dict[str, Any]:
+    """Translate one external provider value into readable Model authoring YAML."""
 
-    backend_ref: dict[str, Any] = {
-        "name": imported_model.provider_key,
-        "base_url": str(
-            imported_model.provider_config.get("baseUrl", "") or ""
-        ).strip(),
-        "provider": "openai",
-        "weight": 1,
+    connection = build_connection(target, imported_model)
+    card: dict[str, Any] = {
+        "capabilities": build_capabilities(imported_model.model_config),
+    }
+    description = str(imported_model.model_config.get("name", "") or "").strip()
+    if description:
+        card["description"] = description
+    context_window = positive_int(imported_model.model_config.get("contextWindow"))
+    if context_window is not None:
+        card["context_window_size"] = context_window
+    return {
+        "name": imported_model.logical_name,
+        "card": card,
+        "connections": [connection],
     }
 
+
+def build_connection(
+    target: dict[str, Any], imported_model: ImportedModel
+) -> dict[str, Any]:
+    """Build one concise OpenAI-compatible Provider Integration binding."""
+
+    raw_base_url = str(imported_model.provider_config.get("baseUrl", "") or "").strip()
+    connection: dict[str, Any] = {
+        "provider": "openai-compatible",
+        "interface": "chat",
+        "endpoint": raw_base_url,
+        "model": imported_model.source_model_id,
+    }
+    credential_ref = import_credential_ref(target, imported_model)
+    if credential_ref:
+        connection["credential"] = credential_ref
+    return connection
+
+
+def import_credential_ref(
+    target: dict[str, Any], imported_model: ImportedModel
+) -> str | None:
+    """Create a named environment-backed credential or reject plaintext."""
+
     api_key = str(imported_model.provider_config.get("apiKey", "") or "").strip()
-    if api_key and api_key != "not-needed":
-        backend_ref["api_key"] = api_key
-        backend_ref["auth_header"] = "Authorization"
-        backend_ref["auth_prefix"] = "Bearer"
+    if not api_key or api_key == "not-needed":
+        return None
+    match = _ENV_REFERENCE.fullmatch(api_key)
+    if match is None:
+        raise ConfigImportError(
+            f"OpenClaw provider '{imported_model.provider_key}' contains a plaintext "
+            "API key. Replace it with an environment reference such as "
+            "${PROVIDER_API_KEY} before importing."
+        )
+    credential_name = re.sub(
+        r"[^a-z0-9_-]+", "_", f"{imported_model.provider_key}_credential".lower()
+    ).strip("_")
+    global_config = target.setdefault("global", {})
+    services = global_config.setdefault("services", {})
+    credentials = services.setdefault("backend_credentials", {})
+    definition = {
+        "credential_adapter_id": "bearer",
+        "secret_env": match.group(1),
+    }
+    existing = credentials.get(credential_name)
+    if existing not in (None, definition):
+        raise ConfigImportError(
+            f"Backend credential name collision for '{credential_name}'."
+        )
+    credentials[credential_name] = definition
+    return credential_name
 
-    headers = imported_model.provider_config.get("headers")
-    if isinstance(headers, dict):
-        extra_headers = {
-            str(key): str(value)
-            for key, value in headers.items()
-            if value is not None and str(key)
-        }
-        if extra_headers:
-            backend_ref["extra_headers"] = extra_headers
 
-    return backend_ref
+def ensure_import_entrypoint(target: dict[str, Any], model: dict[str, Any]) -> None:
+    """Make each imported Model directly callable through a shared passthrough Recipe."""
+
+    recipe_name = "openclaw-passthrough"
+    decision_name = "route"
+    recipes = target["recipes"]
+    if not any(
+        isinstance(recipe, dict) and recipe.get("name") == recipe_name
+        for recipe in recipes
+    ):
+        recipes.append(
+            {
+                "name": recipe_name,
+                "description": "Direct model routing for imported endpoints.",
+                "document": {
+                    "signals": {},
+                    "projections": {},
+                    "decisions": [
+                        {
+                            "name": decision_name,
+                            "description": "Route every request.",
+                            "priority": 100,
+                            "rules": {"operator": "AND", "conditions": []},
+                        }
+                    ],
+                },
+            }
+        )
+
+    entrypoints = target["entrypoints"]
+    public_name = imported_public_model_name(model["name"])
+    compiled = {
+        "name": public_name,
+        "recipe": recipe_name,
+        "assignments": {decision_name: {"models": [{"model": model["name"]}]}},
+    }
+    for index, entrypoint in enumerate(entrypoints):
+        if isinstance(entrypoint, dict) and entrypoint.get("name") == public_name:
+            entrypoints[index] = compiled
+            break
+    else:
+        entrypoints.append(compiled)
+
+
+def imported_public_model_name(logical_name: str) -> str:
+    """Return the request-facing alias without colliding with physical Models."""
+
+    return f"vllm-sr/imported/{logical_name}"
 
 
 def build_capabilities(model_config: dict[str, Any]) -> list[str]:
-    """Map OpenClaw model metadata into routing.modelCards capabilities."""
+    """Map external model metadata into canonical Model capabilities."""
 
     capabilities: list[str] = []
     inputs = model_config.get("input")
@@ -438,25 +498,6 @@ def build_capabilities(model_config: dict[str, Any]) -> list[str]:
         seen.add(capability)
         unique_capabilities.append(capability)
     return unique_capabilities
-
-
-def build_default_decision(default_model: str) -> dict[str, Any]:
-    """Build the catch-all decision used for a bootstrapped target."""
-
-    return {
-        "name": "openclaw-import-default",
-        "description": "Catch-all route bootstrapped from OpenClaw import.",
-        "priority": 100,
-        "rules": {
-            "operator": "AND",
-            "conditions": [],
-        },
-        "modelRefs": [
-            {
-                "model": default_model,
-            }
-        ],
-    }
 
 
 def build_listener_base_url(target: dict[str, Any]) -> str:
@@ -615,6 +656,15 @@ def collect_provider_entries(
         raise ConfigImportError(
             f"OpenClaw provider '{provider_key}' is missing baseUrl."
         )
+    headers = provider_config.get("headers")
+    if isinstance(headers, dict) and any(
+        value is not None and str(key).strip() for key, value in headers.items()
+    ):
+        raise ConfigImportError(
+            f"OpenClaw provider '{provider_key}' uses custom headers. "
+            "Install a Provider Integration for that protocol instead of "
+            "embedding transport details in Model YAML."
+        )
 
     models = provider_config.get("models")
     if models in (None, []):
@@ -656,33 +706,32 @@ def validate_provider_model(provider_key: str, model: Any) -> str:
 
 
 def normalize_target_shape(target: dict[str, Any]) -> None:
-    """Normalize a loaded target into the canonical blocks required by import."""
-
-    target["version"] = "v0.3"
-    target.pop("setup", None)
+    """Populate omitted v0.4 collection defaults required by import."""
 
     listeners = ensure_list(target, "listeners")
     if not listeners:
         target["listeners"] = [default_listener()]
 
-    providers = ensure_mapping(target, "providers")
-    ensure_mapping(providers, "defaults")
-    ensure_list(providers, "models")
+    ensure_list(target, "models")
+    ensure_list(target, "recipes")
+    ensure_list(target, "entrypoints")
+    global_config = target.setdefault("global", {})
+    services = global_config.setdefault("services", {})
+    services.setdefault("backend_dispatch", dict(DEFAULT_BACKEND_DISPATCH))
+    services.setdefault(
+        "backend_egress",
+        {"policy_file": DEFAULT_BACKEND_EGRESS_POLICY_FILE},
+    )
 
-    routing = ensure_mapping(target, "routing")
-    ensure_list(routing, "modelCards")
-    ensure_mapping(routing, "signals")
-    ensure_list(routing, "decisions")
 
+def is_managed_config(target: dict[str, Any]) -> bool:
+    """Return whether a manifest is only a managed-mode bootstrap document."""
 
-def ensure_mapping(parent: dict[str, Any], key: str) -> dict[str, Any]:
-    """Ensure a nested mapping key exists."""
-
-    value = parent.get(key)
-    if not isinstance(value, dict):
-        value = {}
-        parent[key] = value
-    return value
+    global_config = target.get("global")
+    if not isinstance(global_config, dict):
+        return False
+    control_plane = global_config.get("control_plane")
+    return isinstance(control_plane, dict) and control_plane.get("mode") == "managed"
 
 
 def ensure_list(parent: dict[str, Any], key: str) -> list[Any]:
@@ -711,19 +760,17 @@ def collect_rewrite_changes(
             isinstance(model, dict)
             and str(model.get("id", "") or "").strip() == imported_model.source_model_id
         ):
-            if imported_model.logical_name != imported_model.source_model_id:
-                old_ref = (
-                    f"{imported_model.provider_key}/{imported_model.source_model_id}"
+            public_name = imported_public_model_name(imported_model.logical_name)
+            old_ref = f"{imported_model.provider_key}/{imported_model.source_model_id}"
+            new_ref = f"{imported_model.provider_key}/{public_name}"
+            replacements[old_ref] = new_ref
+            renamed_model_ids.append(
+                (
+                    imported_model.provider_key,
+                    imported_model.source_model_id,
+                    public_name,
                 )
-                new_ref = f"{imported_model.provider_key}/{imported_model.logical_name}"
-                replacements[old_ref] = new_ref
-                renamed_model_ids.append(
-                    (
-                        imported_model.provider_key,
-                        imported_model.source_model_id,
-                        imported_model.logical_name,
-                    )
-                )
+            )
             return
 
 

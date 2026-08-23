@@ -27,7 +27,7 @@ func validateGlobalSemanticCacheContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	return validateCacheThreshold(cfg.SemanticCache.SimilarityThreshold, "global semantic_cache")
+	return validateCacheThreshold(cfg.SimilarityThreshold, "global semantic_cache")
 }
 
 func validateDecisionSemanticCacheContracts(cfg *RouterConfig) error {

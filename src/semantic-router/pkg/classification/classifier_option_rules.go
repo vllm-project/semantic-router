@@ -66,14 +66,14 @@ func (b *classifierOptionBuilder) buildEmbeddingClassifierOption() (option, erro
 }
 
 func (b *classifierOptionBuilder) embeddingProviderForRules() (embedding.Provider, error) {
-	if b.cfg == nil || !b.cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if b.cfg == nil || !b.cfg.UsesRemoteEmbeddingBackend() {
 		return nil, nil
 	}
 	b.providerInitOnce.Do(func() {
 		b.provider, b.providerErr = embedding.NewProvider(b.cfg.EmbeddingModels, embedding.ProviderOptions{})
 		if b.providerErr != nil {
 			logging.ComponentErrorEvent("classifier", "embedding_provider_create_failed", map[string]interface{}{
-				"backend": b.cfg.EmbeddingModels.EmbeddingBackend(),
+				"backend": b.cfg.EmbeddingBackend(),
 				"error":   b.providerErr.Error(),
 			})
 		}

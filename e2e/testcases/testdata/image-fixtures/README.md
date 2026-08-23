@@ -35,8 +35,9 @@ The prompts are provenance records, not golden model outputs:
   whiteboard, and no people or company signage.
 
 Regeneration can change embeddings even when the prompt is unchanged. Treat a
-replacement as a fixture change: run the multimodal-routing E2E profile and
-review all nine positive/cross-category cases.
+replacement as a fixture change: run the image embedding-signal test case in a
+profile whose immutable manifest declares those rules, then review all nine
+positive/cross-category cases.
 
 ## Adding or replacing a fixture
 

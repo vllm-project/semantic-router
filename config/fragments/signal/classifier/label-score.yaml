@@ -12,7 +12,7 @@ global:
         llm_model_name: gpt-4.1-mini
         llm_timeout_seconds: 5
 
-routing:
+document:
   signals:
     classifiers:
       - name: tool-risk

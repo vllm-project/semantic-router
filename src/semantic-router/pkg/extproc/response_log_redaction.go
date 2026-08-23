@@ -20,7 +20,7 @@ const (
 // sensitiveHeaderKeys lists header names whose values are credentials and must
 // never be written to logs. The credential resolver injects the upstream
 // provider key under one of these (Authorization for OpenAI, x-api-key for
-// Anthropic, custom names via provider profiles), so a verbatim dump of the
+// Anthropic, or a backend-specific custom name), so a verbatim dump of the
 // ext_proc header mutation would otherwise leak it (CWE-532).
 var sensitiveHeaderKeys = map[string]bool{
 	"authorization":       true,

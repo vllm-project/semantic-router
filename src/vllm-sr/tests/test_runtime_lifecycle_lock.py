@@ -144,3 +144,16 @@ def test_runtime_lifecycle_lock_rejects_symlinked_directory(tmp_path: Path):
         acquire_runtime_lifecycle_lock(
             runtime="docker", stack_name="audit-a", lock_root=symlink_root
         )
+
+
+def test_runtime_lifecycle_lock_rejects_user_owned_writable_ancestor(tmp_path: Path):
+    writable_ancestor = tmp_path / "shared"
+    writable_ancestor.mkdir(mode=0o770)
+    writable_ancestor.chmod(0o770)
+
+    with pytest.raises(RuntimeLifecycleLockError, match="not safely owned"):
+        acquire_runtime_lifecycle_lock(
+            runtime="docker",
+            stack_name="audit-a",
+            lock_root=writable_ancestor / "runtime" / "locks",
+        )

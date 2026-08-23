@@ -3,4 +3,3 @@
 resources:
 - bases/semantic-router-operator.clusterserviceversion.yaml
 - ../default
-- ../samples

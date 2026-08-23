@@ -32,11 +32,8 @@ export function sanitizeAuthTransitionTarget(
   }
 }
 
-export function resolvePostAuthTarget(setupMode: boolean, from?: string | null): string {
-  const fallback = setupMode ? '/setup' : '/dashboard'
-  const requestedTarget = setupMode ? '/setup' : from ?? '/dashboard'
-
-  return sanitizeAuthTransitionTarget(requestedTarget, fallback)
+export function resolvePostAuthTarget(from?: string | null): string {
+  return sanitizeAuthTransitionTarget(from ?? '/dashboard', '/dashboard')
 }
 
 export function buildAuthTransitionPath(target: string): string {

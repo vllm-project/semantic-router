@@ -25,7 +25,7 @@ func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
 		return fmt.Errorf("prompt_guard: variant %q and protocol %q are mutually exclusive - "+
 			"variant selects a local model, protocol selects a remote one", cfg.Variant, cfg.Protocol)
 	}
-	if err := cfg.ClassifierOnErrorConfig.ValidateOnError(); err != nil {
+	if err := cfg.ValidateOnError(); err != nil {
 		return fmt.Errorf("prompt_guard.%w", err)
 	}
 	if cfg.Protocol != "" {

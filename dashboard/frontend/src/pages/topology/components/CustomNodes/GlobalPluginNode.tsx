@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { GlobalPluginConfig } from '../../types'
 import { GLOBAL_PLUGIN_DISPLAY } from '../../constants'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './CustomNodes.module.css'
 
 interface GlobalPluginNodeData {
@@ -14,7 +15,7 @@ interface GlobalPluginNodeData {
 // Get status text based on plugin type and mode
 function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: string } {
   if (!plugin.enabled) {
-    return { text: '✗ Disabled', tooltip: 'Plugin is disabled' }
+    return { text: 'Disabled', tooltip: 'Plugin is disabled' }
   }
 
   // PII Detection: Model loaded but requires decision-level activation
@@ -22,7 +23,7 @@ function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: s
     const mode = plugin.config?.mode as string
     if (mode === 'model_loaded') {
       return {
-        text: '◐ Model Loaded',
+        text: 'Model loaded',
         tooltip: 'Model loaded. Detection requires pii plugin in decision.',
       }
     }
@@ -31,7 +32,7 @@ function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: s
   // Jailbreak: Active for all requests (global AND decision)
   if (plugin.type === 'prompt_guard') {
     return {
-      text: `✓ Active`,
+      text: 'Active',
       tooltip: `Threshold: ${plugin.threshold || 0.7}. Can be overridden per-decision.`,
     }
   }
@@ -40,24 +41,25 @@ function getPluginStatus(plugin: GlobalPluginConfig): { text: string; tooltip: s
   if (plugin.type === 'response_cache') {
     const threshold = plugin.config?.similarity_threshold as number
     return {
-      text: `✓ Active`,
+      text: 'Active',
       tooltip: `Threshold: ${threshold || 0.85}. Can be overridden per-decision.`,
     }
   }
 
-  return { text: `✓ ${plugin.modelId || 'Enabled'}`, tooltip: '' }
+  return { text: plugin.modelId || 'Enabled', tooltip: '' }
 }
 
 export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data }) => {
   const { plugin, isHighlighted } = data
   const display = GLOBAL_PLUGIN_DISPLAY[plugin.type] || {
-    icon: '🔌',
+    icon: '',
     label: plugin.type,
     color: '#607D8B',
   }
 
   const status = getPluginStatus(plugin)
-  const isPartiallyActive = plugin.type === 'pii_detection' && plugin.config?.mode === 'model_loaded'
+  const isPartiallyActive =
+    plugin.type === 'pii_detection' && plugin.config?.mode === 'model_loaded'
 
   return (
     <div
@@ -73,13 +75,11 @@ export const GlobalPluginNode = memo<NodeProps<GlobalPluginNodeData>>(({ data })
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.pluginHeader}>
-        <span className={styles.pluginIcon}>{display.icon}</span>
+        <ProductIcon className={styles.pluginIcon} name="plug" aria-hidden="true" />
         <span className={styles.pluginTitle}>{display.label}</span>
       </div>
 
-      <div className={styles.pluginStatus}>
-        {status.text}
-      </div>
+      <div className={styles.pluginStatus}>{status.text}</div>
 
       <Handle type="source" position={Position.Right} />
     </div>

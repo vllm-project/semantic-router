@@ -33,7 +33,6 @@ PRODUCTION_RELEASE_IMAGES = (
     "vllm-sr-rocm",
 )
 NIGHTLY_IMAGES = (
-    "anthropic-shim",
     *PRODUCTION_RELEASE_IMAGES,
     "llm-katan",
     "vllm-sr-sim",
@@ -44,8 +43,6 @@ _MANUAL_PROFILE_PATHS = profile_paths("manual")
 NON_PR_E2E_RULES = {
     name: _MANUAL_PROFILE_PATHS[name]
     for name in (
-        "anthropic-shim",
-        "response-api",
         "response-api-redis",
         "response-api-redis-cluster",
     )
@@ -230,15 +227,17 @@ def _detect_direct_domains(
         ".github/actions/**",
         "tools/ci/**",
     )
-    # The apiserver API reference and OpenAPI JSON are generated from the route
-    # catalog by `make api-docs-generate`. Editing either artifact by hand is
-    # classified as docs-only, which would otherwise skip the `make
-    # api-docs-check` drift gate that keeps them faithful to the catalog.
+    # The listener and Management API artifacts are generated from Router route
+    # registries. Editing a website artifact by hand would otherwise classify
+    # as docs-only and skip the drift gates that keep clients faithful to them.
     domains["api_docs_generated"] = any_matches(
         changed,
         "website/docs/api/apiserver.md",
         "website/static/openapi/apiserver/**",
+        "website/static/openapi/management/**",
+        "dashboard/frontend/src/generated/managementApiContract.ts",
         "tools/openapi-gen/**",
+        "tools/management-api-gen/**",
     )
     domains["cli_source"] = any(
         is_vllm_sr_product_source(path) for path in product_changed
@@ -342,7 +341,6 @@ def select_image_candidates(
     append_unique(publish_images, *variant_publish)
     fixture_rules = (
         ("e2e/testing/llm-katan/**", "llm-katan"),
-        ("e2e/testing/anthropic-shim/**", "anthropic-shim"),
         (".github/workflows/docker-validate.yml", "vllm-sr"),
     )
     for pattern, image in fixture_rules:

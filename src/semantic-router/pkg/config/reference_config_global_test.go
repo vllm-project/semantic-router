@@ -3,26 +3,11 @@ package config
 import "reflect"
 
 func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]interface{}) {
-	modelSelection := mustMapAt(t, router, "model_selection")
 	learning := mustMapAt(t, router, "learning")
 
 	assertMapCoversStructFields(t, router, reflect.TypeOf(CanonicalRouterGlobal{}), "global.router")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "streamed_body"), reflect.TypeOf(CanonicalStreamedBody{}), "global.router.streamed_body")
-	assertMapCoversStructFields(t, mustMapAt(t, router, "skip_processing"), reflect.TypeOf(SkipProcessingConfig{}), "global.router.skip_processing")
-	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")
-	assertReferenceConfigRouterSelectionCoverage(t, modelSelection)
 	assertReferenceConfigRouterLearningCoverage(t, learning)
-}
-
-func assertReferenceConfigRouterSelectionCoverage(t testingT, modelSelection map[string]interface{}) {
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml"), reflect.TypeOf(MLSelectionConfig{}), "global.router.model_selection.ml")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "global.router.model_selection.router_dc")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "global.router.model_selection.automix")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "global.router.model_selection.hybrid")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "knn"), reflect.TypeOf(MLKNNConfig{}), "global.router.model_selection.ml.knn")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "kmeans"), reflect.TypeOf(MLKMeansConfig{}), "global.router.model_selection.ml.kmeans")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "svm"), reflect.TypeOf(MLSVMConfig{}), "global.router.model_selection.ml.svm")
-	assertMapCoversStructFields(t, mustMapAt(t, modelSelection, "ml", "mlp"), reflect.TypeOf(MLMLPConfig{}), "global.router.model_selection.ml.mlp")
 }
 
 func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string]interface{}) {
@@ -40,19 +25,41 @@ func assertReferenceConfigRouterLearningCoverage(t testingT, learning map[string
 }
 
 func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]interface{}) {
-	assertMapCoversStructFields(t, services, reflect.TypeOf(CanonicalServiceGlobal{}), "global.services")
+	assertMapCoversStructFields(
+		t,
+		services,
+		reflect.TypeOf(CanonicalServiceGlobal{}),
+		"global.services",
+		"access",
+		"backend_credentials",
+		"backend_egress",
+	)
 	assertReferenceConfigAPIServiceCoverage(t, mustMapAt(t, services, "api"))
 	assertReferenceConfigResponseAPIServiceCoverage(t, mustMapAt(t, services, "response_api"))
+	assertMapCoversStructFields(t, mustMapAt(t, services, "agent"), reflect.TypeOf(AgentServiceConfig{}), "global.services.agent")
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
-	assertReferenceConfigAuthzCoverage(t, mustMapAt(t, services, "authz"))
-	assertReferenceConfigRateLimitCoverage(t, mustMapAt(t, services, "ratelimit"))
 	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
 }
 
 func assertReferenceConfigManagementAPICoverage(t testingT, managementAPI map[string]interface{}) {
-	assertMapCoversStructFields(t, managementAPI, reflect.TypeOf(ManagementAPIConfig{}), "global.services.management_api")
-	assertMapCoversStructFields(t, mustMapAt(t, managementAPI, "auth"), reflect.TypeOf(ManagementAPIAuthConfig{}), "global.services.management_api.auth")
+	assertMapCoversStructFields(t, managementAPI, reflect.TypeOf(ManagementAPIConfig{}), "global.services.management_api", "tls")
+	assertMapCoversStructFields(
+		t,
+		mustMapAt(t, managementAPI, "auth"),
+		reflect.TypeOf(ManagementAPIAuthConfig{}),
+		"global.services.management_api.auth",
+		"token_signing_keyring_file",
+		"token_signing_keyring_env",
+		"service_account_hmac_keyring_file",
+		"service_account_hmac_keyring_env",
+		"invitation_hmac_keyring_file",
+		"invitation_hmac_keyring_env",
+		"response_kek_keyring_file",
+		"response_kek_keyring_env",
+		"bootstrap",
+		"recovery",
+	)
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, managementAPI, "auth", "tokens"),
@@ -128,32 +135,6 @@ func assertReferenceConfigObservabilityCoverage(t testingT, observability map[st
 	)
 }
 
-func assertReferenceConfigAuthzCoverage(t testingT, authz map[string]interface{}) {
-	assertMapCoversStructFields(t, authz, reflect.TypeOf(AuthzConfig{}), "global.services.authz")
-	assertMapCoversStructFields(t, mustMapAt(t, authz, "identity"), reflect.TypeOf(IdentityConfig{}), "global.services.authz.identity")
-	assertSliceUnionCoversStructFields(
-		t,
-		mustSliceAt(t, authz, "providers"),
-		reflect.TypeOf(AuthzProviderConfig{}),
-		"global.services.authz.providers",
-	)
-}
-
-func assertReferenceConfigRateLimitCoverage(t testingT, ratelimit map[string]interface{}) {
-	providers := mustSliceAt(t, ratelimit, "providers")
-	rules := collectNestedSliceItems(t, providers, "rules", "global.services.ratelimit.providers")
-
-	assertMapCoversStructFields(t, ratelimit, reflect.TypeOf(RateLimitConfig{}), "global.services.ratelimit")
-	assertSliceUnionCoversStructFields(t, providers, reflect.TypeOf(RateLimitProviderConfig{}), "global.services.ratelimit.providers")
-	assertSliceUnionCoversStructFields(t, rules, reflect.TypeOf(RateLimitRule{}), "global.services.ratelimit.providers[].rules")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectChildMapsFromSlice(t, rules, "match", "global.services.ratelimit.providers[].rules"),
-		reflect.TypeOf(RateLimitMatch{}),
-		"global.services.ratelimit.providers[].rules[].match",
-	)
-}
-
 func assertReferenceConfigRouterReplayCoverage(t testingT, routerReplay map[string]interface{}) {
 	assertMapCoversStructFields(t, routerReplay, reflect.TypeOf(RouterReplayConfig{}), "global.services.router_replay")
 	assertMapCoversStructFields(t, mustMapAt(t, routerReplay, "redis"), reflect.TypeOf(RouterReplayRedisConfig{}), "global.services.router_replay.redis")
@@ -163,7 +144,7 @@ func assertReferenceConfigRouterReplayCoverage(t testingT, routerReplay map[stri
 }
 
 func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]interface{}) {
-	assertMapCoversStructFields(t, stores, reflect.TypeOf(CanonicalStoreGlobal{}), "global.stores")
+	assertMapCoversStructFields(t, stores, reflect.TypeOf(CanonicalStoreGlobal{}), "global.stores", "access", "access_runtime")
 	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "response_cache"))
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"os"
-	"regexp"
 	"strings"
 )
 
@@ -27,23 +26,6 @@ func managedContainerNameForService(service string) string {
 	default:
 		return defaultRouterContainerName
 	}
-}
-
-func managedContainerNameForStorage(backend string) string {
-	stack := normalizedManagedStackName(os.Getenv("VLLM_SR_STACK_NAME"))
-	if stack == "" || stack == "vllm-sr" {
-		return "vllm-sr-" + backend
-	}
-	return stack + "-vllm-sr-" + backend
-}
-
-func normalizedManagedStackName(raw string) string {
-	value := strings.TrimSpace(raw)
-	if value == "" {
-		return "vllm-sr"
-	}
-	value = regexp.MustCompile(`[^A-Za-z0-9_.-]+`).ReplaceAllString(value, "-")
-	return strings.Trim(value, "._-")
 }
 
 func managedDashboardContainerName() string {
@@ -114,16 +96,23 @@ func managedRuntimeContainerStatus() string {
 }
 
 func managedEnvoyReadyURL() string {
+	return managedEnvoyReadyURLForEnvironment(isRunningInContainer())
+}
+
+func managedEnvoyReadyURLForEnvironment(inContainer bool) string {
 	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_ADMIN_URL")); candidate != "" {
 		return strings.TrimRight(candidate, "/") + "/ready"
 	}
 
-	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_URL")); candidate != "" {
-		return strings.TrimRight(candidate, "/") + "/ready"
+	// The public listener serves routed inference traffic; Envoy readiness is
+	// exposed only by the admin listener. Split dashboard deployments share the
+	// runtime network, so resolve that admin listener by its managed container.
+	if managedRuntimeUsesSplitContainers() && inContainer {
+		return "http://" + managedContainerNameForService("envoy") + ":9901/ready"
 	}
 
-	if managedRuntimeUsesSplitContainers() && isRunningInContainer() {
-		return ""
+	if candidate := strings.TrimSpace(os.Getenv("TARGET_ENVOY_URL")); candidate != "" {
+		return strings.TrimRight(candidate, "/") + "/ready"
 	}
 
 	return "http://localhost:8801/ready"

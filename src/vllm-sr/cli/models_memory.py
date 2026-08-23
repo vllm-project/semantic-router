@@ -46,7 +46,7 @@ class MemoryConfig(BaseModel):
 
     Query rewriting and fact extraction are enabled by adding external_models
     with role="memory_rewrite" or role="memory_extraction".
-    See external_models configuration in providers section for details.
+    See ``global.model_catalog.external`` for classifier-only external models.
 
     The embedding_model is auto-detected from embedding_models if not specified.
     Priority: bert > mmbert > multimodal > qwen3 > gemma

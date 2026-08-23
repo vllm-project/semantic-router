@@ -41,7 +41,9 @@ func TestReconcileRouteSkipsCleanupOnStandardKubernetes(t *testing.T) {
 
 	cl := fake.NewClientBuilder().WithScheme(s).Build()
 
-	if err := reconcileRoute(context.Background(), cl, s, sr, false); err != nil {
+	if err := reconcileRoute(
+		context.Background(), cl, s, sr, false, gatewayModeSidecar, controlPlaneModeStandalone,
+	); err != nil {
 		t.Fatalf("reconcileRoute() failed on standard Kubernetes without Route API: %v", err)
 	}
 }

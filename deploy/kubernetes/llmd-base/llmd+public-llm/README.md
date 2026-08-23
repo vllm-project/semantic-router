@@ -26,7 +26,7 @@ Review these files together:
 
 | File | Purpose |
 | --- | --- |
-| `config.yaml.openai` | Router model cards, provider metadata, and decisions. |
+| `config.yaml.openai` | Canonical Models, Recipe decisions, and Entrypoint assignments. |
 | `svc-openai.yaml` | Kubernetes `ExternalName` Service for `api.openai.com`. |
 | `svc-entry-openai.yaml` | Istio egress registration. |
 | `dest-rule-openai.yaml` | TLS origination for the hosted endpoint. |

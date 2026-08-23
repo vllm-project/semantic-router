@@ -1,165 +1,98 @@
 package extproc
 
 import (
-	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestRetrieveFromOpenAI_DirectSearch(t *testing.T) {
-	// This is a unit test structure - actual implementation would require
-	// mocking the OpenAI API client or using a test server
-	// For now, we test the configuration parsing and workflow mode selection
-
-	ragConfig := &config.RAGPluginConfig{
-		Backend: "openai",
-		BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
-			VectorStoreID: "vs_test123",
-			APIKey:        "test-key",
-			WorkflowMode:  "direct_search",
-			MaxNumResults: intPtr(10),
-		}),
+func TestOpenAIRAGConfigurationModes(t *testing.T) {
+	tests := []struct {
+		name string
+		mode string
+	}{
+		{name: "direct search", mode: "direct_search"},
+		{name: "tool based", mode: "tool_based"},
 	}
-
-	openaiConfig, err := ragConfig.OpenAIBackendConfig()
-	if err != nil {
-		t.Fatalf("Failed to decode BackendConfig: %v", err)
-	}
-
-	if openaiConfig.VectorStoreID != "vs_test123" {
-		t.Errorf("Expected vector store ID 'vs_test123', got '%s'", openaiConfig.VectorStoreID)
-	}
-	if openaiConfig.WorkflowMode != "direct_search" {
-		t.Errorf("Expected workflow mode 'direct_search', got '%s'", openaiConfig.WorkflowMode)
-	}
-	if openaiConfig.MaxNumResults == nil || *openaiConfig.MaxNumResults != 10 {
-		t.Errorf("Expected MaxNumResults 10, got %v", openaiConfig.MaxNumResults)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			ragConfig := &config.RAGPluginConfig{
+				Backend: "openai",
+				BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
+					VectorStoreID: "vs_test123",
+					WorkflowMode:  test.mode,
+					MaxNumResults: intPtr(10),
+				}),
+			}
+			got, err := ragConfig.OpenAIBackendConfig()
+			if err != nil {
+				t.Fatalf("decode backend config: %v", err)
+			}
+			if got.VectorStoreID != "vs_test123" || got.WorkflowMode != test.mode || got.MaxNumResults == nil || *got.MaxNumResults != 10 {
+				t.Fatalf("unexpected backend config: %+v", got)
+			}
+		})
 	}
 }
 
-func TestRetrieveFromOpenAI_ToolBased(t *testing.T) {
-	ragConfig := &config.RAGPluginConfig{
-		Backend: "openai",
-		BackendConfig: config.MustStructuredPayload(&config.OpenAIRAGConfig{
-			VectorStoreID: "vs_test123",
-			APIKey:        "test-key",
-			WorkflowMode:  "tool_based",
-			FileIDs:       []string{"file-1", "file-2"},
-		}),
+func TestServerHostedFileSearchIsExplicitlyUnsupported(t *testing.T) {
+	ctx := &RequestContext{SemanticRequest: testNeutralRequest("model", "find a file")}
+	err := (&OpenAIRouter{}).addFileSearchToolToRequest(ctx, &config.OpenAIRAGConfig{VectorStoreID: "vs_test123"})
+	if err == nil {
+		t.Fatal("server-hosted tool was accepted without a representable neutral contract")
 	}
-
-	openaiConfig, err := ragConfig.OpenAIBackendConfig()
-	if err != nil {
-		t.Fatalf("Failed to decode BackendConfig: %v", err)
+	var protocolErr *llmprotocol.ProtocolError
+	if !errors.As(err, &protocolErr) || protocolErr.Category != llmprotocol.ErrorUnsupportedFeature {
+		t.Fatalf("expected typed unsupported-feature error, got %T: %v", err, err)
 	}
-
-	if openaiConfig.WorkflowMode != "tool_based" {
-		t.Errorf("Expected workflow mode 'tool_based', got '%s'", openaiConfig.WorkflowMode)
-	}
-	if len(openaiConfig.FileIDs) != 2 {
-		t.Errorf("Expected 2 file IDs, got %d", len(openaiConfig.FileIDs))
+	if len(ctx.SemanticRequest.Tools) != 0 {
+		t.Fatal("unsupported tool mutated the neutral request")
 	}
 }
 
-func TestAddFileSearchToolToRequest(t *testing.T) {
-	ctx := &RequestContext{
-		OriginalRequestBody: []byte(`{"model":"gpt-4","messages":[{"role":"user","content":"test query"}]}`),
-		UserContent:         "test query",
+func TestRAGToolRoleInjectionMutatesNeutralRequest(t *testing.T) {
+	request := testNeutralRequest("model", "test query")
+	ctx := &RequestContext{RequestID: "request-1", SemanticRequest: request}
+	ragConfig := &config.RAGPluginConfig{InjectionMode: "tool_role"}
+
+	if err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", ragConfig); err != nil {
+		t.Fatalf("inject RAG context: %v", err)
 	}
-
-	openaiConfig := &config.OpenAIRAGConfig{
-		VectorStoreID: "vs_test123",
-		MaxNumResults: intPtr(5),
-		FileIDs:       []string{"file-1"},
+	if len(request.Messages) != 3 || request.Messages[1].Role != llmprotocol.RoleAssistant || request.Messages[2].Role != llmprotocol.RoleTool {
+		t.Fatalf("unexpected neutral tool exchange: %#v", request.Messages)
 	}
-
-	// Create a minimal router for testing
-	router := &OpenAIRouter{}
-
-	err := router.addFileSearchToolToRequest(ctx, openaiConfig)
-	if err != nil {
-		t.Fatalf("addFileSearchToolToRequest failed: %v", err)
+	call := request.Messages[1].Content[0].ToolCall
+	result := request.Messages[2].Content[0].ToolResult
+	if call == nil || result == nil || call.ID == "" || result.CallID != call.ID || result.Content[0].Text != "grounded context" {
+		t.Fatalf("RAG tool lifecycle is not linked: call=%#v result=%#v", call, result)
 	}
-
-	// Parse the modified request
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
-		t.Fatalf("Failed to parse modified request: %v", err)
+	if _, ok := ctx.RAGToolCallIDs[call.ID]; !ok {
+		t.Fatal("RAG provenance did not retain the generated call ID")
 	}
-
-	// Verify tools array exists
-	tools, ok := requestMap["tools"].([]interface{})
-	if !ok {
-		t.Fatal("Tools array not found or not an array")
-	}
-
-	if len(tools) == 0 {
-		t.Fatal("Tools array is empty")
-	}
-
-	// Verify file_search tool
-	tool, ok := tools[0].(map[string]interface{})
-	if !ok {
-		t.Fatal("First tool is not a map")
-	}
-
-	if tool["type"] != "file_search" {
-		t.Errorf("Expected tool type 'file_search', got '%v'", tool["type"])
-	}
-
-	fileSearchConfig, ok := tool["file_search"].(map[string]interface{})
-	if !ok {
-		t.Fatal("file_search config is not a map")
-	}
-
-	vectorStoreIDs, ok := fileSearchConfig["vector_store_ids"].([]interface{})
-	if !ok || len(vectorStoreIDs) == 0 {
-		t.Fatal("vector_store_ids not found or empty")
-	}
-
-	if vectorStoreIDs[0].(string) != "vs_test123" {
-		t.Errorf("Expected vector store ID 'vs_test123', got '%v'", vectorStoreIDs[0])
+	if request.Generation != 2 || !ctx.HasToolsForFactCheck {
+		t.Fatalf("semantic mutation metadata missing: generation=%d context=%#v", request.Generation, ctx)
 	}
 }
 
-func TestAddFileSearchToolToRequest_ExistingTools(t *testing.T) {
-	ctx := &RequestContext{
-		OriginalRequestBody: []byte(`{
-			"model":"gpt-4",
-			"messages":[{"role":"user","content":"test query"}],
-			"tools":[{"type":"function","function":{"name":"existing_tool"}}]
-		}`),
-		UserContent: "test query",
+func TestRAGSystemInstructionPreservesAuthority(t *testing.T) {
+	request := testNeutralRequest("model", "test query")
+	request.Instructions = []llmprotocol.InstructionBlock{{
+		Role:    llmprotocol.RoleDeveloper,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "developer instruction"}},
+	}}
+	ctx := &RequestContext{SemanticRequest: request}
+
+	if err := (&OpenAIRouter{}).injectRAGContext(ctx, "grounded context", &config.RAGPluginConfig{InjectionMode: "system_prompt"}); err != nil {
+		t.Fatalf("inject RAG system context: %v", err)
 	}
-
-	openaiConfig := &config.OpenAIRAGConfig{
-		VectorStoreID: "vs_test123",
+	if len(request.Instructions) != 2 || request.Instructions[0].Role != llmprotocol.RoleSystem || request.Instructions[1].Role != llmprotocol.RoleDeveloper {
+		t.Fatalf("instruction authority/order changed: %#v", request.Instructions)
 	}
-
-	router := &OpenAIRouter{}
-
-	err := router.addFileSearchToolToRequest(ctx, openaiConfig)
-	if err != nil {
-		t.Fatalf("addFileSearchToolToRequest failed: %v", err)
-	}
-
-	var requestMap map[string]interface{}
-	if err := json.Unmarshal(ctx.workingRequestBody(), &requestMap); err != nil {
-		t.Fatalf("Failed to parse modified request: %v", err)
-	}
-
-	tools, ok := requestMap["tools"].([]interface{})
-	if !ok {
-		t.Fatal("Tools array not found")
-	}
-
-	// Should have 2 tools now (existing + file_search)
-	if len(tools) != 2 {
-		t.Errorf("Expected 2 tools, got %d", len(tools))
+	if request.Instructions[0].Content[0].Text == "" || request.Generation != 2 {
+		t.Fatalf("RAG system instruction was not applied: %#v", request.Instructions[0])
 	}
 }
 
-func intPtr(i int) *int {
-	return &i
-}
+func intPtr(value int) *int { return &value }

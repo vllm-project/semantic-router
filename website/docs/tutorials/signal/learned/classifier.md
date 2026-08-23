@@ -30,7 +30,7 @@ preference signals for response-style routing.
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     classifiers:
       - name: phishing
@@ -52,9 +52,6 @@ routing:
             predicate:
               gte: 0.5
             on_error: no_match
-      modelRefs:
-        - model: local-small
-          use_reasoning: false
 ```
 
 LLM classifiers reference a named `global.model_catalog.external` entry and

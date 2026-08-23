@@ -112,10 +112,10 @@ func (rt *routerLearningRuntime) recordModelTelemetry(
 	defer rt.shared.mu.Unlock()
 	rt.recordModelTelemetryLocked(decisionName, decisionTier, model, observation)
 	if decisionName != "" {
-		rt.recordModelTelemetryLocked("", decisionTier, model, observation)
+		rt.recordModelTelemetryLocked(modelExperienceFallbackDecision(decisionName), decisionTier, model, observation)
 	}
 	if decisionTier != 0 {
-		rt.recordModelTelemetryLocked("", 0, model, observation)
+		rt.recordModelTelemetryLocked(modelExperienceFallbackDecision(decisionName), 0, model, observation)
 	}
 }
 

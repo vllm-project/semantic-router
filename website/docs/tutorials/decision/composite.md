@@ -30,7 +30,7 @@ Use a composite decision when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: priority_safe_escalation_route
       description: Combine AND, OR, and NOT for a realistic multi-signal routing case.
@@ -50,9 +50,6 @@ routing:
             conditions:
               - type: jailbreak
                 name: prompt_injection
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: true
 ```
 
 If a decision needs nested logic, keep the groups explicit instead of

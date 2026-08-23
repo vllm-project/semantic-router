@@ -54,7 +54,7 @@ export function getDecisionNodeHeight(decision: DecisionConfig, collapsed: boole
     }, 0)
   const hasAlgorithm = decision.algorithm && decision.algorithm.type !== 'static'
   const hasPlugins = decision.plugins && decision.plugins.length > 0
-  const hasReasoning = decision.modelRefs?.some(m => m.use_reasoning)
+  const hasReasoning = decision.modelRefs?.some((m) => m.use_reasoning)
 
   let height = decisionBaseHeight
   height += visibleRuleLineCount * decisionConditionHeight
@@ -81,9 +81,7 @@ export function getDecisionReachability(
   return {
     isFallback: false,
     isUnreachable: !hasConfiguredCondition,
-    ...(hasConfiguredCondition
-      ? {}
-      : { unreachableReason: 'Referenced signals not configured' }),
+    ...(hasConfiguredCondition ? {} : { unreachableReason: 'Referenced signals not configured' }),
   }
 }
 

@@ -81,8 +81,8 @@ func TestResolveMemoryStoreUsesRuntimeRegistryOnly(t *testing.T) {
 }
 
 func TestResolveAPIServerConfigUsesRuntimeRegistryOnly(t *testing.T) {
-	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	runtimeCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
+	globalCfg := &config.RouterConfig{}
+	runtimeCfg := &config.RouterConfig{}
 
 	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
 	t.Cleanup(restoreGlobalConfig)
@@ -98,8 +98,8 @@ func TestResolveAPIServerConfigUsesRuntimeRegistryOnly(t *testing.T) {
 	}
 }
 
-func TestResolveAPIServerConfigPreservesLegacyGlobalFallback(t *testing.T) {
-	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
+func TestResolveAPIServerConfigUsesStandaloneProcessConfig(t *testing.T) {
+	globalCfg := &config.RouterConfig{}
 
 	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
 	t.Cleanup(restoreGlobalConfig)
@@ -111,13 +111,7 @@ func TestResolveAPIServerConfigPreservesLegacyGlobalFallback(t *testing.T) {
 
 func TestResolveClassificationServiceUsesRuntimeRegistryOnly(t *testing.T) {
 	cfg := &config.RouterConfig{}
-	globalSvc := services.NewPlaceholderClassificationService()
 	runtimeSvc := services.NewClassificationService(nil, cfg)
-
-	services.SetGlobalClassificationService(globalSvc)
-	t.Cleanup(func() {
-		services.SetGlobalClassificationService(nil)
-	})
 
 	registry := routerruntime.NewRegistry(cfg)
 	if got := resolveClassificationService(cfg, registry); got != nil {
@@ -130,17 +124,15 @@ func TestResolveClassificationServiceUsesRuntimeRegistryOnly(t *testing.T) {
 	}
 }
 
-func TestResolveClassificationServicePreservesLegacyGlobalFallback(t *testing.T) {
-	cfg := &config.RouterConfig{}
-	globalSvc := services.NewPlaceholderClassificationService()
+func TestResolveClassificationServiceBuildsCanonicalStandaloneComposition(t *testing.T) {
+	cfg := &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}}}
 
-	services.SetGlobalClassificationService(globalSvc)
-	t.Cleanup(func() {
-		services.SetGlobalClassificationService(nil)
-	})
-
-	if got := resolveClassificationService(cfg, nil); got != globalSvc {
-		t.Fatalf("resolveClassificationService() = %v, want legacy global service %v", got, globalSvc)
+	got := resolveClassificationService(cfg, nil)
+	if got == nil {
+		t.Fatal("resolveClassificationService() returned nil for canonical standalone config")
+	}
+	if got.GetConfig() != cfg {
+		t.Fatalf("resolveClassificationService() config = %p, want %p", got.GetConfig(), cfg)
 	}
 }
 
@@ -148,7 +140,7 @@ func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
 	cfg := &config.RouterConfig{}
 	registry := routerruntime.NewRegistry(cfg)
 
-	svc := ensureClassificationService(cfg, registry, nil)
+	svc := ensureClassificationService(registry, nil)
 	if svc == nil {
 		t.Fatal("ensureClassificationService() returned nil, want placeholder service")
 	}
@@ -157,50 +149,6 @@ func TestEnsureClassificationServiceWaitsForRuntimeRegistry(t *testing.T) {
 	}
 	if got := registry.ClassificationService(); got != nil {
 		t.Fatalf("runtime registry classification service = %v, want nil before router runtime publication", got)
-	}
-}
-
-func TestBuildConfigUpdaterPreservesLegacyGlobalFallback(t *testing.T) {
-	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	nextCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	classificationSvc := &fakeResolvedClassificationService{}
-
-	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
-	t.Cleanup(restoreGlobalConfig)
-
-	updater := buildConfigUpdater(nil, classificationSvc)
-	updater(nextCfg)
-
-	if classificationSvc.updatedConfig != nextCfg {
-		t.Fatalf("classification service updated config = %p, want %p", classificationSvc.updatedConfig, nextCfg)
-	}
-	if got := config.Get(); got != nextCfg {
-		t.Fatalf("config.Get() = %p, want legacy global config update %p", got, nextCfg)
-	}
-}
-
-func TestBuildConfigUpdaterUsesRuntimeRegistryWithoutReplacingGlobalConfig(t *testing.T) {
-	globalCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	initialRuntimeCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceFile}
-	nextCfg := &config.RouterConfig{ConfigSource: config.ConfigSourceKubernetes}
-	classificationSvc := services.NewClassificationService(nil, initialRuntimeCfg)
-	registry := routerruntime.NewRegistry(initialRuntimeCfg)
-	registry.SetClassificationService(classificationSvc)
-
-	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
-	t.Cleanup(restoreGlobalConfig)
-
-	updater := buildConfigUpdater(registry, nil)
-	updater(nextCfg)
-
-	if got := registry.CurrentConfig(); got != nextCfg {
-		t.Fatalf("registry.CurrentConfig() = %p, want %p", got, nextCfg)
-	}
-	if got := classificationSvc.GetConfig(); got != nextCfg {
-		t.Fatalf("classificationSvc.GetConfig() = %p, want %p", got, nextCfg)
-	}
-	if got := config.Get(); got != globalCfg {
-		t.Fatalf("config.Get() = %p, want unchanged global config %p", got, globalCfg)
 	}
 }
 

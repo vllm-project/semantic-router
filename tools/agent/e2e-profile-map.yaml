@@ -7,6 +7,7 @@ full_ci_profiles:
   - envoy-ai-gateway
   - dashboard
   - remote-embedding
+  - response-api
 
 full_ci_triggers:
   - src/semantic-router/**
@@ -37,15 +38,13 @@ profile_rules:
     owner: e2e
     coverage_role: dashboard-api-contract
     selection_mode: full-ci
-    summary: Dashboard API surface — health, status, config read (JSON/YAML), deploy preview, config versions, input validation, and security policy RBAC + ratelimit apply.
+    summary: Dashboard session, Management API client, delegated inference, health, and status contracts.
     paths:
       - e2e/profiles/dashboard/**
       - e2e/testcases/dashboard_*.go
-      - e2e/testcases/security_policy_apply.go
       - deploy/kubernetes/observability/dashboard/**
-      - dashboard/backend/handlers/security_policy*.go
-      - dashboard/backend/handlers/deploy.go
-      - dashboard/backend/handlers/canonical_transport.go
+      - dashboard/backend/**
+      - dashboard/frontend/**
   aibrix:
     owner: e2e
     coverage_role: aibrix-control-plane-and-gateway
@@ -62,20 +61,6 @@ profile_rules:
     paths:
       - e2e/profiles/routing-strategies/**
       - deploy/kubernetes/routing-strategies/**
-  dynamic-config:
-    owner: e2e
-    coverage_role: dynamic-crd-routing-contracts
-    selection_mode: full-ci
-    summary: CRD-driven routing semantics and embedding-signal behavior.
-    paths:
-      - e2e/profiles/dynamic-config/**
-  multimodal-routing:
-    owner: e2e
-    coverage_role: image-modality-embedding-signal-routing
-    selection_mode: full-ci
-    summary: Image-modality EmbeddingSignal routing via the multi-modal-embed-small model.
-    paths:
-      - e2e/profiles/multimodal-routing/**
   remote-embedding:
     owner: e2e
     coverage_role: openai-compatible-remote-embedding-provider
@@ -84,6 +69,22 @@ profile_rules:
     paths:
       - e2e/profiles/remote-embedding/**
       - e2e/testcases/remote_embedding_routing.go
+  response-api:
+    owner: e2e
+    coverage_role: neutral-protocol-matrix-and-responses-api
+    selection_mode: full-ci
+    summary: Complete buffered and streaming protocol matrix plus memory-backed Responses API behavior.
+    paths:
+      - e2e/profiles/response-api/**
+      - e2e/testcases/protocol_codec_matrix.go
+      - deploy/kubernetes/response-api/gwapi-resources.yaml
+      - deploy/kubernetes/response-api/mock-vllm.yaml
+      - tools/mock-vllm/**
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
+      - src/semantic-router/pkg/backendinvoker/**
+      - src/semantic-router/pkg/extproc/processor_protocol_contract.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   llm-d:
     owner: e2e
     coverage_role: llm-d-inference-gateway-health
@@ -137,18 +138,6 @@ profile_rules:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
       - tools/demos/multi-endpoint.sh
-  authz-rbac:
-    owner: e2e
-    coverage_role: authz-and-rate-limit-contracts
-    selection_mode: full-ci
-    summary: Authz-driven routing and per-user rate-limiting behavior, including dashboard security policy apply.
-    paths:
-      - e2e/profiles/authz-rbac/**
-      - e2e/config/config.authz-rbac.yaml
-      - e2e/config/authz-profile-*.yaml
-      - src/semantic-router/pkg/classification/authz*.go
-      - src/semantic-router/pkg/authz/**
-      - dashboard/backend/handlers/security_policy*.go
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache
@@ -159,25 +148,6 @@ profile_rules:
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
 manual_profile_rules:
-  anthropic-shim:
-    owner: e2e
-    coverage_role: anthropic-shape-backend-translation-contracts
-    selection_mode: manual-only
-    summary: Manual diagnostic for the incomplete llama.cpp + Anthropic shim backend route; unit translation contracts remain blocking.
-    paths:
-      - e2e/profiles/anthropic-shim/**
-      - e2e/testing/anthropic-shim/**
-      - deploy/kubernetes/anthropic-backend/**
-      - src/semantic-router/pkg/anthropic/outbound*.go
-  response-api:
-    owner: e2e
-    coverage_role: responses-api-memory
-    selection_mode: manual-only
-    summary: Memory-backed Responses API coverage, kept out of the standard CI profile matrix until the profile is re-enabled.
-    paths:
-      - e2e/profiles/response-api/**
-      - deploy/kubernetes/response-api/gwapi-resources.yaml
-      - deploy/kubernetes/response-api/mock-vllm.yaml
   response-api-redis:
     owner: e2e
     coverage_role: responses-api-redis-ttl

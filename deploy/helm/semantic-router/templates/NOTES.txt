@@ -1,48 +1,60 @@
-1. Get the application URL by running these commands:
-{{- if .Values.ingress.enabled }}
-{{- range $host := .Values.ingress.hosts }}
-  {{- range .paths }}
-  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
-  {{- end }}
-{{- end }}
-{{- else if contains "NodePort" .Values.service.type }}
-  export NODE_PORT=$(kubectl get --namespace {{ include "semantic-router.namespace" . }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "semantic-router.fullname" . }})
-  export NODE_IP=$(kubectl get nodes --namespace {{ include "semantic-router.namespace" . }} -o jsonpath="{.items[0].status.addresses[0].address}")
-  echo http://$NODE_IP:$NODE_PORT
-{{- else if contains "LoadBalancer" .Values.service.type }}
-     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
-           You can watch the status of by running 'kubectl get --namespace {{ include "semantic-router.namespace" . }} svc -w {{ include "semantic-router.fullname" . }}'
-  export SERVICE_IP=$(kubectl get svc --namespace {{ include "semantic-router.namespace" . }} {{ include "semantic-router.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
-  echo http://$SERVICE_IP:{{ .Values.service.api.port }}
-{{- else if contains "ClusterIP" .Values.service.type }}
-  export POD_NAME=$(kubectl get pods --namespace {{ include "semantic-router.namespace" . }} -l "app.kubernetes.io/name={{ include "semantic-router.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
-  export CONTAINER_PORT=$(kubectl get pod --namespace {{ include "semantic-router.namespace" . }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
-  echo "Visit http://127.0.0.1:8080 to use your application"
-  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward $POD_NAME 8080:$CONTAINER_PORT
-{{- end }}
-
-2. Test the Classification API:
-  # Health check
-  curl http://localhost:8080/health
-
-  # Intent classification
-  curl -X POST http://localhost:8080/api/v1/classify/intent \
-    -H "Content-Type: application/json" \
-    -d '{"text": "What is machine learning?"}'
-
-3. Access metrics:
-  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }}-metrics 9190:9190
-  curl http://localhost:9190/metrics
-
-4. Access gRPC API:
-  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward svc/{{ include "semantic-router.fullname" . }} 50051:50051
-
-{{- $config := (get .Values "config") | default (dict) -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
+{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
+{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
 {{- $services := (get $global "services") | default (dict) -}}
 {{- $responseAPI := (get $services "response_api") | default (dict) -}}
 {{- $responseEnabled := (get $responseAPI "enabled") | default false -}}
 {{- $responseBackend := (get $responseAPI "store_backend") | default "" -}}
+{{- if $managedMode }}
+Semantic Router is running in managed mode.
+
+1. Point an Envoy-compatible Gateway at the ExtProc Service:
+
+  {{ include "semantic-router.fullname" . }}.{{ include "semantic-router.namespace" . }}.svc:{{ .Values.service.grpc.port }}
+
+2. The Management API is private and uses Router-terminated HTTPS:
+
+  {{ include "semantic-router.fullname" . }}-management.{{ include "semantic-router.namespace" . }}.svc:{{ .Values.service.management.port }}
+
+  For an administrative diagnostic session, port-forward the private Service and
+  use the configured Management CA and an authorized Management credential:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }}-management 8443:{{ .Values.service.management.port }}
+
+3. Access Router metrics:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }}-metrics 9190:{{ .Values.service.metrics.port }}
+{{- if .Values.dashboard.enabled }}
+
+4. Access the optional Dashboard:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }}-dashboard 8700:{{ .Values.dashboard.service.port }}
+  echo http://127.0.0.1:8700
+{{- end }}
+{{- else }}
+Semantic Router is running in standalone mode.
+
+1. Access the HTTP API through the Service:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }} 8080:{{ .Values.service.api.port }}
+  curl http://127.0.0.1:8080/health
+
+2. Access Router metrics:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }}-metrics 9190:{{ .Values.service.metrics.port }}
+
+3. Access the ExtProc gRPC listener:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }} 50051:{{ .Values.service.grpc.port }}
+{{- end }}
+
 {{- if and $responseEnabled (eq $responseBackend "redis") }}
 NOTE: Response API Redis backend is not implemented yet and will fail at runtime.
 {{- end }}

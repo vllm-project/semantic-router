@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -90,6 +91,110 @@ func WaitForDeploymentReady(ctx context.Context, client *kubernetes.Clientset, n
 		lastErr = fmt.Errorf("timed out waiting for deployment")
 	}
 	return fmt.Errorf("deployment %s/%s not healthy after %v: %w", namespace, name, timeout, lastErr)
+}
+
+// CheckDeploymentReadyReplicas verifies that one Deployment rollout has the
+// exact requested replica count ready. Unlike CheckDeployment, this is a
+// rollout-completion gate: stale or partially updated replicas do not satisfy
+// it.
+func CheckDeploymentReadyReplicas(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	namespace string,
+	name string,
+	expected int32,
+	verbose bool,
+) error {
+	if expected < 1 {
+		return fmt.Errorf("expected replica count must be positive")
+	}
+	deployment, err := client.AppsV1().Deployments(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get deployment: %w", err)
+	}
+	if err := checkDeploymentReadyReplicas(deployment, expected); err != nil {
+		return err
+	}
+	if verbose {
+		fmt.Printf("[Helper] Deployment %s/%s rollout is ready (%d/%d replicas)\n", namespace, name, expected, expected)
+	}
+	return nil
+}
+
+func checkDeploymentReadyReplicas(deployment *appsv1.Deployment, expected int32) error {
+	if deployment == nil {
+		return fmt.Errorf("deployment is required")
+	}
+	configuredReplicas := int32(1)
+	if deployment.Spec.Replicas != nil {
+		configuredReplicas = *deployment.Spec.Replicas
+	}
+	if configuredReplicas != expected {
+		return fmt.Errorf("deployment specifies %d replicas, want %d", configuredReplicas, expected)
+	}
+	if deployment.Status.ObservedGeneration < deployment.Generation {
+		return fmt.Errorf(
+			"deployment generation %d has not been observed (observed %d)",
+			deployment.Generation,
+			deployment.Status.ObservedGeneration,
+		)
+	}
+	if deployment.Status.Replicas != expected ||
+		deployment.Status.UpdatedReplicas != expected ||
+		deployment.Status.ReadyReplicas != expected ||
+		deployment.Status.AvailableReplicas != expected ||
+		deployment.Status.UnavailableReplicas != 0 {
+		return fmt.Errorf(
+			"deployment rollout is incomplete: replicas=%d updated=%d ready=%d available=%d unavailable=%d, want %d",
+			deployment.Status.Replicas,
+			deployment.Status.UpdatedReplicas,
+			deployment.Status.ReadyReplicas,
+			deployment.Status.AvailableReplicas,
+			deployment.Status.UnavailableReplicas,
+			expected,
+		)
+	}
+	return nil
+}
+
+// WaitForDeploymentReadyReplicas waits for a complete exact-size rollout.
+func WaitForDeploymentReadyReplicas(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	namespace string,
+	name string,
+	expected int32,
+	timeout time.Duration,
+	retryInterval time.Duration,
+	verbose bool,
+) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		if failErr := DetectDeploymentFailFastError(ctx, client, namespace, name); failErr != nil {
+			return failErr
+		}
+		lastErr = CheckDeploymentReadyReplicas(ctx, client, namespace, name, expected, verbose)
+		if lastErr == nil {
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retryInterval):
+		}
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("timed out waiting for deployment rollout")
+	}
+	return fmt.Errorf(
+		"deployment %s/%s did not reach %d ready replicas after %v: %w",
+		namespace,
+		name,
+		expected,
+		timeout,
+		lastErr,
+	)
 }
 
 // DetectDeploymentFailFastError returns an error when a deployment's pods hit a
@@ -357,6 +462,46 @@ func StartPortForward(ctx context.Context, client *kubernetes.Clientset, restCon
 	}()
 
 	return waitForPortForwardReady(ctx, namespace, service, stopChan, readyChan, verbose)
+}
+
+// StartPodPortForward establishes a port-forward to one exact Pod. Tests that
+// exercise replica-local behavior use this instead of relying on Service load
+// balancing to select a particular replica.
+func StartPodPortForward(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	restConfig *rest.Config,
+	namespace string,
+	podName string,
+	ports string,
+	verbose bool,
+) (func(), error) {
+	localPort, containerPort, err := ParsePortMapping(ports)
+	if err != nil {
+		return nil, err
+	}
+	pod, err := client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get pod %s/%s: %w", namespace, podName, err)
+	}
+	if pod.Status.Phase != corev1.PodRunning {
+		return nil, fmt.Errorf("pod %s/%s is not running", namespace, podName)
+	}
+	if verbose {
+		fmt.Printf("[Helper] Starting port-forward to pod %s/%s (%s:%s)\n", namespace, podName, localPort, containerPort)
+	}
+	forwarder, stopChan, readyChan, err := newPortForwarder(
+		client, restConfig, namespace, podName, localPort, containerPort, verbose,
+	)
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		if err := forwarder.ForwardPorts(); err != nil && verbose {
+			fmt.Printf("[Helper] Pod port forwarding error: %v\n", err)
+		}
+	}()
+	return waitForPortForwardReady(ctx, namespace, podName, stopChan, readyChan, verbose)
 }
 
 // ParsePortMapping parses a legacy local:service port-forward mapping.

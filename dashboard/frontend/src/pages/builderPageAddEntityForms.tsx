@@ -1,105 +1,40 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { DSLFieldObject, DSLFieldValue } from "@/types/dsl";
+import type { DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 import {
-  BACKEND_TYPES,
   getSignalFieldSchema,
   PLUGIN_DESCRIPTIONS,
   PLUGIN_TYPES,
   SIGNAL_TYPES,
-} from "@/lib/dslMutations";
-import type { SignalType } from "@/lib/dslMutations";
+} from '@/lib/dslMutations'
+import type { SignalType } from '@/lib/dslMutations'
 
-import styles from "./BuilderPage.module.css";
-import {
-  BackendIcon,
-  CustomSelect,
-  FieldEditor,
-  GenericFieldsEditor,
-  ModelIcon,
-  PluginIcon,
-  SignalIcon,
-} from "./builderPageFormPrimitives";
-import { PluginSchemaEditor } from "./builderPageSharedDslEditors";
-
-const AddModelForm: React.FC<{
-  onAdd: (name: string, fields: DSLFieldObject) => void;
-  onCancel: () => void;
-}> = ({ onAdd, onCancel }) => {
-  const [name, setName] = useState("");
-  const [fields, setFields] = useState<DSLFieldObject>({});
-
-  const handleSubmit = useCallback(() => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    onAdd(trimmed, fields);
-  }, [name, fields, onAdd]);
-
-  return (
-    <div className={styles.editorPanel}>
-      <div className={styles.editorHeader}>
-        <div className={styles.editorTitle}>
-          <ModelIcon className={styles.statIcon} />
-          New Model
-        </div>
-        <div className={styles.editorActions}>
-          <button className={styles.toolbarBtn} onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            className={styles.toolbarBtnPrimary}
-            onClick={handleSubmit}
-            disabled={!name.trim()}
-          >
-            Create
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.fieldGroup}>
-        <label className={styles.fieldLabel}>
-          Name <span style={{ color: "var(--color-danger)" }}>*</span>
-        </label>
-        <input
-          className={styles.fieldInput}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder='e.g. "qwen3:32b"'
-          autoFocus
-        />
-      </div>
-
-      <GenericFieldsEditor fields={fields} onUpdate={setFields} />
-    </div>
-  );
-};
+import styles from './BuilderPage.module.css'
+import { CustomSelect, FieldEditor, PluginIcon, SignalIcon } from './builderPageFormPrimitives'
+import { PluginSchemaEditor } from './builderPageSharedDslEditors'
 
 const AddSignalForm: React.FC<{
-  onAdd: (
-    signalType: string,
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onCancel: () => void;
+  onAdd: (signalType: string, name: string, fields: DSLFieldObject) => void
+  onCancel: () => void
 }> = ({ onAdd, onCancel }) => {
-  const [signalType, setSignalType] = useState<SignalType>("domain");
-  const [name, setName] = useState("");
-  const schema = useMemo(() => getSignalFieldSchema(signalType), [signalType]);
-  const [fields, setFields] = useState<DSLFieldObject>({});
+  const [signalType, setSignalType] = useState<SignalType>('domain')
+  const [name, setName] = useState('')
+  const schema = useMemo(() => getSignalFieldSchema(signalType), [signalType])
+  const [fields, setFields] = useState<DSLFieldObject>({})
 
   useEffect(() => {
-    setFields({});
-  }, [signalType]);
+    setFields({})
+  }, [signalType])
 
   const updateField = useCallback((key: string, value: DSLFieldValue) => {
-    setFields((previous) => ({ ...previous, [key]: value }));
-  }, []);
+    setFields((previous) => ({ ...previous, [key]: value }))
+  }, [])
 
   const handleSubmit = useCallback(() => {
-    const trimmed = name.trim().replace(/\s+/g, "_");
-    if (!trimmed) return;
-    onAdd(signalType, trimmed, fields);
-  }, [signalType, name, fields, onAdd]);
+    const trimmed = name.trim().replace(/\s+/g, '_')
+    if (!trimmed) return
+    onAdd(signalType, trimmed, fields)
+  }, [signalType, name, fields, onAdd])
 
   return (
     <div className={styles.editorPanel}>
@@ -124,7 +59,7 @@ const AddSignalForm: React.FC<{
 
       <div className={styles.fieldGroup}>
         <label className={styles.fieldLabel}>
-          Signal Type <span style={{ color: "var(--color-danger)" }}>*</span>
+          Signal Type <span style={{ color: 'var(--color-danger)' }}>*</span>
         </label>
         <CustomSelect
           value={signalType}
@@ -135,7 +70,7 @@ const AddSignalForm: React.FC<{
 
       <div className={styles.fieldGroup}>
         <label className={styles.fieldLabel}>
-          Name <span style={{ color: "var(--color-danger)" }}>*</span>
+          Name <span style={{ color: 'var(--color-danger)' }}>*</span>
         </label>
         <input
           className={styles.fieldInput}
@@ -152,10 +87,10 @@ const AddSignalForm: React.FC<{
         </div>
         <div
           style={{
-            padding: "var(--spacing-md)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--spacing-md)",
+            padding: 'var(--spacing-md)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--spacing-md)',
           }}
         >
           {schema.map((field) => (
@@ -169,33 +104,29 @@ const AddSignalForm: React.FC<{
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
 const AddPluginForm: React.FC<{
-  onAdd: (
-    name: string,
-    pluginType: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onCancel: () => void;
+  onAdd: (name: string, pluginType: string, fields: DSLFieldObject) => void
+  onCancel: () => void
 }> = ({ onAdd, onCancel }) => {
-  const [pluginType, setPluginType] = useState<string>(PLUGIN_TYPES[0]);
-  const [name, setName] = useState("");
+  const [pluginType, setPluginType] = useState<string>(PLUGIN_TYPES[0])
+  const [name, setName] = useState('')
   const [fields, setFields] = useState<DSLFieldObject>({
     enabled: true,
-  });
+  })
 
   const handlePluginTypeChange = useCallback((value: string) => {
-    setPluginType(value);
-    setFields({ enabled: true });
-  }, []);
+    setPluginType(value)
+    setFields({ enabled: true })
+  }, [])
 
   const handleSubmit = useCallback(() => {
-    const trimmed = name.trim().replace(/\s+/g, "_");
-    if (!trimmed) return;
-    onAdd(trimmed, pluginType, fields);
-  }, [name, pluginType, fields, onAdd]);
+    const trimmed = name.trim().replace(/\s+/g, '_')
+    if (!trimmed) return
+    onAdd(trimmed, pluginType, fields)
+  }, [name, pluginType, fields, onAdd])
 
   return (
     <div className={styles.editorPanel}>
@@ -220,7 +151,7 @@ const AddPluginForm: React.FC<{
 
       <div className={styles.fieldGroup}>
         <label className={styles.fieldLabel}>
-          Plugin Type <span style={{ color: "var(--color-danger)" }}>*</span>
+          Plugin Type <span style={{ color: 'var(--color-danger)' }}>*</span>
         </label>
         <CustomSelect
           value={pluginType}
@@ -230,9 +161,9 @@ const AddPluginForm: React.FC<{
         {PLUGIN_DESCRIPTIONS[pluginType] && (
           <span
             style={{
-              fontSize: "0.625rem",
-              color: "var(--color-text-muted)",
-              marginTop: "0.25rem",
+              fontSize: '0.625rem',
+              color: 'var(--color-text-muted)',
+              marginTop: '0.25rem',
             }}
           >
             {PLUGIN_DESCRIPTIONS[pluginType]}
@@ -242,7 +173,7 @@ const AddPluginForm: React.FC<{
 
       <div className={styles.fieldGroup}>
         <label className={styles.fieldLabel}>
-          Name <span style={{ color: "var(--color-danger)" }}>*</span>
+          Name <span style={{ color: 'var(--color-danger)' }}>*</span>
         </label>
         <input
           className={styles.fieldInput}
@@ -253,81 +184,9 @@ const AddPluginForm: React.FC<{
         />
       </div>
 
-      <PluginSchemaEditor
-        pluginType={pluginType}
-        fields={fields}
-        onUpdate={setFields}
-      />
+      <PluginSchemaEditor pluginType={pluginType} fields={fields} onUpdate={setFields} />
     </div>
-  );
-};
+  )
+}
 
-const AddBackendForm: React.FC<{
-  onAdd: (
-    backendType: string,
-    name: string,
-    fields: DSLFieldObject,
-  ) => void;
-  onCancel: () => void;
-}> = ({ onAdd, onCancel }) => {
-  const [backendType, setBackendType] = useState<string>(BACKEND_TYPES[0]);
-  const [name, setName] = useState("");
-  const [fields, setFields] = useState<DSLFieldObject>({});
-
-  const handleSubmit = useCallback(() => {
-    const trimmed = name.trim().replace(/\s+/g, "_");
-    if (!trimmed) return;
-    onAdd(backendType, trimmed, fields);
-  }, [name, backendType, fields, onAdd]);
-
-  return (
-    <div className={styles.editorPanel}>
-      <div className={styles.editorHeader}>
-        <div className={styles.editorTitle}>
-          <BackendIcon className={styles.statIcon} />
-          New Backend
-        </div>
-        <div className={styles.editorActions}>
-          <button className={styles.toolbarBtn} onClick={onCancel}>
-            Cancel
-          </button>
-          <button
-            className={styles.toolbarBtnPrimary}
-            onClick={handleSubmit}
-            disabled={!name.trim()}
-          >
-            Create
-          </button>
-        </div>
-      </div>
-
-      <div className={styles.fieldGroup}>
-        <label className={styles.fieldLabel}>
-          Backend Type <span style={{ color: "var(--color-danger)" }}>*</span>
-        </label>
-        <CustomSelect
-          value={backendType}
-          options={[...BACKEND_TYPES]}
-          onChange={(value) => setBackendType(value)}
-        />
-      </div>
-
-      <div className={styles.fieldGroup}>
-        <label className={styles.fieldLabel}>
-          Name <span style={{ color: "var(--color-danger)" }}>*</span>
-        </label>
-        <input
-          className={styles.fieldInput}
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          placeholder="my_backend"
-          autoFocus
-        />
-      </div>
-
-      <GenericFieldsEditor fields={fields} onUpdate={setFields} />
-    </div>
-  );
-};
-
-export { AddBackendForm, AddModelForm, AddPluginForm, AddSignalForm };
+export { AddPluginForm, AddSignalForm }

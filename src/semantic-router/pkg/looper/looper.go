@@ -20,18 +20,54 @@ limitations under the License.
 package looper
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
+
+// NewRequestFromSemantic constructs a Looper request from the Router's neutral
+// contract. Wire shaping is delegated to the codec registry rather than
+// reproduced in ExtProc.
+func NewRequestFromSemantic(semantic *llmprotocol.Request) (*Request, error) {
+	if semantic == nil {
+		return nil, fmt.Errorf("neutral looper request is required")
+	}
+	encoded, err := protocolcodec.NewBuiltinEngine().EncodeRequest(
+		llmprotocol.OpenAIChatV1,
+		*semantic,
+		llmprotocol.Envelope{},
+	)
+	if err != nil {
+		return nil, err
+	}
+	var request openai.ChatCompletionNewParams
+	if err := json.Unmarshal(encoded.Body, &request); err != nil {
+		return nil, fmt.Errorf("decode looper execution request: %w", err)
+	}
+	return &Request{
+		SemanticRequest:  cloneSemanticRequest(semantic),
+		executionRequest: &request,
+	}, nil
+}
 
 // Request contains the input for looper execution
 type Request struct {
-	// OriginalRequest is the OpenAI chat completion request from the client
-	OriginalRequest *openai.ChatCompletionNewParams
+	// SemanticRequest is the protocol-neutral Router contract. It is immutable
+	// after construction and is the only request representation exposed across
+	// the Looper package boundary.
+	SemanticRequest *llmprotocol.Request
+
+	// executionRequest is a private model-client DTO used by the existing
+	// Looper algorithms. It never crosses ingress, routing, settlement, replay,
+	// or response encoding boundaries.
+	executionRequest *openai.ChatCompletionNewParams
 
 	// ModelRefs contains the list of models to potentially use, ordered by preference
 	ModelRefs []config.ModelRef
@@ -73,13 +109,50 @@ type Request struct {
 	CachedPanel []*ModelResponse
 }
 
+func cloneSemanticRequest(request *llmprotocol.Request) *llmprotocol.Request {
+	if request == nil {
+		return nil
+	}
+	cloned := *request
+	cloned.Instructions = append([]llmprotocol.InstructionBlock(nil), request.Instructions...)
+	for index := range cloned.Instructions {
+		cloned.Instructions[index].Content = append(
+			[]llmprotocol.Content(nil), request.Instructions[index].Content...,
+		)
+	}
+	cloned.Messages = append([]llmprotocol.Message(nil), request.Messages...)
+	for index := range cloned.Messages {
+		cloned.Messages[index].Content = append([]llmprotocol.Content(nil), request.Messages[index].Content...)
+	}
+	cloned.Tools = append([]llmprotocol.Tool(nil), request.Tools...)
+	cloned.Sampling.Stop = append([]string(nil), request.Sampling.Stop...)
+	if bytes.Equal(bytes.TrimSpace(cloned.OutputFormat.Schema), []byte("null")) {
+		cloned.OutputFormat.Schema = nil
+	}
+	if request.Metadata != nil {
+		cloned.Metadata = make(map[string]string, len(request.Metadata))
+		for key, value := range request.Metadata {
+			cloned.Metadata[key] = value
+		}
+	}
+	return &cloned
+}
+
 // Response contains the output from looper execution
 type Response struct {
-	// Body is the response body (JSON for non-streaming, SSE for streaming)
-	Body []byte
+	// Semantic is the only response representation exposed outside Looper.
+	// Public wire encoding belongs to the shared protocol codec engine.
+	Semantic *llmprotocol.Response
 
-	// ContentType is "application/json" or "text/event-stream"
-	ContentType string
+	// Streaming preserves the client's requested delivery mode. Looper itself
+	// remains buffered; ExtProc renders Semantic as semantic stream events.
+	Streaming bool
+
+	// IncludeUsage is a protocol-neutral delivery preference for streaming
+	// responses. Accounting always uses the backend response terminal; this flag
+	// controls only whether the synthesized client stream exposes aggregate
+	// usage.
+	IncludeUsage bool
 
 	// Model is the name of the model that produced the final response
 	Model string
@@ -100,9 +173,9 @@ type Response struct {
 	// This is used for visualization in the dashboard
 	IntermediateResponses interface{} `json:"intermediate_responses,omitempty"`
 
-	// Usage is the aggregated token usage across all model calls made during
-	// this execution. It mirrors the usage block embedded in Body so callers
-	// (extproc, dashboard, metrics) can read totals without re-parsing the body.
+	// Usage is the aggregate reported usage across all model calls made during
+	// this execution. It is presentation metadata only; dispatch settlement is
+	// driven by BackendInvoker response terminals.
 	Usage TokenUsage `json:"usage,omitempty"`
 
 	// LatencyMs is the wall-clock latency, in milliseconds, of the full

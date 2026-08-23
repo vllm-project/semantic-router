@@ -15,7 +15,9 @@ def _backend_provisioning_config():
     }
 
 
-def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch):
+def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
+    monkeypatch, tmp_path
+):
     load_paths = []
     provisioned = {}
 
@@ -46,6 +48,9 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
             )
             or {"milvus", "redis", "postgres"}
         ),
+    )
+    monkeypatch.setattr(
+        core, "_resolve_router_child_environment", lambda *_args, **_kwargs: {}
     )
     monkeypatch.setattr(
         runtime_lifecycle,
@@ -85,17 +90,17 @@ def test_start_vllm_sr_loads_runtime_config_for_backend_provisioning(monkeypatch
         core, "recover_openclaw_containers", lambda *args, **kwargs: None
     )
     monkeypatch.setattr(core, "log_runtime_summary", lambda *args, **kwargs: None)
-    monkeypatch.setattr(core, "maybe_finish_setup_mode", lambda *args, **kwargs: False)
-
+    source_config = tmp_path / "source-config.yaml"
+    compiled_bootstrap = tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     core.start_vllm_sr(
-        "/tmp/effective-config.yaml",
+        str(compiled_bootstrap),
         env_vars={},
         enable_observability=False,
-        source_config_file="/tmp/source-config.yaml",
-        runtime_config_file="/tmp/runtime-config.yaml",
+        source_config_file=str(source_config),
+        compiled_bootstrap_file=str(compiled_bootstrap),
     )
 
-    assert load_paths == ["/tmp/runtime-config.yaml"]
+    assert load_paths == [str(compiled_bootstrap)]
     assert provisioned["config"]["global"]["services"]["response_api"][
         "store_backend"
     ] == ("redis")

@@ -10,9 +10,9 @@ description: Give clients stable virtual model names backed by isolated routing 
 Entrypoints and recipes turn one Semantic Router deployment into a set of
 purpose-built virtual models:
 
-- an **entrypoint** is the model name a client requests;
-- a **recipe** is the routing policy that handles requests for that name; and
-- providers, model endpoints, and shared services remain available to every
+- an **Entrypoint** is the callable model name and its complete assignments;
+- a **Recipe** is reusable routing policy; and
+- Models and shared services remain available to every
   recipe.
 
 ## What Problem Does It Solve?
@@ -27,17 +27,17 @@ holds the named routing policies.
 ## How the pieces fit
 
 ```text
-request model name -> entrypoint -> recipe -> decision -> algorithm -> backend
+request model name -> Entrypoint rule -> Recipe -> decision assignment -> backend
 ```
 
-When the request `model` matches an `entrypoints[].model_names` value, the
-Router evaluates only the mapped recipe. The virtual model name is then
-replaced by the backend selected from that recipe.
+When the request `model` matches an Entrypoint `name` or one of its `aliases`, the Router
+resolves exactly one rule. That rule selects the Recipe and assigns Models to
+every Decision name. The virtual model name is then replaced by the
+selected backend Model.
 
-The top-level `routing` block remains the `default` recipe. Requests for
-`vllm-sr/auto`, `auto`, or another configured auto alias use that default
-policy. If the selected recipe has no matching decision, the Router uses
-`providers.defaults.default_model`.
+There is no implicit default Recipe or automatic alias. Every virtual model is
+an explicit Entrypoint, and every effective rule assigns all of its Recipe's
+decisions. Generated snapshot identities are not part of human authoring.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for
@@ -46,25 +46,24 @@ exact backend.
 
 ## Configuration
 
-The model catalog is shared. Each named recipe owns its signals, projections,
+Models are shared resources. Each named Recipe owns its signals, projections,
 decisions, strategy, algorithms, and route-local plugins.
 
 ```yaml
-routing:
-  modelCards:
-    - name: fast-model
-    - name: accurate-model
-
-entrypoints:
-  - model_names: [vllm-sr/mom-v1-flash]
-    recipe: flash
-  - model_names: [vllm-sr/mom-v1-ultra]
-    recipe: ultra
+models:
+  - name: local/fast
+    card: {description: Fast general-purpose model}
+    connections:
+      - {provider: vllm, endpoint: http://fast-model:8000/v1, model: fast-model}
+  - name: local/accurate
+    card: {description: Higher-quality model}
+    connections:
+      - {provider: vllm, endpoint: http://accurate-model:8000/v1, model: accurate-model}
 
 recipes:
   - name: flash
     description: Prefer the lowest-latency eligible backend.
-    routing:
+    document:
       strategy: priority
       decisions:
         - name: fast-path
@@ -73,12 +72,10 @@ recipes:
           rules:
             operator: AND
             conditions: []
-          modelRefs:
-            - model: fast-model
 
   - name: ultra
     description: Prefer the highest-quality eligible backend.
-    routing:
+    document:
       strategy: priority
       decisions:
         - name: quality-path
@@ -87,8 +84,17 @@ recipes:
           rules:
             operator: AND
             conditions: []
-          modelRefs:
-            - model: accurate-model
+
+entrypoints:
+  - name: vllm-sr/mom-v1-flash
+    recipe: flash
+    assignments:
+      fast-path: {models: [{model: local/fast}]}
+  - name: vllm-sr/mom-v1-ultra
+    recipe: ultra
+    assignments:
+      quality-path:
+        models: [{model: local/accurate, reasoning: {enabled: true, effort: high}}]
 ```
 
 Clients can discover entrypoint names through `/v1/models`. Routed responses
@@ -98,9 +104,8 @@ a request without exposing the backend selection contract to the client.
 ## When to Use
 
 Use named entrypoints and recipes when one deployment must expose more than one
-routing objective, policy boundary, or rollout track. Keep a single top-level
-`routing` profile when all clients should follow the same policy; the existing
-auto-model flow needs no extra configuration.
+routing objective, policy boundary, or rollout track. Even a deployment with
+one policy publishes that policy as one Recipe plus one Entrypoint.
 
 Continue with:
 

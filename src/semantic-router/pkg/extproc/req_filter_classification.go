@@ -15,10 +15,9 @@ import (
 // performDecisionEvaluation performs decision evaluation using DecisionEngine
 // Returns (decisionName, confidence, reasoningDecision, selectedModel)
 // This is the new approach that uses Decision-based routing with AND/OR rule combinations
-// Decision evaluation runs only for request-facing routing models. Concrete
-// backend model IDs are passthrough requests: they do not inherit the default
-// recipe's signals, policy, decisions, or plugins. Direct looper slugs use the
-// default recipe while limiting candidates to their algorithm type.
+// Decision evaluation runs only for request-facing Entrypoints. Concrete
+// backend Model IDs are passthrough requests: they do not inherit a Recipe's
+// signals, policy, decisions, or plugins.
 func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history signalConversationHistory, ctx *RequestContext) (string, float64, entropy.ReasoningDecision, string, error) {
 	var decisionName string
 	var evaluationConfidence float64
@@ -38,15 +37,15 @@ func (r *OpenAIRouter) performDecisionEvaluation(originalModel string, history s
 		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
-	candidates := r.decisionCandidatesForRequest(originalModel, ctx)
+	candidates := r.decisionCandidatesForRequest(ctx)
 	signals, authzErr := r.evaluateSignalsForDecision(originalModel, signalInput, history.nonUserMessages, ctx, candidates)
 	if authzErr != nil {
 		return "", 0, entropy.ReasoningDecision{}, "", authzErr
 	}
 
-	result, defaultModel := r.runDecisionEngine(originalModel, ctx, signals, candidates)
+	result := r.runDecisionEngine(ctx, signals, candidates)
 	if result == nil {
-		return "", 0.0, entropy.ReasoningDecision{}, defaultModel, nil
+		return "", 0.0, entropy.ReasoningDecision{}, "", nil
 	}
 
 	decisionName, evaluationConfidence, reasoningDecision, selectedModel, err := r.finalizeDecisionEvaluation(
@@ -80,10 +79,6 @@ func (r *OpenAIRouter) prepareDecisionEvaluation(
 	if r.Config.HasRoutingDecisions() {
 		return "", false
 	}
-	if r.requestModelActsAsAuto(originalModel) {
-		logging.Warnf("No decisions configured, using default model")
-		return r.Config.DefaultModel, true
-	}
 	return "", true
 }
 
@@ -110,8 +105,8 @@ func (r *OpenAIRouter) modelSelectorForRequest(ctx *RequestContext) *selection.R
 	if r == nil {
 		return nil
 	}
-	if ctx != nil && ctx.Routing.RecipeName() != "" && r.RecipeModelSelectors != nil {
-		if registry, ok := r.RecipeModelSelectors[ctx.Routing.RecipeName()]; ok {
+	if ctx != nil && ctx.Routing.RuntimeScope() != "" && r.RecipeModelSelectors != nil {
+		if registry, ok := r.RecipeModelSelectors[ctx.Routing.RuntimeScope()]; ok {
 			return registry
 		}
 		return nil
@@ -242,7 +237,7 @@ func (r *OpenAIRouter) buildSelectionContext(
 	sessionID, userID, conversationHistory := r.extractSessionContext(reqCtx)
 	var recipeName config.RecipeName
 	if reqCtx != nil {
-		recipeName = reqCtx.Routing.RecipeName()
+		recipeName = reqCtx.Routing.RuntimeScope()
 	}
 
 	return &selection.SelectionContext{
@@ -274,7 +269,7 @@ func (r *OpenAIRouter) buildAgenticSessionContext(
 		return nil
 	}
 	now := time.Now()
-	stateSessionID := config.RoutingNamespaceKey(reqCtx.Routing.RecipeName(), sessionID)
+	stateSessionID := config.RoutingNamespaceKey(reqCtx.Routing.RuntimeScope(), sessionID)
 	snapshot, hasMemory := sessiontelemetry.GetRouterSessionSnapshot(stateSessionID, now)
 	previousModel := reqCtx.PreviousModel
 	if previousModel == "" && hasMemory {
@@ -452,19 +447,12 @@ func (r *OpenAIRouter) extractSessionContext(ctx *RequestContext) (sessionID, us
 		return "", "", nil
 	}
 	userID = extractUserID(ctx)
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest {
-		return r.extractResponseAPISessionContext(ctx, userID)
-	}
-	if len(ctx.ChatCompletionMessages) > 0 {
-		return r.extractChatCompletionSessionContext(ctx, userID)
-	}
-	return ctx.SessionID, userID, nil
-}
-
-func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
-	sessionID = ctx.ResponseAPICtx.ConversationID
-	if ctx.ResponseAPICtx.ConversationHistory != nil {
-		for _, storedResp := range ctx.ResponseAPICtx.ConversationHistory {
+	sessionID = ctx.SessionID
+	if state := ctx.ResponseObjectState; state != nil {
+		if sessionID == "" {
+			sessionID = state.ConversationID
+		}
+		for _, storedResp := range state.ConversationHistory {
 			for _, inItem := range storedResp.Input {
 				if content := extractContentFromInputItem(inItem); content != "" {
 					conversationHistory = append(conversationHistory, content)
@@ -477,17 +465,16 @@ func (r *OpenAIRouter) extractResponseAPISessionContext(ctx *RequestContext, use
 			}
 		}
 	}
-	return sessionID, userID, conversationHistory
-}
-
-func (r *OpenAIRouter) extractChatCompletionSessionContext(ctx *RequestContext, userID string) (sessionID, userIDOut string, conversationHistory []string) {
-	sessionID = ctx.SessionID
-	if sessionID == "" {
-		sessionID = deriveSessionIDFromMessages(ctx.ChatCompletionMessages, userID)
+	if ctx.SemanticRequest == nil {
+		return sessionID, userID, conversationHistory
 	}
-	for i, msg := range ctx.ChatCompletionMessages {
-		if msg.Content != "" && i < len(ctx.ChatCompletionMessages)-1 {
-			conversationHistory = append(conversationHistory, msg.Content)
+	if sessionID == "" {
+		sessionID = deriveSessionIDFromSemanticMessages(ctx.SemanticRequest.Messages, userID)
+	}
+	for index, message := range ctx.SemanticRequest.Messages {
+		content := semanticText(message.Content)
+		if content != "" && index < len(ctx.SemanticRequest.Messages)-1 {
+			conversationHistory = append(conversationHistory, content)
 		}
 	}
 	return sessionID, userID, conversationHistory

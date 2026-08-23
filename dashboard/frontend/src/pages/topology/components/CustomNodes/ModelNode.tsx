@@ -4,6 +4,7 @@ import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { ModelRefConfig } from '../../types'
 import { MODEL_NODE_WIDTH, REASONING_EFFORT_DISPLAY, NODE_COLORS } from '../../constants'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './CustomNodes.module.css'
 
 interface ModelMode {
@@ -31,21 +32,21 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
   const shortName = model.split('/').pop() || model
 
   // Analyze modes: group by reasoning status
-  const reasoningModes = modes?.filter(m => m.hasReasoning) || []
-  const standardModes = modes?.filter(m => !m.hasReasoning) || []
-  
+  const reasoningModes = modes?.filter((m) => m.hasReasoning) || []
+  const standardModes = modes?.filter((m) => !m.hasReasoning) || []
+
   // Determine primary display mode
   const hasAnyReasoning = reasoningModes.length > 0
   const hasAnyStandard = standardModes.length > 0
   const sourceText = usageLabel || decisionName
 
   // Node colors based on whether it has reasoning capability
-  const colors = hasAnyReasoning
-    ? NODE_COLORS.model.reasoning
-    : NODE_COLORS.model.standard
+  const colors = hasAnyReasoning ? NODE_COLORS.model.reasoning : NODE_COLORS.model.standard
 
   // Get unique reasoning efforts
-  const reasoningEfforts = [...new Set(reasoningModes.map(m => m.reasoningEffort).filter(Boolean))]
+  const reasoningEfforts = [
+    ...new Set(reasoningModes.map((m) => m.reasoningEffort).filter(Boolean)),
+  ]
 
   return (
     <div
@@ -62,8 +63,10 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
 
       {/* Model Name */}
       <div className={styles.modelHeader}>
-        <span className={styles.modelIcon}>🤖</span>
-        <span className={styles.modelName} title={model}>{shortName}</span>
+        <ProductIcon className={styles.modelIcon} name="model" aria-hidden="true" />
+        <span className={styles.modelName} title={model}>
+          {shortName}
+        </span>
       </div>
 
       {/* Modes Section - Show aggregated modes */}
@@ -72,21 +75,35 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
         {hasMultipleModes && hasAnyReasoning && hasAnyStandard ? (
           <div className={styles.modesContainer}>
             {/* Reasoning Mode */}
-            <div className={styles.modeBadge} style={{ background: 'rgba(143, 148, 156, 0.2)', borderColor: '#8f949c', color: 'white' }}>
-              <span>🧠</span>
+            <div
+              className={styles.modeBadge}
+              style={{
+                background: 'rgba(143, 148, 156, 0.2)',
+                borderColor: '#8f949c',
+                color: 'white',
+              }}
+            >
+              <ProductIcon name="compute" aria-hidden="true" />
               <span>Reasoning</span>
               {reasoning_family && (
                 <span className={styles.reasoningFamily}>({reasoning_family})</span>
               )}
               {reasoningEfforts.length > 0 && (
                 <span className={styles.effortTag}>
-                  {reasoningEfforts.map(e => e ? (REASONING_EFFORT_DISPLAY[e]?.icon || e) : '').join(' ')}
+                  {reasoningEfforts
+                    .map((effort) =>
+                      effort ? REASONING_EFFORT_DISPLAY[effort]?.label || effort : '',
+                    )
+                    .join(' · ')}
                 </span>
               )}
             </div>
             {/* Standard Mode */}
-            <div className={styles.modeBadge} style={{ background: 'rgba(100, 100, 100, 0.3)', borderColor: '#666' }}>
-              <span>⚡</span>
+            <div
+              className={styles.modeBadge}
+              style={{ background: 'rgba(100, 100, 100, 0.3)', borderColor: '#666' }}
+            >
+              <ProductIcon name="activity" aria-hidden="true" />
               <span>Standard</span>
             </div>
           </div>
@@ -95,7 +112,7 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
             {/* Single Reasoning Mode */}
             {hasAnyReasoning && (
               <div className={styles.reasoningBadge}>
-                <span className={styles.reasoningIcon}>🧠</span>
+                <ProductIcon className={styles.reasoningIcon} name="compute" aria-hidden="true" />
                 <span>Reasoning</span>
                 {reasoning_family && (
                   <span className={styles.reasoningFamily}>({reasoning_family})</span>
@@ -104,26 +121,26 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
             )}
 
             {/* Reasoning Effort Level */}
-            {reasoningEfforts.length > 0 && reasoningEfforts.map((effort, idx) => {
-              if (!effort) return null
-              const effortConfig = REASONING_EFFORT_DISPLAY[effort]
-              return effortConfig ? (
-                <div
-                  key={idx}
-                  className={styles.effortBadge}
-                  style={{ background: effortConfig.color }}
-                  title={`Reasoning Effort: ${effortConfig.label}`}
-                >
-                  <span>{effortConfig.icon}</span>
-                  <span>{effortConfig.label}</span>
-                </div>
-              ) : null
-            })}
+            {reasoningEfforts.length > 0 &&
+              reasoningEfforts.map((effort, idx) => {
+                if (!effort) return null
+                const effortConfig = REASONING_EFFORT_DISPLAY[effort]
+                return effortConfig ? (
+                  <div
+                    key={idx}
+                    className={styles.effortBadge}
+                    style={{ background: effortConfig.color }}
+                    title={`Reasoning Effort: ${effortConfig.label}`}
+                  >
+                    <span>{effortConfig.label}</span>
+                  </div>
+                ) : null
+              })}
 
             {/* Standard Mode Only */}
             {!hasAnyReasoning && (
               <div className={styles.standardBadge}>
-                <span>⚡</span>
+                <ProductIcon name="activity" aria-hidden="true" />
                 <span>Standard</span>
               </div>
             )}
@@ -133,7 +150,7 @@ export const ModelNode = memo<NodeProps<ModelNodeData>>(({ data }) => {
         {/* LoRA Adapter */}
         {lora_name && (
           <div className={styles.loraBadge} title={`LoRA Adapter: ${lora_name}`}>
-            <span className={styles.loraIcon}>🎨</span>
+            <ProductIcon className={styles.loraIcon} name="puzzle" aria-hidden="true" />
             <span className={styles.loraName}>LoRA: {lora_name}</span>
           </div>
         )}

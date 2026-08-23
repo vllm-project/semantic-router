@@ -52,10 +52,9 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 	)
 	for _, required := range []string{
 		`if [ "$(id -u)" -ne 0 ]; then`,
-		"DASHBOARD_RUNTIME_CONFIG_WRITABLE=false",
-		"DASHBOARD_RECIPE_STORE_WRITABLE=false",
-		`PROVENANCE_FILE_PATH=${CONFIG_FILE_PATH%.*}.provenance.json`,
-		`prepare-file "$PROVENANCE_FILE_PATH" "$STATE_GID"`,
+		`prepare-tree /app/data "$DATA_GID"`,
+		`prepare-bootstrap-token`,
+		`OPENCLAW_CONTAINER_RUNTIME_DISABLED=true`,
 		`exec "$@"`,
 	} {
 		if !strings.Contains(entrypoint, required) {
@@ -68,8 +67,6 @@ func TestDashboardContainerUsesOneCatalogCapableRuntime(t *testing.T) {
 		filepath.Join(repositoryRoot, "deploy", "openshift", "dashboard", "dashboard-deployment.yaml"),
 	)
 	for _, required := range []string{
-		`DASHBOARD_RUNTIME_CONFIG_WRITABLE: "false"`,
-		`DASHBOARD_RECIPE_STORE_WRITABLE: "false"`,
 		"readOnly: true",
 		"emptyDir: {}",
 	} {

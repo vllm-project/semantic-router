@@ -10,12 +10,6 @@ from cli.commands.config import (
     import_config_from_source_command,
     migrate_config_command,
 )
-from cli.commands.model import (
-    model_fork_command,
-    model_list_command,
-    model_show_command,
-    model_validate_command,
-)
 from cli.commands.rag import rag_list_command
 from cli.commands.validate import validate_command
 from cli.utils import get_logger
@@ -34,7 +28,7 @@ def config(ctx: click.Context) -> None:
         vllm-sr config envoy
         vllm-sr config router
         vllm-sr config envoy --config my-config.yaml
-        vllm-sr config migrate --config old.yaml
+        vllm-sr config migrate --config config-v0.3.yaml
         vllm-sr config import --from openclaw --source openclaw.json
     """
     if ctx.invoked_subcommand is not None:
@@ -75,22 +69,32 @@ def config_router(config_path: str) -> None:
     "--config",
     "config_path",
     default="config.yaml",
-    help="Path to source config file (default: config.yaml)",
+    show_default=True,
+    help="Path to the canonical v0.3 source file.",
 )
 @click.option(
     "--output",
-    help="Path for migrated canonical config (default: <config>.migrated.yaml)",
+    "output_path",
+    help="Path for validated v0.4 YAML. Defaults to <source>.v0.4.yaml.",
 )
 @click.option(
     "--force",
     is_flag=True,
-    help="Overwrite the output file if it already exists.",
+    help="Replace an existing output file. The v0.3 source is never overwritten.",
 )
 @exit_with_logged_error(log)
-def config_migrate(config_path: str, output: str | None, force: bool) -> None:
-    """Migrate a legacy or mixed config file to canonical v0.3 YAML."""
+def config_migrate(
+    config_path: str,
+    output_path: str | None,
+    force: bool,
+) -> None:
+    """Convert canonical v0.3 YAML to the strict v0.4 contract offline."""
 
-    migrate_config_command(config_path=config_path, output_path=output, force=force)
+    migrate_config_command(
+        config_path=config_path,
+        output_path=output_path,
+        force=force,
+    )
 
 
 @config.command("import")
@@ -125,7 +129,7 @@ def config_import(
     target_path: str,
     force: bool,
 ) -> None:
-    """Import a supported external config source into canonical v0.3 YAML."""
+    """Import a supported external config source into canonical v0.4 YAML."""
 
     import_config_from_source_command(
         from_type=from_type,
@@ -151,117 +155,6 @@ def validate(config: str) -> None:
         vllm-sr validate --config my-config.yaml  # Uses my-config.yaml
     """
     validate_command(config)
-
-
-@click.group(invoke_without_command=True)
-@click.pass_context
-@exit_with_logged_error(log)
-def model(ctx: click.Context) -> None:
-    """
-    Discover bundled virtual models or inspect configured provider models.
-
-    Examples:
-        vllm-sr model list
-        vllm-sr model show vllm-sr/mom-v1-blend
-        vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-        vllm-sr model list --config my-config.yaml
-    """
-    if ctx.invoked_subcommand is not None:
-        return
-    click.echo(ctx.get_help())
-
-
-@model.command("list")
-@click.option(
-    "--config",
-    "config_path",
-    default=None,
-    help="Inspect one explicit runtime config instead of the installed catalog.",
-)
-@click.option("--catalog-version", default="latest", show_default=True)
-@click.option(
-    "--all-versions", is_flag=True, help="Include immutable release snapshots."
-)
-@click.option(
-    "--all",
-    "include_incompatible",
-    is_flag=True,
-    help="Include incompatible models with their reason.",
-)
-@click.option(
-    "--output", type=click.Choice(["table", "json"]), default="table", show_default=True
-)
-@exit_with_logged_error(log)
-def model_list(
-    config_path: str | None,
-    catalog_version: str,
-    all_versions: bool,
-    include_incompatible: bool,
-    output: str,
-) -> None:
-    """List installed virtual models or inspect one explicit config."""
-
-    model_list_command(
-        config_path,
-        catalog_version=catalog_version,
-        include_all_versions=all_versions,
-        include_incompatible=include_incompatible,
-        output=output,
-    )
-
-
-@model.command("show")
-@click.argument("model_id")
-@click.option("--catalog-version", default="latest", show_default=True)
-@click.option(
-    "--output", type=click.Choice(["table", "json"]), default="table", show_default=True
-)
-@exit_with_logged_error(log)
-def model_show(model_id: str, catalog_version: str, output: str) -> None:
-    """Show requirements for one installed virtual model."""
-
-    model_show_command(model_id, catalog_version=catalog_version, output=output)
-
-
-@model.command("fork")
-@click.argument("model_id")
-@click.argument("destination")
-@click.option(
-    "--enable",
-    "additional_models",
-    multiple=True,
-    help="Enable another compatible virtual model; catalog assets merge fail-closed.",
-)
-@click.option("--catalog-version", default="latest", show_default=True)
-@click.option(
-    "--default", "default_model", default=None, help="Default enabled virtual model."
-)
-@exit_with_logged_error(log)
-def model_fork(
-    model_id: str,
-    destination: str,
-    additional_models: tuple[str, ...],
-    catalog_version: str,
-    default_model: str | None,
-) -> None:
-    """Fork one or more compatible built-ins to canonical YAML."""
-
-    model_fork_command(
-        (model_id, *additional_models),
-        destination,
-        catalog_version=catalog_version,
-        default_model=default_model,
-    )
-
-
-@model.command("validate")
-@click.argument("config_path")
-@click.option("--catalog-version", default="latest", show_default=True)
-@exit_with_logged_error(log)
-def model_validate(config_path: str, catalog_version: str) -> None:
-    """Validate canonical YAML and report catalog verification status."""
-
-    model_validate_command(config_path, catalog_version=catalog_version)
 
 
 @click.group(invoke_without_command=True)

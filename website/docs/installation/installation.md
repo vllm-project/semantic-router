@@ -77,15 +77,19 @@ and local runtime state:
 vllm-sr serve
 ```
 
-On the first run, an empty workspace starts the Dashboard in setup mode. Open
-[http://localhost:8700](http://localhost:8700), then:
+On the first run, `serve` creates private local trust material, starts the
+managed Router, Dashboard, PostgreSQL, and Valkey, and makes the Management API
+available in the same launch. Open [http://localhost:8700](http://localhost:8700),
+then:
 
 1. add one or more model endpoints;
-2. choose a routing preset or a single-model baseline; and
-3. activate the generated configuration.
+2. choose a routing preset or a single-model baseline;
+3. publish a Mixture-of-Model entrypoint; and
+4. create an API key with access to that entrypoint.
 
-Activation writes `config.yaml` and starts the inference listener. The local
-stack exposes Envoy at `http://localhost:8899` by default.
+The Router persists those resources directly; the Dashboard never rewrites or
+activates Router YAML. The local stack exposes Envoy at
+`http://localhost:8899` by default.
 
 :::tip[Want a local model?]
 Follow [Local model with Ollama](ollama) if you want a simple local backend
@@ -97,17 +101,24 @@ without setting up vLLM or a GPU environment.
 After activation:
 
 ```bash
+export VLLM_SR_API_KEY='<your API key>'
+export VLLM_SR_MODEL='<your published entrypoint>'
+
+curl http://localhost:8899/v1/models \
+  -H "Authorization: Bearer $VLLM_SR_API_KEY"
+
 curl http://localhost:8899/v1/chat/completions \
+  -H "Authorization: Bearer $VLLM_SR_API_KEY" \
   -H 'Content-Type: application/json' \
   -d '{
-    "model": "vllm-sr/auto",
+    "model": "'"$VLLM_SR_MODEL"'",
     "messages": [{"role": "user", "content": "Hello!"}]
   }'
 ```
 
-Use the model name shown by your active configuration. A virtual model resolves
-to its recipe; a configured physical model name is sent directly to that
-backend.
+Use the entrypoint name shown in the Dashboard. Missing credentials are denied when
+managed access is enabled, and model discovery returns only resources visible to
+that key.
 
 ## Operate the stack
 
@@ -124,24 +135,18 @@ local stacks. Log access is permission-controlled, and service output may
 contain tenant or credential-adjacent data. Treat both Dashboard log access and
 the local log directory as sensitive.
 
-## Start from YAML
+## Use an existing bootstrap
 
 If you already have a complete canonical config:
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve
 ```
 
-Environment references such as `${MODEL_API_KEY}` are resolved from the launch
-environment. Do not put literal credentials in a config that will be shared or
-committed.
-
-For older configs, use:
-
-```bash
-vllm-sr config migrate --config old-config.yaml
-```
+The local command reads `config.yaml` as deployment bootstrap. In managed mode,
+dynamic Models, Recipes, Entrypoints, credentials, and policies are created
+through the Router Management API after startup.
 
 ## Next
 
@@ -150,7 +155,7 @@ vllm-sr config migrate --config old-config.yaml
 - [Configuration](configuration) for canonical YAML, recipes, and environment
   bindings.
 - [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-  for built-in models, backend binding, and the complete CLI workflow.
+  for built-in Recipes, backend binding, and the Management API workflow.
 - [Why Semantic Routing](../overview/goals) for the design goals.
 - [Routing Pipeline](../overview/signal-driven-decisions) for signals,
   decisions, algorithms, and plugins.

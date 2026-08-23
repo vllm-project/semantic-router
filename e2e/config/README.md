@@ -35,10 +35,11 @@ Run it against the current local image with:
 
 ```bash
 make vllm-sr-dev
-OPENAI_API_KEY="<provider-key>" vllm-sr serve \
-  --config e2e/config/config.remote-embedding-smoke.yaml \
-  --image-pull-policy never \
-  --minimal
+mkdir -p .agent-harness/remote-embedding-smoke
+cp e2e/config/config.remote-embedding-smoke.yaml \
+  .agent-harness/remote-embedding-smoke/config.yaml
+cd .agent-harness/remote-embedding-smoke
+OPENAI_API_KEY="<provider-key>" vllm-sr serve --image-pull-policy never --minimal
 curl -fsS http://localhost:8080/startup-status | jq '.embedding_provider'
 ```
 

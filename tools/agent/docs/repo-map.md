@@ -81,13 +81,11 @@ the changed-file structure gate rejects unowned additions.
   - acceptance coverage hotspot; keep contract assertions separate from report-only metrics and stress dashboards
 - `dashboard/frontend/src/pages/ConfigPage.tsx`
   - dashboard config editor hotspot; keep schema/types/helpers outside the page component when possible
-- `dashboard/frontend/src/pages/SetupWizardPage.tsx`
-  - setup route hotspot; keep route state in the page but move wizard support types, config builders, and step panels into adjacent modules
 - `dashboard/frontend/src/components/ChatComponent.tsx`
   - playground/chat orchestration hotspot; keep cards, citation rendering, and control widgets in adjacent components
 - `dashboard/frontend/src/components/ExpressionBuilder.tsx`
   - expression editor hotspot; keep AST/tree helpers and reusable render fragments outside the main ReactFlow container
-- `dashboard/backend/handlers/config.go`, `dashboard/backend/handlers/deploy.go`, `dashboard/backend/handlers/status.go`, `dashboard/backend/handlers/status_modes.go`
+- `dashboard/backend/handlers/router_management_request.go`, `dashboard/backend/handlers/status.go`, `dashboard/backend/handlers/status_modes.go`
   - dashboard backend control hotspots; keep HTTP transport thin and move file mutation, runtime apply, container probing, and status synthesis into adjacent helpers
 
 ## Main Entry Points

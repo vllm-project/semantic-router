@@ -1,18 +1,18 @@
-import React, { useId } from "react";
-import { createPortal } from "react-dom";
+import React, { useId } from 'react'
+import { createPortal } from 'react-dom'
 
-import DslGuide from "@/components/DslGuide";
-import useAccessibleDialog from "@/hooks/useAccessibleDialog";
+import DslGuide from '@/components/DslGuide'
+import useAccessibleDialog from '@/hooks/useAccessibleDialog'
 
-import styles from "./BuilderPage.module.css";
+import styles from './BuilderPage.module.css'
 
 interface BuilderGuideDrawerProps {
-  open: boolean;
-  width: number;
-  isDragging: boolean;
-  onClose: () => void;
-  onDragStart: (event: React.MouseEvent) => void;
-  onInsertSnippet: (snippet: string) => void;
+  open: boolean
+  width: number
+  isDragging: boolean
+  onClose: () => void
+  onDragStart: (event: React.MouseEvent) => void
+  onInsertSnippet: (snippet: string) => void
 }
 
 const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
@@ -23,22 +23,22 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
   onDragStart,
   onInsertSnippet,
 }) => {
-  const dialogId = useId();
-  const titleId = `${dialogId}-title`;
+  const dialogId = useId()
+  const titleId = `${dialogId}-title`
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
     isOpen: open,
     onClose,
     dismissible: !isDragging,
-  });
+  })
 
-  if (!open) return null;
+  if (!open) return null
 
   return createPortal(
     <div
       className={styles.guideDrawerOverlay}
       role="presentation"
       onMouseDown={() => {
-        if (!isDragging) onClose();
+        if (!isDragging) onClose()
       }}
     >
       <div
@@ -51,10 +51,7 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div
-          className={styles.guideDrawerResizeHandle}
-          onMouseDown={onDragStart}
-        >
+        <div className={styles.guideDrawerResizeHandle} onMouseDown={onDragStart}>
           <div className={styles.guideDrawerResizeLine} />
         </div>
         <div className={styles.guideDrawerHeader}>
@@ -67,10 +64,7 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
               stroke="currentColor"
               strokeWidth="1.5"
             >
-              <path
-                d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z"
-                strokeLinejoin="round"
-              />
+              <path d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z" strokeLinejoin="round" />
               <path d="M5 6h5M5 9h3" strokeLinecap="round" />
             </svg>
             DSL Language Guide
@@ -101,7 +95,7 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
       </div>
     </div>,
     document.body,
-  );
-};
+  )
+}
 
-export { BuilderGuideDrawer };
+export { BuilderGuideDrawer }

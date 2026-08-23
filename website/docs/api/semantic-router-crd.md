@@ -1,24 +1,28 @@
 ---
 title: SemanticRouter CRD Reference
 sidebar_label: SemanticRouter CRD
-description: Top-level field guide for the vllm.ai/v1alpha1 SemanticRouter custom resource.
+description: Top-level field guide for the vllm.ai/v1alpha1 SemanticRouter deployment resource.
 ---
 
 # SemanticRouter CRD Reference
 
-`SemanticRouter` is the Operator-owned resource for deploying a Router and
-binding it to Kubernetes model services.
+`SemanticRouter` is the Operator-owned Kubernetes deployment resource. It
+selects an immutable Router bootstrap and configures workload concerns; it is
+not a second Router configuration language.
 
 ```yaml
 apiVersion: vllm.ai/v1alpha1
 kind: SemanticRouter
 metadata:
   name: my-router
-spec: {}
+spec:
+  bootstrap:
+    configMapRef:
+      name: my-router-bootstrap-v1
+      key: config.yaml
 ```
 
-This page summarizes the top-level contract. The installed CRD is authoritative
-for nested OpenAPI validation and defaults:
+The installed CRD is authoritative for nested OpenAPI validation and defaults:
 
 ```bash
 kubectl explain semanticrouter.spec --recursive
@@ -32,80 +36,100 @@ and the generated CRD in
 ## Top-level `spec` fields
 
 | Field | Purpose |
-|-------|---------|
+| --- | --- |
+| `bootstrap` | Required immutable ConfigMap name and key containing the sole v0.4 Router startup manifest. |
 | `image` | Router image repository, tag, registry prefix, and pull policy. |
 | `replicas` | Fixed replica count when autoscaling is not controlling replicas. |
 | `imagePullSecrets` | Registry credentials referenced by name. |
 | `serviceAccount` | Create or select the workload ServiceAccount. |
-| `service` | Service type and API, gRPC, and metrics ports. |
-| `resources` | Container CPU, memory, and other resource requests/limits. |
+| `service` | Inference Service type plus API, gRPC, private Management, and metrics ports. |
+| `resources` | Container CPU, memory, and other resource requests and limits. |
 | `persistence` | Model-storage PVC settings or an existing claim. |
-| `config` | Operator configuration adapters and canonical `routing` object. |
-| `toolsDb` | Function-tool records materialized for Router tool selection. |
-| `vllmEndpoints` | Model services discovered as canonical providers and model cards. |
-| `autoscaling` | HPA enablement and CPU/memory targets. |
+| `autoscaling` | HPA enablement and CPU or memory targets. |
 | `startupProbe`, `livenessProbe`, `readinessProbe` | Workload probe tuning. |
-| `securityContext`, `podSecurityContext` | Container and pod security settings. |
-| `podAnnotations` | Additional annotations, including scraper integration. |
+| `securityContext`, `podSecurityContext` | Container and Pod security settings. |
+| `podAnnotations` | Additional Pod annotations. |
 | `nodeSelector`, `tolerations`, `affinity` | Pod scheduling constraints. |
-| `env`, `args` | Additional Router environment variables and arguments. |
+| `env`, `envFrom`, `args` | Additional environment sources and Router process arguments. |
+| `volumes`, `volumeMounts` | Deployment-owned ConfigMap, Secret, CSI, or other volumes shared with the Router and migration Job. |
 | `gateway` | Reference to an existing Kubernetes Gateway. |
 | `openshift` | OpenShift Route behavior. |
 | `ingress` | Kubernetes Ingress configuration. |
+| `podDisruptionBudget` | Mode-aware disruption protection; enabled by default in managed mode. |
+| `topologySpread` | One portable failure-domain spread constraint; enabled by default in managed mode. |
+| `networkPolicy` | Listener-specific ingress peers; enabled and fail closed by default in managed mode. |
 
-## `vllmEndpoints`
+## `bootstrap.configMapRef`
 
-Each entry creates one logical provider model and one backend reference:
+The reference has two required fields:
 
 ```yaml
 spec:
-  vllmEndpoints:
-    - name: qwen-backend
-      model: qwen/assistant
-      reasoningFamily: qwen3
-      backend:
-        type: service
-        service:
-          name: qwen-vllm
-          namespace: model-serving
-          port: 8000
-      weight: 1
+  bootstrap:
+    configMapRef:
+      name: my-router-bootstrap-v4
+      key: config.yaml
 ```
 
-Supported backend types are `service`, `kserve`, and `llamastack`. Optional
-`loras` declare adapters exposed by the generated routing model card. The first
-resolved model becomes the default unless configuration overrides it.
+The ConfigMap must:
 
-## `config`
+- exist in the same namespace as the `SemanticRouter`;
+- set `immutable: true`;
+- contain the selected `data` key; and
+- contain a v0.4 manifest with `global.control_plane.mode` set to
+  `standalone` or `managed`.
 
-The Operator always renders a canonical v0.3 Router document. Its configuration
-surface has two parts:
+The selected key is projected read-only to `/app/config.yaml`. `spec.args`
+cannot override `--config`, and `spec.env` cannot override `CONFIG_FILE`.
+Operator-owned volume names and the bootstrap mount path cannot be overridden.
 
-- `config.routing` passes through the canonical routing object, including model
-  cards, signals, projections, decisions, algorithms, and route plugins;
-- typed adapter fields such as `response_cache`, `tools`, `prompt_guard`,
-  `classifier`, `complexity_rules`, `reasoning_families`, `api`, and
-  `observability` are translated into their canonical provider or `global`
-  locations.
+Standalone manifests may contain top-level Models, Recipes, and Entrypoints.
+Managed manifests must not contain those resources; the Management API owns
+them. Updating the ConfigMap reference changes the Pod template and causes a
+rollout. The Operator does not perform in-place file reloads.
 
-Do not assume an arbitrary local `config.yaml` key is valid directly under
-`spec.config`. Use the CRD schema and
-[Configuration Workflows](../installation/configuration-workflows) when moving
-between local YAML and the Operator.
+Managed bootstrap additionally requires exactly one
+`global.stores.access.postgres.dsn_env` or `.dsn_file`. The Operator passes
+that reference—not the DSN value—to an explicit schema migration Job and gates
+the Router rollout on Job completion.
 
-The deprecated `semantic_cache` adapter is retained for compatibility;
-`response_cache` is the canonical field. Do not set both.
+## Managed Services and isolation
+
+`spec.service.type` applies only to the inference Service named after the
+`SemanticRouter`. Managed mode also creates private ClusterIP Services named
+`<name>-management`, `<name>-backend-dispatch`, and, when metrics are enabled,
+`<name>-metrics`.
+
+`networkPolicy.inferencePeers`, `.managementPeers`, and `.metricsPeers` map to
+only their corresponding listeners. Omitted peer families stay denied. The
+backend-dispatch listener permits only Pods belonging to the same
+`SemanticRouter`.
+
+Managed mode defaults `podDisruptionBudget.enabled`,
+`topologySpread.enabled`, and `networkPolicy.enabled` to true. Standalone mode
+defaults each to false. An explicit `enabled` value overrides the mode default.
 
 ## Status
 
 `status` reports the observed generation, replica counts, conditions, phase,
-gateway mode, and detected OpenShift features. Controllers and automation
-should use conditions and `status.observedGeneration`, not only the phase.
+gateway mode, control-plane mode, immutable bootstrap digest, public and
+Management Service names, migration state, and detected OpenShift features.
+Automation should use conditions and `status.observedGeneration`, not only
+phase.
 
 ```bash
 kubectl get semanticrouter <name> -o jsonpath='{.status.conditions}'
 kubectl get semanticrouter <name> -o jsonpath='{.status.observedGeneration}'
+kubectl get semanticrouter <name> -o jsonpath='{.status.migration}'
 ```
+
+Managed rollout conditions are:
+
+- `BootstrapReady`: the selected immutable v0.4 bootstrap passed the
+  deployment-boundary checks;
+- `MigrationReady`: the content-addressed schema Job succeeded; and
+- `Available`: the workload is ready and no migration or reconciliation gate
+  is active.
 
 ## Related guides
 

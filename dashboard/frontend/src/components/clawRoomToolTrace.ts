@@ -1,4 +1,4 @@
-import type { ToolCall, ToolResult } from '../tools'
+import type { ToolCall, ToolResult } from '../tools/types'
 
 export interface ClawRoomToolTraceStep {
   id: string
@@ -21,18 +21,14 @@ export type ClawRoomStreamingToolTraceEntry = {
 
 export const CLAW_ROOM_TOOL_TRACE_METADATA_KEY = 'toolTrace'
 
-const normalizeToolTraceStatus = (
-  status: string | undefined
-): ClawRoomToolTraceStep['status'] => {
+const normalizeToolTraceStatus = (status: string | undefined): ClawRoomToolTraceStep['status'] => {
   if (status === 'completed' || status === 'failed' || status === 'pending') {
     return status
   }
   return 'running'
 }
 
-const normalizeClawRoomToolTraceStep = (
-  value: unknown
-): ClawRoomToolTraceStep | null => {
+const normalizeClawRoomToolTraceStep = (value: unknown): ClawRoomToolTraceStep | null => {
   if (!value || typeof value !== 'object') {
     return null
   }
@@ -52,14 +48,14 @@ const normalizeClawRoomToolTraceStep = (
 }
 
 const normalizeClawRoomToolTraceSteps = (values: unknown[]): ClawRoomToolTraceStep[] => {
-  return values.flatMap(value => {
+  return values.flatMap((value) => {
     const step = normalizeClawRoomToolTraceStep(value)
     return step ? [step] : []
   })
 }
 
 export const parseClawRoomToolTracePayload = (
-  payload: Record<string, unknown> | undefined
+  payload: Record<string, unknown> | undefined,
 ): ClawRoomToolTracePayload | null => {
   if (!payload || !Array.isArray(payload.steps)) {
     return null
@@ -72,7 +68,7 @@ export const parseClawRoomToolTracePayload = (
 }
 
 export const parseClawRoomToolTraceFromMessageMetadata = (
-  metadata?: Record<string, string>
+  metadata?: Record<string, string>,
 ): ClawRoomToolTraceStep[] => {
   const raw = metadata?.[CLAW_ROOM_TOOL_TRACE_METADATA_KEY]
   if (!raw) {
@@ -92,7 +88,7 @@ export const parseClawRoomToolTraceFromMessageMetadata = (
 
 export const applyClawRoomToolTraceRevision = (
   current: ClawRoomStreamingToolTraceEntry | undefined,
-  incoming: ClawRoomToolTracePayload
+  incoming: ClawRoomToolTracePayload,
 ): ClawRoomStreamingToolTraceEntry | null => {
   if (!incoming.steps?.length) {
     return null

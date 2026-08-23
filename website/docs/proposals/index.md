@@ -38,7 +38,6 @@ explicit when a model cannot or should not handle a request.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
-| [Model Execution Fallback](./model-execution-fallback) | 2026-08-10 | Proposal | Safe ownership boundary for cross-model fallback. |
 | [PRISM](./Prism-153key) | 2026-03-20 | Proposal | Model qualification and legitimacy checks. |
 | [TruthLens](./hallucination-mitigation-milestone) | 2025-12-02 | Proposal | Gateway-level hallucination detection and mitigation. |
 
@@ -49,8 +48,16 @@ different client and transport protocols.
 
 | Proposal | Created | Status | Scope |
 | --- | --- | --- | --- |
-| [Unified Config Contract v0.3](./unified-config-contract-v0-3) | 2026-03-17 | Implemented | One configuration contract across authoring and deployment surfaces. |
-| [Multi-Protocol Adapter Architecture](./multi-protocol-adaptor) | 2026-02-18 | Proposal | Protocol-independent access to the routing engine. |
+| [Neutral Protocol Codec Matrix](./multi-protocol-adaptor) | 2026-08-23 | Proposal | One neutral IR and complete buffered/streaming translation matrix for public and backend formats. |
+
+## Access & Operations
+
+Identity, credential, authorization, quota, and accounting contracts that protect
+the inference API while keeping management clients replaceable.
+
+| Proposal | Created | Status | Scope |
+| --- | --- | --- | --- |
+| [Router-Native Access Control and Quota Accounting](./router-native-access-control) | 2026-08-22 | Proposal | Router-owned API keys, model grants, global quotas, usage, neutral protocol codecs, durable Agent Builder, Provider Integration compilation, and Docker/Kubernetes deployment, with [resource](./router-native-access-control-contracts), [Provider catalog](./router-native-access-control-provider-catalog), [Model runtime](./router-native-access-control-model-runtime), [protocol](./multi-protocol-adaptor), [quota runtime](./router-native-access-control-quota-runtime), [Management API](./router-native-access-control-management-api), [authorization](./router-native-access-control-authorization), [deployment](./router-native-access-control-deployment), and [Agent](./router-native-agent-runtime) appendices. |
 
 ## Serving Integrations
 

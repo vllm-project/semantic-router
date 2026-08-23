@@ -1,0 +1,105 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+
+const readSource = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8')
+
+describe('dashboard product surfaces', () => {
+  it('puts a calm system overview in the first dashboard surface', () => {
+    const page = readSource('./DashboardPage.tsx')
+    const hero = readSource('./DashboardRoutingHero.tsx')
+
+    expect(page.indexOf('<DashboardRoutingHero')).toBeLessThan(page.indexOf('mainGrid'))
+    expect(hero).toContain('Your model system, at a glance.')
+    expect(hero).toContain('Every capability path visible, governed, and ready.')
+    expect(hero).not.toContain('activeRoute')
+    expect(hero).not.toContain('routeDots')
+  })
+
+  it('does not fetch Router Management routing data without routing.read', () => {
+    const page = readSource('./DashboardPage.tsx')
+
+    expect(page).toContain(
+      'canReadConfig ? configRequest.run({ allowHidden: true }) : Promise.resolve()',
+    )
+    expect(page).toContain('if (!canReadConfig) return')
+  })
+
+  it('uses one shared authentication composition for login and invitations', () => {
+    const login = readSource('./LoginPage.tsx')
+    const invite = readSource('./InviteAcceptPage.tsx')
+
+    expect(login).toContain('<AuthExperienceShell')
+    expect(invite).toContain('<AuthExperienceShell')
+    expect(invite).toContain('Your invitation is here')
+    expect(invite).toContain('Build what one model can’t.')
+    expect(invite).toContain('Valid until')
+    expect(invite).not.toContain('markFirstAPIKeyOnboardingPending')
+  })
+
+  it('welcomes invited users before delivering the one-time key experience', () => {
+    const invite = readSource('./InviteAcceptPage.tsx')
+    const shell = readSource('../app/AuthenticatedShell.tsx')
+    const access = readSource('./AccessControlPage.tsx')
+    const welcome = readSource('../components/InvitationWelcomeDialog.tsx')
+    const moment = readSource('../components/ProductMomentDialog.tsx')
+
+    expect(invite).toContain("navigate('/dashboard'")
+    expect(invite).toContain(
+      'stageInvitationOnboarding({ displayName: invitation.name, onboardingKey })',
+    )
+    expect(invite).not.toContain('state: { invitationOnboarding')
+    expect(invite).not.toContain('markFirstAPIKeyOnboardingPending')
+    expect(shell).toContain('<InvitationWelcomeDialog')
+    expect(shell).toContain("navigate('/access/api-keys?onboarding=invitation'")
+    expect(access).toContain('claimInvitationOnboarding(selfUserId)')
+    expect(shell).not.toContain('state: { onboardingKey')
+    expect(shell).not.toContain('inferenceAccessApi.createSelfKey')
+    expect(welcome).toContain('Reveal my API key')
+    expect(welcome).toContain('One key. Your team’s models. Ready to build.')
+    expect(moment).toContain('src="/vllm.png"')
+  })
+
+  it('uses invitation as the only dashboard user creation path', () => {
+    const access = readSource('./AccessControlPage.tsx')
+    const invitation = readSource('./DashboardMemberInviteDialog.tsx')
+
+    expect(access).toContain('<ProductIcon name="plus" /> Invite user')
+    expect(access).not.toContain("target === 'user'")
+    expect(access).not.toContain("? 'New user'")
+    expect(invitation).toContain('Dashboard role')
+    expect(invitation).toContain('Team <small>Optional</small>')
+    expect(invitation).toContain('Team role')
+  })
+
+  it('keeps every Build manager on the shared banner composition', () => {
+    const manager = readSource('./ConfigPageManagerLayout.tsx')
+
+    expect(manager).toContain('className={styles.headerGrid}')
+    expect(manager).toContain('className={styles.surfacePulse}')
+    expect(manager).toContain('Semantic Router')
+  })
+
+  it('uses the shared semantic icon language on topology and access choices', () => {
+    const topologyFiles = [
+      './topology/TopologyPageEnhanced.tsx',
+      './topology/components/CustomNodes/AlgorithmNode.tsx',
+      './topology/components/CustomNodes/ClientNode.tsx',
+      './topology/components/CustomNodes/DecisionNode.tsx',
+      './topology/components/CustomNodes/DefaultRouteNode.tsx',
+      './topology/components/CustomNodes/FallbackDecisionNode.tsx',
+      './topology/components/CustomNodes/GlobalPluginNode.tsx',
+      './topology/components/CustomNodes/ModelNode.tsx',
+      './topology/components/CustomNodes/PluginChainNode.tsx',
+      './topology/components/CustomNodes/SignalGroupNode.tsx',
+      './topology/components/ResultCard/ResultCard.tsx',
+    ].map(readSource)
+    const accessFields = readSource('./AccessControlEditorFields.tsx')
+
+    for (const source of topologyFiles) {
+      expect(source).toContain('ProductIcon')
+      expect(source).not.toMatch(/[🤖🧠🔌📊⚠✓✗]/u)
+    }
+    expect(accessFields).toContain('className={styles.choiceCheck}')
+    expect(accessFields).not.toContain('<i>✓</i>')
+  })
+})

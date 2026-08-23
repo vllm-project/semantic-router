@@ -40,17 +40,4 @@ export const decisionColumns: Column<DecisionConfig>[] = [
       )
     },
   },
-  {
-    key: 'models',
-    header: 'Models',
-    width: TABLE_COLUMN_WIDTH.medium,
-    render: (row) => {
-      const count = row.modelRefs?.length || 0
-      return (
-        <span>
-          {count} {count === 1 ? 'model' : 'models'}
-        </span>
-      )
-    },
-  },
 ]

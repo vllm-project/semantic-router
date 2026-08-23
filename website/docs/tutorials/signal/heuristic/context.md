@@ -32,7 +32,7 @@ Use `context` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     context:
       - name: long_context

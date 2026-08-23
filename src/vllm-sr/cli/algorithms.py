@@ -210,7 +210,9 @@ class WorkflowRoleConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str
-    models: list[str] = Field(min_length=1)
+    # Physical Models are supplied by Entrypoint assignments. Only the internal
+    # compiled decision form may materialize this field.
+    models: list[str] = Field(default_factory=list)
     prompt: str | None = None
     access_list: list[str] | None = None
 
@@ -381,17 +383,69 @@ class PromptSelectionConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    model: str
+    # The selector uses the Entrypoint-assigned candidate set in v0.4.
+    model: str | None = None
     instructions: str
     timeout_seconds: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validate_required_text(self):
-        if not self.model.strip():
-            raise ValueError("model is required")
+        if self.model is not None and not self.model.strip():
+            raise ValueError("model cannot be blank")
         if not self.instructions.strip():
             raise ValueError("instructions are required")
         return self
+
+
+class MLKNNConfig(BaseModel):
+    """Decision-local KNN selector settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    k: int | None = Field(default=None, gt=0)
+    pretrained_path: str | None = None
+
+
+class MLKMeansConfig(BaseModel):
+    """Decision-local K-Means selector settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    num_clusters: int | None = Field(default=None, gt=0)
+    efficiency_weight: float | None = Field(default=None, ge=0, le=1)
+    pretrained_path: str | None = None
+
+
+class MLSVMConfig(BaseModel):
+    """Decision-local SVM selector settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kernel: Literal["linear", "rbf", "gaussian"] | None = None
+    gamma: float | None = Field(default=None, ge=0)
+    pretrained_path: str | None = None
+
+
+class MLMLPConfig(BaseModel):
+    """Decision-local MLP selector settings."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    device: Literal["cpu", "cuda", "metal"] | None = None
+    pretrained_path: str | None = None
+
+
+class MLSelectionConfig(BaseModel):
+    """Artifact and family settings owned by one Recipe Decision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    models_path: str | None = None
+    embedding_dim: int | None = Field(default=None, gt=0)
+    knn: MLKNNConfig | None = None
+    kmeans: MLKMeansConfig | None = None
+    svm: MLSVMConfig | None = None
+    mlp: MLMLPConfig | None = None
 
 
 class AlgorithmConfig(BaseModel):
@@ -459,11 +513,12 @@ class AlgorithmConfig(BaseModel):
     hybrid: HybridSelectionConfig | None = None
     multi_factor: MultiFactorSelectionConfig | None = None
     prompt: PromptSelectionConfig | None = None
+    ml: MLSelectionConfig | None = None
     # Behavior on algorithm failure: "skip" or "fail"
     on_error: str | None = "skip"
 
     @model_validator(mode="after")
-    def normalize_prompt_fallback(self):
+    def validate_scoped_algorithm_config(self):
         if self.type == "prompt":
             if self.prompt is None:
                 raise ValueError("algorithm.type=prompt requires prompt configuration")
@@ -473,4 +528,27 @@ class AlgorithmConfig(BaseModel):
                 raise ValueError("prompt on_error must be fallback")
         elif self.prompt is not None:
             raise ValueError("prompt configuration requires algorithm.type=prompt")
+
+        ml_types = {"knn", "kmeans", "svm", "mlp"}
+        if self.type in ml_types:
+            if self.ml is None:
+                raise ValueError(
+                    f"algorithm.type={self.type} requires algorithm.ml configuration"
+                )
+            configured_families = [
+                family
+                for family in ("knn", "kmeans", "svm", "mlp")
+                if getattr(self.ml, family) is not None
+            ]
+            if configured_families != [self.type]:
+                if not configured_families:
+                    raise ValueError(
+                        f"algorithm.type={self.type} requires algorithm.ml.{self.type} configuration"
+                    )
+                raise ValueError(
+                    f"algorithm.type={self.type} requires only algorithm.ml.{self.type} "
+                    f"configuration; found {', '.join(configured_families)}"
+                )
+        elif self.ml is not None:
+            raise ValueError("algorithm.ml requires an ML algorithm.type")
         return self

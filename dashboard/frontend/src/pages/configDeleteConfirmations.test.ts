@@ -6,8 +6,8 @@ const readSource = (name: string) => readFileSync(new URL(name, import.meta.url)
 describe('configuration delete confirmation contracts', () => {
   it.each([
     ['./ConfigPageDecisionsSection.tsx', 'decisionDeletePending', 'decisionDeleteError'],
-    ['./ConfigPageMoMRoutingPanel.tsx', 'entrypointPendingDelete', 'deleteError'],
-    ['./ConfigPageModelsSection.tsx', 'reasoningFamilyDeletePending', 'reasoningFamilyDeleteError'],
+    ['./ConfigPageMoMRoutingPanel.tsx', 'pendingDelete', 'deleteError'],
+    ['./ConfigPageModelsSection.tsx', 'pendingDelete', 'deleteError'],
     ['./ConfigPageProjectionsSection.tsx', 'projectionDeletePending', 'projectionDeleteError'],
   ])('uses the shared confirmation flow in %s', (path, pendingState, errorState) => {
     const source = readSource(path)
@@ -30,8 +30,6 @@ describe('configuration delete confirmation contracts', () => {
 
   it.each([
     ['./ConfigPageSignalsSection.tsx', 'signalsPendingDelete', 'confirmDeleteSignals'],
-    ['./ConfigPageTaxonomyClassifiers.tsx', 'deleteTarget', 'confirmDelete'],
-    ['./ConfigPageLegacyCategoriesSection.tsx', 'removeTarget', 'confirmRemoveModel'],
     ['../components/ClawRoomChat.tsx', 'roomPendingDelete', 'handleDeleteRoom'],
   ])('removes native browser confirmation from %s', (path, targetState, confirmAction) => {
     const source = readSource(path)

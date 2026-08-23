@@ -69,27 +69,51 @@ else
     log_error "Helm template with default values failed"
     exit 1
 fi
+if ! grep -A4 'startupProbe:' "$TEMP_DIR/default-template.yaml" | grep -q 'path: /ready'; then
+    log_error "Default startup probe does not use Router readiness"
+    exit 1
+fi
+if ! grep -A5 'livenessProbe:' "$TEMP_DIR/default-template.yaml" | grep -q 'path: /health'; then
+    log_error "Default liveness probe does not use Router health"
+    exit 1
+fi
+if ! grep -A5 'readinessProbe:' "$TEMP_DIR/default-template.yaml" | grep -q 'scheme: HTTP'; then
+    log_error "Standalone readiness probe does not use HTTP"
+    exit 1
+fi
 echo ""
 
 # Test 3: Canonical config override must be atomic and preserve explicit gates
 log_info "Testing atomic canonical Router config rendering..."
 cat > "$TEMP_DIR/canonical-config.yaml" <<'EOF'
 configOverride:
-  version: v0.3
+  version: v0.4
   listeners:
     - name: http
       address: 0.0.0.0
       port: 8899
-  providers:
-    models:
-      - name: local/custom
-  routing:
-    decisions:
-      - name: custom-route
+  models:
+    - name: local/custom
+      connections:
+        - provider: vllm
+          endpoint: http://custom-model.default.svc.cluster.local:8000/v1
+          model: local/custom
+  recipes:
+    - name: custom
+      document:
+        decisions:
+          - name: custom-route
+            priority: 100
+            rules: {}
+  entrypoints:
+    - name: local/custom
+      recipe: custom
+      assignments:
+        custom-route:
+          models:
+            - model: local/custom
   global:
     router:
-      skip_processing:
-        enabled: true
       learning:
         enabled: true
         adaptation:
@@ -104,20 +128,7 @@ if grep -q "replace-with-your-model" "$TEMP_DIR/canonical-template.yaml"; then
     log_error "Chart defaults leaked into the atomic canonical Router config"
     exit 1
 fi
-if ! grep -A1 "skip_processing:" "$TEMP_DIR/canonical-template.yaml" | grep -q "enabled: true"; then
-    log_error "Canonical skip_processing=true was not preserved"
-    exit 1
-fi
-
-helm template canonical-false-release "$CHART_PATH" \
-    -f "$TEMP_DIR/canonical-config.yaml" \
-    --set configOverride.global.router.skip_processing.enabled=false \
-    > "$TEMP_DIR/canonical-false-template.yaml"
-if ! grep -A1 "skip_processing:" "$TEMP_DIR/canonical-false-template.yaml" | grep -q "enabled: false"; then
-    log_error "Canonical skip_processing=false was not preserved"
-    exit 1
-fi
-log_success "Canonical Router config rendering is atomic and preserves feature gates"
+log_success "Canonical Router config rendering is atomic"
 echo ""
 
 if helm template canonical-multi-release "$CHART_PATH" \
@@ -146,7 +157,7 @@ if helm template canonical-empty-release "$CHART_PATH" \
     log_error "An empty canonical config silently fell back to chart defaults"
     exit 1
 fi
-if ! grep -q "configOverride must be a non-empty mapping" \
+if ! grep -Eq "configOverride must be a non-empty mapping|configOverride: Must have at least 1 properties" \
     "$TEMP_DIR/canonical-empty-template.yaml"; then
     log_error "Empty canonical config failed without the expected safety error"
     exit 1
@@ -154,9 +165,137 @@ fi
 log_success "Empty canonical config fails closed instead of using chart samples"
 echo ""
 
+# Test 4: Managed mode must isolate Management and render availability controls.
+log_info "Testing managed listener isolation and availability resources..."
+cat > "$TEMP_DIR/managed-config.yaml" <<'EOF'
+configOverride:
+  version: v0.4
+  global:
+    control_plane:
+      mode: managed
+    stores:
+      access:
+        postgres:
+          dsn_env: TEST_DATABASE_URL
+    services:
+      management_api:
+        port: 9443
+      backend_dispatch:
+        port: 8181
+podDisruptionBudget:
+  enabled: true
+topologySpread:
+  enabled: true
+networkPolicy:
+  enabled: true
+  ingress:
+    extProcPeers:
+      - podSelector: {}
+    backendDispatchPeers:
+      - podSelector: {}
+    metricsPeers:
+      - podSelector: {}
+dashboard:
+  enabled: true
+  routerTLS:
+    ca:
+      existingSecret: router-management-client-ca
+      existingSecretKey: trust.pem
+EOF
+
+helm template managed-release "$CHART_PATH" \
+    -f "$TEMP_DIR/managed-config.yaml" \
+    > "$TEMP_DIR/managed-template.yaml"
+
+awk '
+    $0 == "kind: ConfigMap" { in_router_configmap = 1; next }
+    in_router_configmap && $0 ~ /^  config\.yaml: \|/ { in_config = 1; next }
+    in_config && $0 ~ /^  [^ ]/ { exit }
+    in_config { sub(/^    /, ""); print }
+' "$TEMP_DIR/managed-template.yaml" > "$TEMP_DIR/managed-rendered-config.yaml"
+
+if ! grep -Eq '^[[:space:]]+mode: managed$' "$TEMP_DIR/managed-rendered-config.yaml"; then
+    log_error "Managed mode was not preserved in the rendered Router config"
+    exit 1
+fi
+if grep -Eq '^(models|recipes|entrypoints):' "$TEMP_DIR/managed-rendered-config.yaml"; then
+    log_error "Chart sample routes leaked into the managed Router bootstrap"
+    exit 1
+fi
+if ! grep -q 'name: managed-release-semantic-router-management' "$TEMP_DIR/managed-template.yaml"; then
+    log_error "Managed mode did not render a dedicated Management Service"
+    exit 1
+fi
+if ! awk '
+    /^---$/ { in_service = 0; is_management = 0; publishes_not_ready = 0 }
+    /^kind: Service$/ { in_service = 1 }
+    in_service && $1 == "name:" && $2 == "managed-release-semantic-router-management" { is_management = 1 }
+    in_service && $1 == "publishNotReadyAddresses:" && $2 == "true" { publishes_not_ready = 1 }
+    is_management && publishes_not_ready { found = 1 }
+    END { exit(found ? 0 : 1) }
+' "$TEMP_DIR/managed-template.yaml"; then
+    log_error "Private Management Service does not publish bootstrap endpoints before inference readiness"
+    exit 1
+fi
+publish_not_ready_count=$(grep -c '^  publishNotReadyAddresses: true$' "$TEMP_DIR/managed-template.yaml" || true)
+if [ "$publish_not_ready_count" -ne 1 ]; then
+    log_error "Only the private Management Service may publish not-ready Router addresses"
+    exit 1
+fi
+if ! grep -A5 'readinessProbe:' "$TEMP_DIR/managed-template.yaml" | grep -q 'scheme: HTTPS'; then
+    log_error "Managed readiness probe does not use HTTPS"
+    exit 1
+fi
+if ! grep -A1 'name: TARGET_ROUTER_API_URL' "$TEMP_DIR/managed-template.yaml" | \
+    grep -q 'https://managed-release-semantic-router-management:8080'; then
+    log_error "Dashboard does not use the private managed HTTPS Service"
+    exit 1
+fi
+if ! grep -A1 'name: SSL_CERT_FILE' "$TEMP_DIR/managed-template.yaml" | \
+    grep -q '/var/run/secrets/vllm-sr/router-management-ca/ca.crt'; then
+    log_error "Dashboard does not use the configured Router Management trust bundle"
+    exit 1
+fi
+if ! grep -A5 'name: router-management-ca' "$TEMP_DIR/managed-template.yaml" | \
+    grep -q 'secretName: router-management-client-ca'; then
+    log_error "Dashboard does not mount the configured Router Management CA Secret"
+    exit 1
+fi
+if ! grep -A6 'name: router-management-ca' "$TEMP_DIR/managed-template.yaml" | \
+    grep -q 'key: trust.pem'; then
+    log_error "Dashboard Router Management CA Secret key was not projected"
+    exit 1
+fi
+if ! grep -q 'kind: PodDisruptionBudget' "$TEMP_DIR/managed-template.yaml"; then
+    log_error "Enabled Router PodDisruptionBudget was not rendered"
+    exit 1
+fi
+if ! grep -q 'kind: NetworkPolicy' "$TEMP_DIR/managed-template.yaml"; then
+    log_error "Enabled Router NetworkPolicy was not rendered"
+    exit 1
+fi
+if ! grep -q 'topologySpreadConstraints:' "$TEMP_DIR/managed-template.yaml"; then
+    log_error "Enabled Router topology spread was not rendered"
+    exit 1
+fi
+if helm template unsafe-managed-ingress "$CHART_PATH" \
+    -f "$TEMP_DIR/managed-config.yaml" \
+    --set ingress.enabled=true \
+    > "$TEMP_DIR/unsafe-managed-ingress.yaml" 2>&1; then
+    log_error "Managed mode allowed the private Management listener through Ingress"
+    exit 1
+fi
+if ! grep -q 'ingress cannot expose the managed Management listener' \
+    "$TEMP_DIR/unsafe-managed-ingress.yaml"; then
+    log_error "Managed Ingress rejection did not explain the isolation contract"
+    exit 1
+fi
+log_success "Managed listener isolation and availability resources are explicit"
+echo ""
 
 
-# Test 4: Validate YAML syntax
+
+# Test 5: Validate YAML syntax
 log_info "Validating YAML syntax..."
 if command -v yamllint &> /dev/null; then
     if yamllint "$CHART_PATH/values.yaml" 2>&1 | grep -v "too many spaces inside braces"; then
@@ -169,7 +308,7 @@ else
 fi
 echo ""
 
-# Test 5: Check required files exist
+# Test 6: Check required files exist
 log_info "Checking required files..."
 required_files=(
     "Chart.yaml"
@@ -177,6 +316,7 @@ required_files=(
     "README.md"
     ".helmignore"
     "templates/_helpers.tpl"
+    "templates/access-migrate-job.yaml"
     "templates/deployment.yaml"
     "templates/service.yaml"
     "templates/configmap.yaml"
@@ -184,6 +324,8 @@ required_files=(
     "templates/serviceaccount.yaml"
     "templates/ingress.yaml"
     "templates/hpa.yaml"
+    "templates/networkpolicy.yaml"
+    "templates/poddisruptionbudget.yaml"
     "templates/NOTES.txt"
 )
 
@@ -203,7 +345,7 @@ if [ "$all_files_exist" = false ]; then
 fi
 echo ""
 
-# Test 6: Validate generated resources
+# Test 7: Validate generated resources
 log_info "Validating generated Kubernetes resources..."
 resource_types=(
     "ServiceAccount"
@@ -224,7 +366,7 @@ done
 log_info "Note: Namespace is managed by Helm's --create-namespace flag"
 echo ""
 
-# Test 7: Validate config file mount contract
+# Test 8: Validate config file mount contract
 log_info "Validating config file mount contract..."
 if grep -qE 'mountPath: /app/config$' "$TEMP_DIR/default-template.yaml"; then
     log_error "Rendered templates still mount the full /app/config directory and would hide bundled KB assets"

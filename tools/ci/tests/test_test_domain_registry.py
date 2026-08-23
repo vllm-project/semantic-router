@@ -30,7 +30,6 @@ class TestDomainRegistryTest(unittest.TestCase):
 
     def test_manual_profile_paths_match_classifier_reporting(self) -> None:
         manual = profile_paths("manual")
-        self.assertIn("anthropic-shim", manual)
         self.assertTrue(set(NON_PR_E2E_RULES).issubset(manual))
         self.assertEqual(
             {name: manual[name] for name in NON_PR_E2E_RULES},

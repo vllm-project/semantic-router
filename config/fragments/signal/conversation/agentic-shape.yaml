@@ -1,4 +1,4 @@
-routing:
+document:
   signals:
     conversation:
       - name: multi_turn_user

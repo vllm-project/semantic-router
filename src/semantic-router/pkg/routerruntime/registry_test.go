@@ -1,7 +1,6 @@
 package routerruntime
 
 import (
-	"context"
 	"sync"
 	"testing"
 	"time"
@@ -130,10 +129,6 @@ type leasedLearningRuntime struct {
 	refs     sync.WaitGroup
 	retired  bool
 	releases int
-}
-
-func (*leasedLearningRuntime) UpdateOutcome(_ context.Context, _ *RouterOutcome) RouterOutcomeResult {
-	return RouterOutcomeResult{}
 }
 
 func (runtime *leasedLearningRuntime) AcquireLease() (func(), bool) {

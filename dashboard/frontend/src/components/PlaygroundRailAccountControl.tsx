@@ -18,7 +18,7 @@ export default function PlaygroundRailAccountControl() {
   }
 
   const handleToggle = () => {
-    setIsOpen(prev => !prev)
+    setIsOpen((prev) => !prev)
   }
 
   const handleLogout = () => {

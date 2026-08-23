@@ -41,9 +41,7 @@ MODEL "math-small" {
   param_size: "3b"
   description: "Math focused local model"
   capabilities: ["math", "chat"]
-  loras: [
-    { name: "math-adapter", description: "Improves symbolic math responses" },
-  ]
+  loras: ["math-adapter"]
   tags: ["local", "fast"]
   quality_score: 0.91
   modality: "ar"
@@ -106,9 +104,7 @@ SIGNAL domain math { description: "math" }
 MODEL "math-small" {
   param_size: "3b"
   capabilities: ["math", "chat"]
-  loras: [
-    { name: "math-adapter", description: "Improves symbolic math responses" },
-  ]
+  loras: ["math-adapter"]
   tags: ["local", "fast"]
 }
 
@@ -129,103 +125,71 @@ ROUTE math_route {
 	}
 
 	yamlText := string(yamlBytes)
-	if !strings.Contains(yamlText, "routing:") {
-		t.Fatalf("expected routing fragment, got:\n%s", yamlText)
+	if !strings.Contains(yamlText, "document:") {
+		t.Fatalf("expected Recipe document fragment, got:\n%s", yamlText)
 	}
 	if strings.Contains(yamlText, "providers:") || strings.Contains(yamlText, "global:") {
 		t.Fatalf("routing fragment leaked static config:\n%s", yamlText)
 	}
 
 	var doc struct {
-		Routing config.CanonicalRouting `yaml:"routing"`
+		Document config.CanonicalRouting `yaml:"document"`
 	}
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
 		t.Fatalf("unmarshal routing fragment: %v", err)
 	}
-	if len(doc.Routing.ModelCards) != 1 {
-		t.Fatalf("expected 1 routing model, got %d", len(doc.Routing.ModelCards))
+	if len(doc.Document.Decisions) != 1 {
+		t.Fatalf("expected one Recipe decision, got %d", len(doc.Document.Decisions))
 	}
-	if doc.Routing.ModelCards[0].Name != "math-small" {
-		t.Fatalf("routing model = %q", doc.Routing.ModelCards[0].Name)
-	}
-	if len(doc.Routing.ModelCards[0].LoRAs) != 1 || doc.Routing.ModelCards[0].LoRAs[0].Name != "math-adapter" {
-		t.Fatalf("routing model loras = %#v", doc.Routing.ModelCards[0].LoRAs)
-	}
-	if doc.Routing.Decisions[0].ModelRefs[0].LoRAName != "math-adapter" {
-		t.Fatalf("decision lora_name = %q", doc.Routing.Decisions[0].ModelRefs[0].LoRAName)
+	if len(doc.Document.Decisions[0].ModelRefs) != 0 {
+		t.Fatalf("Recipe document leaked physical Model refs: %#v", doc.Document.Decisions[0].ModelRefs)
 	}
 }
 
 func TestDecompileRoutingIgnoresStaticCanonicalSections(t *testing.T) {
-	configYAML := `
-version: v0.3
-listeners:
-  - name: main
-    address: 0.0.0.0
-    port: 8080
-providers:
-  defaults:
-    default_model: math-small
-    reasoning_families:
-      openai:
-        type: reasoning_effort
-        parameter: reasoning.effort
-    default_reasoning_effort: medium
-  models:
-    - name: math-small
-      reasoning_family: openai
-      provider_model_id: qwen/qwen3
-      backend_refs:
-        - name: local
-          endpoint: http://localhost:8000/v1
-          protocol: http
-          api_key_env: OPENAI_API_KEY
-routing:
-  modelCards:
-    - name: math-small
-      param_size: 3b
-      capabilities: [math, chat]
-      loras:
-        - name: math-adapter
-          description: Improves symbolic math responses
-      tags: [local, fast]
-  signals:
-    domains:
-      - name: math
-        description: math
-  decisions:
-    - name: math_route
-      priority: 10
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: math-small
-          lora_name: math-adapter
-global:
-  router:
-    strategy: priority
-`
-
-	cfg, err := config.ParseYAMLBytes([]byte(configYAML))
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
+	cfg := &config.RouterConfig{
+		APIServer: config.APIServer{Listeners: []config.Listener{{Name: "main", Address: "0.0.0.0", Port: 8080}}},
+		BackendModels: config.BackendModels{
+			ModelConfig: map[string]config.ModelParams{
+				"math-small": {
+					ResourceID: "mdl_math", ResourceRevision: 1, ParamSize: "3b",
+					Capabilities: []string{"math", "chat"},
+					LoRAs:        []config.LoRAAdapter{{Name: "math-adapter"}},
+					Tags:         []string{"local", "fast"},
+				},
+			},
+		},
+		Recipes: []config.RoutingRecipe{{
+			ID: "rcp_math", Revision: 1, Name: "math",
+			Profile: config.RoutingProfile{
+				Signals:   config.Signals{Categories: []config.Category{{CategoryMetadata: config.CategoryMetadata{Name: "math", Description: "math"}}}},
+				Decisions: []config.Decision{{ID: "dec_math", Name: "math_route", Priority: 10, Rules: config.RuleCombination{Operator: "AND", Conditions: []config.RuleCondition{{Type: "domain", Name: "math"}}}}},
+				Strategy:  config.RoutingStrategyPriority,
+			},
+		}},
+		Entrypoints: []config.EntrypointMapping{{
+			ID: "ep_math", Revision: 1, Name: "math", ModelNames: []string{"math"},
+			Rules: []config.EntrypointRule{{
+				ID: "rule_math", Name: "default",
+				Action: config.EntrypointRuleAction{RecipeID: "rcp_math", Assignments: map[string]config.RoutingAssignmentSet{
+					"dec_math": {Models: []config.RoutingModelAssignment{{ModelID: "mdl_math", Priority: 1, Weight: "1", LoRAName: "math-adapter"}}},
+				}},
+			}},
+		}},
 	}
 
-	dslText, err := DecompileRouting(cfg)
+	dslText, err := Decompile(cfg)
 	if err != nil {
-		t.Fatalf("DecompileRouting error: %v", err)
+		t.Fatalf("Decompile error: %v", err)
 	}
 
 	if !strings.Contains(dslText, `MODEL math-small`) {
 		t.Fatalf("expected routing model catalog in DSL:\n%s", dslText)
 	}
-	if !strings.Contains(dslText, `lora = "math-adapter"`) {
-		t.Fatalf("expected LoRA reference to survive decompile:\n%s", dslText)
+	if !strings.Contains(dslText, `lora: "math-adapter"`) {
+		t.Fatalf("expected Entrypoint LoRA assignment to survive decompile:\n%s", dslText)
 	}
-	if !strings.Contains(dslText, `name: "math-adapter"`) {
+	if !strings.Contains(dslText, `loras: ["math-adapter"]`) {
 		t.Fatalf("expected LoRA catalog to survive decompile:\n%s", dslText)
 	}
 	if strings.Contains(dslText, "BACKEND ") || strings.Contains(dslText, "GLOBAL {") {
@@ -236,9 +200,7 @@ global:
 func TestValidateRouteLoRAAgainstModelCatalog(t *testing.T) {
 	input := `
 MODEL "math-small" {
-  loras: [
-    { name: "math-adapter" },
-  ]
+  loras: ["math-adapter"]
 }
 
 ROUTE math_route {

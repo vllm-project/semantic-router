@@ -118,8 +118,6 @@ until the selected cases are known to be isolated.
 - **dashboard**: dashboard API, validation, and security-policy contracts.
 - **aibrix**: AIBrix gateway and control-plane integration.
 - **routing-strategies**: keyword, entropy, and fallback routing.
-- **dynamic-config**: CRD-driven routing and embedding signals.
-- **multimodal-routing**: image-modality embedding routing.
 - **remote-embedding**: OpenAI-compatible remote embedding providers.
 - **llm-d**: llm-d inference-gateway health and router smoke coverage.
 - **istio**: sidecar, mTLS, and tracing behavior.
@@ -127,9 +125,7 @@ until the selected cases are known to be isolated.
 - **production-stack**: HA, load balancing, failover, and load checks.
 - **ml-model-selection**: trained model-selector behavior.
 - **multi-endpoint**: environment policy across several backends.
-- **authz-rbac**: authorization routing and rate-limit behavior.
 - **streaming**: streamed request bodies and cache round trips.
-- **anthropic-shim**: manual Anthropic-shape translation diagnostics.
 - **response-api**: manual memory-backed Responses API coverage.
 - **response-api-redis**: manual Redis persistence and TTL coverage.
 - **response-api-redis-cluster**: manual Redis Cluster persistence and TTL coverage.

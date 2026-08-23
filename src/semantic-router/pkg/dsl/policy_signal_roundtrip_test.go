@@ -53,6 +53,18 @@ func TestPolicySignalsRoundTripInsideIsolatedRecipes(t *testing.T) {
 	input := `
 MODEL "model-a" {}
 
+ENTRYPOINT {
+  name: "router/alpha"
+  recipe: "alpha"
+  assignments: [{ decision: "policy-route", models: [{ model: "model-a" }] }]
+}
+
+ENTRYPOINT {
+  name: "router/beta"
+  recipe: "beta"
+  assignments: [{ decision: "policy-route", models: [{ model: "model-a" }] }]
+}
+
 RECIPE alpha {
   SIGNAL metadata "cohort" {
     key: "tenant"
@@ -72,7 +84,6 @@ RECIPE alpha {
       predicate: { gte: 0.8 },
       on_error: "no_match"
     )
-    MODEL "model-a"
   }
 }
 
@@ -90,7 +101,6 @@ RECIPE beta {
   ROUTE "policy-route" {
     PRIORITY 100
     WHEN metadata("cohort")
-    MODEL "model-a"
   }
 }`
 	cfg := mustCompilePolicyDSL(t, input)

@@ -10,6 +10,7 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -112,10 +113,12 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		"streaming":       req.IsStreaming,
 	})
 
-	panelResponses, failedModels, err := l.executeFusionPanel(ctx, req, cfg)
+	panel, err := l.executeFusionPanel(ctx, req, cfg)
+	panelResponses := panel.responses
+	failedModels := panel.failed
 	if err != nil {
 		if cfg.OnError == config.FusionOnErrorFail || len(panelResponses) == 0 {
-			return nil, err
+			return nil, newPartialExecutionError(err, fusionExecutionEvidence(panel.accountingResponses, nil, nil))
 		}
 		logging.ComponentWarnEvent("looper", "fusion_panel_partial", map[string]interface{}{
 			"decision":  req.DecisionName,
@@ -124,28 +127,69 @@ func (l *FusionLooper) Execute(ctx context.Context, req *Request) (*Response, er
 		})
 	}
 
-	// Grounding (optional) ranks/filters the panel before the judge. It makes no
-	// model calls, so usage is summed from the full panel (the real cost paid).
+	// Grounding (optional) ranks/filters only the quorum snapshot. Accounting
+	// separately retains any sibling result already queued when quorum canceled
+	// the remaining workers.
 	groundedPanel, groundingScores, groundingMode, err := l.applyGrounding(req, cfg, panelResponses)
 	if err != nil {
-		return nil, err
+		return nil, newPartialExecutionError(err, fusionExecutionEvidence(panel.accountingResponses, nil, nil))
 	}
 
 	analysis, analysisResp := l.runFusionAnalysis(ctx, req, cfg, groundedPanel, groundingScores)
 	finalResp, err := l.runFusionFinal(ctx, req, cfg, groundedPanel, analysis, groundingScores)
 	if err != nil {
-		return nil, err
+		return nil, newPartialExecutionError(err, fusionExecutionEvidence(panel.accountingResponses, analysisResp, nil))
 	}
-	usage := SumUsage(panelResponses...).Add(analysisResp, finalResp)
+	usage := SumUsage(panel.accountingResponses...).Add(analysisResp, finalResp)
 
 	trace := buildFusionTrace(cfg, groundedPanel, failedModels, analysis, groundingMode, groundingScores)
 	modelsUsed := orderedFusionModelsUsed(cfg.AnalysisModels, cfg.Model)
 	iterations := len(cfg.AnalysisModels) + 2
 
+	var response *Response
 	if req.IsStreaming {
-		return l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+		response, err = l.formatFusionStreamingResponse(finalResp, modelsUsed, iterations, cfg, trace, usage, streamUsageRequested(req))
+	} else {
+		response, err = l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
 	}
-	return l.formatFusionJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
+	if err != nil {
+		return nil, newPartialExecutionError(err, ExecutionEvidence{
+			ModelsUsed: modelsUsed,
+			Iterations: iterations,
+			Usage:      usage,
+		})
+	}
+	return response, nil
+}
+
+func fusionExecutionEvidence(
+	panelResponses []*ModelResponse,
+	analysisResp *ModelResponse,
+	finalResp *ModelResponse,
+) ExecutionEvidence {
+	responses := append([]*ModelResponse(nil), panelResponses...)
+	responses = append(responses, analysisResp, finalResp)
+	modelsUsed := make([]string, 0, len(responses))
+	iterations := 0
+	for _, response := range responses {
+		if response == nil {
+			continue
+		}
+		iterations++
+		if response.Model != "" {
+			modelsUsed = appendUniqueModel(modelsUsed, response.Model)
+		}
+	}
+	return executionEvidenceFromResponses(responses, modelsUsed, iterations)
+}
+
+func appendUniqueModel(models []string, model string) []string {
+	for _, existing := range models {
+		if existing == model {
+			return models
+		}
+	}
+	return append(models, model)
 }
 
 func (l *FusionLooper) validateFusionModels(cfg fusionExecutionConfig) error {
@@ -163,19 +207,21 @@ func (l *FusionLooper) executeFusionPanel(
 	ctx context.Context,
 	req *Request,
 	cfg fusionExecutionConfig,
-) ([]*ModelResponse, []FusionFailedModel, error) {
+) (fusionPanelExecution, error) {
 	// Paired multi-arm evaluation supplies the panel verbatim so every arm
 	// synthesizes from a byte-identical panel (see bench/grounded_fusion). Skip
 	// the live model calls and feed the cached panel straight into grounding +
 	// synthesis, which are source-agnostic over []*ModelResponse.
 	if len(req.CachedPanel) > 0 {
-		return req.CachedPanel, nil, nil
+		return fusionPanelExecution{responses: req.CachedPanel, accountingResponses: req.CachedPanel}, nil
 	}
 
-	panelCtx := ctx
-	cancel := func() {}
+	var panelCtx context.Context
+	var cancel context.CancelFunc
 	if cfg.RoundTimeoutSeconds > 0 {
 		panelCtx, cancel = context.WithTimeout(ctx, time.Duration(cfg.RoundTimeoutSeconds)*time.Second)
+	} else {
+		panelCtx, cancel = context.WithCancel(ctx)
 	}
 	defer cancel()
 
@@ -196,32 +242,62 @@ func (l *FusionLooper) executeFusionPanel(
 	}
 
 	collector := newFusionPanelCollector(cfg, cancel)
-	for range cfg.AnalysisModels {
+	remaining := len(cfg.AnalysisModels)
+	for remaining > 0 {
 		select {
 		case result := <-results:
-			responses, err, done := collector.handleResult(result)
-			if done {
-				return responses, collector.failed, err
+			remaining--
+			collector.handleResult(result)
+			if collector.quorumReached || collector.terminalErr != nil {
+				drainFusionPanelResults(results, collector, &remaining)
+				return collector.execution(), collector.terminalErr
 			}
 		case <-panelCtx.Done():
 			responses, err := collector.handleTimeout(panelCtx.Err())
-			return responses, collector.failed, err
+			execution := collector.execution()
+			execution.responses = responses
+			return execution, err
 		}
 	}
 
-	responses := collector.responses()
-	if len(responses) == 0 {
-		return nil, collector.failed, fmt.Errorf("fusion panel failed: all %d analysis models failed", len(cfg.AnalysisModels))
+	execution := collector.execution()
+	responses := execution.responses
+	if collector.terminalErr != nil {
+		return execution, collector.terminalErr
 	}
-	return responses, collector.failed, nil
+	if len(responses) == 0 {
+		return execution, fmt.Errorf("fusion panel failed: all %d analysis models failed", len(cfg.AnalysisModels))
+	}
+	return execution, nil
+}
+
+type fusionPanelExecution struct {
+	responses           []*ModelResponse
+	accountingResponses []*ModelResponse
+	failed              []FusionFailedModel
+}
+
+func drainFusionPanelResults(results <-chan fusionPanelResult, collector *fusionPanelCollector, remaining *int) {
+	for *remaining > 0 {
+		select {
+		case result := <-results:
+			(*remaining)--
+			collector.handleResult(result)
+		default:
+			return
+		}
+	}
 }
 
 type fusionPanelCollector struct {
-	cfg       fusionExecutionConfig
-	cancel    context.CancelFunc
-	ordered   []*ModelResponse
-	failed    []FusionFailedModel
-	successes int
+	cfg           fusionExecutionConfig
+	cancel        context.CancelFunc
+	ordered       []*ModelResponse
+	quorumOrdered []*ModelResponse
+	failed        []FusionFailedModel
+	successes     int
+	quorumReached bool
+	terminalErr   error
 }
 
 func newFusionPanelCollector(cfg fusionExecutionConfig, cancel context.CancelFunc) *fusionPanelCollector {
@@ -232,23 +308,24 @@ func newFusionPanelCollector(cfg fusionExecutionConfig, cancel context.CancelFun
 	}
 }
 
-func (c *fusionPanelCollector) handleResult(result fusionPanelResult) ([]*ModelResponse, error, bool) {
+func (c *fusionPanelCollector) handleResult(result fusionPanelResult) {
 	if result.err != nil {
 		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: result.err.Error()})
-		if c.cfg.OnError == config.FusionOnErrorFail {
+		if c.cfg.OnError == config.FusionOnErrorFail && !c.quorumReached && c.terminalErr == nil {
 			c.cancel()
-			return nil, fmt.Errorf("fusion panel model %q failed: %w", result.model, result.err), true
+			c.terminalErr = fmt.Errorf("fusion panel model %q failed: %w", result.model, result.err)
 		}
-		return nil, nil, false
+		return
 	}
 	c.ordered[result.index] = result.resp
 	c.successes++
-	if c.successes < c.cfg.MinSuccessfulResponses {
-		return nil, nil, false
+	if c.quorumReached || c.terminalErr != nil || c.successes < c.cfg.MinSuccessfulResponses {
+		return
 	}
+	c.quorumReached = true
+	c.quorumOrdered = append([]*ModelResponse(nil), c.ordered...)
 	c.logQuorum()
 	c.cancel()
-	return c.responses(), nil, true
 }
 
 func (c *fusionPanelCollector) handleTimeout(err error) ([]*ModelResponse, error) {
@@ -257,11 +334,22 @@ func (c *fusionPanelCollector) handleTimeout(err error) ([]*ModelResponse, error
 		c.failed = append(c.failed, FusionFailedModel{Model: "panel", Error: err.Error()})
 		return responses, err
 	}
-	return nil, err
+	return responses, err
 }
 
 func (c *fusionPanelCollector) responses() []*ModelResponse {
+	if c.quorumReached {
+		return compactFusionPanelResponses(c.quorumOrdered)
+	}
 	return compactFusionPanelResponses(c.ordered)
+}
+
+func (c *fusionPanelCollector) execution() fusionPanelExecution {
+	return fusionPanelExecution{
+		responses:           c.responses(),
+		accountingResponses: compactFusionPanelResponses(c.ordered),
+		failed:              c.failed,
+	}
 }
 
 func (c *fusionPanelCollector) logQuorum() {
@@ -294,7 +382,7 @@ func (l *FusionLooper) callFusionModel(
 	iteration int,
 	override config.FusionModelOverride,
 ) (*ModelResponse, error) {
-	callReq := cloneRequest(req.OriginalRequest)
+	callReq := cloneRequest(req.executionRequest)
 	if !allowTools {
 		callReq = stripFusionToolUse(callReq)
 	}
@@ -308,24 +396,7 @@ func (l *FusionLooper) callFusionModel(
 	} else if cfg.MaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.MaxCompletionTokens))
 	}
-	return l.client.CallModel(ctx, callReq, modelName, streaming, iteration, nil, accessKeyForModel(req, modelName))
-}
-
-func accessKeyForModel(req *Request, modelName string) string {
-	if req == nil || req.ModelParams == nil {
-		return ""
-	}
-	if params, ok := req.ModelParams[modelName]; ok {
-		return params.AccessKey
-	}
-	for _, params := range req.ModelParams {
-		for _, extID := range params.ExternalModelIDs {
-			if extID == modelName {
-				return params.AccessKey
-			}
-		}
-	}
-	return ""
+	return l.client.CallModel(ctx, callReq, modelName, streaming, iteration, nil)
 }
 
 func (l *FusionLooper) runFusionAnalysis(
@@ -335,12 +406,12 @@ func (l *FusionLooper) runFusionAnalysis(
 	panelResponses []*ModelResponse,
 	groundingScores []groundingScore,
 ) (*FusionAnalysis, *ModelResponse) {
-	prompt := buildFusionAnalysisPrompt(cfg, extractOriginalContent(req.OriginalRequest), panelResponses)
+	prompt := buildFusionAnalysisPrompt(cfg, extractOriginalContent(req.executionRequest), panelResponses)
 	if notes := formatGroundingNotes(groundingScores); notes != "" {
 		prompt = prompt + "\n\n" + notes
 	}
-	analysisReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, false, len(panelResponses)+1, config.FusionModelOverride{})
+	analysisReq := appendFusionStageMessage(req.executionRequest, prompt)
+	resp, err := l.callFusionModel(ctx, &Request{executionRequest: analysisReq, ModelParams: req.ModelParams}, cfg, cfg.Model, false, false, len(panelResponses)+1, config.FusionModelOverride{})
 	if err != nil {
 		logging.ComponentWarnEvent("looper", "fusion_analysis_failed", map[string]interface{}{
 			"judge_model": cfg.Model,
@@ -367,16 +438,16 @@ func (l *FusionLooper) runFusionFinal(
 	analysis *FusionAnalysis,
 	groundingScores []groundingScore,
 ) (*ModelResponse, error) {
-	original := extractOriginalContent(req.OriginalRequest)
-	outputContract := requestOutputContract(req.OriginalRequest, req.OutputContract)
+	original := extractOriginalContent(req.executionRequest)
+	outputContract := requestOutputContract(req.executionRequest, req.OutputContract)
 	prompt := buildFusionFinalPrompt(cfg, original, outputContract, panelResponses, analysis)
 	// Under weight/annotate policies the panel was not pruned, so the judge needs
 	// the per-response groundedness signal at synthesis time to soft-weight.
 	if notes := groundingSynthesisNotes(groundingScores, cfg.GroundingPolicy); notes != "" {
 		prompt = prompt + "\n\n" + notes
 	}
-	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-	resp, err := l.callFusionModel(ctx, &Request{OriginalRequest: finalReq, ModelParams: req.ModelParams}, cfg, cfg.Model, true, false, len(panelResponses)+2, config.FusionModelOverride{})
+	finalReq := appendFusionStageMessage(req.executionRequest, prompt)
+	resp, err := l.callFusionModel(ctx, &Request{executionRequest: finalReq, ModelParams: req.ModelParams}, cfg, cfg.Model, true, false, len(panelResponses)+2, config.FusionModelOverride{})
 	if err != nil {
 		return nil, fmt.Errorf("fusion final synthesis failed for judge model %q: %w", cfg.Model, err)
 	}
@@ -554,41 +625,8 @@ func (l *FusionLooper) formatFusionJSONResponse(
 	if finalResp.HasToolCalls {
 		return l.formatFusionToolCallJSONResponse(finalResp, modelsUsed, iterations, cfg, trace, usage)
 	}
-
-	completion := map[string]interface{}{
-		"id":      fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano()),
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   finalResp.Model,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": finalResp.Content,
-				},
-				"finish_reason": "stop",
-			},
-		},
-		"usage": usage.Map(),
-	}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = trace
-	}
-	body, err := json.Marshal(completion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal fusion response: %w", err)
-	}
-	return &Response{
-		Body:                  body,
-		ContentType:           "application/json",
-		Model:                 finalResp.Model,
-		ModelsUsed:            modelsUsed,
-		Iterations:            iterations,
-		AlgorithmType:         "fusion",
-		IntermediateResponses: trace,
-		Usage:                 usage,
-	}, nil
+	semantic := newTextSemanticResponse("response-fusion", finalResp.Model, finalResp.Content, usage)
+	return newLooperResponse(semantic, false, true, finalResp.Model, modelsUsed, iterations, "fusion", usage, trace), nil
 }
 
 func (l *FusionLooper) formatFusionToolCallJSONResponse(
@@ -599,31 +637,12 @@ func (l *FusionLooper) formatFusionToolCallJSONResponse(
 	trace *FusionTrace,
 	usage TokenUsage,
 ) (*Response, error) {
-	var completion map[string]interface{}
-	if err := json.Unmarshal(finalResp.Raw, &completion); err != nil {
-		return nil, fmt.Errorf("failed to parse fusion tool-call response: %w", err)
-	}
-	completion["id"] = fmt.Sprintf("chatcmpl-fusion-%d", time.Now().UnixNano())
-	completion["model"] = finalResp.Model
-	completion["usage"] = usage.Map()
-	normalizeCompletionToolFinishReason(completion)
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		completion["fusion"] = trace
-	}
-	body, err := json.Marshal(completion)
+	_ = cfg
+	semantic, err := newModelSemanticResponse("response-fusion", finalResp, finalResp.Model, usage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal fusion tool-call response: %w", err)
+		return nil, fmt.Errorf("build neutral fusion tool-call response: %w", err)
 	}
-	return &Response{
-		Body:                  body,
-		ContentType:           "application/json",
-		Model:                 finalResp.Model,
-		ModelsUsed:            modelsUsed,
-		Iterations:            iterations,
-		AlgorithmType:         "fusion",
-		IntermediateResponses: trace,
-		Usage:                 usage,
-	}, nil
+	return newLooperResponse(semantic, false, true, finalResp.Model, modelsUsed, iterations, "fusion", usage, trace), nil
 }
 
 func (l *FusionLooper) formatFusionStreamingResponse(
@@ -633,59 +652,18 @@ func (l *FusionLooper) formatFusionStreamingResponse(
 	cfg fusionExecutionConfig,
 	trace *FusionTrace,
 	usage TokenUsage,
+	includeUsage bool,
 ) (*Response, error) {
-	timestamp := time.Now().Unix()
-	id := fmt.Sprintf("chatcmpl-fusion-%d", timestamp)
-	var (
-		body []byte
-		err  error
-	)
+	_ = cfg
+	var semantic llmprotocol.Response
 	if finalResp.HasToolCalls {
-		body, err = buildFusionStreamingToolCallSSE(id, timestamp, finalResp.Model, finalResp.Raw, cfg, trace)
+		var err error
+		semantic, err = newModelSemanticResponse("response-fusion", finalResp, finalResp.Model, usage)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		body = buildFusionStreamingSSE(id, timestamp, finalResp.Model, finalResp.Content, cfg, trace)
+		semantic = newTextSemanticResponse("response-fusion", finalResp.Model, finalResp.Content, usage)
 	}
-	resp := streamingLooperResponse(body, finalResp.Model, modelsUsed, iterations, "fusion")
-	resp.IntermediateResponses = trace
-	resp.Usage = usage
-	return resp, nil
-}
-
-func buildFusionStreamingSSE(
-	id string,
-	created int64,
-	model string,
-	content string,
-	cfg fusionExecutionConfig,
-	trace *FusionTrace,
-) []byte {
-	var body []byte
-	roleChoice := map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{"role": "assistant"},
-		"finish_reason": nil,
-	}
-	var extra map[string]interface{}
-	if cfg.IncludeAnalysis || cfg.IncludeIntermediateResponses || len(trace.FailedModels) > 0 || trace.Grounding != nil {
-		extra = map[string]interface{}{"fusion": trace}
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, roleChoice, extra))
-	for _, chunk := range splitIntoChunks(content, 50) {
-		contentChoice := map[string]interface{}{
-			"index":         0,
-			"delta":         map[string]interface{}{"content": chunk},
-			"finish_reason": nil,
-		}
-		body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, contentChoice, nil))
-	}
-	finalChoice := map[string]interface{}{
-		"index":         0,
-		"delta":         map[string]interface{}{},
-		"finish_reason": "stop",
-	}
-	body = appendSSEDataLine(body, chatCompletionChunkPayload(id, created, model, finalChoice, nil))
-	return appendSSEDone(body)
+	return newLooperResponse(semantic, true, includeUsage, finalResp.Model, modelsUsed, iterations, "fusion", usage, trace), nil
 }

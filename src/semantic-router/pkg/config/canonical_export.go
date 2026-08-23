@@ -1,44 +1,34 @@
 package config
 
 import (
-	"fmt"
-	"sort"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelauthoring"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
 
-// CanonicalConfigFromRouterConfig exports the canonical v0.3 config surface
+// CanonicalConfigFromRouterConfig exports the canonical v0.4 config surface
 // from the internal runtime config.
 func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	if cfg == nil {
-		return CanonicalConfig{Version: "v0.3"}
+		return CanonicalConfig{Version: "v0.4"}
+	}
+	var models []AuthoringModel
+	var recipes []AuthoringRecipe
+	var entrypoints []AuthoringEntrypoint
+	if cfg.ControlPlane.Mode != ControlPlaneModeManaged {
+		models = routingModelsFromRouterConfig(cfg)
+		recipes = canonicalRecipesFromRouterConfig(cfg)
+		entrypoints = canonicalEntrypointsFromRouterConfig(cfg)
 	}
 
 	return CanonicalConfig{
-		Version:   "v0.3",
-		Listeners: append([]Listener(nil), cfg.Listeners...),
-		Providers: CanonicalProviders{
-			Defaults: CanonicalProviderDefaults{
-				DefaultModel:           cfg.DefaultModel,
-				ReasoningFamilies:      copyReasoningFamilies(cfg.ReasoningFamilies),
-				DefaultReasoningEffort: cfg.DefaultReasoningEffort,
-			},
-			Models: canonicalProviderModelsFromRouterConfig(cfg),
-		},
-		Routing:     CanonicalRoutingFromRouterConfig(cfg),
-		Entrypoints: canonicalEntrypointsFromRouterConfig(cfg),
-		Recipes:     canonicalRecipesFromRouterConfig(cfg),
-		Global:      CanonicalGlobalFromRouterConfig(cfg),
+		Version:         "v0.4",
+		BillingCurrency: cfg.BillingCurrency,
+		Listeners:       append([]Listener(nil), cfg.Listeners...),
+		Models:          models,
+		Entrypoints:     entrypoints,
+		Recipes:         recipes,
+		Global:          CanonicalGlobalFromRouterConfig(cfg),
 	}
-}
-
-// CanonicalStaticConfigFromRouterConfig exports the static canonical base used
-// by K8s CRD reconciliation. Dynamic routing state is expected to come from the
-// CRDs, so the routing block, entrypoints, and recipes are left empty.
-func CanonicalStaticConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
-	canonical := CanonicalConfigFromRouterConfig(cfg)
-	canonical.Routing = CanonicalRouting{}
-	canonical.Entrypoints = nil
-	canonical.Recipes = nil
-	return canonical
 }
 
 // CanonicalRoutingFromRouterConfig exports the routing-owned canonical surface
@@ -50,9 +40,8 @@ func CanonicalRoutingFromRouterConfig(cfg *RouterConfig) CanonicalRouting {
 	}
 
 	return CanonicalRouting{
-		ModelCards:  routingModelsFromRouterConfig(cfg),
-		Signals:     canonicalSignalsFromSignals(cfg.RoutingProfileSignals()),
-		Projections: canonicalProjectionsFromProjections(cfg.RoutingProfileProjections()),
+		Signals:     canonicalSignalsFromSignals(cfg.Signals),
+		Projections: canonicalProjectionsFromProjections(cfg.Projections),
 		Decisions:   copyDecisions(cfg.Decisions),
 		Strategy:    cfg.Strategy,
 	}
@@ -91,45 +80,72 @@ func canonicalProjectionsFromProjections(projections Projections) CanonicalProje
 	}
 }
 
-func routingModelsFromRouterConfig(cfg *RouterConfig) []RoutingModel {
-	modelNames := make(map[string]bool)
-	for name := range cfg.ModelConfig {
-		modelNames[name] = true
-	}
-	for _, decision := range cfg.Decisions {
-		for _, ref := range decision.ModelRefs {
-			if ref.Model != "" {
-				modelNames[ref.Model] = true
-			}
-		}
-	}
-
-	if len(modelNames) == 0 {
+func routingModelsFromRouterConfig(cfg *RouterConfig) []AuthoringModel {
+	// Managed bootstrap never owns inline routing source. Its immutable
+	// snapshot may contain credential UIDs and other publication state that
+	// must not be projected back into human authoring fields.
+	if cfg == nil || cfg.ControlPlane.Mode == ControlPlaneModeManaged || cfg.RoutingSnapshot == nil {
 		return nil
 	}
+	return authoringModelsFromSnapshot(cfg.RoutingSnapshot.Models)
+}
 
-	names := make([]string, 0, len(modelNames))
-	for name := range modelNames {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	models := make([]RoutingModel, 0, len(names))
-	for _, name := range names {
-		params := cfg.ModelConfig[name]
-		models = append(models, RoutingModel{
-			Name:              name,
-			ParamSize:         params.ParamSize,
-			ContextWindowSize: params.ContextWindowSize,
-			Description:       params.Description,
-			Capabilities:      append([]string(nil), params.Capabilities...),
-			LoRAs:             copyLoRAAdapters(params.LoRAs),
-			Tags:              append([]string(nil), params.Tags...),
-			QualityScore:      params.QualityScore,
-			Modality:          params.Modality,
+func authoringModelsFromSnapshot(models []routingsnapshot.Model) []AuthoringModel {
+	result := make([]AuthoringModel, 0, len(models))
+	for _, model := range models {
+		connections := make([]modelauthoring.Connection, 0, len(model.Backends))
+		for _, backend := range model.Backends {
+			weight := backend.Weight
+			if weight == "1" {
+				weight = ""
+			}
+			connections = append(connections, modelauthoring.Connection{
+				Provider: backend.ProviderID, Endpoint: backend.Origin,
+				Model: backend.ProviderModelID, Credential: backend.ProviderCredentialID,
+				Weight: weight,
+			})
+		}
+		execution := ModelExecutionSettings{
+			MaxRetries: model.Execution.MaxRetries,
+		}
+		if model.Execution.RequestTimeout != defaultModelInvocationTimeout {
+			execution.RequestTimeout = model.Execution.RequestTimeout
+		}
+		if model.Execution.StreamTimeout != defaultModelInvocationTimeout {
+			execution.StreamTimeout = model.Execution.StreamTimeout
+		}
+		pricing := ModelRuntimePricing{
+			InputCostPerMillionTokens:  cloneStringPointer(model.Pricing.InputCostPerMillionTokens),
+			OutputCostPerMillionTokens: cloneStringPointer(model.Pricing.OutputCostPerMillionTokens),
+		}
+		if !sameModelPrice(model.Pricing.CacheReadCostPerMillionTokens, model.Pricing.InputCostPerMillionTokens) {
+			pricing.CacheReadCostPerMillionTokens = cloneStringPointer(model.Pricing.CacheReadCostPerMillionTokens)
+		}
+		if !sameModelPrice(model.Pricing.CacheWriteCostPerMillionTokens, model.Pricing.InputCostPerMillionTokens) {
+			pricing.CacheWriteCostPerMillionTokens = cloneStringPointer(model.Pricing.CacheWriteCostPerMillionTokens)
+		}
+		result = append(result, AuthoringModel{
+			Name: model.Name,
+			Card: AuthoringModelCard{
+				Aliases: append([]string(nil), model.Aliases...), ParamSize: model.ParamSize,
+				ContextWindowSize: model.ContextWindowSize, Description: model.Description,
+				Capabilities: append([]string(nil), model.Capabilities...), Reasoning: model.Reasoning,
+				LoRAs: append([]string(nil), model.LoRAs...), QualityScore: model.QualityScore,
+				Modality: model.Modality, Tags: append([]string(nil), model.Tags...),
+			},
+			Connections:    connections,
+			Execution:      execution,
+			RuntimePricing: pricing,
 		})
 	}
-	return models
+	return result
+}
+
+func sameModelPrice(left, right *string) bool {
+	if left == nil || right == nil {
+		return left == nil && right == nil
+	}
+	return *left == *right
 }
 
 // CanonicalGlobalFromRouterConfig exports the router-wide canonical global
@@ -140,36 +156,35 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	}
 
 	global := &CanonicalGlobal{
+		ControlPlane: cloneControlPlaneConfig(cfg.ControlPlane),
 		Router: CanonicalRouterGlobal{
-			ConfigSource:              normalizedConfigSource(cfg.ConfigSource),
-			Strategy:                  cfg.Strategy,
-			AutoModelName:             cfg.AutoModelName,
-			AutoModelNames:            canonicalAutoModelNames(cfg.AutoModelNames),
-			IncludeConfigModelsInList: cfg.IncludeConfigModelsInList,
-			ClearRouteCache:           cfg.ClearRouteCache,
+			ClearRouteCache: cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{
 				Enabled:    cfg.StreamedBodyMode,
 				MaxBytes:   cfg.MaxStreamedBodyBytes,
 				TimeoutSec: cfg.StreamedBodyTimeoutSec,
 			},
-			SkipProcessing: cfg.SkipProcessing,
-			ModelSelection: cfg.ModelSelection,
-			Learning:       cfg.RouterLearning,
+			Learning: cfg.RouterLearning,
 		},
 		Services: CanonicalServiceGlobal{
-			API:           cfg.API,
-			ResponseAPI:   cfg.ResponseAPI,
-			Observability: cfg.Observability,
-			Authz:         cfg.Authz,
-			RateLimit:     cfg.RateLimit,
-			ManagementAPI: cfg.ManagementAPI,
-			RouterReplay:  cfg.RouterReplay,
-			StartupStatus: cfg.StartupStatus,
+			API:                cfg.API,
+			ResponseAPI:        cfg.ResponseAPI,
+			Agent:              cfg.Agent,
+			Observability:      cfg.Observability,
+			ManagementAPI:      cfg.ManagementAPI,
+			Access:             cfg.Access,
+			BackendCredentials: cloneBackendCredentialsConfig(cfg.BackendCredentials),
+			BackendEgress:      cfg.BackendEgress,
+			BackendDispatch:    cfg.BackendDispatch,
+			RouterReplay:       cfg.RouterReplay,
+			StartupStatus:      cfg.StartupStatus,
 		},
 		Stores: CanonicalStoreGlobal{
 			ResponseCache: cfg.SemanticCache,
 			Memory:        cfg.Memory,
 			VectorStore:   cloneVectorStoreConfig(cfg.VectorStore),
+			Access:        cloneAccessStoreConfig(cfg.AccessStore),
+			AccessRuntime: cloneAccessRuntimeStoreConfig(cfg.AccessRuntimeStore),
 		},
 		Integrations: CanonicalIntegrationGlobal{
 			Tools:  cfg.Tools,
@@ -179,14 +194,6 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 	}
 
 	return global
-}
-
-func canonicalAutoModelNames(names []string) *[]string {
-	if names == nil {
-		return nil
-	}
-	cloned := append([]string{}, names...)
-	return &cloned
 }
 
 func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCatalog {
@@ -249,182 +256,10 @@ func canonicalModelCatalogFromRouterConfig(cfg *RouterConfig) CanonicalModelCata
 	}
 }
 
-func canonicalProviderModelsFromRouterConfig(cfg *RouterConfig) []CanonicalProviderModel {
-	if cfg == nil {
-		return nil
-	}
-
-	modelNames := canonicalProviderModelNames(cfg)
-	if len(modelNames) == 0 {
-		return nil
-	}
-
-	names := sortedCanonicalProviderModelNames(modelNames)
-	endpointsByName, endpointsByModel := canonicalEndpointIndexes(cfg.VLLMEndpoints)
-
-	models := make([]CanonicalProviderModel, 0, len(names))
-	for _, name := range names {
-		providerModel := canonicalProviderModelFromRuntime(
-			name,
-			cfg.ModelConfig[name],
-			endpointsByName,
-			endpointsByModel,
-			cfg.ProviderProfiles,
-		)
-		if len(providerModel.BackendRefs) == 0 && !canonicalProviderModelHasMetadata(providerModel) {
-			continue
-		}
-		models = append(models, providerModel)
-	}
-
-	return models
-}
-
-func canonicalProviderModelNames(cfg *RouterConfig) map[string]bool {
-	modelNames := make(map[string]bool, len(cfg.ModelConfig))
-	for name := range cfg.ModelConfig {
-		modelNames[name] = true
-	}
-	for _, endpoint := range cfg.VLLMEndpoints {
-		if endpoint.Model != "" {
-			modelNames[endpoint.Model] = true
-		}
-	}
-	return modelNames
-}
-
-func sortedCanonicalProviderModelNames(modelNames map[string]bool) []string {
-	names := make([]string, 0, len(modelNames))
-	for name := range modelNames {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
-}
-
-func canonicalEndpointIndexes(
-	endpoints []VLLMEndpoint,
-) (map[string]VLLMEndpoint, map[string][]VLLMEndpoint) {
-	endpointsByName := make(map[string]VLLMEndpoint, len(endpoints))
-	endpointsByModel := make(map[string][]VLLMEndpoint)
-	for _, endpoint := range endpoints {
-		endpointsByName[endpoint.Name] = endpoint
-		if endpoint.Model != "" {
-			endpointsByModel[endpoint.Model] = append(endpointsByModel[endpoint.Model], endpoint)
-		}
-	}
-	return endpointsByName, endpointsByModel
-}
-
-func canonicalProviderModelFromRuntime(
-	name string,
-	params ModelParams,
-	endpointsByName map[string]VLLMEndpoint,
-	endpointsByModel map[string][]VLLMEndpoint,
-	profiles map[string]ProviderProfile,
-) CanonicalProviderModel {
-	providerModel := CanonicalProviderModel{
-		Name:             name,
-		ReasoningFamily:  params.ReasoningFamily,
-		APIFormat:        params.APIFormat,
-		Pricing:          params.Pricing,
-		Reliability:      params.Reliability,
-		ExternalModelIDs: copyStringMap(params.ExternalModelIDs),
-		BackendRefs: canonicalProviderBackendRefs(
-			name,
-			params,
-			endpointsByName,
-			endpointsByModel,
-			profiles,
-		),
-	}
-	if providerModelID := canonicalProviderModelID(params.ExternalModelIDs); providerModelID != "" {
-		providerModel.ProviderModelID = providerModelID
-	}
-	return providerModel
-}
-
-func canonicalProviderModelID(externalModelIDs map[string]string) string {
-	if len(externalModelIDs) != 1 {
-		return ""
-	}
-	for _, modelID := range externalModelIDs {
-		return modelID
-	}
-	return ""
-}
-
-func canonicalProviderBackendRefs(
-	modelName string,
-	params ModelParams,
-	endpointsByName map[string]VLLMEndpoint,
-	endpointsByModel map[string][]VLLMEndpoint,
-	profiles map[string]ProviderProfile,
-) []CanonicalBackendRef {
-	preferred := params.PreferredEndpoints
-	if len(preferred) == 0 {
-		modelEndpoints := endpointsByModel[modelName]
-		if len(modelEndpoints) == 0 {
-			return nil
-		}
-		refs := make([]CanonicalBackendRef, 0, len(modelEndpoints))
-		for _, endpoint := range modelEndpoints {
-			refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
-		}
-		return refs
-	}
-
-	refs := make([]CanonicalBackendRef, 0, len(preferred))
-	for _, endpointName := range preferred {
-		endpoint, ok := endpointsByName[endpointName]
-		if !ok {
-			continue
-		}
-		refs = append(refs, canonicalBackendRefFromRuntime(endpoint, params.AccessKey, profiles[endpoint.ProviderProfileName]))
-	}
-	return refs
-}
-
-func canonicalBackendRefFromRuntime(endpoint VLLMEndpoint, fallbackAPIKey string, profile ProviderProfile) CanonicalBackendRef {
-	ref := CanonicalBackendRef{
-		Name:       endpoint.Name,
-		Protocol:   endpoint.Protocol,
-		Weight:     endpoint.Weight,
-		Type:       endpoint.Type,
-		Provider:   profile.Type,
-		BaseURL:    profile.BaseURL,
-		AuthHeader: profile.AuthHeader,
-		AuthPrefix: profile.AuthPrefix,
-		APIVersion: profile.APIVersion,
-		ChatPath:   profile.ChatPath,
-		APIKey:     endpoint.APIKey,
-	}
-	if endpoint.Address != "" {
-		ref.Endpoint = endpoint.Address
-		if endpoint.Port > 0 {
-			ref.Endpoint = fmt.Sprintf("%s:%d", endpoint.Address, endpoint.Port)
-		}
-	}
-	if ref.APIKey == "" {
-		ref.APIKey = fallbackAPIKey
-	}
-	if len(profile.ExtraHeaders) > 0 {
-		ref.ExtraHeaders = copyStringMap(profile.ExtraHeaders)
-	}
-	return ref
-}
-
 func cloneVectorStoreConfig(cfg *VectorStoreConfig) *VectorStoreConfig {
 	if cfg == nil {
 		return nil
 	}
 	cloned := *cfg
 	return &cloned
-}
-
-func normalizedConfigSource(source ConfigSource) ConfigSource {
-	if source == "" {
-		return ConfigSourceFile
-	}
-	return source
 }

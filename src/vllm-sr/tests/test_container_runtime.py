@@ -244,3 +244,38 @@ def test_resolve_container_cli_path_returns_none_for_podman_shim(monkeypatch):
     )
 
     assert container_runtime.resolve_container_cli_path("/usr/local/bin/docker") is None
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "example/router:v0.4.0",
+        "example/router@sha256:" + "a" * 64,
+        "example/router:v0.4.0@sha256:" + "b" * 64,
+    ],
+)
+def test_container_image_exists_inspects_exact_reference(monkeypatch, reference):
+    calls = []
+    monkeypatch.setattr(container_runtime, "get_container_runtime", lambda: "docker")
+
+    def inspect(command, **_kwargs):
+        calls.append(command)
+        return _Result("sha256:local\n")
+
+    monkeypatch.setattr(container_runtime.subprocess, "run", inspect)
+
+    assert container_runtime.container_image_exists(reference) is True
+    assert calls == [["docker", "image", "inspect", "--format", "{{.Id}}", reference]]
+
+
+def test_container_image_exists_requires_successful_inspection(monkeypatch):
+    monkeypatch.setattr(container_runtime, "get_container_runtime", lambda: "podman")
+    monkeypatch.setattr(
+        container_runtime.subprocess,
+        "run",
+        lambda *_args, **_kwargs: _Result("", "not found", 1),
+    )
+
+    assert (
+        container_runtime.container_image_exists("missing@sha256:" + "c" * 64) is False
+    )

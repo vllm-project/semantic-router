@@ -1,0 +1,1183 @@
+.panel {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px;
+  background: #0d0e11;
+}
+
+.toolbar {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.toolbar > div:first-child {
+  min-width: 0;
+}
+
+.toolbar h2 {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.91);
+  font-size: 0.98rem;
+  font-weight: 640;
+  letter-spacing: -0.025em;
+}
+
+.toolbar p {
+  margin: 4px 0 0;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.68rem;
+}
+
+.toolbarActions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.search {
+  width: min(250px, 25vw);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.search:focus-within {
+  border-color: rgba(255, 255, 255, 0.19);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.search svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.search input {
+  width: 100%;
+  height: 34px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.8);
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.search input::placeholder {
+  color: rgba(255, 255, 255, 0.29);
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton {
+  min-height: 35px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 0.68rem;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.primaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.92);
+  color: #101114;
+}
+
+.primaryButton:hover:not(:disabled) {
+  background: #fff;
+}
+
+.secondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.67);
+}
+
+.secondaryButton:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.dangerButton {
+  border: 1px solid rgba(226, 154, 154, 0.16);
+  background: rgba(154, 66, 66, 0.06);
+  color: rgba(235, 177, 177, 0.76);
+}
+
+.dangerButton:hover:not(:disabled) {
+  border-color: rgba(226, 154, 154, 0.27);
+  background: rgba(154, 66, 66, 0.11);
+}
+
+.primaryButton svg,
+.secondaryButton svg,
+.dangerButton svg {
+  width: 14px;
+  height: 14px;
+}
+
+.primaryButton:disabled,
+.secondaryButton:disabled,
+.dangerButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.tableWrap {
+  width: 100%;
+  min-height: 270px;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.table th,
+.table td {
+  height: 58px;
+  padding: 0 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.49);
+  font-size: 0.67rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table th {
+  height: 38px;
+  background: rgba(255, 255, 255, 0.018);
+  color: rgba(255, 255, 255, 0.31);
+  font-size: 0.58rem;
+  font-weight: 680;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.table th:first-child,
+.table td:first-child {
+  width: 38%;
+  padding-left: 17px;
+}
+
+.table tbody tr {
+  cursor: pointer;
+  outline: none;
+  transition: background 100ms ease;
+}
+
+.table tbody tr:hover,
+.table tbody tr:focus-visible {
+  background: rgba(255, 255, 255, 0.032);
+}
+
+.table tbody tr:focus-visible {
+  box-shadow: inset 3px 0 rgba(255, 255, 255, 0.5);
+}
+
+.rowIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rowOpen {
+  width: 100%;
+  min-width: 0;
+  display: block;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+}
+
+.rowOpen:focus-visible .rowIcon {
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #fff;
+}
+
+.rowIcon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.rowIcon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.rowIdentity > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.rowIdentity strong,
+.rowIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowIdentity strong {
+  color: rgba(255, 255, 255, 0.79);
+  font-size: 0.72rem;
+  font-weight: 620;
+}
+
+.rowIdentity small {
+  color: rgba(255, 255, 255, 0.31);
+  font-size: 0.59rem;
+}
+
+.chip,
+.status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin: 2px 4px 2px 0;
+  padding: 0 7px;
+  border: 1px solid rgba(255, 255, 255, 0.085);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.57rem;
+  text-transform: capitalize;
+}
+
+.status::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.pagination {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 15px;
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 0.6rem;
+}
+
+.pagination button {
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: inherit;
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.emptyState {
+  min-height: 250px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  color: rgba(255, 255, 255, 0.34);
+  text-align: center;
+}
+
+.emptyState > svg {
+  width: 22px;
+  height: 22px;
+  margin-bottom: 10px;
+}
+
+.emptyState strong {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.76rem;
+}
+
+.emptyState span {
+  margin-top: 4px;
+  font-size: 0.65rem;
+}
+
+.inlineError {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 14px;
+  padding: 8px 10px;
+  border: 1px solid rgba(225, 158, 158, 0.16);
+  border-radius: 8px;
+  background: rgba(148, 59, 59, 0.07);
+  color: rgba(237, 184, 184, 0.76);
+  font-size: 0.66rem;
+}
+
+.inlineError svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.inlineError button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+}
+
+.dialogBackdrop {
+  position: fixed;
+  z-index: 900;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 22px;
+  background: rgba(0, 0, 0, 0.73);
+  backdrop-filter: blur(17px);
+}
+
+.dialog {
+  width: min(760px, 100%);
+  max-height: min(860px, calc(100vh - 44px));
+  overflow: auto;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
+  outline: none;
+  background: rgba(14, 15, 18, 0.9);
+  box-shadow: 0 32px 110px rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(30px) saturate(118%);
+}
+
+.dialogHeader {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 34px;
+  align-items: start;
+  gap: 12px;
+  padding: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(14, 15, 18, 0.94);
+  backdrop-filter: blur(20px);
+}
+
+.dialogLogo {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.dialogLogo img {
+  width: 25px;
+  height: 25px;
+  object-fit: contain;
+}
+
+.dialogHeader > div:nth-child(2) {
+  min-width: 0;
+}
+
+.dialogHeader span {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.59rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dialogHeader h2 {
+  margin: 4px 0 0;
+  overflow: hidden;
+  color: #fff;
+  font-size: 1.38rem;
+  font-weight: 620;
+  letter-spacing: -0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dialogHeader p {
+  margin: 6px 0 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.69rem;
+  line-height: 1.5;
+}
+
+.dialogHeader > button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.43);
+}
+
+.dialogHeader > button:hover:not(:disabled),
+.dialogHeader > button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.1);
+  outline: none;
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.dialogHeader > button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.editor,
+.resourceView,
+.credentialBody {
+  padding: 18px;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.field {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.65rem;
+  font-weight: 620;
+}
+
+.fieldWide {
+  grid-column: 1 / -1;
+}
+
+.field > span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.field b,
+.field em {
+  font-size: 0.52rem;
+  font-style: normal;
+  font-weight: 640;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.field b {
+  color: rgba(255, 255, 255, 0.32);
+}
+.field em {
+  color: rgba(255, 255, 255, 0.24);
+}
+
+.field input,
+.field textarea,
+.field select,
+.rotateForm input {
+  width: 100%;
+  min-width: 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  outline: none;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.84);
+  font: inherit;
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus,
+.rotateForm input:focus {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.field input::placeholder,
+.field textarea::placeholder,
+.rotateForm input::placeholder {
+  color: rgba(255, 255, 255, 0.24);
+}
+
+.field small {
+  color: rgba(255, 255, 255, 0.29);
+  font-size: 0.57rem;
+  font-weight: 450;
+  line-height: 1.45;
+}
+
+.fieldset {
+  min-width: 0;
+  margin: 18px 0 0;
+  padding: 0;
+  border: 0;
+}
+
+.fieldset legend {
+  padding: 0;
+  color: rgba(255, 255, 255, 0.74);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.fieldset > p {
+  margin: 4px 0 10px;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 0.62rem;
+}
+
+.choiceGrid,
+.modeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.choice {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 0 minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 7px;
+  min-height: 52px;
+  padding: 8px 10px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+
+.choice:hover,
+.choice:focus-within,
+.choiceActive {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.choice > input {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.choice > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.choice strong,
+.choice small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choice strong {
+  color: rgba(255, 255, 255, 0.67);
+  font-size: 0.65rem;
+  font-weight: 620;
+}
+
+.choice small {
+  color: rgba(255, 255, 255, 0.29);
+  font-size: 0.56rem;
+  font-weight: 450;
+}
+
+.choice > svg {
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.choiceActive > svg {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.modeChoice {
+  display: grid;
+  gap: 6px;
+}
+
+.defaultToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding-left: 4px;
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.58rem;
+}
+
+.defaultToggle input {
+  accent-color: #e5e7eb;
+}
+
+.emptyInline {
+  grid-column: 1 / -1;
+  padding: 12px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.62rem;
+  text-align: center;
+}
+
+.resourcePicker {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.pickerSearch {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 7px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.31);
+}
+
+.pickerSearch:focus-within {
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.pickerSearch svg {
+  width: 13px;
+  height: 13px;
+}
+
+.pickerSearch input {
+  width: 100%;
+  height: 31px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.74);
+  font: inherit;
+  font-size: 0.63rem;
+}
+
+.pickerSearch input::placeholder {
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.pickerList {
+  max-height: 210px;
+  display: grid;
+  gap: 3px;
+  overflow: auto;
+  padding: 0 7px 7px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.12) transparent;
+}
+
+.pickerItem {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 0 minmax(0, 1fr) 16px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.pickerItem:hover,
+.pickerItem:focus-within,
+.pickerItemSelected {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.pickerItem > input {
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.pickerItem > span {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.pickerItem strong,
+.pickerItem small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pickerItem strong {
+  color: rgba(255, 255, 255, 0.61);
+  font-size: 0.62rem;
+  font-weight: 610;
+}
+
+.pickerItem small {
+  color: rgba(255, 255, 255, 0.27);
+  font-size: 0.54rem;
+}
+
+.pickerItem > svg {
+  width: 13px;
+  height: 13px;
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.pickerItemSelected > svg {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pickerError {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 7px 7px;
+  padding: 7px;
+  border-radius: 7px;
+  background: rgba(142, 55, 55, 0.08);
+  color: rgba(235, 177, 177, 0.72);
+  font-size: 0.57rem;
+}
+
+.pickerError svg {
+  width: 12px;
+  height: 12px;
+}
+.pickerError button {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-weight: 650;
+}
+.pickerMore {
+  display: block;
+  margin: 0 auto 7px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.57rem;
+}
+
+.advanced {
+  margin-top: 18px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.advanced summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.65rem;
+  font-weight: 620;
+  cursor: pointer;
+  list-style: none;
+}
+
+.advanced summary::-webkit-details-marker {
+  display: none;
+}
+.advanced summary svg {
+  width: 14px;
+  height: 14px;
+  transition: transform 120ms ease;
+}
+.advanced[open] summary svg {
+  transform: rotate(180deg);
+}
+.advanced[open] summary {
+  margin-bottom: 12px;
+}
+
+.editorActions,
+.viewActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.editorActions > p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: rgba(235, 177, 177, 0.8);
+  font-size: 0.62rem;
+}
+
+.editorActions > p svg {
+  width: 13px;
+  height: 13px;
+}
+.editorActions > div,
+.viewActions > div {
+  display: flex;
+  gap: 8px;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail {
+  min-width: 0;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.detail span {
+  display: block;
+  color: rgba(255, 255, 255, 0.31);
+  font-size: 0.57rem;
+}
+
+.detail strong {
+  display: block;
+  margin-top: 5px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.66rem;
+  font-weight: 610;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-transform: capitalize;
+}
+
+.instructions {
+  margin-top: 14px;
+}
+
+.instructions h3 {
+  margin: 0 0 7px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.64rem;
+  font-weight: 640;
+}
+
+.instructions pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 11px;
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 9px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.52);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.61rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.credentialBody {
+  display: grid;
+  gap: 14px;
+}
+
+.credentialCreate {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 9px;
+  padding: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.credentialList {
+  display: grid;
+  gap: 7px;
+}
+
+.credentialRow {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.credentialMark {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.credentialMark svg {
+  width: 15px;
+  height: 15px;
+}
+.credentialRow > div:nth-child(2) {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.credentialRow strong,
+.credentialRow span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.credentialRow strong {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.66rem;
+}
+.credentialRow span {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.57rem;
+}
+
+.credentialActions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.credentialActions button {
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.59rem;
+}
+
+.credentialActions button:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.17);
+  color: #fff;
+}
+
+.credentialActions button:last-child {
+  width: 28px;
+  padding: 0;
+}
+
+.credentialActions svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rotateForm {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 0.7fr) auto auto;
+  align-items: center;
+  gap: 8px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.rotateForm > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.rotateForm strong {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.66rem;
+}
+.rotateForm span {
+  color: rgba(255, 255, 255, 0.3);
+  font-size: 0.56rem;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 820px) {
+  .toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .toolbarActions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .search {
+    width: min(100%, 300px);
+  }
+  .detailGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .credentialCreate {
+    grid-template-columns: 1fr 1fr;
+  }
+  .credentialCreate > button {
+    grid-column: 1 / -1;
+  }
+  .rotateForm {
+    grid-template-columns: 1fr auto auto;
+  }
+  .rotateForm > div {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 560px) {
+  .dialogBackdrop {
+    padding: 10px;
+  }
+  .dialog {
+    max-height: calc(100vh - 20px);
+    border-width: 1px;
+  }
+  .dialogHeader {
+    grid-template-columns: 38px minmax(0, 1fr) 30px;
+    padding: 14px;
+  }
+  .dialogLogo {
+    width: 38px;
+    height: 38px;
+  }
+  .dialogHeader h2 {
+    font-size: 1.15rem;
+  }
+  .editor,
+  .resourceView,
+  .credentialBody {
+    padding: 14px;
+  }
+  .formGrid,
+  .choiceGrid,
+  .modeGrid,
+  .detailGrid,
+  .credentialCreate {
+    grid-template-columns: 1fr;
+  }
+  .fieldWide {
+    grid-column: auto;
+  }
+  .editorActions,
+  .viewActions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .editorActions > div,
+  .viewActions > div {
+    justify-content: flex-end;
+  }
+  .credentialRow {
+    grid-template-columns: 30px minmax(0, 1fr);
+  }
+  .credentialActions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+  .rotateForm {
+    grid-template-columns: 1fr 1fr;
+  }
+  .rotateForm input {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .table tbody tr,
+  .advanced summary svg {
+    transition: none;
+  }
+}

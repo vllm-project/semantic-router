@@ -12,7 +12,7 @@ import (
 )
 
 // RequestFacts carries untrusted request-envelope facts used by signal
-// extraction. Trusted identity remains owned by the authz header path.
+// extraction. Trusted identity remains a separate TenantContext-only input.
 type RequestFacts struct {
 	Metadata map[string]string
 	Context  context.Context

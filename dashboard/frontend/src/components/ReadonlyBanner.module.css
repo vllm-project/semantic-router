@@ -12,7 +12,9 @@
 }
 
 .icon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
 }
 
 .text {
@@ -21,7 +23,7 @@
 
 /* Dark mode support */
 :global(.dark) .banner,
-:global([data-theme="dark"]) .banner {
+:global([data-theme='dark']) .banner {
   background-color: rgba(255, 193, 7, 0.15);
   border-color: rgba(255, 193, 7, 0.3);
   color: #ffc107;

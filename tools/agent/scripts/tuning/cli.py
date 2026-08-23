@@ -5,8 +5,8 @@ Usage:
     python -m tuning.cli <scenario> [options]
 
 Examples:
-    python -m tuning.cli privacy --config config.yaml --probes probes.yaml
-    python -m tuning.cli calibration --config config.yaml --probes probes.yaml --max-iter 15
+    python -m tuning.cli privacy --config config.yaml --probes probes.yaml --candidate-config candidate.yaml
+    python -m tuning.cli calibration --config config.yaml --probes probes.yaml --candidate-config candidate.yaml
     python -m tuning.cli list
 """
 
@@ -19,7 +19,7 @@ from pathlib import Path
 
 from .client import RouterClient
 from .probes import save_results
-from .scenario import TuningLoop
+from .scenario import CandidateTuner
 
 BUILTIN_SCENARIOS = {
     "privacy": "tuning.scenarios.privacy:PrivacyScenario",
@@ -44,7 +44,7 @@ def _load_scenario(name: str):
     return cls()
 
 
-def main() -> int:
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="DSL Tuning Framework — analytical optimization for semantic router",
     )
@@ -60,15 +60,9 @@ def main() -> int:
         "--probes", required=True, help="Path to probe definitions YAML"
     )
     parser.add_argument(
-        "--deploy-config",
-        default="",
-        help="Optional: write fixed config to this path instead",
-    )
-    parser.add_argument(
-        "--router-pid", type=int, default=0, help="Router PID for SIGHUP hot-reload"
-    )
-    parser.add_argument(
-        "--max-iter", type=int, default=10, help="Maximum tuning iterations"
+        "--candidate-config",
+        required=True,
+        help="Write the offline candidate here; must differ from --config",
     )
     parser.add_argument(
         "--output",
@@ -78,6 +72,11 @@ def main() -> int:
     parser.add_argument(
         "--output-dir", default="", help="Output directory (default: ./results)"
     )
+    return parser
+
+
+def main() -> int:
+    parser = build_parser()
 
     if len(sys.argv) > 1 and sys.argv[1] == "list":
         print("Available scenarios:")
@@ -96,20 +95,18 @@ def main() -> int:
     print(f"  Endpoint:  {args.endpoint}")
     print(f"  Config:    {args.config}")
     print(f"  Probes:    {args.probes}")
-    print(f"  Max iter:  {args.max_iter}")
+    print(f"  Candidate: {args.candidate_config}")
     print("=" * 70)
 
-    loop = TuningLoop(
+    tuner = CandidateTuner(
         scenario=scenario,
         router=router,
         config_path=Path(args.config),
         probes_path=Path(args.probes),
-        deploy_config=Path(args.deploy_config) if args.deploy_config else None,
-        router_pid=args.router_pid,
-        max_iterations=args.max_iter,
+        candidate_path=Path(args.candidate_config),
     )
 
-    output = loop.run()
+    output = tuner.run()
 
     filename = args.output or f"{scenario.name}_eval.json"
     output_dir = Path(args.output_dir) if args.output_dir else None
@@ -118,14 +115,16 @@ def main() -> int:
     print(f"\n{'='*70}")
     print(f"  SUMMARY — {scenario.name}")
     print(f"{'='*70}")
-    for t in output.get("trajectory", []):
-        print(
-            f"  Iter {t['iteration']}: {t['accuracy']}/{t['total']} "
-            f"({t['pct']}%)  sev_loss={t['severity_weighted_loss']}"
-        )
-    print(f"  Total fixes: {len(output.get('all_fixes_applied', []))}")
+    evaluation = output["evaluation"]
+    print(
+        f"  Evaluation: {evaluation['accuracy']}/{evaluation['total']} "
+        f"({evaluation['pct']}%)"
+    )
+    if output.get("candidate_config"):
+        print(f"  Candidate: {output['candidate_config']}")
 
-    return 0
+    validation = output.get("validation")
+    return 0 if validation is None or validation.get("valid", False) else 1
 
 
 if __name__ == "__main__":

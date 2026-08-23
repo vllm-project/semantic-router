@@ -23,6 +23,19 @@ def _split_runtime_topology(monkeypatch):
     )
 
 
+_CONFIG_BODY = (
+    "version: v0.4\n"
+    "listeners:\n"
+    "  - name: http-8899\n"
+    "    address: 0.0.0.0\n"
+    "    port: 8899\n"
+    "global:\n"
+    "  services:\n"
+    "    backend_egress:\n"
+    "      policy_file: /app/config/backend-egress-policy.yaml\n"
+)
+
+
 def _capture_run_commands(monkeypatch):
     captured = []
 
@@ -59,13 +72,18 @@ def _stub_valid_container_cli(monkeypatch, tmp_path):
     return docker_bin
 
 
+def _set_test_container_socket(monkeypatch, tmp_path):
+    socket_path = tmp_path / "docker.sock"
+    socket_path.write_text("")
+    monkeypatch.setenv("VLLM_SR_CONTAINER_SOCKET", str(socket_path))
+    return socket_path
+
+
 def test_container_start_vllm_sr_rejects_legacy_topology_override(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     monkeypatch.setenv("VLLM_SR_TOPOLOGY", "legacy")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -85,9 +103,7 @@ def test_container_start_vllm_sr_sets_openclaw_shared_network_env(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     socket_path = tmp_path / "docker.sock"
     socket_path.write_text("")
@@ -122,16 +138,14 @@ def test_container_start_vllm_sr_sets_openclaw_shared_network_env(
     assert "-e" in dashboard_cmd
     assert "OPENCLAW_DEFAULT_NETWORK_MODE=vllm-sr-network" in dashboard_cmd
     assert "TARGET_ENVOY_ADMIN_URL=http://vllm-sr-envoy-container:9901" in dashboard_cmd
-    assert "VLLM_SR_ENVOY_CONFIG_PATH=/app/.vllm-sr/envoy.yaml" in dashboard_cmd
+    assert not any("VLLM_SR_ENVOY_CONFIG_PATH=" in token for token in dashboard_cmd)
 
 
 def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_image(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     socket_path = tmp_path / "docker.sock"
     socket_path.write_text("")
@@ -176,15 +190,14 @@ def test_container_start_vllm_sr_places_dashboard_openclaw_runtime_flags_before_
     assert "/app/start-dashboard.sh" in dashboard_cmd[image_index + 1 :]
 
 
-def test_container_start_vllm_sr_mounts_host_docker_cli_by_default(
+def test_container_start_vllm_sr_mounts_host_docker_cli_after_socket_opt_in(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
+    _set_test_container_socket(monkeypatch, tmp_path)
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_start,
@@ -217,11 +230,10 @@ def test_container_start_vllm_sr_uses_in_image_docker_cli_when_opted_out(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
+    _set_test_container_socket(monkeypatch, tmp_path)
     monkeypatch.setenv("VLLM_SR_MOUNT_CONTAINER_CLI", "0")
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -254,11 +266,10 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_when_requested(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     docker_bin = _stub_valid_container_cli(monkeypatch, tmp_path)
+    _set_test_container_socket(monkeypatch, tmp_path)
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
         container_start,
@@ -289,9 +300,7 @@ def test_container_start_vllm_sr_mounts_host_docker_cli_when_requested(
 
 def test_container_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -321,6 +330,8 @@ def test_container_start_vllm_sr_mounts_dashboard_data_dir(tmp_path, monkeypatch
     assert dashboard_data_dir.is_dir()
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
     assert f"{dashboard_data_dir}:/app/data:z" in dashboard_cmd
+    assert "OPENCLAW_CONTAINER_RUNTIME_DISABLED=true" in dashboard_cmd
+    assert not any("docker.sock" in token for token in dashboard_cmd)
 
 
 def test_container_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatch):
@@ -328,9 +339,7 @@ def test_container_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatc
     workspace_dir.mkdir()
     config_path = tmp_path / "runtime-overrides" / "config-with-platform-overrides.yaml"
     config_path.parent.mkdir()
-    config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    config_path.write_text(_CONFIG_BODY)
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -365,21 +374,19 @@ def test_container_start_vllm_sr_uses_state_root_for_mounts(tmp_path, monkeypatc
     assert f"{models_dir}:/app/models:z" in router_cmd
 
 
-def test_container_start_vllm_sr_keeps_source_config_mount_with_runtime_override(
+def test_container_start_vllm_sr_mounts_compiled_bootstrap_read_only(
     tmp_path, monkeypatch
 ):
     workspace_dir = tmp_path / "workspace"
     runtime_dir = workspace_dir / ".vllm-sr"
     workspace_dir.mkdir()
     runtime_dir.mkdir()
+    knowledge_bases_dir = runtime_dir / "knowledge_bases"
+    knowledge_bases_dir.mkdir()
     source_config_path = workspace_dir / "config.yaml"
-    source_config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
-    runtime_config_path = runtime_dir / "runtime-config.yaml"
-    runtime_config_path.write_text(
-        "version: v0.3\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
-    )
+    source_config_path.write_text(_CONFIG_BODY)
+    compiled_bootstrap_path = runtime_dir / "compiled-bootstrap.yaml"
+    compiled_bootstrap_path.write_text(_CONFIG_BODY)
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
     monkeypatch.setattr(
@@ -402,26 +409,34 @@ def test_container_start_vllm_sr_keeps_source_config_mount_with_runtime_override
         openclaw_network_name="vllm-sr-network",
         minimal=True,
         state_root_dir=str(workspace_dir),
-        runtime_config_file=str(runtime_config_path),
+        compiled_bootstrap_file=str(compiled_bootstrap_path),
     )
 
     assert rc == 0
     router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
-    assert f"{source_config_path}:/app/source-config.yaml:ro,z" in router_cmd
+    assert f"{source_config_path}:/app/source-config.yaml:ro,z" not in router_cmd
     assert not any("/app/config.yaml" in token for token in router_cmd)
-    assert f"{runtime_dir}:/app/.vllm-sr:z" in router_cmd
+    assert f"{runtime_dir}:/app/.vllm-sr:z" not in router_cmd
+    assert not any("/app/.vllm-sr/logs" in token for token in router_cmd)
+    assert (
+        f"{compiled_bootstrap_path}:/app/.vllm-sr/compiled-bootstrap.yaml:ro,z"
+        in router_cmd
+    )
+    assert f"{knowledge_bases_dir}:/app/.vllm-sr/knowledge_bases:ro,z" in router_cmd
+    assert router_cmd[-2:] == [
+        "/app/start-router.sh",
+        "/app/.vllm-sr/compiled-bootstrap.yaml",
+    ]
     assert (
         f"{workspace_dir / '.vllm-sr' / 'envoy.yaml'}:/etc/envoy/envoy.yaml:z"
         in envoy_cmd
     )
-    assert "VLLM_SR_RUNTIME_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml" in router_cmd
-    assert "VLLM_SR_SOURCE_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml" in router_cmd
+    assert not any("VLLM_SR_RUNTIME_CONFIG_PATH=" in token for token in router_cmd)
+    assert not any("VLLM_SR_SOURCE_CONFIG_PATH=" in token for token in router_cmd)
     assert "VLLM_SR_STATE_ROOT_DIR=/app" in router_cmd
     assert "VLLM_SR_CONFIG_BASE_DIR=/app" in router_cmd
-    assert (
-        "VLLM_SR_RUNTIME_CONFIG_PATH=/app/.vllm-sr/runtime-config.yaml" not in envoy_cmd
-    )
+    assert not any("VLLM_SR_RUNTIME_CONFIG_PATH=" in token for token in envoy_cmd)
 
 
 def test_render_observability_template_uses_stack_specific_container_hosts():

@@ -26,16 +26,9 @@ import (
 // from the first few KB, and either passes through or accumulates for the
 // full pipeline on end_of_stream.
 func (r *OpenAIRouter) handleRequestBodyDispatch(v *ext_proc.ProcessingRequest_RequestBody, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	// Honor x-vsr-skip-processing before allocating a streamed-body handler.
-	// This guarantees no chunk accumulation, model detection, or buffered
-	// pipeline runs for opted-out requests, regardless of streamed_body_mode.
-	if ctx.SkipProcessing {
-		if ctx.FullDuplexRequestBody {
-			return newFullDuplexRequestBodyResponse(v.RequestBody.GetBody(), v.RequestBody.GetEndOfStream()), nil
-		}
-		return newContinueRequestBodyResponse(), nil
+	if outcomeResponse, handled := r.handleOutcomeFeedbackRequestBody(v, ctx); handled {
+		return outcomeResponse, nil
 	}
-
 	eos := v.RequestBody.GetEndOfStream()
 
 	// If we already have a handler from a previous chunk, continue streaming
@@ -76,6 +69,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 	// CGO inference calls) so a single bad request cannot take down the gRPC server.
 	defer func() {
 		if rec := recover(); rec != nil {
+			if settleErr := r.settleUnknownInference(ctx, 500, "processor_panic"); settleErr != nil {
+				logging.Errorf("failed to settle inference after processor panic: %v", settleErr)
+			}
 			r.finalizeRouterReplay(ctx, routerreplay.LifecycleFailed, "processor_panic")
 			logging.Errorf("Process: recovered panic: %v\n%s", rec, debug.Stack())
 			retErr = status.Errorf(codes.Internal, "internal error: %v", rec)
@@ -96,6 +92,9 @@ func (r *OpenAIRouter) Process(stream ext_proc.ExternalProcessor_ProcessServer) 
 
 		if err := r.handleProcessRequest(stream, req, ctx); err != nil {
 			state, reason := replayLifecycleForProcessError(err)
+			if settleErr := r.settleUnknownInference(ctx, inferenceTerminalStatus(err), reason); settleErr != nil {
+				logging.Errorf("failed to settle inference after processor error: %v", settleErr)
+			}
 			r.finalizeRouterReplay(ctx, state, reason)
 			return err
 		}
@@ -113,6 +112,9 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 	}
 
 	state, reason := replayLifecycleForReceiveError(err)
+	if settleErr := r.settleUnknownInference(ctx, inferenceTerminalStatus(err), reason); settleErr != nil {
+		logging.Errorf("failed to settle inference after stream termination: %v", settleErr)
+	}
 	r.finalizeRouterReplay(ctx, state, reason)
 
 	if errors.Is(err, io.EOF) {
@@ -130,6 +132,16 @@ func (r *OpenAIRouter) handleProcessReceiveError(ctx *RequestContext, err error)
 
 	logging.Errorf("Error receiving request: %v", err)
 	return err
+}
+
+func inferenceTerminalStatus(err error) int {
+	if errors.Is(err, context.Canceled) || status.Code(err) == codes.Canceled {
+		return 499
+	}
+	if errors.Is(err, context.DeadlineExceeded) || status.Code(err) == codes.DeadlineExceeded {
+		return 504
+	}
+	return 500
 }
 
 func replayLifecycleForProcessError(err error) (string, string) {
@@ -222,6 +234,7 @@ func (r *OpenAIRouter) processRequestHeaders(
 		logging.Errorf("handleRequestHeaders failed: %v", err)
 		return err
 	}
+	response = r.encodeImmediateResponseForClient(response, ctx)
 	if err := sendResponse(stream, response, "request header"); err != nil {
 		logging.Errorf("sendResponse for headers failed: %v", err)
 		return err
@@ -239,6 +252,8 @@ func (r *OpenAIRouter) processRequestBody(
 		logging.Errorf("handleRequestBody failed: %v", err)
 		return err
 	}
+	response = r.encodeImmediateResponseForClient(response, ctx)
+	r.persistImmediateResponseObject(response, ctx)
 	// FULL_DUPLEX_STREAMED explicitly permits the processor to buffer any
 	// number of input chunks before sending a StreamedBodyResponse. A nil
 	// response here means this chunk was retained for the eventual EOS reply.

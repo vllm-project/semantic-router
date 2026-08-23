@@ -24,7 +24,7 @@ type SignalResults struct {
 	MatchedStructureRules    []string // Matched structure rule names (e.g. "many_questions")
 	MatchedComplexityRules   []string // Matched complexity rules with difficulty level (e.g. "code_complexity:hard")
 	MatchedModalityRules     []string // Matched modality: "AR", "DIFFUSION", or "BOTH"
-	MatchedAuthzRules        []string // Matched authz role names for user-level RBAC routing
+	MatchedAuthzRules        []string // Matched routing roles from authenticated TenantContext facts
 	MatchedJailbreakRules    []string // Matched jailbreak rule names (confidence >= threshold)
 	MatchedPIIRules          []string // Matched PII rule names (denied PII types detected)
 	MatchedKBRules           []string

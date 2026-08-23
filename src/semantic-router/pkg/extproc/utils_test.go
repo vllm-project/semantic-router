@@ -4,7 +4,8 @@ import (
 	"testing"
 
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/openai/openai-go"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestStatusCodeToEnumIncludesClientAndUpstreamErrors(t *testing.T) {
@@ -13,10 +14,12 @@ func TestStatusCodeToEnumIncludesClientAndUpstreamErrors(t *testing.T) {
 		want       typev3.StatusCode
 	}{
 		{statusCode: 400, want: typev3.StatusCode_BadRequest},
+		{statusCode: 201, want: typev3.StatusCode_Created},
 		{statusCode: 401, want: typev3.StatusCode_Unauthorized},
 		{statusCode: 403, want: typev3.StatusCode_Forbidden},
 		{statusCode: 404, want: typev3.StatusCode_NotFound},
 		{statusCode: 405, want: typev3.StatusCode_MethodNotAllowed},
+		{statusCode: 409, want: typev3.StatusCode_Conflict},
 		{statusCode: 413, want: typev3.StatusCode_PayloadTooLarge},
 		{statusCode: 422, want: typev3.StatusCode_UnprocessableEntity},
 		{statusCode: 429, want: typev3.StatusCode_TooManyRequests},
@@ -35,54 +38,41 @@ func TestStatusCodeToEnumIncludesClientAndUpstreamErrors(t *testing.T) {
 }
 
 func TestExtractUserAndNonUserContentUsesLastUserAndJoinsTextParts(t *testing.T) {
-	req := &openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.SystemMessage([]openai.ChatCompletionContentPartTextParam{
-				{Text: "System"},
-				{Text: "Context"},
-			}),
-			openai.AssistantMessage(
-				[]openai.ChatCompletionAssistantMessageParamContentArrayOfContentPartUnion{
-					{OfText: &openai.ChatCompletionContentPartTextParam{Text: "Assistant"}},
-					{OfText: &openai.ChatCompletionContentPartTextParam{Text: "Reply"}},
-				},
-			),
-			openai.UserMessage("first user message"),
-			openai.UserMessage([]openai.ChatCompletionContentPartUnionParam{
-				openai.TextContentPart("latest"),
-				openai.TextContentPart("question"),
-			}),
+	req := &llmprotocol.Request{
+		Instructions: []llmprotocol.InstructionBlock{{Role: llmprotocol.RoleSystem, Content: textBlocks("System", "Context")}},
+		Messages: []llmprotocol.Message{
+			{Role: llmprotocol.RoleAssistant, Content: textBlocks("Assistant", "Reply")},
+			{Role: llmprotocol.RoleUser, Content: textBlocks("first user message")},
+			{Role: llmprotocol.RoleUser, Content: textBlocks("latest", "question")},
 		},
 	}
 
-	userContent, nonUser := extractUserAndNonUserContent(req)
-	if userContent != "latest question" {
-		t.Fatalf("expected latest user content, got %q", userContent)
+	fast := extractSemanticRequestSignals(req)
+	if fast.UserContent != "latest question" {
+		t.Fatalf("expected latest user content, got %q", fast.UserContent)
 	}
-	if len(nonUser) != 2 {
-		t.Fatalf("expected two non-user messages, got %d", len(nonUser))
+	if len(fast.NonUserMessages) != 2 {
+		t.Fatalf("expected two non-user messages, got %d", len(fast.NonUserMessages))
 	}
-	if nonUser[0] != "System Context" {
-		t.Fatalf("expected joined system content, got %q", nonUser[0])
+	if fast.NonUserMessages[0] != "System Context" {
+		t.Fatalf("expected joined system content, got %q", fast.NonUserMessages[0])
 	}
-	if nonUser[1] != "Assistant Reply" {
-		t.Fatalf("expected joined assistant content, got %q", nonUser[1])
+	if fast.NonUserMessages[1] != "Assistant Reply" {
+		t.Fatalf("expected joined assistant content, got %q", fast.NonUserMessages[1])
 	}
 }
 
 func TestExtractUserAndNonUserContentIgnoresToolMessages(t *testing.T) {
-	req := &openai.ChatCompletionNewParams{
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			openai.ToolMessage("tool output", "tool-call-id"),
-			openai.UserMessage("hello"),
-		},
-	}
+	req := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		neutralToolResult("tool-call-id", "tool output"),
+		{Role: llmprotocol.RoleUser, Content: textBlocks("hello")},
+	}}
 
-	userContent, nonUser := extractUserAndNonUserContent(req)
-	if userContent != "hello" {
-		t.Fatalf("expected user content hello, got %q", userContent)
+	fast := extractSemanticRequestSignals(req)
+	if fast.UserContent != "hello" {
+		t.Fatalf("expected user content hello, got %q", fast.UserContent)
 	}
-	if len(nonUser) != 0 {
-		t.Fatalf("expected tool messages to be ignored, got %#v", nonUser)
+	if len(fast.NonUserMessages) != 0 {
+		t.Fatalf("expected tool messages to be ignored, got %#v", fast.NonUserMessages)
 	}
 }

@@ -2,13 +2,10 @@ package extproc
 
 import (
 	"context"
-	"strings"
 	"time"
 
-	"github.com/openai/openai-go"
-	"github.com/openai/openai-go/shared"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
@@ -37,27 +34,32 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 		callCtx, cancel := context.WithTimeout(ctx, time.Duration(timeout)*time.Second)
 		defer cancel()
 
-		request := &openai.ChatCompletionNewParams{
-			Messages: []openai.ChatCompletionMessageParamUnion{
-				openai.SystemMessage(systemPrompt),
-				openai.UserMessage(input),
+		maxOutput := int64(promptSelectorMaxCompletionTokens)
+		temperature := float64(0)
+		request := &llmprotocol.Request{
+			Generation: 1,
+			Model:      model,
+			Instructions: []llmprotocol.InstructionBlock{{
+				Role:    llmprotocol.RoleSystem,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: systemPrompt}},
+			}},
+			Messages: []llmprotocol.Message{{
+				Role:    llmprotocol.RoleUser,
+				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: input}},
+			}},
+			Sampling: llmprotocol.Sampling{
+				MaxOutputTokens: &maxOutput,
+				Temperature:     &temperature,
 			},
-			MaxCompletionTokens: openai.Int(promptSelectorMaxCompletionTokens),
-			Temperature:         openai.Float(0),
+			OutputFormat: llmprotocol.OutputFormat{Kind: llmprotocol.OutputJSONObject},
 		}
-		jsonObjectFormat := shared.NewResponseFormatJSONObjectParam()
-		request.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
-			OfJSONObject: &jsonObjectFormat,
-		}
-		disablePromptHelperReasoning(request, model)
-		response, err := client.CallModel(
+		response, err := client.CallSemanticModel(
 			callCtx,
 			request,
 			model,
 			false,
 			1,
 			nil,
-			"",
 		)
 		if err != nil {
 			return selection.PromptInvocationResult{}, err
@@ -72,20 +74,4 @@ func (r *OpenAIRouter) newDecisionPromptSelector(
 		}, nil
 	}
 	return selection.NewPromptSelector(cfg, invoke, descriptions)
-}
-
-func disablePromptHelperReasoning(
-	request *openai.ChatCompletionNewParams,
-	model string,
-) {
-	normalized := strings.ToLower(model)
-	if !strings.Contains(normalized, "qwen") &&
-		!strings.Contains(normalized, "qwq") {
-		return
-	}
-	request.SetExtraFields(map[string]interface{}{
-		"chat_template_kwargs": map[string]interface{}{
-			"enable_thinking": false,
-		},
-	})
 }

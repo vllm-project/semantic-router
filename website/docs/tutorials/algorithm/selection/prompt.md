@@ -2,9 +2,9 @@
 
 ## Overview
 
-`prompt` uses a concrete helper model to select exactly one model from the
-matched decision's `modelRefs`. The runtime owns the candidate list, structured
-response schema, deterministic generation settings, and fallback behavior.
+`prompt` selects exactly one Model from the matched decision's Entrypoint
+assignment. The runtime owns the candidate list, structured response schema,
+deterministic generation settings, and fallback behavior.
 
 ## Key Advantages
 
@@ -29,7 +29,7 @@ privacy, and other deterministic gates in signals and decisions.
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: adaptive-model-choice
       description: Let a helper model choose the best eligible candidate.
@@ -37,29 +37,21 @@ routing:
       rules:
         operator: AND
         conditions: []
-      modelRefs:
-        - model: general-small
-          use_reasoning: false
-        - model: reasoning-large
-          use_reasoning: true
       algorithm:
         type: prompt
         on_error: fallback
         prompt:
-          model: router-small
           instructions: >-
             Use general-small for ordinary requests. Use reasoning-large for
             hard reasoning, coding, debugging, or multi-step analysis.
           timeout_seconds: 5
 ```
 
-`model` must be a concrete model declared in `routing.modelCards` and backed by
-`providers.models`, and it must use an OpenAI-compatible API format. Candidate
-base-model names must be unique; use separate decisions when LoRA or reasoning
-variants share the same base model. Candidate names and available model-card
-descriptions are added by the runtime. The selector receives the current user
-turn and returns a fixed JSON object containing an exact candidate name and a
-short rationale.
+The Entrypoint assigns the candidate Models to the decision. Candidate Model
+IDs must be unique; LoRA and reasoning overrides stay on those assignments.
+Candidate names and Model descriptions are added by the runtime. The selector
+receives the current user turn and returns a fixed JSON object containing an
+exact candidate name and a short rationale.
 The internal helper call uses `global.integrations.looper.endpoint`, which must
 address the router's OpenAI-compatible chat endpoint.
 

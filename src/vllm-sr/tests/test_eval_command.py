@@ -47,6 +47,7 @@ CLI_ROOT = Path(__file__).resolve().parents[1]
 def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(CLI_ROOT)
+    environment["PYDANTIC_DISABLE_PLUGINS"] = "__all__"
     return subprocess.run(
         [sys.executable, "-m", "cli.main", *args],
         cwd=tmp_path,
@@ -343,8 +344,8 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     None
 ):
     recipe = {
-        "version": "v0.3",
-        "routing": {
+        "version": "v0.4",
+        "document": {
             "decisions": [
                 {
                     "name": "simple_general",
@@ -367,7 +368,7 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     assert artifact["recipe_patch"]["suggestions"][0]["finding_id"].startswith("rlf_")
     assert artifact["candidate_recipes"]
     assert artifact["candidate_recipes"][0]["recipe"] is not None
-    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["routing"][
+    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["document"][
         "decisions"
     ][0]
     assert candidate_decision["adaptations"]["adaptation"]["candidate_set"] == "tier"
@@ -426,8 +427,8 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         )
     }
     recipe = {
-        "version": "v0.3",
-        "routing": {
+        "version": "v0.4",
+        "document": {
             "decisions": [
                 {"name": "simple_general", "priority": 50},
                 {"name": "domain_math", "priority": 40},
@@ -457,11 +458,11 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         if candidate.get("recipe") is not None
     ]
     assert any(
-        recipe["routing"]["decisions"][0].get("priority") == 40
+        recipe["document"]["decisions"][0].get("priority") == 40
         for recipe in materialized
     )
     assert any(
-        recipe["routing"]["decisions"][0]
+        recipe["document"]["decisions"][0]
         .get("adaptations", {})
         .get("protection", {})
         .get("mode")
@@ -489,8 +490,8 @@ def test_recipe_learning_command_reads_file_and_writes_artifacts(
     )
     recipe_path.write_text(
         """
-version: v0.3
-routing:
+version: v0.4
+document:
   decisions:
     - name: simple_general
       adaptations:

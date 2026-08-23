@@ -106,8 +106,8 @@ func TestBuildModelSelectionConfigPreservesLearningDefaultsWhenUnset(t *testing.
 
 func TestBuildModelSelectionConfigPreservesExplicitFalseOverrides(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
-	cfg.IntelligentRouting.ModelSelection.RouterDC.UseCapabilities = false
-	cfg.IntelligentRouting.ModelSelection.Hybrid.NormalizeScores = false
+	cfg.ModelSelection.RouterDC.UseCapabilities = false
+	cfg.ModelSelection.Hybrid.NormalizeScores = false
 
 	got := buildModelSelectionConfig(&cfg)
 

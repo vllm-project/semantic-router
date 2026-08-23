@@ -1,4 +1,4 @@
-name: Built-in Model Catalog
+name: Built-in Recipes
 
 on:
   workflow_dispatch:
@@ -6,23 +6,13 @@ on:
     paths:
       - "config/recipes/**"
       - "config/schemas/recipe-metadata-v1.*"
-      - "src/vllm-sr/MANIFEST.in"
-      - "src/vllm-sr/cli/commands/general.py"
-      - "src/vllm-sr/cli/commands/model.py"
-      - "src/vllm-sr/cli/commands/model_rendering.py"
-      - "src/vllm-sr/cli/model_assets/**"
-      - "src/vllm-sr/cli/model_bundle.py"
-      - "src/vllm-sr/cli/model_catalog.py"
-      - "src/vllm-sr/cli/model_catalog_types.py"
-      - "src/vllm-sr/cli/model_catalog_validation.py"
-      - "src/vllm-sr/pyproject.toml"
       - "tools/agent/schemas/recipe-probes-v1.schema.json"
       - "tools/agent/scripts/recipe_conformance*.py"
       - "tools/agent/scripts/recipe_metadata_schema.py"
       - "tools/agent/scripts/router_calibration_*.py"
       - "tools/make/recipe-conformance.mk"
-      - "tools/release/sync_model_catalog.py"
-      - "tools/release/snapshot_model_catalog.py"
+      - "tools/release/recipe_bundle.py"
+      - "tools/release/snapshot_builtin_recipes.py"
       - ".github/workflows/recipe-distribution.yml"
   push:
     branches:
@@ -30,35 +20,25 @@ on:
     paths:
       - "config/recipes/**"
       - "config/schemas/recipe-metadata-v1.*"
-      - "src/vllm-sr/MANIFEST.in"
-      - "src/vllm-sr/cli/commands/general.py"
-      - "src/vllm-sr/cli/commands/model.py"
-      - "src/vllm-sr/cli/commands/model_rendering.py"
-      - "src/vllm-sr/cli/model_assets/**"
-      - "src/vllm-sr/cli/model_bundle.py"
-      - "src/vllm-sr/cli/model_catalog.py"
-      - "src/vllm-sr/cli/model_catalog_types.py"
-      - "src/vllm-sr/cli/model_catalog_validation.py"
-      - "src/vllm-sr/pyproject.toml"
       - "tools/agent/schemas/recipe-probes-v1.schema.json"
       - "tools/agent/scripts/recipe_conformance*.py"
       - "tools/agent/scripts/recipe_metadata_schema.py"
       - "tools/agent/scripts/router_calibration_*.py"
       - "tools/make/recipe-conformance.mk"
-      - "tools/release/sync_model_catalog.py"
-      - "tools/release/snapshot_model_catalog.py"
+      - "tools/release/recipe_bundle.py"
+      - "tools/release/snapshot_builtin_recipes.py"
       - ".github/workflows/recipe-distribution.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: built-in-model-catalog-${{ github.event_name == 'push' && 'latest' || github.run_id }}
+  group: built-in-recipes-${{ github.event_name == 'push' && 'latest' || github.run_id }}
   cancel-in-progress: false
 
 jobs:
-  validate-built-in-models:
-    name: Validate bundled virtual models
+  validate-built-in-recipes:
+    name: Validate built-in Recipes
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -75,10 +55,9 @@ jobs:
         with:
           go-version: "1.25"
 
-      - name: Validate source contracts and generated package assets
+      - name: Validate canonical source contracts
         run: |
           python -m pip install -r tools/agent/requirements.txt
-          python tools/release/sync_model_catalog.py --check
           make recipe-conformance-static
 
       - name: Protect snapshots already bound to release tags
@@ -87,33 +66,23 @@ jobs:
             ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha ||
                 github.event_name == 'push' && github.event.before || github.sha }}
         run: |
-          python tools/release/snapshot_model_catalog.py \
+          python tools/release/snapshot_builtin_recipes.py \
             --check-published --base-ref "$BASE_REF"
 
-      - name: Verify the installed model catalog
-        run: |
-          python -m pip install ./src/vllm-sr
-          vllm-sr model list --output json >/tmp/model-catalog-latest.json
-          vllm-sr model list --all-versions --output json >/tmp/model-catalog-all.json
-          vllm-sr model show vllm-sr/mom-v1-blend --output json >/tmp/model-mom-v1.json
-
-      - name: Write catalog validation receipt
+      - name: Write validation receipt
         run: |
           set -euo pipefail
-          receipt_dir="dist/model-catalog-receipt"
+          receipt_dir="dist/built-in-recipe-receipt"
           mkdir -p "$receipt_dir"
-          cp /tmp/model-catalog-latest.json "$receipt_dir/latest.json"
-          cp /tmp/model-catalog-all.json "$receipt_dir/all-versions.json"
-          cp /tmp/model-mom-v1.json "$receipt_dir/mom-v1.json"
           printf '%s\n' "$GITHUB_SHA" >"$receipt_dir/source-commit.txt"
-          find config/recipes/built-in src/vllm-sr/cli/model_assets \
+          find config/recipes/built-in \
             -type f \( -name '*.yaml' -o -name '*.md' -o -name '*.dsl' \) -print0 \
             | sort -z \
             | xargs -0 sha256sum >"$receipt_dir/SHA256SUMS"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: built-in-model-catalog-receipt-${{ github.run_id }}
-          path: dist/model-catalog-receipt/
+          name: built-in-recipe-receipt-${{ github.run_id }}
+          path: dist/built-in-recipe-receipt/
           if-no-files-found: error
           retention-days: 30

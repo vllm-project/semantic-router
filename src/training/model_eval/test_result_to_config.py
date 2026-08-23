@@ -4,8 +4,11 @@ import sys
 
 TEST_DIR = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(TEST_DIR))
+sys.path.insert(0, str(TEST_DIR.parents[1] / "vllm-sr"))
 
 result_to_config = importlib.import_module("result_to_config")
+from cli.models import UserConfig  # noqa: E402
+from cli.validator import validate_user_config  # noqa: E402
 
 EXPECTED_PHI4_QUALITY_SCORE = 0.775
 EXPECTED_QWEN3_QUALITY_SCORE = 0.76
@@ -16,12 +19,11 @@ def test_parse_args_defaults_to_eval_config(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["result_to_config.py"])
     args = result_to_config.parse_args()
     assert args.output_file == "config/config.eval.yaml"
-    assert args.backend_endpoint == "127.0.0.1:8000"
-    assert args.backend_protocol == "http"
-    assert args.api_format == "openai"
+    assert args.endpoint == "http://127.0.0.1:8000/v1"
+    assert args.provider == "openai-compatible"
 
 
-def test_generate_config_yaml_emits_canonical_v03_layout():
+def test_generate_config_yaml_emits_human_v04_layout():
     category_accuracies = {
         "math": {
             "qwen3-8b": 0.82,
@@ -37,42 +39,60 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
     config = result_to_config.generate_config_yaml(
         category_accuracies=category_accuracies,
         similarity_threshold=0.85,
-        backend_endpoint="127.0.0.1:9000",
-        backend_protocol="http",
-        backend_type="chat",
-        api_format="openai",
-        provider_name="openai",
+        endpoint="http://127.0.0.1:9000/v1",
+        provider="openai-compatible",
     )
 
-    assert set(config) == {"version", "listeners", "providers", "routing", "global"}
-    assert config["version"] == "v0.3"
+    assert set(config) == {
+        "version",
+        "listeners",
+        "models",
+        "recipes",
+        "entrypoints",
+        "global",
+    }
+    assert config["version"] == "v0.4"
     assert config["listeners"] == []
 
-    defaults = config["providers"]["defaults"]
-    assert defaults["default_model"] == "phi4"
-    assert defaults["default_reasoning_effort"] == "medium"
-
-    provider_models = {model["name"]: model for model in config["providers"]["models"]}
-    assert set(provider_models) == {"phi4", "qwen3-8b"}
-    assert provider_models["phi4"]["backend_refs"][0]["endpoint"] == "127.0.0.1:9000"
-    assert provider_models["phi4"]["external_model_ids"] == {"openai": "phi4"}
-
-    routing_models = {model["name"]: model for model in config["routing"]["modelCards"]}
-    assert set(routing_models) == {"phi4", "qwen3-8b"}
-    assert routing_models["phi4"]["quality_score"] == EXPECTED_PHI4_QUALITY_SCORE
-    assert routing_models["qwen3-8b"]["quality_score"] == EXPECTED_QWEN3_QUALITY_SCORE
+    generated_models = {model["name"]: model for model in config["models"]}
+    assert set(generated_models) == {"phi4", "qwen3-8b"}
+    assert generated_models["phi4"]["connections"] == [
+        {
+            "provider": "openai-compatible",
+            "endpoint": "http://127.0.0.1:9000/v1",
+            "model": "phi4",
+        }
+    ]
+    assert (
+        generated_models["phi4"]["card"]["quality_score"] == EXPECTED_PHI4_QUALITY_SCORE
+    )
+    assert (
+        generated_models["qwen3-8b"]["card"]["quality_score"]
+        == EXPECTED_QWEN3_QUALITY_SCORE
+    )
 
     domains = {
-        domain["name"]: domain for domain in config["routing"]["signals"]["domains"]
+        domain["name"]: domain
+        for domain in config["recipes"][0]["document"]["signals"]["domains"]
     }
-    math_scores = domains["math"]["model_scores"]
-    assert math_scores[0] == {
-        "model": "qwen3-8b",
-        "score": 0.82,
-        "use_reasoning": True,
+    assert domains["math"]["mmlu_categories"] == ["math"]
+    assert domains["law"]["mmlu_categories"] == ["law"]
+
+    decisions = {
+        decision["name"]: decision
+        for decision in config["recipes"][0]["document"]["decisions"]
     }
-    assert domains["law"]["model_scores"][0]["use_reasoning"] is False
-    assert config["routing"]["decisions"] == []
+    assert set(decisions) == {"default", "law", "math"}
+    assignments = config["entrypoints"][0]["assignments"]
+    assert assignments["math"] == {"models": [{"model": "qwen3-8b"}]}
+    assert assignments["law"] == {"models": [{"model": "phi4"}]}
+    assert assignments["default"] == {"models": [{"model": "phi4"}]}
+    assert config["entrypoints"][0] == {
+        "name": "vllm-sr/eval",
+        "aliases": ["eval"],
+        "recipe": "mmlu-evaluation",
+        "assignments": assignments,
+    }
 
     assert (
         config["global"]["stores"]["response_cache"]["similarity_threshold"]
@@ -85,14 +105,5 @@ def test_generate_config_yaml_emits_canonical_v03_layout():
         == "other"
     )
 
-    for legacy_key in (
-        "default_model",
-        "model_config",
-        "vllm_endpoints",
-        "provider_profiles",
-        "categories",
-        "decisions",
-        "prompt_guard",
-        "classifier",
-    ):
-        assert legacy_key not in config
+    parsed = UserConfig.model_validate(config)
+    assert validate_user_config(parsed) == []

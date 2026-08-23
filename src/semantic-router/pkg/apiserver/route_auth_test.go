@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -35,21 +34,21 @@ func TestAPIRouteCatalogHasUniqueMethodPathPairs(t *testing.T) {
 	}
 }
 
-func TestManagementAuthDisabledAllowsConfigRoutes(t *testing.T) {
+func TestManagementAuthDisabledAllowsOperationalRead(t *testing.T) {
 	server := testManagementAPIServer(t, config.ManagementAPIConfig{
 		Auth: config.ManagementAPIAuthConfig{Mode: config.ManagementAuthModeDisabled},
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/info/models", nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code == http.StatusUnauthorized || rr.Code == http.StatusForbidden {
-		t.Fatalf("expected disabled auth to allow config read, got %d", rr.Code)
+		t.Fatalf("expected disabled auth to allow operational read, got %d", rr.Code)
 	}
 }
 
-func TestManagementAuthBearerRejectsAnonymousConfigRead(t *testing.T) {
+func TestManagementAuthBearerRejectsAnonymousOperationalRead(t *testing.T) {
 	t.Setenv("VSR_MGMT_TOKEN", "test-management-token")
 
 	server := testManagementAPIServer(t, config.ManagementAPIConfig{
@@ -63,16 +62,16 @@ func TestManagementAuthBearerRejectsAnonymousConfigRead(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/info/models", nil)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusUnauthorized {
-		t.Fatalf("expected 401 for anonymous config read, got %d", rr.Code)
+		t.Fatalf("expected 401 for anonymous operational read, got %d", rr.Code)
 	}
 	assertManagementErrorCode(t, rr, "UNAUTHORIZED")
 }
 
-func TestManagementAuthBearerAllowsViewerConfigRead(t *testing.T) {
+func TestManagementAuthBearerAllowsViewerOperationalRead(t *testing.T) {
 	const token = "viewer-management-token"
 	t.Setenv("VSR_MGMT_TOKEN", token)
 
@@ -87,16 +86,16 @@ func TestManagementAuthBearerAllowsViewerConfigRead(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/info/models", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code == http.StatusUnauthorized || rr.Code == http.StatusForbidden {
-		t.Fatalf("expected viewer token to allow config read, got %d body=%s", rr.Code, rr.Body.String())
+		t.Fatalf("expected viewer token to allow operational read, got %d body=%s", rr.Code, rr.Body.String())
 	}
 }
 
-func TestManagementAuthBearerRejectsViewerConfigWrite(t *testing.T) {
+func TestManagementAuthBearerRejectsViewerOperationalMutation(t *testing.T) {
 	const token = "viewer-management-token"
 	t.Setenv("VSR_MGMT_TOKEN", token)
 
@@ -111,13 +110,13 @@ func TestManagementAuthBearerRejectsViewerConfigWrite(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodPatch, "/config/router", strings.NewReader(`{}`))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/response-cache/flush", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
 	if rr.Code != http.StatusForbidden {
-		t.Fatalf("expected 403 for viewer config write, got %d body=%s", rr.Code, rr.Body.String())
+		t.Fatalf("expected 403 for viewer operational mutation, got %d body=%s", rr.Code, rr.Body.String())
 	}
 	assertManagementErrorCode(t, rr, "FORBIDDEN")
 }
@@ -136,7 +135,7 @@ func TestManagementAuthBearerRejectsInvalidToken(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/info/models", nil)
 	req.Header.Set("Authorization", "Bearer wrong-token")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
@@ -154,7 +153,7 @@ func TestManagementAuthBearerRequiresConfiguredTokens(t *testing.T) {
 	})
 	mux := server.setupRoutes()
 
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/info/models", nil)
 	req.Header.Set("Authorization", "Bearer unused")
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
@@ -226,7 +225,7 @@ func TestManagementAuthPreservesCallerRequestID(t *testing.T) {
 	mux := server.setupRoutes()
 
 	const requestID = "req-phase1-auth-001"
-	req := httptest.NewRequest(http.MethodGet, "/config/router", nil)
+	req := httptest.NewRequest(http.MethodGet, "/info/models", nil)
 	req.Header.Set(managementRequestIDHeader, requestID)
 	rr := httptest.NewRecorder()
 	mux.ServeHTTP(rr, req)
@@ -249,58 +248,6 @@ func testManagementAPIServer(t *testing.T, management config.ManagementAPIConfig
 			ManagementAPI: management,
 		},
 	}
-}
-
-// TestManagementAuthPolicyConcurrentWithConfigPublish exercises the auth
-// path against concurrent publishConfigMutation writers. Under go test -race,
-// an unsynchronized s.config read/write pair fails this test.
-func TestManagementAuthPolicyConcurrentWithConfigPublish(t *testing.T) {
-	t.Setenv("VSR_MGMT_TOKEN", "race-token")
-
-	server := testManagementAPIServer(t, config.ManagementAPIConfig{
-		Auth: config.ManagementAPIAuthConfig{
-			Mode: config.ManagementAuthModeBearer,
-			Tokens: []config.ManagementAPITokenRef{
-				{Env: "VSR_MGMT_TOKEN", Role: "viewer"},
-			},
-			Roles: config.DefaultManagementAPIRoles(),
-		},
-	})
-
-	const workers = 32
-	var wg sync.WaitGroup
-	wg.Add(workers * 2)
-	for i := 0; i < workers; i++ {
-		go func() {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				policy := server.managementAuthPolicy()
-				if policy.Mode != config.ManagementAuthModeBearer && policy.Mode != config.ManagementAuthModeDisabled {
-					t.Errorf("unexpected auth mode %q", policy.Mode)
-					return
-				}
-			}
-		}()
-		go func(i int) {
-			defer wg.Done()
-			for j := 0; j < 100; j++ {
-				next := &config.RouterConfig{
-					ManagementAPI: config.ManagementAPIConfig{
-						Auth: config.ManagementAPIAuthConfig{
-							Mode: config.ManagementAuthModeBearer,
-							Tokens: []config.ManagementAPITokenRef{
-								{Env: "VSR_MGMT_TOKEN", Role: "viewer"},
-							},
-							Roles: config.DefaultManagementAPIRoles(),
-						},
-						Port: 8080 + i + j,
-					},
-				}
-				server.publishConfigMutation(next)
-			}
-		}(i)
-	}
-	wg.Wait()
 }
 
 func assertManagementErrorCode(t *testing.T, rr *httptest.ResponseRecorder, want string) {

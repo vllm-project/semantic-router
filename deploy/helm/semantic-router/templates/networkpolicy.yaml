@@ -1,0 +1,73 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
+{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $managementAPI := (get $services "management_api") | default (dict) -}}
+{{- $managementPort := (get $managementAPI "port") | default .Values.service.management.port -}}
+{{- $backendDispatch := (get $services "backend_dispatch") | default (dict) -}}
+{{- $backendDispatchPort := (get $backendDispatch "port") | default 8180 -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "semantic-router.fullname" . }}
+  namespace: {{ include "semantic-router.namespace" . }}
+  labels:
+    {{- include "semantic-router.labels" . | nindent 4 }}
+    app.kubernetes.io/component: router
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "semantic-router.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: router
+  policyTypes:
+  - Ingress
+  ingress:
+  {{- if .Values.networkPolicy.ingress.extProcPeers }}
+  - from:
+      {{- toYaml .Values.networkPolicy.ingress.extProcPeers | nindent 6 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.service.grpc.targetPort }}
+  {{- end }}
+  {{- if $managedMode }}
+  {{- if or .Values.dashboard.enabled .Values.networkPolicy.ingress.managementPeers }}
+  - from:
+    {{- if .Values.dashboard.enabled }}
+    - podSelector:
+        matchLabels:
+          {{- include "semantic-router.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: dashboard
+    {{- end }}
+    {{- with .Values.networkPolicy.ingress.managementPeers }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
+    ports:
+    - protocol: TCP
+      port: {{ $managementPort }}
+  {{- end }}
+  {{- if .Values.networkPolicy.ingress.backendDispatchPeers }}
+  - from:
+      {{- toYaml .Values.networkPolicy.ingress.backendDispatchPeers | nindent 6 }}
+    ports:
+    - protocol: TCP
+      port: {{ $backendDispatchPort }}
+  {{- end }}
+  {{- else }}
+  {{- if .Values.networkPolicy.ingress.managementPeers }}
+  - from:
+      {{- toYaml .Values.networkPolicy.ingress.managementPeers | nindent 6 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.service.api.targetPort }}
+  {{- end }}
+  {{- end }}
+  {{- if and .Values.service.metrics.enabled .Values.networkPolicy.ingress.metricsPeers }}
+  - from:
+      {{- toYaml .Values.networkPolicy.ingress.metricsPeers | nindent 6 }}
+    ports:
+    - protocol: TCP
+      port: {{ .Values.service.metrics.targetPort }}
+  {{- end }}
+{{- end }}

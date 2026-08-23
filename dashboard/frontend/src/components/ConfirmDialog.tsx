@@ -1,6 +1,7 @@
-import { type FormEvent, type ReactNode, useEffect, useId, useState } from 'react'
+import { type FormEvent, type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import ProductIcon from './ProductIcon'
 import styles from './ConfirmDialog.module.css'
 
 interface ConfirmDialogProps {
@@ -11,6 +12,7 @@ interface ConfirmDialogProps {
   cancelLabel?: string
   eyebrow?: string
   details?: ReactNode
+  error?: string | null
   pending?: boolean
   tone?: 'danger' | 'warning' | 'neutral'
   confirmationText?: string
@@ -26,6 +28,7 @@ export default function ConfirmDialog({
   cancelLabel = 'Cancel',
   eyebrow = 'Confirm action',
   details,
+  error,
   pending = false,
   tone = 'danger',
   confirmationText,
@@ -35,6 +38,7 @@ export default function ConfirmDialog({
   const titleId = useId()
   const descriptionId = useId()
   const [confirmation, setConfirmation] = useState('')
+  const errorRef = useRef<HTMLParagraphElement>(null)
   const dialogRef = useAccessibleDialog<HTMLElement>({
     isOpen,
     onClose: onCancel,
@@ -45,6 +49,10 @@ export default function ConfirmDialog({
   useEffect(() => {
     if (isOpen) setConfirmation('')
   }, [isOpen, confirmationText])
+
+  useEffect(() => {
+    if (isOpen && error) errorRef.current?.focus()
+  }, [error, isOpen])
 
   if (!isOpen) return null
 
@@ -71,7 +79,7 @@ export default function ConfirmDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={`${styles.signal} ${styles[tone]}`} aria-hidden="true">
-          {tone === 'danger' ? '!' : tone === 'warning' ? '•' : 'i'}
+          <ProductIcon name={tone === 'neutral' ? 'info' : 'alert'} />
         </div>
         <div className={styles.copy}>
           <span className={styles.eyebrow}>{eyebrow}</span>
@@ -82,6 +90,12 @@ export default function ConfirmDialog({
         </div>
 
         {details ? <div className={styles.details}>{details}</div> : null}
+        {error ? (
+          <p ref={errorRef} className={styles.error} role="alert" tabIndex={-1}>
+            <ProductIcon name="alert" />
+            {error}
+          </p>
+        ) : null}
 
         <form onSubmit={handleSubmit}>
           {confirmationText ? (
@@ -105,6 +119,7 @@ export default function ConfirmDialog({
               disabled={pending}
               data-dialog-initial-focus={!confirmationText ? true : undefined}
             >
+              <ProductIcon name="close" />
               {cancelLabel}
             </button>
             <button
@@ -112,6 +127,7 @@ export default function ConfirmDialog({
               className={`${styles.confirmButton} ${styles[tone]}`}
               disabled={pending || !confirmationReady}
             >
+              <ProductIcon name={tone === 'danger' ? 'trash' : 'check'} />
               {pending ? 'Working…' : confirmLabel}
             </button>
           </div>

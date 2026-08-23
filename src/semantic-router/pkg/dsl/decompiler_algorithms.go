@@ -38,6 +38,54 @@ var algorithmFieldExporters = map[string]algorithmFieldExporter{
 	"prompt": func(algo *config.AlgorithmConfig, fields map[string]Value) {
 		promptAlgorithmToFields(algo.Prompt, fields)
 	},
+	"knn": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		mlSelectionAlgorithmToFields(algo.ML, fields)
+	},
+	"kmeans": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		mlSelectionAlgorithmToFields(algo.ML, fields)
+	},
+	"svm": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		mlSelectionAlgorithmToFields(algo.ML, fields)
+	},
+	"mlp": func(algo *config.AlgorithmConfig, fields map[string]Value) {
+		mlSelectionAlgorithmToFields(algo.ML, fields)
+	},
+}
+
+func mlSelectionAlgorithmToFields(ml *config.MLSelectionConfig, fields map[string]Value) {
+	if ml == nil {
+		return
+	}
+	mlFields := map[string]Value{}
+	setStringValue(mlFields, "models_path", ml.ModelsPath)
+	setIntValue(mlFields, "embedding_dim", ml.EmbeddingDim)
+	if ml.KNN != nil {
+		family := map[string]Value{}
+		setIntValue(family, "k", ml.KNN.K)
+		setStringValue(family, "pretrained_path", ml.KNN.PretrainedPath)
+		mlFields["knn"] = ObjectValue{Fields: family}
+	}
+	if ml.KMeans != nil {
+		family := map[string]Value{}
+		setIntValue(family, "num_clusters", ml.KMeans.NumClusters)
+		setFloatValue(family, "efficiency_weight", ml.KMeans.EfficiencyWeight)
+		setStringValue(family, "pretrained_path", ml.KMeans.PretrainedPath)
+		mlFields["kmeans"] = ObjectValue{Fields: family}
+	}
+	if ml.SVM != nil {
+		family := map[string]Value{}
+		setStringValue(family, "kernel", ml.SVM.Kernel)
+		setFloatValue(family, "gamma", ml.SVM.Gamma)
+		setStringValue(family, "pretrained_path", ml.SVM.PretrainedPath)
+		mlFields["svm"] = ObjectValue{Fields: family}
+	}
+	if ml.MLP != nil {
+		family := map[string]Value{}
+		setStringValue(family, "device", ml.MLP.Device)
+		setStringValue(family, "pretrained_path", ml.MLP.PretrainedPath)
+		mlFields["mlp"] = ObjectValue{Fields: family}
+	}
+	fields["ml"] = ObjectValue{Fields: mlFields}
 }
 
 func promptAlgorithmToFields(

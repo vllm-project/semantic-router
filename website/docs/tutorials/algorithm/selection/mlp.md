@@ -75,26 +75,22 @@ Configure it under `routing.decisions[].algorithm`:
 ```yaml
 algorithm:
   type: mlp
+  ml:
+    models_path: ".cache/ml-models"
+    embedding_dim: 768
+    mlp:
+      device: cpu
+      pretrained_path: .cache/ml-models/mlp_model.json
 ```
 
-### Global ML Settings
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        models_path: ".cache/ml-models"
-        embedding_dim: 768
-        mlp:
-          pretrained_path: .cache/ml-models/mlp_model.json
-```
+`algorithm.ml` belongs to this Decision. Decisions in the same Recipe must
+agree on shared settings and repeated family settings.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `device` | string | `cpu` | Compatibility field; the current decision factory uses CPU regardless of this value |
+| `device` | string | `cpu` | Requested runtime device; the current selector executes on CPU |
 | `pretrained_path` | string | — | Path to pre-trained MLP model weights (JSON format) |
 
 ## Feedback

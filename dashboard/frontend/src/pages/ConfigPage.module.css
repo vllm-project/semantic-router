@@ -231,17 +231,31 @@
 .sectionPanel {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   gap: 1rem;
 }
 
 .sectionTableBlock {
   display: flex;
   flex-direction: column;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
   padding: 1.2rem;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   box-shadow: 0 10px 28px rgba(0, 0, 0, 0.14);
+}
+
+@media (max-width: 768px) {
+  .sectionTableBlock {
+    padding: 0.9rem;
+  }
 }
 
 .managerTable {
@@ -724,222 +738,6 @@
   border-radius: var(--radius-sm);
 }
 
-/* Category Grid - Two Column Layout */
-.categoryGridTwoColumn {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
-}
-
-/* Single column on smaller screens */
-@media (max-width: 1200px) {
-  .categoryGridTwoColumn {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* Legacy category grid (keep for backward compatibility) */
-.categoryGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 1rem;
-}
-
-/* 4 columns on extra large screens */
-@media (min-width: 1800px) {
-  .categoryGrid {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-/* 3 columns on large screens */
-@media (min-width: 1400px) and (max-width: 1799px) {
-  .categoryGrid {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* 2 columns on medium screens */
-@media (min-width: 900px) and (max-width: 1399px) {
-  .categoryGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.categoryCard {
-  background-color: var(--color-bg-tertiary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  padding: 1.25rem;
-  transition: all var(--transition-fast);
-}
-
-.categoryCard:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 20px rgba(143, 148, 156, 0.1);
-}
-
-.categoryHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.75rem;
-}
-
-.categoryName {
-  font-size: 1rem;
-  font-weight: 700;
-  color: var(--color-text);
-  text-transform: capitalize;
-}
-
-.reasoningBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.625rem;
-  border-radius: var(--radius-sm);
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.reasoninglow {
-  background-color: rgba(34, 197, 94, 0.15);
-  color: #16a34a;
-}
-
-.reasoningmedium {
-  background-color: rgba(234, 179, 8, 0.15);
-  color: #ca8a04;
-}
-
-.reasoninghigh {
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #dc2626;
-}
-
-.categoryDescription {
-  font-size: 0.8rem;
-  color: var(--color-text-secondary);
-  line-height: 1.5;
-  margin: 0 0 1rem 0;
-  min-height: 2.4em;
-}
-
-.categoryModels {
-  background-color: rgba(143, 148, 156, 0.03);
-  border: 1px solid rgba(143, 148, 156, 0.1);
-  border-radius: var(--radius-sm);
-  padding: 0.75rem;
-}
-
-.categoryModelsHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--color-text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
-}
-
-.addModelButton {
-  padding: 0.25rem 0.5rem;
-  background: var(--color-primary);
-  color: #000000;
-  border: none;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.addModelButton:hover {
-  background-color: var(--color-primary-light);
-  box-shadow: var(--glow-primary);
-}
-
-.modelScoreRow {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem;
-  border-radius: var(--radius-sm);
-  transition: background-color var(--transition-fast);
-}
-
-.modelScoreRow:hover {
-  background-color: rgba(143, 148, 156, 0.05);
-}
-
-.modelScoreRow:last-child {
-  margin-bottom: 0;
-}
-
-.modelScoreName {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text);
-  font-family: var(--font-mono);
-  min-width: 80px;
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-
-.reasoningIcon {
-  font-size: 0.8rem;
-}
-
-.scoreBar {
-  flex: 1;
-  height: 20px;
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  position: relative;
-}
-
-.scoreBarFill {
-  height: 100%;
-  background: linear-gradient(90deg, var(--color-primary) 0%, rgba(166, 171, 179, 0.8) 100%);
-  transition: width 0.3s ease;
-  border-radius: var(--radius-sm);
-}
-
-.scoreText {
-  position: absolute;
-  top: 50%;
-  right: 0.5rem;
-  transform: translateY(-50%);
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--color-text);
-  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.8);
-}
-
-.modelScoreActions {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.emptyModelScores {
-  padding: 1rem;
-  text-align: center;
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  font-style: italic;
-  background-color: rgba(0, 0, 0, 0.02);
-  border-radius: var(--radius-sm);
-}
-
 /* Feature Card */
 .featureCard {
   background-color: var(--color-bg-tertiary);
@@ -1304,7 +1102,7 @@
   font-size: 0.85rem;
 }
 
-.toolParameter>div:first-child {
+.toolParameter > div:first-child {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -1538,4 +1336,15 @@
   }
 
   /* coreSettingsInline is already hidden on mobile, no need for additional styles */
+}
+.productHint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.productHint a {
+  color: var(--color-text);
+  font-weight: 650;
 }

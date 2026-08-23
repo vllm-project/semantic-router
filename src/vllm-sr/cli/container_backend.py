@@ -23,7 +23,7 @@ class ContainerBackend:
         env_vars: dict[str, str] | None = None,
         *,
         source_config_file: str | None = None,
-        runtime_config_file: str | None = None,
+        compiled_bootstrap_file: str | None = None,
         image: str | None = None,
         router_image: str | None = None,
         envoy_image: str | None = None,
@@ -31,20 +31,20 @@ class ContainerBackend:
         sim_image: str | None = None,
         topology: str | None = None,
         pull_policy: str | None = None,
-        enable_observability: bool = True,
-        runtime_config_lock: Any = None,
+        enable_observability: bool = False,
+        compiled_bootstrap_lock: Any = None,
         **kwargs: Any,
     ) -> None:
         if source_config_file is None:
             source_config_file = kwargs.get("source_config_file")
-        if runtime_config_file is None:
-            runtime_config_file = kwargs.get("runtime_config_file")
+        if compiled_bootstrap_file is None:
+            compiled_bootstrap_file = kwargs.get("compiled_bootstrap_file")
         with self._lifecycle_lock():
             start_vllm_sr(
                 config_file,
                 env_vars=env_vars,
                 source_config_file=source_config_file,
-                runtime_config_file=runtime_config_file,
+                compiled_bootstrap_file=compiled_bootstrap_file,
                 image=image,
                 router_image=router_image,
                 envoy_image=envoy_image,
@@ -53,7 +53,7 @@ class ContainerBackend:
                 topology=topology,
                 pull_policy=pull_policy,
                 enable_observability=enable_observability,
-                runtime_config_lock=runtime_config_lock,
+                compiled_bootstrap_lock=compiled_bootstrap_lock,
             )
 
     def teardown(self) -> None:

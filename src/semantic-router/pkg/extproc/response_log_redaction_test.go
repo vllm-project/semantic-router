@@ -12,7 +12,7 @@ func TestIsSensitiveHeaderKey(t *testing.T) {
 	sensitive := []string{
 		"Authorization", "authorization", "  Authorization  ",
 		"x-api-key", "X-API-Key", "api-key", "proxy-authorization",
-		"x-goog-api-key", "x-litellm-api-key", "x-user-openai-key",
+		"x-goog-api-key", "x-proxy-api-key", "x-user-openai-key",
 		"x-session-token", "client-secret",
 	}
 	for _, k := range sensitive {

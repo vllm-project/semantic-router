@@ -3,98 +3,78 @@ package extproc
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
-func TestCacheScopeUserID_PrefersAuthHeaderOverFallback(t *testing.T) {
-	t.Setenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER", "x-vsr-e2e-cache-user")
+func TestIdentityScopeUsesAuthenticatedTenantContext(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			headers.AuthzUserID:    "auth-user",
-			"x-vsr-e2e-cache-user": "other",
+			"x-authz-user-id": "spoofed-user",
+			"x-authz-team-id": "spoofed-team",
 		},
+		InferenceAccess: &inferenceRequestAccess{tenant: accessruntime.TenantContext{
+			NamespaceID: "namespace-1",
+			UserID:      "user-1",
+			TeamID:      "team-1",
+		}},
 	}
-	assert.Equal(t, "auth-user", cacheScopeUserID(ctx))
+	if got := cacheScopeUserID(ctx); got != "user-1" {
+		t.Fatalf("cache user = %q, want authenticated user", got)
+	}
+	if got := extractUserID(ctx); got != "user-1" {
+		t.Fatalf("memory user = %q, want authenticated user", got)
+	}
+
+	payload, err := config.NewStructuredPayload(config.ResponseCachePluginConfig{Enabled: true, Scope: "team"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx.VSRSelectedDecision = &config.Decision{Plugins: []config.DecisionPlugin{{
+		Type: "response_cache", Configuration: payload,
+	}}}
+	if got := responseCacheScopeIdentity(ctx); got != "team-1" {
+		t.Fatalf("team cache scope = %q", got)
+	}
 }
 
-func TestCacheScopeUserID_UsesFallbackWhenAuthMissing(t *testing.T) {
-	t.Setenv("SEMANTIC_CACHE_FALLBACK_USER_HEADER", "x-vsr-e2e-cache-user")
+func TestIdentityScopeIgnoresRequestHeadersAndBodyIdentity(t *testing.T) {
 	ctx := &RequestContext{
 		Headers: map[string]string{
-			"x-vsr-e2e-cache-user": "fallback-user",
+			"x-authz-user-id": "spoofed-user",
 		},
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Metadata: map[string]string{
+			"user_id": "metadata-user",
+		}},
 	}
-	assert.Equal(t, "fallback-user", cacheScopeUserID(ctx))
+	if got := cacheScopeUserID(ctx); got != "" {
+		t.Fatalf("untrusted cache identity = %q", got)
+	}
+	if got := extractUserID(ctx); got != "" {
+		t.Fatalf("untrusted memory identity = %q", got)
+	}
 }
 
-func TestCacheScopeUserID_UsesOpenAIUserFieldWhenEnvBody(t *testing.T) {
-	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
+func TestRouterLearningSessionIsPartitionedByAuthenticatedTenant(t *testing.T) {
+	cfg := config.RouterLearningProtectionConfig{Scope: config.RouterLearningScopeSession}
 	ctx := &RequestContext{
-		Headers:             map[string]string{},
-		OriginalRequestBody: []byte(`{"model":"MoM","messages":[{"role":"user","content":"hi"}],"user":"body-user"}`),
+		Headers: map[string]string{"x-session-id": "shared-session"},
+		InferenceAccess: &inferenceRequestAccess{tenant: accessruntime.TenantContext{
+			NamespaceID: "namespace-1",
+			APIKeyID:    "key-1",
+		}},
 	}
-	assert.Equal(t, "body-user", cacheScopeUserID(ctx))
-}
-
-func TestCacheScopeUserID_AuthHeaderWinsOverBody(t *testing.T) {
-	t.Setenv("SEMANTIC_CACHE_E2E_USER_FROM_BODY", "true")
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "hdr-user",
-		},
-		OriginalRequestBody: []byte(`{"user":"body-user"}`),
+	identity, ok := (&OpenAIRouter{}).protectionIdentity(ctx, cfg)
+	if !ok {
+		t.Fatal("authenticated learning identity was rejected")
 	}
-	assert.Equal(t, "hdr-user", cacheScopeUserID(ctx))
-}
-
-// =============================================================================
-// extractUserID Tests (Common to both dev and prod builds)
-// =============================================================================
-
-func TestExtractUserID_AuthHeaderOnly(t *testing.T) {
-	// Auth header present, no metadata
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "user_from_auth",
-		},
+	if identity.memoryKey != "namespace-1/key-1/shared-session" {
+		t.Fatalf("learning memory key = %q", identity.memoryKey)
 	}
 
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_from_auth", result)
-}
-
-func TestExtractUserID_AuthHeaderExactKey(t *testing.T) {
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			headers.AuthzUserID: "user_exact_key",
-		},
+	ctx.InferenceAccess.tenant.APIKeyID = ""
+	if _, ok := (&OpenAIRouter{}).protectionIdentity(ctx, cfg); ok {
+		t.Fatal("managed learning identity accepted incomplete TenantContext")
 	}
-
-	result := extractUserID(ctx)
-	assert.Equal(t, "user_exact_key", result)
-}
-
-func TestExtractUserID_NoAuthHeaderNoMetadata(t *testing.T) {
-	// Neither auth header nor metadata present
-	ctx := &RequestContext{
-		Headers: map[string]string{},
-	}
-
-	result := extractUserID(ctx)
-	assert.Empty(t, result, "should return empty string when no user ID source available")
-}
-
-func TestExtractUserID_UnrelatedHeaderIgnored(t *testing.T) {
-	// Unrelated headers should not be used as user ID
-	ctx := &RequestContext{
-		Headers: map[string]string{
-			"x-custom-user-id": "user_from_wrong_header",
-			"authorization":    "Bearer token123",
-		},
-	}
-
-	result := extractUserID(ctx)
-	assert.Empty(t, result, "should not use unrelated headers as user ID")
 }

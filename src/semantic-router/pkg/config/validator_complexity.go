@@ -33,7 +33,7 @@ var complexityDifficultyLevels = map[string]struct{}{
 // (issue #2324).
 func validateComplexityContracts(cfg *RouterConfig) error {
 	declared := collectComplexityRuleNames(cfg.ComplexityRules)
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		if err := validateDecisionComplexityReferences(decision.Name, &decision.Rules, declared); err != nil {
 			return err
 		}

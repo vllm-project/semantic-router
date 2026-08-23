@@ -268,40 +268,39 @@ func (f *Factory) CreateAll() *Registry {
 
 	// Create ML-based selectors (KNN, KMeans, SVM)
 	mlCfg := f.cfg.ML
-	if mlCfg == nil {
-		mlCfg = DefaultMLSelectorConfig()
-	}
-
-	// Create KNN selector
-	knnAdapter, err := CreateKNNSelector(mlCfg, f.embeddingFunc)
-	if err != nil {
-		logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
-	} else {
-		registry.Register(MethodKNN, knnAdapter)
-	}
-
-	// Create KMeans selector
-	kmeansAdapter, err := CreateKMeansSelector(mlCfg, f.embeddingFunc)
-	if err != nil {
-		logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
-	} else {
-		registry.Register(MethodKMeans, kmeansAdapter)
-	}
-
-	// Create SVM selector
-	svmAdapter, err := CreateSVMSelector(mlCfg, f.embeddingFunc)
-	if err != nil {
-		logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
-	} else {
-		registry.Register(MethodSVM, svmAdapter)
-	}
-
-	// Create MLP selector (GPU-accelerated via Candle)
-	mlpAdapter, err := CreateMLPSelector(mlCfg, f.embeddingFunc)
-	if err != nil {
-		logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
-	} else {
-		registry.Register(MethodMLP, mlpAdapter)
+	if mlCfg != nil {
+		if mlCfg.KNN != nil {
+			knnAdapter, err := CreateKNNSelector(mlCfg, f.embeddingFunc)
+			if err != nil {
+				logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
+			} else {
+				registry.Register(MethodKNN, knnAdapter)
+			}
+		}
+		if mlCfg.KMeans != nil {
+			kmeansAdapter, err := CreateKMeansSelector(mlCfg, f.embeddingFunc)
+			if err != nil {
+				logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
+			} else {
+				registry.Register(MethodKMeans, kmeansAdapter)
+			}
+		}
+		if mlCfg.SVM != nil {
+			svmAdapter, err := CreateSVMSelector(mlCfg, f.embeddingFunc)
+			if err != nil {
+				logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
+			} else {
+				registry.Register(MethodSVM, svmAdapter)
+			}
+		}
+		if mlCfg.MLP != nil {
+			mlpAdapter, err := CreateMLPSelector(mlCfg, f.embeddingFunc)
+			if err != nil {
+				logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
+			} else {
+				registry.Register(MethodMLP, mlpAdapter)
+			}
+		}
 	}
 
 	// Create RL-Driven selector

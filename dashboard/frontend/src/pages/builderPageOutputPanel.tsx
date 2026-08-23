@@ -1,244 +1,107 @@
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from 'react'
 
-import styles from "./BuilderPage.module.css";
+import ProductIcon from '@/components/ProductIcon'
 
-type OutputTab = "yaml" | "crd" | "dsl";
+import styles from './BuilderPage.module.css'
 
 interface BuilderOutputPanelProps {
-  open: boolean;
-  width: number;
-  yamlOutput: string;
-  crdOutput: string;
-  dslSource: string;
-  dslTabLabel?: string;
-  compileError: string | null;
-  onDragStart: (event: React.MouseEvent) => void;
-  onOpen: () => void;
-  onClose: () => void;
+  open: boolean
+  width: number
+  recipeDocument: string
+  dslSource: string
+  compileError: string | null
+  onDragStart: (event: React.MouseEvent) => void
+  onOpen: () => void
+  onClose: () => void
 }
 
-const BuilderOutputPanel: React.FC<BuilderOutputPanelProps> = ({
+export function BuilderOutputPanel({
   open,
   width,
-  yamlOutput,
-  crdOutput,
+  recipeDocument,
   dslSource,
-  dslTabLabel = "DSL",
   compileError,
   onDragStart,
   onOpen,
   onClose,
-}) => {
-  const [outputTab, setOutputTab] = useState<OutputTab>("yaml");
-  const [copied, setCopied] = useState(false);
-
-  const outputContent = useMemo(() => {
-    if (outputTab === "yaml") return yamlOutput || "";
-    if (outputTab === "crd") return crdOutput || "";
-    return dslSource || "";
-  }, [outputTab, yamlOutput, crdOutput, dslSource]);
-
-  const handleCopyOutput = useCallback(async () => {
-    if (!outputContent) return;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(outputContent);
-      } else {
-        const textarea = document.createElement("textarea");
-        textarea.value = outputContent;
-        textarea.style.position = "fixed";
-        textarea.style.opacity = "0";
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textarea);
-      }
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      const textarea = document.createElement("textarea");
-      textarea.value = outputContent;
-      textarea.style.position = "fixed";
-      textarea.style.opacity = "0";
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand("copy");
-      document.body.removeChild(textarea);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  }, [outputContent]);
+}: BuilderOutputPanelProps) {
+  const [tab, setTab] = useState<'recipe' | 'dsl'>('recipe')
+  const [copied, setCopied] = useState(false)
+  const content = useMemo(
+    () => (tab === 'recipe' ? recipeDocument : dslSource),
+    [dslSource, recipeDocument, tab],
+  )
+  const copy = useCallback(async () => {
+    if (!content) return
+    await navigator.clipboard.writeText(content)
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 1600)
+  }, [content])
 
   if (!open) {
     return (
       <button
+        type="button"
         className={styles.outputPanelToggle}
         onClick={onOpen}
-        title="Show Output Panel"
+        aria-label="Show Recipe output"
       >
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-        >
-          <path
-            d="M10 2l-4 6 4 6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <ProductIcon name="chevron-left" />
       </button>
-    );
+    )
   }
 
   return (
     <>
-      <div className={styles.resizeHandle} onMouseDown={onDragStart}>
+      <div
+        className={styles.resizeHandle}
+        onMouseDown={onDragStart}
+        role="separator"
+        aria-orientation="vertical"
+      >
         <div className={styles.resizeHandleLine} />
       </div>
-      <div className={styles.outputPanel} style={{ width }}>
+      <aside className={styles.outputPanel} style={{ width }} aria-label="Recipe output">
         <div className={styles.outputPanelTabs}>
           <button
-            className={
-              outputTab === "yaml"
-                ? styles.outputPanelTabActive
-                : styles.outputPanelTab
-            }
-            onClick={() => setOutputTab("yaml")}
+            type="button"
+            className={tab === 'recipe' ? styles.outputPanelTabActive : styles.outputPanelTab}
+            onClick={() => setTab('recipe')}
           >
-            YAML
+            Recipe
           </button>
           <button
-            className={
-              outputTab === "crd"
-                ? styles.outputPanelTabActive
-                : styles.outputPanelTab
-            }
-            onClick={() => setOutputTab("crd")}
+            type="button"
+            className={tab === 'dsl' ? styles.outputPanelTabActive : styles.outputPanelTab}
+            onClick={() => setTab('dsl')}
           >
-            CRD
+            DSL
           </button>
-          <button
-            className={
-              outputTab === "dsl"
-                ? styles.outputPanelTabActive
-                : styles.outputPanelTab
-            }
-            onClick={() => setOutputTab("dsl")}
-          >
-            {dslTabLabel}
-          </button>
-          <div
-            style={{
-              marginLeft: "auto",
-              display: "flex",
-              alignItems: "center",
-              gap: "var(--spacing-xs)",
-            }}
-          >
-            {outputContent && (
-              <button
-                className={styles.outputPanelCopyBtn}
-                onClick={handleCopyOutput}
-                title="Copy to clipboard"
-              >
-                {copied ? (
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="var(--color-success)"
-                    strokeWidth="2"
-                  >
-                    <path
-                      d="M3 8.5l3 3 7-7"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                ) : (
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <rect x="5" y="5" width="9" height="9" rx="1" />
-                    <path d="M2 11V2h9" strokeLinecap="round" />
-                  </svg>
-                )}
-                {copied ? "Copied!" : "Copy"}
+          <div className={styles.builderOutputActions}>
+            {content ? (
+              <button type="button" className={styles.outputPanelCopyBtn} onClick={copy}>
+                <ProductIcon name={copied ? 'check' : 'copy'} /> {copied ? 'Copied' : 'Copy'}
               </button>
-            )}
+            ) : null}
             <button
+              type="button"
               className={styles.outputPanelCloseBtn}
               onClick={onClose}
-              title="Close panel"
+              aria-label="Close Recipe output"
             >
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-              </svg>
+              <ProductIcon name="close" />
             </button>
           </div>
         </div>
         <div className={styles.outputPanelContent}>
-          {compileError && (
-            <div className={styles.outputPanelError}>{compileError}</div>
-          )}
-          {outputContent ? (
-            <pre className={styles.outputPanelCode}>{outputContent}</pre>
+          {compileError ? <div className={styles.outputPanelError}>{compileError}</div> : null}
+          {content ? (
+            <pre className={styles.outputPanelCode}>{content}</pre>
           ) : (
-            <div className={styles.emptyState}>
-              <div className={styles.emptyIcon} aria-hidden="true">
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                >
-                  <path
-                    d="M13 2L5 14h6l-1 8 9-13h-6V2Z"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </div>
-              <div>
-                {outputTab === "dsl" ? (
-                  `${dslTabLabel} source is empty`
-                ) : (
-                  <>
-                    Press <strong>Compile</strong> to generate{" "}
-                    {outputTab.toUpperCase()} output
-                  </>
-                )}
-              </div>
-              <div
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-text-muted)",
-                }}
-              >
-                Ctrl+Enter to compile
-              </div>
-            </div>
+            <div className={styles.emptyState}>Compile to preview this Recipe.</div>
           )}
         </div>
-      </div>
+      </aside>
     </>
-  );
-};
-
-export { BuilderOutputPanel };
+  )
+}

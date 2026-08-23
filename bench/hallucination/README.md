@@ -47,17 +47,16 @@ Use `--dataset /path/to/data.jsonl` for a custom JSONL dataset. Run
 
 ## Configuration
 
-The benchmark configuration uses the v0.3 provider model:
+The benchmark configuration uses a human v0.4 Model connection:
 
 ```yaml
-providers:
-  models:
-    - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      backend_refs:
-        - name: vllm-general
-          endpoint: 127.0.0.1:8083
-          protocol: http
-          type: chat
+models:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+    card: {capabilities: [chat]}
+    connections:
+      - provider: vllm
+        endpoint: http://127.0.0.1:8083/v1
+        model: Qwen/Qwen2.5-14B-Instruct-AWQ
 ```
 
 Classifier modules belong in the global model catalog. A prompt-guard module,

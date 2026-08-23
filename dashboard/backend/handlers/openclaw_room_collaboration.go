@@ -184,16 +184,7 @@ func (h *OpenClawHandler) fanOutCollaborationToWebSocket(roomID string, event Cl
 			return true
 		}
 
-		client.closeMu.Lock()
-		if client.closed {
-			client.closeMu.Unlock()
-			return true
-		}
-		client.closeMu.Unlock()
-
-		select {
-		case client.send <- outbound:
-		default:
+		if !client.enqueue(outbound) {
 			log.Printf("openclaw: WS client %s buffer full, skipping event", client.clientID)
 		}
 		return true

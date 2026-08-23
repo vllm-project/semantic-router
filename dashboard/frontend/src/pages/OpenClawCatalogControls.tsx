@@ -1,5 +1,6 @@
 import { useId } from 'react'
 
+import ProductIcon from '../components/ProductIcon'
 import { getOpenClawPageCount, getOpenClawVisibleRange } from '../utils/openClawCatalogSupport'
 import styles from './OpenClawPage.module.css'
 
@@ -139,7 +140,8 @@ export function OpenClawPagination({
           disabled={safePage === 1}
           aria-label={`First ${itemLabel} page`}
         >
-          «
+          <ProductIcon name="chevron-left" />
+          <ProductIcon name="chevron-left" />
         </button>
         <button
           type="button"
@@ -147,7 +149,7 @@ export function OpenClawPagination({
           disabled={safePage === 1}
           aria-label={`Previous ${itemLabel} page`}
         >
-          ‹
+          <ProductIcon name="chevron-left" />
         </button>
         <span>
           Page {safePage} of {pageCount}
@@ -158,7 +160,7 @@ export function OpenClawPagination({
           disabled={safePage === pageCount}
           aria-label={`Next ${itemLabel} page`}
         >
-          ›
+          <ProductIcon name="chevron-right" />
         </button>
         <button
           type="button"
@@ -166,7 +168,8 @@ export function OpenClawPagination({
           disabled={safePage === pageCount}
           aria-label={`Last ${itemLabel} page`}
         >
-          »
+          <ProductIcon name="chevron-right" />
+          <ProductIcon name="chevron-right" />
         </button>
       </div>
     </nav>

@@ -5,15 +5,17 @@
 `fusion` asks several models to analyze a request and a judge model to
 synthesize one final answer.
 
-The same runtime also supports a direct Fusion model slug through `global.integrations.looper.fusion.model_names`. The built-in default is `vllm-sr/fusion`; add `openrouter/fusion` there only when you intentionally want an OpenRouter-compatible alias. Direct Fusion is still signal-driven: vLLM-SR evaluates the request against Fusion-capable decisions and then executes the matched decision's judge and panel policy.
+Expose Fusion through an Entrypoint alias such as `vllm-sr/fusion`. The
+Entrypoint assigns the panel to each Fusion decision; the first Model in the
+highest-priority tier performs judge and final-synthesis work.
 
 ## Key Advantages
 
 - Runs analysis models concurrently instead of choosing only one model.
 - Produces structured judge analysis before final synthesis.
 - Keeps Fusion policy inside vLLM-SR decisions: `vllm-sr/auto` can choose any route, while `vllm-sr/fusion` intelligently chooses among Fusion routes only.
-- Lets clients override the judge, analysis panel, templates, trace flags, and
-  grounding policy per request with `plugins[].id = fusion`.
+- Lets clients override trace flags and grounding policy per request with
+  `plugins[].id = fusion`, without changing the authorized Model set.
 - Degrades on partial panel failures while preserving failed model metadata.
 
 ## Algorithm Principle
@@ -29,17 +31,14 @@ Fusion executes a three-stage flow:
 ```mermaid
 flowchart TD
     A[Request arrives] --> B{Request model}
-    B -- vllm-sr/auto --> C[Evaluate all decisions]
-    B -- vllm-sr/fusion --> D[Evaluate Fusion decisions only]
+    B -- General Entrypoint --> C[Evaluate its Recipe]
+    B -- Fusion Entrypoint --> D[Evaluate its Recipe]
     C --> E{Matched decision uses algorithm.type=fusion?}
     D --> F{Matched Fusion decision?}
     E -- No --> G[Use normal selected route]
     E -- Yes --> H[Resolve Fusion execution config]
     F -- Yes --> H
-    F -- No --> I{Request plugin has analysis_models?}
-    I -- No --> J[Return no eligible Fusion decision error]
-    I -- Yes --> K[Build request-scoped fusion_direct decision]
-    K --> H
+    F -- No --> J[Return no eligible Fusion decision error]
     H --> L[Apply request plugin overrides]
     L --> M[Run analysis panel concurrently]
     M --> N{Any panel success?}
@@ -75,29 +74,18 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 Decision-level Fusion:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: deliberation
       description: Compare candidate answers and synthesize one response.
       priority: 100
       output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: qwen3-32b
-        - model: deepseek-worker
       algorithm:
         type: fusion
         fusion:
-          model: qwen3-32b
-          analysis_models:
-            - qwen3-32b
-            - deepseek-worker
-          analysis_overrides:
-            - model: qwen3-32b
-              temperature: 0.15
-              max_completion_tokens: 512
-            - model: deepseek-worker
-              temperature: 0.2
-              max_completion_tokens: 384
+          max_concurrent: 2
+          max_completion_tokens: 512
+          round_timeout_seconds: 90
 ```
 
 `output_contract` is decision-scoped prompt text. Use it for benchmark or
@@ -115,17 +103,6 @@ Minimal algorithm configuration:
 algorithm:
   type: fusion
   fusion:
-    model: qwen3-32b
-    analysis_models:
-      - qwen3-8b
-      - qwen3-32b
-    analysis_overrides:
-      - model: qwen3-8b
-        temperature: 0.2
-        max_completion_tokens: 384
-      - model: qwen3-32b
-        temperature: 0.15
-        max_completion_tokens: 512
     max_concurrent: 2
     max_completion_tokens: 512
     round_timeout_seconds: 90
@@ -137,49 +114,24 @@ algorithm:
     judge_prompt_version: fusion-v1
 ```
 
-Automatic routing aliases:
+Entrypoint assignment:
 
 ```yaml
-global:
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-      - auto
-      - MoM
+entrypoints:
+  - name: vllm-sr/fusion
+    recipe: deliberation
+    assignments:
+      deliberation:
+        models:
+          - model: local/judge
+            priority: 0
+          - model: local/panel
+            priority: 0
 ```
 
-`vllm-sr/auto` evaluates all decisions. If the matched decision uses `algorithm.type=fusion`, the request enters Fusion; otherwise it follows the matched non-Fusion route.
-
-Direct Fusion slug registration:
-
-```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-```
-
-`global.integrations.looper.fusion` only registers direct request model names. It does not own route policy, a default route, judge selection, panel selection, concurrency, templates, or error handling.
-
-The judge model, analysis panel, concurrency, templates, and error policy belong under `routing.decisions[].algorithm.fusion`. Direct slug calls evaluate only Fusion-capable decisions, so `vllm-sr/fusion` cannot silently fall back to a normal single-model route. Request-level `plugins[].id = fusion` can still override the decision panel for one call; if no Fusion decision matched, a plugin override with `analysis_models` can provide a request-only panel.
-
-`analysis_overrides` are keyed by `model` and merge field-wise with decision-level settings. In practice, if decision config sets `{temperature: 0.2}` for `panel-a` and request override sets only `{max_completion_tokens: 100}`, `panel-a` keeps `temperature: 0.2` and adds `max_completion_tokens: 100`.
-
-To expose an OpenRouter-compatible alias, opt in explicitly:
-
-```yaml
-global:
-  integrations:
-    looper:
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-          - openrouter/fusion
-```
+The Recipe contains orchestration policy only. The Entrypoint is the sole
+authority for the public alias and concrete Models. Request overrides cannot
+add Models outside this assignment.
 
 Request-level override:
 
@@ -189,12 +141,6 @@ Request-level override:
   "messages": [{"role": "user", "content": "..."}],
   "plugins": [{
     "id": "fusion",
-    "model": "qwen3-32b",
-    "analysis_models": ["qwen3-8b", "qwen3-32b"],
-    "analysis_overrides": [
-      {"model": "qwen3-8b", "max_completion_tokens": 320},
-      {"model": "qwen3-32b", "temperature": 0.1}
-    ],
     "max_concurrent": 2,
     "max_completion_tokens": 1024,
     "round_timeout_seconds": 90,
@@ -214,10 +160,6 @@ Request-level override:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/fusion"]` | Direct request model slugs that trigger Fusion execution |
-| `model` | string | first analysis model | Judge/calling model used for analysis and final synthesis |
-| `analysis_models` | list[string] | `modelRefs` | Panel models for parallel analysis |
-| `analysis_overrides` | list[object] | none | Per-panel-model `temperature` and `max_completion_tokens`, keyed by `model`. Request-level entries merge field-wise onto the decision entry for the same model, so setting one field keeps the decision value for the other |
 | `max_concurrent` | int | panel size | Maximum concurrent panel calls |
 | `max_completion_tokens` | int | request default | Max completion tokens applied to Fusion subrequests |
 | `round_timeout_seconds` | int | wait for all | Stop waiting for a panel round after this many seconds |
@@ -233,9 +175,10 @@ Request-level override:
 
 Best practice:
 
-- Keep `analysis_models` stable per decision, and use `analysis_overrides` for model-specific tuning.
-- Use decision-level overrides for your baseline and request-level overrides only for one-off experiments.
-- Prefer sparse request overrides (set only the field you need) to preserve decision defaults through field-wise merge.
+- Keep the Entrypoint assignment stable and version it whenever panel
+  membership, weights, or fallback order changes.
+- Use Recipe settings for orchestration policy and request overrides only for
+  bounded, non-authority-changing experiments.
 
 ## Grounding-Aware Synthesis
 
@@ -261,8 +204,6 @@ Requires the hallucination detector (and, for the `panel`/cross-model path, the 
 algorithm:
   type: fusion
   fusion:
-    model: qwen3-32b
-    analysis_models: [qwen3-8b, qwen3-32b]
     grounding:
       enabled: true
       reference: hybrid          # hybrid | context | panel

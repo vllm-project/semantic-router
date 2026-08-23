@@ -95,7 +95,7 @@ def _derive_official_variant(image_name, default_variant_image):
             return f"{variant_repo}:latest"
         prefix = f"{candidate_repo}:"
         if image_name.startswith(prefix):
-            return f"{variant_repo}:{image_name[len(prefix):]}"
+            return f"{variant_repo}:{image_name[len(prefix) :]}"
 
     return ""
 
@@ -433,14 +433,12 @@ def _show_image_not_found_error(image_name):
     log.error(f"     {runtime} pull {image_name}")
     log.error("")
     log.error("  2. Use a custom image override:")
-    log.error("     vllm-sr serve --config config.yaml --router-image your-router:tag")
-    log.error(
-        "     vllm-sr serve --config config.yaml --dashboard-image your-dashboard:tag"
-    )
-    log.error("     vllm-sr serve --config config.yaml --envoy-image your-envoy:tag")
-    log.error("     vllm-sr serve --config config.yaml --sim-image your-sim:tag")
+    log.error("     vllm-sr serve --router-image your-router:tag")
+    log.error("     vllm-sr serve --dashboard-image your-dashboard:tag")
+    log.error("     vllm-sr serve --envoy-image your-envoy:tag")
+    log.error("     vllm-sr serve --sim-image your-sim:tag")
     log.error("")
     log.error("  3. Change pull policy to always:")
-    log.error("     vllm-sr serve config.yaml --image-pull-policy always")
+    log.error("     vllm-sr serve --image-pull-policy always")
     log.error("")
     log.error("=" * 70)

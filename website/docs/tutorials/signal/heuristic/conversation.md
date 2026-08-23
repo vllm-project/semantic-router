@@ -31,7 +31,7 @@ Use `conversation` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     conversation:
       - name: multi_turn_user
@@ -83,7 +83,7 @@ routing:
 ## Decision Usage
 
 ```yaml
-routing:
+document:
   decisions:
     - name: agentic_routing
       description: Send tool-heavy chats to an agent-capable model.
@@ -95,8 +95,6 @@ routing:
             name: tool_heavy
           - type: conversation
             name: multi_turn_user
-      modelRefs:
-        - model: gpt-4o
 ```
 
 ## Dependencies and Limitations

@@ -2,35 +2,48 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { RouterConfig } from './dashboardPageTypes'
+import type { ManagedRoutingSummary } from '../utils/managedRoutingSnapshot'
 import DashboardRoutingProfiles from './DashboardRoutingProfiles'
 
 describe('DashboardRoutingProfiles', () => {
-  it('renders entrypoint aliases and scoped routing counts', () => {
-    const config: RouterConfig = {
+  it('renders Entrypoint aliases and native Recipe document counts', () => {
+    const config = {
+      models: [],
       entrypoints: [
-        { model_names: ['vllm-sr/balanced'], recipe: 'balanced' },
-        { model_names: ['vllm-sr/private'], recipe: 'privacy' },
+        {
+          id: 'entrypoint-balanced',
+          name: 'vllm-sr/balanced',
+          aliases: ['vllm-sr/balanced'],
+          rules: [{ recipeId: 'recipe-balanced' }],
+        },
+        {
+          id: 'entrypoint-private',
+          name: 'vllm-sr/private',
+          aliases: ['vllm-sr/private'],
+          rules: [{ recipeId: 'recipe-private' }],
+        },
       ],
       recipes: [
         {
+          id: 'recipe-balanced',
           name: 'balanced',
           description: 'Balanced objective',
-          routing: {
+          document: {
             signals: { keywords: [{ name: 'intent' }] },
             projections: { scores: [{ name: 'score' }], mappings: [{ name: 'map' }] },
             decisions: [{ name: 'route' }],
           },
         },
         {
+          id: 'recipe-private',
           name: 'privacy',
-          routing: {
+          document: {
             signals: { pii: [{ name: 'private' }] },
             decisions: [{ name: 'private-route' }],
           },
         },
       ],
-    }
+    } as unknown as ManagedRoutingSummary
 
     const markup = renderToStaticMarkup(
       createElement(DashboardRoutingProfiles, {

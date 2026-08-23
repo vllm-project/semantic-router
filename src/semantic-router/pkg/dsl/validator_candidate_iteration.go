@@ -33,18 +33,6 @@ func (v *Validator) checkCandidateIterationReferences(route *RouteDecl, iter *Ca
 	}
 }
 
-func routeHasModelCandidates(route *RouteDecl) bool {
-	if len(route.Models) > 0 {
-		return true
-	}
-	for _, iter := range route.CandidateIterations {
-		if iter.Source == "models" && len(iter.Models) > 0 && candidateIterationDeclEmitsVariableModel(iter) {
-			return true
-		}
-	}
-	return false
-}
-
 func (v *Validator) checkCandidateIterationConstraints(route *RouteDecl, iter *CandidateIterationDecl, routeContext string) {
 	if iter == nil {
 		return
@@ -104,13 +92,4 @@ func (v *Validator) checkCandidateIterationOutputs(iter *CandidateIterationDecl,
 			)
 		}
 	}
-}
-
-func candidateIterationDeclEmitsVariableModel(iter *CandidateIterationDecl) bool {
-	for _, output := range iter.Outputs {
-		if output.Type == "model" && output.Value == iter.Variable {
-			return true
-		}
-	}
-	return false
 }

@@ -504,7 +504,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("classifier.model_path"))
 	})
@@ -516,7 +516,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("keywords"))
 	})
@@ -528,7 +528,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("must be one of"))
 	})
@@ -543,7 +543,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -557,7 +557,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -576,7 +576,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -590,7 +590,7 @@ decisions:
 		err := yaml.Unmarshal([]byte(cfgYAML), cfg)
 		Expect(err).NotTo(HaveOccurred())
 
-		err = validateConfigStructure(cfg)
+		err = validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("lower_threshold_ratio is required"))
 	})

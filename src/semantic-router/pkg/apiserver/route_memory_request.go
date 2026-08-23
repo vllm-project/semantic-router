@@ -8,7 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
@@ -34,20 +33,14 @@ func (s *ClassificationAPIServer) requireMemoryStore(w http.ResponseWriter) bool
 	return true
 }
 
-// extractUserID extracts the user_id with priority: auth header > query param fallback.
-//
-// Priority 1: x-authz-user-id header injected by the external auth service.
-// Priority 2: user_id query parameter for development/testing without a full auth stack.
+// extractUserID validates the explicit user scope selected by an authorized
+// Management API caller. Inference identity headers are intentionally ignored:
+// the data plane carries authenticated identity only in process-local state.
 func (s *ClassificationAPIServer) extractUserID(w http.ResponseWriter, r *http.Request) (string, bool) {
-	var userID string
-	if h := r.Header.Get(headers.AuthzUserID); h != "" {
-		userID = h
-	} else if q := r.URL.Query().Get("user_id"); q != "" {
-		userID = q
-	} else {
+	userID := strings.TrimSpace(r.URL.Query().Get("user_id"))
+	if userID == "" {
 		s.writeErrorResponse(w, http.StatusUnauthorized, "MISSING_USER_ID",
-			"User identity required. Set the auth header (x-authz-user-id) via your auth layer, "+
-				"or user_id query parameter for development")
+			"user_id subject scope is required")
 		return "", false
 	}
 

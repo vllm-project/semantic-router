@@ -726,6 +726,126 @@ class TestCLIDiscovery:
         with pytest.raises(SystemExit):
             _load_scenario("nonexistent_scenario")
 
+    def test_candidate_config_is_the_only_runtime_tuning_output(self):
+        from tuning.cli import build_parser
+
+        args = build_parser().parse_args(
+            [
+                "privacy",
+                "--config",
+                "config.yaml",
+                "--probes",
+                "probes.yaml",
+                "--candidate-config",
+                "candidate.yaml",
+            ]
+        )
+
+        assert args.candidate_config == "candidate.yaml"
+        assert not hasattr(args, "router_pid")
+        assert not hasattr(args, "deploy_config")
+
+    def test_public_package_exposes_candidate_tuner_only(self):
+        import tuning
+
+        assert "CandidateTuner" in tuning.__all__
+        assert "TuningLoop" not in tuning.__all__
+        assert not hasattr(tuning.RouterClient(), "get_config_hash")
+        assert not hasattr(tuning.RouterClient(), "hot_reload")
+
+    def test_candidate_tuner_rejects_active_manifest_overwrite(self, tmp_path):
+        from tuning.client import RouterClient
+        from tuning.scenario import CandidateTuner
+        from tuning.scenarios.privacy import PrivacyScenario
+
+        config_path = tmp_path / "config.yaml"
+        probes_path = tmp_path / "probes.yaml"
+        with pytest.raises(ValueError, match="must not overwrite"):
+            CandidateTuner(
+                scenario=PrivacyScenario(),
+                router=RouterClient(),
+                config_path=config_path,
+                probes_path=probes_path,
+                candidate_path=config_path,
+            )
+
+    def test_candidate_tuner_writes_separate_offline_validated_candidate(
+        self, tmp_path, monkeypatch
+    ):
+        from tuning import engine
+        from tuning import scenario as scenario_module
+        from tuning.scenario import CandidateTuner
+        from tuning.scenarios.privacy import PrivacyScenario
+
+        config_path = tmp_path / "config.yaml"
+        candidate_path = tmp_path / "candidate.yaml"
+        probes_path = tmp_path / "probes.yaml"
+        config_path.write_text(yaml.safe_dump(SAMPLE_DSL_CONFIG), encoding="utf-8")
+        probes_path.write_text(yaml.safe_dump(SAMPLE_PROBES_FLAT[:1]), encoding="utf-8")
+        original = config_path.read_text(encoding="utf-8")
+
+        class FakeRouter:
+            endpoint = "http://router.example:8080"
+
+            def __init__(self):
+                self.calls = 0
+
+            def run_probes(self, probes, result_adapter):
+                self.calls += 1
+                return [
+                    {
+                        "id": probes[0]["id"],
+                        "expected": "local_privacy",
+                        "actual": "cloud_standard",
+                        "correct": False,
+                    }
+                ]
+
+        fix = engine.Fix(
+            fix_type="threshold",
+            target="privacy_policy_band",
+            param_path="projections.mappings[privacy_policy_band]",
+            old_value=0.35,
+            new_value=0.2,
+            explanation="candidate",
+        )
+        monkeypatch.setattr(
+            scenario_module.engine_selection,
+            "diagnose_probe",
+            lambda result, dsl: {"failure_kind": "parametric"},
+        )
+        monkeypatch.setattr(
+            scenario_module.engine_selection,
+            "select_fix",
+            lambda *args, **kwargs: fix,
+        )
+        monkeypatch.setattr(
+            scenario_module.engine_selection,
+            "apply_fix_to_config",
+            lambda cfg, selected_fix, dsl: {**cfg, "candidate_marker": True},
+        )
+        monkeypatch.setattr(
+            scenario_module,
+            "run_validate",
+            lambda dsl, yaml_path: {"valid": True, "mode": "yaml->dsl"},
+        )
+
+        router = FakeRouter()
+        output = CandidateTuner(
+            scenario=PrivacyScenario(),
+            router=router,
+            config_path=config_path,
+            probes_path=probes_path,
+            candidate_path=candidate_path,
+        ).run()
+
+        assert router.calls == 1
+        assert config_path.read_text(encoding="utf-8") == original
+        assert yaml.safe_load(candidate_path.read_text(encoding="utf-8"))[
+            "candidate_marker"
+        ]
+        assert output["validation"]["valid"] is True
+
 
 # ---------------------------------------------------------------------------
 # Result persistence

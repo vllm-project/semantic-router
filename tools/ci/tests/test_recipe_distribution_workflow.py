@@ -19,7 +19,7 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.release_workflow: Workflow = workflows["release.yml"]
         self.text = self.workflow.path.read_text(encoding="utf-8")
 
-    def test_workflow_validates_manually_and_after_catalog_merges(self) -> None:
+    def test_workflow_validates_manually_and_after_recipe_merges(self) -> None:
         self.assertIn("workflow_dispatch", self.workflow.events)
         self.assertNotIn("release", self.workflow.events)
         self.assertIn("pull_request", self.workflow.events)
@@ -30,26 +30,17 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertEqual(
             set(pull_request["paths"]),
             set(push["paths"]),
-            "release-critical catalog inputs must run the same gate before and after merge",
+            "release-critical Recipe inputs must run the same gate before and after merge",
         )
         for path in (
             "config/recipes/**",
-            "src/vllm-sr/MANIFEST.in",
-            "src/vllm-sr/cli/commands/model.py",
-            "src/vllm-sr/cli/commands/model_rendering.py",
-            "src/vllm-sr/cli/model_assets/**",
-            "src/vllm-sr/cli/model_bundle.py",
-            "src/vllm-sr/cli/model_catalog.py",
-            "src/vllm-sr/cli/model_catalog_types.py",
-            "src/vllm-sr/cli/model_catalog_validation.py",
-            "src/vllm-sr/pyproject.toml",
             "tools/agent/schemas/recipe-probes-v1.schema.json",
             "tools/agent/scripts/recipe_conformance*.py",
             "tools/agent/scripts/recipe_metadata_schema.py",
             "tools/agent/scripts/router_calibration_*.py",
             "tools/make/recipe-conformance.mk",
-            "tools/release/sync_model_catalog.py",
-            "tools/release/snapshot_model_catalog.py",
+            "tools/release/recipe_bundle.py",
+            "tools/release/snapshot_builtin_recipes.py",
         ):
             self.assertIn(path, push["paths"])
 
@@ -63,39 +54,33 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
 
     def test_workflow_is_read_only_and_never_publishes_recipe_assets(self) -> None:
         self.assertEqual(self.workflow.data["permissions"], {"contents": "read"})
-        self.assertEqual(set(self.workflow.jobs), {"validate-built-in-models"})
-        validator = self.workflow.jobs["validate-built-in-models"]
+        self.assertEqual(set(self.workflow.jobs), {"validate-built-in-recipes"})
+        validator = self.workflow.jobs["validate-built-in-recipes"]
         self.assertEqual(validator["permissions"], {"contents": "read"})
         self.assertNotIn("contents: write", self.text)
         self.assertNotIn("gh release", self.text)
         self.assertNotIn("vllm-sr recipe pack", self.text)
         self.assertNotIn(".vllm-sr-recipe.zip", self.text)
 
-    def test_workflow_checks_source_mirror_and_conformance(self) -> None:
-        self.assertIn("sync_model_catalog.py --check", self.text)
+    def test_workflow_checks_the_canonical_source_without_a_package_mirror(
+        self,
+    ) -> None:
         self.assertIn("make recipe-conformance-static", self.text)
-        self.assertIn("vllm-sr model list --all-versions", self.text)
-        self.assertIn("vllm-sr model show vllm-sr/mom-v1-blend", self.text)
 
     def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
-        self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)
-        self.assertIn("dist/model-catalog-receipt/", self.text)
+        self.assertIn("built-in-recipe-receipt-${{ github.run_id }}", self.text)
+        self.assertIn("dist/built-in-recipe-receipt/", self.text)
         self.assertIn("source-commit.txt", self.text)
-        self.assertIn(
-            "find config/recipes/built-in src/vllm-sr/cli/model_assets",
-            self.text,
-        )
+        self.assertIn("find config/recipes/built-in", self.text)
         self.assertIn("SHA256SUMS", self.text)
         self.assertIn("retention-days: 30", self.text)
 
-    def test_generated_package_mirror_is_collapsed_for_code_review(self) -> None:
+    def test_generated_package_mirror_does_not_exist(self) -> None:
         attributes = (REPO_ROOT / ".gitattributes").read_text(encoding="utf-8")
-        self.assertIn(
-            "src/vllm-sr/cli/model_assets/** linguist-generated=true",
-            attributes,
-        )
+        self.assertNotIn("src/vllm-sr/cli/recipes", attributes)
+        self.assertFalse(any((REPO_ROOT / "src/vllm-sr/cli/recipes").rglob("*")))
 
-    def test_canonical_release_does_not_attach_recipe_or_catalog_assets(self) -> None:
+    def test_canonical_release_does_not_attach_recipe_assets(self) -> None:
         release_path = REPO_ROOT / ".github" / "workflows" / "release.yml"
         release_text = release_path.read_text(encoding="utf-8")
         self.assertNotIn("Managed Recipe packages", release_text)
@@ -103,14 +88,14 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         self.assertNotIn("release-assets/recipes", release_text)
         self.assertNotIn(".vllm-sr-recipe.zip", release_text)
         self.assertIn("needs: [validate, docker, helm, pypi, crate]", release_text)
-        self.assertIn("They are not published", release_text)
-        self.assertIn("as separate GitHub Release assets", release_text)
+        self.assertIn("not duplicated in the CLI wheel", release_text)
+        self.assertIn("separate GitHub Release assets", release_text)
         self.assertIn(
-            "catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}",
+            "recipe_snapshot: ${{ steps.contract.outputs.recipe_snapshot }}",
             release_text,
         )
-        self.assertIn(
-            "catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}",
+        self.assertNotIn(
+            "recipe_snapshot: ${{ needs.validate.outputs.recipe_snapshot }}",
             release_text,
         )
         self.assertIn("fetch-depth: 0", release_text)
@@ -123,39 +108,25 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
                 msg=f"{job_name} must fail closed behind release validation",
             )
 
-    def test_pypi_wheel_dynamically_checks_the_bound_release_snapshot(self) -> None:
+    def test_pypi_wheel_excludes_router_recipe_distribution(self) -> None:
         publish_path = REPO_ROOT / ".github" / "workflows" / "pypi-publish.yml"
         publish_text = publish_path.read_text(encoding="utf-8")
-        self.assertIn("sync_model_catalog.py --check", publish_text)
-        self.assertIn("snapshot_model_catalog.py", publish_text)
-        self.assertIn('--check --version "$RELEASE_VERSION"', publish_text)
-        self.assertIn("INPUT_CATALOG_SNAPSHOT", publish_text)
+        self.assertNotIn("snapshot_builtin_recipes.py", publish_text)
+        self.assertNotIn("recipe_snapshot", publish_text)
         self.assertIn(
-            'EXPECTED_CATALOG_SNAPSHOT="v${VERSION_MAJOR}.${VERSION_MINOR}"',
-            publish_text,
+            "CLI wheel must not embed the Router Recipe distribution", publish_text
         )
-        self.assertIn('for catalog_version in latest "$CATALOG_SNAPSHOT"', publish_text)
-        self.assertIn('find "$SNAPSHOT_DIR"', publish_text)
-        self.assertIn(
-            'package_file="cli/model_assets/$catalog_version/$file"', publish_text
-        )
-        self.assertIn('REQUIRED_FILES+=("$package_file")', publish_text)
         self.assertIn('grep -Fqx "$file" wheel-files.txt', publish_text)
-        self.assertIn(
-            'cmp -s "$SNAPSHOT_DIR/$file" "wheel-unpacked/$package_file"',
-            publish_text,
-        )
 
     def test_release_make_target_snapshots_latest_without_overwrite_flag(self) -> None:
         release_makefile = (REPO_ROOT / "tools" / "make" / "release.mk").read_text(
             encoding="utf-8"
         )
-        self.assertIn("built-in-model-snapshot:", release_makefile)
+        self.assertIn("built-in-recipe-snapshot:", release_makefile)
         self.assertIn(
-            'snapshot_model_catalog.py --version "$(RELEASE_VERSION)"',
+            'snapshot_builtin_recipes.py --version "$(RELEASE_VERSION)"',
             release_makefile,
         )
-        self.assertIn("sync_model_catalog.py --check", release_makefile)
         self.assertNotIn("--force", release_makefile)
 
 

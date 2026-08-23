@@ -43,6 +43,7 @@ func (i *countingPIIInitializer) Init(string, bool, int) error {
 
 func TestNewClassifierWithOptionsDefersRuntimeInitialization(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RoutingScope: "test-recipe",
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
 				EmbeddingRules: []config.EmbeddingRule{
@@ -93,6 +94,7 @@ func TestClassifierBuildParallelismSerializesExplicitCandleRuntime(t *testing.T)
 
 func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RoutingScope: "test-recipe",
 		IntelligentRouting: config.IntelligentRouting{
 			Signals: config.Signals{
 				EmbeddingRules: []config.EmbeddingRule{{
@@ -155,6 +157,7 @@ func TestInitializeRuntimeSkipsUnusedCoreSignalClassifiers(t *testing.T) {
 	jailbreakInitializer := &countingCoreClassifierInitializer{}
 	classifier := &Classifier{
 		Config: &config.RouterConfig{
+			RoutingScope: "test-recipe",
 			InlineModels: config.InlineModels{
 				Classifier: config.Classifier{
 					CategoryModel: config.CategoryModel{
@@ -201,6 +204,7 @@ func TestInitializeRuntimeInitializesCoreSignalClassifiersWhenUsed(t *testing.T)
 	jailbreakInitializer := &countingCoreClassifierInitializer{}
 	classifier := &Classifier{
 		Config: &config.RouterConfig{
+			RoutingScope: "test-recipe",
 			InlineModels: config.InlineModels{
 				Classifier: config.Classifier{
 					CategoryModel: config.CategoryModel{
@@ -291,8 +295,9 @@ func TestEndpointHallucinationDoesNotDependOnNativeCapability(t *testing.T) {
 	}
 }
 
-func TestPublicAuxiliaryConsumersAreOwnedOnlyByDefaultClassifier(t *testing.T) {
+func TestModelLessAPIsAreOwnedOnlyByExplicitDefaultRecipe(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RoutingScope: config.DefaultRecipeName,
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
 				Enabled: true,
@@ -319,13 +324,13 @@ func TestPublicAuxiliaryConsumersAreOwnedOnlyByDefaultClassifier(t *testing.T) {
 			},
 		},
 	}
-	defaultClassifier := &Classifier{Config: cfg}
-	if !defaultClassifier.needsHallucinationDetectorForRuntime() ||
-		!defaultClassifier.needsLocalHallucinationNLIForRuntime() {
-		t.Fatal("default API-only NLI configuration was omitted from runtime lifecycle")
+	defaultRecipeClassifier := &Classifier{Config: cfg}
+	if !defaultRecipeClassifier.needsHallucinationDetectorForRuntime() ||
+		!defaultRecipeClassifier.needsLocalHallucinationNLIForRuntime() {
+		t.Fatal("explicit default Recipe API-only NLI configuration was omitted from runtime lifecycle")
 	}
 	defaultTasks := make(map[string]bool)
-	for _, task := range defaultClassifier.runtimeTasks() {
+	for _, task := range defaultRecipeClassifier.runtimeTasks() {
 		defaultTasks[task.Name] = true
 	}
 	for _, name := range []string{"classifier.fact_check", "classifier.hallucination", "classifier.feedback"} {
@@ -352,6 +357,7 @@ func TestPublicAuxiliaryConsumersAreOwnedOnlyByDefaultClassifier(t *testing.T) {
 
 func TestSignalReadinessRequiresInitializedFactCheckAndFeedbackModels(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RoutingScope: "verification",
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
 				FactCheckModel: config.FactCheckModelConfig{ModelID: "models/test-fact-check"},
@@ -392,6 +398,7 @@ func TestSignalReadinessRequiresInitializedFactCheckAndFeedbackModels(t *testing
 
 func newHallucinationLifecycleConfig(backend string) *config.RouterConfig {
 	return &config.RouterConfig{
+		RoutingScope: "verification",
 		InlineModels: config.InlineModels{
 			HallucinationMitigation: config.HallucinationMitigationConfig{
 				HallucinationModel: config.HallucinationModelConfig{

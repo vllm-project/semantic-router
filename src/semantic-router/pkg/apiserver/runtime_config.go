@@ -1,27 +1,19 @@
 package apiserver
 
-import (
-	"sync"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-)
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
 type liveRuntimeConfig struct {
-	mu       sync.RWMutex
 	fallback *config.RouterConfig
 	resolver func() *config.RouterConfig
-	updater  func(*config.RouterConfig)
 }
 
 func newLiveRuntimeConfig(
 	fallback *config.RouterConfig,
 	resolver func() *config.RouterConfig,
-	updater func(*config.RouterConfig),
 ) *liveRuntimeConfig {
 	return &liveRuntimeConfig{
 		fallback: fallback,
 		resolver: resolver,
-		updater:  updater,
 	}
 }
 
@@ -34,23 +26,7 @@ func (c *liveRuntimeConfig) Current() *config.RouterConfig {
 			return cfg
 		}
 	}
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.fallback
-}
-
-func (c *liveRuntimeConfig) Update(newCfg *config.RouterConfig) {
-	if c == nil {
-		return
-	}
-	c.mu.Lock()
-	c.fallback = newCfg
-	c.mu.Unlock()
-	if c.updater != nil {
-		c.updater(newCfg)
-		return
-	}
-	config.Replace(newCfg)
 }
 
 func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {
@@ -60,30 +36,5 @@ func (s *ClassificationAPIServer) currentConfig() *config.RouterConfig {
 	if s.runtimeConfig != nil {
 		return s.runtimeConfig.Current()
 	}
-	s.configMu.RLock()
-	defer s.configMu.RUnlock()
 	return s.config
-}
-
-func (s *ClassificationAPIServer) publishConfigMutation(newCfg *config.RouterConfig) {
-	if s == nil {
-		return
-	}
-	s.configMu.Lock()
-	s.config = newCfg
-	s.configMu.Unlock()
-	if s.runtimeConfig != nil {
-		s.runtimeConfig.Update(newCfg)
-		return
-	}
-	if s.runtimeRegistry != nil {
-		s.runtimeRegistry.UpdateConfig(newCfg)
-		if s.classificationSvc != nil {
-			s.classificationSvc.RefreshRuntimeConfig(newCfg)
-		} else if svc := s.runtimeRegistry.ClassificationService(); svc != nil {
-			svc.RefreshRuntimeConfig(newCfg)
-		}
-		return
-	}
-	config.Replace(newCfg)
 }

@@ -25,7 +25,7 @@ const ClawRoomMentionMenu = ({
             key={option.token}
             type="button"
             className={`${styles.mentionItem} ${isActive ? styles.mentionItemActive : ''}`}
-            onMouseDown={event => {
+            onMouseDown={(event) => {
               event.preventDefault()
               onSelect(option)
             }}

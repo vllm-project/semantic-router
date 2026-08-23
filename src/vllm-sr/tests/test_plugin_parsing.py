@@ -1,8 +1,9 @@
 """Tests for plugin parsing and validation."""
 
-import pytest
-import tempfile
 import os
+import tempfile
+
+import pytest
 import yaml
 from pydantic import ValidationError as PydanticValidationError
 
@@ -13,40 +14,83 @@ from cli.models import (
     RAGPluginConfig,
     ToolsPluginConfig,
 )
-from cli.config_migration import migrate_config_data
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
 
 
-def _write_config(config_yaml: str) -> str:
-    data = yaml.safe_load(config_yaml)
-    providers = data.get("providers") if isinstance(data, dict) else None
-    models = providers.get("models", []) if isinstance(providers, dict) else []
-    if isinstance(data, dict) and (
-        "signals" in data
-        or "decisions" in data
-        or any(
-            isinstance(model, dict)
-            and any(
-                key in model
-                for key in (
-                    "endpoints",
-                    "access_key",
-                    "reasoning_family",
-                    "param_size",
-                    "context_window_size",
-                    "description",
-                    "capabilities",
-                    "quality_score",
-                    "modality",
-                    "tags",
-                )
-            )
-            for model in models
-        )
-    ):
-        data = migrate_config_data(data)
-
+def _write_config(plugins: list[dict]) -> str:
+    data = {
+        "version": "v0.4",
+        "listeners": [{"name": "http-8888", "address": "0.0.0.0", "port": 8888}],
+        "models": [
+            {
+                "name": "test_model",
+                "card": {
+                    "description": "Test model",
+                    "capabilities": ["chat"],
+                },
+                "connections": [
+                    {
+                        "provider": "vllm",
+                        "endpoint": "http://localhost:8000/v1",
+                        "model": "test_model",
+                    }
+                ],
+            }
+        ],
+        "recipes": [
+            {
+                "name": "test_recipe",
+                "document": {
+                    "signals": {
+                        "keywords": [
+                            {
+                                "name": "test_keywords",
+                                "operator": "OR",
+                                "keywords": ["test"],
+                            }
+                        ],
+                        "domains": [{"name": "test", "description": "Test domain"}],
+                    },
+                    "decisions": [
+                        {
+                            "name": "test_decision",
+                            "description": "Test decision",
+                            "priority": 100,
+                            "rules": {
+                                "operator": "OR",
+                                "conditions": [
+                                    {"type": "keyword", "name": "test_keywords"}
+                                ],
+                            },
+                            "plugins": plugins,
+                        }
+                    ],
+                },
+            }
+        ],
+        "entrypoints": [
+            {
+                "name": "test_entrypoint",
+                "recipe": "test_recipe",
+                "assignments": {"test_decision": {"models": [{"model": "test_model"}]}},
+            }
+        ],
+        "global": {
+            "services": {
+                "backend_dispatch": {
+                    "bind_address": "127.0.0.1",
+                    "port": 8180,
+                    "audience": "vllm-sr.backend-dispatch",
+                    "capability_ttl": "30s",
+                    "max_request_body_bytes": 64 << 20,
+                },
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
+                },
+            }
+        },
+    }
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.safe_dump(data, f, sort_keys=False)
         return f.name
@@ -79,12 +123,11 @@ class TestPluginTypeValidation:
             assert plugin.type.value == plugin_type
 
     @pytest.mark.parametrize(
-        "alias", ["semantic-cache", "semantic_cache", "response-cache"]
+        "legacy_type", ["semantic-cache", "semantic_cache", "response-cache"]
     )
-    def test_response_cache_aliases_export_canonical(self, alias):
-        with pytest.warns(DeprecationWarning):
-            plugin = PluginConfig(type=alias, configuration={"enabled": True})
-        assert plugin.model_dump()["type"] == "response_cache"
+    def test_response_cache_legacy_types_are_rejected(self, legacy_type):
+        with pytest.raises(PydanticValidationError, match="Input should be.*enum"):
+            PluginConfig(type=legacy_type, configuration={"enabled": True})
 
     def test_invalid_plugin_type(self):
         """Test that invalid plugin types are rejected."""
@@ -93,60 +136,35 @@ class TestPluginTypeValidation:
 
     def test_new_plugin_types_validate_in_full_config(self):
         """Test newly exposed plugin types validate end-to-end."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Decision with extended plugin coverage"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "request_params"
-        configuration:
-          blocked_params: ["logprobs"]
-          max_tokens_limit: 256
-          max_n: 1
-          strip_unknown: true
-      - type: "response_jailbreak"
-        configuration:
-          enabled: true
-          threshold: 0.7
-          action: "header"
-      - type: "image_gen"
-        configuration:
-          enabled: true
-          backend: "openai"
-          backend_config:
-            api_key: "test-key"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+        temp_path = _write_config(
+            [
+                {
+                    "type": "request_params",
+                    "configuration": {
+                        "blocked_params": ["logprobs"],
+                        "max_tokens_limit": 256,
+                        "max_n": 1,
+                        "strip_unknown": True,
+                    },
+                },
+                {
+                    "type": "response_jailbreak",
+                    "configuration": {
+                        "enabled": True,
+                        "threshold": 0.7,
+                        "action": "header",
+                    },
+                },
+                {
+                    "type": "image_gen",
+                    "configuration": {
+                        "enabled": True,
+                        "backend": "openai",
+                        "backend_config": {"api_key": "test-key"},
+                    },
+                },
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)
@@ -185,57 +203,28 @@ class TestRouterReplayPluginConfig:
 
     def test_router_replay_plugin_in_config(self):
         """Test router_replay plugin in full config."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Test decision"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: 100
-          capture_request_body: true
-          capture_response_body: false
-          max_body_bytes: 2048
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+        temp_path = _write_config(
+            [
+                {
+                    "type": "router_replay",
+                    "configuration": {
+                        "enabled": True,
+                        "max_records": 100,
+                        "capture_request_body": True,
+                        "capture_response_body": False,
+                        "max_body_bytes": 2048,
+                    },
+                }
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)
-            assert len(config.decisions) == 1
-            assert len(config.decisions[0].plugins) == 1
+            decisions = config.recipes[0].document.decisions
+            assert len(decisions) == 1
+            assert len(decisions[0].plugins) == 1
 
-            plugin = config.decisions[0].plugins[0]
+            plugin = decisions[0].plugins[0]
             assert plugin.type.value == "router_replay"
             assert plugin.configuration["enabled"] is True
             assert plugin.configuration["max_records"] == 100
@@ -359,48 +348,18 @@ class TestPluginConfigurationValidation:
 
     def test_invalid_router_replay_config(self):
         """Test that invalid router_replay configuration is caught."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Test decision"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "router_replay"
-        configuration:
-          enabled: true
-          max_records: "invalid"  # Should be int
-          capture_request_body: "yes"  # Should be bool
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+        temp_path = _write_config(
+            [
+                {
+                    "type": "router_replay",
+                    "configuration": {
+                        "enabled": True,
+                        "max_records": "invalid",
+                        "capture_request_body": "yes",
+                    },
+                }
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)
@@ -412,55 +371,24 @@ providers:
         finally:
             os.unlink(temp_path)
 
-    def test_invalid_semantic_cache_config(self):
-        """Test that invalid semantic-cache configuration is caught."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Test decision"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "semantic-cache"
-        configuration:
-          enabled: "yes"  # Should be bool
-          similarity_threshold: 1.5  # Should be 0.0-1.0
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+    def test_invalid_response_cache_config(self):
+        """Test that invalid response_cache configuration is caught."""
+        temp_path = _write_config(
+            [
+                {
+                    "type": "response_cache",
+                    "configuration": {
+                        "enabled": "yes",
+                        "similarity_threshold": 1.5,
+                    },
+                }
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)
             errors = validate_user_config(config)
             assert len(errors) > 0
-            # Check that the alias normalized to the canonical plugin.
             error_messages = [str(e) for e in errors]
             assert any("response_cache" in msg.lower() for msg in error_messages)
         finally:
@@ -468,42 +396,19 @@ providers:
 
     def test_missing_required_fields(self):
         """Test that missing required fields are caught."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-decisions:
-  - name: "test_decision"
-    description: "Test decision"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions: []
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "semantic-cache"
-        configuration:
-          # Missing required 'enabled' field
-          similarity_threshold: 0.8
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+        temp_path = _write_config(
+            [
+                {
+                    "type": "response_cache",
+                    "configuration": {"similarity_threshold": 0.8},
+                }
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)
             errors = validate_user_config(config)
-            # SemanticCachePluginConfig requires 'enabled' field, so validation should fail
+            # ResponseCachePluginConfig requires 'enabled', so validation should fail.
             assert isinstance(errors, list)
             missing_field_message = (
                 "Expected validation errors for missing required field"
@@ -606,64 +511,36 @@ class TestRAGPluginConfig:
 
     def test_rag_plugin_in_full_config(self):
         """Test end-to-end RAG plugin YAML parsing and validation."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Test decision with RAG"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "rag"
-        configuration:
-          enabled: true
-          backend: "external_api"
-          top_k: 5
-          similarity_threshold: 0.75
-          injection_mode: "tool_role"
-          on_failure: "skip"
-          cache_results: true
-          cache_ttl_seconds: 300
-          backend_config:
-            endpoint: "http://rag-service:8000/v1/search"
-            request_format: "openai"
-            timeout_seconds: 10
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+        temp_path = _write_config(
+            [
+                {
+                    "type": "rag",
+                    "configuration": {
+                        "enabled": True,
+                        "backend": "external_api",
+                        "top_k": 5,
+                        "similarity_threshold": 0.75,
+                        "injection_mode": "tool_role",
+                        "on_failure": "skip",
+                        "cache_results": True,
+                        "cache_ttl_seconds": 300,
+                        "backend_config": {
+                            "endpoint": "http://rag-service:8000/v1/search",
+                            "request_format": "openai",
+                            "timeout_seconds": 10,
+                        },
+                    },
+                }
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)
-            assert len(config.decisions) == 1
-            assert len(config.decisions[0].plugins) == 1
+            decisions = config.recipes[0].document.decisions
+            assert len(decisions) == 1
+            assert len(decisions[0].plugins) == 1
 
-            plugin = config.decisions[0].plugins[0]
+            plugin = decisions[0].plugins[0]
             assert plugin.type.value == "rag"
             assert plugin.configuration["enabled"] is True
             assert plugin.configuration["backend"] == "external_api"
@@ -686,49 +563,19 @@ providers:
 
     def test_invalid_rag_config_in_full_yaml(self):
         """Test that invalid RAG YAML is caught by the validator."""
-        config_yaml = """
-version: v0.1
-listeners:
-  - name: "http-8888"
-    address: "0.0.0.0"
-    port: 8888
-signals:
-  keywords:
-    - name: "test_keywords"
-      operator: "OR"
-      keywords: ["test"]
-  domains:
-    - name: "test"
-      description: "Test domain"
-decisions:
-  - name: "test_decision"
-    description: "Test decision with invalid RAG"
-    priority: 100
-    rules:
-      operator: "OR"
-      conditions:
-        - type: "keyword"
-          name: "test_keywords"
-    modelRefs:
-      - model: "test_model"
-    plugins:
-      - type: "rag"
-        configuration:
-          enabled: true
-          backend: "external_api"
-          similarity_threshold: 1.5
-          top_k: "invalid"
-providers:
-  models:
-    - name: "test_model"
-      endpoints:
-        - name: "ep1"
-          weight: 1
-          endpoint: "localhost:8000"
-  default_model: "test_model"
-"""
-
-        temp_path = _write_config(config_yaml)
+        temp_path = _write_config(
+            [
+                {
+                    "type": "rag",
+                    "configuration": {
+                        "enabled": True,
+                        "backend": "external_api",
+                        "similarity_threshold": 1.5,
+                        "top_k": "invalid",
+                    },
+                }
+            ]
+        )
 
         try:
             config = parse_user_config(temp_path)

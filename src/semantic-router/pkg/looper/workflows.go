@@ -102,10 +102,11 @@ type workflowTrace struct {
 }
 
 type workflowStepResult struct {
-	step             workflowPlanStep
-	responses        []*ModelResponse
-	failed           []FusionFailedModel
-	toolTrajectories map[string][]workflowAgentToolTurn
+	step                workflowPlanStep
+	responses           []*ModelResponse
+	accountingResponses []*ModelResponse
+	failed              []FusionFailedModel
+	toolTrajectories    map[string][]workflowAgentToolTurn
 }
 
 type workflowModelResult struct {
@@ -139,8 +140,8 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 	}
 
 	workerModels := modelRefsToNames(req.ModelRefs)
-	original := extractOriginalContent(req.OriginalRequest)
-	if stateID, ok := findWorkflowToolStateID(req.OriginalRequest); ok {
+	original := extractOriginalContent(req.executionRequest)
+	if stateID, ok := findWorkflowToolStateID(req.executionRequest); ok {
 		return l.resumeWorkflowToolCall(ctx, req, cfg, workerModels, stateID)
 	}
 	logging.ComponentEvent("looper", "workflows_execution_started", map[string]interface{}{
@@ -155,33 +156,47 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 
 	plan, plannerResp, err := l.buildWorkflowPlan(ctx, req, cfg, original, workerModels)
 	if err != nil {
-		return nil, err
+		return nil, newPartialExecutionError(err, workflowExecutionEvidence(cfg, plannerResp, nil))
 	}
 
 	stepResults, interrupt, err := l.executeWorkflowSteps(ctx, req, cfg, plan, plannerResp, workerModels)
 	if err != nil {
-		return nil, err
+		return nil, newPartialExecutionError(err, workflowExecutionEvidence(cfg, plannerResp, stepResults))
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		response, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		if formatErr != nil {
+			return nil, newPartialExecutionError(
+				formatErr,
+				workflowInterruptExecutionEvidence(cfg, plannerResp, interrupt),
+			)
+		}
+		return response, nil
 	}
 
 	finalResp, interrupt, err := l.synthesizeWorkflowFinal(ctx, req, cfg, plan, original, stepResults, plannerResp, workerModels)
 	if err != nil {
 		if cfg.OnError != config.WorkflowOnErrorSkip {
-			return nil, err
+			return nil, newPartialExecutionError(err, workflowExecutionEvidence(cfg, plannerResp, stepResults))
 		}
 		finalResp = workflowFallbackFinalResponse(
 			req.OutputContractSpec,
 			stepResults,
 		)
 		if finalResp == nil {
-			return nil, err
+			return nil, newPartialExecutionError(err, workflowExecutionEvidence(cfg, plannerResp, stepResults))
 		}
 		logging.Warnf("[Workflows] Final synthesis failed; using worker response fallback because on_error=skip: %v", err)
 	}
 	if interrupt != nil {
-		return l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		response, formatErr := l.formatWorkflowToolCallInterrupt(ctx, interrupt, cfg)
+		if formatErr != nil {
+			return nil, newPartialExecutionError(
+				formatErr,
+				workflowInterruptExecutionEvidence(cfg, plannerResp, interrupt),
+			)
+		}
+		return response, nil
 	}
 	applyJSONActionOutputContract(req.OutputContractSpec, finalResp, workflowStepModelResponses(stepResults))
 	applyFinalOutputContract(req.OutputContractSpec, finalResp)
@@ -190,10 +205,60 @@ func (l *WorkflowsLooper) Execute(ctx context.Context, req *Request) (*Response,
 
 	summary := summarizeWorkflowExecution(cfg, plannerResp, stepResults, finalResp)
 	trace := buildWorkflowTrace(cfg, workerModels, plan, stepResults, summary.failed)
+	var response *Response
 	if req.IsStreaming {
-		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+		response, err = formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg, streamUsageRequested(req))
+	} else {
+		response, err = formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
 	}
-	return formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+	if err != nil {
+		return nil, newPartialExecutionError(err, ExecutionEvidence{
+			ModelsUsed: summary.modelsUsed,
+			Iterations: summary.iterations,
+			Usage:      summary.usage,
+		})
+	}
+	return response, nil
+}
+
+func workflowExecutionEvidence(
+	cfg workflowsExecutionConfig,
+	plannerResp *ModelResponse,
+	stepResults []workflowStepResult,
+	extra ...*ModelResponse,
+) ExecutionEvidence {
+	iterations := 0
+	if plannerResp != nil {
+		iterations++
+	}
+	for _, result := range stepResults {
+		iterations += len(result.usageResponses())
+	}
+	for _, response := range extra {
+		if response != nil {
+			iterations++
+		}
+	}
+	return ExecutionEvidence{
+		ModelsUsed: workflowProgressModels(cfg, plannerResp, stepResults, extra...),
+		Iterations: iterations,
+		Usage:      workflowProgressUsage(plannerResp, stepResults, extra...),
+	}
+}
+
+func workflowInterruptExecutionEvidence(
+	cfg workflowsExecutionConfig,
+	plannerResp *ModelResponse,
+	interrupt *workflowToolCallInterrupt,
+) ExecutionEvidence {
+	if interrupt == nil || interrupt.state == nil {
+		return workflowExecutionEvidence(cfg, plannerResp, nil)
+	}
+	results := append([]workflowStepResult(nil), interrupt.state.StepResults...)
+	if workflowToolPhase(interrupt.state) != workflowToolPhaseFinal && len(interrupt.state.CurrentStepResponses) > 0 {
+		results = append(results, workflowStepResult{responses: interrupt.state.CurrentStepResponses})
+	}
+	return workflowExecutionEvidence(cfg, plannerResp, results, interrupt.resp)
 }
 
 func (l *WorkflowsLooper) buildWorkflowPlan(
@@ -212,7 +277,7 @@ func (l *WorkflowsLooper) buildWorkflowPlan(
 		plan, err = buildStaticWorkflowPlan(cfg)
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, plannerResp, err
 	}
 	applyConfiguredWorkflowFinal(plan, cfg)
 	if validateErr := validateWorkflowPlan(plan, workerModels, cfg); validateErr != nil {
@@ -221,11 +286,11 @@ func (l *WorkflowsLooper) buildWorkflowPlan(
 			fallbackPlan := buildDynamicWorkflowFallbackPlan(workerModels, cfg)
 			applyConfiguredWorkflowFinal(fallbackPlan, cfg)
 			if fallbackErr := validateWorkflowPlan(fallbackPlan, workerModels, cfg); fallbackErr != nil {
-				return nil, nil, fallbackErr
+				return nil, plannerResp, fallbackErr
 			}
 			return fallbackPlan, plannerResp, nil
 		}
-		return nil, nil, validateErr
+		return nil, plannerResp, validateErr
 	}
 	return plan, plannerResp, nil
 }
@@ -245,227 +310,6 @@ func applyConfiguredWorkflowFinal(plan *workflowPlan, cfg workflowsExecutionConf
 	}
 }
 
-func (l *WorkflowsLooper) executeWorkflowSteps(
-	ctx context.Context,
-	req *Request,
-	cfg workflowsExecutionConfig,
-	plan *workflowPlan,
-	plannerResp *ModelResponse,
-	workerModels []string,
-) ([]workflowStepResult, *workflowToolCallInterrupt, error) {
-	results := make([]workflowStepResult, 0, len(plan.Steps))
-	var previous []workflowStepResult
-	for idx, step := range plan.Steps {
-		prompt := buildWorkflowStepPrompt(req.OriginalRequest, step, previous)
-		stepReq := appendFusionStageMessage(req.OriginalRequest, prompt)
-		responses, failed, interrupt, err := l.executeWorkflowStep(ctx, req, cfg, plan, step, stepReq, idx, 0, idx+2)
-		if err != nil {
-			return nil, nil, err
-		}
-		if interrupt != nil {
-			interrupt.state.Plan = plan
-			interrupt.state.PlannerResp = plannerResp
-			interrupt.state.WorkerModels = append([]string(nil), workerModels...)
-			interrupt.state.StepResults = append([]workflowStepResult(nil), previous...)
-			return nil, interrupt, nil
-		}
-		result := workflowStepResult{step: step, responses: responses, failed: failed}
-		results = append(results, result)
-		previous = append(previous, result)
-	}
-	return results, nil, nil
-}
-
-func (l *WorkflowsLooper) executeWorkflowStep(
-	ctx context.Context,
-	req *Request,
-	cfg workflowsExecutionConfig,
-	plan *workflowPlan,
-	step workflowPlanStep,
-	stepReq *openai.ChatCompletionNewParams,
-	stepIndex int,
-	modelStartIndex int,
-	iterationStart int,
-) ([]*ModelResponse, []FusionFailedModel, *workflowToolCallInterrupt, error) {
-	if requestHasTools(stepReq) {
-		return l.executeWorkflowStepSequential(ctx, req, cfg, plan, step, stepReq, stepIndex, modelStartIndex, iterationStart)
-	}
-	stepCtx, cancel := workflowRoundContext(ctx, cfg)
-	defer cancel()
-	models := step.Models[modelStartIndex:]
-	results := l.startWorkflowStepWorkers(stepCtx, req, cfg, stepReq, models, modelStartIndex, iterationStart)
-
-	collector := newWorkflowStepCollector(step, cfg, len(models), cancel)
-	for range models {
-		select {
-		case result := <-results:
-			responses, err, done := collector.handleResult(result)
-			if done {
-				return responses, collector.failed, nil, err
-			}
-		case <-stepCtx.Done():
-			responses, err := collector.handleTimeout(stepCtx.Err())
-			return responses, collector.failed, nil, err
-		}
-	}
-
-	responses, err := collector.finalize()
-	return responses, collector.failed, nil, err
-}
-
-func (l *WorkflowsLooper) startWorkflowStepWorkers(
-	stepCtx context.Context,
-	req *Request,
-	cfg workflowsExecutionConfig,
-	stepReq *openai.ChatCompletionNewParams,
-	models []string,
-	modelStartIndex int,
-	iterationStart int,
-) <-chan workflowModelResult {
-	results := make(chan workflowModelResult, len(models))
-	sem := make(chan struct{}, cfg.MaxParallel)
-	for idx, modelName := range models {
-		modelIndex := modelStartIndex + idx
-		go func(idx int, modelIndex int, modelName string) {
-			select {
-			case sem <- struct{}{}:
-			case <-stepCtx.Done():
-				results <- workflowModelResult{index: modelIndex, model: modelName, err: stepCtx.Err()}
-				return
-			}
-			defer func() { <-sem }()
-			resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, false, iterationStart+idx, req)
-			results <- workflowModelResult{index: modelIndex, model: modelName, resp: resp, err: err}
-		}(idx, modelIndex, modelName)
-	}
-	return results
-}
-
-type workflowStepCollector struct {
-	step          workflowPlanStep
-	cfg           workflowsExecutionConfig
-	minSuccessful int
-	cancel        context.CancelFunc
-	ordered       []*ModelResponse
-	failed        []FusionFailedModel
-}
-
-func newWorkflowStepCollector(
-	step workflowPlanStep,
-	cfg workflowsExecutionConfig,
-	modelCount int,
-	cancel context.CancelFunc,
-) *workflowStepCollector {
-	return &workflowStepCollector{
-		step:          step,
-		cfg:           cfg,
-		minSuccessful: workflowRoundMinSuccessful(modelCount, cfg.MinSuccessfulResponses),
-		cancel:        cancel,
-		ordered:       make([]*ModelResponse, len(step.Models)),
-		failed:        make([]FusionFailedModel, 0),
-	}
-}
-
-func (c *workflowStepCollector) handleResult(result workflowModelResult) ([]*ModelResponse, error, bool) {
-	if result.err != nil {
-		c.failed = append(c.failed, FusionFailedModel{Model: result.model, Error: result.err.Error()})
-		if c.cfg.OnError == config.WorkflowOnErrorFail {
-			return nil, fmt.Errorf("workflow step %q failed for model %q: %w", c.step.ID, result.model, result.err), true
-		}
-		return nil, nil, false
-	}
-	c.ordered[result.index] = result.resp
-	responses := c.responses()
-	if len(responses) < c.minSuccessful {
-		return nil, nil, false
-	}
-	c.cancel()
-	return responses, nil, true
-}
-
-func (c *workflowStepCollector) handleTimeout(err error) ([]*ModelResponse, error) {
-	responses := c.responses()
-	if len(responses) > 0 && c.cfg.OnError != config.WorkflowOnErrorFail {
-		logging.Warnf("[Workflows] Step %q timed out with %d partial responses; continuing because on_error=skip", c.step.ID, len(responses))
-		return responses, nil
-	}
-	return nil, err
-}
-
-func (c *workflowStepCollector) finalize() ([]*ModelResponse, error) {
-	responses := c.responses()
-	if len(responses) == 0 {
-		return nil, fmt.Errorf("workflow step %q failed: all models failed", c.step.ID)
-	}
-	return responses, nil
-}
-
-func (c *workflowStepCollector) responses() []*ModelResponse {
-	return workflowResponsesFromOrdered(c.ordered)
-}
-
-func (l *WorkflowsLooper) executeWorkflowStepSequential(
-	ctx context.Context,
-	req *Request,
-	cfg workflowsExecutionConfig,
-	plan *workflowPlan,
-	step workflowPlanStep,
-	stepReq *openai.ChatCompletionNewParams,
-	stepIndex int,
-	modelStartIndex int,
-	iterationStart int,
-) ([]*ModelResponse, []FusionFailedModel, *workflowToolCallInterrupt, error) {
-	stepCtx, cancel := workflowRoundContext(ctx, cfg)
-	defer cancel()
-	responses := make([]*ModelResponse, 0, len(step.Models)-modelStartIndex)
-	failed := make([]FusionFailedModel, 0)
-	for modelIndex := modelStartIndex; modelIndex < len(step.Models); modelIndex++ {
-		modelName := step.Models[modelIndex]
-		resp, err := l.callWorkflowModel(stepCtx, stepReq, cfg, modelName, true, iterationStart+(modelIndex-modelStartIndex), req)
-		if err != nil {
-			failed = append(failed, FusionFailedModel{Model: modelName, Error: err.Error()})
-			if stepCtx.Err() != nil && len(responses) > 0 && cfg.OnError != config.WorkflowOnErrorFail {
-				return responses, failed, nil, nil
-			}
-			if cfg.OnError == config.WorkflowOnErrorFail {
-				return nil, failed, nil, fmt.Errorf("workflow step %q failed for model %q: %w", step.ID, modelName, err)
-			}
-			continue
-		}
-		if resp.HasToolCalls {
-			return nil, failed, &workflowToolCallInterrupt{
-				resp: resp,
-				state: &workflowPendingToolState{
-					DecisionName:         req.DecisionName,
-					Mode:                 cfg.Mode,
-					Template:             cfg.Template,
-					Plan:                 plan,
-					OriginalRequest:      cloneRequest(req.OriginalRequest),
-					Phase:                workflowToolPhaseStep,
-					AgentID:              workflowAgentID(workflowToolPhaseStep, step, modelName, modelIndex),
-					StepID:               step.ID,
-					Role:                 step.Role,
-					AccessList:           append([]string(nil), step.AccessList...),
-					StepIndex:            stepIndex,
-					ModelIndex:           modelIndex,
-					Model:                modelName,
-					StepRequest:          cloneRequest(stepReq),
-					AgentRequest:         cloneRequest(stepReq),
-					CurrentStepResponses: append([]*ModelResponse(nil), responses...),
-					CurrentStepFailed:    append([]FusionFailedModel(nil), failed...),
-					Iteration:            iterationStart + (modelIndex - modelStartIndex),
-					Streaming:            req.IsStreaming,
-				},
-			}, nil
-		}
-		responses = append(responses, resp)
-	}
-	if len(responses) == 0 {
-		return nil, failed, nil, fmt.Errorf("workflow step %q failed: all models failed", step.ID)
-	}
-	return responses, failed, nil, nil
-}
-
 func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 	ctx context.Context,
 	req *Request,
@@ -480,9 +324,9 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 	if err != nil {
 		return nil, nil, err
 	}
-	outputContract := requestOutputContract(req.OriginalRequest, req.OutputContract)
+	outputContract := requestOutputContract(req.executionRequest, req.OutputContract)
 	prompt := buildWorkflowFinalPrompt(plan, original, outputContract, stepResults)
-	finalReq := appendFusionStageMessage(req.OriginalRequest, prompt)
+	finalReq := appendFusionStageMessage(req.executionRequest, prompt)
 	finalCtx, cancel := workflowRoundContext(ctx, cfg)
 	defer cancel()
 	resp, err := l.callWorkflowModel(finalCtx, finalReq, cfg, modelName, true, workflowFinalIteration(stepResults), req)
@@ -500,7 +344,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 				PlannerResp:     plannerResp,
 				WorkerModels:    append([]string(nil), workerModels...),
 				StepResults:     append([]workflowStepResult(nil), stepResults...),
-				OriginalRequest: cloneRequest(req.OriginalRequest),
+				SemanticRequest: cloneSemanticRequest(req.SemanticRequest),
 				Phase:           workflowToolPhaseFinal,
 				AgentID:         workflowAgentID(workflowToolPhaseFinal, workflowPlanStep{ID: "final", Role: "final"}, modelName, 0),
 				StepID:          "final",
@@ -512,6 +356,7 @@ func (l *WorkflowsLooper) synthesizeWorkflowFinal(
 				AgentRequest:    cloneRequest(finalReq),
 				Iteration:       workflowFinalIteration(stepResults),
 				Streaming:       req.IsStreaming,
+				IncludeUsage:    streamUsageRequested(req),
 			},
 		}, nil
 	}
@@ -609,7 +454,7 @@ func firstWorkflowResponseModel(stepResults []workflowStepResult) string {
 
 func workflowRoundContext(ctx context.Context, cfg workflowsExecutionConfig) (context.Context, context.CancelFunc) {
 	if cfg.RoundTimeoutSeconds <= 0 {
-		return ctx, func() {}
+		return context.WithCancel(ctx)
 	}
 	return context.WithTimeout(ctx, time.Duration(cfg.RoundTimeoutSeconds)*time.Second)
 }
@@ -680,7 +525,7 @@ func workflowSingleChoiceFallbackResponse(stepResults []workflowStepResult, spec
 func workflowFinalIteration(stepResults []workflowStepResult) int {
 	iteration := 2
 	for _, result := range stepResults {
-		iteration += len(result.responses) + len(result.failed)
+		iteration += len(result.usageResponses()) + len(result.failed)
 	}
 	return iteration
 }
@@ -711,5 +556,5 @@ func (l *WorkflowsLooper) callWorkflowModel(
 	if modelName == cfg.PlannerModel && cfg.PlannerMaxCompletionTokens > 0 {
 		callReq.MaxCompletionTokens = openai.Int(int64(cfg.PlannerMaxCompletionTokens))
 	}
-	return l.client.CallModel(ctx, callReq, modelName, false, iteration, nil, accessKeyForModel(baseReq, modelName))
+	return l.client.CallModel(ctx, callReq, modelName, false, iteration, nil)
 }

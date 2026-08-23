@@ -45,7 +45,7 @@ tool-mandated entrypoints. The executable allowlist is in
 
 - `cpu-local`: `make vllm-sr-dev`, then `vllm-sr serve --image-pull-policy never`
 - `amd-local`: `make vllm-sr-dev VLLM_SR_PLATFORM=amd`, then `vllm-sr serve --image-pull-policy never --platform amd`
-- `nvidia-local`: `VLLM_SR_PLATFORM=nvidia make vllm-sr-build`, then `vllm-sr serve --platform nvidia --config <recipe>` (selects the CUDA image + flips `use_cpu` to false, at parity with `--platform amd`; see [tools/agent/docs/nvidia-local.md](tools/agent/docs/nvidia-local.md))
+- `nvidia-local`: `VLLM_SR_PLATFORM=nvidia make vllm-sr-build`, then `vllm-sr serve --platform nvidia` (selects the CUDA image + flips `use_cpu` to false, at parity with `--platform amd`; see [tools/agent/docs/nvidia-local.md](tools/agent/docs/nvidia-local.md))
 - `ci-k8s`: `make e2e-test`
 
 ## Non-Negotiable Rules

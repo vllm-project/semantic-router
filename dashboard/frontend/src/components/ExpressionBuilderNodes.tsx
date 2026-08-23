@@ -139,7 +139,7 @@ const OperatorNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected })
         data.onDropOnNode(data.path, dragData)
       }
     },
-    [data]
+    [data],
   )
 
   const handleDoubleClick = useCallback(
@@ -147,7 +147,7 @@ const OperatorNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected })
       event.stopPropagation()
       data.onDoubleClick?.(data.path)
     },
-    [data]
+    [data],
   )
 
   const handleAddClick = useCallback(
@@ -155,7 +155,7 @@ const OperatorNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected })
       event.stopPropagation()
       data.onAddChild?.(data.path)
     },
-    [data]
+    [data],
   )
 
   const opNode = data.ruleNode as Exclude<RuleNode, { signalType: string }>
@@ -207,7 +207,7 @@ const SignalNodeComponent = memo<NodeProps<FlowNodeData>>(({ data, selected }) =
       event.stopPropagation()
       data.onDoubleClick?.(data.path)
     },
-    [data]
+    [data],
   )
 
   const node = data.ruleNode as { signalType: string; signalName: string }

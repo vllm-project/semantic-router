@@ -470,6 +470,13 @@ RUN cd src/semantic-router && \
         go build -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o ../../bin/router-onnx ./cmd; \
     fi
 
+# The managed schema migrator is a separate one-shot command, shipped in the
+# Router image so deployments do not need a second artifact or serve path.
+RUN cd src/semantic-router && \
+    CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" \
+    go build -buildvcs=false -ldflags="-w -s" \
+    -o ../../bin/access-migrate ./cmd/access-migrate
+
 # ============================================================================
 # Final stage: runtime image (candle on all platforms, onnx + openvino on amd64 only)
 # ============================================================================
@@ -489,14 +496,19 @@ WORKDIR /app
 
 # Copy generated router binaries (arm64 has router-candle only)
 COPY --from=go-builder /app/bin/ /app/
+COPY --from=go-builder /app/bin/access-migrate /usr/local/bin/access-migrate
 
 # Copy all shared libraries (candle, onnx, onnxruntime, ml, nlp, openvino) from staged directory
 COPY --from=go-builder /app/lib/ /app/lib/
 
 COPY config/config.yaml /app/config/
+COPY config/backend-egress-policy.yaml /app/config/backend-egress-policy.yaml
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/config/recipes/built-in/latest/mom-v1/config.yaml
+COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/config/recipes/built-in/latest/mom-v1/metadata.yaml
 
 ENV LD_LIBRARY_PATH=/app/lib
+ENV VLLM_SR_CONFIG_BASE_DIR=/app/config
 # Default to candle binding; set AI_BINDING=onnx or openvino for alternative backends
 ENV AI_BINDING=candle
 

@@ -78,7 +78,7 @@ func TestPrepareRouterRuntimeProbesRemoteEmbeddingProvider(t *testing.T) {
 	defer server.Close()
 	t.Setenv("REMOTE_EMBEDDING_API_KEY", "test-secret")
 	cfg := remoteEmbeddingRuntimeConfig(server.URL + "/v1")
-	cfg.EmbeddingModels.Endpoint.APIKeyEnv = "REMOTE_EMBEDDING_API_KEY"
+	cfg.Endpoint.APIKeyEnv = "REMOTE_EMBEDDING_API_KEY"
 
 	state, err := PrepareRouterRuntime(context.Background(), cfg, PrepareRouterRuntimeOptions{
 		Component:      "test-router",

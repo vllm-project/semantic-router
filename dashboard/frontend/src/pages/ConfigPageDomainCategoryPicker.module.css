@@ -73,6 +73,10 @@
 }
 
 .addButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   min-width: 5.5rem;
   padding: 0.7rem 0.9rem;
   border: none;
@@ -85,6 +89,13 @@
   transition:
     background-color var(--transition-fast),
     opacity var(--transition-fast);
+}
+
+.addButton svg,
+.removeButton svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
 }
 
 .addButton:hover:not(:disabled) {

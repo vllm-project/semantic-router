@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/json"
 	"fmt"
 	"net"
 	"os"
@@ -15,7 +14,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -107,7 +105,7 @@ func (r *OpenAIRouter) contextCompressionRecoveryStore(
 	}
 	storeType := strings.TrimSpace(cfg.Recovery.Store)
 	if storeType == "response_cache" {
-		storeType = strings.TrimSpace(r.Config.SemanticCache.BackendType)
+		storeType = strings.TrimSpace(r.Config.BackendType)
 	}
 	options, ok, err := recoveryRedisOptions(
 		r.Config,
@@ -148,10 +146,10 @@ func recoveryRedisOptions(
 ) (contextcompression.RedisRecoveryStoreOptions, bool, error) {
 	switch storeType {
 	case "redis":
-		if routerConfig.SemanticCache.Redis == nil {
+		if routerConfig.Redis == nil {
 			return contextcompression.RedisRecoveryStoreOptions{}, false, nil
 		}
-		connection := routerConfig.SemanticCache.Redis.Connection
+		connection := routerConfig.Redis.Connection
 		tlsConfig, err := recoveryTLSConfig(
 			connection.Host,
 			connection.TLS.Enabled,
@@ -171,10 +169,10 @@ func recoveryRedisOptions(
 			MaxTotalBytes: maxTotalBytes,
 		}, true, nil
 	case "valkey":
-		if routerConfig.SemanticCache.Valkey == nil {
+		if routerConfig.Valkey == nil {
 			return contextcompression.RedisRecoveryStoreOptions{}, false, nil
 		}
-		connection := routerConfig.SemanticCache.Valkey.Connection
+		connection := routerConfig.Valkey.Connection
 		tlsConfig, err := recoveryTLSConfig(
 			connection.Host,
 			connection.TLS.Enabled,
@@ -269,59 +267,17 @@ func compressionPolicyForRequest(
 	return policy
 }
 
-func contextCompressionCapabilities(
-	routerConfig *config.RouterConfig,
-	ctx *RequestContext,
-) contextcompression.ModelContextCapabilities {
-	model := strings.TrimSpace(ctx.VSRSelectedModel)
-	if model == "" {
-		model = strings.TrimSpace(ctx.RequestModel)
-	}
-	contextWindow := 0
-	if routerConfig != nil {
-		if params, ok := routerConfig.ModelConfig[model]; ok {
-			contextWindow = params.ContextWindowSize
-		}
-	}
-	requestedOutput := requestOutputTokens(ctx.workingRequestBody())
-	return contextcompression.ModelContextCapabilities{
-		ContextWindow:   contextWindow,
-		RequestedOutput: requestedOutput,
-	}
-}
-
-func requestOutputTokens(body []byte) int {
-	var request map[string]interface{}
-	if err := json.Unmarshal(body, &request); err != nil {
-		return 0
-	}
-	for _, field := range []string{"max_completion_tokens", "max_tokens"} {
-		switch value := request[field].(type) {
-		case float64:
-			return int(value)
-		case json.Number:
-			parsed, _ := strconv.Atoi(string(value))
-			return parsed
-		}
-	}
-	return 0
-}
-
 func (r *OpenAIRouter) contextCompressionScope(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
 	}
-	userHeader := headers.AuthzUserID
-	if r != nil && r.Config != nil {
-		userHeader = r.Config.Authz.Identity.GetUserIDHeader()
-	}
-	user := headerValueCI(ctx, userHeader)
+	user := cacheScopeUserID(ctx)
 	namespace := cache.UserScopeNamespace(user)
 	if namespace == "" || ctx.RequestID == "" {
 		return ""
 	}
 	return cache.CombineFingerprints(
-		string(ctx.Routing.RecipeName()),
+		string(ctx.Routing.RuntimeScope()),
 		ctx.VSRSelectedDecisionName,
 		namespace,
 		ctx.RequestID,

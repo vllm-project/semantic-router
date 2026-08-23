@@ -36,9 +36,7 @@ export function getMlpHiddenLayersError(value: string): string | null {
     const size = Number(item)
     return !Number.isInteger(size) || size <= 0
   })
-  return invalidIndex >= 0
-    ? `Hidden layer ${invalidIndex + 1} must be a positive integer.`
-    : null
+  return invalidIndex >= 0 ? `Hidden layer ${invalidIndex + 1} must be a positive integer.` : null
 }
 
 export function getDecisionEntriesError(decisions: readonly DecisionEntry[]): string | null {

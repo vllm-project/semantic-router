@@ -23,6 +23,48 @@ from cli.container_backend import ContainerBackend  # noqa: E402
 from cli.deployment_backend import DEFAULT_TARGET, resolve_target  # noqa: E402
 from cli.runtime_lifecycle_lock import RuntimeLifecycleLockError  # noqa: E402
 
+
+def _standalone_model_config(
+    connection_overrides: dict[str, object] | None = None,
+) -> dict[str, object]:
+    connection: dict[str, object] = {
+        "provider": "openai-compatible",
+        "model": "demo-model",
+    }
+    connection.update(connection_overrides or {})
+    return {
+        "version": "v0.4",
+        "models": [
+            {
+                "name": "demo-model",
+                "card": {},
+                "connections": [connection],
+            }
+        ],
+        "recipes": [],
+        "entrypoints": [],
+        "global": {
+            "services": {
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
+                }
+            }
+        },
+    }
+
+
+def _standalone_credential_config(definition: dict[str, object]) -> dict[str, object]:
+    config = _standalone_model_config({"credential": "private-provider"})
+    global_config = config["global"]
+    assert isinstance(global_config, dict)
+    services = global_config["services"]
+    assert isinstance(services, dict)
+    services["backend_credentials"] = {
+        "private-provider": definition,
+    }
+    return config
+
+
 # ---------------------------------------------------------------------------
 # resolve_target
 # ---------------------------------------------------------------------------
@@ -69,11 +111,11 @@ class TestContainerBackend:
         )
 
         backend = ContainerBackend()
-        runtime_lock = object()
+        compiled_bootstrap_lock = object()
         backend.deploy(
             config_file="/tmp/config.yaml",
             source_config_file="/tmp/source-config.yaml",
-            runtime_config_file="/tmp/runtime-config.yaml",
+            compiled_bootstrap_file="/tmp/compiled-bootstrap.yaml",
             env_vars={"A": "B"},
             image="test:img",
             router_image="test:router",
@@ -83,11 +125,11 @@ class TestContainerBackend:
             topology="split",
             pull_policy="always",
             enable_observability=False,
-            runtime_config_lock=runtime_lock,
+            compiled_bootstrap_lock=compiled_bootstrap_lock,
         )
 
         assert captured["source_config_file"] == "/tmp/source-config.yaml"
-        assert captured["runtime_config_file"] == "/tmp/runtime-config.yaml"
+        assert captured["compiled_bootstrap_file"] == "/tmp/compiled-bootstrap.yaml"
         assert captured["image"] == "test:img"
         assert captured["router_image"] == "test:router"
         assert captured["envoy_image"] == "test:envoy"
@@ -96,7 +138,7 @@ class TestContainerBackend:
         assert captured["topology"] == "split"
         assert captured["pull_policy"] == "always"
         assert captured["enable_observability"] is False
-        assert captured["runtime_config_lock"] is runtime_lock
+        assert captured["compiled_bootstrap_lock"] is compiled_bootstrap_lock
         lifecycle_lock.__enter__.assert_called_once_with()
         lifecycle_lock.__exit__.assert_called_once()
 
@@ -273,32 +315,60 @@ class TestConfigTranslator:
         assert disabled["dependencies"]["observability"]["jaeger"]["enabled"] is False
 
     def test_config_sections_pass_through(self, tmp_path):
-        config = tmp_path / "config.yaml"
-        config.write_text(
-            yaml.safe_dump(
+        source = {
+            "version": "v0.4",
+            "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
+            "models": [
                 {
-                    "version": "v0.3",
-                    "listeners": [{"port": 8899}],
-                    "providers": {"models": [{"name": "provider-model"}]},
-                    "routing": {"decisions": [{"name": "default"}]},
-                    "recipes": [{"name": "custom-recipe"}],
-                    "global": {
-                        "services": {"management_api": {"auth": {"mode": "bearer"}}}
+                    "name": "provider-model",
+                    "card": {"capabilities": ["chat"]},
+                    "connections": [
+                        {
+                            "provider": "openai-compatible",
+                            "endpoint": "https://models.example.test/v1",
+                            "model": "provider-model",
+                        }
+                    ],
+                }
+            ],
+            "recipes": [
+                {
+                    "name": "custom-recipe",
+                    "document": {
+                        "decisions": [
+                            {
+                                "name": "default",
+                                "description": "Default route.",
+                                "priority": 100,
+                            }
+                        ]
                     },
                 }
-            )
-        )
+            ],
+            "entrypoints": [
+                {
+                    "name": "custom-model",
+                    "recipe": "custom-recipe",
+                    "assignments": {
+                        "default": {"models": [{"model": "provider-model"}]}
+                    },
+                }
+            ],
+            "global": {
+                "services": {
+                    "backend_egress": {
+                        "policy_file": "/app/config/backend-egress-policy.yaml"
+                    },
+                    "management_api": {"auth": {"mode": "bearer"}},
+                }
+            },
+        }
+        config = tmp_path / "config.yaml"
+        config.write_text(yaml.safe_dump(source))
 
         values = translate_config_to_helm_values(str(config))
         override = values["configOverride"]
-        assert override["version"] == "v0.3"
-        assert override["listeners"] == [{"port": 8899}]
-        assert override["providers"]["models"] == [{"name": "provider-model"}]
-        assert override["routing"]["decisions"] == [{"name": "default"}]
-        assert override["recipes"] == [{"name": "custom-recipe"}]
-        assert (
-            override["global"]["services"]["management_api"]["auth"]["mode"] == "bearer"
-        )
+        assert override == source
 
     @pytest.mark.parametrize("config_document", [None, {}, [], "not-a-mapping"])
     def test_empty_or_non_mapping_config_fails_closed(self, tmp_path, config_document):
@@ -347,97 +417,72 @@ class TestConfigTranslator:
         self, tmp_path, config_document, expected_path
     ):
         canary = "literal-config-secret-canary"
-        model = yaml.safe_load(
+        connection = yaml.safe_load(
             yaml.safe_dump(config_document).replace("canary", canary)
         )
         config = tmp_path / "config.yaml"
         config.write_text(
-            yaml.safe_dump(
-                {
-                    "version": "v0.3",
-                    "providers": {"models": [model]},
-                }
-            ),
+            yaml.safe_dump(_standalone_model_config(connection)),
             encoding="utf-8",
         )
 
         with pytest.raises(ValueError, match="Kubernetes Router credential") as exc:
             translate_config_to_helm_values(str(config))
 
-        assert f"providers.models[0].{expected_path}" in str(exc.value)
+        assert f"models[0].connections[0].{expected_path}" in str(exc.value)
         assert canary not in str(exc.value)
 
-    def test_environment_backed_and_empty_router_credentials_are_allowed(
-        self, tmp_path
-    ):
+    def test_named_environment_backed_router_credentials_are_allowed(self, tmp_path):
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                {
-                    "version": "v0.3",
-                    "listeners": [
-                        {
-                            "name": "public",
-                            "port": 8000,
-                            "api_keys": ["${LISTENER_API_KEY}"],
-                        }
-                    ],
-                    "providers": {
-                        "models": [
-                            {"api_key": "${MODEL_API_KEY}"},
-                            {"password": ""},
-                            {"auth_token": None},
-                            {
-                                "api_key_env": "MODEL_API_KEY",
-                                "auth_header": "Authorization",
-                                "key_file": "/run/keys/public.pem",
-                                "max_tokens": 128,
-                                "headers": {
-                                    "Authorization": "${AUTHORIZATION_HEADER}",
-                                    "X-Tenant": "public-tenant",
-                                },
-                                "endpoint": "https://example.test/v1?version=1",
-                            },
-                        ]
-                    },
-                }
+                _standalone_credential_config(
+                    {
+                        "credential_adapter_id": "bearer",
+                        "secret_env": "MODEL_API_KEY",
+                    }
+                )
             ),
             encoding="utf-8",
         )
 
         values = translate_config_to_helm_values(str(config))
 
-        assert values["configOverride"]["providers"]["models"][0]["api_key"] == (
-            "${MODEL_API_KEY}"
+        override = values["configOverride"]
+        assert override["models"][0]["connections"][0]["credential"] == (
+            "private-provider"
+        )
+        assert (
+            override["global"]["services"]["backend_credentials"]["private-provider"][
+                "secret_env"
+            ]
+            == "MODEL_API_KEY"
         )
 
     @pytest.mark.parametrize(
-        ("credential_config", "expected_path"),
+        "environment_name",
         [
-            ({"api_key_env": "lowercase_name"}, "api_key_env"),
-            ({"api_key_env": "HOME"}, "api_key_env"),
-            ({"api_key_env": " MODEL_API_KEY "}, "api_key_env"),
-            ({"api_key_env": {"value": "MODEL_API_KEY"}}, "api_key_env"),
-            ({"api_key_env": ["MODEL_API_KEY"]}, "api_key_env"),
-            ({"api_key_env": 42}, "api_key_env"),
-            ({"api_key": "${PATH}"}, "api_key"),
-            (
-                {"headers": {"Authorization": "${HOME}"}},
-                "headers.Authorization",
-            ),
-            ({"api_keys": ["${PATH}"]}, "api_keys[0]"),
+            "lowercase_name",
+            "HOME",
+            " MODEL_API_KEY ",
+            {"value": "MODEL_API_KEY"},
+            ["MODEL_API_KEY"],
+            42,
+            "${PATH}",
         ],
     )
     def test_credential_environment_names_are_uppercase_and_non_reserved(
-        self, tmp_path, credential_config, expected_path
+        self, tmp_path, environment_name
     ):
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                {
-                    "version": "v0.3",
-                    "providers": {"models": [credential_config]},
-                }
+                _standalone_credential_config(
+                    {
+                        "credential_adapter_id": "bearer",
+                        "secret_env": environment_name,
+                    }
+                )
             ),
             encoding="utf-8",
         )
@@ -445,35 +490,10 @@ class TestConfigTranslator:
         with pytest.raises(ValueError, match="uppercase, non-reserved") as exc:
             translate_config_to_helm_values(str(config))
 
-        assert f"providers.models[0].{expected_path}" in str(exc.value)
-        assert "lowercase_name" not in str(exc.value)
-
-    def test_listener_api_key_collection_requires_environment_references(
-        self, tmp_path
-    ):
-        canary = "listener-secret-canary"
-        config = tmp_path / "config.yaml"
-        config.write_text(
-            yaml.safe_dump(
-                {
-                    "version": "v0.3",
-                    "listeners": [
-                        {
-                            "name": "public",
-                            "address": "0.0.0.0",
-                            "port": 8000,
-                            "api_keys": ["${LISTENER_API_KEY}", canary],
-                        }
-                    ],
-                }
-            ),
-            encoding="utf-8",
+        assert "global.services.backend_credentials.private-provider.secret_env" in str(
+            exc.value
         )
-
-        with pytest.raises(ValueError, match=r"listeners\[0\]\.api_keys\[1\]") as exc:
-            translate_config_to_helm_values(str(config))
-
-        assert canary not in str(exc.value)
+        assert "lowercase_name" not in str(exc.value)
 
     @pytest.mark.parametrize(
         "credential",
@@ -489,11 +509,24 @@ class TestConfigTranslator:
     ):
         config = tmp_path / "config.yaml"
         config.write_text(
-            yaml.safe_dump({"version": "v0.3", "api_key": credential}),
+            yaml.safe_dump(
+                _standalone_credential_config(
+                    {
+                        "credential_adapter_id": "bearer",
+                        "secret_env": credential,
+                    }
+                )
+            ),
             encoding="utf-8",
         )
 
-        with pytest.raises(ValueError, match=r"config\.api_key") as exc:
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"config\.global\.services\.backend_credentials\."
+                r"private-provider\.secret_env"
+            ),
+        ) as exc:
             translate_config_to_helm_values(str(config))
 
         assert "fallback" not in str(exc.value)
@@ -543,14 +576,20 @@ class TestConfigTranslator:
         assert "OPENAI_API_KEY" not in names, "Sensitive var leaked into plain env"
         assert "HF_ENDPOINT" in names, "Non-sensitive var should be in plain env"
 
-    def test_config_named_api_key_excluded_from_plain_env(self, tmp_path):
-        """A key named only by api_key_env is still a credential and must not be inlined."""
+    def test_config_named_backend_secret_excluded_from_plain_env(self, tmp_path):
+        """A standalone named credential must never be copied into plain values."""
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
                 {
                     "listeners": [],
-                    "providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]},
+                    "global": {
+                        "services": {
+                            "backend_credentials": {
+                                "private_provider": {"secret_env": "GEMINI_API_KEY"}
+                            }
+                        }
+                    },
                 }
             )
         )
@@ -590,16 +629,23 @@ class TestConfigTranslator:
         self, tmp_path
     ):
         """A name discovered from the source config must stay masked even if the
-        effective config (algorithm/platform rewrite) no longer contains it."""
+        effective config no longer contains it."""
         source_config = tmp_path / "config.yaml"
         source_config.write_text(
             yaml.safe_dump(
-                {"providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]}}
+                {
+                    "global": {
+                        "services": {
+                            "backend_credentials": {
+                                "private_provider": {"secret_env": "GEMINI_API_KEY"}
+                            }
+                        }
+                    }
+                }
             )
         )
-        # Simulates resolve_effective_config_path writing a rewritten copy that
-        # dropped the api_key_env reference.
-        effective_config = tmp_path / ".vllm-sr" / "runtime-config.yaml"
+        # Simulates compilation dropping a named credential reference.
+        effective_config = tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
         effective_config.parent.mkdir(parents=True, exist_ok=True)
         effective_config.write_text(yaml.safe_dump({"listeners": []}))
 

@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli.bootstrap import build_bootstrap_config
 from cli.commands.runtime_support import resolve_effective_config_path
 from cli.runtime_stack import resolve_runtime_stack
 from cli.service_defaults import (
@@ -24,13 +23,13 @@ def write_local_looper_config(tmp_path: Path):
         config_path.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.4",
                     "listeners": [
                         {
                             "name": "http-generic",
                             "address": "0.0.0.0",
                             "port": 9011,
-                        }
+                        },
                     ],
                     "global": {"integrations": {"looper": looper}},
                 },
@@ -49,7 +48,7 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [
                     {
                         "name": "http-8899",
@@ -64,18 +63,17 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
-    assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
+    assert effective_path == tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     effective = yaml.safe_load(effective_path.read_text())
     response_api = effective["global"]["services"]["response_api"]
     assert response_api["enabled"] is True
-    assert response_api["store_backend"] == "redis"
-    assert response_api["redis"]["address"] == "vllm-sr-redis:6379"
-    assert response_api["redis"]["db"] == 0
+    assert response_api == {
+        "enabled": True,
+        "store_backend": "memory",
+    }
 
     router_replay = effective["global"]["services"]["router_replay"]
     assert router_replay == {
@@ -95,7 +93,7 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [{"name": "public", "address": "0.0.0.0", "port": 8899}],
                 "global": {
                     "services": {
@@ -112,8 +110,6 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
@@ -143,8 +139,6 @@ def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
@@ -164,8 +158,6 @@ def test_resolve_effective_config_path_preserves_external_looper_endpoint(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
@@ -175,27 +167,11 @@ def test_resolve_effective_config_path_preserves_external_looper_endpoint(
     )
 
 
-def test_resolve_effective_config_path_preserves_setup_mode_bootstrap_config(
-    tmp_path: Path,
-):
-    config_path = tmp_path / "config.yaml"
-    config_path.write_text(yaml.safe_dump(build_bootstrap_config(), sort_keys=False))
-
-    effective_path = resolve_effective_config_path(
-        config_path=config_path,
-        algorithm=None,
-        setup_mode=True,
-        platform=None,
-    )
-
-    assert effective_path == config_path
-
-
 def test_target_neutral_config_skips_all_local_runtime_materialization(
     tmp_path: Path, monkeypatch
 ):
     source = {
-        "version": "v0.3",
+        "version": "v0.4",
         "listeners": [{"name": "http", "port": 8899}],
         "global": {
             "services": {},
@@ -216,8 +192,6 @@ def test_target_neutral_config_skips_all_local_runtime_materialization(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
         materialize_local_runtime=False,
     )
@@ -234,14 +208,18 @@ def test_generated_runtime_config_references_credentials_instead_of_carrying_the
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
                 "global": {
                     "services": {
+                        "response_api": {
+                            "enabled": True,
+                            "store_backend": "redis",
+                        },
                         "router_replay": {
                             "enabled": True,
                             "store_backend": "postgres",
-                        }
+                        },
                     }
                 },
             },
@@ -251,8 +229,6 @@ def test_generated_runtime_config_references_credentials_instead_of_carrying_the
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
@@ -270,7 +246,7 @@ def test_local_backend_defaults_skip_an_externally_hosted_endpoint():
     external_redis = "redis.external.example:6379"
     external_postgres = "postgres.external.example"
     config = {
-        "version": "v0.3",
+        "version": "v0.4",
         "global": {
             "services": {
                 "response_api": {
@@ -300,7 +276,7 @@ def test_local_backend_defaults_skip_an_externally_hosted_endpoint():
 def test_vector_store_metadata_defaults_skip_an_externally_hosted_postgres():
     metadata = {"host": "postgres.external.example", "password": "operator-owned"}
     config = {
-        "version": "v0.3",
+        "version": "v0.4",
         "global": {
             "stores": {
                 "response_cache": {"enabled": False},
@@ -328,7 +304,7 @@ def test_managed_metadata_postgres_credential_is_replaced_with_the_placeholder()
     """
 
     config = {
-        "version": "v0.3",
+        "version": "v0.4",
         "global": {
             "stores": {
                 "response_cache": {"enabled": False},
@@ -350,7 +326,7 @@ def test_managed_metadata_postgres_credential_is_replaced_with_the_placeholder()
 def test_managed_credential_field_is_overwritten_and_reported(caplog):
     stale_password = "router-secret"
     config = {
-        "version": "v0.3",
+        "version": "v0.4",
         "global": {
             "services": {
                 "response_api": {
@@ -379,7 +355,7 @@ def test_managed_credential_field_is_overwritten_and_reported(caplog):
 
 def test_managed_credential_placeholder_is_reapplied_without_a_warning(caplog):
     config = {
-        "version": "v0.3",
+        "version": "v0.4",
         "global": {
             "services": {
                 "response_api": {

@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
 
 // AuthzResult represents the result of authz signal classification.
@@ -26,13 +27,13 @@ type normalizedBinding struct {
 }
 
 type normalizedSubject struct {
-	kind string // "user" or "group" (already lowercased)
+	kind string // "user", "team", or "group" (already lowercased)
 	name string // already trimmed
 }
 
-// AuthzClassifier evaluates user identity and group membership against RBAC role bindings.
-// It follows the Kubernetes RoleBinding pattern:
-//   - Subject  → user ID + groups (from auth backend: Authorino, Envoy Gateway JWT, etc.)
+// AuthzClassifier evaluates authenticated TenantContext facts against routing
+// role bindings. These roles affect routing only and grant no access permission.
+//   - Subject  → user ID, team ID, or a compiled routing-claim membership
 //   - Role     → RoleBinding.Role (emitted as the signal name)
 //   - Permission → decision engine modelRefs (not this classifier's concern)
 type AuthzClassifier struct {
@@ -48,7 +49,7 @@ type AuthzClassifier struct {
 //   - Binding name must be unique across all bindings
 //   - Role must not be empty
 //   - At least one subject must be specified
-//   - Each subject must have kind "User" or "Group" (case-insensitive)
+//   - Each subject must have kind "User", "Team", or "Group" (case-insensitive)
 //   - Each subject must have a non-empty name (whitespace-only is rejected)
 //
 // Normalizes at startup:
@@ -74,7 +75,7 @@ func NewAuthzClassifier(bindings []config.RoleBinding) (*AuthzClassifier, error)
 		}
 		if len(rb.Subjects) == 0 {
 			return nil, fmt.Errorf("role_bindings: binding %q has no subjects — "+
-				"add at least one subject with kind User or Group", rb.Name)
+				"add at least one subject with kind User, Team, or Group", rb.Name)
 		}
 
 		nb := normalizedBinding{
@@ -85,14 +86,13 @@ func NewAuthzClassifier(bindings []config.RoleBinding) (*AuthzClassifier, error)
 
 		for i, s := range rb.Subjects {
 			kind := strings.ToLower(strings.TrimSpace(s.Kind))
-			if kind != "user" && kind != "group" {
+			if kind != "user" && kind != "team" && kind != "group" {
 				return nil, fmt.Errorf("role_bindings: binding %q subject[%d] has invalid kind %q — "+
-					"must be \"User\" or \"Group\"", rb.Name, i, s.Kind)
+					"must be \"User\", \"Team\", or \"Group\"", rb.Name, i, s.Kind)
 			}
 			name := strings.TrimSpace(s.Name)
 			if name == "" {
-				return nil, fmt.Errorf("role_bindings: binding %q subject[%d] (kind: %s) has empty name — "+
-					"the name must match the value your auth backend injects in the identity headers (configured via authz.identity)",
+				return nil, fmt.Errorf("role_bindings: binding %q subject[%d] (kind: %s) has empty name",
 					rb.Name, i, s.Kind)
 			}
 			nb.subjects = append(nb.subjects, normalizedSubject{kind: kind, name: name})
@@ -104,27 +104,24 @@ func NewAuthzClassifier(bindings []config.RoleBinding) (*AuthzClassifier, error)
 	return &AuthzClassifier{bindings: normalized}, nil
 }
 
-// Classify evaluates the RBAC role bindings against the user identity and groups.
+// Classify evaluates role bindings against authenticated routing identity.
 //
 // Match logic: a binding matches if ANY of its subjects match:
-//   - kind: "user"  → matches if subject.name == userID
-//   - kind: "group" → matches if subject.name is in userGroups
+//   - kind: "user"  → matches the TenantContext user
+//   - kind: "team"  → matches the TenantContext team
+//   - kind: "group" → matches a string claim value or a true boolean claim name
 //
 // When a binding matches, its role is emitted as the signal name.
 // Multiple bindings can match. If multiple bindings grant the same role, it is deduplicated.
-//
-// Returns an error if userID is empty and role bindings are configured — this prevents
-// silent bypass when ext_authz fails to inject the user identity header.
-func (c *AuthzClassifier) Classify(userID string, userGroups []string) (*AuthzResult, error) {
+func (c *AuthzClassifier) Classify(identity TrustedRoutingIdentity) (*AuthzResult, error) {
 	if len(c.bindings) == 0 {
 		return &AuthzResult{}, nil
 	}
 
-	if userID == "" {
-		return nil, fmt.Errorf("authz signal: user identity header is empty but %d role_bindings are configured — "+
-			"ensure your auth backend injects the user identity header (check authz.identity.user_id_header config); "+
-			"refusing to evaluate without user identity (no silent bypass allowed)", len(c.bindings))
+	if identity.UserID == "" && identity.TeamID == "" && len(identity.Claims) == 0 {
+		return nil, fmt.Errorf("authz signal requires an authenticated TenantContext when %d role_bindings are configured", len(c.bindings))
 	}
+	groups := trustedClaimMemberships(identity.Claims)
 
 	// Deduplicate roles (multiple bindings can grant the same role)
 	roleSet := make(map[string]bool)
@@ -137,19 +134,19 @@ func (c *AuthzClassifier) Classify(userID string, userGroups []string) (*AuthzRe
 			// Kind and Name are already normalized at startup — no runtime normalization needed
 			switch s.kind {
 			case "user":
-				if s.name == userID {
+				if s.name == identity.UserID {
 					matched = true
-					logging.Infof("[Authz Signal] Binding %q matched: subject User %q == user ID %q → role %q",
-						rb.name, s.name, userID, rb.role)
+					logging.Infof("[Authz Signal] Binding %q matched authenticated User → role %q", rb.name, rb.role)
+				}
+			case "team":
+				if s.name == identity.TeamID {
+					matched = true
+					logging.Infof("[Authz Signal] Binding %q matched authenticated Team → role %q", rb.name, rb.role)
 				}
 			case "group":
-				for _, ug := range userGroups {
-					if s.name == ug {
-						matched = true
-						logging.Infof("[Authz Signal] Binding %q matched: subject Group %q in user groups → role %q",
-							rb.name, s.name, rb.role)
-						break
-					}
+				if _, ok := groups[s.name]; ok {
+					matched = true
+					logging.Infof("[Authz Signal] Binding %q matched trusted claim membership → role %q", rb.name, rb.role)
 				}
 			default:
 				// Cannot happen: NewAuthzClassifier validates kind at startup.
@@ -169,9 +166,9 @@ func (c *AuthzClassifier) Classify(userID string, userGroups []string) (*AuthzRe
 	}
 
 	if len(matchedRoles) == 0 {
-		logging.Infof("[Authz Signal] No roles matched for user %q (groups: %v)", userID, userGroups)
+		logging.Infof("[Authz Signal] No routing roles matched authenticated identity")
 	} else {
-		logging.Infof("[Authz Signal] Matched %d roles for user %q: %v", len(matchedRoles), userID, matchedRoles)
+		logging.Infof("[Authz Signal] Matched %d routing roles: %v", len(matchedRoles), matchedRoles)
 	}
 
 	return &AuthzResult{
@@ -179,19 +176,19 @@ func (c *AuthzClassifier) Classify(userID string, userGroups []string) (*AuthzRe
 	}, nil
 }
 
-// ParseUserGroups parses a comma-separated groups header value into a slice of group names.
-// Whitespace around group names is trimmed. Empty strings are excluded.
-func ParseUserGroups(headerValue string) []string {
-	if headerValue == "" {
-		return nil
-	}
-	parts := strings.Split(headerValue, ",")
-	var groups []string
-	for _, p := range parts {
-		g := strings.TrimSpace(p)
-		if g != "" {
-			groups = append(groups, g)
+func trustedClaimMemberships(claims map[string]routingsnapshot.ClaimValue) map[string]struct{} {
+	result := make(map[string]struct{})
+	for name, value := range claims {
+		switch value.Kind {
+		case "string":
+			if member := strings.TrimSpace(value.String); member != "" {
+				result[member] = struct{}{}
+			}
+		case "boolean":
+			if value.Boolean {
+				result[name] = struct{}{}
+			}
 		}
 	}
-	return groups
+	return result
 }

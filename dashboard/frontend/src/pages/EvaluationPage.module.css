@@ -159,7 +159,8 @@
 }
 
 .tabIcon {
-  font-size: 16px;
+  width: 15px;
+  height: 15px;
 }
 
 .tabLabel {
@@ -168,4 +169,20 @@
 
 .tabContent {
   flex: 1;
+}
+.backButton,
+.errorBanner button,
+.asyncState button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.backButton > svg,
+.errorBanner button > svg,
+.asyncState button > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }

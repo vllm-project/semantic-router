@@ -14,9 +14,9 @@ import type { BoolExprNode, DSLFieldObject, DSLFieldValue } from '@/types/dsl'
 // ---------- Block finding ----------
 
 interface BlockSpan {
-  start: number  // char index of block start (e.g., "SIGNAL keyword ...")
-  end: number    // char index after closing brace + newline
-  body: string   // the full block text
+  start: number // char index of block start (e.g., "SIGNAL keyword ...")
+  end: number // char index after closing brace + newline
+  body: string // the full block text
 }
 
 /**
@@ -94,11 +94,7 @@ export function findBlock(
 /**
  * Update a top-level MODEL declaration's fields.
  */
-export function updateModel(
-  src: string,
-  name: string,
-  fields: DSLFieldObject,
-): string {
+export function updateModel(src: string, name: string, fields: DSLFieldObject): string {
   const block = findBlock(src, 'MODEL', null, name)
   if (!block) return src
 
@@ -110,11 +106,7 @@ export function updateModel(
 /**
  * Add a new top-level MODEL declaration.
  */
-export function addModel(
-  src: string,
-  name: string,
-  fields: DSLFieldObject,
-): string {
+export function addModel(src: string, name: string, fields: DSLFieldObject): string {
   const body = serializeFields(fields)
   const newBlock = `MODEL ${formatDslName(name)} {\n${body}\n}\n`
 
@@ -166,13 +158,24 @@ export function deleteModel(src: string, name: string): string {
  * Serialize a signal's fields to DSL block body text.
  * Supports recursive indentation to match Go decompiler output format.
  */
-export function serializeFields(fields: DSLFieldObject, indent = '  ', opts?: { blankLineBefore?: boolean }): string {
+export function serializeFields(
+  fields: DSLFieldObject,
+  indent = '  ',
+  opts?: { blankLineBefore?: boolean },
+): string {
   const lines: string[] = []
-  const entries = Object.entries(fields).filter(([, v]) => v !== undefined && v !== null) as Array<[string, DSLFieldValue]>
+  const entries = Object.entries(fields).filter(([, v]) => v !== undefined && v !== null) as Array<
+    [string, DSLFieldValue]
+  >
   for (const [key, value] of entries) {
     const serialized = serializeValue(value, indent)
     // Add blank line before nested object blocks (matches Go decompiler)
-    if (opts?.blankLineBefore && typeof value === 'object' && !Array.isArray(value) && value !== null) {
+    if (
+      opts?.blankLineBefore &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      value !== null
+    ) {
       lines.push('')
     }
     lines.push(`${indent}${key}: ${serialized}`)
@@ -203,16 +206,20 @@ function serializeValue(value: DSLFieldValue, currentIndent = '  '): string {
   if (value === null) return 'null'
   if (Array.isArray(value)) {
     if (value.length === 0) return '[]'
-    const simple = value.every(v => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+    const simple = value.every(
+      (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean',
+    )
     if (simple) {
-      return `[${value.map(v => serializeValue(v, currentIndent)).join(', ')}]`
+      return `[${value.map((v) => serializeValue(v, currentIndent)).join(', ')}]`
     }
     const childIndent = currentIndent + '  '
-    const items = value.map(v => `${childIndent}${serializeValue(v, childIndent)}`).join(',\n')
+    const items = value.map((v) => `${childIndent}${serializeValue(v, childIndent)}`).join(',\n')
     return `[\n${items}\n${currentIndent}]`
   }
   if (isDSLFieldObject(value)) {
-    const entries = Object.entries(value).filter(([, v]) => v !== undefined && v !== null) as Array<[string, DSLFieldValue]>
+    const entries = Object.entries(value).filter(([, v]) => v !== undefined && v !== null) as Array<
+      [string, DSLFieldValue]
+    >
     if (entries.length === 0) return '{}'
     // Inline small flat objects (≤3 leaf fields, all primitive) — matches Go decompiler style
     const leafCount = countLeafFields(value)
@@ -296,19 +303,12 @@ export function deleteSignal(src: string, signalType: string, name: string): str
   return result
 }
 
-function buildNamedBlock(
-  header: string,
-  fields: DSLFieldObject,
-): string {
+function buildNamedBlock(header: string, fields: DSLFieldObject): string {
   const body = serializeFields(fields)
   return `${header} {\n${body}\n}\n`
 }
 
-function insertAfterLastBlock(
-  src: string,
-  patterns: RegExp[],
-  newBlock: string,
-): string {
+function insertAfterLastBlock(src: string, patterns: RegExp[], newBlock: string): string {
   for (const pattern of patterns) {
     let lastMatch: RegExpExecArray | null = null
     let match: RegExpExecArray | null
@@ -339,16 +339,13 @@ export function updateProjectionPartition(
   return src.slice(0, block.start) + newBlock + src.slice(block.end)
 }
 
-export function addProjectionPartition(
-  src: string,
-  name: string,
-  fields: DSLFieldObject,
-): string {
+export function addProjectionPartition(src: string, name: string, fields: DSLFieldObject): string {
   const newBlock = buildNamedBlock(`PROJECTION partition ${formatDslName(name)}`, fields)
-  return insertAfterLastBlock(src, [
-    /^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
-    /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
-  ], newBlock)
+  return insertAfterLastBlock(
+    src,
+    [/^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm, /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm],
+    newBlock,
+  )
 }
 
 export function deleteProjectionPartition(src: string, name: string): string {
@@ -378,10 +375,11 @@ export function addProjection(
   fields: DSLFieldObject,
 ): string {
   const newBlock = buildNamedBlock(`PROJECTION ${kind} ${formatDslName(name)}`, fields)
-  return insertAfterLastBlock(src, [
-    /^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
-    /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm,
-  ], newBlock)
+  return insertAfterLastBlock(
+    src,
+    [/^PROJECTION\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm, /^SIGNAL\s+\S+\s+(?:"[^"]+"|\S+)\s*\{/gm],
+    newBlock,
+  )
 }
 
 export function deleteProjection(
@@ -503,7 +501,7 @@ export interface RoutePluginInput {
 export interface RouteInput {
   description?: string
   priority: number
-  when?: string            // raw WHEN expression text, e.g. "domain(\"math\") AND complexity(\"hard\")"
+  when?: string // raw WHEN expression text, e.g. "domain(\"math\") AND complexity(\"hard\")"
   models: RouteModelInput[]
   algorithm?: RouteAlgoInput
   plugins: RoutePluginInput[]
@@ -574,11 +572,7 @@ function serializeRouteBody(input: RouteInput): string {
 /**
  * Update a route's content in DSL source.
  */
-export function updateRoute(
-  src: string,
-  name: string,
-  input: RouteInput,
-): string {
+export function updateRoute(src: string, name: string, input: RouteInput): string {
   const block = findBlock(src, 'ROUTE', null, name)
   if (!block) return src
 
@@ -592,11 +586,7 @@ export function updateRoute(
  * Add a new route to the DSL source.
  * Inserts after the last existing ROUTE block, or after signals if none exist.
  */
-export function addRoute(
-  src: string,
-  name: string,
-  input: RouteInput,
-): string {
+export function addRoute(src: string, name: string, input: RouteInput): string {
   const descPart = input.description ? ` (description = "${input.description}")` : ''
   const body = serializeRouteBody(input)
   const newBlock = `ROUTE ${name}${descPart} {\n${body}\n}\n`
@@ -727,11 +717,7 @@ function findFirstNonCommentLine(src: string): number {
   return offset
 }
 
-export type {
-  AlgorithmType,
-  FieldSchema,
-  SignalType,
-} from './dslSchemas'
+export type { AlgorithmType, FieldSchema, SignalType } from './dslSchemas'
 export {
   ALGORITHM_DESCRIPTIONS,
   ALGORITHM_TYPES,

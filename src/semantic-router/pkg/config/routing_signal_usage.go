@@ -25,16 +25,34 @@ func (c *RouterConfig) UsesSignalTypeInRouting(signalType string) bool {
 		return false
 	}
 
-	if len(c.Recipes) > 0 {
-		for i := range c.Recipes {
-			if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
-				return true
-			}
+	if c.RoutingScope != "" {
+		return c.routingViewUsesNormalizedSignalType(normalizedType)
+	}
+	for i := range c.Recipes {
+		if recipeUsesSignalType(&c.Recipes[i], normalizedType) {
+			return true
 		}
+	}
+	return false
+}
+
+// RoutingViewUsesSignalType reports whether one already-isolated Recipe view
+// uses a signal directly or through a projection. Classifier instances call
+// this method because their config is the scoped execution value, not a root
+// Recipe registry.
+func (c *RouterConfig) RoutingViewUsesSignalType(signalType string) bool {
+	if c == nil {
 		return false
 	}
+	normalizedType := strings.ToLower(strings.TrimSpace(signalType))
+	if normalizedType == "" {
+		return false
+	}
+	return c.routingViewUsesNormalizedSignalType(normalizedType)
+}
 
-	return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+func (c *RouterConfig) routingViewUsesNormalizedSignalType(signalType string) bool {
+	return decisionsUseSignalType(c.Decisions, c.Projections, signalType)
 }
 
 // UsesSignalTypeInReachableRouting reports whether a request-reachable routing
@@ -51,13 +69,7 @@ func (c *RouterConfig) UsesSignalTypeInReachableRouting(signalType string) bool 
 		return false
 	}
 	if c.RoutingScope != "" {
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
-	}
-	if len(c.Recipes) == 0 {
-		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
-			return false
-		}
-		return decisionsUseSignalType(c.Decisions, c.Projections, normalizedType)
+		return c.routingViewUsesNormalizedSignalType(normalizedType)
 	}
 	for _, recipe := range c.ReachableRoutingRecipes() {
 		if recipeUsesSignalType(recipe, normalizedType) {
@@ -119,17 +131,19 @@ func (c *RouterConfig) NeedsFactCheckModelForAPI() bool {
 		c.HallucinationMitigation.FactCheckModel.ModelID == "" {
 		return false
 	}
+	signals := c.defaultAPIConsumerSignals()
 	return c.HallucinationMitigation.Enabled ||
-		len(c.RoutingProfileSignals().FactCheckRules) > 0
+		len(signals.FactCheckRules) > 0
 }
 
 // NeedsFeedbackModelForAPI reports whether the default public feedback API is
 // configured independently of recipe routing.
 func (c *RouterConfig) NeedsFeedbackModelForAPI() bool {
+	signals := c.defaultAPIConsumerSignals()
 	return c.ownsDefaultAPIConsumer() &&
 		c.FeedbackDetector.Enabled &&
 		c.FeedbackDetector.ModelID != "" &&
-		len(c.RoutingProfileSignals().UserFeedbackRules) > 0
+		len(signals.UserFeedbackRules) > 0
 }
 
 // NeedsHallucinationDetectorForDefaultRuntime preserves the legacy global
@@ -154,6 +168,26 @@ func (c *RouterConfig) NeedsLocalHallucinationNLIForAPI() bool {
 func (c *RouterConfig) ownsDefaultAPIConsumer() bool {
 	return c != nil &&
 		(c.RoutingScope == "" || c.RoutingScope == DefaultRecipeName)
+}
+
+// defaultAPIConsumerSignals returns the signals owned by the optional explicit
+// default Recipe. A scoped default Recipe already carries that view directly;
+// a root manifest must declare the Recipe rather than relying on flat fields.
+func (c *RouterConfig) defaultAPIConsumerSignals() Signals {
+	if c == nil {
+		return Signals{}
+	}
+	if c.RoutingScope == DefaultRecipeName {
+		return c.Signals
+	}
+	if c.RoutingScope != "" {
+		return Signals{}
+	}
+	recipe := c.DefaultRecipe()
+	if recipe == nil {
+		return Signals{}
+	}
+	return recipe.Profile.Signals
 }
 
 // NeedsFactCheckModelForRouting reports whether an active routing path depends
@@ -225,13 +259,6 @@ func (c *RouterConfig) routingConsumerDecisions() []Decision {
 	if c.RoutingScope != "" {
 		return c.Decisions
 	}
-	if len(c.Recipes) == 0 {
-		if !c.IsRecipeReachableForRouting(DefaultRecipeName) {
-			return nil
-		}
-		return c.Decisions
-	}
-
 	decisions := make([]Decision, 0)
 	for _, recipe := range c.ReachableRoutingRecipes() {
 		if recipe != nil {

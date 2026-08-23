@@ -6,6 +6,15 @@
 {{- end -}}
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
+{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
+{{- $controlPlaneMode := (get $controlPlane "mode") | default "standalone" -}}
+{{- $managedMode := eq $controlPlaneMode "managed" -}}
+{{- $managementProbeScheme := ternary "HTTPS" "HTTP" $managedMode -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $managementAPI := (get $services "management_api") | default (dict) -}}
+{{- $managementPort := (get $managementAPI "port") | default .Values.service.api.targetPort -}}
+{{- $backendDispatch := (get $services "backend_dispatch") | default (dict) -}}
+{{- $backendDispatchPort := (get $backendDispatch "port") | default 8180 -}}
 {{- $router := (get $global "router") | default (dict) -}}
 {{- $learning := (get $router "learning") | default (dict) -}}
 {{- $learningEnabled := false -}}
@@ -30,6 +39,16 @@
 {{- end -}}
 {{- if and $rejectMultiReplicaLocalLearningState $routerMultiReplica $localLearningStateEnabled -}}
 {{- fail "multi-replica router deployments cannot use Router Learning local state; disable global.router.learning, use one router replica, or set safetyGuards.rejectMultiReplicaLocalLearningState=false after accepting replica-local learning divergence" -}}
+{{- end }}
+{{- range $variable := concat .Values.env .Values.extraEnv -}}
+{{- if or (eq $variable.name "CONFIG_FILE") (eq $variable.name "VLLM_SR_MANAGEMENT_INTERNAL_LISTENER") -}}
+{{- fail (printf "env variable %s is chart-owned and cannot be overridden" $variable.name) -}}
+{{- end -}}
+{{- end }}
+{{- range $argument := .Values.args -}}
+{{- if or (eq $argument "--config") (hasPrefix "--config=" $argument) -}}
+{{- fail "args must not override the chart-mounted Router config" -}}
+{{- end -}}
 {{- end }}
 apiVersion: apps/v1
 kind: Deployment
@@ -66,6 +85,16 @@ spec:
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+      - maxSkew: {{ .Values.topologySpread.maxSkew }}
+        topologyKey: {{ .Values.topologySpread.topologyKey | quote }}
+        whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable }}
+        labelSelector:
+          matchLabels:
+            {{- include "semantic-router.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: router
+      {{- end }}
       # Models are now automatically downloaded by the router at startup
       # No initContainer is needed - the router uses its built-in Go-based
       # modeldownload package to download models from HuggingFace based on
@@ -90,17 +119,24 @@ spec:
         - containerPort: {{ .Values.service.metrics.targetPort }}
           name: metrics
           protocol: TCP
-        - containerPort: {{ .Values.service.api.targetPort }}
+        - containerPort: {{ ternary $managementPort .Values.service.api.targetPort $managedMode }}
           name: classify-api
           protocol: TCP
-        {{- if or .Values.env .Values.extraEnv }}
+        {{- if $managedMode }}
+        - containerPort: {{ $backendDispatchPort }}
+          name: backend-dsp
+          protocol: TCP
+        {{- end }}
         env:
+          - name: CONFIG_FILE
+            value: /app/config/config.yaml
+          - name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER
+            value: "true"
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
         {{- with .Values.extraEnv }}
           {{- toYaml . | nindent 10 }}
-        {{- end }}
         {{- end }}
         {{- with .Values.envFromSecrets }}
         envFrom:
@@ -131,18 +167,25 @@ spec:
           mountPath: /app/models
         {{- end }}
         {{- if .Values.startupProbe.enabled }}
-        # Startup probe for slow-starting containers (model loading takes ~60s with Gemma)
+        # Readiness includes model loading and, in managed mode, publication and
+        # durable-store recovery. TLS certificate verification is intentionally
+        # delegated to the Router; kubelet HTTPS probes do not validate the
+        # serving certificate.
         startupProbe:
-          tcpSocket:
-            port: {{ .Values.service.grpc.targetPort }}
+          httpGet:
+            path: /ready
+            port: classify-api
+            scheme: {{ $managementProbeScheme }}
           periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
           failureThreshold: {{ .Values.startupProbe.failureThreshold }}
         {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
-          tcpSocket:
-            port: {{ .Values.service.grpc.targetPort }}
+          httpGet:
+            path: /health
+            port: classify-api
+            scheme: {{ $managementProbeScheme }}
           initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
@@ -150,8 +193,10 @@ spec:
         {{- end }}
         {{- if .Values.readinessProbe.enabled }}
         readinessProbe:
-          tcpSocket:
-            port: {{ .Values.service.grpc.targetPort }}
+          httpGet:
+            path: /ready
+            port: classify-api
+            scheme: {{ $managementProbeScheme }}
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}
@@ -162,7 +207,12 @@ spec:
       volumes:
       - name: config-volume
         configMap:
-          name: {{ include "semantic-router.fullname" . }}-config
+          name: {{ include "semantic-router.configMapName" . }}
+          items:
+            - key: config.yaml
+              path: config.yaml
+            - key: tools_db.json
+              path: tools_db.json
       {{- if and .Values.knowledgeBases.enabled .Values.knowledgeBases.existingConfigMap }}
       - name: knowledge-bases-volume
         configMap:

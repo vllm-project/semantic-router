@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import ProductIcon from '../components/ProductIcon'
 import styles from './ConfigPageDomainCategoryPicker.module.css'
 
 const DEFAULT_MMLU_DOMAIN_CATEGORIES = [
@@ -122,7 +123,8 @@ export default function ConfigPageDomainCategoryPicker({
           onClick={addCustomCategory}
           disabled={!customCategory.trim()}
         >
-          + Add
+          <ProductIcon name="plus" aria-hidden="true" />
+          Add
         </button>
       </div>
 
@@ -137,7 +139,7 @@ export default function ConfigPageDomainCategoryPicker({
                 onClick={() => removeCategory(category)}
                 aria-label={`Remove ${category}`}
               >
-                x
+                <ProductIcon name="close" aria-hidden="true" />
               </button>
             </span>
           ))}

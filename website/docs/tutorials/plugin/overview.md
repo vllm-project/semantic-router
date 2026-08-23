@@ -25,12 +25,12 @@ application middleware or enabling them globally.
 
 Use a plugin when behavior should apply only after a specific route matches.
 Use `global:` instead when every route shares the same service or backing
-store. Plugin entries live under `routing.decisions[].plugins`.
+store. Plugin entries live under `recipes[].document.decisions[].plugins`.
 
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: cached-support
       description: Reuse cached responses for support requests.
@@ -38,8 +38,6 @@ routing:
       rules:
         operator: AND
         conditions: []
-      modelRefs:
-        - model: support-model
       plugins:
         - type: response_cache
           configuration:

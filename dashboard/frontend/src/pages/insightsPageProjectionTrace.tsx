@@ -32,9 +32,7 @@ export function buildProjectionTraceFields(record: InsightsRecord): ViewField[] 
             id={`projection-trace-raw-${record.id}`}
             title={`Raw JSON (schema ${trace.schema_version || '?'})`}
             defaultExpanded={false}
-            content={
-              <pre className={styles.bodyPreview}>{JSON.stringify(trace, null, 2)}</pre>
-            }
+            content={<pre className={styles.bodyPreview}>{JSON.stringify(trace, null, 2)}</pre>}
           />
         </div>
       ),
@@ -69,7 +67,11 @@ function renderPartitionBlock(p: ProjectionTracePartition, idx: number) {
             <td>{p.semantics || '—'}</td>
             <td>{fmtFixed(p.winner_score)}</td>
             <td>{fmtFixed(p.raw_winner_score)}</td>
-            <td>{p.temperature != null && !Number.isNaN(p.temperature) ? fmtFixed(p.temperature, 3) : '—'}</td>
+            <td>
+              {p.temperature != null && !Number.isNaN(p.temperature)
+                ? fmtFixed(p.temperature, 3)
+                : '—'}
+            </td>
           </tr>
         </tbody>
       </table>
@@ -130,7 +132,11 @@ function renderMappingBlock(m: ProjectionTraceMapping, idx: number) {
                   <tr key={`${key}-${o.name}`}>
                     <td>{o.name}</td>
                     <td>
-                      <span className={o.matched ? styles.projectionTraceMatchYes : styles.projectionTraceMatchNo}>
+                      <span
+                        className={
+                          o.matched ? styles.projectionTraceMatchYes : styles.projectionTraceMatchNo
+                        }
+                      >
                         {o.matched ? 'yes' : 'no'}
                       </span>
                     </td>

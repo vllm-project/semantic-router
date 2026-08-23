@@ -99,19 +99,20 @@ POST /v1/router/outcomes
 ```json
 {
   "replay_id": "replay_123",
-  "source": "agent",
   "target": "model",
-  "target_ref": "frontier-model",
+  "target_ref": "model/frontier-model",
+  "target_revision": 3,
   "verdict": "good_fit",
   "reason": "solved_complex_task",
   "score": 1.0
 }
 ```
 
-`target: model` outcomes update online model experience. `target: route`,
-`target: policy`, `target: stability`, `target: provider`, and
-`target: router` outcomes are kept for replay and offline recipe learning unless
-a typed online consumer exists.
+Authenticate this public-listener request with the same logical API key (or a
+delegated inference session) that owns the replay and include an
+`Idempotency-Key` header. `target: model` outcomes enter a durable,
+revisioned learning projection. Other target types remain immutable evidence
+for replay and offline recipe learning unless a typed consumer exists.
 
 ## Recipe Learning Command
 

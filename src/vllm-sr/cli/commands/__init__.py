@@ -9,12 +9,10 @@ from typing import Any
 
 __all__ = [
     "config_command",
-    "model_list_command",
 ]
 
 _LAZY_EXPORTS = {
     "config_command": (".config", "config_command"),
-    "model_list_command": (".model", "model_list_command"),
 }
 
 

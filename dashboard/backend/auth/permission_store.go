@@ -5,54 +5,6 @@ import (
 	"strings"
 )
 
-func (s *Store) normalizeStoredRoles() error {
-	tx, err := s.db.Begin()
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	rows, err := tx.Query(`SELECT id, role FROM users`)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = rows.Close()
-	}()
-
-	type roleUpdate struct {
-		userID string
-		role   string
-	}
-
-	var updates []roleUpdate
-	for rows.Next() {
-		var userID string
-		var rawRole string
-		if err := rows.Scan(&userID, &rawRole); err != nil {
-			return err
-		}
-		normalized, err := normalizeRole(rawRole)
-		if err != nil || normalized == "" || normalized == rawRole {
-			continue
-		}
-		updates = append(updates, roleUpdate{userID: userID, role: normalized})
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-
-	for _, update := range updates {
-		if _, err := tx.Exec(`UPDATE users SET role = ?, updated_at = ? WHERE id = ?`, update.role, nowUnix(), update.userID); err != nil {
-			return err
-		}
-	}
-
-	return tx.Commit()
-}
-
 func (s *Store) syncDefaultRolePermissions() error {
 	tx, err := s.db.Begin()
 	if err != nil {
@@ -61,22 +13,6 @@ func (s *Store) syncDefaultRolePermissions() error {
 	defer func() {
 		_ = tx.Rollback()
 	}()
-
-	for legacyRole, targetRole := range legacyRoleAliases {
-		if _, err := tx.Exec(
-			`INSERT INTO role_permissions(role, permission_key, allowed)
-SELECT ?, permission_key, allowed FROM role_permissions WHERE role = ?
-ON CONFLICT(role, permission_key) DO UPDATE SET allowed = excluded.allowed`,
-			targetRole,
-			legacyRole,
-		); err != nil {
-			return err
-		}
-
-		if _, err := tx.Exec(`DELETE FROM role_permissions WHERE role = ?`, legacyRole); err != nil {
-			return err
-		}
-	}
 
 	for role, perms := range DefaultRolePermissions {
 		if _, err := tx.Exec(`DELETE FROM role_permissions WHERE role = ?`, role); err != nil {

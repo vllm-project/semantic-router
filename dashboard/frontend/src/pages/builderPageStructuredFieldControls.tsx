@@ -97,7 +97,10 @@ function KeyValueField({
     (entry): entry is [string, string] => typeof entry[1] === 'string',
   )
   return (
-    <FieldShell schema={schema} onClear={value === undefined ? undefined : () => onChange(undefined)}>
+    <FieldShell
+      schema={schema}
+      onClear={value === undefined ? undefined : () => onChange(undefined)}
+    >
       <KeyValueEditor
         value={Object.fromEntries(entries)}
         onChange={onChange}
@@ -199,7 +202,9 @@ function RecursiveObjectListField({
             <section key={index} className={styles.structuredCard}>
               <div className={styles.structuredCardHeader}>
                 <div>
-                  <span className={styles.structuredIndex}>{String(index + 1).padStart(2, '0')}</span>
+                  <span className={styles.structuredIndex}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
                   <h4>{structuredItemLabel(schema, item, index)}</h4>
                 </div>
                 <button
@@ -213,7 +218,9 @@ function RecursiveObjectListField({
               </div>
               {errors.length > 0 ? (
                 <ul className={styles.structuredErrors} aria-live="polite">
-                  {errors.map((error) => <li key={error}>{error}</li>)}
+                  {errors.map((error) => (
+                    <li key={error}>{error}</li>
+                  ))}
                 </ul>
               ) : null}
               <div className={styles.structuredCardBody}>
@@ -377,7 +384,9 @@ function RuleNodeEditor({
                   onClick={() =>
                     onChange({
                       ...node,
-                      conditions: conditions.filter((_, conditionIndex) => conditionIndex !== index),
+                      conditions: conditions.filter(
+                        (_, conditionIndex) => conditionIndex !== index,
+                      ),
                     })
                   }
                   disabled={mode === 'NOT' && conditions.length <= 1}
@@ -413,13 +422,12 @@ function RuleNodeEditor({
   )
 }
 
-function RuleField({
-  schema,
-  value,
-  onChange,
-}: Omit<StructuredFieldEditorProps, 'renderField'>) {
+function RuleField({ schema, value, onChange }: Omit<StructuredFieldEditorProps, 'renderField'>) {
   return (
-    <FieldShell schema={schema} onClear={value === undefined ? undefined : () => onChange(undefined)}>
+    <FieldShell
+      schema={schema}
+      onClear={value === undefined ? undefined : () => onChange(undefined)}
+    >
       <RuleNodeEditor value={value} onChange={onChange} />
     </FieldShell>
   )

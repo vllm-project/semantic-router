@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -29,16 +31,40 @@ func TestMaintainedRecipeDSLMatchesEveryRuntimeConfig(t *testing.T) {
 			assertRecipeDSLContract(t, filepath.Join(root, entry.Name()))
 		})
 	}
+	t.Run("built-in/mom-v1", func(t *testing.T) {
+		assertBuiltInRecipeDSLContract(t, filepath.Join(root, "built-in", "latest", "mom-v1"))
+	})
+}
+
+func assertBuiltInRecipeDSLContract(t *testing.T, directory string) {
+	t.Helper()
+	yamlPath := filepath.Join(directory, "config.yaml")
+	dslPath := filepath.Join(directory, "recipe.dsl")
+	payload, err := os.ReadFile(yamlPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", yamlPath, err)
+	}
+	runtimeConfig, err := parseRecipeBundleYAML(payload)
+	if err != nil {
+		t.Fatalf("parse Recipe bundle %s: %v", yamlPath, err)
+	}
+	dslBytes, err := os.ReadFile(dslPath)
+	if err != nil {
+		t.Fatalf("read %s: %v", dslPath, err)
+	}
+	dsl := string(dslBytes)
+	if _, parseErrs := Parse(dsl); len(parseErrs) > 0 {
+		t.Fatalf("parse DSL %s: %v", dslPath, parseErrs)
+	}
+	assertCanonicalRuntimeDSL(t, yamlPath, dslPath, dsl, runtimeConfig)
+	compileStableRecipeDSL(t, dslPath, dsl)
 }
 
 func assertRecipeDSLContract(t *testing.T, directory string) {
 	t.Helper()
 	yamlPath := filepath.Join(directory, "config.yaml")
 	dslPath := filepath.Join(directory, "recipe.dsl")
-	runtimeConfig, err := config.Parse(yamlPath)
-	if err != nil {
-		t.Fatalf("parse %s: %v", yamlPath, err)
-	}
+	runtimeConfig := parseMaintainedConfig(t, yamlPath)
 	dslBytes, err := os.ReadFile(dslPath)
 	if err != nil {
 		t.Fatalf("read %s: %v", dslPath, err)
@@ -79,7 +105,7 @@ func assertCanonicalRuntimeDSL(
 		t.Fatalf("decompile %s: %v", yamlPath, err)
 	}
 	if canonicalDSL != dsl {
-		t.Fatalf("%s is not the canonical DSL generated from %s", dslPath, yamlPath)
+		t.Fatalf("%s is not the canonical DSL generated from %s (-asset +generated):\n%s", dslPath, yamlPath, cmp.Diff(dsl, canonicalDSL))
 	}
 }
 
@@ -113,14 +139,17 @@ func assertMergedRecipeDSL(
 	if err != nil {
 		t.Fatalf("read base config %s: %v", yamlPath, err)
 	}
+	if len(baseConfig.Recipes) != 1 {
+		if _, mergeErr := MergeRoutingIntoBase(compiled, baseYAML); mergeErr == nil {
+			t.Fatalf("merging %s must reject a base with %d Recipes", dslPath, len(baseConfig.Recipes))
+		}
+		return
+	}
 	merged, err := MergeRoutingIntoBase(compiled, baseYAML)
 	if err != nil {
 		t.Fatalf("merge %s over %s: %v", dslPath, yamlPath, err)
 	}
-	mergedConfig, err := config.ParseYAMLBytes(merged)
-	if err != nil {
-		t.Fatalf("runtime parse of DSL-generated %s: %v", dslPath, err)
-	}
+	mergedConfig := parseMaintainedConfigBytes(t, "DSL-generated "+dslPath, merged)
 	mergedDSL, err := Decompile(mergedConfig)
 	if err != nil {
 		t.Fatalf("decompile DSL-generated %s: %v", dslPath, err)
@@ -128,7 +157,15 @@ func assertMergedRecipeDSL(
 	if mergedDSL != dsl {
 		t.Fatalf("%s changes after compile, base merge, and runtime parse", dslPath)
 	}
-	assertDecisionAdaptationsPreserved(t, yamlPath, baseConfig.Decisions, mergedConfig.Decisions)
+	if len(mergedConfig.Recipes) != 1 {
+		t.Fatalf("runtime parse of merged %s produced %d Recipes", dslPath, len(mergedConfig.Recipes))
+	}
+	assertDecisionAdaptationsPreserved(
+		t,
+		yamlPath,
+		baseConfig.Recipes[0].Profile.Decisions,
+		mergedConfig.Recipes[0].Profile.Decisions,
+	)
 }
 
 func assertDecisionAdaptationsPreserved(

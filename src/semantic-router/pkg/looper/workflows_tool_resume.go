@@ -130,12 +130,18 @@ func (l *WorkflowsLooper) finishCurrentWorkflowStepAfterResume(
 		if callErr != nil {
 			currentFailed = append(currentFailed, FusionFailedModel{Model: modelName, Error: callErr.Error()})
 			if cfg.OnError == config.WorkflowOnErrorFail {
-				return nil, nil, fmt.Errorf("workflow step %q failed for model %q: %w", step.ID, modelName, callErr)
+				results = append(results, workflowStepResult{
+					step:             step,
+					responses:        currentResponses,
+					failed:           currentFailed,
+					toolTrajectories: currentToolTrajectories,
+				})
+				return results, nil, fmt.Errorf("workflow step %q failed for model %q: %w", step.ID, modelName, callErr)
 			}
 			continue
 		}
 		if nextResp.HasToolCalls {
-			nextState := workflowPendingStateForResumedModel(state, results, originalRequest, modelIndex, modelName, currentResponses, currentFailed, currentToolTrajectories, req.IsStreaming)
+			nextState := workflowPendingStateForResumedModel(state, results, modelIndex, modelName, currentResponses, currentFailed, currentToolTrajectories, req.IsStreaming)
 			return nil, &workflowToolCallInterrupt{resp: nextResp, state: nextState}, nil
 		}
 		currentResponses = append(currentResponses, nextResp)
@@ -157,7 +163,6 @@ func workflowResumeModelIteration(state *workflowPendingToolState, modelIndex in
 func workflowPendingStateForResumedModel(
 	state *workflowPendingToolState,
 	results []workflowStepResult,
-	originalRequest *openai.ChatCompletionNewParams,
 	modelIndex int,
 	modelName string,
 	currentResponses []*ModelResponse,
@@ -173,7 +178,7 @@ func workflowPendingStateForResumedModel(
 		PlannerResp:                 state.PlannerResp,
 		WorkerModels:                append([]string(nil), state.WorkerModels...),
 		StepResults:                 append([]workflowStepResult(nil), results...),
-		OriginalRequest:             cloneRequest(originalRequest),
+		SemanticRequest:             cloneSemanticRequest(state.SemanticRequest),
 		Phase:                       workflowToolPhaseStep,
 		AgentID:                     workflowAgentID(workflowToolPhaseStep, state.Plan.Steps[state.StepIndex], modelName, modelIndex),
 		StepID:                      state.Plan.Steps[state.StepIndex].ID,
@@ -189,6 +194,7 @@ func workflowPendingStateForResumedModel(
 		CurrentStepToolTrajectories: cloneWorkflowToolTrajectories(currentToolTrajectories),
 		Iteration:                   workflowResumeModelIteration(state, modelIndex),
 		Streaming:                   streaming,
+		IncludeUsage:                state.IncludeUsage,
 	}
 }
 
@@ -204,15 +210,16 @@ func (l *WorkflowsLooper) executeRemainingWorkflowStepsAfterResume(
 		nextStep := state.Plan.Steps[stepIndex]
 		prompt := buildWorkflowStepPrompt(originalRequest, nextStep, results)
 		stepReq := appendFusionStageMessage(originalRequest, prompt)
-		responses, failed, interrupt, err := l.executeWorkflowStep(ctx, req, cfg, state.Plan, nextStep, stepReq, stepIndex, 0, state.Iteration+1+len(results))
+		responses, accountingResponses, failed, interrupt, err := l.executeWorkflowStep(ctx, req, cfg, state.Plan, nextStep, stepReq, stepIndex, 0, state.Iteration+1+len(results))
 		if err != nil {
-			return nil, nil, err
+			results = append(results, workflowStepResult{step: nextStep, responses: responses, accountingResponses: accountingResponses, failed: failed})
+			return results, nil, err
 		}
 		if interrupt != nil {
 			hydrateResumedWorkflowInterrupt(interrupt, state, results)
 			return results, interrupt, nil
 		}
-		results = append(results, workflowStepResult{step: nextStep, responses: responses, failed: failed})
+		results = append(results, workflowStepResult{step: nextStep, responses: responses, accountingResponses: accountingResponses, failed: failed})
 	}
 	return results, nil, nil
 }
@@ -251,7 +258,7 @@ func (l *WorkflowsLooper) finishResumedWorkflow(
 	summary := summarizeWorkflowExecution(cfg, state.PlannerResp, results, finalResp)
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, results, summary.failed)
 	if req.IsStreaming {
-		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg, streamUsageRequested(req))
 	}
 	return formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
 }
@@ -269,7 +276,7 @@ func (l *WorkflowsLooper) finishResumedWorkflowFinal(
 	trace := buildWorkflowTrace(cfg, state.WorkerModels, state.Plan, state.StepResults, summary.failed)
 	trace.FinalToolTrajectory = workflowToolTurnTraces(state.ToolTrajectory)
 	if req.IsStreaming {
-		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
+		return formatWorkflowStreamingResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg, streamUsageRequested(req))
 	}
 	return formatWorkflowJSONResponse(finalResp, summary.modelsUsed, summary.iterations, trace, summary.usage, cfg)
 }

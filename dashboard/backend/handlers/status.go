@@ -3,46 +3,27 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
-// ServiceStatus represents the status of a single service
+// ServiceStatus is the public availability of one product component. Keep this
+// contract free of internal addresses, runtime topology, and diagnostic text.
 type ServiceStatus struct {
-	Name      string `json:"name"`
-	Status    string `json:"status"`
-	Healthy   bool   `json:"healthy"`
-	Message   string `json:"message,omitempty"`
-	Component string `json:"component,omitempty"`
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Healthy bool   `json:"healthy"`
 }
 
-// RouterRuntimeStatus captures router startup progress beyond process-level health.
-type RouterRuntimeStatus struct {
-	Phase             string                                 `json:"phase"`
-	Ready             bool                                   `json:"ready"`
-	Message           string                                 `json:"message,omitempty"`
-	DownloadingModel  string                                 `json:"downloading_model,omitempty"`
-	PendingModels     []string                               `json:"pending_models,omitempty"`
-	ReadyModels       int                                    `json:"ready_models,omitempty"`
-	TotalModels       int                                    `json:"total_models,omitempty"`
-	EmbeddingProvider *startupstatus.EmbeddingProviderStatus `json:"embedding_provider,omitempty"`
-}
-
-// SystemStatus represents the overall system status
+// SystemStatus is intentionally limited to public product availability.
+// Authorized routing, model, usage, and diagnostic data belongs to the Router
+// Management API and must not be projected through this endpoint.
 type SystemStatus struct {
-	Overall        string               `json:"overall"`
-	DeploymentType string               `json:"deployment_type"`
-	Services       []ServiceStatus      `json:"services"`
-	RouterRuntime  *RouterRuntimeStatus `json:"router_runtime,omitempty"`
-	Models         *RouterModelsInfo    `json:"models,omitempty"`
-	Endpoints      []string             `json:"endpoints,omitempty"`
-	Version        string               `json:"version,omitempty"`
+	Overall  string          `json:"overall"`
+	Services []ServiceStatus `json:"services"`
 }
 
-// StatusHandler returns the status of vLLM-SR services
-// Aligns with the vllm-sr Python CLI by using the same Docker-based detection
-func StatusHandler(routerAPIURL, configDir string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
+// StatusHandler returns a credential-free public health summary. Detailed
+// operational state is available only through authorized Management APIs.
+func StatusHandler(routerAPIURL string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -50,7 +31,7 @@ func StatusHandler(routerAPIURL, configDir string, credentialProvider ...routera
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		status := detectSystemStatus(routerAPIURL, configDir, credentialProvider...)
+		status := detectSystemStatus(routerAPIURL)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {
 			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)

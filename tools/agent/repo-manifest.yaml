@@ -114,6 +114,7 @@ validation:
     - envoy-ai-gateway
     - dashboard
     - remote-embedding
+    - response-api
 docs:
 - AGENTS.md
 - tools/agent/docs/README.md
@@ -140,6 +141,7 @@ docs:
 - tools/agent/docs/testing-strategy.md
 - tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
 - tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
+- tools/agent/docs/plans/pl-0038-router-native-access-control.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -150,6 +152,7 @@ docs:
 - tools/agent/docs/tech-debt/td-044-flow-tool-state-durability-gap.md
 - tools/agent/docs/tech-debt/td-045-reviewed-content-moderation.md
 - tools/agent/docs/tech-debt/td-046-onnx-binding-ci-coverage-gap.md
+- tools/agent/docs/tech-debt/td-047-access-control-control-plane-gap.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -281,6 +284,9 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
     steward: router-core
     freshness: update while the Router Flow four-mode benchmark campaign is active
+  - path: tools/agent/docs/plans/pl-0038-router-native-access-control.md
+    steward: router-core
+    freshness: update while the Router-native access-control implementation is active
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
@@ -311,6 +317,9 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-046-onnx-binding-ci-coverage-gap.md
     steward: agent-contract
     freshness: update when mandatory ONNX binding CI coverage changes
+  - path: tools/agent/docs/tech-debt/td-047-access-control-control-plane-gap.md
+    steward: dashboard
+    freshness: update when access-control scale or multi-host persistence boundaries change
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/cross-stack-bugfix/SKILL.md

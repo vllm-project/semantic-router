@@ -8,11 +8,9 @@ MAX_PERCENTILE = 100
 
 
 def _all_decisions(config: UserConfig):
-    for decision in config.routing.decisions:
-        yield "decisions", decision
     for recipe in config.recipes:
-        field_prefix = f"recipes.{recipe.name}.decisions"
-        for decision in recipe.routing.decisions:
+        field_prefix = f"recipes.{recipe.name}.document.decisions"
+        for decision in recipe.document.decisions:
             yield field_prefix, decision
 
 

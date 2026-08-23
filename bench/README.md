@@ -88,45 +88,38 @@ patch is a review aid, not an automatically safe deployment change. Confirm the
 model name, reasoning family, measured trade-offs, and existing config entries
 before merging it.
 
-A known-family patch uses the current v0.3 provider and Model Card fields:
+A known-family patch uses the human v0.4 Model card:
 
 ```yaml
-providers:
-  defaults:
-    reasoning_families:
-      qwen3:
+models:
+  - name: qwen3-14b
+    card:
+      reasoning:
         type: chat_template_kwargs
-        parameter: enable_thinking
-    default_reasoning_effort: medium
-  models:
-    - name: qwen3-14b
-      reasoning_family: qwen3
-routing:
-  modelCards:
-    - name: qwen3-14b
+        efforts: [medium, high]
+    connections:
+      - provider: vllm
+        endpoint: http://model-server:8000/v1
+        model: qwen3-14b
 ```
 
 Reasoning is enabled per decision reference, after the evaluated model has been
 merged into the existing configuration:
 
 ```yaml
-routing:
-  decisions:
-    - name: math-reasoning
-      rules:
-        operator: AND
-        conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: qwen3-14b
-          use_reasoning: true
-          reasoning_effort: high
+entrypoints:
+  - name: benchmark/reasoning
+    recipe: benchmark
+    assignments:
+      math-reasoning:
+        models:
+          - model: qwen3-14b
+            reasoning: {enabled: true, effort: high}
 ```
 
 Supported generated family mappings are `qwen3`, `deepseek`, and `gpt-oss`.
 When `--reasoning-family` is omitted or unknown, the recommendation records a
-manual follow-up instead of inventing a provider mapping.
+manual follow-up instead of inventing a Model card.
 
 ## Session-routing evaluations
 

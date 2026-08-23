@@ -2,7 +2,10 @@ package config
 
 import (
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func validatePromptAlgorithmConfig(
@@ -13,7 +16,10 @@ func validatePromptAlgorithmConfig(
 	if algorithm.Prompt == nil {
 		return fmt.Errorf("decision '%s': algorithm.type=prompt requires algorithm.prompt configuration", decisionName)
 	}
-	if len(modelRefs) < 2 {
+	// Recipe documents are deliberately model-free. Candidate cardinality is
+	// checked again on the Entrypoint-derived view after assignments have been
+	// compiled into ModelRefs.
+	if len(modelRefs) == 1 {
 		return fmt.Errorf("decision '%s': algorithm.type=prompt requires at least two modelRefs", decisionName)
 	}
 	seenModels := make(map[string]struct{}, len(modelRefs))
@@ -40,7 +46,7 @@ func validatePromptAlgorithmConfig(
 		}
 		seenEffectiveModels[effectiveModel] = struct{}{}
 	}
-	if strings.TrimSpace(algorithm.Prompt.Model) == "" {
+	if len(modelRefs) > 0 && strings.TrimSpace(algorithm.Prompt.Model) == "" {
 		return fmt.Errorf("decision '%s', algorithm.prompt: model is required", decisionName)
 	}
 	if strings.TrimSpace(algorithm.Prompt.Instructions) == "" {
@@ -59,6 +65,11 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 	if decision.Algorithm == nil || decision.Algorithm.Prompt == nil {
 		return nil
 	}
+	if len(decision.ModelRefs) == 0 && strings.TrimSpace(decision.Algorithm.Prompt.Model) == "" {
+		// Model selection is materialized by the Entrypoint. The derived view is
+		// validated later in the same contract pass.
+		return nil
+	}
 	if !cfg.Looper.IsEnabled() {
 		return fmt.Errorf(
 			"decision '%s': algorithm.type=prompt requires global.integrations.looper.endpoint",
@@ -69,14 +80,7 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 	modelConfig, ok := cfg.ModelConfig[model]
 	if !ok {
 		return fmt.Errorf(
-			"decision '%s', algorithm.prompt.model %q is not declared in routing.modelCards",
-			decision.Name,
-			model,
-		)
-	}
-	if strings.EqualFold(modelConfig.APIFormat, ClientProtocolAnthropic) {
-		return fmt.Errorf(
-			"decision '%s', algorithm.prompt.model %q must use an OpenAI-compatible API format",
+			"decision '%s', algorithm.prompt.model %q is not declared in the compiled Model set",
 			decision.Name,
 			model,
 		)
@@ -88,16 +92,16 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 			model,
 		)
 	}
-	if cfg.IsAutoModelName(model) || cfg.IsEntrypointModelName(model) {
+	if cfg.IsEntrypointModelName(model) {
 		return fmt.Errorf(
 			"decision '%s', algorithm.prompt.model %q must be a concrete provider model",
 			decision.Name,
 			model,
 		)
 	}
-	if !promptHelperHasBackend(cfg, model) {
+	if !promptHelperHasChatBackend(cfg, model) {
 		return fmt.Errorf(
-			"decision '%s', algorithm.prompt.model %q requires a provider backend",
+			"decision '%s', algorithm.prompt.model %q requires an OpenAI Chat wire-format backend",
 			decision.Name,
 			model,
 		)
@@ -105,7 +109,19 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 	return nil
 }
 
-func promptHelperHasBackend(cfg *RouterConfig, model string) bool {
+func promptHelperHasChatBackend(cfg *RouterConfig, model string) bool {
+	if cfg.RoutingSnapshot != nil {
+		for _, candidate := range cfg.RoutingSnapshot.Models {
+			if candidate.Name == model || slices.Contains(candidate.Aliases, model) {
+				for _, backend := range candidate.Backends {
+					if backend.WireFormat == llmprotocol.OpenAIChatV1 {
+						return true
+					}
+				}
+				return false
+			}
+		}
+	}
 	for _, endpoint := range cfg.VLLMEndpoints {
 		if endpoint.Model == model || endpoint.Name == model {
 			return true

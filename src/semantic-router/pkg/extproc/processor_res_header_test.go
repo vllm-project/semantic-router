@@ -7,7 +7,7 @@ import (
 	http_ext "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/ext_proc/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/responseapi"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestGetStatusFromHeadersUsesRawValue(t *testing.T) {
@@ -54,12 +54,8 @@ func TestHandleResponseHeadersSetsStreamingModeOverride(t *testing.T) {
 func TestHandleResponseHeadersUsesResponseAPIStreamRequestFallback(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Stream: true,
-			},
-		},
+		SourceFormat:    llmprotocol.OpenAIResponsesV1,
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Stream: true},
 	}
 	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{
@@ -101,12 +97,8 @@ func TestHandleResponseHeadersUsesResponseAPIStreamRequestFallback(t *testing.T)
 func TestHandleResponseHeadersDoesNotForceResponseAPIStreamForError(t *testing.T) {
 	router := &OpenAIRouter{}
 	ctx := &RequestContext{
-		ResponseAPICtx: &ResponseAPIContext{
-			IsResponseAPIRequest: true,
-			OriginalRequest: &responseapi.ResponseAPIRequest{
-				Stream: true,
-			},
-		},
+		SourceFormat:    llmprotocol.OpenAIResponsesV1,
+		SemanticRequest: &llmprotocol.Request{Generation: 1, Stream: true},
 	}
 	responseHeaders := &ext_proc.ProcessingRequest_ResponseHeaders{
 		ResponseHeaders: &ext_proc.HttpHeaders{

@@ -83,30 +83,22 @@ func TestOpenAPISpecEndpoint(t *testing.T) {
 
 	assertOpenAPISpecBasics(t, spec)
 	assertOpenAPIPaths(t, spec, documentedOpenAPIPaths())
-	assertRouterConfigOpenAPIPath(t, spec)
-	assertRecipeConfigOpenAPIPaths(t, spec)
 	assertOpenAPIPathsAbsent(t, spec, []string{
 		"/config/classification",
 		"/config/system-prompts",
+		"/config/router",
+		"/config/router/validate",
+		"/config/router/rollback",
+		"/config/router/versions",
+		"/config/router/recipes",
+		"/config/router/recipes/validate",
+		"/config/router/recipes/{name}",
+		"/config/hash",
+		"/config/kbs",
+		"/config/kbs/{name}",
+		"/config/kbs/{name}/map/metadata",
+		"/config/kbs/{name}/map/data.ndjson",
 	})
-}
-
-func assertRecipeConfigOpenAPIPaths(t *testing.T, spec OpenAPISpec) {
-	t.Helper()
-
-	collection := spec.Paths["/config/router/recipes"]
-	if collection.Get == nil {
-		t.Fatal("expected /config/router/recipes GET to be documented")
-	}
-	validation := spec.Paths["/config/router/recipes/validate"]
-	if validation.Post == nil || validation.Post.RequestBody == nil {
-		t.Fatal("expected recipe validation POST body to be documented")
-	}
-	item := spec.Paths["/config/router/recipes/{name}"]
-	if item.Get == nil || item.Put == nil || item.Delete == nil {
-		t.Fatalf("expected recipe item GET, PUT, and DELETE operations, got %+v", item)
-	}
-	requireOpenAPIPathParameter(t, item.Put.Parameters, "name")
 }
 
 func assertOpenAPISpecBasics(t *testing.T, spec OpenAPISpec) {
@@ -146,24 +138,6 @@ func assertOpenAPIPathsAbsent(t *testing.T, spec OpenAPISpec, absent []string) {
 	}
 }
 
-func assertRouterConfigOpenAPIPath(t *testing.T, spec OpenAPISpec) {
-	t.Helper()
-
-	routerPath, exists := spec.Paths["/config/router"]
-	if !exists {
-		t.Fatalf("expected /config/router to be documented in OpenAPI spec")
-	}
-	if routerPath.Patch == nil || routerPath.Put == nil || routerPath.Get == nil {
-		t.Fatalf("expected /config/router to document GET, PATCH, and PUT, got %+v", routerPath)
-	}
-	if _, ok := routerPath.Patch.Responses["413"]; !ok {
-		t.Fatalf("expected /config/router PATCH to document 413 request body limit response")
-	}
-	if routerPath.Patch.RequestBody == nil || routerPath.Patch.RequestBody.Description == "" {
-		t.Fatalf("expected /config/router PATCH to document request body constraints")
-	}
-}
-
 func requireOpenAPIPathParameter(t *testing.T, parameters []OpenAPIParameter, name string) {
 	t.Helper()
 
@@ -199,13 +173,6 @@ func documentedOpenAPIPaths() []string {
 		"/api/v1/similarity/batch",
 		"/openapi.json",
 		"/docs",
-		"/config/router",
-		"/config/router/rollback",
-		"/config/router/versions",
-		"/config/router/recipes",
-		"/config/router/recipes/validate",
-		"/config/router/recipes/{name}",
-		"/config/hash",
 		"/v1/memory",
 		"/v1/vector_stores",
 		"/v1/files",

@@ -11,18 +11,18 @@ describe('formatLearningHeaderValue', () => {
       ),
     ).toBe('adaptation: proposed switch · protection: switch allowed')
 
-    expect(
-      formatLearningHeaderValue('x-vsr-learning-scopes', 'protection=conversation'),
-    ).toBe('protection: conversation')
+    expect(formatLearningHeaderValue('x-vsr-learning-scopes', 'protection=conversation')).toBe(
+      'protection: conversation',
+    )
   })
 
   it('renders baseline reasons without legacy route-status language', () => {
-    expect(
-      formatLearningHeaderValue('x-vsr-learning-reasons', 'protection=new_conversation'),
-    ).toBe('protection: conversation baseline')
+    expect(formatLearningHeaderValue('x-vsr-learning-reasons', 'protection=new_conversation')).toBe(
+      'protection: conversation baseline',
+    )
 
-    expect(
-      formatLearningHeaderValue('x-vsr-learning-reasons', 'protection=new_session'),
-    ).toBe('protection: session baseline')
+    expect(formatLearningHeaderValue('x-vsr-learning-reasons', 'protection=new_session')).toBe(
+      'protection: session baseline',
+    )
   })
 })

@@ -16,7 +16,7 @@ import (
 
 func init() {
 	pkgtestcases.Register("embedding-signal-routing", pkgtestcases.TestCase{
-		Description: "Test IntelligentRoute with EmbeddingSignal for semantic similarity routing",
+		Description: "Test manifest-authored embedding signals for semantic similarity routing",
 		Tags:        []string{"signal-decision", "embedding", "routing", "semantic"},
 		Fn:          testEmbeddingSignalRouting,
 	})
@@ -46,10 +46,10 @@ type EmbeddingSignalResult struct {
 	Category         string
 }
 
-// testEmbeddingSignalRouting tests IntelligentRoute with EmbeddingSignal configuration
+// testEmbeddingSignalRouting tests manifest-authored embedding signal configuration.
 func testEmbeddingSignalRouting(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
-		fmt.Println("[Test] Testing IntelligentRoute with EmbeddingSignal routing")
+		fmt.Println("[Test] Testing embedding signal routing")
 	}
 
 	// Setup service connection

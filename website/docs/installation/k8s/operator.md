@@ -2,43 +2,39 @@
 sidebar_position: 3
 sidebar_label: Kubernetes Operator
 title: Deploy with the Kubernetes Operator
-description: Install the Semantic Router Operator, connect model services, and create a first Router deployment.
+description: Install the Semantic Router Operator and deploy an immutable standalone or managed Router bootstrap.
 ---
 
 # Deploy with the Kubernetes Operator
 
-The Semantic Router Operator reconciles `SemanticRouter` custom resources into
-Router workloads, Services, configuration, storage, and optional platform
-integrations. Use it when Kubernetes should own the Router lifecycle and model
-backends are already exposed as Kubernetes services, KServe
-`InferenceService`s, or Llama Stack services.
+The Semantic Router Operator owns the Kubernetes lifecycle of Router
+workloads. It creates deployment, service, availability, isolation, storage,
+autoscaling, ingress, and optional platform resources declared by a
+`SemanticRouter` resource.
 
-The Operator does not deploy model servers. It discovers or references them and
-generates the provider bindings used by the Router.
+Router configuration stays separate. Every deployment selects exactly one
+immutable ConfigMap key with `spec.bootstrap.configMapRef`:
 
-## What the Operator manages
+- **standalone**: the selected v0.4 manifest contains Models, Recipes, and
+  Entrypoints and remains unchanged for the lifetime of the Pod;
+- **managed**: the selected manifest contains infrastructure bootstrap only,
+  while the Router Management API owns mutable desired state.
 
-- Router Deployment and Service
-- canonical Router configuration generated from the custom resource
-- optional persistent model storage
-- probes, resources, scheduling, autoscaling, and ingress settings
-- OpenShift security defaults and optional Route creation
-- standalone Envoy sidecar or integration with an existing Gateway
-
-For the top-level field families and links to the installed schema, see the
-[SemanticRouter CRD reference](../../api/semantic-router-crd).
+The Operator never discovers model servers or synthesizes Router resources.
 
 ## Prerequisites
 
-- a supported Kubernetes or OpenShift cluster
-- `kubectl` or `oc` configured for the target cluster
-- Git, GNU Make, and Go 1.25 or newer for the source-based install below
-- permission to install CRDs and cluster-scoped RBAC
-- at least one reachable OpenAI-compatible model service
+- a supported Kubernetes or OpenShift cluster;
+- `kubectl` or `oc` configured for the target cluster;
+- Git, GNU Make, and Go 1.25 or newer for a source install;
+- permission to install CRDs and cluster-scoped RBAC; and
+- model endpoints reachable under the egress policy in the Router manifest.
+
+Managed mode additionally needs reachable PostgreSQL and Valkey services and
+the required security material. See
+[Router-Native Access Control Deployment](../../proposals/router-native-access-control-deployment#kubernetes-deployment).
 
 ## Install the Operator
-
-### Kubernetes with Kustomize
 
 ```bash
 git clone https://github.com/vllm-project/semantic-router.git
@@ -54,47 +50,65 @@ Verify the controller:
 kubectl get pods -n semantic-router-operator-system
 kubectl logs -n semantic-router-operator-system \
   deployment/semantic-router-operator-controller-manager
+kubectl explain semanticrouter.spec.bootstrap
 ```
 
-Pin a released image tag or digest for a controlled environment rather than
-using `latest`.
+Pin a released image tag or digest in controlled environments.
 
-### OpenShift with OLM
+## Create a standalone Router
 
-Use the Kustomize flow above when deploying the controller directly on
-OpenShift. The reconciler detects OpenShift and applies its platform-specific
-workload defaults.
-
-For an Operator Lifecycle Manager installation, first publish or select an OLM
-catalog that contains the Semantic Router bundle, then create the
-`CatalogSource`, `OperatorGroup`, and `Subscription` required by your cluster.
-The repository's `make openshift-deploy` target creates only the namespace,
-OperatorGroup, and Subscription; it assumes a `semantic-router-catalog`
-CatalogSource already exists in `openshift-marketplace`. It is therefore a
-maintainer convenience target, not a standalone installation command.
-
-## Create a first Router
-
-This example binds an existing Service named `model-server` in the same
-namespace. The Operator creates the provider model and model card and uses the
-first discovered model as the default.
+Create the immutable manifest and the workload declaration as separate
+objects. The ConfigMap comes first so reconciliation can validate it
+immediately:
 
 ```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-router-bootstrap-v1
+  namespace: default
+immutable: true
+data:
+  config.yaml: |
+    version: v0.4
+    models:
+      - name: local-model
+        card: {}
+        connections:
+          - provider: openai-compatible
+            endpoint: http://model-server.default.svc.cluster.local:8000
+            model: local-model
+    recipes:
+      - name: default
+        document:
+          decisions:
+            - name: answer
+              rules: {}
+    entrypoints:
+      - name: assistant
+        rules:
+          - name: default
+            matches: []
+            recipe: default
+            assignments:
+              answer:
+                models:
+                  - model: local-model
+    global:
+      control_plane:
+        mode: standalone
+---
 apiVersion: vllm.ai/v1alpha1
 kind: SemanticRouter
 metadata:
   name: my-router
   namespace: default
 spec:
+  bootstrap:
+    configMapRef:
+      name: my-router-bootstrap-v1
+      key: config.yaml
   replicas: 1
-  vllmEndpoints:
-    - name: local-backend
-      model: local/model
-      backend:
-        type: service
-        service:
-          name: model-server
-          port: 8000
   resources:
     requests:
       cpu: 500m
@@ -113,85 +127,114 @@ kubectl get deployment,service \
   -l app.kubernetes.io/instance=my-router
 ```
 
-Send a direct request with the concrete model name, or add canonical routing
-under `spec.config.routing` to expose automatic or policy-driven behavior.
+The selected key is mounted read-only as `/app/config.yaml`. The Operator
+checks that the ConfigMap is immutable, the key exists, the manifest is v0.4,
+and the control-plane mode respects the deployment boundary. Router startup
+performs full schema, provider, Recipe, and Entrypoint validation.
 
-## Add routing policy
+## Update the bootstrap
 
-`spec.config.routing` accepts the canonical routing object. The example below
-adds a catch-all decision over the discovered model:
-
-```yaml
-spec:
-  config:
-    routing:
-      strategy: priority
-      modelCards:
-        - name: local/model
-          modality: text
-          capabilities: [chat]
-      decisions:
-        - name: default-route
-          description: Route unmatched requests to the discovered local model.
-          priority: 1
-          rules:
-            operator: AND
-            conditions: []
-          modelRefs:
-            - model: local/model
-```
-
-The remaining `spec.config` fields are Operator adapters for shared Router
-settings such as response cache, classifiers, tools, observability, and
-reasoning families. They are translated into canonical `global` and provider
-sections. Consult the CRD reference rather than copying fields from a local
-`config.yaml` into arbitrary CR paths.
-
-## Backend discovery
-
-Each `spec.vllmEndpoints[]` entry declares one logical model and one way to
-resolve its backend:
-
-| `backend.type` | Use when | Required fields |
-|----------------|----------|-----------------|
-| `service` | An OpenAI-compatible Kubernetes Service already exists | `service.name`, `service.port`; optional `service.namespace` |
-| `kserve` | KServe owns the model deployment | `inferenceServiceName` |
-| `llamastack` | Services should be selected by labels | `discoveryLabels` |
-
-Example for a service in another namespace:
+Kubernetes does not mutate an immutable ConfigMap. Create a new object and move
+the reference:
 
 ```yaml
 spec:
-  vllmEndpoints:
-    - name: qwen-backend
-      model: qwen/assistant
-      reasoningFamily: qwen3
-      backend:
-        type: service
-        service:
-          name: qwen-vllm
-          namespace: model-serving
-          port: 8000
+  bootstrap:
+    configMapRef:
+      name: my-router-bootstrap-v2
+      key: config.yaml
 ```
 
-The `model` value must match the name served by the provider. The `name` value
-identifies the generated backend reference. Optional LoRA declarations become
-entries under the generated routing model card.
+The reference is part of the Pod template, so the Operator performs a normal
+rollout. It does not watch files or custom routing resources for in-process
+reloads. A standalone manifest is immutable until that rollout. Managed
+routing changes use the Management API and published snapshots instead of a
+ConfigMap revision.
 
-## Deployment modes
+## Managed mode
 
-### Standalone
+A managed manifest contains only process bootstrap: control-plane mode,
+PostgreSQL and Valkey references, access-runtime settings, Management listener
+security, provider-catalog rollout groups, and backend egress policy. Do not
+put Models, Recipes, Entrypoints, Users, Teams, keys, grants, or quota policy in
+it.
 
-With no `spec.gateway`, the Operator deploys an Envoy sidecar next to the
-Router. Client traffic enters the Service, Envoy invokes ExtProc, and Envoy
-forwards the transformed request to the selected backend.
+Mount credentials from Kubernetes Secrets through `spec.env`, `spec.envFrom`,
+or additional Secret volumes. The public ConfigMap contains only environment
+or file references. The maintained managed sample shows the object boundary; the
+[deployment proposal](../../proposals/router-native-access-control-deployment#router-bootstrap-configuration)
+defines every required managed bootstrap value.
 
-This mode is appropriate when the Router should be self-contained and the
-cluster does not already provide a compatible gateway.
+```yaml
+spec:
+  env:
+    - name: VLLM_SR_POSTGRES_DSN
+      valueFrom:
+        secretKeyRef:
+          name: router-control-plane
+          key: postgres-dsn
+```
 
-### Existing Gateway
+The managed bootstrap must select exactly one PostgreSQL migration source with
+`global.stores.access.postgres.dsn_env` or `.dsn_file`. Reconciliation creates a
+content-addressed schema Job with the Router image and waits for it to succeed.
+Only then does the Operator create or roll the Router Deployment. Observe the
+gate through `status.migration` and the `MigrationReady` condition.
 
-Reference an existing Kubernetes Gateway when the cluster owns ingress:
+A new managed installation has two readiness phases. The private Management
+Service becomes reachable after the Router process and stores are healthy, while
+the inference Deployment remains unready. Router replicas first converge the unique
+application-installed Provider Catalog through the configured rollout-group gate;
+they never replace an existing desired or active catalog revision during startup.
+Use the private Service from an authorized console or automation client to complete
+identity bootstrap and publish the first Model, Recipe, Entrypoint, access policy,
+and routing revision. `/ready` succeeds only after the catalog and coupled routing
+revision are active on every required replica. Existing installations with active
+revisions follow ordinary rollout waiting.
+
+Managed deployments have distinct listener Services:
+
+| Service | Exposure | Purpose |
+| --- | --- | --- |
+| `<name>` | `spec.service.type` | Inference and ExtProc traffic only. |
+| `<name>-management` | Private `ClusterIP` | TLS Management API only. |
+| `<name>-backend-dispatch` | Private `ClusterIP` | Router-to-Router dispatch only. |
+| `<name>-metrics` | Private `ClusterIP` | Metrics when enabled. |
+
+`spec.service.management.port` changes only the private Service port; the
+container target remains the Management port in the immutable bootstrap.
+
+PodDisruptionBudget, topology spread, and NetworkPolicy are enabled by default
+in managed mode and disabled by default in standalone mode. NetworkPolicy is
+fail closed: leaving a peer list empty does not allow that listener. Define
+separate `inferencePeers`, `managementPeers`, and `metricsPeers` rather than a
+single broad allow-list.
+
+```yaml
+spec:
+  podDisruptionBudget:
+    minAvailable: 2
+  topologySpread:
+    topologyKey: topology.kubernetes.io/zone
+    whenUnsatisfiable: ScheduleAnyway
+  networkPolicy:
+    inferencePeers:
+      - namespaceSelector:
+          matchLabels:
+            kubernetes.io/metadata.name: gateway-system
+    managementPeers:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/component: console
+```
+
+## Gateway and OpenShift modes
+
+Without `spec.gateway.existingRef`, the Operator deploys a local Envoy sidecar.
+Client traffic enters the Service, Envoy invokes ExtProc, and the Router's
+backend invoker dispatches the selected Model.
+
+To use an existing Gateway:
 
 ```yaml
 spec:
@@ -201,64 +244,30 @@ spec:
       namespace: gateway-system
 ```
 
-The current controller switches the Router into gateway-integration mode but
-does not create an `HTTPRoute`. Create and manage the matching route separately
-and target the Router Service on its API port. See the gateway-specific guides
-under **Deploy → Kubernetes Gateways**.
+The Operator switches to gateway-integration mode but does not create an
+`HTTPRoute`. Create that route separately and target the Router Service.
 
-### OpenShift Route
-
-On OpenShift, the Operator can create a Route:
-
-```yaml
-spec:
-  openshift:
-    routes:
-      enabled: true
-      tls:
-        termination: edge
-        insecureEdgeTerminationPolicy: Redirect
-```
-
-Omit the hostname to let OpenShift allocate one, or provide a hostname covered
-by your DNS and certificate configuration.
-
-## Secrets
-
-Use Kubernetes Secrets for provider, registry, and model-download credentials.
-Reference them from `spec.env` rather than placing literal values in the custom
-resource:
-
-```yaml
-spec:
-  env:
-    - name: HF_TOKEN
-      valueFrom:
-        secretKeyRef:
-          name: model-download-credentials
-          key: token
-```
-
-Apply least-privilege RBAC and restrict who can read the generated ConfigMaps,
-Secrets, logs, and custom resources. See
-[Security Hardening](../security-hardening).
+On OpenShift, `spec.openshift.routes.enabled` may create a Route. Choose its TLS
+termination to match the Router listener contract.
 
 ## Verify the deployment
 
 ```bash
 kubectl get semanticrouter my-router -o wide
 kubectl describe semanticrouter my-router
-kubectl get pods,service,pvc \
+kubectl get pods,service,pvc,job,pdb,networkpolicy \
   -l app.kubernetes.io/instance=my-router
 kubectl logs deployment/my-router -c semantic-router
 ```
 
-Check both reconciliation and data-plane behavior:
+Verify that:
 
-1. the custom resource's observed generation matches its generation;
-2. the expected replicas are ready;
-3. every discovered backend exists and serves the configured model name; and
-4. a real completion succeeds through the Service or Gateway.
+1. the referenced ConfigMap is immutable and contains the selected key;
+2. `status.observedGeneration` matches `metadata.generation`;
+3. managed mode reports `MigrationReady=True`;
+4. expected replicas are ready;
+5. only intended peers can reach Management and metrics; and
+6. a real request succeeds through each important Entrypoint.
 
 ## Next
 
@@ -266,4 +275,4 @@ Check both reconciliation and data-plane behavior:
 - [SemanticRouter CRD reference](../../api/semantic-router-crd)
 - [Configuration Workflows](../configuration-workflows)
 - [Kubernetes Gateway API](gateway-api-inference-extension)
-- [Storage options](../storage-overview)
+- [Security Hardening](../security-hardening)

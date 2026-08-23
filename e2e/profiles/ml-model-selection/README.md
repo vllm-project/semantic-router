@@ -52,8 +52,10 @@ kubectl logs deployment/semantic-router \
 ## Configuration contract
 
 [`values.yaml`](values.yaml) defines domain decisions and per-decision
-algorithms. Each algorithm names a serialized artifact under
-`routing.model_selection.algorithms`.
+algorithms. Each ML Decision owns its artifact configuration under
+`algorithm.ml`, while the canonical Entrypoint assigns the candidate Models to
+every Decision by name. Shared ML settings must agree within one Recipe;
+different Recipes may use different artifacts and embedding dimensions.
 
 Keep these pieces aligned:
 
@@ -61,7 +63,7 @@ Keep these pieces aligned:
 - feature-vector shape and ordering used during training;
 - algorithm type and artifact path;
 - model names stored in the artifact;
-- Router model cards and mock backend model names.
+- canonical Router Model names, Entrypoint assignments, and mock backend names.
 
 An artifact can load successfully and still make meaningless choices if its
 feature schema or labels differ from the runtime config.
@@ -77,7 +79,7 @@ feature schema or labels differ from the runtime config.
 - **No decision matched:** compare domain labels exactly; spaces, punctuation,
   and case are part of the configured value.
 - **Wrong backend:** compare the artifact's output model name with
-  `routing.modelCards`, decision `modelRefs`, and gateway routes.
+  `models[].name`, the decision's Entrypoint assignment, and gateway routes.
 
 Training and evaluation belong in
 [`src/training/model_selection/ml_model_selection`](../../../src/training/model_selection/ml_model_selection/README.md),

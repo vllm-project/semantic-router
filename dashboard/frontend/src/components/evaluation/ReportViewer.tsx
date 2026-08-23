@@ -1,69 +1,88 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { getPageWindow, paginateRows } from '../dataTableSupport';
-import type { EvaluationResult, TaskResults, TestCaseDetail, EvaluationMetadata } from '../../types/evaluation';
-import { DIMENSION_INFO, LEVEL_INFO, STATUS_INFO, formatDate, formatDuration, formatMetricValue, getMetricValue } from '../../types/evaluation';
-import { downloadExport } from '../../utils/evaluationApi';
-import EvaluationPagination from './EvaluationPagination';
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { getPageWindow, paginateRows } from '../dataTableSupport'
+import type {
+  EvaluationResult,
+  TaskResults,
+  TestCaseDetail,
+  EvaluationMetadata,
+} from '../../types/evaluation'
+import {
+  DIMENSION_INFO,
+  LEVEL_INFO,
+  STATUS_INFO,
+  formatDate,
+  formatDuration,
+  formatMetricValue,
+  getMetricValue,
+} from '../../types/evaluation'
+import { downloadExport } from '../../utils/evaluationApi'
+import EvaluationPagination from './EvaluationPagination'
+import ProductIcon from '../ProductIcon'
 import {
   EVALUATION_RESULT_PAGE_SIZE,
   filterAndSortEvaluationResults,
   formatEvaluationResultCount,
   type EvaluationResultSort,
-} from './evaluationListSupport';
-import styles from './ReportViewer.module.css';
+} from './evaluationListSupport'
+import styles from './ReportViewer.module.css'
 
 interface ReportViewerProps {
-  results: TaskResults;
-  onBack?: () => void;
+  results: TaskResults
+  onBack?: () => void
 }
 
 export function ReportViewer({ results, onBack }: ReportViewerProps) {
-  const { task, results: evaluationResults } = results;
-  const [search, setSearch] = useState('');
-  const [dimensionFilter, setDimensionFilter] = useState<EvaluationResult['dimension'] | 'all'>('all');
-  const [sortBy, setSortBy] = useState<EvaluationResultSort>('dataset-asc');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null);
-  const [exportError, setExportError] = useState<string | null>(null);
-  const deferredSearch = useDeferredValue(search);
-  const taskStatus = STATUS_INFO[task.status];
+  const { task, results: evaluationResults } = results
+  const [search, setSearch] = useState('')
+  const [dimensionFilter, setDimensionFilter] = useState<EvaluationResult['dimension'] | 'all'>(
+    'all',
+  )
+  const [sortBy, setSortBy] = useState<EvaluationResultSort>('dataset-asc')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
+  const deferredSearch = useDeferredValue(search)
+  const taskStatus = STATUS_INFO[task.status]
 
-  const handleExport = useCallback(async (format: 'json' | 'csv') => {
-    setExporting(format);
-    setExportError(null);
-    try {
-      await downloadExport(task.id, format);
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Failed to export evaluation results');
-    } finally {
-      setExporting(null);
-    }
-  }, [task.id]);
+  const handleExport = useCallback(
+    async (format: 'json' | 'csv') => {
+      setExporting(format)
+      setExportError(null)
+      try {
+        await downloadExport(task.id, format)
+      } catch (err) {
+        setExportError(err instanceof Error ? err.message : 'Failed to export evaluation results')
+      } finally {
+        setExporting(null)
+      }
+    },
+    [task.id],
+  )
 
   const overallScore = useMemo(() => {
     // Calculate an overall score based on available metrics
-    let totalScore = 0;
-    let count = 0;
+    let totalScore = 0
+    let count = 0
 
     for (const result of evaluationResults) {
-      const accuracy = getMetricValue(result.metrics, 'accuracy');
+      const accuracy = getMetricValue(result.metrics, 'accuracy')
       if (accuracy !== null) {
-        totalScore += accuracy;
-        count++;
+        totalScore += accuracy
+        count++
       }
-      const f1 = getMetricValue(result.metrics, 'f1_score');
+      const f1 = getMetricValue(result.metrics, 'f1_score')
       if (f1 !== null) {
-        totalScore += f1;
-        count++;
+        totalScore += f1
+        count++
       }
     }
 
-    return count > 0 ? totalScore / count : null;
-  }, [evaluationResults]);
+    return count > 0 ? totalScore / count : null
+  }, [evaluationResults])
   const dimensions = useMemo(
     () => [...new Set(evaluationResults.map((result) => result.dimension))].sort(),
     [evaluationResults],
-  );
+  )
   const filteredResults = useMemo(
     () =>
       filterAndSortEvaluationResults(evaluationResults, {
@@ -72,14 +91,14 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         sort: sortBy,
       }),
     [deferredSearch, dimensionFilter, evaluationResults, sortBy],
-  );
-  const pageWindow = getPageWindow(filteredResults.length, currentPage, EVALUATION_RESULT_PAGE_SIZE);
-  const visibleResults = paginateRows(filteredResults, pageWindow);
+  )
+  const pageWindow = getPageWindow(filteredResults.length, currentPage, EVALUATION_RESULT_PAGE_SIZE)
+  const visibleResults = paginateRows(filteredResults, pageWindow)
 
-  useEffect(() => setCurrentPage(1), [deferredSearch, dimensionFilter, sortBy]);
+  useEffect(() => setCurrentPage(1), [deferredSearch, dimensionFilter, sortBy])
   useEffect(() => {
-    if (currentPage !== pageWindow.page) setCurrentPage(pageWindow.page);
-  }, [currentPage, pageWindow.page]);
+    if (currentPage !== pageWindow.page) setCurrentPage(pageWindow.page)
+  }, [currentPage, pageWindow.page])
 
   return (
     <div className={styles.container}>
@@ -87,7 +106,7 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         <div className={styles.headerLeft}>
           {onBack && (
             <button type="button" className={styles.backButton} onClick={onBack}>
-              Back
+              <ProductIcon name="arrow-left" /> Back
             </button>
           )}
           <div className={styles.taskInfo}>
@@ -102,6 +121,7 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
             onClick={() => void handleExport('json')}
             disabled={exporting !== null}
           >
+            {exporting !== 'json' ? <ProductIcon name="download" /> : null}
             {exporting === 'json' ? 'Exporting…' : 'Export JSON'}
           </button>
           <button
@@ -110,12 +130,17 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
             onClick={() => void handleExport('csv')}
             disabled={exporting !== null}
           >
+            {exporting !== 'csv' ? <ProductIcon name="download" /> : null}
             {exporting === 'csv' ? 'Exporting…' : 'Export CSV'}
           </button>
         </div>
       </div>
 
-      {exportError ? <div className={styles.exportError} role="alert">Export failed: {exportError}</div> : null}
+      {exportError ? (
+        <div className={styles.exportError} role="alert">
+          Export failed: {exportError}
+        </div>
+      ) : null}
 
       <div className={styles.summary}>
         <div className={styles.summaryCard}>
@@ -137,7 +162,13 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         {overallScore !== null && (
           <div className={styles.summaryCard}>
             <span className={styles.summaryLabel}>Overall Score</span>
-            <span className={styles.summaryValue} style={{ color: overallScore >= 0.8 ? '#22c55e' : overallScore >= 0.6 ? '#f59e0b' : '#ef4444' }}>
+            <span
+              className={styles.summaryValue}
+              style={{
+                color:
+                  overallScore >= 0.8 ? '#22c55e' : overallScore >= 0.6 ? '#f59e0b' : '#ef4444',
+              }}
+            >
               {formatMetricValue(overallScore, 'percent')}
             </span>
           </div>
@@ -181,9 +212,15 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
               <option value="score-desc">Score high–low</option>
             </select>
             <span className={styles.resultCount}>
-              {formatEvaluationResultCount(filteredResults.length, evaluationResults.length, 'results')}
+              {formatEvaluationResultCount(
+                filteredResults.length,
+                evaluationResults.length,
+                'results',
+              )}
             </span>
-            <span className={styles.clientPagingNote}>Client view · {EVALUATION_RESULT_PAGE_SIZE}/page</span>
+            <span className={styles.clientPagingNote}>
+              Client view · {EVALUATION_RESULT_PAGE_SIZE}/page
+            </span>
           </div>
 
           {visibleResults.length > 0 ? (
@@ -240,31 +277,31 @@ export function ReportViewer({ results, onBack }: ReportViewerProps) {
         </dl>
       </div>
     </div>
-  );
+  )
 }
 
 interface ResultCardProps {
-  result: EvaluationResult;
+  result: EvaluationResult
 }
 
 function ResultCard({ result }: ResultCardProps) {
-  const dimInfo = DIMENSION_INFO[result.dimension];
-  const [showDetails, setShowDetails] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const dimInfo = DIMENSION_INFO[result.dimension]
+  const [showDetails, setShowDetails] = useState(false)
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 10
 
   // Extract common metrics
-  const accuracy = getMetricValue(result.metrics, 'accuracy');
-  const precision = getMetricValue(result.metrics, 'precision');
-  const recall = getMetricValue(result.metrics, 'recall');
-  const f1 = getMetricValue(result.metrics, 'f1_score');
-  const avgLatency = getMetricValue(result.metrics, 'avg_latency_ms');
-  const p50Latency = getMetricValue(result.metrics, 'p50_latency_ms');
-  const p99Latency = getMetricValue(result.metrics, 'p99_latency_ms');
+  const accuracy = getMetricValue(result.metrics, 'accuracy')
+  const precision = getMetricValue(result.metrics, 'precision')
+  const recall = getMetricValue(result.metrics, 'recall')
+  const f1 = getMetricValue(result.metrics, 'f1_score')
+  const avgLatency = getMetricValue(result.metrics, 'avg_latency_ms')
+  const p50Latency = getMetricValue(result.metrics, 'p50_latency_ms')
+  const p99Latency = getMetricValue(result.metrics, 'p99_latency_ms')
 
   // Extract metadata and details
-  const metadata = result.metrics.metadata as EvaluationMetadata | undefined;
-  const details = result.metrics.details as TestCaseDetail[] | undefined;
+  const metadata = result.metrics.metadata as EvaluationMetadata | undefined
+  const details = result.metrics.details as TestCaseDetail[] | undefined
 
   return (
     <div className={styles.resultCard}>
@@ -277,23 +314,27 @@ function ResultCard({ result }: ResultCardProps) {
       </div>
 
       {/* Dimension Info Box */}
-      {((metadata?.description || dimInfo?.description) || metadata) && (
+      {(metadata?.description || dimInfo?.description || metadata) && (
         <div className={styles.dimensionInfoBox}>
           {(metadata?.description || dimInfo?.description) && (
             <div className={styles.infoItem}>
-              <span className={styles.infoIcon}>📋</span>
+              <ProductIcon className={styles.infoIcon} name="logs" aria-hidden="true" />
               <div className={styles.infoText}>
                 <div>Dimension: {dimInfo?.label || result.dimension}</div>
-                <span className={styles.datasetId}>{metadata?.description || dimInfo?.description}</span>
+                <span className={styles.datasetId}>
+                  {metadata?.description || dimInfo?.description}
+                </span>
               </div>
             </div>
           )}
           {metadata && (
             <div className={styles.infoItem}>
-              <span className={styles.infoIcon}>📊</span>
+              <ProductIcon className={styles.infoIcon} name="chart" aria-hidden="true" />
               <div className={styles.infoText}>
                 <div>Dataset: {metadata.dataset_name || result.dataset_name}</div>
-                {metadata.hf_dataset && <span className={styles.datasetId}>{metadata.hf_dataset}</span>}
+                {metadata.hf_dataset && (
+                  <span className={styles.datasetId}>{metadata.hf_dataset}</span>
+                )}
               </div>
             </div>
           )}
@@ -345,104 +386,129 @@ function ResultCard({ result }: ResultCardProps) {
         )}
       </div>
 
-      {(result.dimension === 'domain' || result.dimension === 'fact_check' || result.dimension === 'user_feedback' || result.dimension === 'reask') && (
-        <SignalEvalDetails metrics={result.metrics} />
-      )}
+      {(result.dimension === 'domain' ||
+        result.dimension === 'fact_check' ||
+        result.dimension === 'user_feedback' ||
+        result.dimension === 'reask') && <SignalEvalDetails metrics={result.metrics} />}
 
       {/* Test Case Details */}
-      {details && details.length > 0 && (() => {
-        const totalPages = Math.ceil(details.length / itemsPerPage);
-        const startIdx = (currentPage - 1) * itemsPerPage;
-        const endIdx = startIdx + itemsPerPage;
-        const currentItems = details.slice(startIdx, endIdx);
+      {details &&
+        details.length > 0 &&
+        (() => {
+          const totalPages = Math.ceil(details.length / itemsPerPage)
+          const startIdx = (currentPage - 1) * itemsPerPage
+          const endIdx = startIdx + itemsPerPage
+          const currentItems = details.slice(startIdx, endIdx)
 
-        return (
-          <div className={styles.testCaseSection}>
-            <button
-              type="button"
-              className={styles.toggleDetailsButton}
-              onClick={() => {
-                setShowDetails((visible) => !visible);
-                setCurrentPage(1);
-              }}
-              aria-expanded={showDetails}
-            >
-              {showDetails ? '▼' : '▶'} Test Cases ({details.length})
-            </button>
-            {showDetails && (
-              <>
-                <div className={styles.testCaseList}>
-                  {currentItems.map((testCase, idx) => {
-                    const actualIdx = startIdx + idx;
-                    return (
-                      <div key={actualIdx} className={`${styles.testCase} ${styles[`testCase${testCase.status.charAt(0).toUpperCase() + testCase.status.slice(1)}`]}`}>
-                        <div className={styles.testCaseHeader}>
-                          <span className={styles.testCaseIndex}>#{actualIdx + 1}</span>
-                          <span className={`${styles.testCaseStatus} ${styles[`status${testCase.status.charAt(0).toUpperCase() + testCase.status.slice(1)}`]}`}>
-                            {testCase.status === 'correct' ? '✓' : testCase.status === 'incorrect' ? '✗' : '⊘'}
-                          </span>
-                        </div>
-                        <div className={styles.testCaseContent}>
-                          <div className={styles.testCaseQuery}>
-                            <strong>Query:</strong> {testCase.query}
+          return (
+            <div className={styles.testCaseSection}>
+              <button
+                type="button"
+                className={styles.toggleDetailsButton}
+                onClick={() => {
+                  setShowDetails((visible) => !visible)
+                  setCurrentPage(1)
+                }}
+                aria-expanded={showDetails}
+              >
+                <ProductIcon
+                  name={showDetails ? 'chevron-down' : 'chevron-right'}
+                  aria-hidden="true"
+                />
+                Test Cases ({details.length})
+              </button>
+              {showDetails && (
+                <>
+                  <div className={styles.testCaseList}>
+                    {currentItems.map((testCase, idx) => {
+                      const actualIdx = startIdx + idx
+                      return (
+                        <div
+                          key={actualIdx}
+                          className={`${styles.testCase} ${styles[`testCase${testCase.status.charAt(0).toUpperCase() + testCase.status.slice(1)}`]}`}
+                        >
+                          <div className={styles.testCaseHeader}>
+                            <span className={styles.testCaseIndex}>#{actualIdx + 1}</span>
+                            <span
+                              className={`${styles.testCaseStatus} ${styles[`status${testCase.status.charAt(0).toUpperCase() + testCase.status.slice(1)}`]}`}
+                            >
+                              <ProductIcon
+                                name={
+                                  testCase.status === 'correct'
+                                    ? 'check'
+                                    : testCase.status === 'incorrect'
+                                      ? 'close'
+                                      : 'minus'
+                                }
+                                aria-label={testCase.status}
+                              />
+                            </span>
                           </div>
-                          <div className={styles.testCaseComparison}>
-                            <div className={styles.testCaseExpected}>
-                              <strong>Expected:</strong> <code>{String(testCase.expected)}</code>
+                          <div className={styles.testCaseContent}>
+                            <div className={styles.testCaseQuery}>
+                              <strong>Query:</strong> {testCase.query}
                             </div>
-                            <div className={styles.testCaseActual}>
-                              <strong>Actual:</strong> <code>{testCase.actual !== null ? String(testCase.actual) : 'N/A'}</code>
+                            <div className={styles.testCaseComparison}>
+                              <div className={styles.testCaseExpected}>
+                                <strong>Expected:</strong> <code>{String(testCase.expected)}</code>
+                              </div>
+                              <div className={styles.testCaseActual}>
+                                <strong>Actual:</strong>{' '}
+                                <code>
+                                  {testCase.actual !== null ? String(testCase.actual) : 'N/A'}
+                                </code>
+                              </div>
                             </div>
+                            {testCase.reason && (
+                              <div className={styles.testCaseReason}>
+                                <strong>Reason:</strong> {testCase.reason}
+                              </div>
+                            )}
                           </div>
-                          {testCase.reason && (
-                            <div className={styles.testCaseReason}>
-                              <strong>Reason:</strong> {testCase.reason}
-                            </div>
-                          )}
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {totalPages > 1 && (
-                  <div className={styles.pagination}>
-                    <span className={styles.paginationInfo}>
-                      Page {currentPage} of {totalPages} ({startIdx + 1}-{Math.min(endIdx, details.length)} of {details.length})
-                    </span>
-                    <div className={styles.paginationButtons}>
-                      <button
-                        type="button"
-                        className={styles.paginationButton}
-                        onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                        disabled={currentPage === 1}
-                      >
-                        ← Previous
-                      </button>
-                      <button
-                        type="button"
-                        className={styles.paginationButton}
-                        onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
-                        disabled={currentPage === totalPages}
-                      >
-                        Next →
-                      </button>
-                    </div>
+                      )
+                    })}
                   </div>
-                )}
-              </>
-            )}
-          </div>
-        );
-      })()}
+                  {totalPages > 1 && (
+                    <div className={styles.pagination}>
+                      <span className={styles.paginationInfo}>
+                        Page {currentPage} of {totalPages} ({startIdx + 1}-
+                        {Math.min(endIdx, details.length)} of {details.length})
+                      </span>
+                      <div className={styles.paginationButtons}>
+                        <button
+                          type="button"
+                          className={styles.paginationButton}
+                          onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          <ProductIcon name="chevron-left" /> Previous
+                        </button>
+                        <button
+                          type="button"
+                          className={styles.paginationButton}
+                          onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                          disabled={currentPage === totalPages}
+                        >
+                          Next <ProductIcon name="chevron-right" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })()}
     </div>
-  );
+  )
 }
 
 function SignalEvalDetails({ metrics }: { metrics: Record<string, unknown> }) {
-  const totalSamples = getMetricValue(metrics, 'total_samples');
-  const correct = getMetricValue(metrics, 'correct');
-  const incorrect = getMetricValue(metrics, 'incorrect');
-  const skipped = getMetricValue(metrics, 'skipped');
+  const totalSamples = getMetricValue(metrics, 'total_samples')
+  const correct = getMetricValue(metrics, 'correct')
+  const incorrect = getMetricValue(metrics, 'incorrect')
+  const skipped = getMetricValue(metrics, 'skipped')
 
   return (
     <div className={styles.details}>
@@ -472,7 +538,7 @@ function SignalEvalDetails({ metrics }: { metrics: Record<string, unknown> }) {
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default ReportViewer;
+export default ReportViewer

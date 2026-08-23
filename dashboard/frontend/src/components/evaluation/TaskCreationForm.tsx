@@ -1,29 +1,35 @@
-import { useCallback } from 'react';
-import type { CreateTaskRequest, DatasetInfo, EvaluationDimension, EvaluationLevel } from '../../types/evaluation';
-import { DIMENSION_INFO, LEVEL_INFO } from '../../types/evaluation';
-import { useTaskCreationForm, useDatasets } from '../../hooks/useEvaluation';
-import { getAllowedDimensionsForLevel } from '../../utils/evaluationConfig';
-import styles from './TaskCreationForm.module.css';
+import { useCallback } from 'react'
+import type {
+  CreateTaskRequest,
+  DatasetInfo,
+  EvaluationDimension,
+  EvaluationLevel,
+} from '../../types/evaluation'
+import { DIMENSION_INFO, LEVEL_INFO } from '../../types/evaluation'
+import { useTaskCreationForm, useDatasets } from '../../hooks/useEvaluation'
+import { getAllowedDimensionsForLevel } from '../../utils/evaluationConfig'
+import ProductIcon from '../ProductIcon'
+import styles from './TaskCreationForm.module.css'
 
 interface TaskCreationFormProps {
-  onSubmit: (request: CreateTaskRequest) => void;
-  onCancel: () => void;
-  loading?: boolean;
+  onSubmit: (request: CreateTaskRequest) => void
+  onCancel: () => void
+  loading?: boolean
 }
 
 export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFormProps) {
-  const form = useTaskCreationForm();
+  const form = useTaskCreationForm()
   const {
     datasets: availableDatasets,
     loading: datasetsLoading,
     error: datasetsError,
     refresh: refreshDatasets,
-  } = useDatasets();
+  } = useDatasets()
 
   const handleSubmit = useCallback(() => {
-    const config = form.getConfig();
-    onSubmit(config);
-  }, [form, onSubmit]);
+    const config = form.getConfig()
+    onSubmit(config)
+  }, [form, onSubmit])
 
   const renderStepIndicator = () => (
     <div className={styles.stepIndicator}>
@@ -45,12 +51,14 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         </button>
       ))}
     </div>
-  );
+  )
 
   const renderStep1 = () => (
     <div className={styles.stepContent}>
       <h3>Basic Information</h3>
-      <p className={styles.stepDescription}>Enter a name, description, and evaluation level for your task.</p>
+      <p className={styles.stepDescription}>
+        Enter a name, description, and evaluation level for your task.
+      </p>
 
       <div className={styles.formGroup}>
         <label>Evaluation Level *</label>
@@ -61,9 +69,11 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
               type="button"
               className={`${styles.levelButton} ${form.level === level ? styles.levelButtonActive : ''}`}
               onClick={() => form.setLevel(level as EvaluationLevel)}
-              style={{
-                '--level-color': info.color,
-              } as React.CSSProperties}
+              style={
+                {
+                  '--level-color': info.color,
+                } as React.CSSProperties
+              }
             >
               <span className={styles.levelButtonLabel}>{info.label}</span>
             </button>
@@ -127,19 +137,20 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         </div>
       </div>
     </div>
-  );
+  )
 
   const renderStep2 = () => {
-    const availableDimensions = getAllowedDimensionsForLevel(form.level);
+    const availableDimensions = getAllowedDimensionsForLevel(form.level)
     const filteredDimensionInfo = Object.entries(DIMENSION_INFO).filter(([dim]) =>
-      availableDimensions.includes(dim as EvaluationDimension)
-    ) as [EvaluationDimension, typeof DIMENSION_INFO[EvaluationDimension]][];
+      availableDimensions.includes(dim as EvaluationDimension),
+    ) as [EvaluationDimension, (typeof DIMENSION_INFO)[EvaluationDimension]][]
 
     return (
       <div className={styles.stepContent}>
         <h3>Select Evaluation Dimensions</h3>
         <p className={styles.stepDescription}>
-          Choose which {form.level === 'router' ? 'signal types' : 'model performance metrics'} to evaluate.
+          Choose which {form.level === 'router' ? 'signal types' : 'model performance metrics'} to
+          evaluate.
         </p>
 
         {filteredDimensionInfo.length === 0 ? (
@@ -158,7 +169,10 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
                 style={{ '--dim-color': info.color } as React.CSSProperties}
               >
                 <div className={styles.dimensionHeader}>
-                  <span className={styles.dimensionIndicator} style={{ backgroundColor: info.color }} />
+                  <span
+                    className={styles.dimensionIndicator}
+                    style={{ backgroundColor: info.color }}
+                  />
                   <span className={styles.dimensionLabel}>{info.label}</span>
                 </div>
                 <p className={styles.dimensionDescription}>{info.description}</p>
@@ -167,8 +181,8 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
           </div>
         )}
       </div>
-    );
-  };
+    )
+  }
 
   const renderStep3 = () => (
     <div className={styles.stepContent}>
@@ -181,21 +195,25 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         <div className={styles.datasetError} role="alert">
           <h4>Datasets are unavailable</h4>
           <p>{datasetsError}</p>
-          <button type="button" onClick={() => void refreshDatasets()}>Retry</button>
+          <button type="button" onClick={() => void refreshDatasets()}>
+            <ProductIcon name="refresh" /> Retry
+          </button>
         </div>
       ) : (
         <div className={styles.datasetGroups}>
           {form.dimensions.map((dim) => {
             // Filter datasets by level
-            const allDatasets = availableDatasets[dim] || [];
-            const datasets = allDatasets.filter((ds: DatasetInfo) => ds.level === form.level);
+            const allDatasets = availableDatasets[dim] || []
+            const datasets = allDatasets.filter((ds: DatasetInfo) => ds.level === form.level)
 
             return (
               <div key={dim} className={styles.datasetGroup}>
                 <h4 style={{ color: DIMENSION_INFO[dim].color }}>{DIMENSION_INFO[dim].label}</h4>
                 <div className={styles.datasetList}>
                   {datasets.length === 0 ? (
-                    <p className={styles.noDatasets}>No datasets available for this dimension at {form.level} level.</p>
+                    <p className={styles.noDatasets}>
+                      No datasets available for this dimension at {form.level} level.
+                    </p>
                   ) : (
                     datasets.map((ds: DatasetInfo) => (
                       <label key={ds.name} className={styles.datasetItem}>
@@ -213,19 +231,21 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
                   )}
                 </div>
               </div>
-            );
+            )
           })}
         </div>
       )}
     </div>
-  );
+  )
 
   const renderStep4 = () => {
-    const config = form.getConfig();
+    const config = form.getConfig()
     return (
       <div className={styles.stepContent}>
         <h3>Review & Submit</h3>
-        <p className={styles.stepDescription}>Review your evaluation configuration before submitting.</p>
+        <p className={styles.stepDescription}>
+          Review your evaluation configuration before submitting.
+        </p>
 
         <div className={styles.reviewSection}>
           <h4>Task Details</h4>
@@ -254,7 +274,10 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
               <span
                 key={dim}
                 className={styles.dimensionTag}
-                style={{ backgroundColor: `${DIMENSION_INFO[dim].color}20`, color: DIMENSION_INFO[dim].color }}
+                style={{
+                  backgroundColor: `${DIMENSION_INFO[dim].color}20`,
+                  color: DIMENSION_INFO[dim].color,
+                }}
               >
                 {DIMENSION_INFO[dim].label}
               </span>
@@ -268,14 +291,18 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
             {Object.entries(config.config.datasets).map(([dim, datasets]) => (
               <div key={dim}>
                 <dt>{DIMENSION_INFO[dim as EvaluationDimension]?.label || dim}</dt>
-                <dd>{(datasets as string[]).length > 0 ? (datasets as string[]).join(', ') : 'Use backend default dataset'}</dd>
+                <dd>
+                  {(datasets as string[]).length > 0
+                    ? (datasets as string[]).join(', ')
+                    : 'Use backend default dataset'}
+                </dd>
               </div>
             ))}
           </dl>
         </div>
       </div>
-    );
-  };
+    )
+  }
 
   return (
     <div className={styles.container}>
@@ -294,8 +321,13 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
         </button>
         <div className={styles.navButtons}>
           {form.step > 1 && (
-            <button type="button" className={styles.prevButton} onClick={form.prevStep} disabled={loading}>
-              Previous
+            <button
+              type="button"
+              className={styles.prevButton}
+              onClick={form.prevStep}
+              disabled={loading}
+            >
+              <ProductIcon name="chevron-left" /> Previous
             </button>
           )}
           {form.step < 4 ? (
@@ -305,17 +337,23 @@ export function TaskCreationForm({ onSubmit, onCancel, loading }: TaskCreationFo
               onClick={form.nextStep}
               disabled={!form.isStepValid(form.step) || loading}
             >
-              Next
+              Next <ProductIcon name="chevron-right" />
             </button>
           ) : (
-            <button type="button" className={styles.submitButton} onClick={handleSubmit} disabled={loading}>
+            <button
+              type="button"
+              className={styles.submitButton}
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              {!loading ? <ProductIcon name="plus" /> : null}
               {loading ? 'Creating...' : 'Create Task'}
             </button>
           )}
         </div>
       </div>
     </div>
-  );
+  )
 }
 
-export default TaskCreationForm;
+export default TaskCreationForm

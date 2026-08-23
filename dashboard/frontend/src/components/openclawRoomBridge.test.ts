@@ -13,7 +13,9 @@ describe('openclawRoomBridge', () => {
       event: { type: 'new_message', message: { id: 'm1' } as never },
     })
     expect(isRoomBridgeEnvelope(envelope)).toBe(true)
-    expect(isRoomBridgeEnvelope({ source: 'other', type: 'room_event', roomId: 'room-alpha' })).toBe(false)
+    expect(
+      isRoomBridgeEnvelope({ source: 'other', type: 'room_event', roomId: 'room-alpha' }),
+    ).toBe(false)
   })
 
   it('builds parent to iframe room_event payloads', () => {
@@ -62,15 +64,17 @@ describe('openclawRoomBridge', () => {
         type: 'room_event',
         roomId: 'room-alpha',
       }),
-      '*'
+      '*',
     )
   })
 
   it('builds websocket surface_event payloads with worker identity', () => {
-    expect(buildRoomSurfaceWSMessage(
-      { kind: 'tool_call', name: 'search' },
-      { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' }
-    )).toEqual({
+    expect(
+      buildRoomSurfaceWSMessage(
+        { kind: 'tool_call', name: 'search' },
+        { senderType: 'worker', senderId: 'worker-a', senderName: 'worker-a' },
+      ),
+    ).toEqual({
       type: 'surface_event',
       payload: { kind: 'tool_call', name: 'search' },
       senderType: 'worker',

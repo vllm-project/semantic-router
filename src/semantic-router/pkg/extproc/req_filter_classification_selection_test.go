@@ -231,14 +231,14 @@ func TestSelectModelFromCandidatesRecordsSingleCandidateInRouterMemory(t *testin
 
 func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
-	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+	cfg.ModelConfig = map[string]config.ModelParams{
 		"current":  {Description: "general chat"},
 		"frontier": {Description: "coding specialist"},
 	}
 
 	modelSelectionCfg := buildModelSelectionConfig(&cfg)
 	registry := selection.NewFactory(modelSelectionCfg).
-		WithModelConfig(cfg.BackendModels.ModelConfig).
+		WithModelConfig(cfg.ModelConfig).
 		WithEmbeddingFunc(func(text string) ([]float32, error) {
 			lower := strings.ToLower(text)
 			switch {
@@ -293,7 +293,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedMultiFactorSelector(t *tes
 		},
 	}
 	cfg := config.DefaultGlobalConfig()
-	cfg.BackendModels.ModelConfig = map[string]config.ModelParams{
+	cfg.ModelConfig = map[string]config.ModelParams{
 		"premium": {
 			QualityScore: 0.9,
 			Pricing:      config.ModelPricing{PromptPer1M: 10},

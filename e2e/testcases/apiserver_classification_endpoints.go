@@ -16,28 +16,15 @@ import (
 
 func init() {
 	pkgtestcases.Register("apiserver-classification-endpoints", pkgtestcases.TestCase{
-		Description: "Verify router config, metrics, and combined-classification endpoints against the live router runtime",
-		Tags:        []string{"kubernetes", "apiserver", "classification", "config", "api"},
+		Description: "Verify the standalone immutable-config boundary, metrics, and combined classification",
+		Tags:        []string{"kubernetes", "apiserver", "classification", "api"},
 		Fn:          testAPIServerClassificationEndpoints,
 	})
 }
 
-type routerConfigDocument struct {
-	Routing struct {
-		Decisions []struct {
-			Name string `json:"name"`
-		} `json:"decisions"`
-		Signals map[string]interface{} `json:"signals"`
-	} `json:"routing"`
-}
-
 type classificationMetricsDocument struct {
-	DecisionCount    int  `json:"decision_count"`
-	SignalGroupCount int  `json:"signal_group_count"`
-	RouterConfigAPI  bool `json:"router_config_api"`
-	ClassifierReady  bool `json:"classifier_ready"`
-	PIIReady         bool `json:"pii_ready"`
-	SecurityReady    bool `json:"security_ready"`
+	DecisionCount    int `json:"decision_count"`
+	SignalGroupCount int `json:"signal_group_count"`
 }
 
 func testAPIServerClassificationEndpoints(
@@ -52,11 +39,7 @@ func testAPIServerClassificationEndpoints(
 	defer session.Close()
 
 	httpClient := session.HTTPClient(30 * time.Second)
-	configBody, configDoc, err := fetchRouterConfigDocument(ctx, httpClient, session.URL("/config/router"))
-	if err != nil {
-		return err
-	}
-	if err := assertRouterConfigMergeSemantics(ctx, httpClient, session.URL("/config/router"), configBody); err != nil {
+	if err := assertStandaloneConfigRoutesAbsent(ctx, httpClient, session); err != nil {
 		return err
 	}
 
@@ -64,10 +47,6 @@ func testAPIServerClassificationEndpoints(
 	if err != nil {
 		return err
 	}
-	if metricsDoc.DecisionCount != len(configDoc.Routing.Decisions) {
-		return fmt.Errorf("expected /metrics/classification decision_count=%d, got %d", len(configDoc.Routing.Decisions), metricsDoc.DecisionCount)
-	}
-
 	combinedKeys, err := fetchCombinedClassificationKeys(
 		ctx,
 		httpClient,
@@ -77,15 +56,11 @@ func testAPIServerClassificationEndpoints(
 	if err != nil {
 		return err
 	}
-	if err := assertRouterConfigReplaceSemantics(ctx, httpClient, session.URL("/config/router"), configBody); err != nil {
-		return err
-	}
-
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
 			"decision_count":     metricsDoc.DecisionCount,
 			"signal_group_count": metricsDoc.SignalGroupCount,
-			"router_config_api":  metricsDoc.RouterConfigAPI,
+			"immutable_config":   true,
 			"combined_keys":      combinedKeys,
 		})
 	}
@@ -93,132 +68,42 @@ func testAPIServerClassificationEndpoints(
 	return nil
 }
 
-func fetchRouterConfigDocument(
+func assertStandaloneConfigRoutesAbsent(
 	ctx context.Context,
 	httpClient *http.Client,
-	url string,
-) ([]byte, *routerConfigDocument, error) {
-	resp, err := getJSON(ctx, httpClient, url)
-	if err != nil {
-		return nil, nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, nil, fmt.Errorf("expected /config/router status 200, got %d: %s", resp.StatusCode, string(resp.Body))
-	}
-
-	var doc routerConfigDocument
-	if err := json.Unmarshal(resp.Body, &doc); err != nil {
-		return nil, nil, fmt.Errorf("decode /config/router response: %w", err)
-	}
-	if len(doc.Routing.Decisions) == 0 {
-		return nil, nil, fmt.Errorf("expected /config/router to include routing decisions")
-	}
-	return resp.Body, &doc, nil
-}
-
-func assertRouterConfigMergeSemantics(
-	ctx context.Context,
-	httpClient *http.Client,
-	url string,
-	originalBody []byte,
+	session *fixtures.ServiceSession,
 ) error {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(originalBody, &payload); err != nil {
-		return fmt.Errorf("decode original /config/router document: %w", err)
+	tests := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/config/router"},
+		{http.MethodPost, "/config/router/validate"},
+		{http.MethodPatch, "/config/router"},
+		{http.MethodPut, "/config/router"},
+		{http.MethodPost, "/config/router/rollback"},
+		{http.MethodGet, "/config/router/versions"},
+		{http.MethodGet, "/config/router/recipes"},
+		{http.MethodPost, "/config/router/recipes/validate"},
+		{http.MethodGet, "/config/router/recipes/example"},
+		{http.MethodPut, "/config/router/recipes/example"},
+		{http.MethodDelete, "/config/router/recipes/example"},
+		{http.MethodGet, "/config/hash"},
+		{http.MethodGet, "/config/kbs"},
+		{http.MethodPost, "/config/kbs"},
+		{http.MethodGet, "/config/kbs/example"},
+		{http.MethodPut, "/config/kbs/example"},
+		{http.MethodDelete, "/config/kbs/example"},
 	}
-
-	routing, ok := payload["routing"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected original /config/router document to include routing")
+	for _, test := range tests {
+		response, err := postJSON(ctx, httpClient, test.method, session.URL(test.path), []byte(`{}`))
+		if err != nil {
+			return err
+		}
+		if response.StatusCode != http.StatusNotFound {
+			return fmt.Errorf("expected removed route %s %s to return 404, got %d: %s", test.method, test.path, response.StatusCode, string(response.Body))
+		}
 	}
-	if _, ok := routing["projections"].(map[string]interface{}); !ok {
-		return fmt.Errorf("expected original /config/router document to include routing.projections")
-	}
-
-	patchBody, err := json.Marshal(map[string]interface{}{
-		"routing": map[string]interface{}{
-			"decisions": routing["decisions"],
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("marshal merge PATCH /config/router body: %w", err)
-	}
-
-	resp, err := postJSON(ctx, httpClient, http.MethodPatch, url, patchBody)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("expected PATCH /config/router status 200, got %d: %s", resp.StatusCode, string(resp.Body))
-	}
-
-	var updated map[string]interface{}
-	if err := json.Unmarshal(resp.Body, &updated); err != nil {
-		return fmt.Errorf("decode PATCH /config/router response: %w", err)
-	}
-	updatedRouting, ok := updated["routing"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected PATCH /config/router response to include routing")
-	}
-	if _, ok := updatedRouting["projections"].(map[string]interface{}); !ok {
-		return fmt.Errorf("expected PATCH /config/router to preserve omitted routing.projections")
-	}
-	return nil
-}
-
-func assertRouterConfigReplaceSemantics(
-	ctx context.Context,
-	httpClient *http.Client,
-	url string,
-	originalBody []byte,
-) error {
-	var payload map[string]interface{}
-	if err := json.Unmarshal(originalBody, &payload); err != nil {
-		return fmt.Errorf("decode original /config/router document: %w", err)
-	}
-
-	routing, ok := payload["routing"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected original /config/router document to include routing")
-	}
-	if _, ok := routing["projections"].(map[string]interface{}); !ok {
-		return fmt.Errorf("expected original /config/router document to include routing.projections")
-	}
-
-	delete(routing, "projections")
-	modifiedBody, err := json.Marshal(payload)
-	if err != nil {
-		return fmt.Errorf("marshal modified /config/router document: %w", err)
-	}
-
-	resp, err := postJSON(ctx, httpClient, http.MethodPut, url, modifiedBody)
-	if err != nil {
-		return err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("expected replace PUT /config/router status 200, got %d: %s", resp.StatusCode, string(resp.Body))
-	}
-
-	var updated map[string]interface{}
-	if err := json.Unmarshal(resp.Body, &updated); err != nil {
-		return fmt.Errorf("decode replace PUT /config/router response: %w", err)
-	}
-	updatedRouting, ok := updated["routing"].(map[string]interface{})
-	if !ok {
-		return fmt.Errorf("expected replace PUT /config/router response to include routing")
-	}
-	if _, ok := updatedRouting["projections"]; ok {
-		return fmt.Errorf("expected replace PUT /config/router to drop omitted routing.projections")
-	}
-
-	restoreResp, err := postJSON(ctx, httpClient, http.MethodPut, url, originalBody)
-	if err != nil {
-		return err
-	}
-	if restoreResp.StatusCode != http.StatusOK {
-		return fmt.Errorf("expected restore PUT /config/router status 200, got %d: %s", restoreResp.StatusCode, string(restoreResp.Body))
-	}
-
 	return nil
 }
 
@@ -238,9 +123,6 @@ func fetchClassificationMetricsDocument(
 	var doc classificationMetricsDocument
 	if err := json.Unmarshal(resp.Body, &doc); err != nil {
 		return nil, fmt.Errorf("decode /metrics/classification response: %w", err)
-	}
-	if !doc.RouterConfigAPI {
-		return nil, fmt.Errorf("expected /metrics/classification to advertise router_config_api=true")
 	}
 	return &doc, nil
 }

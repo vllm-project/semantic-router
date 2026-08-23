@@ -1,26 +1,28 @@
 import React from 'react'
-import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { Outlet, useNavigate } from 'react-router-dom'
+import InvitationWelcomeDialog from '../components/InvitationWelcomeDialog'
 import OnboardingGuide from '../components/OnboardingGuide'
-import { useSetup } from '../contexts/SetupContext'
+import { useAuth } from '../contexts/AuthContext'
+import { canAccessDashboardPath } from '../utils/accessControl'
+import { peekInvitationOnboarding } from '../utils/invitationOnboarding'
 
-/** Setup-mode redirect + onboarding for normal routes. */
+/** Capability-scoped onboarding for authenticated routes. */
 const AuthenticatedShell: React.FC = () => {
-  const { setupState } = useSetup()
-  const location = useLocation()
-  const isSetupMode = setupState?.setupMode ?? false
-
-  if (isSetupMode && location.pathname !== '/setup') {
-    return <Navigate to="/setup" replace />
-  }
-
-  if (!isSetupMode && location.pathname === '/setup') {
-    return <Navigate to="/dashboard" replace />
-  }
-
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  const invitationOnboarding = user?.managementUserId
+    ? peekInvitationOnboarding(user.managementUserId)
+    : null
   return (
     <>
       <Outlet />
-      {!isSetupMode && location.pathname !== '/setup' && <OnboardingGuide />}
+      {canAccessDashboardPath(user, '/config/models') && <OnboardingGuide />}
+      {invitationOnboarding ? (
+        <InvitationWelcomeDialog
+          displayName={invitationOnboarding.displayName}
+          onRevealKey={() => navigate('/access/api-keys?onboarding=invitation', { replace: true })}
+        />
+      ) : null}
     </>
   )
 }

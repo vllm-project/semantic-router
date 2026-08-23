@@ -11,8 +11,7 @@ import (
 
 func TestResolveInitialRouterConfigWithEmptyRuntimeRegistryParsesFileBeforeGlobal(t *testing.T) {
 	globalCfg := &config.RouterConfig{
-		ConfigSource: config.ConfigSourceKubernetes,
-		Looper:       config.LooperConfig{GRPCMaxMsgSizeMB: 64},
+		Looper: config.LooperConfig{GRPCMaxMsgSizeMB: 64},
 	}
 	restoreGlobalConfig := replaceExtProcGlobalConfigForTest(globalCfg)
 	defer restoreGlobalConfig()
@@ -23,6 +22,7 @@ func TestResolveInitialRouterConfigWithEmptyRuntimeRegistryParsesFileBeforeGloba
 	cfg, publishGlobal, err := resolveInitialRouterConfig(
 		configPath,
 		routerruntime.NewRegistry(nil),
+		extProcAuthoringParser(t).Parse,
 	)
 	if err != nil {
 		t.Fatalf("resolveInitialRouterConfig() error = %v", err)
@@ -30,11 +30,11 @@ func TestResolveInitialRouterConfigWithEmptyRuntimeRegistryParsesFileBeforeGloba
 	if cfg == globalCfg {
 		t.Fatal("resolveInitialRouterConfig() returned legacy global config, want file config for runtime registry path")
 	}
-	if cfg.ConfigSource != config.ConfigSourceFile {
-		t.Fatalf("resolveInitialRouterConfig() source = %q, want file source", cfg.ConfigSource)
+	if _, ok := cfg.ModelConfig["file-model"]; !ok {
+		t.Fatalf("resolveInitialRouterConfig() Models = %+v, want file-model", cfg.ModelConfig)
 	}
-	if cfg.BackendModels.DefaultModel != "file-model" {
-		t.Fatalf("resolveInitialRouterConfig() default model = %q, want file-model", cfg.BackendModels.DefaultModel)
+	if _, ok := cfg.RecipeForRequestModel("router/file"); !ok {
+		t.Fatal("resolveInitialRouterConfig() did not compile the file Entrypoint")
 	}
 	if publishGlobal {
 		t.Fatal("resolveInitialRouterConfig() publishGlobal = true, want false for runtime registry path")
@@ -47,30 +47,31 @@ func TestResolveInitialRouterConfigWithEmptyRuntimeRegistryParsesFileBeforeGloba
 func writeRuntimeRegistryFileConfig(t *testing.T, path string) {
 	t.Helper()
 	content := []byte(`
-version: v0.3
+version: v0.4
 listeners:
   - name: http
     address: 0.0.0.0
     port: 8888
-providers:
-  defaults:
-    default_model: file-model
-  models:
-    - name: file-model
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: file-model
-  decisions:
-    - name: default-route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: file-model
-          use_reasoning: false
+models:
+  - name: file-model
+    card: {}
+    connections:
+      - provider: vllm
+        endpoint: http://127.0.0.1:8000
+        model: file-model
+recipes:
+  - name: default
+    document:
+      decisions:
+        - name: default-route
+          priority: 1
+          rules: {operator: AND, conditions: []}
+entrypoints:
+  - name: router/file
+    recipe: default
+    assignments:
+      default-route:
+        models: [{model: file-model}]
 `)
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatalf("write runtime registry file config: %v", err)

@@ -1,8 +1,9 @@
 # vLLM Semantic Router CLI
 
 `vllm-sr` configures and runs the local vLLM Semantic Router stack. It can also
-validate or migrate config files, deploy the router Helm chart, inspect virtual
-models and Recipes, and send test requests.
+validate or import bootstrap config, deploy the Router Helm chart, and send
+test requests. Models, Recipes, decision assignments, and Entrypoints are
+managed through the Router Management API or Dashboard after startup.
 
 Full documentation: <https://vllm-sr.ai/docs/installation/>
 
@@ -29,8 +30,11 @@ run the local container stack.
 ## Start a local stack
 
 ```bash
-# Start Router, Envoy, Dashboard, the simulator, and observability.
+# Start Router, Envoy, Dashboard, PostgreSQL, and Valkey.
 vllm-sr serve
+
+# Add Prometheus, Grafana, and Jaeger when you need them.
+vllm-sr serve --with-observability
 
 # Use Podman.
 vllm-sr serve --runtime podman
@@ -45,7 +49,7 @@ OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
-backends referenced by `providers.models`; those endpoints must already be
+services referenced by `models[].connections`; those endpoints must already be
 running and reachable.
 
 Useful lifecycle commands:
@@ -58,7 +62,11 @@ vllm-sr logs simulator
 vllm-sr stop
 ```
 
-Add `--minimal` to run Router and Envoy without Dashboard or observability. Add
+On the first run, `serve` creates a managed Router bootstrap and private local
+trust material under `.vllm-sr`. The first Dashboard registration provisions
+that administrator, the default namespace, and its exact Router identity through
+the Management API, then removes the one-time bootstrap credential without a
+restart. Add `--minimal` to run Router and Envoy without Dashboard. Add
 `--readonly` to keep Dashboard available without config editing.
 
 ## Test routing
@@ -97,42 +105,47 @@ vllm-sr chat --base-url https://gateway.example.com "Hello"
 ingress or port-forwarded gateway. It is not the Router management API used by
 `eval` and `rag list`.
 
-## Choose a configuration
+## Choose a bootstrap configuration
 
-The CLI reads canonical v0.3 YAML with
-`version/listeners/providers/routing/global`. Author a file directly, start
-from a [maintained Recipe](../../config/recipes/README.md), or fork a bundled
-virtual model.
+The CLI reads canonical v0.4 YAML for deployment bootstrap. The ordinary local
+flow needs no launch-time routing selection:
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve
+# Or select another immutable bootstrap manifest.
+vllm-sr serve --config /path/to/config.yaml
 ```
 
-Route policy lives in `routing.decisions[]`. For example, this decision
-fragment defines a final static fallback; merge it into a complete config that
-declares `local-model` under `providers.models` and `routing.modelCards`:
+`--config` selects one immutable standalone or managed v0.4 bootstrap manifest.
+It does not select a Model or Recipe and does not create a second routing-policy
+authority.
+
+Route policy lives in `recipes[].document.decisions[]`; physical candidates are
+assigned by readable Decision name on an Entrypoint. For example:
 
 ```yaml
-routing:
-  decisions:
-    - name: local-fallback
-      description: Handle requests that did not match an earlier decision.
-      priority: 0
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: local-model
-      algorithm:
-        type: static
+recipes:
+  - name: local
+    document:
+      decisions:
+        - name: local-fallback
+          description: Handle requests that did not match an earlier decision.
+          priority: 0
+          rules: {operator: AND, conditions: []}
+          algorithm: {type: static}
+entrypoints:
+  - name: vllm-sr/local
+    aliases: [local]
+    recipe: local
+    assignments:
+      local-fallback:
+        models: [{model: local/model}]
 ```
 
-`vllm-sr init` was removed in v0.3. For older files or supported external
-provider configs, use the explicit conversion commands:
+Supported external provider configs can be imported explicitly:
 
 ```bash
-vllm-sr config migrate --config old-config.yaml
 vllm-sr config import \
   --from openclaw \
   --source openclaw.json \
@@ -145,57 +158,31 @@ Focused examples live under [`config/fragments/`](../../config/fragments/).
 Use those sources instead of copying plugin or algorithm schemas from this
 package README.
 
-Keep credentials out of YAML. Reference environment variables and authorize
-Recipe-specific variables explicitly:
+Keep credentials out of YAML. In managed mode, provider credentials are
+versioned secret resources created through the Router Management API; the
+Dashboard is one client of that API.
+
+## Build a Mixture of Models
+
+Start the control plane with one command:
 
 ```bash
-export PROVIDER_API_KEY=...
-vllm-sr serve --config recipe.yaml --recipe-env PROVIDER_API_KEY
+vllm-sr serve
 ```
 
-## Discover virtual and provider models
+Then use the Dashboard to complete the serving graph:
 
-The installed catalog is available offline:
+1. Connect provider endpoints in **Models**.
+2. Choose a built-in Recipe or create one in **Recipes**.
+3. Create a **Mixture of Models** entrypoint and assign one or more configured
+   models to each decision.
+4. Publish the entrypoint and verify it in the Playground.
 
-```bash
-vllm-sr model list
-vllm-sr model list --all-versions
-vllm-sr model show vllm-sr/mom-v1-blend
-```
-
-When `./config.yaml` exists, the ordinary list merges its configured models
-with compatible built-ins. Pass a file explicitly to inspect only that config:
-
-```bash
-vllm-sr model list --config my-config.yaml
-```
-
-The output separates **Provider models** (backend bindings) from **Model cards**
-(routing metadata). Credential values and credential variable names
-are omitted or redacted so the output can be shared in support logs. Use
-`--output json` for automation.
-
-Fork a built-in model before changing it:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom.yaml
-vllm-sr model validate mom.yaml
-vllm-sr serve --config mom.yaml
-```
-
-For a local Docker stack, a catalog ID can also be passed directly:
-
-```bash
-vllm-sr serve vllm-sr/mom-v1-blend
-vllm-sr serve \
-  vllm-sr/mom-v1-lite \
-  vllm-sr/mom-v1-flash
-```
-
-These IDs select request-facing routing policies, not downloadable inference
-models. Configure and start their required provider backends separately. The
-catalog shorthand is local-only; materialize the YAML before Kubernetes
-deployment.
+The CLI owns infrastructure startup. Model discovery, Recipe composition,
+decision assignments, and entrypoint publication use the Router Management API,
+which keeps the same workflow available to the Dashboard and independent
+control-plane clients. Physical inference services must already be reachable;
+`serve` does not download or launch them.
 
 ## Deploy to Kubernetes
 
@@ -205,18 +192,19 @@ The Kubernetes target installs or upgrades the Helm release:
 vllm-sr serve \
   --target k8s \
   --profile dev \
-  --namespace semantic-router \
-  --config config.yaml
+  --namespace semantic-router
 
 vllm-sr status --target k8s --namespace semantic-router
 vllm-sr logs router --target k8s --namespace semantic-router -f
 vllm-sr stop --target k8s --namespace semantic-router
 ```
 
-Kubernetes requires a complete, non-empty config. The CLI does not merge local
-Docker defaults or sample routes into it. Credential references are stored in
-a release-scoped Secret, and literal credentials or credential-bearing URLs
-are rejected.
+Kubernetes reads the complete, non-empty `./config.yaml` bootstrap manifest.
+The CLI does not merge local Docker defaults or sample routes into it.
+Credential references are stored in a release-scoped Secret, and literal
+credentials or credential-bearing URLs are rejected. After bootstrap, use the
+versioned Management API or Dashboard to manage Models, Recipes, and
+Entrypoints; `serve` never selects one of them.
 
 `--platform amd` and `--platform nvidia` are local-container shortcuts. On
 Kubernetes, select GPU images, resources, and device plugins through Helm
@@ -250,6 +238,8 @@ Default ports in the reference local stack are:
 | Router metrics | `9190` | Prometheus metrics |
 | Jaeger | `16686` | Trace UI |
 | Prometheus | `9090` | Metrics storage and queries |
+
+Jaeger and Prometheus are published only when `--with-observability` is set.
 
 Listener and management ports can be changed in YAML. Local Dashboard data is
 stored under `.vllm-sr/dashboard-data/` and survives `stop` unless that

@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -44,11 +45,7 @@ func loadMultiObjectiveConfig(t *testing.T) *config.RouterConfig {
 	if err != nil {
 		t.Fatalf("read multi-objective config: %v", err)
 	}
-	original, err := config.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("parse multi-objective config: %v", err)
-	}
-	return original
+	return parseMaintainedConfigBytes(t, "multi-objective config", data)
 }
 
 func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
@@ -61,11 +58,15 @@ func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
 	}
 	for _, expected := range []string{
 		`mode: "insert"`,
-		`planner: { model: "local/qwen3.6-27b-coder" }`,
+		`mode: "dynamic"`,
+		`template: "micro_agent"`,
 	} {
 		if !strings.Contains(source, expected) {
 			t.Fatalf("decompiled multi-objective DSL missing %q", expected)
 		}
+	}
+	if strings.Contains(source, `planner: { model:`) {
+		t.Fatalf("Recipe DSL leaked physical planner Model selection:\n%s", source)
 	}
 }
 
@@ -74,12 +75,15 @@ func assertMultiObjectiveRoutingScopesEqual(
 	original, recompiled *config.RouterConfig,
 ) {
 	t.Helper()
-	if !reflect.DeepEqual(original.Entrypoints, recompiled.Entrypoints) {
-		t.Fatalf("entrypoints changed after YAML -> DSL -> config round trip")
+	originalEntrypoints := persistedEntrypointContracts(original.Entrypoints)
+	recompiledEntrypoints := persistedEntrypointContracts(recompiled.Entrypoints)
+	if !reflect.DeepEqual(originalEntrypoints, recompiledEntrypoints) {
+		t.Fatalf("entrypoints changed after YAML -> DSL -> config round trip:\n%s", cmp.Diff(originalEntrypoints, recompiledEntrypoints))
 	}
 	recipeDiff := cmp.Diff(
 		original.Recipes,
 		recompiled.Recipes,
+		cmpopts.IgnoreUnexported(config.RoutingRecipe{}),
 		cmp.Comparer(func(left, right config.StructuredPayload) bool {
 			var leftValue, rightValue interface{}
 			if json.Unmarshal(left.Raw, &leftValue) != nil ||
@@ -99,4 +103,41 @@ func assertMultiObjectiveRoutingScopesEqual(
 			recipeDiff,
 		)
 	}
+}
+
+// EntrypointMapping also carries a prepared, runtime-only derived recipe view.
+// Round-trip equality must cover the complete persisted contract without
+// treating that immutable cache (whose profile may contain normalized runtime
+// defaults) as serialized DSL state.
+type persistedEntrypointContract struct {
+	ID         string
+	Revision   int64
+	Name       string
+	ModelNames []string
+	Rules      []persistedEntrypointRule
+}
+
+type persistedEntrypointRule struct {
+	ID      string
+	Name    string
+	Matches []config.EntrypointMatch
+	Action  config.EntrypointRuleAction
+}
+
+func persistedEntrypointContracts(entrypoints []config.EntrypointMapping) []persistedEntrypointContract {
+	result := make([]persistedEntrypointContract, 0, len(entrypoints))
+	for _, entrypoint := range entrypoints {
+		rules := make([]persistedEntrypointRule, 0, len(entrypoint.Rules))
+		for _, rule := range entrypoint.Rules {
+			rules = append(rules, persistedEntrypointRule{ID: rule.ID, Name: rule.Name, Matches: rule.Matches, Action: rule.Action})
+		}
+		result = append(result, persistedEntrypointContract{
+			ID:         entrypoint.ID,
+			Revision:   entrypoint.Revision,
+			Name:       entrypoint.Name,
+			ModelNames: entrypoint.ModelNames,
+			Rules:      rules,
+		})
+	}
+	return result
 }

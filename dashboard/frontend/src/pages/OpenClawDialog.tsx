@@ -1,6 +1,7 @@
 import { type ReactNode, useId } from 'react'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import ProductIcon from '../components/ProductIcon'
 import styles from './OpenClawPage.module.css'
 
 interface OpenClawDialogProps {
@@ -48,9 +49,12 @@ export function OpenClawDialog({
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.ocModalHeader}>
-          <h3 id={titleId} className={styles.ocModalTitle}>
-            {title}
-          </h3>
+          <div className={styles.ocModalTitleRow}>
+            <img className={styles.ocModalLogo} src="/openclaw.svg" alt="" aria-hidden="true" />
+            <h3 id={titleId} className={styles.ocModalTitle}>
+              {title}
+            </h3>
+          </div>
           <button
             type="button"
             className={styles.ocModalClose}
@@ -58,7 +62,7 @@ export function OpenClawDialog({
             disabled={busy}
             aria-label={`Close ${title}`}
           >
-            ×
+            <ProductIcon name="close" />
           </button>
         </div>
         <div className={styles.ocModalBody}>{children}</div>

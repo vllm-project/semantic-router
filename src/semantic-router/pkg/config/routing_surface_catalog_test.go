@@ -53,6 +53,29 @@ func TestSupportedLooperAlgorithmTypes(t *testing.T) {
 	}
 }
 
+func TestDecisionAlgorithmDispatchCardinalityIsExhaustiveAndClosed(t *testing.T) {
+	cardinality, ok := DecisionAlgorithmDispatchCardinality("")
+	if !ok || cardinality != AlgorithmDispatchSingle {
+		t.Fatalf("default dispatch cardinality = %q, %v", cardinality, ok)
+	}
+	for _, entry := range DecisionAlgorithmCatalog() {
+		cardinality, ok := DecisionAlgorithmDispatchCardinality(entry.Type)
+		if !ok {
+			t.Fatalf("catalog algorithm %q has no dispatch cardinality", entry.Type)
+		}
+		want := AlgorithmDispatchSingle
+		if entry.Execution == AlgorithmExecutionLooper {
+			want = AlgorithmDispatchMulti
+		}
+		if cardinality != want {
+			t.Errorf("algorithm %q cardinality = %q, want %q", entry.Type, cardinality, want)
+		}
+	}
+	if cardinality, ok := DecisionAlgorithmDispatchCardinality("unknown"); ok || cardinality != "" {
+		t.Fatalf("unknown algorithm cardinality = %q, %v; want closed rejection", cardinality, ok)
+	}
+}
+
 func TestDecisionAlgorithmCatalog_PublicAlgorithmSurface(t *testing.T) {
 	publicTypes := []string{
 		"automix", "confidence", "fusion", "hybrid", "kmeans",

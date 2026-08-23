@@ -8,6 +8,7 @@ describe('RecoverableLazyRoute contract', () => {
     expect(source).toContain('createRetryableLazyPage(loader, attempt)')
     expect(source).toContain('return lazy(loader)')
     expect(source).toContain('resetDashboardRouteLoader(loader as RouteLoader)')
+    expect(source).toContain('recoverRouteAssetOnce(error)')
     expect(source).toContain('<RouteLoadingFallback />')
     expect(source).toContain('Retry route')
     expect(source).toContain('Reload dashboard')

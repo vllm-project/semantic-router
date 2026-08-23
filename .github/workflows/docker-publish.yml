@@ -89,11 +89,6 @@ jobs:
           IMAGE: ${{ matrix.image }}
         run: |
           case "$IMAGE" in
-            anthropic-shim)
-              CONTEXT="./e2e/testing/anthropic-shim"
-              DOCKERFILE="./e2e/testing/anthropic-shim/Dockerfile"
-              PLATFORMS="linux/amd64,linux/arm64"
-              ;;
             dashboard)
               CONTEXT="."
               DOCKERFILE="./dashboard/backend/Dockerfile"
@@ -180,7 +175,7 @@ jobs:
           esac
           TAGS="${IMAGE}:${PRIMARY_TAG}"
           if [[ "$MODE" == "nightly" ]] &&
-             [[ "${{ matrix.image }}" =~ ^(anthropic-shim|llm-katan)$ ]]; then
+             [[ "${{ matrix.image }}" == "llm-katan" ]]; then
             TAGS="${TAGS},${IMAGE}:nightly"
           fi
           if [[ "$PUBLISH_LATEST" == "true" ]]; then

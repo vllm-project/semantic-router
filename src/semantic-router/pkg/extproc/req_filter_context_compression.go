@@ -10,6 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -24,119 +25,44 @@ type contextCompressionStats struct {
 	jsonBlocks      int
 }
 
-func (stats contextCompressionStats) format() string {
-	switch stats.jsonBlocks {
-	case 0:
-		return "text"
-	case stats.appliedBlocks:
-		return "json"
-	default:
-		return "mixed"
-	}
-}
-
-func (r *OpenAIRouter) applyContextCompression(
+// applySemanticContextCompression runs compression directly against neutral
+// content blocks. The service mutates only the semantic request; codecs remain
+// the sole wire-format boundary.
+func (r *OpenAIRouter) applySemanticContextCompression(
 	ctx *RequestContext,
-	requestBody []byte,
-) []byte {
-	compressed, err := r.applyContextCompressionPolicy(ctx, requestBody)
-	if err != nil {
-		return requestBody
-	}
-	return compressed
-}
-
-func (r *OpenAIRouter) applyContextCompressionPolicy(
-	ctx *RequestContext,
-	requestBody []byte,
-) ([]byte, error) {
-	if ctx == nil || ctx.VSRSelectedDecision == nil {
-		return requestBody, nil
+	request *llmprotocol.Request,
+) error {
+	if ctx == nil || request == nil || ctx.VSRSelectedDecision == nil {
+		return nil
 	}
 	pluginConfig := ctx.VSRSelectedDecision.GetContextCompressionConfig()
 	if pluginConfig == nil || !pluginConfig.Enabled {
-		return requestBody, nil
+		return nil
 	}
 	applyContextCompressionRequestControls(ctx, pluginConfig)
 	if ctx.ContextCompressionSkipReason == "request_bypass" {
 		recordContextCompressionStatus(ctx, "bypassed", 0)
-		return requestBody, nil
+		return nil
 	}
-
 	start := time.Now()
-	request, err := parseContextCompressionRequest(ctx, requestBody, start)
-	if err != nil {
-		return compressionFailure(pluginConfig, requestBody, err)
-	}
-
 	service := r.contextCompressionService()
 	if service == nil {
-		return compressionFailure(
-			pluginConfig,
-			requestBody,
-			fmt.Errorf("context compression service is unavailable"),
-		)
+		return semanticCompressionFailure(pluginConfig, fmt.Errorf("context compression service is unavailable"))
 	}
-	callContext, compressionRequest, ragProtected := r.buildContextCompressionRequest(
-		ctx,
-		pluginConfig,
-		request,
-	)
-	result := service.Apply(callContext, compressionRequest)
-	return r.finishContextCompression(
-		ctx,
-		pluginConfig,
-		requestBody,
-		request,
-		result,
-		ragProtected,
-		start,
-	)
-}
-
-func parseContextCompressionRequest(
-	ctx *RequestContext,
-	requestBody []byte,
-	start time.Time,
-) (map[string]interface{}, error) {
-	var request map[string]interface{}
-	if err := json.Unmarshal(requestBody, &request); err != nil {
-		recordContextCompressionStatus(ctx, "parse_error_fail_open", time.Since(start).Seconds())
-		return nil, err
+	policy := contextCompressionPolicy(pluginConfig, ctx.ContextCompressionTargetTokens)
+	policy = compressionPolicyForRequest(policy, ctx)
+	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
+		ctx.ContextCompressionRevision = revision[:12]
 	}
-	if _, ok := request["messages"].([]interface{}); !ok {
-		recordContextCompressionStatus(ctx, "unsupported_shape_fail_open", time.Since(start).Seconds())
-		return nil, fmt.Errorf("context compression requires a messages array")
+	provenance := contextcompression.Provenance{
+		RAGToolCallIDs:       ctx.RAGToolCallIDs,
+		MemoryMessageIndexes: ctx.MemoryMessageIndexes,
 	}
-	return request, nil
-}
-
-func (r *OpenAIRouter) buildContextCompressionRequest(
-	ctx *RequestContext,
-	pluginConfig *config.ContextCompressionPluginConfig,
-	request map[string]interface{},
-) (context.Context, contextcompression.Request, bool) {
+	requestIR := contextcompression.ParseSemanticRequest(request, provenance)
 	model := strings.TrimSpace(ctx.VSRSelectedModel)
 	if model == "" {
 		model = strings.TrimSpace(ctx.RequestModel)
 	}
-	policy := contextCompressionPolicy(
-		pluginConfig,
-		ctx.ContextCompressionTargetTokens,
-	)
-	policy = compressionPolicyForRequest(policy, ctx)
-	ragProtected := requestContainsRAGToolResult(request) &&
-		policy.Targets.RAG.Mode == contextcompression.TargetPreserve
-	if revision, err := cache.FingerprintValue(pluginConfig); err == nil {
-		ctx.ContextCompressionRevision = revision[:12]
-	}
-	requestIR := contextcompression.ParseRequestIR(
-		request,
-		contextcompression.Provenance{
-			RAGToolCallIDs:       ctx.RAGToolCallIDs,
-			MemoryMessageIndexes: ctx.MemoryMessageIndexes,
-		},
-	)
 	callContext := ctx.TraceContext
 	if callContext == nil {
 		callContext = context.Background()
@@ -146,148 +72,106 @@ func (r *OpenAIRouter) buildContextCompressionRequest(
 		Scope:        r.contextCompressionScope(ctx),
 		Request:      requestIR,
 		Policy:       policy,
-		Capabilities: contextCompressionCapabilities(r.Config, ctx),
+		Capabilities: semanticContextCompressionCapabilities(r.Config, ctx, request),
 		TokenCounter: r.contextCompressionTokenCounter(ctx),
 		Scorer:       r.contextCompressionScorer(callContext, pluginConfig),
 		Recovery:     r.contextCompressionRecoveryStore(pluginConfig),
-		Provenance: contextcompression.Provenance{
-			RAGToolCallIDs:       ctx.RAGToolCallIDs,
-			MemoryMessageIndexes: ctx.MemoryMessageIndexes,
-		},
+		Provenance:   provenance,
 	}
-	return callContext, compressionRequest, ragProtected
-}
-
-func (r *OpenAIRouter) finishContextCompression(
-	ctx *RequestContext,
-	pluginConfig *config.ContextCompressionPluginConfig,
-	requestBody []byte,
-	request map[string]interface{},
-	result contextcompression.ServiceResult,
-	ragProtected bool,
-	start time.Time,
-) ([]byte, error) {
+	result := service.Apply(callContext, compressionRequest)
 	if result.Failure != nil {
 		recordContextCompressionStatus(ctx, "compression_failed", time.Since(start).Seconds())
-		return compressionFailure(pluginConfig, requestBody, result.Failure)
+		return semanticCompressionFailure(pluginConfig, result.Failure)
 	}
 	r.recordCompressionPlan(ctx, result)
 	if !result.Applied {
 		status := string(result.Plan.SkipReason)
-		if status == string(contextcompression.SkipNoTargets) && ragProtected {
-			status = "rag_protected"
-		}
 		if status == "" {
 			status = "not_applied"
 		}
 		recordContextCompressionStatus(ctx, status, time.Since(start).Seconds())
-		return requestBody, nil
+		return nil
 	}
 	if len(result.RecoveryKeys) > 0 {
-		if err := injectContextRecoveryTool(request, result.RecoveryKeys); err != nil {
-			return compressionFailure(pluginConfig, requestBody, err)
+		if err := injectSemanticContextRecoveryTool(request, result.RecoveryKeys); err != nil {
+			return semanticCompressionFailure(pluginConfig, err)
 		}
 	}
-
-	compressedBody, err := result.Request.Marshal()
-	if err != nil {
-		recordContextCompressionStatus(ctx, "marshal_error_fail_open", time.Since(start).Seconds())
-		return compressionFailure(pluginConfig, requestBody, err)
-	}
-	stats := contextCompressionStats{
+	ctx.ContextCompressionRecoveryKeys = append(ctx.ContextCompressionRecoveryKeys[:0], result.RecoveryKeys...)
+	recordContextCompressionApplied(ctx, contextCompressionStats{
 		appliedMessages: result.MessagesCompressed,
 		appliedBlocks:   result.BlocksCompressed,
 		beforeTokens:    result.TokensBefore,
 		afterTokens:     result.TokensAfter,
 		omittedChunks:   result.OmittedChunks,
 		jsonBlocks:      result.JSONBlocks,
-	}
-	ctx.ContextCompressionRecoveryKeys = append(
-		ctx.ContextCompressionRecoveryKeys[:0],
-		result.RecoveryKeys...,
-	)
-	recordContextCompressionApplied(ctx, stats, start)
-	return compressedBody, nil
-}
-
-func requestContainsRAGToolResult(request map[string]interface{}) bool {
-	messages, _ := request["messages"].([]interface{})
-	for _, rawMessage := range messages {
-		message, ok := rawMessage.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		if isRAGToolResult(message) {
-			return true
-		}
-		blocks, _ := message["content"].([]interface{})
-		for _, rawBlock := range blocks {
-			block, ok := rawBlock.(map[string]interface{})
-			if ok && isRAGToolResult(block) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func injectContextRecoveryTool(
-	request map[string]interface{},
-	keys []string,
-) error {
-	rawTools := request["tools"]
-	tools := make([]interface{}, 0)
-	if rawTools != nil {
-		existing, ok := rawTools.([]interface{})
-		if !ok {
-			return fmt.Errorf("tools must be an array for recoverable compression")
-		}
-		tools = append(tools, existing...)
-		for _, rawTool := range existing {
-			tool, _ := rawTool.(map[string]interface{})
-			function, _ := tool["function"].(map[string]interface{})
-			if function["name"] == contextcompression.RetrieveToolName {
-				return fmt.Errorf(
-					"request defines reserved tool %q",
-					contextcompression.RetrieveToolName,
-				)
-			}
-		}
-	}
-	enumValues := make([]interface{}, len(keys))
-	for index, key := range keys {
-		enumValues[index] = key
-	}
-	tools = append(tools, map[string]interface{}{
-		"type": "function",
-		"function": map[string]interface{}{
-			"name":        contextcompression.RetrieveToolName,
-			"description": "Retrieve original context omitted by vLLM Semantic Router compression.",
-			"parameters": map[string]interface{}{
-				"type": "object",
-				"properties": map[string]interface{}{
-					"key": map[string]interface{}{
-						"type": "string",
-						"enum": enumValues,
-					},
-				},
-				"required": []interface{}{"key"},
-			},
-		},
-	})
-	request["tools"] = tools
+	}, start)
+	request.Generation++
 	return nil
 }
 
-func compressionFailure(
-	plugin *config.ContextCompressionPluginConfig,
-	requestBody []byte,
-	err error,
-) ([]byte, error) {
+func semanticCompressionFailure(plugin *config.ContextCompressionPluginConfig, err error) error {
 	if plugin.EffectiveFailureMode() == config.ContextCompressionFailureClosed {
-		return nil, err
+		return err
 	}
-	return requestBody, nil
+	return nil
+}
+
+func semanticContextCompressionCapabilities(
+	routerConfig *config.RouterConfig,
+	ctx *RequestContext,
+	request *llmprotocol.Request,
+) contextcompression.ModelContextCapabilities {
+	model := strings.TrimSpace(ctx.VSRSelectedModel)
+	if model == "" {
+		model = strings.TrimSpace(ctx.RequestModel)
+	}
+	contextWindow := 0
+	if routerConfig != nil {
+		if params, ok := routerConfig.ModelConfig[model]; ok {
+			contextWindow = params.ContextWindowSize
+		}
+	}
+	capabilities := contextcompression.ModelContextCapabilities{ContextWindow: contextWindow}
+	if request != nil && request.Sampling.MaxOutputTokens != nil {
+		capabilities.RequestedOutput = int(*request.Sampling.MaxOutputTokens)
+	}
+	return capabilities
+}
+
+func injectSemanticContextRecoveryTool(request *llmprotocol.Request, keys []string) error {
+	for _, tool := range request.Tools {
+		if tool.Name == contextcompression.RetrieveToolName {
+			return fmt.Errorf("request defines reserved tool %q", contextcompression.RetrieveToolName)
+		}
+	}
+	schema, err := json.Marshal(map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"key": map[string]interface{}{"type": "string", "enum": keys},
+		},
+		"required": []string{"key"},
+	})
+	if err != nil {
+		return err
+	}
+	request.Tools = append(request.Tools, llmprotocol.Tool{
+		Name:        contextcompression.RetrieveToolName,
+		Description: "Retrieve original context omitted by vLLM Semantic Router compression.",
+		InputSchema: schema,
+	})
+	return nil
+}
+
+func (stats contextCompressionStats) format() string {
+	switch stats.jsonBlocks {
+	case 0:
+		return "text"
+	case stats.appliedBlocks:
+		return "json"
+	default:
+		return "mixed"
+	}
 }
 
 func (r *OpenAIRouter) recordCompressionPlan(
@@ -399,14 +283,4 @@ func recordContextCompressionApplied(
 		"rag_skipped":    stats.skippedRAG,
 		"latency_millis": time.Since(start).Milliseconds(),
 	})
-}
-
-func isRAGToolResult(value map[string]interface{}) bool {
-	for _, field := range []string{"tool_call_id", "tool_use_id"} {
-		id, _ := value[field].(string)
-		if strings.HasPrefix(id, "rag_") {
-			return true
-		}
-	}
-	return false
 }

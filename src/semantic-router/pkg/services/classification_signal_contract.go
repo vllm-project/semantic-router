@@ -17,7 +17,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	if err != nil {
 		return nil, err
 	}
-	classifier, candidates, recipeName, err := s.evalRoutingScopeSnapshot(req.Model)
+	classifier, candidates, recipeName, runtimeScope, err := s.evalRoutingScopeSnapshot(req.Model)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	resp.RequestedModel = strings.TrimSpace(req.Model)
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
-	s.populateEvalModelSelection(resp, input, decisionResult)
+	s.populateEvalModelSelection(resp, input, decisionResult, runtimeScope)
 	return resp, nil
 }
 
@@ -75,6 +75,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	response *EvalResponse,
 	input intentSignalInput,
 	decisionResult *decision.DecisionResult,
+	runtimeScope config.RecipeName,
 ) {
 	if response == nil || decisionResult == nil || decisionResult.Decision == nil {
 		return
@@ -87,6 +88,7 @@ func (s *ClassificationService) populateEvalModelSelection(
 	}
 	selection := selector.SelectModelForEval(EvalModelSelectionInput{
 		Recipe:            response.Recipe,
+		RuntimeScope:      runtimeScope,
 		Decision:          decisionResult.Decision,
 		Query:             input.currentUserText,
 		Category:          evalDecisionCategory(decisionResult.MatchedRules),
@@ -137,6 +139,7 @@ func (s *ClassificationService) evalRoutingScopeSnapshot(
 	*classification.Classifier,
 	[]config.Decision,
 	config.RecipeName,
+	config.RecipeName,
 	error,
 ) {
 	s.configMutex.RLock()
@@ -144,25 +147,21 @@ func (s *ClassificationService) evalRoutingScopeSnapshot(
 	return s.evalRoutingScope(modelName)
 }
 
-func (s *ClassificationService) evalRoutingScope(modelName string) (*classification.Classifier, []config.Decision, config.RecipeName, error) {
+func (s *ClassificationService) evalRoutingScope(modelName string) (*classification.Classifier, []config.Decision, config.RecipeName, config.RecipeName, error) {
 	if s.config == nil {
-		return s.classifier, nil, "", nil
+		return s.classifier, nil, "", "", nil
 	}
-	trimmed := strings.TrimSpace(modelName)
-	if trimmed == "" {
-		trimmed = config.DefaultVSRAutoModelName
-	}
-	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
+	recipe, requestedModel, ok := s.recipeForClassificationModel(modelName)
 	if !ok {
-		return nil, nil, "", fmt.Errorf("%w %q", ErrUnknownRoutingModel, trimmed)
+		return nil, nil, "", "", fmt.Errorf("%w %q", ErrUnknownRoutingModel, requestedModel)
 	}
 	classifier := s.classifier
 	if s.recipeClassifiers != nil {
 		var found bool
 		classifier, found = s.recipeClassifiers.ForRecipe(recipe.Name)
 		if !found {
-			return nil, nil, "", fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
+			return nil, nil, "", "", fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
 		}
 	}
-	return classifier, recipe.Profile.Decisions, recipe.Name, nil
+	return classifier, recipe.Profile.Decisions, recipe.Name, recipe.RuntimeScope(), nil
 }

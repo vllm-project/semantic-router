@@ -10,7 +10,7 @@ type modelFeatureGate struct {
 var optionalModelFeatureGates = []modelFeatureGate{
 	{
 		enabled: func(cfg *config.RouterConfig) bool {
-			return !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend()
+			return !cfg.UsesRemoteEmbeddingBackend()
 		},
 		paths: func(cfg *config.RouterConfig) []string {
 			return []string{

@@ -1,28 +1,16 @@
 #!/bin/sh
 set -eu
 
-# Fix ownership and permissions for config file before switching to nonroot user
-# This allows the dashboard to write to the mounted config.yaml file
-CONFIG_FILE_PATH=${ROUTER_CONFIG_PATH:-/app/config/config.yaml}
-PROVENANCE_FILE_PATH=${CONFIG_FILE_PATH%.*}.provenance.json
-STATE_DIR=$(dirname "$CONFIG_FILE_PATH")
-RECIPE_STORE_DIR=${VLLM_SR_RECIPE_STORE_DIR:-${STATE_DIR}/.vllm-sr/recipe-store}
 PERMISSION_HELPER=/app/entrypoint_permissions.py
-SERVER_READONLY=${DASHBOARD_READONLY:-false}
-RUNTIME_CONFIG_WRITABLE=${DASHBOARD_RUNTIME_CONFIG_WRITABLE:-true}
-RECIPE_STORE_WRITABLE=${DASHBOARD_RECIPE_STORE_WRITABLE:-true}
 LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}
 
 # OpenShift restricted SCCs run images with an arbitrary non-root UID that is
 # a member of the root group. Such a process cannot prepare users or bind
-# mounts, so keep runtime mutations fail-closed and start directly. The image
+# mounts, so keep container-runtime operations fail-closed and start directly. The image
 # grants group 0 write access only to /app/data for Dashboard-owned state.
 if [ "$(id -u)" -ne 0 ]; then
-    DASHBOARD_RUNTIME_CONFIG_WRITABLE=false
-    DASHBOARD_RECIPE_STORE_WRITABLE=false
     OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
-    export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE \
-        OPENCLAW_CONTAINER_RUNTIME_DISABLED
+    export OPENCLAW_CONTAINER_RUNTIME_DISABLED
     exec "$@"
 fi
 
@@ -50,72 +38,63 @@ if [ -n "$LOG_SPOOL_GID" ]; then
     add_nonroot_group_gid "$LOG_SPOOL_GID"
 fi
 
-# Atomic runtime-config replacement needs group write access to the containing
-# state directory, not only to the current file. Preserve the host owner's UID
-# so the host CLI and the nonroot Dashboard can both manage the state. A
-# declared read-only Dashboard may consume a read-only ConfigMap without these
-# mutations. Config mount availability is intentionally independent from the
-# managed Recipe package store: an admin may still import packages for later
-# activation when only the runtime config mount is read-only.
-if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; then
-    if [ ! -f "$CONFIG_FILE_PATH" ] || [ ! -d "$STATE_DIR" ] ||
-       ! python3 "$PERMISSION_HELPER" probe-config "$STATE_DIR" "$CONFIG_FILE_PATH"; then
-        echo "Dashboard runtime config is read-only; runtime mutation is disabled while Recipe package storage remains independent" >&2
-        RUNTIME_CONFIG_WRITABLE=false
-    fi
-fi
-
-if [ "$SERVER_READONLY" != "true" ] && [ "$RECIPE_STORE_WRITABLE" = "true" ]; then
-    if ! python3 "$PERMISSION_HELPER" ensure-directory "$RECIPE_STORE_DIR"; then
-        echo "Dashboard Recipe package store is read-only; package import is disabled" >&2
-        RECIPE_STORE_WRITABLE=false
-    fi
-fi
-
-DASHBOARD_RUNTIME_CONFIG_WRITABLE=$RUNTIME_CONFIG_WRITABLE
-DASHBOARD_RECIPE_STORE_WRITABLE=$RECIPE_STORE_WRITABLE
-export DASHBOARD_RUNTIME_CONFIG_WRITABLE DASHBOARD_RECIPE_STORE_WRITABLE
-
-if [ "$SERVER_READONLY" != "true" ] && [ "$RUNTIME_CONFIG_WRITABLE" = "true" ]; then
-    STATE_GID=65532
-    if [ -d "$STATE_DIR" ]; then
-        add_nonroot_group_gid "$STATE_GID"
-        python3 "$PERMISSION_HELPER" prepare-directory "$STATE_DIR" "$STATE_GID"
-    fi
-    if [ -f "$CONFIG_FILE_PATH" ]; then
-        python3 "$PERMISSION_HELPER" prepare-file "$CONFIG_FILE_PATH" "$STATE_GID"
-    fi
-    if [ -f "$PROVENANCE_FILE_PATH" ]; then
-        python3 "$PERMISSION_HELPER" prepare-file "$PROVENANCE_FILE_PATH" "$STATE_GID"
-    fi
-    if [ -n "${VLLM_SR_ENVOY_CONFIG_PATH:-}" ] && [ -f "$VLLM_SR_ENVOY_CONFIG_PATH" ]; then
-        ENVOY_STATE_DIR=$(dirname "$VLLM_SR_ENVOY_CONFIG_PATH")
-        ENVOY_STATE_GID=65532
-        add_nonroot_group_gid "$ENVOY_STATE_GID"
-        python3 "$PERMISSION_HELPER" prepare-directory "$ENVOY_STATE_DIR" "$ENVOY_STATE_GID"
-        python3 "$PERMISSION_HELPER" prepare-file "$VLLM_SR_ENVOY_CONFIG_PATH" "$ENVOY_STATE_GID"
-    fi
-fi
-if [ "$SERVER_READONLY" != "true" ] && [ "$RECIPE_STORE_WRITABLE" = "true" ] &&
-   [ -d "$RECIPE_STORE_DIR" ]; then
-    RECIPE_STORE_GID=65532
-    add_nonroot_group_gid "$RECIPE_STORE_GID"
-    python3 "$PERMISSION_HELPER" prepare-tree \
-        "$RECIPE_STORE_DIR" "$RECIPE_STORE_GID" \
-        --credential-relative-path credentials/router-management.token
-fi
 if [ -d /app/data ]; then
     DATA_GID=65532
     add_nonroot_group_gid "$DATA_GID"
     python3 "$PERMISSION_HELPER" prepare-tree /app/data "$DATA_GID"
 fi
 
-# The dashboard is deliberately nonroot, but managed Recipe topology and
-# OpenClaw operations use the mounted container-runtime socket. Map the
+# The first-registration saga alone may consume this one-time credential. Its
+# dedicated bind mount contains no long-lived Router or Dashboard key material.
+if [ -n "${DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE:-}" ]; then
+    python3 "$PERMISSION_HELPER" prepare-bootstrap-token \
+        "$DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE" 65532 65532
+fi
+
+# Long-lived Dashboard issuer material is copied into an isolated ephemeral
+# runtime directory. The non-root backend never receives traversal access to
+# the Router state tree that contains unrelated control-plane secrets.
+STAGED_SECRET_DIR=/run/vllm-sr-dashboard-secrets
+mkdir -p "$STAGED_SECRET_DIR"
+chown root:root "$STAGED_SECRET_DIR"
+chmod 0700 "$STAGED_SECRET_DIR"
+if [ -n "${DASHBOARD_SIGNING_KEY_FILE:-}" ]; then
+    python3 "$PERMISSION_HELPER" stage-private-file \
+        "$DASHBOARD_SIGNING_KEY_FILE" "$STAGED_SECRET_DIR/signing-key.pem" 65532 65532
+    DASHBOARD_SIGNING_KEY_FILE="$STAGED_SECRET_DIR/signing-key.pem"
+    export DASHBOARD_SIGNING_KEY_FILE
+fi
+if [ -n "${DASHBOARD_ISSUER_TLS_CERT_FILE:-}" ]; then
+    python3 "$PERMISSION_HELPER" stage-private-file \
+        "$DASHBOARD_ISSUER_TLS_CERT_FILE" "$STAGED_SECRET_DIR/tls-cert.pem" 65532 65532
+    DASHBOARD_ISSUER_TLS_CERT_FILE="$STAGED_SECRET_DIR/tls-cert.pem"
+    export DASHBOARD_ISSUER_TLS_CERT_FILE
+fi
+if [ -n "${DASHBOARD_ISSUER_TLS_KEY_FILE:-}" ]; then
+    python3 "$PERMISSION_HELPER" stage-private-file \
+        "$DASHBOARD_ISSUER_TLS_KEY_FILE" "$STAGED_SECRET_DIR/tls-key.pem" 65532 65532
+    DASHBOARD_ISSUER_TLS_KEY_FILE="$STAGED_SECRET_DIR/tls-key.pem"
+    export DASHBOARD_ISSUER_TLS_KEY_FILE
+fi
+if [ -n "${SSL_CERT_FILE:-}" ]; then
+    python3 "$PERMISSION_HELPER" stage-private-file \
+        "$SSL_CERT_FILE" "$STAGED_SECRET_DIR/trust-bundle.pem" 65532 65532
+    SSL_CERT_FILE="$STAGED_SECRET_DIR/trust-bundle.pem"
+    export SSL_CERT_FILE
+fi
+chown 65532:65532 "$STAGED_SECRET_DIR"
+chmod 0700 "$STAGED_SECRET_DIR"
+
+# The dashboard is deliberately nonroot, but OpenClaw operations use the
+# mounted container-runtime socket. Map the
 # socket's numeric group inside the image before gosu rebuilds supplementary
-# groups for the nonroot account. Never broaden the socket's host permissions.
+# groups for the nonroot account. The local CLI sets the flag to false only
+# after an explicit VLLM_SR_CONTAINER_SOCKET opt-in and host-side validation.
+# Never broaden the socket's host permissions.
 CONTAINER_SOCKET_PATH=${VLLM_SR_CONTAINER_SOCKET_PATH:-/var/run/docker.sock}
-if [ -e "$CONTAINER_SOCKET_PATH" ] || [ -L "$CONTAINER_SOCKET_PATH" ]; then
+if [ "${OPENCLAW_CONTAINER_RUNTIME_DISABLED:-true}" != "false" ]; then
+    export OPENCLAW_CONTAINER_RUNTIME_DISABLED=true
+elif [ -e "$CONTAINER_SOCKET_PATH" ] || [ -L "$CONTAINER_SOCKET_PATH" ]; then
     if CONTAINER_SOCKET_GID=$(python3 "$PERMISSION_HELPER" socket-gid "$CONTAINER_SOCKET_PATH" 2>/dev/null); then
         add_nonroot_group_gid "$CONTAINER_SOCKET_GID"
         export OPENCLAW_CONTAINER_RUNTIME_DISABLED=false

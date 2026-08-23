@@ -17,23 +17,35 @@ import (
 
 // EvaluationHandler holds dependencies for evaluation endpoints.
 type EvaluationHandler struct {
-	db           *evaluation.DB
-	runner       *evaluation.Runner
-	readonlyMode bool
-	routerAPIURL string   // Router API URL for signal evaluation
-	envoyURL     string   // Envoy URL for model evaluation
-	sseClients   sync.Map // map[taskID]map[clientID]chan models.ProgressUpdate
-	cancelFuncs  sync.Map // map[taskID]context.CancelFunc
+	db            *evaluation.DB
+	runner        *evaluation.Runner
+	readonlyMode  bool
+	routerAPIURL  string   // Router API URL for signal evaluation
+	envoyURL      string   // Envoy URL for model evaluation
+	sseClients    sync.Map // map[taskID]map[clientID]chan models.ProgressUpdate
+	cancelFuncs   sync.Map // map[taskID]context.CancelFunc
+	scopeResolver EvaluationScopeResolver
+	runAuthorizer EvaluationRunAuthorizer
 }
 
 // NewEvaluationHandler creates a new evaluation handler.
-func NewEvaluationHandler(db *evaluation.DB, runner *evaluation.Runner, readonlyMode bool, routerAPIURL, envoyURL string) *EvaluationHandler {
+func NewEvaluationHandler(
+	db *evaluation.DB,
+	runner *evaluation.Runner,
+	readonlyMode bool,
+	routerAPIURL string,
+	envoyURL string,
+	scopeResolver EvaluationScopeResolver,
+	runAuthorizer EvaluationRunAuthorizer,
+) *EvaluationHandler {
 	h := &EvaluationHandler{
-		db:           db,
-		runner:       runner,
-		readonlyMode: readonlyMode,
-		routerAPIURL: routerAPIURL,
-		envoyURL:     envoyURL,
+		db:            db,
+		runner:        runner,
+		readonlyMode:  readonlyMode,
+		routerAPIURL:  routerAPIURL,
+		envoyURL:      envoyURL,
+		scopeResolver: scopeResolver,
+		runAuthorizer: runAuthorizer,
 	}
 
 	// Start background goroutine to forward progress updates to SSE clients
@@ -91,21 +103,23 @@ func decodeRunTaskRequest(w http.ResponseWriter, r *http.Request) (models.RunTas
 	return request, true
 }
 
-func (h *EvaluationHandler) prepareTaskRun(w http.ResponseWriter, taskID string) bool {
-	task, err := h.db.GetTask(taskID)
-	if err != nil {
-		log.Printf("Failed to get task: %v", err)
-		http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
-		return false
-	}
-	if task == nil {
-		http.Error(w, "Task not found", http.StatusNotFound)
-		return false
+func (h *EvaluationHandler) prepareTaskRun(
+	w http.ResponseWriter,
+	r *http.Request,
+	taskID string,
+) (*models.EvaluationTask, bool) {
+	task, ok := h.authorizedTask(w, r, taskID)
+	if !ok {
+		return nil, false
 	}
 	if task.Status != models.StatusPending && task.Status != models.StatusFailed {
 		http.Error(w, fmt.Sprintf("Task is already %s", task.Status), http.StatusConflict)
-		return false
+		return nil, false
 	}
+	return task, true
+}
+
+func (h *EvaluationHandler) markTaskRunning(w http.ResponseWriter, taskID string) bool {
 	if err := h.db.UpdateTaskStatus(taskID, models.StatusRunning, ""); err != nil {
 		log.Printf("Failed to mark task %s as running: %v", taskID, err)
 		http.Error(w, fmt.Sprintf("Failed to start task: %v", err), http.StatusInternalServerError)
@@ -119,12 +133,15 @@ func (h *EvaluationHandler) prepareTaskRun(w http.ResponseWriter, taskID string)
 	return true
 }
 
-func (h *EvaluationHandler) startTaskRun(taskID string) {
+func (h *EvaluationHandler) startTaskRun(
+	taskID string,
+	authorization evaluation.InferenceAuthorization,
+) {
 	ctx, cancel := context.WithCancel(context.Background())
 	h.cancelFuncs.Store(taskID, cancel)
 	go func() {
 		defer h.cancelFuncs.Delete(taskID)
-		if err := h.runner.RunTask(ctx, taskID); err != nil {
+		if err := h.runner.RunTask(ctx, taskID, authorization); err != nil {
 			log.Printf("Task %s failed: %v", taskID, err)
 		}
 	}()
@@ -152,6 +169,20 @@ func (h *EvaluationHandler) ListTasksHandler() http.HandlerFunc {
 
 		if tasks == nil {
 			tasks = []*models.EvaluationTask{}
+		}
+		scope, scopeErr := h.principalScope(r)
+		if scopeErr != nil {
+			http.Error(w, "Evaluation scope is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		if !scope.unrestricted {
+			visible := make([]*models.EvaluationTask, 0, len(tasks))
+			for _, task := range tasks {
+				if scope.allows(task) {
+					visible = append(visible, task)
+				}
+			}
+			tasks = visible
 		}
 
 		w.Header().Set("Content-Type", "application/json")
@@ -181,15 +212,8 @@ func (h *EvaluationHandler) GetTaskHandler() http.HandlerFunc {
 		}
 		taskID := pathParts[0]
 
-		task, err := h.db.GetTask(taskID)
-		if err != nil {
-			log.Printf("Failed to get task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		if task == nil {
-			http.Error(w, "Task not found", http.StatusNotFound)
+		task, ok := h.authorizedTask(w, r, taskID)
+		if !ok {
 			return
 		}
 
@@ -224,9 +248,25 @@ func (h *EvaluationHandler) CreateTaskHandler() http.HandlerFunc {
 			return
 		}
 		h.applyEvaluationCreateDefaults(&req.Config)
+		scope, err := h.principalScope(r)
+		if err != nil {
+			http.Error(w, "Evaluation scope is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		ownerUserID, ownerTeamID, allowed := scope.taskOwner(strings.TrimSpace(req.TeamID))
+		if !allowed {
+			if strings.TrimSpace(req.TeamID) != "" {
+				http.Error(w, "Team not found", http.StatusBadRequest)
+			} else {
+				http.Error(w, "Choose a team for this evaluation", http.StatusBadRequest)
+			}
+			return
+		}
 		task := &models.EvaluationTask{
 			Name:        req.Name,
 			Description: req.Description,
+			OwnerUserID: ownerUserID,
+			OwnerTeamID: ownerTeamID,
 			Config:      req.Config,
 		}
 		if err := h.db.CreateTask(task); err != nil {
@@ -264,6 +304,9 @@ func (h *EvaluationHandler) DeleteTaskHandler() http.HandlerFunc {
 			return
 		}
 		taskID := pathParts[0]
+		if _, ok := h.authorizedTask(w, r, taskID); !ok {
+			return
+		}
 
 		if err := h.db.DeleteTask(taskID); err != nil {
 			if strings.Contains(err.Error(), "not found") {
@@ -296,10 +339,18 @@ func (h *EvaluationHandler) RunTaskHandler() http.HandlerFunc {
 		}
 
 		req, ok := decodeRunTaskRequest(w, r)
-		if !ok || !h.prepareTaskRun(w, req.TaskID) {
+		if !ok {
 			return
 		}
-		h.startTaskRun(req.TaskID)
+		task, ok := h.prepareTaskRun(w, r, req.TaskID)
+		if !ok {
+			return
+		}
+		authorization, ok := h.evaluationRunAuthorization(w, r, task)
+		if !ok || !h.markTaskRunning(w, req.TaskID) {
+			return
+		}
+		h.startTaskRun(req.TaskID, authorization)
 
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(map[string]string{
@@ -384,6 +435,9 @@ func (h *EvaluationHandler) CancelTaskHandler() http.HandlerFunc {
 			return
 		}
 		taskID := pathParts[0]
+		if _, ok := h.authorizedTask(w, r, taskID); !ok {
+			return
+		}
 
 		// Cancel the context
 		if cancelFunc, ok := h.cancelFuncs.Load(taskID); ok {
@@ -412,6 +466,9 @@ func (h *EvaluationHandler) StreamProgressHandler() http.HandlerFunc {
 
 		taskID, ok := evaluationStreamTaskID(w, r.URL.Path)
 		if !ok {
+			return
+		}
+		if _, ok = h.authorizedTask(w, r, taskID); !ok {
 			return
 		}
 
@@ -464,14 +521,8 @@ func (h *EvaluationHandler) GetResultsHandler() http.HandlerFunc {
 		taskID := pathParts[0]
 
 		// Get task to check status
-		task, err := h.db.GetTask(taskID)
-		if err != nil {
-			log.Printf("Failed to get task: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to get task: %v", err), http.StatusInternalServerError)
-			return
-		}
-		if task == nil {
-			http.Error(w, "Task not found", http.StatusNotFound)
+		task, ok := h.authorizedTask(w, r, taskID)
+		if !ok {
 			return
 		}
 
@@ -518,6 +569,9 @@ func (h *EvaluationHandler) ExportResultsHandler() http.HandlerFunc {
 			return
 		}
 		taskID := pathParts[0]
+		if _, ok := h.authorizedTask(w, r, taskID); !ok {
+			return
+		}
 
 		format := models.ExportFormat(r.URL.Query().Get("format"))
 		if format == "" {
@@ -585,7 +639,28 @@ func (h *EvaluationHandler) GetHistoryHandler() http.HandlerFunc {
 			_, _ = fmt.Sscanf(limitStr, "%d", &limit)
 		}
 
-		entries, err := h.db.GetHistoryForMetric(metricName, limit)
+		scope, err := h.principalScope(r)
+		if err != nil {
+			http.Error(w, "Evaluation scope is unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		var entries []*models.EvaluationHistoryEntry
+		if scope.unrestricted {
+			entries, err = h.db.GetHistoryForMetric(metricName, limit)
+		} else {
+			tasks, listErr := h.db.ListTasks("")
+			if listErr != nil {
+				err = listErr
+			} else {
+				taskIDs := make([]string, 0, len(tasks))
+				for _, task := range tasks {
+					if scope.allows(task) {
+						taskIDs = append(taskIDs, task.ID)
+					}
+				}
+				entries, err = h.db.GetHistoryForMetricTasks(metricName, limit, taskIDs)
+			}
+		}
 		if err != nil {
 			log.Printf("Failed to get history: %v", err)
 			http.Error(w, fmt.Sprintf("Failed to get history: %v", err), http.StatusInternalServerError)

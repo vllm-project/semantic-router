@@ -39,10 +39,18 @@ var algorithmSubConfigCompilers = map[string]algorithmSubConfigCompiler{
 		algo.Prompt = c.compilePromptAlgo(fields)
 	},
 	"static": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"knn":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"kmeans": func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"mlp":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
-	"svm":    func(*Compiler, *config.AlgorithmConfig, map[string]Value) {},
+	"knn": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.ML = c.compileMLSelectionAlgo(fields)
+	},
+	"kmeans": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.ML = c.compileMLSelectionAlgo(fields)
+	},
+	"mlp": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.ML = c.compileMLSelectionAlgo(fields)
+	},
+	"svm": func(c *Compiler, algo *config.AlgorithmConfig, fields map[string]Value) {
+		algo.ML = c.compileMLSelectionAlgo(fields)
+	},
 }
 
 func (c *Compiler) compilePromptAlgo(
@@ -69,12 +77,74 @@ func (c *Compiler) compileAlgorithm(spec *AlgoSpec) *config.AlgorithmConfig {
 	algo := &config.AlgorithmConfig{Type: spec.AlgoType}
 	c.populateAlgorithmSubConfig(algo, spec)
 	c.setAlgorithmTopLevelOnError(algo, spec.Fields)
+	if config.IsMLSelectionAlgorithm(algo.Type) {
+		if err := config.ValidateMLSelectionAlgorithmConfig(algo.Type, algo.ML); err != nil {
+			c.addError(spec.Pos, "invalid %s algorithm: %v", algo.Type, err)
+		}
+	}
 	if algo.ReMoM != nil {
 		if err := config.ValidateReMoMAlgorithmConfig(algo.ReMoM); err != nil {
 			c.addError(spec.Pos, "invalid remom algorithm: %v", err)
 		}
 	}
 	return algo
+}
+
+func (c *Compiler) compileMLSelectionAlgo(fields map[string]Value) *config.MLSelectionConfig {
+	ml, ok := fields["ml"].(ObjectValue)
+	if !ok {
+		return nil
+	}
+	cfg := &config.MLSelectionConfig{}
+	if value, ok := getStringField(ml.Fields, "models_path"); ok {
+		cfg.ModelsPath = value
+	}
+	if value, ok := getIntField(ml.Fields, "embedding_dim"); ok {
+		cfg.EmbeddingDim = value
+	}
+	if family, ok := ml.Fields["knn"].(ObjectValue); ok {
+		cfg.KNN = &config.MLKNNConfig{}
+		if value, ok := getIntField(family.Fields, "k"); ok {
+			cfg.KNN.K = value
+		}
+		if value, ok := getStringField(family.Fields, "pretrained_path"); ok {
+			cfg.KNN.PretrainedPath = value
+		}
+	}
+	if family, ok := ml.Fields["kmeans"].(ObjectValue); ok {
+		cfg.KMeans = &config.MLKMeansConfig{}
+		if value, ok := getIntField(family.Fields, "num_clusters"); ok {
+			cfg.KMeans.NumClusters = value
+		}
+		if value, ok := getFloat64Field(family.Fields, "efficiency_weight"); ok {
+			cfg.KMeans.EfficiencyWeight = value
+		}
+		if value, ok := getStringField(family.Fields, "pretrained_path"); ok {
+			cfg.KMeans.PretrainedPath = value
+		}
+	}
+	if family, ok := ml.Fields["svm"].(ObjectValue); ok {
+		cfg.SVM = &config.MLSVMConfig{}
+		if value, ok := getStringField(family.Fields, "kernel"); ok {
+			cfg.SVM.Kernel = value
+		}
+		if value, ok := getFloat64Field(family.Fields, "gamma"); ok {
+			cfg.SVM.Gamma = value
+		}
+		if value, ok := getStringField(family.Fields, "pretrained_path"); ok {
+			cfg.SVM.PretrainedPath = value
+		}
+	}
+	if family, ok := ml.Fields["mlp"].(ObjectValue); ok {
+		cfg.MLP = &config.MLMLPConfig{}
+		if value, ok := getStringField(family.Fields, "device"); ok {
+			cfg.MLP.Device = value
+		}
+		if value, ok := getStringField(family.Fields, "pretrained_path"); ok {
+			cfg.MLP.PretrainedPath = value
+		}
+	}
+	return cfg
 }
 
 func (c *Compiler) populateAlgorithmSubConfig(algo *config.AlgorithmConfig, spec *AlgoSpec) {

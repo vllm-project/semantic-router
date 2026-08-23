@@ -18,6 +18,38 @@ from cli.k8s_backend import K8sBackend  # noqa: E402
 from cli.main import main  # noqa: E402
 from click.testing import CliRunner  # noqa: E402
 
+
+def _config_with_backend_credential(
+    definition: dict[str, object],
+) -> dict[str, object]:
+    return {
+        "version": "v0.4",
+        "models": [
+            {
+                "name": "demo-model",
+                "card": {},
+                "connections": [
+                    {
+                        "provider": "openai-compatible",
+                        "model": "demo-model",
+                        "credential": "private-provider",
+                    }
+                ],
+            }
+        ],
+        "recipes": [],
+        "entrypoints": [],
+        "global": {
+            "services": {
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
+                },
+                "backend_credentials": {"private-provider": definition},
+            }
+        },
+    }
+
+
 # ---------------------------------------------------------------------------
 # K8sBackend (unit tests — no real cluster needed)
 # ---------------------------------------------------------------------------
@@ -54,10 +86,12 @@ class TestK8sBackend:
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                {
-                    "version": "v0.3",
-                    "providers": {"models": [{"api_key": secret_value}]},
-                }
+                _config_with_backend_credential(
+                    {
+                        "credential_adapter_id": "bearer",
+                        "api_key": secret_value,
+                    }
+                )
             ),
             encoding="utf-8",
         )
@@ -77,7 +111,13 @@ class TestK8sBackend:
         monkeypatch.setattr(backend, "_ensure_namespace", cluster_mutation)
         monkeypatch.setattr(backend, "_run", cluster_mutation)
 
-        with pytest.raises(ValueError, match=r"config.providers.models\[0\].api_key"):
+        with pytest.raises(
+            ValueError,
+            match=(
+                r"config\.global\.services\.backend_credentials\."
+                r"private-provider\.api_key"
+            ),
+        ):
             backend.deploy(config_file=str(config))
 
         assert cluster_mutation.call_count == 0
@@ -90,7 +130,7 @@ class TestK8sBackend:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.4",
                     "global": {
                         "services": {
                             "management_api": {
@@ -138,10 +178,12 @@ class TestK8sBackend:
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                {
-                    "version": "v0.3",
-                    "providers": {"models": [{"api_key": "${GEMINI_API_KEY}"}]},
-                }
+                _config_with_backend_credential(
+                    {
+                        "credential_adapter_id": "bearer",
+                        "secret_env": "GEMINI_API_KEY",
+                    }
+                )
             ),
             encoding="utf-8",
         )
@@ -391,10 +433,15 @@ class TestK8sBackend:
         source_config = tmp_path / "config.yaml"
         source_config.write_text(
             yaml.safe_dump(
-                {"providers": {"models": [{"api_key_env": "GEMINI_API_KEY"}]}}
+                _config_with_backend_credential(
+                    {
+                        "credential_adapter_id": "bearer",
+                        "secret_env": "GEMINI_API_KEY",
+                    }
+                )
             )
         )
-        effective_config = tmp_path / "runtime-config.yaml"
+        effective_config = tmp_path / "compiled-bootstrap.yaml"
         effective_config.write_text(yaml.safe_dump({"listeners": []}))
 
         backend = K8sBackend.__new__(K8sBackend)
@@ -449,7 +496,7 @@ class TestCLITargetRouting:
         built = []
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.4\nlisteners:\n  - name: http\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -465,16 +512,17 @@ class TestCLITargetRouting:
         monkeypatch.setattr(
             rt,
             "ensure_bootstrap_workspace",
-            lambda _: MagicMock(config_path=config_path, setup_mode=False),
+            lambda *_args, **_kwargs: MagicMock(
+                config_path=config_path, setup_mode=False
+            ),
         )
+        monkeypatch.setattr(rt, "DEFAULT_SERVE_CONFIG", str(config_path))
 
         runner = CliRunner()
         runner.invoke(
             main,
             [
                 "serve",
-                "--config",
-                str(config_path),
                 "--image-pull-policy",
                 "never",
             ],
@@ -504,7 +552,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.4\nlisteners:\n  - name: http\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -516,15 +564,16 @@ class TestCLITargetRouting:
         monkeypatch.setattr(
             rt,
             "ensure_bootstrap_workspace",
-            lambda _: MagicMock(config_path=config_path, setup_mode=False),
+            lambda *_args, **_kwargs: MagicMock(
+                config_path=config_path, setup_mode=False
+            ),
         )
+        monkeypatch.setattr(rt, "DEFAULT_SERVE_CONFIG", str(config_path))
 
         result = CliRunner().invoke(
             main,
             [
                 "serve",
-                "--config",
-                str(config_path),
                 "--target",
                 "k8s",
                 "--minimal",
@@ -546,7 +595,7 @@ class TestCLITargetRouting:
             config_path.write_text(
                 yaml.safe_dump(
                     {
-                        "version": "v0.3",
+                        "version": "v0.4",
                         "setup": {"mode": True, "state": "bootstrap"},
                     }
                 ),
@@ -557,10 +606,11 @@ class TestCLITargetRouting:
         backend_builder = MagicMock(side_effect=AssertionError("backend was called"))
         monkeypatch.setattr(rt, "ensure_bootstrap_workspace", bootstrap)
         monkeypatch.setattr(rt, "_build_backend", backend_builder)
+        monkeypatch.setattr(rt, "DEFAULT_SERVE_CONFIG", str(config_path))
 
         result = CliRunner().invoke(
             main,
-            ["serve", "--config", str(config_path), "--target", "k8s"],
+            ["serve", "--target", "k8s"],
         )
 
         assert result.exit_code == 1
@@ -576,7 +626,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         source = {
-            "version": "v0.3",
+            "version": "v0.4",
             "listeners": [{"name": "http", "port": 8899}],
             "global": {
                 "services": {},
@@ -594,12 +644,15 @@ class TestCLITargetRouting:
         monkeypatch.setattr(
             rt,
             "ensure_bootstrap_workspace",
-            lambda _: MagicMock(config_path=config_path, setup_mode=False),
+            lambda *_args, **_kwargs: MagicMock(
+                config_path=config_path, setup_mode=False
+            ),
         )
+        monkeypatch.setattr(rt, "DEFAULT_SERVE_CONFIG", str(config_path))
 
         result = CliRunner().invoke(
             main,
-            ["serve", "--config", str(config_path), "--target", "k8s"],
+            ["serve", "--target", "k8s"],
         )
 
         assert result.exit_code == 0, result.output
@@ -607,7 +660,7 @@ class TestCLITargetRouting:
         assert captured["config_document"] == source
         assert not (tmp_path / ".vllm-sr").exists()
 
-    def test_k8s_overrides_never_publish_local_runtime_state(
+    def test_k8s_source_config_never_publishes_compiled_bootstrap_state(
         self,
         monkeypatch,
         tmp_path,
@@ -615,11 +668,23 @@ class TestCLITargetRouting:
         monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
         monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
         source = {
-            "version": "v0.3",
+            "version": "v0.4",
             "listeners": [{"name": "http", "port": 8899}],
-            "routing": {
-                "decisions": [{"name": "route", "algorithm": {"type": "multi_factor"}}]
-            },
+            "models": [],
+            "recipes": [
+                {
+                    "name": "test-recipe",
+                    "document": {
+                        "decisions": [
+                            {
+                                "name": "route",
+                                "algorithm": {"type": "multi_factor"},
+                            }
+                        ]
+                    },
+                }
+            ],
+            "entrypoints": [],
             "global": {
                 "model_catalog": {"embeddings": {"semantic": {"use_cpu": True}}}
             },
@@ -628,10 +693,8 @@ class TestCLITargetRouting:
         config_path.write_text(yaml.safe_dump(source), encoding="utf-8")
         runtime_dir = tmp_path / ".vllm-sr"
         runtime_dir.mkdir(mode=0o700)
-        active_path = runtime_dir / "runtime-config.yaml"
-        provenance_path = runtime_dir / "runtime-config.provenance.json"
-        active_path.write_text("dashboard_owned: do-not-clobber\n", encoding="utf-8")
-        provenance_path.write_text('{"dashboard":"receipt"}\n', encoding="utf-8")
+        sentinel = runtime_dir / "unrelated-state"
+        sentinel.write_text("do-not-clobber\n", encoding="utf-8")
         captured = {}
 
         class _FakeK8s:
@@ -642,33 +705,36 @@ class TestCLITargetRouting:
         monkeypatch.setattr(
             rt,
             "ensure_bootstrap_workspace",
-            lambda _: MagicMock(config_path=config_path, setup_mode=False),
+            lambda *_args, **_kwargs: MagicMock(
+                config_path=config_path, setup_mode=False
+            ),
         )
+        monkeypatch.setattr(rt, "DEFAULT_SERVE_CONFIG", str(config_path))
 
         result = CliRunner().invoke(
             main,
             [
                 "serve",
-                "--config",
-                str(config_path),
                 "--target",
                 "k8s",
-                "--algorithm",
-                "static",
             ],
         )
 
         assert result.exit_code == 0, result.output
         value = captured["config_document"]
-        for component in ("routing", "decisions", 0, "algorithm", "type"):
+        for component in (
+            "recipes",
+            0,
+            "document",
+            "decisions",
+            0,
+            "algorithm",
+            "type",
+        ):
             value = value[component]
-        assert value == "static"
-        assert active_path.read_text() == "dashboard_owned: do-not-clobber\n"
-        assert provenance_path.read_text() == '{"dashboard":"receipt"}\n'
-        assert {path.name for path in runtime_dir.iterdir()} == {
-            active_path.name,
-            provenance_path.name,
-        }
+        assert value == "multi_factor"
+        assert sentinel.read_text() == "do-not-clobber\n"
+        assert {path.name for path in runtime_dir.iterdir()} == {sentinel.name}
 
     @pytest.mark.parametrize(
         ("override_args", "env_name", "env_value"),
@@ -695,14 +761,11 @@ class TestCLITargetRouting:
         backend_builder = MagicMock(side_effect=AssertionError("backend was called"))
         monkeypatch.setattr(rt, "ensure_bootstrap_workspace", bootstrap)
         monkeypatch.setattr(rt, "_build_backend", backend_builder)
-        missing_config = tmp_path / "missing" / "config.yaml"
 
         result = CliRunner().invoke(
             main,
             [
                 "serve",
-                "--config",
-                str(missing_config),
                 "--target",
                 "k8s",
                 *override_args,

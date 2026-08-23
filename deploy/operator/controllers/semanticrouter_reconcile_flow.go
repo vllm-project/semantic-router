@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -150,63 +151,148 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	ctx context.Context,
 	semanticrouter *vllmv1alpha1.SemanticRouter,
 	logger logr.Logger,
-) error {
+) (ctrl.Result, error) {
+	bootstrap, err := r.validateBootstrapConfigMap(ctx, semanticrouter)
+	if err != nil {
+		logger.Error(err, "Bootstrap ConfigMap validation failed")
+		semanticrouter.Status.BootstrapRevision = ""
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type:               typeBootstrapReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             "ValidationFailed",
+			Message:            err.Error(),
+			ObservedGeneration: semanticrouter.Generation,
+		})
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type:               typeMigrationReady,
+			Status:             metav1.ConditionFalse,
+			Reason:             "BootstrapInvalid",
+			Message:            "Migration requirements cannot be resolved until the bootstrap is valid",
+			ObservedGeneration: semanticrouter.Generation,
+		})
+		return ctrl.Result{}, err
+	}
+	semanticrouter.Status.ControlPlaneMode = bootstrap.Mode
+	semanticrouter.Status.BootstrapRevision = bootstrap.Revision
+	semanticrouter.Status.PublicService = semanticrouter.Name
+	if bootstrap.Mode == controlPlaneModeManaged {
+		semanticrouter.Status.ManagementService = semanticrouter.Name + "-management"
+	} else {
+		semanticrouter.Status.ManagementService = ""
+	}
+	meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+		Type: typeBootstrapReady, Status: metav1.ConditionTrue, Reason: "Validated",
+		Message: "The immutable Router bootstrap is valid", ObservedGeneration: semanticrouter.Generation,
+	})
+
 	if err := r.reconcileServiceAccount(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile ServiceAccount")
-		return err
-	}
-
-	if err := r.reconcileConfigMap(ctx, semanticrouter); err != nil {
-		logger.Error(err, "Failed to reconcile ConfigMap")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcilePVC(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile PersistentVolumeClaim")
-		return err
+		return ctrl.Result{}, err
 	}
 
-	gatewayMode, err := reconcileGatewayIntegration(ctx, r.Client, r.Scheme, semanticrouter)
+	if bootstrap.Mode == controlPlaneModeManaged {
+		migration, err := r.reconcileMigrationJob(ctx, semanticrouter, bootstrap)
+		semanticrouter.Status.Migration = migration
+		if err != nil {
+			meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+				Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: "Failed",
+				Message: err.Error(), ObservedGeneration: semanticrouter.Generation,
+			})
+			return ctrl.Result{}, err
+		}
+		if migration.State != migrationStateSucceeded {
+			semanticrouter.Status.Phase = "Migrating"
+			meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+				Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: migration.State,
+				Message: "Waiting for the managed schema migration Job", ObservedGeneration: semanticrouter.Generation,
+			})
+			meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+				Type: typeAvailableSemanticRouter, Status: metav1.ConditionFalse, Reason: "MigrationPending",
+				Message: "Router rollout is gated on schema migration", ObservedGeneration: semanticrouter.Generation,
+			})
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeMigrationReady, Status: metav1.ConditionTrue, Reason: "Succeeded",
+			Message: "The managed schema is current", ObservedGeneration: semanticrouter.Generation,
+		})
+	} else {
+		if err := r.deleteStaleMigrationJobs(ctx, semanticrouter, ""); err != nil {
+			return ctrl.Result{}, err
+		}
+		semanticrouter.Status.Migration = nil
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeMigrationReady, Status: metav1.ConditionTrue, Reason: "NotRequired",
+			Message: "Standalone mode does not use managed schema migration", ObservedGeneration: semanticrouter.Generation,
+		})
+	}
+
+	gatewayMode, err := resolveGatewayMode(ctx, r.Client, semanticrouter)
 	if err != nil {
 		logger.Error(err, "Gateway integration failed")
-		return err
+		return ctrl.Result{}, err
 	}
 	semanticrouter.Status.GatewayMode = gatewayMode
 	logger.Info("Gateway mode determined", "mode", gatewayMode)
 
 	if err := r.reconcileEnvoyConfig(ctx, semanticrouter, gatewayMode); err != nil {
 		logger.Error(err, "Failed to reconcile Envoy ConfigMap")
-		return err
+		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode); err != nil {
+	if err := r.reconcileDeployment(ctx, semanticrouter, gatewayMode, bootstrap); err != nil {
 		logger.Error(err, "Failed to reconcile Deployment")
-		return err
+		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcileService(ctx, semanticrouter, gatewayMode); err != nil {
-		logger.Error(err, "Failed to reconcile Service")
-		return err
+	if err := r.reconcileServices(ctx, semanticrouter, gatewayMode, bootstrap); err != nil {
+		logger.Error(err, "Failed to reconcile Services")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcilePodDisruptionBudget(ctx, semanticrouter, bootstrap.Mode); err != nil {
+		logger.Error(err, "Failed to reconcile PodDisruptionBudget")
+		return ctrl.Result{}, err
+	}
+
+	if err := r.reconcileNetworkPolicy(ctx, semanticrouter, gatewayMode, bootstrap); err != nil {
+		logger.Error(err, "Failed to reconcile NetworkPolicy")
+		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileHPA(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile HorizontalPodAutoscaler")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	if err := r.reconcileIngress(ctx, semanticrouter); err != nil {
 		logger.Error(err, "Failed to reconcile Ingress")
-		return err
+		return ctrl.Result{}, err
 	}
 
 	isOpenShift := false
 	if r.isOpenShift != nil {
 		isOpenShift = *r.isOpenShift
 	}
-	if err := reconcileRoute(ctx, r.Client, r.Scheme, semanticrouter, isOpenShift); err != nil {
+	if err := reconcileRoute(
+		ctx,
+		r.Client,
+		r.Scheme,
+		semanticrouter,
+		isOpenShift,
+		gatewayMode,
+		bootstrap.Mode,
+	); err != nil {
 		logger.Error(err, "Route reconciliation failed")
-		return err
+		return ctrl.Result{}, err
 	}
 
-	return nil
+	semanticrouter.Status.Phase = "Progressing"
+	meta.RemoveStatusCondition(&semanticrouter.Status.Conditions, typeDegradedSemanticRouter)
+	return ctrl.Result{}, nil
 }

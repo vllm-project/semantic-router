@@ -1,117 +1,124 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: qwen14b-dev
-  models:
-    - name: qwen14b-dev
-      external_model_ids:
-        vllm: Qwen/Qwen2.5-14B-Instruct
-      backend_refs:
-        - name: vllm-14b-dev
-          endpoint: 127.0.0.1:8100
-          weight: 1
-          type: vllm
-    - name: qwen14b-prod
-      external_model_ids:
-        vllm: Qwen/Qwen2.5-14B-Instruct
-      backend_refs:
-        - name: vllm-14b-prod
-          endpoint: 127.0.0.1:8200
-          weight: 1
-          type: vllm
-routing:
-  decisions:
+models:
+- name: qwen14b-dev
+  card:
+    aliases:
+    - Qwen/Qwen2.5-14B-Instruct
+    capabilities:
+    - chat
+    - code
+    - reasoning
+    - math
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8100/v1
+    model: qwen14b-dev
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+- name: qwen14b-prod
+  card:
+    aliases:
+    - Qwen/Qwen2.5-14B-Instruct
+    capabilities:
+    - chat
+    - code
+    - reasoning
+    - math
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8200/v1
+    model: qwen14b-prod
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      keywords:
+      - name: code_keywords
+        operator: OR
+        keywords:
+        - code
+        - function
+        - implement
+        - debug
+        - refactor
+        - python
+        - golang
+        - javascript
+        - algorithm
+        - class
+        - API
+        - bug
+        - compile
+      - name: general_keywords
+        operator: OR
+        keywords:
+        - hello
+        - what is
+        - explain
+        - tell me
+        - how does
+        - history
+        - science
+        - who
+        - where
+        - when
+      domains:
+      - name: code
+        description: Programming, debugging, and software engineering tasks
+      - name: general
+        description: General knowledge, conversation, and miscellaneous topics
+    decisions:
     - name: code_to_dev
       description: Route code/tech queries to Dev (internal developer env)
       priority: 100
       rules:
         operator: OR
         conditions:
-          - type: keyword
-            name: code_keywords
-      modelRefs:
-        - model: qwen14b-dev
-          use_reasoning: false
+        - type: keyword
+          name: code_keywords
       plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
+      - type: system_prompt
+        configuration:
+          system_prompt: You are a senior software engineer. Provide clear, production-quality
+            code with best practices.
     - name: general_to_prod
       description: Route general/user queries to Prod (strict safety)
       priority: 50
       rules:
         operator: OR
         conditions:
-          - type: keyword
-            name: general_keywords
-      modelRefs:
-        - model: qwen14b-prod
-          use_reasoning: false
+        - type: keyword
+          name: general_keywords
       plugins:
-        - type: system_prompt
-          configuration:
-            system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user. If a user shares personal data, remind them to avoid sharing sensitive details.
-  signals:
-    keywords:
-      - name: code_keywords
-        operator: OR
-        keywords:
-          - code
-          - function
-          - implement
-          - debug
-          - refactor
-          - python
-          - golang
-          - javascript
-          - algorithm
-          - class
-          - API
-          - bug
-          - compile
-      - name: general_keywords
-        operator: OR
-        keywords:
-          - hello
-          - what is
-          - explain
-          - tell me
-          - how does
-          - history
-          - science
-          - who
-          - where
-          - when
-    domains:
-      - name: code
-        description: Programming, debugging, and software engineering tasks
-      - name: general
-        description: General knowledge, conversation, and miscellaneous topics
-  modelCards:
-    - name: qwen14b-dev
-      param_size: 14b
-      description: Qwen2.5 14B — Dev environment (internal)
-      capabilities:
-        - chat
-        - code
-        - reasoning
-        - math
-      quality_score: 0.85
-    - name: qwen14b-prod
-      param_size: 14b
-      description: Qwen2.5 14B — Prod environment (user-facing)
-      capabilities:
-        - chat
-        - code
-        - reasoning
-        - math
-      quality_score: 0.85
+      - type: system_prompt
+        configuration:
+          system_prompt: You are a helpful assistant operating under strict data protection
+            policies. Never store, log, or repeat any personal information shared
+            by the user. If a user shares personal data, remind them to avoid sharing
+            sensitive details.
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    code_to_dev:
+      models:
+      - model: qwen14b-dev
+        weight: '1'
+    general_to_prod:
+      models:
+      - model: qwen14b-prod
+        weight: '1'
 global:
   router:
-    strategy: priority
     clear_route_cache: true
-  services: {}
   stores:
     response_cache:
       enabled: false
@@ -121,3 +128,17 @@ global:
     vector_store:
       embedding_model: mmbert
   integrations: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}
+  services:
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml

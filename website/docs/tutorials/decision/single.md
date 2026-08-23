@@ -29,7 +29,7 @@ Use a single-condition decision when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: business_route
       description: Route business and management questions.
@@ -39,9 +39,6 @@ routing:
         conditions:
           - type: domain
             name: business
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
 ```
 
 Even for a single condition, keep the route named and reusable. If the policy

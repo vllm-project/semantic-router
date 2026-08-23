@@ -6,7 +6,11 @@ export interface PageWindow {
   end: number
 }
 
-export function getPageWindow(totalItems: number, requestedPage: number, requestedPageSize: number): PageWindow {
+export function getPageWindow(
+  totalItems: number,
+  requestedPage: number,
+  requestedPageSize: number,
+): PageWindow {
   const total = Math.max(0, Math.floor(totalItems))
   const pageSize = Math.max(1, Math.floor(requestedPageSize))
   const totalPages = Math.max(1, Math.ceil(total / pageSize))

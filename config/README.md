@@ -8,7 +8,7 @@ or start from a maintained routing recipe.
 | See every supported field | `config/config.yaml`, the exhaustive canonical reference config |
 | Add one routing capability | `config/fragments/` |
 | Run a complete use case | `config/recipes/` |
-| Serve a packaged virtual model | `config/recipes/built-in/` |
+| Start from a built-in Recipe | `config/recipes/built-in/` |
 | Configure a storage or service backend | `config/runtime/` |
 | Validate a managed asset | `config/schemas/` |
 
@@ -21,23 +21,26 @@ trim it for a deployment instead of treating every optional service as required.
 A router config uses these top-level sections:
 
 ```yaml
-version: v0.3
+version: v0.4
 listeners: []
-providers: {}
-routing: {}
-entrypoints: []
+models: []
 recipes: []
+entrypoints: []
 global: {}
 ```
 
 - `listeners` exposes inference and management endpoints.
-- `providers.defaults` defines shared provider behavior;
-  `providers.models[]` binds model names to concrete backends.
-- `routing` owns model cards, signals, projections, decisions, and the routing
-  strategy for the default profile.
-- `entrypoints` maps request-facing model names to isolated `recipes`. Each
-  recipe has its own signals, decisions, algorithms, and plugins while sharing
-  providers and router-wide services. See
+- `models` contains each logical Model as a readable `name`, semantic `card`,
+  one or more provider `connections`, and optional `runtime` and `pricing`.
+  Each connection may select a catalog interface such as `chat`, `responses`,
+  or `messages`; omitting `interface` selects that Provider's declared default.
+- `recipes` contains reusable, model-free routing documents. Each document owns
+  signals, projections, decisions, strategy, algorithms, and route plugins.
+- `entrypoints` defines callable virtual models. The common form references one
+  Recipe by name and assigns an ordered Model list to every Decision name;
+  conditional rules use the same readable references. There is no detached
+  pool or binding resource. Each effective rule runs in its own routing-state
+  scope while sharing Models and router-wide services. See
   [`tutorials/global/entrypoints-and-recipes.md`](../website/docs/tutorials/global/entrypoints-and-recipes.md).
 - `global` owns cross-cutting router settings, services, stores, integrations,
   and router-managed model assets.
@@ -46,8 +49,13 @@ Validate a file before serving it:
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve
 ```
+
+`serve` starts the infrastructure and reads `config.yaml` only as deployment
+bootstrap. Models, Recipes, decision assignments, and Entrypoints are created
+through the Router Management API or the Dashboard; they are not selected by a
+CLI operand.
 
 ## Choose the right asset
 
@@ -61,8 +69,8 @@ deployments and may rely on model or service definitions from a base config.
   `tutorials/signal/heuristic/` and `tutorials/signal/learned/`.
 - `config/fragments/decision/`: `single`, `and`, `or`, `not`, and nested
   boolean rule shapes.
-- `config/fragments/algorithm/`: per-decision model selection and bounded
-  multi-model execution policies.
+- `config/fragments/algorithm/`: per-decision selection and bounded multi-model
+  execution policies over the Models assigned by an Entrypoint.
 - `config/fragments/plugin/`: route-local request or response processing such
   as caching, memory, RAG, tool policy, and safety handling.
 
@@ -73,16 +81,16 @@ The corresponding website sections are
 [`tutorials/plugin/`](../website/docs/tutorials/plugin/), and
 [`tutorials/global/`](../website/docs/tutorials/global/).
 
-### Recipes and built-in models
+### Recipes and built-in policy
 
 `config/recipes/` contains complete, runnable examples. Read a recipe's Model
 Card before using it; the card explains its intended use, backend roles, data
 handling, evaluation scope, and limitations.
 
-`config/recipes/built-in/` is the versioned source for virtual models bundled
-with the CLI. Use `vllm-sr model list` and `vllm-sr model show` to inspect the
-installed catalog. Fork a built-in before changing its provider bindings or
-routing policy.
+`config/recipes/built-in/` is the versioned source for model-free Recipes
+bundled with each release. Inspect a built-in Recipe in the Dashboard, then assign
+configured Models and publish a Mixture of Models. Independent control planes
+can perform the same lifecycle through the Router Management API.
 
 ### Runtime examples
 
@@ -92,11 +100,28 @@ runtime dependency; they do not define routing behavior by themselves.
 
 ## Important boundaries
 
-- Model backend credentials belong in environment references, not literal YAML
-  values.
-- `routing.modelCards` describes semantic capabilities; concrete URLs and
-  credentials belong in `providers.models`.
-- `routing.projections` derives named routing outputs from signals. Decisions
+- Standalone model backends use `credential_ref` to select a named
+  `global.services.backend_credentials` entry backed by exactly one
+  `secret_file` or `secret_env`. Literal backend keys and caller-supplied
+  authorization headers are rejected. Managed mode uses published
+  ProviderCredential resources instead of YAML secret references.
+- Managed mode requires Router-terminated Management TLS. Configure exactly one
+  file or environment source for both the server certificate and private key;
+  a client CA source enables required, verified mTLS.
+- Managed mode requires `global.services.agent.public_inference_endpoint` to
+  name the ordinary public Router `/v1/chat/completions` endpoint. It must not
+  point to the Dashboard or a physical model backend. Agent calls use delegated
+  API keys so they pass through the same access, quota, logging, and usage path
+  as every other inference request.
+- Managed usage storage uses fixed UTC-month partitions. Under
+  `global.services.access.usage_storage`, `create_ahead_months` and
+  `maintenance_interval` tune bounded lifecycle work; `raw_retention` is empty
+  by default and must be set explicitly before any raw month can be retired.
+  Settlement tombstones and audit history are retained indefinitely.
+- `models[]` is the only runtime Model definition. A backend contains compiled
+  adapter fields; provider product metadata and authoring forms remain in the
+  control plane.
+- `recipes[].document.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.
@@ -104,8 +129,6 @@ runtime dependency; they do not define routing behavior by themselves.
   decision's request-time base algorithm.
 - Router replay is disabled by default and can capture request or response
   bodies. Review its access controls and retention settings before enabling it.
-- `global.router.skip_processing.enabled` should be enabled only when an
-  authenticated upstream component owns the bypass header.
 - Knowledge bases are declared under `global.model_catalog.kbs[]`; routing
   signals bind to those shared assets by name.
 

@@ -30,11 +30,13 @@ type RedisStore struct {
 
 const (
 	// ResponseKeyPrefix for response keys
-	// Combined with key_prefix (default "sr:"): sr:response:resp_xxxxx
+	// Combined with key_prefix and an opaque owner partition:
+	// sr:response:<owner>:resp_xxxxx
 	ResponseKeyPrefix = "response:"
 
 	// ConversationKeyPrefix for conversation keys
-	// Combined with key_prefix (default "sr:"): sr:conversation:conv_xxxxx
+	// Combined with key_prefix and an opaque owner partition:
+	// sr:conversation:<owner>:conv_xxxxx
 	ConversationKeyPrefix = "conversation:"
 )
 
@@ -281,6 +283,14 @@ func (s *RedisStore) buildKey(suffix string) string {
 	return s.keyPrefix + suffix
 }
 
+func (s *RedisStore) responseKey(owner responseapi.ResponseOwner, responseID string) string {
+	return s.buildKey(ResponseKeyPrefix + ownerPartition(owner) + ":" + responseID)
+}
+
+func (s *RedisStore) conversationKey(owner responseapi.ResponseOwner, conversationID string) string {
+	return s.buildKey(ConversationKeyPrefix + ownerPartition(owner) + ":" + conversationID)
+}
+
 func (s *RedisStore) CheckConnection(ctx context.Context) error {
 	if !s.enabled {
 		return fmt.Errorf("redis store is disabled")
@@ -309,15 +319,15 @@ func (s *RedisStore) IsEnabled() bool {
 
 // Response Store Methods
 
-func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+func (s *RedisStore) StoreResponse(ctx context.Context, owner responseapi.ResponseOwner, response *responseapi.StoredResponse) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if response == nil || response.ID == "" {
+	if validateOwner(owner) != nil || response == nil || response.ID == "" || response.Owner != owner {
 		return ErrInvalidInput
 	}
 
-	key := s.buildKey(ResponseKeyPrefix + response.ID)
+	key := s.responseKey(owner, response.ID)
 
 	exists, err := s.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -339,15 +349,15 @@ func (s *RedisStore) StoreResponse(ctx context.Context, response *responseapi.St
 	return nil
 }
 
-func (s *RedisStore) GetResponse(ctx context.Context, responseID string) (*responseapi.StoredResponse, error) {
+func (s *RedisStore) GetResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) (*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
 	}
-	if responseID == "" {
+	if validateOwner(owner) != nil || responseID == "" {
 		return nil, ErrInvalidInput
 	}
 
-	key := s.buildKey(ResponseKeyPrefix + responseID)
+	key := s.responseKey(owner, responseID)
 
 	data, err := s.client.Get(ctx, key).Bytes()
 	if err != nil {
@@ -361,19 +371,22 @@ func (s *RedisStore) GetResponse(ctx context.Context, responseID string) (*respo
 	if err := json.Unmarshal(data, &response); err != nil {
 		return nil, fmt.Errorf("failed to deserialize response: %w", err)
 	}
+	if response.Owner != owner {
+		return nil, ErrNotFound
+	}
 
 	return &response, nil
 }
 
-func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+func (s *RedisStore) UpdateResponse(ctx context.Context, owner responseapi.ResponseOwner, response *responseapi.StoredResponse) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if response == nil || response.ID == "" {
+	if validateOwner(owner) != nil || response == nil || response.ID == "" || response.Owner != owner {
 		return ErrInvalidInput
 	}
 
-	key := s.buildKey(ResponseKeyPrefix + response.ID)
+	key := s.responseKey(owner, response.ID)
 
 	exists, err := s.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -395,15 +408,15 @@ func (s *RedisStore) UpdateResponse(ctx context.Context, response *responseapi.S
 	return nil
 }
 
-func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) error {
+func (s *RedisStore) DeleteResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if responseID == "" {
+	if validateOwner(owner) != nil || responseID == "" {
 		return ErrInvalidInput
 	}
 
-	key := s.buildKey(ResponseKeyPrefix + responseID)
+	key := s.responseKey(owner, responseID)
 
 	deleted, err := s.client.Del(ctx, key).Result()
 	if err != nil {
@@ -418,16 +431,16 @@ func (s *RedisStore) DeleteResponse(ctx context.Context, responseID string) erro
 
 // GetConversationChain retrieves the full conversation chain for a response.
 // It follows the previous_response_id links backwards to build the complete history.
-func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string) ([]*responseapi.StoredResponse, error) {
+func (s *RedisStore) GetConversationChain(ctx context.Context, owner responseapi.ResponseOwner, responseID string) ([]*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
 	}
-	if responseID == "" {
+	if validateOwner(owner) != nil || responseID == "" {
 		return nil, ErrInvalidInput
 	}
 
 	// Phase 1: Collect response IDs by following the chain
-	responseIDs, err := s.collectChainIDs(ctx, responseID)
+	responseIDs, err := s.collectChainIDs(ctx, owner, responseID)
 	if err != nil {
 		return nil, err
 	}
@@ -437,7 +450,7 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 	}
 
 	// Phase 2: Fetch all responses using pipelining
-	chain, err := s.fetchResponsesPipelined(ctx, responseIDs)
+	chain, err := s.fetchResponsesPipelined(ctx, owner, responseIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -450,16 +463,16 @@ func (s *RedisStore) GetConversationChain(ctx context.Context, responseID string
 	return chain, nil
 }
 
-func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
+func (s *RedisStore) ListResponsesByConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
 	}
-	if conversationID == "" {
+	if validateOwner(owner) != nil || conversationID == "" {
 		return nil, ErrInvalidInput
 	}
 
-	// Use SCAN to find all response keys
-	pattern := s.buildKey(ResponseKeyPrefix + "*")
+	// Scan only the caller's opaque owner partition.
+	pattern := s.responseKey(owner, "*")
 	var responses []*responseapi.StoredResponse
 
 	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
@@ -477,7 +490,7 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 			continue
 		}
 
-		if response.ConversationID == conversationID {
+		if response.Owner == owner && response.ConversationID == conversationID {
 			responses = append(responses, &response)
 		}
 	}
@@ -493,15 +506,15 @@ func (s *RedisStore) ListResponsesByConversation(ctx context.Context, conversati
 
 // Conversation Store Methods
 
-func (s *RedisStore) CreateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
+func (s *RedisStore) CreateConversation(ctx context.Context, owner responseapi.ResponseOwner, conversation *responseapi.StoredConversation) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if conversation == nil || conversation.ID == "" {
+	if validateOwner(owner) != nil || conversation == nil || conversation.ID == "" || conversation.Owner != owner {
 		return ErrInvalidInput
 	}
 
-	key := s.buildKey(ConversationKeyPrefix + conversation.ID)
+	key := s.conversationKey(owner, conversation.ID)
 
 	exists, err := s.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -523,15 +536,15 @@ func (s *RedisStore) CreateConversation(ctx context.Context, conversation *respo
 	return nil
 }
 
-func (s *RedisStore) GetConversation(ctx context.Context, conversationID string) (*responseapi.StoredConversation, error) {
+func (s *RedisStore) GetConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string) (*responseapi.StoredConversation, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
 	}
-	if conversationID == "" {
+	if validateOwner(owner) != nil || conversationID == "" {
 		return nil, ErrInvalidInput
 	}
 
-	key := s.buildKey(ConversationKeyPrefix + conversationID)
+	key := s.conversationKey(owner, conversationID)
 
 	data, err := s.client.Get(ctx, key).Bytes()
 	if err != nil {
@@ -545,19 +558,22 @@ func (s *RedisStore) GetConversation(ctx context.Context, conversationID string)
 	if err := json.Unmarshal(data, &conversation); err != nil {
 		return nil, fmt.Errorf("failed to deserialize conversation: %w", err)
 	}
+	if conversation.Owner != owner {
+		return nil, ErrNotFound
+	}
 
 	return &conversation, nil
 }
 
-func (s *RedisStore) UpdateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
+func (s *RedisStore) UpdateConversation(ctx context.Context, owner responseapi.ResponseOwner, conversation *responseapi.StoredConversation) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if conversation == nil || conversation.ID == "" {
+	if validateOwner(owner) != nil || conversation == nil || conversation.ID == "" || conversation.Owner != owner {
 		return ErrInvalidInput
 	}
 
-	key := s.buildKey(ConversationKeyPrefix + conversation.ID)
+	key := s.conversationKey(owner, conversation.ID)
 
 	exists, err := s.client.Exists(ctx, key).Result()
 	if err != nil {
@@ -579,15 +595,15 @@ func (s *RedisStore) UpdateConversation(ctx context.Context, conversation *respo
 	return nil
 }
 
-func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID string, deleteResponses bool) error {
+func (s *RedisStore) DeleteConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string, deleteResponses bool) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if conversationID == "" {
+	if validateOwner(owner) != nil || conversationID == "" {
 		return ErrInvalidInput
 	}
 
-	convKey := s.buildKey(ConversationKeyPrefix + conversationID)
+	convKey := s.conversationKey(owner, conversationID)
 	deleted, err := s.client.Del(ctx, convKey).Result()
 	if err != nil {
 		return fmt.Errorf("failed to delete conversation from Redis: %w", err)
@@ -598,13 +614,13 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 
 	// Optionally delete all responses in the conversation
 	if deleteResponses {
-		responses, err := s.ListResponsesByConversation(ctx, conversationID, ListOptions{})
+		responses, err := s.ListResponsesByConversation(ctx, owner, conversationID, ListOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to list responses for deletion: %w", err)
 		}
 
 		for _, resp := range responses {
-			if err := s.DeleteResponse(ctx, resp.ID); err != nil && !errors.Is(err, ErrNotFound) {
+			if err := s.DeleteResponse(ctx, owner, resp.ID); err != nil && !errors.Is(err, ErrNotFound) {
 				logging.Warnf("RedisStore: failed to delete response %s: %v", resp.ID, err)
 			}
 		}
@@ -613,12 +629,15 @@ func (s *RedisStore) DeleteConversation(ctx context.Context, conversationID stri
 	return nil
 }
 
-func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([]*responseapi.StoredConversation, error) {
+func (s *RedisStore) ListConversations(ctx context.Context, owner responseapi.ResponseOwner, opts ListOptions) ([]*responseapi.StoredConversation, error) {
 	if !s.enabled {
 		return nil, ErrStoreDisabled
 	}
+	if validateOwner(owner) != nil {
+		return nil, ErrInvalidInput
+	}
 
-	pattern := s.buildKey(ConversationKeyPrefix + "*")
+	pattern := s.conversationKey(owner, "*")
 	var conversations []*responseapi.StoredConversation
 
 	iter := s.client.Scan(ctx, 0, pattern, 0).Iterator()
@@ -635,7 +654,9 @@ func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([
 			continue
 		}
 
-		conversations = append(conversations, &conversation)
+		if conversation.Owner == owner {
+			conversations = append(conversations, &conversation)
+		}
 	}
 
 	if err := iter.Err(); err != nil {
@@ -649,11 +670,11 @@ func (s *RedisStore) ListConversations(ctx context.Context, opts ListOptions) ([
 }
 
 // AddResponseToConversation adds a response ID to a conversation.
-func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversationID, responseID string) error {
+func (s *RedisStore) AddResponseToConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID, responseID string) error {
 	if !s.enabled {
 		return ErrStoreDisabled
 	}
-	if conversationID == "" || responseID == "" {
+	if validateOwner(owner) != nil || conversationID == "" || responseID == "" {
 		return ErrInvalidInput
 	}
 
@@ -664,7 +685,7 @@ func (s *RedisStore) AddResponseToConversation(ctx context.Context, conversation
 
 // Helper methods
 
-func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]string, error) {
+func (s *RedisStore) collectChainIDs(ctx context.Context, owner responseapi.ResponseOwner, startID string) ([]string, error) {
 	var responseIDs []string
 	currentID := startID
 	visited := make(map[string]bool)
@@ -682,7 +703,7 @@ func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]str
 
 		responseIDs = append(responseIDs, currentID)
 
-		response, err := s.GetResponse(ctx, currentID)
+		response, err := s.GetResponse(ctx, owner, currentID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				// If this is the first response (start of chain), return error
@@ -702,7 +723,7 @@ func (s *RedisStore) collectChainIDs(ctx context.Context, startID string) ([]str
 	return responseIDs, nil
 }
 
-func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []string) ([]*responseapi.StoredResponse, error) {
+func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, owner responseapi.ResponseOwner, responseIDs []string) ([]*responseapi.StoredResponse, error) {
 	if len(responseIDs) == 0 {
 		return []*responseapi.StoredResponse{}, nil
 	}
@@ -711,7 +732,7 @@ func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []
 
 	cmds := make([]*redis.StringCmd, len(responseIDs))
 	for i, id := range responseIDs {
-		key := s.buildKey(ResponseKeyPrefix + id)
+		key := s.responseKey(owner, id)
 		cmds[i] = pipe.Get(ctx, key)
 	}
 
@@ -737,6 +758,9 @@ func (s *RedisStore) fetchResponsesPipelined(ctx context.Context, responseIDs []
 		var response responseapi.StoredResponse
 		if err := json.Unmarshal(data, &response); err != nil {
 			logging.Warnf("RedisStore: failed to parse response %s: %v", responseIDs[i], err)
+			continue
+		}
+		if response.Owner != owner {
 			continue
 		}
 

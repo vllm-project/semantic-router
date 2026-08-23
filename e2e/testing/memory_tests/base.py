@@ -273,10 +273,7 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
             response = requests.post(
                 self.responses_url,
                 json=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "x-authz-user-id": user,
-                },
+                headers={"Content-Type": "application/json"},
                 timeout=self.timeout,
             )
 

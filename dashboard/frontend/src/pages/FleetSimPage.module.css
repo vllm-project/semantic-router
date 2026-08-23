@@ -470,8 +470,8 @@
   align-items: center;
   justify-content: center;
   padding: 1.25rem;
-  background: rgba(0, 0, 0, 0.78);
-  backdrop-filter: blur(10px);
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
 }
 
 .dialogPanel {
@@ -481,13 +481,15 @@
   flex-direction: column;
   gap: 1rem;
   padding: 1.1rem;
-  border-radius: 1.3rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
   background:
-    radial-gradient(circle at top right, rgba(166, 171, 179, 0.1), rgba(166, 171, 179, 0) 32%),
-    linear-gradient(155deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.015)),
-    rgba(16, 16, 18, 0.96);
-  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48);
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
 }
 
 .dialogHeader {
@@ -537,6 +539,20 @@
   transform: translateY(-1px);
   border-color: rgba(166, 171, 179, 0.26);
   background: rgba(166, 171, 179, 0.08);
+}
+
+.dialogCloseButton > svg,
+.dialogFooter button > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+
+.dialogFooter button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
 }
 
 .dialogMetaRow {

@@ -1,77 +1,129 @@
 package config
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
 
-func TestParseYAMLBytesAcceptsLearningAdaptationAndProtection(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
+// canonicalRecipeFixture builds the smallest complete standalone v0.4
+// document around one Recipe document. Tests pass only the Recipe-owned
+// routing value and sparse global override they need to exercise.
+func canonicalRecipeFixture(documentYAML, globalYAML string) []byte {
+	indent := func(value, prefix string) string {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			return ""
+		}
+		return prefix + strings.ReplaceAll(value, "\n", "\n"+prefix)
+	}
+
+	global := ""
+	if strings.TrimSpace(globalYAML) != "" {
+		global = "\nglobal:\n" + indent(globalYAML, "  ")
+	}
+	return []byte(fmt.Sprintf(`
+version: v0.4
 listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        adaptation:
-          mode: observe
-          candidate_set: global
-        protection:
-          mode: apply
-          stability_weight: 1.5
-          switch_margin: 0.11
-global:
-  router:
-    learning:
-      enabled: true
-      adaptation:
-        enabled: true
-        candidate_set: tier
-        strategy: routing_sampling
-      protection:
-        enabled: true
-        scope: session
-        identity:
-          headers:
-            session: x-session-id
-            conversation: x-conversation-id
-        tuning:
-          idle_timeout_seconds: 300
-          min_turns_before_switch: 1
-          switch_margin: 0.05
-          stability_weight: 1.0
-      state_store:
-        backend: redis
-        ttl_seconds: 86400
-        timeout_ms: 50
-        redis:
-          address: redis:6379
-          database: 2
-          key_prefix: "vsr:router-session:v1:"
+models:
+  - name: cheap
+    card: {}
+    connections:
+      - provider: private-test
+        endpoint: http://127.0.0.1:8000
+        model: cheap
+recipes:
+  - name: default
+    document:
+%s
+entrypoints:
+  - name: vllm-sr/test
+    recipe: default
+    assignments:
+      route:
+        models:
+          - model: cheap%s
+`, indent(documentYAML, "      "), global))
+}
+
+func canonicalLearningFixture(decisionYAML, routerYAML string) []byte {
+	decision := `
+decisions:
+  - name: route
+    priority: 1
+    rules:
+      operator: AND
+      conditions: []`
+	if strings.TrimSpace(decisionYAML) != "" {
+		decision += "\n    " + strings.ReplaceAll(
+			strings.TrimSpace(decisionYAML),
+			"\n",
+			"\n    ",
+		)
+	}
+
+	global := ""
+	if strings.TrimSpace(routerYAML) != "" {
+		global = "router:\n  " + strings.ReplaceAll(strings.TrimSpace(routerYAML), "\n", "\n  ")
+	}
+	return canonicalRecipeFixture(decision, global)
+}
+
+func canonicalFixtureDecision(t *testing.T, cfg *RouterConfig) Decision {
+	t.Helper()
+	recipe := cfg.DefaultRecipe()
+	if recipe == nil || len(recipe.Profile.Decisions) != 1 {
+		t.Fatalf("fixture default Recipe decisions = %#v", recipe)
+	}
+	return recipe.Profile.Decisions[0]
+}
+
+func TestParseYAMLBytesAcceptsLearningAdaptationAndProtection(t *testing.T) {
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  adaptation:
+    mode: observe
+    candidate_set: global
+  protection:
+    mode: apply
+    stability_weight: 1.5
+    switch_margin: 0.11
+`, `
+learning:
+  enabled: true
+  adaptation:
+    enabled: true
+    candidate_set: tier
+    strategy: routing_sampling
+  protection:
+    enabled: true
+    scope: session
+    identity:
+      headers:
+        session: x-session-id
+        conversation: x-conversation-id
+    tuning:
+      idle_timeout_seconds: 300
+      min_turns_before_switch: 1
+      switch_margin: 0.05
+      stability_weight: 1.0
+  state_store:
+    backend: redis
+    ttl_seconds: 86400
+    timeout_ms: 50
+    redis:
+      address: redis:6379
+      database: 2
+      key_prefix: "vsr:router-session:v1:"
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
 	assertLearningConfig(t, cfg)
-	assertDecisionAdaptations(t, cfg.Decisions[0].Adaptations, cfg.RouterLearning.Adaptation.EffectiveCandidateSet())
+	assertDecisionAdaptations(t, canonicalFixtureDecision(t, cfg).Adaptations, cfg.RouterLearning.Adaptation.EffectiveCandidateSet())
 }
 
 func TestValidateDecisionLearningCoversRecipeOwnedDecisions(t *testing.T) {
@@ -131,34 +183,9 @@ func assertDecisionAdaptations(t *testing.T, adaptations DecisionAdaptationsConf
 }
 
 func TestParseYAMLBytesDefaultsLearningComponentsWhenEnabled(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-global:
-  router:
-    learning:
-      enabled: true
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture("", `
+learning:
+  enabled: true
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -190,38 +217,13 @@ global:
 }
 
 func TestParseYAMLBytesDisablesLearningComponentsIndependently(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-global:
-  router:
-    learning:
-      enabled: true
-      adaptation:
-        enabled: false
-      protection:
-        enabled: false
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture("", `
+learning:
+  enabled: true
+  adaptation:
+    enabled: false
+  protection:
+    enabled: false
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -238,45 +240,21 @@ global:
 }
 
 func TestParseYAMLBytesAcceptsDecisionLearningBypass(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        mode: bypass
-global:
-  router:
-    learning:
-      enabled: true
-      adaptation:
-        enabled: true
-      protection:
-        enabled: true
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  mode: bypass
+`, `
+learning:
+  enabled: true
+  adaptation:
+    enabled: true
+  protection:
+    enabled: true
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-	adaptations := cfg.Decisions[0].Adaptations
+	adaptations := canonicalFixtureDecision(t, cfg).Adaptations
 	if adaptations.AdaptationMode() != DecisionAdaptationModeBypass ||
 		adaptations.ProtectionMode() != DecisionAdaptationModeBypass {
 		t.Fatalf("expected global decision bypass, got %#v", adaptations)
@@ -299,38 +277,14 @@ func TestDecisionAdaptationsModeDefaultsComponents(t *testing.T) {
 }
 
 func TestParseYAMLBytesRejectsDecisionObserveComponentApply(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        mode: observe
-        adaptation:
-          mode: apply
-global:
-  router:
-    learning:
-      enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  mode: observe
+  adaptation:
+    mode: apply
+`, `
+learning:
+  enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected component apply to be rejected under decision observe")
@@ -341,38 +295,14 @@ global:
 }
 
 func TestParseYAMLBytesRejectsDecisionBypassComponentObserve(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        mode: bypass
-        protection:
-          mode: observe
-global:
-  router:
-    learning:
-      enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  mode: bypass
+  protection:
+    mode: observe
+`, `
+learning:
+  enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected component observe to be rejected under decision bypass")
@@ -394,121 +324,49 @@ func TestDecisionAdaptationsCandidateSetDefaultsToGlobal(t *testing.T) {
 }
 
 func TestParseYAMLBytesRejectsUnknownDecisionAdaptation(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        session_aware:
-          mode: apply
-global:
-  router:
-    learning:
-      enabled: true
-      protection:
-        enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  session_aware:
+    mode: apply
+`, `
+learning:
+  enabled: true
+  protection:
+    enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected unknown decision adaptation to be rejected")
 	}
-	if !strings.Contains(err.Error(), "routing.decisions[0].adaptations.session_aware") {
+	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.session_aware") {
 		t.Fatalf("expected unknown adaptation path in error, got %v", err)
 	}
 }
 
 func TestParseYAMLBytesRejectsRemovedDecisionCoordination(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        coordination:
-          protection_weight: 1.0
-global:
-  router:
-    learning:
-      enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  coordination:
+    protection_weight: 1.0
+`, `
+learning:
+  enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected removed decision coordination block to be rejected")
 	}
-	if !strings.Contains(err.Error(), "routing.decisions[0].adaptations.coordination") {
+	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.coordination") {
 		t.Fatalf("expected coordination path in error, got %v", err)
 	}
 }
 
 func TestParseYAMLBytesRejectsInvalidDecisionAdaptationCandidateSet(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        adaptation:
-          candidate_set: cluster
-global:
-  router:
-    learning:
-      enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  adaptation:
+    candidate_set: cluster
+`, `
+learning:
+  enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected invalid decision adaptation candidate_set to be rejected")
@@ -519,43 +377,18 @@ global:
 }
 
 func TestParseYAMLBytesRejectsRemovedProtectionTuningFields(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-global:
-  router:
-    learning:
-      enabled: true
-      protection:
-        tuning:
-          cache_weight: 0.20
-          handoff_penalty: 0.05
-          switch_history_weight: 0.04
-          max_cache_cost_multiplier: 2.5
-          weight: 1.0
-          protection_weight: 1.0
-          handoff_penalty_weight: 1.0
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture("", `
+learning:
+  enabled: true
+  protection:
+    tuning:
+      cache_weight: 0.20
+      handoff_penalty: 0.05
+      switch_history_weight: 0.04
+      max_cache_cost_multiplier: 2.5
+      weight: 1.0
+      protection_weight: 1.0
+      handoff_penalty_weight: 1.0
 `))
 	if err == nil {
 		t.Fatal("expected removed protection tuning fields to be rejected")
@@ -566,112 +399,47 @@ global:
 }
 
 func TestParseYAMLBytesRejectsRemovedDecisionProtectionWeight(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        protection:
-          weight: 1.0
-global:
-  router:
-    learning:
-      enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  protection:
+    weight: 1.0
+`, `
+learning:
+  enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected removed decision protection weight to be rejected")
 	}
-	if !strings.Contains(err.Error(), "routing.decisions[0].adaptations.protection.weight") {
+	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.protection.weight") {
 		t.Fatalf("expected protection weight path in error, got %v", err)
 	}
 }
 
 func TestParseYAMLBytesRejectsProtectionCandidateSet(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      adaptations:
-        protection:
-          mode: apply
-          candidate_set: tier
-global:
-  router:
-    learning:
-      enabled: true
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+adaptations:
+  protection:
+    mode: apply
+    candidate_set: tier
+`, `
+learning:
+  enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected protection candidate_set to be rejected")
 	}
-	if !strings.Contains(err.Error(), "routing.decisions[0].adaptations.protection.candidate_set") {
+	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.protection.candidate_set") {
 		t.Fatalf("expected protection candidate_set path in error, got %v", err)
 	}
 }
 
 func TestParseYAMLBytesRejectsOldGlobalLearningAPI(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-global:
-  router:
-    learning:
+	_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture("", `
+learning:
+  enabled: true
+  adaptations:
+    session_aware:
       enabled: true
-      adaptations:
-        session_aware:
-          enabled: true
 `))
 	if err == nil {
 		t.Fatal("expected old learning API to be rejected")
@@ -690,69 +458,12 @@ func TestParseYAMLBytesRejectsMigratedLearningAlgorithms(t *testing.T) {
 		"personalization": "personalization",
 	} {
 		t.Run(name, func(t *testing.T) {
-			_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-  decisions:
-    - name: route
-      priority: 1
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: cheap
-      algorithm:
-        type: ` + algorithmType + `
-`))
+			_, err := testAuthoringParser(t).ParseYAMLBytes(canonicalLearningFixture(`
+algorithm:
+  type: `+algorithmType+`
+`, ""))
 			if err == nil {
 				t.Fatalf("expected algorithm.type=%s to be rejected", algorithmType)
-			}
-			if !strings.Contains(err.Error(), "global.router.learning.adaptation") {
-				t.Fatalf("expected Router Learning migration error, got %v", err)
-			}
-		})
-	}
-}
-
-func TestParseYAMLBytesRejectsRemovedGlobalLearningSelectorMethods(t *testing.T) {
-	for _, method := range []string{"session_aware", "lookup_tables", "elo", "rl_driven", "gmtrouter", "bandit", "personalization"} {
-		t.Run(method, func(t *testing.T) {
-			_, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8899
-providers:
-  defaults:
-    default_model: cheap
-  models:
-    - name: cheap
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  modelCards:
-    - name: cheap
-global:
-  router:
-    model_selection:
-      method: ` + method + `
-`))
-			if err == nil {
-				t.Fatalf("expected model_selection.method=%s to be rejected", method)
 			}
 			if !strings.Contains(err.Error(), "global.router.learning.adaptation") {
 				t.Fatalf("expected Router Learning migration error, got %v", err)

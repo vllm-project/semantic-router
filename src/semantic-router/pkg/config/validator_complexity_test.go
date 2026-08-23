@@ -115,7 +115,7 @@ func TestValidateComplexityContracts(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := complexityDecisionConfig(tc.declared, tc.condition, tc.nested)
-			err := validateComplexityContracts(cfg)
+			err := validateComplexityContracts(scopedRoutingProfileForTest(cfg))
 			if tc.wantErr {
 				if err == nil {
 					t.Fatalf("expected error for condition %q, got nil", tc.condition)
@@ -147,7 +147,7 @@ func TestValidateComplexityContracts_NoComplexityConditions(t *testing.T) {
 			}},
 		},
 	}
-	if err := validateComplexityContracts(cfg); err != nil {
+	if err := validateComplexityContracts(scopedRoutingProfileForTest(cfg)); err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

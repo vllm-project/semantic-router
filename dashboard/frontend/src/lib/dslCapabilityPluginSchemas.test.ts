@@ -31,4 +31,11 @@ describe('capability plugin field schemas', () => {
       'revision',
     ])
   })
+
+  it.each(['semantic-cache', 'semantic_cache', 'response-cache'])(
+    'does not expose a schema for removed alias %s',
+    (pluginType) => {
+      expect(getCapabilityPluginFieldSchema(pluginType)).toBeNull()
+    },
+  )
 })

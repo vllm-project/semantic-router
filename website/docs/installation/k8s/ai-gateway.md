@@ -75,8 +75,8 @@ kubectl wait --for=condition=Available deployment/semantic-router -n vllm-semant
 kubectl get pods -n vllm-semantic-router-system
 ```
 
-**Note**: The values file contains the Semantic Router model bindings, signals,
-decisions, and routing rules. Download and review
+**Note**: The values file contains the Semantic Router Models, Entrypoint
+assignments, signals, decisions, and routing rules. Download and review
 [values.yaml](https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml)
 before adapting it to a real provider pool.
 

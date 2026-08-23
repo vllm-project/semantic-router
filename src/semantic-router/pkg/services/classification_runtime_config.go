@@ -8,8 +8,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-// RefreshRuntimeConfig updates the live service config and refreshes the legacy
-// classifier so signal evaluation uses the new routing rules immediately.
+// RefreshRuntimeConfig atomically refreshes the explicit Recipe classifier
+// graph so signal evaluation uses the new routing rules immediately.
 func (s *ClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
 	if err := s.TryRefreshRuntimeConfig(newConfig); err != nil {
 		logging.Errorf(
@@ -28,22 +28,13 @@ func (s *ClassificationService) TryRefreshRuntimeConfig(
 	currentRecipes := s.recipeClassifiers
 	currentClassifier := s.classifier
 	s.configMutex.RUnlock()
-	if currentRecipes != nil {
-		return s.refreshRecipeClassifiers(
-			newConfig,
-			currentClassifier,
-		)
+	if currentRecipes == nil {
+		return fmt.Errorf("refresh Recipe classifiers: classifier graph is unavailable")
 	}
-
-	rebuiltClassifier, err := classification.NewLegacyClassifierFromConfig(newConfig)
-	if err != nil {
-		return fmt.Errorf("rebuild classifier: %w", err)
-	}
-	s.configMutex.Lock()
-	s.classifier = rebuiltClassifier
-	s.config = newConfig
-	s.configMutex.Unlock()
-	return nil
+	return s.refreshRecipeClassifiers(
+		newConfig,
+		currentClassifier,
+	)
 }
 
 func (s *ClassificationService) refreshRecipeClassifiers(
@@ -73,9 +64,6 @@ func (s *ClassificationService) refreshRecipeClassifiers(
 		return fmt.Errorf("initialize recipe classifiers: %w", err)
 	}
 	defaultClassifier := rebuilt.Default()
-	if defaultClassifier == nil {
-		return fmt.Errorf("default routing recipe classifier is unavailable")
-	}
 
 	s.configMutex.Lock()
 	s.classifier = defaultClassifier

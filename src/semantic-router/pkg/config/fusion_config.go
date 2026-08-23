@@ -113,16 +113,6 @@ func (c FusionRuntimeConfig) EffectiveModelNames() []string {
 	return DefaultFusionModelNames()
 }
 
-func (c *RouterConfig) ExposedFusionModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if len(c.Looper.Fusion.ModelNames) == 0 && !c.HasFusionDecision() {
-		return nil
-	}
-	return c.Looper.Fusion.EffectiveModelNames()
-}
-
 func normalizeFusionModelNames(names []string) []string {
 	seen := make(map[string]bool, len(names))
 	result := make([]string, 0, len(names))
@@ -135,34 +125,6 @@ func normalizeFusionModelNames(names []string) []string {
 		result = append(result, normalized)
 	}
 	return result
-}
-
-func (c *RouterConfig) IsFusionModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.Fusion.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *RouterConfig) HasFusionDecision() bool {
-	if c == nil {
-		return false
-	}
-	for _, decision := range c.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmFusion {
-			return true
-		}
-	}
-	return false
 }
 
 func ValidateFusionAlgorithmConfig(cfg *FusionAlgorithmConfig) error {

@@ -1,17 +1,9 @@
 from cli.config_contract import (
-    LEGACY_SIGNAL_KEY_TO_CANONICAL,
     build_projection_reference_index,
     build_signal_reference_index,
     signal_reference_exists,
 )
 from cli.models import Decision, Projections, Signals
-
-
-def test_legacy_signal_inventory_covers_flat_authz_and_context_blocks():
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["role_bindings"] == "role_bindings"
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["context_rules"] == "context"
-    assert LEGACY_SIGNAL_KEY_TO_CANONICAL["events"] == "events"
-    assert "session_metrics" not in LEGACY_SIGNAL_KEY_TO_CANONICAL
 
 
 def test_build_signal_reference_index_expands_complexity_levels_and_authz_names():
@@ -46,7 +38,7 @@ def test_build_signal_reference_index_expands_complexity_levels_and_authz_names(
         "difficulty:medium",
         "difficulty:hard",
     }
-    assert signal_names["authz"] == {"admin-access"}
+    assert signal_names["authz"] == {"admin"}
     assert signal_names["event"] == {"critical_event"}
 
 

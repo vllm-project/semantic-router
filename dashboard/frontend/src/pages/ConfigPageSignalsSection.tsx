@@ -17,7 +17,6 @@ import type {
   ClassifierSignal,
 } from './configPageSupport'
 import { formatThreshold } from './configPageSupport'
-import { hasFlatSignals } from '../types/config'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import { buildSignalFormFields } from './configPageSignalFormFields'
@@ -40,27 +39,22 @@ import {
 } from './configPageSignalFormSupport'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
 import type { UnifiedSignal } from './configPageSignalTableTypes'
+import ConfigPageRoutingScopeState from './ConfigPageRoutingScopeState'
+import ProductIcon from '../components/ProductIcon'
 
 interface ConfigPageSignalsSectionProps {
-  config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   signalsSearch: string
   onSignalsSearchChange: (value: string) => void
-  saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
-  listInputToArray: (input: string) => string[]
   removeSignalByName: (cfg: ConfigData, type: SignalType, targetName: string) => void
 }
 
 export default function ConfigPageSignalsSection({
-  config,
-  isPythonCLI,
   isReadonly,
   signalsSearch,
   onSignalsSearchChange,
-  saveConfig,
   openEditModal,
   openViewModal,
   removeSignalByName,
@@ -71,44 +65,24 @@ export default function ConfigPageSignalsSection({
   const [deleteError, setDeleteError] = React.useState<string | null>(null)
   const [actionError, setActionError] = React.useState<string | null>(null)
   const {
-    applyScopedConfig,
+    error: routingScopeError,
+    loading: routingScopeLoading,
+    reload: reloadRoutingScopes,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+    selectedRecipe,
+  } = useRoutingScopeManager()
+  const scopeReadonly = isReadonly || Boolean(selectedRecipe?.immutable)
   React.useEffect(() => {
     setSelectedSignalKeys(new Set())
     setSignalsPendingDelete([])
     setActionError(null)
   }, [selectedScopeId])
-  const signals = scopedConfig?.signals
-  const flatSignals: ConfigData['signals'] | null =
-    !signals && hasFlatSignals(config)
-      ? {
-          keywords: config?.keyword_rules,
-          embeddings: config?.embedding_rules,
-          domains: (config?.categories || []).map((category) => ({
-            name: category.name,
-            description: category.description || '',
-            mmlu_categories: category.mmlu_categories,
-          })),
-          fact_check: config?.fact_check_rules,
-          user_feedbacks: config?.user_feedback_rules,
-          reasks: config?.reask_rules,
-          preferences: config?.preference_rules,
-          language: config?.language_rules,
-          context: config?.context_rules,
-          structure: config?.structure_rules,
-          complexity: config?.complexity_rules,
-          modality: undefined,
-          role_bindings: undefined,
-          jailbreak: config?.jailbreak,
-          pii: config?.pii,
-        }
-      : null
-  const effectiveSignals = signals || flatSignals
+  const effectiveSignals = scopedConfig?.signals
 
   const allSignals: UnifiedSignal[] = []
 
@@ -300,7 +274,7 @@ export default function ConfigPageSignalsSection({
   const signalKey = (signal: UnifiedSignal) => `${signal.type}-${signal.name}`
   const signalReferenceCount = (signal: UnifiedSignal) =>
     getSignalReferenceCountInRoutingProfile(
-      (selectedScope ?? routingScopes[0])?.routing as ConfigData['routing'],
+      (selectedScope ?? routingScopes[0])?.document as ConfigData,
       signal.type,
       signal.name,
     )
@@ -310,7 +284,11 @@ export default function ConfigPageSignalsSection({
       key: 'name',
       header: 'Name',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}</span>,
+      render: (row) => (
+        <span style={{ fontWeight: 600 }}>
+          {formatRoutingMetadataValue(`x-vsr-matched-${row.type}`, row.name)}
+        </span>
+      ),
     },
     {
       key: 'type',
@@ -769,7 +747,20 @@ export default function ConfigPageSignalsSection({
       })
     }
 
-    openViewModal(`Signal: ${signal.name}`, sections, () => handleEditSignal(signal))
+    openViewModal(
+      `Signal: ${signal.name}`,
+      sections,
+      () => handleEditSignal(signal),
+      scopeReadonly
+        ? []
+        : [
+            {
+              label: 'Delete signal',
+              tone: 'destructive',
+              onClick: () => handleDeleteSignal(signal),
+            },
+          ],
+    )
   }
 
   const openSignalEditor = (mode: 'add' | 'edit', signal?: UnifiedSignal) => {
@@ -896,14 +887,6 @@ export default function ConfigPageSignalsSection({
     const fields = buildSignalFormFields()
 
     const saveSignal = async (formData: AddSignalFormState) => {
-      if (!config) {
-        throw new Error('Configuration not loaded yet.')
-      }
-
-      if (!isPythonCLI) {
-        throw new Error('Editing signals is only supported for Python CLI configs.')
-      }
-
       const name = (formData.name || '').trim()
       if (!name) {
         throw new Error('Name is required.')
@@ -1260,7 +1243,7 @@ export default function ConfigPageSignalsSection({
           throw new Error('Unsupported signal type.')
       }
 
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
     }
 
     openEditModal<AddSignalFormState>(
@@ -1284,8 +1267,8 @@ export default function ConfigPageSignalsSection({
       )
       return
     }
-    if (!config || !isPythonCLI) {
-      setActionError('Deleting signals is only supported for Python CLI configs.')
+    if (!scopedConfig) {
+      setActionError('Recipe configuration is not available.')
       return
     }
     setActionError(null)
@@ -1294,7 +1277,7 @@ export default function ConfigPageSignalsSection({
   }
 
   const handleBulkDeleteSignals = () => {
-    if (!config || !isPythonCLI || selectedSignalKeys.size === 0) return
+    if (!scopedConfig || selectedSignalKeys.size === 0) return
     const selectedSignals = allSignals.filter((signal) => selectedSignalKeys.has(signalKey(signal)))
     const safeSignals = selectedSignals.filter((signal) => signalReferenceCount(signal) === 0)
     if (safeSignals.length !== selectedSignals.length) {
@@ -1309,7 +1292,7 @@ export default function ConfigPageSignalsSection({
   }
 
   const confirmDeleteSignals = async () => {
-    if (!config || !isPythonCLI || signalsPendingDelete.length === 0 || deletePending) return
+    if (!scopedConfig || signalsPendingDelete.length === 0 || deletePending) return
 
     setDeletePending(true)
     setDeleteError(null)
@@ -1319,7 +1302,7 @@ export default function ConfigPageSignalsSection({
       removeSignalByName(newConfig, signal.type, signal.name),
     )
     try {
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
       setSelectedSignalKeys(new Set())
       setSignalsPendingDelete([])
     } catch (err) {
@@ -1329,10 +1312,25 @@ export default function ConfigPageSignalsSection({
     }
   }
 
+  if (routingScopeLoading || routingScopeError || !selectedRecipe) {
+    return (
+      <ConfigPageManagerLayout
+        title="Signals"
+        description="Define what the router understands about every request."
+      >
+        <ConfigPageRoutingScopeState
+          error={routingScopeError}
+          loading={routingScopeLoading}
+          onRetry={() => void reloadRoutingScopes()}
+        />
+      </ConfigPageManagerLayout>
+    )
+  }
+
   return (
     <ConfigPageManagerLayout
       title="Signals"
-      description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
+      description="Define what the router understands about every request."
       scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
@@ -1355,7 +1353,7 @@ export default function ConfigPageSignalsSection({
             onSearchChange={onSignalsSearchChange}
             onAdd={() => openSignalEditor('add')}
             addButtonText="Add Signal"
-            disabled={isReadonly || !isPythonCLI}
+            disabled={scopeReadonly}
             variant="embedded"
           />
           {selectedSignalKeys.size > 0 ? (
@@ -1375,6 +1373,7 @@ export default function ConfigPageSignalsSection({
                   className={signalStyles.clearButton}
                   onClick={() => setSelectedSignalKeys(new Set())}
                 >
+                  <ProductIcon name="close" aria-hidden="true" />
                   Clear
                 </button>
                 <button
@@ -1382,6 +1381,7 @@ export default function ConfigPageSignalsSection({
                   className={signalStyles.deleteButton}
                   onClick={handleBulkDeleteSignals}
                 >
+                  <ProductIcon name="trash" aria-hidden="true" />
                   Delete selected
                 </button>
               </div>
@@ -1392,11 +1392,10 @@ export default function ConfigPageSignalsSection({
             data={filteredSignals}
             keyExtractor={signalKey}
             onView={handleViewSignal}
-            onEdit={handleEditSignal}
-            onDelete={handleDeleteSignal}
+            openOnRowClick
             emptyMessage={signalsSearch ? 'No signals match your search' : 'No signals configured'}
             className={styles.managerTable}
-            readonly={isReadonly || !isPythonCLI}
+            readonly={scopeReadonly}
             pagination={{
               pageSize: 25,
               pageSizeOptions: [10, 25, 50],
@@ -1404,7 +1403,7 @@ export default function ConfigPageSignalsSection({
               resetKey: `${selectedScopeId}:${signalsSearch}`,
             }}
             selection={
-              !isReadonly && isPythonCLI
+              !scopeReadonly
                 ? {
                     selectedKeys: selectedSignalKeys,
                     onChange: setSelectedSignalKeys,

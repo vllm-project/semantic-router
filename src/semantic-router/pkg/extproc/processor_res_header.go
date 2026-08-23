@@ -6,10 +6,12 @@ import (
 
 // handleResponseHeaders processes the response headers.
 func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_ResponseHeaders, ctx *RequestContext) (*ext_proc.ProcessingResponse, error) {
-	if skipResp := r.handleSkipProcessingResponseHeaders(v, ctx); skipResp != nil {
-		return skipResp, nil
+	dispatchMutation, err := r.consumeBackendDispatchOutcome(v, ctx)
+	if err != nil {
+		return nil, err
 	}
 	if looperResp := r.handleLooperResponseHeaders(v, ctx); looperResp != nil {
+		mergeProcessingResponseHeaderMutation(looperResp, dispatchMutation)
 		return looperResp, nil
 	}
 
@@ -24,9 +26,24 @@ func (r *OpenAIRouter) handleResponseHeaders(v *ext_proc.ProcessingRequest_Respo
 	r.updateRouterReplayStatus(ctx, outcome.statusCode, ctx != nil && ctx.IsStreamingResponse)
 	r.observeRouterLearningProviderStatus(ctx, outcome.statusCode)
 
-	headerMutation := buildResponseHeaderMutation(ctx, outcome.isSuccessful)
-	if outcome.isSuccessful && isResponseAPIStreamRequest(ctx) {
-		headerMutation = mergeHeaderMutations(headerMutation, responseAPIStreamingHeaderMutation())
-	}
+	headerMutation := mergeHeaderMutations(
+		dispatchMutation,
+		buildResponseStreamingMutation(ctx, outcome),
+		buildResponseHeaderMutation(ctx, outcome.isSuccessful),
+	)
 	return buildResponseHeadersContinueResponse(headerMutation, ctx != nil && ctx.IsStreamingResponse), nil
+}
+
+func mergeProcessingResponseHeaderMutation(
+	response *ext_proc.ProcessingResponse,
+	mutation *ext_proc.HeaderMutation,
+) {
+	if response == nil || mutation == nil {
+		return
+	}
+	common := response.GetResponseHeaders().GetResponse()
+	if common == nil {
+		return
+	}
+	common.HeaderMutation = mergeHeaderMutations(common.HeaderMutation, mutation)
 }

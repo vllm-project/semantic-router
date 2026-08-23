@@ -1,1013 +1,500 @@
-import { useMemo, useState, type Dispatch, type SetStateAction } from 'react'
-import styles from './ConfigPage.module.css'
-import ConfigPageManagerLayout from './ConfigPageManagerLayout'
-import ConfigPageModelInventoryPanel from './ConfigPageModelInventoryPanel'
-import ModelDeleteDialog from './ModelDeleteDialog'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+
 import ConfirmDialog from '../components/ConfirmDialog'
-import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
-import { normalizeStringList } from '../components/structuredFieldEditorSupport'
+import ProductIcon from '../components/ProductIcon'
+import TableHeader from '../components/TableHeader'
 import type { ViewSection } from '../components/ViewModal'
-import { ConfigData, NormalizedModel, ReasoningFamily } from './configPageSupport'
 import {
-  ensureProviderDefaultsConfig,
-  ensureProvidersConfig,
-  cloneConfigData,
-  removeRoutingModelCard,
-  upsertRoutingModelCard,
-} from './configPageCanonicalization'
+  routingManagementApi,
+  waitForRoutingMutation,
+  type RoutingModel,
+  type RoutingModelPatch,
+} from '../utils/routingManagementApi'
+import ConfigPageAddModelsDialog, { type ModelBatchImportInput } from './ConfigPageAddModelsDialog'
+import ConfigPageManagerLayout from './ConfigPageManagerLayout'
+import ModelProviderLogo from './ModelProviderLogo'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
-import {
-  filterModelInventory,
-  getModelDeleteBlocker,
-  getModelReferenceCounts,
-  getReasoningFamilyFilterOptions,
-  validateModelStructuredFields,
-  validateNewModelName,
-  type ModelEndpointFilter,
-  type ModelRoleFilter,
-} from './configPageModelInventory'
-import {
-  buildProviderModelPayload,
-  normalizeModelBackendRefs,
-  normalizeModelLoras,
-  normalizeModelPricing,
-  normalizeModelStringMap,
-} from './configPageModelFormSupport'
-import { getModelStructuredFormFields } from './configPageModelFormFields'
-import {
-  ModelBackendRefsEditor,
-  ModelCapabilitiesEditor,
-  ModelExternalIdsEditor,
-  ModelLorasEditor,
-  ModelPricingEditor,
-  ModelTagsEditor,
-} from './configPageModelStructuredEditors'
-import { useModelLiveVerification } from './useModelLiveVerification'
+import { useProviderCatalogDisplayMap } from './useProviderCatalogDisplayMap'
+import styles from './ConfigPage.module.css'
+import modelStyles from './ConfigPageModelsSection.module.css'
 
 interface ConfigPageModelsSectionProps {
-  config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   canVerifyModels: boolean
-  models: NormalizedModel[]
-  defaultModel: string
-  reasoningFamilies: Record<string, ReasoningFamily>
   modelsSearch: string
   onModelsSearchChange: (value: string) => void
-  expandedModels: Set<string>
-  onExpandedModelsChange: Dispatch<SetStateAction<Set<string>>>
-  saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
-  listInputToArray: (input: string) => string[]
 }
 
-interface ReasoningFamilyFormState {
+interface ModelFormState {
   name: string
-  type: string
-  parameter: string
+  aliases: string
+  capabilities: string
+  reasoningType: string
+  reasoningEfforts: string
+  loras: string
+  maxRetries: number
+  requestTimeout: string
+  streamTimeout: string
+  inputCost: string
+  outputCost: string
+  cacheReadCost: string
+  cacheWriteCost: string
 }
+
+type ProbeState =
+  | { state: 'idle' | 'checking' }
+  | { state: 'live'; latencyMilliseconds: number }
+  | { state: 'error'; message: string }
+
+const splitList = (value: string): string[] => [
+  ...new Set(
+    value
+      .split(/[\n,]/)
+      .map((item) => item.trim())
+      .filter(Boolean),
+  ),
+]
+
+const nullableCost = (value: string): string | null => {
+  const normalized = value.trim()
+  return normalized || null
+}
+
+const price = (value: string | null | undefined): string => value ?? '—'
 
 export default function ConfigPageModelsSection({
-  config,
-  isPythonCLI,
   isReadonly,
   canVerifyModels,
-  models,
-  defaultModel,
-  reasoningFamilies,
   modelsSearch,
   onModelsSearchChange,
-  expandedModels,
-  onExpandedModelsChange,
-  saveConfig,
   openEditModal,
   openViewModal,
 }: ConfigPageModelsSectionProps) {
-  const [reasoningFamilyFilter, setReasoningFamilyFilter] = useState('all')
-  const [endpointFilter, setEndpointFilter] = useState<ModelEndpointFilter>('all')
-  const [roleFilter, setRoleFilter] = useState<ModelRoleFilter>('all')
-  const [reasoningFamilySearch, setReasoningFamilySearch] = useState('')
-  const [selectedModelKeys, setSelectedModelKeys] = useState<Set<string>>(new Set())
-  const [bulkDeletePending, setBulkDeletePending] = useState(false)
-  const [operationError, setOperationError] = useState<string | null>(null)
-  const [modelsPendingDelete, setModelsPendingDelete] = useState<string[]>([])
-  const [reasoningFamilyPendingDelete, setReasoningFamilyPendingDelete] = useState<string | null>(
-    null,
-  )
-  const [reasoningFamilyDeletePending, setReasoningFamilyDeletePending] = useState(false)
-  const [reasoningFamilyDeleteError, setReasoningFamilyDeleteError] = useState<string | null>(null)
-  const liveVerification = useModelLiveVerification(config)
+  const [models, setModels] = useState<RoutingModel[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
+  const [pendingDelete, setPendingDelete] = useState<RoutingModel | null>(null)
+  const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [probeStates, setProbeStates] = useState<Map<string, ProbeState>>(new Map())
+  const autoProbeRevision = useRef('')
+  const providerDisplays = useProviderCatalogDisplayMap()
 
-  const reasoningFamilyOptions = useMemo(() => getReasoningFamilyFilterOptions(models), [models])
-  const modelReferenceCounts = useMemo(() => getModelReferenceCounts(config), [config])
-  const filteredModels = useMemo(
-    () =>
-      filterModelInventory(models, {
-        search: modelsSearch,
-        reasoningFamily: reasoningFamilyFilter,
-        endpointState: endpointFilter,
-        role: roleFilter,
-        defaultModel,
-      }),
-    [defaultModel, endpointFilter, models, modelsSearch, reasoningFamilyFilter, roleFilter],
-  )
-  const filtersActive = Boolean(
-    modelsSearch.trim() ||
-      reasoningFamilyFilter !== 'all' ||
-      endpointFilter !== 'all' ||
-      roleFilter !== 'all',
-  )
+  const loadModels = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      setModels(await routingManagementApi.listModels())
+    } catch (cause) {
+      setModels([])
+      setError(cause instanceof Error ? cause.message : 'Models could not be loaded.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
-  const getDeleteBlocker = (modelName: string) =>
-    getModelDeleteBlocker(modelName, defaultModel, modelReferenceCounts)
+  useEffect(() => {
+    void loadModels()
+  }, [loadModels])
 
-  const clearModelFilters = () => {
-    onModelsSearchChange('')
-    setReasoningFamilyFilter('all')
-    setEndpointFilter('all')
-    setRoleFilter('all')
-  }
-
-  type ModelRow = NormalizedModel
-  const renderModelEndpoints = (model: ModelRow) => {
-    if (!model.endpoints || model.endpoints.length === 0) {
-      return (
-        <div style={{ padding: '1rem', color: 'var(--color-text-secondary)', textAlign: 'center' }}>
-          No endpoints configured for this model
-        </div>
+  const verifyModel = useCallback(async (model: RoutingModel) => {
+    setProbeStates((current) => new Map(current).set(model.id, { state: 'checking' }))
+    try {
+      const result = await routingManagementApi.probeModel(model.id)
+      setProbeStates((current) =>
+        new Map(current).set(
+          model.id,
+          result.reachable
+            ? { state: 'live', latencyMilliseconds: result.latencyMilliseconds }
+            : { state: 'error', message: 'Unavailable' },
+        ),
+      )
+    } catch (cause) {
+      setProbeStates((current) =>
+        new Map(current).set(model.id, {
+          state: 'error',
+          message: cause instanceof Error ? cause.message : 'Check failed',
+        }),
       )
     }
+  }, [])
 
-    return (
-      <div style={{ padding: '1rem', background: 'rgba(0, 0, 0, 0.3)' }}>
-        <h4
-          style={{
-            margin: '0 0 1rem 0',
-            fontSize: '0.875rem',
-            fontWeight: 600,
-            color: 'var(--color-text-secondary)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.05em',
-          }}
-        >
-          Endpoints for {model.name}
-        </h4>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'left',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                }}
-              >
-                Name
-              </th>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'left',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                }}
-              >
-                Address
-              </th>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'center',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  width: '100px',
-                }}
-              >
-                Protocol
-              </th>
-              <th
-                style={{
-                  padding: '0.5rem',
-                  textAlign: 'center',
-                  fontSize: '0.875rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  width: '100px',
-                }}
-              >
-                Weight
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {model.endpoints.map((ep, idx) => (
-              <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>
-                  {ep.name}
-                </td>
-                <td
-                  style={{
-                    padding: '0.75rem 0.5rem',
-                    fontSize: '0.875rem',
-                    fontFamily: 'var(--font-mono)',
-                    color: 'var(--color-text-secondary)',
-                  }}
-                >
-                  {isReadonly ? '************' : ep.endpoint || 'N/A'}
-                </td>
-                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                  <span
-                    style={{
-                      padding: '0.25rem 0.5rem',
-                      background:
-                        ep.protocol === 'https'
-                          ? 'rgba(34, 197, 94, 0.15)'
-                          : 'rgba(234, 179, 8, 0.15)',
-                      borderRadius: '4px',
-                      fontSize: '0.75rem',
-                      fontWeight: 600,
-                      textTransform: 'uppercase',
-                    }}
-                  >
-                    {ep.protocol}
-                  </span>
-                </td>
-                <td
-                  style={{
-                    padding: '0.75rem 0.5rem',
-                    textAlign: 'center',
-                    fontSize: '0.875rem',
-                    fontFamily: 'var(--font-mono)',
-                  }}
-                >
-                  {ep.weight}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+  useEffect(() => {
+    if (!canVerifyModels || models.length === 0) return
+    const revisionKey = models.map((model) => `${model.id}:${model.revision}`).join('|')
+    if (autoProbeRevision.current === revisionKey) return
+    autoProbeRevision.current = revisionKey
+    void Promise.all(models.slice(0, 10).map(verifyModel))
+  }, [canVerifyModels, models, verifyModel])
+
+  const filteredModels = useMemo(() => {
+    const query = modelsSearch.trim().toLocaleLowerCase()
+    if (!query) return models
+    return models.filter((model) =>
+      [
+        model.name,
+        ...model.aliases,
+        ...model.capabilities,
+        ...model.loras,
+        ...model.backends.flatMap((backend) => [backend.providerId, backend.providerModelId]),
+      ]
+        .join(' ')
+        .toLocaleLowerCase()
+        .includes(query),
+    )
+  }, [models, modelsSearch])
+
+  const editModel = (model: RoutingModel) => {
+    const form: ModelFormState = {
+      name: model.name,
+      aliases: model.aliases.join(', '),
+      capabilities: model.capabilities.join(', '),
+      reasoningType: model.reasoning?.type ?? '',
+      reasoningEfforts: model.reasoning?.efforts?.join(', ') ?? '',
+      loras: model.loras.join(', '),
+      maxRetries: model.execution.maxRetries,
+      requestTimeout: model.execution.requestTimeout,
+      streamTimeout: model.execution.streamTimeout,
+      inputCost: model.pricing.inputCostPerMillionTokens ?? '',
+      outputCost: model.pricing.outputCostPerMillionTokens ?? '',
+      cacheReadCost: model.pricing.cacheReadCostPerMillionTokens ?? '',
+      cacheWriteCost: model.pricing.cacheWriteCostPerMillionTokens ?? '',
+    }
+    openEditModal<ModelFormState>(
+      `Edit ${model.name}`,
+      form,
+      [
+        { name: 'name', label: 'Name', type: 'text', required: true },
+        {
+          name: 'aliases',
+          label: 'Aliases',
+          type: 'textarea',
+          description: 'Comma-separated names clients can recognize.',
+        },
+        {
+          name: 'capabilities',
+          label: 'Capabilities',
+          type: 'textarea',
+          description: 'Examples: tools, vision, reasoning.',
+        },
+        { name: 'reasoningType', label: 'Reasoning family', type: 'text' },
+        {
+          name: 'reasoningEfforts',
+          label: 'Reasoning efforts',
+          type: 'text',
+          placeholder: 'low, medium, high',
+        },
+        { name: 'loras', label: 'LoRA adapters', type: 'textarea' },
+        { name: 'maxRetries', label: 'Max retries', type: 'number', min: 0, max: 5 },
+        {
+          name: 'requestTimeout',
+          label: 'Request timeout',
+          type: 'text',
+          placeholder: '300s',
+        },
+        {
+          name: 'streamTimeout',
+          label: 'Stream timeout',
+          type: 'text',
+          placeholder: '900s',
+        },
+        {
+          name: 'inputCost',
+          label: 'Input cost / 1M tokens',
+          type: 'text',
+          placeholder: '0.50',
+        },
+        {
+          name: 'outputCost',
+          label: 'Output cost / 1M tokens',
+          type: 'text',
+          placeholder: '1.50',
+        },
+        {
+          name: 'cacheReadCost',
+          label: 'Cache read cost / 1M tokens',
+          type: 'text',
+          description: 'Uses the input price when left blank.',
+        },
+        {
+          name: 'cacheWriteCost',
+          label: 'Cache write cost / 1M tokens',
+          type: 'text',
+          description: 'Uses the input price when left blank.',
+        },
+      ],
+      async (next) => {
+        const name = next.name.trim()
+        if (!name) throw new Error('Name is required.')
+        if (!next.requestTimeout.trim() || !next.streamTimeout.trim()) {
+          throw new Error('Both timeouts are required.')
+        }
+        const patch: RoutingModelPatch = {
+          name,
+          aliases: splitList(next.aliases),
+          capabilities: splitList(next.capabilities),
+          reasoning: {
+            ...(next.reasoningType.trim() ? { type: next.reasoningType.trim() } : {}),
+            ...(splitList(next.reasoningEfforts).length
+              ? { efforts: splitList(next.reasoningEfforts) }
+              : {}),
+          },
+          loras: splitList(next.loras),
+          execution: {
+            maxRetries: next.maxRetries,
+            requestTimeout: next.requestTimeout.trim(),
+            streamTimeout: next.streamTimeout.trim(),
+          },
+          pricing: {
+            inputCostPerMillionTokens: nullableCost(next.inputCost),
+            outputCostPerMillionTokens: nullableCost(next.outputCost),
+            cacheReadCostPerMillionTokens: nullableCost(next.cacheReadCost),
+            cacheWriteCostPerMillionTokens: nullableCost(next.cacheWriteCost),
+          },
+        }
+        await waitForRoutingMutation(
+          await routingManagementApi.updateModel(model.id, model.revision, patch),
+        )
+        await loadModels()
+      },
     )
   }
 
-  const handleViewModel = (model: ModelRow) => {
+  const viewModel = (model: RoutingModel) => {
     const sections: ViewSection[] = [
       {
-        title: 'Basic Information',
+        title: 'Model',
         fields: [
-          { label: 'Model Name', value: model.name },
-          { label: 'Reasoning Family', value: model.reasoning_family || 'N/A' },
-          { label: 'Is Default', value: model.name === defaultModel ? 'Yes' : 'No' },
-          { label: 'Provider Model ID', value: model.provider_model_id || 'N/A' },
-          { label: 'API Format', value: model.api_format || 'N/A' },
-          { label: 'Modality', value: model.modality || 'N/A' },
-          { label: 'Param Size', value: model.param_size || 'N/A' },
-          {
-            label: 'Context Window',
-            value: model.context_window_size ? `${model.context_window_size}` : 'N/A',
-          },
-        ],
-      },
-    ]
-
-    if (
-      model.description ||
-      model.capabilities?.length ||
-      model.tags?.length ||
-      model.loras?.length ||
-      typeof model.quality_score === 'number'
-    ) {
-      sections.push({
-        title: 'Routing Metadata',
-        fields: [
-          { label: 'Description', value: model.description || 'N/A', fullWidth: true },
+          { label: 'Name', value: model.name },
+          { label: 'Status', value: model.status === 'active' ? 'Live' : 'Draft' },
+          { label: 'Aliases', value: model.aliases.join(', ') || '—', fullWidth: true },
           {
             label: 'Capabilities',
-            value: <ModelCapabilitiesEditor value={model.capabilities || []} readOnly />,
+            value: model.capabilities.join(', ') || '—',
             fullWidth: true,
           },
-          {
-            label: 'Tags',
-            value: <ModelTagsEditor value={model.tags || []} readOnly />,
-            fullWidth: true,
-          },
-          {
-            label: 'LoRAs',
-            value: <ModelLorasEditor value={model.loras || []} readOnly />,
-            fullWidth: true,
-          },
-          {
-            label: 'Quality Score',
-            value: typeof model.quality_score === 'number' ? `${model.quality_score}` : 'N/A',
-          },
+          { label: 'Reasoning family', value: model.reasoning?.type || '—' },
+          { label: 'LoRA adapters', value: model.loras.join(', ') || '—' },
         ],
-      })
-    }
-
-    if (model.external_model_ids && Object.keys(model.external_model_ids).length > 0) {
-      sections.push({
-        title: 'External Model IDs',
-        fields: [
-          {
-            label: 'Provider IDs',
-            value: <ModelExternalIdsEditor value={model.external_model_ids} readOnly />,
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    if (model.backend_refs && model.backend_refs.length > 0) {
-      sections.push({
-        title: `Provider Backends (${model.backend_refs.length})`,
-        fields: [
-          {
-            label: 'Configured Backend Refs',
-            value: (
-              <ModelBackendRefsEditor
-                value={model.backend_refs}
-                readOnly
-                maskSensitive={isReadonly}
-              />
-            ),
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    if (model.pricing) {
-      sections.push({
-        title: 'Pricing',
-        fields: [
-          {
-            label: 'Token Pricing',
-            value: <ModelPricingEditor value={model.pricing} readOnly />,
-            fullWidth: true,
-          },
-        ],
-      })
-    }
-
-    openViewModal(`Model: ${model.name}`, sections, () => handleEditModel(model))
-  }
-
-  const handleAddModel = () => {
-    const reasoningFamilyNames = Object.keys(reasoningFamilies)
-
-    openEditModal(
-      'Add New Model',
+      },
       {
-        model_name: '',
-        reasoning_family: reasoningFamilyNames[0] || '',
-        provider_model_id: '',
-        api_format: '',
-        external_model_ids: {},
-        param_size: '',
-        context_window_size: '',
-        description: '',
-        capabilities: [],
-        loras: [],
-        tags: [],
-        quality_score: '',
-        modality: '',
-        backend_refs: [
-          {
-            name: 'endpoint-1',
-            endpoint: 'localhost:8000',
-            protocol: 'http' as const,
-            weight: 1,
-          },
+        title: 'Execution',
+        fields: [
+          { label: 'Max retries', value: model.execution.maxRetries },
+          { label: 'Request timeout', value: model.execution.requestTimeout },
+          { label: 'Stream timeout', value: model.execution.streamTimeout },
         ],
-        pricing: {
-          currency: 'USD',
-          prompt_per_1m: 0,
-          cached_input_per_1m: 0,
-          completion_per_1m: 0,
-        },
       },
-      [
-        {
-          name: 'model_name',
-          label: 'Model Name',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., openai/gpt-4',
-          description: 'Unique identifier for the model',
-        },
-        {
-          name: 'reasoning_family',
-          label: 'Reasoning Family',
-          type: 'select',
-          options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families',
-        },
-        {
-          name: 'provider_model_id',
-          label: 'Provider Model ID',
-          type: 'text',
-          placeholder: 'e.g., openai/gpt-4.1',
-          description:
-            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
-        },
-        {
-          name: 'api_format',
-          label: 'API Format',
-          type: 'text',
-          placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format',
-        },
-        {
-          name: 'param_size',
-          label: 'Parameter Size',
-          type: 'text',
-          placeholder: 'e.g., 8B',
-        },
-        {
-          name: 'context_window_size',
-          label: 'Context Window Size',
-          type: 'number',
-          placeholder: 'e.g., 131072',
-        },
-        {
-          name: 'modality',
-          label: 'Modality',
-          type: 'text',
-          placeholder: 'e.g., text, omni, diffusion',
-        },
-        {
-          name: 'description',
-          label: 'Description',
-          type: 'textarea',
-          placeholder: 'Short routing-facing model description',
-        },
-        ...getModelStructuredFormFields(),
-      ],
-      async (data) => {
-        if (!config) {
-          return
-        }
-        validateModelStructuredFields(data)
-        const modelName = validateNewModelName(data.model_name, models)
-        const capabilities = normalizeStringList(data.capabilities)
-        const tags = normalizeStringList(data.tags)
-        const loras = normalizeModelLoras(data.loras)
-
-        const newConfig = cloneConfigData(config)
-
-        if (isPythonCLI) {
-          const providers = ensureProvidersConfig(newConfig)
-          upsertRoutingModelCard(newConfig, modelName, {
-            param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size
-              ? Number(data.context_window_size)
-              : undefined,
-            description: data.description || undefined,
-            capabilities: capabilities.length > 0 ? capabilities : undefined,
-            loras: loras.length > 0 ? loras : undefined,
-            tags: tags.length > 0 ? tags : undefined,
-            quality_score:
-              data.quality_score === '' || data.quality_score === undefined
-                ? undefined
-                : Number(data.quality_score),
-            modality: data.modality || undefined,
-          })
-          providers.models.push(buildProviderModelPayload(modelName, data))
-        } else {
-          if (!newConfig.model_config) {
-            newConfig.model_config = {}
-          }
-          newConfig.model_config[modelName] = {
-            reasoning_family: data.reasoning_family,
-            pricing: normalizeModelPricing(data.pricing),
-            api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
-            external_model_ids: normalizeModelStringMap(data.external_model_ids),
-            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs)
-              .map((backendRef) => backendRef.name || '')
-              .filter(Boolean),
-            model_id:
-              typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
-                ? data.provider_model_id.trim()
-                : modelName,
-          }
-        }
-        await saveConfig(newConfig)
-      },
-      'add',
-    )
-  }
-
-  const handleEditModel = (model: ModelRow) => {
-    const reasoningFamilyNames = Object.keys(reasoningFamilies)
-
-    openEditModal(
-      `Edit Model: ${model.name}`,
       {
-        reasoning_family: model.reasoning_family || '',
-        provider_model_id: model.provider_model_id || '',
-        api_format: model.api_format || '',
-        external_model_ids: model.external_model_ids || {},
-        param_size: model.param_size || '',
-        context_window_size: model.context_window_size || '',
-        description: model.description || '',
-        capabilities: model.capabilities || [],
-        loras: model.loras || [],
-        tags: model.tags || [],
-        quality_score: model.quality_score ?? '',
-        modality: model.modality || '',
-        backend_refs: model.backend_refs || [],
-        pricing: model.pricing || {},
+        title: 'Pricing / 1M tokens',
+        fields: [
+          { label: 'Input', value: price(model.pricing.inputCostPerMillionTokens) },
+          { label: 'Output', value: price(model.pricing.outputCostPerMillionTokens) },
+          { label: 'Cache read', value: price(model.pricing.cacheReadCostPerMillionTokens) },
+          { label: 'Cache write', value: price(model.pricing.cacheWriteCostPerMillionTokens) },
+        ],
       },
-      [
-        {
-          name: 'reasoning_family',
-          label: 'Reasoning Family',
-          type: 'select',
-          options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families',
-        },
-        {
-          name: 'provider_model_id',
-          label: 'Provider Model ID',
-          type: 'text',
-          placeholder: 'e.g., openai/gpt-4.1',
-          description:
-            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
-        },
-        {
-          name: 'api_format',
-          label: 'API Format',
-          type: 'text',
-          placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format',
-        },
-        {
-          name: 'param_size',
-          label: 'Parameter Size',
-          type: 'text',
-          placeholder: 'e.g., 8B',
-        },
-        {
-          name: 'context_window_size',
-          label: 'Context Window Size',
-          type: 'number',
-          placeholder: 'e.g., 131072',
-        },
-        {
-          name: 'modality',
-          label: 'Modality',
-          type: 'text',
-          placeholder: 'e.g., text, omni, diffusion',
-        },
-        {
-          name: 'description',
-          label: 'Description',
-          type: 'textarea',
-          placeholder: 'Short routing-facing model description',
-        },
-        ...getModelStructuredFormFields(),
-      ],
-      async (data) => {
-        if (!config) {
-          return
-        }
-        validateModelStructuredFields(data)
-        const newConfig = cloneConfigData(config)
-        const capabilities = normalizeStringList(data.capabilities)
-        const tags = normalizeStringList(data.tags)
-        const loras = normalizeModelLoras(data.loras)
-
-        if (isPythonCLI && newConfig.providers?.models) {
-          const providers = ensureProvidersConfig(newConfig)
-          upsertRoutingModelCard(newConfig, model.name, {
-            param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size
-              ? Number(data.context_window_size)
-              : undefined,
-            description: data.description || undefined,
-            capabilities: capabilities.length > 0 ? capabilities : undefined,
-            loras: loras.length > 0 ? loras : undefined,
-            tags: tags.length > 0 ? tags : undefined,
-            quality_score:
-              data.quality_score === '' || data.quality_score === undefined
-                ? undefined
-                : Number(data.quality_score),
-            modality: data.modality || undefined,
-          })
-          type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
-          providers.models = providers.models.map((providerModel: ProviderModel) =>
-            providerModel.name === model.name
-              ? {
-                  ...providerModel,
-                  ...buildProviderModelPayload(model.name, data, providerModel),
-                }
-              : providerModel,
-          )
-        } else if (newConfig.model_config) {
-          newConfig.model_config[model.name] = {
-            ...newConfig.model_config[model.name],
-            reasoning_family: data.reasoning_family,
-            pricing: normalizeModelPricing(data.pricing),
-            api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
-            external_model_ids: normalizeModelStringMap(data.external_model_ids),
-            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs)
-              .map((backendRef) => backendRef.name || '')
-              .filter(Boolean),
-            model_id:
-              typeof data.provider_model_id === 'string' ? data.provider_model_id : model.name,
-          }
-        }
-        await saveConfig(newConfig)
+      {
+        title: 'Backends',
+        fields: model.backends.map((backend, index) => ({
+          label: backend.providerId,
+          value: `${backend.providerModelId} · weight ${backend.weight}${backend.credentialConfigured ? ' · credential ready' : ''}`,
+          fullWidth: index === model.backends.length - 1,
+        })),
       },
-      'edit',
-    )
-  }
-
-  const handleDeleteModelsAction = async (modelNames: string[]) => {
-    if (!config || modelNames.length === 0) {
-      return
-    }
-    const blockedModel = modelNames.find((modelName) => getDeleteBlocker(modelName))
-    if (blockedModel) {
-      setOperationError(getDeleteBlocker(blockedModel))
-      setModelsPendingDelete([])
-      return
-    }
-
-    setBulkDeletePending(true)
-    setOperationError(null)
-    try {
-      const namesToDelete = new Set(modelNames)
-      const newConfig = cloneConfigData(config)
-      if (isPythonCLI && newConfig.providers?.models) {
-        const providers = ensureProvidersConfig(newConfig)
-        type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
-        providers.models = providers.models.filter(
-          (providerModel: ProviderModel) => !namesToDelete.has(providerModel.name),
-        )
-        for (const modelName of namesToDelete) {
-          removeRoutingModelCard(newConfig, modelName)
-        }
-      } else if (newConfig.model_config) {
-        for (const modelName of namesToDelete) {
-          delete newConfig.model_config[modelName]
-        }
-      }
-      await saveConfig(newConfig)
-      setSelectedModelKeys((current) => {
-        const next = new Set(current)
-        for (const modelName of namesToDelete) next.delete(modelName)
-        return next
-      })
-      setModelsPendingDelete([])
-    } catch (error) {
-      setOperationError(
-        error instanceof Error ? error.message : 'Failed to delete the selected models.',
-      )
-    } finally {
-      setBulkDeletePending(false)
-    }
-  }
-
-  const handleDeleteModel = (model: ModelRow) => {
-    const blocker = getDeleteBlocker(model.name)
-    if (blocker) {
-      setOperationError(`${model.name}: ${blocker}`)
-      return
-    }
-    setOperationError(null)
-    setModelsPendingDelete([model.name])
-  }
-
-  const handleToggleExpand = (model: ModelRow) => {
-    onExpandedModelsChange((prev) => {
-      const next = new Set(prev)
-      if (next.has(model.name)) {
-        next.delete(model.name)
-      } else {
-        next.add(model.name)
-      }
-      return next
-    })
-  }
-
-  const handleViewReasoningFamily = (familyName: string) => {
-    const familyConfig = reasoningFamilies[familyName]
-    if (!familyConfig) return
-
+    ]
     openViewModal(
-      `Reasoning Family: ${familyName}`,
-      [
-        {
-          title: 'Configuration',
-          fields: [
-            { label: 'Family Name', value: familyName },
-            { label: 'Type', value: familyConfig.type },
-            { label: 'Parameter', value: familyConfig.parameter },
+      model.name,
+      sections,
+      isReadonly ? undefined : () => editModel(model),
+      isReadonly
+        ? []
+        : [
+            {
+              label: 'Delete model',
+              tone: 'destructive',
+              onClick: () => setPendingDelete(model),
+            },
           ],
-        },
-      ],
-      () => handleEditReasoningFamily(familyName),
     )
   }
 
-  const handleEditReasoningFamily = (familyName: string) => {
-    const familyConfig = reasoningFamilies[familyName]
-    if (!familyConfig || !config) return
-
-    openEditModal(
-      `Edit Reasoning Family: ${familyName}`,
-      { ...familyConfig },
-      [
-        {
-          name: 'type',
-          label: 'Type',
-          type: 'select',
-          options: ['reasoning_effort', 'chat_template_kwargs'],
-          required: true,
-          description: 'Type of reasoning family',
-        },
-        {
-          name: 'parameter',
-          label: 'Parameter',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., reasoning_effort',
-          description: 'Parameter name for reasoning control',
-        },
-      ],
-      async (data) => {
-        const newConfig = cloneConfigData(config)
-        if (isPythonCLI) {
-          const defaults = ensureProviderDefaultsConfig(newConfig)
-          if (!defaults.reasoning_families) {
-            defaults.reasoning_families = {}
-          }
-          defaults.reasoning_families[familyName] = data
-        } else if (newConfig.reasoning_families) {
-          newConfig.reasoning_families[familyName] = data
-        }
-        await saveConfig(newConfig)
-      },
-    )
-  }
-
-  const handleAddReasoningFamily = () => {
-    if (!config) return
-
-    openEditModal<ReasoningFamilyFormState>(
-      'Add Reasoning Family',
-      { name: '', type: 'reasoning_effort', parameter: '' },
-      [
-        {
-          name: 'name',
-          label: 'Family Name',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., o1-reasoning',
-          description: 'Unique name for this reasoning family',
-        },
-        {
-          name: 'type',
-          label: 'Type',
-          type: 'select',
-          options: ['reasoning_effort', 'chat_template_kwargs'],
-          required: true,
-          description: 'Type of reasoning family',
-        },
-        {
-          name: 'parameter',
-          label: 'Parameter',
-          type: 'text',
-          required: true,
-          placeholder: 'e.g., reasoning_effort',
-          description: 'Parameter name for reasoning control',
-        },
-      ],
-      async (data) => {
-        const familyName = data.name
-        const familyConfig = {
-          type: data.type,
-          parameter: data.parameter,
-        }
-
-        const newConfig = cloneConfigData(config)
-        if (isPythonCLI) {
-          const defaults = ensureProviderDefaultsConfig(newConfig)
-          if (!defaults.reasoning_families) {
-            defaults.reasoning_families = {}
-          }
-          defaults.reasoning_families[familyName] = familyConfig
-        } else {
-          if (!newConfig.reasoning_families) {
-            newConfig.reasoning_families = {}
-          }
-          newConfig.reasoning_families[familyName] = familyConfig
-        }
-        await saveConfig(newConfig)
-      },
-      'add',
-    )
-  }
-
-  const handleDeleteReasoningFamily = (familyName: string) => {
-    setReasoningFamilyDeleteError(null)
-    setReasoningFamilyPendingDelete(familyName)
-  }
-
-  const confirmDeleteReasoningFamily = async () => {
-    if (!reasoningFamilyPendingDelete) return
-    if (!config) {
-      setReasoningFamilyDeleteError('No active configuration is available.')
-      return
-    }
-
-    setReasoningFamilyDeletePending(true)
-    setReasoningFamilyDeleteError(null)
-    try {
-      const newConfig = cloneConfigData(config)
-      if (isPythonCLI && newConfig.providers?.defaults?.reasoning_families) {
-        const defaults = ensureProviderDefaultsConfig(newConfig)
-        defaults.reasoning_families = { ...defaults.reasoning_families }
-        delete defaults.reasoning_families[reasoningFamilyPendingDelete]
-      } else if (newConfig.reasoning_families) {
-        delete newConfig.reasoning_families[reasoningFamilyPendingDelete]
-      }
-      await saveConfig(newConfig)
-      setReasoningFamilyPendingDelete(null)
-    } catch (error) {
-      setReasoningFamilyDeleteError(
-        error instanceof Error ? error.message : 'Failed to delete reasoning family.',
-      )
-    } finally {
-      setReasoningFamilyDeletePending(false)
-    }
-  }
-
-  type ReasoningFamilyRow = { name: string; type: string; parameter: string }
-  const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(
-    ([name, config]) => ({
-      name,
-      type: config.type,
-      parameter: config.parameter,
-    }),
-  )
-  const normalizedReasoningFamilySearch = reasoningFamilySearch.trim().toLocaleLowerCase()
-  const filteredReasoningFamilyData = normalizedReasoningFamilySearch
-    ? reasoningFamilyData.filter(
-        (family) =>
-          family.name.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
-          family.type.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
-          family.parameter.toLocaleLowerCase().includes(normalizedReasoningFamilySearch),
-      )
-    : reasoningFamilyData
-
-  const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
+  const columns: Column<RoutingModel>[] = [
     {
       key: 'name',
-      header: 'Family Name',
+      header: 'Model',
+      width: '340px',
       sortable: true,
-      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
-    },
-    {
-      key: 'type',
-      header: 'Type',
-      width: '200px',
-      sortable: true,
-      render: (row) => (
-        <span
-          className={styles.badge}
-          style={{ background: 'rgba(166, 171, 179, 0.15)', color: 'var(--color-accent-cyan)' }}
-        >
-          {row.type}
-        </span>
+      render: (model) => (
+        <div className={modelStyles.modelIdentityWithLogo}>
+          <ModelProviderLogo
+            icon={providerDisplays.get(model.backends[0]?.providerId || '')?.icon}
+            name={
+              providerDisplays.get(model.backends[0]?.providerId || '')?.name ||
+              model.backends[0]?.providerId ||
+              'Model'
+            }
+            monogram={providerDisplays.get(model.backends[0]?.providerId || '')?.monogram}
+            accent={providerDisplays.get(model.backends[0]?.providerId || '')?.accent}
+            size="small"
+          />
+          <div className={modelStyles.modelIdentity}>
+            <span className={modelStyles.modelName}>{model.name}</span>
+            <span className={modelStyles.modelPhysicalId}>
+              {model.backends[0]?.providerModelId || model.id}
+            </span>
+          </div>
+        </div>
       ),
     },
     {
-      key: 'parameter',
-      header: 'Parameter',
-      sortable: true,
-      render: (row) => (
-        <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
-          {row.parameter}
-        </code>
-      ),
+      key: 'capabilities',
+      header: 'Capabilities',
+      width: '220px',
+      render: (model) => model.capabilities.slice(0, 3).join(' · ') || '—',
+    },
+    {
+      key: 'backends',
+      header: 'Backends',
+      width: '110px',
+      align: 'center',
+      render: (model) => model.backends.length,
+    },
+    ...(canVerifyModels
+      ? [
+          {
+            key: 'live',
+            header: 'Live',
+            width: '130px',
+            render: (model: RoutingModel) => {
+              const state = probeStates.get(model.id) ?? { state: 'idle' as const }
+              return (
+                <button
+                  type="button"
+                  className={modelStyles.liveVerificationButton}
+                  disabled={state.state === 'checking'}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    void verifyModel(model)
+                  }}
+                >
+                  <ProductIcon name={state.state === 'live' ? 'check' : 'refresh'} />
+                  {state.state === 'checking'
+                    ? 'Checking'
+                    : state.state === 'live'
+                      ? `Live · ${state.latencyMilliseconds} ms`
+                      : state.state === 'error'
+                        ? 'Retry'
+                        : 'Check'}
+                </button>
+              )
+            },
+          } satisfies Column<RoutingModel>,
+        ]
+      : []),
+    {
+      key: 'execution',
+      header: 'Execution',
+      width: '170px',
+      render: (model) =>
+        `${model.execution.requestTimeout} · ${model.execution.maxRetries} retries`,
+    },
+    {
+      key: 'pricing',
+      header: 'Input / Output',
+      width: '180px',
+      render: (model) =>
+        `${price(model.pricing.inputCostPerMillionTokens)} / ${price(model.pricing.outputCostPerMillionTokens)}`,
     },
   ]
 
+  const importModels = async (input: ModelBatchImportInput) => {
+    const receipt = await routingManagementApi.bulkImportModels(input)
+    await waitForRoutingMutation(receipt)
+    await loadModels()
+  }
+
+  const deleteModel = async () => {
+    if (!pendingDelete) return
+    setDeleting(true)
+    setDeleteError(null)
+    try {
+      await routingManagementApi.deleteModel(pendingDelete.id, pendingDelete.revision)
+      setPendingDelete(null)
+      await loadModels()
+    } catch (cause) {
+      setDeleteError(cause instanceof Error ? cause.message : 'Model could not be deleted.')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
-    <>
-      <ConfigPageManagerLayout
-        title="Models"
-        description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions."
-      >
-        <div className={styles.sectionPanel}>
-          <div className={styles.sectionTableBlock}>
-            <ConfigPageModelInventoryPanel
-              models={models}
-              filteredModels={filteredModels}
-              defaultModel={defaultModel}
-              modelReferenceCounts={modelReferenceCounts}
-              modelsSearch={modelsSearch}
-              onModelsSearchChange={onModelsSearchChange}
-              reasoningFamilyFilter={reasoningFamilyFilter}
-              onReasoningFamilyFilterChange={setReasoningFamilyFilter}
-              reasoningFamilyOptions={reasoningFamilyOptions}
-              endpointFilter={endpointFilter}
-              onEndpointFilterChange={setEndpointFilter}
-              roleFilter={roleFilter}
-              onRoleFilterChange={setRoleFilter}
-              filtersActive={filtersActive}
-              onClearFilters={clearModelFilters}
-              isReadonly={isReadonly}
-              selectedModelKeys={selectedModelKeys}
-              onSelectedModelKeysChange={setSelectedModelKeys}
-              onClearSelection={() => setSelectedModelKeys(new Set())}
-              onDeleteSelected={() => {
-                setOperationError(null)
-                setModelsPendingDelete([...selectedModelKeys])
-              }}
-              operationError={operationError}
-              onDismissOperationError={() => setOperationError(null)}
-              onAddModel={handleAddModel}
-              onViewModel={handleViewModel}
-              onEditModel={handleEditModel}
-              onDeleteModel={handleDeleteModel}
-              expandedModels={expandedModels}
-              onToggleExpand={handleToggleExpand}
-              renderExpandedRow={renderModelEndpoints}
-              getDeleteBlocker={getDeleteBlocker}
-              liveVerificationStates={liveVerification.states}
-              onVerifyModel={(modelName) => void liveVerification.verify(modelName)}
-              canVerifyModels={canVerifyModels}
-            />
+    <ConfigPageManagerLayout title="Models" description="Connect once. Route anywhere.">
+      <div className={styles.sectionCard}>
+        <TableHeader
+          title="Models"
+          count={models.length}
+          searchPlaceholder="Search models, providers, or capabilities"
+          searchValue={modelsSearch}
+          onSearchChange={onModelsSearchChange}
+          onSecondaryAction={() => void loadModels()}
+          secondaryActionText={loading ? 'Loading' : 'Refresh'}
+          onAdd={isReadonly ? undefined : () => setAddOpen(true)}
+          addButtonText="Add model"
+          variant="embedded"
+        />
+        {error ? (
+          <div className={modelStyles.operationError} role="alert">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError(null)}>
+              Dismiss
+            </button>
           </div>
+        ) : null}
+        <DataTable
+          columns={columns}
+          data={filteredModels}
+          keyExtractor={(model) => model.id}
+          onView={viewModel}
+          openOnRowClick
+          emptyMessage={loading ? 'Loading models…' : 'No models yet'}
+          className={styles.managerTable}
+          readonly={isReadonly}
+          pagination={{
+            pageSize: 25,
+            pageSizeOptions: [25, 50, 100],
+            itemLabel: 'models',
+            resetKey: modelsSearch,
+          }}
+        />
+      </div>
 
-          <div className={styles.sectionTableBlock}>
-            <TableHeader
-              title="Reasoning Families"
-              count={filteredReasoningFamilyData.length}
-              searchPlaceholder="Search family, type, or parameter..."
-              searchValue={reasoningFamilySearch}
-              onSearchChange={setReasoningFamilySearch}
-              onAdd={handleAddReasoningFamily}
-              addButtonText="Add Family"
-              disabled={isReadonly}
-              variant="embedded"
-            />
-            <DataTable
-              columns={reasoningFamilyColumns}
-              data={filteredReasoningFamilyData}
-              keyExtractor={(row) => row.name}
-              onView={(row) => handleViewReasoningFamily(row.name)}
-              onEdit={(row) => handleEditReasoningFamily(row.name)}
-              onDelete={(row) => handleDeleteReasoningFamily(row.name)}
-              emptyMessage="No reasoning families configured"
-              className={styles.managerTable}
-              readonly={isReadonly}
-              pagination={{
-                pageSize: 25,
-                pageSizeOptions: [25, 50, 100],
-                itemLabel: 'families',
-                resetKey: reasoningFamilySearch,
-              }}
-            />
-          </div>
-        </div>
-      </ConfigPageManagerLayout>
-
-      <ModelDeleteDialog
-        modelNames={modelsPendingDelete}
-        pending={bulkDeletePending}
-        onCancel={() => setModelsPendingDelete([])}
-        onConfirm={() => void handleDeleteModelsAction(modelsPendingDelete)}
+      <ConfigPageAddModelsDialog
+        isOpen={addOpen}
+        existingModelNames={models.map((model) => model.name)}
+        onClose={() => setAddOpen(false)}
+        onImport={importModels}
       />
-
       <ConfirmDialog
-        isOpen={reasoningFamilyPendingDelete !== null}
-        title={`Delete reasoning family “${reasoningFamilyPendingDelete || ''}”?`}
-        description="Remove this reasoning control definition from the active model configuration. Models that still reference it may need to be updated separately."
-        eyebrow="Destructive configuration change"
-        confirmLabel="Delete family"
-        pending={reasoningFamilyDeletePending}
-        details={
-          reasoningFamilyDeleteError ? (
-            <span role="alert">{reasoningFamilyDeleteError}</span>
-          ) : undefined
-        }
+        isOpen={pendingDelete !== null}
+        title={`Delete “${pendingDelete?.name ?? ''}”?`}
+        description="This model must be removed from every Mixture-of-Models first."
+        eyebrow="Delete model"
+        confirmLabel="Delete model"
+        pending={deleting}
+        details={deleteError ? <div role="alert">{deleteError}</div> : undefined}
         onCancel={() => {
-          if (reasoningFamilyDeletePending) return
-          setReasoningFamilyPendingDelete(null)
-          setReasoningFamilyDeleteError(null)
+          if (deleting) return
+          setPendingDelete(null)
+          setDeleteError(null)
         }}
-        onConfirm={confirmDeleteReasoningFamily}
+        onConfirm={() => void deleteModel()}
       />
-    </>
+    </ConfigPageManagerLayout>
   )
 }

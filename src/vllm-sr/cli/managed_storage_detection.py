@@ -25,7 +25,7 @@ log = get_logger(__name__)
 CANONICAL_SERVICE_DEFAULTS: dict[str, dict[str, object]] = {
     "response_api": {
         "enabled": True,
-        "store_backend": "redis",
+        "store_backend": "memory",
     },
     "router_replay": {
         "enabled": False,
@@ -50,12 +50,6 @@ _INVALID_MAPPING = object()
 # The field each backend block uses to name its endpoint.
 _BACKEND_ENDPOINT_KEYS = {"postgres": "host"}
 _DEFAULT_BACKEND_ENDPOINT_KEY = "address"
-
-
-def is_setup_mode_config(config: Mapping[str, Any]) -> bool:
-    """Return True when the config is a setup-mode bootstrap config."""
-    setup_config = config.get("setup")
-    return isinstance(setup_config, Mapping) and setup_config.get("mode") is True
 
 
 def detect_canonical_storage_backends(
@@ -205,16 +199,7 @@ def _response_cache_milvus_connection_host(config: Mapping[str, Any]) -> str | N
 
 
 def _response_cache_mapping(stores: Mapping[str, Any]) -> object:
-    canonical = stores.get("response_cache")
-    legacy = stores.get("semantic_cache")
-    if canonical is not None:
-        if legacy is not None:
-            log.warning(
-                "Ignoring deprecated global.stores.semantic_cache because "
-                "global.stores.response_cache is configured"
-            )
-        return canonical
-    return legacy
+    return stores.get("response_cache")
 
 
 def effective_service_backend(

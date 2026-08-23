@@ -1,40 +1,47 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-  - name: qwen2.5:3b
-    reasoning_family: qwen3
-    backend_refs:
-    - name: ollama
-      endpoint: 127.0.0.1:11434
-      weight: 1
-routing:
-  decisions:
-  - name: default
-    description: Default routing
-    priority: 100
-    rules:
-      operator: OR
-      conditions:
-      - type: domain
-        name: general
-    modelRefs:
-    - model: qwen2.5:3b
-      use_reasoning: false
-      weight: 100
-  signals:
-    domains:
-    - name: general
-      description: General queries
-    - name: engineering
-      description: Technical questions
-  modelCards:
-  - name: qwen2.5:3b
+models:
+- name: qwen2.5:3b
+  card:
+    reasoning:
+      type: chat_template_kwargs
+      efforts: []
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:11434/v1
+    model: qwen2.5:3b
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
+      - name: general
+        description: General queries
+      - name: engineering
+        description: Technical questions
+    decisions:
+    - name: default
+      description: Default routing
+      priority: 100
+      rules:
+        operator: OR
+        conditions:
+        - type: domain
+          name: general
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    default:
+      models:
+      - model: qwen2.5:3b
+        weight: '100'
 global:
   model_catalog:
     embeddings:
@@ -64,6 +71,14 @@ global:
       store_backend: memory
       ttl_seconds: 2592000
       async_writes: true
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
     response_cache:
       enabled: true
@@ -77,6 +92,4 @@ global:
     tools:
       enabled: true
       tools_db_path: config/runtime/tools/tools_db.json
-      model_type: mmbert
-      target_dim: 0
       similarity_threshold: 0.7

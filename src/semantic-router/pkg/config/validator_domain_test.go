@@ -16,19 +16,19 @@ func TestSupportedRoutingDomainNamesStayInSyncWithCommittedDomainContract(t *tes
 	}
 
 	var fragment struct {
-		Routing struct {
+		Document struct {
 			Signals struct {
 				Domains []Category `yaml:"domains"`
 			} `yaml:"signals"`
-		} `yaml:"routing"`
+		} `yaml:"document"`
 	}
 	if err := yamlv3.Unmarshal(data, &fragment); err != nil {
 		t.Fatalf("unmarshal committed domain contract: %v", err)
 	}
 
 	got := SupportedRoutingDomainNames()
-	want := make([]string, 0, len(fragment.Routing.Signals.Domains))
-	for _, domain := range fragment.Routing.Signals.Domains {
+	want := make([]string, 0, len(fragment.Document.Signals.Domains))
+	for _, domain := range fragment.Document.Signals.Domains {
 		want = append(want, domain.Name)
 	}
 	slices.Sort(got)
@@ -47,7 +47,7 @@ func TestValidateDomainContractsAllowsLooseAliasOutsideSoftmaxGroup(t *testing.T
 		},
 	}
 
-	if err := validateDomainContracts(cfg); err != nil {
+	if err := validateDomainContracts(scopedRoutingProfileForTest(cfg)); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
@@ -68,7 +68,7 @@ func TestValidateDomainContractsAllowsAliasWithSupportedMMLUCategories(t *testin
 		},
 	}
 
-	if err := validateDomainContracts(cfg); err != nil {
+	if err := validateDomainContracts(scopedRoutingProfileForTest(cfg)); err != nil {
 		t.Fatalf("unexpected validation error: %v", err)
 	}
 }
@@ -82,7 +82,7 @@ func TestValidateDomainContractsRejectsUnsupportedMMLUCategory(t *testing.T) {
 		},
 	}
 
-	err := validateDomainContracts(cfg)
+	err := validateDomainContracts(scopedRoutingProfileForTest(cfg))
 	if err == nil {
 		t.Fatal("expected unsupported mmlu_categories error")
 	}
@@ -105,7 +105,7 @@ func TestValidateDomainContractsRejectsUnsupportedSoftmaxGroupImplicitDomain(t *
 		},
 	}
 
-	err := validateDomainContracts(cfg)
+	err := validateDomainContracts(scopedRoutingProfileForTest(cfg))
 	if err == nil {
 		t.Fatal("expected unsupported softmax domain member error")
 	}
@@ -127,7 +127,7 @@ func TestValidateDomainContractsRejectsUndeclaredDecisionDomain(t *testing.T) {
 		},
 	}
 
-	err := validateDomainContracts(cfg)
+	err := validateDomainContracts(scopedRoutingProfileForTest(cfg))
 	if err == nil {
 		t.Fatal("expected undeclared decision domain error")
 	}

@@ -74,7 +74,7 @@ signals, decisions, route plugins, cache, learning, or session routing.
 
 ## 5. Send a routed request
 
-Replace `virtual-model` with an entrypoint or automatic alias configured for the
+Replace `virtual-model` with an explicit Entrypoint configured for the
 deployment:
 
 ```bash

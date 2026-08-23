@@ -271,14 +271,6 @@ func (v *Validator) checkRouteReferences(route *RouteDecl) {
 		v.checkCandidateIterationReferences(route, iter)
 	}
 
-	if !routeHasModelCandidates(route) {
-		v.addDiag(DiagWarning, route.Pos,
-			fmt.Sprintf("Route %q has no MODEL specified. Add MODEL \"<model_name>\" inside the route body", route.Name),
-			nil,
-		)
-		return
-	}
-
 	if len(v.modelNames) > 0 {
 		v.checkRouteModelReferences(route)
 	}
@@ -666,11 +658,7 @@ func collectModelLoRANames(fields map[string]Value) map[string]bool {
 	}
 	loras := make(map[string]bool)
 	for _, item := range av.Items {
-		ov, ok := item.(ObjectValue)
-		if !ok {
-			continue
-		}
-		nameValue, ok := ov.Fields["name"].(StringValue)
+		nameValue, ok := item.(StringValue)
 		if !ok || nameValue.V == "" {
 			continue
 		}

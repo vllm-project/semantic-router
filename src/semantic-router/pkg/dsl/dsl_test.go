@@ -8,10 +8,21 @@ import (
 	"strings"
 	"testing"
 
-	"gopkg.in/yaml.v2"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
+
+func roundTripRecipeDocument(t *testing.T, cfg *config.RouterConfig) *config.RouterConfig {
+	t.Helper()
+	payload, err := EmitYAMLFromConfig(cfg)
+	if err != nil {
+		t.Fatalf("emit Recipe document: %v", err)
+	}
+	roundTripped, err := config.ParseRoutingYAMLBytes(payload)
+	if err != nil {
+		t.Fatalf("parse Recipe document: %v\nYAML:\n%s", err, payload)
+	}
+	return roundTripped
+}
 
 // ---------- Lexer Tests ----------
 
@@ -465,9 +476,9 @@ SIGNAL domain test { description: "test" }`
 }
 
 func TestCompilePluginTemplateWithOverride(t *testing.T) {
-	input := `PLUGIN default_cache semantic_cache {
+	input := `PLUGIN default_cache response_cache {
   enabled: true
-  similarity_threshold: 0.80
+  semantic: { similarity_threshold: 0.80 }
 }
 
 SIGNAL domain test { description: "test" }
@@ -477,7 +488,7 @@ ROUTE test {
   WHEN domain("test")
   MODEL "m:1b"
   PLUGIN default_cache {
-    similarity_threshold: 0.95
+    semantic: { similarity_threshold: 0.95 }
   }
 }`
 
@@ -486,7 +497,7 @@ ROUTE test {
 		t.Fatalf("compile errors: %v", errs)
 	}
 	p := cfg.Decisions[0].Plugins[0]
-	if p.Type != "response_cache" { // normalized
+	if p.Type != "response_cache" {
 		t.Errorf("expected plugin type response_cache, got %s", p.Type)
 	}
 }
@@ -600,7 +611,7 @@ SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["ke
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard task"] } easy: { candidates: ["easy task"] } }
-SIGNAL modality mod { description: "image" }
+SIGNAL modality AR { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 `
 	cfg, errs := Compile(input)
@@ -690,15 +701,14 @@ ROUTE math_route {
 	}
 
 	yamlStr := string(yamlBytes)
-	// Basic sanity checks on the YAML output
-	if !strings.Contains(yamlStr, "model_config:") {
-		t.Error("YAML should contain model_config")
+	if !strings.HasPrefix(yamlStr, "document:\n") {
+		t.Fatalf("YAML should contain one Recipe document:\n%s", yamlStr)
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML should contain category name")
 	}
-	if !strings.Contains(yamlStr, "description: Math-capable model") {
-		t.Error("YAML should contain routing model metadata")
+	if strings.Contains(yamlStr, "Math-capable model") || strings.Contains(yamlStr, "modelRefs:") {
+		t.Fatalf("Recipe document must not contain physical Model selection:\n%s", yamlStr)
 	}
 }
 
@@ -765,9 +775,9 @@ SIGNAL complexity code_complexity {
 }
 
 # Plugins
-PLUGIN default_cache semantic_cache {
+PLUGIN default_cache response_cache {
   enabled: true
-  similarity_threshold: 0.80
+  semantic: { similarity_threshold: 0.80 }
 }
 
 # Routes
@@ -869,11 +879,14 @@ func TestCompileFullExample(t *testing.T) {
 		t.Fatalf("YAML emit error: %v", err)
 	}
 	yamlStr := string(yamlBytes)
-	if !strings.Contains(yamlStr, "model_config:") {
-		t.Error("YAML missing model_config")
+	if !strings.HasPrefix(yamlStr, "document:\n") {
+		t.Fatalf("YAML missing Recipe document envelope:\n%s", yamlStr)
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML missing math category")
+	}
+	if strings.Contains(yamlStr, "modelRefs:") || strings.Contains(yamlStr, "models:") {
+		t.Fatalf("Recipe document leaked Models:\n%s", yamlStr)
 	}
 }
 
@@ -944,17 +957,8 @@ ROUTE urgent_ai_route {
 		t.Fatalf("compile errors: %v", errs)
 	}
 
-	// Step 2: RouterConfig → YAML bytes
-	yamlBytes, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit YAML error: %v", err)
-	}
-
-	// Step 3: YAML bytes → RouterConfig (using yaml.v2 like the real loader)
-	var roundTripped config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &roundTripped); err != nil {
-		t.Fatalf("yaml.Unmarshal failed: %v\nYAML content:\n%s", err, string(yamlBytes))
-	}
+	// Step 2: RouterConfig → model-free Recipe document → routing view.
+	roundTripped := roundTripRecipeDocument(t, cfg)
 
 	// Step 4: Verify key routing fields survived the round trip
 	if len(roundTripped.Categories) != 1 {
@@ -998,13 +1002,6 @@ ROUTE urgent_ai_route {
 	if len(roundTripped.Decisions) != 2 {
 		t.Fatalf("round-trip: expected 2 decisions, got %d", len(roundTripped.Decisions))
 	}
-	if len(roundTripped.ModelConfig) != 2 {
-		t.Fatalf("round-trip: expected 2 routing model entries, got %d", len(roundTripped.ModelConfig))
-	}
-	if roundTripped.ModelConfig["qwen2.5:3b"].Description != "Math model" {
-		t.Errorf("round-trip: model description = %q", roundTripped.ModelConfig["qwen2.5:3b"].Description)
-	}
-
 	// Find math_route decision
 	var mathDec, urgentDec *config.Decision
 	for i := range roundTripped.Decisions {
@@ -1029,17 +1026,8 @@ ROUTE urgent_ai_route {
 		t.Errorf("round-trip: math_route rules condition = {type: %q, name: %q}, want {type: domain, name: math}",
 			mathDec.Rules.Conditions[0].Type, mathDec.Rules.Conditions[0].Name)
 	}
-	if len(mathDec.ModelRefs) != 1 {
-		t.Fatalf("round-trip: math_route expected 1 model ref, got %d", len(mathDec.ModelRefs))
-	}
-	if mathDec.ModelRefs[0].Model != "qwen2.5:3b" {
-		t.Errorf("round-trip: math_route model = %q, want %q", mathDec.ModelRefs[0].Model, "qwen2.5:3b")
-	}
-	if mathDec.ModelRefs[0].UseReasoning == nil || *mathDec.ModelRefs[0].UseReasoning != true {
-		t.Error("round-trip: math_route model use_reasoning should be true")
-	}
-	if mathDec.ModelRefs[0].ReasoningEffort != "high" {
-		t.Errorf("round-trip: math_route reasoning_effort = %q, want %q", mathDec.ModelRefs[0].ReasoningEffort, "high")
+	if len(mathDec.ModelRefs) != 0 {
+		t.Fatalf("round-trip Recipe leaked model refs: %#v", mathDec.ModelRefs)
 	}
 
 	// Verify plugins survived
@@ -1060,8 +1048,8 @@ ROUTE urgent_ai_route {
 	if urgentDec.Rules.Operator != "AND" {
 		t.Errorf("round-trip: urgent_ai_route rules operator = %q, want AND", urgentDec.Rules.Operator)
 	}
-	if len(urgentDec.ModelRefs) != 2 {
-		t.Fatalf("round-trip: urgent_ai_route expected 2 model refs, got %d", len(urgentDec.ModelRefs))
+	if len(urgentDec.ModelRefs) != 0 {
+		t.Fatalf("round-trip Recipe leaked model refs: %#v", urgentDec.ModelRefs)
 	}
 
 	// Verify algorithm
@@ -1085,10 +1073,6 @@ ROUTE urgent_ai_route {
 	}
 	if urgentDec.Algorithm.Confidence.HybridWeights.LogprobWeight != 0.6 {
 		t.Errorf("round-trip: logprob_weight = %v, want 0.6", urgentDec.Algorithm.Confidence.HybridWeights.LogprobWeight)
-	}
-
-	if roundTripped.ModelConfig["qwen3:70b"].Modality != "text" {
-		t.Errorf("round-trip: qwen3:70b modality = %q", roundTripped.ModelConfig["qwen3:70b"].Modality)
 	}
 }
 
@@ -1125,15 +1109,8 @@ ROUTE math_route {
 		t.Errorf("leaf node = {type: %q, name: %q}, want {type: domain, name: math}", leaf.Type, leaf.Name)
 	}
 
-	// Verify this survives YAML round-trip
-	yamlBytes, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit YAML error: %v", err)
-	}
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("yaml.Unmarshal failed: %v\nYAML:\n%s", err, string(yamlBytes))
-	}
+	// Verify this survives the strict Recipe-document round-trip.
+	rt := roundTripRecipeDocument(t, cfg)
 
 	rtRules := rt.Decisions[0].Rules
 	if rtRules.Operator != "AND" || len(rtRules.Conditions) != 1 {
@@ -1519,40 +1496,40 @@ func TestCompileAllAlgorithmTypes(t *testing.T) {
 		{
 			name:     "knn",
 			algoType: "knn",
-			body:     ``,
+			body:     `ml: { models_path: "/models/a", embedding_dim: 1024, knn: { k: 5 } }`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "knn" {
-					t.Errorf("type = %q, want knn", algo.Type)
+				if algo.ML == nil || algo.ML.KNN == nil || algo.ML.KNN.K != 5 {
+					t.Errorf("knn ML config = %#v", algo.ML)
 				}
 			},
 		},
 		{
 			name:     "kmeans",
 			algoType: "kmeans",
-			body:     ``,
+			body:     `ml: { models_path: "/models/a", embedding_dim: 1024, kmeans: { num_clusters: 8, efficiency_weight: 0.1 } }`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "kmeans" {
-					t.Errorf("type = %q, want kmeans", algo.Type)
+				if algo.ML == nil || algo.ML.KMeans == nil || algo.ML.KMeans.NumClusters != 8 {
+					t.Errorf("kmeans ML config = %#v", algo.ML)
 				}
 			},
 		},
 		{
 			name:     "svm",
 			algoType: "svm",
-			body:     ``,
+			body:     `ml: { models_path: "/models/a", embedding_dim: 1024, svm: { kernel: "rbf", gamma: 1.0 } }`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "svm" {
-					t.Errorf("type = %q, want svm", algo.Type)
+				if algo.ML == nil || algo.ML.SVM == nil || algo.ML.SVM.Kernel != "rbf" {
+					t.Errorf("svm ML config = %#v", algo.ML)
 				}
 			},
 		},
 		{
 			name:     "mlp",
 			algoType: "mlp",
-			body:     ``,
+			body:     `ml: { models_path: "/models/a", embedding_dim: 1024, mlp: { device: "cpu" } }`,
 			verify: func(t *testing.T, algo *config.AlgorithmConfig) {
-				if algo.Type != "mlp" {
-					t.Errorf("type = %q, want mlp", algo.Type)
+				if algo.ML == nil || algo.ML.MLP == nil || algo.ML.MLP.Device != "cpu" {
+					t.Errorf("mlp ML config = %#v", algo.ML)
 				}
 			},
 		},
@@ -1761,108 +1738,6 @@ ROUTE test {
 	}
 }
 
-// ---------- P1-4: EmitCRD Test ----------
-
-func TestEmitCRD(t *testing.T) {
-	input := `
-MODEL "qwen2.5:3b" { param_size: "3b" modality: "text" }
-SIGNAL domain math { description: "Math" mmlu_categories: ["math"] }
-ROUTE math_route {
-  PRIORITY 100
-  WHEN domain("math")
-  MODEL "qwen2.5:3b" (reasoning = true)
-}`
-
-	cfg, errs := Compile(input)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	cfg.DefaultModel = "qwen2.5:3b"
-	cfg.Strategy = "priority"
-
-	t.Run("with_namespace", func(t *testing.T) {
-		crdBytes, err := EmitCRD(cfg, "my-router", "production")
-		if err != nil {
-			t.Fatalf("EmitCRD error: %v", err)
-		}
-		crdStr := string(crdBytes)
-		if !strings.Contains(crdStr, "apiVersion: vllm.ai/v1alpha1") {
-			t.Error("CRD missing apiVersion")
-		}
-		if !strings.Contains(crdStr, "kind: SemanticRouter") {
-			t.Error("CRD missing kind")
-		}
-		if !strings.Contains(crdStr, "name: my-router") {
-			t.Error("CRD missing name")
-		}
-		if !strings.Contains(crdStr, "namespace: production") {
-			t.Error("CRD missing namespace")
-		}
-		// default_model should be inside spec.config
-		if !strings.Contains(crdStr, "default_model: qwen2.5:3b") {
-			t.Error("CRD missing spec.config.default_model")
-		}
-		// decisions should be inside spec.config
-		if !strings.Contains(crdStr, "decisions:") {
-			t.Error("CRD missing spec.config.decisions")
-		}
-		// categories (signal rules) should be inside spec.config
-		if !strings.Contains(crdStr, "categories:") {
-			t.Error("CRD missing spec.config.categories for domain signals")
-		}
-	})
-
-	t.Run("default_namespace", func(t *testing.T) {
-		crdBytes, err := EmitCRD(cfg, "test-router", "")
-		if err != nil {
-			t.Fatalf("EmitCRD error: %v", err)
-		}
-		if !strings.Contains(string(crdBytes), "namespace: default") {
-			t.Error("expected default namespace")
-		}
-	})
-
-	t.Run("vllm_endpoints_as_k8s_service", func(t *testing.T) {
-		cfgP, errs := Compile(input)
-		if len(errs) > 0 {
-			t.Fatalf("compile errors: %v", errs)
-		}
-		cfgP.DefaultModel = "qwen2.5:3b"
-		cfgP.Strategy = "priority"
-		cfgP.VLLMEndpoints = []config.VLLMEndpoint{
-			{
-				Name:    "vllm_qwen",
-				Address: "vllm-qwen-svc",
-				Port:    8000,
-				Weight:  1,
-				Model:   "qwen2.5:3b",
-			},
-		}
-		crdBytes, err := EmitCRD(cfgP, "test", "ns")
-		if err != nil {
-			t.Fatalf("EmitCRD error: %v", err)
-		}
-		crdStr := string(crdBytes)
-		// Should have vllmEndpoints with backend.type: service
-		if !strings.Contains(crdStr, "vllmEndpoints:") {
-			t.Error("CRD missing spec.vllmEndpoints")
-		}
-		if !strings.Contains(crdStr, "type: service") {
-			t.Error("CRD vllmEndpoints should use backend type: service")
-		}
-		if !strings.Contains(crdStr, "name: vllm-qwen-svc") {
-			t.Error("CRD vllmEndpoints should have service name from address")
-		}
-		// Should NOT have flat vllm_endpoints or model_config at top level
-		if strings.Contains(crdStr, "vllm_endpoints:") {
-			t.Error("CRD should not contain flat vllm_endpoints")
-		}
-		if strings.Contains(crdStr, "model_config:") {
-			t.Error("CRD should not contain flat model_config")
-		}
-	})
-}
-
 // ---------- P1-5: Complex Boolean Expression Variants ----------
 
 func TestCompileORExpression(t *testing.T) {
@@ -1952,17 +1827,17 @@ func TestLexNegativeNumber(t *testing.T) {
 }
 
 func TestLexIdentWithDotAndDash(t *testing.T) {
-	input := `qwen2.5 semantic-cache`
+	input := `qwen2.5 context-compression`
 	tokens, errs := Lex(input)
 	if len(errs) > 0 {
 		t.Fatalf("lex errors: %v", errs)
 	}
-	// qwen2.5 IDENT(semantic-cache) EOF
+	// qwen2.5 IDENT(context-compression) EOF
 	if tokens[0].Type != TOKEN_IDENT || tokens[0].Literal != "qwen2.5" {
 		t.Errorf("expected IDENT qwen2.5, got %s %q", tokens[0].Type, tokens[0].Literal)
 	}
-	if tokens[1].Type != TOKEN_IDENT || tokens[1].Literal != "semantic-cache" {
-		t.Errorf("expected IDENT semantic-cache, got %s %q", tokens[1].Type, tokens[1].Literal)
+	if tokens[1].Type != TOKEN_IDENT || tokens[1].Literal != "context-compression" {
+		t.Errorf("expected IDENT context-compression, got %s %q", tokens[1].Type, tokens[1].Literal)
 	}
 }
 
@@ -2050,7 +1925,7 @@ func TestParseEmptyArray(t *testing.T) {
 }
 
 func TestParseNestedObjects(t *testing.T) {
-	input := `MODEL "deep-model" {
+	input := `PLUGIN "deep-plugin" custom {
   outer: {
     inner: {
       value: "deep"
@@ -2061,7 +1936,7 @@ func TestParseNestedObjects(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("parse errors: %v", errs)
 	}
-	outer, ok := prog.Models[0].Fields["outer"].(ObjectValue)
+	outer, ok := prog.Plugins[0].Fields["outer"].(ObjectValue)
 	if !ok {
 		t.Fatal("expected outer ObjectValue")
 	}
@@ -2385,7 +2260,7 @@ func TestCompileIdempotency(t *testing.T) {
 }
 
 // ---------- P2-2: Double Round-Trip ----------
-// DSL → YAML → Unmarshal → Marshal → Unmarshal and compare.
+// DSL → Recipe document → routing view → Recipe document and compare.
 
 func TestDoubleRoundTrip(t *testing.T) {
 	cfg, errs := Compile(fullDSLExample)
@@ -2393,30 +2268,10 @@ func TestDoubleRoundTrip(t *testing.T) {
 		t.Fatalf("compile errors: %v", errs)
 	}
 
-	// First round-trip
-	yaml1, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit1 error: %v", err)
-	}
-	var rt1 config.RouterConfig
-	if unmarshalErr := yaml.Unmarshal(yaml1, &rt1); unmarshalErr != nil {
-		t.Fatalf("unmarshal1 error: %v", unmarshalErr)
-	}
-
-	// Second round-trip: marshal rt1 back to YAML using yaml.v2
-	yaml2, err := yaml.Marshal(&rt1)
-	if err != nil {
-		t.Fatalf("marshal2 error: %v", err)
-	}
-	var rt2 config.RouterConfig
-	if err := yaml.Unmarshal(yaml2, &rt2); err != nil {
-		t.Fatalf("unmarshal2 error: %v", err)
-	}
+	rt1 := roundTripRecipeDocument(t, cfg)
+	rt2 := roundTripRecipeDocument(t, rt1)
 
 	// Compare key fields
-	if rt1.DefaultModel != rt2.DefaultModel {
-		t.Errorf("default_model: %q vs %q", rt1.DefaultModel, rt2.DefaultModel)
-	}
 	if rt1.Strategy != rt2.Strategy {
 		t.Errorf("strategy: %q vs %q", rt1.Strategy, rt2.Strategy)
 	}
@@ -2425,9 +2280,6 @@ func TestDoubleRoundTrip(t *testing.T) {
 	}
 	if len(rt1.Decisions) != len(rt2.Decisions) {
 		t.Errorf("decisions count: %d vs %d", len(rt1.Decisions), len(rt2.Decisions))
-	}
-	if len(rt1.VLLMEndpoints) != len(rt2.VLLMEndpoints) {
-		t.Errorf("endpoints count: %d vs %d", len(rt1.VLLMEndpoints), len(rt2.VLLMEndpoints))
 	}
 }
 
@@ -2487,7 +2339,7 @@ SIGNAL preference pref { description: "preference" threshold: 0.7 examples: ["ke
 SIGNAL language lang { description: "English" threshold: 0.6 }
 SIGNAL context ctx { min_tokens: "1K" max_tokens: "32K" }
 SIGNAL complexity comp { threshold: 0.1 hard: { candidates: ["hard"] } easy: { candidates: ["easy"] } }
-SIGNAL modality mod { description: "image" }
+SIGNAL modality AR { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 
 ROUTE test_route {
@@ -2501,15 +2353,7 @@ ROUTE test_route {
 		t.Fatalf("compile errors: %v", errs)
 	}
 
-	yamlBytes, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit error: %v", err)
-	}
-
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v\nYAML:\n%s", err, string(yamlBytes))
-	}
+	rt := roundTripRecipeDocument(t, cfg)
 
 	if len(rt.KeywordRules) != 1 {
 		t.Errorf("keyword rules: %d", len(rt.KeywordRules))
@@ -2630,9 +2474,9 @@ ROUTE r {
 
 func TestPluginTemplateMergeSemantics(t *testing.T) {
 	input := `
-PLUGIN my_cache semantic_cache {
+PLUGIN my_cache response_cache {
   enabled: true
-  similarity_threshold: 0.80
+  semantic: { similarity_threshold: 0.80 }
 }
 
 SIGNAL domain test { description: "test" }
@@ -2649,7 +2493,7 @@ ROUTE route_b {
   WHEN domain("test")
   MODEL "m:1b" (reasoning = false)
   PLUGIN my_cache {
-    similarity_threshold: 0.95
+    semantic: { similarity_threshold: 0.95 }
   }
 }
 `
@@ -2679,15 +2523,7 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 		t.Fatalf("compile errors: %v", errs)
 	}
 
-	yamlBytes, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit YAML error: %v", err)
-	}
-
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v\nYAML:\n%s", err, string(yamlBytes))
-	}
+	rt := roundTripRecipeDocument(t, cfg)
 
 	// Comprehensive field check
 	if len(rt.Categories) != 3 {
@@ -2702,11 +2538,8 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 	if len(rt.Decisions) != 4 {
 		t.Errorf("decisions = %d, want 4", len(rt.Decisions))
 	}
-	if len(rt.ModelConfig) != 2 {
-		t.Errorf("model_config = %d, want 2", len(rt.ModelConfig))
-	}
-	if rt.ModelConfig["qwen3:70b"].ParamSize != "70b" {
-		t.Errorf("qwen3:70b param_size = %q", rt.ModelConfig["qwen3:70b"].ParamSize)
+	if len(rt.ModelConfig) != 0 {
+		t.Errorf("Recipe document Model catalog = %d, want 0", len(rt.ModelConfig))
 	}
 
 	// Check urgent_ai_route specifically
@@ -2715,8 +2548,8 @@ func TestFullExampleYAMLRoundTrip(t *testing.T) {
 			if d.Priority != 200 {
 				t.Errorf("urgent priority = %d", d.Priority)
 			}
-			if len(d.ModelRefs) != 2 {
-				t.Errorf("urgent model_refs = %d", len(d.ModelRefs))
+			if len(d.ModelRefs) != 0 {
+				t.Errorf("Recipe decision model_refs = %d, want 0", len(d.ModelRefs))
 			}
 			if d.Algorithm == nil || d.Algorithm.Type != "confidence" {
 				t.Error("urgent should have confidence algorithm")
@@ -2863,14 +2696,7 @@ ROUTE my_route (description = "This is a detailed description") {
 	}
 
 	// Verify survives YAML round-trip
-	yamlBytes, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit error: %v", err)
-	}
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
+	rt := roundTripRecipeDocument(t, cfg)
 	if rt.Decisions[0].Description != "This is a detailed description" {
 		t.Errorf("round-trip description = %q", rt.Decisions[0].Description)
 	}
@@ -2878,7 +2704,7 @@ ROUTE my_route (description = "This is a detailed description") {
 
 // ---------- P2-13: Model LoRA Compile and Round-Trip ----------
 
-func TestModelLoRACompileAndRoundTrip(t *testing.T) {
+func TestRecipeDocumentStripsModelLoRASelection(t *testing.T) {
 	input := `
 SIGNAL domain test { description: "test" }
 ROUTE test {
@@ -2895,16 +2721,9 @@ ROUTE test {
 		t.Errorf("lora_name = %q", cfg.Decisions[0].ModelRefs[0].LoRAName)
 	}
 
-	yamlBytes, err := EmitYAMLFromConfig(cfg)
-	if err != nil {
-		t.Fatalf("emit error: %v", err)
-	}
-	var rt config.RouterConfig
-	if err := yaml.Unmarshal(yamlBytes, &rt); err != nil {
-		t.Fatalf("unmarshal error: %v", err)
-	}
-	if rt.Decisions[0].ModelRefs[0].LoRAName != "math-lora-v2" {
-		t.Errorf("round-trip lora_name = %q", rt.Decisions[0].ModelRefs[0].LoRAName)
+	rt := roundTripRecipeDocument(t, cfg)
+	if len(rt.Decisions[0].ModelRefs) != 0 {
+		t.Fatalf("Recipe document leaked Model/LoRA selection: %#v", rt.Decisions[0].ModelRefs)
 	}
 }
 
@@ -3141,7 +2960,7 @@ SIGNAL unknown_type test { description: "test" }
 	}
 }
 
-func TestValidateRouteNoModel(t *testing.T) {
+func TestValidateRecipeRouteDoesNotRequireModelSelection(t *testing.T) {
 	input := `
 SIGNAL domain test { description: "test" }
 ROUTE test {
@@ -3150,15 +2969,10 @@ ROUTE test {
 }
 `
 	diags, _ := Validate(input)
-	found := false
 	for _, d := range diags {
 		if d.Level == DiagWarning && strings.Contains(d.Message, "no MODEL") {
-			found = true
-			break
+			t.Fatalf("model-free Recipe route produced a legacy Model warning: %s", d.Message)
 		}
-	}
-	if !found {
-		t.Error("expected warning for route without MODEL")
 	}
 }
 
@@ -3460,7 +3274,7 @@ SIGNAL complexity comp {
   easy: { candidates: ["easy"] }
   composer: { operator: "OR", conditions: [{ type: "domain", name: "dom" }, { type: "keyword", name: "kw" }] }
 }
-SIGNAL modality mod { description: "image" }
+SIGNAL modality AR { description: "image" }
 SIGNAL authz auth { role: "admin" subjects: [{ kind: "User", name: "admin" }] }
 SIGNAL jailbreak jb { method: "classifier" threshold: 0.9 include_history: true }
 SIGNAL pii pii_rule { threshold: 0.8 pii_types_allowed: ["EMAIL_ADDRESS"] include_history: true }
@@ -3488,7 +3302,7 @@ ROUTE test_route { PRIORITY 1 WHEN domain("dom") MODEL "m:1b" }
 		"SIGNAL fact_check fc", "SIGNAL user_feedback uf", "SIGNAL reask ra",
 		"SIGNAL preference pref", "SIGNAL language lang",
 		"SIGNAL context ctx", "SIGNAL structure struct", "SIGNAL conversation conv",
-		"SIGNAL complexity comp", "SIGNAL modality mod", "SIGNAL authz auth",
+		"SIGNAL complexity comp", "SIGNAL modality AR", "SIGNAL authz auth",
 		"SIGNAL jailbreak jb", "SIGNAL pii pii_rule", "SIGNAL kb kb_rule",
 		"SIGNAL event critical_event",
 	}
@@ -3529,9 +3343,6 @@ func TestDecompileOmitsLegacyStaticSections(t *testing.T) {
 			DefaultModel: "m:1b",
 			VLLMEndpoints: []config.VLLMEndpoint{
 				{Name: "ep1", Address: "10.0.0.1", Port: 8000, Model: "m:1b"},
-			},
-			ProviderProfiles: map[string]config.ProviderProfile{
-				"pp1": {Type: "openai", BaseURL: "https://api.openai.com/v1"},
 			},
 		},
 		InlineModels: config.InlineModels{
@@ -3872,7 +3683,7 @@ func TestCLICompileAndDecompile(t *testing.T) {
 	defer os.Remove(yamlFile.Name())
 	yamlFile.Close()
 
-	if compileErr := CLICompile(dslFile.Name(), yamlFile.Name(), "yaml", "", "", ""); compileErr != nil {
+	if compileErr := CLICompile(dslFile.Name(), yamlFile.Name(), ""); compileErr != nil {
 		t.Fatalf("CLICompile error: %v", compileErr)
 	}
 
@@ -3918,43 +3729,8 @@ func TestCLICompileAndDecompile(t *testing.T) {
 	if len(cfg.Decisions) == 0 {
 		t.Fatalf("round-trip decisions = %d", len(cfg.Decisions))
 	}
-	if len(cfg.ModelConfig) == 0 {
-		t.Fatal("round-trip model catalog should not be empty")
-	}
-}
-
-func TestCLICompileCRD(t *testing.T) {
-	dslFile, err := os.CreateTemp("", "test*.dsl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dslFile.Name())
-	_, _ = dslFile.WriteString(fullDSLExample)
-	dslFile.Close()
-
-	crdFile, err := os.CreateTemp("", "test*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(crdFile.Name())
-	crdFile.Close()
-
-	if compileErr := CLICompile(dslFile.Name(), crdFile.Name(), "crd", "my-router", "production", ""); compileErr != nil {
-		t.Fatalf("CLICompile CRD error: %v", compileErr)
-	}
-
-	data, err := os.ReadFile(crdFile.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "apiVersion: vllm.ai/v1alpha1") {
-		t.Error("CRD output missing apiVersion")
-	}
-	if !strings.Contains(string(data), "kind: SemanticRouter") {
-		t.Error("CRD output missing kind")
-	}
-	if !strings.Contains(string(data), "name: my-router") {
-		t.Error("CRD output missing name")
+	if len(cfg.ModelConfig) != 0 {
+		t.Fatal("Recipe document round-trip must remain model-free")
 	}
 }
 
@@ -3987,202 +3763,6 @@ func TestCLIFormat(t *testing.T) {
 	_, errs := Compile(string(data))
 	if len(errs) > 0 {
 		t.Fatalf("formatted output is not valid DSL: %v", errs)
-	}
-}
-
-// TestEmitUserYAML verifies that EmitUserYAML produces nested signals/providers format.
-func TestEmitUserYAML(t *testing.T) {
-	cfg, errs := Compile(fullDSLExample)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-	cfg.DefaultModel = "qwen2.5:3b"
-	cfg.ReasoningFamilies = map[string]config.ReasoningFamilyConfig{
-		"qwen3": {Type: "chat_template_kwargs", Parameter: "enable_thinking"},
-	}
-	cfg.VLLMEndpoints = []config.VLLMEndpoint{
-		{
-			Name:    "qwen2.5:3b_primary",
-			Address: "router-model.local",
-			Port:    8000,
-			Model:   "qwen2.5:3b",
-		},
-	}
-
-	userYAML, err := EmitUserYAML(cfg)
-	if err != nil {
-		t.Fatalf("EmitUserYAML error: %v", err)
-	}
-
-	yamlStr := string(userYAML)
-
-	// Should have nested "signals" section
-	if !strings.Contains(yamlStr, "signals:") {
-		t.Error("expected 'signals:' section in user YAML")
-	}
-	// Should have nested signal types
-	if !strings.Contains(yamlStr, "domains:") {
-		t.Error("expected 'domains:' under signals")
-	}
-	if !strings.Contains(yamlStr, "keywords:") {
-		t.Error("expected 'keywords:' under signals")
-	}
-	if !strings.Contains(yamlStr, "embeddings:") {
-		t.Error("expected 'embeddings:' under signals")
-	}
-	if !strings.Contains(yamlStr, "context:") {
-		t.Error("expected 'context:' under signals")
-	}
-
-	// Should have nested "providers" section
-	if !strings.Contains(yamlStr, "providers:") {
-		t.Error("expected 'providers:' section in user YAML")
-	}
-	if !strings.Contains(yamlStr, "default_model:") {
-		t.Error("expected 'default_model:' under providers")
-	}
-
-	// Should NOT have flat RouterConfig keys at top level
-	if strings.Contains(yamlStr, "keyword_rules:") {
-		t.Error("should not have flat 'keyword_rules:' key")
-	}
-	if strings.Contains(yamlStr, "embedding_rules:") {
-		t.Error("should not have flat 'embedding_rules:' key")
-	}
-	// Check that top-level "categories:" is gone (note: mmlu_categories is fine as a nested field)
-	if strings.Contains(yamlStr, "\ncategories:") || strings.HasPrefix(yamlStr, "categories:") {
-		t.Error("should not have top-level 'categories:' key (should be signals.domains)")
-	}
-	if strings.Contains(yamlStr, "vllm_endpoints:") {
-		t.Error("should not have flat 'vllm_endpoints:' key (should be providers.models)")
-	}
-}
-
-func TestEmitUserYAML_IncludesListeners(t *testing.T) {
-	cfg := &config.RouterConfig{
-		APIServer: config.APIServer{
-			Listeners: []config.Listener{
-				{
-					Name:    "http-8899",
-					Address: "0.0.0.0",
-					Port:    8899,
-					Timeout: "300s",
-				},
-			},
-		},
-	}
-
-	userYAML, err := EmitUserYAML(cfg)
-	if err != nil {
-		t.Fatalf("EmitUserYAML error: %v", err)
-	}
-
-	yamlStr := string(userYAML)
-	if !strings.Contains(yamlStr, "listeners:") {
-		t.Fatal("expected listeners section in user YAML")
-	}
-	if !strings.Contains(yamlStr, "port: 8899") {
-		t.Fatal("expected listener port in user YAML")
-	}
-}
-
-// TestEmitHelm verifies that EmitHelm produces a valid Helm values.yaml structure.
-func TestEmitHelm(t *testing.T) {
-	cfg, errs := Compile(fullDSLExample)
-	if len(errs) > 0 {
-		t.Fatalf("compile errors: %v", errs)
-	}
-
-	helmYAML, err := EmitHelm(cfg)
-	if err != nil {
-		t.Fatalf("EmitHelm error: %v", err)
-	}
-
-	yamlStr := string(helmYAML)
-
-	// Should have top-level "config:" key
-	if !strings.Contains(yamlStr, "config:") {
-		t.Error("expected top-level 'config:' key in Helm values")
-	}
-	// Should contain canonical version
-	if !strings.Contains(yamlStr, "version: v0.3") {
-		t.Error("expected canonical config version in Helm values")
-	}
-	// Should contain routing under config
-	if !strings.Contains(yamlStr, "routing:") {
-		t.Error("expected 'routing:' under config")
-	}
-	if !strings.Contains(yamlStr, "decisions:") {
-		t.Error("expected routing decisions in Helm values")
-	}
-	// Helm emission should stay routing-only
-	if strings.Contains(yamlStr, "default_model:") {
-		t.Error("did not expect provider defaults in routing-only Helm values")
-	}
-	// Should NOT have apiVersion (that's CRD format)
-	if strings.Contains(yamlStr, "apiVersion:") {
-		t.Error("Helm values should not contain apiVersion")
-	}
-	// Should NOT have kind
-	if strings.Contains(yamlStr, "kind:") {
-		t.Error("Helm values should not contain kind")
-	}
-}
-
-// TestCLICompileHelm verifies the CLI can compile to Helm format.
-func TestCLICompileHelm(t *testing.T) {
-	dslFile, err := os.CreateTemp("", "test*.dsl")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(dslFile.Name())
-	_, _ = dslFile.WriteString(fullDSLExample)
-	dslFile.Close()
-
-	helmFile, err := os.CreateTemp("", "test*.yaml")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.Remove(helmFile.Name())
-	helmFile.Close()
-
-	if compileErr := CLICompile(dslFile.Name(), helmFile.Name(), "helm", "", "", ""); compileErr != nil {
-		t.Fatalf("CLICompile Helm error: %v", compileErr)
-	}
-
-	data, err := os.ReadFile(helmFile.Name())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(data), "config:") {
-		t.Error("Helm output missing config: key")
-	}
-	if !strings.Contains(string(data), "decisions:") {
-		t.Error("Helm output missing decisions")
-	}
-}
-
-// TestDecompileDropsGlobalAuthzRatelimit verifies global-only fields are not exported back into routing DSL.
-func TestDecompileDropsGlobalAuthzRatelimit(t *testing.T) {
-	cfg := &config.RouterConfig{
-		Authz:     config.AuthzConfig{FailOpen: true},
-		RateLimit: config.RateLimitConfig{FailOpen: true},
-	}
-	if !cfg.Authz.FailOpen {
-		t.Fatal("authz.fail_open should be true after compile")
-	}
-	if !cfg.RateLimit.FailOpen {
-		t.Fatal("ratelimit.fail_open should be true after compile")
-	}
-
-	// Decompile and verify the routing-only output omits authz/ratelimit.
-	dslText, err := Decompile(cfg)
-	if err != nil {
-		t.Fatalf("decompile error: %v", err)
-	}
-
-	if strings.Contains(dslText, "authz") || strings.Contains(dslText, "ratelimit") || strings.Contains(dslText, "fail_open") {
-		t.Fatalf("routing-only decompile leaked global-only settings:\n%s", dslText)
 	}
 }
 

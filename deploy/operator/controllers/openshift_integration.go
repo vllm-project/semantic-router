@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	routev1 "github.com/openshift/api/route/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -34,7 +35,15 @@ import (
 )
 
 // reconcileRoute creates or deletes OpenShift Route based on config
-func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme, sr *vllmv1alpha1.SemanticRouter, isOpenShift bool) error {
+func reconcileRoute(
+	ctx context.Context,
+	c client.Client,
+	scheme *runtime.Scheme,
+	sr *vllmv1alpha1.SemanticRouter,
+	isOpenShift bool,
+	gatewayMode string,
+	controlPlaneMode string,
+) error {
 	logger := log.FromContext(ctx)
 
 	// Check if Route creation enabled
@@ -52,13 +61,26 @@ func reconcileRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme
 		logger.Info("Route creation requested but not on OpenShift platform")
 		return nil
 	}
+	if gatewayMode != gatewayModeSidecar && controlPlaneMode == controlPlaneModeManaged {
+		return fmt.Errorf("managed OpenShift Route requires the inference-only Envoy sidecar")
+	}
 
 	// Create or update Route
-	return createOrUpdateRoute(ctx, c, scheme, sr)
+	targetPort := "api"
+	if gatewayMode == gatewayModeSidecar {
+		targetPort = "envoy-http"
+	}
+	return createOrUpdateRoute(ctx, c, scheme, sr, targetPort)
 }
 
 // createOrUpdateRoute builds and applies Route
-func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.Scheme, sr *vllmv1alpha1.SemanticRouter) error {
+func createOrUpdateRoute(
+	ctx context.Context,
+	c client.Client,
+	scheme *runtime.Scheme,
+	sr *vllmv1alpha1.SemanticRouter,
+	targetPort string,
+) error {
 	logger := log.FromContext(ctx)
 
 	termination := routev1.TLSTerminationEdge
@@ -95,7 +117,7 @@ func createOrUpdateRoute(ctx context.Context, c client.Client, scheme *runtime.S
 				Name: sr.Name,
 			},
 			Port: &routev1.RoutePort{
-				TargetPort: intstr.FromString("api"),
+				TargetPort: intstr.FromString(targetPort),
 			},
 			TLS: &routev1.TLSConfig{
 				Termination:                   termination,

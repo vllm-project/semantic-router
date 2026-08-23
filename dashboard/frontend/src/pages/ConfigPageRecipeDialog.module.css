@@ -1,0 +1,144 @@
+.dialog {
+  width: min(720px, 100%);
+}
+
+.body {
+  min-height: 220px;
+}
+
+.designPane {
+  display: grid;
+  gap: 22px;
+}
+
+.identityGrid {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.2fr);
+  gap: 12px;
+}
+
+.identityGrid label {
+  display: grid;
+  gap: 7px;
+}
+
+.identityGrid span {
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.71rem;
+  font-weight: 650;
+}
+
+.identityGrid input {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  outline: 0;
+  background: #1a1a1d;
+  color: #f5f5f7;
+  font: inherit;
+  font-size: 0.78rem;
+}
+
+.identityGrid input:focus {
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.055);
+}
+
+.identityGrid input:disabled {
+  color: rgba(255, 255, 255, 0.56);
+  cursor: not-allowed;
+}
+
+.recipeSummary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px;
+}
+
+.recipeSummary > div {
+  display: grid;
+  gap: 5px;
+  padding: 18px;
+  background: #0e0e10;
+}
+
+.recipeSummary > div + div {
+  border-left: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.recipeSummary strong {
+  color: #f4f4f5;
+  font-size: 1.35rem;
+  letter-spacing: -0.04em;
+}
+
+.recipeSummary span,
+.decisionList span,
+.nextStep span {
+  color: rgba(255, 255, 255, 0.43);
+  font-size: 0.68rem;
+}
+
+.decisionList {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 11px;
+}
+
+.decisionList > div {
+  display: flex;
+  min-height: 46px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 0 14px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.decisionList > div + div {
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.decisionList strong,
+.nextStep strong {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.76rem;
+}
+
+.nextStep {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 17px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 11px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.nextStep > svg {
+  width: 19px;
+  height: 19px;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.nextStep > div {
+  display: grid;
+  gap: 4px;
+}
+
+@media (max-width: 720px) {
+  .identityGrid,
+  .recipeSummary {
+    grid-template-columns: 1fr;
+  }
+
+  .recipeSummary > div + div {
+    border-top: 1px solid rgba(255, 255, 255, 0.075);
+    border-left: 0;
+  }
+}

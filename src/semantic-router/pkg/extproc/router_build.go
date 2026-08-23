@@ -3,13 +3,13 @@ package extproc
 import (
 	"fmt"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/authz"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
@@ -43,40 +43,28 @@ type routerComponents struct {
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
-	credentialResolver   *authz.CredentialResolver
-	rateLimiter          *ratelimit.RateLimitResolver
+	inferenceAccess      InferenceAccessRuntime
+	outcomeFeedback      OutcomeFeedbackRuntime
+	outcomeProjection    OutcomeLearningProjectionRuntime
+	dispatchCapabilities DispatchCapabilityRuntime
+	responseTerminals    backendinvoker.ResponseTerminalReader
+	protocolCodecs       *protocolcodec.Registry
 	lookupTableCancel    func()
 	routerSessionStore   *sessiontelemetry.RouterSessionStateStoreSlot
-}
-
-// NewOpenAIRouter creates a new OpenAI API router instance.
-func NewOpenAIRouter(configPath string) (*OpenAIRouter, error) {
-	cfg, err := loadRouterConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	router, err := buildOpenAIRouterFromConfig(cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	config.Replace(cfg)
-	publishRouterLearningStateStore(router)
-	logLoadedRouterConfig(configPath, cfg)
-	return router, nil
 }
 
 func newOpenAIRouterForServer(
 	configPath string,
 	runtimeRegistry *routerruntime.Registry,
+	dependencies RuntimeDependencies,
+	parseConfig ConfigParser,
 ) (*OpenAIRouter, error) {
-	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry)
+	cfg, publishGlobal, err := resolveInitialRouterConfig(configPath, runtimeRegistry, parseConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	router, err := buildOpenAIRouterFromConfig(cfg)
+	router, err := buildOpenAIRouterFromConfigWithDependencies(cfg, dependencies)
 	if err != nil {
 		return nil, err
 	}
@@ -91,36 +79,30 @@ func newOpenAIRouterForServer(
 func resolveInitialRouterConfig(
 	configPath string,
 	runtimeRegistry *routerruntime.Registry,
+	parseConfig ConfigParser,
 ) (*config.RouterConfig, bool, error) {
 	if runtimeRegistry != nil {
 		if cfg := runtimeRegistry.CurrentConfig(); cfg != nil {
-			logging.ComponentEvent("extproc", "router_config_using_runtime_registry", map[string]interface{}{
-				"config_source": cfg.ConfigSource,
-			})
+			logging.ComponentEvent("extproc", "router_config_using_runtime_registry", nil)
 			return cfg, false, nil
 		}
-		cfg, err := parseRouterConfigFile(configPath)
+		cfg, err := parseRouterConfigFile(configPath, parseConfig)
 		return cfg, false, err
 	}
 
-	cfg, err := loadRouterConfig(configPath)
+	cfg, err := loadRouterConfig(configPath, parseConfig)
 	return cfg, true, err
 }
 
-func loadRouterConfig(configPath string) (*config.RouterConfig, error) {
-	globalCfg := config.Get()
-	if globalCfg != nil && globalCfg.ConfigSource == config.ConfigSourceKubernetes {
-		logging.ComponentEvent("extproc", "router_config_using_kubernetes_source", map[string]interface{}{
-			"config_source": globalCfg.ConfigSource,
-		})
-		return globalCfg, nil
-	}
-
-	return parseRouterConfigFile(configPath)
+func loadRouterConfig(configPath string, parseConfig ConfigParser) (*config.RouterConfig, error) {
+	return parseRouterConfigFile(configPath, parseConfig)
 }
 
-func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
-	cfg, err := config.Parse(configPath)
+func parseRouterConfigFile(configPath string, parseConfig ConfigParser) (*config.RouterConfig, error) {
+	if parseConfig == nil {
+		return nil, fmt.Errorf("failed to load config: router config parser is unavailable")
+	}
+	cfg, err := parseConfig(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load config: %w", err)
 	}
@@ -128,11 +110,14 @@ func parseRouterConfigFile(configPath string) (*config.RouterConfig, error) {
 	return cfg, nil
 }
 
-func buildOpenAIRouterFromConfig(cfg *config.RouterConfig) (*OpenAIRouter, error) {
+func buildOpenAIRouterFromConfigWithDependencies(
+	cfg *config.RouterConfig,
+	dependencies RuntimeDependencies,
+) (*OpenAIRouter, error) {
 	if err := validateResponseCacheScopeSecret(cfg); err != nil {
 		return nil, err
 	}
-	components, err := buildRouterComponents(cfg)
+	components, err := buildRouterComponentsWithDependencies(cfg, dependencies)
 	if err != nil {
 		return nil, err
 	}
@@ -158,21 +143,28 @@ func validateResponseCacheScopeSecret(cfg *config.RouterConfig) error {
 
 func logLoadedRouterConfig(configPath string, cfg *config.RouterConfig) {
 	logging.ComponentDebugEvent("extproc", "router_config_loaded", map[string]interface{}{
-		"config_path":    configPath,
-		"decision_count": len(cfg.Decisions),
+		"config_path":      configPath,
+		"recipe_count":     len(cfg.Recipes),
+		"entrypoint_count": len(cfg.Entrypoints),
 	})
-	for i, decision := range cfg.Decisions {
-		logging.ComponentDebugEvent("extproc", "router_config_decision_loaded", map[string]interface{}{
-			"config_path": configPath,
-			"index":       i,
-			"name":        decision.Name,
-			"model_refs":  len(decision.ModelRefs),
-			"priority":    decision.Priority,
+	for index := range cfg.Recipes {
+		recipe := &cfg.Recipes[index]
+		logging.ComponentDebugEvent("extproc", "router_config_recipe_loaded", map[string]interface{}{
+			"config_path":    configPath,
+			"index":          index,
+			"name":           recipe.Name,
+			"decision_count": len(recipe.Profile.Decisions),
 		})
 	}
 }
 
-func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) {
+func buildRouterComponentsWithDependencies(
+	cfg *config.RouterConfig,
+	dependencies RuntimeDependencies,
+) (*routerComponents, error) {
+	if err := dependencies.validate(cfg); err != nil {
+		return nil, err
+	}
 	routerSessionStore := buildRouterLearningStateStore(cfg)
 	keepRouterSessionStore := false
 	defer func() {
@@ -216,20 +208,6 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 	}
 	recipeModelSelectors, modelSelector, lookupTable, lookupTableCancel := createModelSelectorRegistries(cfg, replayReaderForLookup)
 	memoryStore, memoryExtractor := createMemoryRuntime(cfg)
-	credentialResolver := buildCredentialResolver(cfg)
-	rateLimiter := buildRateLimitResolver(cfg)
-
-	if credentialResolver != nil {
-		logging.ComponentEvent("extproc", "credential_resolver_initialized", map[string]interface{}{
-			"providers": credentialResolver.ProviderNames(),
-		})
-	}
-	if rateLimiter != nil {
-		logging.ComponentEvent("extproc", "rate_limit_resolver_initialized", map[string]interface{}{
-			"providers": rateLimiter.ProviderNames(),
-		})
-	}
-
 	components := &routerComponents{
 		cfg:                  cfg,
 		categoryDescriptions: categoryDescriptions,
@@ -247,8 +225,12 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		lookupTable:          lookupTable,
 		memoryStore:          memoryStore,
 		memoryExtractor:      memoryExtractor,
-		credentialResolver:   credentialResolver,
-		rateLimiter:          rateLimiter,
+		inferenceAccess:      dependencies.InferenceAccess,
+		outcomeFeedback:      dependencies.OutcomeFeedback,
+		outcomeProjection:    dependencies.OutcomeProjection,
+		dispatchCapabilities: dependencies.DispatchCapabilities,
+		responseTerminals:    dependencies.ResponseTerminals,
+		protocolCodecs:       dependencies.ProtocolCodecs,
 		lookupTableCancel:    lookupTableCancel,
 		routerSessionStore:   routerSessionStore,
 	}
@@ -274,8 +256,12 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:         components.replayRecorders,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
-		CredentialResolver:      components.credentialResolver,
-		RateLimiter:             components.rateLimiter,
+		InferenceAccess:         components.inferenceAccess,
+		OutcomeFeedback:         components.outcomeFeedback,
+		OutcomeProjection:       components.outcomeProjection,
+		DispatchCapabilities:    components.dispatchCapabilities,
+		ResponseTerminals:       components.responseTerminals,
+		ProtocolCodecs:          components.protocolCodecs,
 		lookupTableCancel:       components.lookupTableCancel,
 		routerSessionStateStore: components.routerSessionStore,
 	}

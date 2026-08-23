@@ -62,13 +62,14 @@ func TestConfidenceLooperAccountsForSelfVerificationCall(t *testing.T) {
 	if response.Usage != (TokenUsage{PromptTokens: 6, CompletionTokens: 4, TotalTokens: 10}) {
 		t.Fatalf("usage = %+v, want generation plus verifier", response.Usage)
 	}
-	if !strings.Contains(string(response.Body), "candidate secret answer") || strings.Contains(string(response.Body), "verifier private rationale") {
-		t.Fatalf("response did not isolate candidate content from verifier evidence: %s", response.Body)
+	body := wireResponseForTest(t, response)
+	if !strings.Contains(string(body), "candidate secret answer") || strings.Contains(string(body), "verifier private rationale") {
+		t.Fatalf("response did not isolate candidate content from verifier evidence: %s", body)
 	}
 	var completion struct {
 		Usage TokenUsage `json:"usage"`
 	}
-	if err := json.Unmarshal(response.Body, &completion); err != nil {
+	if err := json.Unmarshal(body, &completion); err != nil {
 		t.Fatalf("decode response body: %v", err)
 	}
 	if completion.Usage != response.Usage {
@@ -188,7 +189,7 @@ func assertSelfVerificationFailResult(
 	if err == nil || !strings.Contains(err.Error(), failure.wantErrorFragment) || response != nil || calls != 2 {
 		t.Fatalf("fail result = response %+v / error %v / calls %d", response, err, calls)
 	}
-	evidence, ok := ConfidenceEvidenceFromError(err)
+	evidence, ok := ExecutionEvidenceFromError(err)
 	if !ok || evidence.Iterations != 2 || !slices.Equal(evidence.ModelsUsed, []string{"small", "small"}) ||
 		evidence.Usage != failure.wantFailUsage {
 		t.Fatalf("partial evidence = %+v (present=%v), want usage %+v", evidence, ok, failure.wantFailUsage)
@@ -213,7 +214,7 @@ func assertSelfVerificationSkipResult(
 		!slices.Equal(response.ModelsUsed, []string{"small", "small", "large", "large"}) {
 		t.Fatalf("skip result = calls %d response %+v, want usage %+v", calls, response, failure.wantSkipUsage)
 	}
-	body := string(response.Body)
+	body := string(wireResponseForTest(t, response))
 	if !strings.Contains(body, "large private candidate answer") ||
 		strings.Contains(body, "small private candidate answer") ||
 		strings.Contains(body, "malformed private verifier evidence") ||

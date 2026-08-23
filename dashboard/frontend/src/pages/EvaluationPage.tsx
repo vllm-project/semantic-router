@@ -9,6 +9,7 @@ import {
   HistoricalResults,
 } from '../components/evaluation'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductIcon, { type ProductIconName } from '../components/ProductIcon'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
@@ -148,11 +149,12 @@ export function EvaluationPage() {
     setTabState({ active: 'report', selectedTaskId: task.id })
   }, [])
 
-  const tabs = [
-    { id: 'tasks' as const, label: 'Tasks', icon: '📋' },
-    ...(canWrite ? [{ id: 'create' as const, label: 'Create', icon: '➕' }] : []),
-    { id: 'history' as const, label: 'History', icon: '📊' },
-  ]
+  const tabs: Array<{ id: 'tasks' | 'create' | 'history'; label: string; icon: ProductIconName }> =
+    [
+      { id: 'tasks', label: 'Tasks', icon: 'evaluation' },
+      ...(canWrite ? [{ id: 'create' as const, label: 'Create', icon: 'plus' as const }] : []),
+      { id: 'history', label: 'History', icon: 'chart' },
+    ]
 
   return (
     <div className={styles.container}>
@@ -169,7 +171,7 @@ export function EvaluationPage() {
         <div className={styles.errorBanner}>
           <span>{mutationError}</span>
           <button type="button" onClick={clearError}>
-            Dismiss
+            <ProductIcon name="close" /> Dismiss
           </button>
         </div>
       )}
@@ -188,7 +190,7 @@ export function EvaluationPage() {
             className={styles.backButton}
             onClick={() => setTabState({ active: 'tasks', selectedTaskId: null })}
           >
-            Back to Tasks
+            <ProductIcon name="arrow-left" /> Back to Tasks
           </button>
           <ProgressTracker
             taskId={tabState.selectedTaskId}
@@ -211,7 +213,7 @@ export function EvaluationPage() {
         ) : (
           <div className={styles.progressView}>
             <button type="button" className={styles.backButton} onClick={handleBackFromReport}>
-              Back to Tasks
+              <ProductIcon name="arrow-left" /> Back to Tasks
             </button>
             <div
               className={`${styles.asyncState} ${resultsError ? styles.asyncStateError : ''}`}
@@ -226,7 +228,7 @@ export function EvaluationPage() {
               </p>
               {resultsError ? (
                 <button type="button" onClick={() => void refreshResults()}>
-                  Retry
+                  <ProductIcon name="refresh" /> Retry
                 </button>
               ) : null}
             </div>
@@ -247,7 +249,7 @@ export function EvaluationPage() {
                 className={`${styles.tab} ${tabState.active === tab.id ? styles.activeTab : ''}`}
                 onClick={() => setTabState({ active: tab.id, selectedTaskId: null })}
               >
-                <span className={styles.tabIcon}>{tab.icon}</span>
+                <ProductIcon className={styles.tabIcon} name={tab.icon} aria-hidden="true" />
                 <span className={styles.tabLabel}>{tab.label}</span>
               </button>
             ))}

@@ -21,41 +21,31 @@ func TestOpenAIModelsEndpoint(t *testing.T) {
 		expectedModelResultLength int
 	}{
 		{
-			name:                      "default excludes config models",
+			name:                      "empty routing config exposes no implicit models",
 			includeConfiguredModels:   false,
-			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM"},
-			expectedModelResultLength: 3,
+			expectedModels:            nil,
+			expectedModelResultLength: 0,
 		},
 		{
 			name:                      "router option includes config models",
 			includeConfiguredModels:   true,
-			expectedModels:            []string{"vllm-sr/auto", "auto", "MoM", "gpt-4o-mini", "llama-3.1-8b-instruct"},
-			expectedModelResultLength: 5,
+			expectedModels:            []string{"gpt-4o-mini", "llama-3.1-8b-instruct"},
+			expectedModelResultLength: 2,
 		},
 		{
 			name:   "entrypoint model names are exposed",
-			config: openAIModelsEntrypointTestConfig(),
+			config: openAIModelsEntrypointTestConfig(t),
 			expectedModels: []string{
-				"vllm-sr/auto",
-				"auto",
-				"MoM",
 				"vllm-sr/privacy",
 				"vllm-sr/default-alias",
 			},
-			expectedModelResultLength: 5,
+			expectedModelResultLength: 2,
 		},
 		{
-			name:   "direct looper models are exposed when decisions are configured",
-			config: openAIModelsLooperTestConfig(),
-			expectedModels: []string{
-				"vllm-sr/auto",
-				"auto",
-				"MoM",
-				"vllm-sr/remom",
-				"vllm-sr/fusion",
-				"vllm-sr/flow",
-			},
-			expectedModelResultLength: 6,
+			name:                      "unpublished orchestration recipes do not create model aliases",
+			config:                    openAIModelsLooperTestConfig(),
+			expectedModels:            nil,
+			expectedModelResultLength: 0,
 		},
 	}
 
@@ -117,48 +107,82 @@ func openAIModelsTestConfig(includeConfiguredModels bool) *config.RouterConfig {
 	}
 }
 
-func openAIModelsEntrypointTestConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+func openAIModelsEntrypointTestConfig(t *testing.T) *config.RouterConfig {
+	t.Helper()
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"backend": {ResourceID: "model-backend", ResourceRevision: 1},
+		}},
 		Recipes: []config.RoutingRecipe{
-			{Name: config.DefaultRecipeName},
-			{Name: "privacy", Description: "privacy profile"},
+			{
+				ID: "recipe-default", Revision: 1, Name: config.DefaultRecipeName,
+				Profile: config.RoutingProfile{Decisions: []config.Decision{{ID: "decision-default", Name: "default"}}},
+			},
+			{
+				ID: "recipe-privacy", Revision: 1, Name: "privacy", Description: "privacy profile",
+				Profile: config.RoutingProfile{Decisions: []config.Decision{{ID: "decision-privacy", Name: "privacy"}}},
+			},
 		},
 		Entrypoints: []config.EntrypointMapping{
-			{ModelNames: []string{"vllm-sr/privacy"}, Recipe: "privacy"},
-			{ModelNames: []string{"vllm-sr/default-alias"}, Recipe: config.DefaultRecipeName},
+			{
+				ID: "entrypoint-privacy", Revision: 1, Name: "privacy", ModelNames: []string{"vllm-sr/privacy"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-privacy", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: "recipe-privacy", RecipeRevision: 1, Recipe: "privacy",
+						Assignments: map[string]config.RoutingAssignmentSet{
+							"decision-privacy": {Models: []config.RoutingModelAssignment{{ModelID: "model-backend", ModelRevision: 1, ModelName: "backend", Weight: "1"}}},
+						},
+					},
+				}},
+			},
+			{
+				ID: "entrypoint-default", Revision: 1, Name: "default", ModelNames: []string{"vllm-sr/default-alias"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-default", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: "recipe-default", RecipeRevision: 1, Recipe: config.DefaultRecipeName,
+						Assignments: map[string]config.RoutingAssignmentSet{
+							"decision-default": {Models: []config.RoutingModelAssignment{{ModelID: "model-backend", ModelRevision: 1, ModelName: "backend", Weight: "1"}}},
+						},
+					},
+				}},
+			},
 		},
 	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare model-list Entrypoints: %v", err)
+	}
+	return cfg
 }
 
 func openAIModelsLooperTestConfig() *config.RouterConfig {
 	return &config.RouterConfig{
 		Looper: config.LooperConfig{Endpoint: "http://looper"},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+		Recipes: []config.RoutingRecipe{{
+			ID: "recipe-unpublished", Revision: 1, Name: "unpublished",
+			Profile: config.RoutingProfile{Decisions: []config.Decision{
 				{
-					Name:      "remom-route",
-					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					ID: "decision-remom", Name: "remom-route",
 					Algorithm: &config.AlgorithmConfig{
 						Type:  "remom",
 						ReMoM: &config.ReMoMAlgorithmConfig{BreadthSchedule: []int{1}},
 					},
 				},
 				{
-					Name:      "fusion-route",
-					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					ID: "decision-fusion", Name: "fusion-route",
 					Algorithm: &config.AlgorithmConfig{
 						Type: "fusion",
 					},
 				},
 				{
-					Name:      "flow-route",
-					ModelRefs: []config.ModelRef{{Model: "worker-a"}},
+					ID: "decision-flow", Name: "flow-route",
 					Algorithm: &config.AlgorithmConfig{
 						Type: "workflows",
 					},
 				},
-			},
-		},
+			}},
+		}},
 	}
 }
 

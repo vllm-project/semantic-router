@@ -48,8 +48,10 @@ const ROUTER_LABELS: Record<string, string> = {
 }
 
 const ROUTER_DESCRIPTIONS: Record<string, string> = {
-  length: 'Direct shorter prompts to the fast pool and reserve long-context work for the deeper pool.',
-  compress_route: 'Bias traffic toward a cheaper short pool while gradually spilling long requests to the premium pool.',
+  length:
+    'Direct shorter prompts to the fast pool and reserve long-context work for the deeper pool.',
+  compress_route:
+    'Bias traffic toward a cheaper short pool while gradually spilling long requests to the premium pool.',
   least_loaded: 'Keep traffic balanced by sending new work to the least busy pool.',
   random: 'Distribute requests evenly when you only want a neutral baseline.',
   model: 'Pin requests to pools based on model-aware routing logic.',
@@ -85,7 +87,9 @@ export function formatBuiltinWorkloadName(name: string): string {
 }
 
 export function describeBuiltinWorkload(name: string, fallback?: string): string {
-  return BUILTIN_WORKLOAD_DESCRIPTIONS[name] || fallback || 'Reusable traffic mix for planning runs.'
+  return (
+    BUILTIN_WORKLOAD_DESCRIPTIONS[name] || fallback || 'Reusable traffic mix for planning runs.'
+  )
 }
 
 export function formatTraceFormat(format: FleetSimTraceFormat): string {
@@ -206,11 +210,15 @@ export function renderJobResultSummary(job: FleetSimJob) {
           </div>
           <div className={styles.resultMetric}>
             <span className={styles.resultMetricLabel}>Annual cost</span>
-            <span className={styles.resultMetricValue}>{formatMoneyKusd(best.annual_cost_kusd)}</span>
+            <span className={styles.resultMetricValue}>
+              {formatMoneyKusd(best.annual_cost_kusd)}
+            </span>
           </div>
           <div className={styles.resultMetric}>
             <span className={styles.resultMetricLabel}>Savings vs baseline</span>
-            <span className={styles.resultMetricValue}>{job.result_optimize.savings_pct.toFixed(1)}%</span>
+            <span className={styles.resultMetricValue}>
+              {job.result_optimize.savings_pct.toFixed(1)}%
+            </span>
           </div>
         </div>
       </div>
@@ -253,7 +261,9 @@ export function renderJobResultSummary(job: FleetSimJob) {
           </div>
           <div className={styles.resultMetric}>
             <span className={styles.resultMetricLabel}>Fleet GPUs</span>
-            <span className={styles.resultMetricValue}>{formatNumber(job.result_simulate.total_gpus)}</span>
+            <span className={styles.resultMetricValue}>
+              {formatNumber(job.result_simulate.total_gpus)}
+            </span>
           </div>
           <div className={styles.resultMetric}>
             <span className={styles.resultMetricLabel}>Annual cost</span>
@@ -269,7 +279,7 @@ export function renderJobResultSummary(job: FleetSimJob) {
   if (job.result_whatif) {
     const maxLam = job.result_whatif.points.reduce(
       (current, point) => Math.max(current, point.lam),
-      0
+      0,
     )
     return (
       <div className={styles.resultSummary}>
@@ -342,15 +352,21 @@ export function renderJobResultRows(job: FleetSimJob) {
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Annual cost</span>
-            <span className={styles.inlineDetailValue}>{formatMoneyKusd(best.annual_cost_kusd)}</span>
+            <span className={styles.inlineDetailValue}>
+              {formatMoneyKusd(best.annual_cost_kusd)}
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Savings</span>
-            <span className={styles.inlineDetailValue}>{job.result_optimize.savings_pct.toFixed(1)}%</span>
+            <span className={styles.inlineDetailValue}>
+              {job.result_optimize.savings_pct.toFixed(1)}%
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>SLO</span>
-            <span className={styles.inlineDetailValue}>{best.slo_met ? 'Matched' : 'Needs review'}</span>
+            <span className={styles.inlineDetailValue}>
+              {best.slo_met ? 'Matched' : 'Needs review'}
+            </span>
           </div>
         </div>
       </div>
@@ -367,23 +383,33 @@ export function renderJobResultRows(job: FleetSimJob) {
         <div className={styles.inlineDetailGrid}>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>P99 TTFT</span>
-            <span className={styles.inlineDetailValue}>{formatNumber(job.result_simulate.fleet_p99_ttft_ms, 1)} ms</span>
+            <span className={styles.inlineDetailValue}>
+              {formatNumber(job.result_simulate.fleet_p99_ttft_ms, 1)} ms
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Hit rate</span>
-            <span className={styles.inlineDetailValue}>{formatPercent(job.result_simulate.fleet_slo_compliance)}</span>
+            <span className={styles.inlineDetailValue}>
+              {formatPercent(job.result_simulate.fleet_slo_compliance)}
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Utilization</span>
-            <span className={styles.inlineDetailValue}>{formatPercent(job.result_simulate.fleet_mean_utilisation)}</span>
+            <span className={styles.inlineDetailValue}>
+              {formatPercent(job.result_simulate.fleet_mean_utilisation)}
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Fleet GPUs</span>
-            <span className={styles.inlineDetailValue}>{formatNumber(job.result_simulate.total_gpus)}</span>
+            <span className={styles.inlineDetailValue}>
+              {formatNumber(job.result_simulate.total_gpus)}
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Annual cost</span>
-            <span className={styles.inlineDetailValue}>{formatMoneyKusd(job.result_simulate.annual_cost_kusd)}</span>
+            <span className={styles.inlineDetailValue}>
+              {formatMoneyKusd(job.result_simulate.annual_cost_kusd)}
+            </span>
           </div>
         </div>
       </div>
@@ -391,7 +417,10 @@ export function renderJobResultRows(job: FleetSimJob) {
   }
 
   if (job.result_whatif) {
-    const maxLam = job.result_whatif.points.reduce((current, point) => Math.max(current, point.lam), 0)
+    const maxLam = job.result_whatif.points.reduce(
+      (current, point) => Math.max(current, point.lam),
+      0,
+    )
     return (
       <div className={styles.inlineDetails}>
         <div className={styles.inlineDetailRow}>
@@ -401,12 +430,16 @@ export function renderJobResultRows(job: FleetSimJob) {
         <div className={styles.inlineDetailGrid}>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Sweep points</span>
-            <span className={styles.inlineDetailValue}>{formatNumber(job.result_whatif.points.length)}</span>
+            <span className={styles.inlineDetailValue}>
+              {formatNumber(job.result_whatif.points.length)}
+            </span>
           </div>
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Break lambda</span>
             <span className={styles.inlineDetailValue}>
-              {job.result_whatif.slo_break_lam != null ? formatNumber(job.result_whatif.slo_break_lam, 1) : 'Stable'}
+              {job.result_whatif.slo_break_lam != null
+                ? formatNumber(job.result_whatif.slo_break_lam, 1)
+                : 'Stable'}
             </span>
           </div>
           <div className={styles.inlineDetailCell}>
@@ -416,7 +449,9 @@ export function renderJobResultRows(job: FleetSimJob) {
           <div className={styles.inlineDetailCell}>
             <span className={styles.inlineDetailLabel}>Sweep status</span>
             <span className={styles.inlineDetailValue}>
-              {job.result_whatif.slo_break_lam != null ? 'Break point found' : 'Stable across sweep'}
+              {job.result_whatif.slo_break_lam != null
+                ? 'Break point found'
+                : 'Stable across sweep'}
             </span>
           </div>
         </div>

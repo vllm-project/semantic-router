@@ -1,2 +1,8 @@
 algorithm:
   type: mlp
+  ml:
+    models_path: /models/selection
+    embedding_dim: 1024
+    mlp:
+      device: cpu
+      pretrained_path: /models/selection/mlp_model.json

@@ -1,107 +1,123 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: Qwen/Qwen2.5-14B-Instruct-AWQ
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      reasoning_family: qwen3
-      provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
-      api_format: openai
-      backend_refs:
-        - name: vllm-general
-          endpoint: 127.0.0.1:8083
-          protocol: http
-          type: chat
-          weight: 1
-routing:
-  modelCards:
-    - name: Qwen/Qwen2.5-14B-Instruct-AWQ
-      description: Benchmark target model for hallucination mitigation evaluation.
-      capabilities: [chat, reasoning]
-      modality: ar
-  signals:
-    domains:
+models:
+- name: Qwen/Qwen2.5-14B-Instruct-AWQ
+  card:
+    capabilities:
+    - chat
+    - reasoning
+    - ar
+    reasoning:
+      type: chat_template_kwargs
+      efforts:
+      - medium
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8083/v1
+    model: Qwen/Qwen2.5-14B-Instruct-AWQ
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
       - name: general
         description: General questions.
-        mmlu_categories: [other]
+        mmlu_categories:
+        - other
       - name: math
         description: Mathematics and quantitative reasoning.
-        mmlu_categories: [math]
+        mmlu_categories:
+        - math
       - name: science
         description: Science questions.
-        mmlu_categories: [physics, chemistry, biology]
-    fact_check:
+        mmlu_categories:
+        - physics
+        - chemistry
+        - biology
+      fact_check:
       - name: needs_fact_check
-        description: Query contains factual claims that should be verified against context.
+        description: Query contains factual claims that should be verified against
+          context.
       - name: no_fact_check_needed
-        description: Query is creative, code-related, or opinion-based and does not need factual verification.
-  decisions:
+        description: Query is creative, code-related, or opinion-based and does not
+          need factual verification.
+    decisions:
     - name: math_decision
       description: Mathematics and quantitative reasoning.
       priority: 100
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: Qwen/Qwen2.5-14B-Instruct-AWQ
-          use_reasoning: true
+        - type: domain
+          name: math
       plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            use_nli: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+      - type: hallucination
+        configuration:
+          enabled: true
+          use_nli: true
+          hallucination_action: header
+          unverified_factual_action: header
+          include_hallucination_details: false
     - name: science_decision
       description: Science questions.
       priority: 100
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: science
-      modelRefs:
-        - model: Qwen/Qwen2.5-14B-Instruct-AWQ
-          use_reasoning: true
+        - type: domain
+          name: science
       plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            use_nli: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+      - type: hallucination
+        configuration:
+          enabled: true
+          use_nli: true
+          hallucination_action: header
+          unverified_factual_action: header
+          include_hallucination_details: false
     - name: general_decision
       description: General questions.
       priority: 50
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: Qwen/Qwen2.5-14B-Instruct-AWQ
-          use_reasoning: false
+        - type: domain
+          name: general
       plugins:
-        - type: hallucination
-          configuration:
-            enabled: true
-            use_nli: true
-            hallucination_action: header
-            unverified_factual_action: header
-            include_hallucination_details: false
+      - type: hallucination
+        configuration:
+          enabled: true
+          use_nli: true
+          hallucination_action: header
+          unverified_factual_action: header
+          include_hallucination_details: false
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    math_decision:
+      models:
+      - model: Qwen/Qwen2.5-14B-Instruct-AWQ
+        weight: '1'
+        reasoning:
+          enabled: true
+    science_decision:
+      models:
+      - model: Qwen/Qwen2.5-14B-Instruct-AWQ
+        weight: '1'
+        reasoning:
+          enabled: true
+    general_decision:
+      models:
+      - model: Qwen/Qwen2.5-14B-Instruct-AWQ
+        weight: '1'
 global:
-  router:
-    strategy: priority
+  router: {}
   services:
     api:
       batch_classification:
@@ -110,11 +126,25 @@ global:
           detailed_goroutine_tracking: true
           high_resolution_timing: false
           sample_rate: 1.0
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
-    semantic_cache:
-      enabled: false
-      embedding_model: mmbert
     memory:
       embedding_model: mmbert
     vector_store:
       embedding_model: mmbert
+    response_cache:
+      enabled: false
+      embedding_model: mmbert
+  integrations: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

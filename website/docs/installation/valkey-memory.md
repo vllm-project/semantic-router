@@ -220,7 +220,7 @@ You can layer a Redis/Valkey hot cache in front of the Valkey memory store for f
 Routes can override global memory settings using the `memory` plugin:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: personalized_route
       plugins:

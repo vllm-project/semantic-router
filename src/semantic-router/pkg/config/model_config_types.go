@@ -1,5 +1,7 @@
 package config
 
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
+
 // Classifier represents the configuration for text classification.
 type Classifier struct {
 	CategoryModel    `yaml:"category_model"`
@@ -303,25 +305,14 @@ type ClassifierVLLMEndpoint struct {
 }
 
 type VLLMEndpoint struct {
-	Name                string `yaml:"name"`
-	Address             string `yaml:"address"`
-	Port                int    `yaml:"port"`
-	Weight              int    `yaml:"weight,omitempty"`
-	Type                string `yaml:"type,omitempty"`
-	APIKey              string `yaml:"api_key,omitempty" json:"-"`
-	ProviderProfileName string `yaml:"provider_profile,omitempty"`
-	Model               string `yaml:"model,omitempty"`
-	Protocol            string `yaml:"protocol,omitempty"`
-}
-
-type ProviderProfile struct {
-	Type         string            `yaml:"type"`
-	BaseURL      string            `yaml:"base_url,omitempty"`
-	AuthHeader   string            `yaml:"auth_header,omitempty"`
-	AuthPrefix   string            `yaml:"auth_prefix,omitempty"`
-	ExtraHeaders map[string]string `yaml:"extra_headers,omitempty"`
-	APIVersion   string            `yaml:"api_version,omitempty"`
-	ChatPath     string            `yaml:"chat_path,omitempty"`
+	Name          string `yaml:"name"`
+	Address       string `yaml:"address"`
+	Port          int    `yaml:"port"`
+	Weight        int    `yaml:"weight,omitempty"`
+	Type          string `yaml:"type,omitempty"`
+	CredentialRef string `yaml:"credential_ref,omitempty"`
+	Model         string `yaml:"model,omitempty"`
+	Protocol      string `yaml:"protocol,omitempty"`
 }
 
 type ModelPricing struct {
@@ -333,22 +324,32 @@ type ModelPricing struct {
 }
 
 type ModelParams struct {
-	PreferredEndpoints []string            `yaml:"preferred_endpoints,omitempty"`
-	Pricing            ModelPricing        `yaml:"pricing,omitempty"`
-	Reliability        ProviderReliability `yaml:"reliability,omitempty"`
-	ReasoningFamily    string              `yaml:"reasoning_family,omitempty"`
-	LoRAs              []LoRAAdapter       `yaml:"loras,omitempty"`
-	AccessKey          string              `yaml:"access_key,omitempty" json:"-"`
-	ParamSize          string              `yaml:"param_size,omitempty"`
-	ContextWindowSize  int                 `yaml:"context_window_size,omitempty"`
-	APIFormat          string              `yaml:"api_format,omitempty"`
-	Description        string              `yaml:"description,omitempty"`
-	Capabilities       []string            `yaml:"capabilities,omitempty"`
-	Tags               []string            `yaml:"tags,omitempty"`
-	QualityScore       float64             `yaml:"quality_score,omitempty"`
-	ExternalModelIDs   map[string]string   `yaml:"external_model_ids,omitempty"`
-	Modality           string              `yaml:"modality,omitempty"`
-	ImageGenBackend    string              `yaml:"image_gen_backend,omitempty"`
+	// ResourceID and ResourceRevision are the immutable routing identity pinned
+	// by v0.4 Entrypoint assignments and routing snapshots. Model remains a
+	// human-facing, mutable name at request/backend seams.
+	ResourceID       string                 `yaml:"-" json:"-"`
+	ResourceRevision int64                  `yaml:"-" json:"-"`
+	Execution        ModelExecutionSettings `yaml:"-" json:"-"`
+	RuntimePricing   ModelRuntimePricing    `yaml:"-" json:"-"`
+	// Aliases and Reasoning complete the provider-neutral ModelCard projection
+	// retained by authoring tools. Physical connection state remains solely in
+	// RoutingSnapshot.
+	Aliases            []string                        `yaml:"-" json:"-"`
+	Reasoning          routingsnapshot.ReasoningFamily `yaml:"-" json:"-"`
+	PreferredEndpoints []string                        `yaml:"preferred_endpoints,omitempty"`
+	Pricing            ModelPricing                    `yaml:"pricing,omitempty"`
+	Reliability        ProviderReliability             `yaml:"reliability,omitempty"`
+	ReasoningFamily    string                          `yaml:"reasoning_family,omitempty"`
+	LoRAs              []LoRAAdapter                   `yaml:"loras,omitempty"`
+	ParamSize          string                          `yaml:"param_size,omitempty"`
+	ContextWindowSize  int                             `yaml:"context_window_size,omitempty"`
+	Description        string                          `yaml:"description,omitempty"`
+	Capabilities       []string                        `yaml:"capabilities,omitempty"`
+	Tags               []string                        `yaml:"tags,omitempty"`
+	QualityScore       float64                         `yaml:"quality_score,omitempty"`
+	ExternalModelIDs   map[string]string               `yaml:"external_model_ids,omitempty"`
+	Modality           string                          `yaml:"modality,omitempty"`
+	ImageGenBackend    string                          `yaml:"image_gen_backend,omitempty"`
 }
 
 type LoRAAdapter struct {

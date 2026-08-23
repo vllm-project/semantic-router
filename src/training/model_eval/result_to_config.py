@@ -1,4 +1,4 @@
-"""Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold."""
+"""Analyze MMLU-Pro results and generate a human-readable v0.4 scaffold."""
 
 import argparse
 import glob
@@ -67,27 +67,10 @@ DEFAULT_PII_CLASSIFIER = {
     "pii_mapping_path": "models/mmbert32k-pii-detector-merged/pii_type_mapping.json",
 }
 
-CATEGORY_REASONING = {
-    "math": True,
-    "physics": True,
-    "chemistry": True,
-    "computer science": True,
-    "engineering": True,
-    "biology": True,
-    "business": False,
-    "law": False,
-    "psychology": False,
-    "history": False,
-    "economics": False,
-    "philosophy": False,
-    "health": False,
-    "other": False,
-}
-
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Analyze MMLU-Pro results and generate a canonical v0.3 config scaffold"
+        description="Analyze MMLU-Pro results and generate a human-readable v0.4 config scaffold"
     )
     parser.add_argument(
         "--results-dir",
@@ -108,34 +91,16 @@ def parse_args():
         help="Similarity threshold for the generated semantic cache override",
     )
     parser.add_argument(
-        "--backend-endpoint",
+        "--endpoint",
         type=str,
-        default="127.0.0.1:8000",
-        help="Endpoint to bind generated providers.models[].backend_refs[] entries to",
+        default="http://127.0.0.1:8000/v1",
+        help="OpenAI-compatible endpoint shared by the generated Models",
     )
     parser.add_argument(
-        "--backend-protocol",
+        "--provider",
         type=str,
-        default="http",
-        help="Protocol for generated backend_refs entries",
-    )
-    parser.add_argument(
-        "--backend-type",
-        type=str,
-        default="chat",
-        help="Backend type for generated backend_refs entries",
-    )
-    parser.add_argument(
-        "--api-format",
-        type=str,
-        default="openai",
-        help="API format for generated providers.models entries",
-    )
-    parser.add_argument(
-        "--provider-name",
-        type=str,
-        default="openai",
-        help="Provider name used in generated external_model_ids",
+        default="openai-compatible",
+        help="Provider Integration used by the generated Model connections",
     )
     return parser.parse_args()
 
@@ -186,65 +151,38 @@ def calculate_average_accuracies(category_accuracies):
     }
 
 
-def build_provider_models(
-    ranked_models,
-    backend_endpoint,
-    backend_protocol,
-    backend_type,
-    api_format,
-    provider_name,
-):
-    provider_models = []
-    for model_name, _average_accuracy in ranked_models:
-        provider_models.append(
+def build_models(ranked_models, endpoint, provider):
+    """Build concise logical Models from ranked evaluation results."""
+    generated_models = []
+    for model_name, average_accuracy in ranked_models:
+        generated_models.append(
             {
                 "name": model_name,
-                "provider_model_id": model_name,
-                "api_format": api_format,
-                "external_model_ids": {provider_name: model_name},
-                "backend_refs": [
+                "card": {
+                    "description": (
+                        "Generated from MMLU-Pro evaluation results for "
+                        "category-aware routing."
+                    ),
+                    "quality_score": round(float(average_accuracy), 6),
+                    "capabilities": ["chat"],
+                    "tags": ["generated", "mmlu-pro"],
+                    "modality": "text",
+                },
+                "connections": [
                     {
-                        "name": f"{model_name}-backend",
-                        "endpoint": backend_endpoint,
-                        "protocol": backend_protocol,
-                        "type": backend_type,
-                        "weight": 1,
+                        "provider": provider,
+                        "endpoint": endpoint,
+                        "model": model_name,
                     }
                 ],
             }
         )
-    return provider_models
-
-
-def build_routing_model_cards(ranked_models):
-    model_cards = []
-    for model_name, average_accuracy in ranked_models:
-        model_cards.append(
-            {
-                "name": model_name,
-                "description": (
-                    "Generated from MMLU-Pro evaluation results for category-aware routing."
-                ),
-                "quality_score": round(float(average_accuracy), 6),
-                "capabilities": ["chat"],
-                "tags": ["generated", "mmlu-pro"],
-                "modality": "ar",
-            }
-        )
-    return model_cards
+    return generated_models
 
 
 def build_domain_signals(category_accuracies):
     domains = []
-    for category_name, models in sorted(category_accuracies.items()):
-        ranked_models = sorted(
-            (
-                (model_name, float(accuracy))
-                for model_name, accuracy in models.items()
-                if model_name != "auto"
-            ),
-            key=lambda item: (-item[1], item[0]),
-        )
+    for category_name in sorted(category_accuracies):
         domains.append(
             {
                 "name": category_name,
@@ -252,31 +190,60 @@ def build_domain_signals(category_accuracies):
                     f"MMLU-Pro category generated from evaluation results: {category_name}."
                 ),
                 "mmlu_categories": [category_name],
-                "model_scores": [
-                    {
-                        "model": model_name,
-                        "score": round(accuracy, 6),
-                        "use_reasoning": CATEGORY_REASONING.get(
-                            category_name.lower(), False
-                        ),
-                    }
-                    for model_name, accuracy in ranked_models
-                ],
             }
         )
     return domains
 
 
+def build_decisions_and_assignments(category_accuracies, default_model):
+    """Turn each observed category into one readable route and Model assignment."""
+    decisions = []
+    assignments = {}
+    for offset, (category_name, models) in enumerate(
+        sorted(category_accuracies.items())
+    ):
+        candidates = [
+            (model_name, float(accuracy))
+            for model_name, accuracy in models.items()
+            if model_name != "auto"
+        ]
+        if not candidates:
+            continue
+        selected_model, _ = min(candidates, key=lambda item: (-item[1], item[0]))
+        decisions.append(
+            {
+                "name": category_name,
+                "description": (
+                    f"Route {category_name} requests to their best evaluated Model."
+                ),
+                "priority": 100 - offset,
+                "rules": {
+                    "operator": "AND",
+                    "conditions": [{"type": "domain", "name": category_name}],
+                },
+            }
+        )
+        assignments[category_name] = {"models": [{"model": selected_model}]}
+
+    decisions.append(
+        {
+            "name": "default",
+            "description": "Handle requests outside the evaluated categories.",
+            "priority": 0,
+            "rules": {"operator": "AND", "conditions": []},
+        }
+    )
+    assignments["default"] = {"models": [{"model": default_model}]}
+    return decisions, assignments
+
+
 def generate_config_yaml(
     category_accuracies,
     similarity_threshold,
-    backend_endpoint,
-    backend_protocol,
-    backend_type,
-    api_format,
-    provider_name,
+    endpoint,
+    provider,
 ):
-    """Generate a canonical v0.3 config scaffold from MMLU-Pro results."""
+    """Generate a human-readable v0.4 config scaffold from MMLU-Pro results."""
     average_accuracies = calculate_average_accuracies(category_accuracies)
     if not average_accuracies:
         raise ValueError("No non-auto model results were found in the input directory")
@@ -286,31 +253,35 @@ def generate_config_yaml(
         key=lambda item: (-item[1], item[0]),
     )
     default_model = ranked_models[0][0]
+    decisions, assignments = build_decisions_and_assignments(
+        category_accuracies,
+        default_model,
+    )
 
     return {
-        "version": "v0.3",
+        "version": "v0.4",
         "listeners": [],
-        "providers": {
-            "defaults": {
-                "default_model": default_model,
-                "default_reasoning_effort": "medium",
+        "models": build_models(ranked_models, endpoint, provider),
+        "recipes": [
+            {
+                "name": "mmlu-evaluation",
+                "description": "Category routing derived from MMLU-Pro results.",
+                "document": {
+                    "signals": {
+                        "domains": build_domain_signals(category_accuracies),
+                    },
+                    "decisions": decisions,
+                },
             },
-            "models": build_provider_models(
-                ranked_models,
-                backend_endpoint,
-                backend_protocol,
-                backend_type,
-                api_format,
-                provider_name,
-            ),
-        },
-        "routing": {
-            "modelCards": build_routing_model_cards(ranked_models),
-            "signals": {
-                "domains": build_domain_signals(category_accuracies),
-            },
-            "decisions": [],
-        },
+        ],
+        "entrypoints": [
+            {
+                "name": "vllm-sr/eval",
+                "aliases": ["eval"],
+                "recipe": "mmlu-evaluation",
+                "assignments": assignments,
+            }
+        ],
         "global": {
             "stores": {
                 "response_cache": {
@@ -329,6 +300,18 @@ def generate_config_yaml(
                         "domain": DEFAULT_DOMAIN_CLASSIFIER,
                         "pii": DEFAULT_PII_CLASSIFIER,
                     },
+                },
+            },
+            "services": {
+                "backend_dispatch": {
+                    "bind_address": "127.0.0.1",
+                    "port": 8180,
+                    "audience": "vllm-sr.backend-dispatch",
+                    "capability_ttl": "30s",
+                    "max_request_body_bytes": 67108864,
+                },
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
                 },
             },
         },
@@ -353,15 +336,12 @@ def main():
     print(f"Analyzing MMLU-Pro results in {args.results_dir}...")
     category_accuracies = collect_model_accuracies(args.results_dir)
 
-    print("Generating canonical v0.3 config scaffold...")
+    print("Generating human-readable v0.4 config scaffold...")
     config = generate_config_yaml(
         category_accuracies,
         args.similarity_threshold,
-        args.backend_endpoint,
-        args.backend_protocol,
-        args.backend_type,
-        args.api_format,
-        args.provider_name,
+        args.endpoint,
+        args.provider,
     )
 
     print(f"Saving config to {args.output_file}...")

@@ -47,6 +47,7 @@ var (
 		validateKnowledgeBaseContracts,
 		validateConversationContracts,
 		validateDecisionContracts,
+		validateRoutingProfileMLSelectionConfig,
 		validateDecisionSemanticCacheContracts,
 		validateDecisionMemoryContracts,
 		validateEmbeddingSignalContracts,
@@ -130,24 +131,13 @@ func getIPAddressType(address string) string {
 
 // validateConfigStructure performs additional validation on the parsed config.
 func validateConfigStructure(cfg *RouterConfig) error {
-	// In Kubernetes mode, decisions and model_config will be loaded from CRDs
-	// Skip validation for these fields during initial config parse
-	if cfg.ConfigSource == ConfigSourceKubernetes {
-		return nil
-	}
-	return validateConfigContracts(cfg)
-}
-
-// ValidateKubernetesConfigContracts runs the validators that apply after CRDs
-// have been converted into the canonical runtime config. The initial
-// Kubernetes static-config parse stays tolerant because routing state is still
-// absent there; the reconciler calls this function once the pool and route have
-// been merged.
-func ValidateKubernetesConfigContracts(cfg *RouterConfig) error {
 	return validateConfigContracts(cfg)
 }
 
 func validateConfigContracts(cfg *RouterConfig) error {
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		return err
+	}
 	if err := runConfigContractValidators(cfg, globalConfigContractValidators); err != nil {
 		return err
 	}

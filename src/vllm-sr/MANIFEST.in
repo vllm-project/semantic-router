@@ -7,7 +7,6 @@ include PUBLISHING.md
 recursive-include cli/templates *.yaml
 recursive-include cli/templates *.json
 recursive-include cli/templates *.ini
-recursive-include cli/model_assets *.yaml *.md *.dsl
 
 # Include requirements
 include requirements.txt

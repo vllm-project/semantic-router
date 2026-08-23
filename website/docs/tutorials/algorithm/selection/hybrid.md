@@ -95,10 +95,9 @@ algorithm:
 
 ## Feedback
 
-Hybrid does not read Router Learning snapshots or
-`global.router.learning.adaptation`. Its Elo, Router-DC, and AutoMix components
-own separate in-memory state, and the current Router Learning outcome endpoint
-does not feed that state automatically.
+Hybrid does not currently consume the durable outcome-learning projection.
+Its Router-DC and AutoMix components remain request-time signals rather than
+independent outcome-ingest authorities.
 
 Request text is embedded for Router-DC and AutoMix components. Missing model
 descriptions, pricing, or initialized component state make the corresponding component

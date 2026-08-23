@@ -6,11 +6,9 @@ export type ConfigSection =
   | 'signals' // config.yaml: signals (keywords, embeddings, domains, etc.)
   | 'projections' // config.yaml: routing.projections (partitions, scores, mappings)
   | 'decisions' // config.yaml: decisions (routing rules)
-  | 'models' // config.yaml: providers.models
-  | 'entrypoints-recipes' // config.yaml: top-level entrypoints + recipes
-  | 'global-config' // config.yaml: global runtime overrides (cache, prompt guard, tools, etc.)
-  | 'mcp' // MCP servers configuration
-  | 'topology' // Separate page for visualization
+  | 'models' // Router-managed Models
+  | 'entrypoints-recipes' // Router-managed entrypoints + recipes
+  | 'agent' // Router-native Agent profiles, skills, tools, and connections
 
 interface ConfigNavProps {
   activeSection: ConfigSection
@@ -19,12 +17,6 @@ interface ConfigNavProps {
 
 const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange }) => {
   const sections = [
-    {
-      id: 'global-config' as ConfigSection,
-      icon: 'GC',
-      title: 'Global Config',
-      description: 'Global runtime overrides, services, stores & model catalog',
-    },
     {
       id: 'decisions' as ConfigSection,
       icon: 'DC',
@@ -56,16 +48,10 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       description: 'Partitions, scores & derived routing bands',
     },
     {
-      id: 'mcp' as ConfigSection,
-      icon: 'MP',
-      title: 'MCP Servers & Tools',
-      description: 'MCP servers and all available tools',
-    },
-    {
-      id: 'topology' as ConfigSection,
-      icon: 'TP',
-      title: 'Topology',
-      description: 'Visualize signal-driven routing flow',
+      id: 'agent' as ConfigSection,
+      icon: 'AG',
+      title: 'vLLM-SR Agent',
+      description: 'Profiles, skills, tools, and connections',
     },
   ]
 

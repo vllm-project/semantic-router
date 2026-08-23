@@ -11,11 +11,6 @@ const (
 	ResponseCacheModeSemantic          = "semantic"
 	ResponseCacheModeExact             = "exact"
 	ResponseCacheModeExactThenSemantic = "exact_then_semantic"
-
-	// Deprecated compatibility names.
-	SemanticCacheModeSemantic          = ResponseCacheModeSemantic
-	SemanticCacheModeExact             = ResponseCacheModeExact
-	SemanticCacheModeExactThenSemantic = ResponseCacheModeExactThenSemantic
 )
 
 // DecisionPlugin represents a plugin configuration for a decision.
@@ -59,19 +54,11 @@ type ResponseCachePluginConfig struct {
 	Mode            string                              `json:"mode,omitempty" yaml:"mode,omitempty"`
 	Scope           string                              `json:"scope,omitempty" yaml:"scope,omitempty"`
 	Semantic        *ResponseCacheSemanticConfig        `json:"semantic,omitempty" yaml:"semantic,omitempty"`
+	TTLSeconds      *int                                `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 	RequestControls *ResponseCacheRequestControlsConfig `json:"request_controls,omitempty" yaml:"request_controls,omitempty"`
 	Personalized    *ResponseCachePersonalizedConfig    `json:"personalized,omitempty" yaml:"personalized,omitempty"`
 	Revision        *ResponseCacheRevisionConfig        `json:"revision,omitempty" yaml:"revision,omitempty"`
-	// Deprecated flat compatibility fields. New config should use semantic and
-	// request_controls.
-	AllowRequestControls bool     `json:"allow_request_controls,omitempty" yaml:"allow_request_controls,omitempty"`
-	ControlHeader        string   `json:"control_header,omitempty" yaml:"control_header,omitempty"`
-	SimilarityThreshold  *float32 `json:"similarity_threshold,omitempty" yaml:"similarity_threshold,omitempty"`
-	TTLSeconds           *int     `json:"ttl_seconds,omitempty" yaml:"ttl_seconds,omitempty"`
 }
-
-// SemanticCachePluginConfig is retained for source compatibility.
-type SemanticCachePluginConfig = ResponseCachePluginConfig
 
 func (c *ResponseCachePluginConfig) EffectiveSimilarityThreshold() *float32 {
 	if c == nil {
@@ -80,7 +67,7 @@ func (c *ResponseCachePluginConfig) EffectiveSimilarityThreshold() *float32 {
 	if c.Semantic != nil && c.Semantic.SimilarityThreshold != nil {
 		return c.Semantic.SimilarityThreshold
 	}
-	return c.SimilarityThreshold
+	return nil
 }
 
 func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequestControlsConfig {
@@ -90,10 +77,7 @@ func (c *ResponseCachePluginConfig) EffectiveRequestControls() ResponseCacheRequ
 	if c.RequestControls != nil {
 		return *c.RequestControls
 	}
-	return ResponseCacheRequestControlsConfig{
-		Enabled: c.AllowRequestControls,
-		Header:  c.ControlHeader,
-	}
+	return ResponseCacheRequestControlsConfig{}
 }
 
 // ContextCompressionPluginConfig controls route-local provider-bound context compression.
@@ -280,12 +264,6 @@ func UnmarshalPluginConfig(config *StructuredPayload, target interface{}) error 
 func (d *Decision) GetResponseCacheConfig() *ResponseCachePluginConfig {
 	result := &ResponseCachePluginConfig{}
 	return decodeDecisionPlugin(d, DecisionPluginResponseCache, result)
-}
-
-// GetSemanticCacheConfig is retained for source compatibility.
-// Deprecated: use GetResponseCacheConfig.
-func (d *Decision) GetSemanticCacheConfig() *SemanticCachePluginConfig {
-	return d.GetResponseCacheConfig()
 }
 
 // GetContextCompressionConfig returns route-local tool-output compression settings.

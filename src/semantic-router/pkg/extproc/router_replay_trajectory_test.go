@@ -155,9 +155,10 @@ func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T)
 	assertStringField(t, messages[4], "content", "done")
 }
 
-func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
+func TestHandleRouterReplayTrajectoryDoesNotReparseStoredWireBodies(t *testing.T) {
 	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
-	// Body-based trajectory fallback presumes the bodies were captured.
+	// Stored bodies are presentation artifacts. A trajectory is built only from
+	// the neutral tool trace captured while the request was live.
 	recorder.SetCapturePolicy(true, true, 4096)
 	sessionID := "sess-fallback"
 
@@ -189,14 +190,9 @@ func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
 	assertIntField(t, body, "record_count", 1)
 
 	messages := mustTrajectoryMessages(t, body)
-	if len(messages) == 0 {
-		t.Fatal("expected messages from body fallback, got none")
+	if len(messages) != 0 {
+		t.Fatalf("stored wire bodies were reparsed into %d trajectory messages", len(messages))
 	}
-
-	// The last message should be the assistant final response from the response body.
-	last := messages[len(messages)-1]
-	assertStringField(t, last, "role", "assistant")
-	assertStringField(t, last, "content", "final")
 }
 
 func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *testing.T) {
@@ -215,6 +211,44 @@ func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *te
 	if len(messages) != 0 {
 		t.Fatalf("expected 0 messages for unknown session, got %d", len(messages))
 	}
+}
+
+func TestHandleRouterReplayTrajectoryAppliesPrincipalScopeWithinSession(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	sessionID := "shared-session"
+	for _, record := range []routerreplay.RoutingRecord{
+		{
+			ID: "team-a-record", RequestID: sessionID, UserID: "user-a", TeamID: "team-a",
+			Timestamp: time.Unix(1, 0).UTC(),
+			ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{{
+				Type: replayToolStepUserInput, Role: "user", Text: "team a",
+			}}},
+		},
+		{
+			ID: "team-b-record", RequestID: sessionID, UserID: "user-b", TeamID: "team-b",
+			Timestamp: time.Unix(2, 0).UTC(),
+			ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{{
+				Type: replayToolStepUserInput, Role: "user", Text: "team b",
+			}}},
+		},
+	} {
+		if _, err := recorder.AddRecord(record); err != nil {
+			t.Fatalf("failed to add record: %v", err)
+		}
+	}
+	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder}}
+
+	response := router.handleRouterReplayAPI(
+		"GET",
+		"/v1/router_replay/trajectory?session_id="+sessionID+"&scope_user_id=user-a&scope_team_id=team-a",
+	)
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	assertIntField(t, body, "record_count", 1)
+	messages := mustTrajectoryMessages(t, body)
+	if len(messages) != 1 {
+		t.Fatalf("expected one scoped message, got %d", len(messages))
+	}
+	assertStringField(t, messages[0], "content", "team a")
 }
 
 func TestHandleRouterReplayTrajectoryMethodNotAllowed(t *testing.T) {

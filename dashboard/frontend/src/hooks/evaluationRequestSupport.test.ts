@@ -16,9 +16,10 @@ describe('evaluation request controller', () => {
   it('deduplicates overlapping requests', async () => {
     let resolveRequest: ((value: string[]) => void) | undefined
     const fetcher = vi.fn(
-      () => new Promise<string[]>((resolve) => {
-        resolveRequest = resolve
-      }),
+      () =>
+        new Promise<string[]>((resolve) => {
+          resolveRequest = resolve
+        }),
     )
     const request = createEvaluationRequest(fetcher, { isHidden: () => false })
 
@@ -36,9 +37,10 @@ describe('evaluation request controller', () => {
   it('drops a stale response even when the underlying fetch ignores abort', async () => {
     let resolveRequest: ((value: string) => void) | undefined
     const request = createEvaluationRequest(
-      () => new Promise<string>((resolve) => {
-        resolveRequest = resolve
-      }),
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRequest = resolve
+        }),
       { isHidden: () => false },
     )
 

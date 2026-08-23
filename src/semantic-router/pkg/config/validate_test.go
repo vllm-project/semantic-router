@@ -168,9 +168,11 @@ func TestWarnUnknownFields_MapValues(t *testing.T) {
 
 func TestWarnUnknownFields_CanonicalConfig(t *testing.T) {
 	raw := map[string]interface{}{
-		"version": "0.3",
-		"routing": map[interface{}]interface{}{},
-		"global":  map[interface{}]interface{}{},
+		"version":     "v0.4",
+		"models":      []interface{}{},
+		"recipes":     []interface{}{},
+		"entrypoints": []interface{}{},
+		"global":      map[interface{}]interface{}{},
 	}
 	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 	assert.Empty(t, warnings, "minimal valid canonical config should produce no warnings")
@@ -178,13 +180,13 @@ func TestWarnUnknownFields_CanonicalConfig(t *testing.T) {
 
 func TestWarnUnknownFields_CanonicalConfigTypo(t *testing.T) {
 	raw := map[string]interface{}{
-		"version":  "0.3",
-		"routingg": map[interface{}]interface{}{}, // typo
+		"version":  "v0.4",
+		"recipess": map[interface{}]interface{}{}, // typo
 	}
 	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))
 	assert.Len(t, warnings, 1)
-	assert.Contains(t, warnings[0], `"routingg"`)
-	assert.Contains(t, warnings[0], `"routing"`)
+	assert.Contains(t, warnings[0], `"recipess"`)
+	assert.Contains(t, warnings[0], `"recipes"`)
 }
 
 func TestWarnUnknownFields_ReferenceConfig(t *testing.T) {

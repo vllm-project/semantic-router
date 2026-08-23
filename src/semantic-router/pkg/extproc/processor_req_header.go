@@ -10,9 +10,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 )
@@ -24,32 +22,26 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	span := startRequestHeaderSpan(v, ctx)
 	defer span.End()
 
-	method, path := captureRequestHeaders(v, ctx, r.skipProcessingEnabled())
+	method, path := captureRequestHeaders(v, ctx)
 
 	setRequestHeaderSpanAttributes(span, ctx, method, path)
-	detectClientProtocol(path, ctx)
+	detectSourceFormat(path, ctx)
 	applyHeaderPassThroughPolicy(ctx)
+	if accessResponse := r.bindInferenceAuthentication(ctx); accessResponse != nil {
+		return accessResponse, nil
+	}
+	if outcomeResponse := r.handleOutcomeFeedbackRequestHeaders(method, path, ctx); outcomeResponse != nil {
+		return outcomeResponse, nil
+	}
 
 	// Router Replay contains captured request, response, and tool data. It is a
-	// management API only: the public inference listener must fail closed even
-	// when a caller supplies the otherwise valid skip-processing opt-out.
+	// management API only: the public inference listener must fail closed.
 	if isRouterReplayRequestTarget(path) {
 		return r.createErrorResponse(404, "endpoint not found"), nil
 	}
 
-	// Honor x-vsr-skip-processing as early as possible: once captured we bypass
-	// every router-side header check (replay API, validation, response-API
-	// translation) and emit a plain CONTINUE so the request flows through.
-	// Streaming detection still runs because the same flag drives mode selection
-	// for downstream filters and is cheap; the body and response handlers will
-	// also short-circuit in the no-op path.
-	if ctx.SkipProcessing {
-		detectStreamingExpectation(ctx)
-		return newContinueRequestHeadersResponse(buildLooperInternalHeaderRemovalMutation()), nil
-	}
-
 	detectStreamingExpectation(ctx)
-	if modelsResp, err := r.handleModelsRequestHeaders(method, path); err != nil || modelsResp != nil {
+	if modelsResp, err := r.handleModelsRequestHeaders(method, path, ctx); err != nil || modelsResp != nil {
 		return modelsResp, err
 	}
 	if responseAPIResp, err := r.handleResponseAPIRequestHeaders(method, path, ctx); err != nil || responseAPIResp != nil {
@@ -58,7 +50,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation()), nil
+	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation(r.managedInferenceAccessEnabled())), nil
 }
 
 func startRequestHeaderSpan(
@@ -87,42 +79,28 @@ func startRequestHeaderSpan(
 func captureRequestHeaders(
 	v *ext_proc.ProcessingRequest_RequestHeaders,
 	ctx *RequestContext,
-	skipProcessingGateEnabled bool,
 ) (string, string) {
 	requestHeaders := v.RequestHeaders.Headers
 	for _, header := range requestHeaders.Headers {
 		headerValue := extractHeaderValue(header)
 		ctx.Headers[header.Key] = headerValue
 
-		// HTTP/2 lowercases header names, but we accept either case for the
-		// external skip-processing opt-out so upstream filters do not have to
-		// worry about casing. Internal request authentication runs after all
-		// headers have been captured so header order cannot affect validation.
 		lowerKey := strings.ToLower(header.Key)
 		if lowerKey == headers.RequestID {
 			ctx.RequestID = headerValue
 		}
-		// The x-vsr-skip-processing opt-out is gated by the deployment-level
-		// global.router.skip_processing.enabled flag. When disabled (the
-		// default), the header is ignored entirely so an unauthenticated
-		// upstream caller cannot bypass router policy by injecting it.
-		if skipProcessingGateEnabled &&
-			lowerKey == headers.VSRSkipProcessing &&
-			strings.EqualFold(strings.TrimSpace(headerValue), "true") {
-			ctx.SkipProcessing = true
-		}
 	}
 	authenticateLooperRequestContext(ctx)
+	scrubUntrustedIdentityHeaders(ctx)
 
 	method := ctx.Headers[":method"]
 	path := ctx.Headers[":path"]
 	logging.ComponentDebugEvent("extproc", "request_headers_captured", map[string]interface{}{
-		"request_id":      ctx.RequestID,
-		"method":          method,
-		"path":            path,
-		"header_count":    len(requestHeaders.Headers),
-		"looper_request":  ctx.LooperRequest,
-		"skip_processing": ctx.SkipProcessing,
+		"request_id":     ctx.RequestID,
+		"method":         method,
+		"path":           path,
+		"header_count":   len(requestHeaders.Headers),
+		"looper_request": ctx.LooperRequest,
 	})
 
 	return method, path
@@ -175,7 +153,7 @@ func extractHeaderValue(header interface {
 	return headerValue
 }
 
-func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
+func buildIdentityEncodingRequestMutation(stripAuthorization bool) *ext_proc.HeaderMutation {
 	return &ext_proc.HeaderMutation{
 		SetHeaders: []*core.HeaderValueOption{{
 			Header: &core.HeaderValue{
@@ -183,7 +161,7 @@ func buildIdentityEncodingRequestMutation() *ext_proc.HeaderMutation {
 				Value: "identity",
 			},
 		}},
-		RemoveHeaders: looperInternalHeadersForRemoval(),
+		RemoveHeaders: upstreamInternalHeadersForRemoval(stripAuthorization),
 	}
 }
 
@@ -205,47 +183,9 @@ var hopByHopDropList = []string{
 	"expect",
 }
 
-// anthropicPassThroughHeader names a header captured from an Anthropic
-// inbound request so the body-phase routing step can layer the value
-// under the provider-profile pin. Stored on IRExtensions; downstream
-// reads decide whether to forward. `anthropicPassThroughHeaders` is
-// the canonical list: both capture (request-header phase) and forward
-// (request-body routing phase via appendCapturedPassThroughHeaders)
-// iterate it, so adding a new header only requires one entry here.
-type anthropicPassThroughHeader struct {
-	name   string
-	assign func(ext *ir.IRExtensions, value string)
-	read   func(ext *ir.IRExtensions) string
-}
-
-var anthropicPassThroughHeaders = []anthropicPassThroughHeader{
-	{
-		name:   "anthropic-version",
-		assign: func(ext *ir.IRExtensions, v string) { ext.InboundAnthropicVersion = v },
-		read:   func(ext *ir.IRExtensions) string { return ext.InboundAnthropicVersion },
-	},
-	{
-		name:   "anthropic-beta",
-		assign: func(ext *ir.IRExtensions, v string) { ext.InboundAnthropicBeta = v },
-		read:   func(ext *ir.IRExtensions) string { return ext.InboundAnthropicBeta },
-	},
-	{
-		name:   "anthropic-dangerous-direct-browser-access",
-		assign: func(ext *ir.IRExtensions, v string) { ext.InboundDangerousDirectBrowserAccess = v },
-		read:   func(ext *ir.IRExtensions) string { return ext.InboundDangerousDirectBrowserAccess },
-	},
-}
-
 // applyHeaderPassThroughPolicy enforces the request-header pass-through
-// contract: hop-by-hop framing headers are stripped from ctx.Headers
-// (defense-in-depth — Envoy already filters most), and on Anthropic
-// ingress the named pass-through headers are captured into
-// IRExtensions so the body-phase routing step can layer them under any
-// provider-profile pin.
-//
-// KEEP-by-default for everything else: ctx.Headers retains the inbound
-// view of any header not in the drop list. The body-phase routing step
-// decides what to forward to the upstream.
+// contract. Client protocol headers are not provider connection settings;
+// BackendInvoker obtains those only from the compiled Integration.
 func applyHeaderPassThroughPolicy(ctx *RequestContext) {
 	if ctx == nil || ctx.Headers == nil {
 		return
@@ -253,39 +193,6 @@ func applyHeaderPassThroughPolicy(ctx *RequestContext) {
 
 	for _, name := range hopByHopDropList {
 		delete(ctx.Headers, name)
-	}
-
-	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
-		return
-	}
-	capturePassThroughHeaders(ctx)
-}
-
-// capturePassThroughHeaders records the inbound values of the named
-// Anthropic pass-through headers into IRExtensions. The PR2 inbound
-// parser may already have allocated IRExtensions when this runs (it
-// runs at body-parse time, after the header phase); both call sites
-// tolerate the other running first.
-func capturePassThroughHeaders(ctx *RequestContext) {
-	captured := make(map[string]string, len(anthropicPassThroughHeaders))
-	for _, h := range anthropicPassThroughHeaders {
-		if v := strings.TrimSpace(headerValueCI(ctx, h.name)); v != "" {
-			captured[h.name] = v
-		}
-	}
-	if len(captured) == 0 {
-		return
-	}
-
-	if ctx.IRExtensions == nil {
-		ctx.IRExtensions = &ir.IRExtensions{
-			SourceProtocol: ctx.ClientProtocol,
-		}
-	}
-	for _, h := range anthropicPassThroughHeaders {
-		if v, ok := captured[h.name]; ok {
-			h.assign(ctx.IRExtensions, v)
-		}
 	}
 }
 

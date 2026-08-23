@@ -6,107 +6,42 @@ import (
 	"fmt"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/inflight"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
 
-func (r *OpenAIRouter) translateResponseAPIRequest(
-	requestBody []byte,
+func (r *OpenAIRouter) extractRequestSignalSnapshot(
 	ctx *RequestContext,
-) ([]byte, *ext_proc.ProcessingResponse) {
-	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest || r.ResponseAPIFilter == nil {
-		return requestBody, nil
+) (*requestSignalSnapshot, error) {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
-
-	respCtx, translatedBody, err := r.ResponseAPIFilter.TranslateRequest(ctx.TraceContext, requestBody)
-	if err != nil {
-		logging.Errorf("Response API translation error: %v", err)
-		return nil, r.createErrorResponse(400, "Invalid Response API request: "+err.Error())
-	}
-	if respCtx == nil || translatedBody == nil {
-		logging.Errorf("Response API: Request to /v1/responses missing required 'input' field")
-		return nil, r.createErrorResponse(
-			400,
-			"Invalid Response API request: 'input' field is required. Use 'input' instead of 'messages' for Response API.",
-		)
-	}
-
-	ctx.ResponseAPICtx = respCtx
-	populateSessionTransitionFields(ctx)
-	logging.ComponentDebugEvent("extproc", "response_api_request_translated", map[string]interface{}{
-		"request_id": ctx.RequestID,
-	})
-	return translatedBody, nil
-}
-
-func (r *OpenAIRouter) extractFastRequestState(
-	requestBody []byte,
-	ctx *RequestContext,
-) (*FastExtractResult, error) {
-	fast, err := extractRequestSignalsForProtocol(ctx.ClientProtocol, requestBody)
-	if err != nil {
-		logging.Errorf("Error extracting request fields: %v", err)
-		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		metrics.RecordModelRequest(ctx.RequestModel)
-		return nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
-	}
-	if fast.Stream {
+	snapshot := extractSemanticRequestSignals(ctx.SemanticRequest)
+	if snapshot.Stream {
 		logging.ComponentDebugEvent("extproc", "stream_parameter_detected", map[string]interface{}{
 			"request_id": ctx.RequestID,
 		})
 		ctx.ExpectStreamingResponse = true
 	}
-	return fast, nil
-}
-
-// extractRequestSignalsForProtocol dispatches the gjson-based fast-extract
-// walker by inbound wire format. OpenAI is the default (empty protocol);
-// Anthropic /v1/messages uses the variant that understands the Anthropic
-// content-block shape. Downstream signal consumers see the same
-// FastExtractResult contract regardless of source protocol.
-func extractRequestSignalsForProtocol(clientProtocol string, body []byte) (*FastExtractResult, error) {
-	switch clientProtocol {
-	case config.ClientProtocolAnthropic:
-		return extractContentFastAnthropic(body)
-	default:
-		return extractContentFast(body)
-	}
-}
-
-// parseRequestForProtocol dispatches body parsing by inbound wire format.
-// OpenAI is the default; Anthropic /v1/messages routes through the
-// dedicated inbound parser, whose IRExtensions output is stashed on the
-// request context for downstream emitters and plugins.
-func parseRequestForProtocol(ctx *RequestContext, requestBody []byte) (*openai.ChatCompletionNewParams, error) {
-	if ctx.ClientProtocol != config.ClientProtocolAnthropic {
-		return parseOpenAIRequest(requestBody)
-	}
-	openAIRequest, ext, err := anthropic.ParseAnthropicRequest(requestBody)
-	if err != nil {
-		return nil, err
-	}
-	if ext != nil {
-		ctx.IRExtensions = ext
-	}
-	return openAIRequest, nil
+	return snapshot, nil
 }
 
 func (r *OpenAIRouter) runRequestPreRoutingStages(
 	originalModel string,
-	fast *FastExtractResult,
+	snapshot *requestSignalSnapshot,
 	ctx *RequestContext,
 ) (requestDecisionState, *ext_proc.ProcessingResponse) {
-	r.resolveEntrypointForRequest(originalModel, ctx)
+	if !ctx.Routing.IsResolved() {
+		r.resolveEntrypointForRequest(originalModel, ctx)
+	}
 	populatePinnedSessionFromHeaders(ctx)
-	history := signalConversationHistoryFromFastExtract(fast)
-	applyFastRequestContextEstimate(fast, ctx)
+	history := signalConversationHistoryFromSnapshot(snapshot)
+	applyRequestContextEstimate(snapshot, ctx)
 	decisionName, _, reasoningDecision, selectedModel, decisionErr := r.performDecisionEvaluation(
 		originalModel,
 		history,
@@ -120,6 +55,10 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		logging.Errorf("[Request Body] Authz evaluation failed: %v", decisionErr)
 		return requestDecisionState{}, r.createErrorResponse(403, decisionErr.Error())
 	}
+	if accessResponse := r.admitInferenceRequest(ctx.TraceContext, ctx, selectedModel); accessResponse != nil {
+		return requestDecisionState{}, accessResponse
+	}
+	r.installInferenceDispatchObserver(ctx)
 
 	metrics.RecordModelRequest(selectedModel)
 	ctx.InflightToken = inflight.Begin(selectedModel)
@@ -136,7 +75,7 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 		addRouterReplayHeaderToImmediateResponse(resp, ctx.RouterReplayID)
 		return requestDecisionState{}, resp
 	}
-	if resp := r.applyRateLimitAndCacheChecks(ctx, selectedModel, decisionName); resp != nil {
+	if resp := r.applyCacheChecks(ctx, selectedModel, decisionName); resp != nil {
 		inflight.End(selectedModel, ctx.InflightToken)
 		ctx.InflightToken = 0
 		return requestDecisionState{}, resp
@@ -154,45 +93,21 @@ func (r *OpenAIRouter) runRequestPreRoutingStages(
 	}, nil
 }
 
-func applyFastRequestContextEstimate(fast *FastExtractResult, ctx *RequestContext) {
-	if fast == nil || ctx == nil {
+func applyRequestContextEstimate(snapshot *requestSignalSnapshot, ctx *RequestContext) {
+	if snapshot == nil || ctx == nil {
 		return
 	}
-	ctx.VSRContextTokenCount = fast.ContextTokenFloor
-	ctx.VSRContextTextBytes = fast.ContextTextBytes
-	ctx.VSRContextEquivalentBytes = fast.ContextEquivalentBytes
-	ctx.VSRContextHasNonText = fast.ContextHasNonText
+	ctx.VSRContextTokenCount = snapshot.ContextTokenFloor
+	ctx.VSRContextTextBytes = snapshot.ContextTextBytes
+	ctx.VSRContextEquivalentBytes = snapshot.ContextEquivalentBytes
+	ctx.VSRContextHasNonText = snapshot.ContextHasNonText
 }
 
-func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
+func (r *OpenAIRouter) applyCacheChecks(
 	ctx *RequestContext,
 	selectedModel string,
 	decisionName string,
 ) *ext_proc.ProcessingResponse {
-	if r.RateLimiter != nil {
-		rlCtx := r.buildRateLimitContext(ctx, selectedModel)
-		decision, err := r.RateLimiter.Check(rlCtx)
-		if err != nil {
-			logging.ComponentErrorEvent("extproc", "rate_limit_check_failed", map[string]interface{}{
-				"request_id": ctx.RequestID,
-				"model":      selectedModel,
-				"error":      err.Error(),
-			})
-			return r.createRateLimitResponse(decision)
-		}
-		if decision != nil && !decision.Allowed {
-			logging.ComponentEvent("extproc", "rate_limit_rejected", map[string]interface{}{
-				"request_id":         ctx.RequestID,
-				"model":              rlCtx.Model,
-				"provider":           decision.Provider,
-				"remaining":          decision.Remaining,
-				"user_scope_present": rlCtx.UserID != "",
-			})
-			return r.createRateLimitResponse(decision)
-		}
-		ctx.RateLimitCtx = &rlCtx
-	}
-
 	if response, shouldReturn := r.handleCaching(ctx, decisionName, selectedModel); shouldReturn {
 		logging.ComponentDebugEvent("extproc", "cache_short_circuit", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -204,38 +119,15 @@ func (r *OpenAIRouter) applyRateLimitAndCacheChecks(
 }
 
 func (r *OpenAIRouter) prepareRequestForModelRouting(
-	requestBody []byte,
+	request *llmprotocol.Request,
 	userContent string,
 	ctx *RequestContext,
-) (*openai.ChatCompletionNewParams, *ext_proc.ProcessingResponse, error) {
-	r.maybeForceImageGenerationModality(userContent, ctx)
-
-	openAIRequest, err := parseRequestForProtocol(ctx, requestBody)
-	if err != nil {
-		logging.Errorf("Error parsing request for routing: %v", err)
-		metrics.RecordRequestError(ctx.RequestModel, "parse_error")
-		return nil, nil, status.Errorf(codes.InvalidArgument, "invalid request body: %v", err)
+) (*llmprotocol.Request, *ext_proc.ProcessingResponse, error) {
+	if request == nil {
+		return nil, nil, status.Error(codes.InvalidArgument, "neutral inference request is unavailable")
 	}
-
-	// Store Chat Completion messages for memory extraction (if not Response API)
-	// Response API has its own conversation history via previous_response_id chain
-	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.IsResponseAPIRequest {
-		ctx.ChatCompletionMessages = extractChatCompletionMessages(openAIRequest)
-		// Note: ChatCompletionUserID extraction is handled in user_id_dev.go for dev builds only.
-		// In production, user ID comes ONLY from the trusted auth header (x-authz-user-id).
-		// We store the raw request body to allow dev builds to extract it later.
-		ctx.ChatCompletionRequestBody = requestBody
-		populateSessionTransitionFields(ctx)
-	}
-
-	if resp, err := r.handleModalityFromDecision(ctx, openAIRequest); err != nil {
-		logging.Errorf("[ModalityRouter] Error: %v", err)
-		return nil, r.createErrorResponse(503, fmt.Sprintf("Modality routing failed: %v", err)), nil
-	} else if resp != nil {
-		return nil, resp, nil
-	}
-
-	requestBody, memErr := r.handleMemoryRetrieval(ctx, userContent, requestBody, openAIRequest)
+	populateSessionTransitionFields(ctx)
+	memErr := r.handleMemoryRetrieval(ctx, userContent, request)
 	if memErr != nil {
 		logging.ComponentWarnEvent("extproc", "memory_retrieval_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
@@ -243,72 +135,8 @@ func (r *OpenAIRouter) prepareRequestForModelRouting(
 			"fallback":   "continue_without_memory",
 		})
 	}
-	ctx.setWorkingRequestBody(requestBody)
-	requestBody, compressionErr := r.applyContextCompressionPolicy(ctx, requestBody)
-	if compressionErr != nil {
-		return nil, r.createErrorResponse(
-			500,
-			"Context compression failed under fail_closed policy",
-		), nil
+	if compressionErr := r.applySemanticContextCompression(ctx, request); compressionErr != nil {
+		return nil, r.createErrorResponse(500, "Context compression failed under fail_closed policy"), nil
 	}
-	ctx.setWorkingRequestBody(requestBody)
-	r.refreshResponseAPITranslatedBody(ctx, requestBody)
-	openAIRequest = r.reparseRequestAfterMutation(requestBody, openAIRequest, ctx)
-
-	return openAIRequest, nil, nil
-}
-
-func (r *OpenAIRouter) maybeForceImageGenerationModality(userContent string, ctx *RequestContext) {
-	if ctx.ResponseAPICtx == nil || !ctx.ResponseAPICtx.HasImageGenerationTool {
-		return
-	}
-	if ctx.ModalityClassification != nil && ctx.ModalityClassification.Modality != "" && ctx.ModalityClassification.Modality != ModalityAR {
-		return
-	}
-
-	modality := ModalityDiffusion
-	if userContent != "" {
-		modality = ModalityBoth
-	}
-	ctx.ModalityClassification = &ModalityClassificationResult{
-		Modality:   modality,
-		Confidence: 1.0,
-		Method:     "image_generation_tool",
-	}
-	logging.ComponentDebugEvent("extproc", "modality_forced", map[string]interface{}{
-		"request_id": ctx.RequestID,
-		"modality":   modality,
-		"reason":     "image_generation_tool",
-	})
-}
-
-func (r *OpenAIRouter) refreshResponseAPITranslatedBody(ctx *RequestContext, requestBody []byte) {
-	if ctx.ResponseAPICtx != nil && ctx.ResponseAPICtx.IsResponseAPIRequest && len(requestBody) > 0 {
-		ctx.ResponseAPICtx.TranslatedBody = requestBody
-	}
-}
-
-func (r *OpenAIRouter) reparseRequestAfterMutation(
-	requestBody []byte,
-	openAIRequest *openai.ChatCompletionNewParams,
-	ctx *RequestContext,
-) *openai.ChatCompletionNewParams {
-	if ctx.MemoryContext == "" && !ctx.ContextCompressionApplied {
-		return openAIRequest
-	}
-
-	updatedReq, err := parseRequestForProtocol(ctx, requestBody)
-	if err != nil {
-		logging.ComponentErrorEvent("extproc", "mutated_request_reparse_failed", map[string]interface{}{
-			"request_id": ctx.RequestID,
-			"error":      err.Error(),
-		})
-		return openAIRequest
-	}
-
-	logging.ComponentDebugEvent("extproc", "mutated_request_reparsed", map[string]interface{}{
-		"request_id": ctx.RequestID,
-		"body_len":   len(requestBody),
-	})
-	return updatedReq
+	return request, nil, nil
 }

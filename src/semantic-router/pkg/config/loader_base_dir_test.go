@@ -14,12 +14,12 @@ func TestParseUsesAbsoluteConfigBaseDirOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(stateDir, "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte(recipeTestBaseYAML), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(entrypointRulesYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(ConfigBaseDirEnv, root)
 
-	cfg, err := Parse(configPath)
+	cfg, err := testAuthoringParser(t).Parse(configPath)
 	if err != nil {
 		t.Fatalf("Parse() error = %v", err)
 	}
@@ -30,12 +30,12 @@ func TestParseUsesAbsoluteConfigBaseDirOverride(t *testing.T) {
 
 func TestParseRejectsRelativeConfigBaseDirOverride(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(configPath, []byte(recipeTestBaseYAML), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(entrypointRulesYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(ConfigBaseDirEnv, "relative-assets")
 
-	_, err := Parse(configPath)
+	_, err := testAuthoringParser(t).Parse(configPath)
 	if err == nil || !strings.Contains(err.Error(), "must be an absolute directory") {
 		t.Fatalf("Parse() error = %v, want absolute-directory error", err)
 	}
@@ -44,9 +44,9 @@ func TestParseRejectsRelativeConfigBaseDirOverride(t *testing.T) {
 func TestParseYAMLBytesDoesNotConsultConfigBaseDirOverride(t *testing.T) {
 	t.Setenv(ConfigBaseDirEnv, "/path/that/does/not/exist")
 
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML))
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML))
 	if err != nil {
-		t.Fatalf("ParseYAMLBytes() error = %v", err)
+		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes() error = %v", err)
 	}
 	if cfg.ConfigBaseDir != "" {
 		t.Fatalf("ConfigBaseDir = %q, want empty for in-memory parsing", cfg.ConfigBaseDir)

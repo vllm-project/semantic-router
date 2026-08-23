@@ -1,87 +1,187 @@
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: base-model
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
-    models:
-      - name: base-model
-        reasoning_family: qwen3
-        backend_refs:
-          - name: local-vllm
-            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
-            weight: 1
-      - name: premium-model
-        provider_model_id: base-model
-        pricing:
-          currency: USD
-          prompt_per_1m: 10
-        backend_refs:
-          - name: local-vllm-premium
-            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
-            weight: 1
-      - name: economy-model
-        provider_model_id: base-model
-        pricing:
-          currency: USD
-          prompt_per_1m: 1
-        backend_refs:
-          - name: local-vllm-economy
-            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
-            weight: 1
-  entrypoints:
-    - model_names: [vllm-sr/metadata-policy]
-      recipe: metadata-policy
+  models:
+  - name: base-model
+    card:
+      reasoning:
+        type: chat_template_kwargs
+        efforts:
+        - high
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      model: base-model
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  - name: premium-model
+    card:
+      quality_score: 0.9
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      model: base-model
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+    pricing:
+      input_cost_per_million_tokens: '10'
+      cache_read_cost_per_million_tokens: '10'
+      cache_write_cost_per_million_tokens: '10'
+  - name: economy-model
+    card:
+      quality_score: 0.1
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      model: base-model
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+    pricing:
+      input_cost_per_million_tokens: '1'
+      cache_read_cost_per_million_tokens: '1'
+      cache_write_cost_per_million_tokens: '1'
   recipes:
-    - name: metadata-policy
-      description: Deterministic recipe-local metadata routing probe.
-      routing:
-        strategy: priority
-        signals:
-          metadata:
-            - name: canary_cohort
-              key: cohort
-              predicate:
-                equals: canary
-        decisions:
-          - name: metadata_recipe_decision
-            description: Route canary metadata inside the selected recipe.
-            priority: 100
-            rules:
-              operator: AND
-              conditions:
-                - type: metadata
-                  name: canary_cohort
-            modelRefs:
-              - model: base-model
-                use_reasoning: false
-  routing:
-    decisions:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        keywords:
+        - name: quality_policy
+          operator: OR
+          keywords:
+          - decision scoped quality policy
+          case_sensitive: false
+        - name: cost_policy
+          operator: OR
+          keywords:
+          - decision scoped cost policy
+          case_sensitive: false
+        - name: code_keywords
+          operator: OR
+          method: bm25
+          keywords:
+          - code
+          - function
+          - implement
+          - debug
+          - algorithm
+          - compile
+          - syntax
+          - variable
+          - loop
+          - refactor
+          bm25_threshold: 0.1
+          case_sensitive: false
+        - name: urgent_request
+          operator: OR
+          method: ngram
+          keywords:
+          - urgent
+          - immediate
+          - asap
+          - emergency
+          ngram_threshold: 0.4
+          ngram_arity: 3
+          case_sensitive: false
+        - name: sensitive_data
+          operator: AND
+          keywords:
+          - SSN
+          - credit card
+          case_sensitive: false
+        - name: regex_pattern_match
+          operator: OR
+          keywords:
+          - user.name@domain.com
+          - C:\Program Files\
+          case_sensitive: false
+        domains:
+        - name: code_keywords
+          description: Programming and software development queries
+          mmlu_categories:
+          - computer science
+        - name: urgent_request
+          description: Urgent and time-sensitive requests
+        - name: sensitive_data
+          description: Requests involving sensitive personal data
+        - name: business
+          description: Business and management related queries
+          mmlu_categories:
+          - business
+        - name: law
+          description: Legal questions and law-related topics
+          mmlu_categories:
+          - law
+        - name: psychology
+          description: Psychology and mental health topics
+          mmlu_categories:
+          - psychology
+        - name: biology
+          description: Biology and life sciences questions
+          mmlu_categories:
+          - biology
+        - name: chemistry
+          description: Chemistry and chemical sciences questions
+          mmlu_categories:
+          - chemistry
+        - name: history
+          description: Historical questions and cultural topics
+          mmlu_categories:
+          - history
+        - name: other
+          description: General knowledge and miscellaneous topics
+          mmlu_categories:
+          - other
+        - name: health
+          description: Health and medical information queries
+          mmlu_categories:
+          - health
+        - name: economics
+          description: Economics and financial topics
+          mmlu_categories:
+          - economics
+        - name: math
+          description: Mathematics and quantitative reasoning
+          mmlu_categories:
+          - math
+        - name: physics
+          description: Physics and physical sciences
+          mmlu_categories:
+          - physics
+        - name: computer science
+          description: Computer science and programming
+          mmlu_categories:
+          - computer science
+        - name: philosophy
+          description: Philosophy and ethical questions
+          mmlu_categories:
+          - philosophy
+        - name: engineering
+          description: Engineering and technical problem-solving
+          mmlu_categories:
+          - engineering
+        jailbreak:
+        - name: jailbreak_standard
+          threshold: 0.6
+          include_history: false
+          description: Standard jailbreak detection for routing-strategies tests
+        pii:
+        - name: pii_deny_all
+          threshold: 0.7
+          include_history: false
+          description: Block all PII
+      decisions:
       - name: quality_policy_decision
         description: Quality-only multi-factor policy
         priority: 250
         rules:
           operator: AND
           conditions:
-            - type: keyword
-              name: quality_policy
-        modelRefs:
-          - model: premium-model
-          - model: economy-model
+          - type: keyword
+            name: quality_policy
         algorithm:
           type: multi_factor
           multi_factor:
@@ -96,11 +196,8 @@ config:
         rules:
           operator: AND
           conditions:
-            - type: keyword
-              name: cost_policy
-        modelRefs:
-          - model: premium-model
-          - model: economy-model
+          - type: keyword
+            name: cost_policy
         algorithm:
           type: multi_factor
           multi_factor:
@@ -115,228 +212,123 @@ config:
         rules:
           operator: AND
           conditions:
-            - type: keyword
-              name: code_keywords
-        modelRefs:
-          - model: base-model
-            use_reasoning: true
+          - type: keyword
+            name: code_keywords
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are an expert software engineer. Provide clear, well-structured code examples with explanations. Follow best practices and consider edge cases.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are an expert software engineer. Provide clear, well-structured
+              code examples with explanations. Follow best practices and consider
+              edge cases.
       - name: urgent_request_decision
-        description: Urgent and time-sensitive requests (N-gram classified with typo tolerance)
+        description: Urgent and time-sensitive requests (N-gram classified with typo
+          tolerance)
         priority: 150
         rules:
           operator: AND
           conditions:
-            - type: keyword
-              name: urgent_request
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+          - type: keyword
+            name: urgent_request
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a highly responsive assistant specialized in handling urgent requests. Prioritize speed and efficiency while maintaining accuracy. Provide concise, actionable responses and focus on immediate solutions.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a highly responsive assistant specialized in handling
+              urgent requests. Prioritize speed and efficiency while maintaining accuracy.
+              Provide concise, actionable responses and focus on immediate solutions.
       - name: sensitive_data_decision
         description: Requests involving sensitive personal data
         priority: 150
         rules:
           operator: AND
           conditions:
-            - type: keyword
-              name: sensitive_data
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+          - type: keyword
+            name: sensitive_data
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a security-conscious assistant specialized in handling sensitive data. Exercise extreme caution with personal information, follow data protection best practices, and remind users about privacy considerations.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a security-conscious assistant specialized in handling
+              sensitive data. Exercise extreme caution with personal information,
+              follow data protection best practices, and remind users about privacy
+              considerations.
       - name: regex_pattern_match_decision
         description: Structured data and pattern-based requests
         priority: 150
         rules:
           operator: AND
           conditions:
-            - type: keyword
-              name: regex_pattern_match
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+          - type: keyword
+            name: regex_pattern_match
       - name: business_decision
         description: Business and management related queries
         priority: 100
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: business
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+          - type: domain
+            name: business
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a senior business consultant and strategic advisor
+              with expertise in corporate strategy, operations management, financial
+              analysis, marketing, and organizational development. Provide practical,
+              actionable business advice backed by proven methodologies and industry
+              best practices.
       - name: general_decision
         description: General knowledge and miscellaneous topics
         priority: 50
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: base-model
-            use_reasoning: false
+          - type: domain
+            name: other
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful and knowledgeable assistant. Provide
+              accurate, helpful responses across a wide range of topics.
+        - type: response_cache
+          configuration:
+            enabled: true
+            scope: global
+            semantic:
               similarity_threshold: 0.75
-    signals:
-      keywords:
-        - name: quality_policy
-          operator: OR
-          keywords:
-            - decision scoped quality policy
-          case_sensitive: false
-        - name: cost_policy
-          operator: OR
-          keywords:
-            - decision scoped cost policy
-          case_sensitive: false
-        - name: code_keywords
-          operator: OR
-          method: bm25
-          keywords:
-            - code
-            - function
-            - implement
-            - debug
-            - algorithm
-            - compile
-            - syntax
-            - variable
-            - loop
-            - refactor
-          bm25_threshold: 0.1
-          case_sensitive: false
-        - name: urgent_request
-          operator: OR
-          method: ngram
-          keywords:
-            - urgent
-            - immediate
-            - asap
-            - emergency
-          ngram_threshold: 0.4
-          ngram_arity: 3
-          case_sensitive: false
-        - name: sensitive_data
+  - name: metadata-policy
+    description: Deterministic recipe-local metadata routing probe.
+    document:
+      signals:
+        metadata:
+        - name: canary_cohort
+          key: cohort
+          predicate:
+            equals: canary
+      decisions:
+      - name: metadata_recipe_decision
+        description: Route canary metadata inside the selected recipe.
+        priority: 100
+        rules:
           operator: AND
-          keywords:
-            - SSN
-            - credit card
-          case_sensitive: false
-        - name: regex_pattern_match
-          operator: OR
-          keywords:
-            - user.name@domain.com
-            - C:\Program Files\
-          case_sensitive: false
-      domains:
-        - name: code_keywords
-          description: Programming and software development queries
-          mmlu_categories:
-            - "computer science"
-        - name: urgent_request
-          description: Urgent and time-sensitive requests
-        - name: sensitive_data
-          description: Requests involving sensitive personal data
-        - name: business
-          description: Business and management related queries
-          mmlu_categories:
-            - business
-        - name: law
-          description: Legal questions and law-related topics
-          mmlu_categories:
-            - law
-        - name: psychology
-          description: Psychology and mental health topics
-          mmlu_categories:
-            - psychology
-        - name: biology
-          description: Biology and life sciences questions
-          mmlu_categories:
-            - biology
-        - name: chemistry
-          description: Chemistry and chemical sciences questions
-          mmlu_categories:
-            - chemistry
-        - name: history
-          description: Historical questions and cultural topics
-          mmlu_categories:
-            - history
-        - name: other
-          description: General knowledge and miscellaneous topics
-          mmlu_categories:
-            - other
-        - name: health
-          description: Health and medical information queries
-          mmlu_categories:
-            - health
-        - name: economics
-          description: Economics and financial topics
-          mmlu_categories:
-            - economics
-        - name: math
-          description: Mathematics and quantitative reasoning
-          mmlu_categories:
-            - math
-        - name: physics
-          description: Physics and physical sciences
-          mmlu_categories:
-            - physics
-        - name: "computer science"
-          description: Computer science and programming
-          mmlu_categories:
-            - "computer science"
-        - name: philosophy
-          description: Philosophy and ethical questions
-          mmlu_categories:
-            - philosophy
-        - name: engineering
-          description: Engineering and technical problem-solving
-          mmlu_categories:
-            - engineering
-      jailbreak:
-        - name: jailbreak_standard
-          threshold: 0.6
-          include_history: false
-          description: Standard jailbreak detection for routing-strategies tests
-      pii:
-        - name: pii_deny_all
-          threshold: 0.7
-          include_history: false
-          description: Block all PII
-    modelCards:
-      - name: base-model
-      - name: premium-model
-        quality_score: 0.9
-      - name: economy-model
-        quality_score: 0.1
+          conditions:
+          - type: metadata
+            name: canary_cohort
+      strategy: priority
+  entrypoints:
+  - name: vllm-sr/metadata-policy
+    recipe: metadata-policy
+    assignments:
+      metadata_recipe_decision:
+        models:
+        - model: base-model
+          weight: '1'
+  billing_currency: USD
   global:
     model_catalog:
       kbs: []
-    router:
-      strategy: priority
+      embeddings: {}
+      modules:
+        classifier: {}
+        hallucination_mitigation: {}
+    router: {}
     services:
       api:
         batch_classification:
@@ -349,28 +341,28 @@ config:
             high_resolution_timing: false
             sample_rate: 1.0
             duration_buckets:
-              - 0.001
-              - 0.005
-              - 0.01
-              - 0.025
-              - 0.05
-              - 0.1
-              - 0.25
-              - 0.5
-              - 1
-              - 2.5
-              - 5
-              - 10
-              - 30
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
             size_buckets:
-              - 1
-              - 2
-              - 5
-              - 10
-              - 20
-              - 50
-              - 100
-              - 200
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
       observability:
         tracing:
           enabled: true
@@ -386,6 +378,14 @@ config:
             service_name: vllm-semantic-router
             service_version: v0.1.0
             deployment_environment: development
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
         enabled: true

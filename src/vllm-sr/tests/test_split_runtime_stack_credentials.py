@@ -38,8 +38,13 @@ def _stub_valid_container_cli(monkeypatch, tmp_path):
 def _minimal_stack_config(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n"
+        "version: v0.4\nlisteners:\n  - name: http-8899\n"
         "    address: 0.0.0.0\n    port: 8899\n"
+        "global:\n  services:\n    backend_egress:\n"
+        "      policy_file: /app/config/backend-egress-policy.yaml\n"
+        "  runtime_refs:\n"
+        "    provider_env: PROVIDER_API_KEY\n"
+        "    management_env: MANAGEMENT_TOKEN\n"
     )
     return config_path
 
@@ -86,14 +91,22 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
         stack_layout=resolve_runtime_stack(),
         volumes=storage_secrets.StorageVolumes(postgres="pg-data", redis="redis-data"),
     )
+    provider_secret = "provider-secret-canary"
+    management_secret = "management-secret-canary"
+    dashboard_secret = "dashboard-secret-canary"
+    monkeypatch.setenv("DASHBOARD_JWT_SECRET", dashboard_secret)
     captured = _capture_run_commands_with_env(monkeypatch)
 
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
-        {},
+        {
+            "PROVIDER_API_KEY": provider_secret,
+            "MANAGEMENT_TOKEN": management_secret,
+        },
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         state_root_dir=str(tmp_path),
         minimal=False,
+        router_child_env=storage_secrets.storage_secret_env(secrets),
     )
 
     assert rc == 0
@@ -111,12 +124,35 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
 
     assert router_env[POSTGRES_PASSWORD_ENV] == secrets.postgres.password
     assert router_env[REDIS_PASSWORD_ENV] == secrets.redis.password
-    # Every other container inherits this process's environment untouched.
-    assert dashboard_env is None
-    assert envoy_env is None
+    assert router_env["PROVIDER_API_KEY"] == provider_secret
+    assert router_env["MANAGEMENT_TOKEN"] == management_secret
+    assert "DASHBOARD_JWT_SECRET" not in router_env
+
+    assert "DASHBOARD_JWT_SECRET" in dashboard_cmd
+    assert dashboard_env["DASHBOARD_JWT_SECRET"] == dashboard_secret
+    assert "PROVIDER_API_KEY" not in dashboard_cmd
+    assert "MANAGEMENT_TOKEN" not in dashboard_cmd
+    assert POSTGRES_PASSWORD_ENV not in dashboard_cmd
+    assert REDIS_PASSWORD_ENV not in dashboard_cmd
+    assert "PROVIDER_API_KEY" not in dashboard_env
+    assert "MANAGEMENT_TOKEN" not in dashboard_env
+    assert POSTGRES_PASSWORD_ENV not in dashboard_env
+    assert REDIS_PASSWORD_ENV not in dashboard_env
+
+    for name in (
+        "PROVIDER_API_KEY",
+        "MANAGEMENT_TOKEN",
+        "DASHBOARD_JWT_SECRET",
+        *STORAGE_SECRET_ENV_NAMES,
+    ):
+        assert name not in envoy_cmd
+        assert name not in envoy_env
     for cmd, _ in captured:
         assert secrets.postgres.password not in cmd
         assert secrets.redis.password not in cmd
+        assert provider_secret not in cmd
+        assert management_secret not in cmd
+        assert dashboard_secret not in cmd
 
 
 def test_container_start_vllm_sr_omits_storage_credentials_without_state(

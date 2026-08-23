@@ -212,9 +212,7 @@ def _open_private_directory(path: Path) -> int:
                 raise RuntimeLifecycleLockError(
                     "The runtime lifecycle lock path must contain only directories."
                 )
-            if info.st_uid not in {0, os.geteuid()} or (
-                stat.S_IMODE(info.st_mode) & 0o022
-            ):
+            if not _is_safe_lock_path_component(info):
                 os.close(next_descriptor)
                 raise RuntimeLifecycleLockError(
                     "The runtime lifecycle lock path is not safely owned."
@@ -238,3 +236,20 @@ def _open_private_directory(path: Path) -> int:
         raise RuntimeLifecycleLockError(
             "The runtime lifecycle lock path cannot be opened safely."
         ) from error
+
+
+def _is_safe_lock_path_component(info: os.stat_result) -> bool:
+    """Accept owned private ancestors and conventional root-owned temp roots.
+
+    Sticky root-owned temporary directories such as ``/tmp`` are safe traversal
+    ancestors here: every component is opened relative to an already verified
+    descriptor without following symlinks, while the final two directories must
+    still be current-user-owned and are forced to mode 0700.
+    """
+
+    if info.st_uid not in {0, os.geteuid()}:
+        return False
+    mode = stat.S_IMODE(info.st_mode)
+    if not mode & 0o022:
+        return True
+    return info.st_uid == 0 and bool(mode & stat.S_ISVTX)

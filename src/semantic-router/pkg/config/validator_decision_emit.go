@@ -15,7 +15,7 @@ func validateDecisionEmitContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		seen := make(map[string]bool, len(decision.Emits))
 		for i, emit := range decision.Emits {
 			context := fmt.Sprintf("decision '%s', emits[%d]", decision.Name, i)

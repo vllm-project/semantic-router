@@ -34,8 +34,8 @@ REPRESENTATIVE_FIXTURES = {
     ),
     "dashboard": (
         ["dashboard/frontend/src/App.tsx"],
-        ("quality", "security", "dashboard", "images"),
-        (),
+        ("quality", "security", "dashboard", "e2e", "images"),
+        ("dashboard",),
         ("dashboard",),
     ),
     "operator": (
@@ -143,7 +143,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         self.assertIn("recipe-conformance", result.selected_jobs)
         self.assertEqual(
             result.profiles,
-            ("envoy-ai-gateway", "dashboard", "remote-embedding"),
+            ("envoy-ai-gateway", "dashboard", "remote-embedding", "response-api"),
         )
 
     def test_generated_api_docs_select_core_tests(self) -> None:
@@ -157,7 +157,10 @@ class PRChangeClassifierTests(unittest.TestCase):
         for path in (
             "website/docs/api/apiserver.md",
             "website/static/openapi/apiserver/apiserver.openapi.json",
+            "website/static/openapi/management/v1/management.openapi.json",
+            "dashboard/frontend/src/generated/managementApiContract.ts",
             "tools/openapi-gen/main.go",
+            "tools/management-api-gen/main.go",
         ):
             with self.subTest(path=path):
                 result = classify([path])
@@ -237,15 +240,10 @@ class PRChangeClassifierTests(unittest.TestCase):
 
     def test_fixture_builds_follow_active_integration_receipts(self) -> None:
         llm_katan = classify(["e2e/testing/llm-katan/llm_katan/server.py"])
-        anthropic = classify(["e2e/testing/anthropic-shim/anthropic_shim/app.py"])
 
         self.assertIn("memory", llm_katan.selected_jobs)
         self.assertEqual(llm_katan.pr_images, ())
-        self.assertNotIn("anthropic-shim", anthropic.profiles)
-        self.assertIn("images", anthropic.selected_jobs)
-        self.assertEqual(anthropic.pr_images, ("anthropic-shim",))
         self.assertEqual(llm_katan.publish_images, ())
-        self.assertEqual(anthropic.publish_images, ())
 
     def test_release_and_nightly_image_lifecycles_are_distinct(self) -> None:
         self.assertEqual(
@@ -263,7 +261,7 @@ class PRChangeClassifierTests(unittest.TestCase):
         )
         self.assertEqual(
             set(NIGHTLY_IMAGES) - set(PRODUCTION_RELEASE_IMAGES),
-            {"anthropic-shim", "llm-katan", "vllm-sr-sim"},
+            {"llm-katan", "vllm-sr-sim"},
         )
 
 

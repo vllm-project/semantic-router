@@ -69,14 +69,10 @@ When request controls are enabled, the configured header accepts the authorized
 directives. `max-age` bounds read freshness and `ttl` bounds write lifetime;
 caller TTL values are clamped to `max_ttl_seconds`.
 
-## Migration
-
-`semantic-cache`, `semantic_cache`, and `response-cache` are accepted as
-deprecated aliases and normalize to `response_cache`. Likewise,
-`global.stores.semantic_cache` is read as a deprecated alias for
-`global.stores.response_cache`. Do not configure both spellings in the same
-document. Export, Dashboard saves, and DSL decompilation always emit the
-canonical names.
+Only the canonical `response_cache` identifier is accepted for both the plugin
+and `global.stores.response_cache`. Put the route-local similarity threshold
+under `configuration.semantic.similarity_threshold`; removed aliases and flat
+compatibility fields fail validation instead of being rewritten at runtime.
 
 ## Operations
 

@@ -1,7 +1,7 @@
 ---
 name: routing-calibration-loop
 category: support
-description: Calibrates routing changes against a live router endpoint with executable probes, local DSL validation, versioned deploys, and structured failure review. Use when tuning signals, projections, decisions, or maintained route examples against a real apiserver.
+description: Calibrates immutable routing manifests with executable probes, offline DSL validation, controlled process replacement, and structured failure review. Use when tuning signals, projections, decisions, or maintained route examples against a real apiserver.
 ---
 
 # Routing Calibration Loop
@@ -10,7 +10,7 @@ description: Calibrates routing changes against a live router endpoint with exec
 
 - Use when a signal, projection, decision, or maintained routing example needs to be checked against a live router apiserver
 - Use when a routing failure must be classified as a bad probe, bad routing policy, or bad validator rule instead of blindly patching the profile
-- Use when a maintainer wants the loop `eval -> update -> validate -> deploy -> eval` to be run with versioned evidence
+- Use when a maintainer wants the loop `eval -> update -> validate -> replace -> eval` to be run with versioned source evidence
 
 ## Required Surfaces
 
@@ -24,14 +24,14 @@ description: Calibrates routing changes against a live router endpoint with exec
 - `signal_runtime`
 - `decision_logic`
 - `algorithm_selection`
-- `dsl_crd`
+- `dsl_config_contract`
 - `docs_examples`
 
 ## Stop Conditions
 
 - No live router base URL is available and no local replacement environment has been chosen
 - No probe manifest exists and the task cannot safely infer executable probes from maintained examples
-- A deploy would change remote runtime state without capturing the current version or without a rollback path
+- A replacement would change remote runtime state without preserving the current deployment input or rollback path
 - Local validation fails for reasons that are not yet understood or recorded
 
 ## Workflow
@@ -41,7 +41,7 @@ description: Calibrates routing changes against a live router endpoint with exec
    - The manifest should stay profile-generic: point to any owned routing YAML / DSL pair through `routing_assets`, and group probes by decision with multiple variants when robustness matters.
    - Treat each probe as both a test case and a specification fragment.
 2. Baseline the live router before editing policy.
-   - Use [`tools/agent/scripts/router_calibration_loop.py`](../../../../../tools/agent/scripts/router_calibration_loop.py) to snapshot `/config/router` and `/config/router/versions`, then run `/api/v1/eval` across the probe suite.
+   - Use [`tools/agent/scripts/router_calibration_loop.py`](../../../../../tools/agent/scripts/router_calibration_loop.py) to run `/api/v1/eval` across the probe suite and preserve the report beside the source manifest.
    - Record which decision actually fired, which signals matched, and which signals were expected but absent.
 3. Classify every failure under one of three buckets before changing anything.
    - `query_quality`: the prompt is not a robust representative of the intended route.
@@ -50,14 +50,14 @@ description: Calibrates routing changes against a live router endpoint with exec
 4. Edit the canonical authoring surface locally.
    - For maintained routing, edit the owned YAML / DSL asset pair instead of patching only the live server.
    - Do not add narrow trigger-phrase hacks just to pass one probe.
-5. Run local validation before deploying.
-   - Use the runner's `run` or `validate` path to execute `sr-dsl validate` against the DSL source, or against a YAML file through decompile-then-validate.
+5. Run offline validation before replacing the deployment.
+   - Use the runner's `validate` path to execute `sr-dsl validate` against the DSL source, or against a YAML file through decompile-then-validate.
    - Prefer manifest-owned assets as defaults, but allow explicit YAML / DSL overrides for any other routing profile.
    - Keep validation output with the loop artifacts so validator behavior can be reviewed alongside runtime eval output.
-6. Deploy durably and re-evaluate.
-   - Use `PUT /config/router` for versioned full-document replacement so the live router exactly matches the canonical YAML being calibrated.
-   - After every config update, wait for `GET /ready` to return `ready=true` before trusting `eval` results. Do not treat a successful update response as proof that router initialization has finished.
-   - Re-run the same probe suite after deploy and compare before / after success rate and per-probe traces.
+6. Replace the immutable deployment and re-evaluate.
+   - Promote the validated manifest through the owning Docker or Kubernetes deployment workflow; the standalone Router API is intentionally not a config writer.
+   - Preserve the previous deployment input as the rollback artifact, then wait for `GET /ready` to return `ready=true` before trusting eval results.
+   - Re-run the same probe suite after replacement and compare before / after success rate and per-probe traces.
 7. Close the loop with structured reflection.
    - `0. Query quality`: Is the probe semantically representative, or is it a brittle phrase trigger?
    - `1. Routing design`: Are the signal, projection, and decision boundaries robust, or merely sufficient for this probe set?
@@ -66,10 +66,10 @@ description: Calibrates routing changes against a live router endpoint with exec
 
 ## Gotchas
 
-- The calibration loop now deploys with `PUT /config/router`, so the calibrated YAML must be a complete router document, not a partial merge fragment.
+- A standalone router compiles one manifest at startup. Calibration must replace that complete deployment input rather than patching a live process.
 - Do not declare success just because one crafted query passes. Probe quality is part of the task; decision-level robustness should be checked with multiple variants, not just one trigger phrase.
 - If runtime eval looks correct and validation still looks wrong, assume validator semantics may need work rather than forcing a worse route design.
-- If deploy succeeds but success rate regresses, capture the returned version and use the versions endpoint before continuing.
+- If replacement succeeds but success rate regresses, restore the preserved deployment input before continuing.
 
 ## Must Read
 
@@ -81,15 +81,13 @@ description: Calibrates routing changes against a live router endpoint with exec
 ## Standard Commands
 
 - `python3 tools/agent/scripts/router_calibration_loop.py eval --router-url http://<router-host>:8080 --probes <profile>.probes.yaml`
-- `python3 tools/agent/scripts/router_calibration_loop.py run --router-url http://<router-host>:8080 --probes <profile>.probes.yaml`
-- `python3 tools/agent/scripts/router_calibration_loop.py run --router-url http://<router-host>:8080 --probes <profile>.probes.yaml --yaml <routing>.yaml --dsl <routing>.dsl`
-- `python3 tools/agent/scripts/router_calibration_loop.py deploy --router-url http://<router-host>:8080 --yaml <routing>.yaml --dsl <routing>.dsl --ready-timeout 300`
+- `python3 tools/agent/scripts/router_calibration_loop.py validate --yaml <routing>.yaml --dsl <routing>.dsl`
 - `make agent-report ENV=amd CHANGED_FILES="config/recipes/balance/config.yaml,config/recipes/balance/recipe.dsl,website/docs/installation/amd-rocm.md"`
 - `make agent-ci-gate CHANGED_FILES="tools/agent/skills/maintainer/routing-calibration/SKILL.md,tools/agent/scripts/router_calibration_loop.py,config/recipes/balance/probes.yaml"`
 
 ## Acceptance
 
-- Each calibration round produces a probe report with before / after outcomes, live decision traces, and the captured deploy version when a deploy occurs
+- Each calibration round preserves before / after probe reports, live decision traces, and the exact versioned deployment inputs
 - Failures are explicitly reviewed under query quality, routing design, and validator quality instead of being patched blindly
-- Maintained routing changes are validated locally before deploy and re-evaluated on the live endpoint after deploy
+- Maintained routing changes are validated offline before process replacement and re-evaluated on the live endpoint afterward
 - The loop leaves behind executable probes or maintained examples that are stronger than the ones it started with, ideally by improving decision-level variant coverage instead of adding single-example hacks

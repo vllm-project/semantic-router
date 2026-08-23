@@ -6,7 +6,16 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
+
+// TrustedRoutingIdentity contains only Router-authenticated routing facts.
+// It is deliberately typed and has no request-header representation.
+type TrustedRoutingIdentity struct {
+	UserID string
+	TeamID string
+	Claims map[string]routingsnapshot.ClaimValue
+}
 
 // SignalEvaluationInput is the complete, typed input to request-time signal
 // evaluation. Keeping optional values named avoids positional interface{}
@@ -18,7 +27,7 @@ type SignalEvaluationInput struct {
 	PriorUserMessages      []string
 	NonUserMessages        []string
 	HasPriorAssistantReply bool
-	Headers                map[string]string
+	TrustedIdentity        TrustedRoutingIdentity
 	ForceEvaluateAll       bool
 	ImageURL               string
 	UncompressedText       string
@@ -27,10 +36,10 @@ type SignalEvaluationInput struct {
 	RequestFacts           RequestFacts
 }
 
-// EvaluateAllSignalsWithHeaders evaluates the selected recipe's signals,
-// including authz role bindings. Authz errors are returned to the caller so a
-// missing identity cannot silently bypass policy.
-func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) (*SignalResults, error) {
+// EvaluateAllSignalsWithIdentity evaluates the selected recipe's signals,
+// including role bindings over Router-authenticated identity. Missing trusted
+// identity fails closed whenever the recipe uses an authz signal.
+func (c *Classifier) EvaluateAllSignalsWithIdentity(input SignalEvaluationInput) (*SignalResults, error) {
 	results := c.evaluateAllSignalsWithContext(
 		input.Text,
 		input.ContextText,
@@ -47,13 +56,13 @@ func (c *Classifier) EvaluateAllSignalsWithHeaders(input SignalEvaluationInput) 
 		nil,
 		false,
 	)
-	if err := c.appendAuthzFromHeaders(results, input.Headers, input.ForceEvaluateAll); err != nil {
+	if err := c.appendAuthzFromTrustedIdentity(results, input.TrustedIdentity, input.ForceEvaluateAll); err != nil {
 		return nil, err
 	}
 	return results, nil
 }
 
-func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[string]string, forceEvaluateAll bool) error {
+func (c *Classifier) appendAuthzFromTrustedIdentity(results *SignalResults, identity TrustedRoutingIdentity, forceEvaluateAll bool) error {
 	usedSignals := c.getUsedSignals()
 	if forceEvaluateAll {
 		usedSignals = c.getAllSignalTypes()
@@ -67,11 +76,7 @@ func (c *Classifier) appendAuthzFromHeaders(results *SignalResults, headers map[
 	}
 
 	start := time.Now()
-	userID := headers[c.authzUserIDHeader]
-	userGroups := ParseUserGroups(headers[c.authzUserGroupsHeader])
-
-	authzResult, err := c.authzClassifier.Classify(userID, userGroups)
-	authzResult, err = applyAuthzFailOpenOnClassifyError(c.authzFailOpen, userID, authzResult, err)
+	authzResult, err := c.authzClassifier.Classify(identity)
 	elapsed := time.Since(start)
 	latencySeconds := elapsed.Seconds()
 

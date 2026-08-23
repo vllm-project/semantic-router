@@ -1,7 +1,8 @@
-"""Scenario ABC and TuningLoop — pluggable analytical tuning pipeline.
+"""Scenario ABC and immutable-runtime candidate tuning pipeline.
 
 A Scenario defines *what* to tune and *how to score* it.
-The TuningLoop orchestrates the generic observe → diagnose → fix → verify cycle.
+CandidateTuner evaluates one live snapshot, proposes one offline candidate, and
+validates that candidate without mutating the running router.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import yaml
+from router_calibration_support import run_validate
 
 from . import engine, engine_selection
 from .client import RouterClient
@@ -50,9 +52,9 @@ class Scenario(abc.ABC):
         diagnoses: list[dict],
         fix: Any,
     ) -> None:
-        """Hook for scenario-specific per-iteration display.
+        """Hook for scenario-specific diagnostic display.
 
-        Override in subclasses to print custom diagnostics per tuning round.
+        Override in subclasses to print custom diagnostics for the candidate pass.
         The default implementation is a no-op.
         """
         return
@@ -62,16 +64,8 @@ class Scenario(abc.ABC):
         return base
 
 
-class TuningLoop:
-    """Generic observe → diagnose → analytical-fix → verify loop.
-
-    Works with any Scenario implementation.  The loop:
-      1. Runs probes against the live router
-      2. Diagnoses failures using the analytical engine
-      3. Selects the best analytical fix (structural or parametric)
-      4. Applies the fix and reloads the router
-      5. Repeats until convergence or max iterations
-    """
+class CandidateTuner:
+    """Propose and validate one candidate for an immutable live runtime."""
 
     def __init__(
         self,
@@ -79,127 +73,70 @@ class TuningLoop:
         router: RouterClient,
         config_path: Path,
         probes_path: Path,
-        deploy_config: Path | None = None,
-        router_pid: int = 0,
-        max_iterations: int = 10,
+        candidate_path: Path,
     ):
         self.cs = scenario
         self.router = router
-        self.config_path = config_path
-        self.probes_path = probes_path
-        self.deploy_config = deploy_config
-        self.router_pid = router_pid
-        self.max_iterations = max_iterations
+        self.config_path = config_path.resolve()
+        self.probes_path = probes_path.resolve()
+        self.candidate_path = candidate_path.resolve()
+        if self.config_path == self.candidate_path:
+            raise ValueError("candidate config must not overwrite the active manifest")
 
     def run(self) -> dict:
-        """Execute the full tuning loop. Returns the output dict."""
+        """Evaluate once and write at most one offline-validated candidate."""
         probes = load_probes(self.probes_path)
         print(f"\nLoaded {len(probes)} probes from {self.probes_path}")
 
         adapter = self._make_adapter()
-        iterations: list[dict] = []
-        all_fixes: list[dict] = []
-        trajectory: list[dict] = []
+        print(f"\n{'='*60}")
+        print("  Immutable runtime evaluation")
+        print(f"{'='*60}")
+        results = self.router.run_probes(probes, adapter)
+        self._print_summary(results)
 
-        for iteration in range(self.max_iterations):
-            print(f"\n{'='*60}")
-            print(f"  Iteration {iteration}")
-            print(f"{'='*60}")
+        cfg_raw = yaml.safe_load(self.config_path.read_text(encoding="utf-8"))
+        if not isinstance(cfg_raw, dict):
+            raise ValueError("config must decode to a YAML mapping")
+        dsl = engine.load_dsl_config(cfg_raw)
+        failures = [result for result in results if not result["correct"]]
+        diagnoses = [
+            engine_selection.diagnose_probe(result, dsl) for result in failures
+        ]
+        fix = engine_selection.select_fix(
+            diagnoses,
+            results,
+            dsl,
+            severity_fn=self.cs.severity,
+        )
+        self.cs.display_iteration(0, results, diagnoses, fix)
 
-            results = self.router.run_probes(probes, adapter)
-            self._print_summary(iteration, results)
-
-            correct = sum(1 for r in results if r["correct"])
-            total = len(results)
-            pct = round(100 * correct / total, 1) if total else 0
-
-            weighted_loss = sum(
-                self.cs.severity(r) for r in results if not r["correct"]
-            )
-
-            if correct == total:
-                print("  All probes pass — converged!")
-                iterations.append(self._iteration_record(iteration, results, [], None))
-                trajectory.append(
-                    {
-                        "iteration": iteration,
-                        "accuracy": correct,
-                        "total": total,
-                        "pct": pct,
-                        "severity_weighted_loss": weighted_loss,
-                    }
-                )
-                break
-
-            cfg_raw = yaml.safe_load(self.config_path.read_text())
-            dsl = engine.load_dsl_config(cfg_raw)
-
-            failures = [r for r in results if not r["correct"]]
-            diagnoses = [engine_selection.diagnose_probe(r, dsl) for r in failures]
-
-            fix = engine_selection.select_fix(
-                diagnoses,
-                results,
-                dsl,
-                severity_fn=self.cs.severity,
-            )
-
-            self.cs.display_iteration(iteration, results, diagnoses, fix)
-
-            iterations.append(
-                self._iteration_record(iteration, results, diagnoses, fix)
-            )
-            trajectory.append(
-                {
-                    "iteration": iteration,
-                    "accuracy": correct,
-                    "total": total,
-                    "pct": pct,
-                    "severity_weighted_loss": weighted_loss,
-                }
-            )
-
-            if fix is None:
-                print("  No beneficial fix found — converged.")
-                break
-
+        validation = None
+        if fix is None:
+            print("  No beneficial candidate found.")
+        else:
             self._apply_fix(fix, cfg_raw, dsl)
-            all_fixes.append(self._fix_to_dict(fix))
-            self._write_and_reload(cfg_raw)
-
-        final_verification = self._run_final_verification(probes, adapter)
+            self._write_candidate(cfg_raw)
+            validation = run_validate(None, self.candidate_path)
+            status = "valid" if validation.get("valid") else "invalid"
+            print(f"  Offline validation: {status}")
 
         output = {
             "scenario": self.cs.name,
             "method": "analytical_trace_diagnosis",
-            "pipeline": "engine.py — observe → diagnose → fix → verify",
+            "pipeline": "observe → diagnose → candidate → offline validate",
             "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
             "router_endpoint": self.router.endpoint,
             "config_path": str(self.config_path),
             "num_probes": len(probes),
-            "iterations": iterations,
-            "final_verification": final_verification,
-            "all_fixes_applied": all_fixes,
-            "trajectory": trajectory,
+            "evaluation": self._evaluation_record(results),
+            "selected_fix": self._fix_to_dict(fix) if fix else None,
+            "candidate_config": str(self.candidate_path) if fix else None,
+            "validation": validation,
         }
         return self.cs.build_output(output)
 
     # -- internal helpers --------------------------------------------------
-
-    def _run_final_verification(self, probes, adapter) -> dict:
-        print(f"\n{'='*60}")
-        print("  Final verification")
-        print(f"{'='*60}")
-        results = self.router.run_probes(probes, adapter)
-        self._print_summary("final", results)
-        correct = sum(1 for r in results if r["correct"])
-        weighted_loss = sum(self.cs.severity(r) for r in results if not r["correct"])
-        return {
-            "accuracy": correct,
-            "total": len(results),
-            "pct": (round(100 * correct / len(results), 1) if results else 0),
-            "severity_weighted_loss": weighted_loss,
-        }
 
     def _make_adapter(self):
         cs = self.cs
@@ -209,7 +146,7 @@ class TuningLoop:
 
         return adapter
 
-    def _print_summary(self, label, results):
+    def _print_summary(self, results):
         correct = sum(1 for r in results if r["correct"])
         total = len(results)
         pct = round(100 * correct / total, 1) if total else 0
@@ -218,19 +155,16 @@ class TuningLoop:
             f"  Accuracy: {correct}/{total} ({pct}%)" f"  severity_loss={weighted_loss}"
         )
 
-    def _iteration_record(self, iteration, results, diagnoses, fix):
+    def _evaluation_record(self, results):
         correct = sum(1 for r in results if r["correct"])
         total = len(results)
         return {
-            "iteration": iteration,
             "accuracy": correct,
             "total": total,
             "pct": round(100 * correct / total, 1) if total else 0,
             "severity_weighted_loss": sum(
                 self.cs.severity(r) for r in results if not r["correct"]
             ),
-            "num_diagnoses": len(diagnoses),
-            "selected_fix": self._fix_to_dict(fix) if fix else None,
             "probe_details": [
                 {
                     "id": r["id"],
@@ -252,9 +186,9 @@ class TuningLoop:
             cfg_raw.update(updated)
             print(f"  Applied parametric fix: {fix.explanation}")
 
-    def _write_and_reload(self, cfg_raw):
-        target = self.deploy_config or self.config_path
-        target_path = Path(target)
+    def _write_candidate(self, cfg_raw):
+        target_path = self.candidate_path
+        target_path.parent.mkdir(parents=True, exist_ok=True)
         fd, tmp = tempfile.mkstemp(
             dir=str(target_path.parent),
             suffix=".tmp",
@@ -271,16 +205,11 @@ class TuningLoop:
                 )
                 f.flush()
                 os.fsync(f.fileno())
-            os.replace(tmp, str(target_path))
+            os.replace(tmp, target_path)
         except BaseException:
             os.unlink(tmp)
             raise
-        print(f"  Config written to {target}")
-        if self.router_pid:
-            ok = self.router.hot_reload(self.router_pid)
-            print(f"  Hot reload: {'success' if ok else 'timeout/failed'}")
-        else:
-            print("  No router PID — skipping hot reload")
+        print(f"  Candidate written to {target_path}")
 
     @staticmethod
     def _fix_to_dict(fix) -> dict:

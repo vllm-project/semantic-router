@@ -48,7 +48,7 @@ Keep these names aligned across the two systems:
 
 | Name | Owner | Requirement |
 | --- | --- | --- |
-| Provider model | Semantic Router | `providers.models[].name` is the logical pool name selected by a recipe. |
+| Provider model | Semantic Router | `models[].name` identifies the logical Model selected by an Entrypoint assignment. |
 | Request header | Semantic Router | The Router writes the selected provider model to `x-selected-model`. |
 | Route match | Gateway API | An `HTTPRoute` matches that exact header value. |
 | Backend reference | Gateway API / llm-d | The route targets the intended `InferencePool`. |

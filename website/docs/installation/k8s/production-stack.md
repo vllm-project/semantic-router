@@ -56,27 +56,23 @@ semantic-routing failures.
 
 ## 2. Bind the model in canonical configuration
 
-Create one Semantic Router provider model for each model pool you want policy
-to select. A Kubernetes backend reference uses this shape:
+Create one Semantic Router Model for each model pool you want policy to select.
+A Kubernetes connection uses this shape:
 
 ```yaml
-providers:
-  defaults:
-    default_model: production/qwen3
-  models:
-    - name: production/qwen3
-      provider_model_id: Qwen/Qwen3-8B
-      backend_refs:
-        - name: production-stack
-          endpoint: vllm-router-service.default.svc.cluster.local:80
-          protocol: http
-          weight: 100
+models:
+  - name: production/qwen3
+    card: {capabilities: [chat]}
+    connections:
+      - provider: vllm
+        endpoint: http://vllm-router-service.default.svc.cluster.local:80/v1
+        model: Qwen/Qwen3-8B
 ```
 
 Replace the endpoint and model identifier with values from your deployment.
 If Production Stack exposes different services per model, create a binding for
 each service. If it exposes one multi-model service, keep distinct provider
-models and use the backend's served model identifiers.
+Models and use the backend's served model identifiers.
 
 Add model cards, decisions, and entrypoints that reference these provider
 names, then validate the complete document:

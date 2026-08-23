@@ -12,8 +12,8 @@ must contain exactly:
 The router may create a temporary `.vllm-sr/` directory while running; it is not
 part of the maintained contract.
 
-`config/recipes/built-in/` is the reserved versioned catalog container, not a
-Recipe. The default standalone inventory skips that directory and CI runs the
+`config/recipes/built-in/` is the reserved versioned distribution container,
+not a Recipe. The default standalone inventory skips that directory and CI runs the
 same five-file conformance checks separately for every bundle under
 `built-in/latest/` and every release snapshot.
 
@@ -47,7 +47,7 @@ authoring mechanics here and release operations in the maintainer guide.
 ## Add or change a recipe
 
 1. Add the five files under `config/recipes/<name>/` and add the recipe to the
-   catalog in [README.md](README.md).
+   index in [README.md](README.md).
 2. Set `schema_version: vllm-sr/recipe-metadata/v1` in `metadata.yaml`. Its
    stable `id` must match the directory name; declare a semantic `version`,
    authorship, license, tags, and at least the source link. Bump the version for
@@ -57,8 +57,8 @@ authoring mechanics here and release operations in the maintainer guide.
 3. Set `schema_version: v1`, matching `name`, and correct `routing_assets` in
    `probes.yaml`.
 4. Add at least one probe for every decision and every request-facing model
-   entrypoint. Default recipes use `global.router.auto_model_names`; named
-   recipes set `model` and `expected_recipe`.
+   Entrypoint. Every request-facing alias belongs to `entrypoints[].model_names`;
+   named probes set `model` and `expected_recipe`.
 5. Declare `expected_algorithm` for every decision and `expected_plugins` when
    the decision configures plugins.
 6. Use `expected_signals` or `forbidden_signals` for signal and projection

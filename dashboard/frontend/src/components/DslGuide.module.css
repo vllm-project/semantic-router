@@ -54,6 +54,11 @@
   background: var(--color-bg-tertiary);
 }
 
+.searchClear svg {
+  width: 11px;
+  height: 11px;
+}
+
 /* Sections */
 .section {
   border-bottom: 1px solid var(--color-border);
@@ -80,16 +85,17 @@
 }
 
 .sectionChevron {
-  font-size: 0.625rem;
+  height: 11px;
+  width: 11px;
   color: var(--color-text-muted);
-  width: 10px;
-  text-align: center;
   flex-shrink: 0;
 }
 
 .sectionIcon {
-  font-size: 0.75rem;
+  width: 14px;
+  height: 14px;
   flex-shrink: 0;
+  color: var(--color-text-secondary);
 }
 
 .sectionTitle {
@@ -168,7 +174,17 @@
   border-radius: var(--radius-sm);
   cursor: pointer;
   opacity: 0;
-  transition: opacity var(--transition-fast), background var(--transition-fast);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  transition:
+    opacity var(--transition-fast),
+    background var(--transition-fast);
+}
+
+.insertBtn svg {
+  width: 11px;
+  height: 11px;
 }
 
 .codeBlock:hover .insertBtn {
@@ -275,11 +291,10 @@
 }
 
 .typeChevron {
-  font-size: 0.5625rem;
+  width: 11px;
+  height: 11px;
+  flex: 0 0 auto;
   color: var(--color-text-muted);
-  width: 8px;
-  text-align: center;
-  flex-shrink: 0;
 }
 
 .typeName {

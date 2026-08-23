@@ -1,18 +1,17 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import RouterModelInventory from '../components/RouterModelInventory'
+import ProductIcon from '../components/ProductIcon'
 import { useAuth } from '../contexts/AuthContext'
-import { canAccessMLSetup } from '../utils/accessControl'
+import { canAccessDashboardPath } from '../utils/accessControl'
+import { inferenceAccessApi, type AccessOverview } from '../utils/inferenceAccessApi'
 import {
-  getLoadedModelCount,
-  getModelStatusSummary,
-  getRouterModelAnchor,
-  getTotalKnownModelCount,
-  type SystemStatus,
-} from '../utils/routerRuntime'
+  fetchManagedRoutingSummary,
+  type ManagedRoutingSummary,
+} from '../utils/managedRoutingSnapshot'
+import { type SystemStatus } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
+import DashboardRoutingHero from './DashboardRoutingHero'
 import DashboardRoutingProfiles from './DashboardRoutingProfiles'
-import type { RouterConfig } from './dashboardPageTypes'
 import {
   categorizeDecisions,
   countDecisions,
@@ -25,12 +24,15 @@ import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardP
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
 import styles from './DashboardPage.module.css'
 
+const formatWholeCount = (value: string) => new Intl.NumberFormat('en-US').format(BigInt(value))
+
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const [config, setConfig] = useState<RouterConfig | null>(null)
+  const [config, setConfig] = useState<ManagedRoutingSummary | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
+  const [accessOverview, setAccessOverview] = useState<AccessOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -44,33 +46,42 @@ const DashboardPage: React.FC = () => {
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const configResult = await fetch('/api/router/config/all')
-    if (configResult.ok) {
-      setConfig(await configResult.json())
-      setLastUpdated(new Date())
-      setError(null)
-    }
+    const snapshot = await fetchManagedRoutingSummary()
+    setConfig(snapshot)
+    setLastUpdated(new Date())
+    setError(null)
   }, [])
+
+  const canReadConfig = canAccessDashboardPath(user, '/config/models')
+  const canReadAccess = canAccessDashboardPath(user, '/access/usage')
+  const fetchAccess = useCallback(async () => {
+    if (!canReadAccess) return
+    setAccessOverview(await inferenceAccessApi.overview())
+  }, [canReadAccess])
 
   const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
   const configRequest = useMemo(() => createVisibilityAwareRequest(fetchConfig), [fetchConfig])
 
-  const fetchAll = useCallback(async (manual = false) => {
-    if (manual) setRefreshing(true)
-    try {
-      await Promise.all([
-        configRequest.run({ allowHidden: true }),
-        statusRequest.run({ allowHidden: true }),
-      ])
-      setLastUpdated(new Date())
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [configRequest, statusRequest])
+  const fetchAll = useCallback(
+    async (manual = false) => {
+      if (manual) setRefreshing(true)
+      try {
+        await Promise.all([
+          canReadConfig ? configRequest.run({ allowHidden: true }) : Promise.resolve(),
+          statusRequest.run({ allowHidden: true }),
+          fetchAccess(),
+        ])
+        setLastUpdated(new Date())
+        setError(null)
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+        setRefreshing(false)
+      }
+    },
+    [canReadConfig, configRequest, fetchAccess, statusRequest],
+  )
 
   useEffect(() => {
     const pollStatus = () => {
@@ -79,8 +90,11 @@ const DashboardPage: React.FC = () => {
       })
     }
     const pollConfig = () => {
+      if (!canReadConfig) return
       void configRequest.run().catch((pollError) => {
-        setError(pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config')
+        setError(
+          pollError instanceof Error ? pollError.message : 'Failed to refresh dashboard config',
+        )
       })
     }
     const onVisibilityChange = () => {
@@ -89,36 +103,25 @@ const DashboardPage: React.FC = () => {
         pollConfig()
       }
     }
-    const onConfigDeployed = () => {
-      void fetchAll()
-    }
-
     void fetchAll()
     const statusInterval = window.setInterval(pollStatus, 10000)
     const configInterval = window.setInterval(pollConfig, 30000)
-    window.addEventListener('config-deployed', onConfigDeployed)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.clearInterval(statusInterval)
       window.clearInterval(configInterval)
-      window.removeEventListener('config-deployed', onConfigDeployed)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [configRequest, fetchAll, statusRequest])
+  }, [canReadConfig, configRequest, fetchAll, statusRequest])
 
-  const signalStats = useMemo(() => (config ? countSignals(config) : { total: 0, byType: {} }), [config])
+  const signalStats = useMemo(
+    () => (config ? countSignals(config) : { total: 0, byType: {} }),
+    [config],
+  )
   const decisionCount = useMemo(() => (config ? countDecisions(config) : 0), [config])
   const modelCount = useMemo(() => (config ? countModels(config) : 0), [config])
   const pluginCount = useMemo(() => (config ? countPlugins(config) : 0), [config])
   const currentDecisions = useMemo(() => (config ? getAllDecisions(config) : []), [config])
-  const healthyServices = useMemo(() => status?.services.filter(s => s.healthy).length ?? 0, [status])
-  const showMLSetupQuickLink = canAccessMLSetup(user)
-  const totalServices = useMemo(() => status?.services.length ?? 0, [status])
-  const modelStatus = useMemo(() => getModelStatusSummary(status), [status])
-  const loadedModels = useMemo(() => getLoadedModelCount(status?.models), [status])
-  const knownModels = useMemo(() => getTotalKnownModelCount(status?.models), [status])
-  const previewModelLimit = 6
-
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
     [config],
@@ -128,11 +131,12 @@ const DashboardPage: React.FC = () => {
     [signalStats.byType],
   )
   const decisionPreviewRows = useMemo(
-    () => buildDecisionPreviewRows([
-      ...categorizedDecisions.guardrails,
-      ...categorizedDecisions.routing,
-      ...categorizedDecisions.fallbacks,
-    ]),
+    () =>
+      buildDecisionPreviewRows([
+        ...categorizedDecisions.guardrails,
+        ...categorizedDecisions.routing,
+        ...categorizedDecisions.fallbacks,
+      ]),
     [categorizedDecisions],
   )
 
@@ -149,177 +153,105 @@ const DashboardPage: React.FC = () => {
 
   return (
     <div className={styles.page}>
-      <div className={styles.header}>
-        <div>
-          <h1 className={styles.title}>Building Mixture-of-Models</h1>
-          <p className={styles.subtitle}>
-            The next-generation model architecture for heterogeneous LLM inference.
-          </p>
+      <DashboardRoutingHero
+        modelCount={modelCount}
+        signalCount={signalStats.total}
+        decisionCount={decisionCount}
+        apiKeyCount={accessOverview?.activeKeys ?? null}
+        overallStatus={status?.overall}
+        refreshing={refreshing}
+        lastUpdated={lastUpdated}
+        onRefresh={() => void fetchAll(true)}
+        onNavigate={navigate}
+      />
+
+      {user?.managementIdentityStatus === 'error' && (
+        <div className={styles.errorBanner} role="alert">
+          <span>
+            <strong>Routing access unavailable.</strong>{' '}
+            {user.managementIdentityError || 'Reconnect this Dashboard account to the Router.'}
+          </span>
         </div>
-        <div className={styles.headerActions}>
-          {lastUpdated && (
-            <span className={styles.lastUpdated}>
-              Updated {lastUpdated.toLocaleTimeString()}
-            </span>
-          )}
-          <button
-            className={`${styles.refreshBtn} ${refreshing ? styles.refreshBtnSpin : ''}`}
-            onClick={() => fetchAll(true)}
-            disabled={refreshing}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M14 8A6 6 0 1 1 8 2" strokeLinecap="round" />
-              <path d="M14 2v6h-6" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </button>
-        </div>
-      </div>
+      )}
 
       {error && (
-        <div className={styles.errorBanner}>
+        <div className={styles.errorBanner} role="alert">
           <span>Failed to load data: {error}</span>
           <button onClick={() => fetchAll(true)}>Retry</button>
         </div>
       )}
 
-      <div className={styles.statsGrid}>
-        <button type="button" className={styles.statCard} onClick={() => navigate('/config/models')}>
-          <div className={styles.statIcon}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <rect x="2" y="3" width="20" height="18" rx="3" />
-              <path d="M8 7v10M12 7v10M16 7v10" />
-            </svg>
+      <div className={`${styles.mainGrid} ${!canReadConfig ? styles.mainGridCompact : ''}`}>
+        {canReadConfig ? (
+          <div className={styles.card}>
+            <div className={styles.cardHeader}>
+              <h2 className={styles.cardTitle}>Intelligence Layers</h2>
+              <button
+                type="button"
+                className={styles.cardAction}
+                onClick={() => navigate('/topology')}
+              >
+                View topology
+                <ProductIcon name="chevron-right" aria-hidden="true" />
+              </button>
+            </div>
+            <div className={styles.flowContainer}>
+              {config ? (
+                <DashboardMiniFlowDiagram
+                  signals={signalStats}
+                  decisions={decisionCount}
+                  models={modelCount}
+                  plugins={pluginCount}
+                />
+              ) : (
+                <div className={styles.emptyState}>No configuration loaded</div>
+              )}
+            </div>
           </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{modelCount}</span>
-            <span className={styles.statLabel}>Models</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button type="button" className={styles.statCard} onClick={() => navigate('/config/decisions')}>
-          <div className={styles.statIcon}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M4 6h16M4 12h8M4 18h12" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{decisionCount}</span>
-            <span className={styles.statLabel}>Decisions</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button type="button" className={styles.statCard} onClick={() => navigate('/config/signals')}>
-          <div className={styles.statIcon}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{signalStats.total}</span>
-            <span className={styles.statLabel}>Signals</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button type="button" className={styles.statCard} onClick={() => navigate('/status')}>
-          <div className={`${styles.statIcon} ${
-            status?.overall === 'healthy' ? styles.statIconHealthy :
-            status?.overall === 'degraded' ? styles.statIconDegraded :
-            styles.statIconDown
-          }`}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round">
-              <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{healthyServices}/{totalServices}</span>
-            <span className={styles.statLabel}>Services Healthy</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-
-        <button type="button" className={styles.statCard} onClick={() => navigate('/status')}>
-          <div className={`${styles.statIcon} ${
-            modelStatus.tone === 'ok' ? styles.statIconHealthy :
-            modelStatus.tone === 'warn' ? styles.statIconStarting :
-            styles.statIconDown
-          }`}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3v10" />
-              <path d="M8.5 9.5 12 13l3.5-3.5" />
-              <path d="M4 19h16" />
-            </svg>
-          </div>
-          <div className={styles.statContent}>
-            <span className={styles.statValue}>{modelStatus.value}</span>
-            <span className={styles.statLabel}>Model Status</span>
-            <span className={styles.statDetail}>{modelStatus.detail}</span>
-          </div>
-          <span className={styles.statArrow}>&rsaquo;</span>
-        </button>
-      </div>
-
-      <div className={styles.mainGrid}>
-        <div className={styles.card}>
-          <div className={styles.cardHeader}>
-            <h2 className={styles.cardTitle}>Intelligence Layers</h2>
-            <button type="button" className={styles.cardAction} onClick={() => navigate('/topology')}>
-              View Full Layers &rsaquo;
-            </button>
-          </div>
-          <div className={styles.flowContainer}>
-            {config ? (
-              <DashboardMiniFlowDiagram
-                signals={signalStats}
-                decisions={decisionCount}
-                models={modelCount}
-                plugins={pluginCount}
-              />
-            ) : (
-              <div className={styles.emptyState}>No configuration loaded</div>
-            )}
-          </div>
-        </div>
+        ) : null}
 
         <div className={styles.rightCol}>
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>System Health</h2>
-              <button type="button" className={styles.cardAction} onClick={() => navigate('/status')}>
-                Details &rsaquo;
+              <button
+                type="button"
+                className={styles.cardAction}
+                onClick={() => navigate('/status')}
+              >
+                Details
+                <ProductIcon name="chevron-right" aria-hidden="true" />
               </button>
             </div>
             <div className={styles.healthContent}>
               {status ? (
                 <>
                   <div className={styles.healthOverall}>
-                    <span className={`${styles.healthDot} ${
-                      status.overall === 'healthy' ? styles.healthDotGreen :
-                      status.overall === 'degraded' ? styles.healthDotYellow :
-                      styles.healthDotRed
-                    }`}
+                    <span
+                      className={`${styles.healthDot} ${
+                        status.overall === 'healthy'
+                          ? styles.healthDotGreen
+                          : status.overall === 'degraded'
+                            ? styles.healthDotYellow
+                            : styles.healthDotRed
+                      }`}
                     />
                     <span className={styles.healthLabel}>
-                      {status.overall === 'not_running' ? 'Not Running' :
-                       status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
+                      {status.overall === 'not_running'
+                        ? 'Not Running'
+                        : status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
                     </span>
-                    {status.version && <span className={styles.versionBadge}>{status.version}</span>}
-                    {status.deployment_type && status.deployment_type !== 'none' && (
-                      <span className={styles.deployBadge}>{status.deployment_type}</span>
-                    )}
                   </div>
                   <div className={styles.servicesList}>
                     {status.services.slice(0, 6).map((svc, i) => (
                       <div key={i} className={styles.serviceRow}>
-                        <span className={`${styles.svcDot} ${svc.healthy ? styles.svcDotOk : styles.svcDotFail}`} />
+                        <span
+                          className={`${styles.svcDot} ${svc.healthy ? styles.svcDotOk : styles.svcDotFail}`}
+                        />
                         <span className={styles.svcName}>{svc.name}</span>
-                        <span className={`${styles.svcStatus} ${svc.healthy ? styles.svcStatusOk : styles.svcStatusFail}`}>
+                        <span
+                          className={`${styles.svcStatus} ${svc.healthy ? styles.svcStatusOk : styles.svcStatusFail}`}
+                        >
                           {svc.status}
                         </span>
                       </div>
@@ -337,162 +269,182 @@ const DashboardPage: React.FC = () => {
 
           <div className={styles.card}>
             <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Quick Actions</h2>
-            </div>
-            <div className={styles.quickLinks}>
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/playground')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
-                </svg>
-                Test in Playground
-              </button>
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/builder')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <polyline points="16 18 22 12 16 6" /><polyline points="8 6 2 12 8 18" />
-                </svg>
-                Open Builder
-              </button>
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/topology')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" />
-                </svg>
-                View Topology
-              </button>
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/evaluation')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M9 11l3 3L22 4" /><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" />
-                </svg>
-                Run Evaluation
-              </button>
-              {showMLSetupQuickLink ? (
-                <button type="button" className={styles.quickLink} onClick={() => navigate('/ml-setup')}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                    <path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path d="M2 12l10 5 10-5" />
-                  </svg>
-                  ML Setup
-                </button>
-              ) : null}
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/config/models')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="2" y="3" width="20" height="18" rx="3" /><path d="M8 7v10M16 7v10" />
-                </svg>
-                Manage Models
-              </button>
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/config/decisions')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M4 6h16M4 12h8M4 18h12" />
-                </svg>
-                Manage Decisions
-              </button>
-              <button type="button" className={styles.quickLink} onClick={() => navigate('/config/signals')}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="M12 20V10M18 20V4M6 20v-4" />
-                </svg>
-                Manage Signals
+              <h2 className={styles.cardTitle}>Access</h2>
+              <button
+                type="button"
+                className={styles.cardAction}
+                onClick={() => navigate('/access/usage')}
+              >
+                Details
+                <ProductIcon name="chevron-right" aria-hidden="true" />
               </button>
             </div>
+            {accessOverview ? (
+              <div className={styles.accessSnapshot}>
+                {accessOverview.activeKeys !== null && (
+                  <div>
+                    <strong>{formatWholeCount(accessOverview.activeKeys)}</strong>
+                    <span>active keys</span>
+                  </div>
+                )}
+                <div>
+                  <strong>{accessOverview.requestsToday.toLocaleString('en-US')}</strong>
+                  <span>requests today</span>
+                </div>
+                <div>
+                  <strong>{accessOverview.tokensToday.toLocaleString('en-US')}</strong>
+                  <span>tokens today</span>
+                </div>
+                <div>
+                  <strong>
+                    {accessOverview.requestsToday
+                      ? `${Math.round((accessOverview.successfulToday / accessOverview.requestsToday) * 1000) / 10}%`
+                      : '—'}
+                  </strong>
+                  <span>success rate</span>
+                </div>
+              </div>
+            ) : (
+              <div className={styles.emptyState}>Access data is unavailable</div>
+            )}
           </div>
         </div>
       </div>
 
-      {config ? (
+      {canReadConfig && config ? (
         <DashboardRoutingProfiles
           config={config}
-          onOpenTopology={(scopeId) =>
-            navigate(`/topology?scope=${encodeURIComponent(scopeId)}`)
-          }
+          onOpenTopology={(scopeId) => navigate(`/topology?scope=${encodeURIComponent(scopeId)}`)}
         />
       ) : null}
 
-      <div className={styles.card}>
-        <div className={styles.cardHeader}>
-          <div>
-            <h2 className={styles.cardTitle}>Loaded Models</h2>
-            {knownModels > 0 && (
-              <span className={styles.cardSubtitle}>{loadedModels}/{knownModels} ready</span>
-            )}
+      {canReadConfig ? (
+        <div className={styles.card}>
+          <div className={styles.cardHeader}>
+            <div>
+              <h2 className={styles.cardTitle}>Models</h2>
+              <span className={styles.cardSubtitle}>{modelCount} connected</span>
+            </div>
+            <button
+              type="button"
+              className={styles.cardAction}
+              onClick={() => navigate('/config/models')}
+            >
+              View all
+              <ProductIcon name="chevron-right" aria-hidden="true" />
+            </button>
           </div>
-          <button type="button" className={styles.cardAction} onClick={() => navigate('/status')}>
-            Status &rsaquo;
-          </button>
+          {config?.models.length ? (
+            <div className={styles.servicesList}>
+              {config.models.slice(0, 6).map((model) => (
+                <div key={model.id} className={styles.serviceRow}>
+                  <span className={`${styles.svcDot} ${styles.svcDotOk}`} />
+                  <span className={styles.svcName}>{model.name}</span>
+                  <span className={styles.svcStatus}>Configured</span>
+                </div>
+              ))}
+              {config.models.length > 6 ? (
+                <div className={styles.moreServices}>+{config.models.length - 6} more</div>
+              ) : null}
+            </div>
+          ) : (
+            <div className={styles.emptyState}>No models connected</div>
+          )}
         </div>
-        <RouterModelInventory
-          mode="preview"
-          previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
-          modelsInfo={status?.models}
-          emptyMessage="Router model inventory will appear here after the router reports its active models."
-          onSelectModel={(model) => navigate(`/status#${encodeURIComponent(getRouterModelAnchor(model))}`)}
-        />
-      </div>
+      ) : null}
 
-      <div className={styles.bottomGrid}>
-        {signalStats.total > 0 && (
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Signal Breakdown</h2>
-              <span className={styles.cardSubtitle}>{signalStats.total} total</span>
-            </div>
-            <div className={styles.signalBreakdown}>
-              {signalBreakdownRows.map((row) => (
-                <div key={row.type} className={styles.breakdownRow} title={`${row.type}: ${row.count} signal(s)`}>
-                  <span className={styles.breakdownLabel}>
-                    <span className={styles.breakdownDot} style={{ background: row.color }} />
-                    {row.type}
-                  </span>
-                  <div className={styles.breakdownBar}>
-                    <div className={styles.breakdownFill} style={{ width: `${row.percent}%`, background: row.color }} />
-                  </div>
-                  <span className={styles.breakdownCount}>{row.count}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {currentDecisions.length > 0 && (
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Decisions Overview</h2>
-              <button type="button" className={styles.cardAction} onClick={() => navigate('/config/decisions')}>
-                Manage &rsaquo;
-              </button>
-            </div>
-            <div className={styles.decisionTable}>
-              <div className={styles.decisionTableHead}>
-                <span>Name</span>
-                <span>Priority</span>
-                <span>Type</span>
-                <span>Models</span>
+      {canReadConfig ? (
+        <div className={styles.bottomGrid}>
+          {signalStats.total > 0 && (
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Signal Breakdown</h2>
+                <span className={styles.cardSubtitle}>{signalStats.total} total</span>
               </div>
-              {decisionPreviewRows.map((row) => (
-                <div key={row.key} className={styles.decisionTableRow}>
-                  <span className={styles.decisionIdentity} title={row.title}>
-                    <span className={styles.decisionName}>{row.name}</span>
-                    {row.scopeLabel ? (
-                      <span className={styles.decisionScope}>{row.scopeLabel}</span>
-                    ) : null}
-                  </span>
-                  <span className={styles.decisionPriority}>{row.priorityLabel}</span>
-                  <span className={`${styles.decisionBadge} ${
-                    row.category === 'guardrail' ? styles.badgeGuardrail :
-                    row.category === 'fallback' ? styles.badgeFallback :
-                    styles.badgeRouting
-                  }`}
+              <div className={styles.signalBreakdown}>
+                {signalBreakdownRows.map((row) => (
+                  <div
+                    key={row.type}
+                    className={styles.breakdownRow}
+                    title={`${row.type}: ${row.count} signal(s)`}
                   >
-                    {row.typeLabel}
-                  </span>
-                  <span className={styles.decisionModels} title={row.modelNames}>{row.modelNames}</span>
-                </div>
-              ))}
-              {currentDecisions.length > 10 && (
-                <button type="button" className={styles.decisionTableMore} onClick={() => navigate('/config/decisions')}>
-                  +{currentDecisions.length - 10} more decisions &rsaquo;
-                </button>
-              )}
+                    <span className={styles.breakdownLabel}>
+                      <span className={styles.breakdownDot} style={{ background: row.color }} />
+                      {row.type}
+                    </span>
+                    <div className={styles.breakdownBar}>
+                      <div
+                        className={styles.breakdownFill}
+                        style={{ width: `${row.percent}%`, background: row.color }}
+                      />
+                    </div>
+                    <span className={styles.breakdownCount}>{row.count}</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+
+          {currentDecisions.length > 0 && (
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Decisions Overview</h2>
+                <button
+                  type="button"
+                  className={styles.cardAction}
+                  onClick={() => navigate('/config/decisions')}
+                >
+                  View all
+                  <ProductIcon name="chevron-right" aria-hidden="true" />
+                </button>
+              </div>
+              <div className={styles.decisionTable}>
+                <div className={styles.decisionTableHead}>
+                  <span>Name</span>
+                  <span>Priority</span>
+                  <span>Type</span>
+                  <span>Models</span>
+                </div>
+                {decisionPreviewRows.map((row) => (
+                  <div key={row.key} className={styles.decisionTableRow}>
+                    <span className={styles.decisionIdentity} title={row.title}>
+                      <span className={styles.decisionName}>{row.name}</span>
+                      {row.scopeLabel ? (
+                        <span className={styles.decisionScope}>{row.scopeLabel}</span>
+                      ) : null}
+                    </span>
+                    <span className={styles.decisionPriority}>{row.priorityLabel}</span>
+                    <span
+                      className={`${styles.decisionBadge} ${
+                        row.category === 'guardrail'
+                          ? styles.badgeGuardrail
+                          : row.category === 'fallback'
+                            ? styles.badgeFallback
+                            : styles.badgeRouting
+                      }`}
+                    >
+                      {row.typeLabel}
+                    </span>
+                    <span className={styles.decisionModels} title={row.modelNames}>
+                      {row.modelNames}
+                    </span>
+                  </div>
+                ))}
+                {currentDecisions.length > 10 && (
+                  <button
+                    type="button"
+                    className={styles.decisionTableMore}
+                    onClick={() => navigate('/config/decisions')}
+                  >
+                    +{currentDecisions.length - 10} more decisions
+                    <ProductIcon name="chevron-right" aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }

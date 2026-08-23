@@ -50,13 +50,13 @@ global:
 
 | Value | Candidate models |
 | --- | --- |
-| `decision` | Models from the matched decision's `modelRefs`. |
-| `tier` | Union of `modelRefs` from decisions with the same `decision.tier`. |
-| `global` | All deployed models in the recipe's model/provider inventory. |
+| `decision` | Models assigned to the matched decision by the Entrypoint. |
+| `tier` | Union of Entrypoint assignments for decisions with the same `decision.tier`. |
+| `global` | All Models visible to the active Entrypoint and access policy. |
 
 `decision` is the safest default. `tier` lets related routes share candidates.
-`global` is broadest and can propose deployed models that do not appear in the
-matched decision's `modelRefs`, so it uses stricter cost and reliability guards.
+`global` is broadest and can propose visible Models that do not appear in the
+matched decision's assignment, so it uses stricter cost and reliability guards.
 
 ## Routing Sampling
 

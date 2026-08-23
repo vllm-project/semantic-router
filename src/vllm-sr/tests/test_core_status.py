@@ -15,6 +15,39 @@ runtime_service_status = importlib.import_module("cli.runtime_service_status")
 storage_backends = importlib.import_module("cli.storage_backends")
 
 
+def test_check_router_status_uses_compiled_management_tls_contract(monkeypatch):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    captured = []
+    config = """
+version: v0.4
+global:
+  services:
+    management_api:
+      port: 8443
+      tls:
+        certificate_file: /run/secrets/management-cert.pem
+"""
+    responses = iter(((0, config, ""), (0, "", "")))
+
+    def fake_exec(container_name, command):
+        captured.append((container_name, command))
+        return next(responses)
+
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+
+    assert runtime_service_status._check_router_status(
+        stack_layout.router_container_name, stack_layout
+    )
+    assert captured[1][1] == [
+        "curl",
+        "-f",
+        "-s",
+        "--cacert",
+        "/run/secrets/management-cert.pem",
+        "https://localhost:8443/health",
+    ]
+
+
 def test_check_envoy_status_uses_ready_probe_when_available(monkeypatch):
     stack_layout = runtime_stack.resolve_runtime_stack()
     captured = []

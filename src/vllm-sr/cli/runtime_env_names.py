@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable
 
+from cli.storage_secrets import STORAGE_SECRET_ENV_NAMES
+
 _ENV_NAME = re.compile(r"^[A-Z_][A-Z0-9_]*$")
 
 # These names either expose process identity or control CLI/container lifecycle.
@@ -17,24 +19,17 @@ RESERVED_RUNTIME_ENV_NAMES = frozenset(
         "SHELL",
         "PWD",
         "LOGNAME",
-        "VLLM_SR_SETUP_MODE",
-        "DASHBOARD_SETUP_MODE",
-        "VLLM_SR_ALGORITHM_OVERRIDE",
         "DISABLE_DASHBOARD",
         "DASHBOARD_READONLY",
         "DASHBOARD_PLATFORM",
         "VLLM_SR_PLATFORM",
-        "VLLM_SR_RECIPE_ENV_ALLOWLIST",
         "VLLM_SR_RUNTIME_CONFIG_PATH",
         "VLLM_SR_SOURCE_CONFIG_PATH",
         "VLLM_SR_STATE_ROOT_DIR",
         "VLLM_SR_CONFIG_BASE_DIR",
-        "VLLM_SR_RECIPE_STORE_DIR",
         "VLLM_SR_MANAGED_STORAGE_BACKENDS",
-        "VLLM_SR_ACTIVE_RECIPE_DIR",
         "VLLM_SR_STACK_NAME",
-        "VLLM_SR_STACK_POSTGRES_PASSWORD",
-        "VLLM_SR_STACK_REDIS_PASSWORD",
+        *STORAGE_SECRET_ENV_NAMES,
     }
 )
 

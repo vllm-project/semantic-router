@@ -5,22 +5,24 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercatalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercomposition"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dsl"
 )
 
 const usage = `Usage: sr-dsl <command> [options]
 
 Commands:
-  compile    Compile routing DSL to YAML/CRD
+  compile    Compile routing DSL to a Recipe document
   decompile  Convert YAML config to routing DSL
   validate   Validate a DSL file
   fmt        Format a DSL file
   generate   Generate DSL from natural language using an LLM
 
 Examples:
-  sr-dsl compile -o config.yaml --base providers.yaml privacy-router.dsl
+  sr-dsl compile -o config.yaml --base config.yaml privacy-router.dsl
   sr-dsl compile -o config.yaml config.dsl
-  sr-dsl compile --format crd -o semanticrouter.yaml config.dsl
   sr-dsl decompile -o config.dsl config.yaml
   sr-dsl validate config.dsl
   sr-dsl validate --runtime-checks config.dsl
@@ -60,10 +62,7 @@ func main() {
 func runCompile() {
 	fs := flag.NewFlagSet("compile", flag.ExitOnError)
 	output := fs.String("o", "", "Output file path (default: stdout)")
-	format := fs.String("format", "yaml", "Output format: yaml, crd")
-	base := fs.String("base", "", "Base YAML config with infrastructure (version, listeners, providers); merged with compiled routing to produce a complete config")
-	crdName := fs.String("name", "router", "CRD resource name (for --format crd)")
-	crdNamespace := fs.String("namespace", "", "CRD namespace (for --format crd, default: \"default\")")
+	base := fs.String("base", "", "Complete v0.4 YAML manifest containing exactly one Recipe whose document will be replaced")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
@@ -71,12 +70,12 @@ func runCompile() {
 
 	if fs.NArg() == 0 {
 		fmt.Fprintln(os.Stderr, "Error: input file required")
-		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile [-o output.yaml] [--base providers.yaml] [--format yaml|crd] <input.dsl>")
+		fmt.Fprintln(os.Stderr, "Usage: sr-dsl compile [-o output.yaml] [--base config.yaml] <input.dsl>")
 		os.Exit(1)
 	}
 
 	inputPath := fs.Arg(0)
-	if err := dsl.CLICompile(inputPath, *output, *format, *crdName, *crdNamespace, *base); err != nil {
+	if err := dsl.CLICompile(inputPath, *output, *base); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}
@@ -98,7 +97,16 @@ func runDecompile() {
 	}
 
 	inputPath := fs.Arg(0)
-	if err := dsl.CLIDecompile(inputPath, *output); err != nil {
+	connectionCompiler, err := providercomposition.NewAuthoringCompiler(
+		providercatalog.BuiltinIntegrations(),
+		[]providercatalog.BackendCompiler{providercatalog.StaticBackendCompiler{}},
+	)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: initialize Provider Integrations: %s\n", err)
+		os.Exit(1)
+	}
+	parseConfig := config.NewParser(connectionCompiler).ParseYAMLBytes
+	if err := dsl.CLIDecompileWithParser(inputPath, *output, parseConfig); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)
 	}

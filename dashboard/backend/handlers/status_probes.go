@@ -6,8 +6,6 @@ import (
 	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
 // getDockerContainerStatus checks the status of a Docker container.
@@ -21,8 +19,10 @@ func getDockerContainerStatus(containerName string) string {
 	return strings.TrimSpace(string(output))
 }
 
-// isRunningInContainer checks if the current process is running inside a Docker container.
-func isRunningInContainer() bool {
+var isRunningInContainer = detectRunningInContainer
+
+// detectRunningInContainer checks if the current process is running inside a Docker container.
+func detectRunningInContainer() bool {
 	if _, err := os.Stat("/.dockerenv"); err == nil {
 		return true
 	}
@@ -59,15 +59,6 @@ func checkHTTPHealth(url string) (bool, string) {
 		return true, "HTTP health check OK"
 	}
 	return false, ""
-}
-
-func checkRouterManagementHealth(url string, credentialProvider ...routerauth.CredentialProvider) bool {
-	resp, err := routerManagementGET(url, 2*time.Second, credentialProvider...)
-	if err != nil {
-		return false
-	}
-	defer func() { _ = resp.Body.Close() }()
-	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 
 // checkEnvoyHealth checks if Envoy is running and healthy.

@@ -3,7 +3,8 @@
 ## Overview
 
 An algorithm runs after a decision matches. It either selects one model from
-the decision's `modelRefs` or coordinates several of them through the Looper.
+the Models assigned to that decision by the Entrypoint, or coordinates several
+of those Models through the Looper.
 It does not decide whether the route is eligible; signals and decisions do
 that first.
 
@@ -30,7 +31,7 @@ chosen Looper supports and needs a single-model execution plan.
 Algorithms are decision-local:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: responsive-route
       description: Prefer the model with the best observed latency.
@@ -38,9 +39,6 @@ routing:
       rules:
         operator: AND
         conditions: []
-      modelRefs:
-        - model: small-model
-        - model: large-model
       algorithm:
         type: latency_aware
         latency_aware:
@@ -91,8 +89,8 @@ traffic before using them for production routing.
 
 ## Operational Boundaries
 
-- Candidate model names must resolve through `routing.modelCards` and
-  `providers.models` in a complete config.
+- Every candidate is a stable `models[].id` in the matching Entrypoint action.
+  Recipes never contain physical Model references.
 - Learned selectors need artifacts produced for the same embedding dimension
   and candidate labels used at runtime.
 - Latency and load observations are local to a Router process; they are not a

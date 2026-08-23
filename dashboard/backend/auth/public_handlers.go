@@ -84,19 +84,17 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 
 		// Atomic check-and-create: only one admin can be created via this path even
 		// under concurrent requests (see Service.BootstrapRegister).
-		user, err := svc.BootstrapRegister(r.Context(), req.Email, req.Name, hash)
+		user, token, err := svc.BootstrapRegister(r.Context(), req.Email, req.Name, req.Password, hash)
 		if errors.Is(err, ErrBootstrapClosed) {
 			http.Error(w, "bootstrap is disabled", http.StatusConflict)
 			return
 		}
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+		if errors.Is(err, ErrFirstAdminProvisioningUnavailable) {
+			http.Error(w, "initial setup is not ready", http.StatusServiceUnavailable)
 			return
 		}
-
-		token, err := svc.issueTokenForContext(r.Context(), user)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
@@ -108,7 +106,7 @@ func bootstrapRegisterHandler(svc *Service) http.HandlerFunc {
 
 		setAuthSessionCookie(w, r, token, svc.ttlDuration)
 		writeAudit(r, svc, "user.bootstrap", "/api/auth/bootstrap/register", "")
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
+		respondJSON(w, LoginResponse{User: cloneSessionUser(user, perms)})
 	}
 }
 
@@ -138,7 +136,7 @@ func loginHandler(svc *Service) http.HandlerFunc {
 		}
 
 		setAuthSessionCookie(w, r, token, svc.ttlDuration)
-		respondJSON(w, LoginResponse{Token: token, User: cloneSessionUser(user, perms)})
+		respondJSON(w, LoginResponse{User: cloneSessionUser(user, perms)})
 	}
 }
 

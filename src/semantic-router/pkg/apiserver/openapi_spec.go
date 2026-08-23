@@ -24,7 +24,7 @@ func newOpenAPISpec() OpenAPISpec {
 		OpenAPI: "3.0.0",
 		Info: OpenAPIInfo{
 			Title:       "Semantic Router Apiserver",
-			Description: "HTTP router apiserver for classification utilities, config management, and service introspection",
+			Description: "HTTP router apiserver for classification utilities and service introspection",
 			Version:     "v1",
 		},
 		Servers: []OpenAPIServer{

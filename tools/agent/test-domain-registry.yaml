@@ -138,9 +138,7 @@ domains:
     resource_class: heavy
     paths:
       - deploy/operator/**
-      - deploy/kubernetes/crds/**
-      - src/semantic-router/pkg/apis/**
-    local: {fast: [make generate-crd], feature: []}
+    local: {fast: [make operator-generate], feature: []}
     image_receipts: [extproc, operator, operator-bundle]
     reporting: {kind: check}
 
@@ -307,7 +305,6 @@ domains:
       - src/semantic-router/pkg/extproc/router_learning*
       - src/semantic-router/pkg/config/*learning*
       - src/semantic-router/pkg/routerreplay/store/learning_diagnostics.go
-      - src/semantic-router/pkg/apiserver/route_router_outcomes.go
     local: {fast: [], feature: [make bench-router-learning]}
     image_receipts: []
     reporting: {kind: evaluation}
@@ -364,21 +361,9 @@ profiles:
     paths:
       - e2e/profiles/dashboard/**
       - e2e/testcases/dashboard_*.go
-      - e2e/testcases/security_policy_apply.go
       - deploy/kubernetes/observability/dashboard/**
-      - dashboard/backend/handlers/security_policy*.go
-      - dashboard/backend/handlers/deploy.go
-      - dashboard/backend/handlers/canonical_transport.go
-  dynamic-config:
-    owner: e2e
-    coverage_role: dynamic-crd-routing-contracts
-    selection: pr
-    paths: [e2e/profiles/dynamic-config/**]
-  multimodal-routing:
-    owner: e2e
-    coverage_role: image-modality-embedding-signal-routing
-    selection: pr
-    paths: [e2e/profiles/multimodal-routing/**]
+      - dashboard/backend/**
+      - dashboard/frontend/**
   remote-embedding:
     owner: e2e
     coverage_role: openai-compatible-remote-embedding-provider
@@ -424,17 +409,6 @@ profiles:
       - e2e/profiles/multi-endpoint/**
       - e2e/config/config.multi-endpoint.yaml
       - tools/demos/multi-endpoint.sh
-  authz-rbac:
-    owner: e2e
-    coverage_role: authz-and-rate-limit-contracts
-    selection: pr
-    paths:
-      - e2e/profiles/authz-rbac/**
-      - e2e/config/config.authz-rbac.yaml
-      - e2e/config/authz-profile-*.yaml
-      - src/semantic-router/pkg/classification/authz*.go
-      - src/semantic-router/pkg/authz/**
-      - dashboard/backend/handlers/security_policy*.go
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache
@@ -443,24 +417,22 @@ profiles:
       - e2e/profiles/streaming/**
       - deploy/kubernetes/streaming/**
       - src/semantic-router/pkg/extproc/processor_req_body_streamed*.go
-  anthropic-shim:
-    owner: e2e
-    coverage_role: anthropic-shape-backend-translation-contracts
-    selection: manual
-    image_receipts: [anthropic-shim]
-    paths:
-      - e2e/profiles/anthropic-shim/**
-      - e2e/testing/anthropic-shim/**
-      - deploy/kubernetes/anthropic-backend/**
-      - src/semantic-router/pkg/anthropic/outbound*.go
   response-api:
     owner: e2e
-    coverage_role: responses-api-memory
-    selection: manual
+    coverage_role: neutral-protocol-matrix-and-responses-api
+    selection: pr
+    full_ci: true
     paths:
       - e2e/profiles/response-api/**
+      - e2e/testcases/protocol_codec_matrix.go
       - deploy/kubernetes/response-api/gwapi-resources.yaml
       - deploy/kubernetes/response-api/mock-vllm.yaml
+      - tools/mock-vllm/**
+      - src/semantic-router/pkg/llmprotocol/**
+      - src/semantic-router/pkg/protocolcodec/**
+      - src/semantic-router/pkg/backendinvoker/**
+      - src/semantic-router/pkg/extproc/processor_protocol_contract.go
+      - src/semantic-router/pkg/extproc/processor_res_semantic_stream.go
   response-api-redis:
     owner: e2e
     coverage_role: responses-api-redis-ttl

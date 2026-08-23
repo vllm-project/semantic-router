@@ -48,6 +48,7 @@ import (
 
 	candle "github.com/vllm-project/semantic-router/candle-binding"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
@@ -82,6 +83,21 @@ type usageRec struct {
 	PromptTokens     int64 `json:"prompt_tokens"`
 	CompletionTokens int64 `json:"completion_tokens"`
 	TotalTokens      int64 `json:"total_tokens"`
+	Authoritative    bool  `json:"authoritative"`
+}
+
+func usageRecord(usage looper.TokenUsage) usageRec {
+	return usageRec{
+		PromptTokens: usage.PromptTokens, CompletionTokens: usage.CompletionTokens,
+		TotalTokens: usage.TotalTokens, Authoritative: usage.Authoritative(),
+	}
+}
+
+func (usage usageRec) tokenUsage() looper.TokenUsage {
+	if !usage.Authoritative {
+		return looper.UnknownTokenUsage()
+	}
+	return looper.NewActualTokenUsage(usage.PromptTokens, usage.CompletionTokens, usage.TotalTokens)
 }
 
 type cachedResponse struct {
@@ -275,7 +291,7 @@ func generatePanel(client *looper.Client, opt options, it item) ([]cachedRespons
 	out := make([]cachedResponse, 0, len(opt.panelModels))
 	for _, model := range opt.panelModels {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, model, false, 1, nil, "")
+		resp, err := client.CallModel(context.Background(), req, model, false, 1, nil)
 		if err != nil {
 			return nil, fmt.Errorf("model %q: %w", model, err)
 		}
@@ -283,7 +299,7 @@ func generatePanel(client *looper.Client, opt options, it item) ([]cachedRespons
 			Model:     model,
 			Content:   resp.Content,
 			Reasoning: resp.ReasoningContent,
-			Usage:     usageRec(resp.Usage),
+			Usage:     usageRecord(resp.Usage),
 		})
 	}
 	return out, nil
@@ -341,13 +357,13 @@ func produceArm(
 
 	if arm == "A" {
 		req := buildRequest(it.Question, it.Context, opt)
-		resp, err := client.CallModel(context.Background(), req, opt.judge, false, 1, nil, "")
+		resp, err := client.CallModel(context.Background(), req, opt.judge, false, 1, nil)
 		if err != nil {
 			rec.Error = err.Error()
 			return rec
 		}
 		rec.FinalAnswer = resp.Content
-		rec.Usage = usageRec(resp.Usage)
+		rec.Usage = usageRecord(resp.Usage)
 		return rec
 	}
 
@@ -357,17 +373,19 @@ func produceArm(
 		defer looper.SetGroundingBackends(realNLI(), nil)
 	}
 
-	req := &looper.Request{
-		OriginalRequest: buildRequest(it.Question, it.Context, opt),
-		DecisionName:    "fusioneval",
-		CachedPanel:     toModelResponses(entry.Panel),
-		Algorithm: &config.AlgorithmConfig{
-			Type: "fusion",
-			Fusion: &config.FusionAlgorithmConfig{
-				Model:          opt.judge,
-				AnalysisModels: opt.panelModels,
-				Grounding:      grounding,
-			},
+	req, err := looper.NewRequestFromSemantic(buildSemanticRequest(it.Question, it.Context, opt))
+	if err != nil {
+		rec.Error = err.Error()
+		return rec
+	}
+	req.DecisionName = "fusioneval"
+	req.CachedPanel = toModelResponses(entry.Panel)
+	req.Algorithm = &config.AlgorithmConfig{
+		Type: "fusion",
+		Fusion: &config.FusionAlgorithmConfig{
+			Model:          opt.judge,
+			AnalysisModels: opt.panelModels,
+			Grounding:      grounding,
 		},
 	}
 	resp, err := fusion.Execute(context.Background(), req)
@@ -375,8 +393,8 @@ func produceArm(
 		rec.Error = err.Error()
 		return rec
 	}
-	rec.FinalAnswer = finalAnswer(resp.Body)
-	rec.Usage = usageRec(resp.Usage)
+	rec.FinalAnswer = semanticFinalAnswer(resp.Semantic)
+	rec.Usage = usageRecord(resp.Usage)
 	fillTrace(&rec, resp.IntermediateResponses)
 	return rec
 }
@@ -443,6 +461,35 @@ func buildRequest(question, context string, opt options) *openai.ChatCompletionN
 	return req
 }
 
+func buildSemanticRequest(question, requestContext string, opt options) *llmprotocol.Request {
+	request := &llmprotocol.Request{
+		Generation: 1,
+		Messages: []llmprotocol.Message{{
+			Role: llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentText,
+				Text: question,
+			}},
+		}},
+	}
+	if strings.TrimSpace(requestContext) != "" {
+		request.Instructions = []llmprotocol.InstructionBlock{{
+			Role: llmprotocol.RoleSystem,
+			Content: []llmprotocol.Content{{
+				Kind: llmprotocol.ContentText,
+				Text: requestContext,
+			}},
+		}}
+	}
+	if opt.temperature > 0 {
+		request.Sampling.Temperature = llmprotocol.Float64(opt.temperature)
+	}
+	if opt.maxTokens > 0 {
+		request.Sampling.MaxOutputTokens = llmprotocol.Int64(int64(opt.maxTokens))
+	}
+	return request
+}
+
 func toModelResponses(panel []cachedResponse) []*looper.ModelResponse {
 	out := make([]*looper.ModelResponse, 0, len(panel))
 	for _, p := range panel {
@@ -450,24 +497,25 @@ func toModelResponses(panel []cachedResponse) []*looper.ModelResponse {
 			Model:            p.Model,
 			Content:          p.Content,
 			ReasoningContent: p.Reasoning,
-			Usage:            looper.TokenUsage(p.Usage),
+			Usage:            p.Usage.tokenUsage(),
 		})
 	}
 	return out
 }
 
-func finalAnswer(body []byte) string {
-	var completion struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(body, &completion); err != nil || len(completion.Choices) == 0 {
+func semanticFinalAnswer(response *llmprotocol.Response) string {
+	if response == nil {
 		return ""
 	}
-	return completion.Choices[0].Message.Content
+	var answer strings.Builder
+	for _, item := range response.Output {
+		for _, content := range item.Content {
+			if content.Kind == llmprotocol.ContentText {
+				answer.WriteString(content.Text)
+			}
+		}
+	}
+	return answer.String()
 }
 
 func panelSHA256(panel []cachedResponse) string {

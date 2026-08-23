@@ -40,9 +40,9 @@ export const useClawRoomTransport = ({
   const [streamingToolTraces, setStreamingToolTraces] = useState<
     Map<string, ClawRoomStreamingToolTraceEntry>
   >(new Map())
-  const [streamingParticipants, setStreamingParticipants] = useState<Map<string, StreamingParticipant>>(
-    new Map()
-  )
+  const [streamingParticipants, setStreamingParticipants] = useState<
+    Map<string, StreamingParticipant>
+  >(new Map())
 
   useEffect(() => {
     onRoomEventRef.current = onRoomEvent
@@ -120,7 +120,9 @@ export const useClawRoomTransport = ({
         sourceRef.current.close()
       }
 
-      const source = new EventSource(`/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/stream`)
+      const source = new EventSource(
+        `/api/openclaw/rooms/${encodeURIComponent(selectedRoomId)}/stream`,
+      )
       sourceRef.current = source
 
       source.addEventListener('message', ((event: MessageEvent<string>) => {
@@ -155,7 +157,9 @@ export const useClawRoomTransport = ({
         }
       }) as EventListener)
 
-      source.addEventListener(ROOM_COLLABORATION_OUTBOUND_TYPES.toolTraceUpdate, ((event: MessageEvent<string>) => {
+      source.addEventListener(ROOM_COLLABORATION_OUTBOUND_TYPES.toolTraceUpdate, ((
+        event: MessageEvent<string>,
+      ) => {
         try {
           const payload = JSON.parse(event.data) as RoomStreamEvent
           applyRoomStreamEvent(payload, collaborationHandlers)
@@ -234,7 +238,7 @@ export const useClawRoomTransport = ({
         }, 30000)
       }
 
-      ws.onmessage = event => {
+      ws.onmessage = (event) => {
         try {
           const payload = JSON.parse(event.data) as WSOutboundMessage
           handleOutboundEvent(payload)

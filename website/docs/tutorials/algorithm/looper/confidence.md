@@ -37,7 +37,7 @@ The confidence algorithm evaluates model responses using either token-level logp
 flowchart TD
     A[Request arrives] --> B[Decision matched]
     B --> C[algorithm.type = confidence]
-    C --> D[Order modelRefs by escalation_order]
+    C --> D[Order assigned Models by escalation_order]
     D --> E[Call current model]
     E --> F{Model succeeded?}
     F -- No --> G{on_error = skip?}

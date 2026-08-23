@@ -11,8 +11,6 @@ coverage from a numbered script or a saved check mark in this directory.
 
 - [`llm-katan/`](llm-katan/) provides a lightweight OpenAI-compatible test
   server and echo backend.
-- [`anthropic-shim/`](anthropic-shim/) translates a llama.cpp-style backend to
-  the Anthropic Messages shape for a manual profile.
 - [`hallucination-demo/`](hallucination-demo/) runs a focused mock-tool demo.
 - [`vllm-sr-cli/`](vllm-sr-cli/) documents CLI unit and container integration
   tests.

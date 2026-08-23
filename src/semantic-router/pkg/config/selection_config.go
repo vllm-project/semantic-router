@@ -13,7 +13,6 @@ type ModelSelectionConfig struct {
 	RouterDC RouterDCSelectionConfig `yaml:"router_dc,omitempty"`
 	AutoMix  AutoMixSelectionConfig  `yaml:"automix,omitempty"`
 	Hybrid   HybridSelectionConfig   `yaml:"hybrid,omitempty"`
-	ML       MLSelectionConfig       `yaml:"ml,omitempty"`
 
 	SessionAware SessionAwareSelectionConfig `yaml:"-"`
 	Momentum     MomentumSelectionConfig     `yaml:"momentum,omitempty"`
@@ -121,12 +120,12 @@ type ModelSwitchGateConfig struct {
 
 // MLSelectionConfig holds configuration for the shared ML-based selectors.
 type MLSelectionConfig struct {
-	ModelsPath   string         `yaml:"models_path,omitempty"`
-	EmbeddingDim int            `yaml:"embedding_dim,omitempty"`
-	KNN          MLKNNConfig    `yaml:"knn,omitempty"`
-	KMeans       MLKMeansConfig `yaml:"kmeans,omitempty"`
-	SVM          MLSVMConfig    `yaml:"svm,omitempty"`
-	MLP          MLMLPConfig    `yaml:"mlp,omitempty"`
+	ModelsPath   string          `yaml:"models_path,omitempty"`
+	EmbeddingDim int             `yaml:"embedding_dim,omitempty"`
+	KNN          *MLKNNConfig    `yaml:"knn,omitempty"`
+	KMeans       *MLKMeansConfig `yaml:"kmeans,omitempty"`
+	SVM          *MLSVMConfig    `yaml:"svm,omitempty"`
+	MLP          *MLMLPConfig    `yaml:"mlp,omitempty"`
 }
 
 type MLKNNConfig struct {

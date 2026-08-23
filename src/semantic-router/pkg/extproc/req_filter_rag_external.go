@@ -18,7 +18,8 @@ import (
 )
 
 var (
-	// Shared HTTP client for external API requests with connection pooling
+	// Shared client for the internal RAG document-retrieval adapter. This path
+	// never selects or invokes a request-facing logical Model backend.
 	externalAPIClient     *http.Client
 	externalAPIClientOnce sync.Once
 )
@@ -85,7 +86,8 @@ func validateHeaderValue(value string) (string, error) {
 	return result, nil
 }
 
-// retrieveFromExternalAPI retrieves context from external API backend
+// retrieveFromExternalAPI retrieves documents from the configured vector or
+// search service. It is an internal plugin dependency, not inference egress.
 func (r *OpenAIRouter) retrieveFromExternalAPI(traceCtx context.Context, ctx *RequestContext, ragConfig *config.RAGPluginConfig) (string, error) {
 	apiConfig, err := ragConfig.ExternalAPIBackendConfig()
 	if err != nil {

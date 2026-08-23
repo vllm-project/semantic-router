@@ -1,4 +1,4 @@
-import type { ToolCall } from '../tools'
+import type { ToolCall } from '../tools/types'
 
 const TOOL_LABELS: Record<string, string> = {
   calculate: 'Calculator',

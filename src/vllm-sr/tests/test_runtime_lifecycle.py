@@ -112,25 +112,3 @@ def test_router_startup_diagnostics_use_stderr(capsys):
     assert captured.out == ""
     assert 'caller="startup"' in captured.err
     assert "ordinary line" not in captured.err
-
-
-def test_setup_mode_keeps_progress_on_stderr_and_summary_on_stdout(monkeypatch, capsys):
-    monkeypatch.setattr(runtime_lifecycle, "_wait_for_setup_dashboard", lambda *_: None)
-    monkeypatch.setattr(
-        runtime_lifecycle, "ensure_runtime_container_not_exited", lambda *_a, **_k: None
-    )
-    stack_layout = resolve_runtime_stack()
-
-    finished = runtime_lifecycle.maybe_finish_setup_mode(
-        setup_mode=True,
-        dashboard_disabled=False,
-        stack_layout=stack_layout,
-    )
-
-    captured = capsys.readouterr()
-    assert finished is True
-    assert "✓ vLLM Semantic Router setup mode is running" in captured.out
-    assert stack_layout.dashboard_url in captured.out
-    assert "Next steps" in captured.out
-    assert "Setup mode detected" in captured.err
-    assert "Waiting for Dashboard" in captured.err

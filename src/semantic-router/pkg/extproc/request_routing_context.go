@@ -60,6 +60,17 @@ func (c *RequestRoutingContext) RecipeName() config.RecipeName {
 	return recipe.Name
 }
 
+// RuntimeScope returns the stable namespace for mutable state owned by the
+// effective entrypoint view. Several model-name aliases in one mapping share
+// a scope, while separate mappings of the same reusable recipe do not.
+func (c *RequestRoutingContext) RuntimeScope() config.RecipeName {
+	recipe := c.SelectedRecipe()
+	if recipe == nil {
+		return ""
+	}
+	return recipe.RuntimeScope()
+}
+
 func (c *RequestRoutingContext) IsPassthrough() bool {
 	return c != nil && c.resolution == routingPassthrough
 }

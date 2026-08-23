@@ -18,10 +18,6 @@ describe('decision editor preservation', () => {
         operator: 'AND',
         conditions: [{ type: 'keyword', name: 'complex' }],
       },
-      modelRefs: [
-        { model: 'model-a', use_reasoning: false },
-        { model: 'model-b', use_reasoning: true },
-      ],
       plugins: [],
       algorithm: {
         type: 'prompt',
@@ -38,7 +34,6 @@ describe('decision editor preservation', () => {
       description: 'after',
       priority: 20,
       rules: existing.rules,
-      modelRefs: existing.modelRefs,
       plugins: [],
     })
 

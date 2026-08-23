@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: semantic-router-dashboard-e2e-egress
+  namespace: vllm-semantic-router-system
+  labels:
+    vllm.ai/e2e-managed: "true"
+data:
+  policy.yaml: |
+    version: v1
+    schemes: [http, https]
+    hosts:
+      - host: vllm-llama3-8b-instruct.default.svc.cluster.local
+        ports: [8000]
+        # The exact Pod CIDR is assigned by the disposable E2E cluster. The
+        # host allow-list above remains exact; these ranges only admit that
+        # service when it resolves inside the cluster network.
+        allow_cidrs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      - host: semantic-router-dashboard-issuer.vllm-semantic-router-system.svc.cluster.local
+        ports: [9443]
+        # Management assertions are fail-closed unless Router can fetch the
+        # exact issuer metadata and JWKS through the same egress guard.
+        allow_cidrs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      - host: semantic-router-public.vllm-semantic-router-system.svc.cluster.local
+        ports: [80]
+        # Agent calls re-enter only through the exact public inference alias.
+        allow_cidrs: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]

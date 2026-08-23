@@ -50,18 +50,11 @@ const graphiteSurfaceContracts = [
     forbiddenPatterns: [/#(?:3b82f6|2563eb|60a5fa)\b/i, /rgba?\(\s*59\s*,\s*130\s*,\s*246\b/i],
   },
   {
-    path: '../components/MCPConfigPanel.module.css',
+    path: '../components/AgentManagementPanel.module.css',
     forbiddenPatterns: [
       /#(?:1e1e2e|181825|313244|cdd6f4|a6adc8|89b4fa|cba6f7|a6e3a1|101311|0f1304)\b/i,
       /rgba?\(\s*(?:137\s*,\s*180\s*,\s*250|166\s*,\s*227\s*,\s*161|203\s*,\s*166\s*,\s*247)\b/i,
       /rgba?\(\s*(?:6\s*,\s*10\s*,\s*9|10\s*,\s*14\s*,\s*13|7\s*,\s*11\s*,\s*10|3\s*,\s*6\s*,\s*6|5\s*,\s*8\s*,\s*8)\b/i,
-    ],
-  },
-  {
-    path: '../pages/SetupWizardPage.module.css',
-    forbiddenPatterns: [
-      /#(?:060706|d8f7a5|f5f7ff)\b/i,
-      /rgba?\(\s*(?:12\s*,\s*18\s*,\s*36|9\s*,\s*12\s*,\s*24|0\s*,\s*180\s*,\s*216)\b/i,
     ],
   },
   {
@@ -72,7 +65,7 @@ const graphiteSurfaceContracts = [
     ],
   },
   {
-    path: '../components/ChatComponent.module.css',
+    path: '../components/ClawRoomToolCards.module.css',
     forbiddenPatterns: [
       /rgba?\(\s*(?:40\s*,\s*44\s*,\s*52|19\s*,\s*21\s*,\s*27|46\s*,\s*50\s*,\s*58|21\s*,\s*23\s*,\s*29|7\s*,\s*8\s*,\s*9)\b/i,
     ],
@@ -103,19 +96,8 @@ const graphiteSurfaceContracts = [
     ],
   },
   {
-    path: '../pages/ConfigPageTaxonomyClassifiers.module.css',
-    forbiddenPatterns: [/#f4ffe7\b/i, /rgba?\(\s*24\s*,\s*34\s*,\s*17\b/i],
-  },
-  {
     path: '../pages/topology/components/CustomNodes/CustomNodes.module.css',
     forbiddenPatterns: [/#e8efe1\b/i, /rgba?\(\s*20\s*,\s*30\s*,\s*20\b/i],
-  },
-  {
-    path: '../components/RouterModelInventory.module.css',
-    forbiddenPatterns: [
-      /#(?:bef264|102113|101c12|dcfce7)\b/i,
-      /rgba?\(\s*(?:34\s*,\s*197\s*,\s*94|134\s*,\s*239\s*,\s*172|190\s*,\s*242\s*,\s*100|12\s*,\s*32\s*,\s*18|16\s*,\s*33\s*,\s*19)\b/i,
-    ],
   },
   {
     path: '../components/InsightsCharts.tsx',
@@ -177,7 +159,7 @@ describe('graphite dashboard theme contract', () => {
 
     expect(dslTheme).toContain("'editor.background': '#050505'")
     expect(dslTheme).toContain("'editorCursor.foreground': '#e31b23'")
-    expect(insightsCharts).toMatch(/const CHART_COLORS = \[\s*'#e31b23'/)
+    expect(insightsCharts).toContain("const CHART_PRIMARY = '#e31b23'")
   })
 
   it('does not reintroduce the retired legacy brand palette', () => {

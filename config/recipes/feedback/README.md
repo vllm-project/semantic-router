@@ -69,9 +69,12 @@ and history retention before using the recipe with sensitive conversations.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/feedback/config.yaml
-vllm-sr serve --config config/recipes/feedback/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Feedback Routing** in
+**Recipes**, assign each recovery lane, and publish the resulting
+Mixture-of-Model Entrypoint.
 
 ## Evaluation
 

@@ -1,14 +1,6 @@
 package config
 
-// ConfigSource defines where to load dynamic configuration from.
-type ConfigSource string
-
-const (
-	// ConfigSourceFile loads configuration from file (default).
-	ConfigSourceFile ConfigSource = "file"
-	// ConfigSourceKubernetes loads configuration from Kubernetes CRDs.
-	ConfigSourceKubernetes ConfigSource = "kubernetes"
-)
+import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 
 // Model role constants for external models.
 const (
@@ -80,23 +72,17 @@ const (
 	SignalTypeProjection   = "projection"
 )
 
-// API format constants for model backends.
-const (
-	APIFormatOpenAI    = "openai"
-	APIFormatAnthropic = "anthropic"
-)
-
-// ClientProtocol* identifies the inbound wire format; distinct from APIFormat (upstream backend).
-// The zero value (empty string) is treated as OpenAI-compatible; additional constants will be
-// introduced as follow-up changes add explicit consumers.
-const (
-	ClientProtocolAnthropic = "anthropic"
-)
-
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
-	ConfigSource ConfigSource      `yaml:"config_source,omitempty"`
-	MoMRegistry  map[string]string `yaml:"mom_registry,omitempty"`
+	CanonicalVersion string `yaml:"-" json:"-"`
+	BillingCurrency  string `yaml:"-" json:"-"`
+	// RoutingSnapshot is the immutable compiled Model/Recipe/Entrypoint value
+	// used by BackendInvoker. It is built once at the standalone manifest
+	// boundary or supplied by the managed publication replica. Runtime routing
+	// views are derived from it and never act as physical-backend authority.
+	RoutingSnapshot *routingsnapshot.Snapshot `yaml:"-" json:"-"`
+	ControlPlane    ControlPlaneConfig        `yaml:"control_plane,omitempty"`
+	MoMRegistry     map[string]string         `yaml:"mom_registry,omitempty"`
 	// SkipExternalAssetValidation is set only for untrusted read-only
 	// validation requests, which must never trigger filesystem reads.
 	SkipExternalAssetValidation bool `yaml:"-" json:"-"`
@@ -108,6 +94,7 @@ type RouterConfig struct {
 	Memory           MemoryConfig        `yaml:"memory"`
 	VectorStore      *VectorStoreConfig  `yaml:"vector_store,omitempty"`
 	ResponseAPI      ResponseAPIConfig   `yaml:"response_api"`
+	Agent            AgentServiceConfig  `yaml:"agent,omitempty"`
 	RouterReplay     RouterReplayConfig  `yaml:"router_replay"`
 	StartupStatus    StartupStatusConfig `yaml:"startup_status"`
 	Looper           LooperConfig        `yaml:"looper,omitempty"`
@@ -116,20 +103,26 @@ type RouterConfig struct {
 	RouterOptions    `yaml:",inline"`
 	RouterLearning   RouterLearningConfig `yaml:"learning,omitempty"`
 
-	// Dynamic user-facing routing configuration. Entrypoints and Recipes are
-	// the normalized multi-recipe state produced by the canonical loader; the
-	// inline IntelligentRouting fields always mirror the default recipe.
+	// Dynamic routing configuration. Entrypoints and Recipes are the root
+	// runtime authority produced by the canonical loader. The inline
+	// IntelligentRouting fields are populated only on an isolated Recipe view;
+	// they never define an implicit root-level Recipe.
 	IntelligentRouting `yaml:",inline"`
 	Entrypoints        []EntrypointMapping `yaml:"-"`
 	Recipes            []RoutingRecipe     `yaml:"-"`
-	// RoutingScope is populated only on immutable recipe views.
+	// RoutingScope is populated only on isolated Recipe and Recipe-document
+	// views. An empty scope identifies the root runtime config.
 	RoutingScope  RecipeName `yaml:"-"`
 	BackendModels `yaml:",inline"`
 	ToolSelection `yaml:",inline"`
 
-	Authz         AuthzConfig         `yaml:"authz,omitempty"`
-	RateLimit     RateLimitConfig     `yaml:"ratelimit,omitempty"`
-	ManagementAPI ManagementAPIConfig `yaml:"management_api,omitempty"`
+	ManagementAPI      ManagementAPIConfig       `yaml:"management_api,omitempty"`
+	Access             AccessServiceConfig       `yaml:"access,omitempty"`
+	AccessStore        *AccessStoreConfig        `yaml:"access_store,omitempty"`
+	AccessRuntimeStore *AccessRuntimeStoreConfig `yaml:"access_runtime_store,omitempty"`
+	BackendCredentials BackendCredentialsConfig  `yaml:"backend_credentials,omitempty"`
+	BackendEgress      BackendEgressConfig       `yaml:"backend_egress,omitempty"`
+	BackendDispatch    BackendDispatchConfig     `yaml:"backend_dispatch,omitempty"`
 
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
@@ -138,64 +131,6 @@ type RouterConfig struct {
 	// runtime snapshot was parsed. Management APIs use it to distinguish a
 	// persisted config from the config that has completed hot reload.
 	DocumentHash string `yaml:"-"`
-}
-
-// AuthzConfig configures how the router resolves per-user LLM API keys.
-type AuthzConfig struct {
-	FailOpen  bool                  `yaml:"fail_open,omitempty"`
-	Identity  IdentityConfig        `yaml:"identity,omitempty"`
-	Providers []AuthzProviderConfig `yaml:"providers,omitempty"`
-}
-
-// IdentityConfig controls how the router reads user identity from request headers.
-type IdentityConfig struct {
-	UserIDHeader     string `yaml:"user_id_header,omitempty"`
-	UserGroupsHeader string `yaml:"user_groups_header,omitempty"`
-}
-
-func (ic IdentityConfig) GetUserIDHeader() string {
-	if ic.UserIDHeader == "" {
-		return "x-authz-user-id"
-	}
-	return ic.UserIDHeader
-}
-
-func (ic IdentityConfig) GetUserGroupsHeader() string {
-	if ic.UserGroupsHeader == "" {
-		return "x-authz-user-groups"
-	}
-	return ic.UserGroupsHeader
-}
-
-type AuthzProviderConfig struct {
-	Type    string            `yaml:"type"`
-	Headers map[string]string `yaml:"headers,omitempty"`
-}
-
-type RateLimitConfig struct {
-	FailOpen  bool                      `yaml:"fail_open,omitempty"`
-	Providers []RateLimitProviderConfig `yaml:"providers,omitempty"`
-}
-
-type RateLimitProviderConfig struct {
-	Type    string          `yaml:"type"`
-	Address string          `yaml:"address,omitempty"`
-	Domain  string          `yaml:"domain,omitempty"`
-	Rules   []RateLimitRule `yaml:"rules,omitempty"`
-}
-
-type RateLimitRule struct {
-	Name            string         `yaml:"name"`
-	Match           RateLimitMatch `yaml:"match"`
-	RequestsPerUnit int            `yaml:"requests_per_unit,omitempty"`
-	TokensPerUnit   int            `yaml:"tokens_per_unit,omitempty"`
-	Unit            string         `yaml:"unit"`
-}
-
-type RateLimitMatch struct {
-	User  string `yaml:"user,omitempty"`
-	Group string `yaml:"group,omitempty"`
-	Model string `yaml:"model,omitempty"`
 }
 
 type ToolSelection struct {
@@ -219,24 +154,11 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	AutoModelName             string               `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            []string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                 `yaml:"include_config_models_in_list,omitempty"`
-	ClearRouteCache           bool                 `yaml:"clear_route_cache"`
-	StreamedBodyMode          bool                 `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes      int64                `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec    int                  `yaml:"streamed_body_timeout_sec,omitempty"`
-	SkipProcessing            SkipProcessingConfig `yaml:"skip_processing,omitempty"`
-}
-
-// SkipProcessingConfig gates the x-vsr-skip-processing request header.
-type SkipProcessingConfig struct {
-	Enabled bool `yaml:"enabled"`
-}
-
-// IsEnabled reports whether the x-vsr-skip-processing opt-out is honored.
-func (s SkipProcessingConfig) IsEnabled() bool {
-	return s.Enabled
+	IncludeConfigModelsInList bool  `yaml:"include_config_models_in_list,omitempty"`
+	ClearRouteCache           bool  `yaml:"clear_route_cache"`
+	StreamedBodyMode          bool  `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes      int64 `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec    int   `yaml:"streamed_body_timeout_sec,omitempty"`
 }
 
 // InlineModels captures built-in model families and prompt-processing settings.
@@ -267,7 +189,6 @@ type BackendModels struct {
 	DefaultModel     string                          `yaml:"default_model"`
 	VLLMEndpoints    []VLLMEndpoint                  `yaml:"vllm_endpoints"`
 	ImageGenBackends map[string]ImageGenBackendEntry `yaml:"image_gen_backends,omitempty"`
-	ProviderProfiles map[string]ProviderProfile      `yaml:"provider_profiles,omitempty"`
 }
 
 type ReasoningConfig struct {

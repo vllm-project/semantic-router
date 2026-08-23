@@ -1,8 +1,6 @@
 package handlers
 
 import (
-	"os"
-	"path/filepath"
 	"testing"
 )
 
@@ -61,20 +59,9 @@ func TestOpenClawModelGatewayContainerNameFallsBackToManagedEnvoyContainer(t *te
 	}
 }
 
-func TestResolveOpenClawModelBaseURL_TargetEnvoyWinsOverRouterConfig(t *testing.T) {
+func TestResolveOpenClawModelBaseURL_UsesTargetEnvoy(t *testing.T) {
 	tempDir := t.TempDir()
-	configPath := filepath.Join(tempDir, "config.yaml")
-	configYAML := `
-listeners:
-  - address: 0.0.0.0
-    port: 18889
-`
-	if err := os.WriteFile(configPath, []byte(configYAML), 0o644); err != nil {
-		t.Fatalf("failed to write config file: %v", err)
-	}
-
 	h := newTestOpenClawHandler(t, tempDir, false)
-	h.SetRouterConfigPath(configPath)
 	t.Setenv("OPENCLAW_MODEL_BASE_URL", "")
 	t.Setenv("TARGET_ENVOY_URL", "http://vllm-sr-envoy-container:8899")
 

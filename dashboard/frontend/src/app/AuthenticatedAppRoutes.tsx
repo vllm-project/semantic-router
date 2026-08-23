@@ -1,14 +1,9 @@
 import React from 'react'
-import { Navigate, Route } from 'react-router-dom'
+import { Navigate, Route, useLocation } from 'react-router-dom'
 import type { ConfigSection } from '../components/ConfigNav'
 import AppShellLayout from './AppShellLayout'
+import { ConfigSectionRoute } from './ConfigSectionRoutes'
 import {
-  ConfigSectionRoute,
-  KnowledgeBaseRoute,
-  LegacyTaxonomyRedirect,
-} from './ConfigSectionRoutes'
-import {
-  fallbackRouteTarget,
   redirectRouteDefinitions,
   shellRouteDefinitions,
   type ShellRouteDefinition,
@@ -17,6 +12,7 @@ import {
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
 import {
+  loadAccessControlPage,
   loadBuilderPage,
   loadDashboardPage,
   loadEvaluationPage,
@@ -26,7 +22,6 @@ import {
   loadFleetSimWorkloadsPage,
   loadInsightsPage,
   loadInsightsRecordPage,
-  loadKnowledgeMapPage,
   loadLogsPage,
   loadMLSetupPage,
   loadMonitoringPage,
@@ -34,12 +29,9 @@ import {
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
   loadPluginOperationsPage,
-  loadSecurityPolicyPage,
-  loadSetupWizardPage,
   loadStatusPage,
   loadTopologyPage,
   loadTracingPage,
-  loadUsersPage,
 } from './routeLoaders'
 
 interface AuthenticatedAppRoutesProps {
@@ -47,12 +39,13 @@ interface AuthenticatedAppRoutesProps {
   setConfigSection: (section: ConfigSection) => void
   canUseMLSetup: boolean
   user: PermissionUser | null
-  setupMode: boolean
 }
 
 const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
+  'access-control': (
+    <RecoverableLazyRoute loader={loadAccessControlPage} routeLabel="Access Control" />
+  ),
   builder: <RecoverableLazyRoute loader={loadBuilderPage} routeLabel="Config Builder" />,
-  clawos: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="ClawOS" />,
   dashboard: <RecoverableLazyRoute loader={loadDashboardPage} routeLabel="Dashboard" />,
   evaluation: <RecoverableLazyRoute loader={loadEvaluationPage} routeLabel="Evaluation" />,
   'fleet-sim': <RecoverableLazyRoute loader={loadFleetSimOverviewPage} routeLabel="Fleet Sim" />,
@@ -69,15 +62,14 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   ),
   logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
+  openclaw: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
   plugins: (
     <RecoverableLazyRoute loader={loadPluginOperationsPage} routeLabel="Plugin Operations" />
   ),
-  security: <RecoverableLazyRoute loader={loadSecurityPolicyPage} routeLabel="Security" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
   tracing: <RecoverableLazyRoute loader={loadTracingPage} routeLabel="Tracing" />,
-  users: <RecoverableLazyRoute loader={loadUsersPage} routeLabel="Users" />,
 }
 
 const renderShellContent = (
@@ -102,28 +94,53 @@ const renderShellElement = (
   setConfigSection: (section: ConfigSection) => void,
 ) => renderShellContent(route, shellPageElements[route.page], configSection, setConfigSection)
 
+interface AuthorizedShellRouteProps {
+  route: ShellRouteDefinition
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+  user: PermissionUser | null
+}
+
+const AuthorizedStandaloneRoute: React.FC<{
+  children: React.ReactElement
+  user: PermissionUser | null
+}> = ({ children, user }) => {
+  const { pathname } = useLocation()
+  return canAccessDashboardPath(user, pathname) ? children : <Navigate to="/dashboard" replace />
+}
+
+const AuthorizedShellRoute: React.FC<AuthorizedShellRouteProps> = ({
+  route,
+  configSection,
+  setConfigSection,
+  user,
+}) => {
+  const { pathname } = useLocation()
+  return canAccessDashboardPath(user, pathname) ? (
+    renderShellElement(route, configSection, setConfigSection)
+  ) : (
+    <Navigate to="/dashboard" replace />
+  )
+}
+
 export const renderAuthenticatedAppRoutes = ({
   configSection,
   setConfigSection,
   canUseMLSetup,
   user,
-  setupMode,
 }: AuthenticatedAppRoutesProps): React.ReactElement => (
   <>
-    <Route
-      path="/setup"
-      element={<RecoverableLazyRoute loader={loadSetupWizardPage} routeLabel="Setup" />}
-    />
     {shellRouteDefinitions.map((route) => (
       <Route
         key={route.path}
         path={route.path}
         element={
-          canAccessDashboardPath(user, route.path) ? (
-            renderShellElement(route, configSection, setConfigSection)
-          ) : (
-            <Navigate to="/dashboard" replace />
-          )
+          <AuthorizedShellRoute
+            route={route}
+            configSection={configSection}
+            setConfigSection={setConfigSection}
+            user={user}
+          />
         }
       />
     ))}
@@ -143,29 +160,14 @@ export const renderAuthenticatedAppRoutes = ({
       <Route key={route.path} path={route.path} element={<Navigate to={route.to} replace />} />
     ))}
     <Route
-      path="/knowledge-bases/:name/map"
-      element={
-        canAccessDashboardPath(user, '/knowledge-bases/map') ? (
-          <RecoverableLazyRoute loader={loadKnowledgeMapPage} routeLabel="Knowledge map" />
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
-      }
-    />
-    <Route
-      path="/knowledge-bases/:view"
-      element={
-        <KnowledgeBaseRoute configSection={configSection} setConfigSection={setConfigSection} />
-      }
-    />
-    <Route path="/taxonomy/:view" element={<LegacyTaxonomyRedirect />} />
-    <Route
       path="/playground/fullscreen"
       element={
-        <RecoverableLazyRoute
-          loader={loadPlaygroundFullscreenPage}
-          routeLabel="Fullscreen playground"
-        />
+        <AuthorizedStandaloneRoute user={user}>
+          <RecoverableLazyRoute
+            loader={loadPlaygroundFullscreenPage}
+            routeLabel="Fullscreen playground"
+          />
+        </AuthorizedStandaloneRoute>
       }
     />
     <Route
@@ -183,6 +185,6 @@ export const renderAuthenticatedAppRoutes = ({
         )
       }
     />
-    <Route path="*" element={<Navigate to={fallbackRouteTarget(setupMode)} replace />} />
+    <Route path="*" element={<Navigate to="/dashboard" replace />} />
   </>
 )

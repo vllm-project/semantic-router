@@ -40,10 +40,6 @@ func (r *OpenAIRouter) validateRequestHeaders(method string, path string) *ext_p
 }
 
 func (r *OpenAIRouter) validateResponseAPICollectionMethod(method string) *ext_proc.ProcessingResponse {
-	if r.ResponseAPIFilter == nil || !r.ResponseAPIFilter.IsEnabled() {
-		return r.createErrorResponse(404, "endpoint not found")
-	}
-
 	return validateAllowedMethod(r, method, "POST")
 }
 

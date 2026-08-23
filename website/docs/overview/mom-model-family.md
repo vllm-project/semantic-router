@@ -36,7 +36,7 @@ internal architecture does not change the routing abstraction.
 
 | Kind | Example | Role |
 | --- | --- | --- |
-| **Provider model** | A vLLM, Ollama, or hosted model endpoint | Generates the application response. |
+| **Model** | A logical Model with one or more compiled vLLM or hosted backends | Generates the application response. |
 | **Virtual model** | `vllm-sr/mom-v1-flash` | Gives clients a stable objective and selects a recipe. |
 | **Router system model** | An embedding or classifier asset | Helps detect intent, risk, similarity, or another routing signal. |
 
@@ -65,16 +65,23 @@ high-accuracy tasks, not as a default for all traffic.
 
 ## Virtual models and recipes
 
-An entrypoint maps one or more public model names to an isolated recipe:
+An Entrypoint maps one public name and optional aliases to a Recipe and a
+complete decision assignment. The compiler pins immutable identities when it
+publishes the routing snapshot:
 
 ```yaml
 entrypoints:
-  - model_names: ["acme/assistant-fast"]
+  - name: acme/assistant-fast
     recipe: fast
+    assignments:
+      default-fast-route:
+        models:
+          - {model: local/small}
+          - {model: local/vision}
 
 recipes:
   - name: fast
-    routing:
+    document:
       strategy: priority
       decisions:
         - name: default-fast-route
@@ -83,18 +90,14 @@ recipes:
           rules:
             operator: AND
             conditions: []
-          modelRefs:
-            - model: local/small
-              use_reasoning: false
-            - model: local/vision
-              use_reasoning: false
           algorithm:
             type: static
 ```
 
 In a production recipe, signals and decisions would guard modality, context,
 tools, locality, and other requirements before selection. The public model name
-does not reach the backend; it resolves to the selected provider model.
+does not reach the backend; it resolves to the selected Model's provider model
+ID.
 
 See [Virtual Models](../tutorials/global/entrypoints-and-recipes)
 for the full schema and isolation rules.
@@ -117,26 +120,18 @@ backends must already be running and available under the configured aliases.
 Tool execution remains the client's responsibility, and “local” privacy still
 depends on the deployment's network, backends, logs, caches, and stores.
 
-Inspect the installed Model Card and requirements:
+Start Semantic Router, then open **Recipes** in the Dashboard to inspect the
+built-in cards and requirements:
 
 ```bash
-vllm-sr model list
-vllm-sr model show vllm-sr/mom-v1-blend
+vllm-sr serve
 ```
 
-Serve one objective, or expose several over the same pool:
-
-```bash
-vllm-sr serve vllm-sr/mom-v1-blend
-vllm-sr serve vllm-sr/mom-v1-lite vllm-sr/mom-v1-flash
-```
-
-To change the pool or policy, fork the asset into a user-owned configuration:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml
-vllm-sr model validate mom-v1.yaml
-```
+Connect endpoints in **Models**, choose a built-in or custom Recipe, and create
+a **Mixture of Models** entrypoint. Each decision presents the compatible model
+assignments it needs; assign configured models and publish when the graph is
+complete. The Dashboard performs these operations through the Router Management
+API, so independent control planes can implement the same lifecycle.
 
 Read the full
 [MoM V1 Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/built-in/latest/mom-v1/README.md)
@@ -152,7 +147,7 @@ capability boundary, objective, or measured routing improvement.
 ## Next
 
 - [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)
-  for the complete CLI and backend-binding workflow.
+  for the complete Dashboard and Management API workflow.
 - [Use Cases](use-cases) for practical patterns.
 - [Routing Pipeline](signal-driven-decisions) for policy composition.
 - [Algorithms](../tutorials/algorithm/overview) for selection and orchestration

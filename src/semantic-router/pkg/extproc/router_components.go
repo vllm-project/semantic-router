@@ -151,7 +151,7 @@ func createToolsDatabase(cfg *config.RouterConfig) (*tools.ToolsDatabase, error)
 }
 
 func toolsEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg == nil || !cfg.UsesRemoteEmbeddingBackend() {
 		return nil, nil
 	}
 	provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
@@ -180,9 +180,6 @@ func createRouterClassifier(
 	}
 
 	defaultClassifier := classifiers.Default()
-	if defaultClassifier == nil {
-		return nil, nil, nil, fmt.Errorf("default routing recipe classifier is unavailable")
-	}
 	classificationService := services.NewRecipeClassificationService(classifiers, cfg)
 	return classifiers, defaultClassifier, classificationService, nil
 }

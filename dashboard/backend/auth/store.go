@@ -19,7 +19,8 @@ const (
 )
 
 type Store struct {
-	db *sql.DB
+	db                     *sql.DB
+	invitationBeforeCommit func() error
 }
 
 func NewStore(path string) (*Store, error) {
@@ -38,14 +39,10 @@ func NewStore(path string) (*Store, error) {
 
 	if _, err := db.ExecContext(context.Background(), createUsersSchema); err != nil {
 		_ = db.Close()
-		return nil, fmt.Errorf("migrate schema: %w", err)
+		return nil, fmt.Errorf("initialize auth schema: %w", err)
 	}
 
 	store := &Store{db: db}
-	if err := store.normalizeStoredRoles(); err != nil {
-		_ = db.Close()
-		return nil, err
-	}
 	if err := store.syncDefaultRolePermissions(); err != nil {
 		_ = db.Close()
 		return nil, err
@@ -97,6 +94,26 @@ func (s *Store) CreateUser(ctx context.Context, email, name, hash, role, status 
 	return &User{ID: id, Email: strings.ToLower(email), Name: name, Role: role, Status: status, CreatedAt: createdAt, UpdatedAt: createdAt}, nil
 }
 
+func (s *Store) ListAllUsers(ctx context.Context) ([]*User, error) {
+	rows, err := s.db.QueryContext(
+		ctx,
+		`SELECT id, email, name, role, status, created_at, updated_at, last_login_at FROM users ORDER BY created_at ASC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	users := []*User{}
+	for rows.Next() {
+		user, scanErr := scanUserRows(rows)
+		if scanErr != nil {
+			return nil, scanErr
+		}
+		users = append(users, user)
+	}
+	return users, rows.Err()
+}
+
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (id, emailOut, name, role, status string, createdAt, updatedAt int64, lastLogin *int64, hash string, err error) {
 	row := s.db.QueryRowContext(
 		ctx,
@@ -108,7 +125,6 @@ func (s *Store) GetUserByEmail(ctx context.Context, email string) (id, emailOut,
 	if err != nil {
 		return id, emailOut, name, role, status, createdAt, updatedAt, lastLogin, hash, err
 	}
-	role = canonicalRole(role)
 	if last.Valid {
 		t := last.Int64
 		lastLogin = &t

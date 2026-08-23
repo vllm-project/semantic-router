@@ -1,31 +1,16 @@
 import type { RouteInput } from '@/lib/dslMutations'
-import type {
-  ASTProgram,
-  BuilderNLGenerateRequest,
-  BuilderNLProgressEvent,
-  BuilderNLStagedDraft,
-  ConfigVersion,
-  DeployResult,
-  DeployStep,
-  Diagnostic,
-  EditorMode,
-  SymbolTable,
-  DSLFieldObject,
-} from '@/types/dsl'
+import type { ASTProgram, Diagnostic, EditorMode, SymbolTable, DSLFieldObject } from '@/types/dsl'
 
 interface DSLState {
   // --- Editor content ---
   dslSource: string
-  /** Full canonical YAML rendered from the imported base plus compiled DSL-owned scopes. */
-  renderedYamlOutput: string
-  /** DSL compiler fragment used as the deploy payload. */
+  /** Canonical compiler output used for inspection outside Recipe Builder. */
   yamlOutput: string
   crdOutput: string
   diagnostics: Diagnostic[]
   symbols: SymbolTable | null
   /** Parsed AST from last successful parse (for Visual Builder) */
   ast: ASTProgram | null
-  baseConfigYaml: string
 
   // --- Runtime ---
   wasmReady: boolean
@@ -37,25 +22,6 @@ interface DSLState {
   mode: EditorMode
   dirty: boolean
   lastCompileAt: number | null
-
-  // --- Deploy ---
-  deploying: boolean
-  deployStep: DeployStep | null
-  deployResult: DeployResult | null
-  showDeployConfirm: boolean
-  configVersions: ConfigVersion[]
-
-  // --- Deploy Preview (diff) ---
-  deployPreviewCurrent: string
-  deployPreviewMerged: string
-  deployPreviewLoading: boolean
-  deployPreviewError: string | null
-
-  // --- Natural Language Builder ---
-  nlGenerating: boolean
-  nlGenerateError: string | null
-  nlStagedDraft: BuilderNLStagedDraft | null
-  nlProgressEvents: BuilderNLProgressEvent[]
 }
 
 interface DSLActions {
@@ -86,23 +52,11 @@ interface DSLActions {
   /** Reset editor state to initial values. */
   reset(): void
 
-  /** Load DSL source without preserving an imported full-config deploy base. */
+  /** Load a DSL source as the current editor document. */
   loadDsl(source: string): void
 
-  /** Load YAML and decompile its complete DSL-owned surface. */
+  /** Decompile a pasted document into the standalone editor. */
   importYaml(yaml: string): void
-
-  /** Fetch current router YAML and decompile its complete DSL-owned surface. */
-  loadFromRouter(): Promise<void>
-
-  /** Update a model's fields in DSL source text, then re-parse AST. */
-  mutateModel(name: string, fields: DSLFieldObject): void
-
-  /** Add a new model to DSL source text, then re-parse AST. */
-  addModel(name: string, fields: DSLFieldObject): void
-
-  /** Delete a model from DSL source text, then re-parse AST. */
-  deleteModel(name: string): void
 
   /** Update a signal's fields in DSL source text, then re-parse AST. */
   mutateSignal(signalType: string, name: string, fields: DSLFieldObject): void
@@ -157,30 +111,6 @@ interface DSLActions {
 
   /** Add a new route, then re-parse AST. */
   addRoute(name: string, input: RouteInput): void
-
-  /** Show deploy confirmation dialog. Compiles first if needed. Fetches preview diff. */
-  requestDeploy(): void
-
-  /** Execute the deploy (called after user confirms). */
-  executeDeploy(): Promise<void>
-
-  /** Cancel/dismiss deploy dialog. */
-  dismissDeploy(): void
-
-  /** Rollback to a specific version. */
-  rollback(version: string): Promise<void>
-
-  /** Fetch available config versions. */
-  fetchVersions(): Promise<void>
-
-  /** Generate DSL from a natural-language request and optional custom model connection. */
-  generateFromNaturalLanguage(input: BuilderNLGenerateRequest): Promise<void>
-
-  /** Apply the staged NL draft into the live Builder editor while preserving the current deploy base YAML. */
-  applyNaturalLanguageDraft(): void
-
-  /** Clear the staged NL draft and any related review state. */
-  discardNaturalLanguageDraft(): void
 }
 
 type DSLStore = DSLState & DSLActions

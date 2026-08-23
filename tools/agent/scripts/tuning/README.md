@@ -14,21 +14,21 @@ python -m tuning.cli SCENARIO \
   --endpoint http://localhost:8080 \
   --config path/to/config.yaml \
   --probes path/to/probes.yaml \
-  --router-pid ROUTER_PID \
-  --max-iter 10
+  --candidate-config path/to/candidate.yaml
 ```
 
-The live scenarios use the router evaluation and config-management APIs to
-inspect traces, update the configured YAML, confirm the active config hash, and
-roll back rejected changes. Run against a disposable configuration and review
-every generated mutation before promoting it.
+The live scenarios use only the router evaluation API. One invocation observes
+the immutable runtime, proposes at most one candidate in a separate file, and
+runs offline DSL validation. Review and version that candidate before replacing
+the owning Docker or Kubernetes deployment; the tool never writes the active
+manifest or asks the running router to reload it.
 
 ## Built-in Scenarios
 
 | Scenario | Mode | Purpose |
 |---|---|---|
-| `privacy` | live | adjust privacy-routing thresholds and identify missing signal coverage |
-| `calibration` | live | remove non-beneficial category escalations while protecting higher-severity probes |
+| `privacy` | live-read/offline-write | propose privacy-routing threshold changes and identify missing signal coverage |
+| `calibration` | live-read/offline-write | propose removal of non-beneficial category escalations while protecting higher-severity probes |
 | `confidence` | offline | derive per-category confidence strategies from collected observations |
 
 Offline analysis does not need a running router. See
@@ -59,8 +59,8 @@ adaptation, severity, iteration display, or final output construction. Use
 `OfflineAnalyzer` directly when no live config mutation is needed.
 
 Keep scenario-specific policy and parsing in the scenario module; keep generic
-trace analysis, fix selection, regression checks, and config mutation in the
-shared engine modules.
+trace analysis, fix selection, regression checks, and candidate generation in
+the shared engine modules.
 
 ## Validate
 

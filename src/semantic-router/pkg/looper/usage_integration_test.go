@@ -67,9 +67,9 @@ func usageBackendRequest(models ...config.ModelRef) *Request {
 		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 	return &Request{
-		OriginalRequest: &params,
-		ModelRefs:       models,
-		DecisionName:    "usage_decision",
+		executionRequest: &params,
+		ModelRefs:        models,
+		DecisionName:     "usage_decision",
 	}
 }
 
@@ -104,7 +104,7 @@ func TestBaseLooper_Execute_AggregatesUsageOverHTTP(t *testing.T) {
 	var parsed struct {
 		Usage TokenUsage `json:"usage"`
 	}
-	if err := json.Unmarshal(out.Body, &parsed); err != nil {
+	if err := json.Unmarshal(wireResponseForTest(t, out), &parsed); err != nil {
 		t.Fatalf("unmarshal body: %v", err)
 	}
 	if parsed.Usage != want {

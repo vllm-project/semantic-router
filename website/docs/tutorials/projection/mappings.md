@@ -44,7 +44,7 @@ The supported calibration method today is `sigmoid_distance`, which derives conf
 ## Configuration
 
 ```yaml
-routing:
+document:
   projections:
     mappings:
       - name: difficulty_band
@@ -76,8 +76,6 @@ routing:
             name: math
           - type: projection
             name: balance_reasoning
-      modelRefs:
-        - model: google/gemini-3.1-pro
 ```
 
 ## DSL

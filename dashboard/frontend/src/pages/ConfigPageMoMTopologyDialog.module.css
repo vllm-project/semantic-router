@@ -5,18 +5,24 @@
   display: grid;
   place-items: center;
   padding: 28px;
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
 }
 
 .dialog {
   width: min(1120px, 96vw);
   max-height: 88vh;
   overflow: auto;
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
   outline: none;
-  background: #0d0d0f;
-  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.62);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
 }
 
 .header {
@@ -28,8 +34,25 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.header span {
-  color: #ff8d91;
+.heading {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.heading > svg {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 auto;
+  padding: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.heading span {
+  color: rgba(255, 255, 255, 0.55);
   font-size: 0.64rem;
   font-weight: 750;
   letter-spacing: 0.1em;
@@ -55,14 +78,40 @@
 }
 
 .header button {
+  display: grid;
   width: 32px;
   height: 32px;
+  place-items: center;
   border: 0;
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.05);
   color: #9da7b3;
   cursor: pointer;
   font-size: 1.1rem;
+}
+
+.header button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 16px 24px 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 8px;
+  background: rgba(127, 29, 29, 0.14);
+  color: #fecaca;
+  font-size: 0.72rem;
+}
+
+.error svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
 }
 
 .canvas {
@@ -74,8 +123,7 @@
   gap: 14px;
   min-height: 390px;
   padding: 30px 24px 34px;
-  background-image: radial-gradient(circle, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
-  background-size: 18px 18px;
+  background: rgba(5, 6, 8, 0.28);
 }
 
 .stage {
@@ -155,18 +203,76 @@
   gap: 8px;
 }
 
-.modelDot {
-  width: 7px;
-  height: 7px;
+.modelNode > svg {
+  width: 15px;
+  height: 15px;
   flex: 0 0 auto;
-  border-radius: 50%;
-  background: var(--brand-amd, #e31b23);
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.emptyNode {
+  color: #777f89;
+  font-size: 0.68rem;
+  text-align: center;
 }
 
 .connector {
+  display: grid;
+  place-items: center;
   color: #5f6670;
-  font-size: 1rem;
-  text-align: center;
+}
+
+.connector svg {
+  width: 16px;
+  height: 16px;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.actions > div {
+  display: flex;
+  gap: 8px;
+}
+
+.actions button {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 13px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #d7dbe0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.actions button svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.actions > div button:last-child {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #f4f4f5;
+  color: #111113;
+}
+
+.actions button:disabled {
+  cursor: wait;
+  opacity: 0.52;
 }
 
 @media (max-width: 880px) {

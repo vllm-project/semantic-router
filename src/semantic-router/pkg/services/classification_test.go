@@ -13,7 +13,7 @@ import (
 )
 
 func TestNewUnifiedClassificationService(t *testing.T) {
-	// Test with nil unified classifier and nil legacy classifier (this is expected to work)
+	// Explicitly injected empty services remain valid for focused API tests.
 	config := &config.RouterConfig{}
 	service := NewUnifiedClassificationService(nil, nil, config)
 
@@ -21,7 +21,7 @@ func TestNewUnifiedClassificationService(t *testing.T) {
 		t.Fatal("Expected non-nil service")
 	}
 	if service.classifier != nil {
-		t.Error("Expected legacy classifier to be nil")
+		t.Error("Expected default classifier to be nil")
 	}
 	if service.unifiedClassifier != nil {
 		t.Error("Expected unified classifier to be nil when passed nil")
@@ -32,18 +32,18 @@ func TestNewUnifiedClassificationService(t *testing.T) {
 }
 
 func TestNewUnifiedClassificationService_WithBothClassifiers(t *testing.T) {
-	// Test with both unified and legacy classifiers
+	// Test with both unified and default Recipe classifiers.
 	config := &config.RouterConfig{}
 	unifiedClassifier := &classification.UnifiedClassifier{}
-	legacyClassifier := &classification.Classifier{}
+	defaultClassifier := &classification.Classifier{}
 
-	service := NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config)
+	service := NewUnifiedClassificationService(unifiedClassifier, defaultClassifier, config)
 
 	if service == nil {
 		t.Fatal("Expected non-nil service")
 	}
-	if service.classifier != legacyClassifier {
-		t.Error("Expected legacy classifier to match provided classifier")
+	if service.classifier != defaultClassifier {
+		t.Error("Expected default classifier to match provided classifier")
 	}
 	if service.unifiedClassifier != unifiedClassifier {
 		t.Error("Expected unified classifier to match provided classifier")
@@ -200,17 +200,6 @@ func TestClassificationService_BasicFunctionality(t *testing.T) {
 			t.Error("Expected config to match")
 		}
 	})
-
-	t.Run("Global_service_access", func(t *testing.T) {
-		config := &config.RouterConfig{}
-		service := NewClassificationService(nil, config)
-		SetGlobalClassificationService(service)
-
-		globalService := GetGlobalClassificationService()
-		if globalService != service {
-			t.Error("Expected global service to match created service")
-		}
-	})
 }
 
 func TestBuildIntentResponseFromSignals_IncludesExtendedMatchedSignals(t *testing.T) {
@@ -280,7 +269,7 @@ func TestBuildEvalResponse_ProjectionSignalsIncludedInUsedMatchedAndUnmatched(t 
 						Type: "remom",
 					},
 					Plugins: []config.DecisionPlugin{
-						{Type: "semantic_cache"},
+						{Type: config.DecisionPluginResponseCache},
 						{Type: "system_prompt"},
 					},
 					Rules: config.RuleCombination{

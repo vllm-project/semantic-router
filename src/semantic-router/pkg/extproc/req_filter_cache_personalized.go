@@ -49,19 +49,21 @@ func canUsePersonalizedExactCache(ctx *RequestContext) bool {
 		strings.TrimSpace(responseCacheScopeIdentity(ctx)) == "" {
 		return false
 	}
-	return len(ctx.workingRequestBody()) > 0
+	return ctx.SemanticRequest != nil
 }
 
 func preparePersonalizedCacheIdentity(ctx *RequestContext, selectedModel string) bool {
-	workingBody := ctx.workingRequestBody()
-	identity, err := cache.BuildRequestIdentity(workingBody)
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return false
+	}
+	identity, err := cache.BuildSemanticRequestIdentity(*ctx.SemanticRequest)
 	if err != nil {
 		return false
 	}
 	contextRevision, err := cache.FingerprintValue(map[string]interface{}{
-		"working_body": workingBody,
-		"rag_context":  ctx.RAGRetrievedContext,
-		"memory":       ctx.MemoryContext,
+		"request":     ctx.SemanticRequest,
+		"rag_context": ctx.RAGRetrievedContext,
+		"memory":      ctx.MemoryContext,
 	})
 	if err != nil || contextRevision == "" {
 		return false

@@ -1,0 +1,35 @@
+# Safe public origins installed by the Router application. Deployments that
+# connect private runtimes or add application Provider Integrations must mount
+# an explicit site policy instead of weakening this boundary in managed state.
+version: v1
+schemes: [https]
+hosts:
+  - {host: openrouter.ai, ports: [443]}
+  - {host: api.ai.amd.com, ports: [443]}
+  - {host: api.openai.com, ports: [443]}
+  - {host: api.anthropic.com, ports: [443]}
+  - {host: generativelanguage.googleapis.com, ports: [443]}
+  - {host: api.deepseek.com, ports: [443]}
+  - {host: api.mistral.ai, ports: [443]}
+  - {host: api.groq.com, ports: [443]}
+  - {host: api.together.ai, ports: [443]}
+  - {host: api.fireworks.ai, ports: [443]}
+  - {host: api.cerebras.ai, ports: [443]}
+  - {host: api.x.ai, ports: [443]}
+  - {host: api.perplexity.ai, ports: [443]}
+  - {host: api.cohere.com, ports: [443]}
+  - {host: api.deepinfra.com, ports: [443]}
+  - {host: router.huggingface.co, ports: [443]}
+  - {host: integrate.api.nvidia.com, ports: [443]}
+  - {host: api.sambanova.ai, ports: [443]}
+  - {host: dashscope-intl.aliyuncs.com, ports: [443]}
+  - {host: api.minimax.io, ports: [443]}
+  - {host: api.moonshot.ai, ports: [443]}
+  - {host: api.z.ai, ports: [443]}
+  - {host: api.novita.ai, ports: [443]}
+  - {host: api.studio.nebius.com, ports: [443]}
+  - {host: api.featherless.ai, ports: [443]}
+  - {host: api.friendli.ai, ports: [443]}
+  - {host: ai-gateway.vercel.sh, ports: [443]}
+  - {host: api.cometapi.com, ports: [443]}
+  - {host: api.sakana.ai, ports: [443]}

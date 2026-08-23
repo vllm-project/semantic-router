@@ -112,7 +112,10 @@ async function setCachedModule(module: WebAssembly.Module, etag: string | null):
 
         req.onerror = (e) => {
           // DataCloneError: WebAssembly.Module can not be serialized for storage
-          console.warn('[wasm] IndexedDB cache write failed (non-fatal):', (e.target as IDBRequest)?.error?.message)
+          console.warn(
+            '[wasm] IndexedDB cache write failed (non-fatal):',
+            (e.target as IDBRequest)?.error?.message,
+          )
           e.preventDefault() // prevent uncaught error
           finish()
         }
@@ -218,7 +221,13 @@ async function init(): Promise<void> {
     go.run(wasmInstance)
 
     // 5. Wait for the global functions to be registered.
-    await waitForGlobals(['signalCompile', 'signalValidate', 'signalParseAST', 'signalDecompile', 'signalFormat'])
+    await waitForGlobals([
+      'signalCompile',
+      'signalValidate',
+      'signalParseAST',
+      'signalDecompile',
+      'signalFormat',
+    ])
 
     isReady = true
   })()

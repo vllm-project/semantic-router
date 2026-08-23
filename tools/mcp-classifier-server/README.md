@@ -74,25 +74,27 @@ Disable the local domain classifier when MCP should be the domain source, then
 configure the MCP module:
 
 ```yaml
-providers:
-  defaults:
-    default_model: openai/gpt-oss-20b
-  models:
-    - name: openai/gpt-oss-20b
-      provider_model_id: openai/gpt-oss-20b
-      api_format: openai
-      backend_refs:
-        - name: default-backend
-          endpoint: 127.0.0.1:8000
-          protocol: http
-          type: chat
-
-routing:
-  modelCards:
-    - name: openai/gpt-oss-20b
-  signals:
-    domains: []
-  decisions: []
+version: v0.4
+models:
+  - name: local/gpt-oss-20b
+    card:
+      capabilities: [chat]
+    connections:
+      - provider: vllm
+        endpoint: http://127.0.0.1:8000/v1
+        model: openai/gpt-oss-20b
+recipes:
+  - name: mcp-domain
+    document:
+      decisions:
+        - name: route
+          rules: {}
+entrypoints:
+  - name: vllm-sr/mcp-domain
+    recipe: mcp-domain
+    assignments:
+      route:
+        models: [{model: local/gpt-oss-20b}]
 
 global:
   model_catalog:
@@ -109,9 +111,9 @@ global:
           timeout_seconds: 30
 ```
 
-Configure providers, model cards, routing signals, and decisions in the normal
-router config. The MCP server supplies classification; it does not replace the
-rest of the routing policy. See the
+Configure the Model connection, model-free Recipe, and Entrypoint assignments
+in the normal Router config. The MCP server supplies classification; it does
+not replace the rest of the routing policy. See the
 [domain signal guide](../../website/docs/tutorials/signal/learned/domain.md)
 for the user-facing configuration model.
 

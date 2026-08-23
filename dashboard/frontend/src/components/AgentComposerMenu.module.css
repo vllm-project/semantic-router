@@ -1,0 +1,145 @@
+.root {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.trigger:hover:not(:disabled),
+.triggerOpen {
+  border-color: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.trigger > svg {
+  width: 18px;
+  height: 18px;
+  transition: transform 140ms ease;
+}
+
+.triggerOpen > svg {
+  transform: rotate(45deg);
+}
+
+.menu {
+  position: absolute;
+  z-index: 80;
+  bottom: calc(100% + 0.65rem);
+  left: 0;
+  width: min(292px, calc(100vw - 2rem));
+  padding: 0.4rem;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(16, 17, 20, 0.96);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.46);
+  backdrop-filter: blur(24px) saturate(120%);
+  animation: openMenu 120ms ease-out;
+}
+
+.item {
+  width: 100%;
+  min-height: 54px;
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  text-align: left;
+}
+
+.item:hover,
+.item:focus-visible,
+.itemActive {
+  border-color: rgba(255, 255, 255, 0.09);
+  outline: none;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.icon svg,
+.check {
+  width: 17px;
+  height: 17px;
+}
+
+.copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.16rem;
+}
+
+.copy strong {
+  font-size: 0.8rem;
+  font-weight: 660;
+}
+
+.copy small {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.divider {
+  height: 1px;
+  margin: 0.34rem 0.5rem;
+  background: rgba(255, 255, 255, 0.09);
+}
+
+@keyframes openMenu {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (max-width: 480px) {
+  .menu {
+    position: fixed;
+    right: 0.75rem;
+    bottom: calc(5.4rem + env(safe-area-inset-bottom, 0px));
+    left: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu {
+    animation: none;
+  }
+  .trigger > svg {
+    transition: none;
+  }
+}

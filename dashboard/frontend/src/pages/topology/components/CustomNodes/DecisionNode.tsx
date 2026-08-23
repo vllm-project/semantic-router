@@ -6,6 +6,7 @@ import { DecisionConfig } from '../../types'
 import { NODE_COLORS } from '../../constants'
 import { buildRulePreviewLines, summarizeRuleNode } from '../../utils/ruleTree'
 import { formatRoutingMetadataValue } from '../../../../components/routingMetadataDisplay'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './CustomNodes.module.css'
 
 interface DecisionNodeData {
@@ -66,7 +67,7 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       }}
       title={
         isUnreachable
-          ? `⚠️ Unreachable: ${unreachableReason}`
+          ? `Unreachable: ${unreachableReason}`
           : isFallback
             ? 'Fallback route: matches when no earlier decision wins'
             : undefined
@@ -80,9 +81,11 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.decisionHeader}>
-        <span className={styles.decisionIcon}>
-          {isUnreachable ? '⚠️' : isFallback ? '↪' : '🔀'}
-        </span>
+        <ProductIcon
+          className={styles.decisionIcon}
+          name={isUnreachable ? 'alert' : isFallback ? 'chevron-right' : 'decision'}
+          aria-hidden="true"
+        />
         <span className={styles.decisionName} title={name}>
           {displayName}
         </span>
@@ -91,13 +94,20 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
 
       {/* Unreachable Warning Banner */}
       {isUnreachable && (
-        <div className={styles.unreachableBanner}>⚠️ {unreachableReason || 'Unreachable'}</div>
+        <div className={styles.unreachableBanner}>
+          <ProductIcon name="alert" aria-hidden="true" />
+          {unreachableReason || 'Unreachable'}
+        </div>
       )}
 
       {/* Rules Section */}
       <div className={styles.rulesSection}>
         <div className={styles.rulesHeader} onClick={onToggleRulesCollapse}>
-          <span className={styles.collapseIcon}>{rulesCollapsed ? '▶' : '▼'}</span>
+          <ProductIcon
+            className={`${styles.collapseIcon} ${rulesCollapsed ? '' : styles.collapseIconOpen}`}
+            name="chevron-right"
+            aria-hidden="true"
+          />
           <span className={styles.rulesOperator}>{isFallback ? 'FALLBACK' : rules.operator}</span>
           <span className={styles.rulesCount}>
             {isFallback ? 'Always matches' : `${rules.conditions.length} rules`}
@@ -153,17 +163,19 @@ export const DecisionNode = memo<NodeProps<DecisionNodeData>>(({ data }) => {
       <div className={styles.decisionMeta}>
         {hasAlgorithm && (
           <span className={styles.metaTag} title="Multi-model algorithm">
-            🔄 {algorithm!.type}
+            <ProductIcon name="settings" aria-hidden="true" />
+            {algorithm!.type}
           </span>
         )}
         {hasPlugins && (
           <span className={styles.metaTag} title="Has plugins">
-            🔌 {plugins!.length}
+            <ProductIcon name="plug" aria-hidden="true" />
+            {plugins!.length}
           </span>
         )}
         {hasReasoning && (
           <span className={styles.metaTag} title="Reasoning enabled">
-            🧠
+            <ProductIcon name="compute" aria-label="Reasoning" />
           </span>
         )}
       </div>

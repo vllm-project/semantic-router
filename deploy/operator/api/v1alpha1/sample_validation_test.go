@@ -17,174 +17,53 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
-	"k8s.io/apimachinery/pkg/util/yaml"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/yaml"
 )
 
-func TestSampleCRValidation(t *testing.T) {
-	// Get the project root directory
-	projectRoot := filepath.Join("..", "..", "..")
-	samplesDir := filepath.Join(projectRoot, "config", "samples")
-
-	tests := []struct {
-		name     string
-		filename string
-	}{
-		{
-			name:     "mmbert sample CR",
-			filename: "vllm.ai_v1alpha1_semanticrouter_mmbert.yaml",
-		},
-		{
-			name:     "complexity routing sample CR",
-			filename: "vllm.ai_v1alpha1_semanticrouter_complexity.yaml",
-		},
-		{
-			name:     "simple sample CR",
-			filename: "vllm.ai_v1alpha1_semanticrouter_simple.yaml",
-		},
-		{
-			name:     "redis cache sample CR",
-			filename: "vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml",
-		},
-		{
-			name:     "milvus cache sample CR",
-			filename: "vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			samplePath := filepath.Join(samplesDir, tt.filename)
-
-			// Read the sample YAML file
-			data, err := os.ReadFile(samplePath)
-			if err != nil {
-				t.Skipf("Sample file not found: %s (this is expected during development)", samplePath)
-				return
-			}
-
-			// Parse the YAML into a SemanticRouter object
-			var sr SemanticRouter
-			if err := yaml.Unmarshal(data, &sr); err != nil {
-				t.Errorf("Failed to unmarshal sample CR: %v", err)
-				return
-			}
-
-			// Validate the CR using webhook validation
-			_, err = sr.ValidateCreate(context.Background(), &sr)
-			if err != nil {
-				t.Errorf("Sample CR validation failed: %v", err)
-			}
-
-			// Additional checks for specific samples
-			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_mmbert.yaml" {
-				if sr.Spec.Config.EmbeddingModels == nil {
-					t.Error("mmbert sample should have embedding_models configured")
-				} else {
-					if sr.Spec.Config.EmbeddingModels.MmBertModelPath == "" {
-						t.Error("mmbert sample should have mmbert_model_path set")
-					}
-					if sr.Spec.Config.EmbeddingModels.EmbeddingConfig == nil {
-						t.Error("mmbert sample should have embedding_config")
-					} else {
-						if sr.Spec.Config.EmbeddingModels.EmbeddingConfig.ModelType != "mmbert" {
-							t.Errorf("mmbert sample embedding_config model_type = %v, want mmbert", sr.Spec.Config.EmbeddingModels.EmbeddingConfig.ModelType)
-						}
-						// Verify target_layer is one of the valid values
-						validLayers := map[int]bool{3: true, 6: true, 11: true, 22: true}
-						if !validLayers[sr.Spec.Config.EmbeddingModels.EmbeddingConfig.TargetLayer] {
-							t.Errorf("mmbert sample target_layer = %v, want one of 3, 6, 11, 22", sr.Spec.Config.EmbeddingModels.EmbeddingConfig.TargetLayer)
-						}
-					}
-				}
-				if sr.Spec.Config.ResponseCache != nil {
-					if sr.Spec.Config.ResponseCache.EmbeddingModel != "mmbert" {
-						t.Errorf("mmbert sample should use embedding_model: mmbert, got %v", sr.Spec.Config.ResponseCache.EmbeddingModel)
-					}
-				}
-			}
-
-			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_complexity.yaml" {
-				if len(sr.Spec.Config.ComplexityRules) == 0 {
-					t.Error("complexity sample should have complexity_rules configured")
-				}
-				// Verify structure of complexity rules
-				for _, rule := range sr.Spec.Config.ComplexityRules {
-					if rule.Name == "" {
-						t.Error("complexity rule should have a name")
-					}
-					if len(rule.Hard.Candidates) == 0 {
-						t.Errorf("complexity rule %s should have hard candidates", rule.Name)
-					}
-					if len(rule.Easy.Candidates) == 0 {
-						t.Errorf("complexity rule %s should have easy candidates", rule.Name)
-					}
-				}
-			}
-
-			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_redis_cache.yaml" {
-				if sr.Spec.Config.EmbeddingModels == nil {
-					t.Error("redis cache sample should have embedding_models configured")
-				}
-				if sr.Spec.Config.ResponseCache != nil {
-					if sr.Spec.Config.ResponseCache.BackendType != "redis" {
-						t.Errorf("redis cache sample backend_type = %v, want redis", sr.Spec.Config.ResponseCache.BackendType)
-					}
-					// Should use qwen3 or another embedding model
-					if sr.Spec.Config.ResponseCache.EmbeddingModel != "" && sr.Spec.Config.ResponseCache.EmbeddingModel == "bert" {
-						// This is fine, but ideally should showcase new embedding models
-						t.Logf("redis cache sample could showcase new embedding models (qwen3/gemma)")
-					}
-				}
-			}
-
-			if tt.filename == "vllm.ai_v1alpha1_semanticrouter_milvus_cache.yaml" {
-				if sr.Spec.Config.EmbeddingModels == nil {
-					t.Error("milvus cache sample should have embedding_models configured")
-				}
-				if sr.Spec.Config.ResponseCache != nil {
-					if sr.Spec.Config.ResponseCache.BackendType != "milvus" {
-						t.Errorf("milvus cache sample backend_type = %v, want milvus", sr.Spec.Config.ResponseCache.BackendType)
-					}
-				}
-			}
-		})
-	}
-}
-
-func TestSampleCRsParseable(t *testing.T) {
-	// Test that all sample CRs can be parsed without errors
-	projectRoot := filepath.Join("..", "..", "..")
-	samplesDir := filepath.Join(projectRoot, "config", "samples")
-
-	entries, err := os.ReadDir(samplesDir)
+func TestSamplesSelectBootstrapConfigMap(t *testing.T) {
+	paths, err := filepath.Glob("../../config/samples/vllm.ai_v1alpha1_semanticrouter_*.yaml")
 	if err != nil {
-		t.Skipf("Samples directory not found: %s", samplesDir)
-		return
+		t.Fatal(err)
 	}
-
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
-		}
-		if filepath.Ext(entry.Name()) != ".yaml" && filepath.Ext(entry.Name()) != ".yml" {
-			continue
-		}
-
-		t.Run(entry.Name(), func(t *testing.T) {
-			samplePath := filepath.Join(samplesDir, entry.Name())
-			data, err := os.ReadFile(samplePath)
+	if len(paths) == 0 {
+		t.Fatal("no SemanticRouter samples found")
+	}
+	for _, path := range paths {
+		t.Run(filepath.Base(path), func(t *testing.T) {
+			data, err := os.ReadFile(path)
 			if err != nil {
-				t.Fatalf("Failed to read sample file: %v", err)
+				t.Fatal(err)
 			}
-
-			var sr SemanticRouter
-			if err := yaml.Unmarshal(data, &sr); err != nil {
-				t.Errorf("Failed to parse sample CR %s: %v", entry.Name(), err)
+			documents := strings.Split(string(data), "\n---\n")
+			if len(documents) != 2 {
+				t.Fatalf("sample must contain one ConfigMap and one SemanticRouter, got %d documents", len(documents))
+			}
+			var configMap corev1.ConfigMap
+			if err := yaml.Unmarshal([]byte(documents[0]), &configMap); err != nil {
+				t.Fatal(err)
+			}
+			if configMap.Kind != "ConfigMap" || configMap.Immutable == nil || !*configMap.Immutable {
+				t.Fatalf("first document must be an immutable ConfigMap: %#v", configMap.ObjectMeta)
+			}
+			var router SemanticRouter
+			if err := yaml.Unmarshal([]byte(documents[1]), &router); err != nil {
+				t.Fatal(err)
+			}
+			if router.Spec.Bootstrap.ConfigMapRef.Name == "" || router.Spec.Bootstrap.ConfigMapRef.Key == "" {
+				t.Fatalf("sample must select spec.bootstrap.configMapRef: %#v", router.Spec.Bootstrap)
+			}
+			ref := router.Spec.Bootstrap.ConfigMapRef
+			if ref.Name != configMap.Name {
+				t.Fatalf("bootstrap reference %q does not select sample ConfigMap %q", ref.Name, configMap.Name)
+			}
+			if _, ok := configMap.Data[ref.Key]; !ok {
+				t.Fatalf("bootstrap ConfigMap does not contain selected key %q", ref.Key)
 			}
 		})
 	}

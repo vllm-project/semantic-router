@@ -21,6 +21,22 @@ def _configured_management_port(user_config: dict) -> int:
     return port
 
 
+def _configured_management_tls_certificate_file(user_config: dict) -> str | None:
+    management = _management_api_config(user_config)
+    tls = management.get("tls") or {}
+    if not isinstance(tls, dict):
+        raise ValueError("global.services.management_api.tls must be a mapping")
+    certificate_file = tls.get("certificate_file")
+    certificate_env = tls.get("certificate_env")
+    private_file = tls.get("private_key_file")
+    private_env = tls.get("private_key_env")
+    if not any((certificate_file, certificate_env, private_file, private_env)):
+        return None
+    if isinstance(certificate_file, str) and certificate_file.strip():
+        return certificate_file.strip()
+    return ""
+
+
 def _configured_management_readiness_token_env(
     user_config: dict, env_vars: Mapping[str, str]
 ) -> str | None:
@@ -49,11 +65,15 @@ def _bearer_management_auth(management: dict) -> dict | None:
     if mode is None or mode == "":
         mode = "disabled"
     if not isinstance(mode, str):
-        raise ValueError("management API auth mode must be disabled or bearer")
-    if mode == "disabled":
+        raise ValueError(
+            "management API auth mode must be disabled or bearer in standalone mode, or router in managed mode"
+        )
+    if mode in {"disabled", "router"}:
         return None
     if mode != "bearer":
-        raise ValueError("management API auth mode must be disabled or bearer")
+        raise ValueError(
+            "management API auth mode must be disabled or bearer in standalone mode, or router in managed mode"
+        )
     return auth
 
 

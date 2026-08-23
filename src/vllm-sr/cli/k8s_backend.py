@@ -26,7 +26,6 @@ from cli.k8s_env_secret import (
     referenced_secret_names,
 )
 from cli.logo import print_vllm_logo
-from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from cli.terminal import echo, fields, heading, success
 from cli.utils import get_logger
 
@@ -51,71 +50,6 @@ K8S_SERVICE_TO_LABEL: dict[str, str] = {
     "dashboard": "app.kubernetes.io/component=dashboard",
     "envoy": "app.kubernetes.io/component=envoy",
 }
-
-
-def _external_dashboard_management_entry(
-    entry: dict[str, object], owner: str
-) -> dict[str, object] | None:
-    """Validate one operator-owned Dashboard management Secret reference."""
-
-    if "value" in entry:
-        raise ValueError(
-            "Helm dashboard management credential must use a Secret "
-            "secretKeyRef, not a plaintext value"
-        )
-    value_from = entry.get("valueFrom")
-    secret_ref = (
-        value_from.get("secretKeyRef") if isinstance(value_from, dict) else None
-    )
-    referenced_name = secret_ref.get("name") if isinstance(secret_ref, dict) else None
-    if referenced_name == LEGACY_ENV_SECRET_NAME or (
-        isinstance(referenced_name, str)
-        and is_managed_env_secret_name(referenced_name, owner)
-    ):
-        return None
-    referenced_key = secret_ref.get("key") if isinstance(secret_ref, dict) else None
-    if not (
-        isinstance(referenced_name, str)
-        and referenced_name
-        and isinstance(referenced_key, str)
-        and referenced_key
-    ):
-        raise ValueError(
-            "Helm dashboard management credential must use a Secret secretKeyRef"
-        )
-    return entry
-
-
-def _dashboard_management_extra_env(
-    configured_entries: list[dict[str, object]],
-    *,
-    managed_secret_name: str | None,
-    owner: str,
-) -> list[dict[str, object]]:
-    """Resolve Dashboard env without retaining stale managed Secret revisions."""
-
-    extra_env: list[dict[str, object]] = []
-    for configured_entry in configured_entries:
-        entry = dict(configured_entry)
-        if entry.get("name") != MANAGEMENT_CREDENTIAL_ENV:
-            extra_env.append(entry)
-        elif managed_secret_name is None:
-            external_entry = _external_dashboard_management_entry(entry, owner)
-            if external_entry is not None:
-                extra_env.append(external_entry)
-    if managed_secret_name is not None:
-        extra_env.append(
-            {
-                "name": MANAGEMENT_CREDENTIAL_ENV,
-                "valueFrom": {
-                    "secretKeyRef": {
-                        "name": managed_secret_name,
-                        "key": MANAGEMENT_CREDENTIAL_ENV,
-                    }
-                },
-            }
-        )
-    return extra_env
 
 
 class K8sBackend:
@@ -147,7 +81,7 @@ class K8sBackend:
         source_config_file: str | None = None,
         image: str | None = None,
         pull_policy: str | None = None,
-        enable_observability: bool = True,
+        enable_observability: bool = False,
         minimal: bool = False,
         readonly: bool = False,
         **kwargs: Any,
@@ -164,7 +98,7 @@ class K8sBackend:
             log.info(f"  Context:   {self.context}")
 
         # env_vars was discovered against source_config_file (runtime.py forwards it
-        # before algorithm/platform overrides rewrite the config), so sensitivity must
+        # before platform transforms rewrite the config), so sensitivity must
         # be re-checked against that same file, not the rewritten effective one, or a
         # name dropped by the rewrite silently loses its secret classification.
         sensitivity_config_file = source_config_file or config_file
@@ -187,7 +121,6 @@ class K8sBackend:
             readonly=readonly,
         )
         self._bind_env_secret_revision(values, secret_name)
-        self._bind_dashboard_management_credential(values, secret_plan)
 
         with temporary_helm_values_file(values) as values_path:
             self._deploy_helm_values(
@@ -479,44 +412,6 @@ class K8sBackend:
             values["podAnnotations"] = annotations
         else:
             values.pop("podAnnotations", None)
-
-    def _bind_dashboard_management_credential(
-        self, values: dict, secret_plan: EnvSecretPlan | None
-    ) -> None:
-        """Expose only the Dashboard management key, never the whole Secret."""
-
-        configured_dashboard = values.get("dashboard", {})
-        if not isinstance(configured_dashboard, dict):
-            raise ValueError("Helm dashboard values must be a mapping")
-        dashboard = dict(configured_dashboard)
-        configured_extra_env = dashboard.get("extraEnv", [])
-        if not isinstance(configured_extra_env, list) or not all(
-            isinstance(entry, dict) and isinstance(entry.get("name"), str)
-            for entry in configured_extra_env
-        ):
-            raise ValueError("Helm dashboard.extraEnv must contain named mappings")
-
-        owner = env_secret_owner(self.namespace, self.release_name)
-        managed_secret_name = (
-            secret_plan.name
-            if secret_plan is not None
-            and MANAGEMENT_CREDENTIAL_ENV in secret_plan.keys
-            and dashboard.get("enabled") is not False
-            else None
-        )
-        extra_env = _dashboard_management_extra_env(
-            configured_extra_env,
-            managed_secret_name=managed_secret_name,
-            owner=owner,
-        )
-        if extra_env:
-            dashboard["extraEnv"] = extra_env
-        else:
-            dashboard.pop("extraEnv", None)
-        if dashboard:
-            values["dashboard"] = dashboard
-        else:
-            values.pop("dashboard", None)
 
     def _current_release_env_secret_refs(self) -> set[str]:
         """Return only CLI-managed Secret refs used by this release."""

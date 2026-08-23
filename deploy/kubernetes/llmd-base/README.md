@@ -47,7 +47,7 @@ the Istio example:
 | `llama3-8b` | `vllm-llama3-8b-instruct` | `app: vllm-llama3-8b-instruct` |
 | `phi4-mini` | `vllm-phi4-mini` | `app: phi4-mini` |
 
-If you change a model alias, update the Router model card, `HTTPRoute` header
+If you change a model alias, update the canonical Router Model, `HTTPRoute` header
 match, `InferencePool`, EPP arguments, and backend labels as one contract.
 
 ## Verify the two layers

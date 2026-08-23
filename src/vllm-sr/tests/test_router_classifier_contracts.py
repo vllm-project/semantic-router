@@ -6,6 +6,26 @@ from cli.validator import validate_user_config
 from pydantic import ValidationError as PydanticValidationError
 
 
+def _user_config(document: dict) -> UserConfig:
+    global_config = document.setdefault("global", {})
+    services = global_config.setdefault("services", {})
+    services.setdefault(
+        "backend_dispatch",
+        {
+            "bind_address": "127.0.0.1",
+            "port": 8180,
+            "audience": "vllm-sr.backend-dispatch",
+            "capability_ttl": "30s",
+            "max_request_body_bytes": 64 << 20,
+        },
+    )
+    services.setdefault(
+        "backend_egress",
+        {"policy_file": "/app/config/backend-egress-policy.yaml"},
+    )
+    return UserConfig.model_validate(document)
+
+
 @pytest.mark.parametrize(
     "predicate",
     [
@@ -73,27 +93,32 @@ def test_prompt_candidates_reject_effective_lora_identity_collision():
 
 
 def test_classifier_contract_rejects_multiple_local_rules():
-    config = UserConfig.model_validate(
+    config = _user_config(
         {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "classifiers": [
-                        {
-                            "name": "risk-a",
-                            "type": "local",
-                            "model_path": "models/risk-a",
-                            "labels": ["SAFE", "RISKY"],
-                        },
-                        {
-                            "name": "risk-b",
-                            "type": "local",
-                            "model_path": "models/risk-b",
-                            "labels": ["SAFE", "RISKY"],
-                        },
-                    ]
+            "version": "v0.4",
+            "recipes": [
+                {
+                    "name": "default",
+                    "document": {
+                        "signals": {
+                            "classifiers": [
+                                {
+                                    "name": "risk-a",
+                                    "type": "local",
+                                    "model_path": "models/risk-a",
+                                    "labels": ["SAFE", "RISKY"],
+                                },
+                                {
+                                    "name": "risk-b",
+                                    "type": "local",
+                                    "model_path": "models/risk-b",
+                                    "labels": ["SAFE", "RISKY"],
+                                },
+                            ]
+                        }
+                    },
                 }
-            },
+            ],
         }
     )
     assert any(
@@ -109,17 +134,17 @@ def test_classifier_contract_allows_one_local_rule_per_recipe():
         "model_path": "models/risk",
         "labels": ["SAFE", "RISKY"],
     }
-    config = UserConfig.model_validate(
+    config = _user_config(
         {
-            "version": "v0.3",
+            "version": "v0.4",
             "recipes": [
                 {
                     "name": "private",
-                    "routing": {"signals": {"classifiers": [rule]}},
+                    "document": {"signals": {"classifiers": [rule]}},
                 },
                 {
                     "name": "public",
-                    "routing": {"signals": {"classifiers": [rule]}},
+                    "document": {"signals": {"classifiers": [rule]}},
                 },
             ],
         }
@@ -139,19 +164,19 @@ def test_classifier_contract_rejects_incompatible_recipe_local_models():
             "labels": ["SAFE", "RISKY"],
         }
 
-    config = UserConfig.model_validate(
+    config = _user_config(
         {
-            "version": "v0.3",
+            "version": "v0.4",
             "recipes": [
                 {
                     "name": "private",
-                    "routing": {
+                    "document": {
                         "signals": {"classifiers": [rule("models/private-risk")]}
                     },
                 },
                 {
                     "name": "public",
-                    "routing": {
+                    "document": {
                         "signals": {"classifiers": [rule("models/public-risk")]}
                     },
                 },
@@ -182,22 +207,27 @@ def test_llm_classifier_requires_classification_external_model(
     external,
     expected,
 ):
-    config = UserConfig.model_validate(
+    config = _user_config(
         {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "classifiers": [
-                        {
-                            "name": "risk",
-                            "type": "llm",
-                            "model": "judge",
-                            "labels": ["SAFE", "RISKY"],
-                            "instructions": "Classify.",
+            "version": "v0.4",
+            "recipes": [
+                {
+                    "name": "default",
+                    "document": {
+                        "signals": {
+                            "classifiers": [
+                                {
+                                    "name": "risk",
+                                    "type": "llm",
+                                    "model": "judge",
+                                    "labels": ["SAFE", "RISKY"],
+                                    "instructions": "Classify.",
+                                }
+                            ]
                         }
-                    ]
+                    },
                 }
-            },
+            ],
             "global": {"model_catalog": {"external": external}},
         }
     )
@@ -205,35 +235,39 @@ def test_llm_classifier_requires_classification_external_model(
 
 
 def test_classifier_decision_rejects_unknown_label_and_local_threshold():
-    config = UserConfig.model_validate(
+    config = _user_config(
         {
-            "version": "v0.3",
-            "routing": {
-                "signals": {
-                    "classifiers": [
-                        {
-                            "name": "risk",
-                            "type": "local",
-                            "model_path": "models/risk",
-                            "labels": ["SAFE", "RISKY"],
-                        }
-                    ]
-                },
-                "decisions": [
-                    {
-                        "name": "risk-route",
-                        "description": "risk",
-                        "priority": 1,
-                        "rules": {
-                            "type": "classifier",
-                            "name": "risk",
-                            "label": "UNKNOWN",
-                            "predicate": {"gte": 0.4},
+            "version": "v0.4",
+            "recipes": [
+                {
+                    "name": "default",
+                    "document": {
+                        "signals": {
+                            "classifiers": [
+                                {
+                                    "name": "risk",
+                                    "type": "local",
+                                    "model_path": "models/risk",
+                                    "labels": ["SAFE", "RISKY"],
+                                }
+                            ]
                         },
-                        "modelRefs": [],
-                    }
-                ],
-            },
+                        "decisions": [
+                            {
+                                "name": "risk-route",
+                                "description": "risk",
+                                "priority": 1,
+                                "rules": {
+                                    "type": "classifier",
+                                    "name": "risk",
+                                    "label": "UNKNOWN",
+                                    "predicate": {"gte": 0.4},
+                                },
+                            }
+                        ],
+                    },
+                }
+            ],
         }
     )
     messages = [error.message for error in validate_user_config(config)]
@@ -243,38 +277,48 @@ def test_classifier_decision_rejects_unknown_label_and_local_threshold():
 
 def test_classifier_names_and_labels_reject_reserved_delimiters():
     with pytest.raises(PydanticValidationError):
-        UserConfig.model_validate(
+        _user_config(
             {
-                "version": "v0.3",
-                "routing": {
-                    "signals": {
-                        "classifiers": [
-                            {
-                                "name": "risk:score",
-                                "type": "local",
-                                "model_path": "models/risk",
-                                "labels": ["SAFE", "RISKY"],
+                "version": "v0.4",
+                "recipes": [
+                    {
+                        "name": "default",
+                        "document": {
+                            "signals": {
+                                "classifiers": [
+                                    {
+                                        "name": "risk:score",
+                                        "type": "local",
+                                        "model_path": "models/risk",
+                                        "labels": ["SAFE", "RISKY"],
+                                    }
+                                ]
                             }
-                        ]
+                        },
                     }
-                },
+                ],
             }
         )
     with pytest.raises(PydanticValidationError):
-        UserConfig.model_validate(
+        _user_config(
             {
-                "version": "v0.3",
-                "routing": {
-                    "signals": {
-                        "classifiers": [
-                            {
-                                "name": "risk",
-                                "type": "local",
-                                "model_path": "models/risk",
-                                "labels": [" SAFE ", "RISKY"],
+                "version": "v0.4",
+                "recipes": [
+                    {
+                        "name": "default",
+                        "document": {
+                            "signals": {
+                                "classifiers": [
+                                    {
+                                        "name": "risk",
+                                        "type": "local",
+                                        "model_path": "models/risk",
+                                        "labels": [" SAFE ", "RISKY"],
+                                    }
+                                ]
                             }
-                        ]
+                        },
                     }
-                },
+                ],
             }
         )

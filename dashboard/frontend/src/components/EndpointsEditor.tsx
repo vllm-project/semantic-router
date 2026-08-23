@@ -24,7 +24,7 @@ const EndpointsEditor: React.FC<EndpointsEditorProps> = ({ endpoints, onChange }
       name: `endpoint-${endpoints.length + 1}`,
       endpoint: 'localhost:8000',
       protocol: 'http',
-      weight: 1
+      weight: 1,
     }
     onChange([...endpoints, newEndpoint])
     setEditingIndex(endpoints.length)

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
+import ProductIcon from './ProductIcon'
 import styles from './DataTable.module.css'
 import { getPageWindow, paginateRows, updatePageSelection } from './dataTableSupport'
 
@@ -33,6 +34,7 @@ export interface DataTableProps<T> {
   onView?: (row: T) => void
   onEdit?: (row: T) => void
   onDelete?: (row: T) => void
+  openOnRowClick?: boolean
   expandable?: boolean
   renderExpandedRow?: (row: T) => React.ReactNode
   isRowExpanded?: (row: T) => boolean
@@ -118,6 +120,7 @@ export function DataTable<T>({
   onView,
   onEdit,
   onDelete,
+  openOnRowClick = false,
   expandable = false,
   renderExpandedRow,
   isRowExpanded,
@@ -143,7 +146,7 @@ export function DataTable<T>({
 
   const effectiveOnEdit = readonly ? undefined : onEdit
   const effectiveOnDelete = readonly ? undefined : onDelete
-  const hasActions = Boolean(onView || effectiveOnEdit || effectiveOnDelete)
+  const hasActions = Boolean((onView && !openOnRowClick) || effectiveOnEdit || effectiveOnDelete)
 
   const handleSort = (columnKey: string) => {
     if (sortColumn === columnKey) {
@@ -196,6 +199,14 @@ export function DataTable<T>({
     <div className={`${styles.tableContainer} ${className}`}>
       <div className={styles.tableViewport}>
         <table className={styles.table}>
+          <colgroup>
+            {selection ? <col className={styles.selectionColumn} /> : null}
+            {expandable ? <col className={styles.expandColumn} /> : null}
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.width }} />
+            ))}
+            {hasActions ? <col className={styles.actionsColumnWidth} /> : null}
+          </colgroup>
           <thead className={styles.thead}>
             <tr>
               {selection ? (
@@ -238,7 +249,9 @@ export function DataTable<T>({
                         {column.header}
                         {activeSort ? (
                           <span className={styles.sortIcon} aria-hidden="true">
-                            {sortDirection === 'asc' ? '↑' : '↓'}
+                            <ProductIcon
+                              name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'}
+                            />
                           </span>
                         ) : null}
                       </button>
@@ -265,11 +278,28 @@ export function DataTable<T>({
                 const key = keyExtractor(row)
                 const expanded = isRowExpanded?.(row) || false
                 const selectionDisabled = selection?.isRowDisabled?.(row) ?? false
+                const rowOpensDetails = Boolean(openOnRowClick && onView)
+                const openRow = () => onView?.(row)
+                const handleRowClick = (event: React.MouseEvent<HTMLTableRowElement>) => {
+                  if (!rowOpensDetails) return
+                  const target = event.target as HTMLElement
+                  if (target.closest('button, a, input, select, textarea, [role="button"]')) return
+                  openRow()
+                }
+                const handleRowKeyDown = (event: React.KeyboardEvent<HTMLTableRowElement>) => {
+                  if (!rowOpensDetails || (event.key !== 'Enter' && event.key !== ' ')) return
+                  event.preventDefault()
+                  openRow()
+                }
 
                 return (
                   <React.Fragment key={key}>
                     <tr
-                      className={`${styles.tr} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}
+                      className={`${styles.tr} ${rowOpensDetails ? styles.trInteractive : ''} ${selection?.selectedKeys.has(key) ? styles.trSelected : ''}`}
+                      tabIndex={rowOpensDetails ? 0 : undefined}
+                      aria-label={rowOpensDetails ? `Open ${key}` : undefined}
+                      onClick={handleRowClick}
+                      onKeyDown={handleRowKeyDown}
                     >
                       {selection ? (
                         <td className={styles.selectionCell}>
@@ -294,12 +324,11 @@ export function DataTable<T>({
                             aria-label={`${expanded ? 'Collapse' : 'Expand'} ${key}`}
                             aria-expanded={expanded}
                           >
-                            <span
+                            <ProductIcon
+                              name="chevron-right"
                               className={`${styles.expandIcon} ${expanded ? styles.expanded : ''}`}
                               aria-hidden="true"
-                            >
-                              ▶
-                            </span>
+                            />
                           </button>
                         </td>
                       ) : null}
@@ -317,13 +346,14 @@ export function DataTable<T>({
                       {hasActions ? (
                         <td className={`${styles.td} ${styles.actionsCell}`}>
                           <div className={styles.actionButtons}>
-                            {onView ? (
+                            {onView && !openOnRowClick ? (
                               <button
                                 type="button"
                                 className={`${styles.actionButton} ${styles.viewButton}`}
                                 onClick={() => onView(row)}
                                 aria-label={`View ${key}`}
                               >
+                                <ProductIcon name="info" aria-hidden="true" />
                                 View
                               </button>
                             ) : null}
@@ -334,6 +364,7 @@ export function DataTable<T>({
                                 onClick={() => effectiveOnEdit(row)}
                                 aria-label={`Edit ${key}`}
                               >
+                                <ProductIcon name="edit" aria-hidden="true" />
                                 Edit
                               </button>
                             ) : null}
@@ -344,6 +375,7 @@ export function DataTable<T>({
                                 onClick={() => effectiveOnDelete(row)}
                                 aria-label={`Delete ${key}`}
                               >
+                                <ProductIcon name="trash" aria-hidden="true" />
                                 Delete
                               </button>
                             ) : null}
@@ -399,7 +431,8 @@ export function DataTable<T>({
               disabled={pageWindow.page === 1}
               aria-label="First page"
             >
-              «
+              <ProductIcon name="chevron-left" />
+              <ProductIcon name="chevron-left" />
             </button>
             <button
               type="button"
@@ -407,7 +440,7 @@ export function DataTable<T>({
               disabled={pageWindow.page === 1}
               aria-label="Previous page"
             >
-              ‹
+              <ProductIcon name="chevron-left" />
             </button>
             <span>
               Page {pageWindow.page} of {pageWindow.totalPages}
@@ -418,7 +451,7 @@ export function DataTable<T>({
               disabled={pageWindow.page === pageWindow.totalPages}
               aria-label="Next page"
             >
-              ›
+              <ProductIcon name="chevron-right" />
             </button>
             <button
               type="button"
@@ -426,7 +459,8 @@ export function DataTable<T>({
               disabled={pageWindow.page === pageWindow.totalPages}
               aria-label="Last page"
             >
-              »
+              <ProductIcon name="chevron-right" />
+              <ProductIcon name="chevron-right" />
             </button>
           </div>
         </div>

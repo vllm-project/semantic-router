@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from pydantic import ValidationError
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -16,8 +17,10 @@ utils = importlib.import_module("cli.utils")
 
 load_profile_values = config_translator.load_profile_values
 EmbeddingModelsConfig = models.EmbeddingModelsConfig
+RecipeDistribution = models.RecipeDistribution
 ConfigParseError = parser.ConfigParseError
 load_config_file = parser.load_config_file
+parse_config_artifact = parser.parse_config_artifact
 parse_user_config = parser.parse_user_config
 find_config_file = utils.find_config_file
 
@@ -26,30 +29,58 @@ def write_minimal_config(path: Path) -> None:
     path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "providers": {
-                    "defaults": {"default_model": "demo-model"},
-                    "models": [
-                        {
-                            "name": "demo-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
+                "models": [
+                    {
+                        "name": "demo-model",
+                        "card": {
+                            "description": "Model used by parser tests.",
+                            "capabilities": ["chat"],
+                        },
+                        "connections": [
+                            {
+                                "provider": "openai-compatible",
+                                "endpoint": "http://127.0.0.1:8000/v1",
+                                "model": "demo-model",
+                                "weight": "1",
+                            }
+                        ],
+                    }
+                ],
+                "recipes": [
+                    {
+                        "name": "default",
+                        "document": {
+                            "decisions": [
+                                {
+                                    "name": "default-route",
+                                    "description": "fallback",
+                                    "priority": 100,
+                                    "rules": {"operator": "AND", "conditions": []},
+                                }
+                            ]
+                        },
+                    }
+                ],
+                "entrypoints": [
+                    {
+                        "name": "vllm-sr/default",
+                        "aliases": ["default"],
+                        "recipe": "default",
+                        "assignments": {
+                            "default-route": {"models": [{"model": "demo-model"}]}
+                        },
+                    }
+                ],
+                "global": {
+                    "services": {
+                        "backend_egress": {
+                            "policy_file": "/app/config/backend-egress-policy.yaml"
                         }
-                    ],
-                },
-                "routing": {
-                    "modelCards": [{"name": "demo-model"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "description": "fallback",
-                            "priority": 100,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "demo-model"}],
-                        }
-                    ],
+                    }
                 },
             },
             sort_keys=False,
@@ -67,7 +98,7 @@ def test_parse_user_config_rejects_missing_file(tmp_path: Path) -> None:
 
 def test_parse_user_config_rejects_invalid_yaml(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\nrouting: [broken\n", encoding="utf-8")
+    config_path.write_text("version: v0.4\nrouting: [broken\n", encoding="utf-8")
 
     with pytest.raises(ConfigParseError, match="Invalid YAML syntax"):
         parse_user_config(str(config_path))
@@ -81,18 +112,51 @@ def test_parse_user_config_rejects_empty_file(tmp_path: Path) -> None:
         parse_user_config(str(config_path))
 
 
+def test_parse_user_config_rejects_v03_at_steady_state(tmp_path: Path) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["version"] = "v0.3"
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match="v0.4"):
+        parse_user_config(str(config_path))
+
+
 def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
     data["entrypoints"] = [
-        {"model_names": ["vllm-sr/mom-v1-vault"], "recipe": "privacy-first"}
+        {
+            "name": "vllm-sr/mom-v1-vault",
+            "aliases": ["privacy-first"],
+            "recipe": "privacy-first",
+            "assignments": {
+                "privacy-route": {
+                    "models": [
+                        {
+                            "model": "demo-model",
+                            "priority": 0,
+                        },
+                        {
+                            "model": "backup-model",
+                            "priority": 1,
+                        },
+                    ],
+                    "fallback": {
+                        "strategy": "priority",
+                        "on": ["unavailable", "overloaded"],
+                    },
+                }
+            },
+        }
     ]
     data["recipes"] = [
         {
             "name": "privacy-first",
             "description": "Keep sensitive prompts on the private route.",
-            "routing": {
+            "document": {
                 "signals": {
                     "keywords": [
                         {
@@ -113,20 +177,127 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
                                 {"type": "keyword", "name": "privacy-markers"}
                             ],
                         },
-                        "modelRefs": [{"model": "demo-model"}],
                     }
                 ],
             },
         }
     ]
+    data["models"].append(
+        {
+            **data["models"][0],
+            "name": "backup-model",
+            "connections": [
+                {
+                    **data["models"][0]["connections"][0],
+                    "model": "backup-model",
+                }
+            ],
+        }
+    )
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     parsed = parse_user_config(str(config_path))
 
-    assert parsed.entrypoints[0].model_names == ["vllm-sr/mom-v1-vault"]
+    assert parsed.entrypoints[0].name == "vllm-sr/mom-v1-vault"
     assert parsed.entrypoints[0].recipe == "privacy-first"
+    assignment = parsed.entrypoints[0].assignments["privacy-route"]
+    assert [model.priority for model in assignment.models] == [0, 1]
+    assert assignment.fallback is not None
+    assert assignment.fallback.on == ["unavailable", "overloaded"]
     assert parsed.recipes[0].name == "privacy-first"
-    assert parsed.recipes[0].routing.decisions[0].name == "privacy-route"
+    assert parsed.recipes[0].document.decisions[0].name == "privacy-route"
+
+
+def test_parse_config_artifact_accepts_recipe_only_distribution(tmp_path: Path) -> None:
+    config_path = tmp_path / "recipes.yaml"
+    config_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": "v0.4",
+                "recipes": [
+                    {
+                        "name": "balance",
+                        "document": {
+                            "decisions": [
+                                {
+                                    "name": "simple",
+                                    "rules": {"operator": "AND", "conditions": []},
+                                }
+                            ]
+                        },
+                    }
+                ],
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+
+    artifact = parse_config_artifact(str(config_path))
+
+    assert isinstance(artifact, RecipeDistribution)
+    assert artifact.recipes[0].name == "balance"
+
+    with pytest.raises(ConfigParseError, match="backend_egress.policy_file"):
+        parse_user_config(str(config_path))
+
+
+@pytest.mark.parametrize("runtime_field", ["models", "entrypoints", "global"])
+def test_recipe_distribution_rejects_runtime_owned_fields(runtime_field: str) -> None:
+    document = {
+        "version": "v0.4",
+        "recipes": [{"name": "balance", "document": {}}],
+        runtime_field: [] if runtime_field != "global" else {},
+    }
+
+    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+        RecipeDistribution.model_validate(document)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        lambda data: data["listeners"][0].update({"api_keys": ["legacy"]}),
+        lambda data: data["models"][0]["connections"][0].update(
+            {"api_key_env": "MODEL_API_KEY"}
+        ),
+    ],
+)
+def test_parse_user_config_rejects_removed_inline_access_fields(
+    tmp_path: Path, mutation
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    mutation(data)
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match="Extra inputs are not permitted"):
+        parse_user_config(str(config_path))
+
+
+def test_parse_user_config_rejects_non_contiguous_fallback_tiers(
+    tmp_path: Path,
+) -> None:
+    config_path = tmp_path / "config.yaml"
+    write_minimal_config(config_path)
+    data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    data["entrypoints"][0]["assignments"] = {
+        "default-route": {
+            "models": [
+                {"model": "demo-model", "priority": 0},
+                {"model": "backup-model", "priority": 2},
+            ],
+            "fallback": {
+                "strategy": "priority",
+                "on": ["unavailable"],
+            },
+        }
+    }
+    config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+    with pytest.raises(ConfigParseError, match="contiguous from zero"):
+        parse_user_config(str(config_path))
 
 
 def test_parse_user_config_rejects_recipe_owned_model_cards(tmp_path: Path) -> None:
@@ -136,7 +307,7 @@ def test_parse_user_config_rejects_recipe_owned_model_cards(tmp_path: Path) -> N
     data["recipes"] = [
         {
             "name": "invalid",
-            "routing": {"modelCards": [{"name": "recipe-owned-model"}]},
+            "document": {"modelCards": [{"name": "recipe-owned-model"}]},
         }
     ]
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -144,7 +315,7 @@ def test_parse_user_config_rejects_recipe_owned_model_cards(tmp_path: Path) -> N
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "recipes -> 0 -> routing -> modelCards" in str(exc.value)
+    assert "recipes -> 0 -> document -> modelCards" in str(exc.value)
     assert "Extra inputs are not permitted" in str(exc.value)
 
 
@@ -152,23 +323,21 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["providers"]["models"][0]["pricing"] = {
-        "currency": "USD",
-        "prompt_per_1m": 2.0,
-        "cached_input_per_1m": 0.25,
-        "cache_write_per_1m": 2.5,
-        "completion_per_1m": 6.0,
+    data["billing_currency"] = "USD"
+    data["models"][0]["pricing"] = {
+        "input_cost_per_million_tokens": "2",
+        "cache_read_cost_per_million_tokens": "0.25",
+        "cache_write_cost_per_million_tokens": "2.5",
+        "output_cost_per_million_tokens": "6",
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     parsed = parse_user_config(str(config_path))
 
-    pricing = parsed.providers.models[0].pricing
+    pricing = parsed.models[0].pricing
     assert pricing is not None
-    assert pricing.cached_input_per_1m == 0.25
-    assert pricing.cache_write_per_1m == 2.5
-    assert pricing.model_dump()["cached_input_per_1m"] == 0.25
-    assert pricing.model_dump()["cache_write_per_1m"] == 2.5
+    assert pricing.cache_read_cost_per_million_tokens == "0.25"
+    assert pricing.cache_write_cost_per_million_tokens == "2.5"
 
 
 def test_embedding_models_config_accepts_remote_endpoint() -> None:
@@ -223,7 +392,7 @@ def test_parse_user_config_accepts_decision_learning_controls(
             },
         },
     }
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "adaptation": {
             "mode": "observe",
             "candidate_set": "tier",
@@ -238,7 +407,7 @@ def test_parse_user_config_accepts_decision_learning_controls(
 
     parsed = parse_user_config(str(config_path))
 
-    adaptations = parsed.decisions[0].adaptations
+    adaptations = parsed.recipes[0].document.decisions[0].adaptations
     assert adaptations is not None
     assert adaptations.adaptation is not None
     assert adaptations.adaptation.mode == "observe"
@@ -257,7 +426,7 @@ def test_parse_user_config_rejects_unknown_decision_adaptation(tmp_path: Path) -
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "unknown_learning": {"mode": "apply"}
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -272,7 +441,7 @@ def test_parse_user_config_rejects_removed_decision_coordination(
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "coordination": {"protection_weight": 1.0}
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
@@ -285,7 +454,7 @@ def test_parse_user_config_rejects_protection_candidate_set(tmp_path: Path) -> N
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "protection": {
             "mode": "apply",
             "candidate_set": "tier",
@@ -303,7 +472,7 @@ def test_parse_user_config_rejects_decision_observe_component_apply(
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "mode": "observe",
         "adaptation": {"mode": "apply"},
     }
@@ -319,7 +488,7 @@ def test_parse_user_config_rejects_decision_bypass_component_observe(
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "mode": "bypass",
         "protection": {"mode": "observe"},
     }
@@ -335,7 +504,7 @@ def test_parse_user_config_rejects_removed_decision_protection_weight(
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["adaptations"] = {
+    data["recipes"][0]["document"]["decisions"][0]["adaptations"] = {
         "protection": {
             "weight": 1.0,
         }
@@ -482,11 +651,10 @@ def test_parse_user_config_rejects_unknown_pricing_fields(tmp_path: Path) -> Non
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["providers"]["models"][0]["pricing"] = {
-        "currency": "USD",
-        "prompt_per_1m": 2.0,
+    data["models"][0]["pricing"] = {
+        "input_cost_per_million_tokens": "2",
         "cached_input": 0.25,
-        "completion_per_1m": 6.0,
+        "output_cost_per_million_tokens": "6",
     }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
@@ -503,7 +671,7 @@ def test_parse_user_config_rejects_removed_session_aware_algorithm(
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["algorithm"] = {
+    data["recipes"][0]["document"]["decisions"][0]["algorithm"] = {
         "type": "session_aware",
         "session_aware": {"fallback_method": "static"},
     }
@@ -526,7 +694,9 @@ def test_parse_user_config_rejects_migrated_learning_algorithms(
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["routing"]["decisions"][0]["algorithm"] = {"type": algorithm_type}
+    data["recipes"][0]["document"]["decisions"][0]["algorithm"] = {
+        "type": algorithm_type
+    }
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
     with pytest.raises(ConfigParseError) as exc:
@@ -562,8 +732,8 @@ def test_parse_user_config_rejects_removed_global_learning_selector_methods(
     with pytest.raises(ConfigParseError) as exc:
         parse_user_config(str(config_path))
 
-    assert "Removed Router Learning config fields" in str(exc.value)
-    assert f"global.router.model_selection.method={method}" in str(exc.value)
+    assert "Removed config fields are not supported" in str(exc.value)
+    assert "global.router.model_selection" in str(exc.value)
 
 
 def test_load_config_file_rejects_missing_file(tmp_path: Path) -> None:
@@ -575,7 +745,7 @@ def test_load_config_file_rejects_missing_file(tmp_path: Path) -> None:
 
 def test_load_config_file_rejects_invalid_yaml(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\nproviders: [broken\n", encoding="utf-8")
+    config_path.write_text("version: v0.4\nproviders: [broken\n", encoding="utf-8")
 
     with pytest.raises(ConfigParseError, match="Invalid YAML syntax"):
         load_config_file(str(config_path))
@@ -587,13 +757,13 @@ def test_load_config_file_returns_mapping(tmp_path: Path) -> None:
 
     loaded = load_config_file(str(config_path))
 
-    assert loaded["version"] == "v0.3"
-    assert loaded["providers"]["defaults"]["default_model"] == "demo-model"
+    assert loaded["version"] == "v0.4"
+    assert loaded["models"][0]["name"] == "demo-model"
 
 
 def test_find_config_file_returns_explicit_file_path(tmp_path: Path) -> None:
     config_path = tmp_path / "custom.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.4\n", encoding="utf-8")
 
     found = find_config_file(path=str(tmp_path), file=str(config_path))
 
@@ -602,7 +772,7 @@ def test_find_config_file_returns_explicit_file_path(tmp_path: Path) -> None:
 
 def test_find_config_file_finds_root_config_yaml(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.4\n", encoding="utf-8")
 
     found = find_config_file(path=str(tmp_path))
 
@@ -613,7 +783,7 @@ def test_find_config_file_finds_nested_config_yaml(tmp_path: Path) -> None:
     config_dir = tmp_path / "config"
     config_dir.mkdir()
     config_path = config_dir / "config.yaml"
-    config_path.write_text("version: v0.3\n", encoding="utf-8")
+    config_path.write_text("version: v0.4\n", encoding="utf-8")
 
     found = find_config_file(path=str(tmp_path))
 

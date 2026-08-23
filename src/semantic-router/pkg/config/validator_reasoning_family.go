@@ -20,7 +20,7 @@ func validateReasoningFamilyContracts(cfg *RouterConfig) error {
 	for _, familyName := range familyNames {
 		family := cfg.ReasoningFamilies[familyName]
 		if strings.TrimSpace(familyName) == "" {
-			return fmt.Errorf("providers.defaults.reasoning_families: family name must not be empty")
+			return fmt.Errorf("reasoning_families: family name must not be empty")
 		}
 		switch family.Type {
 		case ReasoningFamilyTypeChatTemplateKwargs,
@@ -28,7 +28,7 @@ func validateReasoningFamilyContracts(cfg *RouterConfig) error {
 			ReasoningFamilyTypeTopLevelReasoningEffort:
 		default:
 			return fmt.Errorf(
-				"providers.defaults.reasoning_families[%q].type: unsupported value %q (supported: %s, %s, %s)",
+				"reasoning_families[%q].type: unsupported value %q (supported: %s, %s, %s)",
 				familyName,
 				family.Type,
 				ReasoningFamilyTypeChatTemplateKwargs,
@@ -38,13 +38,13 @@ func validateReasoningFamilyContracts(cfg *RouterConfig) error {
 		}
 		if strings.TrimSpace(family.Parameter) == "" {
 			return fmt.Errorf(
-				"providers.defaults.reasoning_families[%q].parameter must not be empty",
+				"reasoning_families[%q].parameter must not be empty",
 				familyName,
 			)
 		}
 		if family.Type == ReasoningFamilyTypeTopLevelReasoningEffort && family.Parameter != "reasoning_effort" {
 			return fmt.Errorf(
-				"providers.defaults.reasoning_families[%q].parameter must be %q for type %s",
+				"reasoning_families[%q].parameter must be %q for type %s",
 				familyName,
 				"reasoning_effort",
 				ReasoningFamilyTypeTopLevelReasoningEffort,

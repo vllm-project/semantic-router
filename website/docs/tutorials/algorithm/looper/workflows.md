@@ -5,17 +5,14 @@
 `workflows` runs a bounded, multi-step Router Flow behind one
 OpenAI-compatible model name.
 
-The runtime also supports a direct Flow model slug through
-`global.integrations.looper.flow.model_names`. The built-in default is
-`vllm-sr/flow`. Direct Flow calls evaluate only decisions with
-`algorithm.type=workflows`; they do not silently fall back to normal single-model
-routes.
+Expose Flow through an Entrypoint alias such as `vllm-sr/flow`. Its action
+assigns the bounded worker pool to each workflow decision.
 
 ## Key Advantages
 
 - Exposes a multi-step agent workflow as one model name: `vllm-sr/flow`.
-- Keeps worker boundaries explicit: dynamic planners may only use the decision's
-  `modelRefs`.
+- Keeps worker boundaries explicit: dynamic planners may only use the Models
+  in the matching Entrypoint assignment.
 - Supports both static role plans and dynamic planner-generated workflows.
 - Records a Flow trace with plan, worker steps, responses, failed models, and
   usage.
@@ -31,50 +28,40 @@ surface as small as `vllm-sr/flow`.
 ## When to Use
 
 - A route should expose a single model name but run a bounded micro-agent flow.
-- The worker pool should come from the decision's `modelRefs`.
+- The worker pool should come from the matching Entrypoint assignment.
 - You want static low-latency templates for predictable tasks.
 - You want dynamic planner-generated workflows for harder reasoning, coding, or
   verification tasks.
 
 ## Configuration
 
-Register the direct model slug:
+Expose the Recipe and assign its worker pool:
 
 ```yaml
-global:
-  integrations:
-    looper:
-      endpoint: http://localhost:8899/v1/chat/completions
-      max_response_bytes_mb: 32 # optional; caps a single upstream response body (default 32 MiB)
-      flow:
-        model_names:
-          - vllm-sr/flow
-        state:
-          store_backend: file
-          ttl_seconds: 1800
-          file:
-            directory: .vllm-sr/flow-state
+entrypoints:
+  - name: vllm-sr/flow
+    recipe: agent
+    assignments:
+      coding-flow:
+        models:
+          - model: local/planner
+          - model: local/worker
 ```
 
 Configure a dynamic Flow decision:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: coding_flow
       description: Coordinate coding work through planned worker steps.
       priority: 100
       output_contract: Preserve any explicit output format exactly.
-      modelRefs:
-        - model: openrouter/gemini-pro
-        - model: openrouter/deepseek
-        - model: qwen/qwen3.6-rocm
       algorithm:
         type: workflows
         workflows:
           mode: dynamic
           planner:
-            model: qwen-coordinator
             max_completion_tokens: 2048
           max_steps: 6
           max_parallel: 3
@@ -92,35 +79,29 @@ normalization, or reference dereferencing. Extraction defaults to exact
 `content` matching; use `extract.sources` or `extract.mode: json_object` only
 when the decision explicitly permits a wider parser.
 
-The planner model is a control-plane model. It does not need to appear in
-`modelRefs`. Worker calls are constrained to `modelRefs`; if the planner names a
-model outside that list, the executor rejects the plan.
+The first eligible assigned Model performs planning and final synthesis.
+Worker calls remain constrained to the same assignment; a generated plan
+cannot introduce another Model.
 
-Static mode uses an explicit role plan. Each role model must be in the
-decision's `modelRefs`.
+Static mode uses an explicit role plan over the assigned worker pool.
 
 ```yaml
-routing:
+document:
   decisions:
     - name: static_flow
       description: Coordinate a fixed sequence of worker roles.
       priority: 100
-      modelRefs:
-        - model: qwen-worker
-        - model: deepseek-worker
       algorithm:
         type: workflows
         workflows:
           mode: static
           roles:
             - name: thinker
-              models: [qwen-worker]
+              prompt: Analyze the request and identify the hard parts.
             - name: worker
-              models: [deepseek-worker]
+              prompt: Produce a complete solution.
             - name: verifier
-              models: [qwen-worker]
-          final:
-            model: qwen-worker
+              prompt: Check the solution and correct any errors.
           max_steps: 3
           max_parallel: 1
           round_timeout_seconds: 90
@@ -131,15 +112,12 @@ routing:
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `model_names` | list[string] | `["vllm-sr/flow"]` | Direct request model slugs that trigger Flow execution |
 | `state.store_backend` | string | `file` | Pending tool-call workflow state backend: `memory`, `file`, or `redis` |
 | `state.ttl_seconds` | int | `1800` | TTL for pending tool-call workflow state |
 | `mode` | string | `static` | `static` role execution or `dynamic` planner-generated execution |
 | `template` | string | `micro_agent` | Static workflow template name |
-| `roles` | list[object] | required for static | Ordered static roles, each with `name`, `models`, optional `prompt`, and optional `access_list` of earlier role ids or agent ids |
-| `final.model` | string | first worker response | Optional static final synthesis model from `modelRefs` |
+| `roles` | list[object] | required for static | Ordered static roles, each with `name`, optional `prompt`, and optional `access_list` of earlier role ids or agent ids |
 | `final.prompt` | string | built-in synthesis prompt | Optional static final synthesis instruction |
-| `planner.model` | string | required for dynamic | Control-plane model used to generate the workflow plan |
 | `planner.max_completion_tokens` | int | `2048` | Max completion tokens for the planner JSON plan only |
 | `max_steps` | int | `3` | Maximum workflow steps accepted from the planner |
 | `max_parallel` | int | `2` | Maximum worker models per step |
@@ -194,8 +172,8 @@ claimed by whichever router instance receives it.
 ## Design Notes
 
 Router Flow intentionally keeps the user-facing API small. The decision's
-`modelRefs` are the worker pool. `algorithm.workflows` describes how to
-orchestrate that pool, not a second model catalog.
+Entrypoint assignment is the worker pool. `algorithm.workflows` describes how
+to orchestrate that pool, not a second model catalog.
 
 Planner and worker models receive request-derived content according to the
 workflow plan. Tool-call state can be persisted in memory, files, or Redis;

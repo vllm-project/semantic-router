@@ -22,9 +22,9 @@ func (l *WorkflowsLooper) generateDynamicWorkflowPlan(
 	if cfg.PlannerModel == "" {
 		return nil, nil, fmt.Errorf("workflows dynamic mode requires planner.model")
 	}
-	plannerOriginal := requestTextWithOutputContract(original, req.OriginalRequest, req.OutputContract)
+	plannerOriginal := requestTextWithOutputContract(original, req.executionRequest, req.OutputContract)
 	prompt := buildWorkflowPlannerPrompt(plannerOriginal, workerModels, cfg, req.OutputContractSpec)
-	planReq := appendFusionStageMessage(stripFusionToolUse(req.OriginalRequest), prompt)
+	planReq := appendFusionStageMessage(stripFusionToolUse(req.executionRequest), prompt)
 	configureWorkflowPlannerRequest(planReq, cfg.PlannerModel)
 	resp, err := l.callWorkflowModel(ctx, planReq, cfg, cfg.PlannerModel, false, 1, req)
 	if err != nil {

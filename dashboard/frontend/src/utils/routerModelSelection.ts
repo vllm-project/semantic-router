@@ -21,6 +21,7 @@ interface RouterModelsResponse {
 export interface RouterModelOption {
   id: string
   description: string
+  kind?: 'individual'
   recipe?: string
 }
 
@@ -33,7 +34,6 @@ interface RouterModelRoutingMetadata {
   recipe?: string
 }
 
-const LEGACY_AUTO_MODEL_IDS = new Set(['auto', CANONICAL_AUTO_MODEL])
 const RETIRED_ROUTER_MODEL_IDS = new Set(['mom'])
 
 function normalizeModelRecords(payload: unknown): RouterModelRecord[] {
@@ -89,13 +89,7 @@ function modelRoutingMetadata(entry: RouterModelRecord): RouterModelRoutingMetad
     }
   }
 
-  // Older routers do not emit routing metadata. Preserve only their standard
-  // auto aliases; custom aliases require the explicit contract.
-  const owner = typeof entry.owned_by === 'string' ? entry.owned_by.trim().toLowerCase() : ''
-  if (owner !== 'vllm-semantic-router') return null
-  const normalizedId = modelId(entry).toLowerCase()
-  if (!LEGACY_AUTO_MODEL_IDS.has(normalizedId)) return null
-  return { resolution: 'virtual', selectable: true, defaultRoute: true }
+  return null
 }
 
 function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
@@ -136,6 +130,10 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
       id: modelId(entry),
       description: typeof entry.description === 'string' ? entry.description.trim() : '',
       defaultRoute: modelRoutingMetadata(entry)?.defaultRoute ?? false,
+      kind:
+        modelRoutingMetadata(entry)?.resolution === 'passthrough'
+          ? ('individual' as const)
+          : undefined,
       recipe: modelRoutingMetadata(entry)?.recipe,
     }))
     .filter((model) => {
@@ -146,13 +144,17 @@ export function listRouterModels(payload: unknown): RouterModelOption[] {
   const toOption = (model: (typeof models)[number]): RouterModelOption => ({
     id: model.id,
     description: model.description,
+    ...(model.kind ? { kind: model.kind } : {}),
     ...(model.recipe ? { recipe: model.recipe } : {}),
   })
-  const explicitModels = models.filter((model) => !model.defaultRoute)
-  if (explicitModels.length > 0) return explicitModels.map(toOption)
-
-  const canonical = models.find((model) => model.id === CANONICAL_AUTO_MODEL)
-  return canonical ? [toOption(canonical)] : models.slice(0, 1).map(toOption)
+  const explicitVirtualModels = models.filter((model) => !model.defaultRoute && !model.kind)
+  const individualModels = models.filter((model) => model.kind === 'individual')
+  if (explicitVirtualModels.length > 0) {
+    return [...explicitVirtualModels, ...individualModels].map(toOption)
+  }
+  const automaticID = selectRouterAutoModel(payload)
+  const automaticModel = models.find((model) => model.id === automaticID)
+  return [...(automaticModel ? [automaticModel] : []), ...individualModels].map(toOption)
 }
 
 export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string {
@@ -160,7 +162,7 @@ export function getRouterModelsEndpoint(chatCompletionsEndpoint: string): string
   const markerIndex = chatCompletionsEndpoint.indexOf(marker)
 
   if (markerIndex === -1) {
-    return '/api/router/v1/models'
+    return '/v1/models'
   }
 
   return `${chatCompletionsEndpoint.slice(0, markerIndex)}${marker.replace('/chat/completions', '/models')}`

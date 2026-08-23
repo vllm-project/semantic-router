@@ -116,6 +116,43 @@ docs-all: docs-crd docs-config docs-build ## Generate all documentation (CRD + c
 	@$(LOG_TARGET)
 	@echo "All documentation generated successfully"
 
+##@ Management API Contract
+
+MANAGEMENT_API_GEN := tools/management-api-gen
+MANAGEMENT_OPENAPI_JSON := website/static/openapi/management/v1/management.openapi.json
+MANAGEMENT_TYPESCRIPT_CONTRACT := dashboard/frontend/src/generated/managementApiContract.ts
+
+.PHONY: management-api-contract-generate
+management-api-contract-generate: ## Regenerate the checked Management OpenAPI and TypeScript client contract
+	@$(LOG_TARGET)
+	@mkdir -p $(dir $(MANAGEMENT_OPENAPI_JSON)) $(dir $(MANAGEMENT_TYPESCRIPT_CONTRACT))
+	@cd src/semantic-router && \
+		go run ../../$(MANAGEMENT_API_GEN)/main.go -format openapi -o ../../$(MANAGEMENT_OPENAPI_JSON) && \
+		go run ../../$(MANAGEMENT_API_GEN)/main.go -format typescript -o ../../$(MANAGEMENT_TYPESCRIPT_CONTRACT)
+	@echo "Wrote $(MANAGEMENT_OPENAPI_JSON)"
+	@echo "Wrote $(MANAGEMENT_TYPESCRIPT_CONTRACT)"
+
+.PHONY: management-api-contract-check
+management-api-contract-check: ## Fail if checked Management API client artifacts drift from the Router registry
+	@$(LOG_TARGET)
+	@TMPDIR_CHECK=$$(mktemp -d) && \
+	trap 'rm -rf "$$TMPDIR_CHECK"' EXIT HUP INT TERM && \
+	cd src/semantic-router && \
+		go run ../../$(MANAGEMENT_API_GEN)/main.go -format openapi -o "$$TMPDIR_CHECK/management.openapi.json" && \
+		go run ../../$(MANAGEMENT_API_GEN)/main.go -format typescript -o "$$TMPDIR_CHECK/managementApiContract.ts" && \
+	cd ../.. && \
+	if ! diff -q "$$TMPDIR_CHECK/management.openapi.json" "$(MANAGEMENT_OPENAPI_JSON)" >/dev/null 2>&1; then \
+		echo "ERROR: $(MANAGEMENT_OPENAPI_JSON) is stale. Run 'make management-api-contract-generate' and commit the result." >&2; \
+		diff "$$TMPDIR_CHECK/management.openapi.json" "$(MANAGEMENT_OPENAPI_JSON)" | head -40 >&2; \
+		exit 1; \
+	fi && \
+	if ! diff -q "$$TMPDIR_CHECK/managementApiContract.ts" "$(MANAGEMENT_TYPESCRIPT_CONTRACT)" >/dev/null 2>&1; then \
+		echo "ERROR: $(MANAGEMENT_TYPESCRIPT_CONTRACT) is stale. Run 'make management-api-contract-generate' and commit the result." >&2; \
+		diff "$$TMPDIR_CHECK/managementApiContract.ts" "$(MANAGEMENT_TYPESCRIPT_CONTRACT)" | head -40 >&2; \
+		exit 1; \
+	fi
+	@echo "Management API artifacts are up to date"
+
 ##@ Apiserver API Reference (issue #2774)
 
 OPENAPI_GEN := tools/openapi-gen
@@ -136,7 +173,7 @@ api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
 .PHONY: api-docs-generate
-api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoint index from the route catalog
+api-docs-generate: api-docs-openapi management-api-contract-generate ## Regenerate API reference artifacts from their route catalogs
 	@$(LOG_TARGET)
 	@cd src/semantic-router && \
 		CGO_ENABLED=1 \
@@ -150,7 +187,7 @@ api-docs-generate: api-docs-openapi ## Regenerate the apiserver reference endpoi
 		--end "$(APISERVER_INDEX_END)"
 
 .PHONY: api-docs-check
-api-docs-check: $(if $(CI),rust-ci,rust) ## Fail if committed api docs artifacts differ from generator output
+api-docs-check: $(if $(CI),rust-ci,rust) management-api-contract-check ## Fail if committed api docs artifacts differ from generator output
 	@$(LOG_TARGET)
 	@TMPDIR_CHECK=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMPDIR_CHECK"' EXIT HUP INT TERM && \

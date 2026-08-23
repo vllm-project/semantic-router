@@ -120,3 +120,114 @@ func TestResolvedManagementAPIRejectsUnsupportedAuthMode(t *testing.T) {
 		t.Fatal("unsupported management auth mode should be rejected")
 	}
 }
+
+func TestResolvedManagementAPIValidatesManagedSecurityInManagedMode(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.Auth.Mode = ManagementAuthModeRouter
+	cfg.Auth.Roles = nil
+	cfg.Auth.ControlPlaneHMACKeyringFile = "/run/secrets/control-plane-hmac"
+	cfg.Auth.TokenSigningKeyringFile = "/run/secrets/management-signing"
+	cfg.Auth.ServiceAccountHMACKeyringFile = "/run/secrets/service-account-hmac"
+	cfg.Auth.InvitationHMACKeyringFile = "/run/secrets/invitation-hmac"
+	cfg.Auth.ResponseKEKKeyringFile = "/run/secrets/response-kek"
+	cfg.TLS.CertificateFile = "/run/secrets/management-tls-cert"
+	cfg.TLS.PrivateKeyFile = "/run/secrets/management-tls-key"
+
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{
+		ControlPlaneMode: ControlPlaneModeManaged,
+	}); err != nil {
+		t.Fatalf("managed ResolvedManagementAPI() error = %v", err)
+	}
+}
+
+func TestResolvedManagementAPIRejectsAmbiguousManagedTLSSources(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.Auth.Mode = ManagementAuthModeRouter
+	cfg.Auth.Roles = nil
+	cfg.Auth.ControlPlaneHMACKeyringFile = "/run/secrets/control-plane-hmac"
+	cfg.Auth.TokenSigningKeyringFile = "/run/secrets/management-signing"
+	cfg.Auth.ServiceAccountHMACKeyringFile = "/run/secrets/service-account-hmac"
+	cfg.Auth.InvitationHMACKeyringFile = "/run/secrets/invitation-hmac"
+	cfg.Auth.ResponseKEKKeyringFile = "/run/secrets/response-kek"
+	cfg.TLS.CertificateFile = "/run/secrets/management-tls-cert"
+	cfg.TLS.CertificateEnv = "VLLM_SR_MANAGEMENT_TLS_CERT"
+	cfg.TLS.PrivateKeyFile = "/run/secrets/management-tls-key"
+
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{
+		ControlPlaneMode: ControlPlaneModeManaged,
+	}); err == nil {
+		t.Fatal("managed Management TLS should reject ambiguous certificate sources")
+	}
+}
+
+func TestResolvedManagementAPIRequiresRouterAuthInManagedMode(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	configureManagedManagementSecurity(&cfg)
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{
+		ControlPlaneMode: ControlPlaneModeManaged,
+	}); err == nil {
+		t.Fatal("managed mode should reject standalone Management authentication")
+	}
+}
+
+func TestResolvedManagementAPIRejectsStaticAuthorizationInManagedMode(t *testing.T) {
+	for _, mutate := range []func(*ManagementAPIConfig){
+		func(cfg *ManagementAPIConfig) {
+			cfg.Auth.Tokens = []ManagementAPITokenRef{{Env: "VSR_MGMT_TOKEN", Role: "admin"}}
+		},
+		func(cfg *ManagementAPIConfig) { cfg.Auth.Roles = DefaultManagementAPIRoles() },
+	} {
+		cfg := DefaultManagementAPIConfig()
+		cfg.Auth.Mode = ManagementAuthModeRouter
+		cfg.Auth.Roles = nil
+		configureManagedManagementSecurity(&cfg)
+		mutate(&cfg)
+		if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{
+			ControlPlaneMode: ControlPlaneModeManaged,
+		}); err == nil {
+			t.Fatal("managed mode should reject static tokens and roles")
+		}
+	}
+}
+
+func TestResolvedManagementAPIRejectsRouterAuthInStandaloneMode(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.Auth.Mode = ManagementAuthModeRouter
+	cfg.Auth.Roles = nil
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{}); err == nil {
+		t.Fatal("standalone mode should reject Router-native Management authentication")
+	}
+}
+
+func TestResolvedManagementAPIAllowsManagedRemoteExposureWithoutStaticTokens(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.Auth.Mode = ManagementAuthModeRouter
+	cfg.Auth.Roles = nil
+	cfg.RemoteExposure = true
+	cfg.BindAddress = "0.0.0.0"
+	configureManagedManagementSecurity(&cfg)
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{
+		ControlPlaneMode: ControlPlaneModeManaged,
+	}); err != nil {
+		t.Fatalf("managed Router authentication should not require static bearer tokens: %v", err)
+	}
+}
+
+func configureManagedManagementSecurity(cfg *ManagementAPIConfig) {
+	cfg.Auth.ControlPlaneHMACKeyringFile = "/run/secrets/control-plane-hmac"
+	cfg.Auth.TokenSigningKeyringFile = "/run/secrets/management-signing"
+	cfg.Auth.ServiceAccountHMACKeyringFile = "/run/secrets/service-account-hmac"
+	cfg.Auth.InvitationHMACKeyringFile = "/run/secrets/invitation-hmac"
+	cfg.Auth.ResponseKEKKeyringFile = "/run/secrets/response-kek"
+	cfg.TLS.CertificateFile = "/run/secrets/management-tls-cert"
+	cfg.TLS.PrivateKeyFile = "/run/secrets/management-tls-key"
+}
+
+func TestResolvedManagementAPIRejectsManagedOnlyKeyringInStandaloneMode(t *testing.T) {
+	cfg := DefaultManagementAPIConfig()
+	cfg.Auth.ControlPlaneHMACKeyringFile = "/run/secrets/control-plane-hmac"
+
+	if _, err := cfg.ResolvedManagementAPI(ManagementAPIRuntimeOptions{}); err == nil {
+		t.Fatal("standalone mode should reject the managed-only control-plane keyring")
+	}
+}

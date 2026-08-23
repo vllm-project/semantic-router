@@ -2,7 +2,8 @@
 
 import React from 'react'
 import { TestQueryResult, SignalType } from '../../types'
-import { SIGNAL_COLORS, SIGNAL_ICONS } from '../../constants'
+import { SIGNAL_COLORS } from '../../constants'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './ResultCard.module.css'
 
 interface ResultCardProps {
@@ -13,14 +14,10 @@ interface ResultCardProps {
 export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
   if (!result) return null
 
-  const matchedSignals = result.matchedSignals.filter(signal => signal.matched)
+  const matchedSignals = result.matchedSignals.filter((signal) => signal.matched)
 
   const getSignalColor = (type: SignalType): string => {
     return SIGNAL_COLORS[type]?.background || '#607D8B'
-  }
-
-  const getSignalIcon = (type: SignalType): string => {
-    return SIGNAL_ICONS[type] || '❓'
   }
 
   const formatValue = (value: number): string => {
@@ -36,17 +33,23 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
       <div className={styles.card} onClick={(e) => e.stopPropagation()}>
         {/* Header */}
         <div className={styles.header}>
-          <span className={styles.title}>📊 Routing</span>
+          <span className={styles.title}>
+            <ProductIcon name="topology" aria-hidden="true" />
+            Routing
+          </span>
           {result.routingLatency !== undefined && (
             <span className={styles.latencyBadge}>{result.routingLatency}ms</span>
           )}
-          <button className={styles.closeBtn} onClick={onClose}>✕</button>
+          <button type="button" className={styles.closeBtn} onClick={onClose} aria-label="Close">
+            <ProductIcon name="close" aria-hidden="true" />
+          </button>
         </div>
 
         {/* Warning Banner */}
         {result.warning && (
           <div className={styles.warningBanner}>
-            <span>⚠️ {result.warning}</span>
+            <ProductIcon name="alert" aria-hidden="true" />
+            <span>{result.warning}</span>
           </div>
         )}
 
@@ -56,9 +59,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
           <div className={styles.compactRow}>
             <div className={styles.compactItem}>
               <span className={styles.label}>Decision:</span>
-              <span className={styles.value}>
-                {result.matchedDecision || 'Default'}
-              </span>
+              <span className={styles.value}>{result.matchedDecision || 'Not resolved'}</span>
             </div>
             <div className={styles.compactItem}>
               <span className={styles.label}>Model:</span>
@@ -73,23 +74,23 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
             <div className={styles.section}>
               <span className={styles.sectionTitle}>Signals:</span>
               <div className={styles.signalList}>
-                {matchedSignals.map(signal => (
-                  <div
-                    key={`${signal.type}-${signal.name}`}
-                    className={styles.signalCard}
-                  >
+                {matchedSignals.map((signal) => (
+                  <div key={`${signal.type}-${signal.name}`} className={styles.signalCard}>
                     <div className={styles.signalCardHeader}>
                       <span
                         className={styles.signalTag}
                         style={{ background: getSignalColor(signal.type) }}
                       >
-                        {getSignalIcon(signal.type)} {signal.name}
+                        <ProductIcon name="signal" aria-hidden="true" />
+                        {signal.name}
                       </span>
                       <span className={styles.signalType}>{signal.type}</span>
                     </div>
                     <div className={styles.signalMeta}>
                       {signal.value !== undefined && (
-                        <span className={styles.signalMetric}>Value {formatValue(signal.value)}</span>
+                        <span className={styles.signalMetric}>
+                          Value {formatValue(signal.value)}
+                        </span>
                       )}
                       {(signal.score ?? signal.confidence) !== undefined && (
                         <span className={styles.signalMetric}>
@@ -107,7 +108,8 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onClose }) => {
           {/* Fallback Reason */}
           {result.isFallbackDecision && result.fallbackReason && (
             <div className={styles.fallbackReason}>
-              💡 {result.fallbackReason}
+              <ProductIcon name="info" aria-hidden="true" />
+              {result.fallbackReason}
             </div>
           )}
         </div>

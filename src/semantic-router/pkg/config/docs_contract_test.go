@@ -21,7 +21,8 @@ func repoRel(parts ...string) string {
 var apiserverDocNeedles = []string{
 	"http://localhost:8080",
 	"/openapi.json",
-	"/config/router",
+	"one read-only manifest",
+	"/management/v1",
 }
 
 var configContractRequiredDocs = []docNeedles{
@@ -44,8 +45,9 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration.md"),
 		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
-			"`providers.defaults.default_model`",
+			"version:\nlisteners:\nmodels:\nrecipes:\nentrypoints:\nglobal:",
+			"`entrypoints[].recipe`",
+			"connections:",
 			"vllm-sr validate --config config.yaml",
 			"Environment references and secrets",
 			"Entrypoints and recipes",
@@ -56,8 +58,8 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "installation", "configuration-workflows.md"),
 		needles: []string{
-			"Choose one primary source of truth",
-			"vllm-sr serve --target k8s --config config.yaml",
+			"Semantic Router has two explicit authorities",
+			"vllm-sr serve --target k8s",
 			"`spec.config.routing`",
 			"Routing DSL",
 			"Avoid split ownership",
@@ -66,36 +68,18 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "tutorials", "global", "models-entrypoints-serving.md"),
 		needles: []string{
-			"vllm-sr model list",
-			"vllm-sr model show",
-			"vllm-sr model fork",
-			"vllm-sr model validate",
-			"vllm-sr serve vllm-sr/mom-v1-blend",
+			"vllm-sr serve",
+			"Build → Models",
+			"Build → Recipes",
+			"Build → Mixture of Models",
+			"Router Management API",
 			"vllm-sr status",
 			"vllm-sr logs router",
 			"vllm-sr stop",
-			"providers.models[].backend_refs[]",
 			"curl -sS http://localhost:8899/v1/models",
+			"VLLM_SR_API_KEY",
 			"vllm-sr recipe pack",
-			"vllm-sr config migrate --config old-config.yaml",
-			"--recipe-env PROVIDER_API_KEY",
-			"Model Card",
-		},
-	},
-	{
-		path: repoRel("website", "docs", "proposals", "unified-config-contract-v0-3.md"),
-		needles: []string{
-			"version:\nlisteners:\nproviders:\nrouting:\nentrypoints:\nrecipes:\nglobal:",
-			"`routing.modelCards`",
-			"`routing.modelCards[].loras`",
-			"`config/fragments/algorithm/`",
-			"`providers.defaults`",
-			"`providers.models[].backend_refs[]`",
-			"`lora_name`",
-			"`global.router.config_source`",
-			"vllm-sr init",
-			"exhaustive canonical reference config",
-			"`make agent-lint`",
+			"vllm-sr serve --config /path/to/config.yaml",
 		},
 	},
 	{
@@ -108,7 +92,7 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "overview", "mom-model-family.md"),
 		needles: []string{
 			"Mixture of Experts",
-			"**Provider model**",
+			"**Model**",
 			"**Virtual model**",
 			"**Router system model**",
 			"`vllm-sr/mom-v1-blend`",
@@ -117,18 +101,19 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
 		needles: []string{
-			"global:\n  router:\n    model_selection:",
-			"routing:\n  decisions:",
+			"`algorithm.ml`",
+			"recipes:\n  - name: ml-selection",
+			"assignments:",
 		},
 	},
 	{
 		path: repoRel("website", "docs", "training", "model-performance-eval.md"),
 		needles: []string{
 			"listeners: []",
-			"providers:\n  defaults:",
-			"routing:\n  modelCards:",
-			"model_catalog:",
-			"modules:",
+			"models: []",
+			"recipes: []",
+			"entrypoints: []",
+			"one logical Model and connection",
 		},
 	},
 	{
@@ -142,9 +127,10 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "api", "router.md"),
 		needles: []string{
-			"providers:\n  models:",
+			"models:\n  - name: local-small",
+			"connections:",
 			"pricing:",
-			"`providers.models[].backend_refs[]`",
+			"Entrypoint's `name` or `aliases`",
 		},
 	},
 	{
@@ -154,12 +140,12 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("website", "docs", "troubleshooting", "common-errors.md"),
 		needles: []string{
-			"backend_refs:",
-			"endpoint: 10.0.0.1:8000",
+			"connections:",
+			"endpoint: http://10.0.0.1:8000/v1",
 			"[config/config.yaml]",
 			"global:\n  stores:\n    response_cache:",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
-			"routing:\n  decisions:",
+			"document:\n  decisions:",
 		},
 	},
 	{
@@ -175,9 +161,9 @@ var configContractRequiredDocs = []docNeedles{
 	{
 		path: repoRel("src", "vllm-sr", "README.md"),
 		needles: []string{
-			"`routing.decisions[]`",
-			"routing:\n  decisions:",
-			"vllm-sr config migrate --config old-config.yaml",
+			"`recipes[].document.decisions[]`",
+			"recipes:\n  - name: local",
+			"`models[].connections`",
 		},
 	},
 	{
@@ -185,17 +171,17 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"`vsr_canonical_patch.yaml`",
 			"`vsr_canonical_patch_recommendation.json`",
-			"providers:\n  defaults:\n    reasoning_families:",
-			"routing:\n  modelCards:",
-			"routing:\n  decisions:",
-			"default_reasoning_effort: medium",
+			"models:\n  - name: qwen3-14b",
+			"connections:",
+			"entrypoints:",
+			"reasoning: {enabled: true, effort: high}",
 		},
 	},
 	{
 		path: repoRel("bench", "hallucination", "README.md"),
 		needles: []string{
-			"providers:\n  models:",
-			"backend_refs:",
+			"models:\n  - name: Qwen/Qwen2.5-14B-Instruct-AWQ",
+			"connections:",
 			"global:\n  model_catalog:\n    modules:\n      prompt_guard:",
 			"global:\n  model_catalog:\n    modules:\n      hallucination_mitigation:",
 		},
@@ -220,12 +206,11 @@ var configContractRequiredDocs = []docNeedles{
 		path: repoRel("website", "docs", "installation", "k8s", "operator.md"),
 		needles: []string{
 			"kind: SemanticRouter",
-			"`spec.config.routing`",
-			"`spec.vllmEndpoints[]`",
-			"| `service` |",
-			"| `kserve` |",
-			"| `llamastack` |",
-			"does not create an `HTTPRoute`",
+			"`spec.bootstrap.configMapRef`",
+			"immutable: true",
+			"mode: standalone",
+			"Management API owns mutable desired state",
+			"does not create an",
 			"secretKeyRef:",
 		},
 	},
@@ -234,32 +219,44 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"kind: SemanticRouter",
 			"kubectl explain semanticrouter.spec --recursive",
-			"`vllmEndpoints`",
-			"`config.routing`",
+			"`bootstrap`",
+			"`bootstrap.configMapRef`",
+			"immutable: true",
+			"Management API owns",
 			"`status.observedGeneration`",
 		},
 	},
 	{
 		path: "deploy/helm/README.md",
 		needles: []string{
-			"providers:\n    defaults:",
+			"version: v0.4",
+			"models:\n    - name:",
+			"connections:",
+			"recipes:\n    - name:",
+			"entrypoints:\n    - name:",
+			"assignments:",
 		},
 	},
 	{
 		path: "tools/mcp-classifier-server/README.md",
 		needles: []string{
-			"providers:\n  defaults:",
-			"routing:\n  modelCards:",
+			"version: v0.4",
+			"connections:",
+			"recipes:",
+			"entrypoints:",
+			"assignments:",
 			"global:\n  model_catalog:\n    modules:\n      classifier:",
 		},
 	},
 	{
 		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
 		needles: []string{
-			"global:\n  router:\n    model_selection:",
-			"providers:\n  models:",
-			"backend_refs:",
-			"routing:\n  decisions:",
+			"`algorithm.ml`",
+			"models:",
+			"connections:",
+			"recipes:",
+			"entrypoints:",
+			"assignments:",
 		},
 	},
 }
@@ -283,8 +280,15 @@ var configContractForbiddenDocs = []docNeedles{
 		path: repoRel("website", "docs", "training", "ml-model-selection.md"),
 		needles: []string{
 			"config:\n  model_selection:",
+			"global:\n  router:\n    model_selection:",
 			"\nmodel_selection:\n",
 			"\nembedding_models:\n",
+		},
+	},
+	{
+		path: repoRel("src", "semantic-router", "pkg", "modelselection", "README.md"),
+		needles: []string{
+			"global:\n  router:\n    model_selection:",
 		},
 	},
 	{
@@ -301,7 +305,6 @@ var configContractForbiddenDocs = []docNeedles{
 		needles: []string{
 			"\nvllm_endpoints:\n",
 			"\nmodel_config:\n",
-			"\nprovider_profiles:\n",
 			"router-defaults.yaml",
 		},
 	},
@@ -460,7 +463,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "decision", "overview.md"),
 		needles: []string{
 			"Signals tell the Router what it detected",
-			"`routing.decisions`",
+			"`recipes[].document.decisions`",
 			"`decision.algorithm`",
 			"`decision.plugins`",
 		},
@@ -479,7 +482,7 @@ var latestTutorialOverviewDocs = []docNeedles{
 		path: repoRel("website", "docs", "tutorials", "plugin", "overview.md"),
 		needles: []string{
 			"Plugins add route-local behavior after a decision matches",
-			"`routing.decisions[].plugins`",
+			"`recipes[].document.decisions[].plugins`",
 			"[Fast Response](./fast-response)",
 			"[Response Cache](./response-cache)",
 		},
@@ -535,6 +538,7 @@ var latestTutorialSidebarRequired = []string{
 	"'tutorials/global/models-entrypoints-serving'",
 	"'tutorials/global/entrypoints'",
 	"'tutorials/global/recipes'",
+	"'tutorials/global/playground-builder'",
 	"'tutorials/global/overview'",
 }
 
@@ -558,7 +562,9 @@ var latestTutorialSidebarForbidden = []string{
 
 var proposalSidebarRequired = []string{
 	"label: 'Proposals'",
-	"'proposals/unified-config-contract-v0-3'",
+	"'proposals/router-native-access-control'",
+	"'proposals/multi-protocol-adaptor'",
+	"'proposals/router-native-agent-runtime'",
 }
 
 var latestTutorialRequiredSections = []string{

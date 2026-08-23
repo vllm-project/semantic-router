@@ -3,6 +3,9 @@ package config
 import (
 	"math"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
 
 func TestValidateClassifierSignalContracts(t *testing.T) {
@@ -196,30 +199,20 @@ func TestPromptAlgorithmRejectsEffectiveLoRAIdentityCollision(t *testing.T) {
 }
 
 func TestValidateLocalClassifierReloadRequiresRestartForChanges(t *testing.T) {
-	current := &RouterConfig{IntelligentRouting: IntelligentRouting{
-		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
-			Name:      "risk",
-			Type:      "local",
-			ModelPath: "models/risk-v1",
-			Labels:    []string{"SAFE", "RISKY"},
-		}}},
-	}}
-	same := &RouterConfig{IntelligentRouting: IntelligentRouting{
-		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
-			Name:      "renamed-risk",
-			Type:      "local",
-			ModelPath: "models/risk-v1",
-			Labels:    []string{"SAFE", "RISKY"},
-		}}},
-	}}
-	changed := &RouterConfig{IntelligentRouting: IntelligentRouting{
-		Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
-			Name:      "risk",
-			Type:      "local",
-			ModelPath: "models/risk-v2",
-			Labels:    []string{"SAFE", "RISKY"},
-		}}},
-	}}
+	configWithLocalClassifier := func(name, modelPath string) *RouterConfig {
+		return &RouterConfig{Recipes: []RoutingRecipe{{
+			Name: "risk-routing",
+			Profile: RoutingProfile{Signals: Signals{ClassifierRules: []ClassifierSignalRule{{
+				Name:      name,
+				Type:      "local",
+				ModelPath: modelPath,
+				Labels:    []string{"SAFE", "RISKY"},
+			}}}},
+		}}}
+	}
+	current := configWithLocalClassifier("risk", "models/risk-v1")
+	same := configWithLocalClassifier("renamed-risk", "models/risk-v1")
+	changed := configWithLocalClassifier("risk", "models/risk-v2")
 
 	if err := ValidateLocalClassifierReload(current, same); err != nil {
 		t.Fatalf("same runtime contract rejected: %v", err)
@@ -362,11 +355,11 @@ func TestDecisionPluginRejectsUnknownTypeAndFields(t *testing.T) {
 		"route",
 		0,
 		DecisionPlugin{
-			Type:          DecisionPluginSemanticCache,
+			Type:          DecisionPluginResponseCache,
 			Configuration: payload,
 		},
 	); err == nil {
-		t.Fatal("expected unknown semantic-cache field error")
+		t.Fatal("expected unknown response_cache field error")
 	}
 }
 
@@ -386,24 +379,29 @@ func TestDecisionPluginRequiresFastResponseMessage(t *testing.T) {
 	}
 }
 
-func TestDecisionPluginAliasResolvesCanonicalAccessor(t *testing.T) {
+func TestDecisionPluginCanonicalAccessor(t *testing.T) {
 	decision := &Decision{Plugins: []DecisionPlugin{{
-		Type: "semantic_cache",
+		Type: DecisionPluginResponseCache,
 		Configuration: MustStructuredPayload(
-			SemanticCachePluginConfig{Enabled: true},
+			ResponseCachePluginConfig{Enabled: true},
 		),
 	}}}
-	cache := decision.GetSemanticCacheConfig()
+	cache := decision.GetResponseCacheConfig()
 	if cache == nil || !cache.Enabled {
-		t.Fatalf("semantic_cache alias did not resolve: %#v", cache)
+		t.Fatalf("response_cache plugin did not resolve: %#v", cache)
 	}
 }
 
-func TestPromptModelRejectsAnthropicAPIFormat(t *testing.T) {
+func TestPromptModelRejectsBackendWithoutChatWireFormat(t *testing.T) {
 	cfg := &RouterConfig{
+		Looper: LooperConfig{Endpoint: "http://router:8899"},
 		BackendModels: BackendModels{ModelConfig: map[string]ModelParams{
-			"anthropic-helper": {APIFormat: ClientProtocolAnthropic},
+			"anthropic-helper": {Modality: "text"},
 		}},
+		RoutingSnapshot: &routingsnapshot.Snapshot{Bundle: routingsnapshot.Bundle{Models: []routingsnapshot.Model{{
+			Name:     "anthropic-helper",
+			Backends: []routingsnapshot.Backend{{WireFormat: llmprotocol.AnthropicMessagesV1}},
+		}}}},
 	}
 	err := validateDecisionPromptModel(cfg, Decision{
 		Name: "prompt-route",

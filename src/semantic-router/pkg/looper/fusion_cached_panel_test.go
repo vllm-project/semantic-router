@@ -87,7 +87,12 @@ func runCachedPanelArm(
 	}
 	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal(resp.Body, &body))
+	require.NoError(t, json.Unmarshal(wireResponseForTest(t, resp), &body))
+	encodedTrace, err := json.Marshal(resp.IntermediateResponses)
+	require.NoError(t, err)
+	var trace map[string]interface{}
+	require.NoError(t, json.Unmarshal(encodedTrace, &trace))
+	body["fusion"] = trace
 	return body, judgePrompts
 }
 

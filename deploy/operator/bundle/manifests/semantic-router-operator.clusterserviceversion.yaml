@@ -2,61 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    alm-examples: |-
-      [
-        {
-          "apiVersion": "vllm.ai/v1alpha1",
-          "kind": "SemanticRouter",
-          "metadata": {
-            "name": "semantic-router-simple",
-            "namespace": "default"
-          },
-          "spec": {
-            "config": {
-              "prompt_guard": {
-                "enabled": true,
-                "threshold": "0.7"
-              },
-              "response_cache": {
-                "enabled": true,
-                "max_entries": 1000,
-                "similarity_threshold": "0.85",
-                "ttl_seconds": 3600
-              },
-              "tools": {
-                "enabled": true,
-                "top_k": 3
-              }
-            },
-            "persistence": {
-              "enabled": true,
-              "size": "10Gi"
-            },
-            "replicas": 1,
-            "resources": {
-              "limits": {
-                "cpu": "2000m",
-                "memory": "4Gi"
-              },
-              "requests": {
-                "cpu": "1000m",
-                "memory": "2Gi"
-              }
-            },
-            "vllmEndpoints": [
-              {
-                "backend": {
-                  "inferenceServiceName": "llama-3-8b",
-                  "type": "kserve"
-                },
-                "model": "llama3-8b",
-                "name": "my-llama-model",
-                "reasoningFamily": "qwen3"
-              }
-            ]
-          }
-        }
-      ]
+    alm-examples: '[]'
     capabilities: Basic Install
     categories: AI/Machine Learning
     certified: "false"
@@ -96,6 +42,15 @@ spec:
       - kind: Ingress
         name: ""
         version: v1
+      - kind: Job
+        name: ""
+        version: v1
+      - kind: NetworkPolicy
+        name: ""
+        version: v1
+      - kind: PodDisruptionBudget
+        name: ""
+        version: v1
       specDescriptors:
       - description: Number of replicas for the deployment
         displayName: Replicas
@@ -113,9 +68,9 @@ spec:
       - description: Persistence configuration
         displayName: Persistence
         path: persistence
-      - description: Semantic router configuration
-        displayName: Configuration
-        path: config
+      - description: Immutable v0.4 Router bootstrap reference
+        displayName: Bootstrap
+        path: bootstrap
       statusDescriptors:
       - description: Current number of replicas
         displayName: Replicas
@@ -132,76 +87,32 @@ spec:
         path: phase
         x-descriptors:
         - urn:alm:descriptor:io.kubernetes.phase
+      - description: Validated Router control-plane mode
+        displayName: Control Plane Mode
+        path: controlPlaneMode
+      - description: Observed immutable bootstrap digest
+        displayName: Bootstrap Revision
+        path: bootstrapRevision
+      - description: Managed schema migration state
+        displayName: Migration
+        path: migration.state
       version: v1alpha1
   description: |
     ## About the Semantic Router Operator
 
-    The Semantic Router Operator manages the lifecycle of vLLM Semantic Router instances on OpenShift and Kubernetes.
+    The Operator deploys vLLM Semantic Router from one immutable v0.4
+    bootstrap ConfigMap. It never synthesizes Models, Recipes, Entrypoints,
+    credentials, access policy, or quota policy.
 
-    vLLM Semantic Router is a Mixture-of-Models (MoM) router that intelligently directs OpenAI API requests to
-    appropriate models based on semantic understanding of request intent.
+    Standalone mode deploys a stateless Router from the selected manifest.
+    Managed mode runs an explicit schema migration Job before rolling the
+    Router Deployment, exposes inference and Management through separate
+    Services, and creates mode-aware disruption, topology, and network
+    isolation resources.
 
-    ### Key Features
-
-    * **Intelligent Model Selection**: Automatically routes requests to the most appropriate model based on query complexity and category
-    * **Tool Auto-Selection**: Semantic similarity-based tool selection from a configurable database
-    * **PII Detection**: Token-level PII classification with configurable policies
-    * **Jailbreak Protection**: Detects and blocks malicious/adversarial prompts
-    * **Semantic Caching**: Reduces latency and token usage through embedding-based response caching
-    * **Category-Specific Prompts**: Inject domain-specific system prompts based on query classification
-    * **OpenTelemetry Integration**: Distributed tracing for debugging and performance analysis
-
-    ### Prerequisites
-
-    * OpenShift 4.12+ or Kubernetes 1.25+
-    * Persistent storage for ML models (10Gi recommended)
-    * HuggingFace token secret for downloading gated models (optional)
-
-    ### Quick Start
-
-    1. Create a SemanticRouter custom resource:
-
-    ```yaml
-    apiVersion: vllm.ai/v1alpha1
-    kind: SemanticRouter
-    metadata:
-      name: my-semantic-router
-    spec:
-      replicas: 1
-      persistence:
-        enabled: true
-        size: 10Gi
-    ```
-
-    2. The operator will automatically:
-       - Download required ML models from HuggingFace
-       - Create deployment, service, and configmap
-       - Configure probes for health checking
-       - Set up persistent storage for models
-
-    ### Configuration
-
-    The SemanticRouter CR supports extensive configuration options:
-
-    * **Image**: Customize container image and pull policy
-    * **Resources**: Set CPU/memory requests and limits
-    * **Persistence**: Configure storage class and size
-    * **Config**: Fine-tune BERT models, caching, classifiers, and more
-    * **Autoscaling**: Enable HPA with custom metrics
-    * **Ingress**: Expose via ingress with TLS
-
-    See the [documentation](https://vllm-sr.ai) for detailed configuration options.
-
-    ### Architecture
-
-    The Semantic Router runs as an Envoy ExtProc filter, processing requests through:
-
-    1. Prompt guard (jailbreak detection)
-    2. PII detection and redaction
-    3. Semantic cache lookup
-    4. Category classification
-    5. Tool selection
-    6. Model routing with optional reasoning mode
+    Dynamic managed resources are created through the Router Management API;
+    they do not enter the SemanticRouter custom resource or trigger Pod
+    rollouts.
 
     ### Support
 
@@ -264,10 +175,9 @@ spec:
           - update
           - watch
         - apiGroups:
-          - gateway.networking.k8s.io
+          - batch
           resources:
-          - gateways
-          - httproutes
+          - jobs
           verbs:
           - create
           - delete
@@ -277,9 +187,30 @@ spec:
           - update
           - watch
         - apiGroups:
+          - gateway.networking.k8s.io
+          resources:
+          - gateways
+          verbs:
+          - get
+          - list
+          - watch
+        - apiGroups:
           - networking.k8s.io
           resources:
           - ingresses
+          - networkpolicies
+          verbs:
+          - create
+          - delete
+          - get
+          - list
+          - patch
+          - update
+          - watch
+        - apiGroups:
+          - policy
+          resources:
+          - poddisruptionbudgets
           verbs:
           - create
           - delete
@@ -299,14 +230,6 @@ spec:
           - list
           - patch
           - update
-          - watch
-        - apiGroups:
-          - serving.kserve.io
-          resources:
-          - inferenceservices
-          verbs:
-          - get
-          - list
           - watch
         - apiGroups:
           - storage.k8s.io

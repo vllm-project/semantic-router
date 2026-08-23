@@ -89,8 +89,9 @@ func (h *OpenClawHandler) ProvisionHandler() http.HandlerFunc {
 		if req.Container.ModelAPIKey == "" {
 			req.Container.ModelAPIKey = "not-needed"
 		}
-		if req.Container.ModelName == "" {
-			req.Container.ModelName = "vllm-sr/auto"
+		if strings.TrimSpace(req.Container.ModelName) == "" {
+			writeJSONError(w, "modelName is required; select an active Router entrypoint", http.StatusBadRequest)
+			return
 		}
 		if req.Container.MemoryBackend == "" {
 			req.Container.MemoryBackend = "local"

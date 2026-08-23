@@ -38,10 +38,6 @@ jobs:
           IMAGE: ${{ matrix.image }}
         run: |
           case "$IMAGE" in
-            anthropic-shim)
-              CONTEXT="./e2e/testing/anthropic-shim"
-              DOCKERFILE="./e2e/testing/anthropic-shim/Dockerfile"
-              ;;
             dashboard)
               CONTEXT="."
               DOCKERFILE="./dashboard/backend/Dockerfile"

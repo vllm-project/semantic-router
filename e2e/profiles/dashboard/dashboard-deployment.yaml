@@ -14,27 +14,6 @@ spec:
       labels:
         app: semantic-router-dashboard
     spec:
-      # The production ConfigMap is intentionally immutable. Dashboard E2E
-      # exercises deployment and security-policy mutations, so stage a private
-      # copy into an emptyDir instead of misreporting the ConfigMap as writable.
-      initContainers:
-        - name: stage-dashboard-runtime-config
-          image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
-          imagePullPolicy: Never
-          command:
-            - /bin/sh
-            - -ec
-            - |
-              cp /config-seed/config.yaml /config-runtime/config.yaml
-              if [ -f /config-seed/tools_db.json ]; then
-                cp /config-seed/tools_db.json /config-runtime/tools_db.json
-              fi
-          volumeMounts:
-            - name: router-config-seed
-              mountPath: /config-seed
-              readOnly: true
-            - name: router-config-runtime
-              mountPath: /config-runtime
       containers:
         - name: dashboard
           image: ghcr.io/vllm-project/semantic-router/dashboard:e2e-test
@@ -62,10 +41,7 @@ spec:
                   name: semantic-router-dashboard-config
                   key: TARGET_PROMETHEUS_URL
             - name: TARGET_ROUTER_API_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: semantic-router-dashboard-config
-                  key: TARGET_ROUTER_API_URL
+              value: https://semantic-router-management.vllm-semantic-router-system.svc.cluster.local:8080
             - name: TARGET_ROUTER_METRICS_URL
               valueFrom:
                 configMapKeyRef:
@@ -85,7 +61,25 @@ spec:
                   optional: true
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
-            - name: DASHBOARD_RUNTIME_CONFIG_WRITABLE
+            - name: SSL_CERT_FILE
+              value: /run/vllm-sr-dashboard-ca.crt
+            - name: DASHBOARD_ISSUER
+              value: https://semantic-router-dashboard-issuer.vllm-semantic-router-system.svc.cluster.local:9443
+            - name: DASHBOARD_ISSUER_ID
+              value: 10000000-0000-4000-8000-000000000011
+            - name: DASHBOARD_KEY_ID
+              value: dashboard-e2e-v1
+            - name: DASHBOARD_SIGNING_KEY_FILE
+              value: /run/vllm-sr-dashboard-assertion-signing-key.pem
+            - name: DASHBOARD_ISSUER_TLS_LISTEN_ADDR
+              value: :9443
+            - name: DASHBOARD_ISSUER_TLS_CERT_FILE
+              value: /run/vllm-sr-dashboard-issuer-tls.crt
+            - name: DASHBOARD_ISSUER_TLS_KEY_FILE
+              value: /run/vllm-sr-dashboard-issuer-tls.key
+            - name: DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE
+              value: /tmp/vllm-sr-dashboard/bootstrap/router-token
+            - name: DASHBOARD_ALLOW_OPEN_BOOTSTRAP
               value: "true"
             # ML pipeline disabled in E2E — ml-training-service image is not
             # available in CI and the pipeline is not part of the dashboard contract.
@@ -101,27 +95,50 @@ spec:
             - name: EVALUATION_DB_PATH
               value: /tmp/vllm-sr-dashboard/evaluations.db
             - name: DASHBOARD_JWT_SECRET
-              value: dashboard-e2e-jwt-secret
-            - name: DASHBOARD_ADMIN_EMAIL
-              value: e2e-dashboard-admin@example.com
-            - name: DASHBOARD_ADMIN_PASSWORD
-              value: dashboard-e2e-password
-            - name: DASHBOARD_ADMIN_NAME
-              value: Dashboard E2E Admin
+              valueFrom:
+                secretKeyRef:
+                  name: semantic-router-dashboard-e2e-dashboard
+                  key: jwt-secret
           ports:
             - name: http
               containerPort: 8700
+            - name: https-issuer
+              containerPort: 9443
           volumeMounts:
-            - name: router-config-runtime
+            - name: router-config
               mountPath: /app/config
+              readOnly: true
             - name: dashboard-data
               mountPath: /tmp/vllm-sr-dashboard
+            # Pin each identity file as a regular bind mount. Kubernetes Secret
+            # directory projections use mutable symlink trees, which the
+            # Dashboard's fail-closed path walker deliberately rejects.
+            - name: dashboard-identity
+              mountPath: /run/vllm-sr-dashboard-assertion-signing-key.pem
+              subPath: assertion-signing-key.pem
+              readOnly: true
+            - name: dashboard-identity
+              mountPath: /run/vllm-sr-dashboard-issuer-tls.crt
+              subPath: tls.crt
+              readOnly: true
+            - name: dashboard-identity
+              mountPath: /run/vllm-sr-dashboard-issuer-tls.key
+              subPath: tls.key
+              readOnly: true
+            - name: dashboard-identity
+              mountPath: /run/vllm-sr-dashboard-ca.crt
+              subPath: ca.crt
+              readOnly: true
       volumes:
-        - name: router-config-seed
+        - name: router-config
           configMap:
-            name: semantic-router-config
-        - name: router-config-runtime
-          emptyDir: {}
+            # The profile resolves this placeholder from the installed Router
+            # Deployment so Dashboard mounts the same immutable config snapshot.
+            name: router-config-resolved-at-setup
         - name: dashboard-data
           persistentVolumeClaim:
             claimName: semantic-router-dashboard-e2e-data
+        - name: dashboard-identity
+          secret:
+            secretName: semantic-router-dashboard-e2e-dashboard
+            defaultMode: 0400

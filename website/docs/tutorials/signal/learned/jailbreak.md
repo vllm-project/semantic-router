@@ -33,7 +33,7 @@ Use `jailbreak` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     jailbreak:
       - name: prompt_injection

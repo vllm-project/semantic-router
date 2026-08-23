@@ -6,13 +6,10 @@ import sys
 import tempfile
 from pathlib import Path
 
-import yaml
-
 from cli.config_generator import generate_envoy_config_from_user_config
 from cli.config_import import import_config_command as run_import_config_command
-from cli.config_migration import migrate_config_data
-from cli.parser import ConfigParseError, load_config_file, parse_user_config
-from cli.terminal import echo, fields, heading, success
+from cli.parser import ConfigParseError, parse_user_config
+from cli.terminal import echo
 from cli.utils import get_logger
 from cli.validator import (
     print_validation_errors,
@@ -38,11 +35,9 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
     # Check if config file exists
     if not Path(config_path).exists():
         log.error(f"Config file not found: {config_path}")
+        log.error("Run 'vllm-sr serve' to create a local managed config")
         log.error(
-            "Run 'vllm-sr serve' to bootstrap setup mode and create a config file"
-        )
-        log.error(
-            "Or write a canonical v0.3 config.yaml using the docs examples if you want to hand-author it directly"
+            "Or write a canonical v0.4 config.yaml using the docs examples if you want to hand-author it directly"
         )
         sys.exit(1)
 
@@ -89,64 +84,38 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
             sys.exit(1)
 
 
-def migrate_config_command(
-    config_path: str = "config.yaml",
-    output_path: str | None = None,
-    force: bool = False,
-) -> Path:
-    """Migrate a legacy or mixed config file to canonical v0.3 YAML."""
-
-    source_path = Path(config_path)
-    if not source_path.exists():
-        log.error(f"Config file not found: {config_path}")
-        sys.exit(1)
-
-    try:
-        data = load_config_file(config_path)
-    except ConfigParseError as e:
-        log.error(f"Failed to read configuration: {e}")
-        sys.exit(1)
-
-    migrated = migrate_config_data(data)
-
-    destination = (
-        Path(output_path)
-        if output_path
-        else source_path.with_name(f"{source_path.stem}.migrated{source_path.suffix}")
-    )
-    if destination.exists() and not force:
-        log.error(f"Output file already exists: {destination}")
-        log.error("Use --force to overwrite the destination")
-        sys.exit(1)
-
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(
-        yaml.safe_dump(migrated, sort_keys=False, allow_unicode=True),
-        encoding="utf-8",
-    )
-
-    success("Configuration migrated")
-    heading("Files")
-    fields(
-        (
-            ("Source", source_path),
-            ("Output", destination),
-        )
-    )
-    return destination
-
-
 def import_config_from_source_command(
     from_type: str,
     source_path: str | None = None,
     target_path: str = "config.yaml",
     force: bool = False,
 ):
-    """Import a supported external config source into canonical v0.3 YAML."""
+    """Import a supported external config source into canonical v0.4 YAML."""
 
     return run_import_config_command(
         from_type=from_type,
         source_path=source_path,
         target_path=target_path,
+        force=force,
+    )
+
+
+def migrate_config_command(
+    config_path: str = "config.yaml",
+    output_path: str | None = None,
+    force: bool = False,
+):
+    """Upgrade one canonical v0.3 file into a validated v0.4 file offline."""
+
+    # The v0.3 reader is an offline conversion boundary. Keep it out of every
+    # runtime command's import graph so serve/validate cannot become a dual
+    # version reader accidentally.
+    from cli.config_upgrade_v03 import (
+        migrate_config_command as run_migrate_config_command,
+    )
+
+    return run_migrate_config_command(
+        config_path=config_path,
+        output_path=output_path,
         force=force,
     )

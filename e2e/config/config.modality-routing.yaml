@@ -1,101 +1,121 @@
-version: v0.3
-providers:
-  defaults:
-    default_model: "Qwen/Qwen2.5-14B-Instruct"
-  models:
-    - name: "Qwen/Qwen2.5-14B-Instruct"
-      backend_refs:
-        - name: vllm-ar
-          endpoint: 127.0.0.1:8000
-          weight: 1
-    - name: "Qwen/Qwen-Image"
-      backend_refs:
-        - name: vllm-omni
-          endpoint: 127.0.0.1:8001
-          weight: 1
-routing:
-  modelCards:
-    - name: "Qwen/Qwen2.5-14B-Instruct"
-      modality: ar
-    - name: "Qwen/Qwen-Image"
-      modality: diffusion
-      capabilities: [image_generation]
-  signals:
-    domains:
+version: v0.4
+listeners: []
+models:
+- name: Qwen/Qwen2.5-14B-Instruct
+  card:
+    capabilities:
+    - ar
+    modality: ar
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8000/v1
+    model: Qwen/Qwen2.5-14B-Instruct
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+- name: Qwen/Qwen-Image
+  card:
+    capabilities:
+    - image_generation
+    - diffusion
+    modality: diffusion
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8001/v1
+    model: Qwen/Qwen-Image
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
       - name: text_generation
         description: Text generation and general queries.
-        mmlu_categories: [other]
-    modality:
+        mmlu_categories:
+        - other
+      modality:
       - name: AR
         description: Text-only response via autoregressive LLM.
       - name: DIFFUSION
         description: Image generation via diffusion model.
       - name: BOTH
         description: Hybrid response requiring both text and image.
-  decisions:
+    decisions:
     - name: image_generation
       description: Route image generation requests to the diffusion model.
       priority: 200
       rules:
         operator: AND
         conditions:
-          - type: modality
-            name: DIFFUSION
-      modelRefs:
-        - model: "Qwen/Qwen-Image"
-          use_reasoning: false
+        - type: modality
+          name: DIFFUSION
       plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
+      - type: image_gen
+        configuration:
+          enabled: true
+          backend: vllm_omni
+          backend_config:
+            base_url: http://localhost:8001
+            model: Qwen/Qwen-Image
+            num_inference_steps: 4
+            cfg_scale: 0.0
+          default_width: 1024
+          default_height: 1024
+          timeout_seconds: 120
     - name: text_and_image
       description: Route hybrid text+image requests to both models in parallel.
       priority: 190
       rules:
         operator: AND
         conditions:
-          - type: modality
-            name: BOTH
-      modelRefs:
-        - model: "Qwen/Qwen2.5-14B-Instruct"
-          use_reasoning: false
-        - model: "Qwen/Qwen-Image"
-          use_reasoning: false
+        - type: modality
+          name: BOTH
       plugins:
-        - type: image_gen
-          configuration:
-            enabled: true
-            backend: vllm_omni
-            backend_config:
-              base_url: "http://localhost:8001"
-              model: "Qwen/Qwen-Image"
-              num_inference_steps: 4
-              cfg_scale: 0.0
-            default_width: 1024
-            default_height: 1024
-            timeout_seconds: 120
+      - type: image_gen
+        configuration:
+          enabled: true
+          backend: vllm_omni
+          backend_config:
+            base_url: http://localhost:8001
+            model: Qwen/Qwen-Image
+            num_inference_steps: 4
+            cfg_scale: 0.0
+          default_width: 1024
+          default_height: 1024
+          timeout_seconds: 120
     - name: text_generation
       description: Default text routing for AR requests.
       priority: 1
       rules:
         operator: OR
         conditions:
-          - type: modality
-            name: AR
-          - type: domain
-            name: text_generation
-      modelRefs:
-        - model: "Qwen/Qwen2.5-14B-Instruct"
-          use_reasoning: false
+        - type: modality
+          name: AR
+        - type: domain
+          name: text_generation
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    image_generation:
+      models:
+      - model: Qwen/Qwen-Image
+        weight: '1'
+    text_and_image:
+      models:
+      - model: Qwen/Qwen2.5-14B-Instruct
+        weight: '1'
+      - model: Qwen/Qwen-Image
+        weight: '1'
+    text_generation:
+      models:
+      - model: Qwen/Qwen2.5-14B-Instruct
+        weight: '1'
 global:
   stores:
     response_cache:
@@ -121,6 +141,20 @@ global:
         enabled: true
       tracing:
         enabled: false
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   integrations:
     tools:
       enabled: false
+  router: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

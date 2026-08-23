@@ -231,8 +231,8 @@ func (r *OpenAIRouter) protectionRescueEvidence(
 ) bool {
 	tier := decisionTier(ctx)
 	decision := selectionDecisionStateKey(learningCtx)
-	currentExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, current)
-	proposalExp := r.routerLearningRuntimeState().experienceSnapshot(decision, tier, proposal)
+	currentExp := r.routerLearningRuntimeState().experienceSnapshotForRequest(ctx, decision, tier, current)
+	proposalExp := r.routerLearningRuntimeState().experienceSnapshotForRequest(ctx, decision, tier, proposal)
 	currentWeak := currentExp.UnderpoweredCount >= 2 && currentExp.UnderpoweredCount > currentExp.GoodFitCount
 	currentUnreliable := currentExp.FailedCount >= 2
 	if !currentWeak && !currentUnreliable {
@@ -388,6 +388,13 @@ func (r *OpenAIRouter) protectionIdentity(
 		}
 		memoryKey = fmt.Sprintf("%s/%s", sessionID, conversationID)
 	}
+	partition, trusted := authenticatedLearningPartition(ctx)
+	if !trusted {
+		return routerLearningIdentity{}, false
+	}
+	if partition != "" {
+		memoryKey = partition + "/" + memoryKey
+	}
 	return routerLearningIdentity{
 		sessionID:          sessionID,
 		conversationID:     conversationID,
@@ -396,6 +403,21 @@ func (r *OpenAIRouter) protectionIdentity(
 		sessionHeader:      sessionHeader,
 		conversationHeader: conversationHeader,
 	}, true
+}
+
+// authenticatedLearningPartition prevents caller-selected session identifiers
+// from colliding across managed tenants. Standalone requests retain their
+// local session key; managed requests require the authenticated namespace and
+// API-key identity carried in TenantContext.
+func authenticatedLearningPartition(ctx *RequestContext) (string, bool) {
+	if ctx == nil || ctx.InferenceAccess == nil {
+		return "", true
+	}
+	tenant := ctx.InferenceAccess.tenant
+	if tenant.NamespaceID == "" || tenant.APIKeyID == "" {
+		return "", false
+	}
+	return fmt.Sprintf("%s/%s", tenant.NamespaceID, tenant.APIKeyID), true
 }
 
 func (r *OpenAIRouter) protectionSelectionContext(

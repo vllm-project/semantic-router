@@ -69,9 +69,7 @@ func triggerReplayRecordBeforeRestart(ctx context.Context, client *kubernetes.Cl
 		Messages: []fixtures.ChatMessage{
 			{Role: "user", Content: "What is 2+2? Reply with just the number."},
 		},
-	}, map[string]string{
-		"x-authz-user-id": "e2e-replay-user",
-	})
+	}, map[string]string{})
 	if err != nil {
 		return "", fmt.Errorf("chat completion failed: %w", err)
 	}

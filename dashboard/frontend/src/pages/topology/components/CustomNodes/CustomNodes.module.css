@@ -55,7 +55,8 @@
 }
 
 .clientIcon {
-  font-size: 24px;
+  width: 22px;
+  height: 22px;
   margin-bottom: 4px;
 }
 
@@ -83,7 +84,8 @@
 }
 
 .pluginIcon {
-  font-size: 18px;
+  width: 17px;
+  height: 17px;
 }
 
 .pluginTitle {
@@ -118,7 +120,8 @@
 }
 
 .signalGroupIcon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .signalGroupTitle {
@@ -156,10 +159,21 @@
   opacity: 0.9;
 }
 
+.signalLatency > svg:first-child {
+  width: 11px;
+  height: 11px;
+}
+
 .collapseIcon {
-  font-size: 10px;
+  width: 12px;
+  height: 12px;
   margin-left: auto;
   opacity: 0.7;
+  transition: transform 150ms ease;
+}
+
+.collapseIconOpen {
+  transform: rotate(90deg);
 }
 
 .signalList {
@@ -180,7 +194,8 @@
 }
 
 .mlTag {
-  font-size: 10px;
+  width: 11px;
+  height: 11px;
   opacity: 0.8;
 }
 
@@ -229,6 +244,10 @@
 }
 
 .unreachableBanner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   width: 100%;
   padding: 4px 8px;
   margin-top: 4px;
@@ -240,6 +259,11 @@
   font-weight: 500;
 }
 
+.unreachableBanner svg {
+  width: 12px;
+  height: 12px;
+}
+
 .decisionHeader {
   display: flex;
   align-items: center;
@@ -248,7 +272,8 @@
 }
 
 .decisionIcon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .decisionName {
@@ -382,10 +407,18 @@
 }
 
 .metaTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
   font-size: 10px;
   padding: 2px 6px;
   background: rgba(0, 0, 0, 0.2);
   border-radius: 4px;
+}
+
+.metaTag svg {
+  width: 11px;
+  height: 11px;
 }
 
 .modelsList {
@@ -421,7 +454,8 @@
 }
 
 .algorithmIcon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .algorithmType {
@@ -454,8 +488,17 @@
 }
 
 .pluginChainTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   font-weight: 600;
+}
+
+.pluginChainTitle svg,
+.chainPlugin svg {
+  width: 12px;
+  height: 12px;
 }
 
 .pluginChain {
@@ -490,9 +533,10 @@
 }
 
 .chainArrow {
-  font-size: 14px; /* Slightly larger for vertical arrow */
+  width: 13px;
+  height: 13px;
   opacity: 0.5;
-  /* No rotation needed - arrow is already ↓ in the component */
+  transform: rotate(90deg);
 }
 
 /* ============== Model Node ============== */
@@ -513,7 +557,8 @@
 }
 
 .modelIcon {
-  font-size: 16px;
+  width: 16px;
+  height: 16px;
 }
 
 .modelName {
@@ -545,7 +590,8 @@
 }
 
 .reasoningIcon {
-  font-size: 11px;
+  width: 11px;
+  height: 11px;
 }
 
 .reasoningFamily {
@@ -576,7 +622,8 @@
 }
 
 .loraIcon {
-  font-size: 11px;
+  width: 11px;
+  height: 11px;
 }
 
 .loraName {
@@ -629,7 +676,13 @@
 }
 
 .modeBadge span:first-child {
-  font-size: 11px;
+  flex: 0 0 auto;
+}
+
+.modeBadge svg,
+.standardBadge svg {
+  width: 11px;
+  height: 11px;
 }
 
 .effortTag {
@@ -688,7 +741,8 @@
 }
 
 .fallbackDecisionIcon {
-  font-size: 18px;
+  width: 18px;
+  height: 18px;
 }
 
 .fallbackDecisionTitle {
@@ -722,6 +776,9 @@
 }
 
 .fallbackDecisionModel {
+  display: flex;
+  align-items: center;
+  gap: 3px;
   font-size: 11px;
   background: rgba(255, 255, 255, 0.15);
   padding: 3px 8px;
@@ -729,6 +786,12 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.fallbackDecisionModel svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
 }
 
 /* ============== More Decisions Node ============== */

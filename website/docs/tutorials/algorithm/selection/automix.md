@@ -51,7 +51,7 @@ See a complete example:
 
 ## Dependencies and Limitations
 
-- Candidate prices come from `providers.models[].pricing`; missing metadata
+- Candidate prices come from `models[].pricing`; missing metadata
   reduces the usefulness of cost-aware scoring.
 - Capability estimates start from configured model metadata and defaults.
   AutoMix does not learn from the public outcome endpoint; retune estimates

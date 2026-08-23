@@ -10,8 +10,9 @@ import (
 
 func TestPostgresRecipeColumnAlignmentAndMigration(t *testing.T) {
 	const (
-		addRecipeColumn   = "ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe TEXT;"
-		widenRecipeColumn = "ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;"
+		addRecipeColumn       = "ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS recipe TEXT;"
+		widenRecipeColumn     = "ALTER TABLE {{table}} ALTER COLUMN recipe TYPE TEXT;"
+		addRoutingScopeColumn = "ALTER TABLE {{table}} ADD COLUMN IF NOT EXISTS routing_scope TEXT;"
 	)
 	if !strings.Contains(postgresCreateTableQueryTemplate, "recipe TEXT,") {
 		t.Fatal("CREATE TABLE template does not provision the recipe column as TEXT")
@@ -26,6 +27,10 @@ func TestPostgresRecipeColumnAlignmentAndMigration(t *testing.T) {
 	}
 	if addIndex > widenIndex {
 		t.Fatal("recipe column migration widens the column before ensuring it exists")
+	}
+	if !strings.Contains(postgresCreateTableQueryTemplate, "routing_scope TEXT,") ||
+		!strings.Contains(postgresCreateTableQueryTemplate, addRoutingScopeColumn) {
+		t.Fatal("CREATE TABLE template does not provision and migrate the routing_scope column")
 	}
 
 	insertColumns := extractInsertColumns(t, postgresInsertQueryTemplate)
@@ -60,6 +65,14 @@ func TestPostgresRecipeColumnAlignmentAndMigration(t *testing.T) {
 	selectRecipeIndex := sqlColumnIndex(t, selectColumns, "recipe")
 	if _, ok := (&postgresRecordRow{}).scanDestinations()[selectRecipeIndex].(*sql.NullString); !ok {
 		t.Fatalf("recipe SELECT destination has type %T, want *sql.NullString", (&postgresRecordRow{}).scanDestinations()[selectRecipeIndex])
+	}
+	routingScopeIndex := sqlColumnIndex(t, insertColumns, "routing_scope")
+	if got := insertArgs[routingScopeIndex]; got != "entrypoint/test-scope" {
+		t.Fatalf("routing_scope INSERT argument = %v, want entrypoint/test-scope", got)
+	}
+	selectRoutingScopeIndex := sqlColumnIndex(t, selectColumns, "routing_scope")
+	if _, ok := (&postgresRecordRow{}).scanDestinations()[selectRoutingScopeIndex].(*sql.NullString); !ok {
+		t.Fatalf("routing_scope SELECT destination has type %T, want *sql.NullString", (&postgresRecordRow{}).scanDestinations()[selectRoutingScopeIndex])
 	}
 }
 
@@ -106,9 +119,10 @@ func TestPostgresRecipeRoundTripAndLegacyNull(t *testing.T) {
 func postgresRecipeInsertArgs(t *testing.T, recipe string) []interface{} {
 	t.Helper()
 	prepared, err := newPostgresInsertRecord(Record{
-		ID:        "recipe-round-trip",
-		Timestamp: time.Unix(1, 0).UTC(),
-		Recipe:    recipe,
+		ID:           "recipe-round-trip",
+		Timestamp:    time.Unix(1, 0).UTC(),
+		Recipe:       recipe,
+		RoutingScope: "entrypoint/test-scope",
 	})
 	if err != nil {
 		t.Fatalf("newPostgresInsertRecord: %v", err)

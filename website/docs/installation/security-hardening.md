@@ -48,46 +48,48 @@ request_headers_to_remove:
   - x-vsr-looper-iteration
   - x-authz-user-id
   - x-authz-user-groups
+  - x-authz-team-id
+  - x-authz-tenant-id
+  - x-vllm-sr-api-key-id
+  - x-vllm-sr-user-id
+  - x-vllm-sr-team-id
 ```
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
-public inference endpoints. Terminate client authentication at a trusted
-boundary and allow only that component to supply identity headers.
+public inference endpoints. The Router authenticates managed inference
+credentials and constructs its process-local `TenantContext`; no upstream
+component should supply identity headers.
 
-## Configure authorization and rate limits
+## Configure access and quotas
 
-The Dashboard **Security Policy** page maps users or groups to Router roles and
-model access, and can define per-subject request and token limits. Saving a
-valid policy updates the canonical Router configuration and applies it to the
-active stack.
-
-Use preview before saving when a policy changes several mappings. Keep the
-management surface authenticated and grant write permissions only to operators
-who are allowed to change live routing policy.
-
-Relevant Dashboard permissions include:
-
-| Permission | Purpose | Default roles |
-| --- | --- | --- |
-| `feedback.submit` | Submit routing feedback. | admin, write |
-| `replay.read` | List replay records. | admin, write, read |
-| `security.manage` | Change security policy. | admin |
-| `logs.read` | Read bounded local-stack service logs. | admin, write |
-
-The Router management API distinguishes replay metadata from replay detail.
-The Dashboard service can retrieve complete records, then removes captured
-bodies and tool payloads for users who do not have configuration-write access.
-It does not receive permission to reveal stored secret values.
+Use the Management API to bind AccessPolicies and RateLimitPolicies to API
+keys, Users, or Teams. Managed replicas consume immutable policy projections
+and share atomic quota state through the configured access runtime. Keep the
+Management listener private and grant mutation permissions only to operators.
 
 See the [management API reference](../api/apiserver) for endpoints and response
 contracts.
 
 ## Keep credentials out of configuration
 
-Use environment references in canonical YAML:
+Standalone backends reference a named secret source; they never contain the
+secret itself:
 
 ```yaml
-api_key: ${MODEL_API_KEY}
+global:
+  services:
+    backend_credentials:
+      private_provider:
+        credential_adapter_id: bearer
+        secret_env: MODEL_API_KEY
+models:
+  - name: remote/model
+    card: {}
+    connections:
+      - provider: openai-compatible
+        endpoint: https://models.example.com/v1
+        model: provider/model
+        credential: private_provider
 ```
 
 Do not commit literal API keys, passwords, authorization headers, credential
@@ -104,11 +106,26 @@ Existing chart-native Secret references, such as a Dashboard JWT Secret, remain
 external objects and are not copied into the CLI-managed Secret. Use the same
 namespace and release ownership discipline for every manually managed Secret.
 
+### Mount Dashboard identity files in Kubernetes
+
+Strict Dashboard file staging accepts individually pinned, read-only regular
+file mounts. It rejects the mutable symlink tree created by mounting an entire
+projected Secret directory. Mount each required key with `subPath` and set its
+source Secret immutable. To rotate the material, create a replacement immutable
+Secret, update the file references, roll the Dashboard Pod, and remove the old
+Secret only after the rollout succeeds.
+
 ## Secure the local stack's storage credentials
 
 `vllm-sr serve` provisions Redis and Postgres for the local stack, so it also
 owns their credentials. Each stack generates its own on first start. No value
 ships in this repository, and nothing falls back to a shared default.
+
+Workspace bootstrap creates only Router and Dashboard trust material. Storage
+credentials are created by the storage provisioner after it has adopted the
+stack's volumes. It applies the values to Redis and Postgres first and writes
+the credential state last. A failed re-key therefore leaves no committed state
+that could be mistaken for a usable credential on the next start.
 
 Where the material lives:
 
@@ -129,7 +146,10 @@ reads `requirepass` from its mounted config; Router receives the values as
 inherited environment names and the generated runtime config carries only
 `${VLLM_SR_STACK_POSTGRES_PASSWORD}` and `${VLLM_SR_STACK_REDIS_PASSWORD}`.
 They do not appear in a `docker` command line, a generated config file, a log
-record, or a report artifact. Dashboard is not given them.
+record, or a report artifact. The migration process receives only its Postgres
+DSN, Router receives only values referenced by its config, Dashboard receives
+only Dashboard authentication and TLS/bootstrap settings, and Envoy receives
+none of them.
 
 These credentials authenticate network peers. They do not constrain a caller
 that can reach the container runtime directly: the Postgres image trusts local
@@ -185,14 +205,6 @@ the stack's named volume (`vllm-sr-postgres-data` / `vllm-sr-redis-data`, with
 the stack prefix for a named stack). The CLI does not guess which orphaned
 volume is yours.
 
-**Recipe activation reports that the credentials are not readable.** Dashboard
-can start a managed store while activating a Recipe, but it runs as a separate,
-less trusted account -- it holds the container-runtime socket, which is exactly
-what these credentials are kept away from -- so it cannot read the credential
-state, and it will not guess which volume holds the data. Run `vllm-sr serve`
-from the account that owns the stack to provision the store, then activate the
-Recipe again.
-
 **An older CLI is used against a rotated stack.** It will fail to authenticate.
 That is the intended outcome. Either upgrade the CLI, or reset the passwords by
 hand through the container runtime.
@@ -219,20 +231,35 @@ guides.
 
 ## Limit container-runtime access
 
-Some Dashboard workflows can manage local containers. The CLI mounts a
-container-runtime socket only when it is a Unix socket with a safe owner and
-group mode; it rejects symlinks, world-accessible sockets, and unsafe group
-ownership. The Dashboard repeats the check inside the container and runs as a
-non-root user.
+The local split stack gives Router only its compiled bootstrap, model directory,
+one producer log file, exact managed-secret files, and an optional read-only
+runtime knowledge-base directory. It does not mount the source bootstrap or the
+private `.vllm-sr` state tree into Router. Keep new runtime data on similarly
+narrow mounts instead of widening that boundary.
+
+Dashboard container management is disabled by default. The CLI does not probe
+for Docker or Podman sockets. To opt in, set `VLLM_SR_CONTAINER_SOCKET` to the
+absolute, canonical path of the intended daemon socket:
+
+```bash
+VLLM_SR_CONTAINER_SOCKET=/var/run/docker.sock vllm-sr serve
+```
+
+This mount gives Dashboard **host-equivalent privilege** through the container
+daemon: it can create privileged containers and mount host paths. Enable it only
+on a trusted administrative workstation. Socket owner, Unix-socket type,
+non-root group ID, and exact `0660` mode are validated before mounting; symlinks
+and other owners or modes are rejected. Those checks constrain filesystem
+sharing but do not reduce the daemon's capabilities. The Dashboard repeats the
+socket type and group-mode checks inside the container and runs as a non-root
+user.
 
 When the socket is missing or rejected, Router and Dashboard still start, but
 container-management features report the runtime as unavailable. Do not make a
-socket world-writable to bypass this protection. Use
-`VLLM_SR_CONTAINER_SOCKET` for a non-default rootless runtime socket and verify
-its user-namespace and supplementary-group mapping.
-
-If the deployment does not need Dashboard-managed containers, do not mount a
-runtime socket.
+socket world-writable to bypass this protection. For a rootless runtime, verify
+the user-namespace and supplementary-group mapping before opting in. Leave
+`VLLM_SR_CONTAINER_SOCKET` unset when Dashboard-managed containers are not
+required.
 
 ## Production checklist
 

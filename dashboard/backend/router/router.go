@@ -5,9 +5,8 @@ import (
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -18,16 +17,10 @@ type Server struct {
 }
 
 // Setup configures all routes and returns the dashboard server bundle.
-//
-// setupResolver is built by main, not here, so that the process has exactly one
-// resolver and one cache over the config file.
-func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
+func Setup(cfg *config.Config) *Server {
 	mux := http.NewServeMux()
-
-	// The bootstrap gate consults the resolver on every unauthenticated
-	// can-register / register call, so it must be wired before any request
-	// arrives. Wiring it later compiles but panics at request time.
-	authSvc := setupAuthRoutes(mux, cfg, setupResolver)
+	managementSessions := setupManagementSessions(mux, cfg)
+	authSvc := setupAuthRoutes(mux, cfg, managementSessions)
 
 	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{
 		LegacyOpenClawDir: cfg.OpenClawDataDir,
@@ -36,43 +29,51 @@ func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 		log.Fatalf("workflow store: %v", err)
 	}
 
-	var cp *configprojection.Store
-	if opened, openErr := configprojection.Open(cfg.ConfigProjectionDBPath); openErr != nil {
-		log.Printf(
-			"Warning: config projection store unavailable at %s: %v; deploy/update projection refresh and projection APIs will be degraded",
-			cfg.ConfigProjectionDBPath,
-			openErr,
-		)
-	} else {
-		cp = opened
-		handlers.SetConfigProjectionStore(cp)
-	}
-
 	mux.HandleFunc("/api/workflows/health", handlers.WorkflowHealthHandler(wf))
 	log.Printf("Workflow health API registered: /api/workflows/health")
-
 	openClawHandler := newOpenClawHandler(cfg, wf)
-	recipeStore := newDashboardRecipeStore(cfg)
-
-	registerCoreRoutes(mux, cfg, setupResolver, coreRouteOptions{
-		recipeStore:              recipeStore,
-		modelVerificationAuditor: authSvc,
-	})
-	registerEvaluationRoutes(mux, cfg)
-	SetupMCP(mux, cfg, wf, openClawHandler)
+	registerCoreRoutes(mux, cfg)
+	registerEvaluationRoutes(mux, cfg, managementSessions)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
-	registerProxyRoutes(mux, cfg, recipeStore)
+	registerProxyRoutes(mux, cfg, managementSessions)
 
 	// Static frontend must be registered last.
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 	return &Server{
 		Handler: wrapWithAuth(mux, authSvc),
-		Close: func() error {
-			if cp == nil {
-				return nil
-			}
-			return cp.Close()
-		},
+		Close:   wf.Close,
 	}
+}
+
+func setupManagementSessions(mux *http.ServeMux, cfg *config.Config) routerauth.ManagementIdentityProvider {
+	if cfg.DashboardIssuer == "" || cfg.DashboardSigningKeyFile == "" || cfg.DashboardKeyID == "" {
+		log.Printf("Dashboard issuer disabled: signing configuration is incomplete")
+		return nil
+	}
+	signer, err := routerauth.LoadEd25519AssertionSigner(cfg.DashboardSigningKeyFile, cfg.DashboardKeyID)
+	if err != nil {
+		log.Printf("Dashboard issuer disabled: %v", err)
+		return nil
+	}
+	issuerURL, err := routerauth.CanonicalIssuerURL(cfg.DashboardIssuer)
+	if err != nil {
+		log.Printf("Dashboard issuer disabled: %v", err)
+		return nil
+	}
+	routerauth.RegisterIssuerDiscovery(mux, issuerURL, signer)
+	if cfg.DashboardIssuerID == "" {
+		log.Printf("Router Management browser sessions disabled: Dashboard issuer ID is not configured")
+		return nil
+	}
+	provider, err := routerauth.NewManagementSessionProvider(routerauth.ManagementSessionOptions{
+		RouterURL: cfg.RouterAPIURL, IssuerURL: issuerURL,
+		IssuerID: cfg.DashboardIssuerID, Signer: signer,
+		BootstrapTokenFile: cfg.RouterBootstrapTokenFile,
+	})
+	if err != nil {
+		log.Printf("Router Management browser sessions disabled: %v", err)
+		return nil
+	}
+	return provider
 }

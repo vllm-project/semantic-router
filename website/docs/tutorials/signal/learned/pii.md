@@ -33,7 +33,7 @@ Use `pii` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     pii:
       - name: restricted_pii

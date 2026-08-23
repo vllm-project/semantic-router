@@ -59,7 +59,6 @@ export const PLUGIN_DESCRIPTIONS: Record<string, string> = {
 
 export const BACKEND_TYPES = [
   'vllm_endpoint',
-  'provider_profile',
   'embedding_model',
   'response_cache',
   'memory',

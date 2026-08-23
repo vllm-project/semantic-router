@@ -1,0 +1,44 @@
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: Backend
+metadata:
+  name: semantic-router-backend-dispatch
+  namespace: default
+  labels:
+    vllm.ai/e2e-managed: "true"
+spec:
+  endpoints:
+    - fqdn:
+        hostname: semantic-router-backend-dispatch.vllm-semantic-router-system.svc.cluster.local
+        port: 8180
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIServiceBackend
+metadata:
+  name: semantic-router-backend-dispatch
+  namespace: default
+  labels:
+    vllm.ai/e2e-managed: "true"
+spec:
+  schema:
+    name: OpenAI
+  backendRef:
+    name: semantic-router-backend-dispatch
+    kind: Backend
+    group: gateway.envoyproxy.io
+---
+apiVersion: aigateway.envoyproxy.io/v1alpha1
+kind: AIGatewayRoute
+metadata:
+  name: semantic-router
+  namespace: default
+spec:
+  parentRefs:
+    - name: semantic-router
+      kind: Gateway
+      group: gateway.networking.k8s.io
+  rules:
+    - backendRefs:
+        - name: semantic-router-backend-dispatch
+      timeouts:
+        request: 60s
+        backendRequest: 60s

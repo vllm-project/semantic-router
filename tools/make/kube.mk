@@ -14,9 +14,12 @@ YELLOW := \033[1;33m
 RED := \033[0;31m
 NC := \033[0m # No Color
 
-.PHONY: create-cluster delete-cluster cluster-info deploy undeploy load-image test-deployment test-api port-forward-api port-forward-grpc
+.PHONY: create-cluster delete-cluster cluster-info deploy undeploy load-image test-deployment test-api port-forward-api port-forward-grpc operator-generate
 
 ##@ Kubernetes
+
+operator-generate: ## Regenerate operator manifests and API artifacts
+	$(MAKE) -C deploy/operator manifests generate
 
 # Create kind cluster with optimized configuration
 create-cluster: ## Create a kind cluster with optimized configuration

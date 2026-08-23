@@ -2,6 +2,7 @@ import { useDeferredValue, useEffect, useMemo, useState, type FormEvent } from '
 
 import styles from './ClawRoomChat.module.css'
 import ClawRoomTeamDetailsModal from './ClawRoomTeamDetailsModal'
+import ProductIcon from './ProductIcon'
 import {
   filterAndSortOpenClawRooms,
   getOpenClawPageCount,
@@ -145,7 +146,7 @@ export default function ClawRoomSidebar({
             <span className={styles.teamDetailsButtonHead}>
               <span className={styles.teamDetailsButtonLabel}>Team details</span>
               <span className={styles.teamDetailsButtonIcon} aria-hidden="true">
-                ↗
+                <ProductIcon name="arrow-right" />
               </span>
             </span>
             <span className={styles.teamDetailsButtonText}>
@@ -277,7 +278,7 @@ export default function ClawRoomSidebar({
                       title="Delete room"
                       aria-label="Delete room"
                     >
-                      {deletingRoomId === room.id ? '…' : '✕'}
+                      {deletingRoomId === room.id ? '…' : <ProductIcon name="trash" />}
                     </button>
                   </div>
                 )
@@ -296,7 +297,7 @@ export default function ClawRoomSidebar({
                   disabled={safePage === 1}
                   aria-label="Previous rooms page"
                 >
-                  ‹
+                  <ProductIcon name="chevron-left" />
                 </button>
                 <span>
                   {safePage}/{pageCount}
@@ -307,7 +308,7 @@ export default function ClawRoomSidebar({
                   disabled={safePage === pageCount}
                   aria-label="Next rooms page"
                 >
-                  ›
+                  <ProductIcon name="chevron-right" />
                 </button>
               </div>
             </div>

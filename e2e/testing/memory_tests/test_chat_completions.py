@@ -14,7 +14,7 @@ MEMORY_KEYWORD = "purple"
 
 
 def _chat_headers(user_id: str) -> dict:
-    return {"Content-Type": "application/json", "x-authz-user-id": user_id}
+    return {"Content-Type": "application/json"}
 
 
 def _chat_payload(messages: list, user_id: str) -> dict:

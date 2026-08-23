@@ -18,10 +18,11 @@ func summarizeWorkflowExecution(
 		summary.iterations++
 	}
 	for _, result := range stepResults {
-		summary.usage = summary.usage.Add(result.responses...)
-		summary.iterations += len(result.responses) + len(result.failed)
+		usageResponses := result.usageResponses()
+		summary.usage = summary.usage.Add(usageResponses...)
+		summary.iterations += len(usageResponses) + len(result.failed)
 		summary.failed = append(summary.failed, result.failed...)
-		for _, resp := range result.responses {
+		for _, resp := range usageResponses {
 			summary.modelsUsed = appendUniqueWorkflowModel(summary.modelsUsed, resp.Model)
 		}
 	}

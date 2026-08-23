@@ -29,7 +29,7 @@ Use `NOT` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: safe_only_route
       description: Match only when the known prompt-injection signal is absent.
@@ -39,9 +39,6 @@ routing:
         conditions:
           - type: jailbreak
             name: prompt_injection
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
 ```
 
 Use `NOT` sparingly and keep the excluded signal explicit, otherwise the decision becomes hard to audit.

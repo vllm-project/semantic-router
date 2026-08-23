@@ -2,50 +2,61 @@ package config
 
 import (
 	"fmt"
+	"sort"
 
 	"gopkg.in/yaml.v2"
 )
 
 type routingFragmentDocument struct {
-	Routing CanonicalRouting `yaml:"routing"`
+	Document CanonicalRouting `yaml:"document"`
 }
 
-// ParseRoutingYAMLBytes parses a routing-only YAML fragment containing the DSL-owned
-// canonical surface under `routing:`. This intentionally skips provider/global
-// cross-reference checks so DSL compile/decompile flows can round-trip fragments.
+const routingFragmentScope RecipeName = "authoring-document"
+
+// ParseRoutingYAMLBytes parses a model-free Recipe document fragment. The
+// fragment is an authoring value and cannot be served until a Recipe and an
+// Entrypoint bind it to immutable Models.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	raw, err := parseRawConfigMap(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
-	if rejectErr := rejectRemovedStructureFields(raw); rejectErr != nil {
-		return nil, rejectErr
+	if _, found := raw["document"]; !found || len(raw) != 1 {
+		fields := make([]string, 0, len(raw))
+		for field := range raw {
+			fields = append(fields, field)
+		}
+		sort.Strings(fields)
+		return nil, fmt.Errorf("routing fragment must contain exactly one top-level document field, got %v", fields)
+	}
+	for _, validate := range []func(map[string]interface{}) error{
+		rejectRemovedStructureFields,
+		rejectRemovedTaxonomyLegacyFields,
+		rejectRemovedDecisionToolFields,
+		rejectDecisionLearningFields,
+		rejectUnsupportedDecisionAdaptationFields,
+	} {
+		if rejectErr := validate(raw); rejectErr != nil {
+			return nil, rejectErr
+		}
 	}
 
 	doc := &routingFragmentDocument{}
-	if err := yaml.Unmarshal(data, doc); err != nil {
+	if err := yaml.UnmarshalStrict(data, doc); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
 
 	cfg := DefaultGlobalConfig()
-	cfg.Decisions = copyDecisions(doc.Routing.Decisions)
+	// A routing fragment is one isolated Recipe document, not a root runtime
+	// config. Marking the view explicitly lets shared validators read its flat
+	// fields without reviving the removed implicit-default Recipe path.
+	cfg.RoutingScope = routingFragmentScope
+	cfg.Decisions = copyDecisions(doc.Document.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(doc.Routing.Signals, cfg.Decisions)
-	cfg.Projections = normalizeProjections(doc.Routing.Projections)
+	cfg.Signals = normalizeSignals(doc.Document.Signals, cfg.Decisions)
+	cfg.Projections = normalizeProjections(doc.Document.Projections)
+	cfg.Strategy = doc.Document.Strategy
 	cfg.ModelConfig = make(map[string]ModelParams)
-
-	for _, model := range canonicalRoutingModels(doc.Routing) {
-		cfg.ModelConfig[model.Name] = ModelParams{
-			ParamSize:         model.ParamSize,
-			ContextWindowSize: model.ContextWindowSize,
-			Description:       model.Description,
-			Capabilities:      append([]string(nil), model.Capabilities...),
-			LoRAs:             copyLoRAAdapters(model.LoRAs),
-			Tags:              append([]string(nil), model.Tags...),
-			QualityScore:      model.QualityScore,
-			Modality:          model.Modality,
-		}
-	}
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()

@@ -40,6 +40,11 @@
   font-weight: 800;
 }
 
+.signal svg {
+  width: 17px;
+  height: 17px;
+}
+
 .signal.danger {
   border-color: rgba(227, 27, 35, 0.45);
   background: rgba(227, 27, 35, 0.12);
@@ -95,6 +100,27 @@
   font-size: 0.8rem;
 }
 
+.error {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  margin: 1rem 0 0;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid rgba(227, 27, 35, 0.32);
+  border-radius: 8px;
+  background: rgba(227, 27, 35, 0.08);
+  color: #ffb1b4;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.error svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  margin-top: 0.08rem;
+}
+
 .confirmation {
   display: grid;
   gap: 0.5rem;
@@ -120,11 +146,21 @@
 
 .cancelButton,
 .confirmButton {
+  display: inline-flex;
   min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   padding: 0.55rem 0.95rem;
   border-radius: 8px;
   font-size: 0.82rem;
   font-weight: 680;
+}
+
+.cancelButton svg,
+.confirmButton svg {
+  width: 15px;
+  height: 15px;
 }
 
 .cancelButton {

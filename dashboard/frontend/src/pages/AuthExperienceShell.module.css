@@ -1,0 +1,278 @@
+.container {
+  position: relative;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: #050505;
+}
+
+.container::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    radial-gradient(circle at 50% 45%, transparent 0, rgba(5, 5, 5, 0.48) 74%);
+  background-size:
+    42px 42px,
+    42px 42px,
+    auto;
+}
+
+.backgroundEffect {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+
+.mainContent {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+}
+
+.shell {
+  width: min(1040px, 100%);
+  display: grid;
+  grid-template-columns: minmax(320px, 1fr) minmax(360px, 0.9fr);
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.storyPanel,
+.card {
+  position: relative;
+  isolation: isolate;
+  min-height: 540px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(15, 16, 19, 0.96);
+  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.34);
+}
+
+.storyPanel {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 1.3rem;
+  padding: 1.6rem;
+  background:
+    radial-gradient(circle at 20% 80%, rgba(86, 130, 255, 0.17), transparent 37%),
+    radial-gradient(circle at 90% 5%, rgba(153, 92, 255, 0.13), transparent 31%),
+    rgba(14, 15, 18, 0.96);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.1rem;
+  padding: 1.7rem;
+}
+
+.brandBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.72rem;
+  width: fit-content;
+  min-height: 38px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 7px;
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.brandBadge img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
+}
+
+.storyCopy {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.storyEyebrow,
+.stageEyebrow {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.7rem;
+  font-weight: 730;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.storyTitle {
+  max-width: none;
+  margin: 0;
+  color: #fff;
+  font-size: clamp(3rem, 6vw, 5.5rem);
+  font-weight: 570;
+  line-height: 0.93;
+  letter-spacing: -0.065em;
+}
+
+.storyDescription,
+.stageDescription {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.storyIdentity {
+  width: fit-content;
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.78rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.storyIdentity span {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+.storyIdentity small {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.65rem;
+}
+
+.stageHeader {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.stageTitle {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.75rem, 2.4vw, 2rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+}
+
+.inputBlock {
+  display: grid;
+  gap: 0.65rem;
+}
+.label {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  min-height: 50px;
+  box-sizing: border-box;
+  padding: 0 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  outline: none;
+  background: #090a0c;
+  color: #fff;
+  font-size: 0.9rem;
+}
+
+.input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+.input:focus {
+  border-color: rgba(255, 255, 255, 0.42);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.08);
+}
+
+.error {
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 107, 107, 0.26);
+  border-radius: 7px;
+  background: rgba(255, 107, 107, 0.09);
+  color: #ffb1b1;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.primaryButton,
+.secondaryButton {
+  flex: 1 1 0;
+  min-height: 48px;
+  padding: 0 1.2rem;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  font-weight: 680;
+}
+
+.primaryButton {
+  border: 1px solid transparent;
+  background: #fff;
+  color: #0c0c10;
+}
+.primaryButton:hover:not(:disabled) {
+  background: #e4e4e7;
+}
+.secondaryButton {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: #18181b;
+  color: #f5f5f7;
+}
+.secondaryButton:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.4);
+  background: #202024;
+}
+.primaryButton:disabled,
+.secondaryButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 960px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+  .storyPanel {
+    min-height: 320px;
+  }
+  .card {
+    min-height: 480px;
+  }
+}
+
+@media (max-width: 640px) {
+  .mainContent {
+    align-items: flex-start;
+    padding: 0.8rem;
+  }
+  .storyPanel,
+  .card {
+    padding: 1.2rem;
+  }
+  .storyTitle {
+    font-size: 3.2rem;
+  }
+  .actions {
+    flex-direction: column;
+  }
+}

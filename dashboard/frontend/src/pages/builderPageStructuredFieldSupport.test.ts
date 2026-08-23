@@ -45,10 +45,7 @@ describe('Builder structured field interactions', () => {
       models: ['qwen-32b'],
     })
 
-    expect(updated).toEqual([
-      { name: 'planner' },
-      { name: 'reviewer', models: ['qwen-32b'] },
-    ])
+    expect(updated).toEqual([{ name: 'planner' }, { name: 'reviewer', models: ['qwen-32b'] }])
     expect(removeStructuredObjectListItem(updated, 0)).toEqual([
       { name: 'reviewer', models: ['qwen-32b'] },
     ])

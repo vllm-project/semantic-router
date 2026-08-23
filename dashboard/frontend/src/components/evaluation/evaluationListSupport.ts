@@ -10,11 +10,7 @@ export const EVALUATION_TASK_PAGE_SIZE = 25
 export const EVALUATION_HISTORY_PAGE_SIZE = 20
 export const EVALUATION_RESULT_PAGE_SIZE = 8
 
-export type EvaluationTaskSort =
-  | 'created-desc'
-  | 'created-asc'
-  | 'name-asc'
-  | 'progress-desc'
+export type EvaluationTaskSort = 'created-desc' | 'created-asc' | 'name-asc' | 'progress-desc'
 
 export interface EvaluationTaskFilters {
   search: string
@@ -82,10 +78,16 @@ export function filterAndSortEvaluationTasks(
       case 'name-asc':
         return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
       case 'progress-desc':
-        return right.progress_percent - left.progress_percent || Date.parse(right.created_at) - Date.parse(left.created_at)
+        return (
+          right.progress_percent - left.progress_percent ||
+          Date.parse(right.created_at) - Date.parse(left.created_at)
+        )
       case 'created-desc':
       default:
-        return Date.parse(right.completed_at || right.created_at) - Date.parse(left.completed_at || left.created_at)
+        return (
+          Date.parse(right.completed_at || right.created_at) -
+          Date.parse(left.completed_at || left.created_at)
+        )
     }
   })
 }
@@ -95,8 +97,9 @@ function resultSearchText(result: EvaluationResult): string {
   const metadataText =
     metadata && typeof metadata === 'object'
       ? Object.values(metadata)
-          .filter((value): value is string | number =>
-            typeof value === 'string' || typeof value === 'number',
+          .filter(
+            (value): value is string | number =>
+              typeof value === 'string' || typeof value === 'number',
           )
           .join(' ')
       : ''
@@ -122,16 +125,25 @@ export function filterAndSortEvaluationResults(
   return [...filtered].sort((left, right) => {
     switch (filters.sort) {
       case 'dimension-asc':
-        return left.dimension.localeCompare(right.dimension) || left.dataset_name.localeCompare(right.dataset_name)
+        return (
+          left.dimension.localeCompare(right.dimension) ||
+          left.dataset_name.localeCompare(right.dataset_name)
+        )
       case 'score-desc':
         return (getEvaluationResultScore(right) ?? -1) - (getEvaluationResultScore(left) ?? -1)
       case 'dataset-asc':
       default:
-        return left.dataset_name.localeCompare(right.dataset_name, undefined, { sensitivity: 'base' })
+        return left.dataset_name.localeCompare(right.dataset_name, undefined, {
+          sensitivity: 'base',
+        })
     }
   })
 }
 
-export function formatEvaluationResultCount(filtered: number, total: number, label: string): string {
+export function formatEvaluationResultCount(
+  filtered: number,
+  total: number,
+  label: string,
+): string {
   return filtered === total ? `${total} ${label}` : `${filtered} of ${total} ${label}`
 }

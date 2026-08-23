@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useId } from 'react'
 import {
   SIGNAL_TYPES,
   PLUGIN_TYPES,
@@ -10,6 +10,7 @@ import {
   getAlgorithmFieldSchema,
 } from '@/lib/dslMutations'
 import styles from './DslGuide.module.css'
+import ProductIcon, { type ProductIconName } from './ProductIcon'
 
 interface DslGuideProps {
   onInsertSnippet?: (snippet: string) => void
@@ -18,19 +19,34 @@ interface DslGuideProps {
 // Collapsible section
 const Section: React.FC<{
   title: string
-  icon: string
+  icon: ProductIconName
   defaultOpen?: boolean
   children: React.ReactNode
 }> = ({ title, icon, defaultOpen = false, children }) => {
   const [open, setOpen] = useState(defaultOpen)
+  const contentId = useId()
   return (
     <div className={styles.section}>
-      <button className={styles.sectionHeader} onClick={() => setOpen(!open)}>
-        <span className={styles.sectionChevron}>{open ? '▾' : '▸'}</span>
-        <span className={styles.sectionIcon}>{icon}</span>
+      <button
+        type="button"
+        className={styles.sectionHeader}
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={contentId}
+      >
+        <ProductIcon
+          className={styles.sectionChevron}
+          name={open ? 'chevron-down' : 'chevron-right'}
+          aria-hidden="true"
+        />
+        <ProductIcon className={styles.sectionIcon} name={icon} aria-hidden="true" />
         <span className={styles.sectionTitle}>{title}</span>
       </button>
-      {open && <div className={styles.sectionBody}>{children}</div>}
+      {open && (
+        <div id={contentId} className={styles.sectionBody}>
+          {children}
+        </div>
+      )}
     </div>
   )
 }
@@ -46,11 +62,12 @@ const CodeBlock: React.FC<{
     <pre className={styles.codeContent}>{code}</pre>
     {onInsert && (
       <button
+        type="button"
         className={styles.insertBtn}
         onClick={() => onInsert(code)}
         title="Insert into editor"
       >
-        + Insert
+        <ProductIcon name="plus" aria-hidden="true" /> Insert
       </button>
     )}
   </div>
@@ -112,15 +129,26 @@ const TypeDetail: React.FC<{
   }[]
 }> = ({ name, description, fields }) => {
   const [expanded, setExpanded] = useState(false)
+  const contentId = useId()
   return (
     <div className={styles.typeItem}>
-      <button className={styles.typeHeader} onClick={() => setExpanded(!expanded)}>
-        <span className={styles.typeChevron}>{expanded ? '▾' : '▸'}</span>
+      <button
+        type="button"
+        className={styles.typeHeader}
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+        aria-controls={contentId}
+      >
+        <ProductIcon
+          className={styles.typeChevron}
+          name={expanded ? 'chevron-down' : 'chevron-right'}
+          aria-hidden="true"
+        />
         <code className={styles.typeName}>{name}</code>
         {description && <span className={styles.typeDesc}>{description}</span>}
       </button>
       {expanded && (
-        <div className={styles.typeBody}>
+        <div id={contentId} className={styles.typeBody}>
           <FieldTable fields={fields} />
         </div>
       )}
@@ -280,24 +308,20 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
           onChange={(e) => setSearchQuery(e.target.value)}
         />
         {searchQuery && (
-          <button className={styles.searchClear} onClick={() => setSearchQuery('')}>
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="M4 4l8 8M12 4l-8 8" strokeLinecap="round" />
-            </svg>
+          <button
+            type="button"
+            className={styles.searchClear}
+            onClick={() => setSearchQuery('')}
+            aria-label="Clear guide search"
+          >
+            <ProductIcon name="close" />
           </button>
         )}
       </div>
 
       {/* Quick Start */}
       {matchesSearch('quick start template example') && (
-        <Section title="Quick Start" icon="⚡" defaultOpen>
+        <Section title="Quick Start" icon="activity" defaultOpen>
           <p className={styles.hint}>
             A DSL file defines <strong>signals</strong> (what to detect), <strong>routes</strong>{' '}
             (how to decide), <strong>models</strong> (semantic catalog), and{' '}
@@ -315,7 +339,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Models */}
       {matchesSearch('model catalog reasoning family capability modality') && (
-        <Section title="Model Catalog" icon="📦">
+        <Section title="Model Catalog" icon="model">
           <p className={styles.hint}>
             Top-level models define the semantic routing catalog. Syntax:{' '}
             <code>MODEL &lt;name&gt; {'{ fields }'}</code>
@@ -376,7 +400,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Signals */}
       {matchesSearch('signal keyword embedding domain') && (
-        <Section title={`Signals (${SIGNAL_TYPES.length} types)`} icon="📡">
+        <Section title={`Signals (${SIGNAL_TYPES.length} types)`} icon="signal">
           <p className={styles.hint}>
             Signals detect patterns in user queries. Syntax:{' '}
             <code>SIGNAL &lt;type&gt; &lt;name&gt; {'{ fields }'}</code>
@@ -396,7 +420,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Routes & WHEN Expressions */}
       {matchesSearch('route when expression boolean model algorithm priority') && (
-        <Section title="Routes & WHEN Expressions" icon="🔀">
+        <Section title="Routes & WHEN Expressions" icon="decision">
           <p className={styles.hint}>
             Routes define decision logic. Syntax:{' '}
             <code>ROUTE &lt;name&gt; (description = &quot;...&quot;) {'{ ... }'}</code>
@@ -587,8 +611,10 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       )}
 
       {/* Algorithms */}
-      {matchesSearch('algorithm confidence ratings remom fusion workflows static router_dc automix hybrid') && (
-        <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="🧮">
+      {matchesSearch(
+        'algorithm confidence ratings remom fusion workflows static router_dc automix hybrid',
+      ) && (
+        <Section title={`Algorithms (${ALGORITHM_TYPES.length} types)`} icon="compute">
           <p className={styles.hint}>
             Algorithms determine how to select among multiple models. Syntax:{' '}
             <code>ALGORITHM &lt;type&gt; {'{ fields }'}</code> (inside a ROUTE)
@@ -610,7 +636,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
       {matchesSearch(
         'plugin jailbreak pii cache memory rag image_gen request_params fast_response response_jailbreak tools',
       ) && (
-        <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="🔌">
+        <Section title={`Plugins (${PLUGIN_TYPES.length} types)`} icon="plug">
           <p className={styles.hint}>
             Plugins add pre/post processing. Declare with{' '}
             <code>PLUGIN &lt;name&gt; &lt;type&gt; {'{ fields }'}</code>, reference in routes with{' '}
@@ -631,7 +657,7 @@ const DslGuide: React.FC<DslGuideProps> = ({ onInsertSnippet }) => {
 
       {/* Cheat Sheet */}
       {matchesSearch('cheat sheet syntax grammar reference') && (
-        <Section title="Cheat Sheet" icon="📋">
+        <Section title="Cheat Sheet" icon="code">
           <div className={styles.cheatSheet}>
             <div className={styles.cheatItem}>
               <code className={styles.cheatSyntax}>MODEL &lt;name&gt; {'{ ... }'}</code>

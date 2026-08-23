@@ -145,7 +145,7 @@ docker run --rm \
 If the host check succeeds but the container check fails, recheck
 `OLLAMA_HOST` and the host firewall before continuing.
 
-## 5. Configure the model in the setup dashboard
+## 5. Connect the model in the Dashboard
 
 Start Semantic Router (or use the instance already started by the installer):
 
@@ -153,9 +153,12 @@ Start Semantic Router (or use the instance already started by the installer):
 vllm-sr serve
 ```
 
-If `config.yaml` does not exist yet in the current directory, the dashboard opens in **setup mode** at [http://localhost:8700](http://localhost:8700).
+If `config.yaml` does not exist, the same command creates a secure managed
+workspace and starts Router, Dashboard, PostgreSQL, and Valkey. Open
+[http://localhost:8700](http://localhost:8700), create the first administrator,
+then open **Build → Models**.
 
-On **Step 1 — Connect model**, register your Ollama model:
+Register your Ollama model:
 
 | Field | Value |
 | --- | --- |
@@ -164,8 +167,6 @@ On **Step 1 — Connect model**, register your Ollama model:
 | **Base URL or host** | `host.docker.internal:11434` |
 | **Endpoint label** | `primary` (or any short label) |
 | **Default** | Select this model if it is your only backend |
-
-![Configure an Ollama backend in the setup dashboard](/img/installation/ollama/setup-wizard-ollama-model.png)
 
 Why **Local vLLM** and not **OpenAI-compatible API**?
 
@@ -177,17 +178,20 @@ Alternatively, choose **OpenAI-compatible API** and enter
 `http://host.docker.internal:11434/v1`; that provider type writes a `base_url`.
 Both paths use Ollama's OpenAI-compatible API.
 
-Click **Continue** when the model card validates.
+Test the connection, then save the Model.
 
-## 6. Choose routing and activate
+## 6. Publish a Mixture of Models
 
-On **Step 2 — Choose routing**, keep the **Single-model baseline** if you only registered one Ollama model. You can import a preset or remote config later when you add more backends.
+Open **Build → Mixture of Models**, choose a Recipe, and assign the Ollama
+Model to every required decision. A single-model Recipe is the smallest useful
+starting point; choose a richer Recipe when you add more backends.
 
-On **Step 3 — Review & activate**, confirm the model summary, then click **Activate configuration**.
+Choose a stable API model name, review the topology, and publish the
+Entrypoint. These are Router Management resources; the Dashboard does not write
+or activate a replacement YAML file.
 
-![Review the generated config and activate setup](/img/installation/ollama/setup-wizard-ollama-activate.png)
-
-Activation writes `config.yaml` to the current directory and exits setup mode. Envoy starts on port `8899` and routes requests through Semantic Router to your Ollama backend.
+Envoy is already listening on port `8899`; the published Entrypoint becomes
+available without restarting `serve`.
 
 ## 7. Test through Semantic Router
 
@@ -220,41 +224,51 @@ A JSON chat completion response means Ollama is wired correctly.
 If you prefer to edit YAML directly instead of the dashboard, add a model entry like this:
 
 ```yaml
-version: v0.3
-
-providers:
-  defaults:
-    default_model: llama3.2:3b
-  models:
-    - name: llama3.2:3b
-      provider_model_id: llama3.2:3b
-      api_format: openai
-      backend_refs:
-        - name: local-ollama
-          endpoint: host.docker.internal:11434
-          protocol: http
-          weight: 100
-
-routing:
-  modelCards:
-    - name: llama3.2:3b
-  decisions:
-    - name: default-route
-      description: Route all requests to the local Ollama model.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: llama3.2:3b
-          use_reasoning: false
+version: v0.4
+models:
+  - name: llama3.2:3b
+    card:
+      capabilities: [chat]
+    connections:
+      - provider: openai-compatible
+        endpoint: http://host.docker.internal:11434/v1
+        model: llama3.2:3b
+    runtime:
+      max_retries: 1
+recipes:
+  - name: default
+    document:
+      decisions:
+        - name: default-route
+          description: Route every request.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+entrypoints:
+  - name: ollama
+    recipe: default
+    assignments:
+      default-route:
+        models:
+          - model: llama3.2:3b
+global:
+  services:
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
 ```
 
 Validate and serve:
 
 ```bash
 vllm-sr validate --config config.yaml
-vllm-sr serve --config config.yaml
+vllm-sr serve
 ```
 
 ## Troubleshooting

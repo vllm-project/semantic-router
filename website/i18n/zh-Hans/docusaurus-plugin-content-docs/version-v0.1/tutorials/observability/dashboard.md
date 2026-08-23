@@ -42,13 +42,12 @@ Semantic Router 仪表板是一个统一的操作员界面，集成了配置管�
 
 - 提供前端构建产物（SPA 路由）
 - 反向代理上游服务，并为 iframe 嵌入规范化 Header
-- 为配置和工具数据库公开了一组简小的仪表板 API
+- 提供专用的仪表板 API，并代理 Router Management
 
 关键路由：
 
 - 健康检查：`GET /healthz`
-- 配置（读）：`GET /api/router/config/all`（读取 YAML，返回 JSON）
-- 配置（写）：`POST /api/router/config/update`（将 YAML 写回文件）
+- Router Management：`/api/router/management/v1/*`（由 Router 管理资源与鉴权）
 - 工具数据库：`GET /api/tools-db`（提供与配置同目录下的 tools_db.json）
 - 路由 API：`GET/POST /api/router/*`（转发 Authorization Header）
 - Grafana (嵌入)：`GET /embedded/grafana/*`

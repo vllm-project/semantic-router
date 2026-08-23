@@ -1,92 +1,49 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 
-import {
-  projectConfigForRoutingScope,
-  type RoutingScopedConfigLike,
-} from '../../../utils/routingScopes'
-import type { ConfigData } from '../types'
-import { testQueryDryRun } from './api'
+import type { ManagedTopologyConfig } from '../types'
 import { parseConfigToTopology } from './topologyParser'
+import { simulateSignalMatching } from './signalMatcher'
 
 const config = {
-  providers: {
-    defaults: { default_model: 'model-a' },
-    models: [{ name: 'model-a' }],
+  models: [{ name: 'model-a', card: {} }],
+  document: {
+    strategy: 'confidence',
+    signals: {
+      keywords: [
+        {
+          name: 'balanced-keyword',
+          operator: 'OR',
+          keywords: ['balanced'],
+        },
+      ],
+    },
+    projections: {
+      scores: [{ name: 'balanced-score', inputs: [] }],
+      mappings: [
+        {
+          name: 'balanced-map',
+          source: 'balanced-score',
+          outputs: [{ name: 'balanced-standard' }],
+        },
+      ],
+    },
+    decisions: [
+      {
+        name: 'balanced-route',
+        priority: 100,
+        rules: {
+          operator: 'AND',
+          conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
+        },
+        modelRefs: [{ model: 'model-a' }],
+      },
+    ],
   },
-  entrypoints: [
-    { model_names: ['vllm-sr/balanced'], recipe: 'balanced' },
-    { model_names: ['vllm-sr/private'], recipe: 'privacy' },
-  ],
-  recipes: [
-    {
-      name: 'balanced',
-      routing: {
-        strategy: 'confidence',
-        signals: {
-          keywords: [
-            {
-              name: 'balanced-keyword',
-              operator: 'OR',
-              keywords: ['balanced'],
-            },
-          ],
-        },
-        projections: {
-          scores: [{ name: 'balanced-score', inputs: [] }],
-          mappings: [
-            {
-              name: 'balanced-map',
-              source: 'balanced-score',
-              outputs: [{ name: 'balanced-standard' }],
-            },
-          ],
-        },
-        decisions: [
-          {
-            name: 'balanced-route',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [{ type: 'keyword', name: 'balanced-keyword' }],
-            },
-            modelRefs: [{ model: 'model-a' }],
-          },
-        ],
-      },
-    },
-    {
-      name: 'privacy',
-      routing: {
-        signals: {
-          pii: [{ name: 'private-pii', threshold: 0.8 }],
-        },
-        decisions: [
-          {
-            name: 'private-route',
-            priority: 100,
-            rules: {
-              operator: 'AND',
-              conditions: [{ type: 'pii', name: 'private-pii' }],
-            },
-            modelRefs: [{ model: 'model-a' }],
-          },
-        ],
-      },
-    },
-  ],
-} as ConfigData
+} as ManagedTopologyConfig
 
 describe('recipe-aware topology', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
   it('parses only the selected recipe signal, projection, and decision graph', () => {
-    const projected = projectConfigForRoutingScope(
-      config as ConfigData & RoutingScopedConfigLike,
-      'balanced',
-    )
-    const topology = parseConfigToTopology(projected)
+    const topology = parseConfigToTopology(config)
 
     expect(topology.signals.map((signal) => signal.name)).toEqual(
       expect.arrayContaining(['balanced-keyword', 'balanced-standard']),
@@ -96,28 +53,13 @@ describe('recipe-aware topology', () => {
     expect(topology.strategy).toBe('confidence')
   })
 
-  it('forwards the selected entrypoint to backend topology evaluation', async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        query: 'hello',
-        mode: 'dry-run',
-        matchedSignals: [],
-        matchedDecision: 'balanced-route',
-        matchedModels: ['model-a'],
-        highlightedPath: [],
-        isAccurate: true,
-      }),
-    })
-    vi.stubGlobal('fetch', fetchMock)
+  it('keeps local previews honest when a recipe needs Router-only signals', async () => {
+    const result = await simulateSignalMatching('balanced', parseConfigToTopology(config))
 
-    await testQueryDryRun('hello', 'vllm-sr/balanced')
-
-    const request = JSON.parse(fetchMock.mock.calls[0][1].body as string)
-    expect(request).toMatchObject({
-      query: 'hello',
-      mode: 'dry-run',
-      model: 'vllm-sr/balanced',
-    })
+    expect(result.mode).toBe('simulate')
+    expect(result.isAccurate).toBe(false)
+    expect(result.matchedDecision).toBeNull()
+    expect(result.matchedModels).toEqual([])
+    expect(result.warning).toBe('Local preview covers keyword and language signals only.')
   })
 })

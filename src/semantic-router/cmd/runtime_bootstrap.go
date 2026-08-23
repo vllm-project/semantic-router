@@ -25,8 +25,6 @@ import (
 type runtimeOptions struct {
 	configPath             string
 	certPath               string
-	kubeconfig             string
-	namespace              string
 	port                   int
 	apiPort                int
 	apiBind                string
@@ -44,14 +42,12 @@ func parseRuntimeOptions() runtimeOptions {
 		port                   = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
 		apiPort                = flag.Int("api-port", 0, "Port to listen on for the router apiserver (default from config: 8080)")
 		apiBind                = flag.String("api-bind", "", "Bind address for the router apiserver (default from config: 127.0.0.1)")
-		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: bearer or disabled")
-		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires bearer auth tokens in config)")
+		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: disabled or bearer for standalone; router for managed")
+		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires configured authentication)")
 		metricsPort            = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
 		enableAPI              = flag.Bool("enable-api", true, "Enable the router apiserver")
 		secure                 = flag.Bool("secure", false, "Enable secure gRPC server with TLS")
 		certPath               = flag.String("cert-path", "", "Path to TLS certificate directory (containing tls.crt and tls.key)")
-		kubeconfig             = flag.String("kubeconfig", "", "Path to kubeconfig file (optional, uses in-cluster config if not specified)")
-		namespace              = flag.String("namespace", "default", "Kubernetes namespace to watch for CRDs")
 		downloadOnly           = flag.Bool("download-only", false, "Download required models and exit (useful for CI/testing)")
 	)
 	flag.Parse()
@@ -59,8 +55,6 @@ func parseRuntimeOptions() runtimeOptions {
 	return runtimeOptions{
 		configPath:             *configPath,
 		certPath:               *certPath,
-		kubeconfig:             *kubeconfig,
-		namespace:              *namespace,
 		port:                   *port,
 		apiPort:                *apiPort,
 		apiBind:                *apiBind,
@@ -81,10 +75,11 @@ func resolveRuntimeManagementOptions(opts runtimeOptions, cfg *config.RouterConf
 		return runtimeOptions{}, errors.New("management API configuration is unavailable")
 	}
 	resolved, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
-		Port:           opts.apiPort,
-		BindAddress:    opts.apiBind,
-		RemoteExposure: opts.managementRemoteExpose,
-		AuthMode:       opts.managementAuthMode,
+		ControlPlaneMode: cfg.ControlPlane.Mode,
+		Port:             opts.apiPort,
+		BindAddress:      opts.apiBind,
+		RemoteExposure:   opts.managementRemoteExpose,
+		AuthMode:         opts.managementAuthMode,
 	})
 	if err != nil {
 		return runtimeOptions{}, fmt.Errorf("invalid management API configuration: %w", err)
@@ -121,14 +116,14 @@ func initializeRuntimeLogger() {
 	}
 }
 
-func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
+func loadRuntimeConfigOrFatal(configPath string, parser *config.Parser) *config.RouterConfig {
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		logging.ComponentFatalEvent("router", "runtime_config_missing", map[string]interface{}{
 			"config_path": configPath,
 		})
 	}
 
-	cfg, err := config.Parse(configPath)
+	cfg, err := parser.Parse(configPath)
 	if err != nil {
 		logging.ComponentFatalEvent("router", "runtime_config_load_failed", map[string]interface{}{
 			"config_path": configPath,
@@ -137,7 +132,6 @@ func loadRuntimeConfigOrFatal(configPath string) *config.RouterConfig {
 	}
 	logging.ComponentDebugEvent("router", "runtime_config_loaded", map[string]interface{}{
 		"config_path":    configPath,
-		"config_source":  cfg.ConfigSource,
 		"decision_count": len(cfg.Decisions),
 	})
 	return cfg
@@ -444,8 +438,11 @@ func newExtProcServerOrFatal(
 	opts runtimeOptions,
 	writer startupstatus.StatusWriter,
 	runtimeRegistry *routerruntime.Registry,
+	dependencies extproc.ServerDependencies,
 ) *extproc.Server {
-	server, err := extproc.NewServer(opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry)
+	server, err := extproc.NewServerWithDependencies(
+		opts.configPath, opts.port, opts.secure, opts.certPath, runtimeRegistry, dependencies,
+	)
 	if err != nil {
 		failStartup(writer, "Failed to create ExtProc server: %v", err)
 	}
@@ -478,20 +475,49 @@ func warmupRouterRuntime(server *extproc.Server, embeddingState modelruntime.Emb
 	})
 }
 
-func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime.Registry) error {
-	if !opts.enableAPI {
+type apiServerLifecycle struct {
+	cancel context.CancelFunc
+	done   chan error
+}
+
+func (lifecycle *apiServerLifecycle) Close(ctx context.Context) error {
+	if lifecycle == nil {
 		return nil
 	}
+	if lifecycle.cancel != nil {
+		lifecycle.cancel()
+	}
+	select {
+	case err := <-lifecycle.done:
+		return err
+	case <-ctx.Done():
+		return errors.New("management API shutdown timed out")
+	}
+}
+
+func startAPIServerIfEnabled(
+	ctx context.Context,
+	opts runtimeOptions,
+	runtimeRegistry *routerruntime.Registry,
+	managedAPI apiserver.ManagedAPI,
+) (*apiServerLifecycle, error) {
+	if !opts.enableAPI {
+		return &apiServerLifecycle{done: closedErrorChannel()}, nil
+	}
 	if runtimeRegistry == nil || runtimeRegistry.CurrentConfig() == nil {
-		return errors.New("management API configuration is unavailable")
+		return nil, errors.New("management API configuration is unavailable")
 	}
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, runtimeRegistry.CurrentConfig())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts = resolvedOpts
 
+	serverContext, cancel := context.WithCancel(ctx)
+	lifecycle := &apiServerLifecycle{cancel: cancel, done: make(chan error, 1)}
+	listenerStarted := make(chan error, 1)
 	go func() {
+		defer cancel()
 		logging.ComponentEvent("router", "api_server_starting", map[string]interface{}{
 			"api_port":                   opts.apiPort,
 			"api_bind":                   opts.apiBind,
@@ -499,20 +525,43 @@ func startAPIServerIfEnabled(opts runtimeOptions, runtimeRegistry *routerruntime
 			"management_remote_exposure": opts.managementRemoteExpose,
 		})
 		if err := apiserver.InitWithOptions(apiserver.InitOptions{
+			Context:         serverContext,
+			OnListenerStart: func(err error) { listenerStarted <- err },
 			ConfigPath:      opts.configPath,
 			Port:            opts.apiPort,
 			BindAddress:     opts.apiBind,
 			RemoteExposure:  opts.managementRemoteExpose,
 			AuthMode:        opts.managementAuthMode,
 			RuntimeRegistry: runtimeRegistry,
+			ManagedAPI:      managedAPI,
 		}); err != nil {
 			logging.ComponentErrorEvent("router", "api_server_failed", map[string]interface{}{
 				"api_port": opts.apiPort,
 				"error":    err.Error(),
 			})
+			lifecycle.done <- err
+			return
 		}
+		lifecycle.done <- nil
 	}()
-	return nil
+	select {
+	case err := <-listenerStarted:
+		if err == nil {
+			return lifecycle, nil
+		}
+		cancel()
+		<-lifecycle.done
+		return nil, err
+	case <-ctx.Done():
+		cancel()
+		return nil, ctx.Err()
+	}
+}
+
+func closedErrorChannel() chan error {
+	done := make(chan error, 1)
+	done <- nil
+	return done
 }
 
 func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *startupstatus.EmbeddingProviderStatus) {
@@ -522,12 +571,6 @@ func markRouterReady(writer startupstatus.StatusWriter, embeddingProvider *start
 		Message:           "Router models are ready. Starting router services...",
 		EmbeddingProvider: embeddingProvider,
 	}, "Failed to write ready startup status")
-}
-
-func startKubernetesControllerIfNeeded(cfg *config.RouterConfig, kubeconfig, namespace string) {
-	if cfg.ConfigSource == config.ConfigSourceKubernetes {
-		go startKubernetesController(cfg, kubeconfig, namespace)
-	}
 }
 
 func startExtProcServerOrFatal(server *extproc.Server, writer startupstatus.StatusWriter) {

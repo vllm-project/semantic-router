@@ -43,6 +43,23 @@ def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):
     assert "DASHBOARD_ALLOW_OPEN_BOOTSTRAP" not in dashboard_env
 
 
+def test_router_managed_bootstrap_stays_interactive_with_legacy_admin_env(monkeypatch):
+    monkeypatch.delenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", raising=False)
+    monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "core@vllm-sr.ai")
+    monkeypatch.setenv("DASHBOARD_ADMIN_PASSWORD", "not-used-for-managed-bootstrap")
+    monkeypatch.setenv(
+        "DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE", "/run/secrets/bootstrap/router-token"
+    )
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+
+    assert dashboard_env["DASHBOARD_ALLOW_OPEN_BOOTSTRAP"] == "true"
+
+
 def test_dashboard_open_bootstrap_respects_explicit_true(monkeypatch):
     monkeypatch.setenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", "true")
     monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "admin@example.com")

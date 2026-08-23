@@ -15,7 +15,7 @@ from cli.container_observability import (
     render_observability_template as _render_observability_template,
 )
 from cli.container_runtime import get_container_runtime
-from cli.recipe_topology_storage import validate_storage_port_isolation
+from cli.container_storage_security import validate_storage_port_isolation
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.storage_secrets import (
     CONTAINER_POSTGRES_PASSWORD_PATH,
@@ -63,57 +63,6 @@ def container_status(container_name):
     except Exception as exc:
         log.error(f"Failed to get container status: {exc}")
         return "error"
-
-
-def container_status_strict(container_name: str) -> str:
-    """Return one exact state or fail when absence cannot be proven.
-
-    Activation recovery is destructive transaction work, so it must not use
-    the compatibility helper above that historically treats every inspect
-    failure as an absent container.
-    """
-
-    runtime = get_container_runtime()
-    try:
-        result = subprocess.run(
-            [
-                runtime,
-                "inspect",
-                "--format",
-                "{{.State.Status}}",
-                container_name,
-            ],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=10,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise RuntimeError("managed container status inspection failed") from exc
-    if result.returncode != 0:
-        detail = (result.stderr or result.stdout).lower()
-        if any(
-            marker in detail
-            for marker in (
-                "no such container",
-                "no such object",
-                "no container with name or id",
-            )
-        ):
-            return "not found"
-        raise RuntimeError("managed container status inspection failed")
-    status = result.stdout.strip().lower()
-    if status not in {
-        "created",
-        "restarting",
-        "running",
-        "removing",
-        "paused",
-        "exited",
-        "dead",
-    }:
-        raise RuntimeError("managed container status inspection is invalid")
-    return status
 
 
 def container_stop_container(container_name):
@@ -274,7 +223,6 @@ def container_start_redis(
         return _storage_port_conflict_result(
             "Redis", stack_layout.redis_port, container_name
         )
-
     cmd = [
         runtime,
         "run",
@@ -347,7 +295,6 @@ def container_start_postgres(
         return _storage_port_conflict_result(
             "Postgres", stack_layout.postgres_port, container_name
         )
-
     cmd = [
         runtime,
         "run",

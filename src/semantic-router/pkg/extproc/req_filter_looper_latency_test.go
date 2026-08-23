@@ -25,10 +25,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 )
 
-func looperResponseWithLatencyAndUsage() *looper.Response {
+func looperResponseWithLatencyAndUsage(t testing.TB) *looper.Response {
+	t.Helper()
 	return &looper.Response{
-		Body:          []byte(`{"ok":true}`),
-		ContentType:   "application/json",
+		Semantic:      looperTestSemanticResponse(t),
 		Model:         "model-b",
 		ModelsUsed:    []string{"model-a", "model-b"},
 		Iterations:    2,
@@ -46,7 +46,7 @@ func looperResponseWithLatencyAndUsage() *looper.Response {
 // observability, so they must be demoted to the x-vsr-debug surface next to
 // the existing x-vsr-looper-* trace headers (#2205).
 func TestCreateLooperResponseIncludesLatencyAndUsageHeaders(t *testing.T) {
-	resp := looperResponseWithLatencyAndUsage()
+	resp := looperResponseWithLatencyAndUsage(t)
 	reqCtx := &RequestContext{
 		Headers: map[string]string{headers.VSRDebug: "true"},
 	}
@@ -61,7 +61,7 @@ func TestCreateLooperResponseIncludesLatencyAndUsageHeaders(t *testing.T) {
 }
 
 func TestCreateLooperResponseDefaultSurfaceExcludesLatencyAndUsageHeaders(t *testing.T) {
-	resp := looperResponseWithLatencyAndUsage()
+	resp := looperResponseWithLatencyAndUsage(t)
 	reqCtx := &RequestContext{}
 
 	response := (&OpenAIRouter{}).createLooperResponse(resp, reqCtx)
@@ -80,8 +80,7 @@ func TestCreateLooperResponseDefaultSurfaceExcludesLatencyAndUsageHeaders(t *tes
 // from a real zero.
 func TestCreateLooperResponseOmitsUnmeasuredZeroValueHeaders(t *testing.T) {
 	resp := &looper.Response{
-		Body:          []byte(`{"ok":true}`),
-		ContentType:   "application/json",
+		Semantic:      looperTestSemanticResponse(t),
 		Model:         "model-b",
 		ModelsUsed:    []string{"model-a", "model-b"},
 		Iterations:    2,

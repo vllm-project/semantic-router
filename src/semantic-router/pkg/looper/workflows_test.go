@@ -24,7 +24,7 @@ func TestWorkflowsDynamicExecutesPlannerBoundedWorkersAndSynthesis(t *testing.T)
 
 	req := workflowTestRequest()
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: req,
+		executionRequest: req,
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
 			{Model: "worker-b"},
@@ -57,22 +57,18 @@ func TestWorkflowsDynamicExecutesPlannerBoundedWorkersAndSynthesis(t *testing.T)
 		}
 	}
 
-	var body map[string]interface{}
-	if err := json.Unmarshal(resp.Body, &body); err != nil {
-		t.Fatalf("response body is not JSON: %v", err)
-	}
-	if _, ok := body["flow"]; !ok {
-		t.Fatalf("response body missing flow trace: %s", string(resp.Body))
+	if _, ok := resp.IntermediateResponses.(*workflowTrace); !ok {
+		t.Fatalf("response metadata missing flow trace: %#v", resp.IntermediateResponses)
 	}
 }
 
-func TestWorkflowsDynamicPlannerStripsToolAndFunctionSchemas(t *testing.T) {
+func TestWorkflowsDynamicPlannerIsolatesToolSchemas(t *testing.T) {
 	server := newWorkflowToolSchemaServer(t)
 	defer server.Close()
 
 	_, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowMixedToolSchemasTestRequest(),
-		ModelRefs:       []config.ModelRef{{Model: "worker-a"}},
+		executionRequest: workflowToolTestRequest(),
+		ModelRefs:        []config.ModelRef{{Model: "worker-a"}},
 		Algorithm: &config.AlgorithmConfig{
 			Type: "workflows",
 			Workflows: &config.WorkflowsAlgorithmConfig{
@@ -112,8 +108,8 @@ func TestWorkflowsDynamicUsesPlannerTokenBudgetSeparately(t *testing.T) {
 	defer server.Close()
 
 	_, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowTestRequest(),
-		ModelRefs:       []config.ModelRef{{Model: "worker-a"}},
+		executionRequest: workflowTestRequest(),
+		ModelRefs:        []config.ModelRef{{Model: "worker-a"}},
 		Algorithm: &config.AlgorithmConfig{
 			Type: "workflows",
 			Workflows: &config.WorkflowsAlgorithmConfig{
@@ -154,7 +150,7 @@ func TestWorkflowsDynamicUsesConfiguredFinalModel(t *testing.T) {
 	defer server.Close()
 
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowTestRequest(),
+		executionRequest: workflowTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
 			{Model: "gpt-final"},
@@ -180,8 +176,8 @@ func TestWorkflowsDynamicUsesConfiguredFinalModel(t *testing.T) {
 	if resp.Model != "gpt-final" {
 		t.Fatalf("final model = %q, want gpt-final", resp.Model)
 	}
-	if !strings.Contains(string(resp.Body), "final answer from configured model") {
-		t.Fatalf("response body missing configured final model output: %s", string(resp.Body))
+	if !strings.Contains(semanticTextForTest(t, resp), "final answer from configured model") {
+		t.Fatalf("response missing configured final model output: %s", semanticTextForTest(t, resp))
 	}
 	trace, ok := resp.IntermediateResponses.(*workflowTrace)
 	if !ok || trace.Plan == nil || trace.Plan.Final == nil {
@@ -212,8 +208,8 @@ func TestWorkflowsParallelStepReturnsAfterQuorum(t *testing.T) {
 
 	start := time.Now()
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowTestRequest(),
-		ModelRefs:       []config.ModelRef{{Model: "worker-a"}, {Model: "worker-b"}},
+		executionRequest: workflowTestRequest(),
+		ModelRefs:        []config.ModelRef{{Model: "worker-a"}, {Model: "worker-b"}},
 		Algorithm: &config.AlgorithmConfig{
 			Type: "workflows",
 			Workflows: &config.WorkflowsAlgorithmConfig{
@@ -237,8 +233,49 @@ func TestWorkflowsParallelStepReturnsAfterQuorum(t *testing.T) {
 	if elapsed := time.Since(start); elapsed >= 1800*time.Millisecond {
 		t.Fatalf("workflow waited for slow worker; elapsed=%v", elapsed)
 	}
-	if !strings.Contains(string(resp.Body), "fast answer") {
-		t.Fatalf("response missing fast worker answer: %s", string(resp.Body))
+	if !strings.Contains(semanticTextForTest(t, resp), "fast answer") {
+		t.Fatalf("response missing fast worker answer: %s", semanticTextForTest(t, resp))
+	}
+	if strings.Contains(semanticTextForTest(t, resp), "slow answer") {
+		t.Fatalf("response included a worker outside the quorum snapshot: %s", semanticTextForTest(t, resp))
+	}
+}
+
+func TestWorkflowStepCollectorAccountsDroppedCompletedResultAfterQuorum(t *testing.T) {
+	collector := newWorkflowStepCollector(
+		workflowPlanStep{ID: "solve", Models: []string{"worker-a", "worker-b", "worker-c"}},
+		workflowsExecutionConfig{MinSuccessfulResponses: 1},
+		3,
+		func() {},
+	)
+
+	collector.handleResult(workflowModelResult{
+		index: 0,
+		model: "worker-a",
+		resp:  &ModelResponse{Model: "worker-a", Usage: TokenUsage{TotalTokens: 7}},
+	})
+	queued := make(chan workflowModelResult, 2)
+	queued <- workflowModelResult{
+		index: 1,
+		model: "worker-b",
+		resp:  &ModelResponse{Model: "worker-b", Usage: TokenUsage{TotalTokens: 11}},
+	}
+	remaining := 2 // one queued completion plus one still-running worker
+	drainWorkflowStepResults(queued, collector, &remaining)
+
+	responses := collector.responses()
+	if len(responses) != 1 {
+		t.Fatalf("quorum responses = %d, want 1", len(responses))
+	}
+	if remaining != 1 {
+		t.Fatalf("remaining workers = %d, want 1 slow worker left outstanding", remaining)
+	}
+	accountingResponses := collector.accountingResponses()
+	if len(accountingResponses) != 2 {
+		t.Fatalf("accounting responses = %d, want 2", len(accountingResponses))
+	}
+	if total := SumUsage(accountingResponses...).TotalTokens; total != 18 {
+		t.Fatalf("total tokens = %d, want 18", total)
 	}
 }
 
@@ -265,7 +302,7 @@ func TestWorkflowsFinalTimeoutFallsBackToWorkerResponse(t *testing.T) {
 		openai.UserMessage("Answer the multiple choice question with exactly one letter: A, B, C, or D."),
 	}
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest:    req,
+		executionRequest:   req,
 		OutputContract:     singleChoiceOutputContractForTest(),
 		OutputContractSpec: singleChoiceOutputContractSpecForTest(),
 		ModelRefs:          []config.ModelRef{{Model: "worker-a"}, {Model: "gpt-final"}},
@@ -287,7 +324,7 @@ func TestWorkflowsFinalTimeoutFallsBackToWorkerResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	if got := workflowResponseContent(t, resp.Body); got != "B" {
+	if got := semanticTextForTest(t, resp); got != "B" {
 		t.Fatalf("fallback final content = %q, want B", got)
 	}
 }
@@ -319,7 +356,7 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 		openai.UserMessage("Answer the multiple choice question with exactly one letter: A, B, C, or D."),
 	}
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest:    req,
+		executionRequest:   req,
 		OutputContract:     singleChoiceOutputContractForTest(),
 		OutputContractSpec: singleChoiceOutputContractSpecForTest(),
 		ModelRefs: []config.ModelRef{
@@ -347,7 +384,7 @@ func TestWorkflowsFinalTimeoutUsesSingleChoiceMajorityFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	if got := workflowResponseContent(t, resp.Body); got != "B" {
+	if got := semanticTextForTest(t, resp); got != "B" {
 		t.Fatalf("fallback final content = %q, want B", got)
 	}
 	if resp.Model != "worker-a" {
@@ -365,7 +402,7 @@ func TestWorkflowsStaticExecutesConfiguredRoles(t *testing.T) {
 
 	includeTrace := true
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowTestRequest(),
+		executionRequest: workflowTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "thinker-model"},
 			{Model: "worker-model"},
@@ -418,8 +455,8 @@ func TestWorkflowsDynamicRejectsPlannerModelOutsideModelRefs(t *testing.T) {
 	defer server.Close()
 
 	_, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowTestRequest(),
-		ModelRefs:       []config.ModelRef{{Model: "worker-a"}},
+		executionRequest: workflowTestRequest(),
+		ModelRefs:        []config.ModelRef{{Model: "worker-a"}},
 		Algorithm: &config.AlgorithmConfig{
 			Type: "workflows",
 			Workflows: &config.WorkflowsAlgorithmConfig{
@@ -447,7 +484,7 @@ func TestWorkflowsDynamicFallsBackWhenPlannerJSONInvalidAndOnErrorSkip(t *testin
 	defer server.Close()
 
 	resp, err := NewWorkflowsLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), &Request{
-		OriginalRequest: workflowTestRequest(),
+		executionRequest: workflowTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
 			{Model: "worker-b"},
@@ -469,19 +506,12 @@ func TestWorkflowsDynamicFallsBackWhenPlannerJSONInvalidAndOnErrorSkip(t *testin
 	if err != nil {
 		t.Fatalf("Execute failed: %v", err)
 	}
-	var body map[string]interface{}
-	if unmarshalErr := json.Unmarshal(resp.Body, &body); unmarshalErr != nil {
-		t.Fatalf("response body is not JSON: %v", unmarshalErr)
+	trace, ok := resp.IntermediateResponses.(*workflowTrace)
+	if !ok || trace.Plan == nil || len(trace.Plan.Steps) == 0 {
+		t.Fatalf("response metadata missing flow trace: %#v", resp.IntermediateResponses)
 	}
-	flow, ok := body["flow"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("response body missing flow trace: %s", string(resp.Body))
-	}
-	plan := flow["plan"].(map[string]interface{})
-	steps := plan["steps"].([]interface{})
-	firstStep := steps[0].(map[string]interface{})
-	if firstStep["id"] != "fallback_solve" {
-		t.Fatalf("fallback step id = %v", firstStep["id"])
+	if trace.Plan.Steps[0].ID != "fallback_solve" {
+		t.Fatalf("fallback step id = %v", trace.Plan.Steps[0].ID)
 	}
 }
 
@@ -1135,11 +1165,7 @@ func TestWorkflowsFinalToolCallsArePreserved(t *testing.T) {
 			"finish_reason":"tool_calls"
 		}]
 	}`)
-	finalResp := &ModelResponse{
-		Model:        "qwen-coordinator",
-		Raw:          raw,
-		HasToolCalls: true,
-	}
+	finalResp := modelResponseFromWireForTest(t, raw, "qwen-coordinator", false)
 	trace := &workflowTrace{Mode: config.WorkflowModeDynamic}
 	cfg := workflowsExecutionConfig{IncludeIntermediateResponses: true}
 
@@ -1147,32 +1173,38 @@ func TestWorkflowsFinalToolCallsArePreserved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("formatWorkflowJSONResponse failed: %v", err)
 	}
+	bodyBytes := wireResponseForTest(t, resp)
 	var body map[string]interface{}
-	if unmarshalErr := json.Unmarshal(resp.Body, &body); unmarshalErr != nil {
+	if unmarshalErr := json.Unmarshal(bodyBytes, &body); unmarshalErr != nil {
 		t.Fatalf("response body is not JSON: %v", unmarshalErr)
 	}
 	choices := body["choices"].([]interface{})
 	choice := choices[0].(map[string]interface{})
 	message := choice["message"].(map[string]interface{})
 	if _, ok := message["tool_calls"].([]interface{}); !ok {
-		t.Fatalf("tool_calls missing from response: %s", string(resp.Body))
+		t.Fatalf("tool_calls missing from response: %s", string(bodyBytes))
 	}
 	if choice["finish_reason"] != "tool_calls" {
 		t.Fatalf("finish_reason = %v", choice["finish_reason"])
 	}
-	if _, ok := body["flow"]; !ok {
-		t.Fatalf("flow trace missing from response: %s", string(resp.Body))
+	if resp.IntermediateResponses != trace {
+		t.Fatalf("flow trace missing from response metadata: %#v", resp.IntermediateResponses)
 	}
 
-	streaming, err := formatWorkflowStreamingResponse(finalResp, []string{"qwen-coordinator"}, 1, trace, TokenUsage{}, cfg)
+	wantUsage := TokenUsage{PromptTokens: 7, CompletionTokens: 3, TotalTokens: 10}
+	streaming, err := formatWorkflowStreamingResponse(finalResp, []string{"qwen-coordinator"}, 1, trace, wantUsage, cfg, true)
 	if err != nil {
 		t.Fatalf("formatWorkflowStreamingResponse failed: %v", err)
 	}
-	if !strings.Contains(string(streaming.Body), `"tool_calls"`) {
-		t.Fatalf("streaming response missing tool_calls: %s", string(streaming.Body))
+	streamBody := wireResponseForTest(t, streaming)
+	if !strings.Contains(string(streamBody), `"tool_calls"`) {
+		t.Fatalf("streaming response missing tool_calls: %s", string(streamBody))
 	}
-	if !strings.Contains(string(streaming.Body), `"finish_reason":"tool_calls"`) {
-		t.Fatalf("streaming response missing tool_calls finish: %s", string(streaming.Body))
+	if !strings.Contains(string(streamBody), `"finish_reason":"tool_calls"`) {
+		t.Fatalf("streaming response missing tool_calls finish: %s", string(streamBody))
+	}
+	if got := parseStreamingUsage(streamBody); got != wantUsage {
+		t.Fatalf("streaming workflow usage = %+v, want %+v", got, wantUsage)
 	}
 }
 
@@ -1192,22 +1224,4 @@ func TestWorkflowPlannerPromptIncludesMultipleChoicePlanningRule(t *testing.T) {
 			t.Fatalf("planner prompt missing %q:\n%s", want, prompt)
 		}
 	}
-}
-
-func workflowResponseContent(t *testing.T, body []byte) string {
-	t.Helper()
-	var payload struct {
-		Choices []struct {
-			Message struct {
-				Content string `json:"content"`
-			} `json:"message"`
-		} `json:"choices"`
-	}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		t.Fatalf("response body is not JSON: %v", err)
-	}
-	if len(payload.Choices) == 0 {
-		t.Fatalf("response body has no choices: %s", string(body))
-	}
-	return payload.Choices[0].Message.Content
 }

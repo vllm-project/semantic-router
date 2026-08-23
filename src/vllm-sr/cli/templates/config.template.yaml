@@ -1,37 +1,52 @@
-# Advanced YAML sample for vLLM Semantic Router.
-# Most users should start with `vllm-sr serve` and finish setup in the dashboard.
-# Use this template when you want to hand-author routing config directly.
-
-version: v0.3
-
+version: v0.4
 listeners:
-  - name: "http-8899"
-    address: "0.0.0.0"
-    port: 8899
-    timeout: "300s"
-
-providers:
-  defaults:
-    default_model: "replace-with-your-model"
-  models:
-    - name: "replace-with-your-model"
-      backend_refs:
-        - name: "primary"
-          endpoint: "host.docker.internal:8000"
-          protocol: "http"
-          weight: 100
-
-routing:
-  modelCards:
-    - name: "replace-with-your-model"
-
-  decisions:
-    - name: "default-route"
-      description: "Catch-all route for every request while you build out more specific signals and decisions."
+- name: http-8899
+  address: 0.0.0.0
+  port: 8899
+  timeout: 300s
+models:
+- name: replace-with-your-model
+  card:
+    description: Your connected model.
+    capabilities:
+    - chat
+  connections:
+  - provider: openai-compatible
+    endpoint: http://host.docker.internal:8000/v1
+    model: replace-with-your-model
+  runtime:
+    max_retries: 0
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Route every request to the configured assignment.
+  document:
+    signals: {}
+    projections: {}
+    decisions:
+    - name: default-route
+      description: Match every request.
       priority: 100
       rules:
-        operator: "AND"
+        operator: AND
         conditions: []
-      modelRefs:
-        - model: "replace-with-your-model"
-          use_reasoning: false
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    default-route:
+      models:
+      - model: replace-with-your-model
+global:
+  services:
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml

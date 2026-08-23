@@ -120,6 +120,14 @@
     opacity var(--transition-fast);
 }
 
+.iconRemoveButton > svg,
+.addButtonSmall > svg,
+.addButton > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}
+
 .addButton,
 .addButtonSmall {
   display: inline-flex;

@@ -4,22 +4,27 @@ import {
   canAccessMLSetup,
   canAccessDashboardPath,
   canAccessReplayFlowDetails,
+  canManageInferenceAccess,
   canDeployConfig,
-  canManageMCP,
+  canManageAgent,
+  canManageAgentTools,
   canManageOpenClaw,
-  canManageSecurity,
   canManageUsers,
   canRunEvaluation,
+  canManageRouting,
+  canReadRouting,
+  canSelfManageInferenceAccess,
   canViewUsers,
   canWriteConfig,
   canWriteEvaluation,
+  isModelConsumer,
 } from './accessControl'
 
 describe('config write access', () => {
-  it('allows explicit config writers and write-capable roles', () => {
+  it('allows only explicit config writers', () => {
     expect(canWriteConfig({ role: 'read', permissions: ['config.write'] })).toBe(true)
-    expect(canWriteConfig({ role: 'admin' })).toBe(true)
-    expect(canWriteConfig({ role: 'write' })).toBe(true)
+    expect(canWriteConfig({ role: 'admin' })).toBe(false)
+    expect(canWriteConfig({ role: 'write' })).toBe(false)
   })
 
   it('keeps read-only users out of mutating dashboard controls', () => {
@@ -39,38 +44,164 @@ describe('config write access', () => {
     expect(canAccessMLSetup(emptyAdmin)).toBe(false)
   })
 
-  it('uses legacy role fallback only when permissions are absent', () => {
-    expect(canAccessReplayFlowDetails({ role: 'write' })).toBe(true)
+  it('never infers capabilities from a dashboard role', () => {
+    expect(canAccessReplayFlowDetails({ role: 'write' })).toBe(false)
     expect(canAccessReplayFlowDetails({ role: 'read' })).toBe(false)
-    expect(canAccessMLSetup({ role: 'admin' })).toBe(true)
+    expect(canAccessMLSetup({ role: 'admin' })).toBe(false)
     expect(canAccessReplayFlowDetails({ role: 'read', permissions: ['replay.read'] })).toBe(false)
-    expect(
-      canAccessReplayFlowDetails({
-        role: 'write',
-        permissions: ['config.write', 'replay.read'],
-      }),
-    ).toBe(true)
+    expect(canAccessReplayFlowDetails({ managementPermissions: ['log_payload.read'] })).toBe(true)
     expect(canAccessMLSetup({ role: 'read', permissions: ['mlpipeline.manage'] })).toBe(true)
   })
 
   it('maps dashboard routes to their backend read permissions', () => {
     expect(canAccessDashboardPath({ permissions: ['topology.read'] }, '/status')).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/status')).toBe(false)
-    expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/logs')).toBe(true)
+    expect(canAccessDashboardPath({ managementPermissions: ['log.read'] }, '/logs')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/logs')).toBe(false)
-    expect(canAccessDashboardPath({ role: 'write' }, '/logs')).toBe(true)
-    expect(canAccessDashboardPath({ permissions: ['logs.read'] }, '/plugins/response-cache')).toBe(
-      true,
-    )
+    expect(canAccessDashboardPath({ role: 'write' }, '/logs')).toBe(false)
+    expect(
+      canAccessDashboardPath({ permissions: ['logs.read'] }, '/plugins/context-compression'),
+    ).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/status')).toBe(false)
-    expect(canAccessDashboardPath({ permissions: ['replay.read'] }, '/insights/record-1')).toBe(
+    expect(
+      canAccessDashboardPath(
+        { managementPermissions: ['log.read', 'usage.read'] },
+        '/insights/record-1',
+      ),
+    ).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['evaluation.read'] }, '/evaluation')).toBe(true)
+    expect(canAccessDashboardPath({ managementPermissions: ['agent.read'] }, '/config/agent')).toBe(
       true,
     )
-    expect(canAccessDashboardPath({ permissions: ['evaluation.read'] }, '/evaluation')).toBe(true)
-    expect(canAccessDashboardPath({ permissions: ['mcp.read'] }, '/config/mcp')).toBe(true)
-    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/mcp')).toBe(false)
-    expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(true)
-    expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(true)
+    expect(canAccessDashboardPath({ managementPermissions: ['tool.read'] }, '/config/agent')).toBe(
+      true,
+    )
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/config/agent')).toBe(false)
+    expect(canAccessDashboardPath({ managementPermissions: ['routing.read'] }, '/topology')).toBe(
+      true,
+    )
+    expect(canAccessDashboardPath({ permissions: ['topology.read'] }, '/topology')).toBe(false)
+    expect(canAccessDashboardPath({ role: 'read' }, '/topology')).toBe(false)
+    expect(canAccessDashboardPath({ role: 'read' }, '/status')).toBe(false)
+    expect(
+      canAccessDashboardPath({ managementPermissions: ['key.read'] }, '/access/api-keys'),
+    ).toBe(true)
+    expect(
+      canAccessDashboardPath(
+        {
+          managementPermissions: ['key.read', 'delegation.use'],
+          managementUserId: 'router-user-1',
+        },
+        '/access/api-keys',
+      ),
+    ).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/access/api-keys')).toBe(false)
+    expect(
+      canAccessDashboardPath(
+        { permissions: ['config.read'], managementPermissions: ['routing.read'] },
+        '/config/entrypoints-recipes',
+      ),
+    ).toBe(true)
+    expect(
+      canAccessDashboardPath(
+        { permissions: ['config.read'], managementPermissions: [] },
+        '/config/entrypoints-recipes',
+      ),
+    ).toBe(false)
+    expect(canAccessDashboardPath({ managementPermissions: ['routing.read'] }, '/builder')).toBe(
+      true,
+    )
+    expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/builder')).toBe(false)
+    expect(canAccessDashboardPath({ managementPermissions: ['usage.read'] }, '/access/usage')).toBe(
+      true,
+    )
+    expect(
+      canAccessDashboardPath({ managementPermissions: ['usage.read'] }, '/access/not-a-view'),
+    ).toBe(false)
+    expect(canAccessDashboardPath({ managementPermissions: ['usage.read'] }, '/access/users')).toBe(
+      false,
+    )
+  })
+
+  it('keeps model consumers inside routing and their own access surfaces', () => {
+    const consumer = {
+      role: 'read',
+      permissions: ['config.read', 'topology.read'],
+      managementPermissions: ['key.read', 'usage.read', 'delegation.use', 'routing.read'],
+    }
+    expect(isModelConsumer(consumer)).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/config/models')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/builder')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/fleet-sim')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/global-config')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/status')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/insights')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/evaluation')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/access/usage')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/access/api-keys')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/access/users')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/access/access-groups')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/access/budgets')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/access/audit-logs')).toBe(false)
+  })
+
+  it('classifies consumers from effective capabilities instead of dashboard role names', () => {
+    expect(
+      isModelConsumer({
+        role: 'custom-role-name',
+        permissions: ['config.read'],
+        managementPermissions: ['delegation.use', 'key.read', 'usage.read', 'routing.read'],
+      }),
+    ).toBe(true)
+    expect(
+      isModelConsumer({
+        role: 'read',
+        permissions: ['config.read'],
+        managementPermissions: ['key.read', 'usage.read', 'routing.read'],
+      }),
+    ).toBe(false)
+    expect(
+      isModelConsumer({
+        role: 'read',
+        permissions: ['config.read', 'status.read'],
+        managementPermissions: ['delegation.use', 'routing.read'],
+      }),
+    ).toBe(false)
+    expect(
+      isModelConsumer({
+        role: 'read',
+        permissions: ['config.read'],
+        managementPermissions: ['delegation.use', 'key.manage', 'routing.read'],
+      }),
+    ).toBe(false)
+    expect(
+      isModelConsumer({
+        role: 'read',
+        permissions: ['config.read'],
+        managementPermissions: ['delegation.use', 'membership.manage', 'routing.read'],
+      }),
+    ).toBe(false)
+  })
+
+  it('keeps read-only Evaluation visible only with evaluation.read', () => {
+    const reader = {
+      role: 'read',
+      permissions: ['config.read', 'topology.read', 'replay.read', 'evaluation.read'],
+      managementPermissions: ['key.read', 'usage.read', 'log.read', 'delegation.use'],
+    }
+    expect(isModelConsumer(reader)).toBe(true)
+    expect(canAccessDashboardPath(reader, '/insights')).toBe(true)
+    expect(canAccessDashboardPath(reader, '/evaluation')).toBe(true)
+    expect(
+      canAccessDashboardPath(
+        {
+          role: 'read',
+          permissions: ['config.read'],
+          managementPermissions: ['delegation.use'],
+        },
+        '/evaluation',
+      ),
+    ).toBe(false)
   })
 
   it('separates read, write, run, and manage actions', () => {
@@ -80,11 +211,61 @@ describe('config write access', () => {
     expect(canWriteEvaluation({ permissions: ['evaluation.read'] })).toBe(false)
     expect(canRunEvaluation({ permissions: ['evaluation.run'] })).toBe(true)
     expect(canRunEvaluation({ permissions: ['evaluation.write'] })).toBe(false)
-    expect(canManageMCP({ permissions: ['mcp.manage'] })).toBe(true)
-    expect(canManageMCP({ permissions: ['mcp.read'] })).toBe(false)
+    expect(canManageAgent({ managementPermissions: ['agent.read', 'agent.manage'] })).toBe(true)
+    expect(canManageAgent({ managementPermissions: ['agent.read'] })).toBe(false)
+    expect(canManageAgentTools({ managementPermissions: ['tool.read', 'tool.manage'] })).toBe(true)
+    expect(canManageAgentTools({ managementPermissions: ['tool.read'] })).toBe(false)
     expect(canManageOpenClaw({ permissions: ['openclaw.manage'] })).toBe(true)
-    expect(canManageSecurity({ role: 'write' })).toBe(false)
-    expect(canManageSecurity({ role: 'admin' })).toBe(true)
+    expect(canAccessDashboardPath({ permissions: ['openclaw.read'] }, '/openclaw')).toBe(true)
+    expect(canManageInferenceAccess({ managementPermissions: ['key.manage'] })).toBe(true)
+    expect(canManageInferenceAccess({ managementPermissions: ['key.read'] })).toBe(false)
+    expect(canSelfManageInferenceAccess({ managementPermissions: ['key.manage'] })).toBe(true)
+    expect(
+      canSelfManageInferenceAccess({ managementPermissions: ['key.read', 'delegation.use'] }),
+    ).toBe(false)
+    expect(canReadRouting({ role: 'read', managementPermissions: ['routing.read'] })).toBe(true)
+    expect(canManageRouting({ role: 'admin', managementPermissions: ['routing.read'] })).toBe(false)
+    expect(
+      canManageRouting({ role: 'read', managementPermissions: ['routing.read', 'routing.manage'] }),
+    ).toBe(true)
+    expect(canReadRouting({ role: 'admin', permissions: ['config.write'] })).toBe(false)
+  })
+
+  it('authorizes the complete routing workspace only from Router Management capabilities', () => {
+    const routingAdmin = {
+      role: 'admin',
+      permissions: [],
+      managementPermissions: ['routing.read', 'routing.manage'],
+    }
+    const sameCapabilitiesWithoutAdminRole = {
+      role: 'custom-dashboard-role',
+      permissions: [],
+      managementPermissions: ['routing.read', 'routing.manage'],
+    }
+
+    for (const user of [routingAdmin, sameCapabilitiesWithoutAdminRole]) {
+      expect(canAccessDashboardPath(user, '/topology')).toBe(true)
+      expect(canAccessDashboardPath(user, '/config/models')).toBe(true)
+      expect(canAccessDashboardPath(user, '/config/entrypoints-recipes')).toBe(true)
+      expect(canManageRouting(user)).toBe(true)
+    }
+
+    expect(
+      canManageRouting({ role: 'admin', permissions: ['config.write'], managementPermissions: [] }),
+    ).toBe(false)
+  })
+
+  it('fails routing closed when identity projection is unavailable', () => {
+    const disconnectedAdmin = {
+      role: 'admin',
+      permissions: ['config.read', 'config.write'],
+      managementPermissions: [],
+      managementIdentityStatus: 'error' as const,
+      managementIdentityError: 'Principal link is unavailable.',
+    }
+    expect(canAccessDashboardPath(disconnectedAdmin, '/config/entrypoints-recipes')).toBe(false)
+    expect(canReadRouting(disconnectedAdmin)).toBe(false)
+    expect(canManageRouting(disconnectedAdmin)).toBe(false)
   })
 
   it('uses effective user permissions for user-management surfaces', () => {
@@ -94,7 +275,7 @@ describe('config write access', () => {
     expect(canManageUsers({ role: 'read', permissions: ['users.view'] })).toBe(false)
     expect(canViewUsers({ role: 'admin', permissions: [] })).toBe(false)
     expect(canManageUsers({ role: 'admin', permissions: [] })).toBe(false)
-    expect(canViewUsers({ role: 'admin' })).toBe(true)
-    expect(canManageUsers({ role: 'admin' })).toBe(true)
+    expect(canViewUsers({ role: 'admin' })).toBe(false)
+    expect(canManageUsers({ role: 'admin' })).toBe(false)
   })
 })

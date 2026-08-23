@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 
 import styles from './StructuredFieldEditors.module.css'
+import ProductIcon from './ProductIcon'
 
 interface StructuredEditorStateProps {
   disabled?: boolean
@@ -132,7 +133,7 @@ export function KeyValueEditor({
                 disabled={disabled}
                 aria-label={`Remove ${keyLabel.toLocaleLowerCase()} ${key}`}
               >
-                ×
+                <ProductIcon name="close" />
               </button>
             </div>
           )
@@ -146,7 +147,7 @@ export function KeyValueEditor({
         onClick={() => onChange({ ...value, [nextAvailableKey(value)]: '' })}
         disabled={disabled}
       >
-        <span aria-hidden="true">+</span>
+        <ProductIcon name="plus" aria-hidden="true" />
         {addLabel}
       </button>
     </div>

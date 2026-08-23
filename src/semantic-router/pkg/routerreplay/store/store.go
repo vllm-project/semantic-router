@@ -178,11 +178,15 @@ type Record struct {
 	ID                    string                 `json:"id"`
 	Timestamp             time.Time              `json:"timestamp"`
 	RequestID             string                 `json:"request_id,omitempty"`
+	UserID                string                 `json:"user_id,omitempty"`
+	TeamID                string                 `json:"team_id,omitempty"`
+	APIKeyID              string                 `json:"api_key_id,omitempty"`
 	SessionID             string                 `json:"session_id,omitempty"`
 	TurnIndex             int                    `json:"turn_index"`
 	PreviousResponseID    string                 `json:"previous_response_id,omitempty"`
 	ConversationID        string                 `json:"conversation_id,omitempty"`
 	Recipe                string                 `json:"recipe,omitempty"`
+	RoutingScope          string                 `json:"routing_scope,omitempty"`
 	Decision              string                 `json:"decision,omitempty"`
 	DecisionTier          int                    `json:"decision_tier"`
 	DecisionPriority      int                    `json:"decision_priority"`

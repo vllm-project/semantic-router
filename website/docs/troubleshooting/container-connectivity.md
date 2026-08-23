@@ -38,16 +38,13 @@ container, `127.0.0.1` and `localhost` refer to the Router container itself.
 Configure an address that is reachable from the runtime network:
 
 ```yaml
-providers:
-  models:
-    - name: local-model
-      provider_model_id: local-model
-      api_format: openai
-      backend_refs:
-        - name: local-vllm
-          endpoint: model-server:8000
-          protocol: http
-          type: vllm
+models:
+  - name: local-model
+    card: {}
+    connections:
+      - provider: vllm
+        endpoint: http://model-server:8000/v1
+        model: local-model
 ```
 
 Use a container DNS name when both services share a network. For a model server
@@ -129,7 +126,7 @@ isolated stack:
 ```bash
 VLLM_SR_STACK_NAME=lane-b \
 VLLM_SR_PORT_OFFSET=200 \
-vllm-sr serve --config config.yaml
+vllm-sr serve
 ```
 
 Use the same two environment variables with `status`, `logs`, `dashboard`, and

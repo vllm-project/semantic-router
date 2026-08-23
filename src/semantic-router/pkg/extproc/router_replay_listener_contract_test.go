@@ -7,26 +7,22 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 )
 
-func TestPublicListenerFailsClosedForRouterReplayBeforeSkipProcessing(t *testing.T) {
+func TestPublicListenerDoesNotExposeRouterReplay(t *testing.T) {
 	enabledRouter, recordID := newReplayAPITestRouter(t)
 	tests := []struct {
 		name          string
 		router        *OpenAIRouter
 		requestTarget string
-		skip          bool
 	}{
 		{name: "disabled list", router: &OpenAIRouter{}, requestTarget: "/v1/router_replay"},
 		{name: "enabled detail", router: enabledRouter, requestTarget: "/v1/router_replay/" + recordID},
-		{name: "aggregate with skip opt-out", router: newRouterWithSkipProcessingGate(true), requestTarget: "/v1/router_replay/aggregate", skip: true},
+		{name: "aggregate", router: &OpenAIRouter{}, requestTarget: "/v1/router_replay/aggregate"},
 		{name: "reserved prefix variant", router: &OpenAIRouter{}, requestTarget: "/v1/router_replay-export"},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			request := newRequestHeaders("GET", test.requestTarget)
-			if test.skip {
-				request = newSkipProcessingRequestHeaders("GET", test.requestTarget, "true")
-			}
 			ctx := &RequestContext{Headers: make(map[string]string)}
 			response, err := test.router.handleRequestHeaders(request, ctx)
 			if err != nil {
@@ -38,9 +34,6 @@ func TestPublicListenerFailsClosedForRouterReplayBeforeSkipProcessing(t *testing
 			}
 			if !strings.Contains(string(immediate.Body), "endpoint not found") {
 				t.Fatalf("public replay body = %s", immediate.Body)
-			}
-			if test.skip && !ctx.SkipProcessing {
-				t.Fatal("skip-processing header was not captured before replay denial")
 			}
 		})
 	}

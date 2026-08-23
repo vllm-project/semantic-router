@@ -20,35 +20,58 @@ main = importlib.import_module("cli.main").main
 
 
 _VALID_CONFIG = {
-    "version": "v0.3",
+    "version": "v0.4",
     "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-    "providers": {
-        "defaults": {"default_model": "test-model"},
-        "models": [
-            {
-                "name": "test-model",
-                "backend_refs": [
+    "models": [
+        {
+            "name": "test-model",
+            "card": {
+                "description": "Model used by CLI output contract tests.",
+                "capabilities": ["chat"],
+            },
+            "connections": [
+                {
+                    "provider": "openai-compatible",
+                    "endpoint": "http://host.docker.internal:8000/v1",
+                    "model": "test-model",
+                    "weight": "1",
+                }
+            ],
+        }
+    ],
+    "recipes": [
+        {
+            "name": "default",
+            "document": {
+                "decisions": [
                     {
-                        "name": "primary",
-                        "endpoint": "host.docker.internal:8000",
-                        "protocol": "http",
-                        "weight": 100,
+                        "name": "default-route",
+                        "description": "fallback",
+                        "priority": 100,
+                        "rules": {"operator": "AND", "conditions": []},
                     }
-                ],
-            }
-        ],
-    },
-    "routing": {
-        "modelCards": [{"name": "test-model"}],
-        "decisions": [
-            {
-                "name": "default-route",
-                "description": "fallback",
-                "priority": 100,
-                "rules": {"operator": "AND", "conditions": []},
-                "modelRefs": [{"model": "test-model"}],
-            }
-        ],
+                ]
+            },
+        }
+    ],
+    "entrypoints": [
+        {
+            "name": "vllm-sr/auto",
+            "recipe": "default",
+            "assignments": {"default-route": {"models": [{"model": "test-model"}]}},
+        }
+    ],
+    "global": {
+        "services": {
+            "backend_dispatch": {
+                "bind_address": "127.0.0.1",
+                "port": 8180,
+                "audience": "vllm-sr.backend-dispatch",
+                "capability_ttl": "30s",
+                "max_request_body_bytes": 64 << 20,
+            },
+            "backend_egress": {"policy_file": "/app/config/backend-egress-policy.yaml"},
+        }
     },
 }
 
@@ -65,6 +88,7 @@ def _write_config(tmp_path: Path) -> Path:
 def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(PROJECT_ROOT)
+    environment["PYDANTIC_DISABLE_PLUGINS"] = "__all__"
     return subprocess.run(
         [sys.executable, "-m", "cli.main", *args],
         cwd=tmp_path,

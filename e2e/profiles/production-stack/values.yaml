@@ -1,236 +1,33 @@
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: general-expert
-      reasoning_families:
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-      default_reasoning_effort: high
-    models:
-      - name: base-model
-        reasoning_family: qwen3
-        backend_refs:
-          - name: local-vllm
-            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
-            weight: 1
-  routing:
-    decisions:
-      - name: block_jailbreak
-        description: Block jailbreak attempts
-        priority: 1000
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_standard
-        plugins:
-          - type: fast_response
-            configuration:
-              message: I'm sorry, but I cannot process this request as it appears to violate our usage policies.
-      - name: block_pii
-        description: Block requests containing PII
-        priority: 999
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_deny_all
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request contains personal information that cannot be processed.
-      - name: business_decision
-        description: Business domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: business
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: philosophy_decision
-        description: Philosophy domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: philosophy
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: biology_decision
-        description: Biology domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: biology
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: health_decision
-        description: Health domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: health
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: computer_science_decision
-        description: Computer science domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: computer science
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: engineering_decision
-        description: Engineering domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: engineering
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: psychology_decision
-        description: Psychology domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: psychology
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: math_decision
-        description: Math domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: math
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: true
-        plugins: null
-      - name: chemistry_decision
-        description: Chemistry domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: chemistry
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: true
-        plugins: null
-      - name: physics_decision
-        description: Physics domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: physics
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: true
-        plugins: null
-      - name: history_decision
-        description: History domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: history
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: law_decision
-        description: Law domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: law
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: economics_decision
-        description: Economics domain queries
-        priority: 100
-        rules:
-          operator: AND
-          conditions:
-            - type: domain
-              name: economics
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins: null
-      - name: default_decision
-        description: Default route for all requests
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: base-model
-            lora_name: general-expert
-            use_reasoning: false
-        plugins:
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
-              similarity_threshold: 0.8
-    signals:
-      domains:
+  models:
+  - name: base-model
+    card:
+      reasoning:
+        type: chat_template_kwargs
+        efforts:
+        - high
+      loras:
+      - science-expert
+      - social-expert
+      - math-expert
+      - law-expert
+      - humanities-expert
+      - general-expert
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      model: base-model
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        domains:
         - name: business
           description: Business, corporate strategy, management, finance
         - name: philosophy
@@ -259,38 +56,273 @@ config:
           description: Microeconomics, macroeconomics, financial markets
         - name: other
           description: General knowledge and miscellaneous topics
-      jailbreak:
+        jailbreak:
         - name: jailbreak_standard
           threshold: 0.7
           include_history: false
           description: Standard jailbreak detection
-      pii:
+        pii:
         - name: pii_deny_all
           threshold: 0.9
           include_history: false
           description: Block all PII
-    modelCards:
-      - name: base-model
-        loras:
-          - name: science-expert
-            description: Specialized for science domains
-          - name: social-expert
-            description: Optimized for social sciences
-          - name: math-expert
-            description: Fine-tuned for mathematics
-          - name: law-expert
-            description: Specialized for legal questions
-          - name: humanities-expert
-            description: Optimized for humanities
-          - name: general-expert
-            description: General-purpose adapter
-      - name: general-expert
+      decisions:
+      - name: block_jailbreak
+        description: Block jailbreak attempts
+        priority: 1000
+        rules:
+          operator: OR
+          conditions:
+          - type: jailbreak
+            name: jailbreak_standard
+        plugins:
+        - type: fast_response
+          configuration:
+            message: I'm sorry, but I cannot process this request as it appears to
+              violate our usage policies.
+      - name: block_pii
+        description: Block requests containing PII
+        priority: 999
+        rules:
+          operator: OR
+          conditions:
+          - type: pii
+            name: pii_deny_all
+        plugins:
+        - type: fast_response
+          configuration:
+            message: Your request contains personal information that cannot be processed.
+      - name: business_decision
+        description: Business domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: business
+        plugins: null
+      - name: philosophy_decision
+        description: Philosophy domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: philosophy
+        plugins: null
+      - name: biology_decision
+        description: Biology domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: biology
+        plugins: null
+      - name: health_decision
+        description: Health domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: health
+        plugins: null
+      - name: computer_science_decision
+        description: Computer science domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: computer science
+        plugins: null
+      - name: engineering_decision
+        description: Engineering domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: engineering
+        plugins: null
+      - name: psychology_decision
+        description: Psychology domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: psychology
+        plugins: null
+      - name: math_decision
+        description: Math domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: math
+        plugins: null
+      - name: chemistry_decision
+        description: Chemistry domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: chemistry
+        plugins: null
+      - name: physics_decision
+        description: Physics domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: physics
+        plugins: null
+      - name: history_decision
+        description: History domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: history
+        plugins: null
+      - name: law_decision
+        description: Law domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: law
+        plugins: null
+      - name: economics_decision
+        description: Economics domain queries
+        priority: 100
+        rules:
+          operator: AND
+          conditions:
+          - type: domain
+            name: economics
+        plugins: null
+      - name: default_decision
+        description: Default route for all requests
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: other
+        plugins:
+        - type: response_cache
+          configuration:
+            enabled: true
+            scope: global
+            semantic:
+              similarity_threshold: 0.8
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      block_jailbreak:
+        models:
+        - model: base-model
+          weight: '1'
+      block_pii:
+        models:
+        - model: base-model
+          weight: '1'
+      business_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      philosophy_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      biology_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      health_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      computer_science_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      engineering_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      psychology_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      math_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+          reasoning:
+            enabled: true
+      chemistry_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+          reasoning:
+            enabled: true
+      physics_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+          reasoning:
+            enabled: true
+      history_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      law_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      economics_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
+      default_decision:
+        models:
+        - model: base-model
+          weight: '1'
+          lora: general-expert
   global:
     model_catalog:
       kbs: []
+      embeddings: {}
+      modules:
+        classifier: {}
+        hallucination_mitigation: {}
     router:
       clear_route_cache: true
-      strategy: priority
     services:
       api:
         batch_classification:
@@ -303,31 +335,39 @@ config:
             high_resolution_timing: false
             sample_rate: 1.0
             duration_buckets:
-              - 0.001
-              - 0.005
-              - 0.01
-              - 0.025
-              - 0.05
-              - 0.1
-              - 0.25
-              - 0.5
-              - 1
-              - 2.5
-              - 5
-              - 10
-              - 30
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
             size_buckets:
-              - 1
-              - 2
-              - 5
-              - 10
-              - 20
-              - 50
-              - 100
-              - 200
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
       observability:
         tracing:
           enabled: false
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
         enabled: true
@@ -346,10 +386,10 @@ config:
         enabled: false
 resources:
   limits:
-    memory: "10Gi"
-    cpu: "4"
+    memory: 10Gi
+    cpu: '4'
   requests:
-    memory: "5Gi"
-    cpu: "1"
+    memory: 5Gi
+    cpu: '1'
 image:
   pullPolicy: IfNotPresent

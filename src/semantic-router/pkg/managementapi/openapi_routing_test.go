@@ -1,0 +1,207 @@
+package managementapi
+
+import (
+	"encoding/json"
+	"slices"
+	"strings"
+	"testing"
+)
+
+func TestRoutingOperationContractsMatchHTTPMutationSemantics(t *testing.T) {
+	tests := []struct {
+		method      HTTPMethod
+		path        string
+		idempotency IdempotencyMode
+		revision    RevisionMode
+		async       AsyncMode
+		body        bool
+		responseRef string
+	}{
+		{MethodPOST, BasePath + "/routing/models", IdempotencyRequired, RevisionReturns, AsyncSynchronous, true, "MutationReceipt"},
+		{MethodPOST, BasePath + "/routing/models:bulk-import", IdempotencyRequired, RevisionNone, AsyncOperation, true, "MutationReceipt"},
+		{MethodDELETE, BasePath + "/routing/models/{modelId}", IdempotencyNone, RevisionCAS, AsyncSynchronous, false, ""},
+		{MethodPOST, BasePath + "/routing/models/{modelId}:probe", IdempotencyNone, RevisionNone, AsyncSynchronous, false, "RoutingProbeResponse"},
+		{MethodDELETE, BasePath + "/routing/recipes/{recipeId}", IdempotencyNone, RevisionCAS, AsyncSynchronous, false, ""},
+		{MethodPOST, BasePath + "/routing/entrypoints/{entrypointId}:publish", IdempotencyRequired, RevisionCAS, AsyncOperation, false, "MutationReceipt"},
+		{MethodPOST, BasePath + "/routing/entrypoints/{entrypointId}:unpublish", IdempotencyRequired, RevisionCAS, AsyncOperation, false, "MutationReceipt"},
+		{MethodPOST, BasePath + "/routing/entrypoints/{entrypointId}:resolve", IdempotencyNone, RevisionNone, AsyncSynchronous, true, "RoutingResolveResponse"},
+	}
+	document := GenerateOpenAPI()
+	for _, test := range tests {
+		contract, found := LookupOperation(test.method, test.path)
+		if !found {
+			t.Fatalf("missing %s %s", test.method, test.path)
+		}
+		if contract.Idempotency != test.idempotency || contract.Revision != test.revision || contract.Async != test.async {
+			t.Errorf("%s %s metadata = (%s,%s,%s), want (%s,%s,%s)", test.method, test.path,
+				contract.Idempotency, contract.Revision, contract.Async,
+				test.idempotency, test.revision, test.async)
+		}
+		operation := document.Paths[test.path][strings.ToLower(string(test.method))]
+		if (operation.RequestBody != nil) != test.body {
+			t.Errorf("%s %s request body present = %v, want %v", test.method, test.path, operation.RequestBody != nil, test.body)
+		}
+		if test.responseRef == "" {
+			continue
+		}
+		status := "200"
+		if test.async == AsyncOperation {
+			status = "202"
+		} else if test.method == MethodPOST && !strings.Contains(test.path, ":") {
+			status = "201"
+		}
+		response := operation.Responses[status]
+		got := response.Content[JSONMediaType].Schema.Ref
+		want := "#/components/schemas/" + test.responseRef
+		if got != want {
+			t.Errorf("%s %s response = %q, want %q", test.method, test.path, got, want)
+		}
+	}
+}
+
+func TestRoutingOpenAPISafeViewsOmitControlPlaneBindings(t *testing.T) {
+	document := GenerateOpenAPI()
+	model := document.Components.Schemas["RoutingModelView"]
+	modelCardView := document.Components.Schemas["RoutingModelCardView"]
+	modelCard := document.Components.Schemas["RoutingModelCard"]
+	backend := document.Components.Schemas["RoutingModelBackendView"]
+	for _, field := range []string{
+		"credentialId", "providerCredentialId", "baseUrl", "origin", "connectionFields",
+		"connection", "protocolAdapterId", "headers", "path", "secret",
+	} {
+		if _, exposed := model.Properties[field]; exposed {
+			t.Errorf("RoutingModelView exposes %q", field)
+		}
+		if _, exposed := backend.Properties[field]; exposed {
+			t.Errorf("RoutingModelBackendView exposes %q", field)
+		}
+		if _, exposed := modelCardView.Properties[field]; exposed {
+			t.Errorf("RoutingModelCardView exposes %q", field)
+		}
+		if _, exposed := modelCard.Properties[field]; exposed {
+			t.Errorf("RoutingModelCard exposes %q", field)
+		}
+	}
+	for _, field := range []string{
+		"status", "revision", "modelRevision", "catalogRevision", "execution", "pricing",
+		"backends", "createdAt", "updatedAt",
+	} {
+		if _, exposed := modelCardView.Properties[field]; exposed {
+			t.Errorf("RoutingModelCardView exposes runtime field %q", field)
+		}
+		if _, exposed := modelCard.Properties[field]; exposed {
+			t.Errorf("RoutingModelCard exposes runtime field %q", field)
+		}
+	}
+	encoded, err := json.Marshal(document.Components.Schemas)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"protocolAdapterId", "credentialAdapterId", "discoveryAdapterId"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Errorf("public Routing schemas expose internal adapter field %q", forbidden)
+		}
+	}
+}
+
+func TestRoutingOpenAPIExposesPurposeSpecificModelCardPage(t *testing.T) {
+	document := GenerateOpenAPI()
+	operation := document.Paths[BasePath+"/routing/model-cards"]["get"]
+	response := operation.Responses["200"]
+	if got := response.Content[JSONMediaType].Schema.Ref; got != "#/components/schemas/RoutingModelCardPage" {
+		t.Fatalf("Model Card response = %q", got)
+	}
+}
+
+func TestRoutingModelPatchIsSparseAndDoesNotRequireBackendRoundTrip(t *testing.T) {
+	document := GenerateOpenAPI()
+	operation := document.Paths[BasePath+"/routing/models/{modelId}"]["patch"]
+	if operation.RequestBody == nil {
+		t.Fatal("Model PATCH omitted its request body")
+	}
+	ref := operation.RequestBody.Content[JSONMediaType].Schema.Ref
+	if ref != "#/components/schemas/RoutingModelPatch" {
+		t.Fatalf("Model PATCH schema = %q", ref)
+	}
+	patch := document.Components.Schemas["RoutingModelPatch"]
+	if len(patch.Required) != 0 {
+		t.Fatalf("Model PATCH unexpectedly requires fields: %#v", patch.Required)
+	}
+	for _, field := range []string{"name", "execution", "pricing", "backends"} {
+		if _, exists := patch.Properties[field]; !exists {
+			t.Fatalf("Model PATCH omitted %q", field)
+		}
+	}
+}
+
+func TestRoutingOpenAPIExposesTopologyAsExplicitDetailOption(t *testing.T) {
+	document := GenerateOpenAPI()
+	operation := document.Paths[BasePath+"/routing/entrypoints/{entrypointId}"]["get"]
+	var found bool
+	for _, parameter := range operation.Parameters {
+		if parameter.Name == "includeTopology" && parameter.In == "query" && parameter.Schema.Type == "boolean" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Entrypoint detail OpenAPI omitted includeTopology")
+	}
+	view := document.Components.Schemas["RoutingEntrypointView"]
+	if _, exists := view.Properties["rules"]; !exists {
+		t.Fatal("Entrypoint detail schema omitted authorized rules")
+	}
+	for _, field := range []string{"ruleCount", "assignedModelCount"} {
+		if _, exists := view.Properties[field]; !exists {
+			t.Fatalf("Entrypoint summary schema omitted %s", field)
+		}
+		if !slices.Contains(view.Required, field) {
+			t.Fatalf("Entrypoint summary schema does not require %s", field)
+		}
+	}
+}
+
+func TestRoutingOpenAPIExposesImmutableRecipeProvenance(t *testing.T) {
+	document := GenerateOpenAPI()
+	view := document.Components.Schemas["RoutingRecipeView"]
+	for _, field := range []string{"origin", "immutable", "provenance"} {
+		if _, exists := view.Properties[field]; !exists {
+			t.Fatalf("RoutingRecipeView omitted %s", field)
+		}
+	}
+	if view.Properties["provenance"].Ref != "#/components/schemas/RoutingRecipeProvenanceView" {
+		t.Fatalf("Recipe provenance ref = %q", view.Properties["provenance"].Ref)
+	}
+	provenance := document.Components.Schemas["RoutingRecipeProvenanceView"]
+	for _, field := range []string{
+		"distributionId", "distributionVersion", "assetDigest", "sourceRecipeId",
+		"sourceRevision", "recipeDigest", "installedAt",
+	} {
+		if _, exists := provenance.Properties[field]; !exists {
+			t.Fatalf("RoutingRecipeProvenanceView omitted %s", field)
+		}
+	}
+}
+
+func TestRoutingOpenAPIExposesTypedImmutableSnapshots(t *testing.T) {
+	document := GenerateOpenAPI()
+	listPath := BasePath + "/namespaces/{namespaceId}/routing/snapshots"
+	detailPath := listPath + "/{routingRevision}"
+	if got := document.Paths[listPath]["get"].Responses["200"].Content[JSONMediaType].Schema.Ref; got != "#/components/schemas/RoutingSnapshotPage" {
+		t.Fatalf("Routing snapshot page response = %q", got)
+	}
+	if got := document.Paths[detailPath]["get"].Responses["200"].Content[JSONMediaType].Schema.Ref; got != "#/components/schemas/RoutingSnapshotDetail" {
+		t.Fatalf("Routing snapshot detail response = %q", got)
+	}
+	record := document.Components.Schemas["RoutingSnapshotRecord"]
+	for _, field := range []string{"metadata", "members", "export"} {
+		if _, exists := record.Properties[field]; !exists || !slices.Contains(record.Required, field) {
+			t.Fatalf("RoutingSnapshotRecord omitted required %s", field)
+		}
+	}
+	member := document.Components.Schemas["RoutingSnapshotMember"]
+	for _, field := range []string{"resourceType", "resourceId", "resourceRevision"} {
+		if _, exists := member.Properties[field]; !exists || !slices.Contains(member.Required, field) {
+			t.Fatalf("RoutingSnapshotMember omitted required %s", field)
+		}
+	}
+}

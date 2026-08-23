@@ -1,203 +1,125 @@
-version: v0.3
-
+version: v0.4
 listeners:
-  - name: http-8899
-    address: 0.0.0.0
-    port: 8899
-    timeout: 1200s
-
-global:
-  stores:
-    response_cache:
-      enabled: false
-      backend_type: memory
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-  integrations:
-    looper:
-      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
-      timeout_seconds: 300
-      fusion:
-        model_names:
-          - vllm-sr/fusion
-      flow:
-        model_names:
-          - vllm-sr/flow
-
-providers:
-  defaults:
-    default_model: qwen-coordinator
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: qwen-coordinator
-      provider_model_id: qwen-coordinator
-      api_format: openai
-      reasoning_family: qwen3
-      pricing:
-        currency: USD
-        prompt_per_1m: 0
-        cached_input_per_1m: 0
-        completion_per_1m: 0
-      backend_refs:
-        - name: local-qwen
-          endpoint: qwen-coordinator:8000
-          protocol: http
-          type: vllm
-          weight: 1
-    - name: opus48-worker
-      provider_model_id: anthropic/claude-opus-4.8
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 0
-        cached_input_per_1m: 0
-        completion_per_1m: 0
-      backend_refs:
-        - name: openrouter
-          base_url: https://openrouter.ai/api/v1
-          provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
-          weight: 1
-    - name: gemini31-worker
-      provider_model_id: google/gemini-3.1-pro-preview
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 0
-        cached_input_per_1m: 0
-        completion_per_1m: 0
-      backend_refs:
-        - name: openrouter
-          base_url: https://openrouter.ai/api/v1
-          provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
-          weight: 1
-    - name: gpt55-worker
-      provider_model_id: openai/gpt-5.5
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 0
-        cached_input_per_1m: 0
-        completion_per_1m: 0
-      backend_refs:
-        - name: openrouter
-          base_url: https://openrouter.ai/api/v1
-          provider: openai
-          auth_header: Authorization
-          auth_prefix: Bearer
-          api_key_env: OPENROUTER_API_KEY
-          weight: 1
-
-routing:
-  modelCards:
-    - name: qwen-coordinator
-      context_window_size: 32768
-      description: Local planner and synthesis model for Router Flow dynamic plans.
-      capabilities: [chat, planning, synthesis, code]
-      quality_score: 0.88
-      modality: text
-      tags: [deployment:self_hosted, role:planner]
-    - name: opus48-worker
-      context_window_size: 1000000
-      description: OpenRouter worker for long-horizon agentic work.
-      capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.95
-      modality: text
-      tags: [deployment:openrouter, role:worker]
-    - name: gemini31-worker
-      context_window_size: 1000000
-      description: OpenRouter worker for broad reasoning and coding.
-      capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.93
-      modality: text
-      tags: [deployment:openrouter, role:worker]
-    - name: gpt55-worker
-      context_window_size: 1048576
-      description: OpenRouter worker for frontier synthesis.
-      capabilities: [chat, code, reasoning, long-context]
-      quality_score: 0.94
-      modality: text
-      tags: [deployment:openrouter, role:worker]
-
-  signals:
-    keywords:
+- name: http-8899
+  address: 0.0.0.0
+  port: 8899
+  timeout: 1200s
+models:
+- name: qwen-coordinator
+  card:
+    capabilities:
+    - chat
+    - planning
+    - synthesis
+    - code
+    - text
+    reasoning:
+      type: chat_template_kwargs
+      efforts:
+      - medium
+  connections:
+  - provider: vllm
+    endpoint: http://qwen-coordinator:8000/v1
+    model: qwen-coordinator
+- name: opus48-worker
+  card:
+    capabilities:
+    - chat
+    - code
+    - reasoning
+    - long-context
+    - text
+  connections:
+  - provider: openrouter
+    model: anthropic/claude-opus-4.8
+    credential: accuracy_remote
+- name: gemini31-worker
+  card:
+    capabilities:
+    - chat
+    - code
+    - reasoning
+    - long-context
+    - text
+  connections:
+  - provider: openrouter
+    model: google/gemini-3.1-pro-preview
+    credential: accuracy_remote
+- name: gpt55-worker
+  card:
+    capabilities:
+    - chat
+    - code
+    - reasoning
+    - long-context
+    - text
+  connections:
+  - provider: openrouter
+    model: openai/gpt-5.5
+    credential: accuracy_remote
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      keywords:
       - name: accuracy_workflow_request
         operator: OR
         keywords:
-          - investigate and produce an implementation plan
-          - research, compare, and synthesize
-          - diagnose the root cause and verify the fix
-          - break this into independent workstreams
-          - use tools to gather evidence
-          - 调研、比较并综合
-          - 分解为独立任务并验证
-          - 根因分析并验证修复
+        - investigate and produce an implementation plan
+        - research, compare, and synthesize
+        - diagnose the root cause and verify the fix
+        - break this into independent workstreams
+        - use tools to gather evidence
+        - "\u8C03\u7814\u3001\u6BD4\u8F83\u5E76\u7EFC\u5408"
+        - "\u5206\u89E3\u4E3A\u72EC\u7ACB\u4EFB\u52A1\u5E76\u9A8C\u8BC1"
+        - "\u6839\u56E0\u5206\u6790\u5E76\u9A8C\u8BC1\u4FEE\u590D"
       - name: accuracy_deliberation_request
         operator: OR
         keywords:
-          - debate both sides
-          - compare competing hypotheses
-          - adversarial review
-          - independent expert opinions
-          - challenge the proposed solution
-          - compare multiple approaches and reach a verdict
-          - 比较多个假设并得出结论
-          - 从正反两面论证
-          - 对方案进行对抗性审查
+        - debate both sides
+        - compare competing hypotheses
+        - adversarial review
+        - independent expert opinions
+        - challenge the proposed solution
+        - compare multiple approaches and reach a verdict
+        - "\u6BD4\u8F83\u591A\u4E2A\u5047\u8BBE\u5E76\u5F97\u51FA\u7ED3\u8BBA"
+        - "\u4ECE\u6B63\u53CD\u4E24\u9762\u8BBA\u8BC1"
+        - "\u5BF9\u65B9\u6848\u8FDB\u884C\u5BF9\u6297\u6027\u5BA1\u67E5"
       - name: accuracy_direct_request
         operator: OR
         keywords:
-          - answer the question directly
-          - do not debate
-          - do not compare
-          - do not create workstreams
-          - use a single model
-          - without multi-model fan-out
-          - 直接回答问题
-          - 不要比较多个方案
-          - 不要创建并行工作流
-    context:
+        - answer the question directly
+        - do not debate
+        - do not compare
+        - do not create workstreams
+        - use a single model
+        - without multi-model fan-out
+        - "\u76F4\u63A5\u56DE\u7B54\u95EE\u9898"
+        - "\u4E0D\u8981\u6BD4\u8F83\u591A\u4E2A\u65B9\u6848"
+        - "\u4E0D\u8981\u521B\u5EFA\u5E76\u884C\u5DE5\u4F5C\u6D41"
+      context:
       - name: accuracy_long_context
         min_tokens: 16K
         max_tokens: 1M
-        description: Long inputs stay on one capable worker to avoid multiplying context cost across a fan-out workflow.
-
-  decisions:
+        description: Long inputs stay on one capable worker to avoid multiplying context
+          cost across a fan-out workflow.
+    decisions:
     - name: accuracy_workflow
-      description: Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.
+      description: Decompose evidence-gathering and tool-heavy tasks into a bounded
+        parallel workflow.
       priority: 100
       rules:
         operator: OR
         conditions:
-          - type: keyword
-            name: accuracy_workflow_request
-      modelRefs:
-        - model: opus48-worker
-          use_reasoning: true
-          reasoning_effort: medium
-        - model: gemini31-worker
-          use_reasoning: true
-          reasoning_effort: medium
-        - model: gpt55-worker
-          use_reasoning: true
-          reasoning_effort: medium
+        - type: keyword
+          name: accuracy_workflow_request
       algorithm:
         type: workflows
         workflows:
           mode: dynamic
           template: micro_agent
           planner:
-            model: qwen-coordinator
             max_completion_tokens: 2048
           max_steps: 4
           max_parallel: 3
@@ -206,62 +128,101 @@ routing:
           include_intermediate_responses: true
           on_error: skip
     - name: accuracy_long_context_direct
-      description: Keep long-context work on one frontier model instead of paying the latency and token multiplier of fan-out.
+      description: Keep long-context work on one frontier model instead of paying
+        the latency and token multiplier of fan-out.
       priority: 95
       rules:
         operator: OR
         conditions:
-          - type: context
-            name: accuracy_long_context
-      modelRefs:
-        - model: gpt55-worker
-          use_reasoning: true
-          reasoning_effort: high
+        - type: context
+          name: accuracy_long_context
       algorithm:
         type: static
     - name: accuracy_deliberation
-      description: Use independent frontier perspectives for ambiguous, adversarial, or high-stakes judgments.
+      description: Use independent frontier perspectives for ambiguous, adversarial,
+        or high-stakes judgments.
       priority: 90
       rules:
         operator: AND
         conditions:
+        - type: keyword
+          name: accuracy_deliberation_request
+        - operator: NOT
+          conditions:
           - type: keyword
-            name: accuracy_deliberation_request
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: accuracy_direct_request
-      modelRefs:
-        - model: opus48-worker
-          use_reasoning: true
-          reasoning_effort: medium
-        - model: gemini31-worker
-          use_reasoning: true
-          reasoning_effort: medium
-        - model: gpt55-worker
-          use_reasoning: true
-          reasoning_effort: medium
-        - model: qwen-coordinator
-          use_reasoning: false
+            name: accuracy_direct_request
       algorithm:
         type: fusion
         fusion:
-          model: qwen-coordinator
-          analysis_models:
-            - opus48-worker
-            - gemini31-worker
-            - gpt55-worker
           max_concurrent: 3
           min_successful_responses: 2
           include_analysis: true
           include_intermediate_responses: true
           on_error: skip
     - name: accuracy_direct
-      description: Default to one frontier worker when orchestration has no explicit expected-quality benefit.
+      description: Default to one frontier worker when orchestration has no explicit
+        expected-quality benefit.
       priority: 10
-      modelRefs:
-        - model: gpt55-worker
-          use_reasoning: true
-          reasoning_effort: medium
       algorithm:
         type: static
+entrypoints:
+- name: vllm-sr/auto
+  recipe: default
+  assignments:
+    accuracy_workflow:
+      models:
+      - model: opus48-worker
+        weight: '1'
+      - model: gemini31-worker
+        weight: '1'
+      - model: gpt55-worker
+        weight: '1'
+    accuracy_long_context_direct:
+      models:
+      - model: gpt55-worker
+        weight: '1'
+    accuracy_deliberation:
+      models:
+      - model: opus48-worker
+        weight: '1'
+      - model: gemini31-worker
+        weight: '1'
+      - model: gpt55-worker
+        weight: '1'
+      - model: qwen-coordinator
+        weight: '1'
+    accuracy_direct:
+      models:
+      - model: gpt55-worker
+        weight: '1'
+billing_currency: USD
+global:
+  services:
+    backend_credentials:
+      accuracy_remote:
+        secret_env: OPENROUTER_API_KEY
+        credential_adapter_id: bearer
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
+  stores:
+    response_cache:
+      enabled: false
+      backend_type: memory
+  router: {}
+  integrations:
+    looper:
+      endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
+      timeout_seconds: 300
+      fusion: {}
+      flow: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

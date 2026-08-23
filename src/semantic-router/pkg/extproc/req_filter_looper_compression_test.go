@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -8,7 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dispatchauthority"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
 func TestHandleLooperInternalRequestWithPluginsCompressesWorkingBody(t *testing.T) {
@@ -16,39 +19,38 @@ func TestHandleLooperInternalRequestWithPluginsCompressesWorkingBody(t *testing.
 	decision.Name = "fusion_compressed"
 	decision.ModelRefs = []config.ModelRef{{Model: "panel-a"}}
 	router := &OpenAIRouter{
-		Cache: &spyCache{},
+		Cache:                &spyCache{},
+		DispatchCapabilities: dispatchCapabilityRuntimeStub{},
 		Config: &config.RouterConfig{
-			IntelligentRouting: config.IntelligentRouting{
-				Decisions: []config.Decision{decision},
-			},
+			Recipes: []config.RoutingRecipe{{
+				Name: "compression-recipe",
+				Profile: config.RoutingProfile{
+					Decisions: []config.Decision{decision},
+				},
+			}},
 			BackendModels: config.BackendModels{
 				ModelConfig: map[string]config.ModelParams{
-					"panel-a": {PreferredEndpoints: []string{"panel-backend"}},
+					"panel-a": {ResourceID: "model-id", ResourceRevision: 1},
 				},
-				VLLMEndpoints: []config.VLLMEndpoint{{
-					Name:    "panel-backend",
-					Address: "127.0.0.1",
-					Port:    8000,
-					Type:    "vllm",
-					Weight:  1,
-				}},
 			},
 		},
 	}
-	router.CredentialResolver = newTestCredentialResolver(router.Config)
 	largeTool := strings.Repeat("irrelevant inventory ", 300) +
 		"authentication validator failed " +
 		strings.Repeat("irrelevant billing ", 300)
-	body := []byte(`{"model":"panel-a","messages":[` +
-		`{"role":"user","content":"fix authentication validator"},` +
-		`{"role":"tool","tool_call_id":"call_1","content":` + mustJSONString(t, largeTool) + `}]}`)
+	request := semanticCompressionRequest(largeTool)
+	request.Model = "panel-a"
 	ctx := &RequestContext{
-		LooperRequest:       true,
-		VSRSelectedDecision: &router.Config.Decisions[0],
+		LooperRequest:   true,
+		SourceFormat:    llmprotocol.OpenAIChatV1,
+		SemanticRequest: request,
 		Headers: map[string]string{
 			headers.VSRLooperDecision: "fusion_compressed",
+			headers.VSRSelectedRecipe: "compression-recipe",
 		},
-		OriginalRequestBody: body,
+		TraceContext: withVerifiedDispatchGrant(
+			context.Background(), dispatchauthority.VerifiedGrant{},
+		),
 	}
 
 	response, err := router.handleLooperInternalRequestWithPlugins("panel-a", ctx)

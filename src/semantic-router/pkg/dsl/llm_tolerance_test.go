@@ -118,23 +118,24 @@ ROUTE test {
 	}
 }
 
-func TestPluginNameNormalization(t *testing.T) {
-	input := `ROUTE test {
+func TestRemovedResponseCacheAliasesAreRejected(t *testing.T) {
+	for _, alias := range []string{"semantic-cache", "semantic_cache", "response-cache"} {
+		t.Run(alias, func(t *testing.T) {
+			input := `ROUTE test {
   PRIORITY 1
   MODEL "qwen:7b"
-  PLUGIN semantic-cache {
+  PLUGIN ` + alias + ` {
     enabled: true
   }
 }`
-	prog, errs := Parse(input)
-	if len(errs) > 0 {
-		t.Fatalf("expected no errors, got: %v", errs)
-	}
-	if len(prog.Routes[0].Plugins) != 1 {
-		t.Fatalf("expected 1 plugin, got %d", len(prog.Routes[0].Plugins))
-	}
-	if prog.Routes[0].Plugins[0].Name != "response_cache" {
-		t.Errorf("expected normalized plugin name 'response_cache', got %q", prog.Routes[0].Plugins[0].Name)
+			_, errs := Compile(input)
+			if len(errs) == 0 {
+				t.Fatalf("removed response_cache alias %q was accepted", alias)
+			}
+			if !strings.Contains(errs[0].Error(), alias) {
+				t.Fatalf("compile error does not identify removed alias %q: %v", alias, errs)
+			}
+		})
 	}
 }
 
@@ -158,15 +159,6 @@ ROUTE r { PRIORITY 1 MODEL "q" }`,
   MODEL "q"
 }`,
 			wantMsg: "Add SIGNAL",
-		},
-		{
-			name: "no_model",
-			input: `SIGNAL domain math { description: "m" }
-ROUTE r {
-  PRIORITY 1
-  WHEN domain("math")
-}`,
-			wantMsg: "Add MODEL",
 		},
 	}
 

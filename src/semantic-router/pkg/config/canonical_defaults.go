@@ -4,6 +4,7 @@ package config
 // canonical config omits all or part of the global block.
 func DefaultCanonicalGlobal() CanonicalGlobal {
 	defaults := CanonicalGlobal{
+		ControlPlane: DefaultControlPlaneConfig(),
 		Router:       defaultCanonicalRouterGlobal(),
 		Services:     defaultCanonicalServiceGlobal(),
 		Stores:       defaultCanonicalStoreGlobal(),
@@ -15,29 +16,29 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 
 func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 	return CanonicalRouterGlobal{
-		ConfigSource:              ConfigSourceFile,
-		AutoModelName:             "MoM",
-		IncludeConfigModelsInList: false,
-		ClearRouteCache:           true,
-		ModelSelection: ModelSelectionConfig{
-			Enabled: true,
-			Method:  "knn",
-			RouterDC: RouterDCSelectionConfig{
-				Temperature:         0.07,
-				DimensionSize:       768,
-				MinSimilarity:       0.3,
-				UseQueryContrastive: true,
-				UseModelContrastive: true,
-				UseCapabilities:     true,
-			},
-			Hybrid: HybridSelectionConfig{
-				ExperienceWeight:    0.3,
-				RouterDCWeight:      0.3,
-				AutoMixWeight:       0.2,
-				CostWeight:          0.2,
-				QualityGapThreshold: 0.1,
-				NormalizeScores:     true,
-			},
+		ClearRouteCache: true,
+	}
+}
+
+func defaultRuntimeModelSelection() ModelSelectionConfig {
+	return ModelSelectionConfig{
+		Enabled: true,
+		Method:  "knn",
+		RouterDC: RouterDCSelectionConfig{
+			Temperature:         0.07,
+			DimensionSize:       768,
+			MinSimilarity:       0.3,
+			UseQueryContrastive: true,
+			UseModelContrastive: true,
+			UseCapabilities:     true,
+		},
+		Hybrid: HybridSelectionConfig{
+			ExperienceWeight:    0.3,
+			RouterDCWeight:      0.3,
+			AutoMixWeight:       0.2,
+			CostWeight:          0.2,
+			QualityGapThreshold: 0.1,
+			NormalizeScores:     true,
 		},
 	}
 }
@@ -46,7 +47,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 	return CanonicalServiceGlobal{
 		ResponseAPI: ResponseAPIConfig{
 			Enabled:      true,
-			StoreBackend: "redis",
+			StoreBackend: "memory",
 			TTLSeconds:   86400,
 			MaxResponses: 1000,
 		},
@@ -59,7 +60,10 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 		StartupStatus: StartupStatusConfig{
 			StoreBackend: "file",
 		},
-		ManagementAPI: DefaultManagementAPIConfig(),
+		ManagementAPI:   DefaultManagementAPIConfig(),
+		Access:          DefaultAccessServiceConfig(),
+		BackendDispatch: DefaultBackendDispatchConfig(),
+		BackendEgress:   BackendEgressConfig{PolicyFile: "/app/config/backend-egress-policy.yaml"},
 		Observability: ObservabilityConfig{
 			Metrics: MetricsConfig{
 				Enabled: canonicalBoolPtr(true),
@@ -78,7 +82,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 				},
 				Resource: TracingResourceConfig{
 					ServiceName:           "vllm-sr",
-					ServiceVersion:        "v0.3.0",
+					ServiceVersion:        "v0.4.0",
 					DeploymentEnvironment: "development",
 				},
 			},
@@ -330,6 +334,7 @@ func DefaultGlobalConfig() RouterConfig {
 	_ = resolveModuleModelRefs(&global)
 	cfg := RouterConfig{}
 	_ = applyCanonicalGlobal(&cfg, &global)
+	cfg.ModelSelection = defaultRuntimeModelSelection()
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}

@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import ViewPanel, { type ViewPanelAction } from '../components/ViewPanel'
+import ProductIcon from '../components/ProductIcon'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canAccessReplayFlowDetails } from '../utils/accessControl'
+import { copyText } from '../utils/clipboard'
 
-import configStyles from './ConfigPage.module.css'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import styles from './InsightsPage.module.css'
 import { fetchInsightsRecord } from './insightsPageApi'
@@ -74,14 +75,13 @@ export default function InsightsRecordPage() {
   }, [recordId])
 
   const handleCopyLink = useCallback(async () => {
-    if (!shareUrl || !navigator.clipboard?.writeText) {
+    if (!shareUrl) {
       return
     }
 
-    try {
-      await navigator.clipboard.writeText(shareUrl)
+    if (await copyText(shareUrl)) {
       setCopyState('copied')
-    } catch {
+    } else {
       setCopyState('idle')
     }
   }, [shareUrl])
@@ -89,7 +89,8 @@ export default function InsightsRecordPage() {
   const panelActions = useMemo<ViewPanelAction[]>(
     () => [
       {
-        label: copyState === 'copied' ? 'Link Copied' : 'Copy Link',
+        label: copyState === 'copied' ? 'Link copied' : 'Copy link',
+        icon: copyState === 'copied' ? 'check' : 'copy',
         onClick: () => {
           void handleCopyLink()
         },
@@ -103,61 +104,51 @@ export default function InsightsRecordPage() {
     <ConfigPageManagerLayout
       eyebrow="Insights"
       title="Insight Record"
-      description="Open, review, and share a single replay-backed request record."
-      configArea="Analysis"
-      scope="Shareable request detail"
-      panelTitle="Semantic Router Record"
-      panelDescription="A standalone deep-link view of one replay event, with the same detail body used in the in-page modal."
-      pills={[
-        { label: 'Record Detail', active: true },
-        { label: 'Shareable Link' },
-        { label: 'Replay Event' },
-      ]}
+      description="Everything behind one routed request."
     >
       {error ? (
-        <div className={styles.error}>
+        <div className={styles.error} role="alert">
           <span>{error}</span>
         </div>
       ) : null}
 
-      <div className={configStyles.sectionPanel}>
-        <section className={configStyles.sectionTableBlock}>
-          <div className={styles.toolbar}>
-            <div>
-              <h2 className={styles.sectionTitle}>Record Detail</h2>
-              <p className={styles.sectionSubtitle}>
-                Share this page directly when you need a stable URL for a single request replay.
-              </p>
-            </div>
-            <div className={styles.toolbarActions}>
-              <button type="button" onClick={() => void loadRecord()} className={styles.refreshButton}>
-                Refresh
-              </button>
-            </div>
+      <section className={styles.recordStage} aria-label="Insight record" aria-busy={loading}>
+        <div className={styles.recordStageHeader}>
+          <button type="button" className={styles.backButton} onClick={() => navigate('/insights')}>
+            <ProductIcon name="arrow-left" aria-hidden="true" />
+            All requests
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadRecord()}
+            className={styles.refreshButton}
+            disabled={loading}
+          >
+            <ProductIcon name="refresh" aria-hidden="true" />
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
+        </div>
+        {loading ? (
+          <div className={styles.loading}>
+            <div className={styles.spinner} />
+            <p>Loading insight record...</p>
           </div>
+        ) : null}
 
-          {loading ? (
-            <div className={styles.loading}>
-              <div className={styles.spinner} />
-              <p>Loading insight record...</p>
-            </div>
-          ) : null}
-
-          {!loading && !error && record ? (
-            <ViewPanel
-              title={buildInsightsRecordTitle(record)}
-              sections={buildInsightsRecordSections(record, {
-                isReadonly,
-                canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
-              })}
-              onClose={() => navigate('/insights')}
-              closeLabel="Back to Insights"
-              actions={panelActions}
-              variant="page"
-            />
-          ) : null}
-        </section>
-      </div>
+        {!loading && !error && record ? (
+          <ViewPanel
+            title={buildInsightsRecordTitle(record)}
+            sections={buildInsightsRecordSections(record, {
+              isReadonly,
+              canViewReplayFlowDetails: canAccessReplayFlowDetails(user),
+            })}
+            onClose={() => navigate('/insights')}
+            closeLabel="Back to Insights"
+            actions={panelActions}
+            variant="page"
+          />
+        ) : null}
+      </section>
     </ConfigPageManagerLayout>
   )
 }

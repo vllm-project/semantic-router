@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom'
+import ProductIcon from '../components/ProductIcon'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './FleetSimPage.module.css'
 import type { TraceInfo, TraceSample } from '../utils/fleetSimApi'
@@ -42,8 +43,8 @@ export default function FleetSimTracePreviewDialog({
               {trace.name}
             </h2>
             <p className={styles.dialogSubtitle}>
-              Showing {formatNumber(previewCount)} of {formatNumber(sample.total)} rows before
-              you plan against this traffic.
+              Showing {formatNumber(previewCount)} of {formatNumber(sample.total)} rows before you
+              plan against this traffic.
             </p>
           </div>
           <button
@@ -53,7 +54,7 @@ export default function FleetSimTracePreviewDialog({
             onClick={onClose}
             data-dialog-initial-focus
           >
-            ×
+            <ProductIcon name="close" />
           </button>
         </div>
 
@@ -65,7 +66,9 @@ export default function FleetSimTracePreviewDialog({
 
         <div className={styles.dialogBody}>
           {sample.records.length > 0 ? (
-            <pre className={styles.dialogJsonPreview}>{JSON.stringify(sample.records, null, 2)}</pre>
+            <pre className={styles.dialogJsonPreview}>
+              {JSON.stringify(sample.records, null, 2)}
+            </pre>
           ) : (
             <div className={styles.emptyState}>No preview rows are available for this trace.</div>
           )}
@@ -73,11 +76,11 @@ export default function FleetSimTracePreviewDialog({
 
         <div className={styles.dialogFooter}>
           <button type="button" className={styles.secondaryButton} onClick={onClose}>
-            Close
+            <ProductIcon name="check" /> Close
           </button>
         </div>
       </div>
     </div>,
-    document.body
+    document.body,
   )
 }

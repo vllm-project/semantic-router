@@ -74,7 +74,7 @@ kubectl describe envoypatchpolicy semantic-router-extproc-patch-policy \
 ```
 
 Use the frontend's `/v1/models` response as the model-name source of truth. The
-same name must appear in Semantic Router model cards and the Gateway route.
+same name must appear in a canonical Semantic Router Model and the Gateway route.
 
 If this repository's pinned 0.6.1 fixture is intentionally under test, record
 that version in the result. Do not report it as validation of a newer Dynamo

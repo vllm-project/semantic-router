@@ -26,139 +26,35 @@ static_resources:
             virtual_hosts:
             - name: local_service
               domains: ["*"]
-              # Security: strip internal headers from client requests to prevent
-              # looper bypass, identity spoofing, and credential leakage.
-              request_headers_to_remove:
-              - "x-vsr-looper-request"
-              - "x-vsr-looper-secret"
-              - "x-vsr-looper-decision"
-              - "x-vsr-looper-iteration"
-              - "x-authz-user-id"
-              - "x-authz-user-groups"
               routes:
-              {% for model in models %}
-              # Route for model: {{ model.name }}
               - match:
                   prefix: "/"
-                  headers:
-                  - name: x-selected-model
-                    string_match:
-                      exact: "{{ model.name }}"
-                {% if model.route_request_headers %}
-                request_headers_to_add:
-                {% for header in model.route_request_headers %}
-                - header:
-                    key: {{ header.key | tojson }}
-                    value: {{ header.value | tojson }}
-                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
-                {% endfor %}
-                {% endif %}
                 route:
-                  cluster: {{ model.cluster_name }}_cluster
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  idleTimeout: 1200s
-                  {% if model.reliability.retry_count | default(0) > 0 %}
-                  retry_policy:
-                    retry_on: {{ model.reliability.retry_on | default('connect-failure,refused-stream') }}
-                    num_retries: {{ model.reliability.retry_count }}
-                  {% endif %}
-                  # Rewrite Host header to match upstream server
-                  host_rewrite_literal: "{{ model.endpoints[0].host_authority }}"
-                  {% if model.path_prefix %}
-                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
-                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
-                  regex_rewrite:
-                    pattern:
-                      google_re2: {}
-                      regex: "^/v1([/?].*)?$"
-                    substitution: "{{ model.path_prefix }}\\1"
-                  {% endif %}
-              {% endfor %}
-              {% for model in anthropic_models %}
-              # Route for Anthropic model: {{ model.name }}
-              - match:
-                  prefix: "/"
-                  headers:
-                  - name: x-selected-model
-                    string_match:
-                      exact: "{{ model.name }}"
-                route:
-                  cluster: anthropic_api_cluster
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  idleTimeout: 1200s
-                  host_rewrite_literal: "api.anthropic.com"
-              {% endfor %}
-              # Default route (no x-selected-model header)
-              - match:
-                  prefix: "/"
-                {% if models and models[0].route_request_headers %}
-                request_headers_to_add:
-                {% for header in models[0].route_request_headers %}
-                - header:
-                    key: {{ header.key | tojson }}
-                    value: {{ header.value | tojson }}
-                  append_action: OVERWRITE_IF_EXISTS_OR_ADD
-                {% endfor %}
-                {% endif %}
-                route:
-                  {% if models %}
-                  # Route to first model by default
-                  cluster: {{ models[0].cluster_name }}_cluster
-                  {% else %}
-                  cluster: vllm_static_cluster
-                  {% endif %}
-                  timeout: {{ listener.timeout | default('1200s') }}
-                  {% if models and models[0].reliability.retry_count | default(0) > 0 %}
-                  retry_policy:
-                    retry_on: {{ models[0].reliability.retry_on | default('connect-failure,refused-stream') }}
-                    num_retries: {{ models[0].reliability.retry_count }}
-                  {% endif %}
-                  {% if models %}
-                  # Rewrite Host header to match upstream server
-                  host_rewrite_literal: "{{ models[0].endpoints[0].host_authority }}"
-                  {% endif %}
-                  {% if models and models[0].path_prefix %}
-                  # Prepend path prefix to /v1 requests (e.g., /compatible-mode + /v1/chat/completions = /compatible-mode/v1/chat/completions).
-                  # Match only the complete /v1 segment so route recomputation cannot rewrite /v1beta/... again.
-                  regex_rewrite:
-                    pattern:
-                      google_re2: {}
-                      regex: "^/v1([/?].*)?$"
-                    substitution: "{{ models[0].path_prefix }}\\1"
-                  {% endif %}
+                  cluster: backend_dispatch_cluster
+                  timeout: 0s
           http_filters:
-          {% if listener.api_keys %}
-          - name: envoy.filters.http.lua
-            typed_config:
-              "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.LuaPerRoute
+          # Sanitize before ExtProc. Route-level removal would also delete the
+          # short-lived capability that ExtProc adds for backend dispatch.
           - name: envoy.filters.http.lua
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua
-              inline_code: |
-                local VALID_KEYS = {
-                {% for key in listener.api_keys %}
-                  ["{{ key }}"] = true,
-                {% endfor %}
-                }
-                function envoy_on_request(request_handle)
-                  local auth = request_handle:headers():get("authorization") or
-                               request_handle:headers():get("Authorization") or ""
-                  local token = string.match(auth, "^[Bb]earer%s+(.+)$")
-                  if token and VALID_KEYS[token] then
-                    return
+              default_source_code:
+                inline_string: |
+                  local INTERNAL_HEADERS = {
+                  {% for header in internal_request_headers %}
+                    "{{ header }}",
+                  {% endfor %}
+                  }
+                  function envoy_on_request(request_handle)
+                    for _, name in ipairs(INTERNAL_HEADERS) do
+                      request_handle:headers():remove(name)
+                    end
                   end
-                  request_handle:respond(
-                    {[":status"] = "401",
-                     ["content-type"] = "application/json",
-                     ["www-authenticate"] = "Bearer realm=\"vllm-semantic-router\""},
-                    "{\"error\":{\"message\":\"Unauthorized: missing or invalid API key\",\"type\":\"authentication_error\",\"code\":\"invalid_api_key\"}}"
-                  )
-                end
-          {% endif %}
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
               allow_mode_override: true
+              failure_mode_allow: false
               grpc_service:
                 envoy_grpc:
                   cluster_name: extproc_service
@@ -181,7 +77,7 @@ static_resources:
   {% endfor %}
 
   clusters:
-  # ExtProc service (semantic router)
+  # ExtProc selects a backend and issues a request-bound capability.
   - name: extproc_service
     connect_timeout: 1200s
     type: {{ extproc_cluster_type }}
@@ -200,129 +96,31 @@ static_resources:
                 address: {{ extproc_host }}
                 port_value: {{ extproc_port }}
             {% if extproc_host_is_domain %}
-            hostname: "{{ extproc_host }}"
+            hostname: {{ extproc_host | tojson }}
             {% endif %}
 
-  {% if not models %}
-  # Fallback cluster for API-only configs (not actually used, but required for valid Envoy config)
-  # When all models are API-based, the router handles requests directly without routing through Envoy clusters
-  - name: vllm_static_cluster
-    connect_timeout: 30s
-    type: {{ router_api_cluster_type }}
-    {% if router_api_cluster_type == 'LOGICAL_DNS' %}
+  # Stable private hop. The Router resolves destinations, credentials,
+  # retries, fallback, and request/stream timeouts after capability validation.
+  - name: backend_dispatch_cluster
+    connect_timeout: 5s
+    type: {{ backend_dispatch.cluster_type }}
+    {% if backend_dispatch.cluster_type == 'LOGICAL_DNS' %}
     dns_lookup_family: V4_ONLY
     {% endif %}
     lb_policy: ROUND_ROBIN
     load_assignment:
-      cluster_name: vllm_static_cluster
+      cluster_name: backend_dispatch_cluster
       endpoints:
       - lb_endpoints:
         - endpoint:
             address:
               socket_address:
-                address: {{ router_api_host }}
-                port_value: {{ router_api_port }}
-            {% if router_api_host_is_domain %}
-            hostname: "{{ router_api_host }}"
+                address: {{ backend_dispatch.address | tojson }}
+                port_value: {{ backend_dispatch.port }}
+            {% if backend_dispatch.address_is_domain %}
+            hostname: {{ backend_dispatch.address | tojson }}
             {% endif %}
-  {% endif %}
 
-  {% for model in models %}
-  # Cluster for model: {{ model.name }}
-  - name: {{ model.cluster_name }}_cluster
-    connect_timeout: 10s
-    type: {{ model.cluster_type }}
-    {% if model.cluster_type == 'LOGICAL_DNS' %}
-    dns_lookup_family: V4_ONLY
-    {% endif %}
-    {% if model.reliability.lb_policy | default('round_robin') == 'least_request' %}
-    lb_policy: LEAST_REQUEST
-    least_request_lb_config:
-      choice_count: 2
-    {% else %}
-    lb_policy: ROUND_ROBIN
-    {% endif %}
-    {% if model.reliability.retry_count | default(0) > 0 or model.reliability.consecutive_5xx | default(0) > 0 %}
-    circuit_breakers:
-      thresholds:
-      - priority: DEFAULT
-        max_connections: 1024
-        max_pending_requests: 1024
-        max_requests: 4096
-    {% endif %}
-    {% if model.reliability.consecutive_5xx | default(0) > 0 and model.endpoints | length > 1 %}
-    outlier_detection:
-      consecutive_5xx: {{ model.reliability.consecutive_5xx }}
-      interval: 10s
-      base_ejection_time: {{ model.reliability.base_ejection_time | default('30s') }}
-      max_ejection_percent: {{ model.reliability.max_ejection_percent | default(50) }}
-    {% endif %}
-    {% if model.reliability.health_check_path | default('') %}
-    health_checks:
-    - timeout: {{ model.reliability.health_check_timeout | default('2s') }}
-      interval: {{ model.reliability.health_check_interval | default('10s') }}
-      unhealthy_threshold: 3
-      healthy_threshold: 1
-      http_health_check:
-        path: {{ model.reliability.health_check_path | tojson }}
-    {% endif %}
-    load_assignment:
-      cluster_name: {{ model.cluster_name }}_cluster
-      endpoints:
-      - lb_endpoints:
-        {% for endpoint in model.endpoints %}
-        - endpoint:
-            address:
-              socket_address:
-                address: {{ endpoint.address }}
-                port_value: {{ endpoint.port }}
-            {% if endpoint.is_domain %}
-            hostname: "{{ endpoint.address }}"
-            {% endif %}
-          load_balancing_weight: {{ endpoint.weight | default(1) }}
-        {% endfor %}
-    {% if model.has_https %}
-    transport_socket:
-      name: envoy.transport_sockets.tls
-      typed_config:
-        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-        sni: {{ model.endpoints[0].address }}
-        common_tls_context:
-          tls_params:
-            tls_minimum_protocol_version: TLSv1_2
-            tls_maximum_protocol_version: TLSv1_3
-    {% endif %}
-  {% endfor %}
-
-  {% if anthropic_models %}
-  # Shared cluster for Anthropic API (all Anthropic models use this cluster)
-  - name: anthropic_api_cluster
-    type: LOGICAL_DNS
-    dns_lookup_family: V4_ONLY
-    connect_timeout: 10s
-    lb_policy: ROUND_ROBIN
-    load_assignment:
-      cluster_name: anthropic_api_cluster
-      endpoints:
-      - lb_endpoints:
-        - endpoint:
-            address:
-              socket_address:
-                address: api.anthropic.com
-                port_value: 443
-            hostname: "api.anthropic.com"
-    transport_socket:
-      name: envoy.transport_sockets.tls
-      typed_config:
-        "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
-        sni: api.anthropic.com
-        common_tls_context:
-          tls_params:
-            tls_minimum_protocol_version: TLSv1_2
-            tls_maximum_protocol_version: TLSv1_3
-  {% endif %}
-
-# Runtime configuration
 layered_runtime:
   layers:
   - name: static_layer

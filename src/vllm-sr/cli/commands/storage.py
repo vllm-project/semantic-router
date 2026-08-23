@@ -82,7 +82,18 @@ def rotate(config: str | None, runtime: str | None) -> None:
     state_root_dir = resolve_state_root_dir(config_path)
 
     postgres_container = stack_layout.postgres_container_name
-    if container_status(postgres_container) != "running":
+    postgres_status = container_status(postgres_container)
+    redis_status = container_status(stack_layout.redis_container_name)
+    active_backends = {
+        backend
+        for backend, status in (("postgres", postgres_status), ("redis", redis_status))
+        if status != "not found"
+    }
+    if not active_backends:
+        raise click.ClickException(
+            "This stack has no managed Redis or Postgres container to rotate."
+        )
+    if "postgres" in active_backends and postgres_status != "running":
         raise click.ClickException(
             f"{postgres_container} is not running. Rotation re-keys the live "
             "Postgres role in place, which needs the container up. Start the "
@@ -90,8 +101,10 @@ def rotate(config: str | None, runtime: str | None) -> None:
         )
 
     def apply_secrets(rotated: StorageSecrets) -> None:
-        rekey_managed_postgres(postgres_container, rotated.postgres)
-        _rebuild_redis(stack_layout, state_root_dir, rotated)
+        if "postgres" in active_backends:
+            rekey_managed_postgres(postgres_container, rotated.postgres)
+        if "redis" in active_backends:
+            _rebuild_redis(stack_layout, state_root_dir, rotated)
 
     rotate_storage_secrets(
         state_root_dir,
@@ -100,8 +113,7 @@ def rotate(config: str | None, runtime: str | None) -> None:
     )
     success(f"Storage credentials rotated for stack {stack_layout.stack_name}")
     log.warning(
-        "Router is still running on the previous credentials. Every new "
-        "connection it opens to Postgres fails until it is recreated. Re-run "
+        "Router is still running on the previous storage credentials. Re-run "
         "the `vllm-sr serve` command you started this stack with, now."
     )
 

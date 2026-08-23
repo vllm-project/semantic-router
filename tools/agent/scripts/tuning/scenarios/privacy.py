@@ -4,17 +4,18 @@ Targets a four-lane policy (security, privacy, frontier reasoning, standard)
 where misrouting a query to the wrong lane has differential severity impact.
 
 Usage:
-    from tuning import RouterClient, TuningLoop
+    from tuning import CandidateTuner, RouterClient
     from tuning.scenarios import PrivacyScenario
 
     scenario = PrivacyScenario()
-    loop = TuningLoop(
+    tuner = CandidateTuner(
         scenario=scenario,
         router=RouterClient(),
         config_path=Path("config.yaml"),
         probes_path=Path("probes.yaml"),
+        candidate_path=Path("candidate.yaml"),
     )
-    output = loop.run()
+    output = tuner.run()
 """
 
 from __future__ import annotations

@@ -29,64 +29,57 @@ own workload. For a policy that does not require a trained artifact, start with
 
 ## Configure the router
 
-Declare artifact locations in the shared ML settings, then select the
-algorithm on a decision. This minimal topology includes the provider aliases
-referenced by the decision. Replace the endpoints and artifact path before
-using it:
+Declare the artifact with the Decision that uses it. The Recipe stays free of
+physical Model connections; its Entrypoint supplies the candidate Models.
+That Decision owns the complete `algorithm.ml` selector contract.
+Replace the endpoints and artifact path before using it:
 
 ```yaml
-version: v0.3
+version: v0.4
 
 listeners:
   - name: http-8899
     address: 0.0.0.0
     port: 8899
 
-providers:
-  models:
-    - name: small-model
-      provider_model_id: small-model
-      backend_refs:
-        - name: small-model-server
-          endpoint: small-model:8000
-          protocol: http
-          weight: 1
-    - name: large-model
-      provider_model_id: large-model
-      backend_refs:
-        - name: large-model-server
-          endpoint: large-model:8000
-          protocol: http
-          weight: 1
-  defaults:
-    default_model: small-model
+models:
+  - name: small-model
+    connections:
+      - provider: vllm
+        endpoint: http://small-model:8000/v1
+        model: small-model
+  - name: large-model
+    connections:
+      - provider: vllm
+        endpoint: http://large-model:8000/v1
+        model: large-model
 
-routing:
-  decisions:
-    - name: learned-route
-      description: Select a candidate with the trained KNN policy.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: small-model
-        - model: large-model
-      algorithm:
-        type: knn
-  modelCards:
-    - name: small-model
-    - name: large-model
+recipes:
+  - name: learned-selection
+    document:
+      decisions:
+        - name: learned-route
+          description: Select a candidate with the trained KNN policy.
+          priority: 100
+          rules: {}
+          algorithm:
+            type: knn
+            ml:
+              models_path: /models/selection
+              embedding_dim: 384
+              knn:
+                k: 5
+                pretrained_path: /models/selection/knn_model.json
 
-global:
-  router:
-    model_selection:
-      enabled: true
-      ml:
-        embedding_dim: 384
-        knn:
-          k: 5
-          pretrained_path: /models/selection/knn_model.json
+entrypoints:
+  - name: vllm-sr/learned-selection
+    recipe: learned-selection
+    assignments:
+      learned-route:
+        models:
+          - model: small-model
+          - model: large-model
+
 ```
 
 The artifact must be readable inside the router container. Its embedding

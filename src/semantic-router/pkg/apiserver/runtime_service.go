@@ -5,7 +5,6 @@ package apiserver
 import (
 	"context"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -43,17 +42,11 @@ type classificationInventoryReadinessService interface {
 	HasAnyFeedbackDetector() bool
 }
 
-type configUpdateService interface {
-	UpdateConfig(newConfig *config.RouterConfig)
-	RefreshRuntimeConfig(newConfig *config.RouterConfig)
-}
-
 type classificationService interface {
 	intentClassificationService
 	batchClassificationService
 	auxiliaryClassificationService
 	classificationReadinessService
-	configUpdateService
 }
 
 type liveClassificationService struct {
@@ -178,12 +171,4 @@ func (s *liveClassificationService) HasAnyFeedbackDetector() bool {
 		return inventory.HasAnyFeedbackDetector()
 	}
 	return current.HasFeedbackDetector()
-}
-
-func (s *liveClassificationService) UpdateConfig(newConfig *config.RouterConfig) {
-	s.current().UpdateConfig(newConfig)
-}
-
-func (s *liveClassificationService) RefreshRuntimeConfig(newConfig *config.RouterConfig) {
-	s.current().RefreshRuntimeConfig(newConfig)
 }

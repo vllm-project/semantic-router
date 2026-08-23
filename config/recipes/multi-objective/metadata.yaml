@@ -4,7 +4,7 @@ name: Multi-Objective Mixture-of-Models
 version: 0.1.0
 description: >-
   Exposes isolated balanced, latency, cost, accuracy, and privacy objectives as
-  stable request-facing unified model entrypoints over one shared model pool.
+  stable request-facing unified model entrypoints over one shared model catalog.
 authors:
   - name: vLLM Semantic Router Contributors
     url: https://github.com/vllm-project/semantic-router/graphs/contributors

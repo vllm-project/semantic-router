@@ -15,7 +15,6 @@ type ClassificationMetricsResponse struct {
 	ProjectionScoreCount     int            `json:"projection_score_count"`
 	ProjectionMappingCount   int            `json:"projection_mapping_count"`
 	SignalCounts             map[string]int `json:"signal_counts"`
-	RouterConfigAPI          bool           `json:"router_config_api"`
 }
 
 func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWriter, _ *http.Request) {
@@ -26,7 +25,6 @@ func (s *ClassificationAPIServer) handleClassificationMetrics(w http.ResponseWri
 		HallucinationDetector:  s.classificationSvc.HasHallucinationDetector(),
 		HallucinationExplainer: s.classificationSvc.HasHallucinationExplainer(),
 		FeedbackDetector:       s.classificationSvc.HasFeedbackDetector(),
-		RouterConfigAPI:        true,
 		SignalCounts:           map[string]int{},
 	}
 	if cfg == nil {

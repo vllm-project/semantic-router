@@ -54,6 +54,8 @@ const sidebars: SidebarsConfig = {
             'tutorials/global/recipes',
           ],
         },
+        'tutorials/global/access-and-usage',
+        'tutorials/global/playground-builder',
         {
           type: 'category',
           label: 'Signals',
@@ -385,7 +387,6 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Safety & Resilience',
           items: [
-            'proposals/model-execution-fallback',
             'proposals/Prism-153key',
             'proposals/hallucination-mitigation-milestone',
           ],
@@ -394,8 +395,31 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Configuration & Protocols',
           items: [
-            'proposals/unified-config-contract-v0-3',
             'proposals/multi-protocol-adaptor',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Access & Operations',
+          items: [
+            {
+              type: 'category',
+              label: 'Router-Native Access Control',
+              link: {
+                type: 'doc',
+                id: 'proposals/router-native-access-control',
+              },
+              items: [
+                'proposals/router-native-access-control-contracts',
+                'proposals/router-native-access-control-provider-catalog',
+                'proposals/router-native-access-control-model-runtime',
+                'proposals/router-native-access-control-quota-runtime',
+                'proposals/router-native-access-control-management-api',
+                'proposals/router-native-access-control-authorization',
+                'proposals/router-native-access-control-deployment',
+                'proposals/router-native-agent-runtime',
+              ],
+            },
           ],
         },
         {
@@ -432,6 +456,7 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'api/router',
+        'api/management',
         'api/apiserver',
         'api/session-identification',
         'api/semantic-router-crd',

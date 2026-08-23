@@ -21,7 +21,7 @@ func validateEmbeddingModelContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	if err := validateMmBertModelPath(cfg.EmbeddingModels.MmBertModelPath); err != nil {
+	if err := validateMmBertModelPath(cfg.MmBertModelPath); err != nil {
 		return err
 	}
 	if err := validateRemoteEmbeddingProviderConfig(cfg.EmbeddingModels); err != nil {
@@ -34,7 +34,7 @@ func validateEmbeddingSignalContracts(cfg *RouterConfig) error {
 	if cfg == nil {
 		return nil
 	}
-	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingModels.EmbeddingConfig.ModelType)
+	return validateEmbeddingRuleModalities(cfg.EmbeddingRules, cfg.EmbeddingConfig.ModelType)
 }
 
 func validateRemoteEmbeddingProviderConfig(models EmbeddingModels) error {
@@ -125,7 +125,7 @@ func validateMmBertModelPath(modelPath string) error {
 // ValidateEmbeddingContracts is the exported counterpart of the private
 // validateEmbeddingContracts function. It remains available for narrow callers
 // that need only the embedding-modality slice; Kubernetes reconciliation should
-// prefer ValidateKubernetesConfigContracts so every shared family validator runs
+// keep this validator in the shared config contract set so every manifest path runs it
 // through one dispatch surface.
 func ValidateEmbeddingContracts(cfg *RouterConfig) error {
 	return validateEmbeddingContracts(cfg)

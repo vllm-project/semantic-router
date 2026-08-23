@@ -18,11 +18,11 @@ func TestReferenceConfigUsesStrictCanonicalSchema(t *testing.T) {
 		t.Fatalf("config/config.yaml no longer matches the strict canonical schema: %v", err)
 	}
 
-	if canonical.Version != "v0.3" {
-		t.Fatalf("expected reference config version v0.3, got %q", canonical.Version)
+	if canonical.Version != "v0.4" {
+		t.Fatalf("expected reference config version v0.4, got %q", canonical.Version)
 	}
 
-	if _, err := ParseYAMLBytes(data); err != nil {
+	if _, err := testAuthoringParser(t).ParseYAMLBytes(data); err != nil {
 		t.Fatalf("config/config.yaml failed runtime parse validation: %v", err)
 	}
 }
@@ -39,7 +39,8 @@ func TestReferenceConfigCoversCanonicalPublicSurface(t *testing.T) {
 
 func TestReferenceConfigCoversSupportedRoutingSurfaces(t *testing.T) {
 	root := loadReferenceConfigRaw(t)
-	decisions := mustSliceAt(t, root, "routing", "decisions")
+	routing := referenceDefaultRecipeDocument(t, root)
+	decisions := mustSliceAt(t, routing, "decisions")
 
 	assertSupportedSignalTypesInReferenceConfig(t, root)
 	assertReferenceLoRACatalogCoverage(t, root)

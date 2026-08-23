@@ -1,4 +1,4 @@
-routing:
+document:
   signals:
     jailbreak:
       - name: prompt_injection

@@ -61,11 +61,11 @@ func TestBuildModelSpecsRequiresEmbeddingModelWeightsAndTokenizer(t *testing.T) 
 
 func TestBuildModelSpecsSkipsEmbeddingModelsForRemoteBackend(t *testing.T) {
 	cfg := newEmbeddingOnlyConfig()
-	cfg.EmbeddingModels.EmbeddingConfig = config.HNSWConfig{
+	cfg.EmbeddingConfig = config.HNSWConfig{
 		Backend:   config.EmbeddingBackendOpenAICompatible,
 		ModelType: config.EmbeddingModelTypeRemote,
 	}
-	cfg.EmbeddingModels.Endpoint = config.EmbeddingEndpointConfig{
+	cfg.Endpoint = config.EmbeddingEndpointConfig{
 		BaseURL: "http://embedding-service:8000/v1",
 		Model:   "BAAI/bge-m3",
 	}

@@ -30,6 +30,16 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 70
 
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+topologySpread:
+  enabled: true
+  maxSkew: 1
+  topologyKey: topology.kubernetes.io/zone
+  whenUnsatisfiable: ScheduleAnyway
+
 startupProbe:
   failureThreshold: 360  # 60 minutes
 

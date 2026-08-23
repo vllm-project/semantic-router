@@ -3,215 +3,113 @@ package config
 import (
 	"slices"
 	"testing"
+
+	"gopkg.in/yaml.v2"
 )
 
 const momAsset = "config/recipes/built-in/latest/mom-v1/config.yaml"
 
-func TestMoMRuntimeContract(t *testing.T) {
-	cfg, err := ParseYAMLBytes(mustReadRepoFile(t, momAsset))
-	if err != nil {
-		t.Fatalf("parse vLLM-SR MoM recipe: %v", err)
+func TestMoMRecipeDistributionContract(t *testing.T) {
+	var distribution CanonicalConfig
+	if err := yaml.UnmarshalStrict(mustReadRepoFile(t, momAsset), &distribution); err != nil {
+		t.Fatalf("parse built-in Recipe distribution: %v", err)
+	}
+	if distribution.Version != "v0.4" {
+		t.Fatalf("distribution version = %q, want v0.4", distribution.Version)
+	}
+	if len(distribution.Models) != 0 || len(distribution.Entrypoints) != 0 || distribution.Global != nil {
+		t.Fatalf("built-in distribution must own Recipes only: %+v", distribution)
+	}
+	if err := validateAuthoringRecipes(distribution.Recipes); err != nil {
+		t.Fatalf("validate built-in Recipes: %v", err)
 	}
 
-	if got := cfg.Looper.Endpoint; got != "http://vllm-sr-envoy-container:8899/v1/chat/completions" {
-		t.Fatalf("Looper endpoint must re-enter Envoy, got %q", got)
-	}
-	if len(cfg.Entrypoints) != 5 {
-		t.Fatalf("entrypoint count = %d, want 5", len(cfg.Entrypoints))
-	}
-
+	wantNames := []string{"accuracy", "balance", "cost", "speed", "vault"}
+	gotNames := make([]string, 0, len(distribution.Recipes))
 	decisionCount := 0
-	for _, recipeName := range []string{"balance", "speed", "cost", "accuracy", "vault"} {
-		recipe, ok := cfg.RecipeByName(RecipeName(recipeName))
-		if !ok {
-			t.Fatalf("missing recipe %q", recipeName)
-		}
-		decisionCount += len(recipe.Profile.Decisions)
+	for _, recipe := range distribution.Recipes {
+		gotNames = append(gotNames, recipe.Name)
+		decisionCount += len(recipe.Document.Decisions)
+		assertBuiltInOmniDecision(t, recipe)
+		assertBuiltInNoSystemPrompt(t, recipe)
 	}
-	if decisionCount != 43 {
-		t.Fatalf("decision count = %d, want 43", decisionCount)
+	slices.Sort(gotNames)
+	if !slices.Equal(gotNames, wantNames) {
+		t.Fatalf("Recipe names = %v, want %v", gotNames, wantNames)
+	}
+	if decisionCount != 26 {
+		t.Fatalf("decision count = %d, want 26", decisionCount)
 	}
 
-	assertMoMMistralReasoning(t, cfg)
-	assertMoMOrchestrationBudgets(t, cfg)
-	assertMoMReplayBoundary(t, cfg)
-	assertMoMManagementBoundary(t, cfg)
+	accuracy := builtInRecipe(t, distribution.Recipes, "accuracy")
+	assertBuiltInOrchestrationBudgets(t, accuracy)
 }
 
-func assertMoMManagementBoundary(t *testing.T, cfg *RouterConfig) {
+func assertBuiltInOmniDecision(t *testing.T, recipe AuthoringRecipe) {
 	t.Helper()
-	assertMoMManagementListener(t, cfg.ManagementAPI)
-	assertMoMDashboardToken(t, cfg.ManagementAPI.Auth.Tokens)
-	assertMoMDashboardPermissions(t, cfg.ManagementAPI.Auth.Roles["dashboard_control_plane"])
-	if cfg.Observability.Tracing.Enabled {
-		t.Fatal("vLLM-SR MoM must not emit traces to an undeclared collector")
+	decision := builtInDecision(t, recipe, "omni")
+	if !momRuleReferences(decision.Rules, SignalTypeConversation, recipe.Name+"_has_images") {
+		t.Fatalf("Recipe %q omni decision does not match image content: %+v", recipe.Name, decision.Rules)
 	}
-}
-
-func assertMoMManagementListener(t *testing.T, management ManagementAPIConfig) {
-	t.Helper()
-	if management.BindAddress != "0.0.0.0" || management.Port != 8080 || !management.RemoteExposure ||
-		management.Auth.Mode != ManagementAuthModeBearer {
-		t.Fatalf("vLLM-SR MoM management API is not remotely authenticated: %+v", management)
+	if len(decision.ModelRefs) != 0 {
+		t.Fatalf("Recipe %q embeds physical Models: %+v", recipe.Name, decision.ModelRefs)
 	}
 }
 
-func assertMoMDashboardToken(t *testing.T, tokens []ManagementAPITokenRef) {
+func assertBuiltInNoSystemPrompt(t *testing.T, recipe AuthoringRecipe) {
 	t.Helper()
-	foundToken := false
-	for _, token := range tokens {
-		if token.Env == "VLLM_SR_DASHBOARD_RECIPE_TOKEN" && token.Role == "dashboard_control_plane" {
-			foundToken = true
-		}
-	}
-	if !foundToken {
-		t.Fatalf("vLLM-SR MoM management API is missing its Dashboard token reference: %+v", tokens)
-	}
-}
-
-func assertMoMDashboardPermissions(t *testing.T, permissions []string) {
-	t.Helper()
-	expectedPermissions := []string{
-		"cache.invalidate",
-		"cache.manage",
-		"cache.read",
-		"classify.invoke",
-		"compression.manage",
-		"compression.preview",
-		"compression.read",
-		"config.read",
-		"config.write",
-		"learning.ingest",
-		"ready.read",
-		"replay.detail",
-		"replay.read",
-	}
-	if !slices.Equal(permissions, expectedPermissions) {
-		t.Fatalf("vLLM-SR MoM Dashboard role = %v, want %v", permissions, expectedPermissions)
-	}
-	for _, permission := range []string{"*", "secret_view", "data.write"} {
-		if slices.Contains(permissions, permission) {
-			t.Fatalf("vLLM-SR MoM Dashboard role contains broad permission %q: %v", permission, permissions)
+	for _, decision := range recipe.Document.Decisions {
+		if decision.HasPlugin(DecisionPluginSystemPrompt) {
+			t.Fatalf("built-in decision %q must not inject a system prompt", decision.Name)
 		}
 	}
 }
 
-func assertMoMReplayBoundary(t *testing.T, cfg *RouterConfig) {
+func assertBuiltInOrchestrationBudgets(t *testing.T, recipe AuthoringRecipe) {
 	t.Helper()
-	assertMoMReplayStore(t, cfg.RouterReplay)
-	assertMoMVaultReplayDisabled(t, cfg)
-	if replay := cfg.EffectiveRouterReplayConfigForDecision("balance_standard"); replay == nil || !replay.Enabled {
-		t.Fatalf("ordinary vLLM-SR MoM decisions must inherit enabled replay: %+v", replay)
-	}
-}
-
-func assertMoMReplayStore(t *testing.T, replayConfig RouterReplayConfig) {
-	t.Helper()
-	if !replayConfig.Enabled || replayConfig.StoreBackend != "redis" || replayConfig.Redis == nil {
-		t.Fatalf("vLLM-SR MoM replay service = %+v, want enabled Redis", replayConfig)
-	}
-	if replayConfig.TTLSeconds != 604800 || replayConfig.AsyncWrites {
-		t.Fatalf("vLLM-SR MoM replay durability = ttl %d / async %v", replayConfig.TTLSeconds, replayConfig.AsyncWrites)
-	}
-	if replayConfig.Redis.Address != "redis:6379" || replayConfig.Redis.DB != 2 ||
-		replayConfig.Redis.KeyPrefix != "mom-v1:router-replay:" {
-		t.Fatalf("vLLM-SR MoM replay Redis isolation = %+v", replayConfig.Redis)
-	}
-}
-
-func assertMoMVaultReplayDisabled(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	vault, ok := cfg.RecipeByName(RecipeName("vault"))
-	if !ok {
-		t.Fatal("missing Vault recipe")
-	}
-	if len(vault.Profile.Decisions) != 8 {
-		t.Fatalf("Vault decision count = %d, want 8", len(vault.Profile.Decisions))
-	}
-	for index := range vault.Profile.Decisions {
-		decision := &vault.Profile.Decisions[index]
-		if replay := cfg.EffectiveRouterReplayConfig(decision); replay != nil {
-			t.Fatalf("Vault decision %q unexpectedly records replay: %+v", decision.Name, replay)
-		}
-	}
-}
-
-func assertMoMMistralReasoning(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	family := cfg.ReasoningFamilies["mistral"]
-	if family.Type != ReasoningFamilyTypeTopLevelReasoningEffort || family.Parameter != "reasoning_effort" {
-		t.Fatalf("Mistral reasoning family = %+v", family)
-	}
-	if got := cfg.ModelConfig["local/mistral-small-4"].ReasoningFamily; got != "mistral" {
-		t.Fatalf("Mistral model reasoning_family = %q, want mistral", got)
-	}
-
-	mistralRefs := 0
-	for _, recipe := range cfg.Recipes {
-		for _, decision := range recipe.Profile.Decisions {
-			for _, modelRef := range decision.ModelRefs {
-				if modelRef.Model != "local/mistral-small-4" {
-					continue
-				}
-				mistralRefs++
-				if modelRef.UseReasoning == nil || !*modelRef.UseReasoning || modelRef.ReasoningEffort != "high" {
-					t.Fatalf("%s Mistral modelRef must use explicit high effort: %+v", decision.Name, modelRef)
-				}
-			}
-		}
-	}
-	if mistralRefs == 0 {
-		t.Fatal("vLLM-SR MoM recipe has no Mistral modelRefs")
-	}
-}
-
-func assertMoMOrchestrationBudgets(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	assertMoMWorkflowBudget(t, cfg)
-	assertMoMFusionBudgets(t, cfg)
-	assertMoMReMoMBudget(t, cfg)
-}
-
-func assertMoMWorkflowBudget(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	workflow := momDecision(t, cfg, "accuracy", "accuracy_dynamic_workflow")
+	workflow := builtInDecision(t, recipe, "orchestrate")
 	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil ||
 		workflow.Algorithm.Workflows.MaxCompletionTokens != 2048 ||
 		workflow.Algorithm.Workflows.Planner.MaxCompletionTokens != 2048 {
 		t.Fatalf("accuracy workflow output budgets changed: %+v", workflow.Algorithm)
 	}
-}
-
-func assertMoMFusionBudgets(t *testing.T, cfg *RouterConfig) {
-	t.Helper()
-	decision := momDecision(t, cfg, "accuracy", "accuracy_expert_fusion")
-	if decision.Algorithm == nil || decision.Algorithm.Fusion == nil ||
-		decision.Algorithm.Fusion.MaxCompletionTokens != 2048 {
-		t.Fatalf("accuracy Fusion output budget changed: %+v", decision.Algorithm)
+	fusion := builtInDecision(t, recipe, "experts")
+	if fusion.Algorithm == nil || fusion.Algorithm.Fusion == nil ||
+		fusion.Algorithm.Fusion.MaxCompletionTokens != 2048 {
+		t.Fatalf("accuracy Fusion output budget changed: %+v", fusion.Algorithm)
 	}
 }
 
-func assertMoMReMoMBudget(t *testing.T, cfg *RouterConfig) {
+func builtInRecipe(t *testing.T, recipes []AuthoringRecipe, name string) AuthoringRecipe {
 	t.Helper()
-	remom := momDecision(t, cfg, "accuracy", "accuracy_multi_round_exploration")
-	if remom.Algorithm == nil || remom.Algorithm.ReMoM == nil ||
-		remom.Algorithm.ReMoM.MaxCompletionTokens == nil ||
-		*remom.Algorithm.ReMoM.MaxCompletionTokens != 2048 {
-		t.Fatalf("accuracy ReMoM output budget changed: %+v", remom.Algorithm)
+	for _, recipe := range recipes {
+		if recipe.Name == name {
+			return recipe
+		}
 	}
+	t.Fatalf("missing built-in Recipe %q", name)
+	return AuthoringRecipe{}
 }
 
-func momDecision(t *testing.T, cfg *RouterConfig, recipeName, decisionName string) Decision {
+func builtInDecision(t *testing.T, recipe AuthoringRecipe, name string) Decision {
 	t.Helper()
-	recipe, ok := cfg.RecipeByName(RecipeName(recipeName))
-	if !ok {
-		t.Fatalf("missing recipe %q", recipeName)
-	}
-	for _, decision := range recipe.Profile.Decisions {
-		if decision.Name == decisionName {
+	for _, decision := range recipe.Document.Decisions {
+		if decision.Name == name {
 			return decision
 		}
 	}
-	t.Fatalf("recipe %q is missing decision %q", recipeName, decisionName)
+	t.Fatalf("Recipe %q is missing decision %q", recipe.Name, name)
 	return Decision{}
+}
+
+func momRuleReferences(rule RuleNode, signalType, signalName string) bool {
+	if rule.Type == signalType && rule.Name == signalName {
+		return true
+	}
+	for _, condition := range rule.Conditions {
+		if momRuleReferences(condition, signalType, signalName) {
+			return true
+		}
+	}
+	return false
 }

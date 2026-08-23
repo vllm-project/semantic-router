@@ -6,13 +6,13 @@ import (
 )
 
 func TestMultiObjectiveRecipeDefinesObjectiveProfiles(t *testing.T) {
-	cfg, err := ParseYAMLBytes(mustReadRepoFile(t, "config/recipes/multi-objective/config.yaml"))
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(mustReadRepoFile(t, "config/recipes/multi-objective/config.yaml"))
 	if err != nil {
 		t.Fatalf("parse multi-objective recipe: %v", err)
 	}
 
 	assertMultiObjectiveMappings(t, cfg)
-	assertMultiObjectivePoolReasoningCapability(t, cfg)
+	assertMultiObjectiveModelReasoningCapability(t, cfg)
 	assertMultiObjectiveRecipes(t, cfg)
 }
 
@@ -28,14 +28,8 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	if len(cfg.Entrypoints) != len(expectedEntrypoints) {
 		t.Fatalf("entrypoint count = %d, want %d", len(cfg.Entrypoints), len(expectedEntrypoints))
 	}
-	if len(cfg.Recipes) != len(expectedEntrypoints)+1 {
-		t.Fatalf("normalized recipe count = %d, want %d named recipes plus internal default", len(cfg.Recipes), len(expectedEntrypoints))
-	}
-	if defaultRecipe := cfg.DefaultRecipe(); defaultRecipe == nil || len(defaultRecipe.Profile.Decisions) != 0 {
-		t.Fatalf("expected decisionless internal default recipe, got %+v", defaultRecipe)
-	}
-	if cfg.AutoModelNames == nil || len(cfg.EffectiveAutoModelNames()) != 0 {
-		t.Fatalf("expected entrypoint-only public catalog, got auto aliases %#v", cfg.EffectiveAutoModelNames())
+	if len(cfg.Recipes) != len(expectedEntrypoints) {
+		t.Fatalf("Recipe count = %d, want %d explicit Recipes", len(cfg.Recipes), len(expectedEntrypoints))
 	}
 	for modelName, recipeName := range expectedEntrypoints {
 		if _, exists := cfg.ModelConfig[modelName]; exists {
@@ -54,7 +48,7 @@ func assertMultiObjectiveMappings(t *testing.T, cfg *RouterConfig) {
 	}
 }
 
-func assertMultiObjectivePoolReasoningCapability(t *testing.T, cfg *RouterConfig) {
+func assertMultiObjectiveModelReasoningCapability(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
 	for _, modelName := range []string{
 		"local/qwen3.5-122b-frontier",
@@ -64,12 +58,13 @@ func assertMultiObjectivePoolReasoningCapability(t *testing.T, cfg *RouterConfig
 		"local/qwen3.6-27b-coder",
 		"local/qwen3.6-35b-flash",
 	} {
-		if got := cfg.ModelConfig[modelName].ReasoningFamily; got != "qwen3" {
-			t.Fatalf("%s model-pool reasoning family = %q, want qwen3", modelName, got)
+		familyName := cfg.ModelConfig[modelName].ReasoningFamily
+		if familyName == "" {
+			t.Fatalf("%s reasoning family is empty", modelName)
 		}
-	}
-	if family := cfg.ReasoningFamilies["qwen3"]; family.Type != "chat_template_kwargs" {
-		t.Fatalf("qwen3 model pool lost chat-template reasoning capability: %+v", family)
+		if family := cfg.ReasoningFamilies[familyName]; family.Type != "chat_template_kwargs" {
+			t.Fatalf("%s reasoning family %q lost chat-template reasoning capability: %+v", modelName, familyName, family)
+		}
 	}
 	for _, modelName := range []string{
 		"local/gemma4-26b-balanced",
@@ -91,7 +86,7 @@ func assertMultiObjectiveRecipes(t *testing.T, cfg *RouterConfig) {
 
 func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	balanced, _ := cfg.RecipeByName("balanced")
+	balanced := multiObjectiveRecipe(t, cfg, "balanced")
 	if len(balanced.Profile.Projections.Scores) == 0 || len(balanced.Profile.Projections.Mappings) == 0 {
 		t.Fatal("balanced recipe must derive an effort projection from recipe-local signals")
 	}
@@ -113,7 +108,7 @@ func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
 
 func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	speed, _ := cfg.RecipeByName("speed-first")
+	speed := multiObjectiveRecipe(t, cfg, "speed-first")
 	speedAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_first_route").Algorithm
 	speedWeights := requireMultiObjectiveMultiFactorWeights(t, speedAlgorithm, "speed-first")
 	if speedWeights.Latency != 0.85 {
@@ -122,7 +117,7 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 	heavyAlgorithm := multiObjectiveDecision(t, speed, "unified_speed_heavy_route").Algorithm
 	requireMultiObjectiveAlgorithmType(t, heavyAlgorithm, DecisionAlgorithmLatencyAware, "speed-first heavy route")
 
-	cost, _ := cfg.RecipeByName("cost-first")
+	cost := multiObjectiveRecipe(t, cfg, "cost-first")
 	for _, decision := range cost.Profile.Decisions {
 		models := make([]string, 0, len(decision.ModelRefs))
 		for _, ref := range decision.ModelRefs {
@@ -139,14 +134,14 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 			"cost-first decision "+decision.Name,
 		)
 	}
-	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginSemanticCache) {
+	if !multiObjectiveDecision(t, cost, "unified_cost_first_route").HasPlugin(DecisionPluginResponseCache) {
 		t.Fatal("cost-first direct route must reuse semantically equivalent answers")
 	}
 }
 
 func assertMultiObjectiveAccuracyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	accuracy, _ := cfg.RecipeByName("accuracy-first")
+	accuracy := multiObjectiveRecipe(t, cfg, "accuracy-first")
 	if rules := accuracy.Profile.Signals.FactCheckRules; len(rules) != 0 {
 		t.Fatalf("accuracy recipe must not let learned fact-check classification drive orchestration: %+v", rules)
 	}
@@ -244,7 +239,7 @@ func assertMultiObjectiveLanguageCodes(t *testing.T, recipe *RoutingRecipe, expe
 
 func assertMultiObjectivePrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 	t.Helper()
-	privacy, _ := cfg.RecipeByName("privacy-first")
+	privacy := multiObjectiveRecipe(t, cfg, "privacy-first")
 	if len(privacy.Profile.Signals.JailbreakRules) != 1 || len(privacy.Profile.Signals.PIIRules) != 1 {
 		t.Fatalf("privacy-first recipe must keep jailbreak and PII signals: %+v", privacy.Profile.Signals)
 	}
@@ -258,6 +253,20 @@ func assertMultiObjectivePrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 			}
 		}
 	}
+}
+
+func multiObjectiveRecipe(t *testing.T, cfg *RouterConfig, name RecipeName) *RoutingRecipe {
+	t.Helper()
+	for _, entrypoint := range cfg.Entrypoints {
+		if entrypoint.Recipe != name || len(entrypoint.ModelNames) == 0 {
+			continue
+		}
+		if recipe, ok := cfg.RecipeForRequestModel(entrypoint.ModelNames[0]); ok {
+			return recipe
+		}
+	}
+	t.Fatalf("no Entrypoint materializes recipe %q", name)
+	return nil
 }
 
 func multiObjectiveDecision(t *testing.T, recipe *RoutingRecipe, name string) *Decision {

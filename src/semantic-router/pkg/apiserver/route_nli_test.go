@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -58,13 +57,11 @@ func (s *nliTestService) ClassifyFactCheck(_ services.FactCheckRequest) (*servic
 func (s *nliTestService) ClassifyUserFeedback(_ services.UserFeedbackRequest) (*services.UserFeedbackResponse, error) {
 	panic("not implemented")
 }
-func (s *nliTestService) HasClassifier() bool                         { return true }
-func (s *nliTestService) HasFactCheckClassifier() bool                { return false }
-func (s *nliTestService) HasHallucinationDetector() bool              { return false }
-func (s *nliTestService) HasHallucinationExplainer() bool             { return false }
-func (s *nliTestService) HasFeedbackDetector() bool                   { return false }
-func (s *nliTestService) UpdateConfig(_ *config.RouterConfig)         {}
-func (s *nliTestService) RefreshRuntimeConfig(_ *config.RouterConfig) {}
+func (s *nliTestService) HasClassifier() bool             { return true }
+func (s *nliTestService) HasFactCheckClassifier() bool    { return false }
+func (s *nliTestService) HasHallucinationDetector() bool  { return false }
+func (s *nliTestService) HasHallucinationExplainer() bool { return false }
+func (s *nliTestService) HasFeedbackDetector() bool       { return false }
 
 func nliTestServer(svc classificationService) *ClassificationAPIServer {
 	return &ClassificationAPIServer{classificationSvc: svc}

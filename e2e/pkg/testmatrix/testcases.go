@@ -26,7 +26,7 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
-	"anthropic-passthrough-openai-regression",
+	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
 	// Looper aggregate latency/token-usage response-header contract (issue #2694)
@@ -44,27 +44,12 @@ var DashboardContract = []string{
 	// Core API
 	"dashboard-health",
 	"dashboard-status",
-	// Config endpoints
-	"dashboard-config-read",
-	"dashboard-deploy-preview",
-	"dashboard-config-versions",
-	"dashboard-deploy-invalid-yaml",
 	// Evaluation endpoints (tasks/CRUD require CGO — only datasets works without it)
 	"dashboard-eval-datasets",
+	// Router-native identity, access, quota, usage, and credential lifecycle
+	"dashboard-managed-access-lifecycle",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
 	"dashboard-restart-recovery",
-	// Security Policy RBAC + ratelimit apply
-	"security-policy-apply",
-}
-
-// AnthropicShimContract is the test suite that exercises the Anthropic-
-// shaped backend (llama.cpp + anthropic-shim). These tests require the
-// anthropic-shim profile and will not run correctly against the baseline
-// OpenAI-shaped backends because they assert on Anthropic-specific
-// behaviour such as cache-token synthesis and stop-reason mapping.
-var AnthropicShimContract = []string{
-	"anthropic-messages-cache-cycle",
-	"anthropic-messages-stop-sequence",
 }
 
 // Combine preserves order while removing duplicate testcase names.

@@ -1,11 +1,45 @@
 package extproc
 
 import (
+	"context"
+	"fmt"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
+
+type evalRuntimeScopeSelector struct {
+	wantScope config.RecipeName
+	model     string
+}
+
+func (s evalRuntimeScopeSelector) Select(_ context.Context, input *selection.SelectionContext) (*selection.SelectionResult, error) {
+	if input == nil || input.RecipeName != s.wantScope {
+		return nil, fmt.Errorf("Eval selector scope = %q, want %q", input.RecipeName, s.wantScope)
+	}
+	return &selection.SelectionResult{
+		SelectedModel: s.model,
+		Method:        selection.MethodLatencyAware,
+	}, nil
+}
+
+func (evalRuntimeScopeSelector) Method() selection.SelectionMethod {
+	return selection.MethodLatencyAware
+}
+
+func (evalRuntimeScopeSelector) UpdateFeedback(context.Context, *selection.Feedback) error {
+	return nil
+}
+
+func (evalRuntimeScopeSelector) Tier() selection.AlgorithmTier {
+	return selection.TierSupported
+}
+
+func (evalRuntimeScopeSelector) ExternalDependencies() []selection.Dependency {
+	return nil
+}
 
 func TestSelectModelForEvalUsesLiveMultiFactorPolicy(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{
@@ -99,5 +133,110 @@ func TestSelectModelForEvalDoesNotClaimBaseSelectorIsFinalWhenLearningCanChangeI
 	result := router.SelectModelForEval(services.EvalModelSelectionInput{Decision: decision})
 	if result.Status != services.EvalSelectionExecutionRequired || result.SelectedModel != "" {
 		t.Fatalf("learning-aware Eval selection = %+v, want no fabricated final model", result)
+	}
+}
+
+func TestSelectModelForEvalUsesEntrypointRuntimeScope(t *testing.T) {
+	const recipeName config.RecipeName = "shared"
+	const (
+		recipeID   = "recipe-shared"
+		decisionID = "decision-choose"
+	)
+	model := func(id string) config.ModelParams {
+		return config.ModelParams{ResourceID: id, ResourceRevision: 1}
+	}
+	assignment := func(id, name string) config.RoutingModelAssignment {
+		return config.RoutingModelAssignment{
+			ModelID: id, ModelRevision: 1, ModelName: name, Weight: "1",
+		}
+	}
+	configForTest := &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"base-first": model("model-base-first"), "base-second": model("model-base-second"),
+			"edge-first": model("model-edge-first"), "edge-second": model("model-edge-second"),
+			"local-first": model("model-local-first"), "local-second": model("model-local-second"),
+		}},
+		Recipes: []config.RoutingRecipe{{
+			ID: recipeID, Revision: 1, Name: recipeName,
+			Profile: config.RoutingProfile{Decisions: []config.Decision{{
+				ID:        decisionID,
+				Name:      "choose",
+				ModelRefs: []config.ModelRef{{Model: "base-first"}, {Model: "base-second"}},
+				Algorithm: &config.AlgorithmConfig{Type: string(selection.MethodLatencyAware)},
+			}}},
+		}},
+		Entrypoints: []config.EntrypointMapping{
+			{
+				ID: "entrypoint-edge", Revision: 1, Name: "edge", ModelNames: []string{"router/edge"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-edge", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: recipeID, RecipeRevision: 1, Recipe: recipeName,
+						Assignments: map[string]config.RoutingAssignmentSet{
+							decisionID: {Models: []config.RoutingModelAssignment{
+								assignment("model-edge-first", "edge-first"),
+								assignment("model-edge-second", "edge-second"),
+							}},
+						},
+					},
+				}},
+			},
+			{
+				ID: "entrypoint-local", Revision: 1, Name: "local", ModelNames: []string{"router/local"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-local", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: recipeID, RecipeRevision: 1, Recipe: recipeName,
+						Assignments: map[string]config.RoutingAssignmentSet{
+							decisionID: {Models: []config.RoutingModelAssignment{
+								assignment("model-local-first", "local-first"),
+								assignment("model-local-second", "local-second"),
+							}},
+						},
+					},
+				}},
+			},
+		},
+	}
+	if err := configForTest.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("PrepareEntrypointRecipes() error = %v", err)
+	}
+
+	edge, edgeOK := configForTest.RecipeForRequestModel("router/edge")
+	local, localOK := configForTest.RecipeForRequestModel("router/local")
+	if !edgeOK || !localOK || edge.RuntimeScope() == local.RuntimeScope() {
+		t.Fatalf("entrypoint scopes are unavailable or shared: edge=%q local=%q", edge.RuntimeScope(), local.RuntimeScope())
+	}
+
+	registries := map[config.RecipeName]*selection.Registry{}
+	for _, entrypoint := range []struct {
+		recipe *config.RoutingRecipe
+		model  string
+	}{{edge, "edge-second"}, {local, "local-second"}} {
+		registry := selection.NewRegistry()
+		registry.Register(selection.MethodLatencyAware, evalRuntimeScopeSelector{
+			wantScope: entrypoint.recipe.RuntimeScope(),
+			model:     entrypoint.model,
+		})
+		registries[entrypoint.recipe.RuntimeScope()] = registry
+	}
+	router := &OpenAIRouter{Config: configForTest, RecipeModelSelectors: registries}
+
+	for _, entrypoint := range []struct {
+		name   string
+		recipe *config.RoutingRecipe
+		want   string
+	}{{"edge", edge, "edge-second"}, {"local", local, "local-second"}} {
+		t.Run(entrypoint.name, func(t *testing.T) {
+			result := router.SelectModelForEval(services.EvalModelSelectionInput{
+				Recipe:       recipeName,
+				RuntimeScope: entrypoint.recipe.RuntimeScope(),
+				Decision:     &entrypoint.recipe.Profile.Decisions[0],
+				Query:        "route this request",
+			})
+			if result.Status != services.EvalSelectionSelected || result.SelectedModel != entrypoint.want {
+				t.Fatalf("Eval selection = %+v, want model %q", result, entrypoint.want)
+			}
+		})
 	}
 }

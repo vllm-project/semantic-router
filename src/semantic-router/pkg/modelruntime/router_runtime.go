@@ -175,7 +175,7 @@ func embeddingRuntimeTasks(
 	component string,
 	paths embeddingPaths,
 ) (EmbeddingRuntimeState, []Task, *embeddingStateTracker) {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg.UsesRemoteEmbeddingBackend() {
 		tracker := newEmbeddingStateTracker(EmbeddingRuntimeState{
 			EmbeddingProvider: remoteEmbeddingProviderRuntimeStateFromConfig(cfg),
 		})
@@ -378,8 +378,7 @@ func batchedEmbeddingNeeds(cfg *config.RouterConfig, qwen3Path string) (bool, bo
 	semanticCacheNeedsBatched := cfg.Enabled &&
 		strings.ToLower(strings.TrimSpace(cfg.EmbeddingModel)) == "qwen3" &&
 		qwen3Path != ""
-	mlSelectionNeedsBatched := cfg.ModelSelection.Enabled &&
-		cfg.ModelSelection.ML.ModelsPath != "" &&
+	mlSelectionNeedsBatched := cfg.HasReachableMLSelection() &&
 		cfg.Qwen3ModelPath != ""
 	return semanticCacheNeedsBatched, mlSelectionNeedsBatched
 }
@@ -461,21 +460,21 @@ func toolsUseMultiModalEmbeddings(cfg *config.RouterConfig) bool {
 }
 
 func semanticCacheNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg.UsesRemoteEmbeddingBackend() {
 		return false
 	}
 	return cfg.Enabled && resolveSemanticCacheEmbeddingModel(cfg) == "bert"
 }
 
 func vectorStoreNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg.UsesRemoteEmbeddingBackend() {
 		return false
 	}
 	return cfg.VectorStore != nil && cfg.VectorStore.Enabled && cfg.VectorStore.EmbeddingModel == "bert" && !cfg.Enabled
 }
 
 func memoryNeedsBERT(cfg *config.RouterConfig) bool {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg.UsesRemoteEmbeddingBackend() {
 		return false
 	}
 	if !memoryConfigured(cfg) {
@@ -590,26 +589,26 @@ func cloneEmbeddingProviderRuntimeState(status *EmbeddingProviderRuntimeState) *
 }
 
 func remoteEmbeddingProviderRuntimeStateFromConfig(cfg *config.RouterConfig) *EmbeddingProviderRuntimeState {
-	if cfg == nil || !cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg == nil || !cfg.UsesRemoteEmbeddingBackend() {
 		return nil
 	}
 
-	apiKeyEnv := strings.TrimSpace(cfg.EmbeddingModels.Endpoint.APIKeyEnv)
+	apiKeyEnv := strings.TrimSpace(cfg.Endpoint.APIKeyEnv)
 	var apiKeyEnvSet *bool
 	if apiKeyEnv != "" {
 		value := os.Getenv(apiKeyEnv) != ""
 		apiKeyEnvSet = &value
 	}
 
-	dimension := cfg.EmbeddingModels.Endpoint.Dimensions
+	dimension := cfg.Endpoint.Dimensions
 	if dimension == 0 {
-		dimension = cfg.EmbeddingModels.EmbeddingConfig.TargetDimension
+		dimension = cfg.EmbeddingConfig.TargetDimension
 	}
 
 	return &EmbeddingProviderRuntimeState{
 		Mode:         "remote",
-		Backend:      cfg.EmbeddingModels.EmbeddingBackend(),
-		Model:        strings.TrimSpace(cfg.EmbeddingModels.Endpoint.Model),
+		Backend:      cfg.EmbeddingBackend(),
+		Model:        strings.TrimSpace(cfg.Endpoint.Model),
 		Dimension:    dimension,
 		APIKeyEnv:    apiKeyEnv,
 		APIKeyEnvSet: apiKeyEnvSet,
@@ -644,7 +643,7 @@ func remoteEmbeddingProviderProbeStatus(
 func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths embeddingPaths) {
 	logging.ComponentEvent(component, "embedding_models_init_started", map[string]interface{}{
 		"use_cpu":               cfg.UseCPU,
-		"backend":               cfg.EmbeddingModels.EmbeddingBackend(),
+		"backend":               cfg.EmbeddingBackend(),
 		"qwen3_configured":      paths.qwen3 != "",
 		"gemma_configured":      paths.gemma != "",
 		"mmbert_configured":     paths.mmBert != "",
@@ -654,7 +653,7 @@ func logEmbeddingRuntimeStart(component string, cfg *config.RouterConfig, paths 
 }
 
 func embeddingRuntimeConfigured(cfg *config.RouterConfig, paths embeddingPaths) bool {
-	return cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() || paths.hasConfiguredModels()
+	return cfg.UsesRemoteEmbeddingBackend() || paths.hasConfiguredModels()
 }
 
 func buildEmbeddingRuntimeTasks(
@@ -681,8 +680,8 @@ func remoteEmbeddingRuntimeTask(
 		BestEffort: true,
 		Run: func(ctx context.Context) error {
 			logging.ComponentEvent(component, "remote_embedding_init_started", map[string]interface{}{
-				"backend": cfg.EmbeddingModels.EmbeddingBackend(),
-				"model":   cfg.EmbeddingModels.Endpoint.Model,
+				"backend": cfg.EmbeddingBackend(),
+				"model":   cfg.Endpoint.Model,
 			})
 			provider, err := embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
 			if err != nil {

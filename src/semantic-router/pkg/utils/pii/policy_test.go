@@ -9,6 +9,7 @@ import (
 // helper to build a RouterConfig with a decision that references a PII signal
 func makeSignalBasedPIIConfig(decisionName, piiSignalName string, piiTypesAllowed []string) *config.RouterConfig {
 	return &config.RouterConfig{
+		RoutingScope: "pii-policy-test",
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{
@@ -52,6 +53,7 @@ func TestIsPIIEnabled(t *testing.T) {
 			decisionName: "nonexistent",
 			setupConfig: func() *config.RouterConfig {
 				return &config.RouterConfig{
+					RoutingScope: "pii-policy-test",
 					IntelligentRouting: config.IntelligentRouting{
 						Decisions: []config.Decision{},
 					},
@@ -73,6 +75,7 @@ func TestIsPIIEnabled(t *testing.T) {
 			setupConfig: func() *config.RouterConfig {
 				// Decision exists but has no PII signal reference in rules
 				return &config.RouterConfig{
+					RoutingScope: "pii-policy-test",
 					IntelligentRouting: config.IntelligentRouting{
 						Decisions: []config.Decision{
 							{
@@ -118,6 +121,7 @@ func TestCheckPolicy(t *testing.T) {
 			setupConfig: func() *config.RouterConfig {
 				// No PII signal reference → PII disabled
 				return &config.RouterConfig{
+					RoutingScope: "pii-policy-test",
 					IntelligentRouting: config.IntelligentRouting{
 						Decisions: []config.Decision{
 							{
@@ -356,6 +360,7 @@ func TestExtractAllContent(t *testing.T) {
 
 func TestNewPolicyChecker(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RoutingScope: "pii-policy-test",
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{
 				{
@@ -382,6 +387,7 @@ func TestNewPolicyChecker(t *testing.T) {
 
 func TestCheckPolicy_NilDecision(t *testing.T) {
 	cfg := &config.RouterConfig{
+		RoutingScope: "pii-policy-test",
 		IntelligentRouting: config.IntelligentRouting{
 			Decisions: []config.Decision{},
 		},

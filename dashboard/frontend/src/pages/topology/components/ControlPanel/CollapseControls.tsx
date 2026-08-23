@@ -1,6 +1,7 @@
 // ControlPanel/CollapseControls.tsx - Expand/Collapse all controls
 
 import React from 'react'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './ControlPanel.module.css'
 
 interface CollapseControlsProps {
@@ -14,19 +15,11 @@ export const CollapseControls: React.FC<CollapseControlsProps> = ({
 }) => {
   return (
     <div className={styles.collapseControls}>
-      <button
-        className={styles.collapseBtn}
-        onClick={onExpandAll}
-        title="Expand All"
-      >
-        ➕ Expand All
+      <button className={styles.collapseBtn} onClick={onExpandAll} title="Expand all">
+        <ProductIcon name="expand" aria-hidden="true" /> Expand all
       </button>
-      <button
-        className={styles.collapseBtn}
-        onClick={onCollapseAll}
-        title="Collapse All"
-      >
-        ➖ Collapse All
+      <button className={styles.collapseBtn} onClick={onCollapseAll} title="Collapse all">
+        <ProductIcon name="minus" aria-hidden="true" /> Collapse all
       </button>
     </div>
   )

@@ -59,29 +59,24 @@ Some prompt traffic naturally falls into recurring regions where the same model 
 ```yaml
 algorithm:
   type: kmeans
+  ml:
+    models_path: ".cache/ml-models"
+    embedding_dim: 768
+    kmeans:
+      num_clusters: 8
+      efficiency_weight: 0.0
+      pretrained_path: .cache/ml-models/kmeans_model.json
 ```
 
-### Global ML Settings
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        models_path: ".cache/ml-models"
-        embedding_dim: 768
-        kmeans:
-          num_clusters: 8
-          efficiency_weight: 0.0
-          pretrained_path: .cache/ml-models/kmeans_model.json
-```
+`algorithm.ml` belongs to this Decision. Decisions in the same Recipe must
+agree on shared settings and repeated family settings.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `num_clusters` | int | `8` | Number of K-Means clusters |
-| `efficiency_weight` | float | `0.0` | Compatibility field retained in selector configuration and artifacts; the current request-time selector does not read it |
+| `efficiency_weight` | float | `0.0` | Efficiency preference recorded with the selector configuration |
 | `pretrained_path` | string | — | Path to pre-trained KMeans model (JSON format) |
 
 ## Training

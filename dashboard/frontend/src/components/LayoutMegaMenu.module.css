@@ -80,6 +80,11 @@
   border-bottom: 0;
 }
 
+.categoryTab > svg {
+  width: 14px;
+  height: 14px;
+}
+
 .categoryTab:hover {
   color: #ffffff;
   background: #191919;
@@ -234,15 +239,38 @@
   background: #e31b23;
 }
 
+.itemLabel {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.itemLabel > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  color: #69696d;
+}
+
+.item:hover .itemLabel > svg,
+.item:focus-visible .itemLabel > svg,
+.itemActive .itemLabel > svg {
+  color: #202024;
+}
+
 .itemArrow {
   color: #8b8b8e;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
   opacity: 0;
-  transform: translate(-3px, 3px);
+  transform: translateX(-3px);
   transition:
     opacity 110ms ease,
     transform 110ms ease;
+}
+
+.itemArrow > svg {
+  width: 14px;
+  height: 14px;
 }
 
 .item:hover .itemArrow,

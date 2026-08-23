@@ -30,9 +30,9 @@ type FlowRuntimeConfig struct {
 }
 
 // WorkflowsAlgorithmConfig configures Router Flow execution for
-// decision.algorithm.type=workflows. modelRefs on the decision are the worker
-// boundary; planner.model is a control-plane model that generates or
-// synthesizes the workflow plan.
+// decision.algorithm.type=workflows. Reusable Recipe values contain only
+// workflow structure and limits. Entrypoint assignments materialize planner,
+// worker, and final Models into the derived request-local Recipe view.
 type WorkflowsAlgorithmConfig struct {
 	Mode                         string                `yaml:"mode,omitempty" json:"mode,omitempty"`
 	Template                     string                `yaml:"template,omitempty" json:"template,omitempty"`
@@ -113,16 +113,6 @@ func (c FlowRuntimeConfig) EffectiveModelNames() []string {
 	return DefaultFlowModelNames()
 }
 
-func (c *RouterConfig) ExposedFlowModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasFlowDecision() {
-		return nil
-	}
-	return c.Looper.Flow.EffectiveModelNames()
-}
-
 func normalizeFlowModelNames(names []string) []string {
 	seen := make(map[string]bool, len(names))
 	result := make([]string, 0, len(names))
@@ -135,34 +125,6 @@ func normalizeFlowModelNames(names []string) []string {
 		result = append(result, normalized)
 	}
 	return result
-}
-
-func (c *RouterConfig) IsFlowModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.Flow.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *RouterConfig) HasFlowDecision() bool {
-	if c == nil {
-		return false
-	}
-	for _, decision := range c.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmWorkflows {
-			return true
-		}
-	}
-	return false
 }
 
 func ValidateFlowRuntimeConfig(cfg FlowRuntimeConfig) error {
@@ -219,9 +181,6 @@ func validateWorkflowModeAndPlan(cfg *WorkflowsAlgorithmConfig) error {
 	default:
 		return fmt.Errorf("mode must be %q or %q, got %q", WorkflowModeStatic, WorkflowModeDynamic, cfg.Mode)
 	}
-	if mode == WorkflowModeDynamic && strings.TrimSpace(cfg.Planner.Model) == "" {
-		return fmt.Errorf("planner.model is required when mode=dynamic")
-	}
 	return validateWorkflowStaticPlanConfig(mode, cfg)
 }
 
@@ -272,9 +231,6 @@ func validateWorkflowRoleConfig(index int, role WorkflowRoleConfig) error {
 	context := fmt.Sprintf("roles[%d]", index)
 	if strings.TrimSpace(role.Name) == "" {
 		return fmt.Errorf("%s.name cannot be empty", context)
-	}
-	if len(role.Models) == 0 {
-		return fmt.Errorf("%s.models must include at least one model", context)
 	}
 	seen := map[string]bool{}
 	for i, model := range role.Models {

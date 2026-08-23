@@ -82,8 +82,8 @@ func (l *FusionLooper) applyGrounding(
 		return panel, nil, "", nil
 	}
 
-	question := extractOriginalContent(req.OriginalRequest)
-	contextText := extractGroundingContext(req.OriginalRequest)
+	question := extractOriginalContent(req.executionRequest)
+	contextText := extractGroundingContext(req.executionRequest)
 	useContext := resolveGroundingReference(cfg.GroundingReference, contextText)
 
 	if useContext {

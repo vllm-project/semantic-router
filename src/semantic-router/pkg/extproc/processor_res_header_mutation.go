@@ -9,22 +9,7 @@ import (
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
-
-// lossinessHeaderSizeLimit caps the encoded x-vsr-protocol-warnings
-// header at a conservative size well under any HTTP/2 frame limit.
-// >50 warnings already represent a deeper translation regression worth
-// investigating via the structured log rather than the header.
-const lossinessHeaderSizeLimit = 4096
-
-// protocolDefault is the wire-shape token emitted in x-vsr-inbound-
-// protocol / x-vsr-upstream-protocol when the request context did not
-// resolve an explicit protocol. The router's default contract is
-// OpenAI-compatible.
-const protocolDefault = "openai"
 
 type responseHeaderMutationBuilder struct {
 	setHeaders []*core.HeaderValueOption
@@ -73,22 +58,6 @@ func (builder *responseHeaderMutationBuilder) addKeystone(ctx *RequestContext) {
 	builder.addString(headers.VSRResponsePath, path)
 }
 
-// addProtocolMarkers emits the client/upstream protocol markers
-// (x-vsr-client-protocol, x-vsr-upstream-protocol). Per the v0.4 contract
-// (#2206) they ride on cross-protocol responses — when the inbound client
-// protocol differs from the outbound upstream protocol, i.e. a translation
-// actually happened — or when the request opted into debug headers (#2216).
-// Same-protocol non-debug calls omit them to keep the contract lean.
-func (builder *responseHeaderMutationBuilder) addProtocolMarkers(ctx *RequestContext) {
-	client := normalizeProtocol(ctx.ClientProtocol)
-	upstream := normalizeProtocol(ctx.APIFormat)
-	if client == upstream && !debugHeadersRequested(ctx) {
-		return
-	}
-	builder.addString(headers.VSRClientProtocol, client)
-	builder.addString(headers.VSRUpstreamProtocol, upstream)
-}
-
 func (builder *responseHeaderMutationBuilder) addFloat(key string, value float64) {
 	if value <= 0 {
 		return
@@ -127,120 +96,6 @@ func (builder *responseHeaderMutationBuilder) addJoined(key string, values []str
 	builder.addString(key, strings.Join(values, ","))
 }
 
-// addLossinessWarnings encodes ctx.IRExtensions.Warnings into the
-// x-vsr-protocol-warnings header, increments the per-warning Prometheus
-// counter, and emits a structured log event per warning. Returns
-// without emitting anything when warnings is empty.
-//
-// Format: comma-separated entries, each "severity;reason;field". The
-// optional Warning.Detail stays out of the header (lives in the
-// structured log) to keep the header short. If the encoded list would
-// exceed lossinessHeaderSizeLimit the builder truncates and appends a
-// synthetic "error;warnings_truncated;count=N" trailer.
-func (builder *responseHeaderMutationBuilder) addLossinessWarnings(
-	ctx *RequestContext,
-	warnings []ir.Warning,
-) {
-	if len(warnings) == 0 {
-		return
-	}
-
-	inbound := normalizeProtocol(ctx.ClientProtocol)
-	outbound := normalizeProtocol(ctx.APIFormat)
-
-	var sb strings.Builder
-	truncatedAt := -1
-	for i, w := range warnings {
-		entry := formatLossinessEntry(w)
-		separatorLen := 0
-		if sb.Len() > 0 {
-			separatorLen = 1
-		}
-		if sb.Len()+separatorLen+len(entry) > lossinessHeaderSizeLimit && sb.Len() > 0 {
-			truncatedAt = i
-			break
-		}
-		if separatorLen > 0 {
-			sb.WriteByte(',')
-		}
-		sb.WriteString(entry)
-		recordWarning(ctx, inbound, outbound, w)
-	}
-
-	if truncatedAt >= 0 {
-		trailer := fmt.Sprintf("%s;%s;count=%d",
-			ir.WarningSeverityError,
-			ir.ReasonWarningsTruncated,
-			len(warnings)-truncatedAt,
-		)
-		if sb.Len() > 0 {
-			sb.WriteByte(',')
-		}
-		sb.WriteString(trailer)
-	}
-
-	builder.addString(headers.VSRProtocolWarnings, sb.String())
-}
-
-func formatLossinessEntry(w ir.Warning) string {
-	return fmt.Sprintf("%s;%s;%s",
-		w.Severity,
-		sanitizeWarningField(string(w.Reason)),
-		sanitizeWarningField(w.Field),
-	)
-}
-
-// sanitizeWarningField percent-encodes the format separators ',' and
-// ';' so a pathological JSON-path field name cannot break the
-// single-line encoding, and strips CR/LF so a hostile value cannot
-// inject a new header line. PR2's parser never produces such paths;
-// this is belt-and-suspenders.
-func sanitizeWarningField(field string) string {
-	if !strings.ContainsAny(field, ",;\r\n") {
-		return field
-	}
-	var sb strings.Builder
-	sb.Grow(len(field))
-	for _, r := range field {
-		switch r {
-		case ',':
-			sb.WriteString("%2C")
-		case ';':
-			sb.WriteString("%3B")
-		case '\r':
-			sb.WriteString("%0D")
-		case '\n':
-			sb.WriteString("%0A")
-		default:
-			sb.WriteRune(r)
-		}
-	}
-	return sb.String()
-}
-
-func recordWarning(ctx *RequestContext, inbound, outbound string, w ir.Warning) {
-	metrics.RecordTranslationWarning(inbound, outbound, w.Severity.String(), string(w.Reason))
-	logging.ComponentDebugEvent("extproc", "translation_lossy", map[string]interface{}{
-		"request_id":        ctx.RequestID,
-		"inbound_protocol":  inbound,
-		"outbound_protocol": outbound,
-		"field":             w.Field,
-		"reason":            w.Reason,
-		"severity":          w.Severity.String(),
-		"detail":            w.Detail,
-	})
-}
-
-// normalizeProtocol returns the canonical protocol token for headers
-// and metrics, defaulting empty to "openai".
-func normalizeProtocol(value string) string {
-	v := strings.TrimSpace(value)
-	if v == "" {
-		return protocolDefault
-	}
-	return v
-}
-
 func (builder *responseHeaderMutationBuilder) mutation() *ext_proc.HeaderMutation {
 	if len(builder.setHeaders) == 0 {
 		return nil
@@ -258,23 +113,13 @@ func buildResponseHeaderMutation(
 
 	builder := newResponseHeaderMutationBuilder()
 
-	// The keystone headers, protocol markers, and protocol warnings ride on
-	// every non-cache-hit response (success or 4xx/5xx). Cache-hit responses
-	// are an exception: the IRExtensions.Warnings slice is per-request, so a
-	// cached response would attribute warnings from a different request — we
-	// skip these headers entirely on cache hits and let the cached payload
-	// flow unchanged.
+	// Keystone headers ride on every non-cache-hit response (success or
+	// 4xx/5xx). Cache hits preserve the stored response surface unchanged.
 	if !ctx.VSRCacheHit {
 		// Keystone headers (schema-version + response-path) ride on every
 		// non-cache-hit response. This function only handles upstream responses,
 		// so the path defaults to "upstream".
 		builder.addKeystone(ctx)
-		// Client/upstream protocol markers ride only on cross-protocol responses
-		// (#2206); same-protocol calls omit them.
-		builder.addProtocolMarkers(ctx)
-		if ctx.IRExtensions != nil {
-			builder.addLossinessWarnings(ctx, ctx.IRExtensions.Warnings)
-		}
 	}
 
 	if !isSuccessful || ctx.VSRCacheHit {
@@ -409,7 +254,7 @@ func learningPolicyMethodsHeader(ctx *RequestContext) string {
 	}
 	values := make([]string, 0, len(policies))
 	for _, policy := range policies {
-		values = append(values, sanitizeWarningField(string(policy.Method)))
+		values = append(values, sanitizeDelimitedHeaderField(string(policy.Method)))
 	}
 	return strings.Join(values, ",")
 }
@@ -425,9 +270,36 @@ func learningPolicyPairHeader(ctx *RequestContext, field routerLearningPolicyFie
 		if value == "" {
 			continue
 		}
-		pairs = append(pairs, sanitizeWarningField(string(policy.Method))+"="+sanitizeWarningField(value))
+		pairs = append(pairs, sanitizeDelimitedHeaderField(string(policy.Method))+"="+sanitizeDelimitedHeaderField(value))
 	}
 	return strings.Join(pairs, ",")
+}
+
+// sanitizeDelimitedHeaderField keeps one server-owned value inside the
+// comma/semicolon-delimited diagnostic header grammar. Encoding rather than
+// dropping separators makes the representation deterministic and prevents
+// control characters from creating another header line.
+func sanitizeDelimitedHeaderField(value string) string {
+	if !strings.ContainsAny(value, ",;\r\n") {
+		return value
+	}
+	var encoded strings.Builder
+	encoded.Grow(len(value))
+	for _, character := range value {
+		switch character {
+		case ',':
+			encoded.WriteString("%2C")
+		case ';':
+			encoded.WriteString("%3B")
+		case '\r':
+			encoded.WriteString("%0D")
+		case '\n':
+			encoded.WriteString("%0A")
+		default:
+			encoded.WriteRune(character)
+		}
+	}
+	return encoded.String()
 }
 
 func learningPoliciesForHeaders(ctx *RequestContext) []routerLearningPolicy {

@@ -1,7 +1,14 @@
 .modelIdentity {
   display: grid;
-  min-width: 220px;
+  min-width: 0;
   gap: 0.32rem;
+}
+
+.modelIdentityWithLogo {
+  display: flex;
+  min-width: 260px;
+  align-items: center;
+  gap: 12px;
 }
 
 .modelIdentityPrimary {
@@ -64,16 +71,9 @@
 }
 
 .liveVerification {
-  display: grid;
-  min-width: 210px;
-  gap: 0.34rem;
-}
-
-.liveVerificationHeading {
   display: flex;
   align-items: center;
-  min-width: 0;
-  gap: 0.42rem;
+  min-width: 90px;
 }
 
 .liveVerificationDot {
@@ -147,9 +147,14 @@
 }
 
 .liveVerificationButton {
+  display: inline-flex;
   width: fit-content;
-  min-height: 28px;
-  padding: 0.28rem 0.58rem;
+  min-width: 72px;
+  min-height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.55rem;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   background: rgba(255, 255, 255, 0.045);
@@ -324,6 +329,98 @@
   border: 1px solid rgba(254, 202, 202, 0.2);
   background: transparent;
   color: #fecaca;
+}
+
+.reasoningFamilyTable {
+  background: #0d0d0f;
+}
+
+.reasoningFamilyIdentity {
+  display: flex;
+  min-width: 260px;
+  align-items: center;
+  gap: 12px;
+}
+
+.reasoningFamilyGlyph {
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(227, 27, 35, 0.24);
+  border-radius: 9px;
+  background: linear-gradient(145deg, rgba(227, 27, 35, 0.13), rgba(255, 255, 255, 0.025));
+  color: #ffb4b7;
+}
+
+.reasoningFamilyGlyph svg {
+  width: 20px;
+  height: 20px;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.55;
+}
+
+.reasoningFamilyCopy,
+.reasoningFamilyType > span {
+  display: grid;
+  min-width: 0;
+  gap: 0.28rem;
+}
+
+.reasoningFamilyCopy strong,
+.reasoningFamilyType strong {
+  overflow: hidden;
+  color: #f5f5f7;
+  font-size: 0.84rem;
+  font-weight: 660;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reasoningFamilyCopy small,
+.reasoningFamilyType small {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.69rem;
+}
+
+.reasoningFamilyType {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.reasoningFamilyType > i {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #f05a60;
+  box-shadow: 0 0 0 4px rgba(227, 27, 35, 0.1);
+}
+
+.reasoningFamilyType small {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
+.reasoningFamilyParameter {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0.4rem 0.56rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.68);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .inventoryToolbar + .bulkBar,

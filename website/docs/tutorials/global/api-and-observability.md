@@ -30,23 +30,15 @@ Use these blocks when:
 
 ## Configuration
 
-### Router config validation
+### Routing configuration
 
-The management API validates and normalizes a candidate config without writing
-it:
+Standalone compiles one read-only manifest before readiness. Validate that file
+offline with `vllm-sr validate`; the standalone listener has no config mutation,
+Recipe authoring, knowledge-base authoring, backup, rollback, or runtime-sync API.
 
-```http
-POST /config/router/validate
-Content-Type: application/json
-
-{"yaml":"version: v0.3\n..."}
-```
-
-Successful responses include `valid: true` and the normalized canonical YAML.
-Validation uses the same parser and semantic checks as `PATCH /config/router`
-and `PUT /config/router`, but preserves `${ENV_VAR}` references verbatim rather
-than reading process secrets. The endpoint requires `config.read`; plaintext
-secret viewing is not implied.
+Managed deployments create Models, Recipes, and Entrypoints through the Router's
+versioned `/management/v1` resources. This keeps PostgreSQL-backed desired state as
+the only mutable routing authority.
 
 ### API
 
@@ -67,7 +59,7 @@ global:
   services:
     response_api:
       enabled: true
-      store_backend: redis        # default; use "memory" only for local development
+      store_backend: redis        # configure explicitly for durable, shared history
       redis:
         address: "redis:6379"
 ```
@@ -76,8 +68,8 @@ The `store_backend` field controls where response and conversation history is pe
 
 | Backend | Durability | Use case |
 |---------|-----------|----------|
-| `redis` | Survives router restart, shared across replicas | Production (default) |
-| `memory` | Lost on router restart | Local development only |
+| `memory` | Lost on router restart | Standalone default; no external dependency |
+| `redis` | Survives router restart, shared across replicas | Managed and multi-replica deployments |
 
 ### Observability
 
@@ -118,37 +110,41 @@ Common Prometheus metric families:
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
 
-### Skip Processing Header
+### Managed usage and request history
 
-`global.router.skip_processing.enabled` is the deployment-level gate that
-opts the router into honoring the `x-vsr-skip-processing` request header.
-When the gate is on and an upstream filter sets that header to `true`, the
-router becomes a no-op for that single request — every Envoy ext_proc
-callback returns CONTINUE without classifying, routing, mutating, caching,
-or inspecting the request or upstream response. When the gate is off (the
-default) the header is ignored entirely.
+In a managed deployment, Router also exposes durable, tenant-scoped accounting from
+its Management API:
 
-```yaml
-global:
-  router:
-    skip_processing:
-      enabled: false        # default; flip to true to honor the header
+```text
+GET /management/v1/usage
+GET /management/v1/usage/series
+GET /management/v1/usage/breakdowns
+GET /management/v1/users/{userId}/usage
+GET /management/v1/teams/{teamId}/usage
+GET /management/v1/api-keys/{keyId}/usage
+GET /management/v1/request-logs
+GET /management/v1/namespaces/{namespaceId}/request-logs/{admissionId}
 ```
 
-The Helm chart exposes the same gate as a top-level value
-(`router.skipProcessing.enabled`) so it can be enabled at install time
-without editing the embedded canonical config:
+The three resource-detail usage routes return the same summary shape as the main
+usage route, but Router fixes the subject filter to the resource in the URL. A denied
+or unknown resource returns the same nondisclosing response. Clients may still choose
+the bounded time range, time zone, minute/hour/day grain, and other dimensions that
+their Management session is allowed to inspect.
 
-```bash
-helm install vsr ./deploy/helm/semantic-router \
-  --set router.skipProcessing.enabled=true
-```
+Usage totals come from immutable request accounting and verified rollups. Live quota
+remaining comes from the global counter engine instead; clients should not subtract
+historical usage from a configured limit. Request history uses opaque cursor
+pagination and an `admission_id` for exact detail, so large datasets do not require
+offset scans. Internal Model, provider, and dispatch dimensions are omitted unless
+the caller has their explicit read permission.
 
-Enable this gate only when an authenticated upstream filter (Envoy AI
-Gateway, ext_authz, route-level filters, etc.) is responsible for setting
-or stripping the header on trust grounds. Background on the AI Gateway
-interop pattern that motivates this gate lives in
-[issue #1808](https://github.com/vllm-project/semantic-router/issues/1808).
+Every Usage summary and breakdown includes exact cost summaries when Model pricing is
+configured. An API-key detail view should fetch both its `/usage` and `/quota`
+resources: Usage reports actual historical spend, while a live `cost` meter reports
+the enforced limit, remaining amount, currency, reset time, and completeness. A
+sliding rule may use any supported bounded duration—for example, `window: PT8H`—and the
+Router settles it from authoritative response tokens and the pinned Model price.
 
 ### Router Replay
 

@@ -1,6 +1,7 @@
 import styles from './ExpressionBuilder.module.css'
 import { DRAG_MIME, encodeDrag, type SignalDescriptor } from './ExpressionBuilderSupport'
 import { OPERATOR_META, OPERATOR_ORDER } from './ExpressionBuilderNodes'
+import ProductIcon from './ProductIcon'
 
 interface ExpressionBuilderToolboxProps {
   collapsedGroups: Set<string>
@@ -27,29 +28,40 @@ export default function ExpressionBuilderToolbox({
 }: ExpressionBuilderToolboxProps) {
   return (
     <div className={`${styles.toolbox} ${toolboxCollapsed ? styles.toolboxCollapsed : ''}`}>
-      <div className={styles.toolboxHeader} onClick={onToggleCollapsed}>
-        <span className={styles.toolboxHeaderTitle}>{toolboxCollapsed ? '▶' : '▼'} Toolbox</span>
+      <button
+        type="button"
+        className={styles.toolboxHeader}
+        onClick={onToggleCollapsed}
+        aria-expanded={!toolboxCollapsed}
+      >
+        <span className={styles.toolboxHeaderTitle}>
+          <ProductIcon
+            name={toolboxCollapsed ? 'chevron-right' : 'chevron-down'}
+            aria-hidden="true"
+          />
+          Toolbox
+        </span>
         <span className={styles.toolboxHeaderCount}>{signalCount} signals</span>
-      </div>
+      </button>
 
       {!toolboxCollapsed ? (
         <div className={styles.toolboxContent}>
           <div className={styles.toolboxOperators}>
-            {OPERATOR_ORDER.map(operator => {
+            {OPERATOR_ORDER.map((operator) => {
               const meta = OPERATOR_META[operator]
               return (
                 <div
                   key={operator}
                   className={`${styles.toolboxOp} ${styles[`toolboxOp${operator}`]}`}
                   draggable
-                  onDragStart={event => {
+                  onDragStart={(event) => {
                     event.dataTransfer.setData(
                       DRAG_MIME,
-                      encodeDrag({ kind: 'operator', operator })
+                      encodeDrag({ kind: 'operator', operator }),
                     )
                     event.dataTransfer.effectAllowed = 'copyMove'
                   }}
-                  onClick={event => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
                   title={`Drag ${operator} gate to canvas`}
                 >
                   <span className={styles.toolboxOpIcon} style={{ color: meta.color }}>
@@ -60,8 +72,9 @@ export default function ExpressionBuilderToolbox({
               )
             })}
             <button
+              type="button"
               className={styles.clearBtn}
-              onClick={event => {
+              onClick={(event) => {
                 event.stopPropagation()
                 onClear()
               }}
@@ -74,16 +87,18 @@ export default function ExpressionBuilderToolbox({
             <input
               className={styles.toolboxSearchInput}
               value={signalSearch}
-              onChange={event => onSignalSearchChange(event.target.value)}
+              onChange={(event) => onSignalSearchChange(event.target.value)}
               placeholder="Search signals..."
-              onClick={event => event.stopPropagation()}
+              onClick={(event) => event.stopPropagation()}
             />
             {signalSearch ? (
               <button
+                type="button"
                 className={styles.toolboxSearchClear}
                 onClick={() => onSignalSearchChange('')}
+                aria-label="Clear signal search"
               >
-                ×
+                <ProductIcon name="close" />
               </button>
             ) : null}
           </div>
@@ -94,36 +109,42 @@ export default function ExpressionBuilderToolbox({
 
               return (
                 <div key={type} className={styles.signalGroup}>
-                  <div
+                  <button
+                    type="button"
                     className={styles.signalGroupHeader}
-                    onClick={event => {
+                    onClick={(event) => {
                       event.stopPropagation()
                       onToggleGroup(type)
                     }}
+                    aria-expanded={!collapsed}
                   >
-                    <span className={styles.signalGroupToggle}>{collapsed ? '▶' : '▼'}</span>
+                    <ProductIcon
+                      className={styles.signalGroupToggle}
+                      name={collapsed ? 'chevron-right' : 'chevron-down'}
+                      aria-hidden="true"
+                    />
                     <span className={styles.signalGroupName}>{type}</span>
                     <span className={styles.signalGroupCount}>{signals.length}</span>
-                  </div>
+                  </button>
                   {!collapsed ? (
                     <div className={styles.signalGroupItems}>
-                      {signals.map(signal => (
+                      {signals.map((signal) => (
                         <div
                           key={`${signal.signalType}-${signal.name}`}
                           className={styles.toolboxChip}
                           draggable
-                          onDragStart={event => {
+                          onDragStart={(event) => {
                             event.dataTransfer.setData(
                               DRAG_MIME,
                               encodeDrag({
                                 kind: 'signal',
                                 signalType: signal.signalType,
                                 signalName: signal.name,
-                              })
+                              }),
                             )
                             event.dataTransfer.effectAllowed = 'copyMove'
                           }}
-                          onClick={event => event.stopPropagation()}
+                          onClick={(event) => event.stopPropagation()}
                           title={`Drag to canvas to add ${signal.signalType}("${signal.name}")`}
                         >
                           {signal.name}

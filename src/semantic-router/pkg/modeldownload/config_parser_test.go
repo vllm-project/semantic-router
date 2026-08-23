@@ -1,6 +1,7 @@
 package modeldownload
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -9,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercatalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercomposition"
 )
 
 var expectedAMDModelSpecs = []string{
@@ -16,6 +19,70 @@ var expectedAMDModelSpecs = []string{
 	"models/mmbert32k-intent-classifier-merged",
 	"models/mmbert32k-factcheck-classifier-merged",
 	"models/mmbert32k-feedback-detector-merged",
+}
+
+func modelDownloadAuthoringParser(t *testing.T) *config.Parser {
+	t.Helper()
+	compiler, err := providercomposition.NewAuthoringCompiler(
+		providercatalog.BuiltinIntegrations(),
+		[]providercatalog.BackendCompiler{providercatalog.StaticBackendCompiler{}},
+	)
+	if err != nil {
+		t.Fatalf("compose test Provider Integrations: %v", err)
+	}
+	return config.NewParser(compiler)
+}
+
+// bindTestRecipeEntrypoint converts a focused flat test fixture into the same
+// explicit Recipe + Entrypoint graph consumed by runtime provisioning. Root
+// routing fields are intentionally not treated as an implicit default Recipe.
+func bindTestRecipeEntrypoint(t *testing.T, cfg *config.RouterConfig) *config.RouterConfig {
+	t.Helper()
+	const (
+		recipeID     = "recipe-model-download-test"
+		entrypointID = "entrypoint-model-download-test"
+		modelID      = "model-model-download-test"
+		modelName    = "test/backend"
+	)
+
+	profile := config.RoutingProfile{
+		Signals:     cfg.Signals,
+		Projections: cfg.Projections,
+		Decisions:   cfg.Decisions,
+		Strategy:    cfg.Strategy,
+	}
+	assignments := make(map[string]config.RoutingAssignmentSet, len(profile.Decisions))
+	for index := range profile.Decisions {
+		decisionID := fmt.Sprintf("decision-model-download-test-%d", index)
+		profile.Decisions[index].ID = decisionID
+		assignments[decisionID] = config.RoutingAssignmentSet{Models: []config.RoutingModelAssignment{{
+			ModelID: modelID, ModelRevision: 1, ModelName: modelName, Weight: "1",
+		}}}
+	}
+
+	if cfg.ModelConfig == nil {
+		cfg.ModelConfig = make(map[string]config.ModelParams)
+	}
+	cfg.ModelConfig[modelName] = config.ModelParams{ResourceID: modelID, ResourceRevision: 1}
+	cfg.Recipes = []config.RoutingRecipe{{
+		ID: recipeID, Revision: 1, Name: "model-download-test", Profile: profile,
+	}}
+	cfg.Entrypoints = []config.EntrypointMapping{{
+		ID: entrypointID, Revision: 1, Name: "model-download-test",
+		ModelNames: []string{"test/mixture"},
+		Rules: []config.EntrypointRule{{
+			ID: "entrypoint-rule-model-download-test", Name: "default",
+			Action: config.EntrypointRuleAction{
+				RecipeID: recipeID, RecipeRevision: 1, Recipe: "model-download-test",
+				Assignments: assignments,
+			},
+		}},
+	}}
+	cfg.IntelligentRouting = config.IntelligentRouting{}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("PrepareEntrypointRecipes() error = %v", err)
+	}
+	return cfg
 }
 
 func TestExtractModelPaths(t *testing.T) {
@@ -227,6 +294,7 @@ func TestBuildModelSpecsIncludesConfigDerivedRequiredFiles(t *testing.T) {
 			}},
 		},
 	}
+	cfg = bindTestRecipeEntrypoint(t, cfg)
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -298,6 +366,7 @@ func TestBuildModelSpecsIncludesFactCheckClassifierWhenSignalConfigured(t *testi
 			},
 		},
 	}
+	cfg = bindTestRecipeEntrypoint(t, cfg)
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -342,6 +411,7 @@ func TestBuildModelSpecsSkipsUnusedCoreClassifierModels(t *testing.T) {
 			}},
 		},
 	}
+	cfg = bindTestRecipeEntrypoint(t, cfg)
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -387,6 +457,7 @@ func TestBuildModelSpecsIncludesUsedCoreClassifierModels(t *testing.T) {
 			}},
 		},
 	}
+	cfg = bindTestRecipeEntrypoint(t, cfg)
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -436,6 +507,7 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 			}},
 		},
 	}
+	cfg = bindTestRecipeEntrypoint(t, cfg)
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -450,36 +522,32 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 }
 
 func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+	cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes([]byte(`
+version: v0.4
 listeners:
   - name: http-8888
     address: 0.0.0.0
     port: 8888
-providers:
-  defaults:
-    default_model: openai/gpt-oss-120b
-  models:
-    - name: openai/gpt-oss-120b
-      provider_model_id: openai/gpt-oss-120b
-      backend_refs:
-        - name: primary
-          endpoint: localhost:8000
-          protocol: http
-          weight: 100
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
-      modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
+models:
+  - name: openai/gpt-oss-120b
+    card: {modality: text}
+    connections:
+      - provider: vllm
+        endpoint: http://127.0.0.1:8000
+        model: openai/gpt-oss-120b
+recipes:
+  - name: default
+    document:
+      decisions:
+        - name: default-route
+          priority: 100
+          rules: {operator: AND, conditions: []}
+entrypoints:
+  - name: vllm-sr/default
+    recipe: default
+    assignments:
+      default-route:
+        models: [{model: openai/gpt-oss-120b}]
 `))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
@@ -496,36 +564,32 @@ routing:
 }
 
 func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(`
-version: v0.3
+	cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes([]byte(`
+version: v0.4
 listeners:
   - name: http-8888
     address: 0.0.0.0
     port: 8888
-providers:
-  defaults:
-    default_model: openai/gpt-oss-120b
-  models:
-    - name: openai/gpt-oss-120b
-      provider_model_id: openai/gpt-oss-120b
-      backend_refs:
-        - name: primary
-          endpoint: localhost:8000
-          protocol: http
-          weight: 100
-routing:
-  modelCards:
-    - name: openai/gpt-oss-120b
-      modality: text
-  decisions:
-    - name: default-route
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
+models:
+  - name: openai/gpt-oss-120b
+    card: {modality: text}
+    connections:
+      - provider: vllm
+        endpoint: http://127.0.0.1:8000
+        model: openai/gpt-oss-120b
+recipes:
+  - name: default
+    document:
+      decisions:
+        - name: default-route
+          priority: 100
+          rules: {operator: AND, conditions: []}
+entrypoints:
+  - name: vllm-sr/default
+    recipe: default
+    assignments:
+      default-route:
+        models: [{model: openai/gpt-oss-120b}]
 global:
   model_catalog:
     embeddings:
@@ -597,7 +661,7 @@ func TestBuildModelSpecsAcceptsReferenceConfig(t *testing.T) {
 		t.Fatalf("read %s: %v", configPath, err)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
+	cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes(data)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
@@ -628,7 +692,7 @@ func TestBuildModelSpecsIncludesAllAMDDeployModels(t *testing.T) {
 		t.Fatalf("read %s: %v", configPath, err)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
+	cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes(data)
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
@@ -664,7 +728,7 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForAgentSmokeConfigs(t *testing.
 				t.Fatalf("read %s: %v", configPath, err)
 			}
 
-			cfg, err := config.ParseYAMLBytes(data)
+			cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes(data)
 			if err != nil {
 				t.Fatalf("ParseYAMLBytes() error = %v", err)
 			}
@@ -698,7 +762,7 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForMemoryE2EConfigs(t *testing.T
 				t.Fatalf("read %s: %v", configPath, err)
 			}
 
-			cfg, err := config.ParseYAMLBytes(data)
+			cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes(data)
 			if err != nil {
 				t.Fatalf("ParseYAMLBytes() error = %v", err)
 			}

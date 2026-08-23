@@ -153,7 +153,7 @@ Open checkpoints can travel with the artifact; closed models remain authenticate
 
 Preferences become concrete when they are published as model identities. One MoM family can offer several operating points:
 
-The built-in identities currently shipped by the CLI are listed below. Run `vllm-sr model list` for the authoritative catalog state.
+The built-in identities are listed below. Open **Mixture-of-Models** in the Dashboard for the authoritative state of the active control plane.
 
 | Model identity | Contract |
 | --- | --- |

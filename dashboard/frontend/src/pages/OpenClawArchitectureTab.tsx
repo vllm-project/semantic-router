@@ -1,10 +1,7 @@
 import React, { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import styles from './OpenClawPage.module.css'
-import {
-  OPENCLAW_FEATURES,
-  type OpenClawStatus,
-} from './OpenClawPageSupport'
+import { OPENCLAW_FEATURES, type OpenClawStatus } from './OpenClawPageSupport'
 
 export const ArchitectureTab: React.FC<{
   containers: OpenClawStatus[]
@@ -15,12 +12,16 @@ export const ArchitectureTab: React.FC<{
     const noRedNodeLabels = new Set(['memory claw', 'analyst claw'])
     const primary = containers
       .slice()
-      .sort((a, b) => Number(b.healthy) - Number(a.healthy) || Number(b.running) - Number(a.running))
+      .sort(
+        (a, b) => Number(b.healthy) - Number(a.healthy) || Number(b.running) - Number(a.running),
+      )
       .slice(0, 4)
-      .map(container => {
-        const label = (container.agentName || container.containerName).trim() || container.containerName
+      .map((container) => {
+        const label =
+          (container.agentName || container.containerName).trim() || container.containerName
         const rawState = container.healthy ? 'healthy' : container.running ? 'starting' : 'stopped'
-        const state = noRedNodeLabels.has(label.toLowerCase()) && rawState === 'stopped' ? 'healthy' : rawState
+        const state =
+          noRedNodeLabels.has(label.toLowerCase()) && rawState === 'stopped' ? 'healthy' : rawState
         return {
           id: container.containerName,
           label,
@@ -30,13 +31,28 @@ export const ArchitectureTab: React.FC<{
       })
 
     const fallback = [
-      { id: 'routing-claw', label: 'Routing Claw', role: 'Intent Router', state: 'healthy' as const },
+      {
+        id: 'routing-claw',
+        label: 'Routing Claw',
+        role: 'Intent Router',
+        state: 'healthy' as const,
+      },
       { id: 'guard-claw', label: 'Guard Claw', role: 'Safety Guard', state: 'healthy' as const },
-      { id: 'memory-claw', label: 'Memory Claw', role: 'Context Keeper', state: 'healthy' as const },
-      { id: 'planner-claw', label: 'Planner Claw', role: 'Task Planner', state: 'healthy' as const },
+      {
+        id: 'memory-claw',
+        label: 'Memory Claw',
+        role: 'Context Keeper',
+        state: 'healthy' as const,
+      },
+      {
+        id: 'planner-claw',
+        label: 'Planner Claw',
+        role: 'Task Planner',
+        state: 'healthy' as const,
+      },
     ]
 
-    const used = new Set(primary.map(node => node.label.toLowerCase()))
+    const used = new Set(primary.map((node) => node.label.toLowerCase()))
     const merged = [...primary]
     for (const node of fallback) {
       if (merged.length >= 4) break
@@ -49,14 +65,38 @@ export const ArchitectureTab: React.FC<{
 
   const modelNodes = useMemo(() => {
     return [
-      { name: 'General Domain · Small', family: 'Fast intent triage, concise answers, low-latency chat turns.' },
-      { name: 'General Domain · Large', family: 'Deep multi-turn dialogue, synthesis, and broader world knowledge.' },
-      { name: 'Coding Domain · Small', family: 'Lightweight code edits, lint-aware fixes, and script scaffolding.' },
-      { name: 'Coding Domain · Large', family: 'Architecture refactors, debugging traces, and complex code generation.' },
-      { name: 'Multimodal Vision-Language Pool', family: 'Image-grounded understanding, visual QA, and scene-aware dialogue.' },
-      { name: 'Multimodal Audio-Speech Pool', family: 'Speech understanding, voice instructions, and audio-event interpretation.' },
-      { name: 'Multimodal Document-Insight Pool', family: 'PDF/table/chart comprehension with cross-page evidence synthesis.' },
-      { name: 'Multimodal Action-Orchestration Pool', family: 'Grounded tool calling over text, image, and structured interface states.' },
+      {
+        name: 'General Domain · Small',
+        family: 'Fast intent triage, concise answers, low-latency chat turns.',
+      },
+      {
+        name: 'General Domain · Large',
+        family: 'Deep multi-turn dialogue, synthesis, and broader world knowledge.',
+      },
+      {
+        name: 'Coding Domain · Small',
+        family: 'Lightweight code edits, lint-aware fixes, and script scaffolding.',
+      },
+      {
+        name: 'Coding Domain · Large',
+        family: 'Architecture refactors, debugging traces, and complex code generation.',
+      },
+      {
+        name: 'Multimodal Vision-Language Pool',
+        family: 'Image-grounded understanding, visual QA, and scene-aware dialogue.',
+      },
+      {
+        name: 'Multimodal Audio-Speech Pool',
+        family: 'Speech understanding, voice instructions, and audio-event interpretation.',
+      },
+      {
+        name: 'Multimodal Document-Insight Pool',
+        family: 'PDF/table/chart comprehension with cross-page evidence synthesis.',
+      },
+      {
+        name: 'Multimodal Action-Orchestration Pool',
+        family: 'Grounded tool calling over text, image, and structured interface states.',
+      },
     ]
   }, [])
 
@@ -68,7 +108,8 @@ export const ArchitectureTab: React.FC<{
             <span className={styles.kernelBadge}>Full Mesh</span>
             <h3 className={styles.kernelTitle}>Claw Operating System</h3>
             <p className={styles.kernelSubtitle}>
-              Top-layer Claws route intent into Semantic Router. Kernel capabilities then project requests into the model mesh.
+              Top-layer Claws route intent into Semantic Router. Kernel capabilities then project
+              requests into the model mesh.
             </p>
           </div>
           <div className={styles.kernelMeta}>
@@ -105,7 +146,12 @@ export const ArchitectureTab: React.FC<{
                 >
                   <div className={styles.kernelClawNodeHead}>
                     <span className={styles.kernelClawNodeLogoWrap}>
-                      <img className={styles.kernelClawNodeLogo} src="/openclaw.svg" alt="" aria-hidden="true" />
+                      <img
+                        className={styles.kernelClawNodeLogo}
+                        src="/openclaw.svg"
+                        alt=""
+                        aria-hidden="true"
+                      />
                     </span>
                     <div className={styles.kernelNodeTitle}>{node.label}</div>
                   </div>
@@ -150,8 +196,9 @@ export const ArchitectureTab: React.FC<{
               <div className={styles.kernelCoreLead}>
                 <h4 className={styles.kernelCoreTitle}>Signal Driven Decision Runtime</h4>
                 <p className={styles.kernelCoreDescription}>
-                  Semantic Router acts as a control plane: it manages routing policy, safety, context lifecycle,
-                  cross-claw memory sharing, and isolation before dispatching requests to model pools.
+                  Semantic Router acts as a control plane: it manages routing policy, safety,
+                  context lifecycle, cross-claw memory sharing, and isolation before dispatching
+                  each request to its selected model.
                 </p>
               </div>
               <div className={styles.kernelFeatureGrid}>

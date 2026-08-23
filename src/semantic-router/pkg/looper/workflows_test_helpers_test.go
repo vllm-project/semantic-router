@@ -13,7 +13,21 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
+
+func workflowSemanticTestRequest(request *openai.ChatCompletionNewParams) *llmprotocol.Request {
+	body, err := json.Marshal(request)
+	if err != nil {
+		panic(err)
+	}
+	semantic, _, _, err := protocolcodec.NewBuiltinEngine().DecodeRequest(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		panic(err)
+	}
+	return &semantic
+}
 
 func workflowTestRequest() *openai.ChatCompletionNewParams {
 	return &openai.ChatCompletionNewParams{
@@ -37,51 +51,6 @@ func workflowToolTestRequest() *openai.ChatCompletionNewParams {
 			}
 		}],
 		"tool_choice":"auto"
-	}`)
-	var req openai.ChatCompletionNewParams
-	if err := json.Unmarshal(raw, &req); err != nil {
-		panic(err)
-	}
-	return &req
-}
-
-func workflowMixedToolSchemasTestRequest() *openai.ChatCompletionNewParams {
-	raw := []byte(`{
-		"model":"vllm-sr/flow",
-		"messages":[{"role":"user","content":"Use callable context when needed."}],
-		"tools":[{
-			"type":"function",
-			"function":{
-				"name":"lookup",
-				"description":"Look up a value.",
-				"parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}
-			}
-		}],
-		"tool_choice":"auto",
-		"functions":[{
-			"name":"legacy_lookup",
-			"description":"Legacy lookup.",
-			"parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}
-		}],
-		"function_call":"auto"
-	}`)
-	var req openai.ChatCompletionNewParams
-	if err := json.Unmarshal(raw, &req); err != nil {
-		panic(err)
-	}
-	return &req
-}
-
-func workflowLegacyFunctionTestRequest() *openai.ChatCompletionNewParams {
-	raw := []byte(`{
-		"model":"vllm-sr/flow",
-		"messages":[{"role":"user","content":"Use the legacy function, then answer."}],
-		"functions":[{
-			"name":"legacy_lookup",
-			"description":"Legacy lookup.",
-			"parameters":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}
-		}],
-		"function_call":"auto"
 	}`)
 	var req openai.ChatCompletionNewParams
 	if err := json.Unmarshal(raw, &req); err != nil {
@@ -144,9 +113,22 @@ func workflowToolResumeRequestWithIDs(t *testing.T, assistant map[string]interfa
 }
 
 func workflowToolLooperRequest(req *openai.ChatCompletionNewParams) *Request {
+	return workflowToolLooperRequestWithSemantic(req, workflowSemanticTestRequest(req))
+}
+
+// workflowToolStateValidationRequest exercises Looper's state-level validation
+// after the public protocol boundary has already supplied a canonical request.
+// It is intentionally limited to malformed resume-message unit tests: ordinary
+// callers must use workflowToolLooperRequest so the codec contract is enforced.
+func workflowToolStateValidationRequest(req *openai.ChatCompletionNewParams) *Request {
+	return workflowToolLooperRequestWithSemantic(req, workflowSemanticTestRequest(workflowToolTestRequest()))
+}
+
+func workflowToolLooperRequestWithSemantic(req *openai.ChatCompletionNewParams, semantic *llmprotocol.Request) *Request {
 	includeTrace := true
 	return &Request{
-		OriginalRequest: req,
+		SemanticRequest:  semantic,
+		executionRequest: req,
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-model"},
 			{Model: "verifier-model"},
@@ -185,7 +167,8 @@ func workflowParallelToolLooperRequest(req *openai.ChatCompletionNewParams) *Req
 func workflowTwoStepToolLooperRequest(req *openai.ChatCompletionNewParams) *Request {
 	includeTrace := true
 	return &Request{
-		OriginalRequest: req,
+		SemanticRequest:  workflowSemanticTestRequest(req),
+		executionRequest: req,
 		ModelRefs: []config.ModelRef{
 			{Model: "thinker-model"},
 			{Model: "worker-model"},
@@ -212,7 +195,8 @@ func workflowTwoStepToolLooperRequest(req *openai.ChatCompletionNewParams) *Requ
 func workflowAccessListToolLooperRequest(req *openai.ChatCompletionNewParams) *Request {
 	includeTrace := true
 	return &Request{
-		OriginalRequest: req,
+		SemanticRequest:  workflowSemanticTestRequest(req),
+		executionRequest: req,
 		ModelRefs: []config.ModelRef{
 			{Model: "worker-a"},
 			{Model: "worker-b"},
@@ -306,24 +290,6 @@ func workflowMultipleToolCallCompletion(model string, toolCallIDs ...string) []b
 	return data
 }
 
-func workflowLegacyFunctionCallCompletion(model string) []byte {
-	return []byte(`{
-		"id":"chatcmpl-function-worker",
-		"object":"chat.completion",
-		"created":0,
-		"model":"` + model + `",
-		"choices":[{
-			"index":0,
-			"message":{
-				"role":"assistant",
-				"content":null,
-				"function_call":{"name":"legacy_lookup","arguments":"{\"query\":\"flow\"}"}
-			},
-			"finish_reason":"function_call"
-		}]
-	}`)
-}
-
 func workflowChatCompletion(model string, content string) []byte {
 	body := map[string]interface{}{
 		"id":      "chatcmpl-test",
@@ -343,6 +309,39 @@ func workflowChatCompletion(model string, content string) []byte {
 	}
 	data, _ := json.Marshal(body)
 	return data
+}
+
+func workflowCompletionWithUsage(t *testing.T, body []byte, usage TokenUsage) []byte {
+	t.Helper()
+	var payload map[string]interface{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		t.Fatalf("parse workflow completion: %v", err)
+	}
+	payload["usage"] = tokenUsageMapForTest(usage)
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("marshal workflow completion with usage: %v", err)
+	}
+	return data
+}
+
+func requireWorkflowResponseUsage(t *testing.T, response *Response, want TokenUsage) {
+	t.Helper()
+	if response == nil {
+		t.Fatal("workflow response is nil")
+	}
+	if response.Usage != want {
+		t.Fatalf("workflow response usage = %+v, want %+v", response.Usage, want)
+	}
+	var payload struct {
+		Usage TokenUsage `json:"usage"`
+	}
+	if err := json.Unmarshal(wireResponseForTest(t, response), &payload); err != nil {
+		t.Fatalf("parse workflow response usage: %v", err)
+	}
+	if payload.Usage != want {
+		t.Fatalf("workflow response body usage = %+v, want %+v", payload.Usage, want)
+	}
 }
 
 func assistantToolMessageFromResponse(t *testing.T, body []byte) (map[string]interface{}, string) {
@@ -436,63 +435,29 @@ func assertWorkflowToolTrajectoryTurnForAgent(
 	}
 }
 
-func assertWorkflowTraceToolTrajectory(t *testing.T, body []byte, agentID string, toolCallID string) {
+func assertWorkflowTraceToolTrajectory(t *testing.T, response *Response, agentID string, toolCallID string) {
 	t.Helper()
-	response := workflowTraceResponse(t, body, agentID)
-	rawTrajectory, ok := response["tool_trajectory"].([]interface{})
-	if !ok || len(rawTrajectory) == 0 {
-		t.Fatalf("trace response for %s missing tool_trajectory: %#v", agentID, response)
+	if response == nil {
+		t.Fatal("workflow response is nil")
 	}
-	for _, rawTurn := range rawTrajectory {
-		turn, ok := rawTurn.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		rawIDs, ok := turn["tool_call_ids"].([]interface{})
-		if !ok {
-			continue
-		}
-		for _, rawID := range rawIDs {
-			if rawID == toolCallID {
-				return
-			}
-		}
-	}
-	t.Fatalf("trace response for %s missing tool_call_id %q: %#v", agentID, toolCallID, rawTrajectory)
-}
-
-func workflowTraceResponse(t *testing.T, body []byte, agentID string) map[string]interface{} {
-	t.Helper()
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		t.Fatalf("parse workflow response: %v", err)
-	}
-	flow, ok := parsed["flow"].(map[string]interface{})
+	trace, ok := response.IntermediateResponses.(*workflowTrace)
 	if !ok {
-		t.Fatalf("response missing flow trace: %s", string(body))
+		t.Fatalf("response missing workflow trace: %#v", response.IntermediateResponses)
 	}
-	steps, ok := flow["steps"].([]interface{})
-	if !ok {
-		t.Fatalf("flow trace missing steps: %#v", flow)
-	}
-	for _, rawStep := range steps {
-		step, ok := rawStep.(map[string]interface{})
-		if !ok {
-			continue
-		}
-		responses, ok := step["responses"].([]interface{})
-		if !ok {
-			continue
-		}
-		for _, rawResponse := range responses {
-			response, ok := rawResponse.(map[string]interface{})
-			if ok && response["agent_id"] == agentID {
-				return response
+	for _, step := range trace.Steps {
+		for _, worker := range step.Responses {
+			if worker.AgentID != agentID {
+				continue
 			}
+			for _, turn := range worker.ToolTrajectory {
+				if workflowContainsString(turn.ToolCallIDs, toolCallID) {
+					return
+				}
+			}
+			t.Fatalf("trace response for %s missing tool_call_id %q: %#v", agentID, toolCallID, worker.ToolTrajectory)
 		}
 	}
-	t.Fatalf("flow trace missing response for agent %q: %#v", agentID, flow)
-	return nil
+	t.Fatalf("workflow trace missing response for agent %q: %#v", agentID, trace)
 }
 
 func workflowChoiceFinishReason(t *testing.T, body []byte) interface{} {

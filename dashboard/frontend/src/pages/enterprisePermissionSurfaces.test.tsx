@@ -97,10 +97,6 @@ describe('enterprise permission surfaces', () => {
   })
 
   it('keeps permission, structured-input, dialog, tab, and polling contracts explicit', () => {
-    const securitySource = readFileSync(
-      new URL('./SecurityPolicyPage.tsx', import.meta.url),
-      'utf8',
-    )
     const pageSource = readFileSync(new URL('./OpenClawPage.tsx', import.meta.url), 'utf8')
     const configSource = readFileSync(new URL('./ConfigPage.tsx', import.meta.url), 'utf8')
     const mutationSources = [
@@ -108,14 +104,6 @@ describe('enterprise permission surfaces', () => {
       readFileSync(new URL('./OpenClawTeamTab.tsx', import.meta.url), 'utf8'),
       readFileSync(new URL('./OpenClawWorkerTab.tsx', import.meta.url), 'utf8'),
     ]
-
-    expect(securitySource).toContain('canManageSecurity')
-    expect(securitySource).toContain('!serverReadonly &&')
-    expect(securitySource).toContain('runtimeConfigWritable &&')
-    expect(securitySource).toContain('<StringListEditor')
-    expect(securitySource).toContain('security.manage')
-    expect(securitySource).not.toContain('comma-separated')
-    expect(securitySource).not.toContain('modelInputs')
 
     expect(pageSource).toContain('canManageOpenClaw')
     expect(pageSource).toContain(
@@ -131,8 +119,8 @@ describe('enterprise permission surfaces', () => {
     expect(pageSource).toContain('role="tabpanel"')
     expect(pageSource).toContain('aria-selected=')
 
-    expect(configSource).toContain("const isMCPSection = activeSection === 'mcp'")
-    expect(configSource).toContain('{isMCPSection && (')
+    expect(configSource).toContain("case 'agent':")
+    expect(configSource).toContain('return <ConfigPageAgentSection />')
 
     for (const source of mutationSources) {
       expect(source).toContain('<ConfirmDialog')

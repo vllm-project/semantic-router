@@ -9,347 +9,224 @@ import (
 )
 
 const recipeTestBaseYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
+version: v0.4
+models:
+  - name: model-a
+    card:
       description: default tier
-    - name: model-b
-      description: privacy tier
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
-providers:
-  defaults:
-    default_model: model-a
-  models:
-    - name: model-a
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-    - name: model-b
-      backend_refs:
-        - endpoint: 127.0.0.1:8001
-`
-
-const recipeTestPrivacyBlockYAML = `
-recipes:
-  - name: privacy
-    description: privacy profile
-    routing:
-      signals:
-        keywords:
-          - name: pii_keywords
-            operator: OR
-            keywords: ["ssn"]
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
-entrypoints:
-  - model_names: ["vllm-sr/privacy"]
-    recipe: privacy
-  - model_names: ["vllm-sr/default-alias"]
-    recipe: default
-`
-
-func TestCanonicalRecipesRoutingOnlyNormalizesToDefaultRecipe(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-
-	if len(cfg.Recipes) != 1 {
-		t.Fatalf("expected 1 normalized recipe, got %d", len(cfg.Recipes))
-	}
-	defaultRecipe := cfg.DefaultRecipe()
-	if defaultRecipe == nil {
-		t.Fatal("expected a default recipe")
-	}
-	if len(defaultRecipe.Profile.Decisions) != 1 || defaultRecipe.Profile.Decisions[0].Name != "default_route" {
-		t.Fatalf("default recipe does not mirror the top-level routing profile: %+v", defaultRecipe.Profile.Decisions)
-	}
-	if len(cfg.Entrypoints) != 0 {
-		t.Fatalf("expected no entrypoints, got %+v", cfg.Entrypoints)
-	}
-}
-
-func TestCanonicalRecipesWithEntrypoints(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-
-	if len(cfg.Recipes) != 2 {
-		t.Fatalf("expected 2 normalized recipes, got %d", len(cfg.Recipes))
-	}
-
-	privacy, ok := cfg.RecipeForRequestModel("vllm-sr/privacy")
-	if !ok {
-		t.Fatal("expected vllm-sr/privacy to resolve to a recipe")
-	}
-	if privacy.Name != "privacy" || len(privacy.Profile.Decisions) != 1 || privacy.Profile.Decisions[0].Name != "privacy_route" {
-		t.Fatalf("unexpected privacy recipe: %+v", privacy)
-	}
-	if privacy.Profile.Decisions[0].ModelRefs[0].UseReasoning == nil {
-		t.Fatal("expected recipe decisions to receive modelRef defaults")
-	}
-}
-
-func TestCanonicalEntrypointsResolveDefaultRecipeAlias(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-
-	viaAlias, ok := cfg.RecipeForRequestModel("vllm-sr/default-alias")
-	if !ok || viaAlias.Name != DefaultRecipeName {
-		t.Fatalf("expected vllm-sr/default-alias to resolve to the default recipe, got %+v", viaAlias)
-	}
-	if len(viaAlias.Profile.Decisions) != 1 || viaAlias.Profile.Decisions[0].Name != "default_route" {
-		t.Fatalf("default recipe does not mirror the flat routing fields: %+v", viaAlias.Profile.Decisions)
-	}
-
-	if _, ok := cfg.RecipeForRequestModel("model-a"); ok {
-		t.Fatal("expected a plain model name to miss the entrypoint table")
-	}
-}
-
-func TestCanonicalRecipesOnlyDefaultBridgesFlatFields(t *testing.T) {
-	yaml := `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
+      loras: [general-expert]
+    connections:
+      - provider: private-test
+        endpoint: http://127.0.0.1:8000
+        model: model-a
+  - name: model-b
+    card: {description: privacy tier}
+    connections:
+      - provider: private-test
+        endpoint: http://127.0.0.1:8001
+        model: model-b
 recipes:
   - name: default
-    routing:
+    document:
       signals:
         keywords:
           - name: urgent_keywords
             operator: OR
-            keywords: ["urgent"]
+            keywords: [urgent]
       decisions:
-        - name: recipe_default_route
+        - name: default_route
           rules:
             operator: AND
             conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-a
-              use_reasoning: false
-providers:
-  defaults:
-    default_model: model-a
-  models:
-    - name: model-a
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
+              - {type: keyword, name: urgent_keywords}
+entrypoints:
+  - name: vllm-sr/default
+    aliases: [vllm-sr/default-alias]
+    recipe: default
+    assignments:
+      default_route:
+        models: [{model: model-a}]
+global:
+  services:
+    backend_egress: {policy_file: /app/config/backend-egress-policy.yaml}
 `
-	cfg, err := ParseYAMLBytes([]byte(yaml))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
 
-	if len(cfg.Decisions) != 1 || cfg.Decisions[0].Name != "recipe_default_route" {
-		t.Fatalf("expected the explicit default recipe to bridge into the flat routing fields, got %+v", cfg.Decisions)
-	}
-	if len(cfg.Recipes) != 1 || cfg.Recipes[0].Name != DefaultRecipeName {
-		t.Fatalf("expected a single default recipe, got %+v", cfg.Recipes)
-	}
-}
-
-func TestCanonicalExportEmitsRecipesAndEntrypoints(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-
-	canonical := CanonicalConfigFromRouterConfig(cfg)
-	if len(canonical.Recipes) != 1 || canonical.Recipes[0].Name != "privacy" {
-		t.Fatalf("expected the privacy recipe to be exported, got %+v", canonical.Recipes)
-	}
-	if len(canonical.Recipes[0].Routing.ModelCards) != 0 {
-		t.Fatalf("exported recipes must not own model cards, got %+v", canonical.Recipes[0].Routing.ModelCards)
-	}
-	if len(canonical.Entrypoints) != 2 {
-		t.Fatalf("expected 2 exported entrypoints, got %+v", canonical.Entrypoints)
-	}
-
-	static := CanonicalStaticConfigFromRouterConfig(cfg)
-	if len(static.Recipes) != 0 || len(static.Entrypoints) != 0 {
-		t.Fatalf("static export must not carry recipes or entrypoints, got %+v / %+v", static.Recipes, static.Entrypoints)
-	}
-}
-
-func TestCanonicalExportRoundTripsRecipesAndEntrypoints(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-
-	exported, err := yaml.Marshal(CanonicalConfigFromRouterConfig(cfg))
-	if err != nil {
-		t.Fatalf("unexpected marshal error: %v", err)
-	}
-	reparsed, err := ParseYAMLBytes(exported)
-	if err != nil {
-		t.Fatalf("exported config failed to re-parse: %v", err)
-	}
-
-	if !reflect.DeepEqual(cfg.Recipes, reparsed.Recipes) {
-		t.Fatalf("recipes did not round-trip:\nbefore: %+v\nafter: %+v", cfg.Recipes, reparsed.Recipes)
-	}
-	if !reflect.DeepEqual(cfg.Entrypoints, reparsed.Entrypoints) {
-		t.Fatalf("entrypoints did not round-trip:\nbefore: %+v\nafter: %+v", cfg.Entrypoints, reparsed.Entrypoints)
-	}
-}
-
-var canonicalRecipeErrorCases = []struct {
-	name    string
-	extra   string
-	wantErr string
-}{
-	{
-		name: "duplicate recipe name",
-		extra: `
-recipes:
-  - name: privacy
-    routing: {}
-  - name: privacy
-    routing: {}
-`,
-		wantErr: "duplicate recipe name",
-	},
-	{
-		name: "default recipe conflicts with top-level routing",
-		extra: `
+const recipeTestPrivacyYAML = `
+version: v0.4
+models:
+  - name: model-a
+    card: {description: default tier}
+    connections:
+      - {provider: private-test, endpoint: http://127.0.0.1:8000, model: model-a}
+  - name: model-b
+    card: {description: privacy tier}
+    connections:
+      - {provider: private-test, endpoint: http://127.0.0.1:8001, model: model-b}
 recipes:
   - name: default
-    routing: {}
-`,
-		wantErr: "conflicts with the top-level routing profile",
-	},
-	{
-		name: "recipe owns model cards",
-		extra: `
-recipes:
+    document:
+      signals:
+        keywords:
+          - {name: urgent_keywords, operator: OR, keywords: [urgent]}
+      decisions:
+        - name: default_route
+          rules:
+            operator: AND
+            conditions: [{type: keyword, name: urgent_keywords}]
   - name: privacy
-    routing:
-      modelCards:
-        - name: rogue-model
-`,
-		wantErr: "the model catalog is shared",
-	},
-	{
-		name: "recipe decision references unknown model",
-		extra: `
-recipes:
-  - name: privacy
-    routing:
+    description: privacy profile
+    document:
+      signals:
+        keywords:
+          - {name: pii_keywords, operator: OR, keywords: [ssn]}
       decisions:
         - name: privacy_route
           rules:
             operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: missing-model
-              use_reasoning: false
-`,
-		wantErr: "references unknown model",
-	},
-	{
-		name: "entrypoint references unknown recipe",
-		extra: `
+            conditions: [{type: keyword, name: pii_keywords}]
 entrypoints:
-  - model_names: ["vllm-sr/privacy"]
-    recipe: missing
-`,
-		wantErr: "unknown recipe",
-	},
-	{
-		name: "entrypoint without model names",
-		extra: `
-entrypoints:
-  - model_names: []
+  - name: vllm-sr/default
+    aliases: [vllm-sr/default-alias]
     recipe: default
-`,
-		wantErr: "model_names cannot be empty",
-	},
-	{
-		name: "duplicate model name across entrypoints",
-		extra: `
-recipes:
-  - name: privacy
-    routing: {}
-entrypoints:
-  - model_names: ["vllm-sr/dup"]
-    recipe: default
-  - model_names: ["vllm-sr/dup"]
+    assignments:
+      default_route:
+        models: [{model: model-a}]
+  - name: vllm-sr/privacy
     recipe: privacy
-`,
-		wantErr: "already mapped by another entrypoint",
-	},
-	{
-		name: "recipe name with surrounding whitespace",
-		extra: `
-recipes:
-  - name: " privacy "
-    routing: {}
-`,
-		wantErr: "must not contain surrounding whitespace",
-	},
+    assignments:
+      privacy_route:
+        models: [{model: model-b}]
+global:
+  services:
+    backend_egress: {policy_file: /app/config/backend-egress-policy.yaml}
+`
+
+func parseRecipeFixtureYAML(t *testing.T, input []byte) (*RouterConfig, error) {
+	t.Helper()
+	return testAuthoringParser(t).ParseYAMLBytes(input)
+}
+
+func TestCanonicalRecipeCompilesOnlyExplicitResources(t *testing.T) {
+	cfg, err := parseRecipeFixtureYAML(t, []byte(recipeTestBaseYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if len(cfg.Recipes) != 1 || cfg.Recipes[0].Name != DefaultRecipeName {
+		t.Fatalf("compiled Recipes = %+v", cfg.Recipes)
+	}
+	if len(cfg.Entrypoints) != 1 || cfg.Entrypoints[0].Name != "vllm-sr/default" {
+		t.Fatalf("compiled Entrypoints = %+v", cfg.Entrypoints)
+	}
+	if _, ok := cfg.RecipeForRequestModel("vllm-sr/default-alias"); !ok {
+		t.Fatal("explicit Entrypoint alias did not resolve")
+	}
+	if _, ok := cfg.RecipeForRequestModel("model-a"); ok {
+		t.Fatal("physical Model name became an implicit Entrypoint")
+	}
+}
+
+func TestCanonicalExportDoesNotInventSourceModelsWithoutSnapshot(t *testing.T) {
+	cfg := DefaultGlobalConfig()
+	cfg.ModelConfig = map[string]ModelParams{"orphan": {Description: "runtime-only"}}
+	canonical := CanonicalConfigFromRouterConfig(&cfg)
+	if len(canonical.Models) != 0 {
+		t.Fatalf("canonical export invented incomplete source Models: %+v", canonical.Models)
+	}
+}
+
+func TestCanonicalRecipesRemainIsolated(t *testing.T) {
+	cfg, err := parseRecipeFixtureYAML(t, []byte(recipeTestPrivacyYAML))
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	privacy, ok := cfg.RecipeForRequestModel("vllm-sr/privacy")
+	if !ok || privacy.Name != "privacy" || len(privacy.Profile.Decisions) != 1 {
+		t.Fatalf("privacy Recipe = %+v", privacy)
+	}
+	if privacy.Profile.Decisions[0].ModelRefs[0].Model != "model-b" {
+		t.Fatalf("privacy assignments = %+v", privacy.Profile.Decisions[0].ModelRefs)
+	}
+	defaultRecipe, ok := cfg.RecipeForRequestModel("vllm-sr/default")
+	if !ok || defaultRecipe == nil || defaultRecipe.Profile.Decisions[0].ModelRefs[0].Model != "model-a" {
+		t.Fatalf("default Recipe = %+v", defaultRecipe)
+	}
+}
+
+func TestCanonicalExportEmitsHumanRecipesAndEntrypoints(t *testing.T) {
+	cfg, err := parseRecipeFixtureYAML(t, []byte(recipeTestPrivacyYAML))
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonical := CanonicalConfigFromRouterConfig(cfg)
+	if len(canonical.Models) != 2 || len(canonical.Recipes) != 2 || len(canonical.Entrypoints) != 2 {
+		t.Fatalf("canonical export = %+v", canonical)
+	}
+	for _, recipe := range canonical.Recipes {
+		for _, decision := range recipe.Document.Decisions {
+			if decision.ID != "" || len(decision.ModelRefs) != 0 {
+				t.Fatalf("Recipe export contains compiled state: %+v", decision)
+			}
+		}
+	}
+	routingExport, err := yaml.Marshal(struct {
+		Models      []AuthoringModel      `yaml:"models"`
+		Recipes     []AuthoringRecipe     `yaml:"recipes"`
+		Entrypoints []AuthoringEntrypoint `yaml:"entrypoints"`
+	}{canonical.Models, canonical.Recipes, canonical.Entrypoints})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"provider_catalog_revision:", "backends:", "model_id:", "recipe_id:", "revision:"} {
+		if strings.Contains(string(routingExport), forbidden) {
+			t.Fatalf("human routing export contains %q:\n%s", forbidden, routingExport)
+		}
+	}
+	exported, err := yaml.Marshal(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reparsed, err := testAuthoringParser(t).ParseYAMLBytes(exported)
+	if err != nil {
+		t.Fatalf("exported config failed to reparse: %v", err)
+	}
+	if !reflect.DeepEqual(cfg.Recipes, reparsed.Recipes) || !reflect.DeepEqual(cfg.Entrypoints, reparsed.Entrypoints) {
+		t.Fatalf("routing resources did not round trip")
+	}
 }
 
 func TestCanonicalRecipeValidationErrors(t *testing.T) {
-	for _, testCase := range canonicalRecipeErrorCases {
-		t.Run(testCase.name, func(t *testing.T) {
-			_, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + testCase.extra))
-			if err == nil {
-				t.Fatalf("expected parse error containing %q", testCase.wantErr)
-			}
-			if !strings.Contains(err.Error(), testCase.wantErr) {
-				t.Fatalf("expected error containing %q, got: %v", testCase.wantErr, err)
+	tests := []struct {
+		name, needle, replacement, want string
+	}{
+		{"duplicate Recipe", "  - name: privacy\n", "  - name: default\n", "duplicate recipe name"},
+		{"unknown Recipe", "    recipe: privacy\n", "    recipe: missing\n", "unknown Recipe"},
+		{"unknown Model", "        models: [{model: model-b}]", "        models: [{model: missing}]", "unknown Model"},
+		{"duplicate alias", "  - name: vllm-sr/privacy\n", "  - name: vllm-sr/privacy\n    aliases: [vllm-sr/default-alias]\n", "already mapped by another entrypoint"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			document := strings.Replace(recipeTestPrivacyYAML, test.needle, test.replacement, 1)
+			_, err := parseRecipeFixtureYAML(t, []byte(document))
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("error = %v, want %q", err, test.want)
 			}
 		})
 	}
 }
 
-func TestDuplicateIdenticalSignalWithinRecipeRejected(t *testing.T) {
-	needle := `      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]`
-	yamlConfig := strings.Replace(
-		recipeTestBaseYAML,
-		needle,
-		needle+"\n"+needle,
-		1,
-	) + recipeTestPrivacyBlockYAML
+func TestCanonicalRecipeNameRejectsSurroundingWhitespace(t *testing.T) {
+	document := strings.Replace(recipeTestBaseYAML, "  - name: default\n", "  - name: ' default '\n", 1)
+	_, err := parseRecipeFixtureYAML(t, []byte(document))
+	if err == nil || !strings.Contains(err.Error(), "surrounding whitespace") {
+		t.Fatalf("error = %v", err)
+	}
+}
 
-	_, err := ParseYAMLBytes([]byte(yamlConfig))
-	if err == nil ||
-		!strings.Contains(err.Error(), "duplicate local name") {
-		t.Fatalf("expected same-profile duplicate signal error, got %v", err)
+func TestDuplicateIdenticalSignalWithinRecipeRejected(t *testing.T) {
+	needle := "          - {name: urgent_keywords, operator: OR, keywords: [urgent]}"
+	document := strings.Replace(recipeTestPrivacyYAML, needle, needle+"\n"+needle, 1)
+	_, err := parseRecipeFixtureYAML(t, []byte(document))
+	if err == nil || !strings.Contains(err.Error(), "duplicate local name") {
+		t.Fatalf("error = %v", err)
 	}
 }

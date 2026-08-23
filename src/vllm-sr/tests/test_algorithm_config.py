@@ -19,6 +19,7 @@ from cli.algorithms import (  # noqa: E402
     AutoMixSelectionConfig,
     FusionAlgorithmConfig,
     HybridSelectionConfig,
+    MLSelectionConfig,
     MultiFactorSelectionConfig,
     PromptSelectionConfig,
     RatingsAlgorithmConfig,
@@ -49,10 +50,6 @@ class TestAlgorithmConfigTypes:
             "router_dc",
             "automix",
             "hybrid",
-            "knn",
-            "kmeans",
-            "svm",
-            "mlp",
             "multi_factor",
             "latency_aware",
         ]
@@ -60,6 +57,30 @@ class TestAlgorithmConfigTypes:
         for algo_type in selection_types:
             config = AlgorithmConfig(type=algo_type)
             assert config.type == algo_type
+
+    @pytest.mark.parametrize("algo_type", ["knn", "kmeans", "svm", "mlp"])
+    def test_ml_selection_requires_matching_decision_config(self, algo_type):
+        family = {algo_type: {}}
+        config = AlgorithmConfig(
+            type=algo_type,
+            ml=MLSelectionConfig(
+                models_path="/models/selection",
+                embedding_dim=1024,
+                **family,
+            ),
+        )
+        assert config.type == algo_type
+        assert getattr(config.ml, algo_type) is not None
+
+        with pytest.raises(PydanticValidationError, match=r"requires algorithm\.ml"):
+            AlgorithmConfig(type=algo_type)
+
+        wrong_family = "svm" if algo_type != "svm" else "knn"
+        with pytest.raises(PydanticValidationError, match="requires only"):
+            AlgorithmConfig(
+                type=algo_type,
+                ml=MLSelectionConfig(**{wrong_family: {}}),
+            )
 
     def test_on_error_default(self):
         """Test that on_error defaults to 'skip'."""

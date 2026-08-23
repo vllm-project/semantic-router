@@ -282,7 +282,7 @@ func (r *OpenAIRouter) unionRecipeDecisionModelRefs(
 		return nil
 	}
 	scopedConfig := r.Config
-	if recipe, ok := r.Config.RecipeByName(recipeName); ok {
+	if recipe, ok := r.Config.RecipeByRuntimeScope(recipeName); ok {
 		scopedConfig = r.Config.ConfigForRecipe(recipe)
 	}
 	return unionConfigDecisionModelRefs(scopedConfig, match)
@@ -309,9 +309,6 @@ func (r *OpenAIRouter) deployedLearningModelRefs() []config.ModelRef {
 	add(config.ModelRef{Model: r.Config.DefaultModel})
 	for _, ref := range r.unionDecisionModelRefs(func(config.Decision) bool { return true }) {
 		add(ref)
-	}
-	for _, endpoint := range r.Config.VLLMEndpoints {
-		add(config.ModelRef{Model: endpoint.Model})
 	}
 	modelNames := make([]string, 0, len(r.Config.ModelConfig))
 	for modelName := range r.Config.ModelConfig {
@@ -386,7 +383,7 @@ func (r *OpenAIRouter) scoreRoutingSamplingCandidates(
 		if model == "" {
 			continue
 		}
-		exp := r.routerLearningRuntimeState().experienceSnapshot(selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
+		exp := r.routerLearningRuntimeState().experienceSnapshotForRequest(ctx, selectionDecisionStateKey(selCtx), decisionTier(ctx), model)
 		if params, ok := r.Config.ModelConfig[model]; ok && params.QualityScore > 0 && exp.GoodFitCount+exp.UnderpoweredCount == 0 {
 			exp.QualitySeed = clamp01(params.QualityScore)
 			exp.SeedWeight = 2

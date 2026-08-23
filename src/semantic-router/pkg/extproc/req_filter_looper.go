@@ -19,14 +19,16 @@ package extproc
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"strings"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 )
 
@@ -101,7 +103,7 @@ func (r *OpenAIRouter) createLooper(
 // Returns an ImmediateResponse with the aggregated result
 func (r *OpenAIRouter) handleLooperExecution(
 	ctx context.Context,
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
@@ -110,29 +112,47 @@ func (r *OpenAIRouter) handleLooperExecution(
 	if err != nil {
 		return r.createErrorResponse(500, "Looper construction failed: "+err.Error()), nil
 	}
-	looperReq, errorResponse := r.buildLooperRequest(openAIRequest, decision, reqCtx)
+	looperReq, errorResponse := r.buildLooperRequest(request, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil
 	}
-	resp, errorResponse := r.executeLooperRequest(ctx, l, looperReq, openAIRequest.Model, decision, reqCtx)
+	resp, errorResponse := r.executeLooperRequest(ctx, l, looperReq, request.Model, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil
 	}
 
-	r.recordSuccessfulLooperExecution(resp, openAIRequest.Model, decision, reqCtx)
-	r.translateLooperResponse(ctx, resp, decision, reqCtx)
-	return r.createLooperResponse(resp, reqCtx), nil
+	response, semanticResponse, clientBody, err := r.prepareLooperResponse(resp, reqCtx)
+	if err != nil {
+		if settleErr := r.settleLooperInference(reqCtx, http.StatusBadGateway); settleErr != nil {
+			logging.Errorf("failed to settle looper inference usage: %v", settleErr)
+			return r.createInferenceAccessError(quotaruntime.AdmissionUnavailable, nil), nil
+		}
+		logging.ComponentErrorEvent("extproc", "looper_response_encode_failed", map[string]interface{}{
+			"request_id": reqCtx.RequestID,
+			"format":     reqCtx.SourceFormat,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(502, "Looper returned an invalid response"), nil
+	}
+	if err := r.settleLooperInference(reqCtx, http.StatusOK); err != nil {
+		logging.Errorf("failed to settle looper inference usage: %v", err)
+		return r.createInferenceAccessError(quotaruntime.AdmissionUnavailable, nil), nil
+	}
+	r.recordSuccessfulLooperExecution(
+		resp, request.Model, decision, reqCtx, semanticResponse, clientBody,
+	)
+	return response, nil
 }
 
 func (r *OpenAIRouter) buildLooperRequest(
-	openAIRequest *openai.ChatCompletionNewParams,
+	request *llmprotocol.Request,
 	decision *config.Decision,
 	reqCtx *RequestContext,
 ) (*looper.Request, *ext_proc.ProcessingResponse) {
 	// Build looper request.
-	// Response API requests always return JSON, so force non-streaming in the
-	// looper to get a JSON body that TranslateResponse can parse. The
-	// Response API layer handles its own streaming format separately.
+	// Looper currently aggregates a buffered semantic result for non-Chat
+	// clients. The common immediate-response codec encodes that result into the
+	// inbound wire format after execution.
 	streaming := reqCtx.ExpectStreamingResponse
 	if isResponseAPIRequest(reqCtx) {
 		streaming = false
@@ -145,33 +165,22 @@ func (r *OpenAIRouter) buildLooperRequest(
 		"streaming":        streaming,
 		"response_api":     isResponseAPIRequest(reqCtx),
 	})
-	looperReq := &looper.Request{
-		OriginalRequest:    openAIRequest,
-		ModelRefs:          decision.ModelRefs,
-		ModelParams:        r.getModelParams(),
-		Algorithm:          decision.Algorithm,
-		IsStreaming:        streaming,
-		DecisionName:       decision.Name,
-		RecipeName:         reqCtx.Routing.RecipeName(),
-		OutputContract:     decision.OutputContract,
-		OutputContractSpec: decision.OutputContractSpec,
+	looperReq, err := looper.NewRequestFromSemantic(request)
+	if err != nil {
+		return nil, r.recordLooperFailure(
+			reqCtx, request.Model, decision, 400,
+			"Looper cannot represent the request semantics", "looper_request_unsupported",
+		)
 	}
-	if decision.Algorithm.Type != config.DecisionAlgorithmFusion {
-		return looperReq, nil
-	}
-	fusionOverride, err := parseFusionRequestConfig(reqCtx.OriginalRequestBody)
-	if err == nil {
-		looperReq.Fusion = fusionOverride
-		return looperReq, nil
-	}
-	return nil, r.recordLooperFailure(
-		reqCtx,
-		openAIRequest.Model,
-		decision,
-		400,
-		"invalid Fusion plugin: "+err.Error(),
-		"invalid_fusion_request",
-	)
+	looperReq.ModelRefs = decision.ModelRefs
+	looperReq.ModelParams = r.getModelParams()
+	looperReq.Algorithm = decision.Algorithm
+	looperReq.IsStreaming = streaming
+	looperReq.DecisionName = decision.Name
+	looperReq.RecipeName = reqCtx.Routing.RuntimeScope()
+	looperReq.OutputContract = decision.OutputContract
+	looperReq.OutputContractSpec = decision.OutputContractSpec
+	return looperReq, nil
 }
 
 func (r *OpenAIRouter) executeLooperRequest(
@@ -212,15 +221,15 @@ func (r *OpenAIRouter) looperExecutionErrorResponse(
 		"algorithm":  decision.Algorithm.Type,
 		"error":      err.Error(),
 	}
-	confidenceEvidence, hasConfidenceEvidence := looper.ConfidenceEvidenceFromError(err)
-	var evidenceArgs []looper.ConfidenceExecutionEvidence
-	if hasConfidenceEvidence {
-		failureFields["models_used"] = confidenceEvidence.ModelsUsed
-		failureFields["iterations"] = confidenceEvidence.Iterations
-		failureFields["prompt_tokens"] = confidenceEvidence.Usage.PromptTokens
-		failureFields["completion_tokens"] = confidenceEvidence.Usage.CompletionTokens
-		failureFields["total_tokens"] = confidenceEvidence.Usage.TotalTokens
-		evidenceArgs = append(evidenceArgs, confidenceEvidence)
+	executionEvidence, hasExecutionEvidence := looper.ExecutionEvidenceFromError(err)
+	var evidenceArgs []looper.ExecutionEvidence
+	if hasExecutionEvidence {
+		failureFields["models_used"] = executionEvidence.ModelsUsed
+		failureFields["iterations"] = executionEvidence.Iterations
+		failureFields["prompt_tokens"] = executionEvidence.Usage.PromptTokens
+		failureFields["completion_tokens"] = executionEvidence.Usage.CompletionTokens
+		failureFields["total_tokens"] = executionEvidence.Usage.TotalTokens
+		evidenceArgs = append(evidenceArgs, executionEvidence)
 	}
 	logging.ComponentErrorEvent("extproc", "looper_execution_failed", failureFields)
 	return r.recordLooperFailure(
@@ -239,6 +248,8 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	originalModel string,
 	decision *config.Decision,
 	reqCtx *RequestContext,
+	semanticResponse *llmprotocol.Response,
+	clientBody []byte,
 ) {
 	// Update context with looper results
 	reqCtx.RequestModel = resp.Model
@@ -254,44 +265,15 @@ func (r *OpenAIRouter) recordSuccessfulLooperExecution(
 	r.updateRouterReplayStatus(reqCtx, 200, false)
 
 	// Attach response body to router replay record
-	r.attachRouterReplayResponse(reqCtx, resp.Body, true)
+	r.attachRouterReplayResponse(reqCtx, clientBody, true)
 
 	// Memory auto_store: the normal response body pipeline (where
 	// scheduleResponseMemoryStore runs) is bypassed by ImmediateResponse.
-	// Trigger it here while resp.Body is still in Chat Completions format
-	// (extractAssistantResponseText parses Chat Completions). The
-	// ResponseAPICtx on reqCtx provides the ConversationID and user message
-	// needed by extractMemoryInfo / extractCurrentUserMessage.
-	r.scheduleResponseMemoryStore(reqCtx, resp.Body)
-}
-
-func (r *OpenAIRouter) translateLooperResponse(
-	ctx context.Context,
-	resp *looper.Response,
-	decision *config.Decision,
-	reqCtx *RequestContext,
-) {
-	// Response API back-translation: the looper executes against Chat
-	// Completions endpoints directly, so resp.Body is in Chat Completions
-	// format. If the original client request was a Response API request,
-	// translate the response back before returning to the client.
-	if isResponseAPIRequest(reqCtx) && r.ResponseAPIFilter != nil {
-		translated, err := r.ResponseAPIFilter.TranslateResponse(ctx, reqCtx.ResponseAPICtx, resp.Body)
-		if err != nil {
-			logging.ComponentErrorEvent("extproc", "looper_response_api_translation_failed", map[string]interface{}{
-				"request_id": reqCtx.RequestID,
-				"decision":   decision.Name,
-				"algorithm":  resp.AlgorithmType,
-				"error":      err.Error(),
-			})
-		} else {
-			resp.Body = translated
-			logging.ComponentDebugEvent("extproc", "looper_response_api_translated", map[string]interface{}{
-				"request_id": reqCtx.RequestID,
-				"decision":   decision.Name,
-				"algorithm":  resp.AlgorithmType,
-			})
-		}
+	// A buffered looper result is decoded once into the same neutral response
+	// contract used by direct inference. Streaming memory storage is deferred
+	// until a terminal semantic accumulator is available.
+	if semanticResponse != nil {
+		r.scheduleSemanticResponseMemoryStore(reqCtx, semanticResponse)
 	}
 }
 
@@ -302,7 +284,7 @@ func (r *OpenAIRouter) recordLooperFailure(
 	statusCode int,
 	message string,
 	reason string,
-	executionEvidence ...looper.ConfidenceExecutionEvidence,
+	executionEvidence ...looper.ExecutionEvidence,
 ) *ext_proc.ProcessingResponse {
 	response := r.createErrorResponse(statusCode, message)
 	decisionName := ""
@@ -311,9 +293,14 @@ func (r *OpenAIRouter) recordLooperFailure(
 	}
 	if len(executionEvidence) > 0 && executionEvidence[0].Iterations > 0 {
 		evidence := executionEvidence[0]
-		ctx.VSRSelectionMethod = "confidence"
+		algorithm := "looper"
+		if decision != nil && decision.Algorithm != nil && decision.Algorithm.Type != "" {
+			algorithm = decision.Algorithm.Type
+		}
+		ctx.VSRSelectionMethod = algorithm
 		ctx.VSRSelectionReasoning = boundedSelectionReasoning(fmt.Sprintf(
-			"confidence execution failed after %d call attempts; completed models: %s",
+			"%s execution failed after %d call attempts; completed models: %s",
+			algorithm,
 			evidence.Iterations,
 			strings.Join(evidence.ModelsUsed, ","),
 		))

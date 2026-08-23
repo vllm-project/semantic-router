@@ -6,10 +6,8 @@ package publicmodels
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 
 const (
-	routerOwner                  = "vllm-semantic-router"
-	upstreamEndpointOwner        = "upstream-endpoint"
-	autoModelDescription         = "Intelligent Router for Mixture-of-Models"
-	orchestratedModelDescription = "Router-orchestrated model"
+	routerOwner           = "vllm-semantic-router"
+	upstreamEndpointOwner = "upstream-endpoint"
 )
 
 // ResolutionKind describes the stable request-handling boundary exposed to
@@ -26,10 +24,9 @@ const (
 // discovery. Display metadata and internal execution modes are not control
 // signals.
 type RoutingMetadata struct {
-	Resolution   ResolutionKind    `json:"resolution"`
-	Selectable   bool              `json:"selectable"`
-	DefaultRoute bool              `json:"default_route,omitempty"`
-	Recipe       config.RecipeName `json:"recipe,omitempty"`
+	Resolution ResolutionKind    `json:"resolution"`
+	Selectable bool              `json:"selectable"`
+	Recipe     config.RecipeName `json:"recipe,omitempty"`
 }
 
 // OpenAIModel represents a single model in the OpenAI /v1/models response.
@@ -56,9 +53,7 @@ func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList
 		created: created,
 		seen:    map[string]struct{}{},
 	}
-	builder.appendAutoAliases(cfg)
 	builder.appendEntrypointAliases(cfg)
-	builder.appendOrchestratedModels(cfg)
 	builder.appendBackendModels(cfg)
 
 	return OpenAIModelList{
@@ -73,44 +68,13 @@ type modelListBuilder struct {
 	seen    map[string]struct{}
 }
 
-func (b *modelListBuilder) appendAutoAliases(cfg *config.RouterConfig) {
-	autoModelNames := config.DefaultAutoModelNames()
-	if cfg != nil {
-		autoModelNames = cfg.EffectiveAutoModelNames()
-	}
-	b.appendAll(
-		autoModelNames,
-		routerOwner,
-		autoModelDescription,
-		selectableVirtualRoute(config.DefaultRecipeName, true),
-	)
-}
-
 func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 	if cfg == nil {
 		return
 	}
 	for _, entrypoint := range cfg.Entrypoints {
 		description := cfg.EntrypointRecipeDescription(entrypoint.Recipe)
-		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(entrypoint.Recipe, false))
-	}
-}
-
-func (b *modelListBuilder) appendOrchestratedModels(cfg *config.RouterConfig) {
-	if cfg == nil || !cfg.Looper.IsEnabled() {
-		return
-	}
-	for _, models := range [][]string{
-		cfg.ExposedReMoMModelNames(),
-		cfg.ExposedFusionModelNames(),
-		cfg.ExposedFlowModelNames(),
-	} {
-		b.appendAll(
-			models,
-			routerOwner,
-			orchestratedModelDescription,
-			selectableVirtualRoute("", false),
-		)
+		b.appendAll(entrypoint.ModelNames, routerOwner, description, selectableVirtualRoute(entrypoint.Recipe))
 	}
 }
 
@@ -152,12 +116,11 @@ func (b *modelListBuilder) append(
 	})
 }
 
-func selectableVirtualRoute(recipe config.RecipeName, defaultRoute bool) RoutingMetadata {
+func selectableVirtualRoute(recipe config.RecipeName) RoutingMetadata {
 	return RoutingMetadata{
-		Resolution:   ResolutionVirtual,
-		Selectable:   true,
-		DefaultRoute: defaultRoute,
-		Recipe:       recipe,
+		Resolution: ResolutionVirtual,
+		Selectable: true,
+		Recipe:     recipe,
 	}
 }
 

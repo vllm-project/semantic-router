@@ -25,7 +25,7 @@ def test_resolve_effective_config_path_seeds_relative_kb_assets_into_runtime_sto
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "kbs": [
@@ -46,12 +46,10 @@ def test_resolve_effective_config_path_seeds_relative_kb_assets_into_runtime_sto
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
-    assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
+    assert effective_path == tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     effective = yaml.safe_load(effective_path.read_text())
     assert (
         effective["global"]["model_catalog"]["kbs"][0]["source"]["path"]
@@ -80,7 +78,7 @@ def test_resolve_effective_config_path_seeds_builtin_kb_assets_once(tmp_path: Pa
         config_path.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.3",
+                    "version": "v0.4",
                     "global": {
                         "model_catalog": {
                             "kbs": [
@@ -101,12 +99,10 @@ def test_resolve_effective_config_path_seeds_builtin_kb_assets_once(tmp_path: Pa
 
         effective_path = resolve_effective_config_path(
             config_path=config_path,
-            algorithm=None,
-            setup_mode=False,
             platform=None,
         )
 
-        assert effective_path == case_dir / ".vllm-sr" / "runtime-config.yaml"
+        assert effective_path == case_dir / ".vllm-sr" / "compiled-bootstrap.yaml"
         staged_manifest = (
             effective_path.parent / "knowledge_bases" / bundled_dir / "labels.json"
         )
@@ -121,17 +117,15 @@ def test_resolve_effective_config_path_seeds_builtin_kb_assets_once(tmp_path: Pa
         staged_manifest.parent.rmdir()
         effective_path = resolve_effective_config_path(
             config_path=config_path,
-            algorithm=None,
-            setup_mode=False,
             platform=None,
         )
-        assert effective_path == case_dir / ".vllm-sr" / "runtime-config.yaml"
+        assert effective_path == case_dir / ".vllm-sr" / "compiled-bootstrap.yaml"
         assert not staged_manifest.exists()
 
 
 def test_runtime_kb_bootstrap_state_ignores_corrupt_yaml(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n")
+    config_path.write_text("version: v0.4\n")
     state_path = _runtime_kb_bootstrap_state_path(config_path)
     state_path.write_text("processed: [unterminated", encoding="utf-8")
 
@@ -142,7 +136,7 @@ def test_runtime_kb_bootstrap_state_write_replaces_file_without_temp_leftovers(
     tmp_path: Path,
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.3\n")
+    config_path.write_text("version: v0.4\n")
 
     _write_runtime_kb_bootstrap_state(
         config_path,
@@ -173,7 +167,7 @@ def test_runtime_kb_bootstrap_rejects_paths_outside_allowed_roots(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "kbs": [
@@ -195,8 +189,6 @@ def test_runtime_kb_bootstrap_rejects_paths_outside_allowed_roots(
     with pytest.raises(ValueError, match=r"source\.path"):
         resolve_effective_config_path(
             config_path=config_path,
-            algorithm=None,
-            setup_mode=False,
             platform=None,
         )
 
@@ -212,7 +204,7 @@ def test_runtime_kb_bootstrap_rejects_symlinked_source_tree(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "kbs": [
@@ -234,8 +226,6 @@ def test_runtime_kb_bootstrap_rejects_symlinked_source_tree(tmp_path: Path):
     with pytest.raises(ValueError, match=r"source trees.*symbolic links"):
         resolve_effective_config_path(
             config_path=config_path,
-            algorithm=None,
-            setup_mode=False,
             platform=None,
         )
 

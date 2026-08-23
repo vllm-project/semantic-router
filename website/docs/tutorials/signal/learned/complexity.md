@@ -27,7 +27,7 @@ domain-specific evaluation and safety signals for those concerns.
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     complexity:
       - name: needs_reasoning
@@ -49,7 +49,7 @@ A rule emits a suffixed name. Decisions must reference
 `<rule>:easy`, `<rule>:medium`, or `<rule>:hard`:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: escalate-hard-prompts
       description: Route hard prompts to the reasoning model.
@@ -59,9 +59,6 @@ routing:
         conditions:
           - type: complexity
             name: needs_reasoning:hard
-      modelRefs:
-        - model: reasoning-model
-          use_reasoning: true
 ```
 
 For optional prototype-bank tuning, configure the family-level module once:

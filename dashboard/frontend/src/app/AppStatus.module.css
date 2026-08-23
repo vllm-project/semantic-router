@@ -10,8 +10,7 @@
   overflow: hidden;
   padding: 2rem;
   background:
-    radial-gradient(circle at 50% -15%, rgba(255, 255, 255, 0.08), transparent 34rem),
-    #050505;
+    radial-gradient(circle at 50% -15%, rgba(255, 255, 255, 0.08), transparent 34rem), #050505;
 }
 
 .viewport::before,
@@ -91,7 +90,9 @@
   background: #f5f5f7;
   color: #09090a;
   font-weight: 700;
-  transition: background-color var(--transition-fast), transform var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .action:hover {
@@ -137,12 +138,18 @@
 }
 
 @keyframes statusPulse {
-  50% { opacity: 0.42; }
+  50% {
+    opacity: 0.42;
+  }
 }
 
 @keyframes routeScan {
-  from { transform: translateX(-110%); }
-  to { transform: translateX(230%); }
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(230%);
+  }
 }
 
 @media (max-width: 640px) {

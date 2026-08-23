@@ -18,11 +18,110 @@ package v1alpha1
 
 import (
 	"context"
+	"strings"
 	"testing"
 
+	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestValidateBootstrapReference(t *testing.T) {
+	tests := []struct {
+		name string
+		spec SemanticRouterSpec
+		want string
+	}{
+		{
+			name: "valid immutable reference contract",
+			spec: SemanticRouterSpec{Bootstrap: BootstrapSpec{ConfigMapRef: BootstrapConfigMapReference{
+				Name: "router-bootstrap-v1", Key: "config.yaml",
+			}}},
+		},
+		{name: "missing reference", spec: SemanticRouterSpec{}, want: "name"},
+		{
+			name: "config argument override",
+			spec: SemanticRouterSpec{
+				Bootstrap: BootstrapSpec{ConfigMapRef: BootstrapConfigMapReference{Name: "router-bootstrap-v1", Key: "config.yaml"}},
+				Args:      []string{"--config=/tmp/other.yaml"},
+			},
+			want: "must not override",
+		},
+		{
+			name: "management listener topology override",
+			spec: SemanticRouterSpec{
+				Bootstrap: BootstrapSpec{ConfigMapRef: BootstrapConfigMapReference{Name: "router-bootstrap-v1", Key: "config.yaml"}},
+				Env:       []corev1.EnvVar{{Name: "VLLM_SR_MANAGEMENT_INTERNAL_LISTENER", Value: "false"}},
+			},
+			want: "Operator-owned variable",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := (&SemanticRouter{Spec: test.spec}).validateBootstrap()
+			if test.want == "" && err != nil {
+				t.Fatalf("validateBootstrap() error = %v", err)
+			}
+			if test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)) {
+				t.Fatalf("validateBootstrap() error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestValidateDeploymentOwnedVolumes(t *testing.T) {
+	base := SemanticRouterSpec{Bootstrap: BootstrapSpec{ConfigMapRef: BootstrapConfigMapReference{
+		Name: "router-bootstrap-v1", Key: "config.yaml",
+	}}}
+	tests := []struct {
+		name string
+		edit func(*SemanticRouterSpec)
+		want string
+	}{
+		{
+			name: "declared Secret volume",
+			edit: func(spec *SemanticRouterSpec) {
+				spec.Volumes = []corev1.Volume{{Name: "managed-secrets"}}
+				spec.VolumeMounts = []corev1.VolumeMount{{Name: "managed-secrets", MountPath: "/run/secrets/router"}}
+			},
+		},
+		{
+			name: "reserved bootstrap volume",
+			edit: func(spec *SemanticRouterSpec) {
+				spec.Volumes = []corev1.Volume{{Name: "config-volume"}}
+			},
+			want: "Operator-owned volume",
+		},
+		{
+			name: "undeclared mount",
+			edit: func(spec *SemanticRouterSpec) {
+				spec.VolumeMounts = []corev1.VolumeMount{{Name: "missing", MountPath: "/run/secrets/router"}}
+			},
+			want: "undeclared deployment volume",
+		},
+		{
+			name: "bootstrap mount path override",
+			edit: func(spec *SemanticRouterSpec) {
+				spec.Volumes = []corev1.Volume{{Name: "other"}}
+				spec.VolumeMounts = []corev1.VolumeMount{{Name: "other", MountPath: "/app/config.yaml"}}
+			},
+			want: "must not override",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			spec := base
+			test.edit(&spec)
+			err := (&SemanticRouter{Spec: spec}).validateDeploymentContract()
+			if test.want == "" && err != nil {
+				t.Fatalf("validateDeploymentContract() error = %v", err)
+			}
+			if test.want != "" && (err == nil || !strings.Contains(err.Error(), test.want)) {
+				t.Fatalf("validateDeploymentContract() error = %v, want substring %q", err, test.want)
+			}
+		})
+	}
+}
 
 func TestValidateAutoscaling(t *testing.T) {
 	tests := []struct {
@@ -498,6 +597,13 @@ func TestValidateCreate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Bootstrap validation has dedicated table coverage above. These
+			// cases exercise the remaining create-time contracts with a valid
+			// immutable-manifest reference.
+			tt.sr.Spec.Bootstrap = BootstrapSpec{ConfigMapRef: BootstrapConfigMapReference{
+				Name: "router-bootstrap-v1",
+				Key:  "config.yaml",
+			}}
 			_, err := tt.sr.ValidateCreate(context.Background(), tt.sr)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateCreate() error = %v, wantErr %v", err, tt.wantErr)
@@ -581,6 +687,10 @@ func TestValidateUpdate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			tt.sr.Spec.Bootstrap = BootstrapSpec{ConfigMapRef: BootstrapConfigMapReference{
+				Name: "router-bootstrap-v1",
+				Key:  "config.yaml",
+			}}
 			_, err := tt.sr.ValidateUpdate(context.Background(), old, tt.sr)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ValidateUpdate() error = %v, wantErr %v", err, tt.wantErr)

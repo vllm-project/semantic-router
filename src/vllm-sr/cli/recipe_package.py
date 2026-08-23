@@ -1,4 +1,4 @@
-"""Deterministic transport archives for managed Recipe directories."""
+"""Deterministic offline transport archives for Recipe directories."""
 
 from __future__ import annotations
 
@@ -16,6 +16,9 @@ from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
 import yaml
+from pydantic import ValidationError
+
+from cli.models import RecipeDistribution
 
 RECIPE_FILES = (
     "metadata.yaml",
@@ -412,8 +415,23 @@ def _is_literal_credential(
         )
     if normalized in _CREDENTIAL_COLLECTION_KEYS:
         return not isinstance(value, list)
-    credential_field = _CREDENTIAL_KEY_PATTERN.search(normalized) is not None
-    header_credential = normalized in {
+    if not _is_credential_field(normalized, parent_key):
+        return False
+    reference_name = _credential_reference_name(value)
+    return reference_name is None or not _allowed_environment_name(
+        reference_name, environment_name_is_allowed
+    )
+
+
+def _is_credential_field(normalized_key: str, parent_key: str) -> bool:
+    reference_base = normalized_key
+    for suffix in ("_env", "_file"):
+        if reference_base.endswith(suffix):
+            reference_base = reference_base[: -len(suffix)]
+            break
+    if _CREDENTIAL_KEY_PATTERN.search(reference_base) is not None:
+        return True
+    return normalized_key in {
         "authorization",
         "proxy_authorization",
         "cookie",
@@ -421,12 +439,6 @@ def _is_literal_credential(
         "x_api_key",
         "xapikey",
     } and parent_key in {"headers", "extra_headers"}
-    if not credential_field and not header_credential:
-        return False
-    reference_name = _credential_reference_name(value)
-    return reference_name is None or not _allowed_environment_name(
-        reference_name, environment_name_is_allowed
-    )
 
 
 def _credential_collection_item_is_allowed(
@@ -504,6 +516,30 @@ def literal_credential_paths(
     return tuple(sorted(found))
 
 
+def _credential_field_paths(value: object) -> tuple[str, ...]:
+    found: set[str] = set()
+
+    def collect(node: object, path: str, parent_key: str) -> None:
+        if isinstance(node, dict):
+            for key, child in node.items():
+                key_text = str(key)
+                child_path = f"{path}.{key_text}" if path else key_text
+                normalized = key_text.strip().lower().replace("-", "_")
+                if child not in (None, "") and (
+                    normalized in _CREDENTIAL_COLLECTION_KEYS
+                    or _is_credential_field(normalized, parent_key)
+                    or _contains_embedded_url_credential(child)
+                ):
+                    found.add(child_path)
+                collect(child, child_path, normalized)
+        elif isinstance(node, list):
+            for index, child in enumerate(node):
+                collect(child, f"{path}[{index}]", parent_key)
+
+    collect(value, "", "")
+    return tuple(sorted(found))
+
+
 def _contains_embedded_url_credential(value: object) -> bool:
     if not isinstance(value, str) or "://" not in value:
         return False
@@ -537,46 +573,18 @@ def _credential_query_key(key: str) -> bool:
     )
 
 
-def _local_process_mcp_path(data: bytes) -> str | None:
-    """Return the enabled local-process MCP path without exposing its values."""
-
+def _validate_recipe_distribution(document: dict[str, object]) -> None:
     try:
-        document = yaml.safe_load(data.decode("utf-8"))
-    except yaml.YAMLError:
-        return None
-    if not isinstance(document, dict):
-        return None
-
-    node: object = document
-    path = "global.model_catalog.modules.classifier.mcp"
-    for component in path.split("."):
-        if not isinstance(node, dict):
-            return None
-        node = node.get(component)
-    if not isinstance(node, dict) or node.get("enabled") is not True:
-        return None
-
-    raw_transport = node.get("transport_type")
-    transport = raw_transport.strip().lower() if isinstance(raw_transport, str) else ""
-    command = node.get("command")
-    command_present = isinstance(command, str) and bool(command.strip())
-    url = node.get("url")
-    url_present = isinstance(url, str) and bool(url.strip())
-    if not transport:
-        transport = (
-            "streamable-http" if url_present and not command_present else "stdio"
-        )
-
-    args = node.get("args")
-    env = node.get("env")
-    if (
-        transport == "stdio"
-        or command_present
-        or (isinstance(args, (list, dict)) and len(args) != 0)
-        or (isinstance(env, (list, dict)) and len(env) != 0)
-    ):
-        return path
-    return None
+        RecipeDistribution.model_validate(document)
+    except ValidationError as error:
+        details = []
+        for issue in error.errors():
+            path = ".".join(str(part) for part in issue["loc"]) or "config.yaml"
+            details.append(f"{path}: {issue['msg']}")
+        raise RecipePackageError(
+            "config.yaml must be a Recipe distribution containing only version "
+            "and non-empty recipes: " + "; ".join(details)
+        ) from error
 
 
 def _resolve_output_path(
@@ -679,20 +687,21 @@ def pack_recipe(recipe_dir: Path, output: Path | None = None) -> PackageResult:
     recipe_dir = recipe_dir.expanduser().absolute()
     files = _read_exact_recipe_files(recipe_dir)
     recipe_id, version = _validate_metadata(files["metadata.yaml"])
-    _load_yaml_mapping(files["config.yaml"], "config.yaml")
+    config_document = _load_yaml_mapping(files["config.yaml"], "config.yaml")
     _load_yaml_mapping(files["probes.yaml"], "probes.yaml")
     credential_paths = literal_credential_paths(files["config.yaml"])
     if credential_paths:
         raise RecipePackageError(
             "config.yaml contains a literal credential-like value at "
-            f"{credential_paths[0]}; use api_key_env or a pure environment reference"
+            f"{credential_paths[0]}; Recipe distributions contain routing logic only"
         )
-    local_process_mcp_path = _local_process_mcp_path(files["config.yaml"])
-    if local_process_mcp_path is not None:
+    credential_fields = _credential_field_paths(config_document)
+    if credential_fields:
         raise RecipePackageError(
-            "config.yaml must not enable a local-process MCP transport at "
-            f"{local_process_mcp_path}"
+            "config.yaml contains a credential field at "
+            f"{credential_fields[0]}; Recipe distributions contain routing logic only"
         )
+    _validate_recipe_distribution(config_document)
     output_path = _resolve_output_path(recipe_dir, recipe_id, version, output)
     _write_deterministic_archive(output_path, files)
     archive_digest = f"sha256:{hashlib.sha256(output_path.read_bytes()).hexdigest()}"

@@ -86,6 +86,11 @@
   background: rgba(255, 255, 255, 0.055);
 }
 
+.closeButton > svg {
+  width: 15px;
+  height: 15px;
+}
+
 .progressRow {
   display: flex;
   gap: 0.35rem;
@@ -271,10 +276,19 @@
   right: 1.25rem;
   bottom: 1.25rem;
   z-index: 1100;
-  min-height: 40px;
+  width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 50%;
   background: rgba(16, 16, 18, 0.94);
   box-shadow: 0 16px 38px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(10px);
+}
+
+.replayButton span {
+  font-size: 0.9rem;
+  font-weight: 760;
 }
 
 .body::-webkit-scrollbar {

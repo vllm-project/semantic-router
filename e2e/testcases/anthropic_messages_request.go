@@ -23,9 +23,8 @@ func init() {
 }
 
 // testAnthropicMessagesRequest exercises the inbound Anthropic Messages API
-// path end-to-end: the router must accept POST /v1/messages, tag the request
-// as Anthropic-protocol, parse the Anthropic body into the shared IR, run
-// routing, and forward the translated request to the OpenAI-shaped backend.
+// path end-to-end: the Router accepts POST /v1/messages, decodes the request
+// into the shared IR, runs routing, and encodes it for an OpenAI-shaped backend.
 // We only assert on properties the router controls (status, decision header,
 // non-empty body); the free-text response payload is mock-backend dependent.
 func testAnthropicMessagesRequest(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
@@ -74,9 +73,8 @@ func testAnthropicMessagesRequest(ctx context.Context, client *kubernetes.Client
 		return fmt.Errorf("expected non-empty response body for /v1/messages")
 	}
 
-	// Body must be JSON the router synthesized — assert it parses, regardless
-	// of which wire shape (OpenAI or Anthropic) the current PR emits. Later
-	// PRs in the series tighten this to the Anthropic Messages shape.
+	// The public endpoint must always return well-formed JSON. The dedicated
+	// response-shape contract verifies the complete Anthropic envelope.
 	var parsed map[string]interface{}
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		return fmt.Errorf("response body is not valid JSON: %w (body=%s)", err,
@@ -93,8 +91,7 @@ func testAnthropicMessagesRequest(ctx context.Context, client *kubernetes.Client
 }
 
 // anthropicMessage is the minimal Anthropic content shape for E2E requests
-// (string content only; richer content blocks are exercised by the
-// passthrough test on the IRExtensions branch).
+// (string content only; richer blocks are covered by the codec matrix).
 type anthropicMessage struct {
 	Role    string `json:"role"`
 	Content string `json:"content"`

@@ -45,8 +45,16 @@ func requireReadyModel(t *testing.T, models map[string]ModelInfo, name, path str
 	}
 }
 
-func buildAuxiliaryModelsConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+func buildAuxiliaryModelsConfig(t *testing.T) *config.RouterConfig {
+	t.Helper()
+	const (
+		requestModel = "router/auxiliary-models"
+		backendModel = "backend/auxiliary-models"
+		backendID    = "model-auxiliary-models"
+		decisionID   = "decision-model-backed-route"
+		recipeID     = "recipe-auxiliary-models"
+	)
+	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
@@ -100,33 +108,58 @@ func buildAuxiliaryModelsConfig() *config.RouterConfig {
 				UseMmBERT32K: true,
 			},
 		},
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{
-				Categories: []config.Category{
-					{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			backendModel: {ResourceID: backendID, ResourceRevision: 1},
+		}},
+		Recipes: []config.RoutingRecipe{{
+			ID: recipeID, Revision: 1, Name: "auxiliary-models",
+			Profile: config.RoutingProfile{
+				Signals: config.Signals{
+					Categories: []config.Category{
+						{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
+					},
+					FactCheckRules: []config.FactCheckRule{
+						{Name: "verification-needed"},
+					},
+					UserFeedbackRules: []config.UserFeedbackRule{
+						{Name: "satisfied"},
+					},
 				},
-				FactCheckRules: []config.FactCheckRule{
-					{Name: "verification-needed"},
-				},
-				UserFeedbackRules: []config.UserFeedbackRule{
-					{Name: "satisfied"},
-				},
+				Decisions: []config.Decision{{
+					ID: decisionID, Name: "model-backed-route",
+					Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+						{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
+						{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
+					}},
+					Plugins: []config.DecisionPlugin{{
+						Type: config.DecisionPluginHallucination,
+						Configuration: config.MustStructuredPayload(map[string]interface{}{
+							"enabled": true,
+							"use_nli": true,
+						}),
+					}},
+				}},
 			},
-			Decisions: []config.Decision{{
-				Name: "model-backed-route",
-				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
-					{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
-					{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
-				}},
-				Plugins: []config.DecisionPlugin{{
-					Type: config.DecisionPluginHallucination,
-					Configuration: config.MustStructuredPayload(map[string]interface{}{
-						"enabled": true,
-					}),
-				}},
+		}},
+		Entrypoints: []config.EntrypointMapping{{
+			ID: "entrypoint-auxiliary-models", Revision: 1, Name: requestModel, ModelNames: []string{requestModel},
+			Rules: []config.EntrypointRule{{
+				ID: "rule-auxiliary-models", Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: recipeID, RecipeRevision: 1, Recipe: "auxiliary-models",
+					Assignments: map[string]config.RoutingAssignmentSet{
+						decisionID: {Models: []config.RoutingModelAssignment{{
+							ModelID: backendID, ModelRevision: 1, ModelName: backendModel, Weight: "1",
+						}}},
+					},
+				},
 			}},
-		},
+		}},
 	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare auxiliary-models Entrypoint: %v", err)
+	}
+	return cfg
 }
 
 func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *testing.T) {
@@ -170,7 +203,6 @@ func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *tes
 		runtimeConfig: newLiveRuntimeConfig(
 			cfg,
 			func() *config.RouterConfig { return cfg },
-			nil,
 		),
 		configPath: configPath,
 	}
@@ -232,7 +264,6 @@ func TestBuildModelsInfoResponseMarksLoadedClassifierModelsReady(t *testing.T) {
 		runtimeConfig: newLiveRuntimeConfig(
 			cfg,
 			func() *config.RouterConfig { return cfg },
-			nil,
 		),
 	}
 
@@ -253,7 +284,7 @@ func TestBuildModelsInfoResponseMarksLoadedClassifierModelsReady(t *testing.T) {
 func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) {
 	t.Parallel()
 
-	cfg := buildAuxiliaryModelsConfig()
+	cfg := buildAuxiliaryModelsConfig(t)
 
 	apiServer := &ClassificationAPIServer{
 		classificationSvc: &fakeResolvedClassificationService{},
@@ -261,7 +292,6 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 		runtimeConfig: newLiveRuntimeConfig(
 			cfg,
 			func() *config.RouterConfig { return cfg },
-			nil,
 		),
 	}
 
@@ -287,7 +317,7 @@ func TestBuildModelsInfoResponseIncludesConfiguredAuxiliaryModels(t *testing.T) 
 }
 
 func TestBuildHallucinationModelsOmitsLocalExplainerForEndpointBackend(t *testing.T) {
-	cfg := buildAuxiliaryModelsConfig()
+	cfg := buildAuxiliaryModelsConfig(t)
 	cfg.HallucinationMitigation.HallucinationModel.Backend = config.HallucinationBackendEndpoint
 
 	models := buildHallucinationModels(cfg, classifierModelAvailability{})

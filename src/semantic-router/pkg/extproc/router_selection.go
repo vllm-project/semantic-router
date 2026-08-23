@@ -15,27 +15,25 @@ import (
 
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
-	embed := resolveSelectionEmbeddingFunc(cfg)
 	registries := make(map[config.RecipeName]*selection.Registry)
-
-	if len(cfg.Recipes) == 0 {
-		registry := createModelSelectorRegistry(cfg, lt, embed)
-		registries[config.DefaultRecipeName] = registry
-		selection.GlobalRegistry = registry
-		return registries, registry, lt, cancel
-	}
 
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
 		scopedConfig := cfg.ConfigForRecipe(recipe)
-		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed)
+		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt)
+	}
+	for _, recipe := range cfg.ReachableRoutingRecipes() {
+		if recipe == nil || recipe.RuntimeScope() == recipe.Name {
+			continue
+		}
+		registries[recipe.RuntimeScope()] = createModelSelectorRegistry(cfg.ConfigForRecipe(recipe), lt)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
 	selection.GlobalRegistry = defaultRegistry
 	return registries, defaultRegistry, lt, cancel
 }
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.LookupTableStorage, embed func(string) ([]float32, error)) *selection.Registry {
+func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.LookupTableStorage) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -46,7 +44,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.Lookup
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(embed)
+	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
@@ -81,7 +79,7 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]flo
 func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
 	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
-		backend = cfg.EmbeddingModels.EmbeddingBackend()
+		backend = cfg.EmbeddingBackend()
 	}
 	if backend == config.EmbeddingBackendOpenAICompatible {
 		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
@@ -124,6 +122,9 @@ func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) strin
 }
 
 func selectionEmbeddingDimension(cfg *config.RouterConfig, modelType string) int {
+	if mlCfg, err := config.MLSelectionConfigForRoutingProfile(cfg); err == nil && mlCfg != nil && mlCfg.EmbeddingDim > 0 {
+		return mlCfg.EmbeddingDim
+	}
 	if cfg.EmbeddingConfig.TargetDimension > 0 {
 		return cfg.EmbeddingConfig.TargetDimension
 	}
@@ -137,7 +138,7 @@ func collectConfiguredAlgorithmMethods(cfg *config.RouterConfig) []selection.Sel
 	seen := make(map[string]bool)
 	var methods []selection.SelectionMethod
 
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		if decision.Algorithm == nil || decision.Algorithm.Type == "" {
 			continue
 		}
@@ -177,7 +178,7 @@ type decisionScopedSelectionConfigs struct {
 func findDecisionScopedSelectionConfigs(cfg *config.RouterConfig) decisionScopedSelectionConfigs {
 	var result decisionScopedSelectionConfigs
 
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		if decision.Algorithm == nil {
 			continue
 		}
@@ -324,46 +325,47 @@ func buildHybridSelectionConfig(
 }
 
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
-	intelligentRouting := cfg.IntelligentRouting
-	mlCfg := intelligentRouting.ModelSelection.ML
-	if mlCfg.ModelsPath == "" &&
-		mlCfg.KNN.PretrainedPath == "" &&
-		mlCfg.KMeans.PretrainedPath == "" &&
-		mlCfg.SVM.PretrainedPath == "" &&
-		mlCfg.MLP.PretrainedPath == "" {
+	mlCfg, err := config.MLSelectionConfigForRoutingProfile(cfg)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "ml_model_selection_config_invalid", map[string]interface{}{
+			"error": err.Error(),
+		})
+		return nil
+	}
+	if mlCfg == nil {
 		return nil
 	}
 
 	logging.ComponentEvent("extproc", "ml_model_selection_enabled", map[string]interface{}{
 		"models_path":       mlCfg.ModelsPath,
 		"embedding_dim":     mlCfg.EmbeddingDim,
-		"knn_pretrained":    mlCfg.KNN.PretrainedPath != "",
-		"kmeans_pretrained": mlCfg.KMeans.PretrainedPath != "",
-		"svm_pretrained":    mlCfg.SVM.PretrainedPath != "",
-		"mlp_pretrained":    mlCfg.MLP.PretrainedPath != "",
+		"knn_configured":    mlCfg.KNN != nil,
+		"kmeans_configured": mlCfg.KMeans != nil,
+		"svm_configured":    mlCfg.SVM != nil,
+		"mlp_configured":    mlCfg.MLP != nil,
 	})
-	return &selection.MLSelectorConfig{
+	result := &selection.MLSelectorConfig{
 		ModelsPath:   mlCfg.ModelsPath,
 		EmbeddingDim: mlCfg.EmbeddingDim,
-		KNN: &selection.KNNConfig{
-			K:              mlCfg.KNN.K,
-			PretrainedPath: mlCfg.KNN.PretrainedPath,
-		},
-		KMeans: &selection.KMeansConfig{
-			NumClusters:      mlCfg.KMeans.NumClusters,
-			EfficiencyWeight: mlCfg.KMeans.EfficiencyWeight,
-			PretrainedPath:   mlCfg.KMeans.PretrainedPath,
-		},
-		SVM: &selection.SVMConfig{
-			Kernel:         mlCfg.SVM.Kernel,
-			Gamma:          mlCfg.SVM.Gamma,
-			PretrainedPath: mlCfg.SVM.PretrainedPath,
-		},
-		MLP: &selection.MLPConfig{
-			Device:         mlCfg.MLP.Device,
-			PretrainedPath: mlCfg.MLP.PretrainedPath,
-		},
 	}
+	if mlCfg.KNN != nil {
+		result.KNN = &selection.KNNConfig{K: mlCfg.KNN.K, PretrainedPath: mlCfg.KNN.PretrainedPath}
+	}
+	if mlCfg.KMeans != nil {
+		result.KMeans = &selection.KMeansConfig{
+			NumClusters: mlCfg.KMeans.NumClusters, EfficiencyWeight: mlCfg.KMeans.EfficiencyWeight,
+			PretrainedPath: mlCfg.KMeans.PretrainedPath,
+		}
+	}
+	if mlCfg.SVM != nil {
+		result.SVM = &selection.SVMConfig{
+			Kernel: mlCfg.SVM.Kernel, Gamma: mlCfg.SVM.Gamma, PretrainedPath: mlCfg.SVM.PretrainedPath,
+		}
+	}
+	if mlCfg.MLP != nil {
+		result.MLP = &selection.MLPConfig{Device: mlCfg.MLP.Device, PretrainedPath: mlCfg.MLP.PretrainedPath}
+	}
+	return result
 }
 
 func buildMultiFactorSelectionConfig(decisionCfg *config.MultiFactorSelectionConfig) *selection.MultiFactorConfig {

@@ -189,9 +189,12 @@ export function useSpeechDictation(onChangeInput: (value: string) => void) {
     [beginListeningFromInput, isListening],
   )
 
-  useEffect(() => () => {
-    stopListening()
-  }, [stopListening])
+  useEffect(
+    () => () => {
+      stopListening()
+    },
+    [stopListening],
+  )
 
   return {
     isSupported,

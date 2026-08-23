@@ -1,4 +1,4 @@
-/** Config snapshot shapes used by the overview dashboard (loosely typed). */
+/** Router-managed catalog shapes used by the overview dashboard. */
 
 export interface SignalConfig {
   name?: string
@@ -15,46 +15,5 @@ export interface DecisionRule {
   plugins?: unknown[]
   routingScope?: string
   routingEntrypoints?: string[]
-  [key: string]: unknown
-}
-
-export interface RouterConfig {
-  signals?: Record<string, SignalConfig[]>
-  decisions?: DecisionRule[]
-  providers?: {
-    defaults?: {
-      default_model?: string
-    }
-    models?: Array<{
-      name?: string
-      backend_refs?: Array<{ name?: string }>
-      endpoints?: Array<{ name?: string }>
-      preferred_endpoints?: string[]
-      [key: string]: unknown
-    }>
-    vllm_endpoints?: unknown[]
-    [key: string]: unknown
-  }
-  routing?: {
-    signals?: Record<string, SignalConfig[]>
-    decisions?: DecisionRule[]
-  }
-  entrypoints?: Array<{
-    model_names: string[]
-    recipe: string
-  }>
-  recipes?: Array<{
-    name: string
-    description?: string
-    routing: {
-      signals?: Record<string, SignalConfig[]>
-      projections?: Record<string, unknown>
-      decisions?: DecisionRule[]
-      strategy?: string
-    }
-  }>
-  vllm_endpoints?: Array<{ name?: string }>
-  plugins?: Record<string, unknown>
-  global?: Record<string, unknown>
   [key: string]: unknown
 }

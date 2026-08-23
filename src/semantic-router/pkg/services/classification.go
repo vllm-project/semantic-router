@@ -2,7 +2,6 @@ package services
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -11,12 +10,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/decision"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
-)
-
-// Global classification service instance
-var (
-	globalClassificationService *ClassificationService
-	globalClassificationMu      sync.RWMutex
 )
 
 // ClassificationService provides classification functionality
@@ -48,8 +41,8 @@ func (s *ClassificationService) evalModelSelectorSnapshot() EvalModelSelector {
 }
 
 // NewRecipeClassificationService creates a model-aware service backed by
-// isolated recipe classifiers. The default classifier remains available for
-// callers that do not provide a routing model.
+// isolated Recipe classifiers. Model-less calls use the optional explicit
+// Recipe named "default" when one is published.
 func NewRecipeClassificationService(classifiers *classification.RecipeClassifiers, routerConfig *config.RouterConfig) *ClassificationService {
 	var defaultClassifier *classification.Classifier
 	if classifiers != nil {
@@ -71,42 +64,30 @@ func NewClassificationService(classifier *classification.Classifier, config *con
 	}
 }
 
-// NewUnifiedClassificationService creates a new service with unified classifier
-func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedClassifier, legacyClassifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
+// NewUnifiedClassificationService creates an explicitly injected service.
+// Runtime assembly uses NewRecipeClassificationService so named requests
+// cannot be evaluated against a root-level classifier.
+func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedClassifier, defaultClassifier *classification.Classifier, config *config.RouterConfig) *ClassificationService {
 	return &ClassificationService{
-		classifier:        legacyClassifier,
+		classifier:        defaultClassifier,
 		unifiedClassifier: unifiedClassifier,
 		config:            config,
 	}
 }
 
-// SetGlobalClassificationService publishes the compatibility global service used
-// by legacy API-server startup paths that do not yet receive a runtime registry.
-func SetGlobalClassificationService(service *ClassificationService) {
-	globalClassificationMu.Lock()
-	globalClassificationService = service
-	globalClassificationMu.Unlock()
-}
-
-// NewClassificationServiceWithAutoDiscovery creates a service with auto-discovery
-func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*ClassificationService, error) {
-	// Debug: Check current working directory
-	wd, _ := os.Getwd()
-	logging.Debugf("Debug: Current working directory: %s", wd)
-	logging.Debugf("Debug: Attempting to discover models in: ./models")
-
-	// Always try to auto-discover and initialize unified classifier for batch processing
-	// Use model path from config, fallback to "./models" if not specified
+// NewStandaloneClassificationService creates the canonical standalone
+// composition: optional unified batch discovery plus an explicit Recipe
+// classifier graph. It never constructs a classifier from root routing fields.
+func NewStandaloneClassificationService(config *config.RouterConfig) (*ClassificationService, error) {
+	// Batch classification owns a separate optional unified model. Routing
+	// classification is always compiled from explicit Recipes below.
 	modelsPath := "./models"
 	if config != nil && config.CategoryModel.ModelID != "" {
-		// Extract the models directory from the model path
-		// e.g., "models/mom-domain-classifier" -> "models"
 		if idx := strings.Index(config.CategoryModel.ModelID, "/"); idx > 0 {
 			modelsPath = config.CategoryModel.ModelID[:idx]
 		}
 	}
 
-	// Pass mom_registry to auto-discovery for LoRA detection
 	var modelRegistry map[string]string
 	if config != nil {
 		modelRegistry = config.MoMRegistry
@@ -115,22 +96,13 @@ func NewClassificationServiceWithAutoDiscovery(config *config.RouterConfig) (*Cl
 	if ucErr != nil {
 		logging.Infof("Unified classifier auto-discovery failed: %v", ucErr)
 	}
-	// create legacy classifier
-	legacyClassifier, lcErr := classification.NewLegacyClassifierFromConfig(config)
-	if lcErr != nil {
-		logging.Warnf("Legacy classifier initialization failed: %v", lcErr)
+	recipeClassifiers, err := classification.NewRecipeClassifiersFromConfig(config)
+	if err != nil {
+		return nil, fmt.Errorf("initialize standalone Recipe classifiers: %w", err)
 	}
-	if unifiedClassifier == nil && legacyClassifier == nil {
-		logging.Warnf("No classifier initialized. Using placeholder service.")
-	}
-	return NewUnifiedClassificationService(unifiedClassifier, legacyClassifier, config), nil
-}
-
-// GetGlobalClassificationService returns the global classification service instance
-func GetGlobalClassificationService() *ClassificationService {
-	globalClassificationMu.RLock()
-	defer globalClassificationMu.RUnlock()
-	return globalClassificationService
+	service := NewRecipeClassificationService(recipeClassifiers, config)
+	service.unifiedClassifier = unifiedClassifier
+	return service, nil
 }
 
 // HasClassifier returns true if the service has a real classifier (not placeholder)
@@ -260,19 +232,28 @@ func (s *ClassificationService) classifierForRequestModel(modelName string) (*cl
 		}
 		return s.classifier, nil
 	}
-	trimmed := strings.TrimSpace(modelName)
-	if trimmed == "" {
-		trimmed = config.DefaultVSRAutoModelName
-	}
-	recipe, ok := s.config.RecipeForRoutingModel(trimmed)
+	recipe, requestedModel, ok := s.recipeForClassificationModel(modelName)
 	if !ok {
-		return nil, fmt.Errorf("%w %q", ErrUnknownRoutingModel, trimmed)
+		return nil, fmt.Errorf("%w %q", ErrUnknownRoutingModel, requestedModel)
 	}
 	classifier, ok := s.recipeClassifiers.ForRecipe(recipe.Name)
 	if !ok {
 		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", recipe.Name)
 	}
 	return classifier, nil
+}
+
+// recipeForClassificationModel keeps the model-less classification API
+// separate from inference routing. An empty model may use the optional
+// explicit default Recipe; every named model must be an Entrypoint.
+func (s *ClassificationService) recipeForClassificationModel(modelName string) (*config.RoutingRecipe, string, bool) {
+	requestedModel := strings.TrimSpace(modelName)
+	if requestedModel == "" {
+		recipe := s.config.DefaultRecipe()
+		return recipe, requestedModel, recipe != nil
+	}
+	recipe, ok := s.config.RecipeForRequestModel(requestedModel)
+	return recipe, requestedModel, ok
 }
 
 // NOTE: ClassifyIntentUnified removed - ClassifyIntent now always uses signal-driven architecture

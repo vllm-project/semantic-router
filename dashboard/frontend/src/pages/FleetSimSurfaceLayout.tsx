@@ -28,6 +28,7 @@ export default function FleetSimSurfaceLayout({
   return (
     <section className={styles.page}>
       <DashboardSurfaceHero
+        compact
         eyebrow="Fleet Sim"
         title={title}
         description={description}

@@ -1,68 +1,75 @@
 package config
 
-import "testing"
+import (
+	"fmt"
+	"strings"
+	"testing"
+)
 
-func TestNormalizeResponseCachePluginAliases(t *testing.T) {
-	for _, alias := range []string{
-		DecisionPluginResponseCache,
-		"semantic-cache",
-		"semantic_cache",
-		"response-cache",
-	} {
+func responseCacheRecipeFixture(pluginType, configuration string) []byte {
+	configuration = strings.ReplaceAll(strings.TrimSpace(configuration), "\n", "\n          ")
+	document := fmt.Sprintf(`
+decisions:
+  - name: route
+    priority: 1
+    rules:
+      operator: AND
+      conditions: []
+    plugins:
+      - type: %s
+        configuration:
+          %s
+`, pluginType, configuration)
+	return canonicalRecipeFixture(document, "")
+}
+
+func TestResponseCacheUsesCanonicalIdentifier(t *testing.T) {
+	canonical := responseCacheRecipeFixture(DecisionPluginResponseCache, `enabled: true
+semantic:
+  similarity_threshold: 0.9`)
+	if _, err := testAuthoringParser(t).ParseYAMLBytes(canonical); err != nil {
+		t.Fatalf("canonical response_cache plugin rejected: %v", err)
+	}
+
+	for _, alias := range []string{"semantic-cache", "semantic_cache", "response-cache"} {
 		t.Run(alias, func(t *testing.T) {
-			plugin := map[interface{}]interface{}{"type": alias}
-			raw := map[string]interface{}{
-				"routing": map[interface{}]interface{}{
-					"decisions": []interface{}{
-						map[interface{}]interface{}{"plugins": []interface{}{plugin}},
-					},
-				},
-			}
-			if err := normalizeResponseCacheAliases(raw); err != nil {
-				t.Fatalf("normalizeResponseCacheAliases() error = %v", err)
-			}
-			if got := plugin["type"]; got != DecisionPluginResponseCache {
-				t.Fatalf("plugin type = %v, want %s", got, DecisionPluginResponseCache)
+			input := responseCacheRecipeFixture(alias, "enabled: true")
+			if _, err := testAuthoringParser(t).ParseYAMLBytes(input); err == nil {
+				t.Fatalf("removed plugin identifier %q was accepted", alias)
 			}
 		})
 	}
 }
 
-func TestNormalizeResponseCacheRejectsDuplicateAliases(t *testing.T) {
-	raw := map[string]interface{}{
-		"routing": map[interface{}]interface{}{
-			"decisions": []interface{}{
-				map[interface{}]interface{}{
-					"plugins": []interface{}{
-						map[interface{}]interface{}{"type": "semantic-cache"},
-						map[interface{}]interface{}{"type": "response_cache"},
-					},
-				},
-			},
-		},
-	}
-	if err := normalizeResponseCacheAliases(raw); err == nil {
-		t.Fatal("normalizeResponseCacheAliases() accepted duplicate aliases")
+func TestResponseCacheRejectsRemovedFlatFields(t *testing.T) {
+	for name, field := range map[string]string{
+		"similarity threshold":  "similarity_threshold: 0.9",
+		"request controls flag": "allow_request_controls: true",
+		"control header":        "control_header: x-vsr-cache-control",
+	} {
+		t.Run(name, func(t *testing.T) {
+			input := responseCacheRecipeFixture(
+				DecisionPluginResponseCache,
+				"enabled: true\n"+field,
+			)
+			if _, err := testAuthoringParser(t).ParseYAMLBytes(input); err == nil {
+				t.Fatalf("removed response_cache field %q was accepted", field)
+			}
+		})
 	}
 }
 
-func TestNormalizeResponseCacheStoreAliasAndConflict(t *testing.T) {
-	stores := map[interface{}]interface{}{"semantic_cache": map[interface{}]interface{}{"enabled": true}}
-	raw := map[string]interface{}{
-		"global": map[interface{}]interface{}{"stores": stores},
-	}
-	if err := normalizeResponseCacheAliases(raw); err != nil {
-		t.Fatalf("normalizeResponseCacheAliases() error = %v", err)
-	}
-	if _, ok := stores["response_cache"]; !ok {
-		t.Fatal("canonical response_cache store was not created")
-	}
-	if _, ok := stores["semantic_cache"]; ok {
-		t.Fatal("deprecated semantic_cache store was retained")
-	}
-
-	stores["semantic_cache"] = map[interface{}]interface{}{"enabled": false}
-	if err := normalizeResponseCacheAliases(raw); err == nil {
-		t.Fatal("normalizeResponseCacheAliases() accepted both store names")
+func TestResponseCacheRejectsRemovedStoreAlias(t *testing.T) {
+	input := []byte(`
+version: v0.4
+global:
+  control_plane:
+    mode: managed
+  stores:
+    semantic_cache:
+      enabled: true
+`)
+	if _, err := ParseYAMLBytes(input); err == nil {
+		t.Fatal("global.stores.semantic_cache was accepted")
 	}
 }

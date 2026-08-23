@@ -27,7 +27,7 @@ documentation.
 
 For every model pool, align:
 
-- the Semantic Router provider name and `provider_model_id`;
+- the Semantic Router connection's `provider` and `model` values;
 - the platform's served model identity;
 - the stable Service, Gateway, or frontend address; and
 - the modality, context, tool, and protocol capabilities declared by routing

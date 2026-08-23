@@ -73,7 +73,7 @@ surfaces:
   playground_reveal:
   - path: tools/agent/docs/repo-map.md
     reason: Playground and reveal entrypoints for user-visible routing metadata.
-  dsl_crd:
+  dsl_config_contract:
   - path: tools/agent/docs/module-boundaries.md
     reason: Subsystem boundary and capability-placement guidance for the impacted surface.
   k8s_operator:

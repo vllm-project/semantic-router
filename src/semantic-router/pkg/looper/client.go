@@ -28,7 +28,9 @@ import (
 	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 // Client handles HTTP requests to OpenAI-compatible endpoints
@@ -74,8 +76,9 @@ type ModelResponse struct {
 	// Raw is the raw response body
 	Raw []byte
 
-	// Parsed is the parsed ChatCompletion (nil for streaming responses)
-	Parsed *openai.ChatCompletion
+	// Semantic is the decoded neutral backend response used by every Looper
+	// algorithm. Raw remains private workflow/debug evidence only.
+	Semantic *llmprotocol.Response
 
 	// Content is the extracted text content from the response
 	Content string
@@ -148,12 +151,29 @@ type LogprobsConfig struct {
 	TopLogprobs int  // Number of top logprobs to return (0-5, default 1 for margin calculation)
 }
 
+// CallSemanticModel accepts the Router's neutral request contract. The current
+// Looper transport remains an internal Chat-compatible endpoint, but ExtProc
+// never manufactures or mutates that wire DTO.
+func (c *Client) CallSemanticModel(
+	ctx context.Context,
+	request *llmprotocol.Request,
+	modelName string,
+	streaming bool,
+	iteration int,
+	logprobsCfg *LogprobsConfig,
+) (*ModelResponse, error) {
+	looperRequest, err := NewRequestFromSemantic(request)
+	if err != nil {
+		return nil, err
+	}
+	return c.CallModel(ctx, looperRequest.executionRequest, modelName, streaming, iteration, logprobsCfg)
+}
+
 // CallModel sends a request to the configured endpoint with a specific model
 // Parameters:
 //   - iteration: 1-based iteration number for tracking
 //   - logprobsCfg: controls whether to enable logprobs and top_logprobs (nil = disabled)
-//   - accessKey: optional API key for Authorization header (Bearer token)
-func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig, accessKey string) (*ModelResponse, error) {
+func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig) (*ModelResponse, error) {
 	// Clone and modify the request with the target model
 	modifiedReq := cloneRequest(req)
 	modifiedReq.Model = modelName
@@ -206,23 +226,44 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		httpReq.Header.Set(k, v)
 	}
 
-	// Set Authorization header if access key is provided
-	if accessKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+accessKey)
+	observer := dispatchObserverFromContext(ctx)
+	authorization := DispatchAuthorization{}
+	if observer != nil {
+		authorization, err = observer.Started(ctx, DispatchStart{Model: modelName, Iteration: iteration})
+		if err != nil {
+			return nil, fmt.Errorf("dispatch admission failed: %w", err)
+		}
+		if authorization.DispatchID == "" || authorization.Grant == "" {
+			return nil, fmt.Errorf("dispatch admission returned an incomplete authorization")
+		}
 	}
-
-	c.setInternalRequestHeaders(httpReq, ctx, iteration)
+	c.setInternalRequestHeaders(httpReq, ctx, iteration, authorization.Grant, authorization.RequestID)
+	httpStarted := false
+	completed := false
+	complete := func(failureCode string) {
+		if observer == nil || completed {
+			return
+		}
+		completed = true
+		observer.Completed(ctx, DispatchCompletion{
+			DispatchID: authorization.DispatchID, Model: modelName, Iteration: iteration,
+			HTTPStarted: httpStarted, FailureCode: failureCode,
+		})
+	}
 
 	// Execute request
 	start := time.Now()
+	httpStarted = true
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		complete("transport_error")
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := c.readResponseBody(resp)
 	if err != nil {
+		complete("response_read_error")
 		return nil, err
 	}
 
@@ -234,39 +275,41 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		result, err = c.parseNonStreamingResponse(respBody, modelName)
 	}
 	if err != nil {
+		complete("response_parse_error")
 		return nil, err
 	}
 	result.LatencyMs = time.Since(start).Milliseconds()
+	complete("")
 	return result, nil
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response
 func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*ModelResponse, error) {
-	var completion openai.ChatCompletion
-	if err := json.Unmarshal(body, &completion); err != nil {
-		return nil, fmt.Errorf("failed to parse response: %w", err)
+	semantic, _, _, err := protocolcodec.NewBuiltinEngine().DecodeResponse(llmprotocol.OpenAIChatV1, body)
+	if err != nil {
+		return nil, fmt.Errorf("decode neutral model response: %w", err)
 	}
+	if semantic.Error != nil {
+		return nil, semantic.Error
+	}
+	neutral := semanticModelResponse(semantic, modelName)
+	content, reasoning, hasToolCalls := semanticResponseText(neutral)
 
 	result := &ModelResponse{
-		Raw:         body,
-		Parsed:      &completion,
-		Model:       modelName, // Use the requested model name, not the backend's response
-		IsStreaming: false,
-		Usage: TokenUsage{
-			PromptTokens:     completion.Usage.PromptTokens,
-			CompletionTokens: completion.Usage.CompletionTokens,
-			TotalTokens:      completion.Usage.TotalTokens,
-		},
+		Raw:              body,
+		Semantic:         neutral,
+		Model:            modelName, // Use the requested model name, not the backend's response
+		IsStreaming:      false,
+		Usage:            tokenUsageFromSemantic(neutral.Usage),
+		Content:          content,
+		ReasoningContent: reasoning,
+		HasToolCalls:     hasToolCalls,
 	}
 
-	// Extract content, tool_calls, and logprobs
-	if len(completion.Choices) > 0 {
-		result.Content = completion.Choices[0].Message.Content
-		if len(completion.Choices[0].Message.ToolCalls) > 0 || completion.Choices[0].Message.FunctionCall.Name != "" {
-			result.HasToolCalls = true
-		}
-
-		analysis := extractLogprobs(&completion)
+	// Logprobs remain execution evidence for the confidence algorithm. All
+	// publishable content and usage above came from the neutral codec.
+	if len(neutral.Evidence.TokenLogprobs) > 0 {
+		analysis := extractLogprobs(neutral.Evidence.TokenLogprobs)
 		result.Tokens = analysis.Tokens
 		result.Logprobs = analysis.Logprobs
 		result.AverageLogprob = analysis.AverageLogprob
@@ -274,9 +317,6 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 		result.AverageMargin = analysis.AverageMargin
 		result.MarginEvidenceComplete = analysis.MarginEvidenceComplete
 	}
-
-	// Extract reasoning content from vLLM extra fields
-	result.ReasoningContent = extractReasoningFromRaw(body)
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
 		"decision":      c.decisionName,
@@ -293,18 +333,29 @@ func (c *Client) parseNonStreamingResponse(body []byte, modelName string) (*Mode
 
 // parseStreamingResponse parses SSE streaming response
 func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelResponse, error) {
-	result := &ModelResponse{
-		Raw:         body,
-		Model:       modelName,
-		IsStreaming: true,
+	semantic, _, err := protocolcodec.NewBuiltinEngine().DecodeResponseStream(
+		llmprotocol.OpenAIChatV1,
+		body,
+		llmprotocol.StreamContext{PublicModel: modelName},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("decode neutral model stream: %w", err)
 	}
-
-	// Parse SSE chunks to extract content, reasoning, and usage.
-	content, reasoning, chunks := parseSSEContent(body)
-	result.ReasoningContent = reasoning
-	result.Content = content
-	result.StreamingChunks = chunks
-	result.Usage = parseStreamingUsage(body)
+	if semantic.Error != nil {
+		return nil, semantic.Error
+	}
+	neutral := semanticModelResponse(semantic, modelName)
+	content, reasoning, hasToolCalls := semanticResponseText(neutral)
+	result := &ModelResponse{
+		Raw:              body,
+		Semantic:         neutral,
+		Model:            modelName,
+		Content:          content,
+		ReasoningContent: reasoning,
+		HasToolCalls:     hasToolCalls,
+		IsStreaming:      true,
+		Usage:            tokenUsageFromSemantic(neutral.Usage),
+	}
 
 	logging.ComponentDebugEvent("looper", "model_call_completed", map[string]interface{}{
 		"decision":      c.decisionName,
@@ -316,57 +367,6 @@ func (c *Client) parseStreamingResponse(body []byte, modelName string) (*ModelRe
 	})
 
 	return result, nil
-}
-
-// parseSSEContent extracts answer and reasoning text from an SSE response.
-func parseSSEContent(body []byte) (string, string, []string) {
-	var content string
-	var reasoning string
-	var chunks []string
-
-	lines := bytes.Split(body, []byte("\n"))
-	for _, line := range lines {
-		payload, ok := sseDataPayload(line)
-		if !ok {
-			continue
-		}
-		data := string(payload)
-		chunks = append(chunks, data)
-
-		if data == "[DONE]" {
-			continue
-		}
-
-		var chunk map[string]interface{}
-		if err := json.Unmarshal([]byte(data), &chunk); err != nil {
-			continue
-		}
-
-		choices, ok := chunk["choices"].([]interface{})
-		if !ok || len(choices) == 0 {
-			continue
-		}
-		choice, ok := choices[0].(map[string]interface{})
-		if !ok {
-			continue
-		}
-		textFields := choice
-		if delta, ok := choice["delta"].(map[string]interface{}); ok {
-			textFields = delta
-		} else if message, ok := choice["message"].(map[string]interface{}); ok {
-			textFields = message
-		}
-		if text, ok := textFields["content"].(string); ok {
-			content += text
-		}
-		if text := reasoningTextFromMap(textFields); text != "" {
-			reasoning += text
-		} else if text := reasoningTextFromMap(choice); text != "" {
-			reasoning += text
-		}
-	}
-
-	return content, reasoning, chunks
 }
 
 // LogprobAnalysis contains analyzed logprob data from a response
@@ -390,18 +390,11 @@ type LogprobAnalysis struct {
 	MarginEvidenceComplete bool
 }
 
-// extractLogprobs extracts logprobs and margins from a ChatCompletion response
-// Returns both the raw logprobs and the margin analysis for confidence evaluation
-func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
+// extractLogprobs analyzes protocol-neutral token evidence produced by the
+// backend response codec.
+func extractLogprobs(tokens []llmprotocol.TokenLogprob) *LogprobAnalysis {
 	result := &LogprobAnalysis{}
-
-	if len(completion.Choices) == 0 {
-		return result
-	}
-
-	choice := completion.Choices[0]
-	// Check if Logprobs content is empty (the struct is not a pointer in openai-go)
-	if len(choice.Logprobs.Content) == 0 {
+	if len(tokens) == 0 {
 		return result
 	}
 
@@ -409,12 +402,12 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 	var marginSum float64
 	result.MarginEvidenceComplete = true
 
-	for _, tokenLogprob := range choice.Logprobs.Content {
+	for _, tokenLogprob := range tokens {
 		result.Tokens = append(result.Tokens, tokenLogprob.Token)
 		result.Logprobs = append(result.Logprobs, tokenLogprob.Logprob)
 		logprobSum += tokenLogprob.Logprob
 
-		margin, hasAlternative := calculateMargin(tokenLogprob.TopLogprobs)
+		margin, hasAlternative := calculateMargin(tokenLogprob.Alternatives)
 		result.Margins = append(result.Margins, margin)
 		if hasAlternative {
 			marginSum += margin
@@ -437,7 +430,7 @@ func extractLogprobs(completion *openai.ChatCompletion) *LogprobAnalysis {
 // calculateMargin calculates the margin between the chosen token and the next best alternative
 // A large margin indicates the model was very confident in its choice
 // A small margin indicates the model was uncertain between multiple options
-func calculateMargin(topLogprobs []openai.ChatCompletionTokenLogprobTopLogprob) (float64, bool) {
+func calculateMargin(topLogprobs []llmprotocol.TokenLogprobAlternative) (float64, bool) {
 	if len(topLogprobs) < 2 {
 		// A chosen-token logprob alone contains no evidence about the nearest
 		// alternative. Returning zero keeps token/margin indexes aligned; the
@@ -705,48 +698,6 @@ func setStreamParam(body []byte, streaming bool) ([]byte, error) {
 		delete(reqMap, "stream_options")
 	}
 	return json.Marshal(reqMap)
-}
-
-// extractReasoningFromRaw extracts reasoning content from vLLM response
-// vLLM returns reasoning in extra response fields (not tags), which can be in multiple locations:
-// - choices[0].reasoning
-// - choices[0].reasoning_content
-// - choices[0].message.reasoning
-// - choices[0].message.reasoning_content
-func extractReasoningFromRaw(rawBody []byte) string {
-	var raw map[string]interface{}
-	if err := json.Unmarshal(rawBody, &raw); err != nil {
-		return ""
-	}
-
-	choices, ok := raw["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return ""
-	}
-
-	choice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return ""
-	}
-
-	if message, ok := choice["message"].(map[string]interface{}); ok {
-		if reasoning := reasoningTextFromMap(message); reasoning != "" {
-			return reasoning
-		}
-	}
-	if reasoning := reasoningTextFromMap(choice); reasoning != "" {
-		return reasoning
-	}
-	return ""
-}
-
-func reasoningTextFromMap(fields map[string]interface{}) string {
-	for _, key := range []string{"reasoning_content", "reasoning"} {
-		if value, ok := fields[key].(string); ok && strings.TrimSpace(value) != "" {
-			return value
-		}
-	}
-	return ""
 }
 
 // cloneRequest creates a shallow copy of the request

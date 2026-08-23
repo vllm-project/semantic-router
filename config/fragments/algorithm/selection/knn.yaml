@@ -1,3 +1,8 @@
 algorithm:
   type: knn
-
+  ml:
+    models_path: /models/selection
+    embedding_dim: 1024
+    knn:
+      k: 5
+      pretrained_path: /models/selection/knn_model.json

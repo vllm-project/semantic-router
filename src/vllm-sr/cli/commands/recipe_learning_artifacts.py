@@ -38,7 +38,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         if finding_type == "wrong_decision":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/priority",
+                    f"/document/decisions/{decision}/priority",
                     "decrease",
                     "Wrong-route eval evidence suggests this decision may outrank a better match.",
                     finding=item,
@@ -47,7 +47,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "wrong_model_selection":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/document/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     "Model-fit eval evidence suggests this decision should let adaptation compare tier candidates.",
                     value="tier",
@@ -57,7 +57,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "excessive_switching":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/protection/stability_weight",
+                    f"/document/decisions/{decision}/adaptations/protection/stability_weight",
                     "increase",
                     "Frequent switches suggest stronger protection for this decision.",
                     finding=item,
@@ -66,7 +66,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "excessive_holds":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/protection/stability_weight",
+                    f"/document/decisions/{decision}/adaptations/protection/stability_weight",
                     "decrease",
                     "Protection is holding while model-fit evidence suggests the current model is weak.",
                     finding=item,
@@ -75,7 +75,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "missing_protection":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/protection/mode",
+                    f"/document/decisions/{decision}/adaptations/protection/mode",
                     "set",
                     "Protection diagnostics are missing for records where adaptation is active.",
                     value="apply",
@@ -85,7 +85,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type == "overly_broad_candidate_set":
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/document/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     "Broad candidate sets should be narrowed when they correlate with switching or overuse.",
                     value="decision",
@@ -95,7 +95,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type in {"latency_violation", "cost_violation"}:
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/document/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     "Budget violations suggest using the narrowest candidate set until modelRefs are reviewed.",
                     value="decision",
@@ -105,7 +105,7 @@ def build_recipe_patch_suggestions(findings: list[dict[str, Any]]) -> dict[str, 
         elif finding_type in {"underpowered_model", "model_overuse"}:
             suggestions.append(
                 patch_suggestion(
-                    f"/routing/decisions/{decision}/adaptations/adaptation/candidate_set",
+                    f"/document/decisions/{decision}/adaptations/adaptation/candidate_set",
                     "set",
                     item.get("recommendation", ""),
                     value="tier",
@@ -179,7 +179,7 @@ class DecisionPatchPath:
 def parse_decision_patch_path(path: str) -> DecisionPatchPath | None:
     parts = tuple(part for part in path.split("/") if part)
     if len(parts) < _RECIPE_DECISION_PATH_MIN_PARTS or parts[:2] != (
-        "routing",
+        "document",
         "decisions",
     ):
         return None
@@ -257,10 +257,10 @@ def apply_protection_mode_patch(
 def find_recipe_decision(
     recipe: dict[str, Any], decision_name: str
 ) -> dict[str, Any] | None:
-    routing = recipe.get("routing")
-    if not isinstance(routing, dict):
+    document = recipe.get("document")
+    if not isinstance(document, dict):
         return None
-    decisions = routing.get("decisions")
+    decisions = document.get("decisions")
     if not isinstance(decisions, list):
         return None
     for decision in decisions:

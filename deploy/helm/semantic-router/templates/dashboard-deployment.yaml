@@ -1,3 +1,7 @@
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default dict -}}
+{{- $controlPlane := (get $global "control_plane") | default dict -}}
+{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
 {{- if and .Values.dashboard.enabled (gt (int .Values.dashboard.replicaCount) 1) }}
 {{- fail "dashboard.replicaCount > 1 is not supported with the current SQLite auth/session store; use one dashboard replica until a shared auth/session store is configured" }}
 {{- end }}
@@ -56,7 +60,15 @@ spec:
           protocol: TCP
         env:
         - name: TARGET_ROUTER_API_URL
+          {{- if $managedMode }}
+          value: "https://{{ include "semantic-router.fullname" . }}-management:{{ .Values.service.management.port }}"
+          {{- else }}
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
+          {{- end }}
+        {{- if and $managedMode .Values.dashboard.routerTLS.ca.existingSecret }}
+        - name: SSL_CERT_FILE
+          value: "/var/run/secrets/vllm-sr/router-management-ca/ca.crt"
+        {{- end }}
         - name: TARGET_ROUTER_METRICS_URL
           value: "http://{{ include "semantic-router.fullname" . }}-metrics:{{ .Values.service.metrics.port }}/metrics"
         {{- if .Values.dashboard.jwtSecret.existingSecret }}
@@ -79,11 +91,6 @@ spec:
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
         - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
-        - name: VLLM_SR_RECIPE_STORE_DIR
-          value: "{{ .Values.dashboard.persistence.mountPath }}/recipe-store"
-        {{- else }}
-        - name: VLLM_SR_RECIPE_STORE_DIR
-          value: "/app/data/recipe-store"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL
@@ -109,10 +116,11 @@ spec:
           mountPath: /app/config/config.yaml
           subPath: config.yaml
           readOnly: true
-        - name: config-volume
-          mountPath: /app/config/tools_db.json
-          subPath: tools_db.json
+        {{- if and $managedMode .Values.dashboard.routerTLS.ca.existingSecret }}
+        - name: router-management-ca
+          mountPath: /var/run/secrets/vllm-sr/router-management-ca
           readOnly: true
+        {{- end }}
         {{- if .Values.dashboard.persistence.enabled }}
         - name: dashboard-data
           mountPath: {{ .Values.dashboard.persistence.mountPath }}
@@ -134,7 +142,18 @@ spec:
       volumes:
       - name: config-volume
         configMap:
-          name: {{ include "semantic-router.fullname" . }}-config
+          name: {{ include "semantic-router.configMapName" . }}
+          items:
+          - key: config.yaml
+            path: config.yaml
+      {{- if and $managedMode .Values.dashboard.routerTLS.ca.existingSecret }}
+      - name: router-management-ca
+        secret:
+          secretName: {{ .Values.dashboard.routerTLS.ca.existingSecret }}
+          items:
+          - key: {{ .Values.dashboard.routerTLS.ca.existingSecretKey }}
+            path: ca.crt
+      {{- end }}
       {{- if .Values.dashboard.persistence.enabled }}
       - name: dashboard-data
         persistentVolumeClaim:

@@ -9,9 +9,43 @@ import re
 
 from bench.grounded_fusion.datasets import get_dataset, load_draco, load_jsonl
 from bench.grounded_fusion.llm_client import ChatResult
+from bench.grounded_fusion.make_configs import build
 from bench.grounded_fusion.rubric_judge import RubricJudge
 
 FIXTURE = os.path.join(os.path.dirname(__file__), "testdata", "draco_fixture.json")
+
+
+def test_config_builder_emits_readable_v04_resources():
+    config = build(
+        {
+            "version": "v0.4",
+            "models": [],
+            "recipes": [],
+            "entrypoints": [],
+            "global": {
+                "stores": {},
+                "model_catalog": {
+                    "modules": {"hallucination_mitigation": {"enabled": False}}
+                },
+            },
+        },
+        grounding_on=True,
+    )
+
+    assert all(
+        set(model) == {"name", "card", "connections"} for model in config["models"]
+    )
+    assert config["recipes"][0]["document"]["decisions"][0].get("modelRefs") is None
+    assert config["entrypoints"][0]["recipe"] == "grounded-fusion-bench"
+    assigned = config["entrypoints"][0]["assignments"]["grounded-fusion-bench"][
+        "models"
+    ]
+    assert {item["model"] for item in assigned} == {
+        "qwen3:14b",
+        "qwen3:8b",
+        "llama3.1:8b",
+        "gemma3:12b",
+    }
 
 
 # ---- dataset loader --------------------------------------------------------

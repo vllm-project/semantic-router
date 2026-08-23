@@ -93,7 +93,8 @@ export const OPENCLAW_FEATURES: KernelFeature[] = [
   {
     title: 'Intelligent Routing',
     module: 'Routing Orchestrator',
-    description: 'Model selection with cost-accuracy balance driven by vLLM SR routing intelligence.',
+    description:
+      'Model selection with cost-accuracy balance driven by vLLM SR routing intelligence.',
     icon: '\u{1F9ED}',
   },
   {
@@ -124,58 +125,13 @@ export const OPENCLAW_FEATURES: KernelFeature[] = [
 
 const FALLBACK_MODEL_BASE_URL = 'http://127.0.0.1:8801/v1'
 
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  value !== null && typeof value === 'object'
-
-const toPort = (value: unknown): number | null => {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    const normalized = Math.trunc(value)
-    if (normalized >= 1 && normalized <= 65535) return normalized
-    return null
+export const getInitialModelBaseUrl = (routerPublicUrl = ''): string => {
+  const candidate = routerPublicUrl.trim()
+  if (!candidate) return FALLBACK_MODEL_BASE_URL
+  try {
+    const url = new URL(candidate)
+    return `${url.origin}/v1`
+  } catch {
+    return FALLBACK_MODEL_BASE_URL
   }
-  if (typeof value === 'string') {
-    const normalized = Number.parseInt(value.trim(), 10)
-    if (Number.isFinite(normalized) && normalized >= 1 && normalized <= 65535) {
-      return normalized
-    }
-  }
-  return null
 }
-
-const normalizeListenerHost = (value: unknown): string => {
-  const raw = typeof value === 'string' ? value.trim() : ''
-  if (!raw || raw === '0.0.0.0' || raw === '::' || raw === '[::]') {
-    return '127.0.0.1'
-  }
-  return raw
-}
-
-const formatHostForUrl = (host: string): string => {
-  if (host.includes(':') && !host.startsWith('[') && !host.endsWith(']')) {
-    return `[${host}]`
-  }
-  return host
-}
-
-const extractListenerCandidates = (config: unknown): Record<string, unknown>[] => {
-  if (!isRecord(config)) return []
-
-  const listeners = Array.isArray(config.listeners) ? config.listeners : []
-  const apiServer = isRecord(config.api_server) ? config.api_server : null
-  const apiServerListeners = apiServer && Array.isArray(apiServer.listeners) ? apiServer.listeners : []
-
-  return [...listeners, ...apiServerListeners].filter(isRecord)
-}
-
-export const deriveModelBaseUrlFromRouterConfig = (config: unknown): string | null => {
-  const listeners = extractListenerCandidates(config)
-  for (const listener of listeners) {
-    const port = toPort(listener.port)
-    if (!port) continue
-    const host = formatHostForUrl(normalizeListenerHost(listener.address))
-    return `http://${host}:${port}/v1`
-  }
-  return null
-}
-
-export const getInitialModelBaseUrl = (): string => FALLBACK_MODEL_BASE_URL

@@ -88,6 +88,6 @@ describe('TaskList permissions', () => {
 
     expect(markup).toContain('Evaluation tasks are unavailable')
     expect(markup).toContain('service unavailable')
-    expect(markup).toMatch(/>Retry</)
+    expect(markup).toMatch(/<button[^>]*>.*Retry<\/button>/)
   })
 })

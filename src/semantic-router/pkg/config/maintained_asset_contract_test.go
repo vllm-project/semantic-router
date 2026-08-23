@@ -16,11 +16,8 @@ var maintainedFullConfigAssets = []string{
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.local",
 	"deploy/kubernetes/llmd-base/llmd+public-llm/config.yaml.openai",
 	"deploy/kubernetes/observability/dashboard/config.yaml",
-	"deploy/openshift/config-openshift.yaml",
 	repoRel("e2e", "config", "config.agent-smoke.amd.yaml"),
 	repoRel("e2e", "config", "config.agent-smoke.cpu.yaml"),
-	repoRel("e2e", "config", "config.authz-rbac-demo.yaml"),
-	repoRel("e2e", "config", "config.authz-rbac.yaml"),
 	repoRel("e2e", "config", "config.e2e.yaml"),
 	repoRel("e2e", "config", "config.hallucination.yaml"),
 	repoRel("e2e", "config", "config.image-gen.yaml"),
@@ -54,30 +51,45 @@ var maintainedEmbeddedConfigAssets = []string{
 	"deploy/kserve/example-multi-model-config.yaml",
 }
 
-var maintainedValuesConfigAssets = []string{
-	"deploy/helm/semantic-router/values.yaml",
-	"deploy/kubernetes/agentgateway/semantic-router-values/values.yaml",
-	"deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml",
-	"deploy/kubernetes/aibrix/semantic-router-values/values.yaml",
-	"deploy/kubernetes/dynamo/semantic-router-values/values.yaml",
-	"deploy/kubernetes/istio/semantic-router-values/values.yaml",
-	"deploy/kubernetes/llm-d/semantic-router-values/values.yaml",
-	repoRel("e2e", "profiles", "ai-gateway", "values.yaml"),
-	repoRel("e2e", "profiles", "aibrix", "values.yaml"),
-	repoRel("e2e", "profiles", "authz-rbac", "values.yaml"),
-	repoRel("e2e", "profiles", "dynamic-config", "values.yaml"),
-	repoRel("e2e", "profiles", "llm-d", "values.yaml"),
-	repoRel("e2e", "profiles", "ml-model-selection", "values.yaml"),
-	repoRel("e2e", "profiles", "multi-endpoint", "values.yaml"),
-	repoRel("e2e", "profiles", "multimodal-routing", "values.yaml"),
-	repoRel("e2e", "profiles", "production-stack", "values.yaml"),
-	repoRel("e2e", "profiles", "rag-hybrid-search", "values.yaml"),
-	repoRel("e2e", "profiles", "response-api-redis-cluster", "values.yaml"),
-	repoRel("e2e", "profiles", "response-api-redis", "values.yaml"),
-	repoRel("e2e", "profiles", "response-api", "values.yaml"),
-	repoRel("e2e", "profiles", "routing-strategies", "values-mcp.yaml"),
-	repoRel("e2e", "profiles", "routing-strategies", "values.yaml"),
-	repoRel("e2e", "profiles", "streaming", "values.yaml"),
+var maintainedValuesConfigAssets = []valuesConfigAsset{
+	{rel: "deploy/helm/semantic-router/values.yaml"},
+	{rel: "deploy/kubernetes/agentgateway/semantic-router-values/values.yaml"},
+	{rel: "deploy/kubernetes/ai-gateway/semantic-router-values/values.yaml"},
+	{rel: "deploy/kubernetes/aibrix/semantic-router-values/values.yaml"},
+	{rel: "deploy/kubernetes/dynamo/semantic-router-values/values.yaml"},
+	{rel: "deploy/kubernetes/istio/semantic-router-values/values.yaml"},
+	{rel: "deploy/kubernetes/llm-d/semantic-router-values/values.yaml"},
+	{rel: repoRel("e2e", "profiles", "ai-gateway", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "aibrix", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "dashboard", "values.yaml"), configKey: "configOverride"},
+	{rel: repoRel("e2e", "profiles", "hallucination", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "jailbreak-onerror", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "llm-d", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "ml-model-selection", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "multi-endpoint", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "production-stack", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "rag-hybrid-search", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "remote-embedding", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "response-api-redis-cluster", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "response-api-redis", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "response-api", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "router-replay", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "routing-strategies", "values-mcp.yaml")},
+	{rel: repoRel("e2e", "profiles", "routing-strategies", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "streaming", "values.yaml")},
+	{rel: repoRel("e2e", "profiles", "vectorstore-registry", "values.yaml")},
+}
+
+type valuesConfigAsset struct {
+	rel       string
+	configKey string
+}
+
+func (asset valuesConfigAsset) effectiveConfigKey() string {
+	if asset.configKey != "" {
+		return asset.configKey
+	}
+	return "config"
 }
 
 type templatedConfigAsset struct {
@@ -86,6 +98,13 @@ type templatedConfigAsset struct {
 }
 
 var maintainedTemplatedConfigAssets = []templatedConfigAsset{
+	{
+		rel: "deploy/openshift/config-openshift.yaml",
+		replacements: map[string]string{
+			"DYNAMIC_MODEL_A_IP": "192.0.2.21",
+			"DYNAMIC_MODEL_B_IP": "192.0.2.22",
+		},
+	},
 	{
 		rel: repoRel("bench", "cpu-vs-gpu", "config-bench.yaml"),
 		replacements: map[string]string{
@@ -103,7 +122,7 @@ var maintainedTemplatedConfigAssets = []templatedConfigAsset{
 	},
 }
 
-func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
+func TestMaintainedConfigAssetsUseCanonicalV04Contract(t *testing.T) {
 	for _, rel := range maintainedFullConfigAssets {
 		t.Run(rel, func(t *testing.T) {
 			validateMaintainedConfigAsset(t, rel, readMaintainedConfigAsset(t, rel))
@@ -116,9 +135,9 @@ func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 		})
 	}
 
-	for _, rel := range maintainedValuesConfigAssets {
-		t.Run(rel, func(t *testing.T) {
-			validateMaintainedConfigAsset(t, rel, readValuesConfigAsset(t, rel))
+	for _, asset := range maintainedValuesConfigAssets {
+		t.Run(asset.rel, func(t *testing.T) {
+			validateMaintainedConfigAsset(t, asset.rel, readValuesConfigAsset(t, asset))
 		})
 	}
 
@@ -200,19 +219,32 @@ func readEmbeddedConfigAsset(t *testing.T, rel string) []byte {
 	if !ok || rawConfig == "" {
 		t.Fatalf("%s is missing data.config.yaml", rel)
 	}
-	return []byte(rawConfig)
+	// KServe ConfigMaps are source templates. Parse the exact post-render shape so
+	// strict origin validation sees an absolute, credential-free endpoint rather
+	// than the deploy script's brace-delimited placeholders.
+	rendered := strings.NewReplacer(
+		"{{MODEL_NAME}}", "fixture-model",
+		"{{MODEL_NAME_A}}", "fixture-model-a",
+		"{{MODEL_NAME_B}}", "fixture-model-b",
+		"{{PREDICTOR_SERVICE_IP}}", "192.0.2.10",
+		"{{PREDICTOR_SERVICE_IP_A}}", "192.0.2.11",
+		"{{PREDICTOR_SERVICE_IP_B}}", "192.0.2.12",
+		"<namespace>", "default",
+	).Replace(rawConfig)
+	return []byte(rendered)
 }
 
-func readValuesConfigAsset(t *testing.T, rel string) []byte {
+func readValuesConfigAsset(t *testing.T, asset valuesConfigAsset) []byte {
 	t.Helper()
-	root := decodeYAMLMap(t, mustReadRepoFile(t, rel), rel)
-	rawConfig, ok := root["config"]
+	root := decodeYAMLMap(t, mustReadRepoFile(t, asset.rel), asset.rel)
+	configKey := asset.effectiveConfigKey()
+	rawConfig, ok := root[configKey]
 	if !ok {
-		t.Fatalf("%s is missing top-level config block", rel)
+		t.Fatalf("%s is missing top-level %s block", asset.rel, configKey)
 	}
 	data, err := yamlv3.Marshal(rawConfig)
 	if err != nil {
-		t.Fatalf("failed to marshal %s config block: %v", rel, err)
+		t.Fatalf("failed to marshal %s %s block: %v", asset.rel, configKey, err)
 	}
 	return data
 }
@@ -230,9 +262,9 @@ func readTemplatedConfigAsset(t *testing.T, asset templatedConfigAsset) []byte {
 func validateMaintainedConfigAsset(t *testing.T, rel string, data []byte) {
 	t.Helper()
 	raw := decodeYAMLMap(t, data, rel)
-	assertNoLegacySteadyStateKeys(t, rel, raw)
+	assertCanonicalTopLevelKeys(t, rel, raw)
 	assertNoRemovedDomainPolicyKeys(t, rel, raw)
-	if _, err := ParseYAMLBytes(data); err != nil {
+	if _, err := testAuthoringParser(t).ParseYAMLBytes(data); err != nil {
 		t.Fatalf("%s no longer parses as a maintained canonical config asset: %v", rel, err)
 	}
 }
@@ -289,7 +321,7 @@ func assetDomainEntries(raw map[string]interface{}) []map[string]interface{} {
 	return entries
 }
 
-func assertNoLegacySteadyStateKeys(t *testing.T, rel string, raw map[string]interface{}) {
+func assertCanonicalTopLevelKeys(t *testing.T, rel string, raw map[string]interface{}) {
 	t.Helper()
 	for _, key := range []string{
 		"signals",
@@ -313,12 +345,11 @@ func assertNoLegacySteadyStateKeys(t *testing.T, rel string, raw map[string]inte
 		"default_reasoning_effort",
 		"model_config",
 		"vllm_endpoints",
-		"provider_profiles",
 		"strategy",
 		"bert_model",
 	} {
 		if _, ok := raw[key]; ok {
-			t.Fatalf("%s still uses legacy top-level key %q; migrate it to canonical providers/routing/global", rel, key)
+			t.Fatalf("%s uses unsupported top-level key %q; use the v0.4 models/recipes/entrypoints/global contract", rel, key)
 		}
 	}
 }

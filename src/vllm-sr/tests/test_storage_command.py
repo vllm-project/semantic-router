@@ -77,6 +77,28 @@ def test_rotate_refuses_when_postgres_is_not_running(monkeypatch, tmp_path):
     assert storage_state_path(str(tmp_path), stack_layout=layout).read_bytes() == before
 
 
+def test_rotate_redis_only_stack_does_not_require_postgres(monkeypatch, tmp_path):
+    layout = _provision_state(tmp_path)
+    rebuilt = []
+
+    def status(name):
+        return "not found" if name == layout.postgres_container_name else "running"
+
+    monkeypatch.setattr(storage_command, "container_status", status)
+    monkeypatch.setattr(
+        storage_command,
+        "container_start_redis",
+        lambda _network, _layout, **kwargs: rebuilt.append(kwargs) or (0, "", ""),
+    )
+
+    result = CliRunner().invoke(
+        main, ["storage", "rotate", "--config", str(tmp_path / "config.yaml")]
+    )
+
+    assert result.exit_code == 0, result.output
+    assert len(rebuilt) == 1
+
+
 def test_rotate_re_keys_postgres_and_rebuilds_redis_without_re_serving(
     monkeypatch, tmp_path, caplog
 ):
@@ -121,7 +143,7 @@ def test_rotate_re_keys_postgres_and_rebuilds_redis_without_re_serving(
     assert layout.stack_name in result.output
     # Router keeps its credentials from container-create time, so the operator
     # is told to re-create it with the command they actually served with.
-    assert "Router is still running on the previous credentials" in caplog.text
+    assert "Router is still running on the previous storage credentials" in caplog.text
     assert "`vllm-sr serve`" in caplog.text
     assert rotated.postgres.password not in result.output
     assert rotated.redis.password not in result.output

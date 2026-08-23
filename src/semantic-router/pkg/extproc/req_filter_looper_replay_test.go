@@ -12,11 +12,12 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
-	"github.com/openai/openai-go"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/dispatchauthority"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/internalauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
@@ -37,16 +38,14 @@ func TestHandleLooperExecutionFailureIsVisibleAndTerminalInReplay(t *testing.T) 
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "confidence"},
 	}
+	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
 		RequestID:                "replay-looper-failure",
 		Headers:                  map[string]string{},
-		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
-	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "router-entrypoint",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
@@ -104,16 +103,14 @@ func TestHandleConfidencePartialFailurePersistsAccountingWithoutCandidateBody(t 
 			},
 		},
 	}
+	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
 		RequestID:                "replay-confidence-partial",
 		Headers:                  map[string]string{},
-		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
-	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "router-entrypoint",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
@@ -225,16 +222,14 @@ func TestHandleLooperExecutionRecordsFinalModelInReplay(t *testing.T) {
 		},
 		Algorithm: &config.AlgorithmConfig{Type: "ratings"},
 	}
+	request := testNeutralRequest("router-entrypoint", "hello")
 	ctx := &RequestContext{
 		RequestID:                "replay-final-model",
 		Headers:                  map[string]string{},
-		OriginalRequestBody:      []byte(`{"model":"router-entrypoint","messages":[{"role":"user","content":"hello"}]}`),
+		SourceFormat:             llmprotocol.OpenAIChatV1,
+		SemanticRequest:          request,
 		RouterReplayPluginConfig: &replayConfig,
 		VSRSelectedDecision:      decision,
-	}
-	request := &openai.ChatCompletionNewParams{
-		Model:    "router-entrypoint",
-		Messages: []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hello")},
 	}
 
 	response, err := router.handleLooperExecution(context.Background(), request, decision, ctx)
@@ -306,15 +301,29 @@ func assertReplayAggregateUsage(t *testing.T, record store.Record) {
 }
 
 func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T) {
-	cfg := looperReplayRecipeConfig()
+	cfg := looperReplayRecipeConfig(t)
+	firstRecipe, firstOK := cfg.RecipeForRequestModel("router/first-recipe")
+	secondRecipe, secondOK := cfg.RecipeForRequestModel("router/second-recipe")
+	if !firstOK || !secondOK {
+		t.Fatal("resolve published looper Recipe Entrypoints")
+	}
 	recorders := initializeReplayRecorders(cfg)
+	firstRecorder := recorders[config.RoutingDecisionKey(firstRecipe.RuntimeScope(), "shared-route")]
+	secondRecorder := recorders[config.RoutingDecisionKey(secondRecipe.RuntimeScope(), "shared-route")]
+	if firstRecorder == nil || secondRecorder == nil {
+		t.Fatalf("initialize isolated replay recorders for published Entrypoints: keys=%v", recorders)
+	}
 	router := &OpenAIRouter{
-		Config:          cfg,
-		Cache:           &spyCache{},
-		ReplayRecorders: recorders,
+		Config:               cfg,
+		Cache:                &spyCache{},
+		ReplayRecorders:      recorders,
+		DispatchCapabilities: dispatchCapabilityRuntimeStub{},
 	}
 	ctx := &RequestContext{
 		Headers: map[string]string{},
+		TraceContext: withVerifiedDispatchGrant(
+			context.Background(), dispatchauthority.VerifiedGrant{},
+		),
 	}
 
 	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
@@ -324,7 +333,7 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
 		&core.HeaderValue{Key: headers.VSRInternalAuth, Value: internalauth.Token()},
 		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
-		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "second-recipe"},
+		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: string(secondRecipe.RuntimeScope())},
 	)
 	headerResponse, err := router.handleRequestHeaders(requestHeaders, ctx)
 	if err != nil {
@@ -359,13 +368,13 @@ func TestAuthenticatedLooperReplayUsesRecipeScopedDuplicateDecision(t *testing.T
 	assertLooperInternalReplayScope(
 		t,
 		ctx,
-		recorders[config.RoutingDecisionKey("second-recipe", "shared-route")],
-		recorders[config.RoutingDecisionKey("first-recipe", "shared-route")],
+		secondRecorder,
+		firstRecorder,
 	)
 }
 
 func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
-	cfg := looperReplayRecipeConfig()
+	cfg := looperReplayRecipeConfig(t)
 	cfg.RouterReplay.Enabled = false
 	cfg.Recipes[1].Profile.Decisions[0].Plugins = []config.DecisionPlugin{{
 		Type: config.DecisionPluginFastResponse,
@@ -375,7 +384,10 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	}}
 	cfg.BackendModels = config.BackendModels{
 		ModelConfig: map[string]config.ModelParams{
-			"model-a": {PreferredEndpoints: []string{"model-backend"}},
+			"model-a": {
+				ResourceID: "model-a-id", ResourceRevision: 1,
+				PreferredEndpoints: []string{"model-backend"},
+			},
 		},
 		VLLMEndpoints: []config.VLLMEndpoint{{
 			Name:    "model-backend",
@@ -385,19 +397,31 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 			Weight:  1,
 		}},
 	}
-	router := &OpenAIRouter{
-		Config: cfg,
-		Cache:  &spyCache{},
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("recompile looper Recipe Entrypoints: %v", err)
 	}
-	router.CredentialResolver = newTestCredentialResolver(cfg)
-	ctx := &RequestContext{Headers: map[string]string{}}
+	secondRecipe, ok := cfg.RecipeForRequestModel("router/second-recipe")
+	if !ok {
+		t.Fatal("resolve second looper Recipe Entrypoint")
+	}
+	router := &OpenAIRouter{
+		Config:               cfg,
+		Cache:                &spyCache{},
+		DispatchCapabilities: dispatchCapabilityRuntimeStub{},
+	}
+	ctx := &RequestContext{
+		Headers: map[string]string{},
+		TraceContext: withVerifiedDispatchGrant(
+			context.Background(), dispatchauthority.VerifiedGrant{},
+		),
+	}
 
 	requestHeaders := newRequestHeaders("POST", "/v1/chat/completions")
 	requestHeaders.RequestHeaders.Headers.Headers = append(
 		requestHeaders.RequestHeaders.Headers.Headers,
 		&core.HeaderValue{Key: headers.VSRLooperRequest, Value: "true"},
 		&core.HeaderValue{Key: headers.VSRLooperDecision, Value: "shared-route"},
-		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: "second-recipe"},
+		&core.HeaderValue{Key: headers.VSRSelectedRecipe, Value: string(secondRecipe.RuntimeScope())},
 	)
 	headerResponse, err := router.handleRequestHeaders(requestHeaders, ctx)
 	if err != nil {
@@ -415,7 +439,7 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 		}
 	}
 
-	response, err := router.handleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
+	response, err := router.HandleRequestBody(&ext_proc.ProcessingRequest_RequestBody{
 		RequestBody: &ext_proc.HttpBody{
 			Body: []byte(`{"model":"model-a","messages":[{"role":"user","content":"hello"}]}`),
 		},
@@ -423,8 +447,11 @@ func TestSpoofedLooperContextCannotExecuteRecipePlugins(t *testing.T) {
 	if err != nil {
 		t.Fatalf("handleRequestBody: %v", err)
 	}
-	if response.GetImmediateResponse() != nil {
-		t.Fatal("spoofed looper context executed the recipe fast-response plugin")
+	if immediate := response.GetImmediateResponse(); immediate != nil {
+		t.Fatalf(
+			"spoofed looper request returned status %v with body %q (selected decision: %+v)",
+			immediate.GetStatus().GetCode(), string(immediate.GetBody()), ctx.VSRSelectedDecision,
+		)
 	}
 	if ctx.VSRSelectedDecision != nil {
 		t.Fatalf("spoofed looper context selected decision %+v", ctx.VSRSelectedDecision)
@@ -465,16 +492,20 @@ func assertLooperInternalReplayScope(
 }
 
 func TestHydrateLooperRoutingContextPreservesResolvedRouting(t *testing.T) {
-	cfg := looperReplayRecipeConfig()
+	cfg := looperReplayRecipeConfig(t)
 	router := &OpenAIRouter{Config: cfg}
-	firstRecipe, ok := cfg.RecipeByName("first-recipe")
+	firstRecipe, ok := cfg.RecipeForRequestModel("router/first-recipe")
 	if !ok {
-		t.Fatal("first recipe not found")
+		t.Fatal("first Recipe Entrypoint not found")
+	}
+	secondRecipe, ok := cfg.RecipeForRequestModel("router/second-recipe")
+	if !ok {
+		t.Fatal("second Recipe Entrypoint not found")
 	}
 	ctx := &RequestContext{
 		LooperRequest: true,
 		Headers: map[string]string{
-			headers.VSRSelectedRecipe: "second-recipe",
+			headers.VSRSelectedRecipe: string(secondRecipe.RuntimeScope()),
 		},
 	}
 	ctx.Routing.SelectRecipe(firstRecipe)
@@ -486,33 +517,75 @@ func TestHydrateLooperRoutingContextPreservesResolvedRouting(t *testing.T) {
 	}
 }
 
-func looperReplayRecipeConfig() *config.RouterConfig {
-	return &config.RouterConfig{
+func looperReplayRecipeConfig(t *testing.T) *config.RouterConfig {
+	t.Helper()
+	const (
+		backendModel     = "model-a"
+		backendID        = "model-a-id"
+		firstDecisionID  = "decision-first-shared-route"
+		secondDecisionID = "decision-second-shared-route"
+	)
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			backendModel: {ResourceID: backendID, ResourceRevision: 1},
+		}},
 		RouterReplay: config.RouterReplayConfig{
 			Enabled:      true,
 			StoreBackend: "memory",
 		},
 		Recipes: []config.RoutingRecipe{
 			{
-				Name: "first-recipe",
+				ID: "recipe-first", Revision: 1, Name: "first-recipe",
 				Profile: config.RoutingProfile{Decisions: []config.Decision{
 					{
-						Name:      "shared-route",
-						Tier:      1,
-						ModelRefs: []config.ModelRef{{Model: "model-a"}},
+						ID: firstDecisionID, Name: "shared-route", Tier: 1,
 					},
 				}},
 			},
 			{
-				Name: "second-recipe",
+				ID: "recipe-second", Revision: 1, Name: "second-recipe",
 				Profile: config.RoutingProfile{Decisions: []config.Decision{
 					{
-						Name:      "shared-route",
-						Tier:      2,
-						ModelRefs: []config.ModelRef{{Model: "model-a"}},
+						ID: secondDecisionID, Name: "shared-route", Tier: 2,
+					},
+				}},
+			},
+		},
+		Entrypoints: []config.EntrypointMapping{
+			{
+				ID: "entrypoint-first", Revision: 1, Name: "router/first-recipe",
+				ModelNames: []string{"router/first-recipe"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-first", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: "recipe-first", RecipeRevision: 1, Recipe: "first-recipe",
+						Assignments: map[string]config.RoutingAssignmentSet{
+							firstDecisionID: {Models: []config.RoutingModelAssignment{{
+								ModelID: backendID, ModelRevision: 1, ModelName: backendModel, Weight: "1",
+							}}},
+						},
+					},
+				}},
+			},
+			{
+				ID: "entrypoint-second", Revision: 1, Name: "router/second-recipe",
+				ModelNames: []string{"router/second-recipe"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-second", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: "recipe-second", RecipeRevision: 1, Recipe: "second-recipe",
+						Assignments: map[string]config.RoutingAssignmentSet{
+							secondDecisionID: {Models: []config.RoutingModelAssignment{{
+								ModelID: backendID, ModelRevision: 1, ModelName: backendModel, Weight: "1",
+							}}},
+						},
 					},
 				}},
 			},
 		},
 	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare looper Recipe Entrypoints: %v", err)
+	}
+	return cfg
 }

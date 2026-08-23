@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { loadDashboardPage, preloadDashboardRoute, resetDashboardRouteLoader } from './routeLoaders'
+import {
+  loadDashboardPage,
+  loadOpenClawPage,
+  preloadDashboardRoute,
+  resetDashboardRouteLoader,
+} from './routeLoaders'
 
 describe('route preloading', () => {
   it('ignores paths outside the dashboard route registry', () => {
@@ -14,6 +19,12 @@ describe('route preloading', () => {
 
     expect(first).toBeDefined()
     expect(second).toBe(first)
+  })
+
+  it('preloads OpenClaw from its canonical product route', () => {
+    resetDashboardRouteLoader(loadOpenClawPage)
+
+    expect(preloadDashboardRoute('/openclaw')).toBeDefined()
   })
 
   it('allows a failed route boundary to retry through a fresh preload entry', () => {

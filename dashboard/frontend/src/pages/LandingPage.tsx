@@ -36,7 +36,7 @@ const LandingPage: React.FC = () => {
           </h1>
 
           <p className={styles.subtitle}>
-            System-level intelligence for heterogeneous LLM inference
+            Compose heterogeneous LLMs into personalized model paths.
           </p>
 
           <div className={styles.ctaGroup}>
@@ -46,11 +46,7 @@ const LandingPage: React.FC = () => {
             <button
               className={styles.secondaryButton}
               onClick={() =>
-                window.open(
-                  'https://vllm-sr.ai/docs/intro/',
-                  '_blank',
-                  'noopener,noreferrer',
-                )
+                window.open('https://vllm-sr.ai/docs/intro/', '_blank', 'noopener,noreferrer')
               }
             >
               Explore the Docs
@@ -61,7 +57,7 @@ const LandingPage: React.FC = () => {
         <section className={styles.routingSection} aria-labelledby="routing-section-title">
           <div className={styles.sectionHeading}>
             <span>Preference-driven routing</span>
-            <h2 id="routing-section-title">Every request. A personalized model path.</h2>
+            <h2 id="routing-section-title">Match workload with right model on right hardware</h2>
           </div>
 
           <div className={styles.routingGrid}>

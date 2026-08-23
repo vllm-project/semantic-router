@@ -18,13 +18,11 @@ package looper
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
@@ -93,14 +91,6 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 				modelName = ref.LoRAName
 			}
 
-			// Get access key from model params
-			accessKey := ""
-			if req.ModelParams != nil {
-				if params, ok := req.ModelParams[ref.Model]; ok {
-					accessKey = params.AccessKey
-				}
-			}
-
 			logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
 				"looper":    "ratings",
 				"decision":  req.DecisionName,
@@ -112,12 +102,11 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 			// RatingsLooper doesn't need logprobs (no confidence-based routing).
 			resp, err := l.client.CallModel(
 				ctx,
-				toolFreeLooperRequest(req.OriginalRequest),
+				toolFreeLooperRequest(req.executionRequest),
 				modelName,
 				req.IsStreaming,
 				idx+1,
 				nil,
-				accessKey,
 			)
 
 			mu.Lock()
@@ -141,23 +130,25 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 
 	wg.Wait()
 
-	// Check for fail-fast mode
-	if onError == "fail" {
-		for i, err := range errors {
-			if err != nil {
-				return nil, fmt.Errorf("model %d failed: %w", i, err)
-			}
-		}
-	}
-
-	// Collect successful responses
+	// Collect successful responses before evaluating fail-fast so paid work is
+	// retained even when a sibling model failed.
 	var successResponses []*ModelResponse
 	var successModels []string
-
 	for i := range responses {
 		if responses[i] != nil {
 			successResponses = append(successResponses, responses[i])
 			successModels = append(successModels, modelsUsed[i])
+		}
+	}
+	iterations := len(req.ModelRefs)
+	evidence := executionEvidenceFromResponses(successResponses, successModels, iterations)
+
+	// Check for fail-fast mode
+	if onError == "fail" {
+		for i, err := range errors {
+			if err != nil {
+				return nil, newPartialExecutionError(fmt.Errorf("model %d failed: %w", i, err), evidence)
+			}
 		}
 	}
 
@@ -173,158 +164,51 @@ func (l *RatingsLooper) Execute(ctx context.Context, req *Request) (*Response, e
 		"models_used":       successModels,
 	})
 
-	// Iterations = total calls made (including failures)
-	iterations := len(req.ModelRefs)
-
+	var response *Response
+	var err error
 	if req.IsStreaming {
-		return l.formatRatingsStreamingResponse(successResponses, successModels, iterations)
+		response, err = l.formatRatingsStreamingResponse(successResponses, successModels, iterations, streamUsageRequested(req))
+	} else {
+		response, err = l.formatRatingsJSONResponse(successResponses, successModels, iterations)
 	}
-	return l.formatRatingsJSONResponse(successResponses, successModels, iterations)
+	if err != nil {
+		return nil, newPartialExecutionError(err, evidence)
+	}
+	return response, nil
 }
 
 // formatRatingsJSONResponse creates a response with multiple choices (one per model)
 func (l *RatingsLooper) formatRatingsJSONResponse(responses []*ModelResponse, modelsUsed []string, iterations int) (*Response, error) {
-	// Build choices array - one choice per model response
-	choices := make([]map[string]interface{}, len(responses))
-	for i, resp := range responses {
-		choices[i] = map[string]interface{}{
-			"index": i,
-			"message": map[string]interface{}{
-				"role":    "assistant",
-				"content": resp.Content,
-			},
-			"finish_reason": "stop",
-			"model":         modelsUsed[i], // Include model name in each choice
-		}
+	if len(responses) == 0 || len(modelsUsed) == 0 {
+		return nil, fmt.Errorf("ratings produced no responses")
 	}
-
 	usage := SumUsage(responses...)
-	completion := map[string]interface{}{
-		"id":      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   strings.Join(modelsUsed, ","), // Combined model names
-		"choices": choices,
-		"usage":   usage.Map(),
+	semantic := newTextSemanticResponse("response-ratings", modelsUsed[len(modelsUsed)-1], responses[0].Content, usage)
+	for index := 1; index < len(responses); index++ {
+		semantic.Alternatives = append(semantic.Alternatives, []llmprotocol.OutputItem{{
+			ID:      llmprotocol.StableID(semantic.ID, fmt.Sprint(index)),
+			Role:    llmprotocol.RoleAssistant,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: responses[index].Content}},
+		}})
 	}
-
-	body, err := json.Marshal(completion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &Response{
-		Body:          body,
-		ContentType:   "application/json",
-		Model:         modelsUsed[len(modelsUsed)-1],
-		ModelsUsed:    modelsUsed,
-		Iterations:    iterations,
-		AlgorithmType: "ratings",
-		Usage:         usage,
-	}, nil
+	return newLooperResponse(semantic, false, true, modelsUsed[len(modelsUsed)-1], modelsUsed, iterations, "ratings", usage, nil), nil
 }
 
 // formatRatingsStreamingResponse creates an SSE streaming response with multiple choices
-func (l *RatingsLooper) formatRatingsStreamingResponse(responses []*ModelResponse, modelsUsed []string, iterations int) (*Response, error) {
-	timestamp := time.Now().Unix()
-	id := fmt.Sprintf("chatcmpl-looper-%d", timestamp)
-
-	var sseChunks []string
-
-	// First chunk: role delta for each choice
-	firstChunk := map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": timestamp,
-		"model":   strings.Join(modelsUsed, ","),
-		"choices": func() []map[string]interface{} {
-			choices := make([]map[string]interface{}, len(responses))
-			for i := range responses {
-				choices[i] = map[string]interface{}{
-					"index": i,
-					"delta": map[string]interface{}{
-						"role": "assistant",
-					},
-					"model": modelsUsed[i],
-				}
-			}
-			return choices
-		}(),
-	}
-	firstChunkBytes, _ := json.Marshal(firstChunk)
-	sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", firstChunkBytes))
-
-	// Content chunks: stream content for each choice
-	// Find the max content length to determine chunk iterations
-	maxLen := 0
-	for _, resp := range responses {
-		if len(resp.Content) > maxLen {
-			maxLen = len(resp.Content)
-		}
-	}
-
-	chunkSize := 50
-	for offset := 0; offset < maxLen; offset += chunkSize {
-		choices := make([]map[string]interface{}, len(responses))
-		for i, resp := range responses {
-			content := ""
-			if offset < len(resp.Content) {
-				end := offset + chunkSize
-				if end > len(resp.Content) {
-					end = len(resp.Content)
-				}
-				content = resp.Content[offset:end]
-			}
-			choices[i] = map[string]interface{}{
-				"index": i,
-				"delta": map[string]interface{}{
-					"content": content,
-				},
-				"model": modelsUsed[i],
-			}
-		}
-
-		contentChunk := map[string]interface{}{
-			"id":      id,
-			"object":  "chat.completion.chunk",
-			"created": timestamp,
-			"model":   strings.Join(modelsUsed, ","),
-			"choices": choices,
-		}
-		contentChunkBytes, _ := json.Marshal(contentChunk)
-		sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", contentChunkBytes))
-	}
-
-	// Final chunk: finish_reason for each choice
-	finalChunk := map[string]interface{}{
-		"id":      id,
-		"object":  "chat.completion.chunk",
-		"created": timestamp,
-		"model":   strings.Join(modelsUsed, ","),
-		"choices": func() []map[string]interface{} {
-			choices := make([]map[string]interface{}, len(responses))
-			for i := range responses {
-				choices[i] = map[string]interface{}{
-					"index":         i,
-					"delta":         map[string]interface{}{},
-					"finish_reason": "stop",
-					"model":         modelsUsed[i],
-				}
-			}
-			return choices
-		}(),
-	}
-	finalChunkBytes, _ := json.Marshal(finalChunk)
-	sseChunks = append(sseChunks, fmt.Sprintf("data: %s\n\n", finalChunkBytes))
-	sseChunks = append(sseChunks, "data: [DONE]\n\n")
-
-	return &Response{
-		Body:          []byte(strings.Join(sseChunks, "")),
-		ContentType:   "text/event-stream",
-		Model:         modelsUsed[len(modelsUsed)-1],
-		ModelsUsed:    modelsUsed,
-		Iterations:    iterations,
-		AlgorithmType: "ratings",
-		Usage:         SumUsage(responses...),
-	}, nil
+func (l *RatingsLooper) formatRatingsStreamingResponse(
+	responses []*ModelResponse,
+	modelsUsed []string,
+	iterations int,
+	includeUsage bool,
+) (*Response, error) {
+	_ = responses
+	_ = modelsUsed
+	_ = iterations
+	_ = includeUsage
+	return nil, llmprotocol.NewError(
+		llmprotocol.ErrorUnsupportedFeature,
+		"stream_alternatives_unsupported",
+		"streaming multiple rating alternatives is unsupported",
+		nil,
+	)
 }

@@ -34,7 +34,7 @@ Use `modality` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     modality:
       - name: AR

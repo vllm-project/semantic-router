@@ -1,56 +1,121 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { ConfigData } from './configPageSupport'
 import {
-  applyRoutingScopeProjection,
-  listRoutingScopes,
-  projectConfigForRoutingScope,
-  type RoutingScopedConfigLike,
-} from '../utils/routingScopes'
+  routingManagementApi,
+  waitForRoutingMutation,
+  type RoutingRecipe,
+  type RoutingRecipeWrite,
+} from '../utils/routingManagementApi'
+import type { RoutingProfileLike, RoutingScope } from '../utils/routingScopes'
+import type { ConfigData } from './configPageSupport'
 
-export function useRoutingScopeManager(config: ConfigData | null) {
-  const routingScopes = useMemo(
-    () => listRoutingScopes(config as ConfigData & RoutingScopedConfigLike),
-    [config],
-  )
-  const [selectedScopeId, setSelectedScopeId] = useState('')
+const requestedRecipeScope = () =>
+  typeof window === 'undefined'
+    ? ''
+    : new URLSearchParams(window.location.search).get('recipe')?.trim() || ''
+
+const cloneValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+function recipeProfile(recipe: RoutingRecipe): RoutingProfileLike {
+  const document = recipe.document
+  return {
+    strategy: document.strategy,
+    signals: document.signals as Record<string, unknown> | undefined,
+    projections: document.projections as Record<string, unknown> | undefined,
+    decisions: Array.isArray(document.decisions) ? document.decisions : [],
+  }
+}
+
+function recipeScope(recipe: RoutingRecipe): RoutingScope {
+  return {
+    id: recipe.id,
+    label: recipe.name,
+    description: recipe.description,
+    entrypointModelNames: [],
+    document: recipeProfile(recipe),
+  }
+}
+
+export function managedRecipeConfig(recipe: RoutingRecipe): ConfigData {
+  return cloneValue(recipeProfile(recipe)) as ConfigData
+}
+
+export function managedRecipeDocument(config: ConfigData): Record<string, unknown> {
+  return {
+    ...(config.strategy ? { strategy: config.strategy } : {}),
+    ...(config.signals ? { signals: cloneValue(config.signals) } : {}),
+    ...(config.projections ? { projections: cloneValue(config.projections) } : {}),
+    decisions: cloneValue(config.decisions ?? []),
+  }
+}
+
+export function useRoutingScopeManager() {
+  const [recipes, setRecipes] = useState<RoutingRecipe[]>([])
+  const [selectedScopeId, setSelectedScopeId] = useState(requestedRecipeScope)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadRecipes = useCallback(async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const next = await routingManagementApi.listRecipes()
+      setRecipes(next)
+      setSelectedScopeId((current) => {
+        const match = next.find((recipe) => recipe.id === current || recipe.name === current)
+        return match?.id ?? next[0]?.id ?? ''
+      })
+    } catch (cause) {
+      setRecipes([])
+      setError(cause instanceof Error ? cause.message : 'Recipes could not be loaded.')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (routingScopes.some((scope) => scope.id === selectedScopeId)) return
-    setSelectedScopeId(routingScopes[0]?.id ?? '')
-  }, [routingScopes, selectedScopeId])
+    void loadRecipes()
+  }, [loadRecipes])
 
+  const routingScopes = useMemo(() => recipes.map(recipeScope), [recipes])
+  const selectedRecipe = useMemo(
+    () => recipes.find((recipe) => recipe.id === selectedScopeId) ?? recipes[0],
+    [recipes, selectedScopeId],
+  )
   const scopedConfig = useMemo(
-    () =>
-      config
-        ? projectConfigForRoutingScope(
-            config as ConfigData & RoutingScopedConfigLike,
-            selectedScopeId,
-          )
-        : null,
-    [config, selectedScopeId],
+    () => (selectedRecipe ? managedRecipeConfig(selectedRecipe) : null),
+    [selectedRecipe],
   )
 
-  const applyScopedConfig = useCallback(
-    (projectedConfig: ConfigData): ConfigData => {
-      if (!config) {
-        throw new Error('Configuration not loaded yet.')
+  const saveScopedConfig = useCallback(
+    async (projectedConfig: ConfigData): Promise<void> => {
+      if (!selectedRecipe) throw new Error('Choose a Recipe first.')
+      if (selectedRecipe.immutable) {
+        throw new Error('Built-in Recipes are read-only. Duplicate it to make changes.')
       }
-      return applyRoutingScopeProjection(
-        config as ConfigData & RoutingScopedConfigLike,
-        projectedConfig as ConfigData & RoutingScopedConfigLike,
-        selectedScopeId,
+      const input: RoutingRecipeWrite = {
+        name: selectedRecipe.name,
+        description: selectedRecipe.description,
+        document: managedRecipeDocument(projectedConfig),
+      }
+      await waitForRoutingMutation(
+        await routingManagementApi.updateRecipe(selectedRecipe.id, selectedRecipe.revision, input),
       )
+      await loadRecipes()
     },
-    [config, selectedScopeId],
+    [loadRecipes, selectedRecipe],
   )
 
   return {
-    applyScopedConfig,
+    error,
+    loading,
+    reload: loadRecipes,
     routingScopes,
+    saveScopedConfig,
     scopedConfig,
-    selectedScope: routingScopes.find((scope) => scope.id === selectedScopeId),
-    selectedScopeId,
+    selectedRecipe,
+    selectedScope: selectedRecipe ? recipeScope(selectedRecipe) : undefined,
+    selectedScopeId: selectedRecipe?.id ?? selectedScopeId,
     setSelectedScopeId,
   }
 }

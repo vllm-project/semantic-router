@@ -8,6 +8,7 @@ import (
 
 func newRoutingSignalUsageTestConfig() *RouterConfig {
 	return &RouterConfig{
+		RoutingScope: "test-recipe",
 		InlineModels: InlineModels{
 			Classifier: Classifier{
 				CategoryModel: CategoryModel{
@@ -121,6 +122,7 @@ func TestNeedsCoreMappingsForRouting(t *testing.T) {
 
 func TestUsesSignalTypeInRoutingTraversesProjectionDependencies(t *testing.T) {
 	cfg := &RouterConfig{
+		RoutingScope: "test-recipe",
 		IntelligentRouting: IntelligentRouting{
 			Projections: Projections{
 				Scores: []ProjectionScore{
@@ -187,6 +189,7 @@ func TestUsesSignalTypeInRoutingTraversesProjectionDependencies(t *testing.T) {
 
 func TestUsesSignalTypeInRoutingProtectsAgainstProjectionCycles(t *testing.T) {
 	cfg := &RouterConfig{
+		RoutingScope: "test-recipe",
 		IntelligentRouting: IntelligentRouting{
 			Projections: Projections{
 				Scores: []ProjectionScore{
@@ -251,10 +254,7 @@ func TestReachableRoutingUsageExcludesUnmappedNamedRecipes(t *testing.T) {
 		t.Fatal("unmapped named recipe unexpectedly counted as request reachable")
 	}
 
-	cfg.Entrypoints = []EntrypointMapping{{
-		ModelNames: []string{"vllm-sr/verification"},
-		Recipe:     "unmapped",
-	}}
+	cfg.Entrypoints = []EntrypointMapping{testCompiledEntrypoint("vllm-sr/verification", &cfg.Recipes[1])}
 	if !cfg.UsesSignalTypeInReachableRouting(SignalTypeFactCheck) {
 		t.Fatal("entrypoint-mapped recipe did not count as request reachable")
 	}
@@ -363,7 +363,7 @@ func loadGenericMultiRecipeModelNeedsTestConfig(t *testing.T) *RouterConfig {
 	if err != nil {
 		t.Fatalf("read generic multi-recipe fixture: %v", err)
 	}
-	cfg, err := ParseYAMLBytes(data)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(data)
 	if err != nil {
 		t.Fatalf("parse generic multi-recipe fixture: %v", err)
 	}

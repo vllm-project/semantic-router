@@ -49,7 +49,7 @@ func newAuthenticatedRequest(t *testing.T, svc *Service, user *User, method, pat
 	}
 
 	req := httptest.NewRequest(method, path, strings.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	if body != "" {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -94,83 +94,12 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 		}))
 
 		recorder := httptest.NewRecorder()
-		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/status", ""))
+		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/auth/me", ""))
 
 		if recorder.Code != http.StatusUnauthorized {
 			t.Fatalf("status = %d, want %d", recorder.Code, http.StatusUnauthorized)
 		}
 	})
-}
-
-func TestAuthenticateRequestRequiresTopologyReadForRecipeValidateTrailingSlash(t *testing.T) {
-	t.Parallel()
-
-	svc := newTestAuthService(t)
-	user := newTestUser(t, svc, "config-reader@example.com", RoleRead, "active")
-	if _, err := svc.store.db.ExecContext(
-		context.Background(),
-		`DELETE FROM role_permissions WHERE role = ? AND permission_key = ?`,
-		RoleRead,
-		PermTopologyRead,
-	); err != nil {
-		t.Fatalf("remove topology.read permission: %v", err)
-	}
-
-	nextCalled := false
-	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		nextCalled = true
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(
-		recorder,
-		newAuthenticatedRequest(
-			t,
-			svc,
-			user,
-			http.MethodPost,
-			"/api/recipe/probes/lane/variant/validate/",
-			"",
-		),
-	)
-
-	if recorder.Code != http.StatusForbidden {
-		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
-	}
-	if nextCalled {
-		t.Fatal("validate request reached the protected handler")
-	}
-}
-
-func TestAuthenticateRequestDeniesRecipePackageMutationSubtreesToConfigReader(t *testing.T) {
-	t.Parallel()
-
-	svc := newTestAuthService(t)
-	user := newTestUser(t, svc, "package-reader@example.com", RoleRead, "active")
-	for _, path := range []string{
-		"/api/recipe/import",
-		"/api/recipe/import/anything",
-		"/api/recipe/activate",
-		"/api/recipe/activate/anything",
-		"/api/recipe/deactivate",
-		"/api/recipe/deactivate/anything",
-	} {
-		t.Run(path, func(t *testing.T) {
-			nextCalled := false
-			handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-				nextCalled = true
-				w.WriteHeader(http.StatusNoContent)
-			}))
-			recorder := httptest.NewRecorder()
-			handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodPost, path, ""))
-			if recorder.Code != http.StatusForbidden {
-				t.Fatalf("status = %d, want %d", recorder.Code, http.StatusForbidden)
-			}
-			if nextCalled {
-				t.Fatal("package mutation reached the protected handler")
-			}
-		})
-	}
 }
 
 func TestRegisterAdminRoutesHonorsUsersViewAndSelfLockoutGuards(t *testing.T) {
@@ -275,8 +204,7 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 	}
 
 	var payload struct {
-		Token string `json:"token"`
-		User  struct {
+		User struct {
 			ID          string   `json:"id"`
 			Role        string   `json:"role"`
 			Permissions []string `json:"permissions"`
@@ -284,9 +212,6 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 	}
 	if err := json.NewDecoder(recorder.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode response: %v", err)
-	}
-	if payload.Token == "" {
-		t.Fatalf("expected token in login response")
 	}
 	if payload.User.ID != user.ID {
 		t.Fatalf("user.id = %q, want %q", payload.User.ID, user.ID)
@@ -296,9 +221,6 @@ func TestLoginHandlerReturnsEffectivePermissions(t *testing.T) {
 	}
 	if !slices.Contains(payload.User.Permissions, PermConfigDeploy) {
 		t.Fatalf("login response permissions missing %q: %v", PermConfigDeploy, payload.User.Permissions)
-	}
-	if !slices.Contains(payload.User.Permissions, PermToolsUse) {
-		t.Fatalf("login response permissions missing %q: %v", PermToolsUse, payload.User.Permissions)
 	}
 }
 

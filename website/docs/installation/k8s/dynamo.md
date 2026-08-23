@@ -148,9 +148,9 @@ deployment. The provider endpoint should use cluster DNS:
 <frontend-service>.<dynamo-namespace>.svc.cluster.local:<frontend-port>
 ```
 
-Update every `modelRefs[].model` that refers to the sample model as well as
-`providers.defaults.default_model`. The names must match an entry returned by
-the Dynamo frontend.
+Update `models[].connections[]` for the Dynamo frontend, then point each
+Entrypoint assignment at the corresponding Model name. Each connection's
+`model` must match an entry returned by the Dynamo frontend.
 
 For development, install the continuously published Semantic Router chart:
 

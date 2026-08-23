@@ -12,6 +12,7 @@ import {
   type WorkerHealthFilter,
 } from '../utils/openClawCatalogSupport'
 import { OpenClawCatalogControls, OpenClawPagination } from './OpenClawCatalogControls'
+import ProductIcon from '../components/ProductIcon'
 import styles from './OpenClawPage.module.css'
 import { truncateText, type OpenClawStatus, type TeamProfile } from './OpenClawPageSupport'
 import { OpenClawRequestNotice } from './OpenClawRequestNotice'
@@ -285,7 +286,11 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
             {visibleRoster.map((worker) => (
               <article key={worker.containerName} className={styles.agentCard}>
                 <div className={styles.agentCardHeader}>
-                  <div className={styles.agentAvatar}>{worker.agentEmoji?.trim() || '🧠'}</div>
+                  <div className={styles.agentAvatar}>
+                    {worker.agentEmoji?.trim() || (
+                      <ProductIcon name="claw" aria-label="OpenClaw worker" />
+                    )}
+                  </div>
                   <div className={styles.agentHeaderMeta}>
                     <div className={styles.agentName}>
                       {worker.agentName?.trim() || worker.containerName}

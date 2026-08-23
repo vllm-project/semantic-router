@@ -5,12 +5,14 @@ import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
 
 describe('DashboardMiniFlowDiagram', () => {
   it('uses a browser-compatible SVG marker orientation', () => {
-    const markup = renderToStaticMarkup(createElement(DashboardMiniFlowDiagram, {
-      signals: { total: 1, byType: { keywords: 1 } },
-      decisions: 1,
-      models: 1,
-      plugins: 0,
-    }))
+    const markup = renderToStaticMarkup(
+      createElement(DashboardMiniFlowDiagram, {
+        signals: { total: 1, byType: { keywords: 1 } },
+        decisions: 1,
+        models: 1,
+        plugins: 0,
+      }),
+    )
 
     expect(markup).toContain('orient="auto"')
     expect(markup).not.toContain('auto-start-auto')

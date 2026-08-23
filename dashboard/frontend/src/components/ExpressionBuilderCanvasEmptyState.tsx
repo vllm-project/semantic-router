@@ -14,14 +14,14 @@ export default function ExpressionBuilderCanvasEmptyState({
       <div>Drag signals or operators here</div>
       <div className={styles.canvasEmptyHint}>or start with a template</div>
       <div className={styles.canvasTemplates}>
-        {BUILDER_TEMPLATES.map(template => {
+        {BUILDER_TEMPLATES.map((template) => {
           const GateShape = OPERATOR_META[template.op].GateShape
 
           return (
             <div
               key={template.name}
               className={styles.canvasTemplateCard}
-              onClick={event => {
+              onClick={(event) => {
                 event.stopPropagation()
                 onApplyTemplate(template)
               }}

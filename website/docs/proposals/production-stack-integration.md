@@ -81,7 +81,7 @@ the gateway, Semantic Router, Production Stack, and any external stores.
 
 ## Scope
 
-This proposal defines the layering and model-binding contract. It does not:
+This proposal defines the layering and logical Model-to-serving-endpoint contract. It does not:
 
 - replace Production Stack deployment or scheduling APIs;
 - prescribe a particular replica-routing algorithm;

@@ -33,7 +33,7 @@ Use `user-feedback` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     user_feedbacks:
       - name: wrong_answer

@@ -61,5 +61,9 @@ Every entry uses these sections:
 - [TD045: Reviewed content moderation](td-045-reviewed-content-moderation.md)
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
 
+### PL-0038: Router-Native Access Control
+
+- [TD047: Router-native access control cutover](td-047-access-control-control-plane-gap.md)
+
 If a gap becomes release-critical, move ownership to the active release plan
 and update both indexes in the same change.

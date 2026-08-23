@@ -27,9 +27,8 @@ def merge_source_payload() -> dict:
             "providers": {
                 "remote": {
                     "baseUrl": "https://api.example.com/v1",
-                    "apiKey": "sk-test",
+                    "apiKey": "${REMOTE_API_KEY}",
                     "api": "openai-completions",
-                    "headers": {"X-Tenant": "integration"},
                     "models": [
                         {"id": "gpt-4o-mini", "input": ["text"]},
                         {"id": "gpt-4.1", "input": ["text", "image"]},
@@ -42,7 +41,7 @@ def merge_source_payload() -> dict:
 
 def merge_target_payload() -> dict:
     return {
-        "version": "v0.3",
+        "version": "v0.4",
         "listeners": [
             {
                 "name": "http-18889",
@@ -51,53 +50,55 @@ def merge_target_payload() -> dict:
                 "timeout": "300s",
             }
         ],
-        "providers": {
-            "defaults": {
-                "default_model": "existing-model",
-                "default_reasoning_effort": "medium",
-            },
-            "models": [
-                {
-                    "name": "existing-model",
-                    "backend_refs": [
+        "models": [
+            {
+                "name": "existing-model",
+                "card": {"capabilities": ["chat"]},
+                "connections": [
+                    {
+                        "provider": "openai-compatible",
+                        "endpoint": "http://127.0.0.1:8000/v1",
+                        "model": "existing-model",
+                    }
+                ],
+            }
+        ],
+        "recipes": [
+            {
+                "name": "existing",
+                "document": {
+                    "signals": {
+                        "keywords": [
+                            {
+                                "name": "keep",
+                                "operator": "OR",
+                                "method": "bm25",
+                                "keywords": ["keep"],
+                                "case_sensitive": False,
+                                "bm25_threshold": 0.1,
+                            }
+                        ]
+                    },
+                    "decisions": [
                         {
-                            "endpoint": "127.0.0.1:8000",
-                            "protocol": "http",
-                            "weight": 1,
+                            "name": "existing-default",
+                            "description": "keep me",
+                            "priority": 100,
+                            "rules": {"operator": "AND", "conditions": []},
                         }
                     ],
-                }
-            ],
-        },
-        "routing": {
-            "modelCards": [
-                {
-                    "name": "existing-model",
-                    "description": "keep me",
-                }
-            ],
-            "signals": {
-                "keywords": [
-                    {
-                        "name": "keep",
-                        "operator": "OR",
-                        "method": "bm25",
-                        "keywords": ["keep"],
-                        "case_sensitive": False,
-                        "bm25_threshold": 0.1,
-                    }
-                ]
-            },
-            "decisions": [
-                {
-                    "name": "existing-default",
-                    "description": "keep me",
-                    "priority": 100,
-                    "rules": {"operator": "AND", "conditions": []},
-                    "modelRefs": [{"model": "existing-model"}],
-                }
-            ],
-        },
+                },
+            }
+        ],
+        "entrypoints": [
+            {
+                "name": "vllm-sr/existing",
+                "recipe": "existing",
+                "assignments": {
+                    "existing-default": {"models": [{"model": "existing-model"}]}
+                },
+            }
+        ],
         "global": {
             "router": {
                 "config_source": "file",
@@ -170,41 +171,45 @@ def test_cli_config_import_openclaw_bootstraps_target_and_rewrites_source(
     assert result.exit_code == 0
 
     imported = yaml.safe_load(target_path.read_text(encoding="utf-8"))
-    assert imported["version"] == "v0.3"
+    assert imported["version"] == "v0.4"
     assert imported["listeners"][0]["port"] == 8899
-    assert imported["providers"]["defaults"]["default_model"] == "qwen3-8b"
-    assert imported["providers"]["models"] == [
-        {
-            "name": "qwen3-8b",
-            "provider_model_id": "qwen3-8b",
-            "api_format": "openai",
-            "external_model_ids": {"openai": "qwen3-8b"},
-            "backend_refs": [
-                {
-                    "name": "vllm",
-                    "base_url": "http://10.0.0.7:8000/v1",
-                    "provider": "openai",
-                    "weight": 1,
-                }
-            ],
-        }
-    ]
-    assert imported["routing"]["modelCards"] == [
-        {
-            "name": "qwen3-8b",
-            "context_window_size": 131072,
-            "capabilities": ["chat", "reasoning"],
-            "description": "Imported from OpenClaw provider 'vllm'.",
-        }
-    ]
-    assert imported["routing"]["decisions"][0]["modelRefs"] == [{"model": "qwen3-8b"}]
+    assert set(imported) == {
+        "version",
+        "listeners",
+        "models",
+        "recipes",
+        "entrypoints",
+        "global",
+    }
+    model = imported["models"][0]
+    assert model["name"] == "qwen3-8b"
+    assert set(model) == {"name", "card", "connections"}
+    assert model["card"] == {
+        "capabilities": ["chat", "reasoning"],
+        "description": "Qwen 3 8B",
+        "context_window_size": 131072,
+    }
+    assert model["connections"][0] == {
+        "provider": "openai-compatible",
+        "interface": "chat",
+        "endpoint": "http://10.0.0.7:8000/v1",
+        "model": "qwen3-8b",
+    }
+    decision = imported["recipes"][0]["document"]["decisions"][0]
+    assignments = imported["entrypoints"][0]["assignments"]
+    assert assignments[decision["name"]]["models"][0]["model"] == model["name"]
+    assert not (
+        {"id", "revision", "provider_catalog_revision", "backends"} & set(model)
+    )
 
     rewritten_source = read_json(source_path)
     assert (
         rewritten_source["models"]["providers"]["vllm"]["baseUrl"]
         == "http://127.0.0.1:8899/v1"
     )
-    assert rewritten_source["agents"]["defaults"]["model"]["primary"] == "vllm/qwen3-8b"
+    assert rewritten_source["agents"]["defaults"]["model"]["primary"] == (
+        "vllm/vllm-sr/imported/qwen3-8b"
+    )
     assert (source_path.parent / "openclaw.json.bak").exists()
     assert not (target_path.parent / "config.yaml.bak").exists()
 
@@ -240,25 +245,30 @@ def test_cli_config_import_openclaw_merges_existing_target_and_preserves_section
     merged = yaml.safe_load(target_path.read_text(encoding="utf-8"))
     assert merged["listeners"][0]["port"] == 18889
     assert merged["global"]["router"]["config_source"] == "file"
-    assert merged["routing"]["signals"]["keywords"][0]["name"] == "keep"
-    assert merged["routing"]["decisions"][0]["name"] == "existing-default"
-    assert merged["providers"]["defaults"]["default_model"] == "existing-model"
+    existing_recipe = next(
+        recipe for recipe in merged["recipes"] if recipe["name"] == "existing"
+    )
+    assert existing_recipe["document"]["signals"]["keywords"][0]["name"] == "keep"
+    assert existing_recipe["document"]["decisions"][0]["name"] == "existing-default"
 
-    model_names = {model["name"] for model in merged["providers"]["models"]}
+    model_names = {model["name"] for model in merged["models"]}
     assert model_names == {"existing-model", "gpt-4o-mini", "gpt-4.1"}
 
     imported_remote_model = next(
-        model
-        for model in merged["providers"]["models"]
-        if model["name"] == "gpt-4o-mini"
+        model for model in merged["models"] if model["name"] == "gpt-4o-mini"
     )
-    assert (
-        imported_remote_model["backend_refs"][0]["base_url"]
-        == "https://api.example.com/v1"
-    )
-    assert imported_remote_model["backend_refs"][0]["api_key"] == "sk-test"
-    assert imported_remote_model["backend_refs"][0]["extra_headers"] == {
-        "X-Tenant": "integration"
+    assert imported_remote_model["connections"][0] == {
+        "provider": "openai-compatible",
+        "interface": "chat",
+        "endpoint": "https://api.example.com/v1",
+        "model": "gpt-4o-mini",
+        "credential": "remote_credential",
+    }
+    assert merged["global"]["services"]["backend_credentials"] == {
+        "remote_credential": {
+            "credential_adapter_id": "bearer",
+            "secret_env": "REMOTE_API_KEY",
+        }
     }
 
     rewritten_source = read_json(source_path)
@@ -281,7 +291,7 @@ def test_cli_config_import_openclaw_prefixes_duplicate_model_ids_and_rewrites_mo
                 "providers": {
                     "openai": {
                         "baseUrl": "https://api.openai.com/v1",
-                        "apiKey": "sk-openai",
+                        "apiKey": "${OPENAI_API_KEY}",
                         "api": "openai-completions",
                         "models": [{"id": "shared-model", "input": ["text"]}],
                     },
@@ -321,21 +331,21 @@ def test_cli_config_import_openclaw_prefixes_duplicate_model_ids_and_rewrites_mo
     assert result.exit_code == 0
 
     imported = yaml.safe_load(target_path.read_text(encoding="utf-8"))
-    model_names = {model["name"] for model in imported["providers"]["models"]}
+    model_names = {model["name"] for model in imported["models"]}
     assert model_names == {"openai/shared-model", "local/shared-model"}
     provider_model_ids = {
-        model["provider_model_id"] for model in imported["providers"]["models"]
+        model["connections"][0]["model"] for model in imported["models"]
     }
     assert provider_model_ids == {"shared-model"}
 
     rewritten_source = read_json(source_path)
     openai_model = rewritten_source["models"]["providers"]["openai"]["models"][0]
     local_model = rewritten_source["models"]["providers"]["local"]["models"][0]
-    assert openai_model["id"] == "openai/shared-model"
-    assert local_model["id"] == "local/shared-model"
+    assert openai_model["id"] == "vllm-sr/imported/openai/shared-model"
+    assert local_model["id"] == "vllm-sr/imported/local/shared-model"
     assert (
         rewritten_source["agents"]["defaults"]["model"]["primary"]
-        == "openai/openai/shared-model"
+        == "openai/vllm-sr/imported/openai/shared-model"
     )
     assert (
         rewritten_source["models"]["providers"]["openai"]["baseUrl"]
@@ -383,7 +393,7 @@ def test_cli_config_import_openclaw_uses_env_discovery_when_source_omitted(
 
     assert result.exit_code == 0
     imported = yaml.safe_load(target_path.read_text(encoding="utf-8"))
-    assert imported["providers"]["models"][0]["name"] == "demo-model"
+    assert imported["models"][0]["name"] == "demo-model"
 
 
 def test_cli_config_import_openclaw_rejects_unsupported_provider_family_without_rewriting(
@@ -425,6 +435,35 @@ def test_cli_config_import_openclaw_rejects_unsupported_provider_family_without_
     assert not (source_path.parent / "openclaw.json.bak").exists()
 
 
+def test_cli_config_import_openclaw_rejects_custom_transport_headers(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "openclaw.json"
+    target_path = tmp_path / "config.yaml"
+    source = merge_source_payload()
+    source["models"]["providers"]["remote"]["headers"] = {"X-Tenant": "integration"}
+    write_json(source_path, source)
+
+    result = CliRunner().invoke(
+        main,
+        [
+            "config",
+            "import",
+            "--from",
+            "openclaw",
+            "--source",
+            str(source_path),
+            "--target",
+            str(target_path),
+        ],
+    )
+
+    assert result.exit_code != 0
+    assert "Provider Integration" in result.output
+    assert read_json(source_path) == source
+    assert not target_path.exists()
+
+
 def test_cli_config_import_openclaw_requires_force_when_backup_exists(
     tmp_path: Path,
 ) -> None:
@@ -445,37 +484,7 @@ def test_cli_config_import_openclaw_requires_force_when_backup_exists(
         },
     )
     target_path.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "listeners": [
-                    {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
-                ],
-                "providers": {
-                    "defaults": {"default_model": "demo-model"},
-                    "models": [
-                        {
-                            "name": "demo-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
-                        }
-                    ],
-                },
-                "routing": {
-                    "modelCards": [{"name": "demo-model"}],
-                    "decisions": [
-                        {
-                            "name": "default",
-                            "description": "keep me",
-                            "priority": 100,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "demo-model"}],
-                        }
-                    ],
-                },
-            },
-            sort_keys=False,
-        ),
-        encoding="utf-8",
+        yaml.safe_dump(merge_target_payload(), sort_keys=False), encoding="utf-8"
     )
     (source_path.parent / "openclaw.json.bak").write_text("{}", encoding="utf-8")
 

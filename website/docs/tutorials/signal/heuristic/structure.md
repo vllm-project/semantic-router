@@ -33,7 +33,7 @@ Use `structure` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     structure:
       - name: many_questions

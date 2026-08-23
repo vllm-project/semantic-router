@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import styles from './ClawRoomChat.module.css'
+import ProductIcon from './ProductIcon'
 
 interface TeamOption {
   id: string
@@ -62,7 +63,7 @@ export default function ClawRoomTeamDetailsModal({
         aria-labelledby={titleId}
         data-testid="claw-room-team-details-dialog"
         tabIndex={-1}
-        onClick={event => event.stopPropagation()}
+        onClick={(event) => event.stopPropagation()}
       >
         <div className={styles.teamDetailsHeader}>
           <div className={styles.teamDetailsHeaderCopy}>
@@ -78,7 +79,7 @@ export default function ClawRoomTeamDetailsModal({
             onClick={onClose}
             data-dialog-initial-focus
           >
-            ×
+            <ProductIcon name="close" />
           </button>
         </div>
 
@@ -86,9 +87,15 @@ export default function ClawRoomTeamDetailsModal({
           <section className={styles.teamDetailsHero}>
             {(selectedTeam.role || selectedTeam.vibe || selectedRoom) && (
               <div className={styles.metaInline}>
-                {selectedTeam.role ? <span className={styles.metaPill}>{selectedTeam.role}</span> : null}
-                {selectedTeam.vibe ? <span className={styles.metaPill}>{selectedTeam.vibe}</span> : null}
-                {selectedRoom ? <span className={styles.metaPill}>Room · {selectedRoom.name}</span> : null}
+                {selectedTeam.role ? (
+                  <span className={styles.metaPill}>{selectedTeam.role}</span>
+                ) : null}
+                {selectedTeam.vibe ? (
+                  <span className={styles.metaPill}>{selectedTeam.vibe}</span>
+                ) : null}
+                {selectedRoom ? (
+                  <span className={styles.metaPill}>Room · {selectedRoom.name}</span>
+                ) : null}
               </div>
             )}
             <p className={styles.teamDetailsBrief}>{teamBriefText}</p>
@@ -116,7 +123,7 @@ export default function ClawRoomTeamDetailsModal({
               <div className={styles.sidebarEmpty}>No workers in this team yet</div>
             ) : (
               <div className={styles.teamDetailsMemberGrid}>
-                {memberProfiles.map(profile => (
+                {memberProfiles.map((profile) => (
                   <article
                     key={profile.id}
                     className={`${styles.memberResumeItem} ${profile.isLeader ? styles.memberResumeItemLeader : ''} ${styles.teamDetailsMemberCard}`}
@@ -130,7 +137,13 @@ export default function ClawRoomTeamDetailsModal({
                         />
                         <span className={styles.memberResumeName}>{profile.displayName}</span>
                       </span>
-                      <span className={profile.isLeader ? styles.memberResumeRoleLeader : styles.memberResumeRoleWorker}>
+                      <span
+                        className={
+                          profile.isLeader
+                            ? styles.memberResumeRoleLeader
+                            : styles.memberResumeRoleWorker
+                        }
+                      >
                         {profile.isLeader ? 'LEADER' : 'WORKER'}
                       </span>
                     </div>

@@ -1,88 +1,72 @@
-import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
+import ConfirmDialog from '@/components/ConfirmDialog'
+import EditModal, { type EditFormData, type FieldConfig } from '@/components/EditModal'
+import ProductIcon from '@/components/ProductIcon'
+import { useAuth } from '@/contexts/AuthContext'
 import { useDSLStore } from '@/stores/dslStore'
 import type { EditorMode } from '@/types/dsl'
+import { canManageRouting, canReadRouting } from '@/utils/accessControl'
 
 import styles from './BuilderPage.module.css'
+import ConfigPageRoutingScopeState from './ConfigPageRoutingScopeState'
 import DslEditorPage from './DslEditorPage'
 import {
-  BuilderDeployConfirmModal,
-  BuilderDeployToast,
-  BuilderDragOverlay,
-} from './builderPageDeployOverlays'
-import { VisualMode } from './builderPageVisualShell'
+  compileBuilderRecipe,
+  loadManagedRecipeSource,
+  projectImportedRecipe,
+} from './builderRecipeClient'
 import { BuilderGuideDrawer } from './builderPageGuideDrawer'
 import { BuilderImportModal } from './builderPageImportModal'
-import { BuilderNaturalLanguagePanel } from './builderPageNaturalLanguagePanel'
 import { BuilderOutputPanel } from './builderPageOutputPanel'
 import { useResizableWidth } from './builderPageResizeHooks'
+import { mutateBuilderRecipeSource } from './builderPageRoutingScopeSupport'
 import { BuilderStatusBar } from './builderPageStatusBar'
 import { BuilderToolbar } from './builderPageToolbar'
-import {
-  chooseDefaultBuilderRoutingScope,
-  listBuilderRoutingScopes,
-  resolveBuilderRoutingScope,
-  summarizeBuilderRoutingScopes,
-} from './builderPageRoutingScopeSupport'
-import { useBuilderScopedEntityMutations } from './useBuilderScopedEntityMutations'
-import { useReadonly } from '@/contexts/ReadonlyContext'
-import { useAuth } from '@/contexts/AuthContext'
-import { canDeployConfig } from '@/utils/accessControl'
 import type { EntityKind, SectionState, Selection } from './builderPageTypes'
+import { VisualMode } from './builderPageVisualShell'
+import { useBuilderRecipeClient } from './useBuilderRecipeClient'
+import { useBuilderScopedEntityMutations } from './useBuilderScopedEntityMutations'
 
-// ---------- Component ----------
+const DUPLICATE_FIELDS: FieldConfig[] = [
+  { name: 'name', label: 'Name', type: 'text', required: true, placeholder: 'My Recipe' },
+  {
+    name: 'description',
+    label: 'Description',
+    type: 'textarea',
+    placeholder: 'What this Recipe optimizes for',
+  },
+]
 
-const BuilderPage: React.FC = () => {
+export default function BuilderPage() {
   const {
     dslSource,
     diagnostics,
     symbols,
     ast,
-    baseConfigYaml,
     wasmReady,
     wasmError,
     loading,
     mode,
     dirty,
-    renderedYamlOutput,
-    yamlOutput,
-    crdOutput,
     compileError,
     initWasm,
     compile,
     validate,
     parseAST,
     format,
-    reset,
     setMode,
-    importYaml,
-    loadFromRouter,
-    requestDeploy,
-    executeDeploy,
-    dismissDeploy,
-    deploying,
-    deployStep,
-    deployResult,
-    showDeployConfirm,
-    deployPreviewCurrent,
-    deployPreviewMerged,
-    deployPreviewLoading,
-    deployPreviewError,
-    nlGenerating,
-    nlGenerateError,
-    nlProgressEvents,
-    nlStagedDraft,
-    generateFromNaturalLanguage,
-    applyNaturalLanguageDraft,
-    discardNaturalLanguageDraft,
+    loadDsl,
   } = useDSLStore()
-  const { serverReadonly, runtimeConfigWritable, isLoading: readonlyLoading } = useReadonly()
   const { user } = useAuth()
-  const hasDeployPermission = canDeployConfig(user)
+  const canRead = canReadRouting(user)
+  const canManage = canManageRouting(user)
+  const client = useBuilderRecipeClient(wasmReady && canRead)
+  const selectedRecipe = client.selectedRecipe
+  const editable = canManage && Boolean(selectedRecipe) && !selectedRecipe?.immutable
 
   const [selection, setSelection] = useState<Selection | null>(null)
   const [sections, setSections] = useState<SectionState>({
-    models: true,
     signals: true,
     projectionPartitions: true,
     projectionScores: true,
@@ -91,370 +75,244 @@ const BuilderPage: React.FC = () => {
     plugins: true,
   })
   const [addingEntity, setAddingEntity] = useState<EntityKind | null>(null)
-  const [activeRoutingScopeId, setActiveRoutingScopeId] = useState('__auto__')
   const [outputPanelOpen, setOutputPanelOpen] = useState(true)
-  const [showImportModal, setShowImportModal] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
-
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [showDuplicateModal, setShowDuplicateModal] = useState(false)
+  const [pendingRecipeId, setPendingRecipeId] = useState<string | null>(null)
+  const [recipePreview, setRecipePreview] = useState('')
+  const [importText, setImportText] = useState('')
+  const [importError, setImportError] = useState<string | null>(null)
+  const [projectionError, setProjectionError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
   const contentRef = useRef<HTMLDivElement>(null)
-  const {
-    width: guideWidth,
-    isDragging: isGuideDragging,
-    handleDragStart: handleGuideDragStart,
-  } = useResizableWidth({
-    initialWidth: 420,
-    minWidth: 300,
-    getMaxWidth: () => 800,
-    stopPropagation: true,
-  })
   const {
     width: outputWidth,
     isDragging,
     handleDragStart,
   } = useResizableWidth({
     initialWidth: 380,
-    minWidth: 200,
+    minWidth: 240,
     getMaxWidth: () => Math.floor((contentRef.current?.offsetWidth ?? window.innerWidth) * 0.6),
   })
-  const [importText, setImportText] = useState('')
-  const [importError, setImportError] = useState<string | null>(null)
-  const [importUrl, setImportUrl] = useState('')
-  const [importUrlLoading, setImportUrlLoading] = useState(false)
-  const importTextareaRef = useRef<HTMLTextAreaElement | null>(null)
-  const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const autoLoadedDefaultConfigRef = useRef(false)
-  const autoLoadingDefaultConfigRef = useRef(false)
-  const isNaturalLanguageMode = mode === 'nl'
-  const routingScopes = useMemo(() => listBuilderRoutingScopes(ast), [ast])
-  const activeRoutingScope = useMemo(
-    () => routingScopes.find((scope) => scope.id === activeRoutingScopeId) ?? null,
-    [activeRoutingScopeId, routingScopes],
-  )
-  const visualAst = useMemo(
-    () => resolveBuilderRoutingScope(ast, activeRoutingScopeId) ?? ast,
-    [activeRoutingScopeId, ast],
-  )
+  const {
+    width: guideWidth,
+    isDragging: guideDragging,
+    handleDragStart: handleGuideDragStart,
+  } = useResizableWidth({
+    initialWidth: 420,
+    minWidth: 300,
+    getMaxWidth: () => 760,
+    stopPropagation: true,
+  })
 
   useEffect(() => {
-    if (!ast || routingScopes.length === 0) return
-    if (!routingScopes.some((scope) => scope.id === activeRoutingScopeId)) {
-      setActiveRoutingScopeId(chooseDefaultBuilderRoutingScope(ast))
-      setSelection(null)
-      setAddingEntity(null)
-    }
-  }, [activeRoutingScopeId, ast, routingScopes])
-
-  // Initialize WASM on mount
-  useEffect(() => {
-    initWasm()
+    void initWasm()
   }, [initWasm])
-
-  // The visual workspace is the primary authoring entrypoint. DSL remains one
-  // click away for precision edits and round-trip inspection.
   useEffect(() => {
     setMode('visual')
   }, [setMode])
-
-  // Parse AST when entering visual mode or when dslSource changes in visual mode
   useEffect(() => {
-    if (mode === 'visual' && wasmReady && dslSource.trim()) {
-      parseAST()
-    }
-  }, [mode, wasmReady, dslSource, parseAST])
-
+    if (mode === 'visual' && wasmReady && dslSource.trim()) parseAST()
+  }, [dslSource, mode, parseAST, wasmReady])
   useEffect(() => {
-    if (!isNaturalLanguageMode) {
-      return
+    setSelection(null)
+    setAddingEntity(null)
+    if (!selectedRecipe || !wasmReady) return
+    try {
+      setRecipePreview(compileBuilderRecipe(dslSource, selectedRecipe).preview)
+    } catch {
+      setRecipePreview('')
     }
-    setGuideOpen(false)
-    setOutputPanelOpen(false)
-  }, [isNaturalLanguageMode])
+    // Only refresh the preview when a newly loaded managed revision is selected.
+    // Keystrokes are compiled explicitly to keep the editor responsive.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRecipe?.id, selectedRecipe?.revision, wasmReady])
 
+  const visualAst = useMemo(() => ast?.recipes?.[0]?.program ?? ast, [ast])
   const toggleSection = useCallback((key: keyof SectionState) => {
-    setSections((prev) => ({ ...prev, [key]: !prev[key] }))
+    setSections((current) => ({ ...current, [key]: !current[key] }))
   }, [])
-
-  const handleModeSwitch = useCallback(
-    (newMode: EditorMode) => {
-      setMode(newMode)
-      setOutputPanelOpen(newMode !== 'nl')
-      // When switching to visual, parse AST
-      if (newMode === 'visual' && wasmReady && dslSource.trim()) {
-        parseAST()
-      }
-    },
-    [setMode, wasmReady, dslSource, parseAST],
+  const counts = useMemo(
+    () => ({
+      signals: visualAst?.signals?.length ?? symbols?.signals?.length ?? 0,
+      partitions: visualAst?.projectionPartitions?.length ?? 0,
+      scores: visualAst?.projectionScores?.length ?? 0,
+      mappings: visualAst?.projectionMappings?.length ?? 0,
+      routes: visualAst?.routes?.length ?? symbols?.routes?.length ?? 0,
+      plugins: visualAst?.plugins?.length ?? symbols?.plugins?.length ?? 0,
+    }),
+    [symbols, visualAst],
   )
-  const hasPendingNLDraft = nlStagedDraft !== null
-  const deployDisabled =
-    readonlyLoading ||
-    serverReadonly ||
-    !runtimeConfigWritable ||
-    !hasDeployPermission ||
-    hasPendingNLDraft
+  const errorCount =
+    diagnostics.filter((diagnostic) => diagnostic.level === 'error').length + (compileError ? 1 : 0)
+  const isValid = wasmReady && errorCount === 0
 
-  const {
-    handleAddModel,
-    handleAddPlugin,
-    handleAddProjectionMapping,
-    handleAddProjectionPartition,
-    handleAddProjectionScore,
-    handleAddRoute,
-    handleAddSignal,
-    handleDeleteEntity,
-    handleUpdateModelFields,
-    handleUpdatePluginFields,
-    handleUpdateProjectionMappingFields,
-    handleUpdateProjectionPartitionFields,
-    handleUpdateProjectionScoreFields,
-    handleUpdateRoute,
-    handleUpdateSignalFields,
-  } = useBuilderScopedEntityMutations({
-    recipeName: activeRoutingScope?.recipeName ?? null,
+  const selectedEntity = useMemo(() => {
+    if (!selection || !visualAst) return null
+    switch (selection.kind) {
+      case 'signal':
+        return visualAst.signals?.find((item) => item.name === selection.name) ?? null
+      case 'projection-partition':
+        return visualAst.projectionPartitions?.find((item) => item.name === selection.name) ?? null
+      case 'projection-score':
+        return visualAst.projectionScores?.find((item) => item.name === selection.name) ?? null
+      case 'projection-mapping':
+        return visualAst.projectionMappings?.find((item) => item.name === selection.name) ?? null
+      case 'route':
+        return visualAst.routes?.find((item) => item.name === selection.name) ?? null
+      case 'plugin':
+        return visualAst.plugins?.find((item) => item.name === selection.name) ?? null
+    }
+  }, [selection, visualAst])
+
+  const mutations = useBuilderScopedEntityMutations({
+    recipeName: selectedRecipe?.name ?? null,
     setAddingEntity,
     setSelection,
   })
 
-  // --- Import Config handlers ---
-
-  const handleOpenImport = useCallback(() => {
-    setImportText('')
-    setImportError(null)
-    setImportUrl('')
-    setImportUrlLoading(false)
-    setShowImportModal(true)
-    setTimeout(() => importTextareaRef.current?.focus(), 50)
-  }, [])
-
-  const handleImportConfirm = useCallback(() => {
-    const yaml = importText.trim()
-    if (!yaml) {
-      setImportError('Please paste YAML content')
-      return
-    }
+  const compileCurrent = useCallback(() => {
+    if (!selectedRecipe) return
     try {
-      importYaml(yaml)
+      const result = compileBuilderRecipe(useDSLStore.getState().dslSource, selectedRecipe)
       compile()
-      setShowImportModal(false)
-      setImportText('')
-      setImportError(null)
-    } catch {
-      setImportError(
-        'Failed to import YAML. Use a full router config or routing fragment; only the routing section is imported into DSL.',
-      )
+      setRecipePreview(result.preview)
+      setProjectionError(null)
+    } catch (cause) {
+      setProjectionError(cause instanceof Error ? cause.message : 'The Recipe could not compile.')
     }
-  }, [importText, importYaml, compile])
+  }, [compile, selectedRecipe])
 
-  const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const text = ev.target?.result
-      if (typeof text === 'string') {
-        setImportText(text)
-        setImportError(null)
-      }
-    }
-    reader.readAsText(file)
-    e.target.value = ''
-  }, [])
+  const revert = useCallback(() => {
+    if (!selectedRecipe) return
+    const result = loadManagedRecipeSource(selectedRecipe)
+    loadDsl(result.source)
+    compile()
+    parseAST()
+    setRecipePreview(result.preview)
+    setProjectionError(null)
+  }, [compile, loadDsl, parseAST, selectedRecipe])
 
-  const handleImportUrl = useCallback(async () => {
-    const url = importUrl.trim()
-    if (!url) {
-      setImportError('Please enter a URL')
-      return
-    }
-    try {
-      new URL(url)
-    } catch {
-      setImportError('Invalid URL format')
-      return
-    }
-    setImportUrlLoading(true)
-    setImportError(null)
-    try {
-      const resp = await fetch('/api/tools/fetch-raw', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
-      })
-      const data = await resp.json()
-      if (data.error) {
-        throw new Error(data.error)
-      }
-      if (!data.content?.trim()) {
-        throw new Error('Remote returned empty content')
-      }
-      setImportText(data.content)
-      setImportError(null)
-    } catch (err) {
-      setImportError(`Failed to fetch: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      setImportUrlLoading(false)
-    }
-  }, [importUrl])
+  const requestRecipeChange = (recipeId: string) => {
+    if (recipeId === client.selectedRecipeId) return
+    if (dirty) setPendingRecipeId(recipeId)
+    else client.selectRecipe(recipeId)
+  }
 
-  const [loadingFromRouter, setLoadingFromRouter] = useState(false)
-  const handleLoadFromRouter = useCallback(async () => {
-    setLoadingFromRouter(true)
-    setImportError(null)
-    try {
-      await loadFromRouter()
+  const applyProjectedDraft = useCallback(
+    (source: string, preview: string) => {
+      loadDsl(source)
+      useDSLStore.getState().setDslSource(source)
       compile()
-      setShowImportModal(false)
-      setImportText('')
-    } catch (err) {
-      setImportError(
-        `Failed to load from router: ${err instanceof Error ? err.message : String(err)}`,
-      )
-    } finally {
-      setLoadingFromRouter(false)
-    }
-  }, [loadFromRouter, compile])
-
-  const handleRequestDeploy = useCallback(() => {
-    if (deployDisabled) {
-      return
-    }
-    requestDeploy()
-  }, [deployDisabled, requestDeploy])
-
-  // On first entry, load current router config and compile it by default.
-  useEffect(() => {
-    if (
-      !wasmReady ||
-      readonlyLoading ||
-      dslSource.trim() ||
-      autoLoadedDefaultConfigRef.current ||
-      autoLoadingDefaultConfigRef.current
-    ) {
-      return
-    }
-
-    autoLoadingDefaultConfigRef.current = true
-    let cancelled = false
-    const loadDefaultConfig = async () => {
-      setLoadingFromRouter(true)
-      setImportError(null)
-      try {
-        await loadFromRouter()
-        if (!cancelled) {
-          compile()
-          autoLoadedDefaultConfigRef.current = true
-        }
-      } catch (err) {
-        console.error('[BuilderPage] Failed to load default router config:', err)
-      } finally {
-        autoLoadingDefaultConfigRef.current = false
-        if (!cancelled) {
-          setLoadingFromRouter(false)
-        }
-      }
-    }
-    void loadDefaultConfig()
-    return () => {
-      cancelled = true
-    }
-  }, [wasmReady, readonlyLoading, dslSource, loadFromRouter, compile])
-
-  // Diagnostic counts
-  const validationErrorCount = diagnostics.filter((d) => d.level === 'error').length
-  const errorCount = validationErrorCount + (compileError ? 1 : 0)
-  const modelCount = ast?.models?.length ?? symbols?.models?.length ?? 0
-  const currentModelNames = useMemo(() => {
-    const rawNames = ast?.models?.map((model) => model.name) ?? symbols?.models ?? []
-    return Array.from(new Set(rawNames.map((name) => name.trim()).filter(Boolean)))
-  }, [ast?.models, symbols?.models])
-  const totalRoutingSummary = useMemo(
-    () => summarizeBuilderRoutingScopes(ast, symbols, dslSource),
-    [ast, symbols, dslSource],
+      parseAST()
+      setRecipePreview(preview)
+      setMode('visual')
+    },
+    [compile, loadDsl, parseAST, setMode],
   )
-  const {
-    signalCount,
-    projectionPartitionCount,
-    projectionScoreCount,
-    projectionMappingCount,
-    routeCount,
-    pluginCount,
-  } = useMemo(() => summarizeBuilderRoutingScopes(visualAst, null), [visualAst])
-  const { recipeCount, entrypointCount } = totalRoutingSummary
-  const isValid = errorCount === 0 && wasmReady
-  const lineCount = dslSource.split('\n').length
 
-  // Memoize selected entity from AST
-  const selectedEntity = useMemo(() => {
-    if (!selection || !visualAst) return null
-    switch (selection.kind) {
-      case 'model':
-        return visualAst.models?.find((m) => m.name === selection.name) ?? null
-      case 'signal':
-        return visualAst.signals?.find((s) => s.name === selection.name) ?? null
-      case 'projection-partition':
-        return (
-          visualAst.projectionPartitions?.find((partition) => partition.name === selection.name) ??
-          null
-        )
-      case 'projection-score':
-        return visualAst.projectionScores?.find((score) => score.name === selection.name) ?? null
-      case 'projection-mapping':
-        return (
-          visualAst.projectionMappings?.find((mapping) => mapping.name === selection.name) ?? null
-        )
-      case 'route':
-        return visualAst.routes?.find((r) => r.name === selection.name) ?? null
-      case 'plugin':
-        return visualAst.plugins?.find((p) => p.name === selection.name) ?? null
-      default:
-        return null
+  const confirmImport = () => {
+    if (!selectedRecipe || !editable) return
+    try {
+      const result = projectImportedRecipe(importText.trim(), selectedRecipe)
+      applyProjectedDraft(result.source, result.preview)
+      setShowImportModal(false)
+      setImportText('')
+      setImportError(null)
+    } catch (cause) {
+      setImportError(cause instanceof Error ? cause.message : 'The Recipe could not be imported.')
     }
-  }, [selection, visualAst])
+  }
+
+  if (!canRead) {
+    return (
+      <ConfigPageRoutingScopeState
+        loading={false}
+        error="Recipe access is not available for this account."
+        onRetry={() => window.location.reload()}
+      />
+    )
+  }
+  if (client.loading && !selectedRecipe) {
+    return (
+      <ConfigPageRoutingScopeState loading error={null} onRetry={() => void client.refresh()} />
+    )
+  }
+  if (!selectedRecipe) {
+    return (
+      <ConfigPageRoutingScopeState
+        loading={false}
+        error={client.error}
+        onRetry={() => void client.refresh()}
+      />
+    )
+  }
 
   return (
     <div className={styles.page}>
       <BuilderToolbar
+        readOnly={!canManage}
+        immutable={selectedRecipe.immutable}
         dirty={dirty}
         mode={mode}
         wasmReady={wasmReady}
         wasmError={wasmError}
         dslSource={dslSource}
         loading={loading}
-        deploying={deploying}
-        deployDisabled={deployDisabled}
-        deployDisabledReason={
-          readonlyLoading
-            ? 'Checking deploy permissions...'
-            : serverReadonly
-              ? 'Deploy is disabled by the server-wide read-only policy'
-              : !runtimeConfigWritable
-                ? 'Deploy requires a writable runtime configuration mount'
-                : !hasDeployPermission
-                  ? 'Deploy requires the config.deploy permission'
-                  : hasPendingNLDraft
-                    ? 'Apply or discard the staged NL draft before deploying the live Builder config'
-                    : undefined
-        }
-        showBuilderSecondaryActions={!isNaturalLanguageMode}
+        saving={client.saving}
+        recipes={client.recipes}
+        selectedRecipeId={client.selectedRecipeId}
         guideOpen={guideOpen}
-        outputPanelOpen={!isNaturalLanguageMode && outputPanelOpen}
-        onModeSwitch={handleModeSwitch}
-        onImport={handleOpenImport}
-        onCompile={compile}
-        onRequestDeploy={handleRequestDeploy}
+        outputPanelOpen={outputPanelOpen}
+        onRecipeChange={requestRecipeChange}
+        onModeSwitch={(nextMode: EditorMode) => setMode(nextMode)}
+        onImport={() => {
+          if (editable) {
+            setImportError(null)
+            setShowImportModal(true)
+          }
+        }}
+        onCompile={compileCurrent}
+        onSave={() =>
+          void client
+            .save()
+            .then(compileCurrent)
+            .catch(() => undefined)
+        }
+        onDuplicate={() => setShowDuplicateModal(true)}
         onFormat={format}
         onValidate={validate}
-        onToggleGuide={() => setGuideOpen(!guideOpen)}
-        onToggleOutput={() => setOutputPanelOpen(!outputPanelOpen)}
-        onReset={reset}
+        onToggleGuide={() => setGuideOpen((open) => !open)}
+        onToggleOutput={() => setOutputPanelOpen((open) => !open)}
+        onRevert={revert}
       />
 
-      {/* Main Content — editor + output panel */}
+      {client.error || projectionError ? (
+        <div className={styles.builderInlineAlert} role="alert">
+          <ProductIcon name="alert" /> {client.error || projectionError}
+        </div>
+      ) : null}
+      {client.notice ? (
+        <div className={styles.builderNotice} role="status">
+          <ProductIcon name="check" /> {client.notice}
+        </div>
+      ) : null}
+      {selectedRecipe.immutable ? (
+        <div className={styles.builderImmutableBanner}>
+          <ProductIcon name="info" />
+          <span>
+            <strong>Built-in Recipe</strong> Duplicate it to make your own.
+          </span>
+        </div>
+      ) : null}
+
       <div className={styles.content} ref={contentRef}>
-        {/* Editor area (switches by mode) */}
         <div className={styles.editorArea}>
-          {mode === 'visual' && (
+          {mode === 'visual' ? (
             <VisualMode
+              readOnly={!editable}
               ast={visualAst}
               dslSource={dslSource}
               diagnostics={diagnostics}
@@ -463,163 +321,141 @@ const BuilderPage: React.FC = () => {
               sections={sections}
               onToggleSection={toggleSection}
               selectedEntity={selectedEntity}
-              modelCount={modelCount}
-              signalCount={signalCount}
-              projectionPartitionCount={projectionPartitionCount}
-              projectionScoreCount={projectionScoreCount}
-              projectionMappingCount={projectionMappingCount}
-              routeCount={routeCount}
-              pluginCount={pluginCount}
+              signalCount={counts.signals}
+              projectionPartitionCount={counts.partitions}
+              projectionScoreCount={counts.scores}
+              projectionMappingCount={counts.mappings}
+              routeCount={counts.routes}
+              pluginCount={counts.plugins}
               wasmReady={wasmReady}
               wasmError={wasmError}
               addingEntity={addingEntity}
               onSetAddingEntity={setAddingEntity}
-              onDeleteEntity={handleDeleteEntity}
-              onUpdateModelFields={handleUpdateModelFields}
-              onUpdateSignalFields={handleUpdateSignalFields}
-              onUpdateProjectionPartitionFields={handleUpdateProjectionPartitionFields}
-              onUpdateProjectionScoreFields={handleUpdateProjectionScoreFields}
-              onUpdateProjectionMappingFields={handleUpdateProjectionMappingFields}
-              onUpdatePluginFields={handleUpdatePluginFields}
-              onAddModel={handleAddModel}
-              onAddSignal={handleAddSignal}
-              onAddProjectionPartition={handleAddProjectionPartition}
-              onAddProjectionScore={handleAddProjectionScore}
-              onAddProjectionMapping={handleAddProjectionMapping}
-              onAddPlugin={handleAddPlugin}
-              onUpdateRoute={handleUpdateRoute}
-              onAddRoute={handleAddRoute}
+              onDeleteEntity={mutations.handleDeleteEntity}
+              onUpdateSignalFields={mutations.handleUpdateSignalFields}
+              onUpdateProjectionPartitionFields={mutations.handleUpdateProjectionPartitionFields}
+              onUpdateProjectionScoreFields={mutations.handleUpdateProjectionScoreFields}
+              onUpdateProjectionMappingFields={mutations.handleUpdateProjectionMappingFields}
+              onUpdatePluginFields={mutations.handleUpdatePluginFields}
+              onAddSignal={mutations.handleAddSignal}
+              onAddProjectionPartition={mutations.handleAddProjectionPartition}
+              onAddProjectionScore={mutations.handleAddProjectionScore}
+              onAddProjectionMapping={mutations.handleAddProjectionMapping}
+              onAddPlugin={mutations.handleAddPlugin}
+              onUpdateRoute={mutations.handleUpdateRoute}
+              onAddRoute={mutations.handleAddRoute}
               errorCount={errorCount}
               isValid={isValid}
-              onModeSwitch={handleModeSwitch}
-              routingScopes={routingScopes}
-              activeRoutingScopeId={activeRoutingScopeId}
-              onRoutingScopeChange={(scopeId) => {
-                setActiveRoutingScopeId(scopeId)
-                setSelection(null)
-                setAddingEntity(null)
-              }}
+              onModeSwitch={setMode}
             />
-          )}
-          {mode === 'dsl' && (
+          ) : mode === 'dsl' ? (
             <div className={styles.dslModeContainer}>
-              <DslEditorPage embedded hideOutput />
+              <DslEditorPage embedded hideOutput readOnly={!editable} />
             </div>
-          )}
-          {mode === 'nl' && (
-            <BuilderNaturalLanguagePanel
-              currentDsl={dslSource}
-              baseConfigYaml={baseConfigYaml}
-              currentModelNames={currentModelNames}
-              wasmReady={wasmReady}
-              generating={nlGenerating}
-              error={nlGenerateError}
-              progressEvents={nlProgressEvents}
-              stagedDraft={nlStagedDraft}
-              onGenerate={generateFromNaturalLanguage}
-              onApplyDraft={applyNaturalLanguageDraft}
-              onDiscardDraft={discardNaturalLanguageDraft}
-              onModeSwitch={handleModeSwitch}
-            />
-          )}
+          ) : null}
         </div>
-
-        {!isNaturalLanguageMode ? (
-          <BuilderOutputPanel
-            open={outputPanelOpen}
-            width={outputWidth}
-            yamlOutput={renderedYamlOutput || yamlOutput}
-            crdOutput={crdOutput}
-            dslSource={dslSource}
-            dslTabLabel="DSL"
-            compileError={compileError}
-            onDragStart={handleDragStart}
-            onOpen={() => setOutputPanelOpen(true)}
-            onClose={() => setOutputPanelOpen(false)}
-          />
-        ) : null}
+        <BuilderOutputPanel
+          open={outputPanelOpen}
+          width={outputWidth}
+          recipeDocument={recipePreview}
+          dslSource={dslSource}
+          compileError={compileError}
+          onDragStart={handleDragStart}
+          onOpen={() => setOutputPanelOpen(true)}
+          onClose={() => setOutputPanelOpen(false)}
+        />
       </div>
 
       <BuilderStatusBar
         isValid={isValid}
         errorCount={errorCount}
-        modelCount={modelCount}
-        signalCount={signalCount}
-        routeCount={routeCount}
-        pluginCount={pluginCount}
-        recipeCount={recipeCount}
-        entrypointCount={entrypointCount}
-        lineCount={lineCount}
+        recipeName={selectedRecipe.name}
+        revision={selectedRecipe.recipeRevision}
+        immutable={selectedRecipe.immutable}
+        signalCount={counts.signals}
+        routeCount={counts.routes}
+        pluginCount={counts.plugins}
+        lineCount={dslSource.split('\n').length}
         mode={mode}
       />
 
-      {/* Hidden file input for YAML import */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".yaml,.yml,.json"
-        style={{ display: 'none' }}
-        onChange={handleImportFile}
-      />
-
+      {editable ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".yaml,.yml,.json"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (!file) return
+            const reader = new FileReader()
+            reader.onload = () => {
+              if (typeof reader.result === 'string') setImportText(reader.result)
+            }
+            reader.readAsText(file)
+            event.target.value = ''
+          }}
+        />
+      ) : null}
       <BuilderImportModal
-        open={showImportModal}
-        importUrl={importUrl}
+        open={editable && showImportModal}
         importText={importText}
         importError={importError}
-        importUrlLoading={importUrlLoading}
-        loadingFromRouter={loadingFromRouter}
         importTextareaRef={importTextareaRef}
         onClose={() => setShowImportModal(false)}
-        onImportUrlChange={(value) => {
-          setImportUrl(value)
-          setImportError(null)
-        }}
-        onImportTextChange={(value) => {
-          setImportText(value)
-          setImportError(null)
-        }}
-        onImportUrl={handleImportUrl}
+        onImportTextChange={setImportText}
         onSelectFile={() => fileInputRef.current?.click()}
-        onLoadFromRouter={handleLoadFromRouter}
-        onConfirm={handleImportConfirm}
+        onConfirm={confirmImport}
       />
-
       <BuilderGuideDrawer
-        open={!isNaturalLanguageMode && guideOpen}
+        open={editable && guideOpen}
         width={guideWidth}
-        isDragging={isGuideDragging}
+        isDragging={guideDragging}
         onClose={() => setGuideOpen(false)}
         onDragStart={handleGuideDragStart}
         onInsertSnippet={(snippet) => {
-          if (mode !== 'dsl') setMode('dsl')
           const store = useDSLStore.getState()
-          const src = store.dslSource
-          store.setDslSource(src ? src.trimEnd() + '\n\n' + snippet + '\n' : snippet + '\n')
+          const next = mutateBuilderRecipeSource(
+            store.dslSource,
+            selectedRecipe.name,
+            (body) => `${body.trimEnd()}\n\n${snippet}\n`,
+          )
+          store.setDslSource(next)
+          store.parseAST()
           setGuideOpen(false)
         }}
       />
 
-      <BuilderDeployConfirmModal
-        open={showDeployConfirm}
-        loading={deployPreviewLoading}
-        error={deployPreviewError}
-        currentYaml={deployPreviewCurrent}
-        mergedYaml={deployPreviewMerged}
-        onClose={dismissDeploy}
-        onConfirm={executeDeploy}
+      <EditModal
+        isOpen={showDuplicateModal}
+        onClose={() => setShowDuplicateModal(false)}
+        title="Duplicate Recipe"
+        mode="add"
+        data={{
+          name: `${selectedRecipe.name} copy`,
+          description: selectedRecipe.description ?? '',
+        }}
+        fields={DUPLICATE_FIELDS}
+        onSave={async (data: EditFormData) => {
+          const name = String(data.name ?? '').trim()
+          if (!name) throw new Error('Name is required.')
+          await client.duplicate(name, String(data.description ?? ''))
+        }}
       />
-
-      <BuilderDeployToast
-        deploying={deploying}
-        deployStep={deployStep}
-        deployResult={deployResult}
-        onDismiss={dismissDeploy}
+      <ConfirmDialog
+        isOpen={Boolean(pendingRecipeId)}
+        eyebrow="Unsaved draft"
+        title="Switch Recipes?"
+        description="Your unsaved changes will be discarded."
+        tone="warning"
+        confirmLabel="Discard and switch"
+        onCancel={() => setPendingRecipeId(null)}
+        onConfirm={() => {
+          if (pendingRecipeId) client.selectRecipe(pendingRecipeId)
+          setPendingRecipeId(null)
+        }}
       />
-
-      <BuilderDragOverlay active={isDragging || isGuideDragging} />
+      {isDragging || guideDragging ? <div className={styles.dragOverlay} /> : null}
     </div>
   )
 }
-
-export default BuilderPage

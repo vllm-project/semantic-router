@@ -70,12 +70,6 @@ func (s *evalCaptureClassificationService) HasFactCheckClassifier() bool    { re
 func (s *evalCaptureClassificationService) HasHallucinationDetector() bool  { return true }
 func (s *evalCaptureClassificationService) HasHallucinationExplainer() bool { return true }
 func (s *evalCaptureClassificationService) HasFeedbackDetector() bool       { return true }
-func (s *evalCaptureClassificationService) UpdateConfig(_ *config.RouterConfig) {
-}
-
-func (s *evalCaptureClassificationService) RefreshRuntimeConfig(_ *config.RouterConfig) {
-}
-
 func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	fakeSvc := &evalCaptureClassificationService{
 		evalResp: &services.EvalResponse{
@@ -188,7 +182,7 @@ func TestHandleEvalClassification_UsesFullRequestContextWithoutEchoingPrivatePay
 		formatMarker      = "PRIVATE_RESPONSE_SCHEMA_SENTINEL"
 	)
 
-	cfg := contextEvalRouterConfig()
+	cfg := contextEvalRouterConfig(t)
 	apiServer := newContextEvalServer(t, cfg)
 
 	core, observedLogs := observer.New(zapcore.DebugLevel)
@@ -231,31 +225,64 @@ func TestHandleEvalClassification_UsesFullRequestContextWithoutEchoingPrivatePay
 	})
 }
 
-func contextEvalRouterConfig() *config.RouterConfig {
-	return &config.RouterConfig{
-		IntelligentRouting: config.IntelligentRouting{
-			Signals: config.Signals{ContextRules: []config.ContextRule{
-				{
-					Name:      "small-request-context",
-					MinTokens: config.TokenCount("0"),
-					MaxTokens: config.TokenCount("10K"),
-				},
-				{
-					Name:      "large-request-context",
-					MinTokens: config.TokenCount("10K"),
-					MaxTokens: config.TokenCount("128K"),
+func contextEvalRouterConfig(t *testing.T) *config.RouterConfig {
+	t.Helper()
+	const (
+		requestModel = "router/context-eval"
+		backendModel = "backend/context-eval"
+		backendID    = "model-context-eval"
+		decisionID   = "decision-large-request-context"
+		recipeID     = "recipe-context-eval"
+	)
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			backendModel: {ResourceID: backendID, ResourceRevision: 1},
+		}},
+		Recipes: []config.RoutingRecipe{{
+			ID: recipeID, Revision: 1, Name: "context-eval",
+			Profile: config.RoutingProfile{
+				Signals: config.Signals{ContextRules: []config.ContextRule{
+					{
+						Name:      "small-request-context",
+						MinTokens: config.TokenCount("0"),
+						MaxTokens: config.TokenCount("10K"),
+					},
+					{
+						Name:      "large-request-context",
+						MinTokens: config.TokenCount("10K"),
+						MaxTokens: config.TokenCount("128K"),
+					},
+				}},
+				Decisions: []config.Decision{{
+					ID:       decisionID,
+					Name:     "large-request-context-route",
+					Priority: 10,
+					Rules: config.RuleNode{
+						Type: config.SignalTypeContext,
+						Name: "large-request-context",
+					},
+				}},
+			},
+		}},
+		Entrypoints: []config.EntrypointMapping{{
+			ID: "entrypoint-context-eval", Revision: 1, Name: requestModel, ModelNames: []string{requestModel},
+			Rules: []config.EntrypointRule{{
+				ID: "rule-context-eval", Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: recipeID, RecipeRevision: 1, Recipe: "context-eval",
+					Assignments: map[string]config.RoutingAssignmentSet{
+						decisionID: {Models: []config.RoutingModelAssignment{{
+							ModelID: backendID, ModelRevision: 1, ModelName: backendModel, Weight: "1",
+						}}},
+					},
 				},
 			}},
-			Decisions: []config.Decision{{
-				Name:     "large-request-context-route",
-				Priority: 10,
-				Rules: config.RuleNode{
-					Type: config.SignalTypeContext,
-					Name: "large-request-context",
-				},
-			}},
-		},
+		}},
 	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare context-eval Entrypoint: %v", err)
+	}
+	return cfg
 }
 
 func privateContextEvalRequest(
@@ -267,6 +294,7 @@ func privateContextEvalRequest(
 	formatMarker string,
 ) map[string]interface{} {
 	return map[string]interface{}{
+		"model": "router/context-eval",
 		"messages": []map[string]interface{}{
 			{"role": "user", "content": priorMarker + strings.Repeat("p", 2_048)},
 			{
@@ -320,11 +348,13 @@ func privateContextEvalRequest(
 
 func newContextEvalServer(t *testing.T, cfg *config.RouterConfig) *ClassificationAPIServer {
 	t.Helper()
-	classifier, err := classification.NewClassifier(cfg, nil, nil, nil)
+	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
-		t.Fatalf("create classifier: %v", err)
+		t.Fatalf("build Recipe classifiers: %v", err)
 	}
-	return &ClassificationAPIServer{classificationSvc: services.NewClassificationService(classifier, cfg)}
+	return &ClassificationAPIServer{
+		classificationSvc: services.NewRecipeClassificationService(classifiers, cfg),
+	}
 }
 
 func assertLargeContextEvalResponse(t *testing.T, response services.EvalResponse, currentUser string) {

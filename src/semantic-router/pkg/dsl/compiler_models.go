@@ -12,11 +12,26 @@ func (c *Compiler) compileModels() {
 
 	for _, model := range c.prog.Models {
 		params := c.config.ModelConfig[model.Name]
+		params.ResourceID = config.DeterministicRoutingResourceID("mdl", model.Name)
+		params.ResourceRevision = 1
+		applyRoutingModelCardFields(&params, model.Fields)
 		applyRoutingModelTextFields(&params, model.Fields)
 		applyRoutingModelNumericFields(&params, model.Fields)
 		applyRoutingModelArrayFields(&params, model.Fields)
 		c.config.ModelConfig[model.Name] = params
 	}
+}
+
+func applyRoutingModelCardFields(params *config.ModelParams, fields map[string]Value) {
+	if aliases, ok := getStringArrayField(fields, "aliases"); ok {
+		params.Aliases = aliases
+	}
+	reasoningValue, ok := fields["reasoning"].(ObjectValue)
+	if !ok {
+		return
+	}
+	params.Reasoning.Type, _ = getStringField(reasoningValue.Fields, "type")
+	params.Reasoning.Efforts, _ = getStringArrayField(reasoningValue.Fields, "efforts")
 }
 
 func applyRoutingModelTextFields(params *config.ModelParams, fields map[string]Value) {
@@ -56,31 +71,13 @@ func applyRoutingModelArrayFields(params *config.ModelParams, fields map[string]
 }
 
 func getLoRAAdapterField(fields map[string]Value, key string) ([]config.LoRAAdapter, bool) {
-	raw, ok := fields[key]
+	names, ok := getStringArrayField(fields, key)
 	if !ok {
 		return nil, false
 	}
-
-	av, ok := raw.(ArrayValue)
-	if !ok {
-		return nil, false
-	}
-
-	adapters := make([]config.LoRAAdapter, 0, len(av.Items))
-	for _, item := range av.Items {
-		ov, ok := item.(ObjectValue)
-		if !ok {
-			continue
-		}
-		name, ok := getStringField(ov.Fields, "name")
-		if !ok || name == "" {
-			continue
-		}
-		adapter := config.LoRAAdapter{Name: name}
-		if description, ok := getStringField(ov.Fields, "description"); ok {
-			adapter.Description = description
-		}
-		adapters = append(adapters, adapter)
+	adapters := make([]config.LoRAAdapter, 0, len(names))
+	for _, name := range names {
+		adapters = append(adapters, config.LoRAAdapter{Name: name})
 	}
 	return adapters, true
 }

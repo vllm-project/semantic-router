@@ -18,7 +18,7 @@ from release_contract_markers import (
     sim_upgrade_docs_markers,
     upgrade_runbook_fixture_markers,
 )
-from snapshot_model_catalog import release_snapshot_errors
+from snapshot_builtin_recipes import release_snapshot_errors
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PYPROJECT_PATH = REPO_ROOT / "src/vllm-sr/pyproject.toml"
@@ -32,7 +32,7 @@ RELEASE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/release.yml"
 SIM_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/pypi-publish-vllm-sr-sim.yml"
 PUBLISH_CRATE_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/publish-crate.yml"
 UPGRADE_ROLLBACK_DOC_PATH = REPO_ROOT / "website/docs/installation/upgrade-rollback.md"
-BUILT_IN_CATALOG_ROOT = REPO_ROOT / "config/recipes/built-in"
+BUILT_IN_RECIPE_ROOT = REPO_ROOT / "config/recipes/built-in"
 GHCR_IMAGE_PREFIX = "ghcr.io/vllm-project/semantic-router"
 HELM_CHART_REF = "oci://ghcr.io/vllm-project/charts/semantic-router"
 
@@ -108,69 +108,31 @@ def parse_chart_key(path: Path, key: str) -> str:
     return match.group(1).strip()
 
 
-def catalog_snapshot_for_version(version: str) -> str:
+def recipe_snapshot_for_version(version: str) -> str:
     match = SEMVER_RE.fullmatch(version)
     if match is None:
         raise ValueError(f"invalid semantic release version: {version}")
     return f"v{match.group('major')}.{match.group('minor')}"
 
 
-def parse_catalog_key(path: Path, key: str) -> str:
-    match = re.search(
-        rf"^{re.escape(key)}:\s*['\"]?([^'\"\s#]+)['\"]?\s*(?:#.*)?$",
-        read_text(path),
-        re.MULTILINE,
-    )
-    if match is None:
-        raise ValueError(f"could not find {key} in {path.relative_to(REPO_ROOT)}")
-    return match.group(1)
-
-
-def validate_release_catalog(errors: list[str], version: str) -> str:
-    snapshot = catalog_snapshot_for_version(version)
-    snapshot_dir = BUILT_IN_CATALOG_ROOT / snapshot
-    catalog_path = snapshot_dir / "catalog.yaml"
+def validate_release_recipes(errors: list[str], version: str) -> str:
+    snapshot = recipe_snapshot_for_version(version)
+    snapshot_dir = BUILT_IN_RECIPE_ROOT / snapshot
     if not snapshot_dir.is_dir():
         message = (
-            f"release v{version} requires built-in catalog snapshot "
+            f"release v{version} requires built-in Recipe snapshot "
             f"config/recipes/built-in/{snapshot}"
         )
         errors.append(f"{snapshot_dir.relative_to(REPO_ROOT)}: {message}")
-        emit_github_error(snapshot_dir, "Missing release catalog snapshot", message)
+        emit_github_error(snapshot_dir, "Missing built-in Recipe snapshot", message)
         return snapshot
-    if not catalog_path.is_file():
-        message = f"release catalog snapshot {snapshot} is missing catalog.yaml"
-        errors.append(f"{catalog_path.relative_to(REPO_ROOT)}: {message}")
-        emit_github_error(catalog_path, "Missing release catalog manifest", message)
-        return snapshot
-
-    expected_values = {
-        "channel": "release",
-        "release": snapshot,
-        "catalog_version": snapshot,
-    }
-    for key, expected in expected_values.items():
-        try:
-            actual = parse_catalog_key(catalog_path, key)
-        except ValueError as error:
-            message = str(error)
-            errors.append(message)
-            emit_github_error(catalog_path, "Release catalog mismatch", message)
-            continue
-        require_equal(
-            errors,
-            catalog_path,
-            f"release catalog {key}",
-            actual,
-            expected,
-        )
     try:
-        drift_errors = release_snapshot_errors(BUILT_IN_CATALOG_ROOT, snapshot)
+        drift_errors = release_snapshot_errors(BUILT_IN_RECIPE_ROOT, snapshot)
     except (OSError, ValueError) as error:
         drift_errors = [f"release snapshot validation failed: {error}"]
     for message in drift_errors:
         errors.append(f"{snapshot_dir.relative_to(REPO_ROOT)}: {message}")
-        emit_github_error(snapshot_dir, "Release catalog snapshot drift", message)
+        emit_github_error(snapshot_dir, "Built-in Recipe snapshot drift", message)
     return snapshot
 
 
@@ -377,7 +339,7 @@ def validate(expected_version: str | None) -> tuple[ReleaseContract, list[str]]:
     # `make release-validate RELEASE_VERSION=...`. Source-only validation may
     # run before maintainers cut the next immutable minor snapshot.
     if expected_version is not None:
-        validate_release_catalog(errors, expected)
+        validate_release_recipes(errors, expected)
     return contract, errors
 
 
@@ -393,7 +355,7 @@ def write_github_outputs(
         output.write(f"sim_version={contract.sim_version}\n")
         output.write(f"release_images={','.join(contract.release_images)}\n")
         output.write(
-            f"catalog_snapshot={catalog_snapshot_for_version(release_version)}\n"
+            f"recipe_snapshot={recipe_snapshot_for_version(release_version)}\n"
         )
 
 
@@ -427,12 +389,12 @@ def main() -> int:
     print(f"  helm source appVersion: {contract.helm_app_version}")
     print(f"  vllm-sr-sim package:    {contract.sim_version} (independent tag stream)")
     print(f"  Docker release images:  {', '.join(contract.release_images)}")
-    catalog_snapshot = catalog_snapshot_for_version(release_version)
+    recipe_snapshot = recipe_snapshot_for_version(release_version)
     if args.version is not None:
-        print(f"  Built-in catalog:       {catalog_snapshot} (release-bound)")
+        print(f"  Built-in Recipes:       {recipe_snapshot} (release-bound)")
     else:
         print(
-            f"  Built-in catalog target: {catalog_snapshot} "
+            f"  Built-in Recipe target: {recipe_snapshot} "
             "(checked when --version is explicit)"
         )
 

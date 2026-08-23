@@ -4,19 +4,19 @@ import type { RoomMessage, RoomTransportMode, StreamingParticipant } from './cla
 const hasActiveStreamingText = (
   messageId: string,
   content: string,
-  messages: RoomMessage[]
+  messages: RoomMessage[],
 ): boolean => {
   if (!content.trim()) {
     return false
   }
-  const persisted = messages.find(message => message.id === messageId)
+  const persisted = messages.find((message) => message.id === messageId)
   return !persisted || persisted.content !== content
 }
 
 export const buildStreamingEntries = (
   messages: RoomMessage[],
   streamingMessages: Map<string, string>,
-  streamingToolTraces: Map<string, ClawRoomStreamingToolTraceEntry> = new Map()
+  streamingToolTraces: Map<string, ClawRoomStreamingToolTraceEntry> = new Map(),
 ): Array<[string, string]> => {
   const messageIds = new Set<string>()
 
@@ -27,20 +27,19 @@ export const buildStreamingEntries = (
   }
 
   for (const [messageId, entry] of streamingToolTraces.entries()) {
-    if (entry.steps.length > 0 && !messages.some(message => message.id === messageId)) {
+    if (entry.steps.length > 0 && !messages.some((message) => message.id === messageId)) {
       messageIds.add(messageId)
     }
   }
 
-  return Array.from(messageIds).map(messageId => [
-    messageId,
-    streamingMessages.get(messageId) || '',
-  ] as [string, string])
+  return Array.from(messageIds).map(
+    (messageId) => [messageId, streamingMessages.get(messageId) || ''] as [string, string],
+  )
 }
 
 export const resolveTransportStatusLabel = (
   transportMode: RoomTransportMode,
-  wsConnected: boolean
+  wsConnected: boolean,
 ): string => {
   if (transportMode === 'websocket' && wsConnected) {
     return 'Live'
@@ -58,7 +57,7 @@ export const resolveTransportStatusClassName = (
     wsConnected: string
     wsFallback: string
     wsDisconnected: string
-  }
+  },
 ): string => {
   if (transportMode === 'websocket' && wsConnected) {
     return styles.wsConnected
@@ -71,7 +70,7 @@ export const resolveTransportStatusClassName = (
 
 export const resolveTransportStatusTitle = (
   transportMode: RoomTransportMode,
-  wsConnected: boolean
+  wsConnected: boolean,
 ): string => {
   if (transportMode === 'websocket' && wsConnected) {
     return 'WebSocket connected'
@@ -84,7 +83,7 @@ export const resolveTransportStatusTitle = (
 
 export const resolveStreamingParticipantDisplay = (
   messageId: string,
-  streamingParticipants: Map<string, StreamingParticipant>
+  streamingParticipants: Map<string, StreamingParticipant>,
 ): { participantType: string; displayName: string; isLeader: boolean; isWorker: boolean } => {
   const participant = streamingParticipants.get(messageId)
   const participantType = participant?.participantType || 'worker'

@@ -6,35 +6,28 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
-	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 // SettingsResponse represents the dashboard settings returned to frontend
 type SettingsResponse struct {
-	ReadonlyMode          bool   `json:"readonlyMode"`
-	ServerReadonly        bool   `json:"serverReadonly"`
-	RuntimeConfigWritable bool   `json:"runtimeConfigWritable"`
-	RecipeStoreWritable   bool   `json:"recipeStoreWritable"`
-	SetupMode             bool   `json:"setupMode"`
-	Platform              string `json:"platform"`
-	EnvoyURL              string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
-	RouterEvalURL         string `json:"routerEvalEndpoint"`
-	FleetSimEnabled       bool   `json:"fleetSimEnabled"`
+	ReadonlyMode    bool   `json:"readonlyMode"`
+	ServerReadonly  bool   `json:"serverReadonly"`
+	Platform        string `json:"platform"`
+	EnvoyURL        string `json:"envoyUrl"` // Envoy proxy URL for evaluation endpoint
+	RouterPublicURL string `json:"routerPublicUrl"`
+	RouterEvalURL   string `json:"routerEvalEndpoint"`
+	FleetSimEnabled bool   `json:"fleetSimEnabled"`
 }
 
-// SettingsHandler returns dashboard settings for frontend consumption.
-//
-// SetupMode comes from setupResolver, not cfg. cfg.SetupMode is the legacy flag
-// frozen at startup, and this endpoint must agree with /api/setup/state and the
-// bootstrap gate.
-func SettingsHandler(cfg *config.Config, setupResolver *setupmode.Resolver) http.HandlerFunc {
+// SettingsHandler returns dashboard settings for frontend consumption
+func SettingsHandler(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		readOnlyMode := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
+		readOnlyMode := cfg.ReadonlyMode
 		if !readOnlyMode {
 			if ac, ok := auth.AuthFromContext(r); ok && !ac.Perms[auth.PermConfigWrite] {
 				readOnlyMode = true
@@ -42,15 +35,13 @@ func SettingsHandler(cfg *config.Config, setupResolver *setupmode.Resolver) http
 		}
 
 		response := SettingsResponse{
-			ReadonlyMode:          readOnlyMode,
-			ServerReadonly:        cfg.ReadonlyMode,
-			RuntimeConfigWritable: cfg.RuntimeConfigWritable,
-			RecipeStoreWritable:   cfg.RecipeStoreWritable,
-			SetupMode:             setupResolver.Active(),
-			Platform:              cfg.Platform,
-			EnvoyURL:              cfg.EnvoyURL,
-			RouterEvalURL:         defaultRouterEvalEndpoint(cfg.RouterAPIURL),
-			FleetSimEnabled:       cfg.FleetSimURL != "",
+			ReadonlyMode:    readOnlyMode,
+			ServerReadonly:  cfg.ReadonlyMode,
+			Platform:        cfg.Platform,
+			EnvoyURL:        cfg.EnvoyURL,
+			RouterPublicURL: cfg.RouterPublicURL,
+			RouterEvalURL:   defaultRouterEvalEndpoint(cfg.RouterAPIURL),
+			FleetSimEnabled: cfg.FleetSimURL != "",
 		}
 
 		w.Header().Set("Content-Type", "application/json")

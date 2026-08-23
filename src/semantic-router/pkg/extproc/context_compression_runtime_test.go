@@ -8,9 +8,9 @@ import (
 
 func TestRecoveryRedisOptionsUseDedicatedPrefix(t *testing.T) {
 	routerConfig := &config.RouterConfig{}
-	routerConfig.SemanticCache.Redis = &config.RedisConfig{}
-	routerConfig.SemanticCache.Redis.Connection.Host = "redis.internal"
-	routerConfig.SemanticCache.Redis.Connection.Port = 6380
+	routerConfig.Redis = &config.RedisConfig{}
+	routerConfig.Redis.Connection.Host = "redis.internal"
+	routerConfig.Redis.Connection.Port = 6380
 	options, ok, err := recoveryRedisOptions(routerConfig, "redis", 1024)
 	if err != nil || !ok {
 		t.Fatalf("recoveryRedisOptions() = %#v, %v, %v", options, ok, err)

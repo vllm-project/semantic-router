@@ -28,6 +28,9 @@ describe('data table scale support', () => {
     const withPage = updatePageSelection(selected, pageKeys, true)
 
     expect([...withPage].sort()).toEqual(['model-1', 'model-26', 'model-27', 'model-90'])
-    expect([...updatePageSelection(withPage, pageKeys, false)].sort()).toEqual(['model-1', 'model-90'])
+    expect([...updatePageSelection(withPage, pageKeys, false)].sort()).toEqual([
+      'model-1',
+      'model-90',
+    ])
   })
 })

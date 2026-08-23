@@ -3,10 +3,7 @@
 from pathlib import Path
 
 import yaml
-from cli.commands.runtime_support import (
-    configure_runtime_override_env_vars,
-    resolve_effective_config_path,
-)
+from cli.commands.runtime_support import resolve_effective_config_path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 
@@ -20,7 +17,7 @@ def test_resolve_effective_config_path_enables_amd_gpu_by_default(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -44,8 +41,6 @@ def test_resolve_effective_config_path_enables_amd_gpu_by_default(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform="amd",
     )
 
@@ -75,7 +70,7 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -99,8 +94,6 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform="nvidia",
     )
 
@@ -130,7 +123,7 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -151,8 +144,6 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform="nvidia",
     )
 
@@ -176,7 +167,7 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -200,8 +191,6 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform="amd",
     )
 
@@ -222,7 +211,7 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
     )
 
 
-def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides(
+def test_resolve_effective_config_path_preserves_algorithm_and_applies_platform(
     tmp_path: Path, monkeypatch
 ):
     monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
@@ -231,8 +220,20 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
-                "routing": {"decisions": [{"name": "default"}]},
+                "version": "v0.4",
+                "recipes": [
+                    {
+                        "name": "default",
+                        "document": {
+                            "decisions": [
+                                {
+                                    "name": "default",
+                                    "algorithm": {"type": "hybrid"},
+                                }
+                            ]
+                        },
+                    }
+                ],
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -250,14 +251,15 @@ def test_resolve_effective_config_path_combines_algorithm_and_platform_overrides
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm="multi_factor",
-        setup_mode=False,
         platform="amd",
     )
 
-    assert effective_path == tmp_path / ".vllm-sr" / "runtime-config.yaml"
+    assert effective_path == tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     effective = yaml.safe_load(effective_path.read_text())
-    assert effective["routing"]["decisions"][0]["algorithm"]["type"] == "multi_factor"
+    assert (
+        effective["recipes"][0]["document"]["decisions"][0]["algorithm"]["type"]
+        == "hybrid"
+    )
     assert (
         effective["global"]["model_catalog"]["embeddings"]["semantic"]["use_cpu"]
         is False
@@ -273,7 +275,7 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [
                     {
                         "name": "http",
@@ -281,27 +283,46 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
                         "port": 8899,
                     }
                 ],
-                "providers": {
-                    "defaults": {"default_model": "test-model"},
-                    "models": [
-                        {
-                            "name": "test-model",
-                            "provider_model_id": "test-model",
-                            "backend_refs": [{"endpoint": "127.0.0.1:8000"}],
-                        }
-                    ],
-                },
-                "routing": {
-                    "modelCards": [{"name": "test-model"}],
-                    "decisions": [
-                        {
-                            "name": "default-route",
-                            "priority": 1,
-                            "rules": {"operator": "AND", "conditions": []},
-                            "modelRefs": [{"model": "test-model"}],
-                        }
-                    ],
-                },
+                "models": [
+                    {
+                        "name": "test-model",
+                        "card": {"capabilities": ["chat"]},
+                        "connections": [
+                            {
+                                "provider": "vllm",
+                                "endpoint": "http://127.0.0.1:8000/v1",
+                                "model": "test-model",
+                            }
+                        ],
+                    }
+                ],
+                "recipes": [
+                    {
+                        "name": "default",
+                        "document": {
+                            "decisions": [
+                                {
+                                    "name": "default-route",
+                                    "priority": 1,
+                                    "rules": {
+                                        "operator": "AND",
+                                        "conditions": [],
+                                    },
+                                }
+                            ]
+                        },
+                    }
+                ],
+                "entrypoints": [
+                    {
+                        "name": "vllm-sr/default",
+                        "aliases": ["auto"],
+                        "recipe": "default",
+                        "assignments": {
+                            "default-route": {"models": [{"model": "test-model"}]}
+                        },
+                    }
+                ],
                 "global": {},
             },
             sort_keys=False,
@@ -310,8 +331,6 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform="amd",
     )
 
@@ -339,8 +358,6 @@ def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_defaul
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform="amd",
     )
 
@@ -349,23 +366,6 @@ def test_resolve_effective_config_path_keeps_bert_deprecated_with_amd_gpu_defaul
     embeddings = model_catalog.get("embeddings", {})
     assert "bert" not in embeddings
     assert embeddings["semantic"]["use_cpu"] is False
-
-
-def test_configure_runtime_override_env_vars_sets_internal_runtime_path(tmp_path: Path):
-    env_vars: dict[str, str] = {}
-    source_config = tmp_path / "config.yaml"
-    source_config.write_text("version: v0.3\n")
-    effective_config = tmp_path / ".vllm-sr" / "runtime-config.yaml"
-    effective_config.parent.mkdir(parents=True, exist_ok=True)
-    effective_config.write_text("version: v0.3\n")
-
-    configure_runtime_override_env_vars(env_vars, source_config, effective_config)
-
-    assert env_vars["VLLM_SR_SOURCE_CONFIG_PATH"] == "/app/.vllm-sr/runtime-config.yaml"
-    assert (
-        env_vars["VLLM_SR_RUNTIME_CONFIG_PATH"] == "/app/.vllm-sr/runtime-config.yaml"
-    )
-    assert "VLLM_SR_STATE_ROOT_DIR" not in env_vars
 
 
 def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
@@ -381,7 +381,7 @@ def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [
                     {
                         "name": "http-8899",
@@ -396,17 +396,9 @@ def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
 
     effective_path = resolve_effective_config_path(
         config_path=config_path,
-        algorithm=None,
-        setup_mode=False,
         platform=None,
     )
 
-    assert effective_path == state_root / ".vllm-sr" / "runtime-config.yaml"
+    assert effective_path == state_root / ".vllm-sr" / "compiled-bootstrap.yaml"
     assert effective_path.exists()
-    assert not (config_dir / ".vllm-sr" / "runtime-config.yaml").exists()
-
-    env_vars: dict[str, str] = {}
-    configure_runtime_override_env_vars(env_vars, config_path, effective_path)
-    assert (
-        env_vars["VLLM_SR_RUNTIME_CONFIG_PATH"] == "/app/.vllm-sr/runtime-config.yaml"
-    )
+    assert not (config_dir / ".vllm-sr" / "compiled-bootstrap.yaml").exists()

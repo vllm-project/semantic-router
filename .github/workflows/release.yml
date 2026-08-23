@@ -26,7 +26,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       tag: ${{ steps.version.outputs.tag }}
       sim_version: ${{ steps.contract.outputs.sim_version }}
-      catalog_snapshot: ${{ steps.contract.outputs.catalog_snapshot }}
+      recipe_snapshot: ${{ steps.contract.outputs.recipe_snapshot }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,9 +35,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install release validation dependencies
-        run: python -m pip install PyYAML==6.0.3
 
       - name: Resolve release version
         id: version
@@ -63,7 +60,7 @@ jobs:
       - name: Validate release version contract
         id: contract
         run: |
-          python3 tools/release/snapshot_model_catalog.py \
+          python3 tools/release/snapshot_builtin_recipes.py \
             --check-published --base-ref "$GITHUB_SHA"
           python3 tools/release/check_version_contract.py \
             --version "${{ steps.version.outputs.version }}" \
@@ -106,7 +103,6 @@ jobs:
     with:
       version: ${{ needs.validate.outputs.version }}
       tag: ${{ needs.validate.outputs.tag }}
-      catalog_snapshot: ${{ needs.validate.outputs.catalog_snapshot }}
     secrets: inherit
 
   crate:
@@ -199,21 +195,16 @@ jobs:
             candle-semantic-router = "${{ needs.validate.outputs.version }}"
             ```
 
-            ### Built-in virtual models
+            ### Built-in Recipes
 
-            Curated virtual models and their versioned Recipe YAML are bundled
-            in the `vllm-sr` wheel and release images. They are not published
-            as separate GitHub Release assets. This release binds immutable
-            catalog snapshot `${{ needs.validate.outputs.catalog_snapshot }}`.
-            Inspect or fork the installed catalog locally:
-
-            ```bash
-            vllm-sr model list
-            vllm-sr model show vllm-sr/mom-v1-blend \
-              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
-            vllm-sr model fork vllm-sr/mom-v1-blend mom-v1.yaml \
-              --catalog-version ${{ needs.validate.outputs.catalog_snapshot }}
-            ```
+            Curated, model-free Recipes ship in Router release images and are
+            installed as ordinary Management resources. They are not duplicated in the CLI wheel
+            or published as separate GitHub Release assets. This
+            release binds immutable Recipe snapshot
+            `${{ needs.validate.outputs.recipe_snapshot }}`. Start `vllm-sr
+            serve`, then assign configured Models and publish an Entrypoint in the
+            Dashboard. The same lifecycle is available through the Router
+            Management API.
 
             `vllm-sr-sim` Python releases remain on the independent
             `vllm-sr-sim-v*` tag stream (current source version

@@ -71,28 +71,24 @@ Some workloads need a lightweight learned classifier with clearer decision bound
 ```yaml
 algorithm:
   type: svm
+  ml:
+    models_path: ".cache/ml-models"
+    embedding_dim: 768
+    svm:
+      kernel: rbf
+      gamma: 1.0
+      pretrained_path: .cache/ml-models/svm_model.json
 ```
 
-### Global ML Settings
-
-```yaml
-global:
-  router:
-    model_selection:
-      ml:
-        models_path: ".cache/ml-models"
-        embedding_dim: 768
-        svm:
-          kernel: rbf
-          pretrained_path: .cache/ml-models/svm_model.json
-```
+`algorithm.ml` belongs to this Decision. Decisions in the same Recipe must
+agree on shared settings and repeated family settings.
 
 ### Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `kernel` | string | `rbf` | Empty-selector kernel: `rbf` (or `gaussian`) and `linear` are supported; other values fall back to linear |
-| `gamma` | float | `1.0` | Accepted compatibility field; loading an artifact uses the gamma stored in that artifact rather than this value |
+| `gamma` | float | `1.0` | RBF-kernel setting recorded with the selector configuration; loaded artifacts retain their trained value |
 | `pretrained_path` | string | — | Path to pre-trained SVM model (JSON format) |
 
 ## Training

@@ -51,8 +51,9 @@ describe('evaluation list support', () => {
     )
 
     expect(
-      history.every((task) =>
-        task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled',
+      history.every(
+        (task) =>
+          task.status === 'completed' || task.status === 'failed' || task.status === 'cancelled',
       ),
     ).toBe(true)
     expect(EVALUATION_TASK_PAGE_SIZE).toBe(25)
@@ -62,9 +63,27 @@ describe('evaluation list support', () => {
 
   it('filters and ranks result cards by dimension, dataset, and score', () => {
     const results: EvaluationResult[] = [
-      { id: 'r1', task_id: 't1', dimension: 'domain', dataset_name: 'Alpha', metrics: { accuracy: 0.8 } },
-      { id: 'r2', task_id: 't1', dimension: 'accuracy', dataset_name: 'MMLU Pro', metrics: { accuracy: 0.92 } },
-      { id: 'r3', task_id: 't1', dimension: 'accuracy', dataset_name: 'General', metrics: { accuracy: 0.7 } },
+      {
+        id: 'r1',
+        task_id: 't1',
+        dimension: 'domain',
+        dataset_name: 'Alpha',
+        metrics: { accuracy: 0.8 },
+      },
+      {
+        id: 'r2',
+        task_id: 't1',
+        dimension: 'accuracy',
+        dataset_name: 'MMLU Pro',
+        metrics: { accuracy: 0.92 },
+      },
+      {
+        id: 'r3',
+        task_id: 't1',
+        dimension: 'accuracy',
+        dataset_name: 'General',
+        metrics: { accuracy: 0.7 },
+      },
     ]
 
     expect(

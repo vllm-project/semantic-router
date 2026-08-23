@@ -19,6 +19,7 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -71,6 +72,12 @@ func (r *SemanticRouter) ValidateDelete(_ context.Context, _ runtime.Object) (ad
 
 // validateSemanticRouter validates the SemanticRouter resource
 func (r *SemanticRouter) validateSemanticRouter() error {
+	if err := r.validateBootstrap(); err != nil {
+		return err
+	}
+	if err := r.validateDeploymentContract(); err != nil {
+		return err
+	}
 	// Validate autoscaling configuration
 	if r.Spec.Autoscaling.Enabled != nil && *r.Spec.Autoscaling.Enabled {
 		if err := r.validateAutoscaling(); err != nil {
@@ -95,6 +102,69 @@ func (r *SemanticRouter) validateSemanticRouter() error {
 		}
 	}
 
+	return nil
+}
+
+func (r *SemanticRouter) validateBootstrap() error {
+	ref := r.Spec.Bootstrap.ConfigMapRef
+	if ref.Name == "" || ref.Name != strings.TrimSpace(ref.Name) {
+		return fmt.Errorf("bootstrap.configMapRef.name must be a non-empty ConfigMap name without surrounding whitespace")
+	}
+	if ref.Key == "" || ref.Key != strings.TrimSpace(ref.Key) {
+		return fmt.Errorf("bootstrap.configMapRef.key must be a non-empty ConfigMap key without surrounding whitespace")
+	}
+	for _, argument := range r.Spec.Args {
+		if argument == "--config" || strings.HasPrefix(argument, "--config=") {
+			return fmt.Errorf("args must not override the Operator-mounted Router config")
+		}
+	}
+	for _, variable := range r.Spec.Env {
+		if variable.Name == "CONFIG_FILE" || variable.Name == "VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" {
+			return fmt.Errorf("env must not override Operator-owned variable %s", variable.Name)
+		}
+	}
+	return nil
+}
+
+func (r *SemanticRouter) validateDeploymentContract() error {
+	reservedVolumes := map[string]struct{}{
+		"cache-volume":        {},
+		"config-volume":       {},
+		"envoy-config-volume": {},
+		"models-volume":       {},
+		"router-workdir":      {},
+		"var-log":             {},
+		"var-run":             {},
+	}
+	seenVolumes := make(map[string]struct{}, len(r.Spec.Volumes))
+	for _, volume := range r.Spec.Volumes {
+		if _, reserved := reservedVolumes[volume.Name]; reserved {
+			return fmt.Errorf("volumes must not override Operator-owned volume %s", volume.Name)
+		}
+		if _, duplicate := seenVolumes[volume.Name]; duplicate {
+			return fmt.Errorf("volumes contains duplicate name %s", volume.Name)
+		}
+		seenVolumes[volume.Name] = struct{}{}
+	}
+	for _, mount := range r.Spec.VolumeMounts {
+		if _, declared := seenVolumes[mount.Name]; !declared {
+			return fmt.Errorf("volumeMounts references undeclared deployment volume %s", mount.Name)
+		}
+		if mount.MountPath == "/app/config.yaml" {
+			return fmt.Errorf("volumeMounts must not override the Operator-mounted Router config")
+		}
+	}
+
+	if r.Spec.TopologySpread.Enabled != nil && *r.Spec.TopologySpread.Enabled {
+		if r.Spec.TopologySpread.MaxSkew < 0 {
+			return fmt.Errorf("topologySpread.maxSkew must be greater than 0")
+		}
+		if r.Spec.TopologySpread.WhenUnsatisfiable != "" &&
+			r.Spec.TopologySpread.WhenUnsatisfiable != "DoNotSchedule" &&
+			r.Spec.TopologySpread.WhenUnsatisfiable != "ScheduleAnyway" {
+			return fmt.Errorf("topologySpread.whenUnsatisfiable must be DoNotSchedule or ScheduleAnyway")
+		}
+	}
 	return nil
 }
 

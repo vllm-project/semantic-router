@@ -1,6 +1,10 @@
 package config
 
-import "reflect"
+import (
+	"reflect"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelauthoring"
+)
 
 func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface{}) {
 	assertMapCoversStructFields(t, root, reflect.TypeOf(CanonicalConfig{}), "config")
@@ -10,62 +14,52 @@ func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface
 }
 
 func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface{}) {
-	providers := mustMapAt(t, root, "providers")
-	defaults := mustMapAt(t, providers, "defaults")
-	reasoningFamilies := mustMapAt(t, defaults, "reasoning_families")
-	models := mustSliceAt(t, providers, "models")
-
-	assertMapCoversStructFields(t, providers, reflect.TypeOf(CanonicalProviders{}), "providers")
-	assertMapCoversStructFields(t, defaults, reflect.TypeOf(CanonicalProviderDefaults{}), "providers.defaults")
+	models := mustSliceAt(t, root, "models")
+	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(AuthoringModel{}), "models")
 	assertSliceUnionCoversStructFields(
 		t,
-		mapValuesToSlice(t, reasoningFamilies, "providers.defaults.reasoning_families"),
-		reflect.TypeOf(ReasoningFamilyConfig{}),
-		"providers.defaults.reasoning_families",
+		collectNestedSliceItems(t, models, "connections", "models"),
+		reflect.TypeOf(modelauthoring.Connection{}),
+		"models[].connections",
 	)
-	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
-		reflect.TypeOf(CanonicalBackendRef{}),
-		"providers.models[].backend_refs",
-	)
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "card", "models"), reflect.TypeOf(AuthoringModelCard{}), "models[].card")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "runtime", "models"), reflect.TypeOf(ModelExecutionSettings{}), "models[].runtime")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "pricing", "models"), reflect.TypeOf(ModelRuntimePricing{}), "models[].pricing")
 }
 
 func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, root, "entrypoints"),
-		reflect.TypeOf(CanonicalEntrypoint{}),
+		reflect.TypeOf(AuthoringEntrypoint{}),
 		"entrypoints",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, root, "recipes"),
-		reflect.TypeOf(CanonicalRecipe{}),
+		reflect.TypeOf(AuthoringRecipe{}),
 		"recipes",
 	)
 }
 
 func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{}) {
-	routing := mustMapAt(t, root, "routing")
+	routing := referenceDefaultRecipeDocument(t, root)
 
-	assertMapCoversStructFields(t, routing, reflect.TypeOf(CanonicalRouting{}), "routing")
-	assertSliceUnionCoversStructFields(
-		t,
-		mustSliceAt(t, routing, "modelCards"),
-		reflect.TypeOf(RoutingModel{}),
-		"routing.modelCards",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectNestedSliceItems(t, mustSliceAt(t, routing, "modelCards"), "loras", "routing.modelCards"),
-		reflect.TypeOf(LoRAAdapter{}),
-		"routing.modelCards[].loras",
-	)
+	assertMapCoversStructFields(t, routing, reflect.TypeOf(CanonicalRouting{}), "recipes[default].document")
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
 	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
+}
+
+func referenceDefaultRecipeDocument(t testingT, root map[string]interface{}) map[string]interface{} {
+	for _, value := range mustSliceAt(t, root, "recipes") {
+		recipe := mustMapValue(t, value, "recipes")
+		if recipe["name"] == string(DefaultRecipeName) {
+			return mustMapValue(t, recipe["document"], "recipes[default].document")
+		}
+	}
+	t.Fatalf("reference config has no default Recipe document")
+	return nil
 }
 
 func assertReferenceConfigSignalCoverage(t testingT, signals map[string]interface{}) {
@@ -220,25 +214,14 @@ func assertReferenceConfigConversationSignalCoverage(t testingT, conv []interfac
 }
 
 func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) {
-	assertSliceUnionCoversStructFields(t, decisions, reflect.TypeOf(Decision{}), "routing.decisions")
-	assertSliceUnionCoversStructFields(
-		t,
-		collectNestedSliceItems(t, decisions, "modelRefs", "routing.decisions"),
-		reflect.TypeOf(ModelRef{}),
-		"routing.decisions[].modelRefs",
-	)
+	assertSliceUnionCoversStructFields(t, decisions, reflect.TypeOf(Decision{}), "routing.decisions", "id", "modelRefs")
 	candidateIterations := collectNestedSliceItems(t, decisions, "candidateIterations", "routing.decisions")
 	assertSliceUnionCoversStructFields(
 		t,
 		candidateIterations,
 		reflect.TypeOf(CandidateIterationConfig{}),
 		"routing.decisions[].candidateIterations",
-	)
-	assertSliceUnionCoversStructFields(
-		t,
-		collectNestedSliceItems(t, candidateIterations, "models", "routing.decisions[].candidateIterations"),
-		reflect.TypeOf(ModelRef{}),
-		"routing.decisions[].candidateIterations[].models",
+		"models",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
@@ -263,7 +246,10 @@ func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) 
 func assertReferenceConfigGlobalCoverage(t testingT, root map[string]interface{}) {
 	global := mustMapAt(t, root, "global")
 
-	assertMapCoversStructFields(t, global, reflect.TypeOf(CanonicalGlobal{}), "global")
+	// config/config.yaml is the exhaustive standalone v0.4 reference. Managed
+	// bootstrap inputs are exercised separately because they require external
+	// stores, secrets, and provider packs.
+	assertMapCoversStructFields(t, global, reflect.TypeOf(CanonicalGlobal{}), "global", "control_plane")
 	assertReferenceConfigRouterGlobalCoverage(t, mustMapAt(t, global, "router"))
 	assertReferenceConfigServiceGlobalCoverage(t, mustMapAt(t, global, "services"))
 	assertReferenceConfigStoreGlobalCoverage(t, mustMapAt(t, global, "stores"))

@@ -127,9 +127,12 @@ body {
   background:
     radial-gradient(circle at 78% -12%, rgba(255, 255, 255, 0.055), transparent 27rem),
     linear-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
-    var(--surface-canvas);
-  background-size: auto, 40px 40px, 40px 40px, auto;
+    linear-gradient(90deg, rgba(255, 255, 255, 0.018) 1px, transparent 1px), var(--surface-canvas);
+  background-size:
+    auto,
+    40px 40px,
+    40px 40px,
+    auto;
   color: var(--color-text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;

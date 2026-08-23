@@ -157,10 +157,7 @@ func postChatCompletionsWithReplayHeaders(ctx context.Context, session *fixtures
 		Model:    "auto",
 		User:     o.userID,
 		Messages: msgs,
-	}, map[string]string{
-		"x-authz-user-id": o.userID,
-		"x-session-id":    o.sessionID,
-	})
+	}, map[string]string{"x-session-id": o.sessionID})
 	if err != nil {
 		return fmt.Errorf("chat completions: %w", err)
 	}

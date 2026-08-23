@@ -61,7 +61,16 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 		return r.createErrorResponse(400, "session_id is required")
 	}
 
-	records := filterTrajectoryRecordsBySession(r.collectRouterReplayRecords(), sessionID)
+	filters, err := parseRouterReplayFilters(values)
+	if err != nil {
+		return r.createErrorResponse(400, err.Error())
+	}
+	// Trajectory session_id intentionally targets RequestID until the replay
+	// schema has a dedicated session index. Keep principal and presentation
+	// filters, but do not also require RoutingRecord.SessionID to match.
+	filters.sessionID = ""
+	records := filterRouterReplayRecords(r.collectRouterReplayRecords(), filters)
+	records = filterTrajectoryRecordsBySession(records, sessionID)
 	// collectRouterReplayRecords returns newest-first; trajectory needs chronological order.
 	reverseRoutingRecords(records)
 
@@ -133,25 +142,14 @@ func buildTrajectoryMessages(records []routerreplay.RoutingRecord) []trajectoryM
 	return messages
 }
 
-// trajectoryStepsForRecord returns the ToolTraceStep slice for a record.
-// If ToolTrace is nil or empty, it falls back to parsing the stored request/response bodies.
+// trajectoryStepsForRecord returns the semantic tool trace captured while the
+// request was live. Stored public wire bodies are presentation artifacts and
+// are never reparsed as an implicit canonical protocol.
 func trajectoryStepsForRecord(record routerreplay.RoutingRecord) []routerreplay.ToolTraceStep {
 	if record.ToolTrace != nil && len(record.ToolTrace.Steps) > 0 {
 		return record.ToolTrace.Steps
 	}
-	trace := fallbackTrajectoryTrace(record)
-	if trace != nil {
-		return trace.Steps
-	}
 	return nil
-}
-
-// fallbackTrajectoryTrace parses request_body and response_body as Chat Completions
-// payloads when tool_trace is absent.
-func fallbackTrajectoryTrace(record routerreplay.RoutingRecord) *routerreplay.ToolTrace {
-	requestTrace := parseChatCompletionRequestToolTrace([]byte(record.RequestBody))
-	responseTrace := parseChatCompletionResponseToolTrace([]byte(record.ResponseBody))
-	return mergeReplayToolTraces(requestTrace, responseTrace)
 }
 
 func trajectoryMessageFromStep(step routerreplay.ToolTraceStep) *trajectoryMessage {

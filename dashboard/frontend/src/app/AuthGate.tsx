@@ -1,7 +1,7 @@
 import React from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import SetupStatusPage from './SetupStatusPage'
+import AppStatusPage from './AppStatusPage'
 
 /** Requires authentication; redirects to login with return path. */
 const AuthGate: React.FC = () => {
@@ -10,7 +10,7 @@ const AuthGate: React.FC = () => {
 
   if (isLoading) {
     return (
-      <SetupStatusPage
+      <AppStatusPage
         title="Authenticating"
         description="Checking session state..."
         actionLabel="Retry"

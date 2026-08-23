@@ -55,17 +55,27 @@ flowchart TD
 
 ## Model Embedding Initialization
 
-Models need descriptions for embedding-based matching. Configure descriptions in `modelCards`:
+Models need descriptions for embedding-based matching. Put them in each
+human-authored Model card:
 
 ```yaml
-routing:
-  modelCards:
-    - name: llama-3.2-1b
-      description: "Fast small model for simple tasks, low cost"
-      capabilities: ["summarization", "simple_qa"]
-    - name: codellama-7b
-      description: "Code generation specialist, good at programming tasks"
-      capabilities: ["code_generation", "debugging"]
+models:
+  - name: llama-3.2-1b
+    card:
+      description: Fast small model for simple tasks, low cost.
+      capabilities: [summarization, simple_qa]
+    connections:
+      - provider: vllm
+        endpoint: http://llama-3-2-1b:8000/v1
+        model: llama-3.2-1b
+  - name: codellama-7b
+    card:
+      description: Code generation specialist for programming tasks.
+      capabilities: [code_generation, debugging]
+    connections:
+      - provider: vllm
+        endpoint: http://codellama-7b:8000/v1
+        model: codellama-7b
 ```
 
 When `use_capabilities: true`, capability tags are concatenated with descriptions to enrich embeddings.
@@ -121,15 +131,15 @@ offline analysis and learning diagnostics. The router response includes
 `x-vsr-replay-id`; send that value back with the model outcome:
 
 ```bash
-curl -sS -X POST http://localhost:8080/v1/router/outcomes \
-  -H "Authorization: Bearer ${VSR_MGMT_TOKEN}" \
+curl -sS -X POST http://localhost:8899/v1/router/outcomes \
+  -H "Authorization: Bearer ${VSR_API_KEY}" \
   -H "Content-Type: application/json" \
   -H "Idempotency-Key: router-dc-feedback-001" \
   -d '{
     "replay_id": "replay_01J...",
-    "source": "user",
     "target": "model",
-    "target_ref": "codellama-7b",
+    "target_ref": "model/codellama-7b",
+    "target_revision": 7,
     "verdict": "good_fit",
     "reason": "good_code_response",
     "score": 1.0,
@@ -139,8 +149,10 @@ curl -sS -X POST http://localhost:8080/v1/router/outcomes \
   }'
 ```
 
-This endpoint records data for replay and offline analysis. It does not change
-RouterDC's request-time similarity scores.
+The public endpoint accepts only feedback for a replay owned by the same
+logical API key and for the exact Model revision that served it. It records an
+immutable outcome and publishes a revisioned, rebuildable learning projection;
+it does not mutate RouterDC's similarity model in process memory.
 
 Router DC sends request text through the configured embedding runtime. With a
 remote embedding provider, that text crosses the provider boundary. Model-card

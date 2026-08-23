@@ -3,10 +3,21 @@ package extproc
 import (
 	"context"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
-func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, responseBody []byte) {
+func (r *OpenAIRouter) scheduleSemanticResponseMemoryStore(
+	ctx *RequestContext,
+	response *llmprotocol.Response,
+) {
+	r.scheduleResponseMemoryStoreText(ctx, extractSemanticAssistantResponseText(response))
+}
+
+func (r *OpenAIRouter) scheduleResponseMemoryStoreText(
+	ctx *RequestContext,
+	currentAssistantResponse string,
+) {
 	autoStoreEnabled := extractAutoStore(ctx)
 	if requestAutoStore, ok := extractRequestAutoStore(ctx); ok {
 		autoStoreEnabled = requestAutoStore
@@ -25,7 +36,6 @@ func (r *OpenAIRouter) scheduleResponseMemoryStore(ctx *RequestContext, response
 	}
 
 	currentUserMessage := extractCurrentUserMessage(ctx)
-	currentAssistantResponse := extractAssistantResponseText(responseBody)
 	// goSafely wraps the goroutine in a deferred recover so a panic in
 	// the memory-store path (e.g. an unexpected payload shape) is
 	// logged via observability rather than aborting the router

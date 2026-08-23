@@ -2,6 +2,7 @@ import { getPluginFieldSchema, PLUGIN_DESCRIPTIONS, PLUGIN_TYPES } from '../lib/
 import type { FieldSchema } from '../lib/dslSchemas'
 import type { DSLFieldObject, DSLFieldValue } from '../types/dsl'
 import type { DecisionFormState, DecisionPluginConfiguration } from './configPageSupport'
+import ProductIcon from '../components/ProductIcon'
 import decisionStyles from './ConfigPageDecisionsSection.module.css'
 import { FieldEditor } from './builderPageFormPrimitives'
 
@@ -88,6 +89,7 @@ export default function ConfigPageDecisionPluginsEditor({
                 onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}
                 className={decisionStyles.editorButtonDanger}
               >
+                <ProductIcon name="trash" aria-hidden="true" />
                 Remove
               </button>
             </div>
@@ -135,7 +137,8 @@ export default function ConfigPageDecisionPluginsEditor({
         onClick={() => onChange([...rows, { type: 'response_cache', configuration: {} }])}
         className={decisionStyles.editorButtonSecondary}
       >
-        Add Plugin
+        <ProductIcon name="plus" aria-hidden="true" />
+        Add plugin
       </button>
     </div>
   )

@@ -1,4 +1,4 @@
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test'
 
 // For tests against already-running stack (no webServer).
 export default defineConfig({
@@ -8,4 +8,4 @@ export default defineConfig({
   reporter: 'list',
   use: { baseURL: 'http://localhost:3001' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
-});
+})

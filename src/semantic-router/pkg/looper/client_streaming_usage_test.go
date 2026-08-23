@@ -21,102 +21,91 @@ import (
 	"testing"
 )
 
-// Streaming responses carry token counts in a final SSE chunk (emitted only
-// when the request sets stream_options.include_usage). The looper client must
-// both request and parse it, or streamed calls report {0,0,0}.
+func TestParseStreamingResponseUsesNeutralTerminalUsage(t *testing.T) {
+	body := []byte("data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\"}}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[],\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n\n" +
+		"data: [DONE]\n\n")
 
-func TestParseStreamingUsage_ExtractsFinalUsageChunk(t *testing.T) {
-	body := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
-		"data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n" +
-		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n" +
-		"data: [DONE]\n"
-
-	got := parseStreamingUsage([]byte(body))
-
-	want := TokenUsage{PromptTokens: 12, CompletionTokens: 8, TotalTokens: 20}
-	if got != want {
-		t.Errorf("parseStreamingUsage() = %+v, want %+v", got, want)
-	}
-}
-
-func TestParseStreamingUsage_AcceptsDataWithoutSpace(t *testing.T) {
-	body := "data:{\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\r\n" +
-		"data:{\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":4,\"total_tokens\":11}}\r\n" +
-		"data:[DONE]\r\n"
-
-	want := TokenUsage{PromptTokens: 7, CompletionTokens: 4, TotalTokens: 11}
-	if got := parseStreamingUsage([]byte(body)); got != want {
-		t.Fatalf("parseStreamingUsage() = %+v, want %+v", got, want)
-	}
-
-	content, _, chunks := parseSSEContent([]byte(body))
-	if content != "hi" || len(chunks) != 3 || chunks[2] != "[DONE]" {
-		t.Fatalf("parseSSEContent() = content %q chunks %v, want no-space data fields parsed", content, chunks)
-	}
-}
-
-func TestParseStreamingUsage_NoUsageChunkReturnsZero(t *testing.T) {
-	body := "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
-		"data: [DONE]\n"
-
-	if got := parseStreamingUsage([]byte(body)); got != (TokenUsage{}) {
-		t.Errorf("parseStreamingUsage() = %+v, want zero", got)
-	}
-}
-
-func TestParseStreamingUsage_IgnoresNullUsageChunks(t *testing.T) {
-	body := "data: {\"usage\":null,\"choices\":[{\"delta\":{\"content\":\"a\"}}]}\n" +
-		"data: {\"usage\":{\"prompt_tokens\":5,\"completion_tokens\":3,\"total_tokens\":8}}\n" +
-		"data: [DONE]\n"
-
-	if got := parseStreamingUsage([]byte(body)); got.TotalTokens != 8 {
-		t.Errorf("TotalTokens = %d, want 8", got.TotalTokens)
-	}
-}
-
-func TestParseStreamingResponse_PopulatesUsage(t *testing.T) {
-	c := &Client{}
-	body := []byte("data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n" +
-		"data: {\"usage\":{\"prompt_tokens\":12,\"completion_tokens\":8,\"total_tokens\":20}}\n" +
-		"data: [DONE]\n")
-
-	resp, err := c.parseStreamingResponse(body, "model-a")
+	response, err := (&Client{}).parseStreamingResponse(body, "model-a")
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("parseStreamingResponse() error = %v", err)
 	}
-	if resp.Usage.TotalTokens != 20 {
-		t.Errorf("resp.Usage = %+v, want total 20", resp.Usage)
+	if response.Content != "hi" {
+		t.Fatalf("content = %q, want hi", response.Content)
+	}
+	want := TokenUsage{PromptTokens: 12, CompletionTokens: 8, TotalTokens: 20}
+	if response.Usage != want {
+		t.Fatalf("usage = %+v, want %+v", response.Usage, want)
 	}
 }
 
-func TestSetStreamParam_StreamingRequestsIncludeUsage(t *testing.T) {
+func TestParseStreamingResponseAcceptsSSEDataWithoutSpace(t *testing.T) {
+	body := []byte("data:{\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\r\n\r\n" +
+		"data:{\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\r\n\r\n" +
+		"data:{\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[],\"usage\":{\"prompt_tokens\":7,\"completion_tokens\":4,\"total_tokens\":11}}\r\n\r\n" +
+		"data:[DONE]\r\n\r\n")
+
+	response, err := (&Client{}).parseStreamingResponse(body, "model-a")
+	if err != nil {
+		t.Fatalf("parseStreamingResponse() error = %v", err)
+	}
+	if response.Content != "hi" || response.Usage.TotalTokens != 11 {
+		t.Fatalf("response = %+v", response)
+	}
+}
+
+func TestParseStreamingResponseMissingUsageIsUnknown(t *testing.T) {
+	body := []byte("data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: [DONE]\n\n")
+
+	response, err := (&Client{}).parseStreamingResponse(body, "model-a")
+	if err != nil {
+		t.Fatalf("parseStreamingResponse() error = %v", err)
+	}
+	if response.Usage.Authoritative() {
+		t.Fatalf("missing terminal usage became authoritative: %+v", response.Usage)
+	}
+}
+
+func TestParseStreamingResponseRejectsInvalidTerminalUsage(t *testing.T) {
+	body := []byte("data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+		"data: {\"id\":\"chatcmpl-1\",\"model\":\"model-a\",\"choices\":[],\"usage\":{\"prompt_tokens\":9,\"completion_tokens\":4,\"total_tokens\":-13}}\n\n" +
+		"data: [DONE]\n\n")
+
+	if _, err := (&Client{}).parseStreamingResponse(body, "model-a"); err == nil {
+		t.Fatal("invalid terminal usage was accepted")
+	}
+}
+
+func TestSetStreamParamStreamingRequestsIncludeUsage(t *testing.T) {
 	out, err := setStreamParam([]byte(`{"model":"x"}`), true)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("setStreamParam() error = %v", err)
 	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(out, &m); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	var request map[string]interface{}
+	if err := json.Unmarshal(out, &request); err != nil {
+		t.Fatalf("decode request: %v", err)
 	}
-	so, ok := m["stream_options"].(map[string]interface{})
-	if !ok {
-		t.Fatalf("stream_options missing: %s", out)
-	}
-	if so["include_usage"] != true {
-		t.Errorf("include_usage = %v, want true", so["include_usage"])
+	options, ok := request["stream_options"].(map[string]interface{})
+	if !ok || options["include_usage"] != true {
+		t.Fatalf("stream_options = %#v", request["stream_options"])
 	}
 }
 
-func TestSetStreamParam_NonStreamingDropsStreamOptions(t *testing.T) {
+func TestSetStreamParamNonStreamingDropsStreamOptions(t *testing.T) {
 	out, err := setStreamParam([]byte(`{"model":"x","stream_options":{"include_usage":true}}`), false)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("setStreamParam() error = %v", err)
 	}
-	var m map[string]interface{}
-	if err := json.Unmarshal(out, &m); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	var request map[string]interface{}
+	if err := json.Unmarshal(out, &request); err != nil {
+		t.Fatalf("decode request: %v", err)
 	}
-	if _, ok := m["stream_options"]; ok {
-		t.Errorf("stream_options should be dropped when not streaming: %s", out)
+	if _, found := request["stream_options"]; found {
+		t.Fatalf("stream_options were retained: %s", out)
 	}
 }

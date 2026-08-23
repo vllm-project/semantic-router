@@ -1,0 +1,306 @@
+.webSearchCard {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.webSearchHeader {
+  width: 100%;
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.webSearchHeader:hover,
+.webSearchHeader:focus-visible {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.webSearchIcon {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.webSearchIcon svg,
+.webSearchIcon img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.webSearchInfo {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.toolCardHeadingRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.webSearchTitle {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.72rem;
+  font-weight: 640;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.webSearchQuery {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 0.62rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolCardBrand {
+  padding: 2px 5px;
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.52rem;
+  font-weight: 650;
+}
+
+.webSearchStatus {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.webSearchCount,
+.toolStatusPill {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.58rem;
+  font-weight: 610;
+}
+
+.toolStatusPill {
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.toolStatusFailed {
+  border-color: rgba(224, 168, 168, 0.18);
+  color: #e0a8a8;
+}
+
+.toolStatusPending,
+.toolStatusRunning,
+.toolStatusCompleted,
+.toolStatusSkipped {
+  color: rgba(255, 255, 255, 0.46);
+}
+
+.webSearchChevron {
+  width: 14px;
+  height: 14px;
+  color: rgba(255, 255, 255, 0.34);
+  transition: transform 140ms ease;
+}
+
+.webSearchChevron.expanded {
+  transform: rotate(180deg);
+}
+
+.webSearchLoading {
+  height: 1px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.webSearchLoadingBar {
+  width: 38%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.62);
+  animation: toolLoading 1.35s ease-in-out infinite;
+}
+
+.webSearchResults,
+.clawToolHighlights {
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.sourcePills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.sourcePill {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 220px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.58rem;
+  text-decoration: none;
+}
+
+.sourcePill:hover,
+.sourcePill:focus-visible {
+  border-color: rgba(255, 255, 255, 0.16);
+  outline: none;
+  color: #fff;
+}
+
+.sourcePillNumber,
+.sourceItemNumber {
+  color: rgba(255, 255, 255, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+
+.sourcePillDomain {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceDetails,
+.clawToolHighlightRows {
+  display: grid;
+  gap: 8px;
+}
+
+.sourceItem {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.sourceItemHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+
+.sourceItemTitle {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.66rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sourceItemSnippet,
+.openWebContent {
+  margin: 5px 0 0;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.61rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+pre.openWebContent {
+  max-height: 260px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.clawToolHighlights,
+.clawToolHighlightSection {
+  display: grid;
+  gap: 8px;
+}
+
+.clawToolHighlightSection + .clawToolHighlightSection {
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.clawToolHighlightHeading {
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.57rem;
+  font-weight: 680;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.clawToolHighlightRow {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(74px, 0.35fr) minmax(0, 1fr);
+  gap: 9px;
+  font-size: 0.61rem;
+}
+
+.clawToolHighlightKey {
+  color: rgba(255, 255, 255, 0.32);
+}
+
+.clawToolHighlightValue {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.62);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clawToolHighlightError {
+  color: #e0a8a8;
+}
+
+.openClawToolCard,
+.openClawToolIcon,
+.openClawToolLoadingBar {
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.searchSpinner {
+  animation: toolSpin 1s linear infinite;
+}
+
+@keyframes toolLoading {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(370%);
+  }
+}
+
+@keyframes toolSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .webSearchChevron,
+  .webSearchLoadingBar,
+  .searchSpinner {
+    transition: none;
+    animation: none;
+  }
+}

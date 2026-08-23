@@ -256,7 +256,6 @@ def validate_release_images(release: WorkflowLike, errors: list[str]) -> None:
         )
     release_text = release.path.read_text(encoding="utf-8")
     fixture_bullets = {
-        "- `anthropic-shim`",
         "- `llm-katan`",
         "- `vllm-sr-sim`",
     }
@@ -321,7 +320,7 @@ def validate_fixture_tag_policy(
 ) -> None:
     publisher = workflows.get("docker-publish.yml")
     text = publisher.path.read_text(encoding="utf-8") if publisher else ""
-    if "anthropic-shim|llm-katan" not in text or "${IMAGE}:nightly" not in text:
+    if 'matrix.image }}" == "llm-katan"' not in text or "${IMAGE}:nightly" not in text:
         errors.append(
             ".github/workflows/docker-publish.yml: nightly test fixtures need "
             "the mutable nightly tag"

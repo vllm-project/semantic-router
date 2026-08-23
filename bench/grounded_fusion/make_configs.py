@@ -3,7 +3,7 @@
 Both configs are identical except ``algorithm.fusion.grounding.enabled``. They:
   - add a deterministic ``deliberate_sentinel`` regex keyword rule + a top-priority
     fusion decision keyed to it (the harness prepends the sentinel to every prompt),
-  - bind the fusion panel/judge to a local Ollama proxy via provider backend_refs,
+  - add readable Models whose connections target a local Ollama proxy,
   - wire the NLI model (models/mom-halugate-explainer) so PANEL-mode grounding
     actually fires instead of silently falling back to plain fusion.
 
@@ -22,39 +22,27 @@ import yaml
 SENTINEL = "deliberate-eval"
 PANEL = ["qwen3:8b", "llama3.1:8b", "gemma3:12b"]
 JUDGE = "qwen3:14b"
-OLLAMA_BACKEND = {
-    "base_url": "http://localhost:11435/v1",
-    "provider": "openai",
-    "chat_path": "/chat/completions",
+OLLAMA_CONNECTION = {
+    "provider": "openai-compatible",
+    "endpoint": "http://localhost:11435/v1",
 }
 
 
-def _ollama_provider_model(name: str) -> dict:
+def _ollama_model(name: str) -> dict:
     return {
         "name": name,
-        "provider_model_id": name,
-        "api_format": "openai",
-        "backend_refs": [
-            {
-                "name": f"ollama-{name.replace(':', '-')}",
-                "weight": 100,
-                "type": "chat",
-                **OLLAMA_BACKEND,
-            }
-        ],
-    }
-
-
-def _model_card(name: str) -> dict:
-    return {
-        "name": name,
-        "param_size": "8B",
-        "context_window_size": 32768,
-        "description": f"Local Ollama model {name} for the grounded-fusion benchmark.",
-        "capabilities": ["chat", "reasoning"],
-        "quality_score": 0.7,
-        "modality": "ar",
-        "tags": ["bench", "ollama"],
+        "card": {
+            "param_size": "8B",
+            "context_window_size": 32768,
+            "description": (
+                f"Local Ollama model {name} for the grounded-fusion benchmark."
+            ),
+            "capabilities": ["chat", "reasoning"],
+            "quality_score": 0.7,
+            "modality": "ar",
+            "tags": ["bench", "ollama"],
+        },
+        "connections": [{**OLLAMA_CONNECTION, "model": name, "weight": "1"}],
     }
 
 
@@ -77,14 +65,9 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
             "operator": "AND",
             "conditions": [{"type": "keyword", "name": "deliberate_sentinel"}],
         },
-        "modelRefs": [
-            {"model": m, "use_reasoning": False, "weight": 1.0} for m in PANEL
-        ],
         "algorithm": {
             "type": "fusion",
             "fusion": {
-                "model": JUDGE,
-                "analysis_models": PANEL,
                 # Serialize panel calls: loading 3 local models concurrently
                 # thrashes Ollama under memory pressure and 502s some panel
                 # responses (thinning the panel). One at a time is reliable.
@@ -117,24 +100,38 @@ def _fusion_decision(grounding_on: bool, policy: str = "weight") -> dict:
 def build(base: dict, grounding_on: bool, policy: str = "weight") -> dict:
     c = copy.deepcopy(base)
 
-    # provider models + matching modelCards for the local Ollama panel/judge
-    # (every providers.models entry must have a routing.modelCards entry)
-    existing = {m["name"] for m in c["providers"]["models"]}
-    cards = {m["name"] for m in c["routing"]["modelCards"]}
+    # Add complete readable Models for the local Ollama panel and judge.
+    existing = {model["name"] for model in c["models"]}
     for name in [*PANEL, JUDGE]:
         if name not in existing:
-            c["providers"]["models"].append(_ollama_provider_model(name))
-        if name not in cards:
-            c["routing"]["modelCards"].append(_model_card(name))
+            c["models"].append(_ollama_model(name))
 
-    # Reduce routing to ONLY what the benchmark needs: a single regex keyword
-    # signal + a single fusion decision keyed to it. This avoids building the
-    # embedding-backed domain/complexity classifiers (which need a working
-    # embedding model and otherwise fatal at startup) -- the benchmark routes
-    # purely on the sentinel the harness prepends to every prompt.
-    c["routing"]["signals"] = {"keywords": [_sentinel_rule()]}
-    c["routing"].pop("projections", None)
-    c["routing"]["decisions"] = [_fusion_decision(grounding_on, policy)]
+    # Use one model-free Recipe and one readable Entrypoint assignment. This avoids
+    # initializing unrelated classifiers; the benchmark routes only on the sentinel.
+    c["recipes"] = [
+        {
+            "name": "grounded-fusion-bench",
+            "document": {
+                "signals": {"keywords": [_sentinel_rule()]},
+                "decisions": [_fusion_decision(grounding_on, policy)],
+            },
+        }
+    ]
+    c["entrypoints"] = [
+        {
+            "name": "vllm-sr/grounded-fusion-bench",
+            "aliases": ["auto"],
+            "recipe": "grounded-fusion-bench",
+            "assignments": {
+                "grounded-fusion-bench": {
+                    "models": [
+                        {"model": JUDGE},
+                        *({"model": model} for model in PANEL),
+                    ]
+                }
+            },
+        }
+    ]
 
     # disable external-dependency stores (milvus/redis/llama_stack) for a
     # self-contained local run -- otherwise startup fatals on missing services.

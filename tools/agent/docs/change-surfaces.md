@@ -59,7 +59,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `python_cli_schema`
 
 - Python CLI typed schema, parser, validator, migration, and config translation contracts.
-- Typical paths: `src/vllm-sr/cli/models.py`, `parser.py`, `validator.py`, `config_migration.py`
+- Typical paths: `src/vllm-sr/cli/models.py`, `parser.py`, `validator.py`, `config_upgrade_v03*.py`
 - Task rules: `vllm-sr-cli`
 
 ## `python_cli_runtime`
@@ -77,7 +77,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `dashboard_config_ui`
 
 - Dashboard config editing, schema-driven forms, builder flows, and config-oriented frontend state.
-- Typical paths: `dashboard/frontend/src/pages/ConfigPage*.tsx`, `BuilderPage*.tsx`, `DslEditorPage*.tsx`, `SetupWizard*.tsx`
+- Typical paths: `dashboard/frontend/src/pages/ConfigPage*.tsx`, `BuilderPage*.tsx`, `DslEditorPage*.tsx`
 - Task rules: `dashboard`
 
 ## `dashboard_console_backend`
@@ -89,7 +89,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `topology_visualization`
 
 - Topology parsing, graph layout, topology APIs, and highlighted decision-path visualization.
-- Typical paths: `dashboard/frontend/src/pages/topology/**`, `dashboard/backend/handlers/topology.go`
+- Typical paths: `dashboard/frontend/src/pages/topology/**`, `dashboard/frontend/src/pages/ConfigPageMoMTopologyDialog.tsx`
 - Task rules: `dashboard`
 
 ## `playground_reveal`
@@ -98,16 +98,16 @@ This document defines the project-level surfaces used by skills, reports, and va
 - Typical paths: `PlaygroundPage.tsx`, `ChatComponent*.tsx`, `HeaderDisplay.tsx`, `HeaderReveal.tsx`
 - Task rules: `dashboard`
 
-## `dsl_crd`
+## `dsl_config_contract`
 
-- DSL compiler/decompiler and translation layers that bridge router config to Kubernetes-facing forms.
-- Typical paths: `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
+- DSL compiler, decompiler, and versioned router configuration contract.
+- Typical paths: `src/semantic-router/pkg/dsl/**`
 - Task rules: `router-core`, `operator-stack`, `e2e-framework`
 
 ## `k8s_operator`
 
 - Operator APIs, CRDs, controller-facing config translation, and Kubernetes deployment control-plane behavior.
-- Typical paths: `deploy/operator/**`, `deploy/kubernetes/crds/**`, `src/semantic-router/pkg/apis/**`
+- Typical paths: `deploy/operator/api/**`, `deploy/operator/controllers/**`, `deploy/operator/config/crd/**`
 - Task rules: `operator-stack`, `e2e-framework`
 
 ## `deployment_profile_stack`
@@ -119,7 +119,7 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `k8s_platform`
 
 - Kubernetes-facing operator, CRD, deployment-profile, and DSL translation surfaces for semantic-router platform integration.
-- Typical paths: `deploy/helm/**`, `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/apis/**`, `src/semantic-router/pkg/dsl/**`, `src/semantic-router/pkg/k8s/**`
+- Typical paths: `deploy/helm/**`, `deploy/operator/**`, `deploy/kubernetes/**`, `src/semantic-router/pkg/dsl/**`
 - Task rules: `helm-chart`, `operator-stack`, `e2e-framework`
 
 ## `fleet_sim_runtime`

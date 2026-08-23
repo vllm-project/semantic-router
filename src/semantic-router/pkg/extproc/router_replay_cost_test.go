@@ -169,6 +169,41 @@ func TestBuildReplayUsageCostKeepsTokenCountsWhenPricingIsMissing(t *testing.T) 
 	}
 }
 
+func TestBuildReplayUsageCostPreservesTotalOnlyUsageWithoutInventingCost(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{
+			BackendModels: config.BackendModels{
+				ModelConfig: map[string]config.ModelParams{
+					"total-only-model": {
+						Pricing: config.ModelPricing{
+							Currency:        "USD",
+							PromptPer1M:     1,
+							CompletionPer1M: 2,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	snapshot := router.buildReplayUsageCost(
+		&RequestContext{RequestModel: "total-only-model"},
+		responseUsageMetrics{totalTokens: 37},
+	)
+
+	if snapshot.TotalTokens == nil || *snapshot.TotalTokens != 37 {
+		t.Fatalf("expected provider total to be recorded, got %#v", snapshot.TotalTokens)
+	}
+	if snapshot.PromptTokens != nil || snapshot.CachedPromptTokens != nil ||
+		snapshot.CacheWriteTokens != nil || snapshot.CompletionTokens != nil {
+		t.Fatalf("expected unavailable token components to stay empty, got %#v", snapshot)
+	}
+	if snapshot.ActualCost != nil || snapshot.BaselineCost != nil || snapshot.CostSavings != nil ||
+		snapshot.Currency != nil || snapshot.BaselineModel != nil {
+		t.Fatalf("expected unpriceable total-only usage to omit cost fields, got %#v", snapshot)
+	}
+}
+
 func TestBuildReplayUsageCostTreatsZeroPricedModelAsFree(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{

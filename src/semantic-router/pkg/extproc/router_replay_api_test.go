@@ -41,6 +41,32 @@ func TestHandleRouterReplayAPIRecordLookup(t *testing.T) {
 	assertStringSliceField(t, body, "projections", []string{"balance_reasoning"})
 }
 
+func TestRouterReplayAPIKeepsLogicalRecipeAndHidesInternalRoutingScope(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	recordID, err := recorder.AddRecord(routerreplay.RoutingRecord{
+		ID:           "replay-scoped",
+		Recipe:       "privacy",
+		RoutingScope: "entrypoint/internal-scope",
+		Decision:     "privacy-route",
+	})
+	if err != nil {
+		t.Fatalf("add scoped replay record: %v", err)
+	}
+	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{
+		"entrypoint/internal-scope::privacy-route": recorder,
+	}}
+
+	detail := mustReplayLookupBody(t, router, recordID)
+	assertStringField(t, detail, "recipe", "privacy")
+	if _, leaked := detail["routing_scope"]; leaked {
+		t.Fatalf("replay detail leaked internal routing scope: %#v", detail)
+	}
+	list := mustReplayListBody(t, router, "/v1/router_replay?recipe=privacy&showDetails=true")
+	if got := mustSingleReplayRecord(t, list); got["recipe"] != "privacy" || got["routing_scope"] != nil {
+		t.Fatalf("recipe-filtered replay list exposed the wrong identity: %#v", got)
+	}
+}
+
 func TestHandleRouterReplayAPIListDoesNotDuplicateSharedStorageRecords(t *testing.T) {
 	sharedStore := store.NewMemoryStore(10, 0)
 	recorderA := routerreplay.NewRecorder(sharedStore)

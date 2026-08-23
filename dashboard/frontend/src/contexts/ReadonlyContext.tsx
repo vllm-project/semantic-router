@@ -5,11 +5,10 @@ import { preloadPlatformAssets } from '../utils/platformAssets'
 interface ReadonlyContextType {
   isReadonly: boolean
   serverReadonly: boolean
-  runtimeConfigWritable: boolean
-  recipeStoreWritable: boolean
   isLoading: boolean
   platform: string
   envoyUrl: string
+  routerPublicUrl: string
   routerEvalEndpoint: string
   fleetSimEnabled: boolean
 }
@@ -17,11 +16,10 @@ interface ReadonlyContextType {
 const ReadonlyContext = createContext<ReadonlyContextType>({
   isReadonly: true,
   serverReadonly: true,
-  runtimeConfigWritable: false,
-  recipeStoreWritable: false,
   isLoading: true,
   platform: '',
   envoyUrl: '',
+  routerPublicUrl: '',
   routerEvalEndpoint: '',
   fleetSimEnabled: false,
 })
@@ -34,14 +32,13 @@ interface ReadonlyProviderProps {
 }
 
 export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) => {
-  const { token } = useAuth()
+  const { user } = useAuth()
   const [isReadonly, setIsReadonly] = useState(true)
   const [serverReadonly, setServerReadonly] = useState(true)
-  const [runtimeConfigWritable, setRuntimeConfigWritable] = useState(false)
-  const [recipeStoreWritable, setRecipeStoreWritable] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [platform, setPlatform] = useState('')
   const [envoyUrl, setEnvoyUrl] = useState('')
+  const [routerPublicUrl, setRouterPublicUrl] = useState('')
   const [routerEvalEndpoint, setRouterEvalEndpoint] = useState('')
   const [fleetSimEnabled, setFleetSimEnabled] = useState(false)
 
@@ -54,38 +51,22 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
       // keep every mutation surface closed if the request fails.
       setIsReadonly(true)
       setServerReadonly(true)
-      setRuntimeConfigWritable(false)
-      setRecipeStoreWritable(false)
       try {
         const response = await fetch('/api/settings', { signal: controller.signal })
         if (response.ok) {
           const data = await response.json()
           if (controller.signal.aborted) return
-          if (typeof data.readonlyMode !== 'boolean') {
-            console.warn('Dashboard settings omitted the readonlyMode safety boundary')
+          if (typeof data.readonlyMode !== 'boolean' || typeof data.serverReadonly !== 'boolean') {
+            console.warn('Dashboard settings omitted a required mutation safety boundary')
             return
           }
           const effectiveReadonly = data.readonlyMode
-          // Older Dashboard responses exposed only readonlyMode. Preserve the
-          // safe all-or-nothing fallback while consuming split capabilities
-          // whenever the server provides them.
           setIsReadonly(effectiveReadonly)
-          setServerReadonly(
-            typeof data.serverReadonly === 'boolean' ? data.serverReadonly : effectiveReadonly,
-          )
-          setRuntimeConfigWritable(
-            typeof data.runtimeConfigWritable === 'boolean'
-              ? data.runtimeConfigWritable
-              : !effectiveReadonly,
-          )
-          setRecipeStoreWritable(
-            typeof data.recipeStoreWritable === 'boolean'
-              ? data.recipeStoreWritable
-              : !effectiveReadonly,
-          )
+          setServerReadonly(data.serverReadonly)
           const platformValue = data.platform || ''
           setPlatform(platformValue)
           setEnvoyUrl(data.envoyUrl || '')
+          setRouterPublicUrl(typeof data.routerPublicUrl === 'string' ? data.routerPublicUrl : '')
           setRouterEvalEndpoint(data.routerEvalEndpoint || '')
           setFleetSimEnabled(Boolean(data.fleetSimEnabled))
           // Preload platform-specific assets immediately
@@ -102,18 +83,17 @@ export const ReadonlyProvider: React.FC<ReadonlyProviderProps> = ({ children }) 
 
     void fetchSettings()
     return () => controller.abort()
-  }, [token])
+  }, [user?.id])
 
   return (
     <ReadonlyContext.Provider
       value={{
         isReadonly,
         serverReadonly,
-        runtimeConfigWritable,
-        recipeStoreWritable,
         isLoading,
         platform,
         envoyUrl,
+        routerPublicUrl,
         routerEvalEndpoint,
         fleetSimEnabled,
       }}

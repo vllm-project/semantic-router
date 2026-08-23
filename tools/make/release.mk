@@ -1,16 +1,14 @@
 ##@ Release
 
-.PHONY: built-in-model-snapshot release release-check
+.PHONY: built-in-recipe-snapshot release release-check
 
-built-in-model-snapshot: ## Freeze config/recipes/built-in/latest into vMAJOR.MINOR before tagging
+built-in-recipe-snapshot: ## Freeze config/recipes/built-in/latest into vMAJOR.MINOR before tagging
 	@test -n "$(RELEASE_VERSION)" || { \
-		echo "RELEASE_VERSION is required. Example: make built-in-model-snapshot RELEASE_VERSION=X.Y.Z"; \
+		echo "RELEASE_VERSION is required. Example: make built-in-recipe-snapshot RELEASE_VERSION=X.Y.Z"; \
 		exit 1; \
 	}
-	@python3 tools/release/snapshot_model_catalog.py --version "$(RELEASE_VERSION)"
-	@python3 tools/release/sync_model_catalog.py
-	@python3 tools/release/snapshot_model_catalog.py --check --version "$(RELEASE_VERSION)"
-	@python3 tools/release/sync_model_catalog.py --check
+	@python3 tools/release/snapshot_builtin_recipes.py --version "$(RELEASE_VERSION)"
+	@python3 tools/release/snapshot_builtin_recipes.py --check --version "$(RELEASE_VERSION)"
 
 release-check: ## Validate the local release version contract; set RELEASE_VERSION to check a tag version
 	@python3 tools/release/check_version_contract.py $(if $(RELEASE_VERSION),--version "$(RELEASE_VERSION)")

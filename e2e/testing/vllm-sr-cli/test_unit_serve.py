@@ -34,43 +34,7 @@ class TestVllmSRServe(CLITestBase):
 
     def _create_minimal_config(self, port: int = 8888) -> str:
         """Create a lean active config.yaml for testing."""
-        config_content = f"""version: v0.3
-
-listeners:
-  - name: "test-listener"
-    address: "0.0.0.0"
-    port: {port}
-    timeout: "60s"
-
-providers:
-  default_model: "test-model"
-  models:
-    - name: "test-model"
-      provider_model_id: "test-model"
-      backend_refs:
-        - name: "test_endpoint"
-          weight: 1
-          endpoint: "host.docker.internal:8000"
-          protocol: "http"
-
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default_route"
-      description: "Default test route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
-"""
-        config_path = os.path.join(self.test_dir, "config.yaml")
-        with open(config_path, "w") as f:
-            f.write(config_content)
-        return config_path
+        return self.write_minimal_canonical_config(port=port)
 
     def test_serve_bootstraps_missing_config_file(self):
         """Test that serve bootstraps setup mode when config.yaml is missing."""
@@ -121,68 +85,23 @@ routing:
             True, "serve bootstraps setup mode when config is missing"
         )
 
-    def test_serve_with_custom_config_path(self):
-        """Test that serve accepts --config flag for custom config path."""
+    def test_serve_accepts_config_flag(self):
+        """Serve recognizes an explicit immutable bootstrap manifest."""
         self.print_test_header(
-            "Serve With Custom Config Path",
-            "Validates that --config flag allows custom config file location",
+            "Serve Config Flag",
+            "Validates explicit bootstrap-manifest selection",
         )
 
-        # Create config in a subdirectory
-        subdir = os.path.join(self.test_dir, "configs")
-        os.makedirs(subdir)
-        config_path = os.path.join(subdir, "custom-config.yaml")
-
-        config_content = """version: v0.3
-listeners:
-  - name: "test"
-    address: "0.0.0.0"
-    port: 8888
-    timeout: "60s"
-providers:
-  default_model: "test-model"
-  models:
-    - name: "test-model"
-      provider_model_id: "test-model"
-      backend_refs:
-        - name: "primary"
-          endpoint: "host.docker.internal:8000"
-          protocol: "http"
-routing:
-  modelCards:
-    - name: "test-model"
-  decisions:
-    - name: "default-route"
-      description: "Catch-all route"
-      priority: 100
-      rules:
-        operator: "AND"
-        conditions: []
-      modelRefs:
-        - model: "test-model"
-          use_reasoning: false
-"""
-        with open(config_path, "w") as f:
-            f.write(config_content)
-
-        # Run serve with --config pointing to custom path
-        # Use --image-pull-policy=never to avoid pulling and fail fast if image missing
-        _return_code, stdout, stderr = self.run_cli(
-            ["serve", "--config", config_path, "--image-pull-policy", "never"],
-            timeout=30,
+        return_code, stdout, stderr = self.run_cli(
+            ["serve", "--config", "alternate.yaml"], timeout=30
         )
-
-        # The command might fail due to missing image, but should recognize the config
         output = (stdout + stderr).lower()
 
-        # Should NOT complain about config not found
-        self.assertNotIn(
-            "config file not found",
-            output,
-            "Should accept custom config path",
-        )
+        self.assertNotEqual(return_code, 0)
+        self.assertIn("bootstrap config file does not exist", output)
+        self.assertNotIn("no such option", output)
 
-        self.print_test_result(True, "serve accepts custom config path")
+        self.print_test_result(True, "serve accepts an immutable config operand")
 
     def test_serve_image_pull_policy_never(self):
         """Test --image-pull-policy=never fails when image doesn't exist locally."""

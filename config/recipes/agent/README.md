@@ -77,11 +77,13 @@ capture when prompts and responses must not be stored.
 ## Quick start
 
 ```bash
-export POSTGRES_PASSWORD="$(openssl rand -base64 24)"  # your own value
-vllm-sr validate --config config/recipes/agent/config.yaml
-vllm-sr serve --config config/recipes/agent/config.yaml \
-  --recipe-env POSTGRES_PASSWORD
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Agent Routing** in
+**Recipes**, assign each capability lane, and publish the resulting
+Mixture-of-Model Entrypoint. Configure replay retention and credentials through
+the managed control-plane resources rather than the launch command.
 
 ## Evaluation
 

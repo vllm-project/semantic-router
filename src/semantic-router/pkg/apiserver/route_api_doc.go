@@ -36,7 +36,7 @@ func (s *ClassificationAPIServer) handleAPIOverview(w http.ResponseWriter, _ *ht
 	response := APIOverviewResponse{
 		Service:     "Semantic Router Apiserver",
 		Version:     "v1",
-		Description: "HTTP router apiserver for classification utilities, config management, and service introspection",
+		Description: "HTTP router apiserver for classification utilities and service introspection",
 		Endpoints:   endpoints,
 		TaskTypes:   taskTypeRegistry,
 		Links: map[string]string{

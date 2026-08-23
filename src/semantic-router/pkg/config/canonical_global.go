@@ -1,15 +1,11 @@
 package config
 
-import (
-	"fmt"
-	"os"
-
-	"gopkg.in/yaml.v2"
-)
+import "fmt"
 
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
 // overrides, organized into explicit platform modules.
 type CanonicalGlobal struct {
+	ControlPlane ControlPlaneConfig         `yaml:"control_plane,omitempty"`
 	Router       CanonicalRouterGlobal      `yaml:"router"`
 	Services     CanonicalServiceGlobal     `yaml:"services"`
 	Stores       CanonicalStoreGlobal       `yaml:"stores"`
@@ -19,16 +15,9 @@ type CanonicalGlobal struct {
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ConfigSource              ConfigSource          `yaml:"config_source,omitempty"`
-	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
-	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
-	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
-	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
-	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
-	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
-	SkipProcessing            SkipProcessingConfig  `yaml:"skip_processing"`
-	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
-	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
+	ClearRouteCache bool                  `yaml:"clear_route_cache"`
+	StreamedBody    CanonicalStreamedBody `yaml:"streamed_body"`
+	Learning        RouterLearningConfig  `yaml:"learning,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -40,21 +29,26 @@ type CanonicalStreamedBody struct {
 
 // CanonicalServiceGlobal groups shared runtime services exposed by the router.
 type CanonicalServiceGlobal struct {
-	API           APIConfig           `yaml:"api"`
-	ResponseAPI   ResponseAPIConfig   `yaml:"response_api"`
-	Observability ObservabilityConfig `yaml:"observability"`
-	Authz         AuthzConfig         `yaml:"authz"`
-	RateLimit     RateLimitConfig     `yaml:"ratelimit"`
-	ManagementAPI ManagementAPIConfig `yaml:"management_api"`
-	RouterReplay  RouterReplayConfig  `yaml:"router_replay"`
-	StartupStatus StartupStatusConfig `yaml:"startup_status"`
+	API                APIConfig                `yaml:"api"`
+	ResponseAPI        ResponseAPIConfig        `yaml:"response_api"`
+	Agent              AgentServiceConfig       `yaml:"agent,omitempty"`
+	Observability      ObservabilityConfig      `yaml:"observability"`
+	ManagementAPI      ManagementAPIConfig      `yaml:"management_api"`
+	Access             AccessServiceConfig      `yaml:"access,omitempty"`
+	BackendCredentials BackendCredentialsConfig `yaml:"backend_credentials,omitempty"`
+	BackendEgress      BackendEgressConfig      `yaml:"backend_egress,omitempty"`
+	BackendDispatch    BackendDispatchConfig    `yaml:"backend_dispatch"`
+	RouterReplay       RouterReplayConfig       `yaml:"router_replay"`
+	StartupStatus      StartupStatusConfig      `yaml:"startup_status"`
 }
 
 // CanonicalStoreGlobal groups storage-backed runtime facilities.
 type CanonicalStoreGlobal struct {
-	ResponseCache ResponseCacheStoreConfig `yaml:"response_cache"`
-	Memory        MemoryConfig             `yaml:"memory"`
-	VectorStore   *VectorStoreConfig       `yaml:"vector_store,omitempty"`
+	ResponseCache ResponseCacheStoreConfig  `yaml:"response_cache"`
+	Memory        MemoryConfig              `yaml:"memory"`
+	VectorStore   *VectorStoreConfig        `yaml:"vector_store,omitempty"`
+	Access        *AccessStoreConfig        `yaml:"access,omitempty"`
+	AccessRuntime *AccessRuntimeStoreConfig `yaml:"access_runtime,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -178,25 +172,18 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
+		applyControlPlaneBootstrapDefaults(&defaults)
 		if err := resolveModuleModelRefs(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
 		return defaults, nil
 	}
 
-	resolved := defaults
-	overrideSource := interface{}(override)
-	if rawOverride != nil {
-		overrideSource = rawOverride
-	}
-
-	overrideBytes, err := yaml.Marshal(overrideSource)
+	resolved, err := mergeCanonicalGlobalDefaults(defaults, override, rawOverride)
 	if err != nil {
-		return CanonicalGlobal{}, fmt.Errorf("failed to marshal global override: %w", err)
+		return CanonicalGlobal{}, err
 	}
-	if err := yaml.Unmarshal(overrideBytes, &resolved); err != nil {
-		return CanonicalGlobal{}, fmt.Errorf("failed to merge global override: %w", err)
-	}
+	applyControlPlaneBootstrapDefaults(&resolved)
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -208,34 +195,30 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 		return nil
 	}
 
-	cfg.ConfigSource = global.Router.ConfigSource
-	cfg.Strategy = global.Router.Strategy
-	cfg.AutoModelName = global.Router.AutoModelName
-	cfg.AutoModelNames = nil
-	if global.Router.AutoModelNames != nil {
-		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
-	}
-	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes
 	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
-	cfg.SkipProcessing = global.Router.SkipProcessing
-	cfg.ModelSelection = global.Router.ModelSelection
 	cfg.RouterLearning = global.Router.Learning
+	cfg.ControlPlane = cloneControlPlaneConfig(global.ControlPlane)
 
 	cfg.API = global.Services.API
 	cfg.ResponseAPI = global.Services.ResponseAPI
+	cfg.Agent = global.Services.Agent
 	cfg.Observability = global.Services.Observability
-	cfg.Authz = global.Services.Authz
-	cfg.RateLimit = global.Services.RateLimit
 	cfg.ManagementAPI = global.Services.ManagementAPI
+	cfg.Access = global.Services.Access
+	cfg.BackendCredentials = cloneBackendCredentialsConfig(global.Services.BackendCredentials)
+	cfg.BackendEgress = global.Services.BackendEgress
+	cfg.BackendDispatch = global.Services.BackendDispatch
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
 
 	cfg.SemanticCache = global.Stores.ResponseCache
 	cfg.Memory = global.Stores.Memory
 	cfg.VectorStore = global.Stores.VectorStore
+	cfg.AccessStore = cloneAccessStoreConfig(global.Stores.Access)
+	cfg.AccessRuntimeStore = cloneAccessRuntimeStoreConfig(global.Stores.AccessRuntime)
 
 	cfg.Tools = global.Integrations.Tools
 	cfg.Looper = global.Integrations.Looper
@@ -344,14 +327,4 @@ func resolveSystemModelRef(ref string, explicitModelID string, catalog Canonical
 		return "", fmt.Errorf("model_ref %q is not configured in global.model_catalog.system", ref)
 	}
 	return modelID, nil
-}
-
-func resolveBackendAPIKey(ref CanonicalBackendRef) string {
-	if ref.APIKey != "" {
-		return ref.APIKey
-	}
-	if ref.APIKeyEnv != "" {
-		return os.Getenv(ref.APIKeyEnv)
-	}
-	return ""
 }

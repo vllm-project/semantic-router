@@ -347,11 +347,12 @@ func (d *decompiler) decisionToRoute(dec *config.Decision) *RouteDecl {
 	// MODEL
 	for _, mr := range dec.ModelRefs {
 		ref := &ModelRef{
-			Model:     mr.Model,
-			Reasoning: mr.UseReasoning,
-			Effort:    mr.ReasoningEffort,
-			LoRA:      mr.LoRAName,
-			Weight:    mr.Weight,
+			Model:                mr.Model,
+			Reasoning:            mr.UseReasoning,
+			ReasoningDescription: mr.ReasoningDescription,
+			Effort:               mr.ReasoningEffort,
+			LoRA:                 mr.LoRAName,
+			Weight:               mr.Weight,
 		}
 		// Pull param_size from model_config.
 		if mc, ok := d.cfg.ModelConfig[mr.Model]; ok {
@@ -407,11 +408,12 @@ func candidateIterationConfigToDecl(iter config.CandidateIterationConfig) *Candi
 
 func configModelRefToDSLModelRef(model config.ModelRef) *ModelRef {
 	return &ModelRef{
-		Model:     model.Model,
-		Reasoning: model.UseReasoning,
-		Effort:    model.ReasoningEffort,
-		LoRA:      model.LoRAName,
-		Weight:    model.Weight,
+		Model:                model.Model,
+		Reasoning:            model.UseReasoning,
+		ReasoningDescription: model.ReasoningDescription,
+		Effort:               model.ReasoningEffort,
+		LoRA:                 model.LoRAName,
+		Weight:               model.Weight,
 	}
 }
 
@@ -493,6 +495,9 @@ func modelRefOptions(mr *config.ModelRef, modelConfig map[string]config.ModelPar
 	}
 	if mr.ReasoningEffort != "" {
 		opts = append(opts, fmt.Sprintf("effort = %q", mr.ReasoningEffort))
+	}
+	if mr.ReasoningDescription != "" {
+		opts = append(opts, fmt.Sprintf("reasoning_description = %q", mr.ReasoningDescription))
 	}
 	if mr.LoRAName != "" {
 		opts = append(opts, fmt.Sprintf("lora = %q", mr.LoRAName))

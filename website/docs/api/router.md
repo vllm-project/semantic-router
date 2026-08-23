@@ -13,12 +13,13 @@ queries. See [Router management API](./apiserver).
 | Method | Path | Client format | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/v1/chat/completions` | OpenAI Chat Completions | Main routed inference endpoint |
-| `POST` | `/v1/responses` | OpenAI Responses | Requires the Responses service to be enabled |
-| `GET` | `/v1/responses/{id}` | OpenAI Responses | Reads a stored response |
-| `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes a stored response |
-| `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads stored input items |
-| `POST` | `/v1/messages` | Anthropic Messages | The router translates when the selected backend uses another protocol |
+| `POST` | `/v1/responses` | OpenAI Responses | Routed generation; no object store is required |
+| `GET` | `/v1/responses/{id}` | OpenAI Responses | Reads an object when optional response retention is enabled |
+| `DELETE` | `/v1/responses/{id}` | OpenAI Responses | Deletes an object when optional response retention is enabled |
+| `GET` | `/v1/responses/{id}/input_items` | OpenAI Responses | Reads retained input items when optional response retention is enabled |
+| `POST` | `/v1/messages` | Anthropic Messages | Routed generation through the same neutral protocol runtime |
 | `GET` | `/v1/models` | OpenAI Models | Lists models exposed by the active router configuration |
+| `POST` | `/v1/router/outcomes` | Router outcome feedback | Authenticated, replay-bound post-response feedback |
 
 Other `/v1/*` paths fail closed. In particular, Router Replay paths are not
 available on a public inference listener.
@@ -48,27 +49,26 @@ usage, and optional router headers depend on the selected backend and recipe.
 See [VSR routing headers](../troubleshooting/vsr-headers) for the stable
 observability contract.
 
-The model names accepted by the Router come from canonical provider entries.
-`name` is the logical alias used by decisions and clients,
-`provider_model_id` is sent to the upstream provider, and
-`providers.models[].backend_refs[]` identifies the physical endpoint:
+The Router accepts concrete names from `models[]` and virtual names from an
+Entrypoint's `name` or `aliases`. A Model owns a readable card, execution and
+pricing policy, plus one or more provider connections. The connection's
+`model` value is sent to the upstream provider:
 
 ```yaml
-providers:
-  models:
-    - name: local-small
-      provider_model_id: served-model
-      api_format: openai
-      pricing:
-        currency: USD
-        prompt_per_1m: 0
-        completion_per_1m: 0
-      backend_refs:
-        - name: local-vllm
-          endpoint: model-server:8000
-          protocol: http
-          type: vllm
-          weight: 1
+billing_currency: USD
+models:
+  - name: local-small
+    card:
+      capabilities: [chat]
+    connections:
+      - provider: vllm
+        endpoint: http://model-server:8000/v1
+        model: served-model
+    runtime:
+      max_retries: 1
+    pricing:
+      input_cost_per_million_tokens: "0"
+      output_cost_per_million_tokens: "0"
 ```
 
 Pricing is operator-supplied metadata, not a live quote. Keep it aligned with
@@ -85,10 +85,10 @@ curl -sS http://localhost:8899/v1/responses \
   }'
 ```
 
-Creating, retrieving, and deleting Responses API objects requires its backing
-service and store. When Responses API support is disabled, the collection
-endpoint returns `404` and stored-object handling is unavailable. A configured
-service retains objects according to its own storage and retention settings.
+`POST /v1/responses` always uses the routed generation path and does not depend on
+response retention. The optional response-retention service controls only object
+lookup, deletion, input-item history, and `previous_response_id` continuity. Those
+object operations return `404` when retention is disabled.
 
 ### Anthropic Messages
 
@@ -108,9 +108,49 @@ curl -sS http://localhost:8899/v1/messages \
   }'
 ```
 
-Protocol translation is limited to fields the router supports. When a request
-crosses protocols, inspect `x-vsr-client-protocol`,
-`x-vsr-upstream-protocol`, and any `x-vsr-protocol-warnings` response header.
+Every supported client format is decoded to the same neutral request and every
+selected backend is encoded from it. Unsupported or lossy semantics fail before
+dispatch unless the configured fidelity policy explicitly permits the conversion;
+permitted loss produces bounded diagnostics without exposing request content.
+
+## Submit outcome feedback
+
+Managed access exposes outcome feedback on the public inference listener. Use
+the same API key that made the inference request, or a delegated inference
+session derived from that key. The Router binds feedback to the durable replay
+and derives namespace, logical key, User, Team, and authentication source from
+that credential; those fields are not accepted in the request body.
+
+The inference response returns `x-vsr-replay-id`. For a Model outcome, send the
+exact Model identity and revision that served that replay:
+
+```bash
+curl -sS http://localhost:8899/v1/router/outcomes \
+  -H "Authorization: Bearer ${VSR_API_KEY}" \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: feedback-123' \
+  -d '{
+    "replay_id": "replay_01J...",
+    "target": "model",
+    "target_ref": "model/served",
+    "target_revision": 7,
+    "verdict": "good_fit",
+    "reason": "Matched the workload.",
+    "score": 0.9
+  }'
+```
+
+`replay_id`, `target`, and `verdict` are required. A Model target also requires
+`target_ref` and a positive `target_revision`. Supported verdicts are
+`good_fit`, `underpowered`, `overprovisioned`, and `failed`. Bodies, reasons,
+metadata, and idempotency keys are bounded.
+
+A new outcome returns `201`; retrying the identical body and idempotency key
+returns the original receipt with `200`. Reusing that key for another body
+returns `409`. Unknown replays, replays owned by another logical key, and Model
+claims that do not match the served Model all return the same `404` response.
+The endpoint has a separate global abuse limit and does not consume inference
+request, token, or cost quota because it performs no Model dispatch.
 
 ## Router Replay
 
@@ -173,6 +213,7 @@ An HTTP `200` response header alone does not make a streaming record
 | --- | --- |
 | Send model traffic | Configured Envoy listener; `8899` in the standard local stack |
 | List public models | `GET /v1/models` on the inference listener |
+| Submit outcome feedback | `POST /v1/router/outcomes` on the inference listener |
 | Check health or readiness | Management API on `8080` |
 | Read or change configuration | Management API on `8080` |
 | Inspect replay records | Management API on `8080` |

@@ -59,7 +59,7 @@ func TestExecuteWithLatency_RecordsWallClockLatency(t *testing.T) {
 
 	l := NewBaseLooper(&config.LooperConfig{Endpoint: server.URL})
 	req := &Request{
-		OriginalRequest: readLimitTestRequest(),
+		executionRequest: readLimitTestRequest(),
 		ModelRefs: []config.ModelRef{
 			{Model: "model-a"},
 			{Model: "model-b"},
@@ -84,8 +84,8 @@ func TestExecuteWithLatency_RecordsWallClockLatency(t *testing.T) {
 func TestExecuteWithLatency_PropagatesError(t *testing.T) {
 	l := NewBaseLooper(&config.LooperConfig{Endpoint: "http://127.0.0.1:0"})
 	req := &Request{
-		OriginalRequest: readLimitTestRequest(),
-		ModelRefs:       []config.ModelRef{{Model: "model-a"}},
+		executionRequest: readLimitTestRequest(),
+		ModelRefs:        []config.ModelRef{{Model: "model-a"}},
 	}
 
 	_, err := ExecuteWithLatency(context.Background(), l, req)
@@ -106,7 +106,7 @@ func (nilResponseLooper) Execute(ctx context.Context, req *Request) (*Response, 
 // ExecuteWithLatency must not panic when Execute returns a nil Response
 // alongside a nil error.
 func TestExecuteWithLatency_NilResponseDoesNotPanic(t *testing.T) {
-	req := &Request{OriginalRequest: readLimitTestRequest()}
+	req := &Request{executionRequest: readLimitTestRequest()}
 
 	resp, err := ExecuteWithLatency(context.Background(), nilResponseLooper{}, req)
 	if err != nil {

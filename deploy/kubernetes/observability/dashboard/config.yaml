@@ -1,118 +1,124 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: qwen3
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
-  models:
-    - name: qwen3
-      reasoning_family: qwen3
-      backend_refs:
-        - name: endpoint1
-          endpoint: 172.28.0.20:8002
-          weight: 1
-routing:
-  signals:
-    domains:
+models:
+- name: qwen3
+  card:
+    reasoning:
+      type: chat_template_kwargs
+      efforts:
+      - high
+  connections:
+  - provider: vllm
+    endpoint: http://172.28.0.20:8002/v1
+    model: qwen3
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
       - name: business
-        system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development. Provide practical, actionable business advice backed by proven methodologies and industry best practices. Consider market dynamics, competitive landscape, and stakeholder interests in your recommendations.
         model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+        description: business routing domain.
       - name: law
-        system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures across multiple jurisdictions. Provide accurate legal information and analysis while clearly stating that your responses are for informational purposes only and do not constitute legal advice. Always recommend consulting with qualified legal professionals for specific legal matters.
         model_scores:
-          - model: qwen3
-            score: 0.4
-            use_reasoning: false
+        - model: qwen3
+          score: 0.4
+          use_reasoning: false
+        description: law routing domain.
       - name: psychology
-        system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, developmental psychology, social psychology, and therapeutic approaches. Provide evidence-based insights grounded in psychological research and theory. When discussing mental health topics, emphasize the importance of professional consultation and avoid providing diagnostic or therapeutic advice.
         model_scores:
-          - model: qwen3
-            score: 0.6
-            use_reasoning: false
+        - model: qwen3
+          score: 0.6
+          use_reasoning: false
+        description: psychology routing domain.
       - name: biology
-        system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, evolution, anatomy, physiology, and biotechnology. Explain biological concepts with scientific accuracy, use appropriate terminology, and provide examples from current research. Connect biological principles to real-world applications and emphasize the interconnectedness of biological systems.
         model_scores:
-          - model: qwen3
-            score: 0.9
-            use_reasoning: false
+        - model: qwen3
+          score: 0.9
+          use_reasoning: false
+        description: biology routing domain.
       - name: chemistry
-        system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques. Provide detailed, step-by-step explanations.
         model_scores:
-          - model: qwen3
-            score: 0.6
-            use_reasoning: true
+        - model: qwen3
+          score: 0.6
+          use_reasoning: true
+        description: chemistry routing domain.
       - name: history
-        system_prompt: You are a historian with expertise across different time periods and cultures. Provide accurate historical context and analysis.
         model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+        description: history routing domain.
       - name: other
-        system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
         model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+        description: other routing domain.
       - name: health
-        system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, treatments, preventive care, nutrition, and wellness. Provide accurate, evidence-based health information while emphasizing that your responses are for educational purposes only and should never replace professional medical advice, diagnosis, or treatment. Always encourage users to consult healthcare professionals for medical concerns and emergencies.
         model_scores:
-          - model: qwen3
-            score: 0.5
-            use_reasoning: false
+        - model: qwen3
+          score: 0.5
+          use_reasoning: false
+        description: health routing domain.
       - name: economics
-        system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, econometrics, financial markets, monetary policy, fiscal policy, international trade, and economic theory. Analyze economic phenomena using established economic principles, provide data-driven insights, and explain complex economic concepts in accessible terms. Consider both theoretical frameworks and real-world applications in your responses.
         model_scores:
-          - model: qwen3
-            score: 1.0
-            use_reasoning: false
+        - model: qwen3
+          score: 1.0
+          use_reasoning: false
+        description: economics routing domain.
       - name: math
-        system_prompt: You are a mathematics expert. Provide step-by-step solutions, show your work clearly, and explain mathematical concepts in an understandable way.
         model_scores:
-          - model: qwen3
-            score: 1.0
-            use_reasoning: true
+        - model: qwen3
+          score: 1.0
+          use_reasoning: true
+        description: math routing domain.
       - name: physics
-        system_prompt: You are a physics expert with deep understanding of physical laws and phenomena. Provide clear explanations with mathematical derivations when appropriate.
         model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: true
+        - model: qwen3
+          score: 0.7
+          use_reasoning: true
+        description: physics routing domain.
       - name: computer science
-        system_prompt: You are a computer science expert with knowledge of algorithms, data structures, programming languages, and software engineering. Provide clear, practical solutions with code examples when helpful.
         model_scores:
-          - model: qwen3
-            score: 0.6
-            use_reasoning: false
+        - model: qwen3
+          score: 0.6
+          use_reasoning: false
+        description: computer science routing domain.
       - name: philosophy
-        system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions, ethical theories, logic, metaphysics, epistemology, political philosophy, and the history of philosophical thought. Engage with complex philosophical questions by presenting multiple perspectives, analyzing arguments rigorously, and encouraging critical thinking. Draw connections between philosophical concepts and contemporary issues while maintaining intellectual honesty about the complexity and ongoing nature of philosophical debates.
         model_scores:
-          - model: qwen3
-            score: 0.5
-            use_reasoning: false
+        - model: qwen3
+          score: 0.5
+          use_reasoning: false
+        description: philosophy routing domain.
       - name: engineering
-        system_prompt: You are an engineering expert with knowledge across multiple engineering disciplines including mechanical, electrical, civil, chemical, software, and systems engineering. Apply engineering principles, design methodologies, and problem-solving approaches to provide practical solutions. Consider safety, efficiency, sustainability, and cost-effectiveness in your recommendations. Use technical precision while explaining concepts clearly, and emphasize the importance of proper engineering practices and standards.
         model_scores:
-          - model: qwen3
-            score: 0.7
-            use_reasoning: false
-  modelCards:
-    - name: qwen3
+        - model: qwen3
+          score: 0.7
+          use_reasoning: false
+        description: engineering routing domain.
+    decisions:
+    - name: default-route
+      description: Route benchmark requests.
+      priority: 0
+      rules:
+        operator: AND
+        conditions: []
+entrypoints:
+- name: vllm-sr/auto
+  recipe: default
+  assignments:
+    default-route:
+      models:
+      - model: qwen3
+        weight: '1'
 global:
   router: {}
   services:
@@ -127,28 +133,28 @@ global:
           high_resolution_timing: false
           sample_rate: 1.0
           duration_buckets:
-            - 0.001
-            - 0.005
-            - 0.01
-            - 0.025
-            - 0.05
-            - 0.1
-            - 0.25
-            - 0.5
-            - 1
-            - 2.5
-            - 5
-            - 10
-            - 30
+          - 0.001
+          - 0.005
+          - 0.01
+          - 0.025
+          - 0.05
+          - 0.1
+          - 0.25
+          - 0.5
+          - 1
+          - 2.5
+          - 5
+          - 10
+          - 30
           size_buckets:
-            - 1
-            - 2
-            - 5
-            - 10
-            - 20
-            - 50
-            - 100
-            - 200
+          - 1
+          - 2
+          - 5
+          - 10
+          - 20
+          - 50
+          - 100
+          - 200
     observability:
       tracing:
         enabled: true
@@ -168,11 +174,23 @@ global:
         enabled: true
         windowed_metrics:
           enabled: true
-          time_windows: [1m, 5m, 15m, 1h]
+          time_windows:
+          - 1m
+          - 5m
+          - 15m
+          - 1h
           update_interval: 30s
           model_metrics: true
           queue_depth_estimation: true
           max_models: 50
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
     response_cache:
       enabled: true
@@ -193,3 +211,8 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

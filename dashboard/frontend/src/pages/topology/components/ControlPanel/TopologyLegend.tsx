@@ -11,24 +11,33 @@ export const TopologyLegend: React.FC = () => {
       <div className={styles.legend}>
         {/* Node Types */}
         <div className={styles.legendItem}>
-          <span className={styles.legendColor} style={{ background: NODE_COLORS.client.background }}></span>
+          <span
+            className={styles.legendColor}
+            style={{ background: NODE_COLORS.client.background }}
+          ></span>
           <span>User Input</span>
         </div>
 
         <div className={styles.legendItem}>
-          <span className={styles.legendColor} style={{ background: SIGNAL_COLORS.keyword.background }}></span>
+          <span
+            className={styles.legendColor}
+            style={{ background: SIGNAL_COLORS.keyword.background }}
+          ></span>
           <span>Signal Group</span>
         </div>
 
         <div className={styles.legendItem}>
-          <span className={styles.legendColor} style={{ background: NODE_COLORS.decision.normal.background }}></span>
+          <span
+            className={styles.legendColor}
+            style={{ background: NODE_COLORS.decision.normal.background }}
+          ></span>
           <span>Decision</span>
         </div>
 
         <div className={styles.legendItem}>
-          <span 
-            className={styles.legendColor} 
-            style={{ 
+          <span
+            className={styles.legendColor}
+            style={{
               background: NODE_COLORS.decision.unreachable.background,
               border: '1px dashed #5D4037',
             }}
@@ -37,21 +46,24 @@ export const TopologyLegend: React.FC = () => {
         </div>
 
         <div className={styles.legendItem}>
-          <span className={styles.legendColor} style={{ background: NODE_COLORS.model.standard.background }}></span>
+          <span
+            className={styles.legendColor}
+            style={{ background: NODE_COLORS.model.standard.background }}
+          ></span>
           <span>Model</span>
         </div>
 
         <div className={styles.legendItem}>
-          <span className={styles.legendColor} style={{ background: NODE_COLORS.model.reasoning.background }}></span>
+          <span
+            className={styles.legendColor}
+            style={{ background: NODE_COLORS.model.reasoning.background }}
+          ></span>
           <span>Reasoning Model</span>
         </div>
 
         {/* Edge Types */}
         <div className={styles.legendItem}>
-          <div
-            className={styles.legendLine}
-            style={{ background: EDGE_COLORS.reasoning }}
-          ></div>
+          <div className={styles.legendLine} style={{ background: EDGE_COLORS.reasoning }}></div>
           <span>Reasoning Path</span>
         </div>
 
@@ -61,10 +73,7 @@ export const TopologyLegend: React.FC = () => {
         </div>
 
         <div className={styles.legendItem}>
-          <div
-            className={styles.legendLine}
-            style={{ background: EDGE_COLORS.highlighted }}
-          ></div>
+          <div className={styles.legendLine} style={{ background: EDGE_COLORS.highlighted }}></div>
           <span>Highlighted</span>
         </div>
       </div>

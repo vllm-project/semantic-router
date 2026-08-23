@@ -45,12 +45,13 @@ func TestPopulateEvalModelSelectionReturnsConcreteRuntimeChoice(t *testing.T) {
 			Decision:     matchedDecision,
 			MatchedRules: []string{"domain:engineering"},
 		},
+		"entrypoint/scope",
 	)
 
 	if response.SelectedModel != "model-b" || response.SelectionStatus != EvalSelectionSelected {
 		t.Fatalf("selection response = %+v", response)
 	}
-	if selector.input.Decision != matchedDecision || selector.input.Recipe != "balanced" {
+	if selector.input.Decision != matchedDecision || selector.input.Recipe != "balanced" || selector.input.RuntimeScope != "entrypoint/scope" {
 		t.Fatalf("selector scope = %+v", selector.input)
 	}
 	if selector.input.Query != "Explain the tradeoff." || selector.input.Category != "engineering" {
@@ -71,6 +72,7 @@ func TestPopulateEvalModelSelectionDoesNotInventFirstRecommendedModel(t *testing
 			Name:      "fusion-route",
 			ModelRefs: []config.ModelRef{{Model: "model-a"}, {Model: "model-b"}},
 		}},
+		"",
 	)
 
 	if response.SelectedModel != "" || response.SelectionStatus != EvalSelectionUnavailable {

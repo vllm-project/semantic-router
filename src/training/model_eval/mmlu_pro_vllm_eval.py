@@ -25,6 +25,17 @@ ANSWER_PATTERN = re.compile(
 )
 TIMEOUT_SECONDS = 120
 MAX_RETRIES = 1  # No retries
+EVALUATION_BEARER_TOKEN_ENV = "VLLM_SR_EVALUATION_BEARER_TOKEN"
+
+
+def endpoint_api_key(command_line_api_key: str) -> str:
+    """Prefer the run-scoped delegated credential supplied only in memory."""
+    delegated = os.environ.get(EVALUATION_BEARER_TOKEN_ENV, "")
+    if delegated:
+        if any(character.isspace() for character in delegated):
+            raise ValueError("invalid evaluation inference credential")
+        return delegated
+    return command_line_api_key
 
 
 def parse_args():
@@ -99,7 +110,11 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
         print(f"Error communicating with vLLM endpoint: {e}")
         # Try direct HTTP request as fallback
         try:
-            response = requests.get(f"{endpoint}/models")
+            response = requests.get(
+                f"{endpoint}/models",
+                headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
+                timeout=TIMEOUT_SECONDS,
+            )
             if response.status_code == 200:
                 models_data = response.json()
                 return [model["id"] for model in models_data.get("data", [])]
@@ -272,7 +287,7 @@ def evaluate_model(
 ) -> pd.DataFrame:
     """Evaluate a model on the MMLU-Pro dataset."""
     client = OpenAI(base_url=endpoint, api_key=api_key if api_key else "dummy")
-    print(f"Using model: {model}, endpoint: {endpoint}, api_key: {api_key}")
+    print(f"Using model: {model}, endpoint: {endpoint}")
     results = []
 
     # Convert DataFrame rows to dictionaries for processing
@@ -390,6 +405,7 @@ def save_results(
 
 def main():
     args = parse_args()
+    args.api_key = endpoint_api_key(args.api_key)
 
     # Set random seed for reproducibility
     random.seed(args.seed)

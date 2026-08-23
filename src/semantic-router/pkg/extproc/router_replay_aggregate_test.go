@@ -1,6 +1,7 @@
 package extproc
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -122,6 +123,50 @@ func TestHandleRouterReplayAggregateAPIAppliesFilters(t *testing.T) {
 	}
 }
 
+func TestRouterReplayPrincipalScopeAppliesToListsAggregatesAndDetails(t *testing.T) {
+	router := newReplayAggregateTestRouter(t)
+	for _, path := range []string{
+		"/v1/router_replay?scope_user_id=user-a",
+		"/v1/router_replay/aggregate?scope_user_id=user-a",
+	} {
+		response := router.handleRouterReplayAPI("GET", path)
+		body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+		countKey := "count"
+		if strings.Contains(path, "aggregate") {
+			countKey = "record_count"
+		}
+		if got := int(body[countKey].(float64)); got != 1 {
+			t.Fatalf("%s %s=%d, want 1", path, countKey, got)
+		}
+	}
+
+	denied := router.handleRouterReplayAPI(
+		"GET",
+		"/v1/router_replay/replay-2?scope_user_id=user-a&scope_team_id=team-a",
+	)
+	if got := denied.GetImmediateResponse().GetStatus().GetCode(); got != typev3.StatusCode_NotFound {
+		t.Fatalf("scoped detail status = %v, want not found", got)
+	}
+}
+
+func TestReplayPrincipalUsesOnlyAuthenticatedTenantContext(t *testing.T) {
+	ctx := &RequestContext{
+		Headers: map[string]string{
+			"X-VLLM-SR-API-Key-ID": "spoofed-key",
+			"X-VLLM-SR-User-ID":    "spoofed-user",
+			"X-VLLM-SR-Team-ID":    "spoofed-team",
+		},
+		InferenceAccess: &inferenceRequestAccess{tenant: inferenceTestTenant("")},
+	}
+
+	apiKeyID, userID, teamID := replayPrincipalSnapshot(ctx)
+	if apiKeyID != ctx.InferenceAccess.tenant.APIKeyID ||
+		userID != ctx.InferenceAccess.tenant.UserID ||
+		teamID != ctx.InferenceAccess.tenant.TeamID {
+		t.Fatalf("replay principal = %q %q %q, want authenticated TenantContext", apiKeyID, userID, teamID)
+	}
+}
+
 func TestRouterReplayAggregateExcludesNonCompletedCostAndReportsLifecycle(t *testing.T) {
 	cost := 1.25
 	records := []routerreplay.RoutingRecord{
@@ -161,9 +206,12 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 	records := []routerreplay.RoutingRecord{
 		{
 			ID:               "replay-1",
+			UserID:           "user-a",
+			TeamID:           "team-a",
 			Timestamp:        time.Unix(1, 0).UTC(),
 			RequestID:        "req-alpha",
 			Recipe:           "alpha",
+			RoutingScope:     "entrypoint/internal-alpha",
 			Decision:         "decision-a",
 			OriginalModel:    "gpt-4",
 			SelectedModel:    "gpt-4o-mini",
@@ -184,9 +232,12 @@ func newReplayAggregateTestRouter(t *testing.T) *OpenAIRouter {
 		},
 		{
 			ID:               "replay-2",
+			UserID:           "user-b",
+			TeamID:           "team-b",
 			Timestamp:        time.Unix(2, 0).UTC(),
 			RequestID:        "req-beta",
 			Recipe:           "beta",
+			RoutingScope:     "entrypoint/internal-beta",
 			Decision:         "decision-b",
 			OriginalModel:    "gpt-4",
 			SelectedModel:    "gpt-4o",

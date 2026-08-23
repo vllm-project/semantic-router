@@ -304,7 +304,7 @@ function MixtureOfModelsProofSection(): JSX.Element {
               <p>
                 <Translate id="homepage.momProof.description">
                   vLLM Semantic Router keeps the public surface as vllm-sr/auto,
-                  then coordinates closed, open, and hybrid model pools inside the
+                  then coordinates closed, open, and hybrid models inside the
                   serving layer.
                 </Translate>
               </p>
@@ -342,7 +342,7 @@ function MixtureOfModelsProofSection(): JSX.Element {
                   alt={translate({
                     id: 'homepage.momProof.architectureAlt',
                     message:
-                      'vLLM Semantic Router routes heterogeneous closed and open model pools',
+                      'vLLM Semantic Router routes heterogeneous closed and open models',
                   })}
                   loading="lazy"
                 />

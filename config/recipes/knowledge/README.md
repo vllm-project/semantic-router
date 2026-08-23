@@ -60,9 +60,12 @@ base carefully if an organization's benchmark or feedback data is sensitive.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/knowledge/config.yaml
-vllm-sr serve --config config/recipes/knowledge/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect the physical Models, choose **Knowledge Routing** in
+**Recipes**, assign the local and frontier decisions, and publish the resulting
+Mixture-of-Model Entrypoint.
 
 ## Evaluation
 

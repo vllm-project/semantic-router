@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { useSetup } from '../contexts/SetupContext'
 import AuthTransitionScene from './AuthTransitionScene'
 import {
   AUTH_TRANSITION_MIN_DURATION_MS,
@@ -101,13 +100,11 @@ const AuthTransitionPage: React.FC = () => {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { isAuthenticated, isLoading } = useAuth()
-  const { setupState } = useSetup()
   const prefersReducedMotion = usePrefersReducedMotion()
   const [progress, setProgress] = useState(0)
   const [animationComplete, setAnimationComplete] = useState(false)
 
-  const fallbackTarget = setupState?.setupMode ? '/setup' : '/dashboard'
-  const target = sanitizeAuthTransitionTarget(searchParams.get('to'), fallbackTarget)
+  const target = sanitizeAuthTransitionTarget(searchParams.get('to'), '/dashboard')
   const activeMilestoneIndex = getActiveMilestoneIndex(progress)
   const activeMilestone = MILESTONES[activeMilestoneIndex]
 

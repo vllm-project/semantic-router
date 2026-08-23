@@ -35,7 +35,7 @@ configure a storage backend.
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: sensitive-turn
       description: Drop retained state for sensitive turns.
@@ -45,8 +45,6 @@ routing:
         conditions:
           - type: pii
             name: restricted_pii
-      modelRefs:
-        - model: private-model
       emits:
         - kind: retention
           retention:

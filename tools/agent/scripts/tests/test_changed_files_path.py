@@ -97,6 +97,28 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
         self.assertEqual(local_profiles, ["envoy-ai-gateway", "manual-smoke"])
         self.assertEqual(e2e_map["default_local_profiles"], ["envoy-ai-gateway"])
 
+    def test_agent_lint_passes_large_change_sets_by_path(self) -> None:
+        makefile = (
+            run_agent_precommit_lint.REPO_ROOT / "tools/make/agent.mk"
+        ).read_text(encoding="utf-8")
+        recipe = makefile.split("agent-lint:", 1)[1].split(
+            "\nagent-fast-gate:", 1
+        )[0]
+
+        self.assertIn('CHANGED_FILES_FILE="$$(mktemp)"', recipe)
+        self.assertNotIn("CSV_FILES", recipe)
+        for command in (
+            "run-python-lint",
+            "run-go-lint",
+            "run-config-contract-lint",
+            "run-rust-lint",
+        ):
+            command_lines = [line for line in recipe.splitlines() if command in line]
+            self.assertEqual(len(command_lines), 1)
+            self.assertIn(
+                '--changed-files-path "$$CHANGED_FILES_FILE"', command_lines[0]
+            )
+
 
 class RunAgentPrecommitLintTests(unittest.TestCase):
     def test_resolve_changed_files_tries_head_parent_when_default_diff_is_empty(

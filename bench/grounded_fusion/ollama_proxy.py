@@ -7,7 +7,7 @@ before emitting any answer. Ollama's NATIVE ``/api/chat`` *does* honor
 ``"think": false``. This shim accepts OpenAI requests, forwards them to the native
 endpoint with thinking off, and returns an OpenAI-shaped response.
 
-Point provider ``backend_refs[].base_url`` at this proxy:
+Point each benchmark Model ``connections[].endpoint`` at this proxy:
     http://localhost:11435/v1
 
 Run:

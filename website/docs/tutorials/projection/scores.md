@@ -70,7 +70,7 @@ Scores are internal projection state. Decisions do not reference score names dir
 ## Configuration
 
 ```yaml
-routing:
+document:
   projections:
     scores:
       - name: difficulty_score
@@ -100,7 +100,7 @@ routing:
 When a signal family exposes numeric measurements (counts, distances, token totals) through `SignalValues`, use `value_source: raw` to feed them directly into the weighted sum instead of reducing them to binary or confidence scalars.
 
 ```yaml
-routing:
+document:
   projections:
     scores:
       - name: workload_pressure
@@ -156,7 +156,7 @@ Scores can reference earlier projection scores or mapping output confidences usi
 Use `value_source: score` (or omit `value_source`) to read a previously computed score value:
 
 ```yaml
-routing:
+document:
   projections:
     scores:
       - name: difficulty_score

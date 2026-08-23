@@ -23,7 +23,8 @@ Related issue: [#1217](https://github.com/vllm-project/semantic-router/issues/12
 | `pkg/cache/cache.go` | `openai.ChatCompletionNewParams` | SDK | Cache key extraction |
 | `pkg/cache/sdk_compat_test.go` | compat tests | SDK | |
 | `pkg/memory/extractor.go` | `openai.ChatCompletionMessageParamUnion` | SDK | Memory enrichment |
-| `pkg/responseapi/translator.go` | `openai.ChatCompletionNewParams`, `openai.ChatCompletion` | SDK | Response API translation |
+| `pkg/protocolcodec/codec_openai_chat.go` | Chat Completions wire DTOs | Custom | Neutral protocol codec boundary |
+| `pkg/protocolcodec/codec_openai_responses.go` | Responses wire DTOs | Custom | Neutral protocol codec boundary |
 | `pkg/classification/vllm_client.go` | SDK + `extra_body` composition | SDK + extension | vLLM-specific field |
 | `pkg/modelselection/benchmark_runner.go` | SDK + error envelope | SDK + extension | Provider error detection |
 | `pkg/mcp/types.go` | SDK tool types | SDK | Tool conversion |
@@ -39,7 +40,7 @@ Related issue: [#1217](https://github.com/vllm-project/semantic-router/issues/12
 |----------|-------|---------------|-------|
 | `pkg/extproc/processor_res_body_streaming.go` | `openai.ChatCompletionChunk` | SDK | Chunk accumulation |
 | `pkg/extproc/openai_compat_test.go` | chunk parsing tests | SDK | |
-| `pkg/anthropic/compat_test.go` | OpenAI chunk to Anthropic | SDK source | Cross-protocol |
+| `pkg/protocolcodec/matrix_test.go` | all installed streaming wire formats | Custom | Full codec-matrix coverage |
 
 ### Models list (`GET /v1/models`)
 
@@ -64,17 +65,17 @@ Related issue: [#1217](https://github.com/vllm-project/semantic-router/issues/12
 | Location | Types | SDK alignment | Notes |
 |----------|-------|---------------|-------|
 | `pkg/responseapi/types.go` | `ResponseAPIRequest`, `ResponseAPIResponse`, items | Custom | Stateful API; SDK `Response` not used yet |
-| `pkg/responseapi/translator.go` | translates to/from Chat Completions SDK types | SDK at boundary | |
-| `pkg/responseapi/*_test.go` | translation + round-trip | Custom + SDK boundary | |
 | `pkg/responseapi/types_compat_test.go` | JSON round-trip | Custom | Wire stability guard |
+| `pkg/protocolcodec/codec_openai_responses.go` | stateless wire decode/encode | Custom | Neutral protocol codec boundary |
+| `pkg/protocolcodec/matrix_test.go` | cross-format request/response matrix | Custom | No pair-specific translator |
 | `e2e/pkg/fixtures/response_api.go` | fixture types | Custom | E2E isolation |
 
 **Documented differences:**
 
 - Router extension fields: `auto_store` (memory e2e)
-- Translation layer uses `openai.ChatCompletionNewParams` / `openai.ChatCompletion`
-  for backend calls; Response API wire types remain custom until SDK coverage is
-  adopted end-to-end
+- Stateless translation crosses the neutral protocol representation and the
+  installed codec matrix. Stateful Response resources remain owned by
+  `pkg/responseapi`; they are not used as an implicit Chat-shaped working body.
 
 ### Image generation (`/v1/images/generations`)
 
@@ -120,8 +121,8 @@ Related issue: [#1217](https://github.com/vllm-project/semantic-router/issues/12
 |---------|-----------|----------|
 | `pkg/extproc` | `openai_compat_test.go` | Chat Completions request/response/streaming |
 | `pkg/cache` | `sdk_compat_test.go` | Request extraction |
-| `pkg/anthropic` | `compat_test.go` | OpenAI to Anthropic conversion |
-| `pkg/responseapi` | `translator_test.go`, `roundtrip_test.go`, `types_compat_test.go` | Response API wire + translation |
+| `pkg/protocolcodec` | `matrix_test.go`, `stream_contract_test.go` | Full buffered and streaming wire-format matrix |
+| `pkg/responseapi` | `types_compat_test.go` | Stateful Response API resource wire stability |
 | `pkg/extproc` | `models_compat_test.go` | Models list wire format |
 | `pkg/imagegen` | `backend_openai_compat_test.go` | Image generation wire format |
 | `pkg/openai` | `wire_compat_test.go` | Files + Vector Stores wire format |

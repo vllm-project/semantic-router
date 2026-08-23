@@ -1,258 +1,245 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
-import type { BuiltInModelCatalog } from '../types/modelCatalog'
-import ConfigPageMoMEntrypointCatalogMetadata from './ConfigPageMoMEntrypointCatalogMetadata'
+import ProductIcon from '../components/ProductIcon'
+import type { RoutingEntrypoint, RoutingRecipe } from '../utils/routingManagementApi'
 import pageStyles from './ConfigPageEntrypointsRecipesSection.module.css'
-import {
-  collectRecipeTargetModels,
-  countRecipeEntrypoints,
-  getRecipeByName,
-} from './configPageEntrypointsRecipesSupport'
-import type { ConfigData, EntrypointConfig, RecipeConfig } from './configPageSupport'
+import { assignedModelCount } from './configPageMoMRoutingListSupport'
+import { recipeDocumentSummary } from './configPageRecipeDialogSupport'
 
-interface EntrypointsListProps {
-  config: ConfigData
-  isReadonly: boolean
-  onAdd: () => void
-  onView: (entrypoint: EntrypointConfig, index: number) => void
-  onEdit: (entrypoint: EntrypointConfig, index: number) => void
-  onDelete: (entrypoint: EntrypointConfig, index: number) => void
-  onTopology: (entrypoint: EntrypointConfig, recipe: RecipeConfig) => void
-  catalog: BuiltInModelCatalog | null
-  catalogLoading: boolean
-  catalogError: string | null
-  onCatalogRetry: () => void
+const PAGE_SIZE = 8
+
+function Pager({
+  page,
+  count,
+  onChange,
+}: {
+  page: number
+  count: number
+  onChange: (page: number) => void
+}) {
+  const pages = Math.max(1, Math.ceil(count / PAGE_SIZE))
+  if (pages <= 1) return null
+  return (
+    <div className={pageStyles.pager} aria-label="Pagination">
+      <span>
+        {page + 1} / {pages}
+      </span>
+      <button type="button" disabled={page === 0} onClick={() => onChange(page - 1)}>
+        <ProductIcon name="chevron-left" />
+        Previous
+      </button>
+      <button type="button" disabled={page >= pages - 1} onClick={() => onChange(page + 1)}>
+        Next
+        <ProductIcon name="chevron-right" />
+      </button>
+    </div>
+  )
 }
 
-interface RecipesListProps {
-  config: ConfigData
-  isReadonly: boolean
-  onAdd: () => void
-  onView: (recipe: RecipeConfig) => void
-  onEdit: (recipe: RecipeConfig) => void
-  onDelete: (recipe: RecipeConfig) => void
+function OpenCue({ topology = false }: { topology?: boolean }) {
+  return (
+    <span className={pageStyles.portfolioOpenCue} aria-hidden="true">
+      <ProductIcon name={topology ? 'topology' : 'chevron-right'} />
+      <span>{topology ? 'Topology' : 'Details'}</span>
+    </span>
+  )
 }
 
 export function ConfigPageMoMEntrypointsList({
-  config,
-  isReadonly,
+  entrypoints,
+  canManage,
   onAdd,
   onView,
-  onEdit,
-  onDelete,
-  onTopology,
-  catalog,
-  catalogLoading,
-  catalogError,
-  onCatalogRetry,
-}: EntrypointsListProps) {
+}: {
+  entrypoints: RoutingEntrypoint[]
+  canManage: boolean
+  onAdd: () => void
+  onView: (entrypoint: RoutingEntrypoint) => void
+}) {
   const [search, setSearch] = useState('')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const entrypoints = config.entrypoints ?? []
+  const [page, setPage] = useState(0)
   const query = search.trim().toLowerCase()
   const filtered = entrypoints.filter(
     (entrypoint) =>
       !query ||
-      entrypoint.recipe.toLowerCase().includes(query) ||
-      entrypoint.model_names.some((name) => name.toLowerCase().includes(query)),
+      entrypoint.name.toLowerCase().includes(query) ||
+      entrypoint.aliases.some((alias) => alias.toLowerCase().includes(query)),
   )
+  const visible = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  useEffect(() => setPage(0), [search])
 
   return (
     <section className={pageStyles.portfolioPanel}>
       <div className={pageStyles.portfolioHeader}>
         <div>
-          <span className={pageStyles.sectionEyebrow}>Request-facing models</span>
-          <h2>Unified Models</h2>
-          <p>Public model IDs mapped to isolated routing recipes.</p>
+          <span className={pageStyles.sectionEyebrow}>Ready to call</span>
+          <h2>Models</h2>
+          <p>One public model name. One complete recipe.</p>
         </div>
         <div className={pageStyles.portfolioActions}>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search model or recipe"
-            aria-label="Search unified models"
+            placeholder="Search"
+            aria-label="Search Mixture-of-Models"
           />
-          {!isReadonly ? (
+          {canManage ? (
             <button type="button" onClick={onAdd}>
-              Add unified model
+              <ProductIcon name="plus" />
+              Create model
             </button>
           ) : null}
         </div>
       </div>
       <div className={pageStyles.portfolioList}>
-        {filtered.map((entrypoint) => {
-          const key = entrypoint.model_names.join('|')
-          const isExpanded = expanded.has(key)
-          const recipe = getRecipeByName(config, entrypoint.recipe)
-          const targetCount = collectRecipeTargetModels(recipe).length
-          const originalIndex = entrypoints.indexOf(entrypoint)
+        {visible.map((entrypoint) => {
+          const modelCount = assignedModelCount(entrypoint)
           return (
-            <article key={key} className={pageStyles.portfolioItem}>
-              <div className={pageStyles.portfolioItemMain}>
-                <button
-                  type="button"
-                  className={pageStyles.disclosureButton}
-                  aria-expanded={isExpanded}
-                  aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${entrypoint.model_names.join(', ')}`}
-                  onClick={() =>
-                    setExpanded((current) => {
-                      const next = new Set(current)
-                      if (next.has(key)) next.delete(key)
-                      else next.add(key)
-                      return next
-                    })
-                  }
-                >
-                  <span aria-hidden="true">{isExpanded ? '−' : '+'}</span>
-                </button>
+            <article key={entrypoint.id} className={pageStyles.portfolioItem}>
+              <div
+                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain} ${pageStyles.portfolioItemOpenable}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open ${entrypoint.name}`}
+                onClick={() => onView(entrypoint)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  onView(entrypoint)
+                }}
+              >
                 <div className={pageStyles.portfolioIdentity}>
-                  {entrypoint.model_names.map((name) => (
-                    <code key={name}>{name}</code>
-                  ))}
-                  <span>Routes through {entrypoint.recipe}</span>
+                  <strong>{entrypoint.aliases[0] ?? entrypoint.name}</strong>
+                  <span>
+                    {entrypoint.aliases.length > 1
+                      ? `+${entrypoint.aliases.length - 1} aliases`
+                      : 'OpenAI-compatible model'}
+                  </span>
                 </div>
                 <div className={pageStyles.portfolioMeta}>
-                  <span>{targetCount} models</span>
-                  <span>{entrypoint.recipe}</span>
+                  <span>{entrypoint.status === 'active' ? 'Live' : 'Draft'}</span>
+                  <span>
+                    {modelCount} model{modelCount === 1 ? '' : 's'}
+                  </span>
+                  <span>
+                    {entrypoint.ruleCount} rule
+                    {entrypoint.ruleCount === 1 ? '' : 's'}
+                  </span>
+                  <span>Revision {entrypoint.entrypointRevision}</span>
                 </div>
-                <div className={pageStyles.rowActions}>
-                  {recipe ? (
-                    <button type="button" onClick={() => onTopology(entrypoint, recipe)}>
-                      Topology
-                    </button>
-                  ) : null}
-                  <button type="button" onClick={() => onView(entrypoint, originalIndex)}>
-                    View
-                  </button>
-                  {!isReadonly ? (
-                    <>
-                      <button type="button" onClick={() => onEdit(entrypoint, originalIndex)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={pageStyles.deleteAction}
-                        onClick={() => onDelete(entrypoint, originalIndex)}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : null}
-                </div>
+                <OpenCue topology />
               </div>
-              {isExpanded ? (
-                <ConfigPageMoMEntrypointCatalogMetadata
-                  catalog={catalog}
-                  catalogLoading={catalogLoading}
-                  catalogError={catalogError}
-                  config={config}
-                  entrypoint={entrypoint}
-                  onCatalogRetry={onCatalogRetry}
-                />
-              ) : null}
             </article>
           )
         })}
-        {filtered.length === 0 ? (
+        {visible.length === 0 ? (
           <div className={pageStyles.emptyState}>
-            {search ? 'No unified models match your search.' : 'No unified models configured.'}
+            {search
+              ? 'No matches.'
+              : canManage
+                ? 'Create your first model.'
+                : 'No models configured.'}
           </div>
         ) : null}
       </div>
+      <Pager page={page} count={filtered.length} onChange={setPage} />
     </section>
   )
 }
 
 export function ConfigPageMoMRecipesList({
-  config,
-  isReadonly,
+  recipes,
+  canManage,
   onAdd,
   onView,
-  onEdit,
-  onDelete,
-}: RecipesListProps) {
+}: {
+  recipes: RoutingRecipe[]
+  canManage: boolean
+  onAdd: () => void
+  onView: (recipe: RoutingRecipe) => void
+}) {
   const [search, setSearch] = useState('')
-  const recipes = config.recipes ?? []
+  const [page, setPage] = useState(0)
+  const ordered = useMemo(
+    () => [...recipes].sort((a, b) => a.name.localeCompare(b.name)),
+    [recipes],
+  )
   const query = search.trim().toLowerCase()
-  const filtered = recipes.filter(
+  const filtered = ordered.filter(
     (recipe) =>
       !query ||
       recipe.name.toLowerCase().includes(query) ||
-      recipe.description?.toLowerCase().includes(query) ||
-      collectRecipeTargetModels(recipe).some((name) => name.toLowerCase().includes(query)),
+      recipe.description?.toLowerCase().includes(query),
   )
+  const visible = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  useEffect(() => setPage(0), [search])
 
   return (
     <section className={pageStyles.portfolioPanel}>
       <div className={pageStyles.portfolioHeader}>
         <div>
-          <span className={pageStyles.sectionEyebrow}>Reusable routing</span>
+          <span className={pageStyles.sectionEyebrow}>How models work together</span>
           <h2>Recipes</h2>
-          <p>Reusable decision graphs and the configured model pools behind them.</p>
+          <p>Reusable routing intelligence, ready to become a model.</p>
         </div>
         <div className={pageStyles.portfolioActions}>
           <input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search recipe or model"
+            placeholder="Search"
             aria-label="Search recipes"
           />
-          {!isReadonly ? (
+          {canManage ? (
             <button type="button" onClick={onAdd}>
-              Add recipe
+              <ProductIcon name="plus" />
+              Create recipe
             </button>
           ) : null}
         </div>
       </div>
       <div className={pageStyles.portfolioList}>
-        {filtered.map((recipe) => {
+        {visible.map((recipe) => {
+          const summary = recipeDocumentSummary(recipe)
           return (
-            <article key={recipe.name} className={pageStyles.portfolioItem}>
+            <article key={recipe.id} className={pageStyles.portfolioItem}>
               <div
-                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain}`}
+                className={`${pageStyles.portfolioItemMain} ${pageStyles.staticPortfolioItemMain} ${pageStyles.portfolioItemOpenable}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`Open recipe ${recipe.name}`}
+                onClick={() => onView(recipe)}
+                onKeyDown={(event) => {
+                  if (event.key !== 'Enter' && event.key !== ' ') return
+                  event.preventDefault()
+                  onView(recipe)
+                }}
               >
                 <div className={pageStyles.portfolioIdentity}>
-                  <strong>{recipe.name}</strong>
-                  <span>{recipe.description || 'No description'}</span>
+                  <div className={pageStyles.recipeTitle}>
+                    <strong>{recipe.name}</strong>
+                    <span className={pageStyles.recipeBadge}>
+                      {recipe.immutable ? 'Built-in' : 'Recipe'}
+                    </span>
+                  </div>
+                  <span>{recipe.description || 'Custom model composition'}</span>
                 </div>
                 <div className={pageStyles.portfolioMeta}>
-                  <span>
-                    {countRecipeEntrypoints(config.entrypoints ?? [], recipe.name)} public models
-                  </span>
-                  <span>{recipe.routing.decisions?.length ?? 0} decisions</span>
-                  <span>{collectRecipeTargetModels(recipe).length} models</span>
+                  <span>{recipe.status === 'active' ? 'Live' : 'Draft'}</span>
+                  <span>{summary.signals} signals</span>
+                  <span>{summary.decisions} decisions</span>
                 </div>
-                <div className={pageStyles.rowActions}>
-                  <button type="button" onClick={() => onView(recipe)}>
-                    View
-                  </button>
-                  {!isReadonly ? (
-                    <>
-                      <button type="button" onClick={() => onEdit(recipe)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={pageStyles.deleteAction}
-                        onClick={() => onDelete(recipe)}
-                      >
-                        Delete
-                      </button>
-                    </>
-                  ) : null}
-                </div>
+                <OpenCue />
               </div>
             </article>
           )
         })}
-        {filtered.length === 0 ? (
-          <div className={pageStyles.emptyState}>
-            {search ? 'No recipes match your search.' : 'No recipes configured.'}
-          </div>
+        {visible.length === 0 ? (
+          <div className={pageStyles.emptyState}>{search ? 'No matches.' : 'No recipes yet.'}</div>
         ) : null}
       </div>
+      <Pager page={page} count={filtered.length} onChange={setPage} />
     </section>
   )
 }

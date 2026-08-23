@@ -189,8 +189,13 @@ func (r *SemanticRouterReconciler) generateEnvoyConfig() string {
 }
 
 func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
-	if gatewayMode != "standalone" {
-		return nil
+	if gatewayMode != gatewayModeSidecar {
+		return r.deleteOwnedIfPresent(
+			ctx,
+			sr,
+			types.NamespacedName{Name: sr.Name + "-envoy-config", Namespace: sr.Namespace},
+			&corev1.ConfigMap{},
+		)
 	}
 
 	cm := &corev1.ConfigMap{

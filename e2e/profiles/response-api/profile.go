@@ -70,6 +70,10 @@ func (p *Profile) GetTestCases() []string {
 		"response-api-edge-large-input",
 		"response-api-edge-special-characters",
 		"response-api-edge-concurrent-requests",
+		"protocol-codec-buffered-matrix",
+		"protocol-codec-streaming-matrix",
+		"protocol-codec-tool-buffered-matrix",
+		"protocol-codec-tool-streaming-matrix",
 	}
 }
 

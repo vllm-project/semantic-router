@@ -2,7 +2,7 @@
 
 ## Overview
 
-`authz` turns identity and policy bindings into reusable routing inputs under
+`authz` turns trusted routing claims into reusable routing inputs under
 `routing.signals.role_bindings`.
 
 This family is heuristic: it matches request identity against explicit roles and subjects instead of classifier output.
@@ -12,11 +12,13 @@ This family is heuristic: it matches request identity against explicit roles and
 - Routes premium, internal, or tenant-scoped traffic without extra model inference.
 - Keeps access policy visible inside `routing.decisions`.
 - Reuses the same identity rule across multiple routes.
-- Makes RBAC-driven routing auditable in YAML.
+- Makes identity-aware routing auditable in the Recipe.
 
 ## What Problem Does It Solve?
 
-Without an `authz` signal, routing decisions cannot see user tier or role membership directly. That pushes access-sensitive routing into scattered middleware and makes policy harder to review.
+Without an `authz` signal, routing decisions cannot use a verified user, Team,
+or routing claim as an input. This signal keeps those routing choices explicit
+without turning them into access permissions.
 
 `authz` solves that by exposing role membership as a named signal that decisions can compose with domain, safety, or plugin logic.
 
@@ -32,15 +34,15 @@ Use `authz` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   signals:
     role_bindings:
       - name: admin
-        description: Requests from platform administrators.
+        description: Requests from one Team.
         role: admin
         subjects:
-          - kind: Group
-            name: platform-admins
+          - kind: Team
+            name: team_platform
       - name: premium_user
         description: Requests from paid end users.
         role: premium_user
@@ -53,7 +55,10 @@ Use `role_bindings` when the signal should fire from authenticated identity and 
 
 ## Dependencies and Limitations
 
-Identity comes from `global.services.authz`; the signal does not authenticate a
-request by itself. Trust only headers set or sanitized by your authentication
-layer. See a complete example:
+Identity comes only from the Router-authenticated `TenantContext`; the signal
+does not authenticate a request or grant model access. `User` and `Team`
+subjects match their corresponding IDs. `Group` subjects match compiled string
+claim values or the names of true boolean claims. Standalone routing has no
+trusted identity source, so a Recipe that requires these bindings fails closed.
+See a complete example:
 [`config/fragments/signal/authz/rbac.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/authz/rbac.yaml).

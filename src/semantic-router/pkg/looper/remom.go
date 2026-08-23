@@ -123,7 +123,6 @@ func (l *ReMoMLooper) remomRunOneParallelCall(
 		false,
 		idx+1,
 		nil,
-		accessKeyForModel(req, modelName),
 	)
 	elapsed := time.Since(startTime)
 
@@ -324,17 +323,17 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 
 	schedule := append([]int{}, cfg.BreadthSchedule...)
 	schedule = append(schedule, 1)
-	originalContent := extractOriginalContent(req.OriginalRequest)
-	originalWithOutputContract := requestTextWithOutputContract(originalContent, req.OriginalRequest, req.OutputContract)
+	originalContent := extractOriginalContent(req.executionRequest)
+	originalWithOutputContract := requestTextWithOutputContract(originalContent, req.executionRequest, req.OutputContract)
 
 	result, err := l.runReMoMSchedule(ctx, req, cfg, schedule, originalWithOutputContract)
 	if err != nil {
-		return nil, err
+		return nil, newPartialExecutionError(err, remomExecutionEvidence(result))
 	}
 
 	finalResponse, err := selectReMoMFinalResponse(result.allRoundResponses, result.completedFinal)
 	if err != nil {
-		return nil, err
+		return nil, newPartialExecutionError(err, remomExecutionEvidence(result))
 	}
 	finalModelResp := &ModelResponse{
 		Content:          finalResponse.Content,
@@ -354,17 +353,42 @@ func (l *ReMoMLooper) Execute(ctx context.Context, req *Request) (*Response, err
 	)
 	finalResponse.Content = finalModelResp.Content
 	if strings.TrimSpace(finalResponse.Content) == "" {
-		return nil, fmt.Errorf("remom produced no assistant content")
+		return nil, newPartialExecutionError(
+			fmt.Errorf("remom produced no assistant content"),
+			remomExecutionEvidence(result),
+		)
 	}
 	modelsUsedSlice := make([]string, 0, len(result.modelsUsed))
 	for model := range result.modelsUsed {
 		modelsUsedSlice = append(modelsUsedSlice, model)
 	}
 
+	var response *Response
 	if req.IsStreaming {
-		return l.formatReMoMStreamingResponse(finalResponse, result.allRoundResponses, modelsUsedSlice, result.totalIterations, result.usage, cfg)
+		response, err = l.formatReMoMStreamingResponse(finalResponse, result.allRoundResponses, modelsUsedSlice, result.totalIterations, result.usage, cfg, streamUsageRequested(req))
+	} else {
+		response, err = l.formatReMoMJSONResponse(finalResponse, result.allRoundResponses, modelsUsedSlice, result.totalIterations, result.usage, cfg)
 	}
-	return l.formatReMoMJSONResponse(finalResponse, result.allRoundResponses, modelsUsedSlice, result.totalIterations, result.usage, cfg)
+	if err != nil {
+		return nil, newPartialExecutionError(err, remomExecutionEvidence(result))
+	}
+	return response, nil
+}
+
+func remomExecutionEvidence(result *remomScheduleResult) ExecutionEvidence {
+	if result == nil {
+		return ExecutionEvidence{}
+	}
+	modelsUsed := make([]string, 0, len(result.modelsUsed))
+	for model := range result.modelsUsed {
+		modelsUsed = append(modelsUsed, model)
+	}
+	sort.Strings(modelsUsed)
+	return ExecutionEvidence{
+		ModelsUsed: modelsUsed,
+		Iterations: result.totalIterations,
+		Usage:      result.usage,
+	}
 }
 
 func (l *ReMoMLooper) runReMoMSchedule(
@@ -378,9 +402,18 @@ func (l *ReMoMLooper) runReMoMSchedule(
 	modelsUsed := make(map[string]bool)
 	totalIterations := 0
 	var usage TokenUsage
-	currentMessages := cloneMessages(req.OriginalRequest)
+	currentMessages := cloneMessages(req.executionRequest)
 	if requestsJSONAction(req.OutputContractSpec) {
 		currentMessages = replaceLastMessage(currentMessages, originalWithOutputContract)
+	}
+	result := func() *remomScheduleResult {
+		return &remomScheduleResult{
+			allRoundResponses: allRoundResponses,
+			modelsUsed:        modelsUsed,
+			totalIterations:   totalIterations,
+			usage:             usage,
+			completedFinal:    len(allRoundResponses) == len(schedule),
+		}
 	}
 
 	for roundIdx, numCalls := range schedule {
@@ -388,7 +421,7 @@ func (l *ReMoMLooper) runReMoMSchedule(
 
 		updatedMessages, err := l.prepareReMoMRoundMessages(cfg, originalWithOutputContract, roundIdx, allRoundResponses, currentMessages)
 		if err != nil {
-			return nil, err
+			return result(), err
 		}
 		currentMessages = updatedMessages
 
@@ -402,20 +435,14 @@ func (l *ReMoMLooper) runReMoMSchedule(
 				logging.Warnf("[ReMoM] Round %d failed; using previous round responses as fallback: %v", roundIdx+1, err)
 				break
 			}
-			return nil, err
+			return result(), err
 		}
 
 		allRoundResponses = append(allRoundResponses, roundExecution.round)
 		logging.Infof("[ReMoM] Round %d completed: %d usable responses", roundIdx+1, len(roundExecution.usableResponses))
 	}
 
-	return &remomScheduleResult{
-		allRoundResponses: allRoundResponses,
-		modelsUsed:        modelsUsed,
-		totalIterations:   totalIterations,
-		usage:             usage,
-		completedFinal:    len(allRoundResponses) == len(schedule),
-	}, nil
+	return result(), nil
 }
 
 func canFallbackToPreviousReMoMRound(cfg *config.ReMoMAlgorithmConfig, allRoundResponses []RoundResponse) bool {

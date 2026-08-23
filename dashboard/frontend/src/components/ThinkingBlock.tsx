@@ -31,7 +31,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   useEffect(() => {
     if (isStreaming) {
       const interval = setInterval(() => {
-        setDisplayTime(prev => prev + 0.1)
+        setDisplayTime((prev) => prev + 0.1)
       }, 100)
       return () => clearInterval(interval)
     } else if (thinkingTime !== undefined) {
@@ -90,9 +90,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
           </span>
         </div>
         <div className={styles.headerRight}>
-          {displayTime > 0 && (
-            <span className={styles.time}>{formatTime(displayTime)}</span>
-          )}
+          {displayTime > 0 && <span className={styles.time}>{formatTime(displayTime)}</span>}
           <svg
             className={styles.expandIcon}
             width="14"

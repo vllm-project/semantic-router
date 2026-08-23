@@ -24,6 +24,13 @@ func TestReassembleSSEFrames(t *testing.T) {
 			wantRemainder: "",
 		},
 		{
+			name:          "CRLF complete frame passes through",
+			pending:       "",
+			chunk:         "data: {\"a\":1}\r\n\r\n",
+			wantComplete:  "data: {\"a\":1}\r\n\r\n",
+			wantRemainder: "",
+		},
+		{
 			name:          "frame split mid-json is held as remainder",
 			pending:       "",
 			chunk:         "data: {\"a\":",
@@ -67,6 +74,11 @@ func TestReassembleSSEFrames(t *testing.T) {
 			assert.Equal(t, tc.wantRemainder, string(remainder), "held remainder")
 		})
 	}
+}
+
+func TestSSEFramesContainDoneRequiresStandaloneDataPayload(t *testing.T) {
+	assert.False(t, sseFramesContainDone([]byte("data: {\"choices\":[{\"delta\":{\"content\":\"data: [DONE]\"}}]}\n\n")))
+	assert.True(t, sseFramesContainDone([]byte("data:[DONE]\r\n\r\n")))
 }
 
 // TestReassembleSSEFrames_RemainderDoesNotAliasChunk asserts the returned

@@ -137,12 +137,12 @@ one-response-per-chunk behavior required by that mode.
 
 ## Configure an immediate streamed looper response
 
-Looper algorithms are the main immediate-response path added by the full-duplex streaming work. A decision with a looper algorithm and multiple `modelRefs` can return an immediate ExtProc response instead of forwarding the original request to one backend.
+Looper algorithms are the main immediate-response path added by the full-duplex streaming work. A decision with a looper algorithm and multiple Models in its Entrypoint assignment can return an immediate ExtProc response instead of forwarding the original request to one backend.
 
 Example decision fragment:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: streamed_confidence_route
       description: Escalate code requests when the first model is uncertain.
@@ -152,11 +152,6 @@ routing:
         conditions:
           - type: domain
             name: computer science
-      modelRefs:
-        - model: small-code-model
-          use_reasoning: false
-        - model: large-code-model
-          use_reasoning: false
       algorithm:
         type: confidence
         confidence:
@@ -166,8 +161,8 @@ routing:
           on_error: skip
 ```
 
-The `computer science` signal and both provider models must also exist in the
-same recipe. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
+The `computer science` signal must exist in the same Recipe, and the Entrypoint
+must assign both Models to this decision. See the [Confidence tutorial](/docs/tutorials/algorithm/looper/confidence)
 for the complete contract.
 
 When the client sends `"stream": true`, Semantic Router calls the candidate model(s), aggregates the looper result, and returns an immediate SSE body to the gateway. The client still receives a normal OpenAI-compatible stream:
@@ -198,7 +193,7 @@ Look for:
 `fast_response` can also short-circuit requests that arrive as streamed body chunks. This is useful for safety decisions such as PII or jailbreak blocking.
 
 ```yaml
-routing:
+document:
   signals:
     jailbreak:
       - name: streamed_jailbreak
@@ -214,7 +209,6 @@ routing:
         conditions:
           - type: jailbreak
             name: streamed_jailbreak
-      modelRefs: []
       plugins:
         - type: fast_response
           configuration:

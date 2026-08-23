@@ -18,6 +18,7 @@ import { useSearchParams } from 'react-router-dom'
 
 import { useTopologyData, useCollapseState, useTestQuery } from './hooks'
 import { useTheme } from '../../hooks'
+import ProductIcon from '../../components/ProductIcon'
 import { customNodeTypes } from './components/CustomNodes'
 import { TestQueryInput } from './components/ControlPanel'
 import { ResultCard } from './components/ResultCard'
@@ -26,21 +27,13 @@ import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
-  const {
-    data,
-    loading,
-    error,
-    refresh,
-    routingScopes,
-    selectedScopeId,
-    setSelectedScopeId,
-  } = useTopologyData()
+  const { data, loading, error, refresh, routingScopes, selectedScopeId, setSelectedScopeId } =
+    useTopologyData()
   const [searchParams, setSearchParams] = useSearchParams()
   const { collapseState } = useCollapseState()
   const { isDark } = useTheme()
   const selectedScope =
     routingScopes.find((scope) => scope.id === selectedScopeId) ?? routingScopes[0]
-  const selectedRoutingModel = selectedScope?.entrypointModelNames[0]
   const {
     testQuery,
     setTestQuery,
@@ -48,7 +41,7 @@ const TopologyFlow: React.FC = () => {
     isLoading: isTestLoading,
     runTest,
     clearResult,
-  } = useTestQuery(data, selectedRoutingModel)
+  } = useTestQuery(data)
 
   const [nodes, setNodes, onNodesChange] = useNodesState([])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
@@ -126,7 +119,7 @@ const TopologyFlow: React.FC = () => {
       { id: 'projections', label: 'Projection Maps', count: projectionCount },
       { id: 'decisions', label: 'Decision Lanes', count: data.decisions.length },
       { id: 'runtime', label: 'Runtime Chain', count: runtimeCount },
-      { id: 'models', label: 'Model Pool', count: data.models.length },
+      { id: 'models', label: 'Models', count: data.models.length },
     ]
   }, [data])
 
@@ -189,9 +182,10 @@ const TopologyFlow: React.FC = () => {
     return (
       <div className={styles.container}>
         <div className={styles.error}>
-          <span className={styles.errorIcon}>⚠️</span>
+          <ProductIcon className={styles.errorIcon} name="alert" aria-hidden="true" />
           <p>{error}</p>
-          <button onClick={refresh} className={styles.retryButton}>
+          <button type="button" onClick={refresh} className={styles.retryButton}>
+            <ProductIcon name="refresh" aria-hidden="true" />
             Retry
           </button>
         </div>
@@ -364,7 +358,11 @@ const TopologyFlow: React.FC = () => {
             aria-expanded={!sidebarCollapsed}
             aria-label={sidebarCollapsed ? 'Expand test query panel' : 'Collapse test query panel'}
           >
-            {sidebarCollapsed ? '▲' : '▼'}
+            <ProductIcon
+              className={sidebarCollapsed ? styles.bottomToggleCollapsed : undefined}
+              name="chevron-right"
+              aria-hidden="true"
+            />
           </button>
 
           {/* Panel Content */}

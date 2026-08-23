@@ -87,28 +87,26 @@ active release-plan tasks:
 - Propose missing release seed issues from the active release plan, review the
   dry-run payload, and apply only after explicit maintainer approval.
 
-## Built-in Model Catalog Releases
+## Built-in Recipe Releases
 
-`config/recipes/built-in/latest/` is the authoring source for the catalog that
-ships with `vllm-sr`. The package mirror under
-`src/vllm-sr/cli/model_assets/latest/` is generated; update it with
-`tools/release/sync_model_catalog.py` rather than editing it directly.
+`config/recipes/built-in/latest/` is the sole authoring source for the built-in
+Recipe distribution. It is validated and installed into Router Management resources;
+the CLI wheel does not carry a second generated copy.
 
-Immediately before a stable `vX.Y.Z` tag, create the matching catalog snapshot:
+Immediately before a stable `vX.Y.Z` tag, create the matching Recipe snapshot:
 
 ```bash
-make built-in-model-snapshot RELEASE_VERSION=X.Y.Z
+make built-in-recipe-snapshot RELEASE_VERSION=X.Y.Z
 ```
 
-The command creates `config/recipes/built-in/vX.Y/`, updates its release
-metadata and bundle digests, and generates the matching package resources. It
-refuses to overwrite an existing snapshot. Commit both generated trees in the
-release-preparation change.
+The command creates `config/recipes/built-in/vX.Y/` as an exact, path-bound
+projection of `latest`. It refuses to overwrite an existing snapshot. Commit
+that immutable snapshot in the release-preparation change.
 
-Before tagging, verify the version contract and source/package parity. Published
+Before tagging, verify the version contract. Published
 snapshots are release inputs and must not be rewritten; policy changes belong
-in `latest` or a new catalog version. User-facing Model Cards should explain
-catalog versions and compatibility without reproducing these release steps.
+in `latest` or a new Recipe version. User-facing Model Cards should explain
+Recipe versions without reproducing these release steps.
 
 ## Release Promotion
 
@@ -118,7 +116,7 @@ artifacts are never promoted automatically.
 1. Confirm the candidate commit passes the required CI and release checks.
 2. Update the repository's version-bearing surfaces and validate their shared
    version contract.
-3. Create the matching built-in catalog snapshot as described above.
+3. Create the matching built-in Recipe snapshot as described above.
 4. Push the reviewed `v<version>` tag to start the canonical Docker, Helm,
    Python, crate, and Operator publishers.
 5. Verify every publisher before treating the GitHub release as complete.

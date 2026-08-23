@@ -18,26 +18,26 @@ import { collectRuleSignalTypes, isRuleCombination } from './ruleTree'
  */
 export async function simulateSignalMatching(
   query: string,
-  topology: ParsedTopology
+  topology: ParsedTopology,
 ): Promise<TestQueryResult> {
   const matchedSignals: MatchedSignal[] = []
 
   // 1. Keyword matching (accurate simulation)
   topology.signals
-    .filter(s => s.type === 'keyword')
-    .forEach(signal => {
+    .filter((s) => s.type === 'keyword')
+    .forEach((signal) => {
       const config = signal.config as KeywordSignalConfig
       const keywords = config.keywords || []
       const queryToMatch = config.case_sensitive ? query : query.toLowerCase()
 
       let matched = false
       if (config.operator === 'AND') {
-        matched = keywords.every(kw =>
-          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase())
+        matched = keywords.every((kw) =>
+          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase()),
         )
       } else {
-        matched = keywords.some(kw =>
-          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase())
+        matched = keywords.some((kw) =>
+          queryToMatch.includes(config.case_sensitive ? kw : kw.toLowerCase()),
         )
       }
 
@@ -53,8 +53,8 @@ export async function simulateSignalMatching(
 
   // 2. Language matching (heuristic simulation)
   topology.signals
-    .filter(s => s.type === 'language')
-    .forEach(signal => {
+    .filter((s) => s.type === 'language')
+    .forEach((signal) => {
       // Simple detection: Chinese characters > 30% = Chinese
       const chineseChars = (query.match(/[\u4e00-\u9fa5]/g) || []).length
       const chineseRatio = chineseChars / Math.max(query.length, 1)
@@ -81,12 +81,12 @@ export async function simulateSignalMatching(
 
   // 3. Other signal types - mark as "needs backend verification"
   const backendOnlyTypes: SignalType[] = SIGNAL_TYPES.filter(
-    (type) => type !== 'keyword' && type !== 'language'
+    (type) => type !== 'keyword' && type !== 'language',
   )
-  backendOnlyTypes.forEach(type => {
+  backendOnlyTypes.forEach((type) => {
     topology.signals
-      .filter(s => s.type === type)
-      .forEach(signal => {
+      .filter((s) => s.type === type)
+      .forEach((signal) => {
         matchedSignals.push({
           type,
           name: signal.name,
@@ -97,6 +97,7 @@ export async function simulateSignalMatching(
         })
       })
   })
+  const needsRouterEvaluation = matchedSignals.some((signal) => signal.needsBackend)
 
   // 4. Evaluate decisions based on matched signals
   const sortedDecisions = [...topology.decisions].sort((a, b) => b.priority - a.priority)
@@ -105,20 +106,21 @@ export async function simulateSignalMatching(
   const highlightedPath: string[] = ['client']
 
   // Add global plugins to path
-  topology.globalPlugins.forEach(plugin => {
+  topology.globalPlugins.forEach((plugin) => {
     if (plugin.enabled) {
       highlightedPath.push(`global-plugin-${plugin.type}`)
     }
   })
 
-  for (const decision of sortedDecisions) {
-    const ruleMatched = evaluateRules(decision.rules, matchedSignals)
-    if (ruleMatched) {
+  if (!needsRouterEvaluation) {
+    for (const decision of sortedDecisions) {
+      const ruleMatched = evaluateRules(decision.rules, matchedSignals)
+      if (!ruleMatched) continue
       matchedDecision = decision.name
-      matchedModels = decision.modelRefs.map(r => r.model)
+      matchedModels = decision.modelRefs.map((r) => r.model)
 
       // Build highlighted path
-      collectRuleSignalTypes(decision.rules).forEach(type => {
+      collectRuleSignalTypes(decision.rules).forEach((type) => {
         highlightedPath.push(`signal-group-${type}`)
       })
       highlightedPath.push(`decision-${decision.name}`)
@@ -128,10 +130,9 @@ export async function simulateSignalMatching(
       if (decision.plugins && decision.plugins.length > 0) {
         highlightedPath.push(`plugin-chain-${decision.name}`)
       }
-      decision.modelRefs.forEach(ref => {
+      decision.modelRefs.forEach((ref) => {
         highlightedPath.push(`model-${ref.model.replace(/[^a-zA-Z0-9]/g, '-')}`)
       })
-
       break
     }
   }
@@ -143,7 +144,10 @@ export async function simulateSignalMatching(
     matchedDecision,
     matchedModels,
     highlightedPath,
-    isAccurate: false, // Frontend simulation is not 100% accurate
+    isAccurate: false,
+    warning: needsRouterEvaluation
+      ? 'Local preview covers keyword and language signals only.'
+      : 'Local preview only. No request was sent.',
   }
 }
 
@@ -155,21 +159,21 @@ function evaluateRules(rules: RuleCombination, matchedSignals: MatchedSignal[]):
     return true // No conditions = always match (default decision)
   }
 
-  const conditionResults = rules.conditions.map(cond => evaluateRuleNode(cond, matchedSignals))
+  const conditionResults = rules.conditions.map((cond) => evaluateRuleNode(cond, matchedSignals))
 
   if (rules.operator === 'AND') {
-    return conditionResults.every(r => r)
+    return conditionResults.every((r) => r)
   } else if (rules.operator === 'NOT') {
     // NOT (NOR semantics): matches only when none of the conditions match
-    return conditionResults.every(r => !r)
+    return conditionResults.every((r) => !r)
   } else {
-    return conditionResults.some(r => r)
+    return conditionResults.some((r) => r)
   }
 }
 
 function evaluateRuleNode(rule: RuleNode, matchedSignals: MatchedSignal[]): boolean {
   if (!isRuleCombination(rule)) {
-    const signal = matchedSignals.find(s => s.type === rule.type && s.name === rule.name)
+    const signal = matchedSignals.find((s) => s.type === rule.type && s.name === rule.name)
     if (signal?.needsBackend) {
       return false
     }
@@ -184,7 +188,7 @@ function evaluateRuleNode(rule: RuleNode, matchedSignals: MatchedSignal[]): bool
  * Get signal icon by type
  */
 export function getSignalIcon(type: SignalType): string {
-  return SIGNAL_ICONS[type] || '❓'
+  return SIGNAL_ICONS[type] || 'SIG'
 }
 
 /**

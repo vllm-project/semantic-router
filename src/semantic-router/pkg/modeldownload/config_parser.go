@@ -147,21 +147,19 @@ func extractProvisioningModelPaths(cfg *config.RouterConfig) []string {
 	paths := make([]string, 0)
 	seen := make(map[string]bool)
 
-	// Canonical configs mirror the default recipe into the flat routing fields.
-	// Strip the normalized recipe registry before walking shared/default state so
-	// named recipes can be added back according to request reachability.
-	sharedAndDefault := *cfg
-	sharedAndDefault.Recipes = nil
-	sharedAndDefault.Entrypoints = nil
-	if !cfg.IsRecipeReachableForRouting(config.DefaultRecipeName) {
-		sharedAndDefault.Signals = config.Signals{}
-		sharedAndDefault.Projections = config.Projections{}
-		sharedAndDefault.Decisions = nil
-	}
-	extractFromValue(reflect.ValueOf(&sharedAndDefault), &paths, seen)
+	// Walk shared process state without the root Recipe registry, then add the
+	// exact effective Recipe views reachable by Entrypoints. This prevents a
+	// bound Entrypoint from provisioning stale targets from its reusable base.
+	shared := *cfg
+	shared.Recipes = nil
+	shared.Entrypoints = nil
+	shared.Signals = config.Signals{}
+	shared.Projections = config.Projections{}
+	shared.Decisions = nil
+	extractFromValue(reflect.ValueOf(&shared), &paths, seen)
 
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
-		if recipe == nil || recipe.Name == config.DefaultRecipeName {
+		if recipe == nil {
 			continue
 		}
 		extractFromValue(reflect.ValueOf(recipe.Profile), &paths, seen)
@@ -180,7 +178,7 @@ var embeddingModelWeightFiles = []string{"model.safetensors", "tokenizer.json"}
 // its safetensors weights and tokenizer so a partial (ONNX-only) directory is detected as
 // incomplete and the full snapshot is re-downloaded.
 func addEmbeddingModelRequiredFiles(cfg *config.RouterConfig, requiredFilesByModel map[string][]string) {
-	if cfg.EmbeddingModels.UsesRemoteEmbeddingBackend() {
+	if cfg.UsesRemoteEmbeddingBackend() {
 		return
 	}
 

@@ -21,7 +21,7 @@ func requestDecisionStateKey(ctx *RequestContext) string {
 	if ctx == nil {
 		return ""
 	}
-	return config.RoutingDecisionKey(ctx.Routing.RecipeName(), ctx.VSRSelectedDecisionName)
+	return config.RoutingDecisionKey(ctx.Routing.RuntimeScope(), ctx.VSRSelectedDecisionName)
 }
 
 func routingSessionStateKey(ctx *RequestContext) string {
@@ -31,7 +31,7 @@ func routingSessionStateKey(ctx *RequestContext) string {
 	if ctx.Routing.IsPassthrough() {
 		return ""
 	}
-	return config.RoutingNamespaceKey(ctx.Routing.RecipeName(), ctx.SessionID)
+	return config.RoutingNamespaceKey(ctx.Routing.RuntimeScope(), ctx.SessionID)
 }
 
 func requestBypassesRouting(ctx *RequestContext) bool {

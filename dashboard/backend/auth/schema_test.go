@@ -7,7 +7,7 @@ import (
 func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	t.Parallel()
 
-	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead, PermSecurityManage}
+	requiredPerms := []string{PermFeedbackSubmit, PermReplayRead}
 	allSet := make(map[string]bool, len(AllPermissions))
 	for _, p := range AllPermissions {
 		allSet[p] = true
@@ -16,44 +16,6 @@ func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	for _, perm := range requiredPerms {
 		if !allSet[perm] {
 			t.Fatalf("permission %q missing from AllPermissions", perm)
-		}
-	}
-}
-
-func TestAdminRoleHasSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	adminPerms := DefaultRolePermissions[RoleAdmin]
-	found := false
-	for _, p := range adminPerms {
-		if p == PermSecurityManage {
-			found = true
-			break
-		}
-	}
-	if !found {
-		t.Fatalf("admin role should have %q permission", PermSecurityManage)
-	}
-}
-
-func TestWriteRoleDoesNotHaveSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	writePerms := DefaultRolePermissions[RoleWrite]
-	for _, p := range writePerms {
-		if p == PermSecurityManage {
-			t.Fatalf("write role should not have %q permission", PermSecurityManage)
-		}
-	}
-}
-
-func TestReadRoleDoesNotHaveSecurityManage(t *testing.T) {
-	t.Parallel()
-
-	readPerms := DefaultRolePermissions[RoleRead]
-	for _, p := range readPerms {
-		if p == PermSecurityManage {
-			t.Fatalf("read role should not have %q permission", PermSecurityManage)
 		}
 	}
 }
@@ -80,7 +42,7 @@ func containsPermission(permissions []string, target string) bool {
 	return false
 }
 
-func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
+func TestReadOnlyUsersReceiveScopedAnalysisWithoutOperatorPermissions(t *testing.T) {
 	t.Parallel()
 
 	for _, role := range SupportedRoles {
@@ -99,7 +61,12 @@ func TestWriteRolesHaveFeedbackSubmitAndAllRolesHaveReplayRead(t *testing.T) {
 			t.Fatalf("role %q feedback permission = %v", role, hasFeedback)
 		}
 		if !hasReplay {
-			t.Fatalf("role %q should have %q permission", role, PermReplayRead)
+			t.Fatalf("role %q replay permission = %v", role, hasReplay)
+		}
+	}
+	for _, permission := range []string{PermEvalRead, PermOpenClawRead, PermStatusRead} {
+		if containsPermission(DefaultRolePermissions[RoleRead], permission) {
+			t.Fatalf("read role should not have operate permission %q", permission)
 		}
 	}
 }

@@ -471,7 +471,7 @@ func (r *BenchmarkRunner) callOpenAICompatibleModel(ctx context.Context, modelNa
 	req.Header.Set("Content-Type", "application/json")
 
 	// Add API keys for various providers
-	r.addAuthHeaders(req, endpoint, modelName)
+	r.addAuthHeaders(req, endpoint)
 
 	client := &http.Client{Timeout: time.Duration(r.TimeoutSeconds) * time.Second}
 	resp, err := client.Do(req)
@@ -508,11 +508,11 @@ func (r *BenchmarkRunner) callOpenAICompatibleModel(ctx context.Context, modelNa
 	return chatResp.Choices[0].Message.Content, latencyMs, nil
 }
 
-// addAuthHeaders adds appropriate authorization headers based on endpoint
-// Uses API key from config if available, otherwise falls back to environment variables
-func (r *BenchmarkRunner) addAuthHeaders(req *http.Request, endpoint string, modelName string) {
-	// Try to get API key from endpoint config first
-	apiKey := r.getAPIKeyForEndpoint(endpoint, modelName)
+// addAuthHeaders adds benchmark-only authorization from the process
+// environment. Runtime backend credentials are resolved by the Router and are
+// never copied into ModelParams.
+func (r *BenchmarkRunner) addAuthHeaders(req *http.Request, endpoint string) {
+	apiKey := r.getAPIKeyForEndpoint(endpoint)
 
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -557,24 +557,9 @@ func (r *BenchmarkRunner) addAuthHeaders(req *http.Request, endpoint string, mod
 	}
 }
 
-// getAPIKeyForEndpoint retrieves API key from endpoint config, model config, or environment
-func (r *BenchmarkRunner) getAPIKeyForEndpoint(endpoint string, modelName string) string {
-	if r.Config != nil {
-		// Check model's access key first
-		if modelParams, ok := r.Config.ModelConfig[modelName]; ok {
-			if modelParams.AccessKey != "" {
-				return modelParams.AccessKey
-			}
-		}
-
-		// Check endpoint's API key
-		for _, ep := range r.Config.VLLMEndpoints {
-			if strings.Contains(endpoint, ep.Address) && ep.APIKey != "" {
-				return ep.APIKey
-			}
-		}
-	}
-
+// getAPIKeyForEndpoint retrieves a benchmark credential from the
+// provider-specific process environment.
+func (r *BenchmarkRunner) getAPIKeyForEndpoint(endpoint string) string {
 	// Fall back to environment variables based on endpoint type
 	if strings.Contains(endpoint, "huggingface.co") {
 		if envKey := os.Getenv("HF_API_KEY"); envKey != "" {

@@ -1,213 +1,98 @@
-version: v0.3
-
+version: v0.4
 listeners:
-  - name: http-8899
-    address: 0.0.0.0
-    port: 8899
-    timeout: 1200s
-
-global:
-  services:
-    response_api:
-      enabled: true
-      store_backend: memory
-      ttl_seconds: 86400
-      max_responses: 1000
-    router_replay:
-      enabled: true
-      store_backend: postgres
-      ttl_seconds: 2592000
-      async_writes: false
-      postgres:
-        host: postgres
-        port: 5432
-        database: vsr
-        user: router
-        password: ${POSTGRES_PASSWORD}
-        ssl_mode: disable
-        table_name: router_replay_records
-  router:
-    auto_model_names:
-      - vllm-sr/auto
-    learning:
-      enabled: true
-      adaptation:
-        enabled: true
-        candidate_set: decision
-        strategy: routing_sampling
-      protection:
-        enabled: true
-        scope: conversation
-        identity:
-          headers:
-            session: x-session-id
-            conversation: x-conversation-id
-        tuning:
-          idle_timeout_seconds: 300
-          min_turns_before_switch: 1
-          switch_margin: 0.05
-          stability_weight: 1.0
-  stores:
-    response_cache:
-      enabled: false
-      backend_type: memory
-
-providers:
-  defaults:
-    default_model: qwen/qwen3.6-rocm
-    default_reasoning_effort: medium
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: qwen/qwen3.6-rocm
-      api_format: openai
-      reasoning_family: qwen3
-      provider_model_id: qwen/qwen3.6-rocm
-      pricing:
-        currency: USD
-        prompt_per_1m: 0.00
-        cached_input_per_1m: 0.00
-        completion_per_1m: 0.00
-      backend_refs:
-        - name: vllm_primary
-          endpoint: vllm:8000
-          protocol: http
-          type: vllm
-          weight: 1
-    - name: google/gemini-2.5-flash-lite
-      api_format: openai
-      provider_model_id: google/gemini-2.5-flash-lite
-      pricing:
-        currency: USD
-        prompt_per_1m: 0.01
-        cached_input_per_1m: 0.002
-        completion_per_1m: 0.04
-      backend_refs:
-        - name: vllm_primary
-          endpoint: vllm:8000
-          protocol: http
-          type: vllm
-          weight: 1
-    - name: google/gemini-3.1-pro
-      api_format: openai
-      provider_model_id: google/gemini-3.1-pro
-      pricing:
-        currency: USD
-        prompt_per_1m: 0.48
-        cached_input_per_1m: 0.12
-        completion_per_1m: 1.92
-      backend_refs:
-        - name: vllm_primary
-          endpoint: vllm:8000
-          protocol: http
-          type: vllm
-          weight: 1
-    - name: openai/gpt5.4
-      api_format: openai
-      provider_model_id: openai/gpt5.4
-      pricing:
-        currency: USD
-        prompt_per_1m: 1.20
-        cached_input_per_1m: 0.30
-        completion_per_1m: 4.80
-      backend_refs:
-        - name: vllm_primary
-          endpoint: vllm:8000
-          protocol: http
-          type: vllm
-          weight: 1
-    - name: anthropic/claude-opus-4.6
-      api_format: openai
-      provider_model_id: anthropic/claude-opus-4.6
-      pricing:
-        currency: USD
-        prompt_per_1m: 1.80
-        cached_input_per_1m: 0.45
-        completion_per_1m: 7.20
-      backend_refs:
-        - name: vllm_primary
-          endpoint: vllm:8000
-          protocol: http
-          type: vllm
-          weight: 1
-
-routing:
-  modelCards:
-    - name: qwen/qwen3.6-rocm
-      context_window_size: 262144
-      description: Local AMD vLLM alias backed by Qwen3.6 for privacy-sensitive work, safety containment, simple traffic, and low-cost fallbacks.
-      capabilities:
-        - chat
-        - privacy_locality
-        - private_code
-        - simple_qa
-        - tool_use
-      quality_score: 0.78
-      modality: text
-      tags:
-        - deployment:self_hosted
-        - tier:simple
-        - policy:privacy_first
-    - name: google/gemini-2.5-flash-lite
-      context_window_size: 262144
-      description: Simulated low-cost domain lane for medium difficulty explanations, follow-ups, and lightweight coding.
-      capabilities:
-        - chat
-        - low_cost
-        - explanation
-        - coding
-      quality_score: 0.84
-      modality: text
-      tags:
-        - deployment:vllm_alias
-        - tier:medium
-    - name: google/gemini-3.1-pro
-      context_window_size: 262144
-      description: Simulated complex-domain lane for architecture, STEM, research synthesis, and difficult coding.
-      capabilities:
-        - chat
-        - reasoning
-        - architecture
-        - research
-        - code
-      quality_score: 0.90
-      modality: text
-      tags:
-        - deployment:vllm_alias
-        - tier:complex
-        - domain:technical
-    - name: openai/gpt5.4
-      context_window_size: 262144
-      description: Simulated frontier reasoning lane for hard non-private planning and long-horizon agent sessions.
-      capabilities:
-        - chat
-        - frontier_reasoning
-        - planning
-        - synthesis
-      quality_score: 0.95
-      modality: text
-      tags:
-        - deployment:vllm_alias
-        - tier:frontier
-    - name: anthropic/claude-opus-4.6
-      context_window_size: 262144
-      description: Simulated high-care domain lane for non-private legal, compliance, and health analysis.
-      capabilities:
-        - chat
-        - legal_analysis
-        - health_guidance
-        - high_stakes
-      quality_score: 0.96
-      modality: text
-      tags:
-        - deployment:vllm_alias
-        - tier:premium
-        - domain:high_care
-
-  signals:
-    conversation:
+- name: http-8899
+  address: 0.0.0.0
+  port: 8899
+  timeout: 1200s
+models:
+- name: qwen/qwen3.6-rocm
+  card:
+    capabilities:
+    - chat
+    - privacy_locality
+    - private_code
+    - simple_qa
+    - tool_use
+    - text
+    reasoning:
+      type: chat_template_kwargs
+      efforts:
+      - medium
+  connections:
+  - provider: vllm
+    endpoint: http://vllm:8000/v1
+    model: qwen/qwen3.6-rocm
+- name: google/gemini-2.5-flash-lite
+  card:
+    capabilities:
+    - chat
+    - low_cost
+    - explanation
+    - coding
+    - text
+  connections:
+  - provider: vllm
+    endpoint: http://vllm:8000/v1
+    model: google/gemini-2.5-flash-lite
+  pricing:
+    input_cost_per_million_tokens: '0.01'
+    output_cost_per_million_tokens: '0.04'
+    cache_read_cost_per_million_tokens: '0.002'
+- name: google/gemini-3.1-pro
+  card:
+    capabilities:
+    - chat
+    - reasoning
+    - architecture
+    - research
+    - code
+    - text
+  connections:
+  - provider: vllm
+    endpoint: http://vllm:8000/v1
+    model: google/gemini-3.1-pro
+  pricing:
+    input_cost_per_million_tokens: '0.48'
+    output_cost_per_million_tokens: '1.92'
+    cache_read_cost_per_million_tokens: '0.12'
+- name: openai/gpt5.4
+  card:
+    capabilities:
+    - chat
+    - frontier_reasoning
+    - planning
+    - synthesis
+    - text
+  connections:
+  - provider: vllm
+    endpoint: http://vllm:8000/v1
+    model: openai/gpt5.4
+  pricing:
+    input_cost_per_million_tokens: '1.2'
+    output_cost_per_million_tokens: '4.8'
+    cache_read_cost_per_million_tokens: '0.3'
+- name: anthropic/claude-opus-4.6
+  card:
+    capabilities:
+    - chat
+    - legal_analysis
+    - health_guidance
+    - high_stakes
+    - text
+  connections:
+  - provider: vllm
+    endpoint: http://vllm:8000/v1
+    model: anthropic/claude-opus-4.6
+  pricing:
+    input_cost_per_million_tokens: '1.8'
+    output_cost_per_million_tokens: '7.2'
+    cache_read_cost_per_million_tokens: '0.45'
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      conversation:
       - name: multi_turn_user
         feature:
           type: count
@@ -250,367 +135,379 @@ routing:
             role: non_user
         predicate:
           gt: 4
-
-    keywords:
+      keywords:
       - name: prompt_injection_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bignore (all )?(the )?previous instructions\b
-          - \bignore the system instructions\b
-          - \bdisregard the system prompt\b
-          - \bbypass (every )?(safety|security) (rule|restriction)s?\b
-          - \boverride (the )?policy\b
-          - \breveal (the )?(hidden instructions|system prompt)\b
-          - \bforget (all )?(of )?your rules\b
-          - 忽略(所有)?之前的指令
-          - 绕过(所有)?安全(限制|规则)
-          - (泄露|透露)系统提示词
+        - \bignore (all )?(the )?previous instructions\b
+        - \bignore the system instructions\b
+        - \bdisregard the system prompt\b
+        - \bbypass (every )?(safety|security) (rule|restriction)s?\b
+        - \boverride (the )?policy\b
+        - \breveal (the )?(hidden instructions|system prompt)\b
+        - \bforget (all )?(of )?your rules\b
+        - "\u5FFD\u7565(\u6240\u6709)?\u4E4B\u524D\u7684\u6307\u4EE4"
+        - "\u7ED5\u8FC7(\u6240\u6709)?\u5B89\u5168(\u9650\u5236|\u89C4\u5219)"
+        - "(\u6CC4\u9732|\u900F\u9732)\u7CFB\u7EDF\u63D0\u793A\u8BCD"
       - name: secret_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bapi[_ -]?key\b
-          - \bsecret[_ -]?key\b
-          - \baccess[_ -]?token\b
-          - \boauth[_ -]?token\b
-          - \bid[_ -]?token\b
-          - \bprivate[_ -]?key\b
-          - \bssh[_ -]?key\b
-          - \bcredential(s)?\b
-          - \bpassword\b
-          - \bconnection[_ -]?string\b
-          - \bwebhook[_ -]?secret\b
-          - \bsigning[_ -]?secret\b
-          - \bbearer\s+[A-Za-z0-9._~+/-]+=*\b
-          - \bsk-[A-Za-z0-9_-]{8,}\b
-          - 密钥
-          - 凭据
-          - 访问令牌
-          - 私钥
-          - 密码
+        - \bapi[_ -]?key\b
+        - \bsecret[_ -]?key\b
+        - \baccess[_ -]?token\b
+        - \boauth[_ -]?token\b
+        - \bid[_ -]?token\b
+        - \bprivate[_ -]?key\b
+        - \bssh[_ -]?key\b
+        - \bcredential(s)?\b
+        - \bpassword\b
+        - \bconnection[_ -]?string\b
+        - \bwebhook[_ -]?secret\b
+        - \bsigning[_ -]?secret\b
+        - \bbearer\s+[A-Za-z0-9._~+/-]+=*\b
+        - \bsk-[A-Za-z0-9_-]{8,}\b
+        - "\u5BC6\u94A5"
+        - "\u51ED\u636E"
+        - "\u8BBF\u95EE\u4EE4\u724C"
+        - "\u79C1\u94A5"
+        - "\u5BC6\u7801"
       - name: personal_data_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \b\d{3}-\d{2}-\d{4}\b
-          - \bssn\b
-          - \bsocial security( number)?\b
-          - \bcredit card\b
-          - \bcard number\b
-          - \bbank account\b
-          - \biban\b
-          - \bpassport number\b
-          - \bdriver'?s? license\b
-          - \bnational id\b
-          - \bgovernment id\b
-          - \bmedical record\b
-          - \bpatient record\b
-          - \bdate of birth\b
-          - \bdob\b
-          - \bhome address\b
-          - \bphone number\b
-          - \bemail address\b
-          - \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
-          - customer data
-          - employee data
-          - payroll record
-          - hr spreadsheet
-          - crm export
-          - 客户数据
-          - 员工数据
-          - 身份证号
-          - 手机号
-          - 护照号
-          - 银行卡号
-          - 家庭住址
+        - \b\d{3}-\d{2}-\d{4}\b
+        - \bssn\b
+        - \bsocial security( number)?\b
+        - \bcredit card\b
+        - \bcard number\b
+        - \bbank account\b
+        - \biban\b
+        - \bpassport number\b
+        - \bdriver'?s? license\b
+        - \bnational id\b
+        - \bgovernment id\b
+        - \bmedical record\b
+        - \bpatient record\b
+        - \bdate of birth\b
+        - \bdob\b
+        - \bhome address\b
+        - \bphone number\b
+        - \bemail address\b
+        - \b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b
+        - customer data
+        - employee data
+        - payroll record
+        - hr spreadsheet
+        - crm export
+        - "\u5BA2\u6237\u6570\u636E"
+        - "\u5458\u5DE5\u6570\u636E"
+        - "\u8EAB\u4EFD\u8BC1\u53F7"
+        - "\u624B\u673A\u53F7"
+        - "\u62A4\u7167\u53F7"
+        - "\u94F6\u884C\u5361\u53F7"
+        - "\u5BB6\u5EAD\u4F4F\u5740"
       - name: private_code_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bprivate repo(sitory)?\b
-          - \binternal repo(sitory)?\b
-          - '\bproprietary(?: internal)? (?:source )?code\b'
-          - \bcompany codebase\b
-          - \bour codebase\b
-          - \binternal sdk\b
-          - \bprivate package\b
-          - \bconfidential code\b
-          - \binternal monorepo\b
-          - \bproprietary source\b
-          - 私有仓库
-          - 内部仓库
-          - 公司代码
-          - 私有代码
-          - 保密代码
+        - \bprivate repo(sitory)?\b
+        - \binternal repo(sitory)?\b
+        - '\bproprietary(?: internal)? (?:source )?code\b'
+        - \bcompany codebase\b
+        - \bour codebase\b
+        - \binternal sdk\b
+        - \bprivate package\b
+        - \bconfidential code\b
+        - \binternal monorepo\b
+        - \bproprietary source\b
+        - "\u79C1\u6709\u4ED3\u5E93"
+        - "\u5185\u90E8\u4ED3\u5E93"
+        - "\u516C\u53F8\u4EE3\u7801"
+        - "\u79C1\u6709\u4EE3\u7801"
+        - "\u4FDD\u5BC6\u4EE3\u7801"
       - name: internal_doc_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \binternal document\b
-          - \binternal doc\b
-          - \binternal design doc(ument)?\b
-          - \binternal ADR\b
-          - \binternal RFC\b
-          - \binternal runbook\b
-          - \binternal incident review\b
-          - \binternal postmortem\b
-          - \bconfidential memo\b
-          - \bconfidential board memo\b
-          - \bconfidential board deck\b
-          - \binternal board deck\b
-          - \binternal-only document\b
-          - \bemployee handbook\b
-          - 内部文档
-          - 内部设计文档
-          - 内部备忘录
-          - 保密备忘录
-          - 内部运行手册
-          - 内部事故复盘
-          - 仅内部流转
+        - \binternal document\b
+        - \binternal doc\b
+        - \binternal design doc(ument)?\b
+        - \binternal ADR\b
+        - \binternal RFC\b
+        - \binternal runbook\b
+        - \binternal incident review\b
+        - \binternal postmortem\b
+        - \bconfidential memo\b
+        - \bconfidential board memo\b
+        - \bconfidential board deck\b
+        - \binternal board deck\b
+        - \binternal-only document\b
+        - \bemployee handbook\b
+        - "\u5185\u90E8\u6587\u6863"
+        - "\u5185\u90E8\u8BBE\u8BA1\u6587\u6863"
+        - "\u5185\u90E8\u5907\u5FD8\u5F55"
+        - "\u4FDD\u5BC6\u5907\u5FD8\u5F55"
+        - "\u5185\u90E8\u8FD0\u884C\u624B\u518C"
+        - "\u5185\u90E8\u4E8B\u6545\u590D\u76D8"
+        - "\u4EC5\u5185\u90E8\u6D41\u8F6C"
       - name: local_only_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \blocal processing only\b
-          - \blocal model only\b
-          - \blocal only\b
-          - \blocally only\b
-          - '\bon-prem(?:ises)? only\b'
-          - \bkeep (this|processing) local\b
-          - \bdo not (send (this )?to the cloud|upload this)\b
-          - \bconfidential handling\b
-          - \binternal use only\b
-          - \bhandle this locally\b
-          - \buse (the )?local model\b
-          - \brun locally\b
-          - \bstay on the local model\b
-          - \bprivate infrastructure\b
-          - 仅本地处理
-          - 不要发送到云端
+        - \blocal processing only\b
+        - \blocal model only\b
+        - \blocal only\b
+        - \blocally only\b
+        - \bon-prem(?:ises)? only\b
+        - \bkeep (this|processing) local\b
+        - \bdo not (send (this )?to the cloud|upload this)\b
+        - \bconfidential handling\b
+        - \binternal use only\b
+        - \bhandle this locally\b
+        - \buse (the )?local model\b
+        - \brun locally\b
+        - \bstay on the local model\b
+        - \bprivate infrastructure\b
+        - "\u4EC5\u672C\u5730\u5904\u7406"
+        - "\u4E0D\u8981\u53D1\u9001\u5230\u4E91\u7AEF"
       - name: simple_request_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bbriefly\b
-          - \bquick answer\b
-          - \bone sentence\b
-          - \bsimple explanation\b
-          - \bsummarize briefly\b
-          - \bwhat is\b
-          - \bwho is\b
-          - \bdefine\b
-          - 简单解释
-          - 简短回答
+        - \bbriefly\b
+        - \bquick answer\b
+        - \bone sentence\b
+        - \bsimple explanation\b
+        - \bsummarize briefly\b
+        - \bwhat is\b
+        - \bwho is\b
+        - \bdefine\b
+        - "\u7B80\u5355\u89E3\u91CA"
+        - "\u7B80\u77ED\u56DE\u7B54"
       - name: agentic_request_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bagent(ic)?\b
-          - \btool (loop|call)\b
-          - \buse a tool\b
-          - \brun a command\b
-          - \b(read-only )?shell command\b
-          - \bplan and execute\b
-          - \brun until fixed\b
-          - \biterate until it passes\b
-          - \bcheckpoints?\b
-          - \brollback (plan|criteria)\b
-          - \bvalidation loop\b
-          - \bmulti-step workflow\b
-          - 分阶段实施
-          - 回滚步骤
+        - \bagent(ic)?\b
+        - \btool (loop|call)\b
+        - \buse a tool\b
+        - \brun a command\b
+        - \b(read-only )?shell command\b
+        - \bplan and execute\b
+        - \brun until fixed\b
+        - \biterate until it passes\b
+        - \bcheckpoints?\b
+        - \brollback (plan|criteria)\b
+        - \bvalidation loop\b
+        - \bmulti-step workflow\b
+        - "\u5206\u9636\u6BB5\u5B9E\u65BD"
+        - "\u56DE\u6EDA\u6B65\u9AA4"
       - name: code_request_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bimplement\b
-          - \brefactor\b
-          - \bdebug\b
-          - \bstack trace\b
-          - \bfailing tests?\b
-          - \bpull request\b
-          - \brepositor(y|ies)\b
-          - \bcodebase\b
-          - \blint\b
-          - \bkubernetes controller\b
-          - \bdistributed system\b
-          - \brate limiter\b
+        - \bimplement\b
+        - \brefactor\b
+        - \bdebug\b
+        - \bstack trace\b
+        - \bfailing tests?\b
+        - \bpull request\b
+        - \brepositor(y|ies)\b
+        - \bcodebase\b
+        - \blint\b
+        - \bkubernetes controller\b
+        - \bdistributed system\b
+        - \brate limiter\b
       - name: legal_risk_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bcontract risk\b
-          - \bcompliance\b
-          - \bindemnity\b
-          - \blimitation[- ]of[- ]liability\b
-          - \bprivacy policy\b
-          - \bregulatory\b
-          - \blegal memo\b
-          - \bdata transfer agreement\b
+        - \bcontract risk\b
+        - \bcompliance\b
+        - \bindemnity\b
+        - \blimitation[- ]of[- ]liability\b
+        - \bprivacy policy\b
+        - \bregulatory\b
+        - \blegal memo\b
+        - \bdata transfer agreement\b
       - name: health_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bsymptoms?\b
-          - \bdiagnos(is|e)\b
-          - \bmedical\b
-          - \bmedication\b
-          - \btreatment\b
-          - \bclinical\b
-          - \bdoctor\b
-          - \bblood pressure\b
+        - \bsymptoms?\b
+        - \bdiagnos(is|e)\b
+        - \bmedical\b
+        - \bmedication\b
+        - \btreatment\b
+        - \bclinical\b
+        - \bdoctor\b
+        - \bblood pressure\b
       - name: research_request_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bcite sources\b
-          - \bwith evidence\b
-          - \bcompare the evidence\b
-          - \bliterature review\b
-          - \bcompare studies\b
-          - \bsource-backed\b
-          - \breferences\b
-          - \bsurvey the literature\b
-          - \bresearch (approaches|methods?|synthesis)\b
+        - \bcite sources\b
+        - \bwith evidence\b
+        - \bcompare the evidence\b
+        - \bliterature review\b
+        - \bcompare studies\b
+        - \bsource-backed\b
+        - \breferences\b
+        - \bsurvey the literature\b
+        - \bresearch (approaches|methods?|synthesis)\b
       - name: reasoning_request_markers
         operator: OR
         method: regex
         case_sensitive: false
         keywords:
-          - \bcompare (the )?tradeoffs\b
-          - \broot cause\b
-          - \barchitecture\b
-          - \bdesign review\b
-          - \breason (carefully|step by step)\b
-          - \bevaluate options\b
-          - \bsynthesize\b
-          - \bfirst principles\b
-
-    embeddings:
+        - \bcompare (the )?tradeoffs\b
+        - \broot cause\b
+        - \barchitecture\b
+        - \bdesign review\b
+        - \breason (carefully|step by step)\b
+        - \bevaluate options\b
+        - \bsynthesize\b
+        - \bfirst principles\b
+      embeddings:
       - name: fast_qa
         aggregation_method: max
         threshold: 0.72
         candidates:
-          - What is the capital of France?
-          - Briefly explain what an API is.
-          - What does CPU stand for?
-          - Give me a quick summary of this paragraph.
-          - 用一句话解释这个概念。
+        - What is the capital of France?
+        - Briefly explain what an API is.
+        - What does CPU stand for?
+        - Give me a quick summary of this paragraph.
+        - "\u7528\u4E00\u53E5\u8BDD\u89E3\u91CA\u8FD9\u4E2A\u6982\u5FF5\u3002"
       - name: coding_workflows
         aggregation_method: max
         threshold: 0.75
         candidates:
-          - Debug this Python stack trace and explain the likely bug.
-          - Refactor this TypeScript module while preserving behavior.
-          - Implement the feature and update the tests.
-          - Fix the CI failure and rerun the relevant gate.
+        - Debug this Python stack trace and explain the likely bug.
+        - Refactor this TypeScript module while preserving behavior.
+        - Implement the feature and update the tests.
+        - Fix the CI failure and rerun the relevant gate.
       - name: architecture_design
         aggregation_method: max
         threshold: 0.78
         candidates:
-          - Design a distributed rate limiter and explain failure modes.
-          - Plan a migration from a monolith to event-driven microservices.
-          - Propose a consistency strategy for a global payments platform.
+        - Design a distributed rate limiter and explain failure modes.
+        - Plan a migration from a monolith to event-driven microservices.
+        - Propose a consistency strategy for a global payments platform.
       - name: agentic_workflows
         aggregation_method: max
         threshold: 0.76
         candidates:
-          - Create a migration plan with checkpoints, rollback, and validation.
-          - Troubleshoot the production issue and iterate until it is fixed.
-          - Break this project into tasks, dependencies, and acceptance checks.
-          - Design an execution workflow with milestones, owners, and guardrails.
-          - 给我一个分阶段实施方案，并包含校验与回滚步骤。
+        - Create a migration plan with checkpoints, rollback, and validation.
+        - Troubleshoot the production issue and iterate until it is fixed.
+        - Break this project into tasks, dependencies, and acceptance checks.
+        - Design an execution workflow with milestones, owners, and guardrails.
+        - "\u7ED9\u6211\u4E00\u4E2A\u5206\u9636\u6BB5\u5B9E\u65BD\u65B9\u6848\uFF0C\
+          \u5E76\u5305\u542B\u6821\u9A8C\u4E0E\u56DE\u6EDA\u6B65\u9AA4\u3002"
       - name: legal_analysis
         aggregation_method: max
         threshold: 0.78
         candidates:
-          - Analyze indemnity, limitation of liability, and governing-law risks in this contract.
-          - Draft a legal-risk memo for a cross-border data transfer policy.
-          - Compare regulatory exposure under two compliance strategies.
+        - Analyze indemnity, limitation of liability, and governing-law risks in this
+          contract.
+        - Draft a legal-risk memo for a cross-border data transfer policy.
+        - Compare regulatory exposure under two compliance strategies.
       - name: health_guidance
         aggregation_method: max
         threshold: 0.77
         candidates:
-          - Explain common causes of chest pain and when someone should seek urgent care.
-          - Compare evidence-backed treatment options for type 2 diabetes management.
-          - Summarize safe, clinically grounded steps for lowering high blood pressure.
+        - Explain common causes of chest pain and when someone should seek urgent
+          care.
+        - Compare evidence-backed treatment options for type 2 diabetes management.
+        - Summarize safe, clinically grounded steps for lowering high blood pressure.
       - name: research_synthesis
         aggregation_method: max
         threshold: 0.77
         candidates:
-          - Compare several studies, cite the evidence, and explain the trade-offs.
-          - Write a source-backed memo that synthesizes multiple references.
-          - Survey the literature and recommend a position with supporting evidence.
+        - Compare several studies, cite the evidence, and explain the trade-offs.
+        - Write a source-backed memo that synthesizes multiple references.
+        - Survey the literature and recommend a position with supporting evidence.
       - name: business_analysis
         aggregation_method: max
         threshold: 0.75
         candidates:
-          - Compare two pricing strategies for a B2B SaaS product.
-          - Analyze CAC, LTV, and retention trade-offs for a subscription business.
-          - Draft a market-entry strategy for a new AI tooling startup.
+        - Compare two pricing strategies for a B2B SaaS product.
+        - Analyze CAC, LTV, and retention trade-offs for a subscription business.
+        - Draft a market-entry strategy for a new AI tooling startup.
       - name: private_code_request
         aggregation_method: max
         threshold: 0.79
         candidates:
-          - Review source code from a private repository and suggest a fix.
-          - Debug proprietary backend code from our internal monorepo.
-          - Refactor a confidential microservice from our company codebase.
-          - Analyze an internal SDK source file and explain the risks.
-          - 帮我分析公司私有仓库里的源代码。
+        - Review source code from a private repository and suggest a fix.
+        - Debug proprietary backend code from our internal monorepo.
+        - Refactor a confidential microservice from our company codebase.
+        - Analyze an internal SDK source file and explain the risks.
+        - "\u5E2E\u6211\u5206\u6790\u516C\u53F8\u79C1\u6709\u4ED3\u5E93\u91CC\u7684\
+          \u6E90\u4EE3\u7801\u3002"
       - name: pii_request
         aggregation_method: max
         threshold: 0.82
         candidates:
-          - Review an HR spreadsheet containing employee phone numbers, home addresses, and government identifiers.
-          - Analyze a CRM export with names, phone numbers, street addresses, and account numbers.
-          - Process payroll records that include passport numbers, bank accounts, and home addresses.
-          - Summarize a file containing employee personal identifiers and contact details.
-          - 帮我处理包含手机号、家庭住址和身份证号的员工信息。
+        - Review an HR spreadsheet containing employee phone numbers, home addresses,
+          and government identifiers.
+        - Analyze a CRM export with names, phone numbers, street addresses, and account
+          numbers.
+        - Process payroll records that include passport numbers, bank accounts, and
+          home addresses.
+        - Summarize a file containing employee personal identifiers and contact details.
+        - "\u5E2E\u6211\u5904\u7406\u5305\u542B\u624B\u673A\u53F7\u3001\u5BB6\u5EAD\
+          \u4F4F\u5740\u548C\u8EAB\u4EFD\u8BC1\u53F7\u7684\u5458\u5DE5\u4FE1\u606F\
+          \u3002"
       - name: internal_document_request
         aggregation_method: max
         threshold: 0.86
         candidates:
-          - Summarize this internal design document and highlight the risks.
-          - Extract action items from a confidential board memo.
-          - Analyze a private incident postmortem for follow-up actions.
-          - Summarize this internal runbook and identify owners.
-          - 帮我总结这份内部设计文档并提炼风险。
-
-    context:
+        - Summarize this internal design document and highlight the risks.
+        - Extract action items from a confidential board memo.
+        - Analyze a private incident postmortem for follow-up actions.
+        - Summarize this internal runbook and identify owners.
+        - "\u5E2E\u6211\u603B\u7ED3\u8FD9\u4EFD\u5185\u90E8\u8BBE\u8BA1\u6587\u6863\
+          \u5E76\u63D0\u70BC\u98CE\u9669\u3002"
+      context:
       - name: short_context
-        min_tokens: "0"
-        max_tokens: "999"
+        min_tokens: '0'
+        max_tokens: '999'
       - name: medium_context
         min_tokens: 1K
-        max_tokens: "7999"
+        max_tokens: '7999'
       - name: long_context
         min_tokens: 8K
         max_tokens: 256K
-
-    structure:
+      structure:
       - name: ordered_workflow
         feature:
           type: sequence
           source:
             type: sequence
             sequences:
-              - [first, then]
-              - [first, next, finally]
-              - [plan, execute, verify]
-              - [先, 再]
+            - - first
+              - then
+            - - first
+              - next
+              - finally
+            - - plan
+              - execute
+              - verify
+            - - "\u5148"
+              - "\u518D"
       - name: numbered_steps
         feature:
           type: exists
@@ -623,76 +520,73 @@ routing:
           source:
             type: keyword_set
             keywords:
-              - under
-              - at most
-              - at least
-              - within
-              - no more than
-              - must
-              - should
-              - 不超过
-              - 至少
+            - under
+            - at most
+            - at least
+            - within
+            - no more than
+            - must
+            - should
+            - "\u4E0D\u8D85\u8FC7"
+            - "\u81F3\u5C11"
         predicate:
           gt: 0.08
-
-    complexity:
+      complexity:
       - name: general_reasoning
         threshold: 0.14
         easy:
           candidates:
-            - brief definition
-            - quick summary
-            - simple explanation
-            - short direct answer
+          - brief definition
+          - quick summary
+          - simple explanation
+          - short direct answer
         hard:
           candidates:
-            - compare several approaches and justify the trade-offs
-            - synthesize constraints into a plan
-            - root-cause analysis for a complex failure
-            - derive the answer from first principles
+          - compare several approaches and justify the trade-offs
+          - synthesize constraints into a plan
+          - root-cause analysis for a complex failure
+          - derive the answer from first principles
       - name: code_task
         threshold: 0.12
         easy:
           candidates:
-            - explain what this function does
-            - fix a small bug in this code snippet
-            - write a helper function
+          - explain what this function does
+          - fix a small bug in this code snippet
+          - write a helper function
         hard:
           candidates:
-            - design a distributed system with failure handling
-            - debug a race condition in production
-            - refactor a large service boundary safely
+          - design a distributed system with failure handling
+          - debug a race condition in production
+          - refactor a large service boundary safely
       - name: agentic_delivery
         threshold: 0.12
         easy:
           candidates:
-            - give me a short checklist
-            - suggest the next step only
-            - write a small implementation plan
+          - give me a short checklist
+          - suggest the next step only
+          - write a small implementation plan
         hard:
           candidates:
-            - create a migration plan with checkpoints, rollback, and validation
-            - troubleshoot this production issue until the root cause is fixed
-            - design an execution workflow with milestones, owners, and guardrails
-            - automate the process and include verification after each phase
+          - create a migration plan with checkpoints, rollback, and validation
+          - troubleshoot this production issue until the root cause is fixed
+          - design an execution workflow with milestones, owners, and guardrails
+          - automate the process and include verification after each phase
       - name: evidence_synthesis
         threshold: 0.12
         easy:
           candidates:
-            - give a quick overview of the topic
-            - summarize one article briefly
-            - explain the term in simple language
+          - give a quick overview of the topic
+          - summarize one article briefly
+          - explain the term in simple language
         hard:
           candidates:
-            - compare several sources and recommend the strongest evidence-backed position
-            - write a source-backed memo that synthesizes multiple references
-            - survey the literature and explain conflicting evidence with citations
-
-    pii:
+          - compare several sources and recommend the strongest evidence-backed position
+          - write a source-backed memo that synthesizes multiple references
+          - survey the literature and explain conflicting evidence with citations
+      pii:
       - name: pii_strict
         threshold: 0.85
-
-    domains:
+      domains:
       - name: computer science
         description: Programming, software systems, debugging, APIs, and infrastructure.
       - name: law
@@ -707,604 +601,564 @@ routing:
         description: Business, product, operations, and management topics.
       - name: other
         description: General knowledge and miscellaneous topics.
-
-  projections:
-    scores:
+    projections:
+      scores:
       - name: security_risk_score
         method: weighted_sum
         inputs:
-          - type: keyword
-            name: prompt_injection_markers
-            value_source: confidence
-            weight: 0.60
-          - type: keyword
-            name: local_only_markers
-            value_source: confidence
-            weight: 0.20
+        - type: keyword
+          name: prompt_injection_markers
+          value_source: confidence
+          weight: 0.6
+        - type: keyword
+          name: local_only_markers
+          value_source: confidence
+          weight: 0.2
       - name: privacy_risk_score
         method: weighted_sum
         inputs:
-          - type: pii
-            name: pii_strict
-            weight: 0.92
-          - type: keyword
-            name: local_only_markers
-            value_source: confidence
-            weight: 0.12
-          - type: keyword
-            name: private_code_markers
-            value_source: confidence
-            weight: 0.50
-          - type: keyword
-            name: internal_doc_markers
-            value_source: confidence
-            weight: 0.46
-          - type: keyword
-            name: secret_markers
-            value_source: confidence
-            weight: 0.72
-          - type: keyword
-            name: personal_data_markers
-            value_source: confidence
-            weight: 0.72
-          - type: embedding
-            name: private_code_request
-            value_source: confidence
-            weight: 0.22
-          - type: embedding
-            name: pii_request
-            value_source: confidence
-            weight: 0.24
-          - type: embedding
-            name: internal_document_request
-            value_source: confidence
-            weight: 0.22
-          - type: context
-            name: long_context
-            weight: 0.04
+        - type: pii
+          name: pii_strict
+          weight: 0.92
+        - type: keyword
+          name: local_only_markers
+          value_source: confidence
+          weight: 0.12
+        - type: keyword
+          name: private_code_markers
+          value_source: confidence
+          weight: 0.5
+        - type: keyword
+          name: internal_doc_markers
+          value_source: confidence
+          weight: 0.46
+        - type: keyword
+          name: secret_markers
+          value_source: confidence
+          weight: 0.72
+        - type: keyword
+          name: personal_data_markers
+          value_source: confidence
+          weight: 0.72
+        - type: embedding
+          name: private_code_request
+          value_source: confidence
+          weight: 0.22
+        - type: embedding
+          name: pii_request
+          value_source: confidence
+          weight: 0.24
+        - type: embedding
+          name: internal_document_request
+          value_source: confidence
+          weight: 0.22
+        - type: context
+          name: long_context
+          weight: 0.04
       - name: difficulty_score
         method: weighted_sum
         inputs:
-          - type: keyword
-            name: simple_request_markers
-            value_source: confidence
-            weight: -0.24
-          - type: embedding
-            name: fast_qa
-            value_source: confidence
-            weight: -0.22
-          - type: context
-            name: short_context
-            weight: -0.10
-          - type: context
-            name: medium_context
-            weight: 0.06
-          - type: context
-            name: long_context
-            weight: 0.18
-          - type: keyword
-            name: reasoning_request_markers
-            value_source: confidence
-            weight: 0.18
-          - type: keyword
-            name: code_request_markers
-            value_source: confidence
-            weight: 0.10
-          - type: keyword
-            name: research_request_markers
-            value_source: confidence
-            weight: 0.14
-          - type: keyword
-            name: agentic_request_markers
-            value_source: confidence
-            weight: 0.16
-          - type: embedding
-            name: coding_workflows
-            value_source: confidence
-            weight: 0.12
-          - type: embedding
-            name: architecture_design
-            value_source: confidence
-            weight: 0.18
-          - type: embedding
-            name: agentic_workflows
-            value_source: confidence
-            weight: 0.20
-          - type: embedding
-            name: research_synthesis
-            value_source: confidence
-            weight: 0.16
-          - type: structure
-            name: ordered_workflow
-            weight: 0.10
-          - type: structure
-            name: numbered_steps
-            weight: 0.06
-          - type: structure
-            name: constraint_dense
-            weight: 0.05
-          - type: complexity
-            name: general_reasoning:medium
-            weight: 0.08
-          - type: complexity
-            name: general_reasoning:hard
-            weight: 0.20
-          - type: complexity
-            name: code_task:hard
-            weight: 0.16
-          - type: complexity
-            name: agentic_delivery:hard
-            weight: 0.22
-          - type: complexity
-            name: evidence_synthesis:hard
-            weight: 0.18
+        - type: keyword
+          name: simple_request_markers
+          value_source: confidence
+          weight: -0.24
+        - type: embedding
+          name: fast_qa
+          value_source: confidence
+          weight: -0.22
+        - type: context
+          name: short_context
+          weight: -0.1
+        - type: context
+          name: medium_context
+          weight: 0.06
+        - type: context
+          name: long_context
+          weight: 0.18
+        - type: keyword
+          name: reasoning_request_markers
+          value_source: confidence
+          weight: 0.18
+        - type: keyword
+          name: code_request_markers
+          value_source: confidence
+          weight: 0.1
+        - type: keyword
+          name: research_request_markers
+          value_source: confidence
+          weight: 0.14
+        - type: keyword
+          name: agentic_request_markers
+          value_source: confidence
+          weight: 0.16
+        - type: embedding
+          name: coding_workflows
+          value_source: confidence
+          weight: 0.12
+        - type: embedding
+          name: architecture_design
+          value_source: confidence
+          weight: 0.18
+        - type: embedding
+          name: agentic_workflows
+          value_source: confidence
+          weight: 0.2
+        - type: embedding
+          name: research_synthesis
+          value_source: confidence
+          weight: 0.16
+        - type: structure
+          name: ordered_workflow
+          weight: 0.1
+        - type: structure
+          name: numbered_steps
+          weight: 0.06
+        - type: structure
+          name: constraint_dense
+          weight: 0.05
+        - type: complexity
+          name: general_reasoning:medium
+          weight: 0.08
+        - type: complexity
+          name: general_reasoning:hard
+          weight: 0.2
+        - type: complexity
+          name: code_task:hard
+          weight: 0.16
+        - type: complexity
+          name: agentic_delivery:hard
+          weight: 0.22
+        - type: complexity
+          name: evidence_synthesis:hard
+          weight: 0.18
       - name: agentic_pressure
         method: weighted_sum
         inputs:
-          - type: conversation
-            name: current_tool_loop
-            weight: 0.34
-          - type: conversation
-            name: active_tool_use
-            weight: 0.04
-          - type: conversation
-            name: completed_tool_cycle
-            weight: 0.04
-          - type: conversation
-            name: has_tools
-            weight: 0.06
-          - type: conversation
-            name: multi_turn_user
-            weight: 0.04
-          - type: conversation
-            name: heavy_non_user
-            weight: 0.04
-          - type: keyword
-            name: agentic_request_markers
-            value_source: confidence
-            weight: 0.18
-          - type: embedding
-            name: agentic_workflows
-            value_source: confidence
-            weight: 0.06
-          - type: structure
-            name: ordered_workflow
-            weight: 0.10
-          - type: complexity
-            name: agentic_delivery:hard
-            weight: 0.18
-    mappings:
+        - type: conversation
+          name: current_tool_loop
+          weight: 0.34
+        - type: conversation
+          name: active_tool_use
+          weight: 0.04
+        - type: conversation
+          name: completed_tool_cycle
+          weight: 0.04
+        - type: conversation
+          name: has_tools
+          weight: 0.06
+        - type: conversation
+          name: multi_turn_user
+          weight: 0.04
+        - type: conversation
+          name: heavy_non_user
+          weight: 0.04
+        - type: keyword
+          name: agentic_request_markers
+          value_source: confidence
+          weight: 0.18
+        - type: embedding
+          name: agentic_workflows
+          value_source: confidence
+          weight: 0.06
+        - type: structure
+          name: ordered_workflow
+          weight: 0.1
+        - type: complexity
+          name: agentic_delivery:hard
+          weight: 0.18
+      mappings:
       - name: security_policy_band
         source: security_risk_score
         method: threshold_bands
         outputs:
-          - name: policy_security_standard
-            lt: 0.30
-          - name: policy_security_local_only
-            gte: 0.30
+        - name: policy_security_standard
+          lt: 0.3
+        - name: policy_security_local_only
+          gte: 0.3
       - name: privacy_policy_band
         source: privacy_risk_score
         method: threshold_bands
         outputs:
-          - name: policy_privacy_cloud_allowed
-            lt: 0.35
-          - name: policy_privacy_local_only
-            gte: 0.35
+        - name: policy_privacy_cloud_allowed
+          lt: 0.35
+        - name: policy_privacy_local_only
+          gte: 0.35
       - name: difficulty_band
         source: difficulty_score
         method: threshold_bands
         outputs:
-          - name: balance_simple
-            lt: 0.20
-          - name: balance_medium
-            gte: 0.20
-            lt: 0.45
-          - name: balance_complex
-            gte: 0.45
-            lt: 0.70
-          - name: balance_reasoning
-            gte: 0.70
+        - name: balance_simple
+          lt: 0.2
+        - name: balance_medium
+          gte: 0.2
+          lt: 0.45
+        - name: balance_complex
+          gte: 0.45
+          lt: 0.7
+        - name: balance_reasoning
+          gte: 0.7
       - name: agentic_band
         source: agentic_pressure
         method: threshold_bands
         outputs:
-          - name: non_agentic
-            lt: 0.30
-          - name: agentic_workflow
-            gte: 0.30
-
-  decisions:
+        - name: non_agentic
+          lt: 0.3
+        - name: agentic_workflow
+          gte: 0.3
+    decisions:
     - name: local_security_containment
-      description: Keep prompt-injection or jailbreak-like prompts on the local AMD model.
+      description: Keep prompt-injection or jailbreak-like prompts on the local AMD
+        model.
       priority: 340
       tier: 1
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_security_local_only
-      modelRefs:
-        - model: qwen/qwen3.6-rocm
-          use_reasoning: false
+        - type: projection
+          name: policy_security_local_only
       adaptations:
         mode: bypass
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 2048
-            max_tool_trace_steps: 100
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 2048
+          max_tool_trace_steps: 100
     - name: local_privacy_policy
-      description: Route private code, internal documents, credentials, and PII-like requests to the local AMD model.
+      description: Route private code, internal documents, credentials, and PII-like
+        requests to the local AMD model.
       priority: 320
       tier: 1
       rules:
         operator: AND
         conditions:
+        - type: projection
+          name: policy_privacy_local_only
+        - operator: NOT
+          conditions:
           - type: projection
-            name: policy_privacy_local_only
-          - operator: NOT
-            conditions:
-              - type: projection
-                name: policy_security_local_only
-      modelRefs:
-        - model: qwen/qwen3.6-rocm
-          use_reasoning: false
+            name: policy_security_local_only
       adaptations:
         mode: bypass
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 2048
-            max_tool_trace_steps: 100
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 2048
+          max_tool_trace_steps: 100
     - name: simple_math_fast_path
-      description: Keep simple math and short factual STEM questions on the simple local alias.
+      description: Keep simple math and short factual STEM questions on the simple
+        local alias.
       priority: 300
       tier: 2
       rules:
         operator: AND
         conditions:
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - type: domain
+          name: math
+        - operator: OR
+          conditions:
           - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
-          - type: domain
-            name: math
-          - operator: OR
-            conditions:
-              - type: projection
-                name: balance_simple
-              - type: keyword
-                name: simple_request_markers
-      modelRefs:
-        - model: qwen/qwen3.6-rocm
-          use_reasoning: false
+            name: balance_simple
+          - type: keyword
+            name: simple_request_markers
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            capture_request_body: true
-            capture_response_body: true
-            max_body_bytes: 2048
-            max_tool_trace_steps: 100
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 2048
+          max_tool_trace_steps: 100
     - name: domain_legal_health
-      description: Non-private legal, compliance, and health requests route to the high-care domain alias.
+      description: Non-private legal, compliance, and health requests route to the
+        high-care domain alias.
       priority: 260
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
-          - operator: OR
-            conditions:
-              - type: domain
-                name: law
-              - type: domain
-                name: health
-              - type: keyword
-                name: legal_risk_markers
-              - type: keyword
-                name: health_markers
-              - type: embedding
-                name: legal_analysis
-              - type: embedding
-                name: health_guidance
-      modelRefs:
-        - model: anthropic/claude-opus-4.6
-          use_reasoning: false
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - operator: OR
+          conditions:
+          - type: domain
+            name: law
+          - type: domain
+            name: health
+          - type: keyword
+            name: legal_risk_markers
+          - type: keyword
+            name: health_markers
+          - type: embedding
+            name: legal_analysis
+          - type: embedding
+            name: health_guidance
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            max_body_bytes: 4096
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          max_body_bytes: 4096
     - name: domain_code_complex
-      description: Non-private complex coding, architecture, and software-system requests route to stronger technical aliases.
+      description: Non-private complex coding, architecture, and software-system requests
+        route to stronger technical aliases.
       priority: 255
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
-          - operator: OR
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - operator: OR
+          conditions:
+          - type: keyword
+            name: code_request_markers
+          - operator: AND
             conditions:
-              - type: keyword
-                name: code_request_markers
-              - operator: AND
-                conditions:
-                  - type: domain
-                    name: computer science
-                  - operator: OR
-                    conditions:
-                      - type: embedding
-                        name: coding_workflows
-                      - type: embedding
-                        name: architecture_design
-          - operator: OR
-            conditions:
-              - type: projection
-                name: balance_complex
-              - type: projection
-                name: balance_reasoning
+            - type: domain
+              name: computer science
+            - operator: OR
+              conditions:
+              - type: embedding
+                name: coding_workflows
               - type: embedding
                 name: architecture_design
-              - type: complexity
-                name: general_reasoning:hard
-              - type: complexity
-                name: code_task:hard
-          - operator: NOT
-            conditions:
-              - type: projection
-                name: balance_simple
-          - operator: NOT
-            conditions:
-              - type: embedding
-                name: fast_qa
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: simple_request_markers
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: research_request_markers
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          use_reasoning: false
-        - model: openai/gpt5.4
-          use_reasoning: false
+        - operator: OR
+          conditions:
+          - type: projection
+            name: balance_complex
+          - type: projection
+            name: balance_reasoning
+          - type: embedding
+            name: architecture_design
+          - type: complexity
+            name: general_reasoning:hard
+          - type: complexity
+            name: code_task:hard
+        - operator: NOT
+          conditions:
+          - type: projection
+            name: balance_simple
+        - operator: NOT
+          conditions:
+          - type: embedding
+            name: fast_qa
+        - operator: NOT
+          conditions:
+          - type: keyword
+            name: simple_request_markers
+        - operator: NOT
+          conditions:
+          - type: keyword
+            name: research_request_markers
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            max_body_bytes: 4096
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          max_body_bytes: 4096
     - name: domain_code
-      description: Non-private medium coding, repository, and software-system requests route to the code-capable domain alias.
+      description: Non-private medium coding, repository, and software-system requests
+        route to the code-capable domain alias.
       priority: 250
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - operator: OR
+          conditions:
+          - type: keyword
+            name: code_request_markers
+          - operator: AND
+            conditions:
+            - type: domain
+              name: computer science
+            - type: embedding
+              name: coding_workflows
+        - operator: NOT
+          conditions:
           - operator: OR
             conditions:
-              - type: keyword
-                name: code_request_markers
-              - operator: AND
-                conditions:
-                  - type: domain
-                    name: computer science
-                  - type: embedding
-                    name: coding_workflows
-          - operator: NOT
-            conditions:
-              - operator: OR
-                conditions:
-                  - type: projection
-                    name: balance_complex
-                  - type: projection
-                    name: balance_reasoning
-                  - type: keyword
-                    name: reasoning_request_markers
-                  - type: embedding
-                    name: architecture_design
-                  - type: complexity
-                    name: general_reasoning:hard
-                  - type: complexity
-                    name: code_task:hard
-          - operator: NOT
-            conditions:
-              - type: keyword
-                name: research_request_markers
-      modelRefs:
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-        - model: google/gemini-3.1-pro
-          use_reasoning: false
+            - type: projection
+              name: balance_complex
+            - type: projection
+              name: balance_reasoning
+            - type: keyword
+              name: reasoning_request_markers
+            - type: embedding
+              name: architecture_design
+            - type: complexity
+              name: general_reasoning:hard
+            - type: complexity
+              name: code_task:hard
+        - operator: NOT
+          conditions:
+          - type: keyword
+            name: research_request_markers
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            max_body_bytes: 4096
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          max_body_bytes: 4096
     - name: domain_stem_research
-      description: Non-private math, science, research, and evidence-heavy requests route to the STEM/research alias.
+      description: Non-private math, science, research, and evidence-heavy requests
+        route to the STEM/research alias.
       priority: 240
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - operator: OR
+          conditions:
+          - type: domain
+            name: math
+          - type: domain
+            name: physics
+          - type: keyword
+            name: research_request_markers
+        - operator: NOT
+          conditions:
           - operator: OR
             conditions:
-              - type: domain
-                name: math
-              - type: domain
-                name: physics
-              - type: keyword
-                name: research_request_markers
-          - operator: NOT
-            conditions:
-              - operator: OR
-                conditions:
-                  - type: projection
-                    name: balance_simple
-                  - type: domain
-                    name: business
-                  - type: embedding
-                    name: business_analysis
-                  - type: embedding
-                    name: fast_qa
-                  - type: keyword
-                    name: simple_request_markers
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          use_reasoning: false
-        - model: openai/gpt5.4
-          use_reasoning: false
+            - type: projection
+              name: balance_simple
+            - type: domain
+              name: business
+            - type: embedding
+              name: business_analysis
+            - type: embedding
+              name: fast_qa
+            - type: keyword
+              name: simple_request_markers
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            max_body_bytes: 4096
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          max_body_bytes: 4096
     - name: domain_business
-      description: Non-private business and product-analysis requests route to the medium domain alias.
+      description: Non-private business and product-analysis requests route to the
+        medium domain alias.
       priority: 230
       tier: 3
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - operator: OR
+          conditions:
+          - type: domain
+            name: business
+          - type: embedding
+            name: business_analysis
+        - operator: NOT
+          conditions:
           - operator: OR
             conditions:
-              - type: domain
-                name: business
-              - type: embedding
-                name: business_analysis
-          - operator: NOT
-            conditions:
-              - operator: OR
-                conditions:
-                  - type: projection
-                    name: balance_complex
-                  - type: projection
-                    name: balance_reasoning
-                  - type: keyword
-                    name: reasoning_request_markers
-                  - type: embedding
-                    name: architecture_design
-      modelRefs:
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
+            - type: projection
+              name: balance_complex
+            - type: projection
+              name: balance_reasoning
+            - type: keyword
+              name: reasoning_request_markers
+            - type: embedding
+              name: architecture_design
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            max_body_bytes: 4096
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          max_body_bytes: 4096
     - name: complex_general
-      description: Non-private complex or reasoning-heavy work routes to stronger aliases.
+      description: Non-private complex or reasoning-heavy work routes to stronger
+        aliases.
       priority: 190
       tier: 4
       rules:
         operator: AND
         conditions:
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - operator: OR
+          conditions:
           - type: projection
-            name: policy_privacy_cloud_allowed
+            name: balance_complex
           - type: projection
-            name: policy_security_standard
+            name: balance_reasoning
+          - type: keyword
+            name: reasoning_request_markers
+          - type: keyword
+            name: agentic_request_markers
+          - type: projection
+            name: agentic_workflow
+        - operator: NOT
+          conditions:
           - operator: OR
             conditions:
-              - type: projection
-                name: balance_complex
-              - type: projection
-                name: balance_reasoning
-              - type: keyword
-                name: reasoning_request_markers
-              - type: keyword
-                name: agentic_request_markers
-              - type: projection
-                name: agentic_workflow
-          - operator: NOT
-            conditions:
-              - operator: OR
-                conditions:
-                  - type: keyword
-                    name: code_request_markers
-                  - type: domain
-                    name: math
-                  - type: domain
-                    name: physics
-                  - type: keyword
-                    name: research_request_markers
-                  - operator: AND
-                    conditions:
-                      - type: domain
-                        name: computer science
-                      - type: embedding
-                        name: coding_workflows
-      modelRefs:
-        - model: google/gemini-3.1-pro
-          use_reasoning: false
-        - model: openai/gpt5.4
-          use_reasoning: false
+            - type: keyword
+              name: code_request_markers
+            - type: domain
+              name: math
+            - type: domain
+              name: physics
+            - type: keyword
+              name: research_request_markers
+            - operator: AND
+              conditions:
+              - type: domain
+                name: computer science
+              - type: embedding
+                name: coding_workflows
       plugins:
-        - type: router_replay
-          configuration:
-            enabled: true
-            max_records: 10000
-            max_body_bytes: 4096
-
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          max_body_bytes: 4096
     - name: medium_general
-      description: Non-private medium-difficulty explanations and follow-ups route to the medium alias.
+      description: Non-private medium-difficulty explanations and follow-ups route
+        to the medium alias.
       priority: 150
       tier: 5
       rules:
         operator: AND
         conditions:
-          - type: projection
-            name: policy_privacy_cloud_allowed
-          - type: projection
-            name: policy_security_standard
-          - type: projection
-            name: balance_medium
-      modelRefs:
-        - model: google/gemini-2.5-flash-lite
-          use_reasoning: false
-
+        - type: projection
+          name: policy_privacy_cloud_allowed
+        - type: projection
+          name: policy_security_standard
+        - type: projection
+          name: balance_medium
     - name: simple_general
       description: Simple or otherwise unmatched traffic uses the local fallback.
       priority: 80
@@ -1312,6 +1166,117 @@ routing:
       rules:
         operator: AND
         conditions: []
-      modelRefs:
-        - model: qwen/qwen3.6-rocm
-          use_reasoning: false
+entrypoints:
+- name: vllm-sr/auto
+  recipe: default
+  assignments:
+    local_security_containment:
+      models:
+      - model: qwen/qwen3.6-rocm
+        weight: '1'
+    local_privacy_policy:
+      models:
+      - model: qwen/qwen3.6-rocm
+        weight: '1'
+    simple_math_fast_path:
+      models:
+      - model: qwen/qwen3.6-rocm
+        weight: '1'
+    domain_legal_health:
+      models:
+      - model: anthropic/claude-opus-4.6
+        weight: '1'
+    domain_code_complex:
+      models:
+      - model: google/gemini-3.1-pro
+        weight: '1'
+      - model: openai/gpt5.4
+        weight: '1'
+    domain_code:
+      models:
+      - model: google/gemini-2.5-flash-lite
+        weight: '1'
+      - model: google/gemini-3.1-pro
+        weight: '1'
+    domain_stem_research:
+      models:
+      - model: google/gemini-3.1-pro
+        weight: '1'
+      - model: openai/gpt5.4
+        weight: '1'
+    domain_business:
+      models:
+      - model: google/gemini-2.5-flash-lite
+        weight: '1'
+    complex_general:
+      models:
+      - model: google/gemini-3.1-pro
+        weight: '1'
+      - model: openai/gpt5.4
+        weight: '1'
+    medium_general:
+      models:
+      - model: google/gemini-2.5-flash-lite
+        weight: '1'
+    simple_general:
+      models:
+      - model: qwen/qwen3.6-rocm
+        weight: '1'
+billing_currency: USD
+global:
+  services:
+    response_api:
+      enabled: true
+      store_backend: memory
+      ttl_seconds: 86400
+      max_responses: 1000
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      ttl_seconds: 2592000
+      async_writes: false
+      postgres:
+        host: postgres
+        port: 5432
+        database: vsr
+        user: router
+        password: ${POSTGRES_PASSWORD}
+        ssl_mode: disable
+        table_name: router_replay_records
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
+  router:
+    learning:
+      enabled: true
+      adaptation:
+        enabled: true
+        candidate_set: decision
+        strategy: routing_sampling
+      protection:
+        enabled: true
+        scope: conversation
+        identity:
+          headers:
+            session: x-session-id
+            conversation: x-conversation-id
+        tuning:
+          idle_timeout_seconds: 300
+          min_turns_before_switch: 1
+          switch_margin: 0.05
+          stability_weight: 1.0
+  stores:
+    response_cache:
+      enabled: false
+      backend_type: memory
+  integrations: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

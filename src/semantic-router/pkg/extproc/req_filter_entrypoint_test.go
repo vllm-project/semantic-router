@@ -7,35 +7,38 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/classification"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 )
 
+const defaultEntrypointModel = "vllm-sr/auto"
+
 const entrypointTestConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
-  signals:
-    keywords:
-      - name: route_keyword
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: route_keyword
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
+version: v0.4
+models:
+  - name: model-a
+    card: {description: default tier}
+    connections: [{provider: vllm, endpoint: http://127.0.0.1:8000, model: model-a}]
+  - name: model-b
+    card: {description: privacy tier}
+    connections: [{provider: vllm, endpoint: http://127.0.0.1:8001, model: model-b}]
 recipes:
+  - name: default
+    document:
+      signals:
+        keywords:
+          - name: route_keyword
+            operator: OR
+            keywords: ["urgent"]
+      decisions:
+        - name: default_route
+          rules:
+            operator: AND
+            conditions:
+              - type: keyword
+                name: route_keyword
   - name: privacy
-    routing:
+    document:
       signals:
         keywords:
           - name: route_keyword
@@ -48,32 +51,32 @@ recipes:
             conditions:
               - type: keyword
                 name: route_keyword
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
 entrypoints:
-  - model_names: ["vllm-sr/privacy"]
-    recipe: privacy
-  - model_names: ["vllm-sr/default-alias"]
+  - name: vllm-sr/auto
     recipe: default
-providers:
-  defaults:
-    default_model: model-a
-  models:
-    - name: model-a
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-    - name: model-b
-      backend_refs:
-        - endpoint: 127.0.0.1:8001
+    assignments:
+      default_route: {models: [{model: model-a}]}
+  - name: vllm-sr/privacy
+    recipe: privacy
+    assignments:
+      privacy_route: {models: [{model: model-b}]}
+  - name: vllm-sr/privacy-fast
+    recipe: privacy
+    assignments:
+      privacy_route: {models: [{model: model-a}]}
+  - name: vllm-sr/default-alias
+    recipe: default
+    assignments:
+      default_route: {models: [{model: model-a}]}
 `
 
 func newEntrypointTestRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
-	cfg, err := config.ParseYAMLBytes([]byte(entrypointTestConfigYAML))
+	cfg, err := parseExtProcAuthoringConfig(t, entrypointTestConfigYAML)
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
+	cfg.DefaultModel = "model-a"
 	return &OpenAIRouter{Config: cfg}
 }
 
@@ -85,6 +88,38 @@ func TestResolveEntrypointForRequest(t *testing.T) {
 	if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != "privacy" {
 		t.Fatalf("expected the privacy recipe to be resolved, got %+v", ctx.Routing.SelectedRecipe())
 	}
+	privacyScope := ctx.Routing.RuntimeScope()
+	if privacyScope == "" || privacyScope == config.RecipeName("privacy") {
+		t.Fatalf("privacy entrypoint did not receive an isolated runtime scope: %q", privacyScope)
+	}
+
+	fastCtx := &RequestContext{}
+	router.resolveEntrypointForRequest("vllm-sr/privacy-fast", fastCtx)
+	if fastCtx.Routing.RecipeName() != "privacy" || fastCtx.Routing.RuntimeScope() == privacyScope {
+		t.Fatalf("entrypoints sharing one recipe were not runtime-isolated: privacy=%q fast=%q", privacyScope, fastCtx.Routing.RuntimeScope())
+	}
+	ctx.SessionID = "shared-session"
+	fastCtx.SessionID = "shared-session"
+	if routingSessionStateKey(ctx) == routingSessionStateKey(fastCtx) {
+		t.Fatalf("entrypoint runtime scopes collided in session state: %q", routingSessionStateKey(ctx))
+	}
+	ctx.VSRSelectedDecisionName = "privacy_route"
+	fastCtx.VSRSelectedDecisionName = "privacy_route"
+	learning := newRouterLearningRuntime(nil, nil, nil)
+	learning.recordModelExperience(
+		requestDecisionStateKey(ctx),
+		1,
+		"model-a",
+		routerLearningOutcomeGoodFit,
+		1,
+	)
+	if got := learning.experienceSnapshot(requestDecisionStateKey(fastCtx), 1, "model-a"); got.GoodFitCount != 0 {
+		t.Fatalf("entrypoint learning experience crossed runtime scopes: %+v", got)
+	}
+	replay := buildReplayRoutingRecord(fastCtx, "vllm-sr/privacy-fast", "model-a", "privacy_route")
+	if replay.Recipe != "privacy" || replay.RoutingScope != string(fastCtx.Routing.RuntimeScope()) {
+		t.Fatalf("replay identity mixed logical recipe and internal runtime scope: %+v", replay)
+	}
 
 	ctx = &RequestContext{}
 	router.resolveEntrypointForRequest("model-a", ctx)
@@ -93,39 +128,64 @@ func TestResolveEntrypointForRequest(t *testing.T) {
 	}
 }
 
-func TestClassifierForRequestNeverFallsBackAcrossRecipes(t *testing.T) {
+func TestLooperHydrationRestoresBoundEntrypointViewByRuntimeScope(t *testing.T) {
+	router := newEntrypointTestRouter(t)
+	parent := &RequestContext{}
+	router.resolveEntrypointForRequest("vllm-sr/privacy-fast", parent)
+	scope := parent.Routing.RuntimeScope()
+
+	looperContext := &RequestContext{
+		LooperRequest: true,
+		Headers: map[string]string{
+			headers.VSRSelectedRecipe: string(scope),
+		},
+	}
+	router.hydrateLooperRoutingContext(looperContext)
+	recipe := looperContext.Routing.SelectedRecipe()
+	if recipe == nil || recipe.RuntimeScope() != scope {
+		t.Fatalf("looper hydration did not restore runtime scope %q: %+v", scope, recipe)
+	}
+	decision := routingRecipeDecisionByName(recipe, "privacy_route")
+	if decision == nil || len(decision.ModelRefs) != 1 || decision.ModelRefs[0].Model != "model-a" {
+		t.Fatalf("looper hydration restored stale reusable-recipe models: %+v", decision)
+	}
+}
+
+func TestClassifierForRequestNeverFallsBackToRootClassifier(t *testing.T) {
 	defaultClassifier := &classification.Classifier{}
 	router := &OpenAIRouter{Classifier: defaultClassifier}
 
 	defaultContext := &RequestContext{}
 	defaultContext.Routing.SelectRecipe(&config.RoutingRecipe{Name: config.DefaultRecipeName})
-	if got := router.classifierForRequest(defaultContext); got != defaultClassifier {
-		t.Fatalf("default recipe classifier = %p, want %p", got, defaultClassifier)
+	if got := router.classifierForRequest(defaultContext); got != nil {
+		t.Fatalf("default Recipe unexpectedly used the root classifier: %p", got)
 	}
 
 	namedContext := &RequestContext{}
 	namedContext.Routing.SelectRecipe(&config.RoutingRecipe{Name: "privacy"})
 	if got := router.classifierForRequest(namedContext); got != nil {
-		t.Fatalf("named recipe unexpectedly fell back to the default classifier: %p", got)
+		t.Fatalf("named Recipe unexpectedly used the root classifier: %p", got)
 	}
 }
 
-func TestRequestModelActsAsAuto(t *testing.T) {
+func TestRequestModelIsEntrypoint(t *testing.T) {
 	router := newEntrypointTestRouter(t)
 
 	cases := []struct {
 		model string
 		want  bool
 	}{
-		{model: config.DefaultVSRAutoModelName, want: true},
+		{model: defaultEntrypointModel, want: true},
 		{model: "vllm-sr/privacy", want: true},
 		{model: "vllm-sr/default-alias", want: true},
+		{model: "auto", want: false},
+		{model: "MoM", want: false},
 		{model: "model-a", want: false},
 		{model: "unknown-model", want: false},
 	}
 	for _, testCase := range cases {
-		if got := router.requestModelActsAsAuto(testCase.model); got != testCase.want {
-			t.Fatalf("requestModelActsAsAuto(%q) = %v, want %v", testCase.model, got, testCase.want)
+		if got := router.requestModelIsEntrypoint(testCase.model); got != testCase.want {
+			t.Fatalf("requestModelIsEntrypoint(%q) = %v, want %v", testCase.model, got, testCase.want)
 		}
 	}
 }
@@ -135,26 +195,33 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 
 	ctx := &RequestContext{}
 	router.resolveEntrypointForRequest("vllm-sr/privacy", ctx)
-	candidates := router.decisionCandidatesForRequest("vllm-sr/privacy", ctx)
+	candidates := router.decisionCandidatesForRequest(ctx)
 	if len(candidates) != 1 || candidates[0].Name != "privacy_route" {
 		t.Fatalf("expected the privacy recipe's decisions as candidates, got %+v", candidates)
 	}
 
-	// Default aliases resolve to the normalized default recipe just like named
-	// entrypoints resolve to their named recipe.
+	// An Entrypoint may explicitly select the Recipe named default.
 	ctx = &RequestContext{}
 	router.resolveEntrypointForRequest("vllm-sr/default-alias", ctx)
 	if ctx.Routing.SelectedRecipe() == nil || ctx.Routing.SelectedRecipe().Name != config.DefaultRecipeName {
 		t.Fatalf("expected the default recipe to be resolved, got %+v", ctx.Routing.SelectedRecipe())
 	}
-	if candidates := router.decisionCandidatesForRequest("vllm-sr/default-alias", ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
+	if candidates := router.decisionCandidatesForRequest(ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
 		t.Fatalf("expected the default recipe candidates, got %+v", candidates)
 	}
 
 	ctx = &RequestContext{}
-	router.resolveEntrypointForRequest(config.DefaultVSRAutoModelName, ctx)
-	if candidates := router.decisionCandidatesForRequest(config.DefaultVSRAutoModelName, ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
-		t.Fatalf("expected the auto model to use default recipe candidates, got %+v", candidates)
+	router.resolveEntrypointForRequest(defaultEntrypointModel, ctx)
+	if candidates := router.decisionCandidatesForRequest(ctx); len(candidates) != 1 || candidates[0].Name != "default_route" {
+		t.Fatalf("expected the explicit vllm-sr/auto Entrypoint to use default Recipe candidates, got %+v", candidates)
+	}
+
+	// Legacy automatic aliases are inert unless the manifest names them as an
+	// Entrypoint explicitly.
+	ctx = &RequestContext{}
+	router.resolveEntrypointForRequest("auto", ctx)
+	if candidates := router.decisionCandidatesForRequest(ctx); len(candidates) != 0 {
+		t.Fatalf("legacy auto alias selected Recipe candidates: %+v", candidates)
 	}
 }
 
@@ -163,10 +230,11 @@ func TestDecisionCandidatesForRequest(t *testing.T) {
 // fixture only uses keyword signals, which need no local model artifacts.
 func newEntrypointFlowRouter(t *testing.T) *OpenAIRouter {
 	t.Helper()
-	cfg, err := config.ParseYAMLBytes([]byte(entrypointTestConfigYAML))
+	cfg, err := parseExtProcAuthoringConfig(t, entrypointTestConfigYAML)
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
+	cfg.DefaultModel = "model-a"
 	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
@@ -196,29 +264,36 @@ func TestPerformDecisionEvaluationSelectsRecipeByEntrypoint(t *testing.T) {
 			wantModel:    "model-b",
 		},
 		{
-			// The privacy signal does not even run for the default recipe.
-			name:         "auto model ignores other recipes' decisions",
-			model:        config.DefaultVSRAutoModelName,
+			name:         "bound entrypoint selects its physical model from the derived recipe",
+			model:        "vllm-sr/privacy-fast",
 			message:      "my ssn is exposed",
-			wantDecision: "",
+			wantDecision: "privacy_route",
 			wantModel:    "model-a",
 		},
 		{
-			name:         "auto model matches the default recipe decision",
-			model:        config.DefaultVSRAutoModelName,
+			// The privacy signal does not even run for the default recipe.
+			name:         "default Entrypoint ignores other Recipes' decisions",
+			model:        defaultEntrypointModel,
+			message:      "my ssn is exposed",
+			wantDecision: "",
+			wantModel:    "",
+		},
+		{
+			name:         "default Entrypoint matches its Recipe decision",
+			model:        defaultEntrypointModel,
 			message:      "this is urgent",
 			wantDecision: "default_route",
 			wantModel:    "model-a",
 		},
 		{
-			name:         "privacy entrypoint falls back to the default model when its recipe matches nothing",
+			name:         "privacy Entrypoint does not escape its Recipe when nothing matches",
 			model:        "vllm-sr/privacy",
 			message:      "this is urgent",
 			wantDecision: "",
-			wantModel:    "model-a",
+			wantModel:    "",
 		},
 		{
-			name:         "default recipe alias behaves like the auto model",
+			name:         "second Entrypoint can select the default Recipe",
 			model:        "vllm-sr/default-alias",
 			message:      "this is urgent",
 			wantDecision: "default_route",
@@ -297,9 +372,6 @@ func TestModelsListingIncludesEntrypointNames(t *testing.T) {
 func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			RouterOptions: config.RouterOptions{
-				AutoModelNames: []string{"router/balanced"},
-			},
 			Entrypoints: []config.EntrypointMapping{
 				{ModelNames: []string{"router/flash"}, Recipe: "speed-first"},
 			},
@@ -320,27 +392,18 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 	if err := json.Unmarshal(response.GetImmediateResponse().Body, &modelList); err != nil {
 		t.Fatalf("failed to parse response body: %v", err)
 	}
-	if len(modelList.Data) != 2 {
-		t.Fatalf("model count = %d, want 2", len(modelList.Data))
-	}
-	wantDefaultRoute := map[string]bool{
-		"router/balanced": true,
-		"router/flash":    false,
+	if len(modelList.Data) != 1 {
+		t.Fatalf("model count = %d, want 1 explicit Entrypoint", len(modelList.Data))
 	}
 	for _, model := range modelList.Data {
+		if model.ID != "router/flash" {
+			t.Fatalf("unexpected hidden routing alias %q", model.ID)
+		}
 		if model.OwnedBy != "vllm-semantic-router" {
 			t.Fatalf("%s owned_by = %q, want vllm-semantic-router", model.ID, model.OwnedBy)
 		}
 		if model.Routing.Resolution != publicmodels.ResolutionVirtual || !model.Routing.Selectable {
 			t.Fatalf("%s routing metadata = %+v, want selectable virtual model", model.ID, model.Routing)
-		}
-		if model.Routing.DefaultRoute != wantDefaultRoute[model.ID] {
-			t.Fatalf(
-				"%s default_route = %t, want %t",
-				model.ID,
-				model.Routing.DefaultRoute,
-				wantDefaultRoute[model.ID],
-			)
 		}
 		if model.Description == "" {
 			t.Fatalf("%s has an empty description", model.ID)
@@ -352,16 +415,17 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 // recipe: the flat Decisions field stays empty, which used to trip the
 // "no decisions configured" short-circuit before decision evaluation.
 const entrypointRecipesOnlyConfigYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-    - name: model-b
-      description: privacy tier
+version: v0.4
+models:
+  - name: model-a
+    card: {description: default tier}
+    connections: [{provider: vllm, endpoint: http://127.0.0.1:8000, model: model-a}]
+  - name: model-b
+    card: {description: privacy tier}
+    connections: [{provider: vllm, endpoint: http://127.0.0.1:8001, model: model-b}]
 recipes:
   - name: privacy
-    routing:
+    document:
       signals:
         keywords:
           - name: pii_keywords
@@ -374,29 +438,19 @@ recipes:
             conditions:
               - type: keyword
                 name: pii_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
 entrypoints:
-  - model_names: ["vllm-sr/privacy"]
+  - name: vllm-sr/privacy
     recipe: privacy
-providers:
-  defaults:
-    default_model: model-a
-  models:
-    - name: model-a
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-    - name: model-b
-      backend_refs:
-        - endpoint: 127.0.0.1:8001
+    assignments:
+      privacy_route: {models: [{model: model-b}]}
 `
 
 func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(entrypointRecipesOnlyConfigYAML))
+	cfg, err := parseExtProcAuthoringConfig(t, entrypointRecipesOnlyConfigYAML)
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
+	cfg.DefaultModel = "model-a"
 	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
 	if err != nil {
 		t.Fatalf("failed to build recipe classifiers: %v", err)
@@ -416,13 +470,6 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 			message:      "my ssn is exposed",
 			wantDecision: "privacy_route",
 			wantModel:    "model-b",
-		},
-		{
-			name:         "auto model keeps the default profile fallback",
-			model:        config.DefaultVSRAutoModelName,
-			message:      "my ssn is exposed",
-			wantDecision: "",
-			wantModel:    "model-a",
 		},
 	}
 	for _, testCase := range cases {
@@ -451,98 +498,13 @@ func TestPerformDecisionEvaluationRecipesOnlyConfig(t *testing.T) {
 	}
 }
 
-// entrypointDecisionlessRecipeYAML maps an entrypoint to a recipe that
-// declares signals but no decisions. Its traffic must not be routed by the
-// default profile's decisions.
-const entrypointDecisionlessRecipeYAML = `
-version: v0.3
-routing:
-  modelCards:
-    - name: model-a
-      description: default tier
-  signals:
-    keywords:
-      - name: urgent_keywords
-        operator: OR
-        keywords: ["urgent"]
-  decisions:
-    - name: default_route
-      rules:
-        operator: AND
-        conditions:
-          - type: keyword
-            name: urgent_keywords
-      modelRefs:
-        - model: model-a
-          use_reasoning: false
-recipes:
-  - name: screening
-    routing:
-      signals:
-        keywords:
-          - name: screening_keywords
-            operator: OR
-            keywords: ["screening"]
-entrypoints:
-  - model_names: ["vllm-sr/screening"]
-    recipe: screening
-providers:
-  defaults:
-    default_model: model-a
-  models:
-    - name: model-a
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-`
-
-func TestDecisionlessRecipeStaysIsolatedFromDefaultDecisions(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(entrypointDecisionlessRecipeYAML))
-	if err != nil {
-		t.Fatalf("unexpected parse error: %v", err)
-	}
-	classifiers, err := classification.BuildRecipeClassifiers(cfg, nil, nil, nil)
-	if err != nil {
-		t.Fatalf("failed to build recipe classifiers: %v", err)
-	}
-	router := &OpenAIRouter{Config: cfg, Classifier: classifiers.Default(), RecipeClassifiers: classifiers}
-
-	ctx := &RequestContext{}
-	router.resolveEntrypointForRequest("vllm-sr/screening", ctx)
-	candidates := router.decisionCandidatesForRequest("vllm-sr/screening", ctx)
-	if candidates == nil {
-		t.Fatal("a decision-less recipe must scope candidates to an empty slice, not nil")
-	}
-	if len(candidates) != 0 {
-		t.Fatalf("expected no candidates, got %+v", candidates)
-	}
-
-	flowCtx := &RequestContext{
-		TraceContext: context.Background(),
-		Headers:      map[string]string{},
-	}
-	router.resolveEntrypointForRequest("vllm-sr/screening", flowCtx)
-	decisionName, _, _, selectedModel, err := router.performDecisionEvaluation(
-		"vllm-sr/screening",
-		signalConversationHistory{currentUserMessage: "this is urgent"},
-		flowCtx,
-	)
-	if err != nil {
-		t.Fatalf("performDecisionEvaluation failed: %v", err)
-	}
-	if decisionName != "" {
-		t.Fatalf("a decision-less recipe must not select the default profile's decision, got %q", decisionName)
-	}
-	if selectedModel != "model-a" {
-		t.Fatalf("expected the default-model fallback, got %q", selectedModel)
-	}
-}
-
 func TestSemanticCacheScopeStaysRouteLocalForRecipesOnlyConfig(t *testing.T) {
-	cfg, err := config.ParseYAMLBytes([]byte(entrypointRecipesOnlyConfigYAML))
+	cfg, err := parseExtProcAuthoringConfig(t, entrypointRecipesOnlyConfigYAML)
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
-	cfg.SemanticCache.Enabled = true
+	cfg.DefaultModel = "model-a"
+	cfg.Enabled = true
 	router := &OpenAIRouter{Config: cfg}
 
 	privacy, ok := cfg.RecipeByName("privacy")

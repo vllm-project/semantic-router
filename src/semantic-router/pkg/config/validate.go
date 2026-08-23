@@ -34,14 +34,35 @@ func collectUnknownFieldsRecursive(raw map[string]interface{}, t reflect.Type, p
 	if len(known) == 0 {
 		return // opaque/schemaless struct (e.g., StructuredPayload) — skip
 	}
+	inlineMapElement := inlineMapElementType(t)
 	for key := range raw {
 		entry, ok := known[key]
 		if !ok {
+			if inlineMapElement != nil {
+				recurseIntoValue(raw[key], inlineMapElement, joinPath(path, key), out)
+				continue
+			}
 			*out = append(*out, formatUnknownField(key, path, known))
 			continue
 		}
 		recurseIntoValue(raw[key], entry.fieldType, joinPath(path, key), out)
 	}
+}
+
+func inlineMapElementType(t reflect.Type) reflect.Type {
+	t = derefType(t)
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		name, opts := splitYAMLTag(field.Tag.Get("yaml"))
+		if !strings.Contains(opts, "inline") || name != "" {
+			continue
+		}
+		fieldType := derefType(field.Type)
+		if fieldType.Kind() == reflect.Map {
+			return fieldType.Elem()
+		}
+	}
+	return nil
 }
 
 func formatUnknownField(key, path string, known map[string]fieldEntry) string {

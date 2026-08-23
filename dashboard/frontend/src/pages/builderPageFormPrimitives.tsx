@@ -1,11 +1,11 @@
-export { GenericFieldsEditor } from "./builderPageGenericFieldsEditor";
+export { GenericFieldsEditor } from './builderPageGenericFieldsEditor'
 export {
   CustomSelect,
   FieldEditor,
   NumberArrayEditor,
   StringArrayEditor,
   tryParseValue,
-} from "./builderPageFieldControls";
+} from './builderPageFieldControls'
 export {
   BackendIcon,
   GlobalIcon,
@@ -13,4 +13,4 @@ export {
   PluginIcon,
   RouteIcon,
   SignalIcon,
-} from "./builderPageIcons";
+} from './builderPageIcons'

@@ -43,8 +43,6 @@ __all__ = [
     "report_safe_probe_manifest",
 ]
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
-
 
 def load_probe_manifest(path: Path) -> tuple[dict[str, Any], list[Probe]]:
     document = path.read_text(encoding="utf-8")
@@ -226,48 +224,6 @@ def resolve_acceptance(manifest: dict[str, Any]) -> dict[str, float]:
             acceptance.get("min_decision_pass_rate"), 100.0
         ),
     }
-
-
-def resolve_manifest_assets(
-    manifest: dict[str, Any], yaml_override: Path | None, dsl_override: Path | None
-) -> tuple[Path | None, Path | None]:
-    routing_assets = manifest.get("routing_assets")
-    yaml_path = _require_existing_path(
-        yaml_override
-        or _resolve_manifest_path(
-            routing_assets.get("yaml") if isinstance(routing_assets, dict) else None
-        ),
-        "yaml",
-    )
-    dsl_path = _require_existing_path(
-        dsl_override
-        or _resolve_manifest_path(
-            routing_assets.get("dsl") if isinstance(routing_assets, dict) else None
-        ),
-        "dsl",
-    )
-    return yaml_path, dsl_path
-
-
-def _resolve_manifest_path(path_value: Any) -> Path | None:
-    raw_path = str(path_value or "").strip()
-    if not raw_path:
-        return None
-    candidate = Path(raw_path)
-    if candidate.is_absolute():
-        return candidate
-    repo_candidate = REPO_ROOT / raw_path
-    if repo_candidate.exists():
-        return repo_candidate
-    return Path.cwd() / raw_path
-
-
-def _require_existing_path(path: Path | None, label: str) -> Path | None:
-    if path is None:
-        return None
-    if path.exists():
-        return path
-    raise FileNotFoundError(f"{label} asset does not exist: {path}")
 
 
 def _decision_spec_lookup(manifest: dict[str, Any]) -> dict[str, dict[str, Any]]:

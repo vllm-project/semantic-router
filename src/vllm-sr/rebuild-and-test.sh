@@ -74,7 +74,7 @@ docker run --rm --entrypoint /bin/sh "${DASHBOARD_IMAGE}" -c "
     echo '  Checking auth bootstrap endpoint...'
     mkdir -p /tmp/static /tmp/data
     printf '<!doctype html><title>ok</title>' > /tmp/static/index.html
-    printf 'version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n' > /tmp/config.yaml
+    printf 'version: v0.4\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n' > /tmp/config.yaml
     /usr/local/bin/dashboard-backend -port=8700 -static=/tmp/static -config=/tmp/config.yaml -auth-db /tmp/data/auth.db -auth-jwt-secret test-secret >/tmp/dashboard.log 2>&1 &
     pid=\$!
     for i in 1 2 3 4 5; do
@@ -108,7 +108,7 @@ echo ""
 
 # Start service
 echo "5. Starting service with local images..."
-VLLM_SR_IMAGE="${IMAGE}" VLLM_SR_ROUTER_IMAGE="${ROUTER_IMAGE}" VLLM_SR_ENVOY_IMAGE="${ENVOY_IMAGE}" VLLM_SR_DASHBOARD_IMAGE="${DASHBOARD_IMAGE}" python -m cli.main serve --config config.yaml --image-pull-policy never
+VLLM_SR_IMAGE="${IMAGE}" VLLM_SR_ROUTER_IMAGE="${ROUTER_IMAGE}" VLLM_SR_ENVOY_IMAGE="${ENVOY_IMAGE}" VLLM_SR_DASHBOARD_IMAGE="${DASHBOARD_IMAGE}" python -m cli.main serve --image-pull-policy never
 echo ""
 
 # Wait a bit for startup

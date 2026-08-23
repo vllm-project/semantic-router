@@ -31,11 +31,17 @@
 }
 
 .icon {
-  font-size: 0.75rem;
+  width: 13px;
+  height: 13px;
   transition: transform 0.2s ease;
   display: inline-block;
   color: var(--color-primary);
   flex-shrink: 0;
+}
+
+.icon > svg {
+  width: 100%;
+  height: 100%;
 }
 
 .iconExpanded {

@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  fetchCurrentAuthUser,
-  hasAuthenticatedSession,
-  type AuthUser,
-} from './authSession'
+import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
 
 function response(status: number, body?: unknown): Response {
   return {
@@ -21,9 +17,8 @@ describe('authSession', () => {
       name: 'User One',
     }
 
-    expect(hasAuthenticatedSession(null, user)).toBe(true)
-    expect(hasAuthenticatedSession('token', null)).toBe(true)
-    expect(hasAuthenticatedSession(null, null)).toBe(false)
+    expect(hasAuthenticatedSession(user)).toBe(true)
+    expect(hasAuthenticatedSession(null)).toBe(false)
   })
 
   it('refreshes the current user through the server session cookie path', async () => {
@@ -45,7 +40,7 @@ describe('authSession', () => {
         email: 'user@example.test',
         name: 'User One',
       },
-      clearLocalToken: false,
+      unauthorized: false,
     })
     expect(calls).toEqual([
       {
@@ -55,12 +50,12 @@ describe('authSession', () => {
     ])
   })
 
-  it('marks local token state stale when the server session is unauthorized', async () => {
+  it('marks the browser session unauthorized when the server rejects it', async () => {
     const fetcher: typeof fetch = async () => response(401)
 
     await expect(fetchCurrentAuthUser(fetcher)).resolves.toEqual({
       user: null,
-      clearLocalToken: true,
+      unauthorized: true,
     })
   })
 })

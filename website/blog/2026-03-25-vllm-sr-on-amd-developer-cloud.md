@@ -182,13 +182,11 @@ http://<your-server-ip>:8700
 
 ![vLLM Semantic Router dashboard onboarding](/img/amd-deploy-4.png)
 
-Open the dashboard and complete onboarding.
-
-When prompted to load a routing profile (please skip the model configuration directly), import the reference YAML directly from:
-
-> `https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml`
-
-The remote import path applies the full YAML directly during onboarding. If you later inspect the same profile in the DSL editor, the routing surfaces decompile from `routing.modelCards`, `routing.signals`, `routing.projections`, and `routing.decisions`, while `providers` remains YAML-native.
+Open the dashboard and complete onboarding. Connect each backend once in
+**Models**, then open **Mixture-of-Models** and create an Entrypoint from the
+Balanced Recipe. Assign a connected Model to each decision and publish when the
+topology is ready. Recipes describe routing behavior; Entrypoints own the Model
+assignments that make that behavior callable.
 
 ![Reference routing profile import in the dashboard](/img/amd-deploy-5.png)
 

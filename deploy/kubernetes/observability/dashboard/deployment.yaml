@@ -62,8 +62,6 @@ spec:
                   optional: true
             - name: ROUTER_CONFIG_PATH
               value: /app/config/config.yaml
-            - name: VLLM_SR_RECIPE_STORE_DIR
-              value: /app/data/recipe-store
             # ML service sidecar: connect to localhost since it's in the same pod
             - name: ML_SERVICE_URL
               value: "http://localhost:8686"
@@ -76,10 +74,6 @@ spec:
             - name: router-config
               mountPath: /app/config/config.yaml
               subPath: config.yaml
-              readOnly: true
-            - name: router-config
-              mountPath: /app/config/tools_db.json
-              subPath: tools_db.json
               readOnly: true
             - name: ml-data
               mountPath: /app/data/ml-pipeline

@@ -26,7 +26,7 @@ var referenceSignalKeyByType = map[string]string{
 }
 
 func assertSupportedSignalTypesInReferenceConfig(t testingT, root map[string]interface{}) {
-	signals := mustMapAt(t, root, "routing", "signals")
+	signals := mustMapAt(t, referenceDefaultRecipeDocument(t, root), "signals")
 	for _, signalType := range SupportedSignalTypes() {
 		key, ok := referenceSignalKeyByType[signalType]
 		if !ok {
@@ -47,14 +47,14 @@ func assertSupportedAlgorithmsInReferenceConfig(t testingT, decisions []interfac
 	}
 	assertReferenceConfidenceAlgorithmCoverage(t, algorithmsByType)
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["ratings"], "ratings"), reflect.TypeOf(RatingsAlgorithmConfig{}), "routing.decisions[].algorithm.ratings")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["remom"], "remom"), reflect.TypeOf(ReMoMAlgorithmConfig{}), "routing.decisions[].algorithm.remom")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["fusion"], "fusion"), reflect.TypeOf(FusionAlgorithmConfig{}), "routing.decisions[].algorithm.fusion")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["remom"], "remom"), reflect.TypeOf(ReMoMAlgorithmConfig{}), "routing.decisions[].algorithm.remom", "synthesis_model")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["fusion"], "fusion"), reflect.TypeOf(FusionAlgorithmConfig{}), "routing.decisions[].algorithm.fusion", "model", "analysis_models", "analysis_overrides")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["router_dc"], "router_dc"), reflect.TypeOf(RouterDCSelectionConfig{}), "routing.decisions[].algorithm.router_dc")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["automix"], "automix"), reflect.TypeOf(AutoMixSelectionConfig{}), "routing.decisions[].algorithm.automix")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["hybrid"], "hybrid"), reflect.TypeOf(HybridSelectionConfig{}), "routing.decisions[].algorithm.hybrid")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["latency_aware"], "latency_aware"), reflect.TypeOf(LatencyAwareAlgorithmConfig{}), "routing.decisions[].algorithm.latency_aware")
 	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["multi_factor"], "multi_factor"), reflect.TypeOf(MultiFactorSelectionConfig{}), "routing.decisions[].algorithm.multi_factor")
-	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["prompt"], "prompt"), reflect.TypeOf(PromptSelectionConfig{}), "routing.decisions[].algorithm.prompt")
+	assertMapCoversStructFields(t, mustMapAt(t, algorithmsByType["prompt"], "prompt"), reflect.TypeOf(PromptSelectionConfig{}), "routing.decisions[].algorithm.prompt", "model")
 }
 
 func assertReferenceConfidenceAlgorithmCoverage(t testingT, algorithmsByType map[string]map[string]interface{}) {
@@ -213,20 +213,40 @@ func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []inte
 }
 
 func assertReferenceLoRACatalogCoverage(t testingT, root map[string]interface{}) {
-	modelCards := mustSliceAt(t, root, "routing", "modelCards")
-	if len(collectNestedSliceItems(t, modelCards, "loras", "routing.modelCards")) == 0 {
-		t.Fatalf("config/config.yaml must declare at least one routing.modelCards[].loras entry")
+	models := mustSliceAt(t, root, "models")
+	cards := collectChildMapsFromSlice(t, models, "card", "models")
+	if len(collectNestedSliceItems(t, cards, "loras", "models[].card")) == 0 {
+		t.Fatalf("config/config.yaml must declare at least one models[].card.loras entry")
 	}
 
-	decisions := mustSliceAt(t, root, "routing", "decisions")
-	modelRefs := collectNestedSliceItems(t, decisions, "modelRefs", "routing.decisions")
-	for _, rawModelRef := range modelRefs {
-		modelRef := mustMapValue(t, rawModelRef, "routing.decisions[].modelRefs")
-		if _, ok := modelRef["lora_name"]; ok {
-			return
+	for _, rawEntrypoint := range mustSliceAt(t, root, "entrypoints") {
+		entrypoint := mustMapValue(t, rawEntrypoint, "entrypoints")
+		assignmentMaps := []map[string]interface{}{}
+		if rawAssignments, ok := entrypoint["assignments"].(map[string]interface{}); ok {
+			assignmentMaps = append(assignmentMaps, rawAssignments)
+		}
+		for _, rawRule := range sliceAt(entrypoint, "rules") {
+			rule := mustMapValue(t, rawRule, "entrypoints[].rules")
+			assignmentMaps = append(assignmentMaps, mustMapAt(t, rule, "assignments"))
+		}
+		for _, assignments := range assignmentMaps {
+			for _, rawSet := range assignments {
+				set := mustMapValue(t, rawSet, "entrypoints[].assignments")
+				for _, rawModel := range mustSliceAt(t, set, "models") {
+					assignment := mustMapValue(t, rawModel, "entrypoints[].assignments[].models")
+					if _, ok := assignment["lora"]; ok {
+						return
+					}
+				}
+			}
 		}
 	}
-	t.Fatalf("config/config.yaml must exercise routing.decisions[].modelRefs[].lora_name")
+	t.Fatalf("config/config.yaml must exercise entrypoints[].assignments[].models[].lora")
+}
+
+func sliceAt(value map[string]interface{}, key string) []interface{} {
+	items, _ := value[key].([]interface{})
+	return items
 }
 
 func referenceAlgorithmsByType(t testingT, decisions []interface{}) map[string]map[string]interface{} {

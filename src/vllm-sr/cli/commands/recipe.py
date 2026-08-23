@@ -1,4 +1,4 @@
-"""Managed Recipe packaging commands."""
+"""Offline Recipe packaging commands."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from cli.recipe_package import RecipePackageError, pack_recipe
 
 @click.group()
 def recipe() -> None:
-    """Package and inspect managed Recipes."""
+    """Package and inspect offline Recipe bundles."""
 
 
 @recipe.command("pack")

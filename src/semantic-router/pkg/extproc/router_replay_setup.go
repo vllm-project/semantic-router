@@ -42,7 +42,7 @@ func initializeIsolatedReplayRecorders(
 ) (map[string]*routerreplay.Recorder, error) {
 	recorders := make(map[string]*routerreplay.Recorder)
 
-	for _, ref := range cfg.RoutingDecisionRefs() {
+	for _, ref := range reachableReplayDecisionRefs(cfg) {
 		decision := ref.Decision
 		pluginCfg := cfg.EffectiveRouterReplayConfig(decision)
 		if pluginCfg == nil {
@@ -71,7 +71,7 @@ func initializeSharedReplayRecorders(
 		replayRecorder *routerreplay.Recorder
 	)
 
-	for _, ref := range cfg.RoutingDecisionRefs() {
+	for _, ref := range reachableReplayDecisionRefs(cfg) {
 		decision := ref.Decision
 		pluginCfg := cfg.EffectiveRouterReplayConfig(decision)
 		if pluginCfg == nil {
@@ -94,6 +94,31 @@ func initializeSharedReplayRecorders(
 	}
 
 	return recorders, replayRecorder, nil
+}
+
+// reachableReplayDecisionRefs returns only decision views that an inference
+// request can select. Base Recipe documents are authoring resources; their
+// Entrypoint-derived views own replay state and runtime namespaces.
+func reachableReplayDecisionRefs(cfg *config.RouterConfig) []config.RoutingDecisionRef {
+	if cfg == nil {
+		return nil
+	}
+	if cfg.RoutingScope != "" {
+		return cfg.RoutingDecisionRefs()
+	}
+	var refs []config.RoutingDecisionRef
+	for _, recipe := range cfg.ReachableRoutingRecipes() {
+		if recipe == nil {
+			continue
+		}
+		for index := range recipe.Profile.Decisions {
+			refs = append(refs, config.RoutingDecisionRef{
+				Recipe:   recipe.RuntimeScope(),
+				Decision: &recipe.Profile.Decisions[index],
+			})
+		}
+	}
+	return refs
 }
 
 // createReplayRecorder creates a single replay recorder with the appropriate storage backend.

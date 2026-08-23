@@ -170,7 +170,7 @@ type rawModelDecl struct {
 // RouteOpt: key = value inside route header parens
 type RouteOpt struct {
 	Pos   lexer.Position
-	Key   string `parser:"@Ident '='"`
+	Key   string `parser:"','? @Ident '='"`
 	Value *Val   `parser:"@@"`
 }
 
@@ -328,9 +328,60 @@ type Program struct {
 
 // EntrypointDecl is the DSL form of one request-facing recipe binding.
 type EntrypointDecl struct {
-	ModelNames []string
-	Recipe     string
-	Pos        Position
+	Name        string
+	Aliases     []string
+	Recipe      string
+	Assignments map[string]*EntrypointAssignmentSetDecl
+	Rules       []*EntrypointRuleDecl
+	Pos         Position
+}
+
+type EntrypointRuleDecl struct {
+	Name        string
+	Matches     []*EntrypointMatchDecl
+	Recipe      string
+	Assignments map[string]*EntrypointAssignmentSetDecl
+	Pos         Position
+}
+
+type EntrypointMatchDecl struct {
+	Claim *EntrypointClaimMatchDecl
+	Path  *EntrypointPathMatchDecl
+}
+
+type EntrypointClaimMatchDecl struct {
+	Name  string
+	Exact Value
+}
+
+type EntrypointPathMatchDecl struct {
+	Exact  string
+	Prefix string
+}
+
+type EntrypointAssignmentSetDecl struct {
+	Models   []*EntrypointAssignmentDecl
+	Fallback *EntrypointFallbackDecl
+}
+
+type EntrypointAssignmentDecl struct {
+	Model     string
+	Priority  int
+	Weight    string
+	LoRAName  string
+	Reasoning *EntrypointReasoningDecl
+	Pos       Position
+}
+
+type EntrypointFallbackDecl struct {
+	Strategy string
+	On       []string
+}
+
+type EntrypointReasoningDecl struct {
+	Enabled     bool
+	Effort      string
+	Description string
 }
 
 // RecipeDecl is an isolated routing scope. Program contains only recipe-local
@@ -557,13 +608,14 @@ func (s *SignalRefExpr) GetPos() Position { return s.Pos }
 
 // ModelRef represents a model reference in a ROUTE.
 type ModelRef struct {
-	Model     string
-	Reasoning *bool
-	Effort    string
-	LoRA      string
-	ParamSize string
-	Weight    float64
-	Pos       Position
+	Model                string
+	Reasoning            *bool
+	ReasoningDescription string
+	Effort               string
+	LoRA                 string
+	ParamSize            string
+	Weight               float64
+	Pos                  Position
 }
 
 // ---------- Algorithm Specification ----------

@@ -1,75 +1,64 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from 'react'
 
-import type { Diagnostic, EditorMode, DSLFieldObject } from "@/types/dsl";
-import { useDSLStore } from "@/stores/dslStore";
-import type { RouteInput } from "@/lib/dslMutations";
-import { formatRoutingMetadataValue } from "@/components/routingMetadataDisplay";
+import type { Diagnostic, EditorMode, DSLFieldObject } from '@/types/dsl'
+import { useDSLStore } from '@/stores/dslStore'
+import type { RouteInput } from '@/lib/dslMutations'
+import { formatRoutingMetadataValue } from '@/components/routingMetadataDisplay'
 
-import styles from "./BuilderPage.module.css";
-import { ModelIcon, PluginIcon, RouteIcon, SignalIcon } from "./builderPageFormPrimitives";
-import { AddModelForm, AddPluginForm, AddSignalForm } from "./builderPageEntityForms";
+import styles from './BuilderPage.module.css'
+import { PluginIcon, RouteIcon, SignalIcon } from './builderPageFormPrimitives'
+import { AddPluginForm, AddSignalForm } from './builderPageEntityForms'
 import {
   AddProjectionMappingForm,
   AddProjectionPartitionForm,
   AddProjectionScoreForm,
-} from "./builderPageProjectionEditors";
-import { DashboardView, EntityListView, SidebarSection } from "./builderPageDashboardViews";
-import { EntityDetailView } from "./builderPageEntityDetailView";
-import { AddRouteForm } from "./builderPageRouteForms";
-import { BuilderValidationPanel } from "./builderPageValidationPanel";
-import type {
-  BuilderSelectedEntity,
-  EntityKind,
-  SectionState,
-  Selection,
-} from "./builderPageTypes";
-import type { BuilderRoutingScope } from "./builderPageRoutingScopeSupport";
-import { BuilderRoutingScopeBar } from "./builderPageRoutingScopeBar";
+} from './builderPageProjectionEditors'
+import { DashboardView, EntityListView, SidebarSection } from './builderPageDashboardViews'
+import { EntityDetailView } from './builderPageEntityDetailView'
+import { AddRouteForm } from './builderPageRouteForms'
+import { BuilderValidationPanel } from './builderPageValidationPanel'
+import type { BuilderSelectedEntity, EntityKind, SectionState, Selection } from './builderPageTypes'
 
 interface VisualModeProps {
-  ast: ReturnType<typeof useDSLStore.getState>["ast"];
-  dslSource: string;
-  diagnostics: Diagnostic[];
-  selection: Selection | null;
-  onSelect: (sel: Selection | null) => void;
-  sections: SectionState;
-  onToggleSection: (key: keyof SectionState) => void;
-  selectedEntity: BuilderSelectedEntity;
-  modelCount: number;
-  signalCount: number;
-  projectionPartitionCount: number;
-  projectionScoreCount: number;
-  projectionMappingCount: number;
-  routeCount: number;
-  pluginCount: number;
-  wasmReady: boolean;
-  wasmError: string | null;
-  addingEntity: EntityKind | null;
-  onSetAddingEntity: (kind: EntityKind | null) => void;
-  onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void;
-  onUpdateModelFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdateSignalFields: (signalType: string, name: string, fields: DSLFieldObject) => void;
-  onUpdateProjectionPartitionFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdateProjectionScoreFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdateProjectionMappingFields: (name: string, fields: DSLFieldObject) => void;
-  onUpdatePluginFields: (name: string, pluginType: string, fields: DSLFieldObject) => void;
-  onAddModel: (name: string, fields: DSLFieldObject) => void;
-  onAddSignal: (signalType: string, name: string, fields: DSLFieldObject) => void;
-  onAddProjectionPartition: (name: string, fields: DSLFieldObject) => void;
-  onAddProjectionScore: (name: string, fields: DSLFieldObject) => void;
-  onAddProjectionMapping: (name: string, fields: DSLFieldObject) => void;
-  onAddPlugin: (name: string, pluginType: string, fields: DSLFieldObject) => void;
-  onUpdateRoute: (name: string, input: RouteInput) => void;
-  onAddRoute: (name: string, input: RouteInput) => void;
-  errorCount: number;
-  isValid: boolean;
-  onModeSwitch: (mode: EditorMode) => void;
-  routingScopes: BuilderRoutingScope[];
-  activeRoutingScopeId: string;
-  onRoutingScopeChange: (scopeId: string) => void;
+  readOnly: boolean
+  ast: ReturnType<typeof useDSLStore.getState>['ast']
+  dslSource: string
+  diagnostics: Diagnostic[]
+  selection: Selection | null
+  onSelect: (sel: Selection | null) => void
+  sections: SectionState
+  onToggleSection: (key: keyof SectionState) => void
+  selectedEntity: BuilderSelectedEntity
+  signalCount: number
+  projectionPartitionCount: number
+  projectionScoreCount: number
+  projectionMappingCount: number
+  routeCount: number
+  pluginCount: number
+  wasmReady: boolean
+  wasmError: string | null
+  addingEntity: EntityKind | null
+  onSetAddingEntity: (kind: EntityKind | null) => void
+  onDeleteEntity: (kind: EntityKind, name: string, subType?: string) => void
+  onUpdateSignalFields: (signalType: string, name: string, fields: DSLFieldObject) => void
+  onUpdateProjectionPartitionFields: (name: string, fields: DSLFieldObject) => void
+  onUpdateProjectionScoreFields: (name: string, fields: DSLFieldObject) => void
+  onUpdateProjectionMappingFields: (name: string, fields: DSLFieldObject) => void
+  onUpdatePluginFields: (name: string, pluginType: string, fields: DSLFieldObject) => void
+  onAddSignal: (signalType: string, name: string, fields: DSLFieldObject) => void
+  onAddProjectionPartition: (name: string, fields: DSLFieldObject) => void
+  onAddProjectionScore: (name: string, fields: DSLFieldObject) => void
+  onAddProjectionMapping: (name: string, fields: DSLFieldObject) => void
+  onAddPlugin: (name: string, pluginType: string, fields: DSLFieldObject) => void
+  onUpdateRoute: (name: string, input: RouteInput) => void
+  onAddRoute: (name: string, input: RouteInput) => void
+  errorCount: number
+  isValid: boolean
+  onModeSwitch: (mode: EditorMode) => void
 }
 
 const VisualMode: React.FC<VisualModeProps> = ({
+  readOnly,
   ast,
   diagnostics,
   selection,
@@ -77,7 +66,6 @@ const VisualMode: React.FC<VisualModeProps> = ({
   sections,
   onToggleSection,
   selectedEntity,
-  modelCount,
   signalCount,
   projectionPartitionCount,
   projectionScoreCount,
@@ -89,13 +77,11 @@ const VisualMode: React.FC<VisualModeProps> = ({
   addingEntity,
   onSetAddingEntity,
   onDeleteEntity,
-  onUpdateModelFields,
   onUpdateSignalFields,
   onUpdateProjectionPartitionFields,
   onUpdateProjectionScoreFields,
   onUpdateProjectionMappingFields,
   onUpdatePluginFields,
-  onAddModel,
   onAddSignal,
   onAddProjectionPartition,
   onAddProjectionScore,
@@ -106,91 +92,66 @@ const VisualMode: React.FC<VisualModeProps> = ({
   errorCount,
   isValid,
   onModeSwitch,
-  routingScopes,
-  activeRoutingScopeId,
-  onRoutingScopeChange,
 }) => {
   // Collect available signal names for expression builder
   // Complexity signals are referenced as "<name>:easy", "<name>:medium", "<name>:hard" in route conditions
   const availableSignals = useMemo(() => {
-    const result: { signalType: string; name: string }[] = [];
+    const result: { signalType: string; name: string }[] = []
     for (const s of ast?.signals ?? []) {
-      if (s.signalType === "complexity") {
-        result.push({ signalType: s.signalType, name: `${s.name}:easy` });
-        result.push({ signalType: s.signalType, name: `${s.name}:medium` });
-        result.push({ signalType: s.signalType, name: `${s.name}:hard` });
+      if (s.signalType === 'complexity') {
+        result.push({ signalType: s.signalType, name: `${s.name}:easy` })
+        result.push({ signalType: s.signalType, name: `${s.name}:medium` })
+        result.push({ signalType: s.signalType, name: `${s.name}:hard` })
       } else {
-        result.push({ signalType: s.signalType, name: s.name });
+        result.push({ signalType: s.signalType, name: s.name })
       }
     }
     for (const mapping of ast?.projectionMappings ?? []) {
       for (const output of mapping.outputs ?? []) {
-        result.push({ signalType: "projection", name: output.name });
+        result.push({ signalType: 'projection', name: output.name })
       }
     }
-    return result;
-  }, [ast?.signals, ast?.projectionMappings]);
+    return result
+  }, [ast?.signals, ast?.projectionMappings])
   // Collect available plugin names for toggle panel
   const availablePlugins = useMemo(
     () => ast?.plugins?.map((p) => ({ name: p.name, pluginType: p.pluginType })) ?? [],
     [ast?.plugins],
-  );
-  const semanticModels = useMemo(
-    () => ast?.models?.map((model) => model.name) ?? [],
-    [ast?.models],
-  );
-  // Collect available model names for route selection.
-  const availableModels = useMemo(() => {
-    if (semanticModels.length > 0) {
-      return [...semanticModels].sort();
-    }
-    const modelSet = new Set<string>();
-    ast?.routes?.forEach((r) =>
-      r.models.forEach((m) => {
-        if (m.model) modelSet.add(m.model);
-      }),
-    );
-    return Array.from(modelSet).sort();
-  }, [ast?.routes, semanticModels]);
+  )
 
   // Validation panel state
-  const [validationOpen, setValidationOpen] = useState(true);
-  const errorDiags = useMemo(() => diagnostics.filter((d) => d.level === "error"), [diagnostics]);
-  const warnDiags = useMemo(() => diagnostics.filter((d) => d.level === "warning"), [diagnostics]);
+  const [validationOpen, setValidationOpen] = useState(true)
+  const errorDiags = useMemo(() => diagnostics.filter((d) => d.level === 'error'), [diagnostics])
+  const warnDiags = useMemo(() => diagnostics.filter((d) => d.level === 'warning'), [diagnostics])
   const constraintDiags = useMemo(
-    () => diagnostics.filter((d) => d.level === "constraint"),
+    () => diagnostics.filter((d) => d.level === 'constraint'),
     [diagnostics],
-  );
+  )
 
   const handleApplyFix = useCallback((diag: Diagnostic, newText: string) => {
-    const store = useDSLStore.getState();
-    const src = store.dslSource;
-    const lines = src.split("\n");
-    if (diag.line < 1 || diag.line > lines.length) return;
+    const store = useDSLStore.getState()
+    const src = store.dslSource
+    const lines = src.split('\n')
+    if (diag.line < 1 || diag.line > lines.length) return
 
-    const lineContent = lines[diag.line - 1];
-    let startCol = diag.column;
-    let endCol = diag.column;
-    while (startCol > 1 && /[\w\-.]/.test(lineContent[startCol - 2])) startCol--;
-    while (endCol <= lineContent.length && /[\w\-.]/.test(lineContent[endCol - 1])) endCol++;
+    const lineContent = lines[diag.line - 1]
+    let startCol = diag.column
+    let endCol = diag.column
+    while (startCol > 1 && /[\w\-.]/.test(lineContent[startCol - 2])) startCol--
+    while (endCol <= lineContent.length && /[\w\-.]/.test(lineContent[endCol - 1])) endCol++
 
-    const before = lineContent.slice(0, startCol - 1);
-    const after = lineContent.slice(endCol - 1);
-    lines[diag.line - 1] = before + newText + after;
+    const before = lineContent.slice(0, startCol - 1)
+    const after = lineContent.slice(endCol - 1)
+    lines[diag.line - 1] = before + newText + after
 
-    const newSrc = lines.join("\n");
-    useDSLStore.getState().setDslSource(newSrc);
+    const newSrc = lines.join('\n')
+    useDSLStore.getState().setDslSource(newSrc)
     // Re-parse AST for visual mode
-    if (useDSLStore.getState().wasmReady) useDSLStore.getState().parseAST();
-  }, []);
+    if (useDSLStore.getState().wasmReady) useDSLStore.getState().parseAST()
+  }, [])
 
   return (
     <div className={styles.visualContainer}>
-      <BuilderRoutingScopeBar
-        scopes={routingScopes}
-        activeScopeId={activeRoutingScopeId}
-        onChange={onRoutingScopeChange}
-      />
       <div className={styles.visualRow}>
         {/* Sidebar */}
         <div className={styles.sidebar}>
@@ -200,8 +161,8 @@ const VisualMode: React.FC<VisualModeProps> = ({
               selection === null && !addingEntity ? styles.sidebarHomeActive : styles.sidebarHome
             }
             onClick={() => {
-              onSetAddingEntity(null);
-              onSelect(null);
+              onSetAddingEntity(null)
+              onSelect(null)
             }}
           >
             <svg
@@ -222,64 +183,38 @@ const VisualMode: React.FC<VisualModeProps> = ({
             Dashboard
           </div>
 
-          <SidebarSection
-            title="Models"
-            count={modelCount}
-            open={sections.models}
-            onToggle={() => onToggleSection("models")}
-            onAdd={() => {
-              onSetAddingEntity("model");
-              onSelect(null);
-            }}
-          >
-            {ast?.models?.map((model) => (
-              <li
-                key={model.name}
-                className={
-                  selection?.kind === "model" && selection.name === model.name
-                    ? styles.sidebarItemActive
-                    : styles.sidebarItem
-                }
-                onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "model", name: model.name });
-                }}
-              >
-                <ModelIcon className={styles.sidebarItemIcon} />
-                <span className={styles.sidebarItemName}>{model.name}</span>
-                <span className={styles.sidebarItemType}>catalog</span>
-              </li>
-            ))}
-          </SidebarSection>
-
           {/* Signals */}
           <SidebarSection
             title="Signals"
             count={signalCount}
             open={sections.signals}
-            onToggle={() => onToggleSection("signals")}
-            onAdd={() => {
-              onSetAddingEntity("signal");
-              onSelect(null);
-            }}
+            onToggle={() => onToggleSection('signals')}
+            onAdd={
+              readOnly
+                ? undefined
+                : () => {
+                    onSetAddingEntity('signal')
+                    onSelect(null)
+                  }
+            }
           >
             {ast?.signals?.map((s) => (
               <li
                 key={s.name}
                 className={
-                  selection?.kind === "signal" && selection.name === s.name
+                  selection?.kind === 'signal' && selection.name === s.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "signal", name: s.name });
+                  onSetAddingEntity(null)
+                  onSelect({ kind: 'signal', name: s.name })
                 }}
               >
                 <SignalIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
                   {formatRoutingMetadataValue(
-                    `x-vsr-matched-${s.signalType.replace("_", "-")}`,
+                    `x-vsr-matched-${s.signalType.replace('_', '-')}`,
                     s.name,
                   )}
                 </span>
@@ -292,28 +227,32 @@ const VisualMode: React.FC<VisualModeProps> = ({
             title="Projection Partitions"
             count={projectionPartitionCount}
             open={sections.projectionPartitions}
-            onToggle={() => onToggleSection("projectionPartitions")}
-            onAdd={() => {
-              onSetAddingEntity("projection-partition");
-              onSelect(null);
-            }}
+            onToggle={() => onToggleSection('projectionPartitions')}
+            onAdd={
+              readOnly
+                ? undefined
+                : () => {
+                    onSetAddingEntity('projection-partition')
+                    onSelect(null)
+                  }
+            }
           >
             {ast?.projectionPartitions?.map((partition) => (
               <li
                 key={partition.name}
                 className={
-                  selection?.kind === "projection-partition" && selection.name === partition.name
+                  selection?.kind === 'projection-partition' && selection.name === partition.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "projection-partition", name: partition.name });
+                  onSetAddingEntity(null)
+                  onSelect({ kind: 'projection-partition', name: partition.name })
                 }}
               >
                 <SignalIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue("x-vsr-matched-projections", partition.name)}
+                  {formatRoutingMetadataValue('x-vsr-matched-projections', partition.name)}
                 </span>
                 <span className={styles.sidebarItemType}>partition</span>
               </li>
@@ -324,28 +263,32 @@ const VisualMode: React.FC<VisualModeProps> = ({
             title="Projection Scores"
             count={projectionScoreCount}
             open={sections.projectionScores}
-            onToggle={() => onToggleSection("projectionScores")}
-            onAdd={() => {
-              onSetAddingEntity("projection-score");
-              onSelect(null);
-            }}
+            onToggle={() => onToggleSection('projectionScores')}
+            onAdd={
+              readOnly
+                ? undefined
+                : () => {
+                    onSetAddingEntity('projection-score')
+                    onSelect(null)
+                  }
+            }
           >
             {ast?.projectionScores?.map((score) => (
               <li
                 key={score.name}
                 className={
-                  selection?.kind === "projection-score" && selection.name === score.name
+                  selection?.kind === 'projection-score' && selection.name === score.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "projection-score", name: score.name });
+                  onSetAddingEntity(null)
+                  onSelect({ kind: 'projection-score', name: score.name })
                 }}
               >
                 <RouteIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue("x-vsr-matched-projections", score.name)}
+                  {formatRoutingMetadataValue('x-vsr-matched-projections', score.name)}
                 </span>
                 <span className={styles.sidebarItemType}>score</span>
               </li>
@@ -356,28 +299,32 @@ const VisualMode: React.FC<VisualModeProps> = ({
             title="Projection Mappings"
             count={projectionMappingCount}
             open={sections.projectionMappings}
-            onToggle={() => onToggleSection("projectionMappings")}
-            onAdd={() => {
-              onSetAddingEntity("projection-mapping");
-              onSelect(null);
-            }}
+            onToggle={() => onToggleSection('projectionMappings')}
+            onAdd={
+              readOnly
+                ? undefined
+                : () => {
+                    onSetAddingEntity('projection-mapping')
+                    onSelect(null)
+                  }
+            }
           >
             {ast?.projectionMappings?.map((mapping) => (
               <li
                 key={mapping.name}
                 className={
-                  selection?.kind === "projection-mapping" && selection.name === mapping.name
+                  selection?.kind === 'projection-mapping' && selection.name === mapping.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "projection-mapping", name: mapping.name });
+                  onSetAddingEntity(null)
+                  onSelect({ kind: 'projection-mapping', name: mapping.name })
                 }}
               >
                 <RouteIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue("x-vsr-matched-projections", mapping.name)}
+                  {formatRoutingMetadataValue('x-vsr-matched-projections', mapping.name)}
                 </span>
                 <span className={styles.sidebarItemType}>mapping</span>
               </li>
@@ -389,28 +336,32 @@ const VisualMode: React.FC<VisualModeProps> = ({
             title="Routes"
             count={routeCount}
             open={sections.routes}
-            onToggle={() => onToggleSection("routes")}
-            onAdd={() => {
-              onSetAddingEntity("route");
-              onSelect(null);
-            }}
+            onToggle={() => onToggleSection('routes')}
+            onAdd={
+              readOnly
+                ? undefined
+                : () => {
+                    onSetAddingEntity('route')
+                    onSelect(null)
+                  }
+            }
           >
             {ast?.routes?.map((r) => (
               <li
                 key={r.name}
                 className={
-                  selection?.kind === "route" && selection.name === r.name
+                  selection?.kind === 'route' && selection.name === r.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "route", name: r.name });
+                  onSetAddingEntity(null)
+                  onSelect({ kind: 'route', name: r.name })
                 }}
               >
                 <RouteIcon className={styles.sidebarItemIcon} />
                 <span className={styles.sidebarItemName}>
-                  {formatRoutingMetadataValue("x-vsr-selected-decision", r.name)}
+                  {formatRoutingMetadataValue('x-vsr-selected-decision', r.name)}
                 </span>
                 <span className={styles.sidebarItemType}>P{r.priority}</span>
               </li>
@@ -422,23 +373,27 @@ const VisualMode: React.FC<VisualModeProps> = ({
             title="Plugins"
             count={pluginCount}
             open={sections.plugins}
-            onToggle={() => onToggleSection("plugins")}
-            onAdd={() => {
-              onSetAddingEntity("plugin");
-              onSelect(null);
-            }}
+            onToggle={() => onToggleSection('plugins')}
+            onAdd={
+              readOnly
+                ? undefined
+                : () => {
+                    onSetAddingEntity('plugin')
+                    onSelect(null)
+                  }
+            }
           >
             {ast?.plugins?.map((p) => (
               <li
                 key={p.name}
                 className={
-                  selection?.kind === "plugin" && selection.name === p.name
+                  selection?.kind === 'plugin' && selection.name === p.name
                     ? styles.sidebarItemActive
                     : styles.sidebarItem
                 }
                 onClick={() => {
-                  onSetAddingEntity(null);
-                  onSelect({ kind: "plugin", name: p.name });
+                  onSetAddingEntity(null)
+                  onSelect({ kind: 'plugin', name: p.name })
                 }}
               >
                 <PluginIcon className={styles.sidebarItemIcon} />
@@ -459,39 +414,36 @@ const VisualMode: React.FC<VisualModeProps> = ({
           )}
 
           <div className={styles.mainPanelContent}>
-            {addingEntity === "model" ? (
-              <AddModelForm onAdd={onAddModel} onCancel={() => onSetAddingEntity(null)} />
-            ) : addingEntity === "signal" ? (
+            {!readOnly && addingEntity === 'signal' ? (
               <AddSignalForm onAdd={onAddSignal} onCancel={() => onSetAddingEntity(null)} />
-            ) : addingEntity === "projection-partition" ? (
+            ) : !readOnly && addingEntity === 'projection-partition' ? (
               <AddProjectionPartitionForm
                 onAdd={onAddProjectionPartition}
                 onCancel={() => onSetAddingEntity(null)}
               />
-            ) : addingEntity === "projection-score" ? (
+            ) : !readOnly && addingEntity === 'projection-score' ? (
               <AddProjectionScoreForm
                 onAdd={onAddProjectionScore}
                 onCancel={() => onSetAddingEntity(null)}
               />
-            ) : addingEntity === "projection-mapping" ? (
+            ) : !readOnly && addingEntity === 'projection-mapping' ? (
               <AddProjectionMappingForm
                 onAdd={onAddProjectionMapping}
                 onCancel={() => onSetAddingEntity(null)}
               />
-            ) : addingEntity === "plugin" ? (
+            ) : !readOnly && addingEntity === 'plugin' ? (
               <AddPluginForm onAdd={onAddPlugin} onCancel={() => onSetAddingEntity(null)} />
-            ) : addingEntity === "route" ? (
+            ) : !readOnly && addingEntity === 'route' ? (
               <AddRouteForm
                 onAdd={onAddRoute}
                 onCancel={() => onSetAddingEntity(null)}
                 availableSignals={availableSignals}
                 availablePlugins={availablePlugins}
-                availableModels={availableModels}
               />
             ) : !selection ? (
               <DashboardView
+                readOnly={readOnly}
                 ast={ast}
-                modelCount={modelCount}
                 signalCount={signalCount}
                 routeCount={routeCount}
                 pluginCount={pluginCount}
@@ -501,8 +453,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onAddEntity={onSetAddingEntity}
                 onModeSwitch={onModeSwitch}
               />
-            ) : selection.name === "__list__" ? (
+            ) : selection.name === '__list__' ? (
               <EntityListView
+                readOnly={readOnly}
                 kind={selection.kind}
                 ast={ast}
                 onSelect={onSelect}
@@ -511,10 +464,10 @@ const VisualMode: React.FC<VisualModeProps> = ({
               />
             ) : (
               <EntityDetailView
+                readOnly={readOnly}
                 selection={selection}
                 entity={selectedEntity}
                 onDeleteEntity={onDeleteEntity}
-                onUpdateModelFields={onUpdateModelFields}
                 onUpdateSignalFields={onUpdateSignalFields}
                 onUpdateProjectionPartitionFields={onUpdateProjectionPartitionFields}
                 onUpdateProjectionScoreFields={onUpdateProjectionScoreFields}
@@ -523,7 +476,6 @@ const VisualMode: React.FC<VisualModeProps> = ({
                 onUpdateRoute={onUpdateRoute}
                 availableSignals={availableSignals}
                 availablePlugins={availablePlugins}
-                availableModels={availableModels}
                 onBack={() => onSelect(null)}
               />
             )}
@@ -533,6 +485,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
       {/* end visualRow */}
 
       <BuilderValidationPanel
+        readOnly={readOnly}
         diagnostics={diagnostics}
         validationOpen={validationOpen}
         errorDiags={errorDiags}
@@ -542,7 +495,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
         onApplyFix={handleApplyFix}
       />
     </div>
-  );
-};
+  )
+}
 
-export { VisualMode };
+export { VisualMode }

@@ -333,7 +333,7 @@ rebuild-and-test: install
 		echo '  Checking auth bootstrap endpoint...'; \
 		mkdir -p /tmp/static /tmp/data; \
 		printf '<!doctype html><title>ok</title>' > /tmp/static/index.html; \
-		printf 'version: v0.3\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n' > /tmp/config.yaml; \
+		printf 'version: v0.4\nlisteners:\n  - name: http\n    address: 0.0.0.0\n    port: 8899\n' > /tmp/config.yaml; \
 		/usr/local/bin/dashboard-backend -port=8700 -static=/tmp/static -config=/tmp/config.yaml -auth-db /tmp/data/auth.db -auth-jwt-secret test-secret >/tmp/dashboard.log 2>&1 & \
 		pid=\$$!; \
 		for i in 1 2 3 4 5; do \

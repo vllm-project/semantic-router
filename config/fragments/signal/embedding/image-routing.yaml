@@ -1,7 +1,7 @@
 # Opt-in image-modality embedding pack. Inline under
 # routing.signals.embeddings to demo image-routing patterns. Requires
 # the multimodal embedding model.
-routing:
+document:
   signals:
     embeddings:
       - name: identifier_document_imagery

@@ -1,9 +1,13 @@
+import importlib.util
 import os
 import socket
 import stat
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DASHBOARD_DOCKERFILE = REPO_ROOT / "dashboard" / "backend" / "Dockerfile"
@@ -20,14 +24,21 @@ DASHBOARD_PERMISSION_HELPER = (
     REPO_ROOT / "dashboard" / "backend" / "entrypoint_permissions.py"
 )
 DASHBOARD_LOGS_HANDLER = REPO_ROOT / "dashboard" / "backend" / "handlers" / "logs.go"
-BUILT_IN_MODEL_ASSETS = (
-    Path("latest/catalog.yaml"),
-    Path("latest/mom-v1/README.md"),
-    Path("latest/mom-v1/config.yaml"),
-    Path("latest/mom-v1/metadata.yaml"),
-    Path("latest/mom-v1/probes.yaml"),
-    Path("latest/mom-v1/recipe.dsl"),
-)
+
+
+def _load_dashboard_permission_helper() -> ModuleType:
+    spec = importlib.util.spec_from_file_location(
+        "dashboard_entrypoint_permissions",
+        DASHBOARD_PERMISSION_HELPER,
+    )
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load Dashboard permission helper")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+DASHBOARD_PERMISSION_MODULE = _load_dashboard_permission_helper()
 
 
 def test_dashboard_dockerfile_uses_glibc_builder_for_cgo_backend() -> None:
@@ -74,6 +85,13 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
     assert content.index("OPENCLAW_CONTAINER_RUNTIME_DISABLED=true") < content.index(
         'exec "$@"'
     )
+    assert (
+        'if [ "${OPENCLAW_CONTAINER_RUNTIME_DISABLED:-true}" != "false" ]; then'
+        in content
+    )
+    assert content.index(
+        "${OPENCLAW_CONTAINER_RUNTIME_DISABLED:-true}"
+    ) < content.index("socket-gid")
     assert "continuing without socket access" in content
     assert "LOG_SPOOL_GID=${VLLM_SR_LOG_SPOOL_GID:-}" in content
     assert 'add_nonroot_group_gid "$LOG_SPOOL_GID"' in content
@@ -83,27 +101,16 @@ def test_dashboard_entrypoint_maps_runtime_socket_group_before_dropping_root() -
     assert 'if [ "$GROUP_GID" -eq 0 ]' in content
     assert "Refusing to add Dashboard user to the root group" in content
     assert "safe_shared_path_gid" not in content
-    assert "STATE_GID=65532" in content
-    assert "ENVOY_STATE_GID=65532" in content
-    assert "RECIPE_STORE_GID=65532" in content
     assert "DATA_GID=65532" in content
     assert 'python3 "$PERMISSION_HELPER" prepare-tree' in content
-    assert "--credential-relative-path credentials/router-management.token" in content
-    assert 'python3 "$PERMISSION_HELPER" prepare-file "$CONFIG_FILE_PATH"' in content
-    assert (
-        'python3 "$PERMISSION_HELPER" probe-config "$STATE_DIR" "$CONFIG_FILE_PATH"'
-        in content
-    )
-    assert '[ ! -f "$CONFIG_FILE_PATH" ] || [ ! -d "$STATE_DIR" ]' in content
-    assert (
-        "RECIPE_STORE_DIR=${VLLM_SR_RECIPE_STORE_DIR:-${STATE_DIR}/.vllm-sr/recipe-store}"
-        in content
-    )
-    assert (
-        'python3 "$PERMISSION_HELPER" ensure-directory "$RECIPE_STORE_DIR"' in content
-    )
-    assert "DASHBOARD_RUNTIME_CONFIG_WRITABLE=$RUNTIME_CONFIG_WRITABLE" in content
-    assert "DASHBOARD_RECIPE_STORE_WRITABLE=$RECIPE_STORE_WRITABLE" in content
+    assert "DASHBOARD_RUNTIME_CONFIG_WRITABLE" not in content
+    assert "CONFIG_FILE_PATH" not in content
+    assert "RUNTIME_LOCK_DIR" not in content
+    assert 'python3 "$PERMISSION_HELPER" prepare-bootstrap-token' in content
+    assert '"$DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE" 65532 65532' in content
+    assert "VLLM_SR_RECIPE_STORE_DIR" not in content
+    assert "DASHBOARD_RECIPE_STORE_WRITABLE" not in content
+    assert "router-management.token" not in content
     assert "DASHBOARD_READONLY=true" not in content
     assert 'if [ "$(id -u)" -ne 0 ]' in content
     assert content.index('if [ "$(id -u)" -ne 0 ]') < content.index(
@@ -218,136 +225,54 @@ def test_dashboard_permission_helper_pins_and_validates_runtime_socket(
     assert "must be a Unix socket" in result.stderr
 
 
-def test_dashboard_permission_helper_creates_recipe_store_under_writable_parent(
+def test_dashboard_permission_helper_normalizes_only_closed_var_run_alias() -> None:
+    normalize = DASHBOARD_PERMISSION_MODULE._normalize_system_path
+
+    assert normalize("/var/run") == "/run"
+    assert normalize("/var/run/secrets/dashboard/key.pem") == (
+        "/run/secrets/dashboard/key.pem"
+    )
+    assert normalize("/var/runfoo/secrets/key.pem") == "/var/runfoo/secrets/key.pem"
+
+
+def test_dashboard_permission_helper_rejects_parent_traversal(tmp_path: Path) -> None:
+    unsafe_path = str(tmp_path / "safe" / ".." / "secret")
+
+    with pytest.raises(OSError, match="parent traversal"):
+        DASHBOARD_PERMISSION_MODULE.open_path(unsafe_path)
+
+
+def test_dashboard_permission_helper_rejects_symlinked_path_child(
     tmp_path: Path,
 ) -> None:
-    store = tmp_path / "recipe-store"
+    real_directory = tmp_path / "real"
+    real_directory.mkdir()
+    secret = real_directory / "secret"
+    secret.write_text("private-test-material", encoding="utf-8")
+    secret.chmod(0o600)
+    symlinked_child = tmp_path / "symlinked-child"
+    symlinked_child.symlink_to(real_directory, target_is_directory=True)
 
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "ensure-directory",
-            str(store),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode == 0, result.stderr
-    assert store.is_dir()
-
-
-def test_dashboard_permission_helper_rejects_recipe_store_symlink(
-    tmp_path: Path,
-) -> None:
-    target = tmp_path / "target"
-    target.mkdir()
-    store = tmp_path / "recipe-store"
-    store.symlink_to(target, target_is_directory=True)
-
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "ensure-directory",
-            str(store),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-
-    assert result.returncode != 0
-
-
-def test_dashboard_permission_helper_preserves_private_management_token(
-    tmp_path: Path,
-) -> None:
-    store = tmp_path / "recipe-store"
-    credentials = store / "credentials"
-    credentials.mkdir(parents=True)
-    token = credentials / "router-management.token"
-    token.write_text("a" * 64, encoding="utf-8")
-    token.chmod(0o600)
-    record = store / "active.json"
-    record.write_text("{}", encoding="utf-8")
-    record.chmod(0o600)
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "prepare-tree",
-            str(store),
-            str(os.getgid()),
-            "--credential-relative-path",
-            "credentials/router-management.token",
-            "--credential-uid",
-            str(os.getuid()),
-            "--credential-gid",
-            str(os.getgid()),
-        ],
-        check=True,
-    )
-
-    assert stat.S_IMODE(token.stat().st_mode) == 0o600
-    assert stat.S_IMODE(record.stat().st_mode) == 0o660
-    assert stat.S_IMODE(credentials.stat().st_mode) & stat.S_ISGID
-
-
-def test_dashboard_permission_helper_probes_recipe_store_without_residue(
-    tmp_path: Path,
-) -> None:
-    store = tmp_path / "recipe-store"
-    store.mkdir()
-
-    subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "probe-directory",
-            str(store),
-        ],
-        check=True,
-    )
-
-    assert list(store.iterdir()) == []
-
-    linked_store = tmp_path / "linked-store"
-    linked_store.symlink_to(store, target_is_directory=True)
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(DASHBOARD_PERMISSION_HELPER),
-            "probe-directory",
-            str(linked_store),
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    assert result.returncode != 0
-    assert list(store.iterdir()) == []
+    with pytest.raises(OSError):
+        DASHBOARD_PERMISSION_MODULE.open_path(str(symlinked_child / "secret"))
 
 
 def test_dashboard_permission_helper_rejects_symlinked_shared_tree_entry(
     tmp_path: Path,
 ) -> None:
-    store = tmp_path / "recipe-store"
-    store.mkdir()
+    shared_tree = tmp_path / "shared-tree"
+    shared_tree.mkdir()
     outside = tmp_path / "outside"
     outside.write_text("sentinel", encoding="utf-8")
     outside.chmod(0o600)
-    (store / "trap").symlink_to(outside)
+    (shared_tree / "trap").symlink_to(outside)
 
     result = subprocess.run(
         [
             sys.executable,
             str(DASHBOARD_PERMISSION_HELPER),
             "prepare-tree",
-            str(store),
+            str(shared_tree),
             str(os.getgid()),
         ],
         capture_output=True,
@@ -363,16 +288,16 @@ def test_dashboard_permission_helper_rejects_symlinked_shared_tree_entry(
 def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     tmp_path: Path,
 ) -> None:
-    store = tmp_path / "recipe-store"
-    store.mkdir()
-    os.mkfifo(store / "trap")
+    shared_tree = tmp_path / "shared-tree"
+    shared_tree.mkdir()
+    os.mkfifo(shared_tree / "trap")
 
     result = subprocess.run(
         [
             sys.executable,
             str(DASHBOARD_PERMISSION_HELPER),
             "prepare-tree",
-            str(store),
+            str(shared_tree),
             str(os.getgid()),
         ],
         capture_output=True,
@@ -385,24 +310,113 @@ def test_dashboard_permission_helper_rejects_fifo_without_blocking(
     assert "unsafe file" in result.stderr
 
 
-def test_dashboard_dockerfile_copies_router_dsl_package_for_backend_builds() -> None:
+def test_dashboard_permission_helper_preserves_private_bootstrap_token(
+    tmp_path: Path,
+) -> None:
+    token_directory = tmp_path / "bootstrap"
+    token_directory.mkdir(mode=0o700)
+    token = token_directory / "router-token"
+    token.write_text("one-time-test-token", encoding="utf-8")
+    token.chmod(0o600)
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(DASHBOARD_PERMISSION_HELPER),
+            "prepare-bootstrap-token",
+            str(token),
+            str(os.getuid()),
+            str(os.getgid()),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert stat.S_IMODE(token_directory.stat().st_mode) == 0o700
+    assert stat.S_IMODE(token.stat().st_mode) == 0o600
+
+    token.unlink()
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(DASHBOARD_PERMISSION_HELPER),
+            "prepare-bootstrap-token",
+            str(token),
+            str(os.getuid()),
+            str(os.getgid()),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_dashboard_permission_helper_stages_private_secret_without_broadening_source(
+    tmp_path: Path,
+) -> None:
+    source_directory = tmp_path / "router-secrets"
+    source_directory.mkdir(mode=0o700)
+    source = source_directory / "issuer-key.pem"
+    source.write_text("private-test-material", encoding="utf-8")
+    source.chmod(0o600)
+    destination_directory = tmp_path / "dashboard-secrets"
+    destination_directory.mkdir(mode=0o700)
+    destination = destination_directory / "issuer-key.pem"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(DASHBOARD_PERMISSION_HELPER),
+            "stage-private-file",
+            str(source),
+            str(destination),
+            str(os.getuid()),
+            str(os.getgid()),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert destination.read_text(encoding="utf-8") == "private-test-material"
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+    assert stat.S_IMODE(source.stat().st_mode) == 0o600
+
+    source.write_text("rotated-private-test-material", encoding="utf-8")
+    source.chmod(0o600)
+    restarted = subprocess.run(
+        [
+            sys.executable,
+            str(DASHBOARD_PERMISSION_HELPER),
+            "stage-private-file",
+            str(source),
+            str(destination),
+            str(os.getuid()),
+            str(os.getgid()),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert restarted.returncode == 0, restarted.stderr
+    assert destination.read_text(encoding="utf-8") == "rotated-private-test-material"
+    assert stat.S_IMODE(destination.stat().st_mode) == 0o600
+
+
+def test_dashboard_dockerfile_copies_one_router_package_tree_for_backend_builds() -> (
+    None
+):
     content = DASHBOARD_DOCKERFILE.read_text(encoding="utf-8")
 
-    assert (
-        "COPY src/semantic-router/pkg/dsl/ /app/src/semantic-router/pkg/dsl/" in content
-    )
-    assert (
-        "COPY src/semantic-router/pkg/nlgen/ /app/src/semantic-router/pkg/nlgen/"
-        in content
-    )
-    assert (
-        "COPY src/semantic-router/internal/nlgen/ /app/src/semantic-router/internal/nlgen/"
-        in content
-    )
-    assert (
-        "COPY src/semantic-router/pkg/routerreplay/redaction/ "
-        "/app/src/semantic-router/pkg/routerreplay/redaction/" in content
-    )
+    assert "COPY src/semantic-router/pkg/ /app/src/semantic-router/pkg/" in content
+    assert "COPY src/semantic-router/pkg/dsl/" not in content
+    assert "COPY src/semantic-router/pkg/nlgen/" not in content
+    assert "COPY src/semantic-router/pkg/routerreplay/redaction/" not in content
 
 
 def test_dashboard_dockerfile_copies_model_eval_scripts_and_requirements() -> None:
@@ -518,41 +532,6 @@ def test_router_images_ship_the_management_api_runtime_sync_module() -> None:
         content = dockerfile.read_text(encoding="utf-8")
         assert expected_copy in content, f"{dockerfile} omits runtime config sync"
         assert "pyyaml>=6.0.2" in content, f"{dockerfile} omits runtime YAML support"
-
-
-def test_runtime_images_bind_the_generated_model_catalog() -> None:
-    expected_copy = "COPY src/vllm-sr/cli/ /app/cli/"
-    for dockerfile in (
-        VLLM_SR_DOCKERFILE,
-        VLLM_SR_ROCM_DOCKERFILE,
-        VLLM_SR_CUDA_DOCKERFILE,
-        DASHBOARD_DOCKERFILE,
-    ):
-        content = dockerfile.read_text(encoding="utf-8")
-        assert expected_copy in content, f"{dockerfile} omits built-in model assets"
-
-    source_root = REPO_ROOT / "config" / "recipes" / "built-in"
-    image_root = REPO_ROOT / "src" / "vllm-sr" / "cli" / "model_assets"
-    source_assets = {
-        path.relative_to(source_root)
-        for path in (source_root / "latest").rglob("*")
-        if path.is_file()
-    }
-    image_assets = {
-        path.relative_to(image_root)
-        for path in image_root.rglob("*")
-        if path.is_file()
-        and path.name != "__init__.py"
-        and "__pycache__" not in path.parts
-    }
-    assert set(BUILT_IN_MODEL_ASSETS) <= source_assets
-    assert image_assets == source_assets
-    for relative in source_assets:
-        source = source_root / relative
-        image_asset = image_root / relative
-        assert (
-            image_asset.read_bytes() == source.read_bytes()
-        ), f"image model asset drifted: {relative}"
 
 
 def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:

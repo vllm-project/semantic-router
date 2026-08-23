@@ -1,6 +1,7 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
+import type { ProductIconName } from './ProductIcon'
 
-export type LayoutDropdownKey = 'build' | 'analyze' | 'operate'
+export type LayoutDropdownKey = 'build' | 'operate'
 
 export type LayoutConfigSection =
   | 'models'
@@ -8,12 +9,12 @@ export type LayoutConfigSection =
   | 'projections'
   | 'decisions'
   | 'entrypoints-recipes'
-  | 'global-config'
-  | 'mcp'
+  | 'agent'
 
 type LayoutRouteMenuItem = {
   kind: 'route'
   label: string
+  icon: ProductIconName
   to: string
   matchMode?: 'exact' | 'prefix'
   activePathPattern?: RegExp
@@ -22,6 +23,7 @@ type LayoutRouteMenuItem = {
 type LayoutConfigMenuItem = {
   kind: 'config'
   label: string
+  icon: ProductIconName
   configSection: LayoutConfigSection
 }
 
@@ -42,13 +44,21 @@ export interface LayoutMenuCategory {
 
 export interface LayoutNavLink {
   label: string
+  icon: ProductIconName
   to: string
   matchMode?: 'exact' | 'prefix'
+  activePathPattern?: RegExp
 }
 
 export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
-  { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Playground', to: '/playground' },
+  { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+  { label: 'Playground', icon: 'playground', to: '/playground' },
+  {
+    label: 'Access',
+    icon: 'key',
+    to: '/access/usage',
+    activePathPattern: /^\/(?:access(?:\/|$)|logs(?:\/|$))/,
+  },
 ]
 
 export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
@@ -58,102 +68,72 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
     description: 'Design the signal-to-decision path that selects each model route.',
     sections: [
       {
-        title: 'Design',
-        description: 'Author and inspect the routing graph.',
+        title: 'Models',
+        description: 'Configure provider models and compose the available fleet.',
         items: [
-          { kind: 'route', label: 'Config Builder', to: '/builder' },
+          { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',
             label: 'Mixture-of-Models',
+            icon: 'mixture',
             configSection: 'entrypoints-recipes',
           },
-          { kind: 'route', label: 'Brain Topology', to: '/topology' },
         ],
       },
       {
-        title: 'Evidence',
-        description: 'Define the facts and projections every decision can use.',
+        title: 'Routing Logic',
+        description: 'Define the signals, projections, and decisions that select a route.',
         items: [
-          { kind: 'config', label: 'Signals', configSection: 'signals' },
-          { kind: 'config', label: 'Projections', configSection: 'projections' },
+          { kind: 'config', label: 'Signals', icon: 'signal', configSection: 'signals' },
+          {
+            kind: 'config',
+            label: 'Projections',
+            icon: 'projection',
+            configSection: 'projections',
+          },
+          {
+            kind: 'config',
+            label: 'Decisions',
+            icon: 'decision',
+            configSection: 'decisions',
+          },
         ],
       },
       {
-        title: 'Dispatch',
-        description: 'Bind policy outcomes to the available model fleet.',
+        title: 'Design',
+        description: 'Inspect the routing graph, request outcomes, or author its DSL.',
         items: [
-          { kind: 'config', label: 'Decisions', configSection: 'decisions' },
-          { kind: 'config', label: 'Models', configSection: 'models' },
-        ],
-      },
-    ],
-  },
-  {
-    key: 'knowledge',
-    label: 'Knowledge',
-    description: 'Bring governed context into signal extraction and route policy.',
-    sections: [
-      {
-        title: 'Knowledge Base',
-        description: 'Manage the retrieval inventory used by knowledge signals.',
-        items: [
+          { kind: 'route', label: 'Brain Topology', icon: 'topology', to: '/topology' },
+          { kind: 'route', label: 'DSL Builder', icon: 'code', to: '/builder' },
           {
             kind: 'route',
-            label: 'Bases',
-            to: '/knowledge-bases/bases',
-            activePathPattern: /^\/knowledge-bases\/[^/]+\/map\/?$/,
+            label: 'Insights',
+            icon: 'insight',
+            to: '/insights',
+            matchMode: 'prefix',
           },
-          { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
-          { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
         ],
       },
     ],
   },
   {
     key: 'integrations',
-    label: 'Integrations & Policy',
-    description: 'Connect external capabilities and enforce request-path controls.',
+    label: 'Integrations',
+    description: 'Bring trusted tools into vLLM-SR.',
     sections: [
       {
         title: 'Integrations',
-        description: 'Extend the control plane with tools and agent runtimes.',
+        description: 'Choose how the Agent works and what it can use.',
         items: [
-          { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
-          { kind: 'route', label: 'ClawOS', to: '/clawos' },
+          { kind: 'config', label: 'vLLM-SR Agent', icon: 'tool', configSection: 'agent' },
+          { kind: 'route', label: 'OpenClaw', icon: 'claw', to: '/openclaw' },
         ],
-      },
-      {
-        title: 'Policy',
-        description: 'Review the security controls applied around routing.',
-        items: [{ kind: 'route', label: 'Security Policy', to: '/security' }],
       },
     ],
   },
 ]
 
 export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
-  {
-    key: 'outcomes',
-    label: 'Outcomes',
-    description: 'Inspect routing choices, measure quality, and tune model behavior.',
-    sections: [
-      {
-        title: 'Inspect',
-        description: 'Understand what the router selected and why.',
-        items: [{ kind: 'route', label: 'Insights', to: '/insights', matchMode: 'prefix' }],
-      },
-      {
-        title: 'Evaluate',
-        description: 'Benchmark signal and system-level behavior.',
-        items: [{ kind: 'route', label: 'Evaluation', to: '/evaluation' }],
-      },
-      {
-        title: 'Tune',
-        description: 'Prepare and validate the router model stack.',
-        items: [{ kind: 'route', label: 'ML Setup', to: '/ml-setup' }],
-      },
-    ],
-  },
   {
     key: 'fleet-simulation',
     label: 'Fleet Simulation',
@@ -165,6 +145,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: FLEET_SIM_NAV_ITEMS.slice(0, 2).map((item) => ({
           kind: 'route' as const,
           label: item.label,
+          icon: 'fleet' as const,
           to: item.to,
         })),
       },
@@ -174,6 +155,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: FLEET_SIM_NAV_ITEMS.slice(2, 3).map((item) => ({
           kind: 'route' as const,
           label: item.label,
+          icon: 'fleet' as const,
           to: item.to,
         })),
       },
@@ -183,6 +165,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: FLEET_SIM_NAV_ITEMS.slice(3).map((item) => ({
           kind: 'route' as const,
           label: item.label,
+          icon: 'fleet' as const,
           to: item.to,
         })),
       },
@@ -200,14 +183,20 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
         items: [
-          { kind: 'route', label: 'Status', to: '/status' },
-          { kind: 'route', label: 'Plugin Operations', to: '/plugins', matchMode: 'prefix' },
+          { kind: 'route', label: 'Status', icon: 'status', to: '/status' },
+          {
+            kind: 'route',
+            label: 'Plugin Operations',
+            icon: 'puzzle',
+            to: '/plugins',
+            matchMode: 'prefix',
+          },
         ],
       },
       {
         title: 'Diagnostics',
         description: 'Read runtime events and investigate failures.',
-        items: [{ kind: 'route', label: 'Logs', to: '/logs' }],
+        items: [{ kind: 'route', label: 'Logs', icon: 'logs', to: '/logs' }],
       },
     ],
   },
@@ -219,29 +208,27 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Metrics',
         description: 'Open the operational dashboard for fleet and router telemetry.',
-        items: [{ kind: 'route', label: 'Grafana', to: '/monitoring' }],
+        items: [{ kind: 'route', label: 'Grafana', icon: 'chart', to: '/monitoring' }],
       },
       {
         title: 'Tracing',
         description: 'Inspect request paths across the serving system.',
-        items: [{ kind: 'route', label: 'Tracing', to: '/tracing' }],
+        items: [{ kind: 'route', label: 'Tracing', icon: 'trace', to: '/tracing' }],
       },
     ],
   },
   {
-    key: 'platform-access',
-    label: 'Platform & Access',
-    description: 'Manage global defaults and who can change the control plane.',
+    key: 'platform',
+    label: 'Platform',
+    description: 'Manage router-wide defaults and infrastructure bindings.',
     sections: [
       {
         title: 'Platform',
         description: 'Configure router-wide defaults and infrastructure bindings.',
-        items: [{ kind: 'config', label: 'Global Config', configSection: 'global-config' }],
-      },
-      {
-        title: 'Access',
-        description: 'Administer dashboard identities and roles.',
-        items: [{ kind: 'route', label: 'Users', to: '/users' }],
+        items: [
+          { kind: 'route', label: 'Evaluation', icon: 'evaluation', to: '/evaluation' },
+          { kind: 'route', label: 'ML Setup', icon: 'compute', to: '/ml-setup' },
+        ],
       },
     ],
   },

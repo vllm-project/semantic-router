@@ -20,10 +20,7 @@ const (
 	DecisionAlgorithmWorkflows    = "workflows"
 	DecisionAlgorithmPrompt       = "prompt"
 
-	DecisionPluginResponseCache = "response_cache"
-	// DecisionPluginSemanticCache is the deprecated public spelling retained
-	// for source compatibility. Runtime config is normalized to response_cache.
-	DecisionPluginSemanticCache      = "semantic-cache"
+	DecisionPluginResponseCache      = "response_cache"
 	DecisionPluginSystemPrompt       = "system_prompt"
 	DecisionPluginHeaderMutation     = "header_mutation"
 	DecisionPluginHallucination      = "hallucination"
@@ -86,6 +83,17 @@ const (
 	AlgorithmExecutionSelector AlgorithmExecution = "selector"
 )
 
+// AlgorithmDispatchCardinality describes how many inference Models an
+// algorithm requires for one matched decision. It is a closed capability of
+// the canonical algorithm catalog, not a property inferred from an
+// Entrypoint assignment.
+type AlgorithmDispatchCardinality string
+
+const (
+	AlgorithmDispatchSingle AlgorithmDispatchCardinality = "single"
+	AlgorithmDispatchMulti  AlgorithmDispatchCardinality = "multi"
+)
+
 // AlgorithmCatalogEntry describes a decision algorithm, its tier, and the
 // runtime path that executes it.
 type AlgorithmCatalogEntry struct {
@@ -122,12 +130,6 @@ var supportedDecisionAlgorithmTypes = func() []string {
 	return types
 }()
 
-var pluginTypeAliases = map[string]string{
-	"semantic-cache": DecisionPluginResponseCache,
-	"semantic_cache": DecisionPluginResponseCache,
-	"response-cache": DecisionPluginResponseCache,
-}
-
 func SupportedSignalTypes() []string {
 	return cloneSortedStrings(supportedSignalTypes)
 }
@@ -146,9 +148,6 @@ func SupportedDecisionPluginTypes() []string {
 }
 
 func NormalizeDecisionPluginType(pluginType string) string {
-	if normalized, ok := pluginTypeAliases[pluginType]; ok {
-		return normalized
-	}
 	return pluginType
 }
 
@@ -195,6 +194,29 @@ func IsLooperAlgorithmType(algorithmType string) bool {
 		}
 	}
 	return false
+}
+
+// DecisionAlgorithmDispatchCardinality returns the declared dispatch
+// cardinality for a canonical decision algorithm. Omitting an algorithm uses
+// the static selector and therefore dispatches one Model. Unknown algorithm
+// identifiers fail closed.
+func DecisionAlgorithmDispatchCardinality(algorithmType string) (AlgorithmDispatchCardinality, bool) {
+	if algorithmType == "" {
+		return AlgorithmDispatchSingle, true
+	}
+	for _, entry := range decisionAlgorithmCatalog {
+		if entry.Type != algorithmType {
+			continue
+		}
+		if entry.Execution == AlgorithmExecutionSelector {
+			return AlgorithmDispatchSingle, true
+		}
+		if entry.Execution == AlgorithmExecutionLooper {
+			return AlgorithmDispatchMulti, true
+		}
+		return "", false
+	}
+	return "", false
 }
 
 // DecisionAlgorithmCatalog returns the full structured catalog of algorithm types and tiers

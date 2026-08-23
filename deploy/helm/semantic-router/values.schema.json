@@ -36,6 +36,104 @@
         }
       }
     },
+    "podDisruptionBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "minAvailable"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minAvailable": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      }
+    },
+    "topologySpread": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "maxSkew",
+        "topologyKey",
+        "whenUnsatisfiable"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "maxSkew": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "topologyKey": {
+          "type": "string",
+          "minLength": 1
+        },
+        "whenUnsatisfiable": {
+          "type": "string",
+          "enum": [
+            "DoNotSchedule",
+            "ScheduleAnyway"
+          ]
+        }
+      }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "ingress"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "ingress": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "extProcPeers",
+            "managementPeers",
+            "backendDispatchPeers",
+            "metricsPeers"
+          ],
+          "properties": {
+            "extProcPeers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "managementPeers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "backendDispatchPeers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "metricsPeers": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
     "persistence": {
       "type": "object",
       "additionalProperties": true,
@@ -115,42 +213,6 @@
         }
       }
     },
-    "config": {
-      "type": "object",
-      "additionalProperties": true,
-      "properties": {
-        "routing": {
-          "type": "object",
-          "additionalProperties": true,
-          "properties": {
-            "decisions": {
-              "type": "array",
-              "items": {
-                "type": "object",
-                "additionalProperties": true,
-                "properties": {
-                  "name": {
-                    "type": "string"
-                  },
-                  "algorithm": {
-                    "type": "object",
-                    "additionalProperties": true,
-                    "properties": {
-                      "type": {
-                        "type": "string"
-                      },
-                      "storage_path": {
-                        "type": "string"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "configOverride": {
       "type": [
         "object",
@@ -159,6 +221,39 @@
       "additionalProperties": true,
       "minProperties": 1,
       "description": "Complete canonical Router config that atomically replaces chart config defaults before Kubernetes integration rewrites."
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "version",
+        "models",
+        "recipes",
+        "entrypoints"
+      ],
+      "properties": {
+        "version": {
+          "const": "v0.4"
+        },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "recipes": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "entrypoints": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
     },
     "dashboard": {
       "type": "object",
@@ -217,6 +312,32 @@
             },
             "existingSecretKey": {
               "type": "string"
+            }
+          }
+        },
+        "routerTLS": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "ca"
+          ],
+          "properties": {
+            "ca": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "existingSecret",
+                "existingSecretKey"
+              ],
+              "properties": {
+                "existingSecret": {
+                  "type": "string"
+                },
+                "existingSecretKey": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
             }
           }
         },

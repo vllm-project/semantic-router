@@ -1,67 +1,73 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: auto
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: auto
-      reasoning_family: qwen3
-      provider_model_id: auto
-      api_format: openai
-      backend_refs:
-        - name: local_vllm
-          endpoint: 127.0.0.1:8091
-          protocol: http
-          type: chat
-          weight: 1
-routing:
-  modelCards:
-    - name: auto
-      description: Benchmark target model for ONNX signal extraction latency comparisons.
-      capabilities: [chat]
-      modality: ar
-  signals:
-    domains:
+models:
+- name: auto
+  card:
+    capabilities:
+    - chat
+    - ar
+    reasoning:
+      type: chat_template_kwargs
+      efforts: []
+  connections:
+  - provider: vllm
+    endpoint: http://127.0.0.1:8091/v1
+    model: auto
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
       - name: other
         description: General fallback traffic.
-        mmlu_categories: [other]
+        mmlu_categories:
+        - other
       - name: math
         description: Mathematics questions.
-        mmlu_categories: [math]
+        mmlu_categories:
+        - math
       - name: biology
         description: Biology questions.
-        mmlu_categories: [biology]
+        mmlu_categories:
+        - biology
       - name: engineering
         description: Engineering and systems questions.
-        mmlu_categories: [engineering]
-      - name: "computer science"
+        mmlu_categories:
+        - engineering
+      - name: computer science
         description: Computer science questions.
-        mmlu_categories: ["computer science"]
-  decisions:
+        mmlu_categories:
+        - computer science
+    decisions:
     - name: default
-      description: Benchmark route that keeps signal extraction active for any supported domain.
+      description: Benchmark route that keeps signal extraction active for any supported
+        domain.
       priority: 100
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: other
-          - type: domain
-            name: math
-          - type: domain
-            name: biology
-          - type: domain
-            name: engineering
-          - type: domain
-            name: "computer science"
-      modelRefs:
-        - model: auto
-          use_reasoning: false
-          weight: 100
+        - type: domain
+          name: other
+        - type: domain
+          name: math
+        - type: domain
+          name: biology
+        - type: domain
+          name: engineering
+        - type: domain
+          name: computer science
+entrypoints:
+- name: vllm-sr/auto
+  recipe: default
+  assignments:
+    default:
+      models:
+      - model: auto
+        weight: '100'
 global:
   router:
     streamed_body:
@@ -73,11 +79,25 @@ global:
       store_backend: memory
       ttl_seconds: 86400
       async_writes: true
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
-    semantic_cache:
-      enabled: false
-      embedding_model: mmbert
     memory:
       embedding_model: mmbert
     vector_store:
       embedding_model: mmbert
+    response_cache:
+      enabled: false
+      embedding_model: mmbert
+  integrations: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

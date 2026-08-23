@@ -377,9 +377,31 @@
 }
 
 .infoIcon {
-  font-size: var(--text-xl, 1.25rem);
+  width: 20px;
+  height: 20px;
   flex-shrink: 0;
   margin-top: 2px;
+  color: var(--color-text-secondary, #999);
+}
+
+.backButton,
+.exportButton,
+.toggleDetailsButton,
+.paginationButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.backButton > svg,
+.exportButton > svg,
+.toggleDetailsButton > svg,
+.paginationButton > svg,
+.testCaseStatus > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .infoText {

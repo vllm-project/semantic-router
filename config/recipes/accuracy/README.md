@@ -22,7 +22,7 @@ before serving.
 | Orchestration styles | Dynamic workflow and fusion |
 
 The worker names are configuration aliases. Replace their provider bindings
-when adapting the recipe to another model pool.
+when adapting the recipe to another model catalog.
 
 ## Intended use
 
@@ -74,10 +74,13 @@ retention remain outside the Router's control.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/accuracy/config.yaml
-vllm-sr serve --config config/recipes/accuracy/config.yaml \
-  --recipe-env OPENROUTER_API_KEY
+vllm-sr serve
 ```
+
+In the Dashboard, connect approved physical Models, choose **Accuracy
+Routing** in **Recipes**, assign the coordinator and review lanes, and publish
+the resulting Mixture-of-Model Entrypoint. Provider credentials belong to the
+managed Model resources rather than the Recipe or launch command.
 
 ## Evaluation
 

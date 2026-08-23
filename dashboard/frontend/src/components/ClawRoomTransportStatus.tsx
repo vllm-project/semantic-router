@@ -19,7 +19,6 @@ const ClawRoomTransportStatus = ({ transportMode, wsConnected }: ClawRoomTranspo
     wsDisconnected: styles.wsDisconnected,
   })
   const title = resolveTransportStatusTitle(transportMode, wsConnected)
-  const icon = transportMode === 'websocket' && wsConnected ? '●' : transportMode === 'sse' ? '◐' : '○'
 
   return (
     <span
@@ -27,7 +26,8 @@ const ClawRoomTransportStatus = ({ transportMode, wsConnected }: ClawRoomTranspo
       title={title}
       data-testid="claw-room-transport-status"
     >
-      {icon} {label}
+      <span className={styles.transportIndicator} aria-hidden="true" />
+      {label}
     </span>
   )
 }

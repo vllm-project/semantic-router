@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 
-from cli.commands.runtime_paths import _runtime_config_output_dir
+from cli.commands.runtime_paths import _private_runtime_state_dir
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -24,7 +24,7 @@ _SAFE_KB_PATH_COMPONENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 def _runtime_kb_state_dir(config_path: Path) -> Path:
-    kb_dir = _runtime_config_output_dir(config_path) / KB_RUNTIME_ROOT
+    kb_dir = _private_runtime_state_dir(config_path) / KB_RUNTIME_ROOT
     if kb_dir.is_symlink():
         raise ValueError("Runtime knowledge-base directory must not be a symlink")
     kb_dir.mkdir(parents=True, exist_ok=True)
@@ -211,7 +211,7 @@ def _runtime_kb_relative_path(source_path: str, kb_name: str) -> str:
 
 def _runtime_kb_target_root(config_path: Path, runtime_relative_path: str) -> Path:
     runtime_root = _runtime_kb_state_dir(config_path)
-    target = _runtime_config_output_dir(config_path) / Path(runtime_relative_path)
+    target = _private_runtime_state_dir(config_path) / Path(runtime_relative_path)
     try:
         target.relative_to(runtime_root)
     except ValueError as exc:

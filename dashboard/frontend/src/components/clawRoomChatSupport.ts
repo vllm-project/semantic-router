@@ -105,26 +105,26 @@ export interface CollaborationEventHandlers {
   setStreamingMessages: (update: (previous: Map<string, string>) => Map<string, string>) => void
   setStreamingToolTraces?: (
     update: (
-      previous: Map<string, ClawRoomStreamingToolTraceEntry>
-    ) => Map<string, ClawRoomStreamingToolTraceEntry>
+      previous: Map<string, ClawRoomStreamingToolTraceEntry>,
+    ) => Map<string, ClawRoomStreamingToolTraceEntry>,
   ) => void
   setStreamingParticipants?: (
-    update: (previous: Map<string, StreamingParticipant>) => Map<string, StreamingParticipant>
+    update: (previous: Map<string, StreamingParticipant>) => Map<string, StreamingParticipant>,
   ) => void
   setError?: (error: string) => void
 }
 
 export const applyCollaborationOutboundEvent = (
   payload: WSOutboundMessage,
-  handlers: CollaborationEventHandlers
+  handlers: CollaborationEventHandlers,
 ): void => {
   const clearStreamingTextState = (messageId: string) => {
-    handlers.setStreamingMessages(previous => {
+    handlers.setStreamingMessages((previous) => {
       const next = new Map(previous)
       next.delete(messageId)
       return next
     })
-    handlers.setStreamingParticipants?.(previous => {
+    handlers.setStreamingParticipants?.((previous) => {
       const next = new Map(previous)
       next.delete(messageId)
       return next
@@ -132,7 +132,7 @@ export const applyCollaborationOutboundEvent = (
   }
 
   const clearStreamingToolTrace = (messageId: string) => {
-    handlers.setStreamingToolTraces?.(previous => {
+    handlers.setStreamingToolTraces?.((previous) => {
       const next = new Map(previous)
       next.delete(messageId)
       return next
@@ -159,7 +159,7 @@ export const applyCollaborationOutboundEvent = (
 
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.messageChunk && payload.messageId) {
     if (payload.chunk) {
-      handlers.setStreamingMessages(previous => {
+      handlers.setStreamingMessages((previous) => {
         const next = new Map(previous)
         const existing = next.get(payload.messageId!) || ''
         next.set(payload.messageId!, existing + payload.chunk)
@@ -167,7 +167,7 @@ export const applyCollaborationOutboundEvent = (
       })
     }
     if (payload.participantType || payload.participantId) {
-      handlers.setStreamingParticipants?.(previous => {
+      handlers.setStreamingParticipants?.((previous) => {
         const next = new Map(previous)
         next.set(payload.messageId!, {
           participantType: payload.participantType,
@@ -184,7 +184,7 @@ export const applyCollaborationOutboundEvent = (
     if (!parsed?.steps?.length) {
       return
     }
-    handlers.setStreamingToolTraces?.(previous => {
+    handlers.setStreamingToolTraces?.((previous) => {
       const applied = applyClawRoomToolTraceRevision(previous.get(payload.messageId!), parsed)
       if (!applied) {
         return previous
@@ -207,12 +207,12 @@ export const applyCollaborationOutboundEvent = (
 
 export const applyRoomStreamEvent = (
   payload: RoomStreamEvent,
-  handlers: CollaborationEventHandlers
+  handlers: CollaborationEventHandlers,
 ): void => {
   if (payload.type === 'message' && payload.message) {
     applyCollaborationOutboundEvent(
       { type: ROOM_COLLABORATION_OUTBOUND_TYPES.newMessage, message: payload.message },
-      handlers
+      handlers,
     )
     return
   }
@@ -220,7 +220,7 @@ export const applyRoomStreamEvent = (
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.messageUpdated && payload.message) {
     applyCollaborationOutboundEvent(
       { type: ROOM_COLLABORATION_OUTBOUND_TYPES.messageUpdated, message: payload.message },
-      handlers
+      handlers,
     )
     return
   }
@@ -240,7 +240,7 @@ export const applyRoomStreamEvent = (
         participantId: payload.participantId,
         sessionUser: payload.sessionUser,
       },
-      handlers
+      handlers,
     )
     return
   }
@@ -248,7 +248,7 @@ export const applyRoomStreamEvent = (
   if (payload.type === ROOM_COLLABORATION_OUTBOUND_TYPES.surfaceEvent) {
     applyCollaborationOutboundEvent(
       { type: ROOM_COLLABORATION_OUTBOUND_TYPES.surfaceEvent, payload: payload.payload },
-      handlers
+      handlers,
     )
   }
 }
@@ -271,7 +271,7 @@ export interface SenderVisual {
   roleLabel: string
 }
 
-export const parseJSON = async <T,>(resp: Response): Promise<T> => {
+export const parseJSON = async <T>(resp: Response): Promise<T> => {
   const text = await resp.text()
   if (!text.trim()) {
     return {} as T
@@ -301,7 +301,10 @@ export const compareByCreatedAt = (a: RoomMessage, b: RoomMessage): number => {
 
 const mentionQueryPattern = /^@[a-zA-Z0-9_.-]*$/
 
-export const findMentionRange = (text: string, caret: number): { start: number; end: number; query: string } | null => {
+export const findMentionRange = (
+  text: string,
+  caret: number,
+): { start: number; end: number; query: string } | null => {
   if (!text || caret < 0 || caret > text.length) {
     return null
   }

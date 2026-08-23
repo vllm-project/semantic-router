@@ -209,6 +209,7 @@ COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV VLLM_SR_CONFIG_BASE_DIR=/app
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
 COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
@@ -248,6 +249,12 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
       CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
     fi
 
+# Build the explicit, one-shot managed schema migrator into the same artifact
+# as the Router. Router startup never runs migrations implicitly.
+RUN CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" \
+    go build -buildvcs=false -ldflags="-w -s" \
+    -o access-migrate ./cmd/access-migrate
+
 # Stage 3: Final router runtime image
 FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim
 
@@ -276,6 +283,7 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
       'pyyaml>=6.0.2'
 
 COPY --from=go-builder /build/router /usr/local/bin/router
+COPY --from=go-builder /build/access-migrate /usr/local/bin/access-migrate
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
@@ -286,6 +294,9 @@ WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/backend-egress-policy.yaml /app/config/backend-egress-policy.yaml
+COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/recipes/built-in/latest/mom-v1/config.yaml
+COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/recipes/built-in/latest/mom-v1/metadata.yaml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh

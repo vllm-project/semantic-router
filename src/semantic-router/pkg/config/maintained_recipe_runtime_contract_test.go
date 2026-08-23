@@ -19,16 +19,18 @@ func TestMaintainedRecipeExternalAliasesDoNotUseQwenReasoningFamily(t *testing.T
 	} {
 		t.Run(recipe, func(t *testing.T) {
 			canonical := readCanonicalRecipeConfig(t, recipe)
-			for _, model := range canonical.Providers.Models {
-				if !isExternalProviderModelID(model.ProviderModelID) {
-					continue
-				}
-				if model.ReasoningFamily == "qwen3" {
-					t.Fatalf(
-						"external model %q (%s) must not receive Qwen reasoning parameters",
-						model.Name,
-						model.ProviderModelID,
-					)
+			for _, model := range canonical.Models {
+				for _, connection := range model.Connections {
+					if !isExternalProviderModelID(connection.Model) {
+						continue
+					}
+					if model.Card.Reasoning.Type == ReasoningFamilyTypeChatTemplateKwargs {
+						t.Fatalf(
+							"external model %q (%s) must not receive Qwen reasoning parameters",
+							model.Name,
+							connection.Model,
+						)
+					}
 				}
 			}
 		})
@@ -37,11 +39,15 @@ func TestMaintainedRecipeExternalAliasesDoNotUseQwenReasoningFamily(t *testing.T
 
 func TestAccuracyRecipeOrchestrationContract(t *testing.T) {
 	data := mustReadRepoFile(t, "config/recipes/accuracy/config.yaml")
-	cfg, err := ParseYAMLBytes(data)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes(data)
 	if err != nil {
 		t.Fatalf("parse accuracy recipe: %v", err)
 	}
-	decisions := decisionsByName(cfg.Decisions)
+	recipe, ok := cfg.RecipeForRequestModel("vllm-sr/auto")
+	if !ok {
+		t.Fatal("accuracy Entrypoint did not resolve")
+	}
+	decisions := decisionsByName(recipe.Profile.Decisions)
 	workflow := decisions["accuracy_workflow"]
 	longContext := decisions["accuracy_long_context_direct"]
 	deliberation := decisions["accuracy_deliberation"]
@@ -77,8 +83,13 @@ func assertAccuracyWorkflowContract(t *testing.T, workflow Decision) {
 	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil {
 		t.Fatal("accuracy_workflow must use workflows")
 	}
+	assigned := modelNamesFromRefs(workflow.ModelRefs)
+	if len(assigned) == 0 {
+		t.Fatal("accuracy_workflow must receive Models from its Entrypoint assignment")
+	}
 	workflows := workflow.Algorithm.Workflows
-	if workflows.Planner.Model != "qwen-coordinator" ||
+	if workflows.Planner.Model != assigned[0] ||
+		workflows.Final.Model != assigned[0] ||
 		workflows.Planner.MaxCompletionTokens != 2048 ||
 		workflows.MaxSteps != 4 ||
 		workflows.MaxParallel != 3 ||
@@ -94,31 +105,18 @@ func assertAccuracyFusionContract(t *testing.T, deliberation Decision) {
 	if deliberation.Algorithm == nil || deliberation.Algorithm.Fusion == nil {
 		t.Fatal("accuracy_deliberation must use fusion")
 	}
+	assigned := modelNamesFromRefs(deliberation.ModelRefs)
+	if len(assigned) != 4 {
+		t.Fatalf("accuracy_deliberation assignments = %v, want four Models", assigned)
+	}
 	fusion := deliberation.Algorithm.Fusion
-	if fusion.Model != "qwen-coordinator" ||
+	if fusion.Model != assigned[0] ||
 		fusion.MaxConcurrent != 3 ||
 		fusion.MinSuccessfulResponses != 2 ||
-		!reflect.DeepEqual(
-			fusion.AnalysisModels,
-			[]string{"opus48-worker", "gemini31-worker", "gpt55-worker"},
-		) ||
+		!reflect.DeepEqual(fusion.AnalysisModels, assigned) ||
 		fusion.OnError != FusionOnErrorSkip {
 		t.Fatalf("accuracy_deliberation degradation contract changed: %#v", fusion)
 	}
-	if !fusionJudgeReasoningDisabled(deliberation.ModelRefs) {
-		t.Fatal("accuracy_deliberation must disable reasoning for its structured Fusion judge")
-	}
-}
-
-func fusionJudgeReasoningDisabled(modelRefs []ModelRef) bool {
-	for _, modelRef := range modelRefs {
-		if modelRef.Model == "qwen-coordinator" &&
-			modelRef.UseReasoning != nil &&
-			!*modelRef.UseReasoning {
-			return true
-		}
-	}
-	return false
 }
 
 func TestAccuracyRecipeUsesCurrentOpenRouterWorkerIDs(t *testing.T) {
@@ -128,16 +126,16 @@ func TestAccuracyRecipeUsesCurrentOpenRouterWorkerIDs(t *testing.T) {
 		"gemini31-worker": "google/gemini-3.1-pro-preview",
 		"gpt55-worker":    "openai/gpt-5.5",
 	}
-	for _, model := range canonical.Providers.Models {
+	for _, model := range canonical.Models {
 		expected, ok := want[model.Name]
 		if !ok {
 			continue
 		}
-		if model.ProviderModelID != expected {
+		if len(model.Connections) != 1 || model.Connections[0].Model != expected {
 			t.Fatalf(
-				"accuracy worker %q provider_model_id = %q, want %q",
+				"accuracy worker %q connections = %+v, want provider model %q",
 				model.Name,
-				model.ProviderModelID,
+				model.Connections,
 				expected,
 			)
 		}

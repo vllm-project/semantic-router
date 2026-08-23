@@ -7,7 +7,7 @@ exceptions as the corresponding code becomes modular and directly testable.
 
 ## Scope
 
-This plan owns every open entry indexed by
+This plan owns the following open entries indexed by
 [`../tech-debt/README.md`](../tech-debt/README.md):
 
 - repository structure-rule exceptions;
@@ -22,8 +22,8 @@ Release planning and daily GitHub queue state are out of scope.
 
 ## Exit Criteria
 
-- Every open debt entry has this plan as its owner until it is promoted into an
-  active release plan.
+- Every PL-0032-owned debt entry remains assigned here until it is promoted into an
+  active implementation or release plan.
 - Each entry is retired from current docs when its source-level exit criteria
   pass.
 - Structure, lint, and runtime gates report new regressions without hiding them
@@ -45,9 +45,9 @@ Release planning and daily GitHub queue state are out of scope.
 
 ## Next Action
 
-Choose the highest-impact open debt entry, verify its current source evidence,
-and either narrow its scope or implement one independently reviewable exit
-criterion.
+Run the architecture scorecard and structure-rule reports, then choose the
+highest-severity PL-0032-owned entry with current source evidence and implement one
+independently reviewable exit criterion.
 
 ## Operating Rules
 

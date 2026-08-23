@@ -22,66 +22,52 @@ start those inference backends.
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
 | [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
-The [built-in virtual model catalog](built-in/README.md) is a separate
-distribution surface. Its [MoM V1 Model
-Card](built-in/latest/mom-v1/README.md) describes the virtual models bundled
+The [built-in Recipe distribution](built-in/README.md) is a separate,
+Recipe-only surface. Its [MoM V1 Model
+Card](built-in/latest/mom-v1/README.md) describes the routing profiles bundled
 with `vllm-sr`.
 
 ## Use a recipe
 
-Read the Model Card first, start the required provider backends, then validate
-and serve the recipe's config:
+Read the Model Card first and start the required provider backends. Then start
+Semantic Router once:
 
 ```bash
-vllm-sr validate --config config/recipes/<name>/config.yaml
-vllm-sr serve --config config/recipes/<name>/config.yaml
+vllm-sr serve
 ```
 
-Single-profile recipes use the configured `vllm-sr/auto` entrypoint.
-Multi-profile recipes expose named virtual model IDs through top-level
-`entrypoints`.
+In the Dashboard, connect the physical Models, choose or import the Recipe,
+assign Models to its decisions, and publish an Entrypoint. An independent
+control plane can perform the same lifecycle through the Router Management API.
+The CLI does not select or materialize a Recipe at launch time.
 
-## Use a built-in model
+## Use a built-in Recipe
 
-Built-in models can be discovered and selected without locating their source
-files:
+Start Semantic Router, then open **Recipes** in the Dashboard:
 
 ```bash
-vllm-sr model list
-vllm-sr model show vllm-sr/mom-v1-blend
-vllm-sr serve vllm-sr/mom-v1-blend
+vllm-sr serve
 ```
 
-This starts the local routing stack, not the physical model engines. Use
-`model fork` when changing provider bindings or routing policy:
-
-```bash
-vllm-sr model fork vllm-sr/mom-v1-blend mom-custom.yaml
-vllm-sr model validate mom-custom.yaml
-vllm-sr serve --config mom-custom.yaml
-```
-
-See the [built-in catalog guide](built-in/README.md) for version selection,
-multiple virtual models, and customization.
+Connect provider endpoints in **Models**, choose a built-in Recipe, create a
+**Mixture of Models**, and assign configured Models to its decisions before
+publishing an Entrypoint. The Dashboard uses the Router Management API, so an
+independent control plane can perform the same lifecycle. See the
+[built-in Recipe guide](built-in/README.md) for the packaged assets.
 
 ## Custom recipes and Dashboard
 
-Keep credentials out of recipe files. Reference environment variables from the
-config and authorize each required name when serving:
-
-```bash
-export PROVIDER_API_KEY=...
-vllm-sr serve --config path/to/recipe/config.yaml \
-  --recipe-env PROVIDER_API_KEY
-```
+Keep credentials and provider endpoints out of recipe files. Manage provider
+connections separately, then create or import the Recipe through the Dashboard
+or Router Management API.
 
 `vllm-sr recipe pack` is available for teams that need to transport a custom
 recipe as an archive. Treat the archive as public source: the packer rejects
-literal credentials and unsafe package shapes, but it does not turn the recipe
-into a built-in model or provision its runtime dependencies.
+literal credentials and unsafe package shapes, but it does not install the
+Recipe as a built-in distribution resource or provision runtime dependencies.
 
-When a managed recipe is mounted, Dashboard shows its Model Card and probe
-catalog. **Run** sends a probe to Playground, **Edit** prepares an editable
+When a managed Recipe is mounted, Dashboard shows its Model Card and probes.
+**Run** sends a probe to Playground, **Edit** prepares an editable
 request, and **Validate** evaluates routing without generating a model answer.
 See [Models and Recipes](../../website/docs/installation/models-and-recipes.md)
 for the user workflow.

@@ -108,18 +108,18 @@ agent-serve-local: agent-venv-install ## Start vllm-sr with the canonical local 
 	if [ -z "$$CONFIG_PATH" ]; then \
 		CONFIG_PATH="$$DEFAULT_CONFIG"; \
 	fi; \
-	CONFIG_ARGS=""; \
-	if [ -n "$$CONFIG_PATH" ]; then \
-		CONFIG_ARGS="--config $$CONFIG_PATH"; \
-	fi; \
+	case "$$CONFIG_PATH" in /*) ;; *) CONFIG_PATH="$$(pwd)/$$CONFIG_PATH" ;; esac; \
+	SERVE_DIR="$$(pwd)/.agent-harness/serve/$(ENV)-$(AGENT_STACK_NAME)"; \
+	mkdir -p "$$SERVE_DIR"; \
+	cp "$$CONFIG_PATH" "$$SERVE_DIR/config.yaml"; \
 	if [ "$(ENV)" = "amd" ]; then \
 		echo "Starting local AMD workflow..."; \
-		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
-		vllm-sr serve --image-pull-policy never --platform amd $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
+		cd "$$SERVE_DIR" && VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$SERVE_DIR" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
+		vllm-sr serve --image-pull-policy never --platform amd $(AGENT_SERVE_ARGS); \
 	else \
 		echo "Starting local CPU workflow..."; \
-		VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$(pwd)" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
-		vllm-sr serve --image-pull-policy never $$CONFIG_ARGS $(AGENT_SERVE_ARGS); \
+		cd "$$SERVE_DIR" && VLLM_SR_STACK_NAME="$(AGENT_STACK_NAME)" VLLM_SR_PORT_OFFSET="$(AGENT_PORT_OFFSET)" VLLM_SR_STATE_ROOT_DIR="$$SERVE_DIR" VLLM_SR_TOPOLOGY="$(VLLM_SR_TOPOLOGY)" \
+		vllm-sr serve --image-pull-policy never $(AGENT_SERVE_ARGS); \
 	fi
 
 agent-stop-local: ## Stop local vllm-sr services
@@ -133,20 +133,22 @@ agent-lint: agent-bootstrap ## Run lint and structure gates for changed files
 		echo "No changed files detected."; \
 		exit 0; \
 	fi; \
+	CHANGED_FILES_FILE="$$(mktemp)"; \
+	trap 'rm -f "$$CHANGED_FILES_FILE"' EXIT; \
+	printf '%s\n' "$$RAW_FILES" > "$$CHANGED_FILES_FILE"; \
 	FILE_ARGS="$$(printf '%s\n' "$$RAW_FILES" | paste -sd' ' -)"; \
-	CSV_FILES="$$(printf '%s\n' "$$RAW_FILES" | paste -sd',' -)"; \
 	if [ "$(AGENT_SKIP_PRECOMMIT_BASELINE)" != "1" ]; then \
 		echo "Running baseline pre-commit checks..."; \
 		AGENT_SKIP_PRECOMMIT_CHANGED_LINT=1 "$(AGENT_PRE_COMMIT)" run --files $$FILE_ARGS || exit $$?; \
 	fi; \
 	echo "Running Python lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files-path "$$CHANGED_FILES_FILE" && \
 	echo "Running Go structural lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-go-lint --base-ref "$(AGENT_BASE_REF)" --changed-files-path "$$CHANGED_FILES_FILE" && \
 	echo "Running reference config contract lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-config-contract-lint --changed-files-path "$$CHANGED_FILES_FILE" && \
 	echo "Running Rust lint..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files "$$CSV_FILES" && \
+	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files-path "$$CHANGED_FILES_FILE" && \
 	echo "Running structure checks..." && \
 	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
 

@@ -1,318 +1,391 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: Model-A
-      reasoning_family: qwen3
-      backend_refs:
-        - name: model-a-endpoint
-          endpoint: DYNAMIC_MODEL_A_IP:8000
-          weight: 1
-    - name: Model-B
-      reasoning_family: qwen3
-      backend_refs:
-        - name: model-b-endpoint
-          endpoint: DYNAMIC_MODEL_B_IP:8001
-          weight: 1
-routing:
-  decisions:
+models:
+- name: Model-A
+  card:
+    reasoning:
+      type: chat_template_kwargs
+      efforts: []
+  connections:
+  - provider: vllm
+    endpoint: http://DYNAMIC_MODEL_A_IP:8000/v1
+    model: Model-A
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+- name: Model-B
+  card:
+    reasoning:
+      type: chat_template_kwargs
+      efforts: []
+  connections:
+  - provider: vllm
+    endpoint: http://DYNAMIC_MODEL_B_IP:8001/v1
+    model: Model-B
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
+      - name: business
+        description: business routing domain.
+      - name: law
+        description: law routing domain.
+      - name: psychology
+        description: psychology routing domain.
+      - name: biology
+        description: biology routing domain.
+      - name: chemistry
+        description: chemistry routing domain.
+      - name: history
+        description: history routing domain.
+      - name: other
+        description: other routing domain.
+      - name: health
+        description: health routing domain.
+      - name: economics
+        description: economics routing domain.
+      - name: math
+        description: math routing domain.
+      - name: physics
+        description: physics routing domain.
+      - name: computer science
+        description: computer science routing domain.
+      - name: philosophy
+        description: philosophy routing domain.
+      - name: engineering
+        description: engineering routing domain.
+      - name: general
+        description: general routing domain.
+    decisions:
     - name: business
       description: Route business and management queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: business
-      modelRefs:
-        - model: Model-B
-          use_reasoning: false
+        - type: domain
+          name: business
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a senior business consultant and strategic advisor with expertise in corporate strategy, operations management, financial analysis, marketing, and organizational development.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a senior business consultant and strategic advisor
+            with expertise in corporate strategy, operations management, financial
+            analysis, marketing, and organizational development.
+          mode: replace
     - name: law
       description: Route legal queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: law
-      modelRefs:
-        - model: Model-B
-          use_reasoning: false
+        - type: domain
+          name: law
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a knowledgeable legal expert with comprehensive understanding of legal principles, case law, statutory interpretation, and legal procedures.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a knowledgeable legal expert with comprehensive understanding
+            of legal principles, case law, statutory interpretation, and legal procedures.
+          mode: replace
     - name: psychology
       description: Route psychology queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: psychology
-      modelRefs:
-        - model: Model-B
-          use_reasoning: false
+        - type: domain
+          name: psychology
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a psychology expert with deep knowledge of cognitive processes, behavioral patterns, mental health, and therapeutic approaches.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a psychology expert with deep knowledge of cognitive
+            processes, behavioral patterns, mental health, and therapeutic approaches.
+          mode: replace
     - name: biology
       description: Route biology queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: biology
-      modelRefs:
-        - model: Model-A
-          use_reasoning: false
+        - type: domain
+          name: biology
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a biology expert with comprehensive knowledge spanning molecular biology, genetics, cell biology, ecology, and evolution.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a biology expert with comprehensive knowledge spanning
+            molecular biology, genetics, cell biology, ecology, and evolution.
+          mode: replace
     - name: chemistry
       description: Route chemistry queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: chemistry
-      modelRefs:
-        - model: Model-A
-          use_reasoning: true
+        - type: domain
+          name: chemistry
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a chemistry expert specializing in chemical reactions, molecular structures, and laboratory techniques.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a chemistry expert specializing in chemical reactions,
+            molecular structures, and laboratory techniques.
+          mode: replace
     - name: history
       description: Route history queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: history
-      modelRefs:
-        - model: Model-A
-          use_reasoning: false
+        - type: domain
+          name: history
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a historian with expertise across different time periods and cultures.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a historian with expertise across different time
+            periods and cultures.
+          mode: replace
     - name: other
       description: Route general queries
       priority: 5
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: Model-A
-          use_reasoning: false
+        - type: domain
+          name: other
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a helpful and knowledgeable assistant.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a helpful and knowledgeable assistant.
+          mode: replace
     - name: health
       description: Route health and medical queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: health
-      modelRefs:
-        - model: Model-B
-          use_reasoning: false
+        - type: domain
+          name: health
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a health and medical information expert with knowledge of anatomy, physiology, diseases, and treatments.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a health and medical information expert with knowledge
+            of anatomy, physiology, diseases, and treatments.
+          mode: replace
     - name: economics
       description: Route economics queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: economics
-      modelRefs:
-        - model: Model-A
-          use_reasoning: false
+        - type: domain
+          name: economics
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are an economics expert with deep understanding of microeconomics, macroeconomics, and financial markets.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are an economics expert with deep understanding of microeconomics,
+            macroeconomics, and financial markets.
+          mode: replace
     - name: math
       description: Route mathematics queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: math
-      modelRefs:
-        - model: Model-A
-          use_reasoning: true
+        - type: domain
+          name: math
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a mathematics expert. Provide step-by-step solutions and explain mathematical concepts clearly.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a mathematics expert. Provide step-by-step solutions
+            and explain mathematical concepts clearly.
+          mode: replace
     - name: physics
       description: Route physics queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: physics
-      modelRefs:
-        - model: Model-A
-          use_reasoning: true
+        - type: domain
+          name: physics
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a physics expert with deep understanding of physical laws and phenomena.
-            mode: replace
-    - name: "computer science"
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a physics expert with deep understanding of physical
+            laws and phenomena.
+          mode: replace
+    - name: computer science
       description: Route computer science queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: computer science
-      modelRefs:
-        - model: Model-A
-          use_reasoning: false
+        - type: domain
+          name: computer science
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a computer science expert with knowledge of algorithms, data structures, and software engineering.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a computer science expert with knowledge of algorithms,
+            data structures, and software engineering.
+          mode: replace
     - name: philosophy
       description: Route philosophy queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: philosophy
-      modelRefs:
-        - model: Model-B
-          use_reasoning: false
+        - type: domain
+          name: philosophy
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a philosophy expert with comprehensive knowledge of philosophical traditions and ethical theories.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a philosophy expert with comprehensive knowledge
+            of philosophical traditions and ethical theories.
+          mode: replace
     - name: engineering
       description: Route engineering queries
       priority: 10
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: engineering
-      modelRefs:
-        - model: Model-A
-          use_reasoning: true
+        - type: domain
+          name: engineering
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are an engineering expert across multiple disciplines.
-            mode: replace
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are an engineering expert across multiple disciplines.
+          mode: replace
     - name: general
       description: Route general queries
       priority: 5
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: Model-A
-          use_reasoning: false
+        - type: domain
+          name: general
       plugins:
-        - type: system_prompt
-          configuration:
-            enabled: true
-            system_prompt: You are a knowledgeable assistant for general questions.
-            mode: replace
-  signals:
-    domains:
-      - name: business
-      - name: law
-      - name: psychology
-      - name: biology
-      - name: chemistry
-      - name: history
-      - name: other
-      - name: health
-      - name: economics
-      - name: math
-      - name: physics
-      - name: computer science
-      - name: philosophy
-      - name: engineering
-      - name: general
-  modelCards:
-    - name: Model-A
-    - name: Model-B
+      - type: system_prompt
+        configuration:
+          enabled: true
+          system_prompt: You are a knowledgeable assistant for general questions.
+          mode: replace
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    business:
+      models:
+      - model: Model-B
+        weight: '1'
+    law:
+      models:
+      - model: Model-B
+        weight: '1'
+    psychology:
+      models:
+      - model: Model-B
+        weight: '1'
+    biology:
+      models:
+      - model: Model-A
+        weight: '1'
+    chemistry:
+      models:
+      - model: Model-A
+        weight: '1'
+        reasoning:
+          enabled: true
+    history:
+      models:
+      - model: Model-A
+        weight: '1'
+    other:
+      models:
+      - model: Model-A
+        weight: '1'
+    health:
+      models:
+      - model: Model-B
+        weight: '1'
+    economics:
+      models:
+      - model: Model-A
+        weight: '1'
+    math:
+      models:
+      - model: Model-A
+        weight: '1'
+        reasoning:
+          enabled: true
+    physics:
+      models:
+      - model: Model-A
+        weight: '1'
+        reasoning:
+          enabled: true
+    computer science:
+      models:
+      - model: Model-A
+        weight: '1'
+    philosophy:
+      models:
+      - model: Model-B
+        weight: '1'
+    engineering:
+      models:
+      - model: Model-A
+        weight: '1'
+        reasoning:
+          enabled: true
+    general:
+      models:
+      - model: Model-A
+        weight: '1'
 global:
-  router:
-    auto_model_name: auto
+  router: {}
   services:
     observability:
       tracing:
         enabled: true
-        sampling_ratio: 0.1
-        otlp_endpoint: ''
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: ''
+        sampling:
+          type: probabilistic
+          rate: 0.1
       metrics:
         enabled: true
-        port: 9190
     api:
       batch_classification:
-        enabled: true
         max_batch_size: 32
         max_concurrency: 4
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
     response_cache:
       enabled: true
@@ -333,3 +406,8 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/tools_db.json
       fallback_to_empty: true
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

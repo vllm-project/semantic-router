@@ -4,16 +4,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMaintainedFeedbackRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "feedback", "config.yaml")
-	cfg, err := config.Parse(assetPath)
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	cfg := parseMaintainedConfig(t, assetPath)
+	cfg = mustOnlyRecipeConfig(t, cfg)
 
 	dslText, err := DecompileRouting(cfg)
 	if err != nil {
@@ -36,6 +32,7 @@ func TestMaintainedFeedbackRecipeDSLRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
+	cfg = mustOnlyRecipeConfig(t, cfg)
 
 	if len(cfg.ReaskRules) == 0 {
 		t.Error("expected at least one reask rule from feedback recipe")

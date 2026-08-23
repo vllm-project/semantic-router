@@ -15,11 +15,7 @@ def validate_classifier_contracts(
     external_models = _external_models(config)
     runtime_signature: tuple[str, bool, tuple[str, ...]] | None = None
     for profile_name, routing in iter_routing_profiles(config):
-        profile_field = (
-            "routing"
-            if profile_name == "default"
-            else f"recipes.{profile_name}.routing"
-        )
+        profile_field = f"recipes.{profile_name}.document"
         rules = {rule.name: rule for rule in routing.signals.classifiers or []}
         local_rules = [rule for rule in rules.values() if rule.type == "local"]
         if local_rules:

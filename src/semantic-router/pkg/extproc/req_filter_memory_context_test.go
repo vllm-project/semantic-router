@@ -2,17 +2,15 @@ package extproc
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"testing"
 
-	"github.com/openai/openai-go"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 )
@@ -23,24 +21,43 @@ type receiptMemoryStore struct {
 	err     error
 }
 
+func (store receiptMemoryStore) Retrieve(context.Context, memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
+	return store.results, store.err
+}
+
 func TestConcreteModelBypassesMemoryPlugin(t *testing.T) {
 	router := &OpenAIRouter{
 		Config:      &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
 		MemoryStore: &receiptMemoryStore{err: errors.New("must not be called")},
 	}
-	ctx := &RequestContext{}
+	request := testNeutralRequest("concrete-model", "hello")
+	ctx := &RequestContext{SemanticRequest: request}
 	ctx.Routing.SelectPassthrough()
-	body := []byte(`{"messages":[{"role":"user","content":"hello"}]}`)
 
-	got, err := router.handleMemoryRetrieval(ctx, "hello", body, &openai.ChatCompletionNewParams{})
-
-	require.NoError(t, err)
-	assert.Equal(t, body, got)
+	require.NoError(t, router.handleMemoryRetrieval(ctx, "hello", request))
+	assert.Len(t, request.Messages, 1)
 	assert.Empty(t, ctx.MemoryBackend)
 }
 
-func (s receiptMemoryStore) Retrieve(context.Context, memory.RetrieveOptions) ([]*memory.RetrieveResult, error) {
-	return s.results, s.err
+func TestExtractConversationHistoryUsesNeutralMessages(t *testing.T) {
+	router := &OpenAIRouter{}
+	request := &llmprotocol.Request{Messages: []llmprotocol.Message{
+		{Role: llmprotocol.RoleUser, Content: []llmprotocol.Content{
+			{Kind: llmprotocol.ContentText, Text: "Hello"},
+			{Kind: llmprotocol.ContentImage, URL: "https://example.invalid/image"},
+		}},
+		{Role: llmprotocol.RoleAssistant, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Hi there!"}}},
+		{Role: llmprotocol.RoleTool, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult}}},
+	}}
+
+	history := router.extractConversationHistory(request)
+	if len(history) != 2 {
+		t.Fatalf("conversation history = %#v", history)
+	}
+	if history[0].Role != "user" || history[0].Content != "Hello" ||
+		history[1].Role != "assistant" || history[1].Content != "Hi there!" {
+		t.Fatalf("conversation history = %#v", history)
+	}
 }
 
 func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
@@ -48,19 +65,19 @@ func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 		Config:      &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
 		MemoryStore: &receiptMemoryStore{err: errors.New("backend unavailable secret-canary")},
 	}
+	request := testNeutralRequest("entrypoint", "What did I say?")
 	ctx := &RequestContext{
-		Headers:                 map[string]string{headers.AuthzUserID: "user-1"},
+		InferenceAccess:         testInferenceRequestAccess("user-1", ""),
 		TraceContext:            context.Background(),
 		VSRSelectedDecisionName: "balance",
+		SemanticRequest:         request,
 	}
-	body := []byte(`{"messages":[{"role":"user","content":"What did I say?"}]}`)
 	before := testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues("memory", "balance", "unavailable"))
 
-	got, err := router.handleMemoryRetrieval(ctx, "What did I say?", body, &openai.ChatCompletionNewParams{})
-
+	err := router.handleMemoryRetrieval(ctx, "What did I say?", request)
 	require.ErrorContains(t, err, "memory retrieval failed")
 	require.NotContains(t, err.Error(), "secret-canary")
-	assert.Equal(t, body, got)
+	assert.Len(t, request.Messages, 1)
 	assert.Equal(t, before+1, testutil.ToFloat64(metrics.PluginExecutionTotal.WithLabelValues("memory", "balance", "unavailable")))
 	diagnostics := buildReplayRouteDiagnostics(ctx, "auto", "model-a", "balance", 0, 0)
 	assert.Equal(t, "milvus", diagnostics.MemoryBackend)
@@ -69,71 +86,35 @@ func TestMemoryRuntimeReceiptRecordsFailOpenRetrievalError(t *testing.T) {
 	assert.True(t, diagnostics.MemoryFailOpen)
 }
 
-func TestMemoryRuntimeReceiptRecordsUsedMemory(t *testing.T) {
+func TestMemoryRuntimeInjectsNeutralMessage(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{Memory: config.MemoryConfig{Enabled: true, Backend: "milvus"}},
 		MemoryStore: &receiptMemoryStore{results: []*memory.RetrieveResult{{
-			Memory: &memory.Memory{Content: "The user's deadline is Friday."},
-			Score:  0.9,
+			Memory: &memory.Memory{Content: "The user's deadline is Friday."}, Score: 0.9,
 		}}},
 	}
+	request := testNeutralRequest("entrypoint", "What is my deadline?")
+	request.Instructions = []llmprotocol.InstructionBlock{{
+		Role:    llmprotocol.RoleDeveloper,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: "Answer concisely."}},
+	}}
 	ctx := &RequestContext{
-		Headers:      map[string]string{headers.AuthzUserID: "user-1"},
-		TraceContext: context.Background(),
+		InferenceAccess: testInferenceRequestAccess("user-1", ""),
+		TraceContext:    context.Background(),
+		SemanticRequest: request,
 	}
-	body := []byte(`{"messages":[{"role":"user","content":"What is my deadline?"}]}`)
 
-	got, err := router.handleMemoryRetrieval(ctx, "What is my deadline?", body, &openai.ChatCompletionNewParams{})
-
-	require.NoError(t, err)
-	assert.NotEqual(t, body, got)
+	require.NoError(t, router.handleMemoryRetrieval(ctx, "What is my deadline?", request))
+	require.Len(t, request.Messages, 2)
+	assert.Equal(t, llmprotocol.RoleUser, request.Messages[0].Role)
+	assert.Contains(t, request.Messages[0].Content[0].Text, "deadline is Friday")
+	assert.Equal(t, "What is my deadline?", request.Messages[1].Content[0].Text)
+	assert.Equal(t, llmprotocol.RoleDeveloper, request.Instructions[0].Role)
+	assert.Equal(t, uint64(2), request.Generation)
+	assert.Contains(t, ctx.MemoryMessageIndexes, 0)
 	diagnostics := buildReplayRouteDiagnostics(ctx, "auto", "model-a", "balance", 0, 0)
 	assert.Equal(t, "used", diagnostics.MemoryStatus)
 	assert.Equal(t, "injected", diagnostics.MemoryReason)
 	assert.Equal(t, 1, diagnostics.MemoryResultCount)
 	assert.False(t, diagnostics.MemoryFailOpen)
-}
-
-func TestInjectMemoryMessages_InsertsAfterSystemAndDeveloperMessages(t *testing.T) {
-	requestBody := []byte(`{
-		"messages": [
-			{"role": "system", "content": "system instructions"},
-			{"role": "developer", "content": "developer instructions"},
-			{"role": "user", "content": "hello"}
-		]
-	}`)
-
-	modified, err := injectMemoryMessages(requestBody, "memory context")
-	require.NoError(t, err)
-
-	var request struct {
-		Messages []struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"messages"`
-	}
-	require.NoError(t, json.Unmarshal(modified, &request))
-	require.Len(t, request.Messages, 4)
-	assert.Equal(t, "system", request.Messages[0].Role)
-	assert.Equal(t, "developer", request.Messages[1].Role)
-	assert.Equal(t, "user", request.Messages[2].Role)
-	assert.Equal(t, "memory context", request.Messages[2].Content)
-	assert.Equal(t, "user", request.Messages[3].Role)
-	assert.Equal(t, "hello", request.Messages[3].Content)
-}
-
-func TestInjectMemoryMessages_InitializesMissingMessages(t *testing.T) {
-	modified, err := injectMemoryMessages([]byte(`{"model":"test-model"}`), "memory context")
-	require.NoError(t, err)
-
-	var request struct {
-		Messages []struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"messages"`
-	}
-	require.NoError(t, json.Unmarshal(modified, &request))
-	require.Len(t, request.Messages, 1)
-	assert.Equal(t, "user", request.Messages[0].Role)
-	assert.Equal(t, "memory context", request.Messages[0].Content)
 }

@@ -23,7 +23,9 @@ def write_recipe_contract(path: Path) -> None:
 
 
 class RecipeConformanceTest(unittest.TestCase):
-    def test_latest_built_in_bundle_uses_the_same_five_file_contract(self) -> None:
+    def test_latest_built_in_recipe_bundle_uses_the_same_five_file_contract(
+        self,
+    ) -> None:
         root = (
             recipe_conformance.REPO_ROOT / "config" / "recipes" / "built-in" / "latest"
         )
@@ -32,9 +34,10 @@ class RecipeConformanceTest(unittest.TestCase):
 
         self.assertEqual([recipe.name for recipe in inventory], ["mom-v1"])
         mom = inventory[0]
-        self.assertEqual(len(mom.entrypoints), 5)
-        self.assertEqual(len(mom.decisions), 43)
-        self.assertEqual(mom.variants, 222)
+        self.assertEqual(mom.entrypoints, ())
+        self.assertEqual(mom.auto_entrypoints, ())
+        self.assertEqual(len(mom.decisions), 26)
+        self.assertEqual(mom.variants, 226)
         self.assertTrue(mom.coverage["passed"])
 
     def test_default_discovery_skips_the_nested_built_in_catalog(self) -> None:
@@ -282,7 +285,7 @@ class RecipeConformanceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tempdir:
             recipe = Path(tempdir) / "incomplete"
             recipe.mkdir()
-            (recipe / "config.yaml").write_text("version: v0.3\n", encoding="utf-8")
+            (recipe / "config.yaml").write_text("version: v0.4\n", encoding="utf-8")
 
             with self.assertRaisesRegex(ValueError, "five-file contract"):
                 recipe_conformance.validate_recipe_directory(recipe)
@@ -334,11 +337,21 @@ class RecipeConformanceTest(unittest.TestCase):
 
     def test_default_entrypoints_are_bound_round_robin(self) -> None:
         config = {
-            "global": {
-                "router": {
-                    "auto_model_name": "custom-auto",
+            "models": [{"name": "frontier", "card": {}}],
+            "recipes": [
+                {
+                    "name": "default",
+                    "document": {"decisions": [{"name": "route"}]},
                 }
-            }
+            ],
+            "entrypoints": [
+                {
+                    "name": "vllm-sr/auto",
+                    "aliases": ["auto", "custom-auto"],
+                    "recipe": "default",
+                    "assignments": {"route": {"models": [{"model": "frontier"}]}},
+                }
+            ],
         }
         probes = [
             recipe_conformance.Probe(
@@ -356,6 +369,204 @@ class RecipeConformanceTest(unittest.TestCase):
             [probe.model for probe in bound],
             ["vllm-sr/auto", "auto", "custom-auto", "vllm-sr/auto"],
         )
+
+    def test_expected_models_resolve_from_v04_entrypoint_assignments(self) -> None:
+        config = {
+            "models": [
+                {
+                    "name": "frontier",
+                    "card": {"aliases": ["frontier/latest"]},
+                }
+            ],
+            "recipes": [
+                {
+                    "name": "balanced",
+                    "document": {
+                        "decisions": [
+                            {"name": "complex"},
+                        ]
+                    },
+                }
+            ],
+            "entrypoints": [
+                {
+                    "name": "vllm-sr/mixture",
+                    "aliases": ["mixture"],
+                    "recipe": "balanced",
+                    "assignments": {"complex": {"models": [{"model": "frontier"}]}},
+                }
+            ],
+        }
+
+        assignments = recipe_conformance.config_assigned_models(config)
+
+        self.assertEqual(
+            assignments[("vllm-sr/mixture", "balanced", "complex")],
+            frozenset({"frontier", "frontier/latest"}),
+        )
+        self.assertEqual(
+            assignments[("mixture", "balanced", "complex")],
+            frozenset({"frontier", "frontier/latest"}),
+        )
+
+    def test_conditional_entrypoint_uses_rule_recipe_and_assignments(self) -> None:
+        config = {
+            "models": [
+                {"name": "frontier", "card": {"aliases": ["frontier/latest"]}},
+                {"name": "fast", "card": {}},
+            ],
+            "recipes": [
+                {
+                    "name": "balanced",
+                    "document": {"decisions": [{"name": "answer"}]},
+                }
+            ],
+            "entrypoints": [
+                {
+                    "name": "vllm-sr/conditional",
+                    "aliases": ["conditional"],
+                    "rules": [
+                        {
+                            "name": "premium",
+                            "recipe": "balanced",
+                            "assignments": {
+                                "answer": {"models": [{"model": "frontier"}]}
+                            },
+                        },
+                        {
+                            "name": "standard",
+                            "recipe": "balanced",
+                            "assignments": {"answer": {"models": [{"model": "fast"}]}},
+                        },
+                    ],
+                }
+            ],
+        }
+
+        entrypoints = recipe_conformance.config_entrypoints(config)
+        assignments = recipe_conformance.config_assigned_models(config)
+
+        self.assertEqual(
+            entrypoints,
+            {
+                "vllm-sr/conditional": "balanced",
+                "conditional": "balanced",
+            },
+        )
+        self.assertEqual(
+            assignments[("conditional", "balanced", "answer")],
+            frozenset({"frontier", "frontier/latest", "fast"}),
+        )
+
+    def test_generated_identity_fields_are_not_supported(self) -> None:
+        def human_config() -> dict:
+            return {
+                "models": [{"name": "frontier", "card": {}}],
+                "recipes": [
+                    {
+                        "name": "default",
+                        "document": {"decisions": [{"name": "route"}]},
+                    }
+                ],
+                "entrypoints": [
+                    {
+                        "name": "vllm-sr/auto",
+                        "recipe": "default",
+                        "assignments": {"route": {"models": [{"model": "frontier"}]}},
+                    }
+                ],
+            }
+
+        recipe_identity = human_config()
+        recipe_identity["recipes"][0]["id"] = "rcp_default"
+        decision_identity = human_config()
+        decision_identity["recipes"][0]["document"]["decisions"][0][
+            "decision_id"
+        ] = "dec_route"
+        entrypoint_model_names = human_config()
+        entrypoint_model_names["entrypoints"][0]["model_names"] = ["auto"]
+        entrypoint_action = human_config()
+        entrypoint_action["entrypoints"] = [
+            {
+                "name": "vllm-sr/auto",
+                "rules": [
+                    {
+                        "name": "default",
+                        "action": {"recipe_id": "rcp_default"},
+                    }
+                ],
+            }
+        ]
+        model_identity = human_config()
+        model_identity["models"][0]["id"] = "mdl_frontier"
+        assignment_identity = human_config()
+        assignment_identity["entrypoints"][0]["assignments"]["route"]["models"] = [
+            {"model_id": "mdl_frontier"}
+        ]
+
+        cases = (
+            ("recipe id", recipe_identity, recipe_conformance.recipe_profiles),
+            ("decision id", decision_identity, recipe_conformance.recipe_profiles),
+            (
+                "entrypoint model names",
+                entrypoint_model_names,
+                recipe_conformance.config_entrypoints,
+            ),
+            (
+                "entrypoint runtime action",
+                entrypoint_action,
+                recipe_conformance.config_entrypoints,
+            ),
+            (
+                "model id",
+                model_identity,
+                recipe_conformance.config_assigned_models,
+            ),
+            (
+                "assignment model id",
+                assignment_identity,
+                recipe_conformance.config_assigned_models,
+            ),
+        )
+
+        for name, config, parser in cases:
+            with self.subTest(name=name):
+                with self.assertRaisesRegex(ValueError, "unsupported generated fields"):
+                    parser(config)
+
+    def test_conditional_entrypoint_cannot_span_recipes_in_conformance(self) -> None:
+        config = {
+            "recipes": [
+                {
+                    "name": "fast",
+                    "document": {"decisions": [{"name": "answer"}]},
+                },
+                {
+                    "name": "deep",
+                    "document": {"decisions": [{"name": "answer"}]},
+                },
+            ],
+            "entrypoints": [
+                {
+                    "name": "vllm-sr/conditional",
+                    "rules": [
+                        {
+                            "name": "fast",
+                            "recipe": "fast",
+                            "assignments": {},
+                        },
+                        {
+                            "name": "deep",
+                            "recipe": "deep",
+                            "assignments": {},
+                        },
+                    ],
+                }
+            ],
+        }
+
+        with self.assertRaisesRegex(ValueError, "exactly one recipe for conformance"):
+            recipe_conformance.config_entrypoints(config)
 
     def test_consolidated_report_marks_missing_recipes(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

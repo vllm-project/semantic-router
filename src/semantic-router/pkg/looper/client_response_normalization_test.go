@@ -69,9 +69,9 @@ func TestParseNonStreamingResponseKeepsReasoningSeparateFromContent(t *testing.T
 
 func TestParseStreamingResponseCollectsReasoningFields(t *testing.T) {
 	body := []byte(
-		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoned \"}}]}\r\n" +
-			"data: {\"choices\":[{\"delta\":{\"reasoning\":\"answer\"}}]}\r\n" +
-			"data: [DONE]\r\n",
+		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"reasoned \"},\"finish_reason\":null}]}\r\n\r\n" +
+			"data: {\"choices\":[{\"delta\":{\"reasoning\":\"answer\"},\"finish_reason\":\"stop\"}]}\r\n\r\n" +
+			"data: [DONE]\r\n\r\n",
 	)
 
 	response, err := (&Client{}).parseStreamingResponse(body, "model-a")
@@ -83,9 +83,9 @@ func TestParseStreamingResponseCollectsReasoningFields(t *testing.T) {
 
 func TestParseStreamingResponsePrefersExplicitContent(t *testing.T) {
 	body := []byte(
-		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"analysis\"}}]}\n" +
-			"data: {\"choices\":[{\"delta\":{\"content\":\"answer\"}}]}\n" +
-			"data: [DONE]\n",
+		"data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"analysis\"},\"finish_reason\":null}]}\n\n" +
+			"data: {\"choices\":[{\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\n" +
+			"data: [DONE]\n\n",
 	)
 
 	response, err := (&Client{}).parseStreamingResponse(body, "model-a")

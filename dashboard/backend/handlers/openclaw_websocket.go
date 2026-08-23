@@ -60,6 +60,7 @@ type WSOutboundMessage struct {
 type WSClient struct {
 	conn     *websocket.Conn
 	send     chan WSOutboundMessage
+	done     chan struct{}
 	roomID   string
 	clientID string
 	handler  *OpenClawHandler
@@ -100,9 +101,7 @@ func (h *OpenClawHandler) replayLastRoomEventToClient(client *WSClient, roomID s
 	if !ok {
 		return
 	}
-	select {
-	case client.send <- replay:
-	default:
+	if !client.enqueue(replay) {
 		log.Printf("openclaw: WS client %s buffer full, skipping room replay", client.clientID)
 	}
 }
@@ -133,6 +132,7 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	client := &WSClient{
 		conn:     conn,
 		send:     make(chan WSOutboundMessage, 128),
+		done:     make(chan struct{}),
 		roomID:   roomID,
 		clientID: clientID,
 		handler:  h,
@@ -145,10 +145,10 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	log.Printf("openclaw: WebSocket client %s connected to room %s", clientID, roomID)
 
 	// Send connected message
-	client.send <- WSOutboundMessage{
+	client.enqueue(WSOutboundMessage{
 		Type:   WSTypeConnected,
 		RoomID: roomID,
-	}
+	})
 	h.replayLastRoomEventToClient(client, roomID)
 
 	// Start read/write goroutines
@@ -166,13 +166,9 @@ func (c *WSClient) writePump() {
 
 	for {
 		select {
-		case message, ok := <-c.send:
-			if !ok {
-				// Channel closed
-				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
-				return
-			}
-
+		case <-c.done:
+			return
+		case message := <-c.send:
 			_ = c.conn.SetWriteDeadline(time.Now().Add(roomWSWriteTimeout))
 			if err := c.conn.WriteJSON(message); err != nil {
 				log.Printf("openclaw: WS write error for client %s: %v", c.clientID, err)
@@ -225,7 +221,7 @@ func (c *WSClient) readPump() {
 func (c *WSClient) handleMessage(msg WSInboundMessage) {
 	switch msg.Type {
 	case WSTypePing:
-		c.send <- WSOutboundMessage{Type: WSTypePong}
+		c.enqueue(WSOutboundMessage{Type: WSTypePong})
 
 	case WSTypeSendMessage:
 		c.handleSendMessage(msg)
@@ -361,29 +357,48 @@ func (h *OpenClawHandler) appendRoomMessageWS(roomID string, message ClawRoomMes
 
 // sendError sends an error message to the client
 func (c *WSClient) sendError(errMsg string) {
-	c.send <- WSOutboundMessage{
+	c.enqueue(WSOutboundMessage{
 		Type:  WSTypeError,
 		Error: errMsg,
+	})
+}
+
+// enqueue serializes lifecycle inspection with queue publication. The queue is
+// intentionally never closed: fan-out may already hold a client pointer while a
+// disconnect is being observed, and closing a producer-owned channel would make
+// that harmless overlap panic. The done channel owns writer shutdown instead.
+func (c *WSClient) enqueue(message WSOutboundMessage) bool {
+	c.closeMu.Lock()
+	defer c.closeMu.Unlock()
+	if c.closed {
+		return false
+	}
+	select {
+	case c.send <- message:
+		return true
+	default:
+		return false
 	}
 }
 
 // close cleans up the client connection
 func (c *WSClient) close() {
 	c.closeMu.Lock()
-	defer c.closeMu.Unlock()
-
 	if c.closed {
+		c.closeMu.Unlock()
 		return
 	}
 	c.closed = true
+	close(c.done)
+	c.closeMu.Unlock()
 
 	// Unregister from room
 	clients := c.handler.roomWSClientMap(c.roomID)
 	clients.Delete(c.clientID)
 
-	// Close connection and channel
+	// Closing the socket interrupts any blocked reader. The writer exits through
+	// done; send remains producer-owned and is never closed.
 	_ = c.conn.Close()
-	close(c.send)
 
 	log.Printf("openclaw: WebSocket client %s disconnected from room %s", c.clientID, c.roomID)
 }

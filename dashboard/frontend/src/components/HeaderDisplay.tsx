@@ -157,10 +157,6 @@ const HEADER_INFO: Record<
     label: 'Iterations',
     type: 'info',
   },
-  'x-vsr-looper-algorithm': {
-    label: 'Algorithm',
-    type: 'info',
-  },
   'x-vsr-looper-latency-ms': {
     label: 'Looper Latency (ms)',
     type: 'info',
@@ -223,7 +219,7 @@ function summarizeHeaderValue(key: string, rawValue: string): string {
 function routingHeaderPriority(key: string): number {
   if (key.startsWith('x-vsr-matched-')) return 0
   if (key === 'x-vsr-selected-decision') return 1
-  if (key === 'x-vsr-selected-algorithm' || key === 'x-vsr-looper-algorithm') return 2
+  if (key === 'x-vsr-selected-algorithm') return 2
   if (
     key === 'x-vsr-selected-model' ||
     key === 'x-vsr-looper-model' ||
@@ -236,11 +232,8 @@ function routingHeaderPriority(key: string): number {
 
 const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
   // Filter to only show headers that exist
-  const hasSelectedAlgorithm = Boolean(headers['x-vsr-selected-algorithm'])
   const displayHeaders = Object.entries(headers)
-    .filter(
-      ([key]) => key in HEADER_INFO && !(hasSelectedAlgorithm && key === 'x-vsr-looper-algorithm'),
-    )
+    .filter(([key]) => key in HEADER_INFO)
     .sort(
       ([leftKey], [rightKey]) => routingHeaderPriority(leftKey) - routingHeaderPriority(rightKey),
     )

@@ -1,7 +1,6 @@
 package looper
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -34,26 +33,12 @@ func BenchmarkBase_ParseTaggedToolCall(b *testing.B) {
 	}
 }
 
-// BenchmarkBase_RewriteTaggedToolCallResponse measures the full compatibility
-// rewrite: unmarshal completion -> extract tagged tool call -> re-marshal.
-func BenchmarkBase_RewriteTaggedToolCallResponse(b *testing.B) {
-	completion, err := json.Marshal(map[string]any{
-		"choices": []map[string]any{
-			{
-				"index": 0,
-				"message": map[string]any{
-					"role":    "assistant",
-					"content": benchTaggedToolCall,
-				},
-				"finish_reason": "stop",
-			},
-		},
-	})
-	if err != nil {
-		b.Fatalf("failed to build fixture: %v", err)
-	}
+// BenchmarkBase_BuildTaggedToolSemanticResponse measures tagged-tool parsing
+// and construction of the neutral response published by Looper.
+func BenchmarkBase_BuildTaggedToolSemanticResponse(b *testing.B) {
+	usage := NewActualTokenUsage(8, 4, 12)
 	b.ReportAllocs()
 	for b.Loop() {
-		rewriteTaggedToolCallResponse(completion, "model-a")
+		newTaggedToolSemanticResponse("response-bench", "model-a", benchTaggedToolCall, usage)
 	}
 }

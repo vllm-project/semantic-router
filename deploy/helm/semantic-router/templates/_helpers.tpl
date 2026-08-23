@@ -132,8 +132,9 @@ Resolve Jaeger OTLP endpoint for dependency-based deployments.
 {{- end }}
 
 {{/*
-Resolve the Router config once so every template consumer observes the same
-atomic deployment-tooling override instead of Helm's recursive map coalescing.
+Resolve the single Router manifest shared by every chart template. Deployment
+tooling may supply a complete canonical manifest through configOverride so
+Helm's recursive values merge cannot leak chart sample routes into it.
 */}}
 {{- define "semantic-router.effectiveConfig" -}}
 {{- $config := deepCopy .Values.config -}}
@@ -147,4 +148,14 @@ atomic deployment-tooling override instead of Helm's recursive map coalescing.
 {{-   $config = deepCopy .Values.configOverride -}}
 {{- end -}}
 {{- toYaml $config -}}
+{{- end }}
+
+{{/*
+Name the immutable Router bootstrap from its exact content. A manifest change
+creates a new ConfigMap reference and therefore a normal Pod rollout.
+*/}}
+{{- define "semantic-router.configMapName" -}}
+{{- $payload := printf "%s\n%s\n%s\n%s" (include "semantic-router.effectiveConfig" .) (toJson .Values.toolsDb) (toJson .Values.dependencies) .Chart.AppVersion -}}
+{{- $base := include "semantic-router.fullname" . | trunc 43 | trimSuffix "-" -}}
+{{- printf "%s-config-%s" $base (sha256sum $payload | trunc 12) -}}
 {{- end }}

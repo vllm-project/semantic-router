@@ -59,7 +59,7 @@ func TestWrapWithAcceptanceContractSkipsUnscopedProfiles(t *testing.T) {
 
 	var details map[string]interface{}
 	if err := wrapped(context.Background(), nil, TestCaseOptions{
-		Profile: "dynamic-config",
+		Profile: "remote-embedding",
 		SetDetails: func(next map[string]interface{}) {
 			details = next
 		},

@@ -5,10 +5,7 @@ import (
 	agentgateway "github.com/vllm-project/semantic-router/e2e/profiles/agentgateway"
 	aigateway "github.com/vllm-project/semantic-router/e2e/profiles/ai-gateway"
 	aibrix "github.com/vllm-project/semantic-router/e2e/profiles/aibrix"
-	anthropicshim "github.com/vllm-project/semantic-router/e2e/profiles/anthropic-shim"
-	authzrbac "github.com/vllm-project/semantic-router/e2e/profiles/authz-rbac"
 	dashboard "github.com/vllm-project/semantic-router/e2e/profiles/dashboard"
-	dynamicconfig "github.com/vllm-project/semantic-router/e2e/profiles/dynamic-config"
 	dynamo "github.com/vllm-project/semantic-router/e2e/profiles/dynamo"
 	hallucination "github.com/vllm-project/semantic-router/e2e/profiles/hallucination"
 	istio "github.com/vllm-project/semantic-router/e2e/profiles/istio"
@@ -16,7 +13,6 @@ import (
 	llmd "github.com/vllm-project/semantic-router/e2e/profiles/llm-d"
 	mlmodelselection "github.com/vllm-project/semantic-router/e2e/profiles/ml-model-selection"
 	multiendpoint "github.com/vllm-project/semantic-router/e2e/profiles/multi-endpoint"
-	multimodalrouting "github.com/vllm-project/semantic-router/e2e/profiles/multimodal-routing"
 	productionstack "github.com/vllm-project/semantic-router/e2e/profiles/production-stack"
 	raghybridsearch "github.com/vllm-project/semantic-router/e2e/profiles/rag-hybrid-search"
 	remoteembedding "github.com/vllm-project/semantic-router/e2e/profiles/remote-embedding"
@@ -50,17 +46,10 @@ func init() {
 	register("envoy-ai-gateway", func() framework.Profile { return aigateway.NewProfile() }, framework.ProfileCapabilities{})
 	register("aibrix", func() framework.Profile { return aibrix.NewProfile() }, framework.ProfileCapabilities{})
 	register(
-		"anthropic-shim",
-		func() framework.Profile { return anthropicshim.NewProfile() },
-		framework.ProfileCapabilities{LocalImages: anthropicshim.LocalImages()},
-	)
-	register("authz-rbac", func() framework.Profile { return authzrbac.NewProfile() }, framework.ProfileCapabilities{})
-	register(
 		"dashboard",
 		func() framework.Profile { return dashboard.NewProfile() },
 		framework.ProfileCapabilities{LocalImages: dashboardLocalImages},
 	)
-	register("dynamic-config", func() framework.Profile { return dynamicconfig.NewProfile() }, framework.ProfileCapabilities{})
 	register("dynamo", func() framework.Profile { return dynamo.NewProfile() }, framework.ProfileCapabilities{RequiresGPU: true})
 	register(
 		"hallucination",
@@ -80,7 +69,6 @@ func init() {
 		framework.ProfileCapabilities{LocalImages: mockVLLMLocalImages},
 	)
 	register("multi-endpoint", func() framework.Profile { return multiendpoint.NewProfile() }, framework.ProfileCapabilities{})
-	register("multimodal-routing", func() framework.Profile { return multimodalrouting.NewProfile() }, framework.ProfileCapabilities{})
 	register("production-stack", func() framework.Profile { return productionstack.NewProfile() }, framework.ProfileCapabilities{})
 	register("rag-hybrid-search", func() framework.Profile { return raghybridsearch.NewProfile() }, framework.ProfileCapabilities{})
 	register(

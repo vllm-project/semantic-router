@@ -29,7 +29,7 @@ Use `AND` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: urgent_business_route
       description: Match only when business intent and urgent language appear together.
@@ -41,9 +41,6 @@ routing:
             name: business
           - type: keyword
             name: urgent_keywords
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
 ```
 
 Use `AND` when a model should only activate for a narrow, high-confidence slice of traffic.

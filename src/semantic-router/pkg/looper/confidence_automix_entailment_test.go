@@ -35,8 +35,8 @@ func buildAutoMixEntailmentRequest(question string) *Request {
 		},
 	}
 	return &Request{
-		OriginalRequest: &params,
-		DecisionName:    "test_decision",
+		executionRequest: &params,
+		DecisionName:     "test_decision",
 	}
 }
 

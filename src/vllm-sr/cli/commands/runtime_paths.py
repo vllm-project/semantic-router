@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import errno
-import hashlib
-import json
 import os
 import re
 import stat
@@ -19,12 +17,8 @@ from cli.runtime_stack import STACK_NAME_ENV, normalize_stack_name
 from cli.utils import get_logger
 
 DEFAULT_FILENAME_COMPONENT_LIMIT = 255
-RUNTIME_CONFIG_PROVENANCE_SCHEMA = "vllm-sr/runtime-config-provenance/v1"
-MAX_PROVENANCE_BYTES = 64 * 1024
-_SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PRIVATE_STATE_DIRECTORY = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PRIVATE_DIRECTORY_MODE = 0o700
-_RECIPE_ASSET_MODE = 0o644
 STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
 PRIVATE_STATE_FILE_MODE = 0o600
 CONTAINER_READABLE_STATE_FILE_MODE = 0o644
@@ -132,12 +126,7 @@ def _assert_filename_fits(runtime_dir: Path, filename: str) -> None:
 def resolve_state_root_dir(
     source_config_file: str, env_vars: dict[str, str] | None = None
 ) -> str:
-    """Return the directory that holds this stack's private runtime state.
-
-    An explicit override wins; otherwise the state lives beside the config file
-    the caller named, which is what makes a stack self-contained in whatever
-    directory it was served from.
-    """
+    """Return the directory that owns one stack's private runtime state."""
 
     env_vars = env_vars or {}
     override = env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV)
@@ -146,7 +135,7 @@ def resolve_state_root_dir(
     return os.path.dirname(os.path.abspath(source_config_file))
 
 
-def _runtime_config_output_dir(
+def _private_runtime_state_dir(
     config_path: Path, state_root_dir: str | Path | None = None
 ) -> Path:
     state_root = (
@@ -165,7 +154,7 @@ def private_runtime_state_subdirectory(state_root_dir: str | Path, name: str) ->
     if not _PRIVATE_STATE_DIRECTORY.fullmatch(name):
         raise ValueError(f"Runtime state directory name is invalid: {name}")
     state_root = Path(state_root_dir).expanduser().absolute()
-    runtime_dir = _runtime_config_output_dir(
+    runtime_dir = _private_runtime_state_dir(
         state_root / "config.yaml", state_root_dir=state_root
     )
     directory = runtime_dir / name
@@ -190,47 +179,46 @@ def private_runtime_state_nested_directory(
     return directory
 
 
-def _runtime_config_filename(stack_name: str | None = None) -> str:
+def _compiled_bootstrap_filename(stack_name: str | None = None) -> str:
     stack_name = normalize_stack_name(
         stack_name if stack_name is not None else os.getenv(STACK_NAME_ENV)
     )
-    filename = "runtime-config.yaml"
+    filename = "compiled-bootstrap.yaml"
     if stack_name != DEFAULT_STACK_NAME:
-        filename = f"runtime-config.{stack_name}.yaml"
+        filename = f"compiled-bootstrap.{stack_name}.yaml"
     return filename
 
 
-def _runtime_config_output_path(
+def _compiled_bootstrap_output_path(
     source_config_path: Path,
     *,
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
 ) -> Path:
-    filename = _runtime_config_filename(stack_name)
-    runtime_dir = _runtime_config_output_dir(source_config_path, state_root_dir)
+    filename = _compiled_bootstrap_filename(stack_name)
+    runtime_dir = _private_runtime_state_dir(source_config_path, state_root_dir)
     _assert_filename_fits(runtime_dir, filename)
     output_path = runtime_dir / filename
     _assert_direct_child(runtime_dir, output_path)
     return output_path
 
 
-def _container_runtime_config_path(
+def _container_compiled_bootstrap_path(
     source_config_path: Path, *, stack_name: str | None = None
 ) -> str:
     del source_config_path
-    return f"/app/.vllm-sr/{_runtime_config_filename(stack_name)}"
+    return f"/app/.vllm-sr/{_compiled_bootstrap_filename(stack_name)}"
 
 
-def _container_readonly_source_config_path() -> str:
-    return "/app/source-config.yaml"
+def assert_user_bootstrap_source(path: Path) -> Path:
+    """Reject generated private state as a user-selected bootstrap authority."""
 
-
-def _runtime_config_provenance_path(runtime_config_path: Path) -> Path:
-    return runtime_config_path.with_suffix(".provenance.json")
-
-
-def _digest_bytes(data: bytes) -> str:
-    return f"sha256:{hashlib.sha256(data).hexdigest()}"
+    source = path.expanduser().absolute().resolve()
+    if ".vllm-sr" in source.parts:
+        raise ValueError(
+            "--config must select an immutable user bootstrap outside .vllm-sr"
+        )
+    return source
 
 
 def _fsync_directory(directory: Path) -> None:
@@ -272,35 +260,6 @@ def _atomic_write_bytes(path: Path, data: bytes, mode: int) -> None:
 
 def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
     _atomic_write_bytes(path, data, 0o600)
-
-
-def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
-    """Atomically replace an explicit runtime-owned config path."""
-
-    path = path.expanduser().absolute()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    if path.parent.is_symlink() or not path.parent.is_dir():
-        raise ValueError(
-            f"Runtime config parent must be an owned directory: {path.parent}"
-        )
-    _atomic_write_private_bytes(path, data)
-    return path
-
-
-def write_runtime_recipe_asset_bytes(path: Path, data: bytes) -> Path:
-    """Atomically write an embedded Recipe asset inside a private directory.
-
-    The containing runtime-state directories remain owner-only. Files use the
-    read-only asset mode expected by the non-root Dashboard after bind mount.
-    """
-
-    path = path.expanduser().absolute()
-    if path.parent.is_symlink() or not path.parent.is_dir():
-        raise ValueError(
-            f"Runtime Recipe parent must be an owned directory: {path.parent}"
-        )
-    _atomic_write_bytes(path, data, _RECIPE_ASSET_MODE)
-    return path
 
 
 def write_private_state_bytes(
@@ -398,135 +357,40 @@ def _harden_private_state_file(fd: int, info: os.stat_result, path: Path) -> Non
         raise ValueError(f"Runtime state file permissions are not private: {path}")
 
 
-def _provenance_document(source_data: bytes, active_data: bytes) -> dict[str, str]:
-    return {
-        "schema_version": RUNTIME_CONFIG_PROVENANCE_SCHEMA,
-        "source_digest": _digest_bytes(source_data),
-        "last_materialized_active_digest": _digest_bytes(active_data),
-    }
-
-
-def _write_provenance(path: Path, source_data: bytes, active_data: bytes) -> None:
-    document = _provenance_document(source_data, active_data)
-    encoded = (
-        json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n"
-    ).encode("utf-8")
-    _atomic_write_private_bytes(path, encoded)
-
-
-def _load_provenance(path: Path) -> dict[str, str] | None:
-    if not path.exists():
-        return None
-    if path.is_symlink() or not path.is_file():
-        raise ValueError(f"Runtime provenance must be a regular file: {path}")
-    if path.stat().st_size > MAX_PROVENANCE_BYTES:
-        raise ValueError(f"Runtime provenance exceeds {MAX_PROVENANCE_BYTES} bytes")
-    try:
-        document = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise ValueError(f"Runtime provenance is invalid: {error}") from error
-    if not isinstance(document, dict) or set(document) != {
-        "schema_version",
-        "source_digest",
-        "last_materialized_active_digest",
-    }:
-        raise ValueError("Runtime provenance has an invalid field set")
-    if document.get("schema_version") != RUNTIME_CONFIG_PROVENANCE_SCHEMA:
-        raise ValueError("Runtime provenance has an unsupported schema_version")
-    for field in ("source_digest", "last_materialized_active_digest"):
-        value = document.get(field)
-        if not isinstance(value, str) or not _SHA256_PATTERN.fullmatch(value):
-            raise ValueError(f"Runtime provenance {field} is invalid")
-    return document
-
-
-def materialize_runtime_config(
+def materialize_compiled_bootstrap(
     source_config_path: Path,
     effective_data: bytes,
     *,
     state_root_dir: str | Path | None = None,
     stack_name: str | None = None,
 ) -> Path:
-    """Reconcile one runtime-owned active config without overwriting edits.
+    """Atomically compile one immutable, implementation-private bootstrap.
 
-    The CLI records the digest it last materialized. A Dashboard or package
-    activation changes the active digest without changing that receipt, so a
-    later ``serve`` preserves the active file and reports the divergence.
+    The user-selected source remains the only authoring authority. Existing
+    staging bytes are always replaced, so neither Dashboard nor stale local
+    state can become a second routing configuration source.
     """
 
-    source_config_path = source_config_path.expanduser().absolute()
-    source_data = source_config_path.read_bytes()
-    runtime_config_path = _runtime_config_output_path(
+    source_config_path = assert_user_bootstrap_source(source_config_path)
+    compiled_path = _compiled_bootstrap_output_path(
         source_config_path,
         state_root_dir=state_root_dir,
         stack_name=stack_name,
     )
-    provenance_path = _runtime_config_provenance_path(runtime_config_path)
-
-    if runtime_config_path.exists():
-        _assert_direct_child(runtime_config_path.parent, runtime_config_path)
-        if not runtime_config_path.is_file():
+    if compiled_path.exists():
+        _assert_direct_child(compiled_path.parent, compiled_path)
+        if not compiled_path.is_file():
             raise ValueError(
-                f"Runtime config must be a regular file: {runtime_config_path}"
+                f"Compiled bootstrap must be a regular file: {compiled_path}"
             )
-        active_data = runtime_config_path.read_bytes()
-        if active_data == effective_data:
-            _write_provenance(provenance_path, source_data, active_data)
-            return runtime_config_path
-
-        try:
-            provenance = _load_provenance(provenance_path)
-        except ValueError as error:
-            log.warning(
-                "Preserving runtime config %s because its provenance is invalid: %s",
-                runtime_config_path,
-                error,
-            )
-            return runtime_config_path
-
-        if provenance is None:
-            log.warning(
-                "Preserving pre-existing runtime config %s because no provenance "
-                "receipt is available",
-                runtime_config_path,
-            )
-            return runtime_config_path
-
-        active_digest = _digest_bytes(active_data)
-        if active_digest != provenance["last_materialized_active_digest"]:
-            log.warning(
-                "Preserving Dashboard or package changes in runtime config %s; "
-                "source updates were not materialized",
-                runtime_config_path,
-            )
-            return runtime_config_path
-
-    _atomic_write_private_bytes(runtime_config_path, effective_data)
-    _write_provenance(provenance_path, source_data, effective_data)
-    return runtime_config_path
+    _atomic_write_private_bytes(compiled_path, effective_data)
+    return compiled_path
 
 
-def _write_runtime_config(source_config_path: Path, config: dict[str, object]) -> Path:
-    runtime_config_path = _runtime_config_output_path(source_config_path)
-    runtime_dir = runtime_config_path.parent
-    fd, temp_name = tempfile.mkstemp(
-        prefix=f".{runtime_config_path.name}.", suffix=".tmp", dir=runtime_dir
+def _write_compiled_bootstrap(
+    source_config_path: Path, config: dict[str, object]
+) -> Path:
+    encoded = yaml.dump(config, default_flow_style=False, sort_keys=False).encode(
+        "utf-8"
     )
-    temp_path = Path(temp_name)
-    try:
-        os.fchmod(fd, 0o600)
-        handle = os.fdopen(fd, "w", encoding="utf-8")
-        fd = -1
-        with handle:
-            yaml.dump(config, handle, default_flow_style=False, sort_keys=False)
-            handle.flush()
-            os.fsync(handle.fileno())
-        _assert_direct_child(runtime_dir, runtime_config_path)
-        os.replace(temp_path, runtime_config_path)
-        _fsync_directory(runtime_dir)
-    finally:
-        if fd >= 0:
-            os.close(fd)
-        with suppress(FileNotFoundError):
-            temp_path.unlink()
-    return runtime_config_path
+    return materialize_compiled_bootstrap(source_config_path, encoded)

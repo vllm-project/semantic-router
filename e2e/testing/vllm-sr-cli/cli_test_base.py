@@ -246,7 +246,7 @@ class CLITestBase(unittest.TestCase):
         Run a vllm-sr CLI command.
 
         Args:
-            args: CLI arguments (e.g., ["serve", "--config", "config.yaml"])
+            args: CLI arguments (e.g., ["serve", "--image-pull-policy", "never"])
             timeout: Command timeout in seconds
             env: Additional environment variables
             capture_output: Whether to capture stdout/stderr
@@ -314,22 +314,13 @@ class CLITestBase(unittest.TestCase):
         provider: str | None = None,
         api_only: bool = False,
     ) -> str:
-        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
+        """Write a minimal runnable canonical v0.4 config into the temp workspace."""
         config_path = Path(self.test_dir) / "config.yaml"
-        backend_ref: dict[str, object] = {
-            "name": "primary",
-            "weight": 100,
-        }
-        if base_url is not None:
-            backend_ref["base_url"] = base_url
-        else:
-            backend_ref["endpoint"] = endpoint
-            backend_ref["protocol"] = "http"
-        if provider is not None:
-            backend_ref["provider"] = provider
+        connection_endpoint = (base_url or f"http://{endpoint}").rstrip("/")
+        provider_id = provider or "openai-compatible"
 
         config = {
-            "version": "v0.3",
+            "version": "v0.4",
             "listeners": [
                 {
                     "name": "test-listener",
@@ -338,34 +329,62 @@ class CLITestBase(unittest.TestCase):
                     "timeout": "60s",
                 }
             ],
-            "providers": {
-                "defaults": {
-                    "default_model": model_name,
-                    "default_reasoning_effort": "medium",
-                },
-                "models": [
-                    {
-                        "name": model_name,
-                        "provider_model_id": model_name,
-                        "backend_refs": [backend_ref],
-                    }
-                ],
-            },
-            "routing": {
-                "modelCards": [{"name": model_name}],
-                "decisions": [
-                    {
-                        "name": "default-route",
-                        "description": "Default route for CLI test coverage",
-                        "priority": 100,
-                        "rules": {"operator": "AND", "conditions": []},
-                        "modelRefs": [{"model": model_name, "use_reasoning": False}],
-                    }
-                ],
-            },
+            "models": [
+                {
+                    "name": model_name,
+                    "card": {"capabilities": ["chat"]},
+                    "connections": [
+                        {
+                            "provider": provider_id,
+                            "endpoint": connection_endpoint,
+                            "model": model_name,
+                            "weight": "1",
+                        }
+                    ],
+                    "runtime": {
+                        "max_retries": 0,
+                        "request_timeout": "300s",
+                        "stream_timeout": "300s",
+                    },
+                    "pricing": {},
+                }
+            ],
+            "recipes": [
+                {
+                    "name": "default",
+                    "document": {
+                        "decisions": [
+                            {
+                                "name": "default-route",
+                                "description": "Default route for CLI test coverage",
+                                "priority": 100,
+                                "rules": {"operator": "AND", "conditions": []},
+                            }
+                        ]
+                    },
+                }
+            ],
+            "entrypoints": [
+                {
+                    "name": "vllm-sr/default",
+                    "aliases": ["default"],
+                    "recipe": "default",
+                    "assignments": {
+                        "default-route": {"models": [{"model": model_name}]}
+                    },
+                }
+            ],
         }
         if api_only:
             config["global"] = _api_only_global_config()
+        else:
+            config["global"] = {
+                "services": {
+                    "backend_egress": {
+                        "policy_file": "/app/config/backend-egress-policy.yaml"
+                    }
+                }
+            }
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),
             encoding="utf-8",

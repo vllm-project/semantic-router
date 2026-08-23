@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ConfigData } from './configPageSupport'
+import type { RoutingConfig } from './configPageSupport'
 import {
-  getSignalReferenceCount,
   getSignalReferenceCountInRoutingProfile,
   normalizeConditions,
   normalizeStringList,
@@ -58,14 +57,13 @@ describe('signal form support', () => {
   })
 
   it('counts decision, projection, and composer references before deletion', () => {
-    const config: ConfigData = {
+    const document: RoutingConfig = {
       decisions: [
         {
           name: 'route-finance',
           description: '',
           priority: 1,
           rules: { operator: 'AND', conditions: [{ type: 'domain', name: 'finance' }] },
-          modelRefs: [],
         },
       ],
       projections: {
@@ -93,78 +91,27 @@ describe('signal form support', () => {
       },
     }
 
-    expect(getSignalReferenceCount(config, 'Domain', 'finance')).toBe(3)
-    expect(getSignalReferenceCount(config, 'Domain', 'legal')).toBe(0)
-  })
-
-  it('counts recipe-only references before deleting shared signals', () => {
-    const config: ConfigData = {
-      recipes: [
-        {
-          name: 'private',
-          routing: {
-            decisions: [
-              {
-                name: 'private-route',
-                description: '',
-                priority: 1,
-                rules: {
-                  operator: 'AND',
-                  conditions: [{ type: 'metadata', name: 'private-cohort' }],
-                },
-                modelRefs: [],
-              },
-            ],
-          },
-        },
-      ],
-    }
-
-    expect(getSignalReferenceCount(config, 'Metadata', 'private-cohort')).toBe(1)
+    expect(getSignalReferenceCountInRoutingProfile(document, 'Domain', 'finance')).toBe(3)
+    expect(getSignalReferenceCountInRoutingProfile(document, 'Domain', 'legal')).toBe(0)
   })
 
   it('keeps deletion references local to the selected recipe', () => {
-    const config: ConfigData = {
-      recipes: [
+    const alpha: RoutingConfig = { decisions: [] }
+    const beta: RoutingConfig = {
+      decisions: [
         {
-          name: 'alpha',
-          routing: {
-            decisions: [],
-          },
-        },
-        {
-          name: 'beta',
-          routing: {
-            decisions: [
-              {
-                name: 'beta-route',
-                description: '',
-                priority: 100,
-                rules: {
-                  operator: 'AND',
-                  conditions: [{ type: 'metadata', name: 'shared-local-name' }],
-                },
-                modelRefs: [],
-              },
-            ],
+          name: 'beta-route',
+          description: '',
+          priority: 100,
+          rules: {
+            operator: 'AND',
+            conditions: [{ type: 'metadata', name: 'shared-local-name' }],
           },
         },
       ],
     }
 
-    expect(
-      getSignalReferenceCountInRoutingProfile(
-        config.recipes?.[0].routing,
-        'Metadata',
-        'shared-local-name',
-      ),
-    ).toBe(0)
-    expect(
-      getSignalReferenceCountInRoutingProfile(
-        config.recipes?.[1].routing,
-        'Metadata',
-        'shared-local-name',
-      ),
-    ).toBe(1)
+    expect(getSignalReferenceCountInRoutingProfile(alpha, 'Metadata', 'shared-local-name')).toBe(0)
+    expect(getSignalReferenceCountInRoutingProfile(beta, 'Metadata', 'shared-local-name')).toBe(1)
   })
 })

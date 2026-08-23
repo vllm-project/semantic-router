@@ -1,11 +1,9 @@
 package http
 
 import (
-	"encoding/json"
 	"testing"
 
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
-	"github.com/openai/openai-go"
 )
 
 // headerValueByKey returns the value of the first SetHeader matching key, or "".
@@ -46,20 +44,9 @@ func TestKeystoneHeaderOptions(t *testing.T) {
 // TestCacheHitResponseEmitsKeystone verifies the cache immediate response
 // carries schema-version "2" and response-path "cache".
 func TestCacheHitResponseEmitsKeystone(t *testing.T) {
-	completion := openai.ChatCompletion{
-		ID:     "chatcmpl-keystone-cache",
-		Object: "chat.completion",
-		Model:  "test-model",
-		Choices: []openai.ChatCompletionChoice{
-			{Message: openai.ChatCompletionMessage{Role: "assistant", Content: "hi"}, FinishReason: "stop"},
-		},
-	}
-	body, err := json.Marshal(completion)
-	if err != nil {
-		t.Fatalf("Failed to marshal cached response: %v", err)
-	}
-
-	set := CreateCacheHitResponse(body, false, "math", "math_decision", nil).GetImmediateResponse().Headers.SetHeaders
+	body := []byte(`{"id":"response_1","output":[]}`)
+	set := CreateCacheHitResponseWithBody(body, "application/json", "math", "math_decision", nil).
+		GetImmediateResponse().Headers.SetHeaders
 	if v := headerValueByKey(set, "x-vsr-schema-version"); v != "2" {
 		t.Errorf("cache schema-version: expected \"2\", got %q", v)
 	}
@@ -79,7 +66,7 @@ func TestCacheHitResponseDemotesDetailHeaders(t *testing.T) {
 	demoted := []string{"x-vsr-selected-category", "x-vsr-cache-similarity", "x-vsr-matched-keywords"}
 
 	// Lean surface (empty detail, as the non-debug caller passes): demoted.
-	lean := CreateCacheHitResponse(body, false, "", "math_decision", nil).
+	lean := CreateCacheHitResponseWithBody(body, "application/json", "", "math_decision", nil).
 		GetImmediateResponse().Headers.SetHeaders
 	if v := headerValueByKey(lean, "x-vsr-cache-hit"); v != "true" {
 		t.Errorf("cache-hit: expected \"true\", got %q", v)
@@ -94,7 +81,7 @@ func TestCacheHitResponseDemotesDetailHeaders(t *testing.T) {
 	}
 
 	// Populated detail (as the debug caller passes): the headers re-appear.
-	full := CreateCacheHitResponse(body, false, "math", "math_decision", []string{"prove", "theorem"}, 0.93).
+	full := CreateCacheHitResponseWithBody(body, "application/json", "math", "math_decision", []string{"prove", "theorem"}, 0.93).
 		GetImmediateResponse().Headers.SetHeaders
 	if v := headerValueByKey(full, "x-vsr-selected-category"); v != "math" {
 		t.Errorf("category: expected \"math\", got %q", v)
@@ -110,7 +97,8 @@ func TestCacheHitResponseDemotesDetailHeaders(t *testing.T) {
 // TestFastResponseEmitsKeystone verifies the fast_response immediate response
 // carries schema-version "2" and response-path "fast_response".
 func TestFastResponseEmitsKeystone(t *testing.T) {
-	set := CreateFastResponse("blocked message", false, "guard_decision").GetImmediateResponse().Headers.SetHeaders
+	set := CreateFastResponseWithBody([]byte(`{"id":"message_1"}`), "application/json", "guard_decision").
+		GetImmediateResponse().Headers.SetHeaders
 	if v := headerValueByKey(set, "x-vsr-schema-version"); v != "2" {
 		t.Errorf("fast schema-version: expected \"2\", got %q", v)
 	}

@@ -219,11 +219,15 @@ func (d *decompiler) decompileDecision(dec config.Decision) {
 }
 
 func (d *decompiler) writeDecisionHeader(dec config.Decision) {
+	var options []string
 	if dec.Description != "" {
-		d.write("ROUTE %s (description = %q) {\n", quoteName(dec.Name), dec.Description)
-		return
+		options = append(options, fmt.Sprintf("description = %q", dec.Description))
 	}
-	d.write("ROUTE %s {\n", quoteName(dec.Name))
+	d.write("ROUTE %s", quoteName(dec.Name))
+	if len(options) > 0 {
+		d.write(" (%s)", strings.Join(options, ", "))
+	}
+	d.write(" {\n")
 }
 
 func (d *decompiler) writeDecisionModels(dec config.Decision) {

@@ -39,6 +39,12 @@ def test_management_readiness_omits_auth_when_disabled():
     assert _configured_management_readiness_token_env(config, {}) is None
 
 
+def test_management_readiness_omits_static_auth_for_router_native_mode():
+    config = _management_config(mode="router")
+
+    assert _configured_management_readiness_token_env(config, {}) is None
+
+
 def test_management_readiness_selects_first_available_bearer_env():
     config = _management_config(
         mode="bearer",
@@ -235,7 +241,7 @@ def test_custom_serve_forwards_management_readiness_credential(monkeypatch, tmp_
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.3",
+                "version": "v0.4",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
@@ -266,17 +272,16 @@ def test_custom_serve_forwards_management_readiness_credential(monkeypatch, tmp_
     monkeypatch.setattr(
         runtime_commands,
         "ensure_bootstrap_workspace",
-        lambda _path: BootstrapResult(
+        lambda *_args, **_kwargs: BootstrapResult(
             config_path=config_path,
             output_dir=tmp_path / ".vllm-sr",
-            setup_mode=False,
         ),
     )
     monkeypatch.setattr(
         runtime_commands, "_build_backend", lambda *_args, **_kwargs: _StubBackend()
     )
 
-    result = CliRunner().invoke(main, ["serve", "--config", str(config_path)])
+    result = CliRunner().invoke(main, ["serve"])
 
     assert result.exit_code == 0, result.output
     assert captured["env_vars"]["CUSTOM_MGMT_TOKEN"] == "never-print-this-value"

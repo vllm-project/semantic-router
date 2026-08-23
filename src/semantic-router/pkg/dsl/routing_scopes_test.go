@@ -11,16 +11,23 @@ import (
 const scopedRoutingDSL = `
 ROUTING { strategy: priority }
 
-MODEL shared_model { context_window_size: 32768 }
-
-ENTRYPOINT {
-  model_names: ["router/alpha"]
-  recipe: "alpha"
+MODEL shared_model {
+  aliases: ["shared-upstream"]
+  context_window_size: 32768
+  reasoning: { type: "reasoning_effort", efforts: ["medium", "high"] }
 }
 
 ENTRYPOINT {
-  model_names: ["router/beta", "router/beta-v2"]
+  name: "router/alpha"
+  recipe: "alpha"
+  assignments: [{ decision: "alpha_route", models: [{ model: "shared_model" }] }]
+}
+
+ENTRYPOINT {
+  name: "router/beta"
+  aliases: ["router/beta-v2"]
   recipe: "beta"
+  assignments: [{ decision: "beta_route", models: [{ model: "shared_model" }] }]
 }
 
 RECIPE alpha (description = "Alpha objective") {
@@ -29,7 +36,6 @@ RECIPE alpha (description = "Alpha objective") {
   ROUTE alpha_route {
     PRIORITY 10
     WHEN keyword("shared_name")
-    MODEL shared_model
   }
 }
 
@@ -39,7 +45,6 @@ RECIPE beta (description = "Beta objective") {
   ROUTE beta_route {
     PRIORITY 20
     WHEN keyword("shared_name")
-    MODEL shared_model
   }
 }
 `
@@ -49,8 +54,8 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("compile errors: %v", errs)
 	}
-	if len(cfg.Recipes) != 3 {
-		t.Fatalf("recipe count = %d, want default plus two named recipes", len(cfg.Recipes))
+	if len(cfg.Recipes) != 2 {
+		t.Fatalf("recipe count = %d, want two explicitly declared recipes", len(cfg.Recipes))
 	}
 	if len(cfg.Entrypoints) != 2 {
 		t.Fatalf("entrypoint count = %d, want 2", len(cfg.Entrypoints))
@@ -73,6 +78,9 @@ func TestCompileAndDecompileRoutingScopes(t *testing.T) {
 	}
 	if !reflect.DeepEqual(cfg.Recipes, recompiled.Recipes) {
 		t.Fatalf("recipes changed after round trip:\n%+v\n%+v", cfg.Recipes, recompiled.Recipes)
+	}
+	if !reflect.DeepEqual(cfg.ModelConfig, recompiled.ModelConfig) {
+		t.Fatalf("ModelCards changed after round trip:\n%+v\n%+v", cfg.ModelConfig, recompiled.ModelConfig)
 	}
 }
 
@@ -105,7 +113,7 @@ SIGNAL keyword factual { keywords: ["verify"] }
 ROUTE factual_route {
   WHEN keyword("factual")
   MODEL model
-  PLUGIN semantic_cache { enabled: true, similarity_threshold: 0.9, ttl_seconds: 900 }
+  PLUGIN response_cache { enabled: true, semantic: { similarity_threshold: 0.9 }, ttl_seconds: 900 }
   PLUGIN hallucination {
     enabled: true
     use_nli: true

@@ -5,12 +5,8 @@ import styles from './DslEditorPage.module.css'
 interface DslImportModalProps {
   importText: string
   importError: string | null
-  importUrl: string
-  importUrlLoading: boolean
   textareaRef: RefObject<HTMLTextAreaElement>
   onClose: () => void
-  onUrlChange: (value: string) => void
-  onFetchUrl: () => void
   onTextChange: (value: string) => void
   onLoadFile: () => void
   onImport: () => void
@@ -19,12 +15,8 @@ interface DslImportModalProps {
 export function DslImportModal({
   importText,
   importError,
-  importUrl,
-  importUrlLoading,
   textareaRef,
   onClose,
-  onUrlChange,
-  onFetchUrl,
   onTextChange,
   onLoadFile,
   onImport,
@@ -69,50 +61,9 @@ export function DslImportModal({
         </div>
         <div className={styles.modalBody}>
           <p className={styles.modalHint}>
-            Paste a full router config YAML or routing fragment below, load from a file, or fetch
-            from a URL. Only the routing section will be decompiled into DSL.
+            Paste a full router config or routing fragment, or load one from a file. Only the
+            routing section is imported.
           </p>
-          <div className={styles.importUrlRow}>
-            <input
-              className={styles.importUrlInput}
-              type="url"
-              aria-label="YAML config URL"
-              value={importUrl}
-              onChange={(event) => onUrlChange(event.target.value)}
-              placeholder="https://example.com/config.yaml"
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') onFetchUrl()
-              }}
-            />
-            <button
-              className={styles.toolbarBtn}
-              onClick={onFetchUrl}
-              disabled={importUrlLoading || !importUrl.trim()}
-            >
-              {importUrlLoading ? (
-                <>
-                  <span className={styles.dotPulse} />
-                  Fetching…
-                </>
-              ) : (
-                <>
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                  >
-                    <path d="M6 2a4 4 0 100 8 4 4 0 000-8z" />
-                    <path d="M2 6h8M6 2v8" strokeLinecap="round" />
-                    <path d="M14 14l-3.5-3.5" strokeLinecap="round" />
-                  </svg>
-                  Fetch
-                </>
-              )}
-            </button>
-          </div>
           <textarea
             ref={textareaRef}
             className={styles.importTextarea}

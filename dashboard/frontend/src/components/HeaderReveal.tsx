@@ -163,10 +163,6 @@ const HEADER_INFO: Record<string, { label: string; description: string }> = {
     label: 'Iterations',
     description: 'Number of model calls made',
   },
-  'x-vsr-looper-algorithm': {
-    label: 'Algorithm',
-    description: 'The multi-model algorithm used (confidence, ratings, remom, fusion, workflows)',
-  },
   'x-vsr-looper-latency-ms': {
     label: 'Latency (ms)',
     description: 'Wall-clock latency of the full looper execution, in milliseconds',
@@ -235,15 +231,7 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     signals: displayHeaders.filter(([key]) => key.startsWith('x-vsr-matched-')),
     // Decision headers: selected-decision
     decision: displayHeaders.filter(([key]) => key === 'x-vsr-selected-decision'),
-    // Prefer the generic route-selection algorithm and retain the looper header
-    // as a compatibility fallback for older router responses.
-    algorithm: displayHeaders.filter(([key]) =>
-      displayHeaders.some(
-        ([candidate, value]) => candidate === 'x-vsr-selected-algorithm' && value.trim() !== '',
-      )
-        ? key === 'x-vsr-selected-algorithm'
-        : key === 'x-vsr-looper-algorithm',
-    ),
+    algorithm: displayHeaders.filter(([key]) => key === 'x-vsr-selected-algorithm'),
     // Model selection headers: selected and final model path.
     model: displayHeaders.filter(
       ([key]) =>
@@ -267,7 +255,6 @@ const HeaderReveal = ({ headers, onComplete, displayDuration = 2000 }: HeaderRev
     looper: displayHeaders.filter(
       ([key]) =>
         key.startsWith('x-vsr-looper-') &&
-        key !== 'x-vsr-looper-algorithm' &&
         key !== 'x-vsr-looper-model' &&
         key !== 'x-vsr-looper-models-used',
     ),

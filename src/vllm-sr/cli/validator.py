@@ -1,8 +1,11 @@
 """Configuration validator for vLLM Semantic Router."""
 
 from typing import Any, List
+
 from cli.config_contract import iter_routing_profiles
+from cli.managed_envoy_contract import validate_envoy_dispatch_contract
 from cli.models import (
+    RecipeDistribution,
     UserConfig,
     PluginType,
     ResponseCachePluginConfig,
@@ -36,10 +39,6 @@ from cli.validator_recipe_contracts import (
     validate_domain_references,
     validate_recipe_contracts,
 )
-from cli.validator_workflows import (
-    validate_static_workflow_roles,
-    validate_workflow_final_model,
-)
 from cli.validator_signal_references import validate_signal_references
 
 log = get_logger(__name__)
@@ -53,6 +52,10 @@ EXPECTED_ALGORITHM_BLOCK_BY_TYPE = {
     "router_dc": "router_dc",
     "automix": "automix",
     "hybrid": "hybrid",
+    "knn": "ml",
+    "kmeans": "ml",
+    "svm": "ml",
+    "mlp": "ml",
     "latency_aware": "latency_aware",
     "multi_factor": "multi_factor",
     "prompt": "prompt",
@@ -67,6 +70,7 @@ ALGORITHM_CONFIG_BLOCKS = (
     "router_dc",
     "automix",
     "hybrid",
+    "ml",
     "latency_aware",
     "multi_factor",
     "prompt",
@@ -107,12 +111,10 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
 
 
 def _routing_profiles(config: UserConfig):
-    profiles = [("decisions", config.routing)]
-    profiles.extend(
-        (f"recipes.{recipe.name}.decisions", recipe.routing)
+    return [
+        (f"recipes.{recipe.name}.document.decisions", recipe.document)
         for recipe in config.recipes
-    )
-    return profiles
+    ]
 
 
 def _all_decisions(config: UserConfig):
@@ -257,103 +259,6 @@ def validate_algorithm_one_of(config: UserConfig) -> List[ValidationError]:
     return errors
 
 
-def validate_model_references(config: UserConfig) -> List[ValidationError]:
-    """
-    Validate that all model references in decisions exist.
-
-    Args:
-        config: User configuration
-
-    Returns:
-        list: List of validation errors
-    """
-    errors = []
-
-    provider_model_names = {model.name for model in config.providers.models}
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    routing_model_names = set(routing_cards.keys())
-
-    for model in config.providers.models:
-        if model.name not in routing_model_names:
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' is missing from routing.modelCards",
-                    field=f"providers.models.{model.name}",
-                )
-            )
-
-    for model in config.providers.models:
-        if (
-            model.reasoning_family
-            and model.reasoning_family not in config.providers.reasoning_families
-        ):
-            errors.append(
-                ValidationError(
-                    f"Provider model '{model.name}' references unknown reasoning family '{model.reasoning_family}'",
-                    field=f"providers.models.{model.name}.reasoning_family",
-                )
-            )
-
-    # Check decision model references
-    for field_prefix, decision in _all_decisions(config):
-        for model_ref in decision.modelRefs:
-            if model_ref.model not in provider_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references unknown model '{model_ref.model}'",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.model not in routing_model_names:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' references model '{model_ref.model}' without a routing.modelCards entry",
-                        field=f"{field_prefix}.{decision.name}.modelRefs",
-                    )
-                )
-                continue
-            if model_ref.lora_name:
-                declared_loras = {
-                    adapter.name
-                    for adapter in (routing_cards[model_ref.model].loras or [])
-                    if adapter.name
-                }
-                if not declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references LoRA '{model_ref.lora_name}' for model '{model_ref.model}', "
-                            "but routing.modelCards declares no loras for that model",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-                elif model_ref.lora_name not in declared_loras:
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' references unknown LoRA '{model_ref.lora_name}' for model '{model_ref.model}'",
-                            field=f"{field_prefix}.{decision.name}.modelRefs",
-                        )
-                    )
-
-    # Check default model
-    if config.providers.default_model not in provider_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in models",
-                field="providers.defaults.default_model",
-            )
-        )
-    elif config.providers.default_model not in routing_model_names:
-        errors.append(
-            ValidationError(
-                f"Default model '{config.providers.default_model}' not found in routing.modelCards",
-                field="providers.defaults.default_model",
-            )
-        )
-
-    return errors
-
-
 def _collect_pydantic_error_messages(exc: PydanticValidationError) -> List[str]:
     messages: List[str] = []
     for error in exc.errors():
@@ -364,6 +269,7 @@ def _collect_pydantic_error_messages(exc: PydanticValidationError) -> List[str]:
 
 def _validate_single_plugin_configuration(
     decision_name: str,
+    *,
     idx: int,
     plugin_type: str,
     plugin_config: dict,
@@ -434,40 +340,70 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
             errors.extend(
                 _validate_single_plugin_configuration(
                     decision.name,
-                    idx,
-                    plugin_type,
-                    plugin.configuration,
-                    config_model,
-                    field_prefix,
+                    idx=idx,
+                    plugin_type=plugin_type,
+                    plugin_config=plugin.configuration,
+                    config_model=config_model,
+                    field_prefix=field_prefix,
                 )
             )
 
     return errors
 
 
-def _router_dc_missing_description_errors(
-    decision, algo, config: UserConfig
-) -> List[ValidationError]:
-    if (
-        algo.type != "router_dc"
-        or not algo.router_dc
-        or not algo.router_dc.require_descriptions
-    ):
-        return []
-    errs: List[ValidationError] = []
-    routing_cards = {card.name: card for card in config.routing.model_cards}
-    for model_ref in decision.modelRefs:
-        model_card = routing_cards.get(model_ref.model)
-        if model_card is None or model_card.description:
-            continue
-        errs.append(
-            ValidationError(
-                f"Decision '{decision.name}' uses router_dc with require_descriptions=true, "
-                f"but model '{model_ref.model}' has no description",
-                field=f"routing.modelCards.{model_ref.model}.description",
-            )
+def _router_dc_missing_description_errors(config: UserConfig) -> List[ValidationError]:
+    models = {model.name: model for model in config.models}
+    recipes = {recipe.name: recipe for recipe in config.recipes}
+    errors: List[ValidationError] = []
+    for entrypoint_index, entrypoint in enumerate(config.entrypoints):
+        routes = (
+            [
+                (
+                    entrypoint.recipe,
+                    entrypoint.assignments or {},
+                    f"entrypoints.{entrypoint_index}",
+                )
+            ]
+            if not entrypoint.rules
+            else [
+                (
+                    rule.recipe,
+                    rule.assignments,
+                    f"entrypoints.{entrypoint_index}.rules.{rule_index}",
+                )
+                for rule_index, rule in enumerate(entrypoint.rules)
+            ]
         )
-    return errs
+        for recipe_name, assignments, field in routes:
+            recipe = recipes.get(recipe_name or "")
+            if recipe is None:
+                continue
+            decisions = {
+                decision.name: decision for decision in recipe.document.decisions
+            }
+            for decision_name, assignment in assignments.items():
+                decision = decisions.get(decision_name)
+                algorithm = decision.algorithm if decision is not None else None
+                if (
+                    algorithm is None
+                    or algorithm.type != "router_dc"
+                    or algorithm.router_dc is None
+                    or not algorithm.router_dc.require_descriptions
+                ):
+                    continue
+                for model_ref in assignment.models:
+                    model = models.get(model_ref.model)
+                    if model is None or model.card.description:
+                        continue
+                    errors.append(
+                        ValidationError(
+                            f"Decision '{decision.name}' uses router_dc with "
+                            "require_descriptions=true, but assigned Model "
+                            f"'{model_ref.model}' has no description",
+                            field=f"{field}.assignments.{decision_name}",
+                        )
+                    )
+    return errors
 
 
 def _maybe_hybrid_weight_error(
@@ -512,7 +448,7 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     Returns:
         list: List of validation errors
     """
-    errors = []
+    errors = _router_dc_missing_description_errors(config)
 
     for field_prefix, decision in _all_decisions(config):
         if not decision.algorithm:
@@ -532,8 +468,6 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
             )
             continue
 
-        errors.extend(_router_dc_missing_description_errors(decision, algo, config))
-
         hybrid_err = _maybe_hybrid_weight_error(
             decision.name,
             algo_type,
@@ -543,59 +477,56 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
         if hybrid_err is not None:
             errors.append(hybrid_err)
 
-        workflows_cfg = getattr(algo, "workflows", None)
-        if algo_type == "workflows" and workflows_cfg is not None:
-            mode = workflows_cfg.mode or "static"
-            planner = workflows_cfg.planner
-            planner_model = (
-                getattr(planner, "model", None) if planner is not None else None
-            )
-            if mode == "dynamic" and not planner_model:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' uses workflows mode=dynamic but does not set planner.model",
-                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.planner.model",
-                    )
-                )
-            if mode == "dynamic" and workflows_cfg.roles:
-                errors.append(
-                    ValidationError(
-                        f"Decision '{decision.name}' uses workflows mode=dynamic but also sets static roles",
-                        field=f"{field_prefix}.{decision.name}.algorithm.workflows.roles",
-                    )
-                )
-            errors.extend(
-                validate_workflow_final_model(
-                    decision,
-                    workflows_cfg,
-                    field_prefix,
-                )
-            )
-            if mode == "static":
-                errors.extend(
-                    validate_static_workflow_roles(
-                        decision,
-                        workflows_cfg,
-                        field_prefix,
-                    )
-                )
+    return errors
 
-        remom_cfg = getattr(algo, "remom", None)
-        if (
-            algo_type == "remom"
-            and remom_cfg is not None
-            and remom_cfg.synthesis_model
-            and remom_cfg.synthesis_model
-            not in {model_ref.model for model_ref in decision.modelRefs}
-        ):
-            errors.append(
-                ValidationError(
-                    f"Decision '{decision.name}' ReMoM synthesis_model "
-                    f"'{remom_cfg.synthesis_model}' is not present in modelRefs",
-                    field=f"decisions.{decision.name}.algorithm.remom.synthesis_model",
-                )
-            )
 
+def _validate_routing_contracts(config: UserConfig) -> List[ValidationError]:
+    errors = []
+    errors.extend(validate_recipe_contracts(config))
+    errors.extend(validate_signal_references(config))
+    errors.extend(validate_algorithm_one_of(config))
+    errors.extend(validate_latency_aware_algorithm_config(config))
+    errors.extend(validate_domain_references(config))
+    errors.extend(validate_classifier_contracts(config))
+    errors.extend(validate_plugin_configurations(config))
+    errors.extend(validate_algorithm_configurations(config))
+    errors.extend(validate_prompt_dependencies(config))
+    errors.extend(validate_projection_score_dependencies(config))
+    errors.extend(validate_embedding_modality_compatibility(config))
+    return errors
+
+
+def _report_validation_result(
+    errors: List[ValidationError], *, log_summary: bool
+) -> None:
+    if not log_summary:
+        return
+    if errors:
+        log.warning(f"Found {len(errors)} validation error(s)")
+        for error in errors:
+            log.warning(f"  • {error}")
+    else:
+        log.info("Configuration validation passed")
+
+
+def validate_recipe_distribution(
+    distribution: RecipeDistribution, *, log_summary: bool = True
+) -> List[ValidationError]:
+    """Validate routing semantics for a portable Recipe-only artifact."""
+
+    if log_summary:
+        log.info("Validating Recipe distribution...")
+    validation_view = UserConfig.model_construct(
+        version=distribution.version,
+        billing_currency=None,
+        listeners=[],
+        models=[],
+        entrypoints=[],
+        recipes=distribution.recipes,
+        global_=None,
+    )
+    errors = _validate_routing_contracts(validation_view)
+    _report_validation_result(errors, log_summary=log_summary)
     return errors
 
 
@@ -616,42 +547,9 @@ def validate_user_config(
     if log_summary:
         log.info("Validating user configuration...")
 
-    errors = []
-
-    errors.extend(validate_recipe_contracts(config))
-
-    # Validate signal references
-    errors.extend(validate_signal_references(config))
-    errors.extend(validate_algorithm_one_of(config))
-    errors.extend(validate_latency_aware_algorithm_config(config))
-
-    # Validate domain references
-    errors.extend(validate_domain_references(config))
-
-    # Validate model references
-    errors.extend(validate_model_references(config))
-    errors.extend(validate_classifier_contracts(config))
-
-    # Validate plugin configurations
-    errors.extend(validate_plugin_configurations(config))
-
-    # Validate algorithm configurations
-    errors.extend(validate_algorithm_configurations(config))
-    errors.extend(validate_prompt_dependencies(config))
-
-    # Validate projection score dependency ordering
-    errors.extend(validate_projection_score_dependencies(config))
-
-    # Validate embedding query_modality compatibility with embedding model
-    errors.extend(validate_embedding_modality_compatibility(config))
-
-    if errors and log_summary:
-        log.warning(f"Found {len(errors)} validation error(s)")
-        for error in errors:
-            log.warning(f"  • {error}")
-    elif log_summary:
-        log.info("Configuration validation passed")
-
+    errors = validate_envoy_dispatch_contract(config)
+    errors.extend(_validate_routing_contracts(config))
+    _report_validation_result(errors, log_summary=log_summary)
     return errors
 
 

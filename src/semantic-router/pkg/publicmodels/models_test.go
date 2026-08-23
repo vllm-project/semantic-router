@@ -9,23 +9,43 @@ import (
 func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 	cfg := &config.RouterConfig{
 		RouterOptions: config.RouterOptions{
-			AutoModelNames:            []string{"router/custom"},
 			IncludeConfigModelsInList: true,
 		},
 		Entrypoints: []config.EntrypointMapping{
-			{ModelNames: []string{"partner/balanced"}, Recipe: "balanced"},
+			{
+				ID: "entrypoint-balanced", Revision: 1, Name: "partner/balanced", ModelNames: []string{"partner/balanced"},
+				Rules: []config.EntrypointRule{{
+					ID: "rule-balanced", Name: "default",
+					Action: config.EntrypointRuleAction{
+						RecipeID: "recipe-balanced", RecipeRevision: 1, Recipe: "balanced",
+						Assignments: map[string]config.RoutingAssignmentSet{
+							"decision-balanced": {Models: []config.RoutingModelAssignment{{
+								ModelID: "model-partner-backend", ModelRevision: 1, ModelName: "partner/backend", Weight: "1",
+							}}},
+						},
+					},
+				}},
+			},
 		},
 		Recipes: []config.RoutingRecipe{
 			{
+				ID:          "recipe-balanced",
+				Revision:    1,
 				Name:        "balanced",
 				Description: "Intelligent Router for Mixture-of-Models",
+				Profile: config.RoutingProfile{Decisions: []config.Decision{{
+					ID: "decision-balanced", Name: "balanced",
+				}}},
 			},
 		},
 		BackendModels: config.BackendModels{
 			ModelConfig: map[string]config.ModelParams{
-				"partner/backend": {},
+				"partner/backend": {ResourceID: "model-partner-backend", ResourceRevision: 1},
 			},
 		},
+	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare public model fixture: %v", err)
 	}
 
 	modelList := NewOpenAIModelList(cfg, 123)
@@ -36,16 +56,9 @@ func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 
 	assertPublicModel(
 		t,
-		modelsByID["router/custom"],
-		routerOwner,
-		selectableVirtualRoute(config.DefaultRecipeName, true),
-		autoModelDescription,
-	)
-	assertPublicModel(
-		t,
 		modelsByID["partner/balanced"],
 		routerOwner,
-		selectableVirtualRoute("balanced", false),
+		selectableVirtualRoute("balanced"),
 		"Intelligent Router for Mixture-of-Models",
 	)
 	assertPublicModel(
@@ -57,13 +70,10 @@ func TestNewOpenAIModelListUsesSourceMetadata(t *testing.T) {
 	)
 }
 
-func TestNewOpenAIModelListKeepsDefaultAliasesGeneric(t *testing.T) {
+func TestNewOpenAIModelListDoesNotInventDefaultAliases(t *testing.T) {
 	modelList := NewOpenAIModelList(nil, 123)
-	if len(modelList.Data) != len(config.DefaultAutoModelNames()) {
-		t.Fatalf("default model count = %d, want %d", len(modelList.Data), len(config.DefaultAutoModelNames()))
-	}
-	for _, model := range modelList.Data {
-		assertPublicModel(t, model, routerOwner, selectableVirtualRoute(config.DefaultRecipeName, true), autoModelDescription)
+	if len(modelList.Data) != 0 {
+		t.Fatalf("nil config produced hidden routing aliases: %+v", modelList.Data)
 	}
 }
 

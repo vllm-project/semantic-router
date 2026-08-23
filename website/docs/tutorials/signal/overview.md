@@ -34,10 +34,10 @@ Use signals when:
 
 ## Configuration
 
-In canonical v0.3 YAML, signals live under `routing.signals`:
+In canonical v0.4 YAML, signals live under `routing.signals`:
 
 ```yaml
-routing:
+document:
   signals:
     keywords:
       - name: urgent_keywords

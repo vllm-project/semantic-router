@@ -16,7 +16,6 @@ func TestHeaderConstants(t *testing.T) {
 		// Request headers
 		{"RequestID", RequestID, "x-request-id"},
 		{"SelectedModel", SelectedModel, "x-selected-model"},
-		{"VSRSkipProcessing", VSRSkipProcessing, "x-vsr-skip-processing"},
 		{"VSRInternalAuth", VSRInternalAuth, "x-vsr-internal-auth"},
 		// VSR headers
 		{"VSRSelectedCategory", VSRSelectedCategory, "x-vsr-selected-category"},
@@ -76,7 +75,6 @@ func TestVSRRoutingHeadersAreDocumented(t *testing.T) {
 
 	headers := []string{
 		XSessionID,
-		VSRSkipProcessing,
 		VSRDebug,
 		VSRClientProtocol,
 		VSRUpstreamProtocol,

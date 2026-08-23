@@ -598,7 +598,7 @@ func TestRouterLearningAdaptationUsesSamplingOnlyWhenPreflightAllows(t *testing.
 }
 
 func TestRouterLearningCandidateSetsAreDeterministicAndEligible(t *testing.T) {
-	router := &OpenAIRouter{Config: &config.RouterConfig{
+	router, recipe := newRouterLearningEntrypointFixture(t, config.RouterConfig{
 		BackendModels: config.BackendModels{
 			DefaultModel: "cheap",
 			ModelConfig: map[string]config.ModelParams{
@@ -612,39 +612,48 @@ func TestRouterLearningCandidateSetsAreDeterministicAndEligible(t *testing.T) {
 				{Name: "endpoint-only", Model: "endpoint-only"},
 			},
 		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+		Recipes: []config.RoutingRecipe{{
+			Profile: config.RoutingProfile{Decisions: []config.Decision{
 				{
-					Name:      "simple",
-					Tier:      2,
-					ModelRefs: []config.ModelRef{{Model: "cheap"}, {Model: "missing"}},
+					ID:   "decision-simple",
+					Name: "simple",
+					Tier: 2,
 				},
 				{
-					Name:      "complex",
-					Tier:      2,
-					ModelRefs: []config.ModelRef{{Model: "frontier"}, {Model: "cheap"}},
+					ID:   "decision-complex",
+					Name: "complex",
+					Tier: 2,
 				},
 				{
-					Name:      "other",
-					Tier:      4,
-					ModelRefs: []config.ModelRef{{Model: "global-only"}},
+					ID:   "decision-other",
+					Name: "other",
+					Tier: 4,
 				},
-			},
-		},
-	}}
-	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Name: "simple", Tier: 2}}
+			}},
+		}},
+	}, map[string][]string{
+		"decision-simple":  {"cheap"},
+		"decision-complex": {"frontier", "cheap"},
+		"decision-other":   {"global-only"},
+	})
+	decision := routingRecipeDecisionByName(recipe, "simple")
+	if decision == nil {
+		t.Fatal("compiled entrypoint recipe is missing simple decision")
+	}
+	ctx := &RequestContext{VSRSelectedDecision: decision}
 	selCtx := &selection.SelectionContext{
+		RecipeName:      recipe.RuntimeScope(),
 		DecisionName:    "simple",
 		CandidateModels: []config.ModelRef{{Model: "cheap"}, {Model: "missing"}},
 	}
 
 	assertModelRefs(t, router.learningCandidateModels(selCtx, ctx, config.RouterLearningCandidateSetDecision), []string{"cheap"})
 	assertModelRefs(t, router.learningCandidateModels(selCtx, ctx, config.RouterLearningCandidateSetTier), []string{"cheap", "frontier"})
-	assertModelRefs(t, router.learningCandidateModels(selCtx, ctx, config.RouterLearningCandidateSetGlobal), []string{"cheap", "frontier", "global-only", "endpoint-only", "inventory-only"})
+	assertModelRefs(t, router.learningCandidateModels(selCtx, ctx, config.RouterLearningCandidateSetGlobal), []string{"cheap", "endpoint-only", "frontier", "global-only", "inventory-only"})
 }
 
 func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) {
-	router := &OpenAIRouter{Config: &config.RouterConfig{
+	router, recipe := newRouterLearningEntrypointFixture(t, config.RouterConfig{
 		BackendModels: config.BackendModels{
 			DefaultModel: "cheap",
 			ModelConfig: map[string]config.ModelParams{
@@ -658,12 +667,12 @@ func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) 
 				CandidateSet: config.RouterLearningCandidateSetDecision,
 			},
 		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{
+		Recipes: []config.RoutingRecipe{{
+			Profile: config.RoutingProfile{Decisions: []config.Decision{
 				{
-					Name:      "simple",
-					Tier:      2,
-					ModelRefs: []config.ModelRef{{Model: "cheap"}},
+					ID:   "decision-simple",
+					Name: "simple",
+					Tier: 2,
 					Adaptations: config.DecisionAdaptationsConfig{
 						Adaptation: &config.DecisionLearningAdaptationConfig{
 							CandidateSet: config.RouterLearningCandidateSetTier,
@@ -671,17 +680,25 @@ func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) 
 					},
 				},
 				{
-					Name:      "complex",
-					Tier:      2,
-					ModelRefs: []config.ModelRef{{Model: "frontier"}},
+					ID:   "decision-complex",
+					Name: "complex",
+					Tier: 2,
 				},
-			},
-		},
-	}}
-	ctx := &RequestContext{VSRSelectedDecision: &router.Config.Decisions[0]}
+			}},
+		}},
+	}, map[string][]string{
+		"decision-simple":  {"cheap"},
+		"decision-complex": {"frontier"},
+	})
+	decision := routingRecipeDecisionByName(recipe, "simple")
+	if decision == nil {
+		t.Fatal("compiled entrypoint recipe is missing simple decision")
+	}
+	ctx := &RequestContext{VSRSelectedDecision: decision}
 	selCtx := &selection.SelectionContext{
+		RecipeName:      recipe.RuntimeScope(),
 		DecisionName:    "simple",
-		CandidateModels: []config.ModelRef{{Model: "cheap"}},
+		CandidateModels: decision.ModelRefs,
 	}
 	baseResult := &selection.SelectionResult{SelectedModel: "cheap"}
 
@@ -694,6 +711,68 @@ func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) 
 	}
 	learningCtx := router.adaptationSelectionContext(selCtx, ctx, adaptationCfg.EffectiveCandidateSet())
 	assertModelRefs(t, learningCtx.CandidateModels, []string{"cheap", "frontier"})
+}
+
+func newRouterLearningEntrypointFixture(
+	t *testing.T,
+	cfg config.RouterConfig,
+	assignments map[string][]string,
+) (*OpenAIRouter, *config.RoutingRecipe) {
+	t.Helper()
+	if len(cfg.Recipes) != 1 {
+		t.Fatalf("router learning fixture requires exactly one Recipe, got %d", len(cfg.Recipes))
+	}
+	recipe := &cfg.Recipes[0]
+	recipe.ID = "recipe-router-learning"
+	recipe.Revision = 1
+	recipe.Name = "router-learning"
+
+	actionAssignments := make(map[string]config.RoutingAssignmentSet, len(assignments))
+	for decisionID, modelNames := range assignments {
+		models := make([]config.RoutingModelAssignment, 0, len(modelNames))
+		for _, modelName := range modelNames {
+			params, ok := cfg.ModelConfig[modelName]
+			if !ok {
+				t.Fatalf("router learning fixture references unknown model %q", modelName)
+			}
+			if params.ResourceID == "" {
+				params.ResourceID = "model-" + modelName
+				params.ResourceRevision = 1
+				cfg.ModelConfig[modelName] = params
+			}
+			models = append(models, config.RoutingModelAssignment{
+				ModelID:       params.ResourceID,
+				ModelRevision: params.ResourceRevision,
+				ModelName:     modelName,
+				Weight:        "1",
+			})
+		}
+		actionAssignments[decisionID] = config.RoutingAssignmentSet{Models: models}
+	}
+	cfg.Entrypoints = []config.EntrypointMapping{{
+		ID:         "entrypoint-router-learning",
+		Revision:   1,
+		Name:       "router-learning",
+		ModelNames: []string{"router/learning"},
+		Rules: []config.EntrypointRule{{
+			ID:   "rule-router-learning",
+			Name: "router-learning",
+			Action: config.EntrypointRuleAction{
+				RecipeID:       recipe.ID,
+				RecipeRevision: recipe.Revision,
+				Recipe:         recipe.Name,
+				Assignments:    actionAssignments,
+			},
+		}},
+	}}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("prepare router learning Entrypoint: %v", err)
+	}
+	compiled, ok := cfg.RecipeForRequestModel("router/learning")
+	if !ok {
+		t.Fatal("resolve router learning Entrypoint")
+	}
+	return &OpenAIRouter{Config: &cfg}, compiled
 }
 
 func TestRouterLearningProtectionConfigPreservesExplicitZeroValues(t *testing.T) {

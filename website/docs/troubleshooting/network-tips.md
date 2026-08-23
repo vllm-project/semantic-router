@@ -20,7 +20,7 @@ need different fixes.
 Start the stack and inspect its status and component logs:
 
 ```bash
-vllm-sr serve --config config.yaml
+vllm-sr serve
 vllm-sr status
 vllm-sr logs router
 vllm-sr logs envoy
@@ -41,7 +41,7 @@ development, confirm that every required image exists before using a no-pull
 policy:
 
 ```bash
-vllm-sr serve --config config.yaml --image-pull-policy never
+vllm-sr serve --image-pull-policy never
 ```
 
 `never` does not download missing images; startup fails if an image is absent.
@@ -62,18 +62,14 @@ environment:
 ```bash
 export HF_ENDPOINT=https://your-approved-hugging-face-mirror.example
 export HF_TOKEN=your_token_if_required
-vllm-sr serve --config config.yaml
+vllm-sr serve
 ```
 
 Keep tokens in the environment or an external secret manager. The CLI masks
 sensitive passthrough values in its logs.
 
 For an offline deployment, download the required artifacts in advance and put
-them in the workspace model directory:
-
-- a normal YAML workspace mounts `models/` at `/app/models`;
-- a managed Recipe keeps mutable model state under `.vllm-sr/models/` and mounts
-  it at the same container path.
+them in the workspace `models/` directory, which is mounted at `/app/models`.
 
 Use `/app/models/...` in Router configuration, then verify that the file exists
 inside the runtime and that its format matches the selected signal or

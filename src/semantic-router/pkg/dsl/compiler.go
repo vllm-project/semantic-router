@@ -37,6 +37,11 @@ func CompileAST(prog *Program) (*config.RouterConfig, []error) {
 	}
 	c.config.Strategy = config.RoutingStrategy(prog.Strategy)
 	c.compile()
+	if len(c.errors) == 0 {
+		if _, err := config.MLSelectionConfigForRoutingProfile(c.config); err != nil {
+			c.errors = append(c.errors, err)
+		}
+	}
 	c.compileScopes()
 	if len(c.errors) > 0 {
 		return nil, c.errors

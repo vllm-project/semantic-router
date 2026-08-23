@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/k8s"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/logo"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -21,7 +21,12 @@ func main() {
 	initializeRuntimeLogger()
 	applyBackendRuntimeTuningDefaults()
 
-	cfg := loadRuntimeConfigOrFatal(opts.configPath)
+	connectionCompiler, err := productionModelConnectionCompiler()
+	if err != nil {
+		logging.Fatalf("Failed to compose Provider Integrations: %v", err)
+	}
+	configParser := config.NewParser(connectionCompiler)
+	cfg := loadRuntimeConfigOrFatal(opts.configPath, configParser)
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
 
@@ -31,15 +36,47 @@ func main() {
 		failStartup(startupWriter, "Failed to resolve management API: %v", err)
 	}
 	opts = resolvedOpts
+	if cfg.ControlPlane.Mode == config.ControlPlaneModeManaged && !opts.enableAPI {
+		failStartup(startupWriter, "Managed mode requires the Management API listener")
+	}
+	if opts.downloadOnly {
+		ensureModelsDownloadedOrFatal(cfg, startupWriter)
+		exitIfDownloadOnly(true)
+	}
+	processContext, cancelProcess := context.WithCancel(context.Background())
+	processRuntime, err := composeProcessRuntime(processContext, cfg)
+	if err != nil {
+		cancelProcess()
+		failStartup(startupWriter, "Failed to compose managed runtime: %v", err)
+	}
 
 	// Start the API server early so /startup-status is available during
 	// model downloads and initialization.
-	if err := startAPIServerIfEnabled(opts, runtimeRegistry); err != nil {
+	apiLifecycle, err := startAPIServerIfEnabled(
+		processContext, opts, runtimeRegistry, processRuntime.ManagedAPI(),
+	)
+	if err != nil {
+		cancelProcess()
+		_ = processRuntime.Close()
 		failStartup(startupWriter, "Failed to start management API: %v", err)
 	}
+	defer func() {
+		cancelProcess()
+		shutdownContext, cancelShutdown := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancelShutdown()
+		if err := apiLifecycle.Close(shutdownContext); err != nil {
+			logging.ComponentWarnEvent("router", "api_server_shutdown_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+		if err := processRuntime.Close(); err != nil {
+			logging.ComponentWarnEvent("router", "managed_runtime_shutdown_failed", map[string]interface{}{
+				"error": err.Error(),
+			})
+		}
+	}()
 
 	ensureModelsDownloadedOrFatal(cfg, startupWriter)
-	exitIfDownloadOnly(opts.downloadOnly)
 
 	defer initializeTracing(cfg)()
 	initializeWindowedMetricsIfEnabled(cfg)
@@ -49,19 +86,25 @@ func main() {
 	startMetricsServerIfEnabled(cfg, opts.metricsPort)
 
 	embeddingRuntime := initializeRuntimeDependencies(cfg, startupWriter, &shutdownHooks, runtimeRegistry)
-	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry)
+	if err := processRuntime.Start(processContext); err != nil {
+		failStartup(startupWriter, "Failed to start process runtime: %v", err)
+	}
+	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry, extproc.ServerDependencies{
+		ManagedRequests:      processRuntime.ManagedRequests(),
+		StandaloneRequests:   processRuntime.StandaloneRequests(),
+		DispatchCapabilities: processRuntime.DispatchCapabilities(),
+		OutcomeFeedback:      processRuntime.OutcomeFeedback(),
+		OutcomeProjection:    processRuntime.OutcomeProjection(),
+		ResponseTerminals:    processRuntime.ResponseTerminals(),
+		ProtocolCodecs:       processRuntime.ProtocolCodecs(),
+		ParseConfig:          configParser.Parse,
+	})
 
 	warmupRouterRuntime(server, embeddingRuntime)
 	markRouterReady(startupWriter, startupEmbeddingProviderStatus(embeddingRuntime))
 	logStartupSummary(cfg, opts, embeddingRuntime.AnyReady)
-	startKubernetesControllerIfNeeded(cfg, opts.kubeconfig, opts.namespace)
 	startExtProcServerOrFatal(server, startupWriter)
 }
-
-var (
-	ensureKubernetesConfigModels   = modeldownload.EnsureModelsForConfig
-	replaceKubernetesRuntimeConfig = config.Replace
-)
 
 func applyBackendRuntimeTuningDefaults() {
 	backend := strings.TrimSpace(strings.ToLower(os.Getenv("EMBEDDING_BACKEND_OVERRIDE")))
@@ -137,50 +180,6 @@ func ensureModelsDownloaded(cfg *config.RouterConfig, startupWriter startupstatu
 	return modeldownload.EnsureModelsForConfigWithProgress(cfg, reporter)
 }
 
-func applyKubernetesConfigUpdate(newConfig *config.RouterConfig) error {
-	if err := ensureKubernetesConfigModels(newConfig); err != nil {
-		return fmt.Errorf("failed to ensure models for kubernetes config update: %w", err)
-	}
-
-	replaceKubernetesRuntimeConfig(newConfig)
-	logging.ComponentEvent("router", "kubernetes_config_applied", map[string]interface{}{
-		"config_source":  newConfig.ConfigSource,
-		"decision_count": len(newConfig.Decisions),
-	})
-	return nil
-}
-
-// startKubernetesController starts the Kubernetes controller for watching CRDs
-func startKubernetesController(staticConfig *config.RouterConfig, kubeconfig, namespace string) {
-	// Import k8s package here to avoid import errors when k8s dependencies are not available
-	// This is a lazy import pattern
-	logging.ComponentEvent("router", "kubernetes_controller_starting", map[string]interface{}{
-		"namespace":      namespace,
-		"has_kubeconfig": kubeconfig != "",
-	})
-
-	controller, err := k8s.NewController(k8s.ControllerConfig{
-		Namespace:      namespace,
-		Kubeconfig:     kubeconfig,
-		StaticConfig:   staticConfig,
-		OnConfigUpdate: applyKubernetesConfigUpdate,
-	})
-	if err != nil {
-		logging.ComponentFatalEvent("router", "kubernetes_controller_create_failed", map[string]interface{}{
-			"namespace": namespace,
-			"error":     err.Error(),
-		})
-	}
-
-	ctx := context.Background()
-	if err := controller.Start(ctx); err != nil {
-		logging.ComponentFatalEvent("router", "kubernetes_controller_failed", map[string]interface{}{
-			"namespace": namespace,
-			"error":     err.Error(),
-		})
-	}
-}
-
 // logStartupSummary emits a single structured log line summarizing the router
 // startup state — making it trivial for agents and log aggregators to determine
 // what the router is serving and on which ports.
@@ -191,16 +190,13 @@ func logStartupSummary(cfg *config.RouterConfig, opts runtimeOptions, embeddingM
 	}
 
 	logging.ComponentEvent("router", "startup_complete", map[string]interface{}{
-		"extproc_port":        opts.port,
-		"api_port":            opts.apiPort,
-		"metrics_port":        opts.metricsPort,
-		"secure":              opts.secure,
-		"config_source":       cfg.ConfigSource,
-		"decisions":           strings.Join(decisionNames, ","),
-		"embedding_ready":     embeddingModelsReady,
-		"sem_cache_enabled":   cfg.Enabled,
-		"model_selection":     cfg.ModelSelection.Enabled,
-		"authz_providers":     len(cfg.Authz.Providers),
-		"ratelimit_providers": len(cfg.RateLimit.Providers),
+		"extproc_port":      opts.port,
+		"api_port":          opts.apiPort,
+		"metrics_port":      opts.metricsPort,
+		"secure":            opts.secure,
+		"decisions":         strings.Join(decisionNames, ","),
+		"embedding_ready":   embeddingModelsReady,
+		"sem_cache_enabled": cfg.Enabled,
+		"model_selection":   cfg.ModelSelection.Enabled,
 	})
 }

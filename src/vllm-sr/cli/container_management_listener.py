@@ -13,9 +13,10 @@ def _managed_management_listener(
 ) -> dict[str, int | str]:
     """Resolve the management listener contract for the split Docker stack."""
 
-    management = _management_api_config(config_path)
+    management, control_plane_mode = _management_listener_config(config_path)
     bind_address, port = _management_endpoint(management)
-    _validate_management_access(management)
+    tls_enabled, certificate_file = _management_tls(management)
+    _validate_management_access(management, control_plane_mode)
     _validate_management_endpoint(bind_address, port)
     host_port = port + stack_layout.port_offset
     if host_port > _MAX_PORT:
@@ -24,21 +25,34 @@ def _managed_management_listener(
         "bind_address": bind_address,
         "port": port,
         "host_port": host_port,
+        "tls_enabled": tls_enabled,
+        "certificate_file": certificate_file,
     }
 
 
 def _management_api_config(config_path: str) -> dict | None:
+    management, _ = _management_listener_config(config_path)
+    return management
+
+
+def _management_listener_config(config_path: str) -> tuple[dict | None, str]:
     config = parse_user_config(config_path)
     global_config = config.global_ or {}
+    control_plane = global_config.get("control_plane") or {}
+    if not isinstance(control_plane, dict):
+        raise ValueError("global.control_plane must be a mapping")
+    control_plane_mode = str(control_plane.get("mode") or "standalone").strip()
+    if control_plane_mode not in {"standalone", "managed"}:
+        raise ValueError("control-plane mode must be standalone or managed")
     services = global_config.get("services")
     if services is None:
-        return None
+        return None, control_plane_mode
     elif not isinstance(services, dict):
         raise ValueError("global.services must be a mapping")
     management = services.get("management_api")
     if management is not None and not isinstance(management, dict):
         raise ValueError("global.services.management_api must be a mapping")
-    return management
+    return management, control_plane_mode
 
 
 def _management_endpoint(management: dict | None) -> tuple[str, int]:
@@ -53,7 +67,23 @@ def _management_endpoint(management: dict | None) -> tuple[str, int]:
     return bind_address, raw_port
 
 
-def _validate_management_access(management: dict | None) -> None:
+def _management_tls(management: dict | None) -> tuple[bool, str]:
+    if management is None:
+        return False, ""
+    tls = management.get("tls") or {}
+    if not isinstance(tls, dict):
+        raise ValueError("global.services.management_api.tls must be a mapping")
+    certificate_file = str(tls.get("certificate_file") or "").strip()
+    certificate_env = str(tls.get("certificate_env") or "").strip()
+    private_file = str(tls.get("private_key_file") or "").strip()
+    private_env = str(tls.get("private_key_env") or "").strip()
+    enabled = bool(certificate_file or certificate_env or private_file or private_env)
+    return enabled, certificate_file
+
+
+def _validate_management_access(
+    management: dict | None, control_plane_mode: str
+) -> None:
     management_config = management or {}
     remote_exposure = management_config.get("remote_exposure", False)
     if not isinstance(remote_exposure, bool):
@@ -62,11 +92,26 @@ def _validate_management_access(management: dict | None) -> None:
     if not isinstance(auth, dict):
         raise ValueError("global.services.management_api.auth must be a mapping")
     auth_mode = str(auth.get("mode") or "disabled").strip()
-    if auth_mode not in {"disabled", "bearer"}:
-        raise ValueError("management API auth mode must be disabled or bearer")
     tokens = auth.get("tokens", [])
     if not isinstance(tokens, list):
         raise ValueError("management API auth tokens must be a list")
+    roles = auth.get("roles", {})
+    if not isinstance(roles, dict):
+        raise ValueError("management API auth roles must be a mapping")
+    if control_plane_mode == "managed":
+        if auth_mode != "router":
+            raise ValueError(
+                "managed control-plane mode requires management API auth mode router"
+            )
+        if tokens or roles:
+            raise ValueError(
+                "managed control-plane mode does not accept management API auth tokens or roles"
+            )
+        return
+    if auth_mode not in {"disabled", "bearer"}:
+        raise ValueError(
+            "standalone management API auth mode must be disabled or bearer"
+        )
     if remote_exposure and (auth_mode != "bearer" or not tokens):
         raise ValueError("management API remote exposure requires bearer auth tokens")
 

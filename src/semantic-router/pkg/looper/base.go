@@ -17,13 +17,11 @@ limitations under the License.
 package looper
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -74,14 +72,6 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 			modelName = modelRef.LoRAName
 		}
 
-		// Get access key from model params
-		accessKey := ""
-		if req.ModelParams != nil {
-			if params, ok := req.ModelParams[modelRef.Model]; ok {
-				accessKey = params.AccessKey
-			}
-		}
-
 		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
 			"looper":    "base",
 			"decision":  req.DecisionName,
@@ -92,12 +82,11 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 		// BaseLooper doesn't need logprobs (no confidence-based routing).
 		resp, err := l.client.CallModel(
 			ctx,
-			toolFreeLooperRequest(req.OriginalRequest),
+			toolFreeLooperRequest(req.executionRequest),
 			modelName,
 			req.IsStreaming,
 			iteration,
 			nil,
-			accessKey,
 		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
@@ -123,7 +112,7 @@ func (l *BaseLooper) Execute(ctx context.Context, req *Request) (*Response, erro
 
 	// Format output based on streaming preference.
 	if req.IsStreaming {
-		return l.formatStreamingResponse(aggregated, modelsUsed, iteration)
+		return l.formatStreamingResponse(aggregated, modelsUsed, iteration, streamUsageRequested(req))
 	}
 	return l.formatJSONResponse(aggregated, modelsUsed, iteration)
 }
@@ -193,141 +182,23 @@ func aggregatedUsageResponses(agg *AggregatedResponse) []*ModelResponse {
 // is preserved (with metadata patched) to avoid dropping tool_calls.
 func (l *BaseLooper) formatJSONResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
 	usage := SumUsage(aggregatedUsageResponses(agg)...)
-
-	// If the final response has tool_calls, use the original raw response
-	// but patch the model name and id to reflect the looper wrapper.
 	if agg.HasToolCalls && len(agg.Responses) > 0 {
-		last := agg.Responses[len(agg.Responses)-1]
-		if last.Raw != nil {
-			var raw map[string]interface{}
-			if err := json.Unmarshal(last.Raw, &raw); err == nil {
-				raw["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
-				raw["model"] = agg.FinalModel
-				raw["usage"] = usage.Map()
-				normalizeCompletionToolFinishReason(raw)
-				body, err := json.Marshal(raw)
-				if err == nil {
-					return &Response{
-						Body:          body,
-						ContentType:   "application/json",
-						Model:         agg.FinalModel,
-						ModelsUsed:    modelsUsed,
-						Iterations:    iterations,
-						AlgorithmType: "simple",
-						Usage:         usage,
-					}, nil
-				}
-			}
+		semantic, err := newModelSemanticResponse(
+			"response-looper", agg.Responses[len(agg.Responses)-1], agg.FinalModel, usage,
+		)
+		if err != nil {
+			return nil, err
 		}
+		return newLooperResponse(semantic, false, true, agg.FinalModel, modelsUsed, iterations, "simple", usage, nil), nil
 	}
-
-	// Fallback compatibility path:
-	// Some OpenAI-compatible backends emit "<tool_call>{...}</tool_call>" in content
-	// under tool_choice=auto instead of structured tool_calls. Convert that payload
-	// to tool_calls so downstream agents can execute tools.
 	if len(agg.Responses) > 0 {
 		last := agg.Responses[len(agg.Responses)-1]
-		if body, ok := rewriteTaggedToolCallResponse(last.Raw, agg.FinalModel, usage); ok {
-			return &Response{
-				Body:          body,
-				ContentType:   "application/json",
-				Model:         agg.FinalModel,
-				ModelsUsed:    modelsUsed,
-				Iterations:    iterations,
-				AlgorithmType: "simple",
-				Usage:         usage,
-			}, nil
+		if semantic, ok := newTaggedToolSemanticResponse("response-looper", agg.FinalModel, last.Content, usage); ok {
+			return newLooperResponse(semantic, false, true, agg.FinalModel, modelsUsed, iterations, "simple", usage, nil), nil
 		}
 	}
-
-	completion := map[string]interface{}{
-		"id":      fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano()),
-		"object":  "chat.completion",
-		"created": time.Now().Unix(),
-		"model":   agg.FinalModel,
-		"choices": []map[string]interface{}{
-			{
-				"index": 0,
-				"message": map[string]interface{}{
-					"role":    "assistant",
-					"content": agg.CombinedContent,
-				},
-				"finish_reason": "stop",
-			},
-		},
-		"usage": usage.Map(),
-	}
-
-	body, err := json.Marshal(completion)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal response: %w", err)
-	}
-
-	return &Response{
-		Body:          body,
-		ContentType:   "application/json",
-		Model:         agg.FinalModel,
-		ModelsUsed:    modelsUsed,
-		Iterations:    iterations,
-		AlgorithmType: "simple",
-		Usage:         usage,
-	}, nil
-}
-
-func rewriteTaggedToolCallResponse(raw []byte, finalModel string, usage ...TokenUsage) ([]byte, bool) {
-	if len(raw) == 0 {
-		return nil, false
-	}
-
-	var completion map[string]interface{}
-	if err := json.Unmarshal(raw, &completion); err != nil {
-		return nil, false
-	}
-
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return nil, false
-	}
-
-	firstChoice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return nil, false
-	}
-
-	message, ok := firstChoice["message"].(map[string]interface{})
-	if !ok {
-		return nil, false
-	}
-
-	content, _ := message["content"].(string)
-	toolName, argsJSON, ok := parseTaggedToolCall(content)
-	if !ok {
-		return nil, false
-	}
-
-	message["content"] = ""
-	message["tool_calls"] = []map[string]interface{}{
-		{
-			"id":   fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano()),
-			"type": "function",
-			"function": map[string]interface{}{
-				"name":      toolName,
-				"arguments": argsJSON,
-			},
-		},
-	}
-	firstChoice["finish_reason"] = "tool_calls"
-	completion["id"] = fmt.Sprintf("chatcmpl-looper-%d", time.Now().UnixNano())
-	completion["model"] = finalModel
-	if len(usage) > 0 {
-		completion["usage"] = usage[0].Map()
-	}
-
-	body, err := json.Marshal(completion)
-	if err != nil {
-		return nil, false
-	}
-	return body, true
+	semantic := newTextSemanticResponse("response-looper", agg.FinalModel, agg.CombinedContent, usage)
+	return newLooperResponse(semantic, false, true, agg.FinalModel, modelsUsed, iterations, "simple", usage, nil), nil
 }
 
 func parseTaggedToolCall(content string) (string, string, bool) {
@@ -366,125 +237,27 @@ func parseTaggedToolCall(content string) (string, string, bool) {
 }
 
 // formatStreamingResponse creates an SSE streaming response
-func (l *BaseLooper) formatStreamingResponse(agg *AggregatedResponse, modelsUsed []string, iterations int) (*Response, error) {
-	// If we have real SSE streams from the underlying model(s), preserve the SSE
-	// framing instead of simulating it. This still returns a single response body,
-	// but avoids the "fake streaming" behavior where we pre-split text.
+func (l *BaseLooper) formatStreamingResponse(
+	agg *AggregatedResponse,
+	modelsUsed []string,
+	iterations int,
+	includeUsage bool,
+) (*Response, error) {
 	usage := SumUsage(aggregatedUsageResponses(agg)...)
-	if len(agg.Responses) > 0 && agg.Responses[0].IsStreaming {
-		body := concatModelSSEStreams(agg.Responses)
-		resp := streamingLooperResponse(body, agg.FinalModel, modelsUsed, iterations, "simple")
-		resp.Usage = usage
-		return resp, nil
-	}
-
-	timestamp := time.Now().Unix()
-	id := fmt.Sprintf("chatcmpl-looper-%d", timestamp)
-	toolName, toolArgs, toolCallID, hasToolCall := resolveToolCallForStreaming(agg)
-	chunks := splitIntoChunks(agg.CombinedContent, 50)
-	sseBody := buildSimulatedChatCompletionSSE(
-		id, timestamp, agg.FinalModel, chunks, toolName, toolArgs, toolCallID, hasToolCall,
-	)
-	resp := streamingLooperResponse(sseBody, agg.FinalModel, modelsUsed, iterations, "simple")
-	resp.Usage = usage
-	return resp, nil
-}
-
-func concatModelSSEStreams(responses []*ModelResponse) []byte {
-	if len(responses) == 0 {
-		return []byte("data: [DONE]\n\n")
-	}
-
-	// Join the raw SSE streams sequentially, stripping intermediate [DONE] markers
-	// so the client sees a single terminal [DONE].
-	var out []byte
-	for i, resp := range responses {
-		if resp == nil || len(resp.Raw) == 0 {
-			continue
+	if agg.HasToolCalls && len(agg.Responses) > 0 {
+		semantic, err := newModelSemanticResponse(
+			"response-looper", agg.Responses[len(agg.Responses)-1], agg.FinalModel, usage,
+		)
+		if err != nil {
+			return nil, err
 		}
-		body := resp.Raw
-		if i < len(responses)-1 {
-			body = bytes.ReplaceAll(body, []byte("data: [DONE]\n\n"), []byte{})
-			body = bytes.ReplaceAll(body, []byte("data: [DONE]\r\n\r\n"), []byte{})
-		}
-		out = append(out, body...)
+		return newLooperResponse(semantic, true, includeUsage, agg.FinalModel, modelsUsed, iterations, "simple", usage, nil), nil
 	}
-	if !bytes.Contains(out, []byte("data: [DONE]")) {
-		out = append(out, []byte("data: [DONE]\n\n")...)
+	if semantic, ok := newTaggedToolSemanticResponse("response-looper", agg.FinalModel, agg.CombinedContent, usage); ok {
+		return newLooperResponse(semantic, true, includeUsage, agg.FinalModel, modelsUsed, iterations, "simple", usage, nil), nil
 	}
-	return out
-}
-
-func resolveToolCallForStreaming(agg *AggregatedResponse) (string, string, string, bool) {
-	if len(agg.Responses) == 0 {
-		return "", "", "", false
-	}
-
-	last := agg.Responses[len(agg.Responses)-1]
-	if name, args, callID, ok := parseFirstToolCallFromRaw(last.Raw); ok {
-		return name, args, callID, true
-	}
-
-	if name, args, ok := parseTaggedToolCall(agg.CombinedContent); ok {
-		return name, args, fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano()), true
-	}
-
-	return "", "", "", false
-}
-
-func parseFirstToolCallFromRaw(raw []byte) (string, string, string, bool) {
-	if len(raw) == 0 {
-		return "", "", "", false
-	}
-
-	var completion map[string]interface{}
-	if err := json.Unmarshal(raw, &completion); err != nil {
-		return "", "", "", false
-	}
-
-	choices, ok := completion["choices"].([]interface{})
-	if !ok || len(choices) == 0 {
-		return "", "", "", false
-	}
-
-	firstChoice, ok := choices[0].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	message, ok := firstChoice["message"].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	toolCalls, ok := message["tool_calls"].([]interface{})
-	if !ok || len(toolCalls) == 0 {
-		return "", "", "", false
-	}
-
-	firstTool, ok := toolCalls[0].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	function, ok := firstTool["function"].(map[string]interface{})
-	if !ok {
-		return "", "", "", false
-	}
-
-	name, _ := function["name"].(string)
-	args, _ := function["arguments"].(string)
-	callID, _ := firstTool["id"].(string)
-	if strings.TrimSpace(name) == "" {
-		return "", "", "", false
-	}
-	if strings.TrimSpace(args) == "" {
-		args = "{}"
-	}
-	if strings.TrimSpace(callID) == "" {
-		callID = fmt.Sprintf("chatcmpl-tool-%d", time.Now().UnixNano())
-	}
-	return name, args, callID, true
+	semantic := newTextSemanticResponse("response-looper", agg.FinalModel, agg.CombinedContent, usage)
+	return newLooperResponse(semantic, true, includeUsage, agg.FinalModel, modelsUsed, iterations, "simple", usage, nil), nil
 }
 
 // splitIntoChunks splits a string into chunks of approximately the given size

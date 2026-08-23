@@ -14,15 +14,47 @@ from cli.k8s_env_secret import (
     ENV_SECRET_OWNER_LABEL,
     ENV_SECRET_REVISION_ANNOTATION,
     LEGACY_ENV_SECRET_NAME,
-    EnvSecretPlan,
     build_env_secret_plan,
     env_secret_owner,
     is_managed_env_secret_name,
     managed_env_secret_names,
     referenced_secret_names,
 )
-from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from k8s_env_secret_test_support import _backend, _plan
+
+
+def _config_with_backend_credential(environment_name: str) -> dict[str, object]:
+    return {
+        "version": "v0.4",
+        "models": [
+            {
+                "name": "demo-model",
+                "card": {},
+                "connections": [
+                    {
+                        "provider": "openai-compatible",
+                        "model": "demo-model",
+                        "credential": "private-provider",
+                    }
+                ],
+            }
+        ],
+        "recipes": [],
+        "entrypoints": [],
+        "global": {
+            "services": {
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
+                },
+                "backend_credentials": {
+                    "private-provider": {
+                        "credential_adapter_id": "bearer",
+                        "secret_env": environment_name,
+                    }
+                },
+            }
+        },
+    }
 
 
 def test_plan_is_release_scoped_revisioned_and_secret_stays_in_manifest(
@@ -123,7 +155,15 @@ def test_profile_env_and_secret_refs_are_preserved_without_mutation(tmp_path):
         "env": [{"name": "PROFILE_ENV", "value": "profile"}],
         "envFromSecrets": ["operator-db-secret"],
         "podAnnotations": {"operator.example/owned": "true"},
-        "configOverride": {"providers": {"models": [{"name": "stale-profile"}]}},
+        "configOverride": {
+            "models": [
+                {
+                    "name": "stale-profile",
+                    "card": {},
+                    "connections": [],
+                }
+            ]
+        },
     }
     original = copy.deepcopy(profile)
 
@@ -148,12 +188,7 @@ def test_profile_env_and_secret_refs_are_preserved_without_mutation(tmp_path):
 def test_sensitive_profile_env_requires_external_value_from(tmp_path, env_field):
     config = tmp_path / "config.yaml"
     config.write_text(
-        yaml.safe_dump(
-            {
-                "version": "v0.3",
-                "providers": {"models": [{"api_key": "${GEMINI_API_KEY}"}]},
-            }
-        ),
+        yaml.safe_dump(_config_with_backend_credential("GEMINI_API_KEY")),
         encoding="utf-8",
     )
     canary = "profile-literal-secret-canary"
@@ -267,14 +302,22 @@ def test_profile_kubernetes_secret_references_are_not_literal_credentials(tmp_pa
 
 def test_atomic_config_drops_ignored_profile_config_from_helm_values(tmp_path):
     config = tmp_path / "config.yaml"
-    source = {"version": "v0.3", "listeners": []}
+    source = {"version": "v0.4", "listeners": []}
     config.write_text(yaml.safe_dump(source), encoding="utf-8")
     canary = "stale-profile-secret-canary"
 
     values = translate_config_to_helm_values(
         str(config),
         profile_values={
-            "config": {"providers": {"models": [{"api_key": canary}]}},
+            "config": {
+                "models": [
+                    {
+                        "name": "stale-model",
+                        "card": {},
+                        "connections": [{"api_key": canary}],
+                    }
+                ]
+            },
             "configOverride": {"api_key": canary},
         },
     )
@@ -287,7 +330,7 @@ def test_atomic_config_drops_ignored_profile_config_from_helm_values(tmp_path):
 def test_sensitive_profile_env_rejects_configmap_value_from(tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text(
-        yaml.safe_dump({"version": "v0.3", "api_key": "${MODEL_API_KEY}"}),
+        yaml.safe_dump(_config_with_backend_credential("MODEL_API_KEY")),
         encoding="utf-8",
     )
     profile = {
@@ -306,27 +349,65 @@ def test_sensitive_profile_env_rejects_configmap_value_from(tmp_path):
 def test_modern_router_config_and_management_auth_survive_helm_translation(tmp_path):
     config = tmp_path / "config.yaml"
     source = {
-        "version": "v0.3",
+        "version": "v0.4",
         "listeners": [{"name": "http", "port": 8899}],
-        "providers": {"models": [{"name": "local/custom"}]},
-        "routing": {"decisions": [{"name": "custom-route"}]},
-        "recipes": [{"name": "custom-recipe"}],
+        "models": [
+            {
+                "name": "local/custom",
+                "card": {"capabilities": ["chat"]},
+                "connections": [
+                    {
+                        "provider": "openai-compatible",
+                        "endpoint": "http://model-server:8000/v1",
+                        "model": "local/custom",
+                    }
+                ],
+            }
+        ],
+        "recipes": [
+            {
+                "name": "custom-recipe",
+                "document": {
+                    "decisions": [
+                        {
+                            "name": "custom-route",
+                            "description": "Default route.",
+                            "priority": 100,
+                        }
+                    ]
+                },
+            }
+        ],
+        "entrypoints": [
+            {
+                "name": "custom-model",
+                "recipe": "custom-recipe",
+                "assignments": {
+                    "custom-route": {"models": [{"model": "local/custom"}]}
+                },
+            }
+        ],
         "global": {
             "services": {
+                "backend_egress": {
+                    "policy_file": "/app/config/backend-egress-policy.yaml"
+                },
                 "management_api": {
                     "remote_exposure": True,
                     "auth": {
                         "mode": "bearer",
                         "tokens": [{"env": "CUSTOM_MGMT_TOKEN", "role": "viewer"}],
                     },
-                }
+                },
             }
         },
     }
     config.write_text(yaml.safe_dump(source), encoding="utf-8")
     stale_effective = tmp_path / "stale-effective.yaml"
     stale_effective.write_text(
-        yaml.safe_dump({"version": "v0.3", "providers": {"models": []}}),
+        yaml.safe_dump(
+            {"version": "v0.4", "models": [], "recipes": [], "entrypoints": []}
+        ),
         encoding="utf-8",
     )
 
@@ -366,115 +447,3 @@ def test_revision_binding_preserves_profile_values_and_controls_reserved_keys():
     backend._bind_env_secret_revision(values, None)
     assert values["envFromSecrets"] == ["operator-db-secret"]
     assert values["podAnnotations"] == {"operator.example/owned": "true"}
-
-
-def test_dashboard_receives_only_the_management_credential_key():
-    backend = _backend()
-    plan = EnvSecretPlan(
-        owner=env_secret_owner(backend.namespace, backend.release_name),
-        name=_plan(backend).name,
-        manifest="{}",
-        key_count=2,
-        keys=frozenset({MANAGEMENT_CREDENTIAL_ENV, "HF_TOKEN"}),
-    )
-    values = {
-        "dashboard": {
-            "enabled": True,
-            "extraEnv": [{"name": "DASHBOARD_PUBLIC", "value": "true"}],
-        }
-    }
-
-    backend._bind_dashboard_management_credential(values, plan)
-
-    assert values["dashboard"]["extraEnv"] == [
-        {"name": "DASHBOARD_PUBLIC", "value": "true"},
-        {
-            "name": MANAGEMENT_CREDENTIAL_ENV,
-            "valueFrom": {
-                "secretKeyRef": {
-                    "name": plan.name,
-                    "key": MANAGEMENT_CREDENTIAL_ENV,
-                }
-            },
-        },
-    ]
-    assert "HF_TOKEN" not in yaml.safe_dump(values)
-
-
-def test_dashboard_management_key_covers_custom_chart_default_without_profile():
-    backend = _backend()
-    plan = EnvSecretPlan(
-        owner=env_secret_owner(backend.namespace, backend.release_name),
-        name=_plan(backend).name,
-        manifest="{}",
-        key_count=1,
-        keys=frozenset({MANAGEMENT_CREDENTIAL_ENV}),
-    )
-    values = {}
-
-    backend._bind_dashboard_management_credential(values, plan)
-
-    assert values["dashboard"]["extraEnv"][0]["valueFrom"]["secretKeyRef"] == {
-        "name": plan.name,
-        "key": MANAGEMENT_CREDENTIAL_ENV,
-    }
-
-    minimal_values = {"dashboard": {"enabled": False}}
-    backend._bind_dashboard_management_credential(minimal_values, plan)
-    assert "extraEnv" not in minimal_values["dashboard"]
-
-
-def test_dashboard_management_binding_preserves_external_reference_and_removes_stale():
-    backend = _backend()
-    stale = _plan(backend).name
-    values = {
-        "dashboard": {
-            "enabled": True,
-            "extraEnv": [
-                {
-                    "name": MANAGEMENT_CREDENTIAL_ENV,
-                    "valueFrom": {
-                        "secretKeyRef": {
-                            "name": stale,
-                            "key": MANAGEMENT_CREDENTIAL_ENV,
-                        }
-                    },
-                }
-            ],
-        }
-    }
-    backend._bind_dashboard_management_credential(values, None)
-    assert "extraEnv" not in values["dashboard"]
-
-    external = {
-        "name": MANAGEMENT_CREDENTIAL_ENV,
-        "valueFrom": {
-            "secretKeyRef": {
-                "name": "operator-management-secret",
-                "key": "token",
-            }
-        },
-    }
-    values = {"dashboard": {"enabled": True, "extraEnv": [external]}}
-    backend._bind_dashboard_management_credential(values, None)
-    assert values["dashboard"]["extraEnv"] == [external]
-
-
-@pytest.mark.parametrize(
-    "entry",
-    [
-        {"name": MANAGEMENT_CREDENTIAL_ENV, "value": "literal-canary"},
-        {
-            "name": MANAGEMENT_CREDENTIAL_ENV,
-            "valueFrom": {"configMapKeyRef": {"name": "unsafe", "key": "token"}},
-        },
-    ],
-)
-def test_dashboard_management_credential_rejects_plain_or_non_secret_refs(entry):
-    backend = _backend()
-    values = {"dashboard": {"enabled": True, "extraEnv": [entry]}}
-
-    with pytest.raises(ValueError, match="management credential") as exc:
-        backend._bind_dashboard_management_credential(values, None)
-
-    assert "literal-canary" not in str(exc.value)

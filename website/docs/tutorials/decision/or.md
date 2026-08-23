@@ -29,7 +29,7 @@ Use `OR` when:
 ## Configuration
 
 ```yaml
-routing:
+document:
   decisions:
     - name: business_or_law_route
       description: Share one route across either business or law traffic.
@@ -41,9 +41,6 @@ routing:
             name: business
           - type: domain
             name: law
-      modelRefs:
-        - model: qwen2.5:3b
-          use_reasoning: false
 ```
 
 Use `OR` when the route outcome is the same, but several signals should be allowed to trigger it.

@@ -1,5 +1,6 @@
 import React from 'react'
 
+import ProductIcon, { type ProductIconName } from './ProductIcon'
 import styles from './ViewModal.module.css'
 
 export interface ViewField {
@@ -15,9 +16,11 @@ export interface ViewSection {
 
 export interface ViewPanelAction {
   label: string
+  icon?: ProductIconName
   onClick: () => void
-  tone?: 'secondary' | 'primary'
+  tone?: 'secondary' | 'primary' | 'destructive'
   disabled?: boolean
+  availableWhenReadonly?: boolean
 }
 
 interface ViewPanelProps {
@@ -39,16 +42,10 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
   actions = [],
   variant = 'modal',
 }) => {
-  const panelClassName = [
-    styles.modal,
-    variant === 'page' ? styles.modalStandalone : '',
-  ]
+  const panelClassName = [styles.modal, variant === 'page' ? styles.modalStandalone : '']
     .filter(Boolean)
     .join(' ')
-  const contentClassName = [
-    styles.content,
-    variant === 'page' ? styles.contentStandalone : '',
-  ]
+  const contentClassName = [styles.content, variant === 'page' ? styles.contentStandalone : '']
     .filter(Boolean)
     .join(' ')
   const hasFooter = actions.length > 0 || Boolean(onClose) || Boolean(onEdit)
@@ -56,10 +53,23 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
   return (
     <div className={panelClassName}>
       <div className={styles.header}>
-        <h2 className={styles.title}>{title}</h2>
+        <div className={styles.headerIdentity}>
+          <div className={styles.headerLogo} aria-hidden="true">
+            <img src="/vllm.png" alt="" />
+          </div>
+          <div>
+            <span className={styles.eyebrow}>Details</span>
+            <h2 className={styles.title}>{title}</h2>
+          </div>
+        </div>
         {onClose ? (
-          <button className={styles.closeButton} onClick={onClose} type="button" aria-label={closeLabel}>
-            ×
+          <button
+            className={styles.closeButton}
+            onClick={onClose}
+            type="button"
+            aria-label={closeLabel}
+          >
+            <ProductIcon name="close" />
           </button>
         ) : null}
       </div>
@@ -91,22 +101,27 @@ const ViewPanel: React.FC<ViewPanelProps> = ({
               className={
                 action.tone === 'primary'
                   ? styles.primaryFooterButton
-                  : styles.closeFooterButton
+                  : action.tone === 'destructive'
+                    ? styles.destructiveFooterButton
+                    : styles.closeFooterButton
               }
               onClick={action.onClick}
               type="button"
               disabled={action.disabled}
             >
+              {action.icon ? <ProductIcon name={action.icon} /> : null}
               {action.label}
             </button>
           ))}
           {onClose ? (
             <button className={styles.closeFooterButton} onClick={onClose} type="button">
+              <ProductIcon name="check" />
               {closeLabel}
             </button>
           ) : null}
           {onEdit ? (
             <button className={styles.editFooterButton} onClick={onEdit} type="button">
+              <ProductIcon name="edit" />
               Edit
             </button>
           ) : null}

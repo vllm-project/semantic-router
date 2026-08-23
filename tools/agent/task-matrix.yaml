@@ -167,10 +167,8 @@ rules:
     execution_plan_policy: long_horizon
     paths:
       - deploy/operator/**
-      - deploy/kubernetes/crds/**
-      - src/semantic-router/pkg/apis/**
     fast_tests:
-      - make generate-crd
+      - make operator-generate
     feature_tests: []
     requires_local_smoke: false
   - name: training-stack

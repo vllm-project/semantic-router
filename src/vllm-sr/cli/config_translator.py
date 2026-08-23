@@ -17,6 +17,16 @@ from contextlib import contextmanager, suppress
 
 import yaml
 
+from cli.control_plane_deployment import (
+    MANAGED_MODE,
+    control_plane_mode,
+    managed_store_references,
+)
+from cli.managed_envoy_contract import (
+    validate_envoy_dispatch_contract,
+    validate_networked_backend_dispatch,
+)
+from cli.models import UserConfig
 from cli.recipe_package import literal_credential_paths
 from cli.runtime_env_names import runtime_env_name_is_allowed
 from cli.utils import get_logger, load_config
@@ -43,7 +53,7 @@ def translate_config_to_helm_values(
     source_config_file: str | None = None,
     image: str | None = None,
     pull_policy: str | None = None,
-    enable_observability: bool = True,
+    enable_observability: bool = False,
     profile_values: dict | None = None,
     env_vars: dict[str, str] | None = None,
     env_secret_name: str | None = None,
@@ -62,6 +72,7 @@ def translate_config_to_helm_values(
         else load_config(config_file)
     )
     _validate_canonical_config(user_config)
+    _validate_managed_kubernetes_contract(user_config, profile_values, env_vars)
     _validate_profile_configmap_credentials(profile_values)
     values: dict = {}
 
@@ -178,6 +189,75 @@ def _validate_canonical_config(user_config: object) -> None:
             f"Kubernetes Router credential config.{credential_paths[0]} must use an "
             "uppercase, non-reserved environment reference such as ${CREDENTIAL_ENV}"
         )
+
+
+def _validate_managed_kubernetes_contract(
+    user_config: dict[str, object],
+    profile_values: dict | None,
+    env_vars: dict[str, str] | None,
+) -> None:
+    """Validate the same managed authority boundary used by local Docker."""
+
+    if control_plane_mode(user_config) != MANAGED_MODE:
+        return
+    typed = UserConfig.model_validate(user_config)
+    errors = validate_envoy_dispatch_contract(typed)
+    if errors:
+        first = errors[0]
+        raise ValueError(f"{first.field}: {first.message}")
+    validate_networked_backend_dispatch(typed, "Kubernetes")
+
+    references = managed_store_references(user_config)
+    secret_env_names = _profile_secret_reference_names(profile_values or {})
+    for label, reference in (
+        ("PostgreSQL", references.postgres),
+        ("Valkey", references.valkey),
+    ):
+        if reference.kind == "env":
+            value = (env_vars or {}).get(reference.value, "")
+            if not (isinstance(value, str) and value.strip()) and (
+                reference.value not in secret_env_names
+            ):
+                raise ValueError(
+                    f"managed Kubernetes {label} reference {reference.value} "
+                    "must be supplied by a Secret"
+                )
+            continue
+        if not _profile_mounts_secret_file(profile_values or {}, reference.value):
+            raise ValueError(
+                f"managed Kubernetes {label} file {reference.value} must be "
+                "mounted read-only from a Secret"
+            )
+
+
+def _profile_mounts_secret_file(profile: dict, file_path: str) -> bool:
+    volumes = profile.get("extraVolumes", [])
+    mounts = profile.get("extraVolumeMounts", [])
+    if not isinstance(volumes, list) or not isinstance(mounts, list):
+        return False
+    secret_volumes = {
+        item.get("name")
+        for item in volumes
+        if isinstance(item, dict)
+        and isinstance(item.get("name"), str)
+        and isinstance(item.get("secret"), dict)
+    }
+    for mount in mounts:
+        if not isinstance(mount, dict) or mount.get("name") not in secret_volumes:
+            continue
+        if mount.get("readOnly") is not True:
+            continue
+        mount_path = mount.get("mountPath")
+        if not isinstance(mount_path, str) or not mount_path.startswith("/"):
+            continue
+        if mount.get("subPath"):
+            if mount_path == file_path:
+                return True
+            continue
+        prefix = mount_path.rstrip("/") + "/"
+        if file_path.startswith(prefix):
+            return True
+    return False
 
 
 def _validate_profile_configmap_credentials(profile_values: object) -> None:
@@ -382,16 +462,21 @@ def _validated_env_entries(
 
 
 def _environment_reference_names(value: object) -> set[str]:
-    """Collect exact braced environment references from in-memory Helm values."""
+    """Collect named secret and exact braced environment references.
+
+    Standalone backend credentials use ``secret_env``.  Keeping this discovery in
+    the deployment translator lets Helm render a Secret reference without ever
+    copying the secret value into generated values or Envoy configuration.
+    """
 
     names: set[str] = set()
     pending = [value]
     while pending:
         node = pending.pop()
         if isinstance(node, dict):
-            api_key_env = node.get("api_key_env")
-            if isinstance(api_key_env, str) and api_key_env.strip():
-                names.add(api_key_env.strip())
+            secret_env = node.get("secret_env")
+            if isinstance(secret_env, str) and secret_env.strip():
+                names.add(secret_env.strip())
             pending.extend(node.values())
         elif isinstance(node, list):
             pending.extend(node)

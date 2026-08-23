@@ -189,16 +189,13 @@ async function mockRouterInventoryShell(page: Page, status: unknown = statusPayl
     },
   })
 
-  await page.route('**/api/router/config/all', async (route) => {
+  await page.route('**/api/router/management/v1/routing/**', async (route) => {
     await route.fulfill({
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        signals: {},
-        decisions: [],
-        providers: { models: [] },
-        plugins: {},
-      }),
+      headers: {
+        'Content-Type': 'application/vnd.vllm-semantic-router.management.v1+json',
+      },
+      body: JSON.stringify({ data: [], page: { hasMore: false, pageSize: 100 } }),
     })
   })
 

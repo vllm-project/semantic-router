@@ -20,6 +20,10 @@
 }
 
 .controls button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
   min-height: 32px;
   padding: 0.3rem 0.65rem;
   border: 1px solid var(--color-border, #333);
@@ -27,6 +31,16 @@
   background: transparent;
   color: var(--color-text, #e8e8e8);
   cursor: pointer;
+}
+
+.controls button > svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+}
+
+.controls button > svg + svg {
+  margin-left: -0.4rem;
 }
 
 .controls button:hover:not(:disabled) {

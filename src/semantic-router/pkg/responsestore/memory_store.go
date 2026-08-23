@@ -12,12 +12,22 @@ import (
 // MemoryStore is an in-memory implementation of CombinedStore.
 type MemoryStore struct {
 	mu            sync.RWMutex
-	responses     map[string]*responseapi.StoredResponse
-	conversations map[string]*responseapi.StoredConversation
+	responses     map[responseObjectKey]*responseapi.StoredResponse
+	conversations map[conversationObjectKey]*responseapi.StoredConversation
 	enabled       bool
 	ttl           time.Duration
 	maxResponses  int
 	maxConvs      int
+}
+
+type responseObjectKey struct {
+	owner responseapi.ResponseOwner
+	id    string
+}
+
+type conversationObjectKey struct {
+	owner responseapi.ResponseOwner
+	id    string
 }
 
 // NewMemoryStore creates a new in-memory store.
@@ -35,8 +45,8 @@ func NewMemoryStore(config StoreConfig) (*MemoryStore, error) {
 		maxConvs = 1000
 	}
 	store := &MemoryStore{
-		responses:     make(map[string]*responseapi.StoredResponse),
-		conversations: make(map[string]*responseapi.StoredConversation),
+		responses:     make(map[responseObjectKey]*responseapi.StoredResponse),
+		conversations: make(map[conversationObjectKey]*responseapi.StoredConversation),
 		enabled:       config.Enabled,
 		ttl:           ttl,
 		maxResponses:  maxResponses,
@@ -63,16 +73,17 @@ func (m *MemoryStore) Close() error {
 	return nil
 }
 
-func (m *MemoryStore) StoreResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+func (m *MemoryStore) StoreResponse(ctx context.Context, owner responseapi.ResponseOwner, response *responseapi.StoredResponse) error {
 	if !m.enabled {
 		return ErrStoreDisabled
 	}
-	if response == nil || response.ID == "" {
+	if validateOwner(owner) != nil || response == nil || response.ID == "" || response.Owner != owner {
 		return ErrInvalidInput
 	}
+	key := responseObjectKey{owner: owner, id: response.ID}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.responses[response.ID]; exists {
+	if _, exists := m.responses[key]; exists {
 		return ErrAlreadyExists
 	}
 	if len(m.responses) >= m.maxResponses {
@@ -82,11 +93,12 @@ func (m *MemoryStore) StoreResponse(ctx context.Context, response *responseapi.S
 		response.TTL = time.Now().Add(m.ttl)
 	}
 	stored := *response
-	m.responses[response.ID] = &stored
+	m.responses[key] = &stored
 
 	// Add to conversation index if ConversationID is set
 	if response.ConversationID != "" {
-		if conv, exists := m.conversations[response.ConversationID]; exists {
+		conversationKey := conversationObjectKey{owner: owner, id: response.ConversationID}
+		if conv, exists := m.conversations[conversationKey]; exists && conv.Owner == owner {
 			conv.ResponseIDs = append(conv.ResponseIDs, response.ID)
 			conv.UpdatedAt = time.Now().Unix()
 		}
@@ -95,17 +107,20 @@ func (m *MemoryStore) StoreResponse(ctx context.Context, response *responseapi.S
 	return nil
 }
 
-func (m *MemoryStore) GetResponse(ctx context.Context, responseID string) (*responseapi.StoredResponse, error) {
+func (m *MemoryStore) GetResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) (*responseapi.StoredResponse, error) {
 	if !m.enabled {
 		return nil, ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return nil, ErrInvalidInput
 	}
 	if responseID == "" {
 		return nil, ErrInvalidID
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	response, exists := m.responses[responseID]
-	if !exists {
+	response, exists := m.responses[responseObjectKey{owner: owner, id: responseID}]
+	if !exists || response.Owner != owner {
 		return nil, ErrNotFound
 	}
 	if !response.TTL.IsZero() && time.Now().After(response.TTL) {
@@ -115,42 +130,50 @@ func (m *MemoryStore) GetResponse(ctx context.Context, responseID string) (*resp
 	return &result, nil
 }
 
-func (m *MemoryStore) UpdateResponse(ctx context.Context, response *responseapi.StoredResponse) error {
+func (m *MemoryStore) UpdateResponse(ctx context.Context, owner responseapi.ResponseOwner, response *responseapi.StoredResponse) error {
 	if !m.enabled {
 		return ErrStoreDisabled
 	}
-	if response == nil || response.ID == "" {
+	if validateOwner(owner) != nil || response == nil || response.ID == "" || response.Owner != owner {
 		return ErrInvalidInput
 	}
+	key := responseObjectKey{owner: owner, id: response.ID}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.responses[response.ID]; !exists {
+	if stored, exists := m.responses[key]; !exists || stored.Owner != owner {
 		return ErrNotFound
 	}
 	stored := *response
-	m.responses[response.ID] = &stored
+	m.responses[key] = &stored
 	return nil
 }
 
-func (m *MemoryStore) DeleteResponse(ctx context.Context, responseID string) error {
+func (m *MemoryStore) DeleteResponse(ctx context.Context, owner responseapi.ResponseOwner, responseID string) error {
 	if !m.enabled {
 		return ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return ErrInvalidInput
 	}
 	if responseID == "" {
 		return ErrInvalidID
 	}
+	key := responseObjectKey{owner: owner, id: responseID}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.responses[responseID]; !exists {
+	if response, exists := m.responses[key]; !exists || response.Owner != owner {
 		return ErrNotFound
 	}
-	delete(m.responses, responseID)
+	delete(m.responses, key)
 	return nil
 }
 
-func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID string) ([]*responseapi.StoredResponse, error) {
+func (m *MemoryStore) GetConversationChain(ctx context.Context, owner responseapi.ResponseOwner, responseID string) ([]*responseapi.StoredResponse, error) {
 	if !m.enabled {
 		return nil, ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return nil, ErrInvalidInput
 	}
 	if responseID == "" {
 		return nil, ErrInvalidID
@@ -160,8 +183,8 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 	var chain []*responseapi.StoredResponse
 	currentID := responseID
 	for currentID != "" {
-		response, exists := m.responses[currentID]
-		if !exists || (!response.TTL.IsZero() && time.Now().After(response.TTL)) {
+		response, exists := m.responses[responseObjectKey{owner: owner, id: currentID}]
+		if !exists || response.Owner != owner || (!response.TTL.IsZero() && time.Now().After(response.TTL)) {
 			break
 		}
 		result := *response
@@ -174,22 +197,25 @@ func (m *MemoryStore) GetConversationChain(ctx context.Context, responseID strin
 	return chain, nil
 }
 
-func (m *MemoryStore) ListResponsesByConversation(ctx context.Context, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
+func (m *MemoryStore) ListResponsesByConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string, opts ListOptions) ([]*responseapi.StoredResponse, error) {
 	if !m.enabled {
 		return nil, ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return nil, ErrInvalidInput
 	}
 	if conversationID == "" {
 		return nil, ErrInvalidID
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	conv, exists := m.conversations[conversationID]
-	if !exists {
+	conv, exists := m.conversations[conversationObjectKey{owner: owner, id: conversationID}]
+	if !exists || conv.Owner != owner {
 		return nil, ErrNotFound
 	}
 	var responses []*responseapi.StoredResponse
 	for _, respID := range conv.ResponseIDs {
-		if resp, exists := m.responses[respID]; exists {
+		if resp, exists := m.responses[responseObjectKey{owner: owner, id: respID}]; exists && resp.Owner == owner {
 			if resp.TTL.IsZero() || time.Now().Before(resp.TTL) {
 				result := *resp
 				responses = append(responses, &result)
@@ -200,16 +226,17 @@ func (m *MemoryStore) ListResponsesByConversation(ctx context.Context, conversat
 	return responses, nil
 }
 
-func (m *MemoryStore) CreateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
+func (m *MemoryStore) CreateConversation(ctx context.Context, owner responseapi.ResponseOwner, conversation *responseapi.StoredConversation) error {
 	if !m.enabled {
 		return ErrStoreDisabled
 	}
-	if conversation == nil || conversation.ID == "" {
+	if validateOwner(owner) != nil || conversation == nil || conversation.ID == "" || conversation.Owner != owner {
 		return ErrInvalidInput
 	}
+	key := conversationObjectKey{owner: owner, id: conversation.ID}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.conversations[conversation.ID]; exists {
+	if _, exists := m.conversations[key]; exists {
 		return ErrAlreadyExists
 	}
 	if len(m.conversations) >= m.maxConvs {
@@ -219,21 +246,24 @@ func (m *MemoryStore) CreateConversation(ctx context.Context, conversation *resp
 		conversation.TTL = time.Now().Add(m.ttl)
 	}
 	stored := *conversation
-	m.conversations[conversation.ID] = &stored
+	m.conversations[key] = &stored
 	return nil
 }
 
-func (m *MemoryStore) GetConversation(ctx context.Context, conversationID string) (*responseapi.StoredConversation, error) {
+func (m *MemoryStore) GetConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string) (*responseapi.StoredConversation, error) {
 	if !m.enabled {
 		return nil, ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return nil, ErrInvalidInput
 	}
 	if conversationID == "" {
 		return nil, ErrInvalidID
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	conv, exists := m.conversations[conversationID]
-	if !exists {
+	conv, exists := m.conversations[conversationObjectKey{owner: owner, id: conversationID}]
+	if !exists || conv.Owner != owner {
 		return nil, ErrNotFound
 	}
 	if !conv.TTL.IsZero() && time.Now().After(conv.TTL) {
@@ -243,54 +273,62 @@ func (m *MemoryStore) GetConversation(ctx context.Context, conversationID string
 	return &result, nil
 }
 
-func (m *MemoryStore) UpdateConversation(ctx context.Context, conversation *responseapi.StoredConversation) error {
+func (m *MemoryStore) UpdateConversation(ctx context.Context, owner responseapi.ResponseOwner, conversation *responseapi.StoredConversation) error {
 	if !m.enabled {
 		return ErrStoreDisabled
 	}
-	if conversation == nil || conversation.ID == "" {
+	if validateOwner(owner) != nil || conversation == nil || conversation.ID == "" || conversation.Owner != owner {
 		return ErrInvalidInput
 	}
+	key := conversationObjectKey{owner: owner, id: conversation.ID}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, exists := m.conversations[conversation.ID]; !exists {
+	if stored, exists := m.conversations[key]; !exists || stored.Owner != owner {
 		return ErrNotFound
 	}
 	stored := *conversation
-	m.conversations[conversation.ID] = &stored
+	m.conversations[key] = &stored
 	return nil
 }
 
-func (m *MemoryStore) DeleteConversation(ctx context.Context, conversationID string, deleteResponses bool) error {
+func (m *MemoryStore) DeleteConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID string, deleteResponses bool) error {
 	if !m.enabled {
 		return ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return ErrInvalidInput
 	}
 	if conversationID == "" {
 		return ErrInvalidID
 	}
+	key := conversationObjectKey{owner: owner, id: conversationID}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	conv, exists := m.conversations[conversationID]
-	if !exists {
+	conv, exists := m.conversations[key]
+	if !exists || conv.Owner != owner {
 		return ErrNotFound
 	}
 	if deleteResponses {
 		for _, respID := range conv.ResponseIDs {
-			delete(m.responses, respID)
+			delete(m.responses, responseObjectKey{owner: owner, id: respID})
 		}
 	}
-	delete(m.conversations, conversationID)
+	delete(m.conversations, key)
 	return nil
 }
 
-func (m *MemoryStore) ListConversations(ctx context.Context, opts ListOptions) ([]*responseapi.StoredConversation, error) {
+func (m *MemoryStore) ListConversations(ctx context.Context, owner responseapi.ResponseOwner, opts ListOptions) ([]*responseapi.StoredConversation, error) {
 	if !m.enabled {
 		return nil, ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return nil, ErrInvalidInput
 	}
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	var convs []*responseapi.StoredConversation
 	for _, conv := range m.conversations {
-		if conv.TTL.IsZero() || time.Now().Before(conv.TTL) {
+		if conv.Owner == owner && (conv.TTL.IsZero() || time.Now().Before(conv.TTL)) {
 			result := *conv
 			convs = append(convs, &result)
 		}
@@ -305,17 +343,20 @@ func (m *MemoryStore) ListConversations(ctx context.Context, opts ListOptions) (
 	return convs, nil
 }
 
-func (m *MemoryStore) AddResponseToConversation(ctx context.Context, conversationID, responseID string) error {
+func (m *MemoryStore) AddResponseToConversation(ctx context.Context, owner responseapi.ResponseOwner, conversationID, responseID string) error {
 	if !m.enabled {
 		return ErrStoreDisabled
+	}
+	if validateOwner(owner) != nil {
+		return ErrInvalidInput
 	}
 	if conversationID == "" || responseID == "" {
 		return ErrInvalidID
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	conv, exists := m.conversations[conversationID]
-	if !exists {
+	conv, exists := m.conversations[conversationObjectKey{owner: owner, id: conversationID}]
+	if !exists || conv.Owner != owner {
 		return ErrNotFound
 	}
 	conv.ResponseIDs = append(conv.ResponseIDs, responseID)
@@ -346,29 +387,33 @@ func (m *MemoryStore) cleanupExpired() {
 }
 
 func (m *MemoryStore) evictOldestResponse() {
-	var oldestID string
+	var oldestKey responseObjectKey
+	found := false
 	var oldestTime int64 = 1<<63 - 1
-	for id, resp := range m.responses {
+	for key, resp := range m.responses {
 		if resp.CreatedAt < oldestTime {
 			oldestTime = resp.CreatedAt
-			oldestID = id
+			oldestKey = key
+			found = true
 		}
 	}
-	if oldestID != "" {
-		delete(m.responses, oldestID)
+	if found {
+		delete(m.responses, oldestKey)
 	}
 }
 
 func (m *MemoryStore) evictOldestConversation() {
-	var oldestID string
+	var oldestKey conversationObjectKey
+	found := false
 	var oldestTime int64 = 1<<63 - 1
-	for id, conv := range m.conversations {
+	for key, conv := range m.conversations {
 		if conv.CreatedAt < oldestTime {
 			oldestTime = conv.CreatedAt
-			oldestID = id
+			oldestKey = key
+			found = true
 		}
 	}
-	if oldestID != "" {
-		delete(m.conversations, oldestID)
+	if found {
+		delete(m.conversations, oldestKey)
 	}
 }

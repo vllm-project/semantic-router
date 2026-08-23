@@ -3,12 +3,15 @@ import { useLocation, useNavigate } from 'react-router-dom'
 
 import styles from './PlaygroundPage.module.css'
 import AnimatedBackground from '../components/AnimatedBackground'
-import ChatComponent from '../components/ChatComponent'
+import AgentPlayground from '../components/AgentPlayground'
 import { isPlaygroundInvocation } from '../types/playgroundInvocation'
+import { useReadonly } from '../contexts/ReadonlyContext'
+import { routerPublicEndpoint } from '../utils/routerPublicApi'
 
 const PlaygroundPage = () => {
   const location = useLocation()
   const navigate = useNavigate()
+  const { routerPublicUrl } = useReadonly()
   const locationState =
     location.state && typeof location.state === 'object'
       ? (location.state as Record<string, unknown>)
@@ -27,8 +30,8 @@ const PlaygroundPage = () => {
     <div className={styles.container}>
       <AnimatedBackground speed="slow" />
       <div className={styles.chatWrapper}>
-        <ChatComponent
-          endpoint="/api/router/v1/chat/completions"
+        <AgentPlayground
+          endpoint={routerPublicEndpoint(routerPublicUrl, '/v1/chat/completions')}
           invocation={invocation}
           onInvocationConsumed={handleInvocationConsumed}
         />

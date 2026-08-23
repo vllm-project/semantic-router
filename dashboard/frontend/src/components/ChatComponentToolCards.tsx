@@ -1,14 +1,13 @@
 import { useMemo } from 'react'
 
-import type { ToolCall, ToolResult } from '../tools'
-import { isOpenClawMCPToolName, parseMCPToolName } from '../tools/mcp'
+import type { ToolCall, ToolResult } from '../tools/types'
 
-import styles from './ChatComponent.module.css'
+import styles from './ClawRoomToolCards.module.css'
 import {
   buildClawRequestHighlights,
   buildClawResultHighlights,
   truncateHighlight,
-} from './ChatComponentTypes'
+} from './openClawToolPresentation'
 import { OpenWebCard, WebSearchCard } from './ChatComponentWebToolCards'
 import { getToolDisplayName, getToolStatusLabel, getToolSummary } from './chatToolCardPresentation'
 
@@ -18,6 +17,12 @@ const TOOL_STATUS_CLASS_NAMES: Record<ToolCall['status'], string> = {
   completed: styles.toolStatusCompleted,
   failed: styles.toolStatusFailed,
   skipped: styles.toolStatusSkipped,
+}
+
+function openClawToolName(value: string): string {
+  const segments = value.split(/[./]/).filter(Boolean)
+  const candidate = segments[segments.length - 1] ?? value
+  return candidate.startsWith('claw_') ? candidate : ''
 }
 
 function buildResultPreview(toolResult?: ToolResult) {
@@ -48,9 +53,8 @@ export const ToolCard = ({
   onToggle: () => void
 }) => {
   const toolName = toolCall.function.name
-  const parsedMCPTool = parseMCPToolName(toolName)
-  const isClawMCPToolCall = isOpenClawMCPToolName(toolName)
-  const clawToolName = isClawMCPToolCall ? parsedMCPTool?.toolName || '' : ''
+  const clawToolName = openClawToolName(toolName)
+  const isOpenClawToolCall = Boolean(clawToolName)
   const displayToolName = getToolDisplayName(clawToolName || toolName)
   const isClawCreateToolCall =
     clawToolName === 'claw_create_team' || clawToolName === 'claw_create_worker'
@@ -79,7 +83,7 @@ export const ToolCard = ({
   const showResultHighlights =
     isClawCreateToolCall && (toolCall.status === 'completed' || toolCall.status === 'failed')
   const statusLabel = getToolStatusLabel(toolCall.status)
-  const summary = getToolSummary(clawToolName || toolName, parsedArgs, isClawMCPToolCall)
+  const summary = getToolSummary(clawToolName || toolName, parsedArgs, isOpenClawToolCall)
   const resultPreview = useMemo(() => buildResultPreview(toolResult), [toolResult])
 
   if (toolName === 'search_web') {
@@ -105,7 +109,7 @@ export const ToolCard = ({
   }
 
   return (
-    <div className={`${styles.webSearchCard} ${isClawMCPToolCall ? styles.mcpToolCard : ''}`}>
+    <div className={`${styles.webSearchCard} ${isOpenClawToolCall ? styles.openClawToolCard : ''}`}>
       <button
         type="button"
         className={styles.webSearchHeader}
@@ -113,8 +117,10 @@ export const ToolCard = ({
         aria-expanded={isExpanded}
         aria-label={`${isExpanded ? 'Collapse' : 'Expand'} details for ${displayToolName}`}
       >
-        <div className={`${styles.webSearchIcon} ${isClawMCPToolCall ? styles.mcpToolIcon : ''}`}>
-          {isClawMCPToolCall ? (
+        <div
+          className={`${styles.webSearchIcon} ${isOpenClawToolCall ? styles.openClawToolIcon : ''}`}
+        >
+          {isOpenClawToolCall ? (
             <img src="/openclaw.svg" alt="" aria-hidden="true" />
           ) : (
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -125,7 +131,7 @@ export const ToolCard = ({
         <div className={styles.webSearchInfo}>
           <div className={styles.toolCardHeadingRow}>
             <span className={styles.webSearchTitle}>{displayToolName}</span>
-            {isClawMCPToolCall ? <span className={styles.toolCardBrand}>HireClaw</span> : null}
+            {isOpenClawToolCall ? <span className={styles.toolCardBrand}>HireClaw</span> : null}
           </div>
           <span className={styles.webSearchQuery}>{summary}</span>
         </div>
@@ -147,7 +153,7 @@ export const ToolCard = ({
       {toolCall.status === 'running' || toolCall.status === 'pending' ? (
         <div className={styles.webSearchLoading}>
           <div
-            className={`${styles.webSearchLoadingBar} ${isClawMCPToolCall ? styles.mcpToolLoadingBar : ''}`}
+            className={`${styles.webSearchLoadingBar} ${isOpenClawToolCall ? styles.openClawToolLoadingBar : ''}`}
           />
         </div>
       ) : null}

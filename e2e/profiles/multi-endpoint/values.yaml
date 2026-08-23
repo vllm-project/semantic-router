@@ -7,147 +7,90 @@ service:
   type: ClusterIP
   port: 8080
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: qwen14b-dev
-    models:
-      - name: qwen14b-dev
-        external_model_ids:
-          vllm: Qwen/Qwen2.5-14B-Instruct
-        backend_refs:
-          - name: vllm-14b-dev
-            endpoint: vllm-14b-dev.default.svc.cluster.local:8000
-            weight: 1
-            type: vllm
-      - name: qwen14b-prod
-        external_model_ids:
-          vllm: Qwen/Qwen2.5-14B-Instruct
-        backend_refs:
-          - name: vllm-14b-prod
-            endpoint: vllm-14b-prod.default.svc.cluster.local:8000
-            weight: 1
-            type: vllm
-  routing:
-    decisions:
-      - name: block_jailbreak_prod
-        description: Block jailbreak attempts on prod (strict)
-        priority: 1001
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_prod
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
-      - name: block_jailbreak_dev
-        description: Block jailbreak attempts on dev (relaxed)
-        priority: 1000
-        rules:
-          operator: OR
-          conditions:
-            - type: jailbreak
-              name: jailbreak_dev
-        plugins:
-          - type: fast_response
-            configuration:
-              message: Your request has been declined due to a policy violation.
-      - name: block_pii_prod
-        description: Block PII on prod (strict, deny all)
-        priority: 999
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_prod
-        plugins:
-          - type: fast_response
-            configuration:
-              message: For your security, please do not share personal information.
-      - name: block_pii_dev
-        description: Block PII on dev (relaxed, allow GPE/ORG/DATE)
-        priority: 998
-        rules:
-          operator: OR
-          conditions:
-            - type: pii
-              name: pii_dev
-        plugins:
-          - type: fast_response
-            configuration:
-              message: For your security, please do not share personal information.
-      - name: code_to_dev
-        description: Route code/tech queries to Dev (internal developer env)
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: code_keywords
-        modelRefs:
-          - model: qwen14b-dev
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a senior software engineer. Provide clear, production-quality code with best practices.
-      - name: general_to_prod
-        description: Route general/user queries to Prod (strict safety)
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: keyword
-              name: general_keywords
-        modelRefs:
-          - model: qwen14b-prod
-            use_reasoning: false
-        plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a helpful assistant operating under strict data protection policies. Never store, log, or repeat any personal information shared by the user.
-    signals:
-      keywords:
+  models:
+  - name: qwen14b-dev
+    card:
+      aliases:
+      - Qwen/Qwen2.5-14B-Instruct
+      param_size: 14b
+      description: "Qwen2.5 14B \u2014 Dev environment (internal)"
+      capabilities:
+      - chat
+      - code
+      - reasoning
+      - math
+      quality_score: 0.85
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-14b-dev.default.svc.cluster.local:8000/v1
+      model: qwen14b-dev
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  - name: qwen14b-prod
+    card:
+      aliases:
+      - Qwen/Qwen2.5-14B-Instruct
+      param_size: 14b
+      description: "Qwen2.5 14B \u2014 Prod environment (user-facing)"
+      capabilities:
+      - chat
+      - code
+      - reasoning
+      - math
+      quality_score: 0.85
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-14b-prod.default.svc.cluster.local:8000/v1
+      model: qwen14b-prod
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        keywords:
         - name: code_keywords
           operator: OR
           keywords:
-            - code
-            - function
-            - implement
-            - debug
-            - refactor
-            - python
-            - golang
-            - javascript
-            - algorithm
-            - class
-            - API
-            - bug
-            - compile
+          - code
+          - function
+          - implement
+          - debug
+          - refactor
+          - python
+          - golang
+          - javascript
+          - algorithm
+          - class
+          - API
+          - bug
+          - compile
         - name: general_keywords
           operator: OR
           keywords:
-            - hello
-            - what is
-            - explain
-            - tell me
-            - how does
-            - history
-            - science
-            - who
-            - where
-            - when
-      domains:
+          - hello
+          - what is
+          - explain
+          - tell me
+          - how does
+          - history
+          - science
+          - who
+          - where
+          - when
+        domains:
         - name: code
           description: Programming, debugging, and software engineering tasks
         - name: general
           description: General knowledge, conversation, and miscellaneous topics
         - name: other
           description: Catch-all for unclassified queries
-      jailbreak:
+        jailbreak:
         - name: jailbreak_dev
           threshold: 0.5
           include_history: false
@@ -156,13 +99,13 @@ config:
           threshold: 0.9
           include_history: false
           description: Strict jailbreak detection for prod environment
-      pii:
+        pii:
         - name: pii_dev
           threshold: 0.6
           pii_types_allowed:
-            - GPE
-            - ORGANIZATION
-            - DATE_TIME
+          - GPE
+          - ORGANIZATION
+          - DATE_TIME
           include_history: false
           description: Relaxed PII policy for dev (allow GPE/ORG/DATE)
         - name: pii_prod
@@ -170,31 +113,121 @@ config:
           pii_types_allowed: []
           include_history: false
           description: Strict PII policy for prod (block all)
-    modelCards:
-      - name: qwen14b-dev
-        param_size: 14b
-        description: Qwen2.5 14B — Dev environment (internal)
-        capabilities:
-          - chat
-          - code
-          - reasoning
-          - math
-        quality_score: 0.85
-      - name: qwen14b-prod
-        param_size: 14b
-        description: Qwen2.5 14B — Prod environment (user-facing)
-        capabilities:
-          - chat
-          - code
-          - reasoning
-          - math
-        quality_score: 0.85
+      decisions:
+      - name: block_jailbreak_prod
+        description: Block jailbreak attempts on prod (strict)
+        priority: 1001
+        rules:
+          operator: OR
+          conditions:
+          - type: jailbreak
+            name: jailbreak_prod
+        plugins:
+        - type: fast_response
+          configuration:
+            message: Your request has been declined due to a policy violation.
+      - name: block_jailbreak_dev
+        description: Block jailbreak attempts on dev (relaxed)
+        priority: 1000
+        rules:
+          operator: OR
+          conditions:
+          - type: jailbreak
+            name: jailbreak_dev
+        plugins:
+        - type: fast_response
+          configuration:
+            message: Your request has been declined due to a policy violation.
+      - name: block_pii_prod
+        description: Block PII on prod (strict, deny all)
+        priority: 999
+        rules:
+          operator: OR
+          conditions:
+          - type: pii
+            name: pii_prod
+        plugins:
+        - type: fast_response
+          configuration:
+            message: For your security, please do not share personal information.
+      - name: block_pii_dev
+        description: Block PII on dev (relaxed, allow GPE/ORG/DATE)
+        priority: 998
+        rules:
+          operator: OR
+          conditions:
+          - type: pii
+            name: pii_dev
+        plugins:
+        - type: fast_response
+          configuration:
+            message: For your security, please do not share personal information.
+      - name: code_to_dev
+        description: Route code/tech queries to Dev (internal developer env)
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+          - type: keyword
+            name: code_keywords
+        plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a senior software engineer. Provide clear, production-quality
+              code with best practices.
+      - name: general_to_prod
+        description: Route general/user queries to Prod (strict safety)
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+          - type: keyword
+            name: general_keywords
+        plugins:
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful assistant operating under strict data
+              protection policies. Never store, log, or repeat any personal information
+              shared by the user.
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      block_jailbreak_prod:
+        models:
+        - model: qwen14b-dev
+          weight: '1'
+      block_jailbreak_dev:
+        models:
+        - model: qwen14b-dev
+          weight: '1'
+      block_pii_prod:
+        models:
+        - model: qwen14b-dev
+          weight: '1'
+      block_pii_dev:
+        models:
+        - model: qwen14b-dev
+          weight: '1'
+      code_to_dev:
+        models:
+        - model: qwen14b-dev
+          weight: '1'
+      general_to_prod:
+        models:
+        - model: qwen14b-prod
+          weight: '1'
   global:
     model_catalog:
       kbs: []
+      embeddings: {}
+      modules:
+        classifier: {}
+        hallucination_mitigation: {}
     router:
       clear_route_cache: true
-      strategy: priority
     services:
       observability:
         metrics:
@@ -212,28 +245,36 @@ config:
             high_resolution_timing: false
             sample_rate: 1.0
             duration_buckets:
-              - 0.001
-              - 0.005
-              - 0.01
-              - 0.025
-              - 0.05
-              - 0.1
-              - 0.25
-              - 0.5
-              - 1
-              - 2.5
-              - 5
-              - 10
-              - 30
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
             size_buckets:
-              - 1
-              - 2
-              - 5
-              - 10
-              - 20
-              - 50
-              - 100
-              - 200
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
         enabled: false

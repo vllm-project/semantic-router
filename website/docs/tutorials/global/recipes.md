@@ -1,6 +1,6 @@
 ---
 title: Recipes
-description: Define isolated routing policies that share provider models and platform services within one Semantic Router deployment.
+description: Define isolated, model-free routing policies that share Models and platform services within one Semantic Router deployment.
 ---
 
 # Recipes
@@ -24,29 +24,28 @@ Add recipes when consumers need different latency, quality, cost, privacy, or
 safety policies. They are also useful for staging a new policy beside the
 current one before moving clients to its entrypoint.
 
-Keep one top-level `routing` block when a single policy serves all traffic. The
-Router treats that block as the `default` recipe, so existing configurations do
-not need to be rewritten.
+Even a deployment with one policy represents it as an explicit Recipe and
+publishes it through an Entrypoint. There is no top-level default routing
+profile.
 
 ## Configuration
 
-Provider bindings and model cards stay at the top level. A named recipe refers
-to those shared model names from its own routing block:
+Models stay at the top level. A Recipe is deliberately model-free; the
+Entrypoint supplies all decision assignments. The example assumes
+`local/private` and `hosted/general` are declared in top-level `models`:
 
 ```yaml
-routing:
-  modelCards:
-    - name: local-model
-    - name: general-model
-
 entrypoints:
-  - model_names: [vllm-sr/privacy-v1]
+  - name: vllm-sr/privacy-v1
     recipe: privacy
+    assignments:
+      local-sensitive-route: {models: [{model: local/private}]}
+      general-route: {models: [{model: hosted/general}]}
 
 recipes:
   - name: privacy
     description: Keep prompts containing sensitive identifiers on the local model.
-    routing:
+    document:
       strategy: priority
       signals:
         pii:
@@ -61,16 +60,12 @@ recipes:
             conditions:
               - type: pii
                 name: sensitive-input
-          modelRefs:
-            - model: local-model
         - name: general-route
           description: Handle remaining requests with the general backend.
           priority: 100
           rules:
             operator: AND
             conditions: []
-          modelRefs:
-            - model: general-model
 ```
 
 Names resolve inside the owning recipe. Two recipes may both define a signal or
@@ -81,8 +76,8 @@ definition.
 
 | Recipe-local | Shared by the deployment |
 | --- | --- |
-| Signals and their thresholds | Provider models and backend endpoints |
-| Projections and dependency graph | Top-level `routing.modelCards` |
+| Signals and their thresholds | Top-level Models and provider connections |
+| Projections and dependency graph | Model semantic metadata and capabilities |
 | Decisions, priorities, and routing strategy | Shared classifier and embedding assets |
 | Selection and looper policy | API, identity, observability, and transport settings |
 | Route-local plugins | External stores and integration services |
@@ -99,29 +94,23 @@ rest of the document:
 
 | Method and path | Purpose |
 | --- | --- |
-| `GET /config/router/recipes` | List recipes and their entrypoints; retain the response `ETag`. |
-| `POST /config/router/recipes/validate` | Validate a proposed recipe without writing or reloading. |
-| `PUT /config/router/recipes/{name}` | Create or replace a recipe and its entrypoints. |
-| `DELETE /config/router/recipes/{name}` | Delete an unreferenced named recipe. |
+| `GET /management/v1/routing/recipes` | List Recipe resources. |
+| `POST /management/v1/routing/recipes` | Create one Recipe revision. |
+| `PATCH /management/v1/routing/recipes/{recipeId}` | Create the next revision of a Recipe. |
+| `DELETE /management/v1/routing/recipes/{recipeId}` | Delete an unreferenced Recipe using revision CAS. |
 
-Mutations require the current `ETag` in `If-Match`. A missing precondition
-returns `428`; a stale value returns `412`. An accepted mutation validates the
-complete configuration, writes it atomically with a backup, triggers Router
-runtime activation, and returns a new `ETag`. Activation may continue after a
-`202` response; poll `/config/hash` before treating the new policy as active.
-
-The `default` recipe cannot be deleted. Before deleting another recipe, remove
-or move every entrypoint that refers to it. See the
+Mutations use the Management API's revision and idempotency contract. A Recipe
+cannot be deleted while an Entrypoint references it. Publishing the Entrypoint
+creates the immutable routing snapshot consumed by every replica. See the
 [management API reference](../../api/apiserver) for endpoint details.
 
 ## Limits and security boundaries
 
-- A named recipe cannot declare `routing.modelCards`; all recipes use the
-  shared top-level catalog.
+- A Recipe cannot declare Models, backends, credentials, or Model assignments.
 - Signal, projection, and decision references must resolve within the same
   recipe.
-- If no decision matches, routing falls back to the deployment's configured
-  default provider model, not to another recipe.
+- Every Recipe contains at least one decision. Add an explicit empty-condition
+  catch-all when unmatched requests should have a fallback route.
 - Recipe isolation does not isolate the Router process, network, provider
   credentials, or backing services. Use separate deployments when those must
   be tenant boundaries.

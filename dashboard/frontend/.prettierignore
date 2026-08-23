@@ -4,3 +4,6 @@ coverage
 
 public/signal-compiler.wasm
 public/wasm_exec.js
+
+# Generator-owned; drift is enforced by management-api-contract-check.
+src/generated/managementApiContract.ts

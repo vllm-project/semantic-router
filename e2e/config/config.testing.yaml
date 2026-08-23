@@ -1,97 +1,81 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: openai/gpt-oss-20b
-    reasoning_families:
-      deepseek:
-        type: chat_template_kwargs
-        parameter: thinking
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-      gpt-oss:
-        type: reasoning_effort
-        parameter: reasoning_effort
-      gpt:
-        type: reasoning_effort
-        parameter: reasoning_effort
-    default_reasoning_effort: high
-  models:
-    - name: openai/gpt-oss-20b
-      reasoning_family: gpt-oss
-      backend_refs:
-        - name: mock
-          endpoint: 172.28.0.10:8000
-          weight: 1
-routing:
-  decisions:
+models:
+- name: openai/gpt-oss-20b
+  card:
+    reasoning:
+      type: reasoning_effort
+      efforts:
+      - high
+  connections:
+  - provider: vllm
+    endpoint: http://172.28.0.10:8000/v1
+    model: openai/gpt-oss-20b
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      metadata:
+      - name: canary_cohort
+        description: Caller opted into the canary routing cohort
+        key: cohort
+        predicate:
+          equals: canary
+      domains:
+      - name: other
+        description: General knowledge and miscellaneous topics
+        mmlu_categories:
+        - other
+    decisions:
     - name: metadata_decision
       description: Explicit metadata-based routing contract
       priority: 100
       rules:
         operator: AND
         conditions:
-          - type: metadata
-            name: canary_cohort
-      modelRefs:
-        - model: openai/gpt-oss-20b
-          use_reasoning: false
+        - type: metadata
+          name: canary_cohort
     - name: general_decision
       description: General knowledge and miscellaneous topics
       priority: 50
       rules:
         operator: AND
         conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: openai/gpt-oss-20b
-          use_reasoning: false
-  signals:
-    metadata:
+        - type: domain
+          name: other
+- name: metadata-policy
+  description: Exercise recipe-local request metadata routing.
+  document:
+    signals:
+      metadata:
       - name: canary_cohort
-        description: Caller opted into the canary routing cohort
+        description: Recipe-local canary cohort policy.
         key: cohort
         predicate:
           equals: canary
-    domains:
-      - name: other
-        description: General knowledge and miscellaneous topics
-        mmlu_categories:
-          - other
-  modelCards:
-    - name: openai/gpt-oss-20b
+    decisions:
+    - name: metadata_recipe_decision
+      description: Route canary metadata inside the selected recipe.
+      priority: 100
+      rules:
+        operator: AND
+        conditions:
+        - type: metadata
+          name: canary_cohort
 entrypoints:
-  - model_names:
-      - vllm-sr/metadata-policy
-    recipe: metadata-policy
-recipes:
-  - name: metadata-policy
-    description: Exercise recipe-local request metadata routing.
-    routing:
-      signals:
-        metadata:
-          - name: canary_cohort
-            description: Recipe-local canary cohort policy.
-            key: cohort
-            predicate:
-              equals: canary
-      decisions:
-        - name: metadata_recipe_decision
-          description: Route canary metadata inside the selected recipe.
-          priority: 100
-          rules:
-            operator: AND
-            conditions:
-              - type: metadata
-                name: canary_cohort
-          modelRefs:
-            - model: openai/gpt-oss-20b
-              use_reasoning: false
+- name: vllm-sr/metadata-policy
+  recipe: metadata-policy
+  assignments:
+    metadata_recipe_decision:
+      models:
+      - model: openai/gpt-oss-20b
+        weight: '1'
 global:
-  router:
-    strategy: priority
+  router: {}
   services:
     api:
       batch_classification:
@@ -104,28 +88,36 @@ global:
           high_resolution_timing: false
           sample_rate: 1.0
           duration_buckets:
-            - 0.001
-            - 0.005
-            - 0.01
-            - 0.025
-            - 0.05
-            - 0.1
-            - 0.25
-            - 0.5
-            - 1
-            - 2.5
-            - 5
-            - 10
-            - 30
+          - 0.001
+          - 0.005
+          - 0.01
+          - 0.025
+          - 0.05
+          - 0.1
+          - 0.25
+          - 0.5
+          - 1
+          - 2.5
+          - 5
+          - 10
+          - 30
           size_buckets:
-            - 1
-            - 2
-            - 5
-            - 10
-            - 20
-            - 50
-            - 100
-            - 200
+          - 1
+          - 2
+          - 5
+          - 10
+          - 20
+          - 50
+          - 100
+          - 200
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
     response_cache:
       enabled: true
@@ -146,3 +138,8 @@ global:
       similarity_threshold: 0.2
       tools_db_path: config/runtime/tools/tools_db.json
       fallback_to_empty: true
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

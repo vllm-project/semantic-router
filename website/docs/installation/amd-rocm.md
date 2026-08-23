@@ -132,22 +132,16 @@ For a simple one-model deployment, open the Dashboard at
 `http://localhost:8700`, add an OpenAI-compatible backend at `vllm:8000`, and
 activate the generated config.
 
-To evaluate the maintained balance recipe, download it into the current
-workspace instead of relying on a repository-relative path:
+Start the Router and Dashboard:
 
 ```bash
-curl --fail --location \
-  --output balance.yaml \
-  https://raw.githubusercontent.com/vllm-project/semantic-router/main/config/recipes/balance/config.yaml
-
-vllm-sr validate --config balance.yaml
-vllm-sr serve --config balance.yaml
+vllm-sr serve --platform amd
 ```
 
-The balance recipe expects the five aliases exposed by the example backend.
-Read its [Model Card](https://github.com/vllm-project/semantic-router/blob/main/config/recipes/balance/README.md)
-for intended use, routing behavior, data handling, and limitations. Fork the
-configuration before replacing aliases, thresholds, prices, or provider roles.
+In **Models**, connect the AMD-hosted endpoints. Then choose the built-in
+Balanced Recipe, assign those Models to its decisions, and publish an
+Entrypoint. The same lifecycle is available through the Router Management API;
+no Recipe is selected on the `serve` command line.
 
 ## Verify the routed path
 

@@ -30,7 +30,7 @@ var _ = Describe("validateDecisionRAGAndMemoryPlugins", func() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("RAG plugin"))
 	})
@@ -62,7 +62,7 @@ var _ = Describe("validateDecisionRAGAndMemoryPlugins", func() {
 			},
 		}
 
-		err := validateConfigStructure(cfg)
+		err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 		Expect(err).NotTo(HaveOccurred())
 	})
 })

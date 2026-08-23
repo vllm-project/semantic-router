@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"slices"
 	"testing"
 
@@ -19,100 +18,83 @@ var balanceAMDLocalAliases = []string{
 func TestBalanceRecipePreservesAMDLocalAliasContract(t *testing.T) {
 	const asset = "config/recipes/balance/config.yaml"
 
-	var recipe CanonicalConfig
-	if err := yamlv3.Unmarshal(mustReadRepoFile(t, asset), &recipe); err != nil {
+	var manifest CanonicalConfig
+	if err := yamlv3.Unmarshal(mustReadRepoFile(t, asset), &manifest); err != nil {
 		t.Fatalf("failed to decode %s: %v", asset, err)
 	}
 
-	if recipe.Providers.Defaults.DefaultModel != "qwen/qwen3.5-rocm" {
-		t.Fatalf("expected AMD recipe default model to stay on the local Qwen alias, got %q", recipe.Providers.Defaults.DefaultModel)
-	}
-	assertBalanceProviderContract(t, recipe)
-	assertBalanceModelCardContract(t, recipe)
-	assertBalanceDecisionContract(t, recipe)
+	assertBalanceModelContract(t, manifest)
+	assertBalanceDecisionContract(t, manifest)
 }
 
-func assertBalanceProviderContract(t *testing.T, recipe CanonicalConfig) {
+func assertBalanceModelContract(t *testing.T, manifest CanonicalConfig) {
 	t.Helper()
-	const localVLLMEndpoint = "http://vllm:8000/v1"
-
-	providerNames := make([]string, 0, len(recipe.Providers.Models))
-	for _, model := range recipe.Providers.Models {
-		providerNames = append(providerNames, model.Name)
-		if model.ProviderModelID != model.Name {
-			t.Fatalf("provider alias %q must preserve its name as provider_model_id, got %q", model.Name, model.ProviderModelID)
+	modelNames := make([]string, 0, len(manifest.Models))
+	for _, model := range manifest.Models {
+		modelNames = append(modelNames, model.Name)
+		if len(model.Connections) != 1 {
+			t.Fatalf("model %q must have exactly one connection, got %d", model.Name, len(model.Connections))
 		}
-		if len(model.BackendRefs) != 1 {
-			t.Fatalf("provider alias %q must have exactly one local vLLM backend, got %d", model.Name, len(model.BackendRefs))
+		connection := model.Connections[0]
+		if connection.Provider != "vllm" || connection.Endpoint != "http://vllm:8000/v1" {
+			t.Fatalf("model %q must use the local vLLM integration, got provider=%q endpoint=%q", model.Name, connection.Provider, connection.Endpoint)
 		}
-		backend := model.BackendRefs[0]
-		if got := fmt.Sprintf("%s://%s/v1", backend.Protocol, backend.Endpoint); got != localVLLMEndpoint {
-			t.Fatalf("provider alias %q must resolve to %s, got %s", model.Name, localVLLMEndpoint, got)
+		if connection.Model != model.Name {
+			t.Fatalf("model %q must preserve its provider model name, got %q", model.Name, connection.Model)
 		}
 	}
-	if len(providerNames) != len(balanceAMDLocalAliases) {
-		t.Fatalf("expected exactly %d provider aliases, got %d", len(balanceAMDLocalAliases), len(providerNames))
-	}
-	assertBalanceAliasSet(t, "providers.models", providerNames)
+	assertBalanceAliasSet(t, "models", modelNames)
 }
 
-func assertBalanceModelCardContract(t *testing.T, recipe CanonicalConfig) {
+func assertBalanceDecisionContract(t *testing.T, manifest CanonicalConfig) {
 	t.Helper()
-	modelCardNames := make([]string, 0, len(recipe.Routing.ModelCards))
-	for _, modelCard := range recipe.Routing.ModelCards {
-		modelCardNames = append(modelCardNames, modelCard.Name)
+	if len(manifest.Recipes) != 1 {
+		t.Fatalf("balance manifest must contain one Recipe, got %d", len(manifest.Recipes))
 	}
-	if len(modelCardNames) != len(balanceAMDLocalAliases) {
-		t.Fatalf("expected exactly %d routing model cards, got %d", len(balanceAMDLocalAliases), len(modelCardNames))
+	decisions := manifest.Recipes[0].Document.Decisions
+	if len(decisions) != 14 {
+		t.Fatalf("expected 14 balance decisions (13 calibrated lanes plus one terminal fallback), got %d", len(decisions))
 	}
-	assertBalanceAliasSet(t, "routing.modelCards", modelCardNames)
-}
+	if len(manifest.Entrypoints) != 1 || manifest.Entrypoints[0].Recipe != manifest.Recipes[0].Name {
+		t.Fatalf("balance manifest must contain one common-form Entrypoint: %+v", manifest.Entrypoints)
+	}
+	assignments := manifest.Entrypoints[0].Assignments
 
-func assertBalanceDecisionContract(t *testing.T, recipe CanonicalConfig) {
-	t.Helper()
-	if len(recipe.Routing.Decisions) != 14 {
-		t.Fatalf("expected 14 balance decisions (13 calibrated lanes plus one terminal fallback), got %d", len(recipe.Routing.Decisions))
-	}
-
-	decisionModelNames := make([]string, 0, len(recipe.Routing.Decisions))
-	calibratedLanes := recipe.Routing.Decisions[:13]
-	for index, decision := range calibratedLanes {
+	assignedNames := make([]string, 0)
+	for index, decision := range decisions[:13] {
 		if decision.Tier != index+1 {
 			t.Fatalf("expected calibrated lane %q to have tier %d, got %d", decision.Name, index+1, decision.Tier)
 		}
 		if len(decision.Rules.Conditions) == 0 {
 			t.Fatalf("expected calibrated lane %q to have explicit matching conditions", decision.Name)
 		}
-		if index > 0 && calibratedLanes[index-1].Priority <= decision.Priority {
-			t.Fatalf("expected calibrated lane priorities to descend, got %d before %d", calibratedLanes[index-1].Priority, decision.Priority)
+		if index > 0 && decisions[index-1].Priority <= decision.Priority {
+			t.Fatalf("expected calibrated lane priorities to descend, got %d before %d", decisions[index-1].Priority, decision.Priority)
 		}
-		if len(decision.ModelRefs) < 2 {
-			t.Fatalf("expected calibrated lane %q to expose a primary and learning candidate, got %d model refs", decision.Name, len(decision.ModelRefs))
+		set, found := assignments[decision.Name]
+		if !found || len(set.Models) < 2 {
+			t.Fatalf("expected calibrated lane %q to have at least two Entrypoint assignments, got %+v", decision.Name, set)
 		}
-		for _, modelRef := range decision.ModelRefs {
-			decisionModelNames = append(decisionModelNames, modelRef.Model)
+		for _, assignment := range set.Models {
+			assignedNames = append(assignedNames, assignment.Model)
 		}
 	}
 
-	terminal := recipe.Routing.Decisions[13]
-	assertBalanceTerminalDecision(t, terminal)
-	for _, modelRef := range terminal.ModelRefs {
-		decisionModelNames = append(decisionModelNames, modelRef.Model)
-	}
-	assertBalanceAliasSet(t, "routing.decisions[].modelRefs", decisionModelNames)
-}
-
-func assertBalanceTerminalDecision(t *testing.T, terminal Decision) {
-	t.Helper()
+	terminal := decisions[13]
 	if terminal.Name != "casual_chat" || terminal.Tier != 14 || terminal.Priority != 10 {
 		t.Fatalf("expected tier-14 casual_chat terminal fallback at priority 10, got name=%q tier=%d priority=%d", terminal.Name, terminal.Tier, terminal.Priority)
 	}
 	if terminal.Rules.Operator != "AND" || terminal.Rules.Type != "" || terminal.Rules.Name != "" || len(terminal.Rules.Conditions) != 0 {
 		t.Fatalf("expected casual_chat to remain an unconditional terminal fallback, got %+v", terminal.Rules)
 	}
-	if len(terminal.ModelRefs) < 2 || terminal.ModelRefs[0].Model != "qwen/qwen3.5-rocm" {
-		t.Fatalf("expected casual_chat to keep local Qwen first and expose a learning candidate, got %+v", terminal.ModelRefs)
+	terminalAssignments := assignments[terminal.Name]
+	if len(terminalAssignments.Models) < 2 || terminalAssignments.Models[0].Model != "qwen/qwen3.5-rocm" {
+		t.Fatalf("expected casual_chat to keep local Qwen first and expose a learning candidate, got %+v", terminalAssignments)
 	}
+	for _, assignment := range terminalAssignments.Models {
+		assignedNames = append(assignedNames, assignment.Model)
+	}
+	assertBalanceAliasSet(t, "entrypoints[].assignments", assignedNames)
 }
 
 func assertBalanceAliasSet(t *testing.T, surface string, got []string) {

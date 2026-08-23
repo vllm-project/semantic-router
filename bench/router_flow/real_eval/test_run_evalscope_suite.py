@@ -22,6 +22,20 @@ from bench.router_flow.real_eval.run_evalscope_suite import (
 TERMINUS2_MAX_TURNS = 200
 
 
+def _config_decisions(config: dict) -> list[dict]:
+    return config["recipes"][0]["document"]["decisions"]
+
+
+def _model_upstreams(config: dict) -> dict[str, str]:
+    return {
+        model["name"]: model["connections"][0]["model"] for model in config["models"]
+    }
+
+
+def _decision_assignments(config: dict, decision_name: str) -> list[dict]:
+    return config["entrypoints"][0]["assignments"][decision_name]["models"]
+
+
 def test_selected_benchmarks_preserves_requested_order() -> None:
     suite = {
         "benchmarks": [
@@ -111,7 +125,7 @@ def test_livecode_omni_config_routes_every_decision_to_loop_algorithm() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_livecode_omni.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
@@ -332,31 +346,26 @@ def test_hle_glm52_config_uses_only_glm52_loop_models() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_hle_glm52.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    provider_models = config["providers"]["models"]
-    provider_model_by_name = {
-        model["name"]: model["provider_model_id"] for model in provider_models
-    }
+    provider_model_by_name = _model_upstreams(config)
     assert provider_model_by_name["gpt55-judge"] == "openai/gpt-5.5"
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
         assert algorithm, f"{decision['name']} must use a looper algorithm"
         assert algorithm["type"] in {"fusion", "remom", "workflows", "flow"}
-        assert {ref["model"] for ref in decision.get("modelRefs", [])} <= {
+        refs = _decision_assignments(config, decision["name"])
+        assert {ref["model"] for ref in refs} <= {
             "glm52-solver-a",
             "glm52-solver-b",
             "glm52-solver-c",
             "glm52-finalizer",
         }
-        assert {
-            provider_model_by_name[ref["model"]]
-            for ref in decision.get("modelRefs", [])
-        } == {"z-ai/glm-5.2"}
-        assert all(
-            ref["use_reasoning"] is True for ref in decision.get("modelRefs", [])
-        )
+        assert {provider_model_by_name[ref["model"]] for ref in refs} == {
+            "z-ai/glm-5.2"
+        }
+        assert all(ref.get("reasoning", {}).get("enabled") is True for ref in refs)
         algorithm_config = algorithm[algorithm["type"]]
         assert algorithm_config["round_timeout_seconds"] >= 900
 
@@ -399,9 +408,7 @@ def test_hle_hybrid_config_discloses_glm_and_closed_model_pool() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_hle_hybrid.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    provider_model_ids = {
-        model["provider_model_id"] for model in config["providers"]["models"]
-    }
+    provider_model_ids = set(_model_upstreams(config).values())
     assert "z-ai/glm-5.2" in provider_model_ids
     assert {
         "openai/gpt-5.5",
@@ -409,14 +416,15 @@ def test_hle_hybrid_config_discloses_glm_and_closed_model_pool() -> None:
         "google/gemini-3.1-pro-preview",
     } <= provider_model_ids
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     closed_refs = set()
     for decision in decisions:
         algorithm = decision.get("algorithm")
         assert algorithm, f"{decision['name']} must use a looper algorithm"
         assert algorithm["type"] in {"fusion", "remom", "workflows", "flow"}
-        refs = {ref["model"] for ref in decision.get("modelRefs", [])}
+        assignments = _decision_assignments(config, decision["name"])
+        refs = {ref["model"] for ref in assignments}
         assert refs <= {
             "glm52-breadth-a",
             "glm52-breadth-b",
@@ -430,7 +438,7 @@ def test_hle_hybrid_config_discloses_glm_and_closed_model_pool() -> None:
             "gemini31-finalizer",
         }
         assert all(
-            ref["use_reasoning"] is True for ref in decision.get("modelRefs", [])
+            ref.get("reasoning", {}).get("enabled") is True for ref in assignments
         )
         algorithm_config = algorithm[algorithm["type"]]
         assert algorithm_config["round_timeout_seconds"] >= 900
@@ -441,32 +449,27 @@ def test_swe_glm52_config_uses_only_glm52_loop_models() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_swe_glm52.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    provider_models = config["providers"]["models"]
-    provider_model_by_name = {
-        model["name"]: model["provider_model_id"] for model in provider_models
-    }
+    provider_model_by_name = _model_upstreams(config)
     assert set(provider_model_by_name.values()) == {"z-ai/glm-5.2"}
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
         assert algorithm, f"{decision['name']} must use a looper algorithm"
         assert algorithm["type"] in {"fusion", "remom", "workflows", "flow"}
-        assert {ref["model"] for ref in decision.get("modelRefs", [])} <= {
+        refs = _decision_assignments(config, decision["name"])
+        assert {ref["model"] for ref in refs} <= {
             "glm52-planner",
             "glm52-patcher-a",
             "glm52-patcher-b",
             "glm52-verifier",
             "glm52-finalizer",
         }
-        assert {
-            provider_model_by_name[ref["model"]]
-            for ref in decision.get("modelRefs", [])
-        } == {"z-ai/glm-5.2"}
-        assert all(
-            ref["use_reasoning"] is True for ref in decision.get("modelRefs", [])
-        )
+        assert {provider_model_by_name[ref["model"]] for ref in refs} == {
+            "z-ai/glm-5.2"
+        }
+        assert all(ref.get("reasoning", {}).get("enabled") is True for ref in refs)
         algorithm_config = algorithm[algorithm["type"]]
         assert algorithm_config["round_timeout_seconds"] >= 1200
 
@@ -477,28 +480,25 @@ def test_livecode_glm52_omni_config_uses_only_glm52_loop_models() -> None:
     )
     config = yaml.safe_load(config_path.read_text())
 
-    provider_models = config["providers"]["models"]
-    provider_model_by_name = {
-        model["name"]: model["provider_model_id"] for model in provider_models
-    }
+    provider_model_by_name = _model_upstreams(config)
     assert set(provider_model_by_name.values()) == {"z-ai/glm-5.2"}
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
         assert algorithm, f"{decision['name']} must use a looper algorithm"
         assert algorithm["type"] in {"fusion", "remom", "workflows", "flow"}
-        assert {ref["model"] for ref in decision.get("modelRefs", [])} <= {
+        refs = _decision_assignments(config, decision["name"])
+        assert {ref["model"] for ref in refs} <= {
             "glm52-solver-a",
             "glm52-solver-b",
             "glm52-solver-c",
             "glm52-finalizer",
         }
-        assert {
-            provider_model_by_name[ref["model"]]
-            for ref in decision.get("modelRefs", [])
-        } == {"z-ai/glm-5.2"}
+        assert {provider_model_by_name[ref["model"]] for ref in refs} == {
+            "z-ai/glm-5.2"
+        }
         algorithm_config = algorithm[algorithm["type"]]
         assert algorithm_config["round_timeout_seconds"] >= 900
 
@@ -511,18 +511,16 @@ def test_livecode_kimi_k27_code_omni_config_uses_only_kimi_loop_models() -> None
     )
     config = yaml.safe_load(config_path.read_text())
 
-    provider_models = config["providers"]["models"]
-    assert {model["provider_model_id"] for model in provider_models} == {
-        "moonshotai/kimi-k2.7-code"
-    }
+    assert set(_model_upstreams(config).values()) == {"moonshotai/kimi-k2.7-code"}
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     for decision in decisions:
         algorithm = decision.get("algorithm")
         assert algorithm, f"{decision['name']} must use a looper algorithm"
         assert algorithm["type"] in {"fusion", "remom", "workflows", "flow"}
-        assert {ref["model"] for ref in decision.get("modelRefs", [])} <= {
+        refs = _decision_assignments(config, decision["name"])
+        assert {ref["model"] for ref in refs} <= {
             "kimi-k27-code-solver-a",
             "kimi-k27-code-solver-b",
             "kimi-k27-code-solver-c",
@@ -565,7 +563,7 @@ def test_scicode_omni_config_routes_every_decision_to_loop_algorithm() -> None:
     config_path = Path(__file__).parents[1] / "configs" / "amd_auto_scicode_omni.yaml"
     config = yaml.safe_load(config_path.read_text())
 
-    decisions = config["routing"]["decisions"]
+    decisions = _config_decisions(config)
     assert decisions
     assert decisions[-1]["priority"] == 1
     for decision in decisions:

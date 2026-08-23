@@ -191,8 +191,12 @@
 }
 
 .teamDetailsButtonIcon {
-  font-size: 0.9rem;
   color: rgba(255, 255, 255, 0.72);
+}
+
+.teamDetailsButtonIcon > svg {
+  width: 14px;
+  height: 14px;
 }
 
 .teamDetailsButtonText {
@@ -379,6 +383,11 @@
   opacity: 0.6;
 }
 
+.roomDeleteButton > svg {
+  width: 13px;
+  height: 13px;
+}
+
 .chatPanel {
   flex: 1;
   min-width: 0;
@@ -431,6 +440,32 @@
 .chatTitleStatus {
   flex-shrink: 0;
   white-space: nowrap;
+  gap: 0.3rem;
+}
+
+.transportIndicator {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.wsDisconnected .transportIndicator {
+  background: transparent;
+}
+
+.wsFallback .transportIndicator {
+  border-top-color: transparent;
+  background: transparent;
+  animation: transportSpin 0.9s linear infinite;
+}
+
+@keyframes transportSpin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .wsConnected {
@@ -477,8 +512,8 @@
   justify-content: center;
   padding: 1.2rem;
   background: rgba(0, 0, 0, 0.66);
-  backdrop-filter: blur(12px) saturate(120%);
-  -webkit-backdrop-filter: blur(12px) saturate(120%);
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
   z-index: 1300;
 }
 
@@ -488,9 +523,11 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(180deg, rgba(44, 48, 56, 0.72) 0%, rgba(17, 19, 24, 0.88) 100%);
+  border-radius: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.86);
   box-shadow:
     0 28px 80px rgba(0, 0, 0, 0.46),
     inset 0 1px 0 rgba(255, 255, 255, 0.05);
@@ -547,6 +584,12 @@
   height: 38px;
   font-size: 1.3rem;
   line-height: 1;
+}
+
+.teamDetailsCloseButton > svg {
+  width: 16px;
+  height: 16px;
+  margin: auto;
 }
 
 .teamDetailsFooterButton {
@@ -1740,8 +1783,16 @@
 }
 
 .roomPagination button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 28px;
   height: 28px;
+}
+
+.roomPagination button > svg {
+  width: 13px;
+  height: 13px;
 }
 
 .roomPagination button:hover:not(:disabled),

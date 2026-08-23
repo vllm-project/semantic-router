@@ -1,122 +1,101 @@
 # =============================================================================
-# ROUTING PROFILE
-# =============================================================================
-
-ROUTING {
-  strategy: priority
-}
-
-# =============================================================================
-# SIGNALS
-# =============================================================================
-
-# =============================================================================
 # MODELS
 # =============================================================================
 
 MODEL local/deepseek-v4-flash-analyst {
-  context_window_size: 262144
-  description: "Latest MIT-licensed sparse analyst tier, retained behind a stable judge after correctness calibration."
-  capabilities: ["independent_analysis", "long_context", "tool_use", "reasoning_diversity"]
-  tags: ["tier:experimental_frontier", "cost:high", "deployment:self_hosted", "physical:deepseek-v4-flash-0731"]
-  quality_score: 0.88
-  modality: "text"
+  aliases: ["deepseek-ai/DeepSeek-V4-Flash-0731"]
+  capabilities: ["independent_analysis", "long_context", "reasoning_diversity", "text", "tool_use"]
 }
 
 MODEL local/gemma4-26b-balanced {
-  context_window_size: 32768
-  description: "Fast architecture-diverse MoE tier for balanced general reasoning."
-  capabilities: ["reasoning", "multilingual", "structured_output", "long_context"]
-  tags: ["tier:balanced", "cost:medium", "latency:fastest_measured", "deployment:self_hosted", "physical:gemma4-26b-a4b"]
-  quality_score: 0.89
-  modality: "text"
+  capabilities: ["long_context", "multilingual", "reasoning", "structured_output", "text"]
 }
 
 MODEL local/qwen3.5-122b-frontier {
-  context_window_size: 262144
-  description: "Large local MoE tier for accuracy-first synthesis and review."
-  capabilities: ["legal_analysis", "high_risk_review", "deep_synthesis"]
-  tags: ["tier:premium", "cost:highest", "deployment:self_hosted", "physical:qwen3.5-122b-a10b-fp8"]
-  quality_score: 0.94
-  modality: "text"
+  aliases: ["qwen/qwen3.5-rocm"]
+  capabilities: ["deep_synthesis", "high_risk_review", "legal_analysis", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["high", "low", "medium"] }
 }
 
 MODEL local/qwen3.5-9b-economy {
-  context_window_size: 32768
-  description: "Small dense local tier for low-cost and short interactive workloads."
-  capabilities: ["fast_qa", "explanation", "general_chat"]
-  tags: ["tier:economy", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  quality_score: 0.68
-  modality: "text"
+  capabilities: ["explanation", "fast_qa", "general_chat", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["low", "medium"] }
 }
 
 MODEL local/qwen3.5-9b-economy-replica {
-  context_window_size: 32768
-  description: "Independent replica of the economy tier for latency and load-aware selection."
-  capabilities: ["fast_qa", "explanation", "general_chat"]
-  tags: ["tier:economy_replica", "cost:lowest", "latency:fastest", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  quality_score: 0.68
-  modality: "text"
+  aliases: ["local/qwen3.5-9b-economy"]
+  capabilities: ["explanation", "fast_qa", "general_chat", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["low", "medium"] }
 }
 
 MODEL local/qwen3.5-9b-private {
-  context_window_size: 32768
-  description: "Isolated alias of the local 9B tier for privacy-policy routes."
-  capabilities: ["privacy_locality", "sensitive_data", "general_chat"]
-  tags: ["tier:private", "cost:low", "deployment:self_hosted", "physical:qwen3.5-9b"]
-  quality_score: 0.68
-  modality: "text"
+  capabilities: ["general_chat", "privacy_locality", "sensitive_data", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["low"] }
 }
 
 MODEL local/qwen3.6-27b-coder {
-  context_window_size: 32768
-  description: "Dense Qwen3.6 tier for coding, structured output, and verification."
-  capabilities: ["reasoning", "coding", "structured_output", "tool_use"]
-  tags: ["tier:coder", "cost:upper_mid", "deployment:self_hosted", "physical:qwen3.6-27b"]
-  quality_score: 0.9
-  modality: "text"
+  capabilities: ["coding", "reasoning", "structured_output", "text", "tool_use"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["high", "low"] }
 }
 
 MODEL local/qwen3.6-35b-flash {
-  context_window_size: 32768
-  description: "Low-latency alias of Qwen3.6-35B-A3B-FP8 for fast reasoning."
-  capabilities: ["fast_qa", "coding", "reasoning"]
-  tags: ["tier:flash", "cost:medium", "latency:fast", "deployment:self_hosted", "physical:qwen3.6-35b-a3b-fp8"]
-  quality_score: 0.84
-  modality: "text"
+  capabilities: ["coding", "fast_qa", "reasoning", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["low"] }
 }
-
-# =============================================================================
-# ROUTES
-# =============================================================================
 
 # =============================================================================
 # ENTRYPOINTS
 # =============================================================================
 
 ENTRYPOINT {
-  model_names: ["vllm-sr/mom-v1-blend"]
-  recipe: "balanced"
-}
-
-ENTRYPOINT {
-  model_names: ["vllm-sr/mom-v1-flash"]
-  recipe: "speed-first"
-}
-
-ENTRYPOINT {
-  model_names: ["vllm-sr/mom-v1-lite"]
-  recipe: "cost-first"
-}
-
-ENTRYPOINT {
-  model_names: ["vllm-sr/mom-v1-ultra"]
-  recipe: "accuracy-first"
-}
-
-ENTRYPOINT {
-  model_names: ["vllm-sr/mom-v1-vault"]
+  name: "vllm-sr/mom-v1-vault"
   recipe: "privacy-first"
+  assignments: [
+    { decision: "unified_privacy_local_default", models: [{ model: "local/qwen3.5-9b-private", weight: "1" }] },
+    { decision: "unified_privacy_security_containment", models: [{ model: "local/qwen3.5-9b-private", weight: "1" }] },
+    { decision: "unified_privacy_sensitive_route", models: [{ model: "local/qwen3.5-9b-private", weight: "1" }] },
+  ]
+}
+
+ENTRYPOINT {
+  name: "vllm-sr/mom-v1-ultra"
+  recipe: "accuracy-first"
+  assignments: [
+    { decision: "unified_frontier_direct", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+    { decision: "unified_frontier_fusion", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/deepseek-v4-flash-analyst", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+    { decision: "unified_frontier_remom", models: [{ model: "local/qwen3.6-27b-coder", weight: "1", reasoning: { enabled: true, effort: "high" } }, { model: "local/deepseek-v4-flash-analyst", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1", reasoning: { enabled: true, effort: "high" } }] },
+    { decision: "unified_frontier_tool_result_synthesis", models: [{ model: "local/qwen3.5-122b-frontier", weight: "1", reasoning: { enabled: true, effort: "medium" } }] },
+    { decision: "unified_frontier_verified_answer", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+    { decision: "unified_frontier_workflow", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+  ]
+}
+
+ENTRYPOINT {
+  name: "vllm-sr/mom-v1-lite"
+  recipe: "cost-first"
+  assignments: [
+    { decision: "unified_cost_first_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.5-9b-economy-replica", weight: "1" }] },
+    { decision: "unified_cost_local_reasoning", models: [{ model: "local/qwen3.5-9b-economy", weight: "1", reasoning: { enabled: true, effort: "medium" } }, { model: "local/qwen3.5-9b-economy-replica", weight: "1", reasoning: { enabled: true, effort: "medium" } }] },
+  ]
+}
+
+ENTRYPOINT {
+  name: "vllm-sr/mom-v1-flash"
+  recipe: "speed-first"
+  assignments: [
+    { decision: "unified_speed_first_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.5-9b-economy-replica", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }] },
+    { decision: "unified_speed_heavy_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.5-9b-economy-replica", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }] },
+  ]
+}
+
+ENTRYPOINT {
+  name: "vllm-sr/mom-v1-blend"
+  recipe: "balanced"
+  assignments: [
+    { decision: "unified_balance_deliberate_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+    { decision: "unified_balance_recovery", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+    { decision: "unified_balance_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
+  ]
 }
 
 # =============================================================================
@@ -256,10 +235,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 300
     TIER 1
     WHEN (user_feedback("wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
-    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "first"
@@ -276,10 +251,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     PRIORITY 200
     TIER 2
     WHEN projection("unified_balance_deliberate")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -290,11 +261,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   ROUTE unified_balance_route (description = "Balance quality, observed latency, configured cost, and current load.") {
     PRIORITY 100
     TIER 3
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 95
       on_no_candidates: "cheapest"
@@ -357,11 +323,6 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     PRIORITY 200
     TIER 1
     WHEN projection("unified_speed_heavy")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.5-9b-economy-replica" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false),
-          "local/qwen3.6-27b-coder" (reasoning = false)
     ALGORITHM latency_aware {
       description: "Minimize observed generation and first-token latency."
       tpot_percentile: 90
@@ -372,10 +333,6 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
   ROUTE unified_speed_first_route (description = "Choose the fastest healthy candidate from live p90 latency and load.") {
     PRIORITY 100
     TIER 2
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.5-9b-economy-replica" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false)
     ALGORITHM multi_factor {
       latency_percentile: 90
       on_no_candidates: "first"
@@ -383,87 +340,8 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     }
     PLUGIN response_cache {
       enabled: true
-      similarity_threshold: 0.9
+      semantic: { similarity_threshold: 0.9 }
       ttl_seconds: 900
-    }
-  }
-
-}
-
-# =============================================================================
-# RECIPE cost-first
-# =============================================================================
-
-RECIPE cost-first (description = "Keep every request local and spend additional compute only when the request justifies reasoning.") {
-  # =============================================================================
-  # ROUTING PROFILE
-  # =============================================================================
-
-  ROUTING {
-    strategy: priority
-  }
-
-  # =============================================================================
-  # SIGNALS
-  # =============================================================================
-
-  SIGNAL keyword unified_cost_reasoning_markers {
-    operator: "OR"
-    keywords: ["reason step by step", "analyze the tradeoffs", "root cause", "design a system", "prove that", "逐步推理", "分析取舍", "根因分析", "设计系统", "证明", "razonar paso a paso", "razona paso a paso", "concevoir un système", "conçois un système", "raisonner étape par étape", "raisonne étape par étape", "段階的に推論", "system entwerfen"]
-    method: "regex"
-  }
-
-  SIGNAL context unified_cost_long_context {
-    description: "Long requests that benefit from local reasoning."
-    min_tokens: "16K"
-    max_tokens: "262K"
-  }
-
-  SIGNAL structure unified_cost_ordered_workflow {
-    description: "Multi-stage requests that benefit from local reasoning."
-    feature: { source: { sequences: [["first", "then"], ["first", "next", "finally"], ["首先", "然后"], ["先", "再"]], type: "sequence" }, type: "sequence" }
-  }
-
-  PROJECTION score unified_cost_compute_score {
-    method: "weighted_sum"
-    inputs: [{ type: "keyword", weight: 0.6, name: "unified_cost_reasoning_markers", value_source: "confidence" }, { type: "context", weight: 0.35, name: "unified_cost_long_context" }, { type: "structure", weight: 0.3, name: "unified_cost_ordered_workflow" }]
-  }
-
-  PROJECTION mapping unified_cost_compute_band {
-    source: "unified_cost_compute_score"
-    method: "threshold_bands"
-    outputs: [{ name: "unified_cost_direct", lt: 0.35 }, { name: "unified_cost_reasoning", gte: 0.35 }]
-  }
-
-  # =============================================================================
-  # ROUTES
-  # =============================================================================
-
-  ROUTE unified_cost_local_reasoning (description = "Enable bounded reasoning on the self-hosted model for genuinely demanding requests.") {
-    PRIORITY 200
-    TIER 1
-    WHEN projection("unified_cost_reasoning")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = true, effort = "medium"),
-          "local/qwen3.5-9b-economy-replica" (reasoning = true, effort = "medium")
-    ALGORITHM multi_factor {
-      on_no_candidates: "first"
-      weights: { cost: 0.6, load: 0.4 }
-    }
-  }
-
-  ROUTE unified_cost_first_route (description = "Deterministic local route with semantic reuse for ordinary requests.") {
-    PRIORITY 100
-    TIER 2
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.5-9b-economy-replica" (reasoning = false)
-    ALGORITHM multi_factor {
-      on_no_candidates: "first"
-      weights: { cost: 0.8, load: 0.2 }
-    }
-    PLUGIN response_cache {
-      enabled: true
-      similarity_threshold: 0.88
-      ttl_seconds: 3600
     }
   }
 
@@ -637,9 +515,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 400
     TIER 1
     WHEN projection("unified_frontier_use_workflow") AND (keyword("unified_frontier_workflow_markers") OR structure("unified_frontier_ordered_workflow"))
-    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM workflows {
       include_intermediate_responses: false
       max_parallel: 3
@@ -647,7 +522,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       min_successful_responses: 2
       mode: "dynamic"
       on_error: "skip"
-      planner: { model: "local/qwen3.6-27b-coder" }
       round_timeout_seconds: 120
       template: "micro_agent"
     }
@@ -657,7 +531,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 375
     TIER 2
     WHEN conversation("unified_frontier_active_tool_loop") AND NOT keyword("unified_frontier_workflow_markers")
-    MODEL "local/qwen3.5-122b-frontier" (reasoning = true, effort = "medium")
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -669,19 +542,12 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 350
     TIER 3
     WHEN projection("unified_frontier_use_fusion") AND keyword("unified_frontier_fusion_markers")
-    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false),
-          "local/deepseek-v4-flash-analyst" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM fusion {
-      analysis_models: ["local/qwen3.6-27b-coder", "local/gemma4-26b-balanced", "local/deepseek-v4-flash-analyst"]
       include_analysis: false
       include_intermediate_responses: false
       judge_prompt_version: "fusion-v1"
       max_concurrent: 3
       min_successful_responses: 2
-      model: "local/qwen3.5-122b-frontier"
       on_error: "skip"
       round_timeout_seconds: 180
       temperature: 0.2
@@ -692,10 +558,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 325
     TIER 4
     WHEN keyword("unified_frontier_verification_markers")
-    MODEL "local/qwen3.5-9b-economy" (reasoning = false),
-          "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM confidence {
       confidence_method: "avg_logprob"
       escalation_order: "small_to_large"
@@ -708,9 +570,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     PRIORITY 300
     TIER 5
     WHEN projection("unified_frontier_deliberate")
-    MODEL "local/qwen3.6-27b-coder" (reasoning = true, effort = "high"),
-          "local/deepseek-v4-flash-analyst" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = true, effort = "high")
     ALGORITHM remom {
       breadth_schedule: [3, 2]
       compaction_strategy: "last_n_tokens"
@@ -722,7 +581,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
       model_distribution: "round_robin"
       on_error: "skip"
       round_timeout_seconds: 180
-      synthesis_model: "local/qwen3.5-122b-frontier"
       temperature: 0.6
     }
   }
@@ -730,10 +588,6 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   ROUTE unified_frontier_direct (description = "Use the strongest direct model when orchestration would add little value.") {
     PRIORITY 100
     TIER 6
-    MODEL "local/qwen3.6-27b-coder" (reasoning = false),
-          "local/qwen3.6-35b-flash" (reasoning = false),
-          "local/gemma4-26b-balanced" (reasoning = false),
-          "local/qwen3.5-122b-frontier" (reasoning = false)
     ALGORITHM multi_factor {
       on_no_candidates: "first"
       weights: { quality: 1 }
@@ -820,7 +674,6 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 300
     TIER 1
     WHEN (jailbreak("unified_privacy_jailbreak_strict") OR keyword("unified_privacy_attack_markers"))
-    MODEL "local/qwen3.5-9b-private" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -832,7 +685,6 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 200
     TIER 2
     WHEN projection("unified_privacy_sensitive")
-    MODEL "local/qwen3.5-9b-private" (reasoning = false)
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -843,7 +695,81 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
   ROUTE unified_privacy_local_default (description = "Route non-sensitive traffic locally as the privacy-first default.") {
     PRIORITY 100
     TIER 3
-    MODEL "local/qwen3.5-9b-private" (reasoning = false)
+  }
+
+}
+
+# =============================================================================
+# RECIPE cost-first
+# =============================================================================
+
+RECIPE cost-first (description = "Keep every request local and spend additional compute only when the request justifies reasoning.") {
+  # =============================================================================
+  # ROUTING PROFILE
+  # =============================================================================
+
+  ROUTING {
+    strategy: priority
+  }
+
+  # =============================================================================
+  # SIGNALS
+  # =============================================================================
+
+  SIGNAL keyword unified_cost_reasoning_markers {
+    operator: "OR"
+    keywords: ["reason step by step", "analyze the tradeoffs", "root cause", "design a system", "prove that", "逐步推理", "分析取舍", "根因分析", "设计系统", "证明", "razonar paso a paso", "razona paso a paso", "concevoir un système", "conçois un système", "raisonner étape par étape", "raisonne étape par étape", "段階的に推論", "system entwerfen"]
+    method: "regex"
+  }
+
+  SIGNAL context unified_cost_long_context {
+    description: "Long requests that benefit from local reasoning."
+    min_tokens: "16K"
+    max_tokens: "262K"
+  }
+
+  SIGNAL structure unified_cost_ordered_workflow {
+    description: "Multi-stage requests that benefit from local reasoning."
+    feature: { source: { sequences: [["first", "then"], ["first", "next", "finally"], ["首先", "然后"], ["先", "再"]], type: "sequence" }, type: "sequence" }
+  }
+
+  PROJECTION score unified_cost_compute_score {
+    method: "weighted_sum"
+    inputs: [{ type: "keyword", weight: 0.6, name: "unified_cost_reasoning_markers", value_source: "confidence" }, { type: "context", weight: 0.35, name: "unified_cost_long_context" }, { type: "structure", weight: 0.3, name: "unified_cost_ordered_workflow" }]
+  }
+
+  PROJECTION mapping unified_cost_compute_band {
+    source: "unified_cost_compute_score"
+    method: "threshold_bands"
+    outputs: [{ name: "unified_cost_direct", lt: 0.35 }, { name: "unified_cost_reasoning", gte: 0.35 }]
+  }
+
+  # =============================================================================
+  # ROUTES
+  # =============================================================================
+
+  ROUTE unified_cost_local_reasoning (description = "Enable bounded reasoning on the self-hosted model for genuinely demanding requests.") {
+    PRIORITY 200
+    TIER 1
+    WHEN projection("unified_cost_reasoning")
+    ALGORITHM multi_factor {
+      on_no_candidates: "first"
+      weights: { cost: 0.6, load: 0.4 }
+    }
+  }
+
+  ROUTE unified_cost_first_route (description = "Deterministic local route with semantic reuse for ordinary requests.") {
+    PRIORITY 100
+    TIER 2
+    ALGORITHM multi_factor {
+      on_no_candidates: "first"
+      weights: { cost: 0.8, load: 0.2 }
+    }
+    PLUGIN response_cache {
+      enabled: true
+      semantic: { similarity_threshold: 0.88 }
+      ttl_seconds: 3600
+    }
   }
 
 }

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { ALGORITHM_ICONS, PLUGIN_ICONS, SIGNAL_TYPES } from './topology/constants'
 import { parseConfigToTopology } from './topology/utils/topologyParser'
-import type { ConfigData } from './topology/types'
+import type { ManagedTopologyConfig } from './topology/types'
 
-describe('topology v0.3 surface alignment', () => {
-  it('extracts v0.3 signals, algorithms, and plugins from routing config', () => {
-    const config: ConfigData = {
-      routing: {
+describe('topology v0.4 surface alignment', () => {
+  it('extracts signals, algorithms, and plugins from a Recipe document', () => {
+    const config: ManagedTopologyConfig = {
+      models: [{ name: 'fast', card: {} }],
+      document: {
         signals: {
           conversation: [
             {
@@ -40,9 +41,6 @@ describe('topology v0.3 surface alignment', () => {
           },
         ],
       },
-      providers: {
-        models: [{ name: 'fast' }],
-      },
     }
 
     const topology = parseConfigToTopology(config)
@@ -55,7 +53,7 @@ describe('topology v0.3 surface alignment', () => {
     expect(topology.decisions[0].plugins?.[0].type).toBe('tool_selection')
   })
 
-  it('declares display metadata for v0.3 topology surfaces', () => {
+  it('declares display metadata for v0.4 topology surfaces', () => {
     expect(SIGNAL_TYPES).toEqual(expect.arrayContaining(['conversation', 'event']))
     expect(ALGORITHM_ICONS).toMatchObject({
       fusion: 'FU',

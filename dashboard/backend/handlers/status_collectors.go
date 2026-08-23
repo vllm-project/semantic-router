@@ -1,30 +1,28 @@
 package handlers
 
-import "github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
-
-func collectInContainerStatus(runtimePath, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
-	return collectManagedDockerStatus(runtimePath, routerAPIURL, credentialProvider...)
+func collectInContainerStatus(routerAPIURL string) SystemStatus {
+	return collectManagedDockerStatus(routerAPIURL)
 }
 
-func collectHostStatus(runtimePath, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
-	if status, ok := collectSplitManagedHostStatus(runtimePath, routerAPIURL, credentialProvider...); ok {
+func collectHostStatus(routerAPIURL string) SystemStatus {
+	if status, ok := collectSplitManagedHostStatus(routerAPIURL); ok {
 		return status
 	}
 
-	if status, ok := collectDirectStatus(runtimePath, routerAPIURL, credentialProvider...); ok {
+	if status, ok := collectDirectStatus(routerAPIURL); ok {
 		return status
 	}
 	return collectDashboardOnlyHostStatus(routerAPIURL)
 }
 
-func collectSplitManagedHostStatus(runtimePath, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
+func collectSplitManagedHostStatus(routerAPIURL string) (SystemStatus, bool) {
 	if !managedRuntimeUsesSplitContainers() {
 		return SystemStatus{}, false
 	}
 
 	switch managedStatus := managedRuntimeContainerStatus(); managedStatus {
 	case "running", "exited":
-		return collectManagedDockerStatus(runtimePath, routerAPIURL, credentialProvider...), true
+		return collectManagedDockerStatus(routerAPIURL), true
 	case "not found":
 		return SystemStatus{}, false
 	default:
@@ -32,20 +30,14 @@ func collectSplitManagedHostStatus(runtimePath, routerAPIURL string, credentialP
 	}
 }
 
-func collectManagedDockerStatus(runtimePath, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) SystemStatus {
+func collectManagedDockerStatus(routerAPIURL string) SystemStatus {
 	status := baseSystemStatus()
-	status.DeploymentType = "docker"
 	status.Overall = "healthy"
-	status.Endpoints = []string{"http://localhost:8899"}
 
-	routerLogContent := getContainerLogsTailForContainer(managedContainerNameForService("router"), 500)
-	routerHealthy, routerMsg := resolveManagedRouterStatus(routerAPIURL, routerLogContent)
+	routerHealthy, routerMsg := resolveManagedRouterStatus(routerAPIURL)
 	envoyHealthy, envoyMsg := resolveManagedEnvoyStatus()
 	dashboardHealthy, dashboardMsg := resolveManagedDashboardStatus()
 
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
-	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, routerHealthy, credentialProvider...)
 	status.Services = append(status.Services,
 		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
 		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
@@ -58,18 +50,16 @@ func collectManagedDockerStatus(runtimePath, routerAPIURL string, credentialProv
 
 func unknownContainerStatus(containerStatus string) SystemStatus {
 	status := baseSystemStatus()
-	status.DeploymentType = "docker"
-	status.Overall = containerStatus
+	status.Overall = "degraded"
 	status.Services = append(status.Services, ServiceStatus{
-		Name:      "Runtime",
-		Status:    containerStatus,
-		Healthy:   false,
-		Component: "container",
+		Name:    "Runtime",
+		Status:  publicServiceStatus(containerStatus, false),
+		Healthy: false,
 	})
 	return status
 }
 
-func collectDirectStatus(runtimePath, routerAPIURL string, credentialProvider ...routerauth.CredentialProvider) (SystemStatus, bool) {
+func collectDirectStatus(routerAPIURL string) (SystemStatus, bool) {
 	if routerAPIURL == "" {
 		return SystemStatus{}, false
 	}
@@ -80,12 +70,7 @@ func collectDirectStatus(runtimePath, routerAPIURL string, credentialProvider ..
 	}
 
 	status := baseSystemStatus()
-	status.DeploymentType = "local (direct)"
 	status.Overall = "healthy"
-	status.Endpoints = []string{routerAPIURL}
-	status.RouterRuntime = resolveRouterRuntimeStatus(runtimePath, routerAPIURL, routerHealthy, credentialProvider...)
-	routerMsg = applyRuntimeMessage(routerMsg, status.RouterRuntime)
-	status.Models = fetchModelsWhenReady(routerAPIURL, true, credentialProvider...)
 	status.Services = append(status.Services, buildServiceStatus("Router", "running", true, routerMsg, "process"))
 
 	appendDirectEnvoyStatus(&status)
@@ -98,7 +83,6 @@ func collectDashboardOnlyHostStatus(routerAPIURL string) SystemStatus {
 	status := baseSystemStatus()
 	routerMsg := "Router API URL is not configured"
 	if routerAPIURL != "" {
-		status.Endpoints = []string{routerAPIURL}
 		routerMsg = "Router health check failed"
 	}
 
@@ -125,13 +109,23 @@ func appendDirectEnvoyStatus(status *SystemStatus) {
 	}
 }
 
-func buildServiceStatus(name, serviceStatus string, healthy bool, message, component string) ServiceStatus {
+func buildServiceStatus(name, serviceStatus string, healthy bool, _ string, _ string) ServiceStatus {
 	return ServiceStatus{
-		Name:      name,
-		Status:    serviceStatus,
-		Healthy:   healthy,
-		Message:   message,
-		Component: component,
+		Name:    name,
+		Status:  publicServiceStatus(serviceStatus, healthy),
+		Healthy: healthy,
+	}
+}
+
+func publicServiceStatus(status string, healthy bool) string {
+	if healthy {
+		return "operational"
+	}
+	switch status {
+	case "created", "starting", "unknown":
+		return "starting"
+	default:
+		return "unavailable"
 	}
 }
 
@@ -154,7 +148,7 @@ func setManagedDockerOverall(status *SystemStatus, checks ...bool) {
 	status.Overall = "stopped"
 }
 
-func resolveManagedRouterStatus(routerAPIURL string, logContent string) (bool, string) {
+func resolveManagedRouterStatus(routerAPIURL string) (bool, string) {
 	containerStatus := getDockerContainerStatus(managedContainerNameForService("router"))
 	if routerAPIURL != "" {
 		if healthy, msg := checkHTTPHealth(routerAPIURL + "/health"); healthy {
@@ -164,7 +158,7 @@ func resolveManagedRouterStatus(routerAPIURL string, logContent string) (bool, s
 			return false, "Starting"
 		}
 	}
-	return resolveManagedServiceStatus("router", containerStatus, logContent)
+	return resolveManagedServiceStatus(containerStatus)
 }
 
 func resolveManagedEnvoyStatus() (bool, string) {
@@ -173,22 +167,19 @@ func resolveManagedEnvoyStatus() (bool, string) {
 			return healthy, msg
 		}
 	}
-	return resolveManagedServiceStatus("envoy", getDockerContainerStatus(managedContainerNameForService("envoy")), "")
+	return resolveManagedServiceStatus(getDockerContainerStatus(managedContainerNameForService("envoy")))
 }
 
 func resolveManagedDashboardStatus() (bool, string) {
 	if isRunningInContainer() {
 		return true, "Running"
 	}
-	return resolveManagedServiceStatus("dashboard", getDockerContainerStatus(managedContainerNameForService("dashboard")), "")
+	return resolveManagedServiceStatus(getDockerContainerStatus(managedContainerNameForService("dashboard")))
 }
 
-func resolveManagedServiceStatus(service string, containerStatus string, logContent string) (bool, string) {
+func resolveManagedServiceStatus(containerStatus string) (bool, string) {
 	switch containerStatus {
 	case "running":
-		if logContent != "" && serviceLogLooksHealthy(service, logContent) {
-			return true, "Running"
-		}
 		return true, "Running"
 	case "created":
 		return false, "Standby (setup mode)"
@@ -199,19 +190,4 @@ func resolveManagedServiceStatus(service string, containerStatus string, logCont
 	default:
 		return false, containerStatus
 	}
-}
-
-func applyRuntimeMessage(message string, runtime *RouterRuntimeStatus) string {
-	if runtime != nil && runtime.Message != "" {
-		return runtime.Message
-	}
-	return message
-}
-
-func fetchModelsWhenReady(routerAPIURL string, routerHealthy bool, credentialProvider ...routerauth.CredentialProvider) *RouterModelsInfo {
-	if !routerHealthy {
-		return nil
-	}
-
-	return fetchRouterModelsInfo(routerAPIURL, credentialProvider...)
 }

@@ -426,7 +426,7 @@ vllm-sr-dev:
 	@echo "=========================================="
 	@echo ""
 	@echo "Next steps:"
-	@echo "  Start service: cd src/vllm-sr && vllm-sr serve --config config.yaml"
+	@echo "  Start service: cd src/vllm-sr && vllm-sr serve"
 	@echo "  Or use:        make vllm-sr-start"
 	@echo ""
 

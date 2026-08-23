@@ -64,6 +64,17 @@
   top: -28px;
 }
 
+.bottomToggle svg {
+  width: 14px;
+  height: 14px;
+  transform: rotate(90deg);
+  transition: transform 180ms ease;
+}
+
+.bottomToggle .bottomToggleCollapsed {
+  transform: rotate(-90deg);
+}
+
 .bottomPanelContent {
   display: flex;
   justify-content: center;
@@ -498,7 +509,8 @@
 }
 
 .errorIcon {
-  font-size: 3rem;
+  width: 42px;
+  height: 42px;
   margin-bottom: 1rem;
 }
 
@@ -509,6 +521,9 @@
 }
 
 .retryButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
   padding: 0.75rem 1.5rem;
   background: var(--accent-color, #8f949c);
   color: white;
@@ -518,6 +533,11 @@
   cursor: pointer;
   transition: all 0.2s;
   font-weight: 500;
+}
+
+.retryButton svg {
+  width: 15px;
+  height: 15px;
 }
 
 .retryButton:hover {

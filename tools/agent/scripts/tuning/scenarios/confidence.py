@@ -4,8 +4,8 @@ Uses OfflineAnalyzer to find per-category optimal confidence thresholds for
 model escalation.  This is an offline analysis scenario (no live router needed)
 that classifies categories into ESCALATE/SELECTIVE/AVOID strategies.
 
-This scenario doesn't use TuningLoop (it's offline), but follows the same
-severity-weighted analytical framework.
+This scenario doesn't need a live Router evaluation (it's offline), but follows
+the same severity-weighted analytical framework.
 
 Usage:
     from tuning import OfflineAnalyzer

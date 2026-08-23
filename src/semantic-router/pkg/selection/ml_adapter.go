@@ -173,7 +173,6 @@ type MLPConfig struct {
 // DefaultMLSelectorConfig returns default ML selector configuration.
 func DefaultMLSelectorConfig() *MLSelectorConfig {
 	return &MLSelectorConfig{
-		ModelsPath:   ".cache/ml-models",
 		EmbeddingDim: 1024,
 		KNN: &KNNConfig{
 			K: 5,
@@ -200,8 +199,9 @@ func CreateKNNSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	}
 
 	mlCfg := &config.MLModelSelectionConfig{
-		Type: "knn",
-		K:    knnCfg.K,
+		Type:       "knn",
+		ModelsPath: selectorModelsPath(cfg.ModelsPath, knnCfg.PretrainedPath),
+		K:          knnCfg.K,
 	}
 
 	mlSelector, err := modelselection.NewSelector(mlCfg)
@@ -242,6 +242,7 @@ func CreateKMeansSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]f
 	effWeight := kmeansCfg.EfficiencyWeight
 	mlCfg := &config.MLModelSelectionConfig{
 		Type:             "kmeans",
+		ModelsPath:       selectorModelsPath(cfg.ModelsPath, kmeansCfg.PretrainedPath),
 		NumClusters:      kmeansCfg.NumClusters,
 		EfficiencyWeight: &effWeight,
 	}
@@ -282,9 +283,10 @@ func CreateSVMSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	}
 
 	mlCfg := &config.MLModelSelectionConfig{
-		Type:   "svm",
-		Kernel: svmCfg.Kernel,
-		Gamma:  svmCfg.Gamma,
+		Type:       "svm",
+		ModelsPath: selectorModelsPath(cfg.ModelsPath, svmCfg.PretrainedPath),
+		Kernel:     svmCfg.Kernel,
+		Gamma:      svmCfg.Gamma,
 	}
 
 	mlSelector, err := modelselection.NewSelector(mlCfg)
@@ -324,7 +326,8 @@ func CreateMLPSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	}
 
 	mlCfg := &config.MLModelSelectionConfig{
-		Type: "mlp",
+		Type:       "mlp",
+		ModelsPath: selectorModelsPath(cfg.ModelsPath, mlpCfg.PretrainedPath),
 	}
 
 	mlSelector, err := modelselection.NewSelector(mlCfg)
@@ -353,6 +356,13 @@ func CreateMLPSelector(cfg *MLSelectorConfig, embeddingFunc func(string) ([]floa
 	adapter := NewMLSelectorAdapter(mlSelector, MethodMLP)
 	adapter.SetEmbeddingFunc(embeddingFunc)
 	return adapter, nil
+}
+
+func selectorModelsPath(modelsPath string, pretrainedPath string) string {
+	if pretrainedPath != "" {
+		return ""
+	}
+	return modelsPath
 }
 
 // float32ToFloat64 converts a slice of float32 to float64.

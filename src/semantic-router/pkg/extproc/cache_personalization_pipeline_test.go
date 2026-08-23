@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 )
 
 type spyCache struct {
@@ -59,16 +57,6 @@ func (s *spyCache) LookupSimilarWithThreshold(_ context.Context, _ string, query
 	return cache.LookupResult{}, nil
 }
 
-func makeOpenAIRequestBody(model, content string) []byte {
-	body, _ := json.Marshal(map[string]interface{}{
-		"model": model,
-		"messages": []map[string]string{
-			{"role": "user", "content": content},
-		},
-	})
-	return body
-}
-
 // --- Core cache bypass tests: prove decisionWillPersonalize works ---
 
 func TestCacheBypassWhenRAGEnabled(t *testing.T) {
@@ -91,10 +79,10 @@ func TestCacheBypassWhenRAGEnabled(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
+		InferenceAccess:     testInferenceRequestAccess("cache-test-user", ""),
 		RequestID:           "test-bypass-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What are my recent orders?"),
+		SemanticRequest:     testNeutralRequest("test-model", "What are my recent orders?"),
 		VSRSelectedDecision: &decision,
 	}
 
@@ -121,10 +109,10 @@ func TestCacheBypassWhenMemoryEnabledGlobally(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
+		InferenceAccess:     testInferenceRequestAccess("cache-test-user", ""),
 		RequestID:           "test-bypass-memory-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What did we discuss yesterday?"),
+		SemanticRequest:     testNeutralRequest("test-model", "What did we discuss yesterday?"),
 		VSRSelectedDecision: &decision,
 	}
 
@@ -163,7 +151,7 @@ func TestCacheBypassWithBothRAGAndMemory(t *testing.T) {
 		Headers:             make(map[string]string),
 		RequestID:           "test-both-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: makeOpenAIRequestBody("m", "Summarize my project status"),
+		SemanticRequest:     testNeutralRequest("m", "Summarize my project status"),
 		VSRSelectedDecision: &decision,
 	}
 
@@ -197,7 +185,7 @@ func TestCacheBypassWithPerDecisionMemoryOverride(t *testing.T) {
 		Headers:             make(map[string]string),
 		RequestID:           "per-decision-mem-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: makeOpenAIRequestBody("m", "Recall our chat"),
+		SemanticRequest:     testNeutralRequest("m", "Recall our chat"),
 		VSRSelectedDecision: &decision,
 	}
 
@@ -218,7 +206,7 @@ func TestCacheWorksNormallyWithoutPersonalization(t *testing.T) {
 		Name:      "plain-decision",
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 		Plugins: []config.DecisionPlugin{
-			{Type: "semantic-cache", Configuration: config.MustStructuredPayload(map[string]interface{}{
+			{Type: config.DecisionPluginResponseCache, Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
 			})},
 		},
@@ -230,10 +218,10 @@ func TestCacheWorksNormallyWithoutPersonalization(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
+		InferenceAccess:     testInferenceRequestAccess("cache-test-user", ""),
 		RequestID:           "test-normal-cache-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: makeOpenAIRequestBody("test-model", "What is 2+2?"),
+		SemanticRequest:     testNeutralRequest("test-model", "What is 2+2?"),
 		TraceContext:        context.Background(),
 		VSRSelectedDecision: &decision,
 	}
@@ -254,7 +242,7 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 		Name:      "mem-disabled",
 		ModelRefs: []config.ModelRef{{Model: "m"}},
 		Plugins: []config.DecisionPlugin{
-			{Type: "semantic-cache", Configuration: config.MustStructuredPayload(map[string]interface{}{
+			{Type: config.DecisionPluginResponseCache, Configuration: config.MustStructuredPayload(map[string]interface{}{
 				"enabled": true,
 			})},
 			{Type: "memory", Configuration: config.MustStructuredPayload(map[string]interface{}{
@@ -270,10 +258,10 @@ func TestNoCacheBypassWhenMemoryExplicitlyDisabledPerDecision(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 	ctx := &RequestContext{
-		Headers:             map[string]string{"x-authz-user-id": "cache-test-user"},
+		InferenceAccess:     testInferenceRequestAccess("cache-test-user", ""),
 		RequestID:           "mem-disabled-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: makeOpenAIRequestBody("m", "Quick question"),
+		SemanticRequest:     testNeutralRequest("m", "Quick question"),
 		TraceContext:        context.Background(),
 		VSRSelectedDecision: &decision,
 	}
@@ -484,12 +472,11 @@ func TestFullPipeline_CacheBypassThenRAGResolution(t *testing.T) {
 
 	router := &OpenAIRouter{Config: cfg, Cache: spy}
 
-	reqBody := makeOpenAIRequestBody("test-model", "What's my project status?")
 	ctx := &RequestContext{
 		Headers:             make(map[string]string),
 		RequestID:           "pipeline-1",
 		StartTime:           time.Now(),
-		OriginalRequestBody: reqBody,
+		SemanticRequest:     testNeutralRequest("test-model", "What's my project status?"),
 		UserContent:         "What's my project status?",
 		VSRSelectedDecision: &decision,
 	}
@@ -513,9 +500,8 @@ func TestFullPipeline_CacheBypassThenRAGResolution(t *testing.T) {
 	fmt.Println("Full pipeline verified: cache bypassed -> RAG resolved -> cache write registered")
 }
 
-// resolveBodyMutation mirrors the production logic in createSpecifiedModelResponse:
-// body mutation is needed if the upstream model name differs (rewriting) OR if
-// personalized context (RAG/memory) was injected.
+// resolveBodyMutation captures the body-rewrite condition exercised by this
+// personalization test helper.
 func resolveBodyMutation(ctx *RequestContext, upstreamModel, model string) bool {
 	needs := upstreamModel != model
 	if !needs && (ctx.RAGRetrievedContext != "" || ctx.MemoryContext != "") {
@@ -557,105 +543,4 @@ func TestRAGBodyMutationForcedForSpecifiedModel(t *testing.T) {
 		assert.NotEqual(t, model, differentUpstream, "model rewriting already forces mutation")
 		assert.True(t, resolveBodyMutation(ctx, differentUpstream, model), "mutation still true")
 	})
-}
-
-// TestMemoryContextPropagatedToOriginalRequestBody verifies that when
-// memory retrieval injects context, ctx.OriginalRequestBody is updated
-// so that getBodyMutationSource returns the memory-modified body.
-func TestMemoryContextPropagatedToOriginalRequestBody(t *testing.T) {
-	originalBody := makeOpenAIRequestBody("gpt-4", "Hello")
-
-	t.Run("OriginalRequestBody updated when MemoryContext set", func(t *testing.T) {
-		ctx := &RequestContext{}
-		ctx.OriginalRequestBody = originalBody
-
-		memoryInjectedBody := []byte(`{"model":"gpt-4","messages":[{"role":"system","content":"Memory: user prefers dark mode"},{"role":"user","content":"Hello"}]}`)
-		ctx.MemoryContext = "user prefers dark mode"
-
-		if ctx.MemoryContext != "" {
-			ctx.OriginalRequestBody = memoryInjectedBody
-		}
-
-		assert.Contains(t, string(ctx.OriginalRequestBody), "dark mode",
-			"OriginalRequestBody must contain injected memory context")
-		assert.NotEqual(t, string(originalBody), string(ctx.OriginalRequestBody),
-			"OriginalRequestBody must differ from the initial body")
-	})
-
-	t.Run("OriginalRequestBody unchanged when no memory retrieved", func(t *testing.T) {
-		ctx := &RequestContext{}
-		ctx.OriginalRequestBody = originalBody
-
-		if ctx.MemoryContext != "" {
-			ctx.OriginalRequestBody = []byte("should not happen")
-		}
-
-		assert.Equal(t, string(originalBody), string(ctx.OriginalRequestBody),
-			"OriginalRequestBody must stay unchanged when no memory injected")
-	})
-
-	t.Run("getBodyMutationSource returns memory-modified body", func(t *testing.T) {
-		memoryBody := []byte(`{"model":"gpt-4","messages":[{"role":"system","content":"Memory: project deadline is Friday"},{"role":"user","content":"Hello"}]}`)
-		ctx := &RequestContext{
-			Headers:             make(map[string]string),
-			OriginalRequestBody: memoryBody,
-			MemoryContext:       "project deadline is Friday",
-		}
-
-		source := getBodyMutationSource(ctx)
-		assert.Contains(t, string(source), "deadline is Friday",
-			"getBodyMutationSource must return memory-injected body")
-	})
-}
-
-// TestMemoryContextClearedOnInjectionFailure verifies that ctx.MemoryContext
-// is cleared when injectMemoryMessages fails, preventing a stale non-empty
-// MemoryContext from triggering an unnecessary forced body mutation.
-func TestMemoryContextClearedOnInjectionFailure(t *testing.T) {
-	router := &OpenAIRouter{Config: &config.RouterConfig{}}
-	ctx := &RequestContext{}
-
-	invalidBody := []byte(`not valid json at all`)
-
-	memories := []*memory.RetrieveResult{
-		{Memory: &memory.Memory{Content: "user prefers dark mode"}, Score: 0.95},
-	}
-
-	result := router.injectRetrievedMemories(ctx, invalidBody, memories)
-
-	assert.Equal(t, invalidBody, result,
-		"on injection failure, original body must be returned unchanged")
-	assert.Empty(t, ctx.MemoryContext,
-		"MemoryContext must be cleared on injection failure to prevent stale forced body mutation")
-}
-
-func TestRequestBodyAfterPreRoutingUsesRAGMutation(t *testing.T) {
-	original := []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
-	ragBody := []byte(`{"model":"test","messages":[{"role":"system","content":"retrieved context"},{"role":"user","content":"hello"}]}`)
-	ctx := &RequestContext{OriginalRequestBody: ragBody}
-
-	assert.Equal(t, ragBody, requestBodyAfterPreRouting(original, ctx))
-}
-
-func TestAutoRoutingDoesNotInjectMemoryTwice(t *testing.T) {
-	original := []byte(`{"model":"test","messages":[{"role":"user","content":"hello"}]}`)
-	const memoryContext = "project deadline is Friday"
-	injected, err := injectMemoryMessages(original, memoryContext)
-	require.NoError(t, err)
-	request, err := parseOpenAIRequest(injected)
-	require.NoError(t, err)
-	ctx := &RequestContext{
-		MemoryContext: memoryContext,
-	}
-
-	modified, err := (&OpenAIRouter{}).modifyRequestBodyForAutoRouting(
-		request,
-		"test",
-		"",
-		false,
-		nil,
-		ctx,
-	)
-	require.NoError(t, err)
-	assert.Equal(t, 1, strings.Count(string(modified), memoryContext))
 }

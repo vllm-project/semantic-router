@@ -11,7 +11,7 @@ comparison of deployment methods, see
 The CLI is the shortest path when you already have a canonical Router config:
 
 ```bash
-vllm-sr serve --target k8s --profile dev --config config/config.yaml
+vllm-sr serve --target k8s --profile dev
 vllm-sr status --target k8s
 ```
 
@@ -27,26 +27,60 @@ The CLI translates canonical Router YAML into chart values and invokes Helm.
 Helm users can instead set `configOverride` to a complete canonical Router
 document. Do not maintain a second, hand-converted configuration.
 
+The Router image also carries the canonical built-in Recipe distribution. In
+managed mode every replica reconciles it through PostgreSQL before becoming
+ready, and a periodic idempotent worker installs it for later Namespaces. The
+chart intentionally creates no Recipe catalog ConfigMap, volume, CRD, init
+container, or Dashboard copy; the image and Router Management API remain the
+only distribution and read paths.
+
+Managed mode uses one stateless Router Deployment rather than separate control-
+and data-plane workloads. A public ExtProc Service, private HTTPS Management
+Service, and internal backend-dispatch Service select the same Pods. Durable
+claims and consumer groups coordinate projectors and usage workers across HPA
+replicas. The inference path reads applied routing, ProviderCredential, access,
+and quota state from Valkey and never queries PostgreSQL.
+
+A fresh managed installation is intentionally two-phase. Install the release without
+`--wait`, then use the private Management Service to bootstrap identity and publish the
+first complete routing revision. That Service can reach live Router Pods before their
+inference readiness probe succeeds; it remains private, authenticated, TLS protected,
+and NetworkPolicy scoped. After publication, `/ready` succeeds and normal Helm rollout
+waiting applies. Do not disable the Router probes or expose the Management Service to
+break the bootstrap gate.
+
 ```yaml
 configOverride:
-  version: v0.3
-  providers:
-    defaults:
-      default_model: my-model
-    models:
-      - name: my-model
-        backend_refs:
-          - name: primary
-            endpoint: my-vllm.default.svc.cluster.local:8000
-  routing:
-    modelCards:
-      - name: my-model
-    decisions: []
+  version: v0.4
+  models:
+    - name: my-model
+      card:
+        capabilities: [chat]
+      connections:
+        - provider: vllm
+          endpoint: http://my-vllm.default.svc.cluster.local:8000/v1
+          model: my-model
+  recipes:
+    - name: default
+      document:
+        decisions:
+          - name: default
+            priority: 100
+            rules: {}
+  entrypoints:
+    - name: vllm-sr/auto
+      aliases: [auto]
+      recipe: default
+      assignments:
+        default:
+          models: [{model: my-model}]
 ```
 
-Replace the model and endpoint and add the signals, decisions, algorithms, and
-plugins required by your route. Validate the canonical document before a
-release rather than using Helm templating to invent a second schema.
+Replace the Model and endpoint, then add the Recipe and Entrypoint behavior
+required by your route. In managed mode, keep bootstrap configuration free of
+inline Models, Recipes, and Entrypoints and publish those resources through the
+Management API. Validate the canonical document before a release rather than
+using Helm templating to invent a second schema.
 
 ## Values and profiles
 

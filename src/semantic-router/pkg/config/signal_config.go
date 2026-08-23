@@ -31,7 +31,7 @@ type Signals struct {
 
 // EventRule matches structured event metadata extracted from request text.
 // It routes event-driven requests (error alerts, audit logs, incident payloads)
-// to specialized model pools based on event type, severity, and temporal urgency.
+// to specialized models based on event type, severity, and temporal urgency.
 type EventRule struct {
 	Name        string   `yaml:"name"`
 	Description string   `yaml:"description,omitempty"`

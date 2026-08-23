@@ -6,7 +6,18 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
-CANONICAL_VERSION = "v0.3"
+CANONICAL_VERSION = "v0.4"
+
+DEFAULT_BACKEND_DISPATCH = {
+    "bind_address": "0.0.0.0",
+    "port": 8180,
+    "audience": "vllm-sr.backend-dispatch",
+    "capability_ttl": "30s",
+    "max_request_body_bytes": 64 << 20,
+}
+
+DEFAULT_BACKEND_EGRESS_POLICY_FILE = "/app/config/backend-egress-policy.yaml"
+
 
 CONDITION_TYPE_DOMAIN = "domain"
 CONDITION_TYPE_PROJECTION = "projection"
@@ -14,43 +25,12 @@ CONDITION_TYPE_PROJECTION = "projection"
 CANONICAL_TOP_LEVEL_KEYS = frozenset(
     {
         "version",
+        "billing_currency",
         "listeners",
-        "providers",
-        "routing",
+        "models",
         "entrypoints",
         "recipes",
         "global",
-        "setup",
-    }
-)
-
-LEGACY_PROVIDER_DEFAULT_KEYS = (
-    "default_model",
-    "reasoning_families",
-    "default_reasoning_effort",
-)
-
-LEGACY_PROVIDER_KEYS = frozenset(
-    {
-        *LEGACY_PROVIDER_DEFAULT_KEYS,
-        "model_config",
-        "vllm_endpoints",
-        "provider_profiles",
-    }
-)
-
-LEGACY_PROVIDER_MODEL_SURFACE_KEYS = frozenset(
-    {
-        "endpoints",
-        "access_key",
-        "param_size",
-        "context_window_size",
-        "description",
-        "capabilities",
-        "loras",
-        "quality_score",
-        "modality",
-        "tags",
     }
 )
 
@@ -62,52 +42,39 @@ class SignalFamilySpec:
     canonical_key: str
     signal_attr: str
     condition_type: str
-    legacy_key: str | None = None
     reference_suffixes: tuple[str, ...] = ()
 
 
 SIGNAL_FAMILY_SPECS = (
-    SignalFamilySpec("keywords", "keywords", "keyword", "keyword_rules"),
-    SignalFamilySpec("embeddings", "embeddings", "embedding", "embedding_rules"),
-    SignalFamilySpec("domains", "domains", CONDITION_TYPE_DOMAIN, "categories"),
-    SignalFamilySpec("fact_check", "fact_check", "fact_check", "fact_check_rules"),
+    SignalFamilySpec("keywords", "keywords", "keyword"),
+    SignalFamilySpec("embeddings", "embeddings", "embedding"),
+    SignalFamilySpec("domains", "domains", CONDITION_TYPE_DOMAIN),
+    SignalFamilySpec("fact_check", "fact_check", "fact_check"),
     SignalFamilySpec(
         "user_feedbacks",
         "user_feedbacks",
         "user_feedback",
-        "user_feedback_rules",
     ),
-    SignalFamilySpec("reasks", "reasks", "reask", "reask_rules"),
-    SignalFamilySpec("preferences", "preferences", "preference", "preference_rules"),
-    SignalFamilySpec("language", "language", "language", "language_rules"),
-    SignalFamilySpec("context", "context", "context", "context_rules"),
-    SignalFamilySpec("structure", "structure", "structure", "structure_rules"),
+    SignalFamilySpec("reasks", "reasks", "reask"),
+    SignalFamilySpec("preferences", "preferences", "preference"),
+    SignalFamilySpec("language", "language", "language"),
+    SignalFamilySpec("context", "context", "context"),
+    SignalFamilySpec("structure", "structure", "structure"),
     SignalFamilySpec(
         "complexity",
         "complexity",
         "complexity",
-        "complexity_rules",
-        ("easy", "medium", "hard"),
+        reference_suffixes=("easy", "medium", "hard"),
     ),
-    SignalFamilySpec("modality", "modality", "modality", "modality_rules"),
-    SignalFamilySpec("role_bindings", "role_bindings", "authz", "role_bindings"),
-    SignalFamilySpec("jailbreak", "jailbreak", "jailbreak", "jailbreak"),
-    SignalFamilySpec("pii", "pii", "pii", "pii"),
-    SignalFamilySpec("kb", "kb", "kb", "kb"),
-    SignalFamilySpec("conversation", "conversation", "conversation", "conversation"),
-    SignalFamilySpec("events", "events", "event", "events"),
-    SignalFamilySpec("metadata", "metadata", "metadata", "metadata"),
-    SignalFamilySpec("classifiers", "classifiers", "classifier", "classifiers"),
-)
-
-LEGACY_SIGNAL_KEY_TO_CANONICAL = {
-    spec.legacy_key: spec.canonical_key
-    for spec in SIGNAL_FAMILY_SPECS
-    if spec.legacy_key is not None
-}
-
-LEGACY_ROUTING_KEYS = frozenset(
-    {"signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL}
+    SignalFamilySpec("modality", "modality", "modality"),
+    SignalFamilySpec("role_bindings", "role_bindings", "authz"),
+    SignalFamilySpec("jailbreak", "jailbreak", "jailbreak"),
+    SignalFamilySpec("pii", "pii", "pii"),
+    SignalFamilySpec("kb", "kb", "kb"),
+    SignalFamilySpec("conversation", "conversation", "conversation"),
+    SignalFamilySpec("events", "events", "event"),
+    SignalFamilySpec("metadata", "metadata", "metadata"),
+    SignalFamilySpec("classifiers", "classifiers", "classifier"),
 )
 
 _SIGNAL_FAMILY_BY_CONDITION_TYPE = {
@@ -116,10 +83,9 @@ _SIGNAL_FAMILY_BY_CONDITION_TYPE = {
 
 
 def iter_routing_profiles(config: Any) -> Iterable[tuple[str, Any]]:
-    """Yield the default and named routing profiles through one contract."""
-    yield "default", config.routing
+    """Yield every explicit v0.4 Recipe document."""
     for recipe in config.recipes:
-        yield recipe.name, recipe.routing
+        yield recipe.name, recipe.document
 
 
 def iter_condition_leaves(conditions: Any) -> Iterable[Any]:
@@ -138,6 +104,11 @@ def iter_named_signal_entries(signals: Any) -> Iterable[tuple[str, str]]:
         return
     for spec in SIGNAL_FAMILY_SPECS:
         for signal in getattr(signals, spec.signal_attr, None) or []:
+            if spec.condition_type == "authz":
+                role = getattr(signal, "role", None)
+                if role:
+                    yield spec.canonical_key, role
+                continue
             name = getattr(signal, "name", None)
             if name:
                 yield spec.canonical_key, name
@@ -152,6 +123,11 @@ def build_signal_reference_index(signals: Any) -> dict[str, set[str]]:
     for spec in SIGNAL_FAMILY_SPECS:
         family_names = names.setdefault(spec.condition_type, set())
         for signal in getattr(signals, spec.signal_attr, None) or []:
+            if spec.condition_type == "authz":
+                role = getattr(signal, "role", None)
+                if role:
+                    family_names.add(role)
+                continue
             name = getattr(signal, "name", None)
             if not name:
                 continue

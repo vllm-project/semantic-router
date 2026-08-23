@@ -1,8 +1,4 @@
-import type {
-  ProjectionSignalConfig,
-  SignalConfig,
-  SignalType,
-} from '../types'
+import type { ProjectionSignalConfig, SignalConfig, SignalType } from '../types'
 
 export interface ProjectionGroup {
   nodeId: string
@@ -13,12 +9,14 @@ export interface ProjectionGroup {
   upstreamSignals: Array<{ type: SignalType; name: string }>
 }
 
-function isProjectionSignalConfig(config: SignalConfig['config']): config is ProjectionSignalConfig {
+function isProjectionSignalConfig(
+  config: SignalConfig['config'],
+): config is ProjectionSignalConfig {
   return (
-    typeof config === 'object'
-    && config !== null
-    && typeof (config as ProjectionSignalConfig).mapping === 'string'
-    && typeof (config as ProjectionSignalConfig).source === 'string'
+    typeof config === 'object' &&
+    config !== null &&
+    typeof (config as ProjectionSignalConfig).mapping === 'string' &&
+    typeof (config as ProjectionSignalConfig).source === 'string'
   )
 }
 
@@ -48,7 +46,11 @@ export function buildProjectionGroups(signals: SignalConfig[]): ProjectionGroup[
 
     existing.outputs.push(signal)
     upstreamSignals.forEach((input) => {
-      if (existing.upstreamSignals.some((candidate) => candidate.type === input.type && candidate.name === input.name)) {
+      if (
+        existing.upstreamSignals.some(
+          (candidate) => candidate.type === input.type && candidate.name === input.name,
+        )
+      ) {
         return
       }
       existing.upstreamSignals.push(input)
@@ -70,7 +72,9 @@ export function buildProjectionOutputNodeMap(groups: ProjectionGroup[]): Map<str
   return byOutputName
 }
 
-export function groupProjectionInputsBySignalType(group: ProjectionGroup): Map<SignalType, string[]> {
+export function groupProjectionInputsBySignalType(
+  group: ProjectionGroup,
+): Map<SignalType, string[]> {
   const grouped = new Map<SignalType, string[]>()
 
   group.upstreamSignals.forEach((input) => {

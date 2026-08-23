@@ -3,7 +3,8 @@
 import { memo } from 'react'
 import { Handle, Position, NodeProps } from 'reactflow'
 import { SignalType, SignalConfig } from '../../types'
-import { SIGNAL_ICONS, SIGNAL_COLORS, SIGNAL_LATENCY } from '../../constants'
+import { SIGNAL_COLORS, SIGNAL_LATENCY } from '../../constants'
+import ProductIcon from '../../../../components/ProductIcon'
 import styles from './CustomNodes.module.css'
 
 interface SignalGroupNodeData {
@@ -31,7 +32,6 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
     onToggleCollapse,
   } = data
   const color = SIGNAL_COLORS[signalType]
-  const icon = SIGNAL_ICONS[signalType]
   const latency = latencyLabel || SIGNAL_LATENCY[signalType]
 
   return (
@@ -47,32 +47,32 @@ export const SignalGroupNode = memo<NodeProps<SignalGroupNodeData>>(({ data }) =
       <Handle type="target" position={Position.Left} />
 
       <div className={styles.signalGroupHeader}>
-        <span className={styles.signalGroupIcon}>{icon}</span>
-        <span className={styles.signalGroupTitle}>
-          {title || signalType.replace('_', ' ')}
-        </span>
+        <ProductIcon className={styles.signalGroupIcon} name="signal" aria-hidden="true" />
+        <span className={styles.signalGroupTitle}>{title || signalType.replace('_', ' ')}</span>
         <span className={styles.signalGroupBadge}>{signals.length}</span>
         {isDynamic && <span className={styles.dynamicBadge}>ML</span>}
       </div>
 
       <div className={styles.signalGroupContent}>
-        {subtitle ? (
-          <div className={styles.signalGroupSubtitle}>{subtitle}</div>
-        ) : null}
+        {subtitle ? <div className={styles.signalGroupSubtitle}>{subtitle}</div> : null}
         <div className={styles.signalLatency}>
-          <span>⏱️</span>
+          <ProductIcon name="activity" aria-hidden="true" />
           <span>{latency}</span>
-          <span className={styles.collapseIcon}>
-            {collapsed ? '▶' : '▼'}
-          </span>
+          <ProductIcon
+            className={`${styles.collapseIcon} ${collapsed ? '' : styles.collapseIconOpen}`}
+            name="chevron-right"
+            aria-hidden="true"
+          />
         </div>
 
         {!collapsed && signals.length > 0 && (
           <div className={styles.signalList}>
-            {signals.slice(0, 5).map(signal => (
+            {signals.slice(0, 5).map((signal) => (
               <div key={signal.name} className={styles.signalItem}>
                 {signal.name}
-                {(signal as SignalConfig & { isDynamic?: boolean }).isDynamic && <span className={styles.mlTag}>🤖</span>}
+                {(signal as SignalConfig & { isDynamic?: boolean }).isDynamic && (
+                  <ProductIcon className={styles.mlTag} name="compute" aria-label="ML detected" />
+                )}
               </div>
             ))}
             {signals.length > 5 && (

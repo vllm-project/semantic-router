@@ -1,342 +1,151 @@
 ---
 sidebar_position: 10
+title: Upgrade and rollback
+description: Migrate Router manifests, upgrade managed state, and retain a tested rollback path.
 ---
 
-# Upgrade and Rollback
+# Upgrade and rollback
 
-This runbook covers how to upgrade, pin, and roll back each release surface of
-the vLLM Semantic Router in a production environment.
+Router releases, Router configuration manifests, the Management HTTP API, and
+managed database schemas are separate versioned contracts. Upgrade each contract
+deliberately instead of inferring compatibility from an image tag.
 
----
+| Contract | Version signal | Compatibility rule |
+| --- | --- | --- |
+| Router release | image, chart, or Python package version | Pin the release and artifact digest used by each deployment. |
+| Router manifest | top-level `version` | The v0.4 runtime accepts only `v0.4`. |
+| Management HTTP API | path and media type | Clients select both explicitly; it evolves independently from the manifest. |
+| Managed persistence | schema migration revision | A migration job must complete before new Router replicas become ready. |
 
-## Release Channels
+## v0.3 to v0.4 manifest migration
 
-| Channel | Tag pattern | Updated on | Use case |
-|---------|-------------|------------|----------|
-| **Versioned** | `v0.3.0` / `0.3.0` | Tagged releases only | Production release identifier; verify and pin a digest where immutability is required |
-| **Nightly** | `nightly-YYYYMMDD` | Date-stamped builds | Pre-release testing |
-| **Latest** | `latest` | Affected image changes on `main` + releases | Development only |
-
-:::tip Recommendation
-Use a **versioned** release in production, then record the resolved artifact
-digest. A tag is a readable release identifier; only a verified digest is an
-immutable reference. Find published releases on the [GitHub Releases
-page](https://github.com/vllm-project/semantic-router/releases).
-:::
-
----
-
-## Prerequisites
-
-- `helm` ≥ 3.14 when using `--reset-then-reuse-values`
-- `kubectl` configured for your target cluster
-- `pip` ≥ 22 (for Python CLI)
-- `docker` or `podman` (for direct image operations)
-
----
-
-## 1. Checking Your Current Version
-
-### Helm release
+The v0.4 runtime has one schema and does not contain a v0.3 reader. Convert a
+v0.3 manifest offline before upgrading the Router:
 
 ```bash
-helm list -n vllm-semantic-router-system
-helm history semantic-router -n vllm-semantic-router-system
+vllm-sr config migrate \
+  --config ./router-v0.3.yaml \
+  --output ./router-v0.4.yaml
 ```
 
-The `CHART` column shows the chart version (e.g. `semantic-router-0.2.0`) and
-`APP VERSION` shows the image tag that chart deployed.
+The output path defaults to `<source-stem>.v0.4.yaml`. An existing output is
+never replaced unless `--force` is present, and the source file can never be the
+output. The converter:
 
-### Running container image
+1. accepts exactly `version: v0.3`;
+2. rejects duplicate YAML keys and unknown or lossy constructs;
+3. separates Model connection data from semantic Model cards;
+4. turns decision `modelRefs` into Entrypoint assignments;
+5. preserves supported global services and Recipe documents;
+6. validates the complete v0.4 schema and cross-resource references; and
+7. writes the result atomically with owner-only permissions.
 
-```bash
-# Get the image tag currently used by the extproc deployment
-kubectl get deployment -n vllm-semantic-router-system \
-  -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.template.spec.containers[0].image}{"\n"}{end}'
-```
+The converter reports every detected blocker together, using stable issue codes,
+source paths, and corrective guidance. It never produces a partially valid file.
 
-### Python CLI
+### Secret handling
 
-```bash
-vllm-sr --version
-pip show vllm-sr
-```
-
----
-
-## 2. Upgrading
-
-### 2a. Helm chart upgrade
-
-Always upgrade to a specific version. Never rely on `latest` in production.
-
-```bash
-# Pull the chart metadata first (optional but useful to verify it exists)
-helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.0
-
-# Upgrade to a specific version
-# --reset-then-reuse-values (Helm ≥ 3.14) resets to the new chart's defaults
-# first, then re-applies your previous overrides on top. Review the resulting
-# manifests because renamed or incompatible values still require migration.
-helm upgrade semantic-router \
-  oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.3.0 \
-  --namespace vllm-semantic-router-system \
-  --reset-then-reuse-values \
-  --wait \
-  --timeout 10m
-```
-
-:::caution Review values before every chart upgrade
-`--reuse-values` skips new chart defaults and can break when a release adds
-required values. `--reset-then-reuse-values` (Helm ≥ 3.14) starts from the new
-defaults, but it cannot migrate renamed, removed, or incompatible values. Read
-the release notes and render or diff the proposed manifests before applying
-them. If you are on Helm < 3.14, supply a reviewed values file explicitly with
-`-f your-values.yaml`.
-:::
-
-Verify after upgrade:
-
-```bash
-helm status semantic-router -n vllm-semantic-router-system
-kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
-```
-
-### 2b. Docker image upgrade (non-Helm deployments)
-
-Find the latest version on the [GitHub Releases page](https://github.com/vllm-project/semantic-router/releases), then:
-
-```bash
-# Pull by version tag (substitute podman for docker if using podman)
-docker pull ghcr.io/vllm-project/semantic-router/extproc:v0.3.0
-docker pull ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0
-
-# Read the multi-architecture index digest, not a platform-specific manifest.
-DIGEST=$(docker buildx imagetools inspect \
-  ghcr.io/vllm-project/semantic-router/extproc:v0.3.0 \
-  --format '{{.Manifest.Digest}}')
-echo "Use digest: ${DIGEST}"
-```
-
-For Kubernetes manifests, pin to the digest, not the tag:
+Only environment references may cross the migration boundary. For example:
 
 ```yaml
-image: ghcr.io/vllm-project/semantic-router/extproc@sha256:<digest>
+# v0.3 source
+api_key_env: OPENAI_API_KEY
 ```
 
-Published versioned images for a full release:
+becomes a named v0.4 credential reference backed by the same environment
+variable. Plaintext keys, tokens, passwords, secrets, and authorization headers
+cause migration to fail. Their values are never repeated in terminal output.
+Move each secret into the deployment secret store, replace the source value with
+an environment reference, and rerun the command.
 
-| Image | Typical owner |
-|-------|---------------|
-| `ghcr.io/vllm-project/semantic-router/extproc:v0.3.0` | Router ExtProc runtime |
-| `ghcr.io/vllm-project/semantic-router/extproc-rocm:v0.3.0` | ROCm router ExtProc runtime |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr:v0.3.0` | Local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/vllm-sr-rocm:v0.3.0` | ROCm local/runtime CLI image |
-| `ghcr.io/vllm-project/semantic-router/dashboard:v0.3.0` | Dashboard backend/frontend image |
-| `ghcr.io/vllm-project/semantic-router/operator:v0.3.0` | Kubernetes operator image |
-| `ghcr.io/vllm-project/semantic-router/operator-bundle:v0.3.0` | Operator bundle image |
+### Resource translation
 
-Image repositories do not necessarily publish identical release channels.
-Verify the exact tag or digest in GHCR before adding a platform-specific image
-to a production manifest.
+| v0.3 source | v0.4 result |
+| --- | --- |
+| `providers.models[]` | `models[]` connection, provider, runtime, and pricing fields |
+| `routing.modelCards[]` | matching `models[].card` semantic metadata |
+| top-level `routing` | a named default Recipe document |
+| `recipes[].routing` | a named Recipe document |
+| decision `modelRefs` | Entrypoint decision assignments |
+| `model_names` | Entrypoint name plus aliases |
+| environment-backed backend authentication | named `global.services.backend_credentials` reference |
 
-### 2c. Python CLI upgrade
+The migration stops when a value has no exact v0.4 meaning. Examples include
+plaintext credentials, backend transport overrides that are not represented by
+the v0.4 provider contract, embedded algorithm model selection, model-bound
+Recipes with no request-facing Entrypoint, conflicting global model selection,
+or orphan Model cards. Correct the named source path before retrying.
 
-```bash
-pip install --upgrade vllm-sr==0.3.0
-vllm-sr --version    # verify
+## Standalone upgrade
+
+1. Pin the current image digest and retain the v0.3 source manifest.
+2. Run `vllm-sr config migrate` without `--force`.
+3. Review the generated Models, Recipes, Entrypoints, assignments, pricing, and
+   environment credential names.
+4. Supply every referenced environment secret to the new deployment.
+5. Validate the generated file with the target v0.4 CLI.
+6. Start a replacement Router with the v0.4 manifest and run authenticated
+   discovery, non-streaming inference, streaming inference, tool-call, and quota
+   checks.
+7. Move traffic only after readiness and those checks succeed.
+
+Do not mount the v0.3 and v0.4 manifests into the same runtime and do not depend
+on a fallback parser. A standalone rollback restores the pinned previous Router
+release together with its retained v0.3 manifest.
+
+## Managed upgrade
+
+Managed deployments add durable control-plane state to the manifest procedure:
+
+1. Back up PostgreSQL and record the active routing and policy publication
+   revisions, image digests, and required keyring versions.
+2. Convert and review the immutable bootstrap manifest offline.
+3. Run the release's schema migration job with the target Router image.
+4. Confirm the migration revision before allowing new replicas to become ready.
+5. Roll out replicas gradually and verify policy projection, credential loading,
+   authenticated discovery, admission, settlement, usage ingestion, and audit.
+6. Move traffic only after every replica acknowledges the same valid publication.
+
+Valkey is a rebuildable serving projection, not the migration authority. Never
+hand-edit it as an upgrade step. A managed rollback is supported only when the
+previous Router release accepts the resulting database revision. Otherwise,
+restore the recorded PostgreSQL backup and matching keyring versions before
+starting the previous image.
+
+There is intentionally no v0.4-to-v0.3 down-converter.
+
+## Management API versioning
+
+Manifest versions and Management HTTP API versions evolve independently. A v0.4
+manifest does not imply a particular future Management API version.
+
+Clients must select the API path and media type explicitly:
+
+```http
+Accept: application/vnd.vllm-semantic-router.management.v1+json
+Content-Type: application/vnd.vllm-semantic-router.management.v1+json
 ```
 
-To upgrade to the latest stable release:
+Within `/management/v1`, compatibility changes are limited to additive response
+fields and optional request fields with documented defaults. Clients must ignore
+unknown response fields, but the server rejects unknown request fields. A change
+that removes or renames a field, changes its meaning or default, or alters a
+resource lifecycle uses `/management/v2`, a new media type, and a separately
+published OpenAPI document. Clients never negotiate by Router release number or
+silently fall back to another Management API version.
 
-```bash
-pip install --upgrade vllm-sr
-```
+## Acceptance and rollback record
 
-### 2d. Fleet simulator Python package upgrade
+Before completing any upgrade, record:
 
-`vllm-sr-sim` is a separate PyPI package with its own release cadence. Inspect
-the published versions, then pin one that matches your environment. Include
-`--pre` when selecting a development release:
+- release tags and resolved image digests;
+- source and target manifest checksums;
+- converter success summary and manual review owner;
+- database migration and backup revisions, when managed;
+- active routing and policy publication revisions;
+- smoke-test evidence for discovery, inference, streaming, tools, quota, usage,
+  and audit; and
+- the exact rollback image, manifest, database backup, and keyring set.
 
-```bash
-python -m pip index versions --pre vllm-sr-sim
-pip install --upgrade --pre vllm-sr-sim==<published-version>
-```
-
-Fleet Simulator has an independent version stream. Pin its package version
-separately from the Router release.
-
----
-
-## 3. Rollback
-
-### 3a. Helm rollback (fastest path)
-
-Helm stores the release values and manifests for each revision. A rollback
-creates a new rollout; nodes may still need to pull an older image, so wait for
-workload readiness before treating it as complete.
-
-```bash
-# View history
-helm history semantic-router -n vllm-semantic-router-system
-
-# Roll back to the previous revision
-helm rollback semantic-router -n vllm-semantic-router-system --wait
-
-# Roll back to a specific revision number (e.g. revision 3)
-helm rollback semantic-router 3 -n vllm-semantic-router-system --wait
-
-# Verify
-helm status semantic-router -n vllm-semantic-router-system
-kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
-```
-
-If Helm history is unavailable, install an older chart only with the values
-saved and tested for that release:
-
-```bash
-helm upgrade semantic-router \
-  oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.2.0 \
-  --namespace vllm-semantic-router-system \
-  -f values-0.2.0.yaml \
-  --wait
-```
-
-### 3b. Docker / Kubernetes manifest rollback
-
-If you are managing Kubernetes manifests directly (without Helm), roll back the
-Deployment to the previous revision using the built-in rollout history:
-
-```bash
-# View rollout history
-kubectl rollout history deployment/semantic-router -n vllm-semantic-router-system
-
-# Undo the last rollout
-kubectl rollout undo deployment/semantic-router -n vllm-semantic-router-system
-
-# Undo to a specific revision
-kubectl rollout undo deployment/semantic-router \
-  --to-revision=3 -n vllm-semantic-router-system
-
-# Verify
-kubectl rollout status deployment/semantic-router -n vllm-semantic-router-system
-```
-
-If using pinned image digests, update your manifest to the previous image digest
-and `kubectl apply`.
-
-### 3c. Python CLI rollback
-
-```bash
-pip install vllm-sr==0.2.0
-vllm-sr --version
-```
-
----
-
-## 4. Version Pinning Reference
-
-### Helm values file
-
-Create a `values-production.yaml` that explicitly pins image tags:
-
-```yaml
-image:
-  tag: "v0.3.0"   # readable release tag; use a digest when immutability is required
-  pullPolicy: IfNotPresent
-```
-
-Then deploy with:
-
-```bash
-helm upgrade semantic-router \
-  oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version 0.3.0 \
-  -f values-production.yaml \
-  --namespace vllm-semantic-router-system
-```
-
----
-
-## 5. Nightly Builds
-
-Nightly images use `nightly-YYYYMMDD`; nightly chart versions use
-`0.0.0-nightly.YYYYMMDD`. They are intended for pre-release testing only, and
-older dates may no longer be retained. Discover an available date before
-pinning it:
-
-```bash
-# Requires the oras CLI. Inspect both repositories because image and chart
-# retention can differ.
-oras repo tags ghcr.io/vllm-project/semantic-router/vllm-sr \
-  | grep -E '^nightly-[0-9]{8}$' | sort -V | tail
-oras repo tags ghcr.io/vllm-project/charts/semantic-router \
-  | grep -E '^0\.0\.0-nightly\.[0-9]{8}$' | sort -V | tail
-```
-
-Choose a date that exists in both lists, then verify the exact artifacts before
-deploying them:
-
-```bash
-export NIGHTLY_DATE=<available-YYYYMMDD>
-
-docker pull \
-  "ghcr.io/vllm-project/semantic-router/vllm-sr:nightly-${NIGHTLY_DATE}"
-
-helm show chart oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version "0.0.0-nightly.${NIGHTLY_DATE}"
-
-helm install semantic-router \
-  oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version "0.0.0-nightly.${NIGHTLY_DATE}" \
-  --namespace vllm-semantic-router-system --create-namespace
-```
-
-Nightly builds are not automatically promoted to a versioned release. Use them
-for pre-release validation, not as an unpinned production channel.
-
----
-
-## 6. Troubleshooting
-
-### Helm: `Error: chart not found`
-
-```bash
-# List available versions in the OCI registry (requires oras CLI)
-oras repo tags ghcr.io/vllm-project/charts/semantic-router
-
-# Verify a specific version exists before installing
-helm show chart oci://ghcr.io/vllm-project/charts/semantic-router --version 0.3.0
-```
-
-### Helm: release is in a broken state after failed upgrade
-
-```bash
-helm rollback semantic-router -n vllm-semantic-router-system --wait
-# If rollback also fails due to a bad state, force-reinstall:
-helm uninstall semantic-router -n vllm-semantic-router-system
-helm install semantic-router \
-  oci://ghcr.io/vllm-project/charts/semantic-router \
-  --version <last-known-good> \
-  -f your-values.yaml \
-  --namespace vllm-semantic-router-system --create-namespace
-```
-
-### Kubernetes: `ImagePullBackOff` after upgrade
-
-The image tag may not exist yet (release still publishing) or the pull secret
-is missing. Check:
-
-```bash
-kubectl describe pod -n vllm-semantic-router-system <pod-name>
-# Look for "ErrImagePull" and the exact tag that failed
-```
-
-If the tag genuinely does not exist, roll back while the release completes:
-
-```bash
-helm rollback semantic-router -n vllm-semantic-router-system
-```
+Keep the previous artifacts until the rollback window closes. Treat a successful
+process start as necessary but not sufficient evidence of a safe upgrade.

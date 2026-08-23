@@ -115,7 +115,6 @@ func (r *OpenAIRouter) finishExactCacheLookup(
 		cacheSimilarity,
 	)
 	r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
-	r.attachRouterReplayResponse(ctx, result.ResponseBody, true)
 	logging.ComponentDebugEvent("extproc", "exact_cache_hit", map[string]interface{}{
 		"request_id": ctx.RequestID,
 		"latency_ms": lookupTime,

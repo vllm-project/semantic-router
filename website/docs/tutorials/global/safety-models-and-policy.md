@@ -2,10 +2,10 @@
 
 ## Overview
 
-`global.model_catalog` declares shared model assets and the modules that
-use them. `global.services.authz` and `global.services.ratelimit` declare shared
-identity and rate policy. Route-specific thresholds and actions still belong in
-signals, decisions, and plugins.
+`global.model_catalog` declares shared model assets and the modules that use
+them. Managed identity, model grants, and quota policy live in the Router
+Management API and are projected into each authenticated request. Route-specific
+thresholds and actions still belong in signals, decisions, and plugins.
 
 ## What Problem Does It Solve?
 
@@ -17,13 +17,13 @@ route policy small and makes local versus remote processing visible.
 
 - Reuses one model runtime across many route-local safety rules.
 - Makes local and remote processing choices explicit.
-- Separates shared identity/rate services from decision policy.
+- Separates managed access policy from routing decisions.
 
 ## When to Use
 
 Override these settings when you need a different system model, execution
-backend, threshold baseline, identity source, or rate-limit provider. Keep the
-defaults when the bundled local models and policies meet your requirements.
+backend, or threshold baseline. Use managed access resources for identity,
+model visibility, and quota policy.
 
 ## Configuration
 
@@ -155,33 +155,20 @@ global:
 
 ### Identity and rate limiting
 
-```yaml
-global:
-  services:
-    authz:
-      fail_open: false
-      identity:
-        user_id_header: x-user-id
-        user_groups_header: x-user-groups
-      providers:
-        - type: header-injection
-          headers:
-            openai: x-user-openai-key
-    ratelimit:
-      fail_open: false
-      providers:
-        - type: local-limiter
-          rules:
-            - name: premium-per-minute
-              match:
-                group: premium
-              requests_per_unit: 120
-              unit: minute
-```
+Managed inference authenticates each Bearer credential through
+`global.services.access` and constructs an immutable `TenantContext`. Access
+policies, model grants, quota bindings, memory scope, cache scope, and routing
+claims all consume that same context. Caller-supplied identity headers are
+discarded before signal evaluation.
 
-Only trust identity headers set or sanitized by an authenticated upstream.
-`fail_open: true` trades availability for weaker enforcement and should be a
-deliberate policy choice.
+Rate-limit policies and bindings are managed resources rather than static YAML.
+Their counters live in the shared access runtime, so every Router replica
+enforces the same window and remaining balance.
+
+Token limits use provider-reported response usage, never a request-side token
+estimate. Admission checks usage already settled in the active window. The
+request that crosses a token limit is allowed to finish, its actual total is
+then recorded, and later requests are rejected until the window resets.
 
 ## Data and Security
 

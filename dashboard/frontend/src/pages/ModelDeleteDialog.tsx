@@ -54,18 +54,24 @@ export default function ModelDeleteDialog({
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <div className={styles.signal} aria-hidden="true">!</div>
+        <div className={styles.signal} aria-hidden="true">
+          !
+        </div>
         <div className={styles.copy}>
           <span className={styles.eyebrow}>Destructive configuration change</span>
-          <h2 id={titleId}>Delete {modelNames.length} {modelNames.length === 1 ? 'model' : 'models'}?</h2>
+          <h2 id={titleId}>
+            Delete {modelNames.length} {modelNames.length === 1 ? 'model' : 'models'}?
+          </h2>
           <p id={descriptionId}>
-            The selected models are not defaults and are not referenced by routing decisions.
-            This operation writes the configuration once and cannot be undone from the dashboard.
+            The selected models are not defaults and are not referenced by routing decisions. This
+            operation writes the configuration once and cannot be undone from the dashboard.
           </p>
         </div>
 
         <div className={styles.modelList}>
-          {modelNames.slice(0, 6).map((name) => <code key={name}>{name}</code>)}
+          {modelNames.slice(0, 6).map((name) => (
+            <code key={name}>{name}</code>
+          ))}
           {modelNames.length > 6 ? <span>+{modelNames.length - 6} more</span> : null}
         </div>
 

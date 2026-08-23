@@ -15,7 +15,6 @@ import type {
   DecisionConfig,
   DecisionFormState,
   DecisionPluginConfiguration,
-  NormalizedModel,
 } from './configPageSupport'
 import {
   cloneDecisionConditions,
@@ -26,47 +25,47 @@ import {
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { cloneConfigData } from './configPageCanonicalization'
 import ConfigPageDecisionPluginsEditor from './ConfigPageDecisionPluginsEditor'
+import ConfigPageDecisionConditionsView from './ConfigPageDecisionConditionsView'
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
 import { decisionColumns } from './configPageDecisionTable'
+import ConfigPageRoutingScopeState from './ConfigPageRoutingScopeState'
+import ProductIcon from '../components/ProductIcon'
 
 interface ConfigPageDecisionsSectionProps {
-  config: ConfigData | null
-  isPythonCLI: boolean
   isReadonly: boolean
   decisionsSearch: string
   onDecisionsSearchChange: (value: string) => void
-  saveConfig: (config: ConfigData) => Promise<void>
   openEditModal: OpenEditModal
   openViewModal: OpenViewModal
   removeDecisionByName: (cfg: ConfigData, targetName: string) => void
-  models: NormalizedModel[]
 }
 
 type DecisionRow = DecisionConfig
 
 export default function ConfigPageDecisionsSection({
-  config,
-  isPythonCLI,
   isReadonly,
   decisionsSearch,
   onDecisionsSearchChange,
-  saveConfig,
   openEditModal,
   openViewModal,
   removeDecisionByName,
-  models,
 }: ConfigPageDecisionsSectionProps) {
   const [decisionPendingDelete, setDecisionPendingDelete] = useState<DecisionConfig | null>(null)
   const [decisionDeletePending, setDecisionDeletePending] = useState(false)
   const [decisionDeleteError, setDecisionDeleteError] = useState<string | null>(null)
   const {
-    applyScopedConfig,
+    error: routingScopeError,
+    loading: routingScopeLoading,
+    reload: reloadRoutingScopes,
+    saveScopedConfig,
     routingScopes,
     scopedConfig,
     selectedScope,
     selectedScopeId,
     setSelectedScopeId,
-  } = useRoutingScopeManager(config)
+    selectedRecipe,
+  } = useRoutingScopeManager()
+  const scopeReadonly = isReadonly || Boolean(selectedRecipe?.immutable)
   useEffect(() => {
     setDecisionPendingDelete(null)
     setDecisionDeleteError(null)
@@ -78,51 +77,6 @@ export default function ConfigPageDecisionsSection({
       decision.name.toLowerCase().includes(decisionsSearch.toLowerCase()) ||
       decision.description?.toLowerCase().includes(decisionsSearch.toLowerCase()),
   )
-
-  const renderDecisionModelRefSummary = (
-    ref: DecisionConfig['modelRefs'][number],
-    index: number,
-  ) => {
-    const badges = [
-      ref.use_reasoning ? 'Reasoning enabled' : 'Standard inference',
-      ref.reasoning_effort ? `Effort: ${ref.reasoning_effort}` : null,
-      ref.lora_name ? `LoRA: ${ref.lora_name}` : null,
-      typeof ref.weight === 'number' ? `Weight: ${ref.weight}` : null,
-    ].filter((value): value is string => Boolean(value))
-
-    const details = [
-      ref.reasoning_description
-        ? { label: 'Reasoning description', value: ref.reasoning_description }
-        : null,
-    ].filter((value): value is { label: string; value: string } => Boolean(value))
-
-    return (
-      <div key={`${ref.model}-${index}`} className={decisionStyles.viewCard}>
-        <div className={decisionStyles.viewHeading}>
-          <span className={decisionStyles.viewTitle}>{ref.model}</span>
-          {badges.length > 0 ? (
-            <div className={decisionStyles.viewBadgeRow}>
-              {badges.map((badge) => (
-                <span key={badge} className={decisionStyles.viewBadge}>
-                  {badge}
-                </span>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        {details.length > 0 ? (
-          <div className={decisionStyles.viewMeta}>
-            {details.map((detail) => (
-              <div key={detail.label} className={decisionStyles.viewMetaRow}>
-                <span className={decisionStyles.viewMetaLabel}>{detail.label}</span>
-                <span className={decisionStyles.viewMetaValue}>{detail.value}</span>
-              </div>
-            ))}
-          </div>
-        ) : null}
-      </div>
-    )
-  }
 
   const handleViewDecision = (decision: DecisionRow) => {
     const sections: ViewSection[] = [
@@ -140,41 +94,8 @@ export default function ConfigPageDecisionsSection({
           { label: 'Operator', value: decision.rules?.operator || 'N/A' },
           {
             label: 'Conditions',
-            value: decision.rules?.conditions?.length ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {decision.rules.conditions.map((cond, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      padding: '0.5rem',
-                      background: 'rgba(143, 148, 156, 0.1)',
-                      borderRadius: '4px',
-                      fontFamily: 'var(--font-mono)',
-                      fontSize: '0.875rem',
-                    }}
-                  >
-                    {cond.type}: {cond.name}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              'No conditions'
-            ),
-            fullWidth: true,
-          },
-        ],
-      },
-      {
-        title: 'Models',
-        fields: [
-          {
-            label: 'Model References',
-            value: decision.modelRefs?.length ? (
-              <div className={decisionStyles.viewStack}>
-                {decision.modelRefs.map((ref, i) => renderDecisionModelRefSummary(ref, i))}
-              </div>
-            ) : (
-              'No models'
+            value: (
+              <ConfigPageDecisionConditionsView conditions={decision.rules?.conditions ?? []} />
             ),
             fullWidth: true,
           },
@@ -224,7 +145,20 @@ export default function ConfigPageDecisionsSection({
       })
     }
 
-    openViewModal(`Decision: ${decision.name}`, sections, () => handleEditDecision(decision))
+    openViewModal(
+      `Decision: ${decision.name}`,
+      sections,
+      () => handleEditDecision(decision),
+      scopeReadonly
+        ? []
+        : [
+            {
+              label: 'Delete decision',
+              tone: 'destructive',
+              onClick: () => handleDeleteDecision(decision),
+            },
+          ],
+    )
   }
 
   const openDecisionEditor = (mode: 'add' | 'edit', decision?: DecisionRow) => {
@@ -246,46 +180,46 @@ export default function ConfigPageDecisionsSection({
       'pii',
       'projection',
     ] as const
-    const projectionOutputs = (config?.projections?.mappings || []).flatMap((mapping) =>
+    const projectionOutputs = (scopedConfig?.projections?.mappings || []).flatMap((mapping) =>
       (mapping.outputs || []).map((output) => output.name),
     )
 
     const getConditionNameOptions = (type?: ConfigDecisionConditionType) => {
       switch (type) {
         case 'keyword':
-          return config?.signals?.keywords?.map((k) => k.name) || []
+          return scopedConfig?.signals?.keywords?.map((k) => k.name) || []
         case 'domain':
-          return config?.signals?.domains?.map((d) => d.name) || []
+          return scopedConfig?.signals?.domains?.map((d) => d.name) || []
         case 'preference':
-          return config?.signals?.preferences?.map((p) => p.name) || []
+          return scopedConfig?.signals?.preferences?.map((p) => p.name) || []
         case 'user_feedback':
-          return config?.signals?.user_feedbacks?.map((u) => u.name) || []
+          return scopedConfig?.signals?.user_feedbacks?.map((u) => u.name) || []
         case 'reask':
-          return config?.signals?.reasks?.map((r) => r.name) || []
+          return scopedConfig?.signals?.reasks?.map((r) => r.name) || []
         case 'embedding':
-          return config?.signals?.embeddings?.map((e) => e.name) || []
+          return scopedConfig?.signals?.embeddings?.map((e) => e.name) || []
         case 'fact_check':
-          return config?.signals?.fact_check?.map((f) => f.name) || []
+          return scopedConfig?.signals?.fact_check?.map((f) => f.name) || []
         case 'language':
-          return config?.signals?.language?.map((l) => l.name) || []
+          return scopedConfig?.signals?.language?.map((l) => l.name) || []
         case 'context':
-          return config?.signals?.context?.map((c) => c.name) || []
+          return scopedConfig?.signals?.context?.map((c) => c.name) || []
         case 'structure':
-          return config?.signals?.structure?.map((s) => s.name) || []
+          return scopedConfig?.signals?.structure?.map((s) => s.name) || []
         case 'complexity':
-          return (config?.signals?.complexity || []).flatMap((signal) => [
+          return (scopedConfig?.signals?.complexity || []).flatMap((signal) => [
             `${signal.name}:easy`,
             `${signal.name}:medium`,
             `${signal.name}:hard`,
           ])
         case 'modality':
-          return config?.signals?.modality?.map((m) => m.name) || []
+          return scopedConfig?.signals?.modality?.map((m) => m.name) || []
         case 'authz':
-          return config?.signals?.role_bindings?.map((binding) => binding.name) || []
+          return scopedConfig?.signals?.role_bindings?.map((binding) => binding.name) || []
         case 'jailbreak':
-          return config?.signals?.jailbreak?.map((rule) => rule.name) || []
+          return scopedConfig?.signals?.jailbreak?.map((rule) => rule.name) || []
         case 'pii':
-          return config?.signals?.pii?.map((rule) => rule.name) || []
+          return scopedConfig?.signals?.pii?.map((rule) => rule.name) || []
         case 'projection':
           return projectionOutputs
         default:
@@ -299,15 +233,6 @@ export default function ConfigPageDecisionsSection({
       priority: 1,
       operator: 'AND',
       conditions: [{ type: 'keyword', name: '' }],
-      modelRefs: [
-        {
-          model: '',
-          use_reasoning: false,
-          reasoning_description: '',
-          reasoning_effort: '',
-          lora_name: '',
-        },
-      ],
       plugins: [],
     }
 
@@ -319,14 +244,6 @@ export default function ConfigPageDecisionsSection({
             priority: decision.priority ?? 1,
             operator: decision.rules?.operator || 'AND',
             conditions: cloneDecisionConditions(decision.rules?.conditions),
-            modelRefs: (decision.modelRefs || []).map((ref) => ({
-              model: ref.model,
-              use_reasoning: !!ref.use_reasoning,
-              reasoning_description: ref.reasoning_description || '',
-              reasoning_effort: ref.reasoning_effort || '',
-              lora_name: ref.lora_name || '',
-              weight: typeof ref.weight === 'number' ? ref.weight : undefined,
-            })),
             plugins: (decision.plugins || []).map((plugin) => ({
               type: plugin.type,
               configuration: JSON.stringify(plugin.configuration || {}, null, 2),
@@ -413,179 +330,14 @@ export default function ConfigPageDecisionsSection({
                 onClick={() => removeItem(idx)}
                 className={decisionStyles.editorButtonSecondary}
               >
+                <ProductIcon name="trash" aria-hidden="true" />
                 Remove
               </button>
             </div>
           ))}
           <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
-            Add Condition
-          </button>
-        </div>
-      )
-    }
-
-    const renderModelRefsEditor = (
-      value: DecisionFormState['modelRefs'],
-      onChange: (value: DecisionFormState['modelRefs']) => void,
-    ) => {
-      const modelOptions = models.map((model) => model.name)
-      const rows = (Array.isArray(value) ? value : []).length
-        ? value
-        : [
-            {
-              model: '',
-              use_reasoning: false,
-              reasoning_description: '',
-              reasoning_effort: '',
-              lora_name: '',
-            },
-          ]
-
-      const updateItem = (
-        index: number,
-        key:
-          | 'model'
-          | 'use_reasoning'
-          | 'reasoning_description'
-          | 'reasoning_effort'
-          | 'lora_name'
-          | 'weight',
-        val: string | boolean | number | undefined,
-      ) => {
-        const next = rows.map((item, idx) => (idx === index ? { ...item, [key]: val } : item))
-        onChange(next)
-      }
-
-      const removeItem = (index: number) => {
-        const next = rows.filter((_, idx) => idx !== index)
-        onChange(
-          next.length
-            ? next
-            : [
-                {
-                  model: '',
-                  use_reasoning: false,
-                  reasoning_description: '',
-                  reasoning_effort: '',
-                  lora_name: '',
-                },
-              ],
-        )
-      }
-
-      const addItem = () =>
-        onChange([
-          ...rows,
-          {
-            model: '',
-            use_reasoning: false,
-            reasoning_description: '',
-            reasoning_effort: '',
-            lora_name: '',
-          },
-        ])
-
-      return (
-        <div className={decisionStyles.editorList}>
-          {rows.map((ref, idx) => (
-            <div key={idx} className={decisionStyles.editorCard}>
-              <div className={decisionStyles.editorGridTwo}>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>Model</span>
-                  <select
-                    value={ref?.model || ''}
-                    onChange={(e) => updateItem(idx, 'model', e.target.value)}
-                    className={decisionStyles.editorSelect}
-                  >
-                    <option value="">Select model</option>
-                    {ref?.model && !modelOptions.includes(ref.model) ? (
-                      <option value={ref.model}>{ref.model}</option>
-                    ) : null}
-                    {modelOptions.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>Reasoning effort</span>
-                  <select
-                    value={ref?.reasoning_effort || ''}
-                    onChange={(e) => updateItem(idx, 'reasoning_effort', e.target.value)}
-                    className={decisionStyles.editorSelect}
-                  >
-                    <option value="">Default effort</option>
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
-                </label>
-              </div>
-
-              <div className={decisionStyles.editorMetaRow}>
-                <label className={decisionStyles.editorCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={!!ref?.use_reasoning}
-                    onChange={(e) => updateItem(idx, 'use_reasoning', e.target.checked)}
-                  />
-                  Use reasoning
-                </label>
-                <button
-                  type="button"
-                  onClick={() => removeItem(idx)}
-                  className={decisionStyles.editorButtonDanger}
-                >
-                  Remove model reference
-                </button>
-              </div>
-
-              <div className={decisionStyles.editorGridTwo}>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>LoRA adapter</span>
-                  <input
-                    type="text"
-                    value={ref?.lora_name || ''}
-                    onChange={(e) => updateItem(idx, 'lora_name', e.target.value)}
-                    placeholder="Optional adapter name"
-                    className={decisionStyles.editorInput}
-                  />
-                </label>
-                <label className={decisionStyles.editorControlLabel}>
-                  <span className={decisionStyles.editorControlLabelText}>Weight</span>
-                  <input
-                    type="number"
-                    value={typeof ref?.weight === 'number' ? ref.weight : ''}
-                    onChange={(e) =>
-                      updateItem(
-                        idx,
-                        'weight',
-                        e.target.value === '' ? undefined : Number(e.target.value),
-                      )
-                    }
-                    placeholder="Optional weight"
-                    step="0.1"
-                    min="0"
-                    className={decisionStyles.editorInput}
-                  />
-                </label>
-              </div>
-
-              <label className={decisionStyles.editorControlLabel}>
-                <span className={decisionStyles.editorControlLabelText}>Reasoning description</span>
-                <input
-                  type="text"
-                  value={ref?.reasoning_description || ''}
-                  onChange={(e) => updateItem(idx, 'reasoning_description', e.target.value)}
-                  placeholder="Optional operator note or reasoning hint"
-                  className={decisionStyles.editorInput}
-                />
-              </label>
-            </div>
-          ))}
-          <button type="button" onClick={addItem} className={decisionStyles.editorButtonSecondary}>
-            Add Model Reference
+            <ProductIcon name="plus" aria-hidden="true" />
+            Add condition
           </button>
         </div>
       )
@@ -633,17 +385,6 @@ export default function ConfigPageDecisionsSection({
           ),
       },
       {
-        name: 'modelRefs',
-        label: 'Model References',
-        type: 'custom',
-        description: 'Set target models and whether to enable reasoning.',
-        customRender: (value, onChange) =>
-          renderModelRefsEditor(
-            Array.isArray(value) ? (value as DecisionFormState['modelRefs']) : [],
-            (nextValue) => onChange(nextValue),
-          ),
-      },
-      {
         name: 'plugins',
         label: 'Plugins',
         type: 'custom',
@@ -658,14 +399,6 @@ export default function ConfigPageDecisionsSection({
     ]
 
     const saveDecision = async (formData: DecisionFormState) => {
-      if (!config) {
-        throw new Error('Configuration not loaded yet.')
-      }
-
-      if (!isPythonCLI) {
-        throw new Error('Decisions are only supported for Python CLI configs.')
-      }
-
       const name = (formData.name || '').trim()
       if (!name) {
         throw new Error('Name is required.')
@@ -689,34 +422,6 @@ export default function ConfigPageDecisionsSection({
           ...(condition.predicate ? { predicate: condition.predicate } : {}),
           ...(condition.on_error ? { on_error: condition.on_error } : {}),
         }
-      })
-
-      const normalizedModelRefs = (formData.modelRefs || []).filter((m) => (m?.model || '').trim())
-      const modelRefs = normalizedModelRefs.map((modelRefValue, idx) => {
-        const model = (modelRefValue?.model || '').trim()
-        if (!model) {
-          throw new Error(`Model reference #${idx + 1} is missing a model name.`)
-        }
-        const modelRef: DecisionConfig['modelRefs'][number] = {
-          model,
-          use_reasoning: !!modelRefValue?.use_reasoning,
-        }
-        const reasoningDescription = (modelRefValue?.reasoning_description || '').trim()
-        if (reasoningDescription) {
-          modelRef.reasoning_description = reasoningDescription
-        }
-        const reasoningEffort = (modelRefValue?.reasoning_effort || '').trim()
-        if (reasoningEffort) {
-          modelRef.reasoning_effort = reasoningEffort
-        }
-        const loraName = (modelRefValue?.lora_name || '').trim()
-        if (loraName) {
-          modelRef.lora_name = loraName
-        }
-        if (typeof modelRefValue?.weight === 'number' && Number.isFinite(modelRefValue.weight)) {
-          modelRef.weight = modelRefValue.weight
-        }
-        return modelRef
       })
 
       const normalizedPlugins = (formData.plugins || []).filter((p) => {
@@ -758,7 +463,6 @@ export default function ConfigPageDecisionsSection({
           operator: formData.operator,
           conditions,
         }),
-        modelRefs,
         plugins,
       })
 
@@ -773,7 +477,7 @@ export default function ConfigPageDecisionsSection({
       }
 
       newConfig.decisions.push(newDecision)
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
     }
 
     openEditModal<DecisionFormState>(
@@ -796,8 +500,8 @@ export default function ConfigPageDecisionsSection({
 
   const confirmDeleteDecision = async () => {
     if (!decisionPendingDelete) return
-    if (!config || !isPythonCLI) {
-      setDecisionDeleteError('Deleting decisions is only supported for Python CLI configs.')
+    if (!scopedConfig) {
+      setDecisionDeleteError('Recipe configuration is not available.')
       return
     }
 
@@ -809,7 +513,7 @@ export default function ConfigPageDecisionsSection({
       }
       const newConfig: ConfigData = cloneConfigData(scopedConfig)
       removeDecisionByName(newConfig, decisionPendingDelete.name)
-      await saveConfig(applyScopedConfig(newConfig))
+      await saveScopedConfig(newConfig)
       setDecisionPendingDelete(null)
     } catch (error) {
       setDecisionDeleteError(error instanceof Error ? error.message : 'Failed to delete decision.')
@@ -818,10 +522,25 @@ export default function ConfigPageDecisionsSection({
     }
   }
 
+  if (routingScopeLoading || routingScopeError || !selectedRecipe) {
+    return (
+      <ConfigPageManagerLayout
+        title="Decisions"
+        description="Turn request signals into clear routing intent."
+      >
+        <ConfigPageRoutingScopeState
+          error={routingScopeError}
+          loading={routingScopeLoading}
+          onRetry={() => void reloadRoutingScopes()}
+        />
+      </ConfigPageManagerLayout>
+    )
+  }
+
   return (
     <ConfigPageManagerLayout
       title="Decisions"
-      description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
+      description="Turn request signals into clear routing intent."
       scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
@@ -839,7 +558,7 @@ export default function ConfigPageDecisionsSection({
             onSearchChange={onDecisionsSearchChange}
             onAdd={() => openDecisionEditor('add')}
             addButtonText="Add Decision"
-            disabled={isReadonly}
+            disabled={scopeReadonly}
             variant="embedded"
           />
           <DataTable
@@ -847,13 +566,12 @@ export default function ConfigPageDecisionsSection({
             data={filteredDecisions}
             keyExtractor={(row) => row.name}
             onView={handleViewDecision}
-            onEdit={handleEditDecision}
-            onDelete={handleDeleteDecision}
+            openOnRowClick
             emptyMessage={
               decisionsSearch ? 'No decisions match your search' : 'No routing decisions configured'
             }
             className={styles.managerTable}
-            readonly={isReadonly}
+            readonly={scopeReadonly}
           />
         </div>
       </div>

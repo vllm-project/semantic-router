@@ -20,12 +20,10 @@ func init() {
 }
 
 // testAnthropicMessagesProtocolHeaders asserts that the response of a clean
-// /v1/messages request carries the protocol-marker headers the router emits
-// for every translated request, and that no lossiness warnings are reported
-// when the request body uses only fields the router knows how to translate.
-// These headers are the operator-facing contract introduced by the warnings
-// PR; their presence is what makes a translation cell observable from the
-// outside without scraping internal logs.
+// /v1/messages request carries the protocol-marker headers the Router emits
+// for every codec path, and that no lossiness warnings are reported when the
+// request body uses only fields with lossless IR representations. These
+// headers make each codec-matrix cell observable without internal log access.
 func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Anthropic] Verifying protocol marker headers on /v1/messages response")
@@ -37,10 +35,8 @@ func testAnthropicMessagesProtocolHeaders(ctx context.Context, client *kubernete
 	}
 	defer stop()
 
-	// Use a deliberately plain request body: only fields the inbound parser
-	// translates without warnings (model, max_tokens, single text message,
-	// optional system string). Anything richer would risk warnings that
-	// later PRs in the series may add.
+	// Use a deliberately plain request body: only fields with lossless codec
+	// mappings (model, max_tokens, one text message, and a system string).
 	resp, err := sendAnthropicMessagesRequest(ctx, anthropicMessagesRequestBody{
 		Model:     "MoM",
 		MaxTokens: 32,

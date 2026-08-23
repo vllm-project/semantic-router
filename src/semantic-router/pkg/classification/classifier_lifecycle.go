@@ -34,8 +34,8 @@ func BuildClassifier(
 	return newClassifierWithOptions(cfg, options...)
 }
 
-// NewClassifier preserves the legacy convenience behavior for existing callers
-// by building the classifier and then explicitly initializing runtime state.
+// NewClassifier is the convenience form for focused callers that build and
+// initialize one already-scoped Recipe classifier in a single step.
 func NewClassifier(
 	cfg *config.RouterConfig,
 	categoryMapping *CategoryMapping,
@@ -66,8 +66,8 @@ func (c *Classifier) InitializeRuntime() error {
 }
 
 // InitializeDefaultAPIRuntime initializes only model dependencies owned by
-// default public APIs. It is used when auto/direct aliases are disabled, so the
-// default routing profile itself is unreachable but its APIs remain available.
+// model-less public APIs. The explicit default Recipe may own those APIs even
+// when no Entrypoint makes that Recipe request reachable.
 func (c *Classifier) InitializeDefaultAPIRuntime() error {
 	if c == nil {
 		return fmt.Errorf("classifier is nil")
@@ -150,7 +150,7 @@ func (c *Classifier) runtimeTasks() []modelruntime.Task {
 }
 
 func (c *Classifier) usesRoutingSignalType(signalType string) bool {
-	return c != nil && c.Config != nil && c.Config.UsesSignalTypeInReachableRouting(signalType)
+	return c != nil && c.Config != nil && c.Config.RoutingViewUsesSignalType(signalType)
 }
 
 func (c *Classifier) ownsDefaultAPIConsumer() bool {

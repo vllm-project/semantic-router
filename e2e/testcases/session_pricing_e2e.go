@@ -47,9 +47,7 @@ func testSessionPricingChatCompletions(
 
 	chat := fixtures.NewChatCompletionsClient(traffic, 60*time.Second)
 
-	headers := map[string]string{
-		"x-authz-user-id": "e2e-pricing-chat-user",
-	}
+	headers := map[string]string{}
 	resp, err := chat.Create(ctx, fixtures.ChatCompletionsRequest{
 		Model: "MoM",
 		Messages: []fixtures.ChatMessage{

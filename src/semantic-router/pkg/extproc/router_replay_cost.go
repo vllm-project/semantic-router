@@ -3,20 +3,22 @@ package extproc
 import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 
 func (r *OpenAIRouter) buildReplayUsageCost(ctx *RequestContext, usage responseUsageMetrics) routerreplay.UsageCost {
-	totalTokens := usage.promptTokens + usage.completionTokens
+	totalTokens := responseUsageTotal(usage)
 	if totalTokens == 0 {
 		return routerreplay.UsageCost{}
 	}
 
 	snapshot := routerreplay.UsageCost{
-		PromptTokens:       replayIntPtr(usage.promptTokens),
-		CachedPromptTokens: replayIntPtr(usage.cachedPromptTokens),
-		CacheWriteTokens:   replayIntPtr(usage.cacheWriteTokens),
-		CompletionTokens:   replayIntPtr(usage.completionTokens),
-		TotalTokens:        replayIntPtr(totalTokens),
+		TotalTokens: replayIntPtr(totalTokens),
+	}
+	if usage.promptTokens > 0 || usage.completionTokens > 0 {
+		snapshot.PromptTokens = replayIntPtr(usage.promptTokens)
+		snapshot.CachedPromptTokens = replayIntPtr(usage.cachedPromptTokens)
+		snapshot.CacheWriteTokens = replayIntPtr(usage.cacheWriteTokens)
+		snapshot.CompletionTokens = replayIntPtr(usage.completionTokens)
 	}
 
-	if r == nil || r.Config == nil || ctx == nil || ctx.RequestModel == "" {
+	if !responseUsageHasPricableBreakdown(usage) || r == nil || r.Config == nil || ctx == nil || ctx.RequestModel == "" {
 		return snapshot
 	}
 

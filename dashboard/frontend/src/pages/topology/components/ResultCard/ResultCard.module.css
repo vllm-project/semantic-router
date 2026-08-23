@@ -57,10 +57,18 @@
 }
 
 .title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary, #e8e8e8);
   flex: 1;
+}
+
+.title svg {
+  width: 14px;
+  height: 14px;
 }
 
 .latencyBadge {
@@ -78,7 +86,6 @@
   border: none;
   background: transparent;
   color: var(--text-secondary, #888);
-  font-size: 16px;
   cursor: pointer;
   border-radius: 4px;
   transition: all 0.2s;
@@ -86,6 +93,11 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+}
+
+.closeBtn svg {
+  width: 15px;
+  height: 15px;
 }
 
 .closeBtn:hover {
@@ -100,7 +112,14 @@
   background: rgba(255, 152, 0, 0.1);
   border-bottom: 1px solid rgba(255, 152, 0, 0.3);
   font-size: 11px;
-  color: #FF9800;
+  color: #ff9800;
+  gap: 5px;
+}
+
+.warningBanner svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 
 .content {
@@ -191,6 +210,11 @@
   font-weight: 500;
 }
 
+.signalTag svg {
+  width: 11px;
+  height: 11px;
+}
+
 .signalType {
   font-size: 10px;
   color: var(--text-secondary, #888);
@@ -220,12 +244,22 @@
 }
 
 .fallbackReason {
+  display: flex;
+  align-items: flex-start;
+  gap: 5px;
   padding: 8px 10px;
   background: rgba(255, 152, 0, 0.1);
   border-radius: 6px;
   font-size: 10px;
-  color: #FF9800;
+  color: #ff9800;
   border: 1px solid rgba(255, 152, 0, 0.2);
+}
+
+.fallbackReason svg {
+  width: 12px;
+  height: 12px;
+  flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 /* Responsive */

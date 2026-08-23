@@ -1,3 +1,9 @@
 algorithm:
   type: kmeans
-
+  ml:
+    models_path: /models/selection
+    embedding_dim: 1024
+    kmeans:
+      num_clusters: 8
+      efficiency_weight: 0.1
+      pretrained_path: /models/selection/kmeans_model.json

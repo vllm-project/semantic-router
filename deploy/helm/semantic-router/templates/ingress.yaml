@@ -1,3 +1,10 @@
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
+{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- if and .Values.ingress.enabled $managedMode -}}
+{{- fail "ingress cannot expose the managed Management listener; publish inference through an Envoy-compatible Gateway and keep the semantic-router-management Service private" -}}
+{{- end -}}
 {{- if .Values.ingress.enabled -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 import type { RouterModelOption } from '../utils/routerModelSelection'
+import ProductIcon from './ProductIcon'
 import styles from './ChatComposerModelSelect.module.css'
 
 interface ChatComposerModelSelectProps {
@@ -31,6 +32,9 @@ export default function ChatComposerModelSelect({
       model.description.toLowerCase().includes(normalized)
     )
   })
+  const mixtureModels = filteredModels.filter((model) => model.kind !== 'individual')
+  const individualModels = filteredModels.filter((model) => model.kind === 'individual')
+  const orderedModels = [...mixtureModels, ...individualModels]
 
   const closeMenu = (restoreFocus = false) => {
     setOpen(false)
@@ -38,8 +42,8 @@ export default function ChatComposerModelSelect({
   }
 
   const focusOption = (index: number) => {
-    if (filteredModels.length === 0) return
-    const normalizedIndex = (index + filteredModels.length) % filteredModels.length
+    if (orderedModels.length === 0) return
+    const normalizedIndex = (index + orderedModels.length) % orderedModels.length
     optionRefs.current[normalizedIndex]?.focus()
   }
 
@@ -55,7 +59,7 @@ export default function ChatComposerModelSelect({
       focusOption(0)
     } else if (event.key === 'End') {
       event.preventDefault()
-      focusOption(filteredModels.length - 1)
+      focusOption(orderedModels.length - 1)
     } else if (event.key === 'Escape') {
       event.preventDefault()
       closeMenu(true)
@@ -98,9 +102,11 @@ export default function ChatComposerModelSelect({
         title={value || 'Choose model'}
       >
         <span className={styles.triggerLabel}>{value || 'Choose model'}</span>
-        <svg className={styles.chevron} viewBox="0 0 16 16" aria-hidden="true">
-          <path d="m4 10 4-4 4 4" />
-        </svg>
+        <ProductIcon
+          className={styles.chevron}
+          name={open ? 'chevron-up' : 'chevron-down'}
+          aria-hidden="true"
+        />
       </button>
 
       {open ? (
@@ -125,38 +131,53 @@ export default function ChatComposerModelSelect({
                 focusOption(0)
               } else if (event.key === 'ArrowUp') {
                 event.preventDefault()
-                focusOption(filteredModels.length - 1)
+                focusOption(orderedModels.length - 1)
               }
             }}
             autoFocus
           />
           <div id={listboxId} role="listbox" aria-label="Select routing model">
-            {filteredModels.map((model, index) => {
+            {mixtureModels.length > 0 ? (
+              <div className={styles.groupDivider}>
+                <span>Mixture-of-Models</span>
+              </div>
+            ) : null}
+            {orderedModels.map((model, index) => {
               const active = model.id === value
+              const startsIndividualModels =
+                model.kind === 'individual' && index === mixtureModels.length
               return (
-                <button
-                  ref={(element) => {
-                    optionRefs.current[index] = element
-                  }}
-                  key={model.id}
-                  type="button"
-                  role="option"
-                  aria-selected={active}
-                  className={`${styles.option} ${active ? styles.optionActive : ''}`}
-                  onKeyDown={(event) => handleOptionKeyDown(event, index)}
-                  onClick={() => {
-                    onChange(model.id)
-                    closeMenu(true)
-                  }}
-                >
-                  <span className={styles.optionIdentity}>
-                    <span className={styles.optionModelId}>{model.id}</span>
-                    {model.recipe ? (
-                      <span className={styles.objectiveChip}>{model.recipe}</span>
+                <div key={model.id}>
+                  {startsIndividualModels ? (
+                    <div className={styles.groupDivider}>
+                      <span>Single Model</span>
+                    </div>
+                  ) : null}
+                  <button
+                    ref={(element) => {
+                      optionRefs.current[index] = element
+                    }}
+                    type="button"
+                    role="option"
+                    aria-selected={active}
+                    className={`${styles.option} ${active ? styles.optionActive : ''}`}
+                    onKeyDown={(event) => handleOptionKeyDown(event, index)}
+                    onClick={() => {
+                      onChange(model.id)
+                      closeMenu(true)
+                    }}
+                  >
+                    <span className={styles.optionIdentity}>
+                      <span className={styles.optionModelId}>{model.id}</span>
+                      {model.recipe ? (
+                        <span className={styles.objectiveChip}>{model.recipe}</span>
+                      ) : null}
+                    </span>
+                    {active ? (
+                      <ProductIcon className={styles.activeMark} name="check" aria-hidden="true" />
                     ) : null}
-                  </span>
-                  {active ? <span className={styles.activeMark}>✓</span> : null}
-                </button>
+                  </button>
+                </div>
               )
             })}
             {filteredModels.length === 0 ? (

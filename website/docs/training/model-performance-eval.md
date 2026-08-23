@@ -119,54 +119,35 @@ result.
 python result_to_config.py \
   --results-dir results/mmlu-smoke \
   --output-file config.eval.yaml \
-  --backend-endpoint 127.0.0.1:8000 \
-  --backend-protocol http \
-  --backend-type chat \
-  --api-format openai
+  --endpoint http://127.0.0.1:8000/v1 \
+  --provider openai-compatible
 ```
 
-The generator creates a v0.3 document with:
+The generator creates a human-readable v0.4 scaffold with:
 
-- the highest average evaluated model as `providers.defaults.default_model`
-- one provider binding and model card for each evaluated logical model
-- one domain signal per observed MMLU-Pro category
-- ranked `model_scores` for each category
-- an empty `routing.decisions` list
-- sparse defaults for response cache, tools, embeddings, prompt guard, and
-  classifiers
+- one logical Model and connection for each evaluated model
+- one domain signal and decision per observed MMLU-Pro category
+- each decision assigned to its best evaluated Model
+- a default decision assigned to the best model overall
+- sparse defaults for the classifier services used by the generated Recipe
 
-The generated document has this top-level shape. Lists and module bodies are
+The generated file has this top-level shape. Lists and nested bodies are
 abbreviated here; inspect `config.eval.yaml` for the evaluated models, scores,
-and category signals.
+category signals, decisions, and assignments.
 
 ```yaml
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: evaluated-model
-  models: []
-routing:
-  modelCards: []
-  signals:
-    domains: []
-  decisions: []
-global:
-  stores:
-    response_cache: {}
-  integrations:
-    tools: {}
-  model_catalog:
-    embeddings: {}
-    modules:
-      prompt_guard: {}
-      classifier: {}
+models: []
+recipes: []
+entrypoints: []
+global: {}
 ```
 
 Direct and CoT result directories for the same base model are collapsed into
-one logical model. For each category, the generator keeps the higher observed
-accuracy and sets `use_reasoning` from its built-in category mapping. Review
-that choice rather than treating it as a learned reasoning policy.
+one logical Model. For each category, the generator keeps the higher observed
+accuracy and assigns the best evaluated Model. Review those assignments before
+publishing them as routing policy.
 
 The generated backend address is applied to every model unless you override
 it. Replace it with the real endpoint topology, credentials, reliability
@@ -177,14 +158,12 @@ settings, and pricing for each provider.
 `config.eval.yaml` is intentionally incomplete:
 
 - `listeners` is empty.
-- `routing.decisions` is empty.
-- provider bindings use command-line defaults rather than deployment discovery.
+- Model connections use command-line defaults rather than deployment discovery.
 - evaluation categories may not match your user-facing decisions.
 - the sparse `global` section may not match your runtime or security policy.
 
-Merge the evaluation-derived model cards and scores into a complete
-configuration. Add decisions that explain when each category affects routing,
-then validate the result:
+Review the generated Models, category decisions, and assignments, add a
+listener, then validate the result:
 
 ```bash
 vllm-sr validate --config config.yaml

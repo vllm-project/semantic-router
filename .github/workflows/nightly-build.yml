@@ -77,7 +77,7 @@ jobs:
     uses: ./.github/workflows/docker-publish.yml
     with:
       mode: nightly
-      images: '["anthropic-shim","dashboard","extproc","extproc-rocm","llm-katan","operator","operator-bundle","vllm-sr","vllm-sr-cuda","vllm-sr-rocm","vllm-sr-sim"]'
+      images: '["dashboard","extproc","extproc-rocm","llm-katan","operator","operator-bundle","vllm-sr","vllm-sr-cuda","vllm-sr-rocm","vllm-sr-sim"]'
       publish_latest: false
     secrets: inherit
 

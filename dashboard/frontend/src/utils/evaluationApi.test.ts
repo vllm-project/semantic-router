@@ -14,15 +14,15 @@ describe('evaluation API read contracts', () => {
 
     await listTasks('failed', controller.signal)
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/evaluation/tasks?status=failed',
-      { signal: controller.signal },
-    )
+    expect(fetchMock).toHaveBeenCalledWith('/api/evaluation/tasks?status=failed', {
+      signal: controller.signal,
+    })
   })
 
   it('encodes result identifiers before issuing an on-demand report request', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ task: { id: 'task one' }, results: [] }), { status: 200 }),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ task: { id: 'task one' }, results: [] }), { status: 200 }),
     )
     vi.stubGlobal('fetch', fetchMock)
 

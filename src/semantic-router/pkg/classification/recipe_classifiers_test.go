@@ -68,14 +68,24 @@ func TestRecipeClassifierReadinessStaysFalseWhenModelsAreUninitialized(t *testin
 func TestBuildRecipeClassifiersKeepsUnreachableRecipeValidationButSkipsRuntimeLifecycle(t *testing.T) {
 	cfg := &config.RouterConfig{
 		Recipes: []config.RoutingRecipe{
-			{Name: config.DefaultRecipeName},
-			{Name: "unmapped"},
-			{Name: "mapped"},
+			{ID: "recipe-default", Revision: 1, Name: config.DefaultRecipeName},
+			{ID: "recipe-unmapped", Revision: 1, Name: "unmapped"},
+			{ID: "recipe-mapped", Revision: 1, Name: "mapped"},
 		},
 		Entrypoints: []config.EntrypointMapping{{
+			ID:         "entrypoint-mapped",
+			Revision:   1,
 			ModelNames: []string{"vllm-sr/mapped"},
-			Recipe:     "mapped",
+			Rules: []config.EntrypointRule{{
+				ID: "rule-default", Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: "recipe-mapped", RecipeRevision: 1,
+				},
+			}},
 		}},
+	}
+	if err := cfg.PrepareEntrypointRecipes(); err != nil {
+		t.Fatalf("PrepareEntrypointRecipes() error = %v", err)
 	}
 
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
@@ -97,15 +107,15 @@ func TestBuildRecipeClassifiersKeepsUnreachableRecipeValidationButSkipsRuntimeLi
 			t.Fatalf("runtime recipe order = %v, want %v", classifiers.runtimeOrder, wantRuntime)
 		}
 	}
-	if len(classifiers.routingOrder) != len(wantRuntime) {
-		t.Fatalf("routing recipe order = %v, want %v", classifiers.routingOrder, wantRuntime)
+	wantRouting := []config.RecipeName{"mapped"}
+	if len(classifiers.routingOrder) != len(wantRouting) || classifiers.routingOrder[0] != wantRouting[0] {
+		t.Fatalf("routing recipe order = %v, want %v", classifiers.routingOrder, wantRouting)
 	}
 }
 
-func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testing.T) {
+func TestBuildRecipeClassifiersKeepsExplicitDefaultForModelLessAPI(t *testing.T) {
 	cfg := &config.RouterConfig{
-		RouterOptions: config.RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
+		Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}},
 	}
 
 	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
@@ -118,5 +128,21 @@ func TestBuildRecipeClassifiersKeepsDefaultAPIWhenAutoRoutingIsDisabled(t *testi
 	}
 	if len(classifiers.routingOrder) != 0 {
 		t.Fatalf("disabled default routing remained reachable: %v", classifiers.routingOrder)
+	}
+}
+
+func TestBuildRecipeClassifiersDoesNotSynthesizeRootRoutingProfile(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			Decisions: []config.Decision{{Name: "flat-route"}},
+		},
+	}
+
+	classifiers, err := BuildRecipeClassifiers(cfg, nil, nil, nil)
+	if err != nil {
+		t.Fatalf("BuildRecipeClassifiers() error = %v", err)
+	}
+	if len(classifiers.order) != 0 || classifiers.Default() != nil {
+		t.Fatalf("root scoped fields produced a synthetic classifier: %+v", classifiers.order)
 	}
 }

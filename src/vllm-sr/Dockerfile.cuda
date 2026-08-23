@@ -278,7 +278,8 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
     CGO_CFLAGS="-I/build/../onnx-binding" \
     CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
-    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd
+    go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd && \
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-w -s" -o access-migrate ./cmd/access-migrate
 
 # Stage 3: Final router runtime image (CUDA 12.4 + ONNX Runtime GPU)
 # ============================================================================
@@ -351,6 +352,7 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
     ln -sf /opt/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/capi/libonnxruntime.so
 
 COPY --from=go-builder /build/router /usr/local/bin/router
+COPY --from=go-builder /build/access-migrate /usr/local/bin/access-migrate
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=onnx-builder /build/out/libonnx_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
@@ -362,6 +364,7 @@ COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 # resolve.
 ENV ORT_DYLIB_PATH=/opt/onnxruntime/capi/libonnxruntime.so \
     LD_LIBRARY_PATH=/usr/local/lib:/opt/onnxruntime/capi:/usr/local/cuda/lib64
+ENV VLLM_SR_CONFIG_BASE_DIR=/app
 
 # Force ONNX backend (vs candle) for this image. The router supports either
 # at runtime; ROCm/CUDA images make sense only with AI_BINDING=onnx.
@@ -371,6 +374,9 @@ WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
 
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
+COPY config/backend-egress-policy.yaml /app/config/backend-egress-policy.yaml
+COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/recipes/built-in/latest/mom-v1/config.yaml
+COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/recipes/built-in/latest/mom-v1/metadata.yaml
 COPY src/vllm-sr/cli/ /app/cli/
 COPY src/vllm-sr/start-router.sh /app/start-router.sh
 RUN chmod +x /app/start-router.sh

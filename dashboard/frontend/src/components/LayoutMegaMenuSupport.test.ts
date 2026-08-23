@@ -17,11 +17,11 @@ function categoryByKey(categories: LayoutMenuCategory[], key: string): LayoutMen
 
 describe('layout mega-menu geometry', () => {
   it('keeps sparse multi-section navigation compact', () => {
-    const outcomes = categoryByKey(ANALYZE_MENU_CATEGORIES, 'outcomes')
+    const fleetSimulation = categoryByKey(ANALYZE_MENU_CATEGORIES, 'fleet-simulation')
 
-    expect(getLayoutMegaMenuGeometry(outcomes)).toEqual({
+    expect(getLayoutMegaMenuGeometry(fleetSimulation)).toEqual({
       density: 'compact',
-      itemCount: 3,
+      itemCount: 4,
       sectionCount: 3,
     })
   })
@@ -30,8 +30,8 @@ describe('layout mega-menu geometry', () => {
     const routing = categoryByKey(BUILD_MENU_CATEGORIES, 'routing')
 
     expect(getLayoutMegaMenuGeometry(routing)).toEqual({
-      density: 'standard',
-      itemCount: 7,
+      density: 'dense',
+      itemCount: 8,
       sectionCount: 3,
     })
   })
@@ -46,6 +46,7 @@ describe('layout mega-menu geometry', () => {
         items: Array.from({ length: 2 }, (_, itemIndex) => ({
           kind: 'route' as const,
           label: `Item ${sectionIndex + 1}-${itemIndex + 1}`,
+          icon: 'dashboard' as const,
           to: `/item-${sectionIndex + 1}-${itemIndex + 1}`,
         })),
       })),

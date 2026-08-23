@@ -4,18 +4,14 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
 func TestMaintainedKnowledgeRecipeParsesAndDecompilesWithoutError(t *testing.T) {
 	assetPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "knowledge", "config.yaml")
-	cfg, err := config.Parse(assetPath)
-	if err != nil {
-		t.Fatalf("Parse error: %v", err)
-	}
+	cfg := parseMaintainedConfig(t, assetPath)
+	scoped := mustOnlyRecipeConfig(t, cfg)
 
-	dslText, err := DecompileRouting(cfg)
+	dslText, err := DecompileRouting(scoped)
 	if err != nil {
 		t.Fatalf("DecompileRouting error: %v", err)
 	}
@@ -41,7 +37,7 @@ func TestMaintainedKnowledgeRecipeParsesAndDecompilesWithoutError(t *testing.T) 
 		t.Fatal("expected mmlu recipe to resolve built-in mmlu_kb default")
 	}
 
-	if len(cfg.KBRules) == 0 {
+	if len(scoped.KBRules) == 0 {
 		t.Fatal("expected mmlu recipe to define kb signals")
 	}
 }
@@ -57,6 +53,7 @@ func TestMaintainedKnowledgeRecipeDSLRoundTrip(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("Compile errors: %v", errs)
 	}
+	cfg = mustOnlyRecipeConfig(t, cfg)
 
 	if len(cfg.KBRules) == 0 {
 		t.Error("expected at least one kb rule from mmlu recipe")

@@ -11,9 +11,7 @@ describe('clawRoomToolTrace', () => {
   it('parses tool trace payload steps', () => {
     const parsed = parseClawRoomToolTracePayload({
       revision: 2,
-      steps: [
-        { id: 'call_1', name: 'exec', arguments: '{"command":"pwd"}', status: 'running' },
-      ],
+      steps: [{ id: 'call_1', name: 'exec', arguments: '{"command":"pwd"}', status: 'running' }],
     })
 
     expect(parsed?.revision).toBe(2)

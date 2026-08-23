@@ -51,8 +51,6 @@ REQUIRED_MODEL_CARD_HEADINGS = (
 )
 RUNTIME_RECIPE_DIRECTORIES = frozenset({".vllm-sr"})
 RECIPE_CATALOG_DIRECTORIES = frozenset({"built-in"})
-DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto", "auto")
-DEFAULT_AUTO_MODEL_NAME = "MoM"
 
 
 @dataclass(frozen=True)
@@ -96,6 +94,7 @@ class ProbeReferenceContext:
     profiles: dict[str, dict[str, Any]]
     entrypoints: dict[str, str]
     decisions: dict[tuple[str, str], dict[str, Any]]
+    assigned_models: dict[tuple[str, str, str], frozenset[str]]
     covered_decisions: set[tuple[str, str]]
     covered_entrypoints: set[str]
 
@@ -184,56 +183,242 @@ def load_recipe_identity(path: Path, directory_name: str) -> RecipeIdentity:
 
 
 def recipe_profiles(config: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    profiles: dict[str, dict[str, Any]] = {"default": _mapping(config.get("routing"))}
-    for raw_recipe in _sequence(config.get("recipes")):
+    profiles: dict[str, dict[str, Any]] = {}
+    for recipe_index, raw_recipe in enumerate(_sequence(config.get("recipes"))):
         recipe = _mapping(raw_recipe)
+        _reject_fields(
+            recipe,
+            f"recipes[{recipe_index}]",
+            {"id", "revision"},
+        )
         name = str(recipe.get("name") or "").strip()
         if not name:
             continue
-        profiles[name] = _mapping(recipe.get("routing"))
+        if name in profiles:
+            raise ValueError(f"duplicate recipe name {name!r}")
+        document = _mapping(recipe.get("document"))
+        if not document:
+            raise ValueError(f"recipe {name!r} has no document")
+        for decision_index, raw_decision in enumerate(
+            _sequence(document.get("decisions"))
+        ):
+            _reject_fields(
+                _mapping(raw_decision),
+                f"recipes[{recipe_index}].document.decisions[{decision_index}]",
+                {"id", "revision", "decision_id"},
+            )
+        profiles[name] = document
     return profiles
 
 
 def config_auto_entrypoints(config: dict[str, Any]) -> tuple[str, ...]:
-    router = _mapping(_mapping(config.get("global")).get("router"))
-    if "auto_model_names" in router:
-        raw_names = _sequence(router.get("auto_model_names"))
-    else:
-        configured = str(
-            router.get("auto_model_name") or DEFAULT_AUTO_MODEL_NAME
-        ).strip()
-        raw_names = [*DEFAULT_AUTO_ENTRYPOINTS, configured]
     return tuple(
-        dict.fromkeys(
-            normalized
-            for raw_name in raw_names
-            if (normalized := str(raw_name).strip())
-        )
+        model_name
+        for model_name, recipe_name in config_named_entrypoints(config).items()
+        if recipe_name == "default"
     )
+
+
+def _entrypoint_names(entrypoint: dict[str, Any]) -> tuple[str, ...]:
+    _reject_fields(
+        entrypoint,
+        "entrypoint",
+        {"id", "revision", "model_names", "recipe_id"},
+    )
+    name = str(entrypoint.get("name") or "").strip()
+    if not name:
+        raise ValueError("every entrypoint must have a name")
+    aliases = [
+        normalized
+        for alias in _sequence(entrypoint.get("aliases"))
+        if (normalized := str(alias or "").strip())
+    ]
+    return tuple(dict.fromkeys((name, *aliases)))
+
+
+def _entrypoint_bindings(
+    entrypoint: dict[str, Any],
+) -> tuple[tuple[str, dict[str, Any]], ...]:
+    """Return the human Recipe name and Decision assignments for each rule."""
+
+    entrypoint_name = str(entrypoint.get("name") or "").strip()
+    rules = _sequence(entrypoint.get("rules"))
+    if rules:
+        if "recipe" in entrypoint or "assignments" in entrypoint:
+            raise ValueError(
+                f"entrypoint {entrypoint_name!r} cannot mix recipe/assignments "
+                "with rules"
+            )
+        bindings: list[tuple[str, dict[str, Any]]] = []
+        for index, raw_rule in enumerate(rules):
+            rule = _mapping(raw_rule)
+            _reject_fields(
+                rule,
+                f"entrypoint {entrypoint_name!r} rules[{index}]",
+                {"id", "revision", "action", "recipe_id"},
+            )
+            rule_name = str(rule.get("name") or "").strip()
+            recipe_name = str(rule.get("recipe") or "").strip()
+            assignments = rule.get("assignments")
+            if not rule_name:
+                raise ValueError(
+                    f"entrypoint {entrypoint_name!r} rule {index} has no name"
+                )
+            if not recipe_name:
+                raise ValueError(
+                    f"entrypoint {entrypoint_name!r} rule {rule_name!r} "
+                    "has no recipe"
+                )
+            if not isinstance(assignments, dict):
+                raise ValueError(
+                    f"entrypoint {entrypoint_name!r} rule {rule_name!r} "
+                    "assignments must be a mapping"
+                )
+            bindings.append((recipe_name, assignments))
+        return tuple(bindings)
+
+    recipe_name = str(entrypoint.get("recipe") or "").strip()
+    assignments = entrypoint.get("assignments")
+    if not recipe_name:
+        raise ValueError(f"entrypoint {entrypoint_name!r} has no recipe")
+    if not isinstance(assignments, dict):
+        raise ValueError(
+            f"entrypoint {entrypoint_name!r} assignments must be a mapping"
+        )
+    return ((recipe_name, assignments),)
 
 
 def config_named_entrypoints(config: dict[str, Any]) -> dict[str, str]:
     result: dict[str, str] = {}
+    recipes = recipe_profiles(config)
     for raw_entrypoint in _sequence(config.get("entrypoints")):
         entrypoint = _mapping(raw_entrypoint)
-        recipe = str(entrypoint.get("recipe") or "").strip()
-        for model_name in _sequence(entrypoint.get("model_names")):
-            normalized = str(model_name).strip()
-            if normalized:
-                result[normalized] = recipe
+        entrypoint_names = _entrypoint_names(entrypoint)
+        resolved_recipes = {
+            recipe_name for recipe_name, _ in _entrypoint_bindings(entrypoint)
+        }
+        for recipe_name in resolved_recipes:
+            if recipe_name not in recipes:
+                raise ValueError(
+                    f"entrypoint {entrypoint_names[0]!r} references unknown recipe "
+                    f"{recipe_name!r}"
+                )
+        if len(resolved_recipes) != 1:
+            raise ValueError(
+                f"entrypoint {entrypoint_names[0]!r} must resolve to exactly one "
+                "recipe for conformance"
+            )
+        recipe = next(iter(resolved_recipes))
+        for entrypoint_name in entrypoint_names:
+            if entrypoint_name in result:
+                raise ValueError(
+                    f"entrypoint name or alias {entrypoint_name!r} is duplicated"
+                )
+            result[entrypoint_name] = recipe
     return result
 
 
 def config_entrypoints(config: dict[str, Any]) -> dict[str, str]:
-    result = dict.fromkeys(config_auto_entrypoints(config), "default")
-    for model_name, recipe in config_named_entrypoints(config).items():
-        existing = result.get(model_name)
-        if existing is not None and existing != recipe:
-            raise ValueError(
-                f"entrypoint {model_name!r} resolves to both "
-                f"{existing!r} and {recipe!r}"
-            )
-        result[model_name] = recipe
+    return config_named_entrypoints(config)
+
+
+def config_assigned_models(
+    config: dict[str, Any],
+) -> dict[tuple[str, str, str], frozenset[str]]:
+    """Resolve v0.4 entrypoint assignments to public model names.
+
+    Recipe documents describe routing logic, while an Entrypoint owns the
+    concrete model assignment for every Decision.  Conformance therefore
+    validates an expected model against the selected Entrypoint instead of
+    looking for the removed, recipe-local ``modelRefs`` field.
+    """
+
+    profiles = recipe_profiles(config)
+    decision_names: dict[str, frozenset[str]] = {}
+    for recipe_name, document in profiles.items():
+        names: set[str] = set()
+        for raw_decision in _sequence(document.get("decisions")):
+            decision = _mapping(raw_decision)
+            decision_name = str(decision.get("name") or "").strip()
+            if not decision_name:
+                raise ValueError(
+                    f"recipe {recipe_name!r} has a decision without a name"
+                )
+            if decision_name in names:
+                raise ValueError(
+                    f"recipe {recipe_name!r} has duplicate decision name "
+                    f"{decision_name!r}"
+                )
+            names.add(decision_name)
+        decision_names[recipe_name] = frozenset(names)
+
+    model_names: dict[str, frozenset[str]] = {}
+    for model_index, raw_model in enumerate(_sequence(config.get("models"))):
+        model = _mapping(raw_model)
+        _reject_fields(
+            model,
+            f"models[{model_index}]",
+            {"id", "revision", "aliases"},
+        )
+        name = str(model.get("name") or "").strip()
+        card = _mapping(model.get("card"))
+        aliases = {
+            str(alias).strip()
+            for alias in _sequence(card.get("aliases"))
+            if str(alias).strip()
+        }
+        if not name:
+            raise ValueError("every model must have a name")
+        if name in model_names:
+            raise ValueError(f"duplicate model name {name!r}")
+        model_names[name] = frozenset({name, *aliases})
+
+    result: dict[tuple[str, str, str], frozenset[str]] = {}
+    for raw_entrypoint in _sequence(config.get("entrypoints")):
+        entrypoint = _mapping(raw_entrypoint)
+        entrypoint_names = _entrypoint_names(entrypoint)
+        for recipe_name, assignments in _entrypoint_bindings(entrypoint):
+            decisions = decision_names.get(recipe_name)
+            if decisions is None:
+                raise ValueError(
+                    f"entrypoint {entrypoint_names[0]!r} references unknown recipe "
+                    f"{recipe_name!r}"
+                )
+            for raw_decision_name, raw_assignment in assignments.items():
+                decision_name = str(raw_decision_name).strip()
+                if decision_name not in decisions:
+                    raise ValueError(
+                        f"entrypoint {entrypoint_names[0]!r} assignment references "
+                        f"unknown decision {decision_name!r} in recipe {recipe_name!r}"
+                    )
+                assigned: set[str] = set()
+                for model_index, raw_ref in enumerate(
+                    _sequence(_mapping(raw_assignment).get("models"))
+                ):
+                    model_ref = _mapping(raw_ref)
+                    _reject_fields(
+                        model_ref,
+                        f"entrypoint {entrypoint_names[0]!r} assignment "
+                        f"{decision_name!r}.models[{model_index}]",
+                        {"id", "revision", "model_id"},
+                    )
+                    model_name = str(model_ref.get("model") or "").strip()
+                    names = model_names.get(model_name)
+                    if names is None:
+                        raise ValueError(
+                            f"entrypoint {entrypoint_names[0]!r} assignment "
+                            f"references unknown model {model_name!r}"
+                        )
+                    assigned.update(names)
+                if not assigned:
+                    raise ValueError(
+                        f"entrypoint {entrypoint_names[0]!r} assignment for "
+                        f"decision {decision_name!r} has no models"
+                    )
+                for entrypoint_name in entrypoint_names:
+                    key = (entrypoint_name, recipe_name, decision_name)
+                    previous = result.get(key, frozenset())
+                    result[key] = frozenset((*previous, *assigned))
     return result
 
 
@@ -301,6 +486,7 @@ def validate_probe_references(
         profiles=profiles,
         entrypoints=config_entrypoints(config),
         decisions=profile_decisions(profiles),
+        assigned_models=config_assigned_models(config),
         covered_decisions=set(),
         covered_entrypoints=set(),
     )
@@ -332,7 +518,14 @@ def _validate_probe_reference(context: ProbeReferenceContext, probe: Probe) -> N
         )
     context.covered_decisions.add(key)
     _validate_probe_entrypoint(context, probe, recipe)
-    _validate_probe_decision_contract(context.path, probe, decision)
+    _validate_probe_decision_contract(
+        context.path,
+        probe,
+        decision,
+        context.assigned_models.get(
+            (probe.model or "", recipe, probe.expected_decision), frozenset()
+        ),
+    )
     _validate_probe_signals(
         context.path,
         probe,
@@ -362,16 +555,15 @@ def _validate_probe_entrypoint(
 
 
 def _validate_probe_decision_contract(
-    path: Path, probe: Probe, decision: dict[str, Any]
+    path: Path,
+    probe: Probe,
+    decision: dict[str, Any],
+    assigned_models: frozenset[str],
 ) -> None:
-    model_refs = {
-        str(_mapping(model_ref).get("model") or "").strip()
-        for model_ref in _sequence(decision.get("modelRefs"))
-    }
-    if probe.expected_alias and probe.expected_alias not in model_refs:
+    if probe.expected_alias and probe.expected_alias not in assigned_models:
         raise ValueError(
             f"{path}: probe {probe.probe_id} alias {probe.expected_alias!r} "
-            f"is outside decision modelRefs {sorted(model_refs)}"
+            f"is outside entrypoint assignment {sorted(assigned_models)}"
         )
     actual_algorithm = str(
         _mapping(decision.get("algorithm")).get("type") or "static"
@@ -604,7 +796,7 @@ def write_github_output(path: Path, name: str, value: str) -> None:
 
 def command_static(args: argparse.Namespace) -> int:
     inventory = discover_inventory(args.recipes_root)
-    if not args.skip_catalog_readme:
+    if not args.skip_root_readme:
         validate_catalog_readme(args.recipes_root, inventory)
     payload = coverage_payload(inventory)
     args.output_dir.mkdir(parents=True, exist_ok=True)
@@ -697,9 +889,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=DEFAULT_REPORT_ROOT,
     )
     parser.add_argument(
-        "--skip-catalog-readme",
+        "--skip-root-readme",
         action="store_true",
-        help="validate a versioned built-in root whose catalog.yaml owns discovery",
+        help="validate a versioned built-in distribution without a root README",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -727,6 +919,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _mapping(value: Any) -> dict[str, Any]:
     return value if isinstance(value, dict) else {}
+
+
+def _reject_fields(value: dict[str, Any], path: str, fields: set[str]) -> None:
+    rejected = sorted(value.keys() & fields)
+    if rejected:
+        raise ValueError(
+            f"{path} uses unsupported generated fields: {', '.join(rejected)}"
+        )
 
 
 def _sequence(value: Any) -> list[Any]:

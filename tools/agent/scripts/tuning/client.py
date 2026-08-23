@@ -1,22 +1,14 @@
-"""RouterClient — stateless HTTP client for the semantic router's APIs.
-
-Consolidates all router interaction patterns (eval, config hash, hot reload,
-batch probe execution) into a single reusable class.
-"""
+"""Read-only client for evaluating an immutable semantic-router runtime."""
 
 from __future__ import annotations
 
-import contextlib
 import json
-import os
-import signal
-import time
 from collections.abc import Callable
 from urllib import request
 
 
 class RouterClient:
-    """Stateless client for the semantic router's eval and config APIs."""
+    """Stateless client for the router's evaluation API."""
 
     def __init__(self, endpoint: str = "http://localhost:8080"):
         self.endpoint = endpoint.rstrip("/")
@@ -35,36 +27,6 @@ class RouterClient:
         )
         with request.urlopen(req, timeout=30) as resp:
             return json.loads(resp.read())
-
-    def get_config_hash(self) -> str:
-        """Fetch the router's current config hash."""
-        url = f"{self.endpoint}/config/hash"
-        try:
-            req = request.Request(url, method="GET")
-            with request.urlopen(req, timeout=10) as resp:
-                data = json.loads(resp.read())
-                return data.get("hash", "unknown")
-        except Exception:
-            return "unknown"
-
-    def hot_reload(self, pid: int, timeout: int = 30) -> bool:
-        """Signal the router to reload its config and wait for confirmation.
-
-        Returns True if the config hash changed within the timeout.
-        """
-        old_hash = self.get_config_hash()
-
-        if pid:
-            with contextlib.suppress(ProcessLookupError, PermissionError):
-                os.kill(pid, signal.SIGHUP)
-
-        deadline = time.time() + timeout
-        while time.time() < deadline:
-            time.sleep(1)
-            new_hash = self.get_config_hash()
-            if new_hash not in (old_hash, "unknown"):
-                return True
-        return False
 
     def run_probes(
         self,

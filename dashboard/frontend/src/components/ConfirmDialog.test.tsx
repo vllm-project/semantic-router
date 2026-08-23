@@ -22,6 +22,7 @@ describe('ConfirmDialog', () => {
     expect(markup).toContain('aria-modal="true"')
     expect(markup).toContain('Delete route?')
     expect(markup).toContain('Type <strong>DELETE</strong>')
+    expect(markup).toContain('<svg')
   })
 
   it('does not render while closed', () => {

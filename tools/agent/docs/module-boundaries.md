@@ -12,7 +12,7 @@ This document describes the repository's major subsystem seams and the boundarie
   - own native model and classifier bindings consumed by router-side runtime paths
 - `dashboard/`
   - owns frontend and backend UI surfaces, topology visualization, and playground/reveal presentation
-- `deploy/operator/` and `src/semantic-router/pkg/apis/`
+- `deploy/operator/api/`, `deploy/operator/controllers/`, and `deploy/operator/config/crd/`
   - own Kubernetes operator contracts, CRD types, and cluster-facing deployment schema
 - `src/training/`
   - owns post-training, classifier fine-tuning, and training/evaluation workflows for router models

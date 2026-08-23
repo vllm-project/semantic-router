@@ -1,473 +1,219 @@
-import React, { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from 'react'
 
-import ExpressionBuilder from "@/components/ExpressionBuilder";
-import type { DSLFieldObject } from "@/types/dsl";
+import ExpressionBuilder from '@/components/ExpressionBuilder'
+import ProductIcon from '@/components/ProductIcon'
 import {
   ALGORITHM_DESCRIPTIONS,
   ALGORITHM_TYPES,
-} from "@/lib/dslMutations";
-import type {
-  RouteAlgoInput,
-  RouteInput,
-  RouteModelInput,
-  RoutePluginInput,
-} from "@/lib/dslMutations";
+  type RouteAlgoInput,
+  type RouteInput,
+  type RoutePluginInput,
+} from '@/lib/dslMutations'
+import type { DSLFieldObject } from '@/types/dsl'
 
-import styles from "./BuilderPage.module.css";
-import { CustomSelect, RouteIcon } from "./builderPageFormPrimitives";
-import { AlgorithmSchemaEditor, PluginSchemaEditor } from "./builderPageEntityForms";
-import {
-  RouteDslPreviewPanel,
-  generateRouteDslPreview,
-  validateRouteInput,
-} from "./builderPageRoutePreview";
-import { ModelNameInput, ManualPluginAdder } from "./builderPageRouteSharedControls";
-import type { AvailablePlugin, AvailableSignal } from "./builderPageTypes";
+import styles from './BuilderPage.module.css'
+import { AlgorithmSchemaEditor, PluginSchemaEditor } from './builderPageEntityForms'
+import { CustomSelect, RouteIcon } from './builderPageFormPrimitives'
+import { ManualPluginAdder } from './builderPageRouteSharedControls'
+import type { AvailablePlugin, AvailableSignal } from './builderPageTypes'
 
-// ===================================================================
-// Add Route Form
-// ===================================================================
+interface Props {
+  onAdd: (name: string, input: RouteInput) => void
+  onCancel: () => void
+  availableSignals: AvailableSignal[]
+  availablePlugins: AvailablePlugin[]
+}
 
-const AddRouteForm: React.FC<{
-  onAdd: (name: string, input: RouteInput) => void;
-  onCancel: () => void;
-  availableSignals: AvailableSignal[];
-  availablePlugins: AvailablePlugin[];
-  availableModels: string[];
-}> = ({
-  onAdd,
-  onCancel,
-  availableSignals,
-  availablePlugins,
-  availableModels,
-}) => {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [priority, setPriority] = useState(100);
-  const [whenExpr, setWhenExpr] = useState("");
-  const [models, setModels] = useState<RouteModelInput[]>([{ model: "" }]);
-  const [algorithm, setAlgorithm] = useState<RouteAlgoInput | undefined>(
-    undefined,
-  );
-  const [plugins, setPlugins] = useState<RoutePluginInput[]>([]);
+export function AddRouteForm({ onAdd, onCancel, availableSignals, availablePlugins }: Props) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [priority, setPriority] = useState(100)
+  const [whenExpr, setWhenExpr] = useState('')
+  const [algorithm, setAlgorithm] = useState<RouteAlgoInput | undefined>()
+  const [plugins, setPlugins] = useState<RoutePluginInput[]>([])
+  const activePlugins = useMemo(() => new Set(plugins.map((plugin) => plugin.name)), [plugins])
 
-  const handleSubmit = useCallback(() => {
-    const n = name.trim().replace(/\s+/g, "_");
-    if (!n) return;
-    onAdd(n, {
+  const togglePlugin = useCallback((pluginName: string) => {
+    setPlugins((current) =>
+      current.some((plugin) => plugin.name === pluginName)
+        ? current.filter((plugin) => plugin.name !== pluginName)
+        : [...current, { name: pluginName }],
+    )
+  }, [])
+
+  const create = () => {
+    const normalizedName = name.trim().replace(/\s+/g, '_')
+    if (!normalizedName) return
+    onAdd(normalizedName, {
       description: description.trim() || undefined,
       priority,
       when: whenExpr.trim() || undefined,
-      models: models.filter((m) => m.model.trim()),
+      models: [],
       algorithm: algorithm?.algoType ? algorithm : undefined,
       plugins,
-    });
-  }, [
-    name,
-    description,
-    priority,
-    whenExpr,
-    models,
-    algorithm,
-    plugins,
-    onAdd,
-  ]);
-
-  const addModel = useCallback(() => {
-    setModels((prev) => [...prev, { model: "" }]);
-  }, []);
-
-  const removeModel = useCallback((idx: number) => {
-    setModels((prev) => prev.filter((_, i) => i !== idx));
-  }, []);
-
-  const updateModel = useCallback(
-    (idx: number, patch: Partial<RouteModelInput>) => {
-      setModels((prev) =>
-        prev.map((m, i) => (i === idx ? { ...m, ...patch } : m)),
-      );
-    },
-    [],
-  );
-
-  // Expression builder: tree-based, managed by ExpressionBuilder component
-
-  // Generate DSL preview & validation for AddRouteForm
-  const routeName = useMemo(
-    () => name.trim().replace(/\s+/g, "_") || "new_route",
-    [name],
-  );
-  const dslPreview = useMemo(
-    () =>
-      generateRouteDslPreview(
-        routeName,
-        description,
-        priority,
-        whenExpr,
-        models,
-        algorithm,
-        plugins,
-      ),
-    [routeName, description, priority, whenExpr, models, algorithm, plugins],
-  );
-  const validationIssues = useMemo(
-    () => validateRouteInput(name.trim(), models, algorithm, plugins),
-    [name, models, algorithm, plugins],
-  );
-
-  const activePluginNames = useMemo(
-    () => new Set(plugins.map((p) => p.name)),
-    [plugins],
-  );
-
-  const togglePlugin = useCallback((pluginName: string) => {
-    setPlugins((prev) => {
-      const exists = prev.find((p) => p.name === pluginName);
-      if (exists) return prev.filter((p) => p.name !== pluginName);
-      return [...prev, { name: pluginName }];
-    });
-  }, []);
-
-  const updatePluginFields = useCallback(
-    (pluginName: string, fields: DSLFieldObject) => {
-      setPlugins((prev) =>
-        prev.map((p) => (p.name === pluginName ? { ...p, fields } : p)),
-      );
-    },
-    [],
-  );
+    })
+  }
 
   return (
     <div className={styles.editorPanel}>
       <div className={styles.editorHeader}>
         <div className={styles.editorTitle}>
-          <RouteIcon className={styles.statIcon} />
-          New Route
+          <RouteIcon className={styles.statIcon} /> New Decision
         </div>
         <div className={styles.editorActions}>
-          <button className={styles.toolbarBtn} onClick={onCancel}>
+          <button type="button" className={styles.toolbarBtn} onClick={onCancel}>
             Cancel
           </button>
           <button
+            type="button"
             className={styles.toolbarBtnPrimary}
-            onClick={handleSubmit}
+            onClick={create}
             disabled={!name.trim()}
           >
-            Create
+            <ProductIcon name="plus" /> Create
           </button>
         </div>
       </div>
 
-      {/* Basic fields */}
-      <div className={styles.dslPreview}>
+      <section className={styles.dslPreview}>
         <div className={styles.dslPreviewHeader}>
-          <span className={styles.dslPreviewTitle}>Route Configuration</span>
+          <span className={styles.dslPreviewTitle}>Decision</span>
         </div>
-        <div
-          style={{
-            padding: "var(--spacing-md)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--spacing-md)",
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr auto",
-              gap: "var(--spacing-md)",
-            }}
-          >
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>
-                Name <span style={{ color: "var(--color-danger)" }}>*</span>
-              </label>
-              <input
-                className={styles.fieldInput}
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="my_route"
-                autoFocus
-              />
-            </div>
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>
-                Priority <span style={{ color: "var(--color-danger)" }}>*</span>
-              </label>
-              <input
-                className={styles.fieldInput}
-                type="number"
-                value={priority}
-                onChange={(e) => setPriority(Number(e.target.value) || 0)}
-                style={{ width: "100px" }}
-              />
-            </div>
-          </div>
-          <div className={styles.fieldGroup}>
-            <label className={styles.fieldLabel}>Description</label>
+        <div className={styles.builderRecipeFormGrid}>
+          <label className={styles.fieldGroup}>
+            Name
+            <input
+              className={styles.fieldInput}
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="complex"
+              autoFocus
+            />
+          </label>
+          <label className={styles.fieldGroup}>
+            Priority
+            <input
+              className={styles.fieldInput}
+              type="number"
+              value={priority}
+              onChange={(event) => setPriority(Number(event.target.value) || 0)}
+            />
+          </label>
+          <label className={styles.fieldGroup}>
+            Description
             <input
               className={styles.fieldInput}
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Route description..."
+              onChange={(event) => setDescription(event.target.value)}
+              placeholder="When should this path be selected?"
             />
-          </div>
+          </label>
         </div>
-      </div>
+      </section>
 
-      {/* WHEN Expression Builder */}
-      <div className={styles.dslPreview}>
+      <section className={styles.dslPreview}>
         <div className={styles.dslPreviewHeader}>
-          <span className={styles.dslPreviewTitle}>
-            WHEN (Expression Builder)
-          </span>
+          <span className={styles.dslPreviewTitle}>Condition</span>
         </div>
-        <div
-          style={{
-            padding: "var(--spacing-md)",
-            minHeight: "350px",
-            maxHeight: "50vh",
-            display: "flex",
-            flexDirection: "column",
-          }}
-        >
+        <div className={styles.builderExpression}>
           <ExpressionBuilder
             value={whenExpr}
             onChange={setWhenExpr}
             availableSignals={availableSignals}
           />
         </div>
-      </div>
+      </section>
 
-      {/* Models */}
-      <div className={styles.dslPreview}>
-        <div className={styles.dslPreviewHeader}>
-          <span className={styles.dslPreviewTitle}>
-            Models ({models.length})
-          </span>
-          <button
-            className={styles.toolbarBtn}
-            onClick={addModel}
-            style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
-          >
-            + Add
-          </button>
-        </div>
-        <div
-          style={{
-            padding: "var(--spacing-md)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--spacing-sm)",
-          }}
-        >
-          {models.map((m, idx) => (
-            <div key={idx} className={styles.modelCard}>
-              <div className={styles.modelCardHeader}>
-                <span className={styles.modelIndex}>{idx + 1}</span>
-                <ModelNameInput
-                  value={m.model}
-                  availableModels={availableModels}
-                  onChange={(v) => updateModel(idx, { model: v })}
-                />
-                {models.length > 1 && (
-                  <button
-                    className={styles.toolbarBtnDanger}
-                    onClick={() => removeModel(idx)}
-                    style={{
-                      padding: "0.25rem 0.5rem",
-                      fontSize: "var(--text-xs)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    ×
-                  </button>
-                )}
-              </div>
-              <div className={styles.modelAttrs}>
-                <label className={styles.modelAttrCheck}>
-                  <input
-                    type="checkbox"
-                    checked={m.reasoning ?? false}
-                    onChange={(e) =>
-                      updateModel(idx, {
-                        reasoning: e.target.checked || undefined,
-                      })
-                    }
-                    style={{ accentColor: "var(--color-primary)" }}
-                  />
-                  reasoning
-                </label>
-                <div className={styles.modelAttrField}>
-                  <span className={styles.modelAttrLabel}>effort:</span>
-                  <div style={{ minWidth: "90px" }}>
-                    <CustomSelect
-                      value={m.effort ?? ""}
-                      options={["", "low", "medium", "high"]}
-                      onChange={(v) =>
-                        updateModel(idx, { effort: v || undefined })
-                      }
-                      placeholder="—"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Algorithm */}
-      <div className={styles.dslPreview}>
+      <section className={styles.dslPreview}>
         <div className={styles.dslPreviewHeader}>
           <span className={styles.dslPreviewTitle}>Algorithm</span>
-          {!algorithm && (
+          {algorithm ? (
             <button
-              className={styles.toolbarBtn}
-              onClick={() =>
-                setAlgorithm({ algoType: "confidence", fields: {} })
-              }
-              style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
-            >
-              + Add
-            </button>
-          )}
-          {algorithm && (
-            <button
+              type="button"
               className={styles.toolbarBtnDanger}
               onClick={() => setAlgorithm(undefined)}
-              style={{ padding: "0.25rem 0.5rem", fontSize: "var(--text-xs)" }}
             >
               Remove
             </button>
+          ) : (
+            <button
+              type="button"
+              className={styles.toolbarBtn}
+              onClick={() => setAlgorithm({ algoType: 'static', fields: {} })}
+            >
+              <ProductIcon name="plus" /> Add
+            </button>
           )}
         </div>
-        {algorithm && (
-          <div
-            style={{
-              padding: "var(--spacing-md)",
-              display: "flex",
-              flexDirection: "column",
-              gap: "var(--spacing-md)",
-            }}
-          >
-            <div className={styles.fieldGroup}>
-              <label className={styles.fieldLabel}>Algorithm Type</label>
-              <CustomSelect
-                value={algorithm.algoType}
-                options={[...ALGORITHM_TYPES]}
-                onChange={(v) => setAlgorithm({ algoType: v, fields: {} })}
-              />
-              {ALGORITHM_DESCRIPTIONS[algorithm.algoType] && (
-                <span
-                  style={{
-                    fontSize: "0.625rem",
-                    color: "var(--color-text-muted)",
-                    marginTop: "0.25rem",
-                  }}
-                >
-                  {ALGORITHM_DESCRIPTIONS[algorithm.algoType]}
-                </span>
-              )}
-            </div>
+        {algorithm ? (
+          <div className={styles.builderRecipeSectionBody}>
+            <CustomSelect
+              value={algorithm.algoType}
+              options={[...ALGORITHM_TYPES]}
+              onChange={(algoType) => setAlgorithm({ algoType, fields: {} })}
+            />
+            <p className={styles.modalHint}>{ALGORITHM_DESCRIPTIONS[algorithm.algoType]}</p>
             <AlgorithmSchemaEditor
+              modelFree
               algoType={algorithm.algoType}
               fields={algorithm.fields}
-              onUpdate={(f) => setAlgorithm({ ...algorithm, fields: f })}
+              onUpdate={(fields) => setAlgorithm({ ...algorithm, fields })}
             />
           </div>
-        )}
-      </div>
+        ) : null}
+      </section>
 
-      {/* Plugins Toggle Panel */}
-      <div className={styles.dslPreview}>
+      <section className={styles.dslPreview}>
         <div className={styles.dslPreviewHeader}>
-          <span className={styles.dslPreviewTitle}>
-            Plugins ({plugins.length})
-          </span>
+          <span className={styles.dslPreviewTitle}>Plugins</span>
         </div>
-        <div
-          style={{
-            padding: "var(--spacing-md)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--spacing-sm)",
-          }}
-        >
-          {availablePlugins.length > 0 ? (
-            <div className={styles.pluginToggleGrid}>
-              {availablePlugins.map((p) => {
-                const active = activePluginNames.has(p.name);
-                return (
-                  <button
-                    key={p.name}
-                    className={
-                      active ? styles.pluginToggleActive : styles.pluginToggle
-                    }
-                    onClick={() => togglePlugin(p.name)}
-                  >
-                    <span className={styles.pluginToggleCheck}>
-                      {active ? "✓" : "○"}
-                    </span>
-                    <span className={styles.pluginToggleName}>{p.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ) : (
-            <span
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-text-muted)",
-              }}
-            >
-              No plugins defined yet.
-            </span>
-          )}
-
-          {/* Active plugin configuration editors */}
-          {plugins.length > 0 && (
-            <div
-              style={{
-                marginTop: "var(--spacing-sm)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "var(--spacing-sm)",
-              }}
-            >
-              <span className={styles.fieldLabel} style={{ display: "block" }}>
-                Plugin Configuration
-              </span>
-              {plugins.map((p) => {
-                const tmpl = availablePlugins.find((ap) => ap.name === p.name);
-                const pType = tmpl?.pluginType ?? p.name;
-                return (
-                  <div key={p.name} className={styles.pluginOverride}>
-                    <PluginSchemaEditor
-                      pluginType={pType}
-                      pluginName={p.name}
-                      fields={p.fields ?? {}}
-                      onUpdate={(f) => updatePluginFields(p.name, f)}
-                      compact
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* Manual plugin add (for inline plugins not in templates) */}
+        <div className={styles.builderRecipeSectionBody}>
+          <div className={styles.pluginToggleGrid}>
+            {availablePlugins.map((plugin) => (
+              <button
+                type="button"
+                key={plugin.name}
+                className={
+                  activePlugins.has(plugin.name) ? styles.pluginToggleActive : styles.pluginToggle
+                }
+                aria-pressed={activePlugins.has(plugin.name)}
+                onClick={() => togglePlugin(plugin.name)}
+              >
+                <span className={styles.pluginToggleCheck}>
+                  {activePlugins.has(plugin.name) ? <ProductIcon name="check" /> : null}
+                </span>
+                <span className={styles.pluginToggleName}>{plugin.name}</span>
+              </button>
+            ))}
+          </div>
+          {plugins.map((plugin) => {
+            const pluginType =
+              availablePlugins.find((item) => item.name === plugin.name)?.pluginType ?? plugin.name
+            return (
+              <PluginSchemaEditor
+                key={plugin.name}
+                compact
+                pluginType={pluginType}
+                pluginName={plugin.name}
+                fields={plugin.fields ?? {}}
+                onUpdate={(fields: DSLFieldObject) =>
+                  setPlugins((current) =>
+                    current.map((item) => (item.name === plugin.name ? { ...item, fields } : item)),
+                  )
+                }
+              />
+            )
+          })}
           <ManualPluginAdder
-            existingNames={activePluginNames}
-            onAdd={(name) => setPlugins((prev) => [...prev, { name }])}
+            existingNames={activePlugins}
+            onAdd={(pluginName) => setPlugins((current) => [...current, { name: pluginName }])}
           />
         </div>
-      </div>
+      </section>
 
-      {/* DSL Preview with validation */}
-      <RouteDslPreviewPanel dslText={dslPreview} issues={validationIssues} />
+      <p className={styles.builderAssignmentNote}>
+        Assign models after this Recipe is used by a Mixture-of-Model.
+      </p>
     </div>
-  );
-};
-
-export { AddRouteForm };
+  )
+}

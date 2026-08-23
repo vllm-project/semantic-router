@@ -124,7 +124,7 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
 \begin{enumerate}
   \item \textbf{Lexing}: The source is tokenized into a stream of typed tokens with position tracking for diagnostic reporting.
   \item \textbf{Parsing}: The token stream is parsed into a \emph{raw parse tree} (participle-generated structs), then lowered to a \emph{resolved AST} (\texttt{Program} $\to$ \texttt{SignalDecl}, \texttt{RouteDecl}, \texttt{PluginDecl}, \texttt{BackendDecl}, \texttt{GlobalDecl}) with desugared values and resolved positions.
-  \item \textbf{Compilation}: The AST is compiled to the internal \texttt{RouterConfig} structure. This involves: (a) mapping each \texttt{SIGNAL} block to the appropriate signal configuration (keyword rules, embedding rules, domain categories, etc.); (b) flattening the Boolean expression tree in each \texttt{WHEN} clause into a \texttt{RuleCombination} tree with \texttt{AND}/\texttt{OR}/\texttt{NOT} operators; (c) resolving plugin references against top-level templates with field-level merge semantics (route-local fields override template defaults); and (d) mapping \texttt{BACKEND} blocks to endpoint, provider profile, embedding model, or semantic cache configurations based on the backend type keyword.
+  \item \textbf{Compilation}: The AST is compiled to the internal \texttt{RouterConfig} structure. This involves: (a) mapping each \texttt{SIGNAL} block to the appropriate signal configuration (keyword rules, embedding rules, domain categories, etc.); (b) flattening the Boolean expression tree in each \texttt{WHEN} clause into a \texttt{RuleCombination} tree with \texttt{AND}/\texttt{OR}/\texttt{NOT} operators; (c) resolving plugin references against top-level templates with field-level merge semantics (route-local fields override template defaults); and (d) mapping \texttt{BACKEND} blocks to endpoint, embedding model, or semantic cache configurations based on the backend type keyword.
   \item \textbf{Emission}: The \texttt{RouterConfig} is serialized to one of three target formats.
 \end{enumerate}
 
@@ -156,10 +156,9 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
   % RouterConfig
   \node[box, fill=purple!8, minimum width=1.8cm] (cfg) at (11.2, 0) {\texttt{Router-}\\[-2pt]\texttt{Config}};
 
-  % Emitters (branching)
-  \node[box, fill=red!6, font=\scriptsize, minimum width=1.4cm] (eyaml) at (9.8, -1.8) {YAML};
-  \node[box, fill=red!6, font=\scriptsize, minimum width=1.4cm] (ecrd) at (11.5, -1.8) {K8s CRD};
-  \node[box, fill=red!6, font=\scriptsize, minimum width=1.4cm] (ehelm) at (13.2, -1.8) {Helm};
+  % Authoring and standalone outputs
+  \node[box, fill=red!6, font=\scriptsize, minimum width=1.8cm] (eyaml) at (10.2, -1.8) {Recipe YAML};
+  \node[box, fill=red!6, font=\scriptsize, minimum width=1.8cm] (emerge) at (12.5, -1.8) {Base merge};
 
   % Decompiler (reverse)
   \node[box, fill=cyan!8, minimum width=1.5cm] (decomp) at (11.2, 1.5) {Decompiler};
@@ -176,8 +175,7 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
   \draw[arr] (comp) -- (cfg);
 
   \draw[arr] (cfg.south) -- ++(0,-0.5) -| (eyaml.north);
-  \draw[arr] (cfg.south) -- ++(0,-0.5) -| (ecrd.north);
-  \draw[arr] (cfg.south) -- ++(0,-0.5) -| (ehelm.north);
+  \draw[arr] (cfg.south) -- ++(0,-0.5) -| (emerge.north);
 
   \draw[arr] (cfg.north) -- (decomp.south);
   \draw[arr] (decomp.west) -- (dsout.east);
@@ -195,22 +193,14 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
 
   \end{tikzpicture}%
 }
-  \caption{The DSL compilation pipeline. Source text is lexed, parsed into a resolved AST, and compiled to the internal \texttt{RouterConfig}. From this representation, three emitters produce deployment-specific formats (flat YAML, Kubernetes CRD, Helm values). The decompiler reverses the pipeline, reconstructing DSL source from an existing \texttt{RouterConfig}, enabling round-trip editing. The validator operates on the AST directly, producing three-level diagnostics.}
+  \caption{The DSL compilation pipeline. Source text is lexed, parsed into a resolved AST, and compiled to the internal \texttt{RouterConfig}. The emitter produces one model-free Recipe document, which can optionally replace the sole Recipe document in a complete v0.4 base manifest. The decompiler reverses the pipeline for round-trip editing, while the validator operates directly on the AST.}
   \label{fig:dsl_pipeline}
 \end{figure*}
 
-\subsection{Multi-Target Emission}
+\subsection{Recipe Document Emission}
 \label{sec:dsl_emission}
 
-The shared \texttt{RouterConfig} representation enables three emission targets from a single DSL source:
-
-\begin{itemize}
-  \item \textbf{Flat YAML} (\texttt{EmitYAML}): Direct marshaling of \texttt{RouterConfig} for local development and testing. An alternative \texttt{EmitUserYAML} variant restructures the output into the nested \texttt{signals}/\texttt{providers} format expected by the CLI tooling.
-  \item \textbf{Kubernetes CRD} (\texttt{EmitCRD}): Wraps the routing logic in a \texttt{SemanticRouter} custom resource (\texttt{vllm.ai/v1alpha1}), mapping backend definitions to \texttt{spec.vllmEndpoints} and routing configuration to \texttt{spec.config}. Signal rules that the CRD schema does not model are preserved as extra fields for ConfigMap-based deployment compatibility.
-  \item \textbf{Helm values} (\texttt{EmitHelm}): Nests the \texttt{RouterConfig} under a \texttt{config:} key compatible with the Helm chart's ConfigMap template, pruning zero-value infrastructure sections for clean output.
-\end{itemize}
-
-This separation means that infrastructure teams can change deployment targets without modifying the routing policy, and routing engineers can evolve policies without understanding Kubernetes manifests.
+The DSL owns one narrow output contract: a model-free Recipe document containing signals, projections, decisions, and the routing strategy. Physical Models and their provider bindings remain control-plane resources, while Entrypoint assignments bind those Models to Recipe decisions. For standalone operation, the \texttt{--base} path replaces the document of exactly one Recipe in a complete v0.4 manifest; ambiguous multi-Recipe bases are rejected. Kubernetes and Helm artifacts are produced by their respective deployment controllers from the complete v0.4 resource model rather than by lossy DSL-specific emitters.
 
 \subsection{Decompilation and Round-Trip Editing}
 \label{sec:dsl_decompile}
@@ -353,4 +343,3 @@ Taken together, the signal extraction layer (\Cref{sec:signal_engine}), decision
 \end{enumerate}
 
 This perspective unifies the Shannon-theoretic foundation (information reduction + Boolean synthesis) with the modern ML landscape (embeddings + MoE gating + agent-based program synthesis), and suggests that the architecture occupies a principled point in the design space between fully neural routing systems (which sacrifice interpretability and editability) and fully manual rule systems (which sacrifice adaptivity and scalability).
-

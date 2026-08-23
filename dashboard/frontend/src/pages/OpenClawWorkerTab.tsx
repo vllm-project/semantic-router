@@ -1,6 +1,7 @@
 import React, { useDeferredValue, useEffect, useId, useMemo, useRef, useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductIcon from '../components/ProductIcon'
 import {
   filterAndSortOpenClawWorkers,
   getOpenClawPageCount,
@@ -304,12 +305,14 @@ export const WorkerTab: React.FC<WorkerTabProps> = ({
             <div className={styles.agentGrid}>
               {visibleWorkers.map((worker) => {
                 const name = worker.agentName?.trim() || worker.containerName
-                const emoji = worker.agentEmoji?.trim() || '\u{1F916}'
+                const emoji = worker.agentEmoji?.trim()
                 const health = getOpenClawWorkerHealth(worker)
                 return (
                   <article key={worker.containerName} className={styles.agentCard}>
                     <div className={styles.agentCardHeader}>
-                      <div className={styles.agentAvatar}>{emoji}</div>
+                      <div className={styles.agentAvatar}>
+                        {emoji || <ProductIcon name="claw" aria-label="OpenClaw worker" />}
+                      </div>
                       <div className={styles.agentHeaderMeta}>
                         <div className={styles.agentName}>{name}</div>
                         <div className={styles.agentContainerRef}>{worker.containerName}</div>
@@ -457,7 +460,7 @@ export const WorkerTab: React.FC<WorkerTabProps> = ({
               className={styles.textInput}
               value={editForm.emoji}
               onChange={(event) => updateEditForm('emoji', event.target.value)}
-              placeholder="🤖"
+              placeholder="Optional symbol"
             />
           </div>
         </div>

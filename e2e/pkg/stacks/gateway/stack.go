@@ -46,6 +46,12 @@ type Config struct {
 	ResourceManifests     []string
 	WaitDeployments       []helpers.DeploymentRef
 	VerifyDeployments     []helpers.DeploymentRef
+
+	// DeferSemanticRouterReadiness supports a managed first installation: the
+	// private Management listener must accept the first publication before the
+	// Router can become inference-ready. The caller must finish by invoking
+	// WaitForSemanticRouterReady after its Management client has bootstrapped.
+	DeferSemanticRouterReadiness bool
 }
 
 // Stack composes the common gateway-based E2E deployment lifecycle.
@@ -58,6 +64,13 @@ func New(config Config) *Stack {
 	config.ServiceConfig = normalizeServiceConfig(config.ServiceConfig)
 	if len(config.VerifyDeployments) == 0 {
 		config.VerifyDeployments = append([]helpers.DeploymentRef(nil), defaultVerifyDeployments...)
+	}
+	if config.DeferSemanticRouterReadiness {
+		config.VerifyDeployments = withoutDeployment(
+			config.VerifyDeployments,
+			helm.SemanticRouterRelease.Namespace,
+			deploymentSemanticRouter,
+		)
 	}
 	return &Stack{config: config}
 }
@@ -154,8 +167,10 @@ func (s *Stack) DeployCore(ctx context.Context, opts *framework.SetupOptions) er
 	if err := deployer.Install(ctx, s.semanticRouterInstallOptions(opts)); err != nil {
 		return fmt.Errorf("install semantic-router: %w", err)
 	}
-	if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
-		return fmt.Errorf("wait for semantic-router: %w", err)
+	if !s.config.DeferSemanticRouterReadiness {
+		if err := deployer.WaitForDeployment(ctx, helm.SemanticRouterRelease.Namespace, deploymentSemanticRouter, timeoutDeploymentWait); err != nil {
+			return fmt.Errorf("wait for semantic-router: %w", err)
+		}
 	}
 
 	s.log(opts.Verbose, "Installing Envoy Gateway")
@@ -224,6 +239,33 @@ func (s *Stack) Verify(ctx context.Context, opts *framework.SetupOptions) error 
 	return nil
 }
 
+// WaitForSemanticRouterReady closes a deferred managed bootstrap. The Router
+// chart probes /ready; requiring the complete expected rollout therefore proves
+// every replica has crossed the inference-readiness gate after publication.
+func (s *Stack) WaitForSemanticRouterReady(
+	ctx context.Context,
+	opts *framework.SetupOptions,
+	expectedReplicas int32,
+) error {
+	if opts == nil || opts.KubeClient == nil {
+		return fmt.Errorf("kube client is required for Router readiness verification")
+	}
+	s.log(opts.Verbose, "Waiting for semantic-router /ready on %d replicas", expectedReplicas)
+	if err := helpers.WaitForDeploymentReadyReplicas(
+		ctx,
+		opts.KubeClient,
+		helm.SemanticRouterRelease.Namespace,
+		deploymentSemanticRouter,
+		expectedReplicas,
+		timeoutDeploymentWait,
+		5*time.Second,
+		opts.Verbose,
+	); err != nil {
+		return fmt.Errorf("wait for semantic-router publication readiness: %w", err)
+	}
+	return nil
+}
+
 // CleanupResources removes resource manifests in reverse order.
 func (s *Stack) CleanupResources(ctx context.Context, opts *framework.TeardownOptions) error {
 	return s.cleanupManifests(ctx, opts.KubeConfig, reverseCopy(s.config.ResourceManifests))
@@ -268,6 +310,10 @@ func (s *Stack) semanticRouterInstallOptions(opts *framework.SetupOptions) helm.
 
 	installOptions.ValuesFiles = valuesFiles
 	installOptions.Set = setValues
+	if s.config.DeferSemanticRouterReadiness {
+		installOptions.Wait = false
+		installOptions.Timeout = ""
+	}
 	return installOptions
 }
 
@@ -361,4 +407,15 @@ func reverseCopy(items []string) []string {
 		out[left], out[right] = out[right], out[left]
 	}
 	return out
+}
+
+func withoutDeployment(items []helpers.DeploymentRef, namespace, name string) []helpers.DeploymentRef {
+	filtered := make([]helpers.DeploymentRef, 0, len(items))
+	for _, item := range items {
+		if item.Namespace == namespace && item.Name == name {
+			continue
+		}
+		filtered = append(filtered, item)
+	}
+	return filtered
 }

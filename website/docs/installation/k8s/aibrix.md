@@ -57,15 +57,15 @@ semantic policy.
 
 ## 2. Align model identities
 
-For each AIBrix model, create a Semantic Router provider model whose
-`provider_model_id` is the name accepted by the AIBrix endpoint. Bind the
-backend to the stable Gateway or Service DNS name, not to a `ClusterIP`.
+For each AIBrix model, create a Semantic Router Model connection whose `model`
+is the name accepted by the AIBrix endpoint. Set its `endpoint` to the stable
+Gateway or Service DNS name, not to a `ClusterIP`.
 
-Then reference those provider names from model cards and decisions. The same
-identity must agree in four places:
+Then assign those Model names to Recipe decisions through an Entrypoint. The
+same identity must agree in four places:
 
 1. the request-facing virtual model or entrypoint;
-2. the Semantic Router provider model;
+2. the Semantic Router Model connection;
 3. the AIBrix/Gateway routing resource; and
 4. the model server's served model name.
 

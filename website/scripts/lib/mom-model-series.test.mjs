@@ -9,11 +9,11 @@ const repositoryRoot = resolve(
   '../../..',
 )
 
-test('MoM V1 blog model series follows the packaged CLI catalog', () => {
-  const catalog = readFileSync(
+test('MoM V1 blog model series follows the built-in Recipe family', () => {
+  const recipeSource = readFileSync(
     resolve(
       repositoryRoot,
-      'src/vllm-sr/cli/model_assets/latest/catalog.yaml',
+      'config/recipes/built-in/latest/mom-v1/config.yaml',
     ),
     'utf8',
   )
@@ -25,14 +25,22 @@ test('MoM V1 blog model series follows the packaged CLI catalog', () => {
     'utf8',
   )
 
-  const cliModels = [...catalog.matchAll(
-    /^  - id: (vllm-sr\/mom-v1-[a-z-]+)$/gm,
-  )].map(match => match[1])
+  const publicNameByRecipe = new Map([
+    ['balance', 'vllm-sr/mom-v1-blend'],
+    ['cost', 'vllm-sr/mom-v1-lite'],
+    ['speed', 'vllm-sr/mom-v1-flash'],
+    ['accuracy', 'vllm-sr/mom-v1-ultra'],
+    ['vault', 'vllm-sr/mom-v1-vault'],
+  ])
+  const recipeModels = [...recipeSource.matchAll(/^- name: ([a-z-]+)$/gm)]
+    .map(match => publicNameByRecipe.get(match[1]))
+    .filter(Boolean)
+    .sort()
   const blogModels = [...blog.matchAll(
     /^\| `(vllm-sr\/mom-v1-[a-z-]+)` \|/gm,
-  )].map(match => match[1])
+  )].map(match => match[1]).sort()
 
-  assert.deepEqual(blogModels, cliModels)
+  assert.deepEqual(blogModels, recipeModels)
   assert.doesNotMatch(blog, /\bmom-v1-(?:light|halu|secu)\b/)
   assert.match(
     blog,

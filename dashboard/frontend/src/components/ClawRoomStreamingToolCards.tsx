@@ -16,12 +16,13 @@ const ClawRoomStreamingToolCards = ({ steps }: ClawRoomStreamingToolCardsProps) 
   const [expandedToolCards, setExpandedToolCards] = useState<Set<string>>(new Set())
 
   const toolModels = useMemo(
-    () => steps.map(step => ({
-      step,
-      toolCall: toPlaygroundToolCall(step),
-      toolResult: toPlaygroundToolResult(step),
-    })),
-    [steps]
+    () =>
+      steps.map((step) => ({
+        step,
+        toolCall: toPlaygroundToolCall(step),
+        toolResult: toPlaygroundToolResult(step),
+      })),
+    [steps],
   )
 
   if (toolModels.length === 0) {
@@ -37,7 +38,7 @@ const ClawRoomStreamingToolCards = ({ steps }: ClawRoomStreamingToolCardsProps) 
           toolResult={toolResult}
           isExpanded={expandedToolCards.has(step.id)}
           onToggle={() => {
-            setExpandedToolCards(previous => {
+            setExpandedToolCards((previous) => {
               const next = new Set(previous)
               if (next.has(step.id)) {
                 next.delete(step.id)

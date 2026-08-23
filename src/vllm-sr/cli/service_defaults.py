@@ -16,7 +16,6 @@ from cli.managed_storage_detection import (
     _backend_config_uses_managed_endpoint,
     _effective_store_backend,
     _vector_store_metadata_backend,
-    is_setup_mode_config,
 )
 from cli.runtime_stack import RuntimeStackLayout
 from cli.storage_secrets import (
@@ -42,9 +41,6 @@ def inject_local_service_runtime_defaults(
     config: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
     """Inject local Docker connection defaults for canonical service backends."""
-    if is_setup_mode_config(config):
-        return False
-
     services = _ensure_runtime_services_mapping(config)
     if services is None:
         return False
@@ -294,9 +290,6 @@ def inject_local_store_runtime_defaults(
     config: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
     """Inject local Docker connection defaults for canonical store backends."""
-    if is_setup_mode_config(config):
-        return False
-
     wants_milvus_cache = (
         _effective_store_backend(config, "response_cache", "backend_type") == "milvus"
     )
@@ -326,8 +319,6 @@ def inject_local_store_runtime_defaults(
 def _inject_response_cache_milvus_defaults(
     stores: dict[str, object], stack_layout: RuntimeStackLayout
 ) -> bool:
-    if "response_cache" not in stores and "semantic_cache" in stores:
-        stores["response_cache"] = stores.pop("semantic_cache")
     cache_config = stores.get("response_cache")
     if cache_config is None:
         cache_mapping: dict[str, object] = {}

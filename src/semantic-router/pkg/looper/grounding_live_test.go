@@ -64,7 +64,7 @@ func TestFusionWeightPolicy_LiveOllama(t *testing.T) {
 	require.NoError(t, err)
 
 	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Body, &body))
+	require.NoError(t, json.Unmarshal(wireResponseForTest(t, resp), &body))
 
 	// A real synthesized answer came back from the judge model.
 	choices := body["choices"].([]interface{})
@@ -75,13 +75,15 @@ func TestFusionWeightPolicy_LiveOllama(t *testing.T) {
 	t.Logf("final answer (truncated): %.300s", content)
 
 	// Grounding ran under the weight policy and kept the WHOLE panel (no drops).
-	grounding := body["fusion"].(map[string]interface{})["grounding"].(map[string]interface{})
-	assert.Equal(t, config.FusionGroundingPolicyWeight, grounding["policy"])
-	scores := grounding["scores"].([]interface{})
+	fusionTrace, ok := resp.IntermediateResponses.(*FusionTrace)
+	require.True(t, ok)
+	require.NotNil(t, fusionTrace.Grounding)
+	grounding := fusionTrace.Grounding
+	assert.Equal(t, config.FusionGroundingPolicyWeight, grounding.Policy)
+	scores := grounding.Scores
 	assert.Len(t, scores, len(panelModels), "weight policy must keep every panel response")
 	for _, s := range scores {
-		dropped, _ := s.(map[string]interface{})["dropped"].(bool)
-		assert.False(t, dropped, "weight policy must not drop responses")
+		assert.False(t, s.Dropped, "weight policy must not drop responses")
 	}
 	assert.Positive(t, resp.Usage.TotalTokens)
 }

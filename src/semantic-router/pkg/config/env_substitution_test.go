@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -9,26 +10,20 @@ func TestExpandEnvString(t *testing.T) {
 	t.Setenv("POSTGRES_PASSWORD", "super_sensitive_string")
 	t.Setenv("MILVUS_USERNAME", "root")
 	t.Setenv("EMPTY_VALUE", "")
-
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{name: "braced variable", input: "${POSTGRES_PASSWORD}", want: "super_sensitive_string"},
-		{name: "unbraced variable", input: "$MILVUS_USERNAME", want: "root"},
-		{name: "default when unset", input: "${MISSING_VAR:-fallback}", want: "fallback"},
-		{name: "default when empty", input: "${EMPTY_VALUE:-fallback}", want: "fallback"},
-		{name: "dash default when unset", input: "${MISSING_VAR-default}", want: "default"},
-		{name: "literal dollar", input: "cost-$$value", want: "cost-$value"},
-		{name: "no substitution", input: "plain-text", want: "plain-text"},
-		{name: "mixed text", input: "user:${MILVUS_USERNAME}@db", want: "user:root@db"},
+	tests := []struct{ name, input, want string }{
+		{"braced variable", "${POSTGRES_PASSWORD}", "super_sensitive_string"},
+		{"unbraced variable", "$MILVUS_USERNAME", "root"},
+		{"default when unset", "${MISSING_VAR:-fallback}", "fallback"},
+		{"default when empty", "${EMPTY_VALUE:-fallback}", "fallback"},
+		{"dash default when unset", "${MISSING_VAR-default}", "default"},
+		{"literal dollar", "cost-$$value", "cost-$value"},
+		{"no substitution", "plain-text", "plain-text"},
+		{"mixed text", "user:${MILVUS_USERNAME}@db", "user:root@db"},
 	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := expandEnvString(tt.input); got != tt.want {
-				t.Fatalf("expandEnvString(%q) = %q, want %q", tt.input, got, tt.want)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := expandEnvString(test.input); got != test.want {
+				t.Fatalf("expandEnvString(%q) = %q, want %q", test.input, got, test.want)
 			}
 		})
 	}
@@ -36,41 +31,9 @@ func TestExpandEnvString(t *testing.T) {
 
 func TestParseYAMLBytesExpandsEnvironmentVariablesInRouterReplayPostgres(t *testing.T) {
 	t.Setenv("POSTGRES_PASSWORD", "super_sensitive_string")
-
-	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners:
-  - name: http
-    address: 0.0.0.0
-    port: 8888
-providers:
-  defaults:
-    default_model: qwen3
-  models:
-    - name: qwen3
-      provider_model_id: qwen3
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: qwen3
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: qwen3
-global:
-  services:
+	document := strings.Replace(entrypointRulesYAML,
+		"  services:\n    backend_egress:",
+		`  services:
     router_replay:
       enabled: true
       store_backend: postgres
@@ -81,83 +44,52 @@ global:
         password: "${POSTGRES_PASSWORD}"
         ssl_mode: disable
         table_name: router_replay
-`))
+    backend_egress:`, 1)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-	if cfg.RouterReplay.Postgres == nil {
-		t.Fatal("expected router replay postgres config to be populated")
-	}
-	if cfg.RouterReplay.Postgres.Password != "super_sensitive_string" {
-		t.Fatalf("password = %q, want %q", cfg.RouterReplay.Postgres.Password, "super_sensitive_string")
+	if cfg.RouterReplay.Postgres == nil || cfg.RouterReplay.Postgres.Password != "super_sensitive_string" {
+		t.Fatalf("router replay environment was not expanded: %+v", cfg.RouterReplay.Postgres)
 	}
 }
 
-func TestParseYAMLBytesExpandsEnvironmentVariablesInProviderAccessKey(t *testing.T) {
-	t.Setenv("OPENAI_API_KEY", "sk-router-secret")
-
-	cfg, err := ParseYAMLBytes([]byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults:
-    default_model: gpt-4o
-  models:
-    - name: gpt-4o
-      provider_model_id: gpt-4o
-      backend_refs:
-        - endpoint: https://api.openai.com/v1
-          api_key: "${OPENAI_API_KEY}"
-routing:
-  signals:
-    domains:
-      - name: general
-        description: General requests
-        mmlu_categories: [other]
-  modelCards:
-    - name: gpt-4o
-  decisions:
-    - name: default_route
-      priority: 1
-      rules:
-        operator: OR
-        conditions:
-          - type: domain
-            name: general
-      modelRefs:
-        - model: gpt-4o
-`))
+func TestParseYAMLBytesKeepsNamedBackendCredentialReference(t *testing.T) {
+	document := strings.Replace(entrypointRulesYAML,
+		"  services:\n    backend_egress:",
+		"  services:\n    backend_credentials:\n      primary:\n        credential_adapter_id: bearer\n        secret_env: OPENAI_API_KEY\n    backend_egress:", 1)
+	document = strings.Replace(document,
+		"{provider: private-test, endpoint: http://model-a.example, model: model-a}",
+		"{provider: private-test, endpoint: http://model-a.example, model: model-a, credential: primary}", 1)
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
 	}
-	if got := cfg.GetModelAccessKey("gpt-4o"); got != "sk-router-secret" {
-		t.Fatalf("GetModelAccessKey = %q, want %q", got, "sk-router-secret")
+	var credential string
+	if cfg.RoutingSnapshot != nil {
+		for _, model := range cfg.RoutingSnapshot.Models {
+			if model.Name == "model-a" && len(model.Backends) != 0 {
+				credential = model.Backends[0].ProviderCredentialID
+			}
+		}
+	}
+	if credential != "primary" {
+		t.Fatalf("backend credential reference was not compiled: %+v", cfg.RoutingSnapshot)
 	}
 }
 
 func TestExpandEnvSubstitutionsInMapLeavesNonStringsUntouched(t *testing.T) {
-	raw := map[string]interface{}{
-		"port":     5432,
-		"enabled":  true,
-		"password": "${POSTGRES_PASSWORD}",
-	}
+	raw := map[string]interface{}{"port": 5432, "enabled": true, "password": "${POSTGRES_PASSWORD}"}
 	t.Setenv("POSTGRES_PASSWORD", "secret")
 	expandEnvSubstitutionsInMap(raw)
-
-	if raw["port"] != 5432 {
-		t.Fatalf("port = %v, want 5432", raw["port"])
-	}
-	if raw["enabled"] != true {
-		t.Fatalf("enabled = %v, want true", raw["enabled"])
-	}
-	if raw["password"] != "secret" {
-		t.Fatalf("password = %v, want secret", raw["password"])
+	if raw["port"] != 5432 || raw["enabled"] != true || raw["password"] != "secret" {
+		t.Fatalf("unexpected expansion result: %#v", raw)
 	}
 }
 
 func TestExpandEnvStringUnsetVariableIsEmpty(t *testing.T) {
 	_ = os.Unsetenv("DEFINITELY_MISSING_ENV_FOR_CONFIG_TEST")
 	if got := expandEnvString("${DEFINITELY_MISSING_ENV_FOR_CONFIG_TEST}"); got != "" {
-		t.Fatalf("expandEnvString for missing var = %q, want empty string", got)
+		t.Fatalf("expandEnvString for missing var = %q, want empty", got)
 	}
 }

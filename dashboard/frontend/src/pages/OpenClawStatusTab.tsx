@@ -1,6 +1,7 @@
 import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductIcon from '../components/ProductIcon'
 import type { RoomBridgeEnvelope } from '../components/openclawRoomBridge'
 import {
   listenForSurfaceEvents,
@@ -361,7 +362,7 @@ export const StatusTab: React.FC<StatusTabProps> = ({
               className={styles.btnSecondary}
               onClick={() => setSelectedContainer(null)}
             >
-              ← Back to containers
+              <ProductIcon name="arrow-left" /> Back to containers
             </button>
             <span className={styles.embeddedContainerMeta}>
               {selected.containerName} · port {selected.port}

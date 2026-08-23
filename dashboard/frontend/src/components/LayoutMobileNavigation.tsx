@@ -9,6 +9,7 @@ import {
   type LayoutMenuItem,
 } from './LayoutNavSupport'
 import { preloadDashboardRoute } from '../app/routeLoaders'
+import ProductIcon from './ProductIcon'
 
 interface LayoutMobileNavigationSection {
   key: LayoutDropdownKey
@@ -100,6 +101,7 @@ export default function LayoutMobileNavigation({
           onPointerDown={() => void preloadDashboardRoute(`/config/${item.configSection}`)}
           onClick={() => onConfigSelect(item)}
         >
+          <ProductIcon name={item.icon} />
           {item.label}
         </button>
       )
@@ -115,6 +117,7 @@ export default function LayoutMobileNavigation({
         onPointerDown={() => void preloadDashboardRoute(item.to)}
         onClick={onNavigate}
       >
+        <ProductIcon name={item.icon} />
         {item.label}
       </NavLink>
     )
@@ -135,7 +138,7 @@ export default function LayoutMobileNavigation({
           to={link.to}
           data-mobile-nav-control
           className={({ isActive }) =>
-            isActive
+            isActive || Boolean(link.activePathPattern?.test(pathname))
               ? `${styles.mobileNavLink} ${styles.mobileNavLinkActive}`
               : styles.mobileNavLink
           }
@@ -143,6 +146,7 @@ export default function LayoutMobileNavigation({
           onPointerDown={() => void preloadDashboardRoute(link.to)}
           onClick={onNavigate}
         >
+          <ProductIcon name={link.icon} />
           {link.label}
         </NavLink>
       ))}
@@ -174,7 +178,10 @@ export default function LayoutMobileNavigation({
                   <span className={styles.mobileNavActiveMarker}>Current</span>
                 ) : null}
               </span>
-              <span aria-hidden="true">{expanded ? '−' : '+'}</span>
+              <ProductIcon
+                name="chevron-right"
+                className={`${styles.mobileNavDisclosure} ${expanded ? styles.mobileNavDisclosureOpen : ''}`}
+              />
             </button>
 
             {expanded ? (

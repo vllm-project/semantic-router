@@ -18,10 +18,8 @@ func TestMaintainedBalanceRecipeHasNoUndefinedComplexitySignals(t *testing.T) {
 		t.Fatalf("failed to read config/recipes/balance/config.yaml: %v", err)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
-	}
+	cfg := parseMaintainedConfigBytes(t, assetPath, data)
+	cfg = mustOnlyRecipeConfig(t, cfg)
 
 	dslText, err := DecompileRouting(cfg)
 	if err != nil {
@@ -47,10 +45,8 @@ func TestMaintainedBalanceRecipeUsesProjectionPartitionsAndTieredDecisions(t *te
 		t.Fatalf("failed to read config/recipes/balance/config.yaml: %v", err)
 	}
 
-	cfg, err := config.ParseYAMLBytes(data)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
-	}
+	cfg := parseMaintainedConfigBytes(t, assetPath, data)
+	cfg = mustOnlyRecipeConfig(t, cfg)
 	if len(cfg.Projections.Partitions) == 0 {
 		t.Fatal("expected config/recipes/balance/config.yaml to include at least one projection partition")
 	}
@@ -137,10 +133,14 @@ func mustLoadMaintainedBalanceDSLProgram(t *testing.T, dslPath string) *Program 
 	}
 	assertMaintainedBalanceDSLMarkers(t, dslPath, string(dslData))
 
-	prog, errs := Parse(string(dslData))
+	manifest, errs := Parse(string(dslData))
 	if len(errs) > 0 {
 		t.Fatalf("Parse errors: %v", errs)
 	}
+	if len(manifest.Recipes) != 1 || manifest.Recipes[0].Program == nil {
+		t.Fatalf("expected maintained balance DSL to contain exactly one Recipe, got %d", len(manifest.Recipes))
+	}
+	prog := manifest.Recipes[0].Program
 	if len(prog.ProjectionPartitions) < 2 {
 		t.Fatalf("expected maintained balance DSL to declare at least 2 projection partitions, got %d", len(prog.ProjectionPartitions))
 	}
@@ -334,14 +334,22 @@ func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.Canonic
 	if err != nil {
 		t.Fatalf("ParseRoutingYAMLBytes(compiledYAML) error: %v", err)
 	}
-	return config.CanonicalRoutingFromRouterConfig(compiledParsedCfg)
+	canonical, err := canonicalRecipeDocument(compiledParsedCfg)
+	if err != nil {
+		t.Fatalf("canonicalRecipeDocument(compiledYAML) error: %v", err)
+	}
+	return canonical
 }
 
 func mustLoadMaintainedBalanceRoutingYAML(t *testing.T, yamlPath string) config.CanonicalRouting {
 	t.Helper()
 
 	parsedCfg := mustLoadMaintainedBalanceRouterConfig(t, yamlPath)
-	return config.CanonicalRoutingFromRouterConfig(parsedCfg)
+	canonical, err := canonicalRecipeDocument(parsedCfg)
+	if err != nil {
+		t.Fatalf("canonicalRecipeDocument(%s) error: %v", yamlPath, err)
+	}
+	return canonical
 }
 
 func mustLoadMaintainedBalanceRouterConfig(t *testing.T, yamlPath string) *config.RouterConfig {
@@ -351,11 +359,8 @@ func mustLoadMaintainedBalanceRouterConfig(t *testing.T, yamlPath string) *confi
 	if err != nil {
 		t.Fatalf("failed to read %s: %v", yamlPath, err)
 	}
-	parsedCfg, err := config.ParseYAMLBytes(yamlData)
-	if err != nil {
-		t.Fatalf("ParseYAMLBytes error: %v", err)
-	}
-	return parsedCfg
+	parsedCfg := parseMaintainedConfigBytes(t, yamlPath, yamlData)
+	return mustOnlyRecipeConfig(t, parsedCfg)
 }
 
 func mustFindMaintainedBalanceDecision(t *testing.T, decisions []config.Decision, name string) *config.Decision {

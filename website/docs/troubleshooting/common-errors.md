@@ -45,8 +45,8 @@ The process cannot open the path it received. Check:
 - whether `--config` is relative to the current working directory;
 - whether the same path exists inside the Router container;
 - the file and parent-directory permissions; and
-- whether a managed Recipe generated its runtime config in a different
-  workspace.
+- whether `vllm-sr serve` materialized the runtime config in a different
+  workspace or named stack.
 
 Use `vllm-sr status` to identify the active workspace before inspecting
 container mounts.
@@ -140,7 +140,7 @@ global:
 A per-decision override belongs in the plugin configuration:
 
 ```yaml
-routing:
+document:
   decisions:
     - name: cached-route
       plugins:
@@ -194,7 +194,7 @@ detector is producing low-confidence false positives, evaluate a higher
 threshold:
 
 ```yaml
-routing:
+document:
   signals:
     pii:
       - name: pii-policy
@@ -222,7 +222,7 @@ decision.
 To reduce false positives, evaluate a higher threshold on the affected signal:
 
 ```yaml
-routing:
+document:
   signals:
     jailbreak:
       - name: jailbreak-standard
@@ -283,32 +283,30 @@ Test that URL from the Router network. If the server exposes another tool
 name, set `tool_name` exactly or omit it to allow discovery of a recognized
 classification tool.
 
-## Provider backend has no address
+## Model connection has no endpoint
 
 The validation error:
 
 ```text
-providers.models[<model>].backend_refs requires endpoint or base_url
+invalid request: provider origin is invalid
 ```
 
 means a backend reference cannot be resolved:
 
 ```yaml
-providers:
-  models:
-    - name: local-model
-      provider_model_id: local-model
-      api_format: openai
-      backend_refs:
-        - name: local-vllm
-          endpoint: 10.0.0.1:8000
-          protocol: http
-          type: vllm
+models:
+  - name: local-model
+    card: {}
+    connections:
+      - provider: vllm
+        endpoint: http://10.0.0.1:8000/v1
+        model: local-model
 ```
 
-Use `base_url` when the provider requires a complete API root such as
-`https://provider.example/v1`. Use a hostname reachable from the Router
-network; `localhost` refers to the Router container itself.
+Use an HTTPS `endpoint` when the provider is remote, and use a hostname
+reachable from the Router network; `localhost` refers to the Router container
+itself. Provider integrations own protocol paths, so do not add them as
+compiler fields in the Model.
 
 See [Container connectivity](./container-connectivity) for end-to-end checks.
 
@@ -323,9 +321,8 @@ failed to initialize <name> model from <path>: <error>
 failed to load pre-trained model <path>: <error>
 ```
 
-Check the path inside the runtime, not only on the host. A normal local
-workspace mounts `models/` at `/app/models`; managed Recipes keep mutable model
-state under their workspace and mount it at the same container path.
+Check the path inside the runtime, not only on the host. A local workspace
+mounts `models/` at `/app/models`.
 
 ```yaml
 global:

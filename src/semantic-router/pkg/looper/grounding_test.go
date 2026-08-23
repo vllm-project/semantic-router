@@ -2,7 +2,6 @@ package looper
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -400,12 +399,10 @@ func TestFusionExecute_GroundingKeepsContradictedOutOfJudge(t *testing.T) {
 	resp, err := NewFusionLooper(&config.LooperConfig{Endpoint: server.URL}).Execute(context.Background(), req)
 	require.NoError(t, err)
 
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Body, &body))
-	fusionTrace := body["fusion"].(map[string]interface{})
-	grounding, ok := fusionTrace["grounding"].(map[string]interface{})
-	require.True(t, ok, "fusion trace should carry grounding info")
-	assert.Equal(t, config.FusionGroundingReferencePanel, grounding["reference_mode"])
+	fusionTrace, ok := resp.IntermediateResponses.(*FusionTrace)
+	require.True(t, ok, "response should carry fusion metadata")
+	require.NotNil(t, fusionTrace.Grounding, "fusion trace should carry grounding info")
+	assert.Equal(t, config.FusionGroundingReferencePanel, fusionTrace.Grounding.ReferenceMode)
 	// Usage reflects the full panel (3 panel + judge analysis + judge final), not
 	// just the kept responses — grounding makes no extra calls but the panel cost
 	// was already paid.
@@ -469,8 +466,8 @@ func TestFusionExecute_WeightPolicyKeepsPanelAndAnnotatesSynthesis(t *testing.T)
 	assert.True(t, sawDissenterAtJudge, "weight policy should keep the contradicted response in the judge panel")
 	assert.True(t, sawNotesAtSynthesis, "weight policy should annotate the final synthesis prompt")
 
-	var body map[string]interface{}
-	require.NoError(t, json.Unmarshal(resp.Body, &body))
-	grounding := body["fusion"].(map[string]interface{})["grounding"].(map[string]interface{})
-	assert.Equal(t, config.FusionGroundingPolicyWeight, grounding["policy"])
+	fusionTrace, ok := resp.IntermediateResponses.(*FusionTrace)
+	require.True(t, ok)
+	require.NotNil(t, fusionTrace.Grounding)
+	assert.Equal(t, config.FusionGroundingPolicyWeight, fusionTrace.Grounding.Policy)
 }

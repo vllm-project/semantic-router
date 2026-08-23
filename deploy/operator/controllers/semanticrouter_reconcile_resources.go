@@ -38,7 +38,7 @@ import (
 )
 
 func (r *SemanticRouterReconciler) reconcileServiceAccount(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
-	if sr.Spec.ServiceAccount.Create == nil || !*sr.Spec.ServiceAccount.Create {
+	if !serviceAccountShouldCreate(sr) {
 		return nil
 	}
 
@@ -64,6 +64,9 @@ func (r *SemanticRouterReconciler) reconcileServiceAccount(ctx context.Context, 
 	if err != nil && errors.IsNotFound(err) {
 		return r.Create(ctx, sa)
 	} else if err != nil {
+		return err
+	}
+	if err := ensureControlledBy(found, sr, "ServiceAccount"); err != nil {
 		return err
 	}
 
@@ -108,8 +111,13 @@ func (r *SemanticRouterReconciler) reconcilePVC(ctx context.Context, sr *vllmv1a
 	return err
 }
 
-func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
-	deployment := r.generateDeployment(sr, gatewayMode)
+func (r *SemanticRouterReconciler) reconcileDeployment(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+	gatewayMode string,
+	bootstrap bootstrapDeploymentContract,
+) error {
+	deployment := r.generateDeployment(sr, gatewayMode, bootstrap)
 	if err := controllerutil.SetControllerReference(sr, deployment, r.Scheme); err != nil {
 		return err
 	}
@@ -121,10 +129,16 @@ func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *
 	} else if err != nil {
 		return err
 	}
+	if err := ensureControlledBy(found, sr, "Deployment"); err != nil {
+		return err
+	}
 
 	if !reflect.DeepEqual(found.Spec, deployment.Spec) {
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, found); err != nil {
+				return err
+			}
+			if err := ensureControlledBy(found, sr, "Deployment"); err != nil {
 				return err
 			}
 			found.Spec = deployment.Spec
@@ -135,34 +149,90 @@ func (r *SemanticRouterReconciler) reconcileDeployment(ctx context.Context, sr *
 	return nil
 }
 
-func (r *SemanticRouterReconciler) reconcileService(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {
-	svc := r.generateService(sr, gatewayMode)
-	if err := controllerutil.SetControllerReference(sr, svc, r.Scheme); err != nil {
-		return err
+func (r *SemanticRouterReconciler) reconcileServices(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+	gatewayMode string,
+	bootstrap bootstrapDeploymentContract,
+) error {
+	desiredServices := r.generateServices(sr, gatewayMode, bootstrap)
+	desiredNames := make(map[string]struct{}, len(desiredServices))
+	for _, service := range desiredServices {
+		desiredNames[service.Name] = struct{}{}
+		if err := r.reconcileService(ctx, sr, service); err != nil {
+			return err
+		}
 	}
-
-	found := &corev1.Service{}
-	err := r.Get(ctx, types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		return r.Create(ctx, svc)
-	} else if err != nil {
-		return err
+	for _, optionalName := range []string{sr.Name + "-management", sr.Name + "-backend-dispatch", sr.Name + "-metrics"} {
+		if _, desired := desiredNames[optionalName]; desired {
+			continue
+		}
+		if err := r.deleteOwnedIfPresent(ctx, sr, types.NamespacedName{Name: optionalName, Namespace: sr.Namespace}, &corev1.Service{}); err != nil {
+			return err
+		}
 	}
-
-	if !reflect.DeepEqual(found.Spec.Ports, svc.Spec.Ports) ||
-		found.Spec.Type != svc.Spec.Type ||
-		!reflect.DeepEqual(found.Spec.Selector, svc.Spec.Selector) {
-		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(ctx, types.NamespacedName{Name: svc.Name, Namespace: svc.Namespace}, found); err != nil {
-				return err
-			}
-			svc.Spec.ClusterIP = found.Spec.ClusterIP
-			found.Spec = svc.Spec
-			return r.Update(ctx, found)
-		})
-	}
-
 	return nil
+}
+
+func (r *SemanticRouterReconciler) reconcileService(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+	desired *corev1.Service,
+) error {
+	if err := controllerutil.SetControllerReference(sr, desired, r.Scheme); err != nil {
+		return err
+	}
+	key := types.NamespacedName{Name: desired.Name, Namespace: desired.Namespace}
+	found := &corev1.Service{}
+	if err := r.Get(ctx, key, found); err != nil {
+		if !errors.IsNotFound(err) {
+			return err
+		}
+		return r.Create(ctx, desired)
+	}
+	if err := ensureControlledBy(found, sr, "Service"); err != nil {
+		return err
+	}
+	desiredPorts := servicePortsForUpdate(desired, found)
+	if reflect.DeepEqual(found.Spec.Ports, desiredPorts) &&
+		found.Spec.Type == desired.Spec.Type &&
+		reflect.DeepEqual(found.Spec.Selector, desired.Spec.Selector) &&
+		reflect.DeepEqual(found.Labels, desired.Labels) {
+		return nil
+	}
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, key, found); err != nil {
+			return err
+		}
+		if err := ensureControlledBy(found, sr, "Service"); err != nil {
+			return err
+		}
+		found.Spec.Ports = servicePortsForUpdate(desired, found)
+		found.Spec.Type = desired.Spec.Type
+		found.Spec.Selector = desired.Spec.Selector
+		found.Labels = desired.Labels
+		return r.Update(ctx, found)
+	})
+}
+
+func servicePortsForUpdate(desired, current *corev1.Service) []corev1.ServicePort {
+	ports := make([]corev1.ServicePort, len(desired.Spec.Ports))
+	copy(ports, desired.Spec.Ports)
+	if desired.Spec.Type != corev1.ServiceTypeNodePort && desired.Spec.Type != corev1.ServiceTypeLoadBalancer {
+		return ports
+	}
+	allocated := make(map[string]int32, len(current.Spec.Ports))
+	for _, port := range current.Spec.Ports {
+		if port.NodePort != 0 {
+			allocated[port.Name] = port.NodePort
+		}
+	}
+	for index := range ports {
+		if ports[index].NodePort == 0 {
+			ports[index].NodePort = allocated[ports[index].Name]
+		}
+	}
+	return ports
 }
 
 func (r *SemanticRouterReconciler) reconcileHPA(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {
@@ -247,6 +317,9 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 			if errors.IsNotFound(err) {
 				sr.Status.Replicas = 0
 				sr.Status.ReadyReplicas = 0
+				if statusIsGated(sr.Status.Phase) {
+					return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
+				}
 				sr.Status.Phase = "Pending"
 				meta.SetStatusCondition(&sr.Status.Conditions, metav1.Condition{
 					Type:    typeAvailableSemanticRouter,
@@ -261,6 +334,9 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 
 		sr.Status.Replicas = deployment.Status.Replicas
 		sr.Status.ReadyReplicas = deployment.Status.ReadyReplicas
+		if statusIsGated(sr.Status.Phase) {
+			return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
+		}
 
 		if deployment.Status.ReadyReplicas == 0 {
 			sr.Status.Phase = "Pending"
@@ -291,6 +367,10 @@ func (r *SemanticRouterReconciler) updateStatus(ctx context.Context, sr *vllmv1a
 
 		return r.Status().Patch(ctx, sr, client.MergeFrom(baseSR))
 	})
+}
+
+func statusIsGated(phase string) bool {
+	return phase == "Migrating" || phase == "Degraded"
 }
 
 func (r *SemanticRouterReconciler) finalizeSemanticRouter(ctx context.Context, sr *vllmv1alpha1.SemanticRouter) error {

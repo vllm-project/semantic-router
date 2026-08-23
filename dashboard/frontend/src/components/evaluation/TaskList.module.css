@@ -283,8 +283,27 @@
 }
 
 .emptyIcon {
-  font-size: 48px;
+  width: 42px;
+  height: 42px;
   margin-bottom: var(--spacing-md, 1rem);
+  color: var(--color-text-secondary, #999);
+}
+
+.refreshButton,
+.actionButton,
+.errorState button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.refreshButton > svg,
+.actionButton > svg,
+.errorState button > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
 }
 
 .empty h3 {

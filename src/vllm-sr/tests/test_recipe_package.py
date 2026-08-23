@@ -6,6 +6,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
+import yaml
 from cli.main import main
 from cli.recipe_package import (
     RECIPE_FILES,
@@ -14,6 +15,32 @@ from cli.recipe_package import (
     recipe_digest,
 )
 from click.testing import CliRunner
+
+
+_RECIPE_CONFIG = """version: v0.4
+recipes:
+  - name: test-recipe
+    document:
+      decisions:
+        - name: default
+          rules:
+            operator: AND
+            conditions: []
+"""
+
+
+def _write_config_document(recipe: Path, document: dict) -> None:
+    (recipe / "config.yaml").write_text(
+        yaml.safe_dump(document, sort_keys=False), encoding="utf-8"
+    )
+
+
+def _recipe_with_plugin_configuration(configuration: dict) -> dict:
+    document = yaml.safe_load(_RECIPE_CONFIG)
+    document["recipes"][0]["document"]["decisions"][0]["plugins"] = [
+        {"type": "request_params", "configuration": configuration}
+    ]
+    return document
 
 
 def _write_recipe(root: Path, *, reverse: bool = False) -> None:
@@ -31,7 +58,7 @@ tags:
 links:
   source: https://example.com/source
 """,
-        "config.yaml": "version: v0.3\nlisteners: []\n",
+        "config.yaml": _RECIPE_CONFIG,
         "probes.yaml": "schema_version: v1\ndecisions: []\n",
         "recipe.dsl": "MODEL test\n",
         "README.md": "# Test Recipe\n",
@@ -92,14 +119,14 @@ def test_recipe_digest_matches_go_snapshot_algorithm_and_changes_on_tamper(
 def test_recipe_digest_cross_language_golden():
     files = {
         "metadata.yaml": b"schema_version: vllm-sr/recipe-metadata/v1\nid: fixture\n",
-        "config.yaml": b"version: v0.3\n",
+        "config.yaml": _RECIPE_CONFIG.encode("utf-8"),
         "probes.yaml": b"schema_version: v1\ndecisions: []\n",
         "recipe.dsl": b"MODEL fixture\n",
         "README.md": b"# Fixture\n",
     }
 
     assert recipe_digest(files) == (
-        "sha256:b461747f69f276aea124f9d0907e373f9f201245f635d840276765dd6829ef7b"
+        "sha256:53cc6ed9fa3018b6cdec963c70c34dfb535eb69f81fb950ae502447f3f3c3cb0"
     )
 
 
@@ -126,7 +153,7 @@ def test_pack_ignores_real_cli_runtime_state_but_rejects_symlink(tmp_path: Path)
     _write_recipe(recipe)
     runtime_state = recipe / ".vllm-sr"
     runtime_state.mkdir()
-    (runtime_state / "runtime-config.yaml").write_text(
+    (runtime_state / "compiled-bootstrap.yaml").write_text(
         "private runtime state\n", encoding="utf-8"
     )
 
@@ -215,13 +242,29 @@ def test_pack_defaults_to_metadata_identity_filename_and_prints_json(tmp_path: P
     assert archive.is_file()
 
 
-def test_pack_rejects_literal_credential_with_key_path_only(tmp_path: Path):
+def test_pack_rejects_literal_credential_in_current_model_shape(tmp_path: Path):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     secret_value = "super-sensitive-value"
-    (recipe / "config.yaml").write_text(
-        f"version: v0.3\nproviders:\n  password: {secret_value}\n",
-        encoding="utf-8",
+    _write_config_document(
+        recipe,
+        {
+            "version": "v0.4",
+            "models": [
+                {
+                    "name": "private/model",
+                    "card": {"capabilities": ["chat"]},
+                    "connections": [
+                        {
+                            "provider": "openai-compatible",
+                            "endpoint": "https://models.example.test/v1",
+                            "model": "private/model",
+                            "api_key": secret_value,
+                        }
+                    ],
+                }
+            ],
+        },
     )
 
     result = CliRunner().invoke(
@@ -229,51 +272,40 @@ def test_pack_rejects_literal_credential_with_key_path_only(tmp_path: Path):
     )
 
     assert result.exit_code != 0
-    assert "providers.password" in result.output
+    assert "models[0].connections[0].api_key" in result.output
     assert secret_value not in result.output
     assert not (tmp_path / "out" / "test-recipe-1.2.3.vllm-sr-recipe.zip").exists()
 
 
 @pytest.mark.parametrize(
-    ("config", "expected_path"),
+    ("configuration", "expected_suffix"),
     [
-        ("providers:\n  api-key: canary\n", "providers.api-key"),
-        ("providers:\n  access_key: canary\n", "providers.access_key"),
-        ("providers:\n  client-secret: canary\n", "providers.client-secret"),
-        ("stores:\n  auth_token: canary\n", "stores.auth_token"),
-        ("stores:\n  bearer_token: canary\n", "stores.bearer_token"),
-        ("tls:\n  private_key: canary\n", "tls.private_key"),
+        ({"api-key": "canary"}, "api-key"),
+        ({"access_key": "canary"}, "access_key"),
+        ({"client-secret": "canary"}, "client-secret"),
+        ({"auth_token": "canary"}, "auth_token"),
+        ({"bearer_token": "canary"}, "bearer_token"),
+        ({"private_key": "canary"}, "private_key"),
+        ({"headers": {"Authorization": "canary"}}, "headers.Authorization"),
+        ({"extra_headers": {"X-API-Key": "canary"}}, "extra_headers.X-API-Key"),
+        ({"extra_headers": {"XApiKey": "canary"}}, "extra_headers.XApiKey"),
+        ({"headers": {"Cookie": "session=canary"}}, "headers.Cookie"),
         (
-            "request:\n  headers:\n    Authorization: canary\n",
-            "request.headers.Authorization",
-        ),
-        (
-            "request:\n  extra_headers:\n    X-API-Key: canary\n",
-            "request.extra_headers.X-API-Key",
-        ),
-        (
-            "request:\n  extra_headers:\n    XApiKey: canary\n",
-            "request.extra_headers.XApiKey",
-        ),
-        (
-            "request:\n  headers:\n    Cookie: session=canary\n",
-            "request.headers.Cookie",
-        ),
-        (
-            "request:\n  headers:\n    Proxy-Authorization: Bearer canary\n",
-            "request.headers.Proxy-Authorization",
+            {"headers": {"Proxy-Authorization": "Bearer canary"}},
+            "headers.Proxy-Authorization",
         ),
     ],
 )
 def test_pack_literal_credential_detector_matches_runtime_fields(
-    tmp_path: Path, config: str, expected_path: str
+    tmp_path: Path, configuration: dict, expected_suffix: str
 ):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     secret_value = "credential-value-canary"
-    (recipe / "config.yaml").write_text(
-        "version: v0.3\n" + config.replace("canary", secret_value),
-        encoding="utf-8",
+    encoded = yaml.safe_dump(configuration).replace("canary", secret_value)
+    _write_config_document(
+        recipe,
+        _recipe_with_plugin_configuration(yaml.safe_load(encoded)),
     )
 
     result = CliRunner().invoke(
@@ -281,7 +313,9 @@ def test_pack_literal_credential_detector_matches_runtime_fields(
     )
 
     assert result.exit_code != 0
-    assert expected_path in result.output
+    assert (
+        "recipes[0].document.decisions[0].plugins[0].configuration." + expected_suffix
+    ) in result.output
     assert secret_value not in result.output
 
 
@@ -300,9 +334,24 @@ def test_pack_rejects_embedded_url_credential_without_exposing_it(
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
     secret_value = "url-password-canary"
-    (recipe / "config.yaml").write_text(
-        f"version: v0.3\nprovider:\n  {field}: {url_template.format(secret=secret_value)}\n",
-        encoding="utf-8",
+    _write_config_document(
+        recipe,
+        {
+            "version": "v0.4",
+            "models": [
+                {
+                    "name": "private/model",
+                    "card": {"capabilities": ["chat"]},
+                    "connections": [
+                        {
+                            "provider": "openai-compatible",
+                            field: url_template.format(secret=secret_value),
+                            "model": "private/model",
+                        }
+                    ],
+                }
+            ],
+        },
     )
 
     result = CliRunner().invoke(
@@ -310,39 +359,44 @@ def test_pack_rejects_embedded_url_credential_without_exposing_it(
     )
 
     assert result.exit_code != 0
-    assert f"provider.{field}" in result.output
+    assert f"models[0].connections[0].{field}" in result.output
     assert secret_value not in result.output
 
 
-def test_pack_allows_api_key_env_and_exact_braced_credential_reference(tmp_path: Path):
+def test_pack_rejects_credential_references_in_recipe_logic(tmp_path: Path):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
-    (recipe / "config.yaml").write_text(
-        """version: v0.3
-providers:
-  api_key_env: PROVIDER_API_KEY
-stores:
-  password: ${DATABASE_PASSWORD}
-""",
-        encoding="utf-8",
+    _write_config_document(
+        recipe,
+        _recipe_with_plugin_configuration(
+            {
+                "secret_env": "MODEL_SECRET",
+                "password": "${DATABASE_PASSWORD}",
+            }
+        ),
     )
 
     result = CliRunner().invoke(
         main, ["recipe", "pack", str(recipe), "--output", str(tmp_path / "out")]
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code != 0
+    assert "credential field" in result.output
+    assert "MODEL_SECRET" not in result.output
+    assert "DATABASE_PASSWORD" not in result.output
 
 
-@pytest.mark.parametrize("value", ["$DATABASE_PASSWORD", "${database_password}"])
-def test_pack_rejects_noncanonical_credential_environment_reference(
+@pytest.mark.parametrize(
+    "value", ["$DATABASE_PASSWORD", "${database_password}", "${DATABASE_PASSWORD}"]
+)
+def test_pack_rejects_every_credential_environment_reference(
     tmp_path: Path, value: str
 ):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
-    (recipe / "config.yaml").write_text(
-        f"version: v0.3\nstores:\n  password: {value}\n",
-        encoding="utf-8",
+    _write_config_document(
+        recipe,
+        _recipe_with_plugin_configuration({"password": value}),
     )
 
     result = CliRunner().invoke(
@@ -350,20 +404,21 @@ def test_pack_rejects_noncanonical_credential_environment_reference(
     )
 
     assert result.exit_code != 0
-    assert "stores.password" in result.output
+    assert "plugins[0].configuration.password" in result.output
     assert value not in result.output
 
 
-def test_pack_rejects_literal_env_fallback_but_not_pure_reference(tmp_path: Path):
+def test_pack_rejects_literal_env_fallback_and_pure_reference(tmp_path: Path):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
-    (recipe / "config.yaml").write_text(
-        """version: v0.3
-providers:
-  api_key: ${PROVIDER_API_KEY}
-  password: ${DATABASE_PASSWORD:-unsafe-default}
-""",
-        encoding="utf-8",
+    _write_config_document(
+        recipe,
+        _recipe_with_plugin_configuration(
+            {
+                "api_key": "${PROVIDER_API_KEY}",
+                "password": "${DATABASE_PASSWORD:-unsafe-default}",
+            }
+        ),
     )
 
     result = CliRunner().invoke(
@@ -371,103 +426,87 @@ providers:
     )
 
     assert result.exit_code != 0
-    assert "providers.password" in result.output
-    assert "providers.api_key" not in result.output
+    assert "plugins[0].configuration.password" in result.output
     assert "unsafe-default" not in result.output
 
-    (recipe / "config.yaml").write_text(
-        "version: v0.3\nproviders:\n  api_key: ${PROVIDER_API_KEY}\n",
-        encoding="utf-8",
+    _write_config_document(
+        recipe,
+        _recipe_with_plugin_configuration({"api_key": "${PROVIDER_API_KEY}"}),
     )
-    allowed = CliRunner().invoke(
+    referenced = CliRunner().invoke(
         main,
-        ["recipe", "pack", str(recipe), "--output", str(tmp_path / "allowed")],
+        ["recipe", "pack", str(recipe), "--output", str(tmp_path / "referenced")],
     )
 
-    assert allowed.exit_code == 0, allowed.output
+    assert referenced.exit_code != 0
+    assert "plugins[0].configuration.api_key" in referenced.output
+    assert "PROVIDER_API_KEY" not in referenced.output
 
 
 @pytest.mark.parametrize(
-    "mcp_config",
+    ("field", "value"),
     [
-        "",
-        "          transport_type: stdio\n          command: private-command\n",
-        "          command: private-command\n",
-        "          transport_type: stdio\n          env: {PRIVATE_NAME: private-value}\n",
-        "          transport_type: http\n          args: [private-argument]\n",
+        ("models", []),
+        ("models", [{"name": "runtime-model"}]),
+        ("entrypoints", []),
+        ("entrypoints", [{"name": "runtime-entrypoint"}]),
+        ("global", {}),
+        ("global", {"services": {}}),
+        ("listeners", []),
     ],
 )
-def test_pack_rejects_enabled_local_process_mcp_without_exposing_values(
-    tmp_path: Path, mcp_config: str
+def test_pack_rejects_runtime_owned_top_level_fields(
+    tmp_path: Path, field: str, value: object
 ):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
-    (recipe / "config.yaml").write_text(
-        """version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        mcp:
-          enabled: true
-"""
-        + mcp_config
-        + "          tool_name: classify\n",
-        encoding="utf-8",
-    )
+    document = yaml.safe_load(_RECIPE_CONFIG)
+    document[field] = value
+    _write_config_document(recipe, document)
 
     result = CliRunner().invoke(
         main, ["recipe", "pack", str(recipe), "--output", str(tmp_path / "out")]
     )
 
     assert result.exit_code != 0
-    assert "global.model_catalog.modules.classifier.mcp" in result.output
-    for private_value in ("private-command", "private-value", "private-argument"):
-        assert private_value not in result.output
+    assert "Recipe distribution" in result.output
+    assert field in result.output
 
 
 @pytest.mark.parametrize(
-    "mcp_config",
+    ("field", "value", "expected"),
     [
-        "          transport_type: http\n          url: https://example.com/mcp\n",
-        "          transport_type: streamable-http\n          url: https://example.com/mcp\n",
-        "          transport_type: sse\n          url: https://example.com/mcp\n",
-        "          url: https://example.com/mcp\n",
+        ("version", "v0.3", "v0.4"),
+        ("recipes", [], "at least 1 item"),
     ],
 )
-def test_pack_allows_enabled_remote_mcp_transports(tmp_path: Path, mcp_config: str):
+def test_pack_requires_complete_v04_recipe_distribution(
+    tmp_path: Path, field: str, value: object, expected: str
+):
     recipe = tmp_path / "recipe"
     _write_recipe(recipe)
-    (recipe / "config.yaml").write_text(
-        """version: v0.3
-global:
-  model_catalog:
-    modules:
-      classifier:
-        mcp:
-          enabled: true
-"""
-        + mcp_config
-        + "          tool_name: classify\n",
-        encoding="utf-8",
-    )
+    document = yaml.safe_load(_RECIPE_CONFIG)
+    document[field] = value
+    _write_config_document(recipe, document)
 
     result = CliRunner().invoke(
         main, ["recipe", "pack", str(recipe), "--output", str(tmp_path / "out")]
     )
 
-    assert result.exit_code == 0, result.output
+    assert result.exit_code != 0
+    assert "Recipe distribution" in result.output
+    assert expected in result.output
 
 
 @pytest.mark.parametrize(
     "config",
     [
-        "version: v0.3\nsecret: &private-value sensitive\ncopy: *private-value\n",
-        "version: v0.3\ndefaults: &private-map {token: sensitive}\nrequest:\n  <<: *private-map\n",
-        "version: v0.3\nrequest:\n  <<: {token: sensitive}\n",
-        "version: v0.3\nprovider:\n  base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==\n",
-        "version: v0.3\nrequest:\n  headers:\n    !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive\n",
-        "version: v0.3\nvalue: !!str sensitive\n",
+        "version: v0.4\nsecret: &private-value sensitive\ncopy: *private-value\n",
+        "version: v0.4\ndefaults: &private-map {token: sensitive}\nrequest:\n  <<: *private-map\n",
+        "version: v0.4\nrequest:\n  <<: {token: sensitive}\n",
+        "version: v0.4\nprovider:\n  base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==\n",
+        "version: v0.4\nrequest:\n  headers:\n    !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive\n",
+        "version: v0.4\nvalue: !!str sensitive\n",
     ],
 )
 def test_pack_rejects_yaml_indirection_without_exposing_values(

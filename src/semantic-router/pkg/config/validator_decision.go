@@ -25,7 +25,7 @@ func validateDecisionContracts(cfg *RouterConfig) error {
 }
 
 func validateDecisionModelContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		if err := validateDecisionRuleNode(cfg, decision.Name, &decision.Rules); err != nil {
 			return err
 		}
@@ -312,9 +312,14 @@ func validateDecisionCandidateIterationSource(decision Decision, iter CandidateI
 	switch strings.TrimSpace(iter.Source) {
 	case "decision.candidates":
 		if len(decision.ModelRefs) == 0 {
-			return fmt.Errorf("%s: source decision.candidates requires non-empty modelRefs", context)
+			// Recipe documents are model-free. Entrypoint materialization supplies
+			// the candidate set and the derived view is validated afterward.
+			return nil
 		}
 	case "models":
+		if len(iter.Models) == 0 && len(decision.ModelRefs) == 0 {
+			return nil
+		}
 		return validateDecisionCandidateIterationModels(iter.Models, context)
 	default:
 		return fmt.Errorf("%s: unsupported source %q", context, iter.Source)
@@ -347,7 +352,7 @@ func validateDecisionCandidateIterationOutputs(iter CandidateIterationConfig, co
 }
 
 func validateDecisionPluginContracts(cfg *RouterConfig) error {
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		if err := validateOneDecisionPluginContracts(
 			cfg,
 			&decision,
@@ -446,18 +451,18 @@ func validateDecisionContextCompressionRecovery(
 	}
 	store := strings.TrimSpace(compression.Recovery.Store)
 	if store == "response_cache" {
-		store = strings.TrimSpace(cfg.SemanticCache.BackendType)
+		store = strings.TrimSpace(cfg.BackendType)
 	}
 	switch store {
 	case "redis":
-		if cfg.SemanticCache.Redis == nil {
+		if cfg.Redis == nil {
 			return fmt.Errorf(
 				"decision %q: context_compression recovery requires response_cache.redis configuration",
 				decision.Name,
 			)
 		}
 	case "valkey":
-		if cfg.SemanticCache.Valkey == nil {
+		if cfg.Valkey == nil {
 			return fmt.Errorf(
 				"decision %q: context_compression recovery requires response_cache.valkey configuration",
 				decision.Name,
@@ -597,7 +602,7 @@ func validateAlgorithmBlockContract(
 
 func blocklessAlgorithmTypeSupported(normalizedType string) bool {
 	switch normalizedType {
-	case "static", "knn", "kmeans", "svm", "mlp":
+	case "static":
 		return true
 	default:
 		return false
@@ -633,7 +638,7 @@ func validateMigratedLearningAlgorithm(decisionName string, normalizedType strin
 }
 
 func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
-	configuredBlocks := make([]string, 0, 14)
+	configuredBlocks := make([]string, 0, 16)
 	addBlock := func(name string, configured bool) {
 		if configured {
 			configuredBlocks = append(configuredBlocks, name)
@@ -649,6 +654,7 @@ func configuredAlgorithmBlocks(algorithm *AlgorithmConfig) []string {
 	addBlock("router_dc", algorithm.RouterDC != nil)
 	addBlock("automix", algorithm.AutoMix != nil)
 	addBlock("hybrid", algorithm.Hybrid != nil)
+	addBlock("ml", algorithm.ML != nil)
 	addBlock("rl_driven", algorithm.RLDriven != nil)
 	addBlock("gmtrouter", algorithm.GMTRouter != nil)
 	addBlock("latency_aware", algorithm.LatencyAware != nil)
@@ -668,6 +674,10 @@ func expectedAlgorithmBlock(normalizedType string) (string, bool) {
 		"router_dc":     "router_dc",
 		"automix":       "automix",
 		"hybrid":        "hybrid",
+		"knn":           "ml",
+		"kmeans":        "ml",
+		"svm":           "ml",
+		"mlp":           "ml",
 		"latency_aware": "latency_aware",
 		"multi_factor":  "multi_factor",
 		"prompt":        "prompt",
@@ -690,6 +700,12 @@ func validateSpecializedAlgorithmConfig(decisionName string, modelRefs []ModelRe
 		return wrapAlgorithmValidationError(decisionName, "workflows", ValidateWorkflowsAlgorithmConfig(algorithm.Workflows))
 	case "prompt":
 		return validatePromptAlgorithmConfig(decisionName, modelRefs, algorithm)
+	case "knn", "kmeans", "svm", "mlp":
+		return wrapAlgorithmValidationError(
+			decisionName,
+			"ml",
+			ValidateMLSelectionAlgorithmConfig(normalizedType, algorithm.ML),
+		)
 	}
 	return nil
 }

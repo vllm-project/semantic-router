@@ -1,7 +1,6 @@
 package extproc
 
 import (
-	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -17,94 +17,121 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingcontext"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
-)
-
-var (
-	parseReloadConfig        = config.Parse
-	ensureReloadConfigModels = modeldownload.EnsureModelsForConfig
-	buildReloadRouter        = buildOpenAIRouterFromConfig
-	replaceReloadConfig      = config.Replace
-	prepareReloadRuntime     = func(cfg *config.RouterConfig) (modelruntime.EmbeddingRuntimeState, error) {
-		return modelruntime.PrepareRouterRuntime(context.Background(), cfg, modelruntime.PrepareRouterRuntimeOptions{
-			Component:                  "extproc",
-			MaxParallelism:             modelruntime.DefaultParallelism(5),
-			OnEvent:                    logReloadRuntimeLifecycleEvent,
-			InitModalityClassifierFunc: InitModalityClassifier,
-		})
-	}
-	warmupReloadRouter = func(router *OpenAIRouter, state modelruntime.EmbeddingRuntimeState) error {
-		if router == nil {
-			return nil
-		}
-		_, err := modelruntime.WarmupRouter(context.Background(), []modelruntime.RouterWarmupTask{
-			{
-				Name:       "tools_database",
-				Ready:      state.ToolsReady,
-				SkipReason: "embedding_runtime_not_ready_for_tools",
-				Load:       router.LoadToolsDatabase,
-			},
-			{
-				Name:       "knowledge_bases",
-				Ready:      state.AnyReady,
-				SkipReason: "embedding_runtime_not_ready_for_knowledge_bases",
-				Load:       router.PreloadKnowledgeBases,
-			},
-		}, modelruntime.WarmupRouterOptions{
-			Component:      "extproc",
-			MaxParallelism: 2,
-			OnEvent:        logReloadRuntimeLifecycleEvent,
-		})
-		return err
-	}
 )
 
 // Server represents a gRPC server for the Envoy ExtProc
 type Server struct {
-	configPath  string
-	service     *RouterService
-	server      *grpc.Server
-	port        int
-	secure      bool
-	certPath    string
-	runtime     *routerruntime.Registry
-	stopOnce    sync.Once
-	reloadMu    sync.Mutex
-	stopping    atomic.Bool
-	watchMu     sync.Mutex
-	watchCancel context.CancelFunc
+	service  *RouterService
+	server   *grpc.Server
+	port     int
+	secure   bool
+	certPath string
+	runtime  *routerruntime.Registry
+	stopOnce sync.Once
 }
 
-// NewServer creates a new ExtProc gRPC server
-func NewServer(
+// ConfigParser parses one immutable authoring manifest through the
+// application-composed Provider Integration boundary.
+type ConfigParser func(string) (*config.RouterConfig, error)
+
+// ServerDependencies are process-owned request and dispatch resources.
+type ServerDependencies struct {
+	ManagedRequests      *ManagedRequestRuntime
+	StandaloneRequests   *StandaloneRequestRuntime
+	DispatchCapabilities DispatchCapabilityRuntime
+	OutcomeFeedback      OutcomeFeedbackRuntime
+	OutcomeProjection    OutcomeLearningProjectionRuntime
+	ResponseTerminals    backendinvoker.ResponseTerminalReader
+	ProtocolCodecs       *protocolcodec.Registry
+	ParseConfig          ConfigParser
+}
+
+func (dependencies ServerDependencies) routerDependencies() RuntimeDependencies {
+	if dependencies.ManagedRequests == nil {
+		return RuntimeDependencies{
+			DispatchCapabilities: dependencies.DispatchCapabilities,
+			OutcomeFeedback:      dependencies.OutcomeFeedback,
+			OutcomeProjection:    dependencies.OutcomeProjection,
+			ResponseTerminals:    dependencies.ResponseTerminals,
+			ProtocolCodecs:       dependencies.ProtocolCodecs,
+		}
+	}
+	return RuntimeDependencies{
+		InferenceAccess:      dependencies.ManagedRequests.access,
+		DispatchCapabilities: dependencies.DispatchCapabilities,
+		OutcomeFeedback:      dependencies.OutcomeFeedback,
+		OutcomeProjection:    dependencies.OutcomeProjection,
+		ResponseTerminals:    dependencies.ResponseTerminals,
+		ProtocolCodecs:       dependencies.ProtocolCodecs,
+	}
+}
+
+// NewServerWithDependencies creates a server borrowing process-owned request
+// and dispatch resources for its immutable process lifetime.
+func NewServerWithDependencies(
 	configPath string,
 	port int,
 	secure bool,
 	certPath string,
 	runtimeRegistry *routerruntime.Registry,
+	dependencies ServerDependencies,
 ) (*Server, error) {
-	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry)
+	routerDependencies := dependencies.routerDependencies()
+	parseConfig := dependencies.ParseConfig
+	if parseConfig == nil {
+		parseConfig = config.NewParser(nil).Parse
+	}
+	router, err := newOpenAIRouterForServer(configPath, runtimeRegistry, routerDependencies, parseConfig)
 	if err != nil {
 		return nil, err
+	}
+	managedMode := router.Config.ControlPlane.Mode == config.ControlPlaneModeManaged
+	if managedMode && dependencies.ManagedRequests == nil {
+		_ = router.Close()
+		return nil, errors.New("managed inference listener requires a managed request runtime")
+	}
+	if !managedMode && dependencies.ManagedRequests != nil {
+		_ = router.Close()
+		return nil, errors.New("managed request runtime was injected outside managed mode")
+	}
+	if managedMode && dependencies.StandaloneRequests != nil {
+		_ = router.Close()
+		return nil, errors.New("standalone request runtime was injected in managed mode")
+	}
+	if !managedMode && dependencies.StandaloneRequests == nil {
+		_ = router.Close()
+		return nil, errors.New("standalone inference listener requires a standalone request runtime")
+	}
+	if !managedMode && !dependencies.StandaloneRequests.matches(router.Config.RoutingSnapshot) {
+		_ = router.Close()
+		return nil, errors.New("standalone Router does not match the process routing snapshot")
+	}
+	if managedMode && router.Config.Access.Enabled != dependencies.ManagedRequests.accessEnabled() {
+		_ = router.Close()
+		return nil, errors.New("managed request runtime access mode does not match Router configuration")
 	}
 	attachRuntimeRegistry(router, runtimeRegistry)
 	publishRouterState(router.Config, router, runtimeRegistry)
 
-	service := NewRouterService(router)
+	service := newRouterServiceWithRequestRuntimes(
+		router, dependencies.ManagedRequests, dependencies.StandaloneRequests,
+	)
 	return &Server{
-		configPath: configPath,
-		service:    service,
-		port:       port,
-		secure:     secure,
-		certPath:   certPath,
-		runtime:    runtimeRegistry,
+		service:  service,
+		port:     port,
+		secure:   secure,
+		certPath: certPath,
+		runtime:  runtimeRegistry,
 	}, nil
 }
 
@@ -183,23 +210,6 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	// Start config file watcher in background
-	ctx, cancel := context.WithCancel(context.Background())
-	s.watchMu.Lock()
-	if s.stopping.Load() {
-		cancel()
-	} else {
-		s.watchCancel = cancel
-	}
-	s.watchMu.Unlock()
-	defer func() {
-		cancel()
-		s.watchMu.Lock()
-		s.watchCancel = nil
-		s.watchMu.Unlock()
-	}()
-	go s.watchConfigAndReload(ctx)
-
 	// Wait for interrupt signal to gracefully shut down the server
 	signalChan := make(chan os.Signal, 1)
 	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
@@ -229,75 +239,45 @@ func (s *Server) Start() error {
 // Stop stops the gRPC server
 func (s *Server) Stop() {
 	s.stopOnce.Do(func() {
-		s.stopping.Store(true)
-		s.watchMu.Lock()
-		if s.watchCancel != nil {
-			s.watchCancel()
-		}
-		s.watchMu.Unlock()
 		if s.server != nil {
 			s.server.GracefulStop()
 			logging.ComponentEvent("extproc", "server_stopped", map[string]interface{}{
 				"port": s.port,
 			})
 		}
-		s.reloadMu.Lock()
-		defer s.reloadMu.Unlock()
 		if s.service != nil {
 			_ = s.service.Close()
 		}
 	})
 }
 
-// RouterService is a delegating gRPC service that forwards to the current router implementation.
+// RouterService owns the immutable bootstrap Router used by standalone streams
+// and managed error responses. Managed request generations come from the
+// process-owned publication registry.
 type RouterService struct {
-	current atomic.Pointer[routerGeneration]
-	mu      sync.Mutex
-	closed  bool
-	retired sync.WaitGroup
-	errMu   sync.Mutex
-	errors  []error
+	current    atomic.Pointer[routerGeneration]
+	managed    *ManagedRequestRuntime
+	standalone *StandaloneRequestRuntime
+	mu         sync.Mutex
+	closed     bool
+	retired    sync.WaitGroup
+	errMu      sync.Mutex
+	errors     []error
 }
 
 type routerGeneration struct {
-	router  *OpenAIRouter
-	refs    sync.WaitGroup
-	retired atomic.Bool
+	router *OpenAIRouter
+	refs   sync.WaitGroup
 }
 
-func NewRouterService(r *OpenAIRouter) *RouterService {
-	rs := &RouterService{}
+func newRouterServiceWithRequestRuntimes(
+	r *OpenAIRouter,
+	managed *ManagedRequestRuntime,
+	standalone *StandaloneRequestRuntime,
+) *RouterService {
+	rs := &RouterService{managed: managed, standalone: standalone}
 	rs.current.Store(&routerGeneration{router: r})
 	return rs
-}
-
-// Swap replaces the current router implementation and closes the retired
-// generation after every stream that leased it has returned. The current
-// pointer is swapped before publish, but Process must take rs.mu and therefore
-// cannot observe the new generation until the management snapshot is also
-// published and this critical section ends.
-func (rs *RouterService) Swap(r *OpenAIRouter, publish func()) error {
-	rs.mu.Lock()
-	if rs.closed {
-		rs.mu.Unlock()
-		if r != nil {
-			_ = r.Close()
-		}
-		return errors.New("router service is shutting down")
-	}
-	old := rs.current.Swap(&routerGeneration{router: r})
-	if publish != nil {
-		publish()
-	}
-	if old != nil {
-		old.retired.Store(true)
-		rs.retired.Add(1)
-	}
-	rs.mu.Unlock()
-	if old != nil {
-		go rs.closeRetiredGeneration(old)
-	}
-	return nil
 }
 
 // GetRouter returns the current router implementation.
@@ -309,18 +289,119 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 	return generation.router
 }
 
-// Process delegates to the current router.
+// Process delegates standalone streams to the process-global generation. In
+// managed mode it authenticates once, verifies the active publication lease,
+// and acquires the exactly pinned namespace generation before replaying the
+// first header frame.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
+	if rs.managed != nil {
+		return rs.processManaged(stream)
+	}
+	if rs.standalone != nil {
+		return rs.processStandalone(stream)
+	}
+	generation, err := rs.acquireCurrent()
+	if err != nil {
+		return err
+	}
+	defer generation.refs.Done()
+	return generation.router.Process(stream)
+}
+
+func (rs *RouterService) acquireCurrent() (*routerGeneration, error) {
 	rs.mu.Lock()
 	generation := rs.current.Load()
-	if generation == nil || generation.retired.Load() {
+	if generation == nil {
 		rs.mu.Unlock()
-		return errors.New("router is shutting down")
+		return nil, errors.New("router is shutting down")
 	}
 	generation.refs.Add(1)
 	rs.mu.Unlock()
+	return generation, nil
+}
+
+func (rs *RouterService) processManaged(stream ext_proc.ExternalProcessor_ProcessServer) error {
+	first, processManagedErr := stream.Recv()
+	if processManagedErr != nil {
+		return processManagedErr
+	}
+	headerMap, processManagedErr := managedRequestHeaders(first)
+	if processManagedErr != nil {
+		return processManagedErr
+	}
+	if managedInternalAuthenticated(headerMap) {
+		generation, ok := managedInternalGeneration(headerMap)
+		if !ok {
+			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+		}
+		lease, err := rs.managed.resolveInternal(generation)
+		if err != nil {
+			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+		}
+		defer lease.Release()
+		grant, err := consumeDispatchGrant(
+			headerMap, rs.managed.dispatch, stream.Context(), generation,
+			strings.TrimSpace(headerMapValue(headerMap, headers.RequestID)),
+		)
+		if err != nil {
+			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+		}
+		requestContext, err := routingcontext.WithGeneration(stream.Context(), generation)
+		if err != nil {
+			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+		}
+		requestContext = withVerifiedDispatchGrant(requestContext, grant)
+		return lease.Router.Process(&replayProcessStream{
+			ExternalProcessor_ProcessServer: stream, ctx: requestContext, first: first,
+		})
+	}
+
+	var (
+		resolution     managedExternalResolution
+		requestContext = stream.Context()
+	)
+	if rs.managed.accessEnabled() {
+		credential, ok := consumeBearerCredential(headerMap)
+		if !ok {
+			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnauthenticated)
+		}
+		var result quotaruntime.AccessCheckResult
+		var resolveErr error
+		resolution, result, resolveErr = rs.managed.resolveExternal(stream.Context(), credential)
+		if resolveErr != nil || !result.Allowed() || resolution.lease == nil {
+			return rs.sendManagedInferenceError(stream, result.Disposition)
+		}
+		requestContext = withInferenceAuthentication(requestContext, resolution.authentication)
+	} else {
+		// Routing-only mode has no inference identity. Remove any caller bearer
+		// before replay so it can never become an accidental backend credential.
+		_, _ = consumeBearerCredential(headerMap)
+		var resolveErr error
+		resolution, resolveErr = rs.managed.resolvePublic()
+		if resolveErr != nil || resolution.lease == nil {
+			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+		}
+	}
+	defer resolution.lease.Release()
+	requestContext, processManagedErr = routingcontext.WithGeneration(requestContext, resolution.generation)
+	if processManagedErr != nil {
+		return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+	}
+	return resolution.lease.Router.Process(&replayProcessStream{
+		ExternalProcessor_ProcessServer: stream, ctx: requestContext, first: first,
+	})
+}
+
+func (rs *RouterService) sendManagedInferenceError(
+	stream ext_proc.ExternalProcessor_ProcessServer,
+	disposition quotaruntime.AdmissionDisposition,
+) error {
+	generation, err := rs.acquireCurrent()
+	if err != nil {
+		return err
+	}
 	defer generation.refs.Done()
-	return generation.router.Process(stream)
+	return stream.Send(generation.router.createInferenceAccessError(disposition, nil))
 }
 
 func (rs *RouterService) Close() error {
@@ -329,7 +410,6 @@ func (rs *RouterService) Close() error {
 		rs.closed = true
 		generation := rs.current.Swap(nil)
 		if generation != nil {
-			generation.retired.Store(true)
 			rs.retired.Add(1)
 			go rs.closeRetiredGeneration(generation)
 		}
@@ -361,62 +441,6 @@ func closeRouterGeneration(generation *routerGeneration) error {
 	return generation.router.Close()
 }
 
-func (s *Server) reloadRouterFromFile(configPath string) error {
-	candidateCfg, err := parseReloadConfig(configPath)
-	if err != nil {
-		return err
-	}
-
-	return s.reloadRouterFromConfig("file", configPath, candidateCfg)
-}
-
-func (s *Server) reloadRouterFromConfig(
-	source string,
-	configPath string,
-	candidateCfg *config.RouterConfig,
-) error {
-	s.reloadMu.Lock()
-	defer s.reloadMu.Unlock()
-	if s.stopping.Load() {
-		return errors.New("router server is shutting down")
-	}
-	if source == "file" {
-		if err := ensureReloadConfigModels(candidateCfg); err != nil {
-			return fmt.Errorf("model download preflight failed: %w", err)
-		}
-	}
-
-	runtimeState, err := prepareReloadRuntime(candidateCfg)
-	if err != nil {
-		return fmt.Errorf("runtime dependency init failed: %w", err)
-	}
-
-	newRouter, err := buildReloadRouter(candidateCfg)
-	if err != nil {
-		return err
-	}
-	attachRuntimeRegistry(newRouter, s.runtime)
-	if err := warmupReloadRouter(newRouter, runtimeState); err != nil {
-		_ = newRouter.Close()
-		return fmt.Errorf("runtime warmup failed: %w", err)
-	}
-	inheritRouterLearningState(s.service.GetRouter(), newRouter)
-
-	// Kubernetes updates are already published through config.Replace in the
-	// controller callback. Replacing again here would re-enqueue the same config
-	// update and can cause duplicate reload notifications.
-	if source != "kubernetes" && s.runtime == nil {
-		replaceReloadConfig(candidateCfg)
-	}
-	logLoadedRouterConfig(configPath, candidateCfg)
-	if err := s.service.Swap(newRouter, func() {
-		publishRouterState(candidateCfg, newRouter, s.runtime)
-	}); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (s *Server) configuredGRPCMaxMessageSize() int {
 	cfg := resolveServerConfig(s)
 	if cfg == nil {
@@ -435,34 +459,6 @@ func resolveServerConfig(s *Server) *config.RouterConfig {
 		return s.runtime.CurrentConfig()
 	}
 	return config.Get()
-}
-
-func (s *Server) usesKubernetesConfigSource() bool {
-	cfg := resolveServerConfig(s)
-	return cfg != nil && cfg.ConfigSource == config.ConfigSourceKubernetes
-}
-
-func logReloadRuntimeLifecycleEvent(event modelruntime.Event) {
-	if event.Status != modelruntime.TaskFailed && event.Status != modelruntime.TaskSkipped {
-		return
-	}
-
-	payload := map[string]interface{}{
-		"task":        event.Task,
-		"best_effort": event.BestEffort,
-	}
-	if event.Error != nil {
-		payload["error"] = event.Error.Error()
-	}
-	if event.Status == modelruntime.TaskSkipped {
-		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_skipped", payload)
-		return
-	}
-	if event.BestEffort {
-		logging.ComponentWarnEvent("extproc", "runtime_lifecycle_task_failed", payload)
-		return
-	}
-	logging.ComponentErrorEvent("extproc", "runtime_lifecycle_task_failed", payload)
 }
 
 func attachRuntimeRegistry(router *OpenAIRouter, runtimeRegistry *routerruntime.Registry) {
@@ -495,6 +491,5 @@ func publishRouterState(
 		})
 		return
 	}
-	services.SetGlobalClassificationService(router.ClassificationService)
 	memory.SetGlobalMemoryStore(router.MemoryStore)
 }

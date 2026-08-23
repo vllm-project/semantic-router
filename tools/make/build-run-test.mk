@@ -11,7 +11,7 @@ build: $(if $(CI),rust-ci,rust) build-router
 # Build router (conditionally use rust-ci in CI environments)
 # Development build: Use DEV=true to enable untrusted metadata["user_id"] fallback for testing
 # Example: make build-router DEV=true
-# Production builds (default) only accept user_id from auth headers (x-authz-user-id)
+# Production builds use only Router-authenticated TenantContext identity.
 build-router: ## Build the router binary
 build-router: $(if $(CI),rust-ci,rust)
 	@$(LOG_TARGET)

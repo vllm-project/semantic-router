@@ -238,7 +238,7 @@ func TestHandleListMemories_UserIsolation(t *testing.T) {
 	}
 }
 
-func TestHandleListMemories_AuthHeaderPriority(t *testing.T) {
+func TestHandleListMemories_IgnoresIdentityHeader(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
@@ -257,17 +257,17 @@ func TestHandleListMemories_AuthHeaderPriority(t *testing.T) {
 		t.Fatalf("Failed to parse response: %v", err)
 	}
 
-	if resp.Total != 3 {
-		t.Errorf("Expected 3 memories for user-alice (from auth header), got %d", resp.Total)
+	if resp.Total != 1 {
+		t.Errorf("Expected 1 memory for the explicit user-bob scope, got %d", resp.Total)
 	}
 	for _, mem := range resp.Memories {
-		if mem.UserID != "user-alice" {
-			t.Errorf("Expected all memories to belong to user-alice, got %s", mem.UserID)
+		if mem.UserID != "user-bob" {
+			t.Errorf("Expected all memories to belong to user-bob, got %s", mem.UserID)
 		}
 	}
 }
 
-func TestHandleListMemories_AuthHeaderOnly(t *testing.T) {
+func TestHandleListMemories_IdentityHeaderCannotSelectScope(t *testing.T) {
 	server, store := newTestServer()
 	seedTestMemories(store)
 
@@ -277,16 +277,7 @@ func TestHandleListMemories_AuthHeaderOnly(t *testing.T) {
 
 	server.handleListMemories(w, req)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("Expected 200, got %d: %s", w.Code, w.Body.String())
-	}
-
-	var resp MemoryListResponse
-	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("Failed to parse response: %v", err)
-	}
-
-	if resp.Total != 3 {
-		t.Errorf("Expected 3 memories for user-alice, got %d", resp.Total)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("Expected 401, got %d: %s", w.Code, w.Body.String())
 	}
 }

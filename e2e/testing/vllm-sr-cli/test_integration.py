@@ -7,9 +7,7 @@ They are slower than unit tests and should be run with --integration flag.
 
 """
 
-import json
 import os
-import stat
 import subprocess
 import time
 import unittest
@@ -19,7 +17,7 @@ from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
-from cli_test_base import HTTP_STATUS_OK, CLITestBase
+from cli_test_base import CLITestBase
 
 DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
 MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_SIM_IMAGE"
@@ -236,8 +234,7 @@ class TestServeIntegration(CLITestBase):
         request = urllib_request.Request(
             f"http://localhost:{listener_port}/v1/chat/completions",
             data=(
-                b'{"model":"test-model","messages":'
-                b'[{"role":"user","content":"ping"}]}'
+                b'{"model":"test-model","messages":[{"role":"user","content":"ping"}]}'
             ),
             headers={"Content-Type": "application/json"},
             method="POST",
@@ -294,7 +291,7 @@ class TestServeIntegration(CLITestBase):
 
         with self._running_serve(
             base_url=base_url,
-            provider="openai",
+            provider="openai-compatible",
             api_only=True,
         ):
             self.assertTrue(
@@ -326,124 +323,6 @@ class TestServeIntegration(CLITestBase):
             self._assert_logs_command()
 
         self.print_test_result(True, "Running container contracts verified")
-
-    @unittest.skipUnless(
-        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
-        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
-    )
-    def test_catalog_model_operands_expose_only_selected_virtual_entrypoints(self):
-        """Serve two installed virtual models from a private catalog projection."""
-        self.print_test_header(
-            "Catalog Model Selection Integration Test",
-            "Verifies serve MODEL... reaches the live Router model inventory",
-        )
-        selected = {
-            "vllm-sr/mom-v1-lite",
-            "vllm-sr/mom-v1-flash",
-        }
-        list_code, list_stdout, list_stderr = self.run_cli(
-            ["model", "list", "--output", "json"]
-        )
-        self.assertEqual(list_code, 0, list_stderr)
-        installed_catalog_ids = {
-            str(model["id"]) for model in json.loads(list_stdout)["models"]
-        }
-
-        process = self._start_serve_background(
-            env=os.environ.copy(),
-            arguments=(*sorted(selected), "--minimal"),
-        )
-        try:
-            self._wait_for_serve_success(process)
-            model_ids = self._wait_for_catalog_model_ids()
-        finally:
-            self._stop_serve_process(process)
-
-        self.assertEqual(model_ids & installed_catalog_ids, selected)
-        self.assertFalse(
-            os.path.exists(os.path.join(self.test_dir, "config.yaml")),
-            "catalog serving must not overwrite the user's config.yaml",
-        )
-        self.print_test_result(True, "Selected catalog entrypoints are live")
-
-    def _wait_for_catalog_model_ids(self) -> set[str]:
-        """Poll the authenticated Router inventory for selected entrypoints."""
-        token = self._read_catalog_management_credential()
-        endpoint = f"http://127.0.0.1:{self.runtime_stack.api_port}/v1/models"
-        request = urllib_request.Request(
-            endpoint,
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        deadline = time.monotonic() + 90
-        last_error = "no response"
-        while time.monotonic() < deadline:
-            try:
-                with urllib_request.urlopen(request, timeout=5) as response:
-                    if response.status != HTTP_STATUS_OK:
-                        last_error = f"HTTP {response.status}"
-                        time.sleep(1)
-                        continue
-                    payload = json.load(response)
-                models = payload.get("data") if isinstance(payload, dict) else None
-                if isinstance(models, list):
-                    return {
-                        str(model["id"])
-                        for model in models
-                        if isinstance(model, dict) and isinstance(model.get("id"), str)
-                    }
-                last_error = "response did not contain a model list"
-            except (OSError, ValueError) as error:
-                last_error = str(error)
-            time.sleep(1)
-        self.fail(f"Router catalog inventory did not become ready: {last_error}")
-
-    def _read_catalog_management_credential(self) -> str:
-        """Read the stack credential only after verifying its private file contract."""
-        credential_path = os.path.join(
-            self.test_dir,
-            ".vllm-sr",
-            "catalog-credentials",
-            f"{self.runtime_stack.stack_name}.token",
-        )
-        descriptor = os.open(
-            credential_path,
-            os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0),
-        )
-        try:
-            file_info = os.fstat(descriptor)
-            self.assertTrue(
-                stat.S_ISREG(file_info.st_mode),
-                "catalog management credential must be a regular file",
-            )
-            self.assertEqual(
-                file_info.st_nlink,
-                1,
-                "catalog management credential must not have multiple hard links",
-            )
-            if os.name == "posix":
-                self.assertEqual(
-                    file_info.st_uid,
-                    os.getuid(),
-                    "catalog management credential must be owned by the CLI user",
-                )
-                self.assertEqual(
-                    stat.S_IMODE(file_info.st_mode),
-                    0o600,
-                    "catalog management credential must be readable only by its owner",
-                )
-            with os.fdopen(descriptor, encoding="utf-8") as credential_file:
-                descriptor = -1
-                token = credential_file.read().strip()
-        finally:
-            if descriptor >= 0:
-                os.close(descriptor)
-
-        self.assertEqual(len(token), 64, "catalog management credential is malformed")
-        self.assertTrue(
-            all(character in "0123456789abcdef" for character in token),
-            "catalog management credential is malformed",
-        )
-        return token
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",

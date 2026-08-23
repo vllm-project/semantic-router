@@ -29,17 +29,6 @@ if [ "$1" = "inspect" ] && [ "$2" = "-f" ]; then
   exit 1
 fi
 
-if [ "$1" = "logs" ] && [ "$2" = "--tail" ]; then
-  container="$4"
-  case "$container" in
-    "$TEST_LEGACY_CONTAINER") printf "%s" "$TEST_LEGACY_LOG" ;;
-    "$TEST_ROUTER_CONTAINER") printf "%s" "$TEST_ROUTER_LOG" ;;
-    "$TEST_ENVOY_CONTAINER") printf "%s" "$TEST_ENVOY_LOG" ;;
-    "$TEST_DASHBOARD_CONTAINER") printf "%s" "$TEST_DASHBOARD_LOG" ;;
-  esac
-  exit 0
-fi
-
 exit 1
 `
 	if err := os.WriteFile(dockerPath, []byte(script), 0o755); err != nil {
@@ -64,7 +53,7 @@ func TestCollectHostStatusUsesSplitManagedRuntime(t *testing.T) {
 	t.Setenv("TEST_DASHBOARD_CONTAINER", "lane-a-vllm-sr-dashboard-container")
 	t.Setenv("TEST_DASHBOARD_STATUS", "running")
 
-	status := collectHostStatus("", "")
+	status := collectHostStatus("")
 	if status.Overall != "healthy" {
 		t.Fatalf("overall status = %q, want healthy", status.Overall)
 	}
@@ -75,8 +64,8 @@ func TestCollectHostStatusUsesSplitManagedRuntime(t *testing.T) {
 		t.Fatalf("first service = %q, want Router", status.Services[0].Name)
 	}
 	for _, service := range status.Services {
-		if service.Status != "running" {
-			t.Fatalf("service %q status = %q, want running", service.Name, service.Status)
+		if service.Status != "operational" {
+			t.Fatalf("service %q status = %q, want operational", service.Name, service.Status)
 		}
 	}
 }
@@ -97,18 +86,18 @@ func TestCollectHostStatusReportsStandbyForCreatedSplitServices(t *testing.T) {
 	t.Setenv("TEST_DASHBOARD_CONTAINER", "lane-a-vllm-sr-dashboard-container")
 	t.Setenv("TEST_DASHBOARD_STATUS", "running")
 
-	status := collectHostStatus("", "")
+	status := collectHostStatus("")
 	if status.Overall != "degraded" {
 		t.Fatalf("overall status = %q, want degraded", status.Overall)
 	}
 	if len(status.Services) != 3 {
 		t.Fatalf("service count = %d, want 3 (%#v)", len(status.Services), status.Services)
 	}
-	if got := status.Services[0].Message; got != "Standby (setup mode)" {
-		t.Fatalf("router message = %q, want standby", got)
+	if got := status.Services[0].Status; got != "starting" {
+		t.Fatalf("router status = %q, want starting", got)
 	}
-	if got := status.Services[1].Message; got != "Standby (setup mode)" {
-		t.Fatalf("envoy message = %q, want standby", got)
+	if got := status.Services[1].Status; got != "starting" {
+		t.Fatalf("envoy status = %q, want starting", got)
 	}
 }
 
@@ -126,7 +115,7 @@ func TestCollectHostStatusReportsDashboardWhenRouterIsUnavailable(t *testing.T) 
 		t.Fatalf("close listener: %v", err)
 	}
 
-	status := collectHostStatus("", routerAPIURL)
+	status := collectHostStatus(routerAPIURL)
 	if status.Overall != "not_running" {
 		t.Fatalf("overall status = %q, want not_running", status.Overall)
 	}
@@ -135,12 +124,12 @@ func TestCollectHostStatusReportsDashboardWhenRouterIsUnavailable(t *testing.T) 
 	}
 
 	router := status.Services[0]
-	if router.Name != "Router" || router.Healthy || router.Status != "not running" {
+	if router.Name != "Router" || router.Healthy || router.Status != "unavailable" {
 		t.Fatalf("router service = %#v, want Router not running and unhealthy", router)
 	}
 
 	dashboard := status.Services[1]
-	if dashboard.Name != "Dashboard" || !dashboard.Healthy || dashboard.Status != "running" {
+	if dashboard.Name != "Dashboard" || !dashboard.Healthy || dashboard.Status != "operational" {
 		t.Fatalf("dashboard service = %#v, want Dashboard running and healthy", dashboard)
 	}
 }

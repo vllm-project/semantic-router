@@ -1,140 +1,144 @@
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: openai/gpt-oss-20b
-      reasoning_families:
-        deepseek:
-          type: chat_template_kwargs
-          parameter: thinking
-        qwen3:
-          type: chat_template_kwargs
-          parameter: enable_thinking
-        gpt-oss:
-          type: reasoning_effort
-          parameter: reasoning_effort
-        gpt:
-          type: reasoning_effort
-          parameter: reasoning_effort
-      default_reasoning_effort: high
-    models:
-      - name: openai/gpt-oss-20b
-        backend_refs:
-          - name: mock-vllm
-            endpoint: mock-vllm.default.svc.cluster.local:8000
-            weight: 1
-  routing:
-    decisions:
+  models:
+  - name: openai/gpt-oss-20b
+    card: {}
+    connections:
+    - provider: vllm
+      endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
+      model: openai/gpt-oss-20b
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        domains:
+        - name: math
+          description: Mathematics and quantitative reasoning
+          mmlu_categories:
+          - math
+        - name: science
+          description: Science and natural sciences
+          mmlu_categories:
+          - physics
+          - chemistry
+          - biology
+        - name: technology
+          description: Technology and computer science
+          mmlu_categories:
+          - computer science
+        - name: history
+          description: History and cultural topics
+          mmlu_categories:
+          - history
+        - name: general
+          description: General knowledge and miscellaneous topics
+          mmlu_categories:
+          - other
+      decisions:
       - name: math_decision
         description: Mathematics and quantitative reasoning
         priority: 100
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: math
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
+          - type: domain
+            name: math
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a mathematics expert. Provide step-by-step solutions with clear explanations. Show your work and verify calculations.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a mathematics expert. Provide step-by-step solutions
+              with clear explanations. Show your work and verify calculations.
       - name: science_decision
         description: Science and natural sciences
         priority: 100
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: science
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
+          - type: domain
+            name: science
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a science expert. Explain scientific concepts clearly and accurately. Use examples and analogies when helpful.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a science expert. Explain scientific concepts clearly
+              and accurately. Use examples and analogies when helpful.
       - name: technology_decision
         description: Technology and computer science
         priority: 100
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: technology
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
+          - type: domain
+            name: technology
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a technology and programming expert. Provide practical solutions with code examples when appropriate.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a technology and programming expert. Provide practical
+              solutions with code examples when appropriate.
       - name: history_decision
         description: History and cultural topics
         priority: 100
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: history
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
+          - type: domain
+            name: history
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a history expert. Provide accurate historical information with context and relevant details.
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a history expert. Provide accurate historical information
+              with context and relevant details.
       - name: general_decision
         description: General knowledge and miscellaneous topics
         priority: 50
         rules:
           operator: AND
           conditions:
-            - type: domain
-              name: general
-        modelRefs:
-          - model: openai/gpt-oss-20b
-            use_reasoning: false
+          - type: domain
+            name: general
         plugins:
-          - type: system_prompt
-            configuration:
-              system_prompt: You are a helpful and knowledgeable assistant. Provide accurate, helpful responses across a wide range of topics.
-          - type: response_cache
-            configuration:
-              enabled: true
-              scope: global
+        - type: system_prompt
+          configuration:
+            system_prompt: You are a helpful and knowledgeable assistant. Provide
+              accurate, helpful responses across a wide range of topics.
+        - type: response_cache
+          configuration:
+            enabled: true
+            scope: global
+            semantic:
               similarity_threshold: 0.75
-    signals:
-      domains:
-        - name: math
-          description: Mathematics and quantitative reasoning
-          mmlu_categories:
-            - math
-        - name: science
-          description: Science and natural sciences
-          mmlu_categories:
-            - physics
-            - chemistry
-            - biology
-        - name: technology
-          description: Technology and computer science
-          mmlu_categories:
-            - "computer science"
-        - name: history
-          description: History and cultural topics
-          mmlu_categories:
-            - history
-        - name: general
-          description: General knowledge and miscellaneous topics
-          mmlu_categories:
-            - other
-    modelCards:
-      - name: openai/gpt-oss-20b
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      math_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
+      science_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
+      technology_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
+      history_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
+      general_decision:
+        models:
+        - model: openai/gpt-oss-20b
+          weight: '1'
   global:
-    router:
-      strategy: priority
+    router: {}
     services:
       api:
         batch_classification:
@@ -147,28 +151,28 @@ config:
             high_resolution_timing: false
             sample_rate: 1.0
             duration_buckets:
-              - 0.001
-              - 0.005
-              - 0.01
-              - 0.025
-              - 0.05
-              - 0.1
-              - 0.25
-              - 0.5
-              - 1
-              - 2.5
-              - 5
-              - 10
-              - 30
+            - 0.001
+            - 0.005
+            - 0.01
+            - 0.025
+            - 0.05
+            - 0.1
+            - 0.25
+            - 0.5
+            - 1
+            - 2.5
+            - 5
+            - 10
+            - 30
             size_buckets:
-              - 1
-              - 2
-              - 5
-              - 10
-              - 20
-              - 50
-              - 100
-              - 200
+            - 1
+            - 2
+            - 5
+            - 10
+            - 20
+            - 50
+            - 100
+            - 200
       observability:
         tracing:
           enabled: true
@@ -184,6 +188,14 @@ config:
             service_name: vllm-semantic-router
             service_version: v0.1.0
             deployment_environment: development
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
         enabled: true
@@ -204,3 +216,8 @@ config:
         similarity_threshold: 0.2
         tools_db_path: config/tools_db.json
         fallback_to_empty: true
+    model_catalog:
+      embeddings: {}
+      modules:
+        classifier: {}
+        hallucination_mitigation: {}

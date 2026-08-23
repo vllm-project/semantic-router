@@ -80,17 +80,10 @@ type Classifier struct {
 	// Knowledge-base classifiers keyed by configured KB name.
 	kbClassifiers      map[string]*KnowledgeBaseClassifier
 	genericClassifiers map[string]labelClassifier
-	// Identity header names resolved from authz.identity config (or defaults).
-	// Used by EvaluateAllSignalsWithHeaders to read user identity from requests.
-	authzUserIDHeader     string
-	authzUserGroupsHeader string
-	// authzFailOpen: cfg.Authz.FailOpen; see applyAuthzFailOpenOnClassifyError.
-	authzFailOpen bool
-
-	Config           *config.RouterConfig
-	CategoryMapping  *CategoryMapping
-	PIIMapping       *PIIMapping
-	JailbreakMapping *JailbreakMapping
+	Config             *config.RouterConfig
+	CategoryMapping    *CategoryMapping
+	PIIMapping         *PIIMapping
+	JailbreakMapping   *JailbreakMapping
 
 	// Category name mapping layer to support generic categories in config
 	// Maps MMLU-Pro category names -> generic category names (as defined in config.Categories)
@@ -187,11 +180,6 @@ func newClassifierWithOptions(cfg *config.RouterConfig, options ...option) (*Cla
 	}
 
 	classifier := &Classifier{Config: cfg}
-
-	// Resolve identity header names from authz.identity config (or defaults).
-	classifier.authzUserIDHeader = cfg.Authz.Identity.GetUserIDHeader()
-	classifier.authzUserGroupsHeader = cfg.Authz.Identity.GetUserGroupsHeader()
-	classifier.authzFailOpen = cfg.Authz.FailOpen
 
 	for _, option := range options {
 		option(classifier)

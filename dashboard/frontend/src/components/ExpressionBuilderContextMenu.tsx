@@ -38,7 +38,7 @@ export default function ExpressionBuilderContextMenu({
     <div
       className={styles.ctxMenu}
       style={{ left: contextMenu.x, top: contextMenu.y }}
-      onClick={event => event.stopPropagation()}
+      onClick={(event) => event.stopPropagation()}
     >
       {isLeaf(node) ? (
         <div
@@ -56,7 +56,8 @@ export default function ExpressionBuilderContextMenu({
           Toggle to {node.operator === 'AND' ? 'OR' : 'AND'}
         </div>
       ) : null}
-      {isOperator(node) && (node.operator !== 'NOT' || (node.conditions as RuleNode[]).length === 0) ? (
+      {isOperator(node) &&
+      (node.operator !== 'NOT' || (node.conditions as RuleNode[]).length === 0) ? (
         <div className={styles.ctxMenuItem} onClick={() => onAddChild(contextMenu.path)}>
           Add child...
         </div>

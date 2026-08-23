@@ -51,7 +51,7 @@ func validateModalityRules(rules []ModalityRule) error {
 // validateModalityDecisions validates that decisions using modality signals have correct modelRefs.
 // Specifically, a BOTH decision must reference both an AR and a diffusion model, OR a single omni model.
 func validateModalityDecisions(cfg *RouterConfig) error {
-	for _, decision := range cfg.AllRoutingDecisions() {
+	for _, decision := range cfg.Decisions {
 		for _, cond := range decision.Rules.Conditions {
 			if cond.Type != SignalTypeModality || cond.Name != "BOTH" {
 				continue
@@ -65,6 +65,12 @@ func validateModalityDecisions(cfg *RouterConfig) error {
 }
 
 func validateBothModalityDecision(cfg *RouterConfig, decision Decision) error {
+	// Canonical Recipes are intentionally model-free. Their Entrypoint-derived
+	// routing views are validated later in the same pass after assignments have
+	// been compiled into ModelRefs.
+	if len(decision.ModelRefs) == 0 {
+		return nil
+	}
 	hasAR := false
 	hasDiffusion := false
 	hasOmni := false

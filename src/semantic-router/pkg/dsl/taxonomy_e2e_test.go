@@ -86,10 +86,10 @@ func taxonomyConfigFixture(t *testing.T) *config.RouterConfig {
 	}
 }
 
-func TestEmitYAMLFromConfigIncludesKnowledgeBaseAndSignals(t *testing.T) {
-	yamlBytes, err := EmitYAMLFromConfig(taxonomyConfigFixture(t))
+func TestEmitRoutingYAMLIncludesKnowledgeBaseSignalWithoutCatalog(t *testing.T) {
+	yamlBytes, err := EmitRoutingYAMLFromConfig(taxonomyConfigFixture(t))
 	if err != nil {
-		t.Fatalf("EmitYAMLFromConfig: %v", err)
+		t.Fatalf("EmitRoutingYAMLFromConfig: %v", err)
 	}
 
 	var raw map[string]interface{}
@@ -97,16 +97,13 @@ func TestEmitYAMLFromConfigIncludesKnowledgeBaseAndSignals(t *testing.T) {
 		t.Fatalf("yaml.Unmarshal: %v", err)
 	}
 
-	global := mustMap(t, raw["global"], "global")
-	modelCatalog := mustMap(t, global["model_catalog"], "global.model_catalog")
-	kbs := mustSlice(t, modelCatalog["kbs"], "global.model_catalog.kbs")
-	if len(kbs) != 1 {
-		t.Fatalf("expected 1 knowledge base, got %d", len(kbs))
+	if _, exists := raw["global"]; exists {
+		t.Fatalf("Recipe document leaked global KnowledgeBase catalog: %s", yamlBytes)
 	}
 
-	routing := mustMap(t, raw["routing"], "routing")
-	signals := mustMap(t, routing["signals"], "routing.signals")
-	kbSignals := mustSlice(t, signals["kb"], "routing.signals.kb")
+	document := mustMap(t, raw["document"], "document")
+	signals := mustMap(t, document["signals"], "document.signals")
+	kbSignals := mustSlice(t, signals["kb"], "document.signals.kb")
 	if len(kbSignals) != 1 {
 		t.Fatalf("expected 1 kb signal, got %d", len(kbSignals))
 	}

@@ -37,16 +37,6 @@ func (c ReMoMRuntimeConfig) EffectiveModelNames() []string {
 	return DefaultReMoMModelNames()
 }
 
-func (c *RouterConfig) ExposedReMoMModelNames() []string {
-	if c == nil || !c.Looper.IsEnabled() {
-		return nil
-	}
-	if !c.HasReMoMDecision() {
-		return nil
-	}
-	return c.Looper.ReMoM.EffectiveModelNames()
-}
-
 func normalizeReMoMModelNames(names []string) []string {
 	seen := make(map[string]bool, len(names))
 	result := make([]string, 0, len(names))
@@ -59,34 +49,6 @@ func normalizeReMoMModelNames(names []string) []string {
 		result = append(result, normalized)
 	}
 	return result
-}
-
-func (c *RouterConfig) IsReMoMModelName(modelName string) bool {
-	if c == nil {
-		return false
-	}
-	normalized := strings.TrimSpace(modelName)
-	if normalized == "" {
-		return false
-	}
-	for _, candidate := range c.Looper.ReMoM.EffectiveModelNames() {
-		if normalized == candidate {
-			return true
-		}
-	}
-	return false
-}
-
-func (c *RouterConfig) HasReMoMDecision() bool {
-	if c == nil {
-		return false
-	}
-	for _, decision := range c.Decisions {
-		if decision.Algorithm != nil && decision.Algorithm.Type == DecisionAlgorithmReMoM {
-			return true
-		}
-	}
-	return false
 }
 
 func ValidateReMoMRuntimeConfig(cfg ReMoMRuntimeConfig) error {

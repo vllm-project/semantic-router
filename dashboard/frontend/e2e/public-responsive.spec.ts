@@ -3,13 +3,6 @@ import { expect, test, type Page } from '@playwright/test'
 import { mockAuthenticatedAppShell } from './support/auth'
 
 async function mockPublicVisitor(page: Page) {
-  await page.route('**/api/setup/state', async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: 'application/json',
-      body: JSON.stringify({ setupMode: false }),
-    })
-  })
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({ status: 401, body: 'Unauthorized' })
   })
@@ -24,7 +17,7 @@ async function mockPublicVisitor(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ readonlyMode: false, platform: '' }),
+      body: JSON.stringify({ readonlyMode: false, serverReadonly: false, platform: '' }),
     })
   })
 }
@@ -51,9 +44,7 @@ test.describe('Public and transition surfaces on short screens', () => {
       '/login',
     )
 
-    await expect(
-      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
-    ).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
       page.getByRole('heading', { name: 'Every request. A personalized model path.' }),
     ).toBeVisible()
@@ -166,13 +157,9 @@ test.describe('Public and transition surfaces on short screens', () => {
     await expect(landingMotion).toBeVisible()
     await expect(landingMotion.locator('canvas')).toBeVisible()
 
+    await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
-    ).toBeVisible()
-    await expect(
-      page.getByText(
-        'System-level intelligence for heterogeneous LLM inference',
-      ),
+      page.getByText('System-level intelligence for heterogeneous LLM inference'),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })
     await exploreDocs.scrollIntoViewIfNeeded()

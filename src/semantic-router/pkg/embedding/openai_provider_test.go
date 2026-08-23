@@ -3,10 +3,14 @@ package embedding
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync/atomic"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -96,6 +100,29 @@ func TestOpenAICompatibleProviderRetriesRetryableStatus(t *testing.T) {
 	}
 	if calls != 2 {
 		t.Fatalf("calls = %d, want 2", calls)
+	}
+}
+
+func TestShouldRetryEmbeddingErrorClassifiesNetworkFailures(t *testing.T) {
+	tests := []struct {
+		name      string
+		err       error
+		retryable bool
+	}{
+		{name: "deadline", err: context.DeadlineExceeded, retryable: true},
+		{name: "unexpected EOF", err: io.ErrUnexpectedEOF, retryable: true},
+		{name: "connection reset", err: &url.Error{Op: "POST", URL: "https://example.invalid", Err: syscall.ECONNRESET}, retryable: true},
+		{name: "connection refused", err: &url.Error{Op: "POST", URL: "https://example.invalid", Err: syscall.ECONNREFUSED}, retryable: true},
+		{name: "canceled", err: context.Canceled, retryable: false},
+		{name: "application error", err: errors.New("invalid embedding payload"), retryable: false},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := shouldRetryEmbeddingError(test.err); got != test.retryable {
+				t.Fatalf("shouldRetryEmbeddingError(%v) = %t, want %t", test.err, got, test.retryable)
+			}
+		})
 	}
 }
 

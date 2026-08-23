@@ -208,7 +208,9 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
 ):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.4\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "global:\n  services:\n    backend_egress:\n"
+        "      policy_file: /app/config/backend-egress-policy.yaml\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -253,15 +255,15 @@ def test_container_start_vllm_sr_applies_custom_stack_name_and_port_offset(
 def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
     tmp_path, monkeypatch
 ):
-    """Dashboard's runtime-config sync resolves the per-stack filename via
-    VLLM_SR_STACK_NAME. Without the env propagated into the dashboard container,
-    sync writes to runtime-config.yaml while the CLI wrote
-    runtime-config.<stack>.yaml; router stays pinned to the stale path and
-    setup-mode never disengages.
+    """Dashboard resolves the per-stack compiled bootstrap via
+    VLLM_SR_STACK_NAME. Without the env propagated into the Dashboard container,
+    it would read the default stack path instead of the selected stack.
     """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.4\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "global:\n  services:\n    backend_egress:\n"
+        "      policy_file: /app/config/backend-egress-policy.yaml\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")
@@ -292,27 +294,26 @@ def test_container_start_vllm_sr_propagates_stack_name_to_dashboard(
     dashboard_cmd = _find_container_run_cmd(
         captured, "audit-a-vllm-sr-dashboard-container"
     )
-    # Dashboard runs the runtime-config sync, router consumes the resolved
-    # path; both need stack-name visibility.
+    # Dashboard and Router resolve the same stack-scoped compiled bootstrap;
+    # both need stack-name visibility.
     assert "VLLM_SR_STACK_NAME=audit-a" in dashboard_cmd
     assert "VLLM_SR_STACK_NAME=audit-a" in router_cmd
-    assert (
-        "VLLM_SR_RECIPE_STORE_DIR=/app/.vllm-sr/recipe-store/audit-a" in dashboard_cmd
-    )
-    assert "/app/.vllm-sr/runtime-config.audit-a.yaml" in dashboard_cmd
-    assert "/app/.vllm-sr/runtime-config.audit-a.yaml" in router_cmd
+    assert "/app/.vllm-sr/compiled-bootstrap.audit-a.yaml" in dashboard_cmd
+    assert "/app/.vllm-sr/compiled-bootstrap.audit-a.yaml" in router_cmd
 
 
 def test_container_start_vllm_sr_omits_stack_name_env_for_default_stack(
     tmp_path, monkeypatch
 ):
-    """Default stack uses the unsuffixed runtime-config.yaml on both ends, so
+    """Default stack uses the unsuffixed compiled bootstrap on both ends, so
     we do not need to inject VLLM_SR_STACK_NAME and should not start doing so
     accidentally.
     """
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
-        "version: v0.1\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "version: v0.4\nlisteners:\n  - name: http-8899\n    address: 0.0.0.0\n    port: 8899\n"
+        "global:\n  services:\n    backend_egress:\n"
+        "      policy_file: /app/config/backend-egress-policy.yaml\n"
     )
 
     monkeypatch.setattr(container_start, "get_container_runtime", lambda: "docker")

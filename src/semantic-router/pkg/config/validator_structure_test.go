@@ -24,7 +24,7 @@ func TestValidateConfigStructureRejectsRemovedStructureSpanDistance(t *testing.T
 		},
 	}
 
-	err := validateConfigStructure(cfg)
+	err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 	if err == nil {
 		t.Fatal("expected validateConfigStructure to reject span_distance")
 	}
@@ -52,7 +52,7 @@ func TestValidateConfigStructureRejectsRemovedStructureMarkerPair(t *testing.T) 
 		},
 	}
 
-	err := validateConfigStructure(cfg)
+	err := validateConfigStructure(scopedRoutingProfileForTest(cfg))
 	if err == nil {
 		t.Fatal("expected validateConfigStructure to reject marker_pair")
 	}
@@ -81,57 +81,26 @@ func TestValidateConfigStructureAcceptsDensityWithoutNormalizeBy(t *testing.T) {
 		},
 	}
 
-	if err := validateConfigStructure(cfg); err != nil {
+	if err := validateConfigStructure(scopedRoutingProfileForTest(cfg)); err != nil {
 		t.Fatalf("expected density rule without normalize_by to validate, got %v", err)
 	}
 }
 
 func TestParseYAMLBytesRejectsRemovedStructureNormalizeBy(t *testing.T) {
-	yamlContent := []byte(`
-version: v0.3
-listeners:
-  - name: default
-    address: 0.0.0.0
-    port: 8080
-providers:
-  defaults: {}
-  models: []
-routing:
-  modelCards: []
-  signals:
-    keywords: []
-    embeddings: []
-    domains: []
-    fact_check: []
-    user_feedbacks: []
-    preferences: []
-    language: []
-    context: []
-    structure:
-      - name: constraint_dense
-        feature:
-          type: density
-          normalize_by: char_count
-          source:
-            type: keyword_set
-            keywords: ["最多"]
-    complexity: []
-    modality: []
-    role_bindings: []
-    jailbreak: []
-    pii: []
-  projections:
-    partitions: []
-    scores: []
-    mappings: []
-  decisions: []
-global:
-  router: {}
-  services: {}
-  stores: {}
-  integrations: {}
-  model_catalog: {}
-`)
+	yamlContent := canonicalRecipeFixture(`
+signals:
+  structure:
+    - name: constraint_dense
+      feature:
+        type: density
+        normalize_by: char_count
+        source:
+          type: keyword_set
+          keywords: ["最多"]
+decisions:
+  - name: route
+    rules: {}
+`, "")
 
 	_, err := ParseYAMLBytes(yamlContent)
 	if err == nil {
@@ -144,7 +113,7 @@ global:
 
 func TestParseRoutingYAMLBytesRejectsRemovedStructureNormalizeBy(t *testing.T) {
 	yamlContent := []byte(`
-routing:
+document:
   signals:
     structure:
       - name: constraint_dense
@@ -154,7 +123,9 @@ routing:
           source:
             type: keyword_set
             keywords: ["最多"]
-  decisions: []
+  decisions:
+    - name: route
+      rules: {}
 `)
 
 	_, err := ParseRoutingYAMLBytes(yamlContent)

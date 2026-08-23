@@ -2,6 +2,8 @@
 
 export { useTheme } from './useTheme'
 export type { Theme } from './useTheme'
-export { useConversationStorage } from './useConversationStorage'
-export type { StoredConversation } from './useConversationStorage'
-export { usePlaygroundQueue } from './usePlaygroundQueue'
+export { useDelegatedInferenceSession } from './useDelegatedInferenceSession'
+export type {
+  DelegatedInferenceSessionState,
+  DelegatedInferenceStatus,
+} from './useDelegatedInferenceSession'

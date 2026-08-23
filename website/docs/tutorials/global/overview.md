@@ -3,9 +3,9 @@
 ## Overview
 
 `global:` contains Router-wide settings and shared infrastructure. It is the
-counterpart to the route-local `routing:` tree: define a service or store once
-under `global:`, then opt individual routes into it with signals, algorithms,
-or plugins.
+counterpart to each route-local `recipes[].document`: define a service or store
+once under `global:`, then opt individual routes into it with signals,
+algorithms, or plugins.
 
 ## Key Advantages
 
@@ -21,10 +21,11 @@ connections and makes the data and trust boundaries visible.
 
 ## When to Use
 
-Use `global:` for behavior or infrastructure shared by several recipes. Keep
-route matching, candidate models, algorithms, and plugins in `routing:`. Global
-settings are shared across recipes; signals, projections, and decisions are
-recipe-scoped, while algorithms and plugins belong to individual decisions.
+Use `global:` for behavior or infrastructure shared by several Recipes. Keep
+route matching, algorithms, and plugins in each Recipe document; keep candidate
+Models in Entrypoint assignments. Global settings are shared across Recipes,
+while signals, projections, decisions, algorithms, and plugins remain
+Recipe-scoped.
 
 ## Configuration
 
@@ -45,7 +46,7 @@ Global configuration has five groups:
 | Group | Owns | Guide |
 |---|---|---|
 | `global.router` | Router engine controls, selection defaults, streamed-body policy, learning | [Algorithms](../algorithm/overview), [Router Learning](../learning/overview) |
-| `global.services` | API, Response API, observability, authz, rate limits, management API, startup status, replay | [API and Observability](./api-and-observability) |
+| `global.services` | API, Response API, observability, Router-native access, backend dispatch, management API, startup status, replay | [API and Observability](./api-and-observability) |
 | `global.stores` | response cache, memory, vector store | [Stores and Tools](./stores-and-tools) |
 | `global.integrations` | tool catalog and Looper endpoint/state | [Stores and Tools](./stores-and-tools) |
 | `global.model_catalog` | embeddings, system models, external helpers, knowledge bases, capability modules | [Safety, Models, and Policy](./safety-models-and-policy) |
@@ -63,8 +64,6 @@ Remote text embeddings are covered in
 - Persistent stores may contain prompts, responses, embeddings, memories, or
   replay records. Set backend authentication, transport security, retention,
   and tenant/user scope deliberately.
-- `providers.defaults.reasoning_families` and
-  `providers.models[].reasoning_family` are provider configuration, not
-  `global:` configuration.
+- `models[].reasoning` belongs to the immutable Model value, not `global:`.
 - See the complete configuration reference in
   [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

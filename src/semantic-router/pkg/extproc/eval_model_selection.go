@@ -91,7 +91,11 @@ func (r *OpenAIRouter) selectEvalCandidate(
 		VSRContextTokenCount: input.ContextTokenCount,
 		VSRSelectedDecision:  decision,
 	}
-	if recipe, ok := r.Config.RecipeByName(input.Recipe); ok {
+	runtimeScope := input.RuntimeScope
+	if runtimeScope == "" {
+		runtimeScope = input.Recipe
+	}
+	if recipe, ok := r.Config.RecipeByRuntimeScope(runtimeScope); ok {
 		requestContext.Routing.SelectRecipe(recipe)
 	}
 	costWeight, qualityWeight := r.getSelectionWeights(decision.Algorithm)
@@ -99,7 +103,7 @@ func (r *OpenAIRouter) selectEvalCandidate(
 	selectionContext := &selection.SelectionContext{
 		Query:                      input.Query,
 		DecisionName:               decision.Name,
-		RecipeName:                 input.Recipe,
+		RecipeName:                 runtimeScope,
 		CategoryName:               input.Category,
 		CandidateModels:            decision.ModelRefs,
 		CandidateIterations:        decision.CandidateIterations,

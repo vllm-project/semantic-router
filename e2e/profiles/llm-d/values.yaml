@@ -1,167 +1,31 @@
-# Profile revision 2025-11-21: math -> phi4-mini; cs/default -> llama3-8b; removed global HTTPRoute catch-all.
 config:
-  version: v0.3
+  version: v0.4
   listeners: []
-  providers:
-    defaults:
-      default_model: llama3-8b
-    models:
-      - name: llama3-8b
-        backend_refs:
-          - name: llama3-8b-service
-            endpoint: vllm-llama3-8b-instruct.default.svc.cluster.local:8000
-            weight: 1
-      - name: phi4-mini
-        backend_refs:
-          - name: phi4-mini-service
-            endpoint: phi4-mini.default.svc.cluster.local:8000
-            weight: 1
-  routing:
-    decisions:
-      # Decision names match E2E test expectations (*_decision format)
-      - name: math_decision
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: math
-        modelRefs:
-          - model: phi4-mini
-            use_reasoning: false
-      - name: computer_science_decision
-        priority: 100
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: computer science
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: physics_decision
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: physics
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: chemistry_decision
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: chemistry
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: biology_decision
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: biology
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: engineering_decision
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: engineering
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: health_decision
-        priority: 50
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: health
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: psychology_decision
-        priority: 40
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: psychology
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: economics_decision
-        priority: 40
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: economics
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: business_decision
-        priority: 40
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: business
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: history_decision
-        priority: 40
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: history
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: philosophy_decision
-        priority: 40
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: philosophy
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      - name: law_decision
-        priority: 40
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: law
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-      # Default fallback
-      - name: other_decision
-        priority: 1
-        rules:
-          operator: OR
-          conditions:
-            - type: domain
-              name: other
-        modelRefs:
-          - model: llama3-8b
-            use_reasoning: false
-    signals:
-      domains:
+  models:
+  - name: llama3-8b
+    card: {}
+    connections:
+    - provider: vllm
+      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      model: llama3-8b
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  - name: phi4-mini
+    card: {}
+    connections:
+    - provider: vllm
+      endpoint: http://phi4-mini.default.svc.cluster.local:8000/v1
+      model: phi4-mini
+    runtime:
+      request_timeout: 300s
+      stream_timeout: 300s
+  recipes:
+  - name: default
+    description: Default routing recipe.
+    document:
+      signals:
+        domains:
         - name: business
           description: Business management, marketing, entrepreneurship
         - name: philosophy
@@ -190,12 +54,174 @@ config:
           description: Microeconomics, macroeconomics, financial markets
         - name: other
           description: General knowledge and miscellaneous topics
-    modelCards:
-      - name: llama3-8b
-      - name: phi4-mini
+      decisions:
+      - name: math_decision
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: math
+      - name: computer_science_decision
+        priority: 100
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: computer science
+      - name: physics_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: physics
+      - name: chemistry_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: chemistry
+      - name: biology_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: biology
+      - name: engineering_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: engineering
+      - name: health_decision
+        priority: 50
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: health
+      - name: psychology_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: psychology
+      - name: economics_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: economics
+      - name: business_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: business
+      - name: history_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: history
+      - name: philosophy_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: philosophy
+      - name: law_decision
+        priority: 40
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: law
+      - name: other_decision
+        priority: 1
+        rules:
+          operator: OR
+          conditions:
+          - type: domain
+            name: other
+  entrypoints:
+  - name: vllm-sr/auto
+    aliases:
+    - auto
+    recipe: default
+    assignments:
+      math_decision:
+        models:
+        - model: phi4-mini
+          weight: '1'
+      computer_science_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      physics_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      chemistry_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      biology_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      engineering_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      health_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      psychology_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      economics_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      business_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      history_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      philosophy_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      law_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
+      other_decision:
+        models:
+        - model: llama3-8b
+          weight: '1'
   global:
     model_catalog:
       kbs: []
+      embeddings: {}
+      modules:
+        classifier: {}
+        hallucination_mitigation: {}
     router:
       clear_route_cache: true
     stores:
@@ -209,6 +235,14 @@ config:
     integrations:
       tools:
         enabled: false
-# Keep consistent with the default chart: initContainer, model downloads, and PVC use chart defaults
+    services:
+      backend_dispatch:
+        bind_address: 0.0.0.0
+        port: 8180
+        audience: vllm-sr.backend-dispatch
+        capability_ttl: 30s
+        max_request_body_bytes: 67108864
+      backend_egress:
+        policy_file: /app/config/backend-egress-policy.yaml
 image:
   pullPolicy: IfNotPresent

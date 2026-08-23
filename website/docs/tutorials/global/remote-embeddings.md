@@ -66,7 +66,7 @@ When both dimensions are set, `endpoint.dimensions` and
 Embedding signals do not change:
 
 ```yaml
-routing:
+document:
   signals:
     embeddings:
       - name: billing-support
@@ -103,8 +103,7 @@ curl -fsS http://localhost:8080/startup-status | jq '.embedding_provider'
 ```
 
 It reports the environment-variable name and whether it is set, never the key
-value. The Dashboard exposes the same fields under **Global Config > Model
-Catalog > Embedding Models**.
+value.
 
 See the full configuration example in
 [`config/config.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/config.yaml).

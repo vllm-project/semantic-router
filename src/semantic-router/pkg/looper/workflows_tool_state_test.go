@@ -40,7 +40,7 @@ func TestWorkflowsWorkerToolCallReturnsPendingFlowState(t *testing.T) {
 	}
 
 	var body map[string]interface{}
-	if err := json.Unmarshal(resp.Body, &body); err != nil {
+	if err := json.Unmarshal(wireResponseForTest(t, resp), &body); err != nil {
 		t.Fatalf("response body is not JSON: %v", err)
 	}
 	choice := body["choices"].([]interface{})[0].(map[string]interface{})
@@ -53,15 +53,18 @@ func TestWorkflowsWorkerToolCallReturnsPendingFlowState(t *testing.T) {
 	if !strings.HasPrefix(toolCallID, workflowToolCallIDPrefix) {
 		t.Fatalf("tool_call id %q missing workflow prefix", toolCallID)
 	}
-	flow := body["flow"].(map[string]interface{})
-	pending := flow["pending_tool_call"].(map[string]interface{})
-	if pending["model"] != "worker-model" {
-		t.Fatalf("pending model = %v, want worker-model", pending["model"])
+	trace, ok := resp.IntermediateResponses.(*workflowTrace)
+	if !ok || trace.PendingToolCall == nil {
+		t.Fatalf("response metadata missing pending tool state: %#v", resp.IntermediateResponses)
 	}
-	if pending["agent_id"] != "worker:0:worker-model" {
-		t.Fatalf("pending agent_id = %v, want worker:0:worker-model", pending["agent_id"])
+	pending := trace.PendingToolCall
+	if pending.Model != "worker-model" {
+		t.Fatalf("pending model = %v, want worker-model", pending.Model)
 	}
-	if pending["state_id"] == "" {
+	if pending.AgentID != "worker:0:worker-model" {
+		t.Fatalf("pending agent_id = %v, want worker:0:worker-model", pending.AgentID)
+	}
+	if pending.StateID == "" {
 		t.Fatalf("pending state id missing: %#v", pending)
 	}
 }
@@ -97,8 +100,9 @@ func TestWorkflowsDynamicResumesWorkerToolCallAndSynthesizes(t *testing.T) {
 	makeRequest := func(req *openai.ChatCompletionNewParams) *Request {
 		includeTrace := true
 		return &Request{
-			OriginalRequest: req,
-			ModelRefs:       []config.ModelRef{{Model: "worker-model"}},
+			SemanticRequest:  workflowSemanticTestRequest(req),
+			executionRequest: req,
+			ModelRefs:        []config.ModelRef{{Model: "worker-model"}},
 			Algorithm: &config.AlgorithmConfig{
 				Type: "workflows",
 				Workflows: &config.WorkflowsAlgorithmConfig{
@@ -117,7 +121,7 @@ func TestWorkflowsDynamicResumesWorkerToolCallAndSynthesizes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), makeRequest(resumeReq))
@@ -130,54 +134,8 @@ func TestWorkflowsDynamicResumesWorkerToolCallAndSynthesizes(t *testing.T) {
 	if !finalSawWorkerAnswer {
 		t.Fatal("dynamic final synthesis did not receive resumed worker output")
 	}
-	if !strings.Contains(string(secondResp.Body), "dynamic final answer") {
-		t.Fatalf("resume response missing dynamic final answer: %s", string(secondResp.Body))
-	}
-}
-
-func TestWorkflowsLegacyFunctionCallReturnsPendingFlowState(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload map[string]interface{}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		if payload["model"] != "worker-model" {
-			t.Fatalf("unexpected model call before legacy function resume: %s", payload["model"])
-		}
-		if !payloadHasTopLevelField(payload, "functions") || !payloadHasTopLevelField(payload, "function_call") {
-			t.Fatalf("worker missing legacy function schema: %#v", payload)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(workflowLegacyFunctionCallCompletion("worker-model"))
-	}))
-	defer server.Close()
-
-	resp, err := NewWorkflowsLooper(workflowToolLooperConfig(server.URL, t.TempDir())).Execute(context.Background(), workflowToolLooperRequest(workflowLegacyFunctionTestRequest()))
-	if err != nil {
-		t.Fatalf("Execute failed: %v", err)
-	}
-
-	var body map[string]interface{}
-	if err := json.Unmarshal(resp.Body, &body); err != nil {
-		t.Fatalf("response body is not JSON: %v", err)
-	}
-	choice := body["choices"].([]interface{})[0].(map[string]interface{})
-	if choice["finish_reason"] != "tool_calls" {
-		t.Fatalf("finish_reason = %v, want tool_calls", choice["finish_reason"])
-	}
-	message := choice["message"].(map[string]interface{})
-	if _, ok := message["function_call"]; ok {
-		t.Fatalf("legacy function_call leaked after normalization: %s", string(resp.Body))
-	}
-	toolCall := message["tool_calls"].([]interface{})[0].(map[string]interface{})
-	toolCallID := toolCall["id"].(string)
-	if !strings.HasPrefix(toolCallID, workflowToolCallIDPrefix) {
-		t.Fatalf("tool_call id %q missing workflow prefix", toolCallID)
-	}
-	flow := body["flow"].(map[string]interface{})
-	pending := flow["pending_tool_call"].(map[string]interface{})
-	if pending["model"] != "worker-model" {
-		t.Fatalf("pending model = %v, want worker-model", pending["model"])
+	if !strings.Contains(semanticTextForTest(t, secondResp), "dynamic final answer") {
+		t.Fatalf("resume response missing dynamic final answer: %s", semanticTextForTest(t, secondResp))
 	}
 }
 
@@ -216,7 +174,7 @@ func TestWorkflowsResumesWorkerToolCallAndContinuesToFinal(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(resumeReq))
@@ -229,9 +187,117 @@ func TestWorkflowsResumesWorkerToolCallAndContinuesToFinal(t *testing.T) {
 	if !finalCalled {
 		t.Fatal("final synthesis was not called after worker tool result")
 	}
-	if !strings.Contains(string(secondResp.Body), "final answer after tool") {
-		t.Fatalf("resume response missing final answer: %s", string(secondResp.Body))
+	if !strings.Contains(semanticTextForTest(t, secondResp), "final answer after tool") {
+		t.Fatalf("resume response missing final answer: %s", semanticTextForTest(t, secondResp))
 	}
+}
+
+func TestWorkflowsResumeFinalReportsOnlyNewProviderUsage(t *testing.T) {
+	var workerCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeWorkflowRequestPayload(t, r)
+		w.Header().Set("Content-Type", "application/json")
+		switch payload.Model {
+		case "worker-model":
+			workerCalls++
+			if workerCalls == 1 {
+				_, _ = w.Write(workflowCompletionWithUsage(t,
+					workflowToolCallCompletion("worker-model", "call_lookup"),
+					TokenUsage{PromptTokens: 5, CompletionTokens: 2, TotalTokens: 7},
+				))
+				return
+			}
+			_, _ = w.Write(workflowCompletionWithUsage(t,
+				workflowChatCompletion("worker-model", "worker completed with tool result"),
+				TokenUsage{PromptTokens: 11, CompletionTokens: 3, TotalTokens: 14},
+			))
+		case "verifier-model":
+			_, _ = w.Write(workflowCompletionWithUsage(t,
+				workflowChatCompletion("verifier-model", "final answer after tool"),
+				TokenUsage{PromptTokens: 13, CompletionTokens: 4, TotalTokens: 17},
+			))
+		default:
+			t.Fatalf("unexpected model call: %s", payload.Model)
+		}
+	}))
+	defer server.Close()
+
+	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
+	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(workflowToolTestRequest()))
+	if err != nil {
+		t.Fatalf("first Execute failed: %v", err)
+	}
+	requireWorkflowResponseUsage(t, firstResp, TokenUsage{PromptTokens: 5, CompletionTokens: 2, TotalTokens: 7})
+
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
+	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
+	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(resumeReq))
+	if err != nil {
+		t.Fatalf("resume Execute failed: %v", err)
+	}
+	requireWorkflowResponseUsage(t, secondResp, TokenUsage{PromptTokens: 24, CompletionTokens: 7, TotalTokens: 31})
+}
+
+func TestWorkflowsRepeatedInterruptReportsOnlyEachRequestsNewProviderUsage(t *testing.T) {
+	var workerCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		payload := decodeWorkflowRequestPayload(t, r)
+		w.Header().Set("Content-Type", "application/json")
+		switch payload.Model {
+		case "worker-model":
+			workerCalls++
+			switch workerCalls {
+			case 1:
+				_, _ = w.Write(workflowCompletionWithUsage(t,
+					workflowToolCallCompletion("worker-model", "call_lookup"),
+					TokenUsage{PromptTokens: 5, CompletionTokens: 2, TotalTokens: 7},
+				))
+			case 2:
+				_, _ = w.Write(workflowCompletionWithUsage(t,
+					workflowToolCallCompletion("worker-model", "call_lookup"),
+					TokenUsage{PromptTokens: 8, CompletionTokens: 3, TotalTokens: 11},
+				))
+			case 3:
+				_, _ = w.Write(workflowCompletionWithUsage(t,
+					workflowChatCompletion("worker-model", "worker completed"),
+					TokenUsage{PromptTokens: 10, CompletionTokens: 3, TotalTokens: 13},
+				))
+			default:
+				t.Fatalf("unexpected worker call count: %d", workerCalls)
+			}
+		case "verifier-model":
+			_, _ = w.Write(workflowCompletionWithUsage(t,
+				workflowChatCompletion("verifier-model", "final answer"),
+				TokenUsage{PromptTokens: 13, CompletionTokens: 4, TotalTokens: 17},
+			))
+		default:
+			t.Fatalf("unexpected model call: %s", payload.Model)
+		}
+	}))
+	defer server.Close()
+
+	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
+	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(workflowToolTestRequest()))
+	if err != nil {
+		t.Fatalf("first Execute failed: %v", err)
+	}
+	requireWorkflowResponseUsage(t, firstResp, TokenUsage{PromptTokens: 5, CompletionTokens: 2, TotalTokens: 7})
+
+	assistantMessage, firstToolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
+	firstResumeReq := workflowToolResumeRequest(t, assistantMessage, firstToolCallID)
+	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(firstResumeReq))
+	if err != nil {
+		t.Fatalf("second Execute failed: %v", err)
+	}
+	requireWorkflowResponseUsage(t, secondResp, TokenUsage{PromptTokens: 8, CompletionTokens: 3, TotalTokens: 11})
+
+	assistantMessage, secondToolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, secondResp))
+	secondResumeReq := workflowToolResumeRequest(t, assistantMessage, secondToolCallID)
+	finalResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(secondResumeReq))
+	if err != nil {
+		t.Fatalf("third Execute failed: %v", err)
+	}
+	requireWorkflowResponseUsage(t, finalResp, TokenUsage{PromptTokens: 23, CompletionTokens: 7, TotalTokens: 30})
 }
 
 func TestWorkflowsRequiresAllToolResultsBeforeResumingAgent(t *testing.T) {
@@ -243,7 +309,7 @@ func TestWorkflowsRequiresAllToolResultsBeforeResumingAgent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, toolCallIDs := assistantToolMessageIDsFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallIDs := assistantToolMessageIDsFromResponse(t, wireResponseForTest(t, firstResp))
 	if len(toolCallIDs) != 2 {
 		t.Fatalf("tool_call_ids = %v, want 2 ids", toolCallIDs)
 	}
@@ -268,8 +334,8 @@ func TestWorkflowsRequiresAllToolResultsBeforeResumingAgent(t *testing.T) {
 	if !tracker.finalCalled {
 		t.Fatal("final synthesis was not called after full tool result set")
 	}
-	if !strings.Contains(string(secondResp.Body), "final answer after two tool results") {
-		t.Fatalf("resume response missing final answer: %s", string(secondResp.Body))
+	if !strings.Contains(semanticTextForTest(t, secondResp), "final answer after two tool results") {
+		t.Fatalf("resume response missing final answer: %s", semanticTextForTest(t, secondResp))
 	}
 }
 
@@ -282,18 +348,18 @@ func TestWorkflowsWorkerSupportsMultipleToolTurnsBeforeContinuing(t *testing.T) 
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	firstResumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(firstResumeReq))
 	if err != nil {
 		t.Fatalf("second Execute failed: %v", err)
 	}
-	secondFinish := workflowChoiceFinishReason(t, secondResp.Body)
+	secondFinish := workflowChoiceFinishReason(t, wireResponseForTest(t, secondResp))
 	if secondFinish != "tool_calls" {
 		t.Fatalf("second finish_reason = %v, want tool_calls", secondFinish)
 	}
-	assistantMessage, toolCallID = assistantToolMessageFromResponse(t, secondResp.Body)
+	assistantMessage, toolCallID = assistantToolMessageFromResponse(t, wireResponseForTest(t, secondResp))
 	secondResumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	thirdResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(secondResumeReq))
@@ -306,8 +372,8 @@ func TestWorkflowsWorkerSupportsMultipleToolTurnsBeforeContinuing(t *testing.T) 
 	if !tracker.finalCalled {
 		t.Fatal("final synthesis was not called after multi-turn tool loop")
 	}
-	if !strings.Contains(string(thirdResp.Body), "final answer after two tools") {
-		t.Fatalf("final response missing expected answer: %s", string(thirdResp.Body))
+	if !strings.Contains(semanticTextForTest(t, thirdResp), "final answer after two tools") {
+		t.Fatalf("final response missing expected answer: %s", semanticTextForTest(t, thirdResp))
 	}
 }
 
@@ -337,7 +403,7 @@ func TestWorkflowsToolStateIsConsumeOnceAfterSuccessfulResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(resumeReq))
@@ -362,23 +428,23 @@ func TestWorkflowsWorkerRepeatedBackendToolCallIDsAreDistinctAcrossTurns(t *test
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, firstToolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, firstToolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	firstResumeReq := workflowToolResumeRequest(t, assistantMessage, firstToolCallID)
 
 	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(firstResumeReq))
 	if err != nil {
 		t.Fatalf("second Execute failed: %v", err)
 	}
-	if workflowChoiceFinishReason(t, secondResp.Body) != "tool_calls" {
-		t.Fatalf("second response did not request another tool: %s", string(secondResp.Body))
+	if workflowChoiceFinishReason(t, wireResponseForTest(t, secondResp)) != "tool_calls" {
+		t.Fatalf("second response did not request another tool: %s", wireResponseForTest(t, secondResp))
 	}
-	assistantMessage, secondToolCallID := assistantToolMessageFromResponse(t, secondResp.Body)
+	assistantMessage, secondToolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, secondResp))
 	if secondToolCallID == firstToolCallID {
 		t.Fatalf("tool_call_id was reused across tool turns: %q", secondToolCallID)
 	}
 
 	staleResumeReq := workflowToolResumeRequest(t, assistantMessage, firstToolCallID)
-	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(staleResumeReq))
+	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolStateValidationRequest(staleResumeReq))
 	if err == nil || !strings.Contains(err.Error(), "was not requested") {
 		t.Fatalf("expected stale tool result rejection, got %v", err)
 	}
@@ -400,7 +466,7 @@ func TestWorkflowsPersistsAgentToolTrajectoryAcrossToolTurns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, firstToolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, firstToolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	firstState := workflowStoredPendingState(t, stateDir, firstToolCallID)
 	assertWorkflowInitialPendingToolState(t, firstState)
 
@@ -409,7 +475,7 @@ func TestWorkflowsPersistsAgentToolTrajectoryAcrossToolTurns(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second Execute failed: %v", err)
 	}
-	assistantMessage, secondToolCallID := assistantToolMessageFromResponse(t, secondResp.Body)
+	assistantMessage, secondToolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, secondResp))
 	secondState := workflowStoredPendingState(t, stateDir, secondToolCallID)
 	assertWorkflowSecondPendingToolState(t, secondState, firstToolCallID)
 
@@ -432,19 +498,18 @@ func TestWorkflowsResumesFinalToolCallWithoutRerunningWorkers(t *testing.T) {
 	if tracker.workerCalls != 1 {
 		t.Fatalf("worker calls before resume = %d, want 1", tracker.workerCalls)
 	}
-	var firstBody map[string]interface{}
-	if unmarshalErr := json.Unmarshal(firstResp.Body, &firstBody); unmarshalErr != nil {
-		t.Fatalf("response body is not JSON: %v", unmarshalErr)
+	trace, ok := firstResp.IntermediateResponses.(*workflowTrace)
+	if !ok || trace.PendingToolCall == nil {
+		t.Fatalf("response metadata missing pending tool state: %#v", firstResp.IntermediateResponses)
 	}
-	flow := firstBody["flow"].(map[string]interface{})
-	pending := flow["pending_tool_call"].(map[string]interface{})
-	if pending["phase"] != workflowToolPhaseFinal {
-		t.Fatalf("pending phase = %v, want final", pending["phase"])
+	pending := trace.PendingToolCall
+	if pending.Phase != workflowToolPhaseFinal {
+		t.Fatalf("pending phase = %v, want final", pending.Phase)
 	}
-	if pending["model"] != "verifier-model" {
-		t.Fatalf("pending model = %v, want verifier-model", pending["model"])
+	if pending.Model != "verifier-model" {
+		t.Fatalf("pending model = %v, want verifier-model", pending.Model)
 	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(resumeReq))
@@ -463,8 +528,8 @@ func TestWorkflowsResumesFinalToolCallWithoutRerunningWorkers(t *testing.T) {
 	if !tracker.finalSawToolResult {
 		t.Fatal("final resume request did not include tool result")
 	}
-	if !strings.Contains(string(secondResp.Body), "final answer after final tool") {
-		t.Fatalf("resume response missing final answer: %s", string(secondResp.Body))
+	if !strings.Contains(semanticTextForTest(t, secondResp), "final answer after final tool") {
+		t.Fatalf("resume response missing final answer: %s", semanticTextForTest(t, secondResp))
 	}
 }
 
@@ -498,7 +563,7 @@ func TestWorkflowsAccessListExposesPriorOutputWithoutToolTrajectory(t *testing.T
 	if err != nil {
 		t.Fatalf("first Execute failed: %v", err)
 	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
+	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, wireResponseForTest(t, firstResp))
 	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
 
 	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowAccessListToolLooperRequest(resumeReq))
@@ -510,249 +575,5 @@ func TestWorkflowsAccessListExposesPriorOutputWithoutToolTrajectory(t *testing.T
 	}
 	if consumerSawLookupToolTrajectory {
 		t.Fatal("access-list consumer received prior agent private tool trajectory")
-	}
-}
-
-func TestWorkflowsRejectsToolResumeForDifferentDecision(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(workflowToolCallCompletion("worker-model", "call_lookup"))
-	}))
-	defer server.Close()
-
-	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(workflowToolTestRequest()))
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
-	resumeLooperReq := workflowToolLooperRequest(resumeReq)
-	resumeLooperReq.DecisionName = "different-decision"
-
-	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), resumeLooperReq)
-	if err == nil || !strings.Contains(err.Error(), "belongs to decision") {
-		t.Fatalf("expected decision mismatch error, got %v", err)
-	}
-}
-
-func TestWorkflowsToolTrajectoryStaysPrivateToWorker(t *testing.T) {
-	server, tracker := newWorkflowToolPrivacyServer(t)
-	defer server.Close()
-
-	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
-	firstReq := workflowParallelToolLooperRequest(workflowToolTestRequest())
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), firstReq)
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
-
-	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(resumeReq))
-	if err != nil {
-		t.Fatalf("resume Execute failed: %v", err)
-	}
-	if tracker.workerBSawToolTrajectory {
-		t.Fatal("worker-b saw worker-a private tool trajectory")
-	}
-	if !tracker.verifierCalled {
-		t.Fatal("final verifier was not called")
-	}
-	if !strings.Contains(string(secondResp.Body), "final answer") {
-		t.Fatalf("resume response missing final answer: %s", string(secondResp.Body))
-	}
-}
-
-func TestWorkflowsSecondWorkerToolLoopUsesOwnAgentState(t *testing.T) {
-	server, tracker := newWorkflowSecondWorkerToolServer(t)
-	defer server.Close()
-
-	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(workflowToolTestRequest()))
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	firstResumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
-
-	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(firstResumeReq))
-	if err != nil {
-		t.Fatalf("second Execute failed: %v", err)
-	}
-	if workflowChoiceFinishReason(t, secondResp.Body) != "tool_calls" {
-		t.Fatalf("second worker did not return a tool call: %s", string(secondResp.Body))
-	}
-	assistantMessage, toolCallID = assistantToolMessageFromResponse(t, secondResp.Body)
-	secondResumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
-
-	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(secondResumeReq))
-	if err != nil {
-		t.Fatalf("third Execute failed: %v", err)
-	}
-	if tracker.workerBFirstSawPriorTool {
-		t.Fatal("worker-b first call saw worker-a private tool trajectory")
-	}
-	if !tracker.workerBResumeSawOwnTool {
-		t.Fatal("worker-b resume did not receive its own tool result")
-	}
-	if tracker.workerBResumeSawOtherTool {
-		t.Fatal("worker-b resume received worker-a tool result")
-	}
-}
-
-func TestWorkflowsPersistsPriorAgentToolTrajectoryWhenLaterAgentInterrupts(t *testing.T) {
-	server, _ := newWorkflowSecondWorkerToolServer(t)
-	defer server.Close()
-
-	stateDir := t.TempDir()
-	looperCfg := workflowToolLooperConfig(server.URL, stateDir)
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(workflowToolTestRequest()))
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, firstToolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	firstResumeReq := workflowToolResumeRequest(t, assistantMessage, firstToolCallID)
-
-	secondResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(firstResumeReq))
-	if err != nil {
-		t.Fatalf("second Execute failed: %v", err)
-	}
-	if workflowChoiceFinishReason(t, secondResp.Body) != "tool_calls" {
-		t.Fatalf("second worker did not return a tool call: %s", string(secondResp.Body))
-	}
-	assistantMessage, secondToolCallID := assistantToolMessageFromResponse(t, secondResp.Body)
-	secondState := workflowStoredPendingState(t, stateDir, secondToolCallID)
-	if secondState.AgentID != "workers:1:worker-b" {
-		t.Fatalf("second state agent_id = %q, want workers:1:worker-b", secondState.AgentID)
-	}
-	if len(secondState.ToolTrajectory) != 0 {
-		t.Fatalf("worker-b state already has own trajectory = %d turns, want 0", len(secondState.ToolTrajectory))
-	}
-	workerATurns := secondState.CurrentStepToolTrajectories["workers:0:worker-a"]
-	if len(workerATurns) != 1 {
-		t.Fatalf("worker-a current step trajectory = %d turns, want 1", len(workerATurns))
-	}
-	assertWorkflowToolTrajectoryTurnForAgent(t, workerATurns[0], firstToolCallID, "workers:0:worker-a")
-	if _, ok := secondState.CurrentStepToolTrajectories["workers:1:worker-b"]; ok {
-		t.Fatal("worker-b current step trajectory should not be populated before its tool result returns")
-	}
-
-	secondResumeReq := workflowToolResumeRequest(t, assistantMessage, secondToolCallID)
-	finalResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowParallelToolLooperRequest(secondResumeReq))
-	if err != nil {
-		t.Fatalf("third Execute failed: %v", err)
-	}
-	assertWorkflowTraceToolTrajectory(t, finalResp.Body, "workers:0:worker-a", firstToolCallID)
-	assertWorkflowTraceToolTrajectory(t, finalResp.Body, "workers:1:worker-b", secondToolCallID)
-}
-
-func TestWorkflowsRejectsToolResultForDifferentPendingCall(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(workflowToolCallCompletion("worker-model", "call_lookup"))
-	}))
-	defer server.Close()
-
-	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(workflowToolTestRequest()))
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	otherToolCallID := strings.Replace(toolCallID, "call_lookup", "call_other", 1)
-	resumeReq := workflowToolResumeRequest(t, assistantMessage, otherToolCallID)
-
-	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(resumeReq))
-	if err == nil || !strings.Contains(err.Error(), "was not requested") {
-		t.Fatalf("expected pending tool_call_id validation error, got %v", err)
-	}
-}
-
-func TestWorkflowsRejectsMixedToolResultsFromDifferentState(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = w.Write(workflowToolCallCompletion("worker-model", "call_lookup"))
-	}))
-	defer server.Close()
-
-	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(workflowToolTestRequest()))
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
-	reqMap, ok := requestAsMap(resumeReq)
-	if !ok {
-		t.Fatal("resume request did not marshal to map")
-	}
-	messages, ok := reqMap["messages"].([]interface{})
-	if !ok {
-		t.Fatalf("resume request messages have unexpected type: %T", reqMap["messages"])
-	}
-	messages = append(messages, map[string]interface{}{
-		"role":         "tool",
-		"tool_call_id": workflowToolCallIDPrefix + "different_state" + workflowToolCallIDSeparator + "call_other",
-		"content":      `{"value":"wrong-agent"}`,
-	})
-	reqMap["messages"] = messages
-	data, err := json.Marshal(reqMap)
-	if err != nil {
-		t.Fatalf("marshal mixed resume request: %v", err)
-	}
-	if unmarshalErr := json.Unmarshal(data, resumeReq); unmarshalErr != nil {
-		t.Fatalf("parse mixed resume request: %v", unmarshalErr)
-	}
-
-	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowToolLooperRequest(resumeReq))
-	if err == nil || !strings.Contains(err.Error(), "belongs to workflow state") {
-		t.Fatalf("expected mixed workflow state validation error, got %v", err)
-	}
-}
-
-func TestWorkflowsPersistentStateKeepsPriorStepOutputs(t *testing.T) {
-	var finalSawThinkerEvidence bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var payload struct {
-			Model    string                   `json:"model"`
-			Messages []map[string]interface{} `json:"messages"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-			t.Fatalf("decode request: %v", err)
-		}
-		w.Header().Set("Content-Type", "application/json")
-		switch payload.Model {
-		case "thinker-model":
-			_, _ = w.Write(workflowChatCompletion("thinker-model", "thinker evidence"))
-		case "worker-model":
-			if payloadHasToolMessage(payload.Messages) {
-				_, _ = w.Write(workflowChatCompletion("worker-model", "worker completed with tool"))
-				return
-			}
-			_, _ = w.Write(workflowToolCallCompletion("worker-model", "call_lookup"))
-		case "verifier-model":
-			finalSawThinkerEvidence = payloadMessagesContain(payload.Messages, "thinker evidence")
-			_, _ = w.Write(workflowChatCompletion("verifier-model", "final answer"))
-		default:
-			t.Fatalf("unexpected model call: %s", payload.Model)
-		}
-	}))
-	defer server.Close()
-
-	looperCfg := workflowToolLooperConfig(server.URL, t.TempDir())
-	firstResp, err := NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowTwoStepToolLooperRequest(workflowToolTestRequest()))
-	if err != nil {
-		t.Fatalf("first Execute failed: %v", err)
-	}
-	assistantMessage, toolCallID := assistantToolMessageFromResponse(t, firstResp.Body)
-	resumeReq := workflowToolResumeRequest(t, assistantMessage, toolCallID)
-
-	_, err = NewWorkflowsLooper(looperCfg).Execute(context.Background(), workflowTwoStepToolLooperRequest(resumeReq))
-	if err != nil {
-		t.Fatalf("resume Execute failed: %v", err)
-	}
-	if !finalSawThinkerEvidence {
-		t.Fatal("final synthesis did not receive prior step output after file-state resume")
 	}
 }

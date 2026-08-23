@@ -1,10 +1,12 @@
 package gateway
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helm"
+	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
 )
 
 func TestSemanticRouterInstallOptionsUsesBaseValuesFileByDefault(t *testing.T) {
@@ -19,6 +21,37 @@ func TestSemanticRouterInstallOptionsUsesBaseValuesFileByDefault(t *testing.T) {
 
 	if len(opts.ValuesFiles) != 1 || opts.ValuesFiles[0] != "base-values.yaml" {
 		t.Fatalf("expected only the base values file, got %#v", opts.ValuesFiles)
+	}
+}
+
+func TestDeferredSemanticRouterReadinessDoesNotBlockHelmInstall(t *testing.T) {
+	stack := New(Config{
+		Name:                         "managed-bootstrap",
+		SemanticRouterValuesFile:     "managed-values.yaml",
+		DeferSemanticRouterReadiness: true,
+	})
+
+	opts := stack.semanticRouterInstallOptions(&framework.SetupOptions{ImageTag: "test-image"})
+	if opts.Wait {
+		t.Fatal("managed bootstrap must install semantic-router without --wait")
+	}
+	if opts.Timeout != "" {
+		t.Fatalf("non-waiting semantic-router install timeout = %q, want empty", opts.Timeout)
+	}
+}
+
+func TestDeferredSemanticRouterReadinessRemovesOnlyRouterFromEarlyVerification(t *testing.T) {
+	stack := New(Config{
+		Name:                         "managed-bootstrap",
+		DeferSemanticRouterReadiness: true,
+	})
+
+	want := []helpers.DeploymentRef{
+		{Namespace: helm.EnvoyGatewayRelease.Namespace, Name: deploymentEnvoyGateway},
+		{Namespace: helm.AIGatewayRelease.Namespace, Name: deploymentAIGateway},
+	}
+	if !slices.Equal(stack.config.VerifyDeployments, want) {
+		t.Fatalf("early verification deployments = %#v, want %#v", stack.config.VerifyDeployments, want)
 	}
 }
 

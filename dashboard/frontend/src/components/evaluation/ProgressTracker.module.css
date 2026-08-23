@@ -273,3 +273,17 @@
 .cancelButton:hover {
   background: rgba(239, 68, 68, 0.1);
 }
+.loadError button,
+.cancelButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.loadError button > svg,
+.cancelButton > svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+}

@@ -15,6 +15,12 @@ func Decompile(cfg *config.RouterConfig) (string, error) {
 }
 
 func DecompileToAST(cfg *config.RouterConfig) *Program {
+	if cfg != nil && (len(cfg.Recipes) > 0 || len(cfg.Entrypoints) > 0) {
+		prog := &Program{}
+		(&decompiler{cfg: cfg}).appendModelsToProgram(prog)
+		appendConfigScopesToAST(prog, cfg)
+		return prog
+	}
 	prog := DecompileRoutingToAST(cfg)
 	appendConfigScopesToAST(prog, cfg)
 	return prog

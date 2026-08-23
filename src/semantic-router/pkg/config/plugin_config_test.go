@@ -8,6 +8,7 @@ import (
 var _ = Describe("IsRAGEnabledForDecision", func() {
 	It("returns false for decision without RAG plugin", func() {
 		cfg := &RouterConfig{
+			RoutingScope: "test-recipe",
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{Name: "no-rag", ModelRefs: []ModelRef{{Model: "m"}}},
@@ -19,6 +20,7 @@ var _ = Describe("IsRAGEnabledForDecision", func() {
 
 	It("returns false when RAG plugin is explicitly disabled", func() {
 		cfg := &RouterConfig{
+			RoutingScope: "test-recipe",
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{
@@ -39,6 +41,7 @@ var _ = Describe("IsRAGEnabledForDecision", func() {
 
 	It("returns true when RAG plugin is enabled", func() {
 		cfg := &RouterConfig{
+			RoutingScope: "test-recipe",
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{
@@ -66,7 +69,8 @@ var _ = Describe("IsRAGEnabledForDecision", func() {
 var _ = Describe("IsMemoryEnabledForDecision", func() {
 	It("returns false when global memory is disabled and no per-decision config", func() {
 		cfg := &RouterConfig{
-			Memory: MemoryConfig{Enabled: false},
+			RoutingScope: "test-recipe",
+			Memory:       MemoryConfig{Enabled: false},
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{Name: "test", ModelRefs: []ModelRef{{Model: "m"}}},
@@ -78,7 +82,8 @@ var _ = Describe("IsMemoryEnabledForDecision", func() {
 
 	It("returns true when global memory is enabled and no per-decision override", func() {
 		cfg := &RouterConfig{
-			Memory: MemoryConfig{Enabled: true},
+			RoutingScope: "test-recipe",
+			Memory:       MemoryConfig{Enabled: true},
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{Name: "test", ModelRefs: []ModelRef{{Model: "m"}}},
@@ -99,7 +104,7 @@ var _ = Describe("IsMemoryEnabledForDecision", func() {
 	})
 
 	It("returns global default for non-existent decision", func() {
-		cfg := &RouterConfig{Memory: MemoryConfig{Enabled: true}}
+		cfg := &RouterConfig{RoutingScope: "test-recipe", Memory: MemoryConfig{Enabled: true}}
 		Expect(cfg.IsMemoryEnabledForDecision("nonexistent")).To(BeTrue())
 	})
 })
@@ -107,7 +112,8 @@ var _ = Describe("IsMemoryEnabledForDecision", func() {
 var _ = Describe("HasPersonalizationPlugins", func() {
 	It("returns false when neither RAG nor memory is enabled", func() {
 		cfg := &RouterConfig{
-			Memory: MemoryConfig{Enabled: false},
+			RoutingScope: "test-recipe",
+			Memory:       MemoryConfig{Enabled: false},
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{Name: "plain", ModelRefs: []ModelRef{{Model: "m"}}},
@@ -124,7 +130,8 @@ var _ = Describe("HasPersonalizationPlugins", func() {
 
 	It("returns true when only memory is enabled (global)", func() {
 		cfg := &RouterConfig{
-			Memory: MemoryConfig{Enabled: true},
+			RoutingScope: "test-recipe",
+			Memory:       MemoryConfig{Enabled: true},
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{Name: "mem-global", ModelRefs: []ModelRef{{Model: "m"}}},
@@ -136,7 +143,8 @@ var _ = Describe("HasPersonalizationPlugins", func() {
 
 	It("returns true when both RAG and memory are enabled", func() {
 		cfg := &RouterConfig{
-			Memory: MemoryConfig{Enabled: true},
+			RoutingScope: "test-recipe",
+			Memory:       MemoryConfig{Enabled: true},
 			IntelligentRouting: IntelligentRouting{
 				Decisions: []Decision{
 					{
@@ -163,7 +171,8 @@ var _ = Describe("EffectiveRouterReplayConfigForDecision", registerEffectiveRout
 
 func ragDecisionConfig(name string) *RouterConfig {
 	return &RouterConfig{
-		Memory: MemoryConfig{Enabled: false},
+		RoutingScope: "test-recipe",
+		Memory:       MemoryConfig{Enabled: false},
 		IntelligentRouting: IntelligentRouting{
 			Decisions: []Decision{
 				{
@@ -187,7 +196,8 @@ func memoryDecisionConfig(globalEnabled, perDecisionEnabled bool) *RouterConfig 
 		name = "mem-off"
 	}
 	return &RouterConfig{
-		Memory: MemoryConfig{Enabled: globalEnabled},
+		RoutingScope: "test-recipe",
+		Memory:       MemoryConfig{Enabled: globalEnabled},
 		IntelligentRouting: IntelligentRouting{
 			Decisions: []Decision{
 				{
@@ -287,6 +297,7 @@ func routerReplayDecisionConfig(globalEnabled bool, name string, pluginConfig ma
 	}
 
 	return &RouterConfig{
+		RoutingScope: "test-recipe",
 		RouterReplay: RouterReplayConfig{Enabled: globalEnabled},
 		IntelligentRouting: IntelligentRouting{
 			Decisions: []Decision{decision},

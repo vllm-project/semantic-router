@@ -10,8 +10,8 @@ import (
 // RecipeName identifies an isolated routing namespace.
 type RecipeName string
 
-// DefaultRecipeName names the routing profile normalized from the top-level
-// `routing:` block. Additional named profiles come from `recipes:`.
+// DefaultRecipeName identifies the optional explicit Recipe that backs
+// model-less classification APIs. Request routing still requires an Entrypoint.
 const DefaultRecipeName RecipeName = "default"
 
 // RoutingStrategy controls how matching decisions are ordered within one
@@ -47,17 +47,107 @@ type RoutingProfile struct {
 // RoutingRecipe gives an isolated routing profile a stable name and optional
 // request-facing description.
 type RoutingRecipe struct {
-	Name        RecipeName
-	Description string
-	Profile     RoutingProfile
+	ID           string
+	Revision     int64
+	Name         RecipeName
+	Description  string
+	Profile      RoutingProfile
+	runtimeScope RecipeName
 }
 
-// EntrypointMapping binds request-facing virtual model names to a named
-// recipe. The virtual names never reach a backend; they only select which
-// routing profile evaluates the request.
+// RuntimeScope returns the stable namespace used by mutable routing state.
+// Reusable base recipes use their canonical name; entrypoint-derived views use
+// a deterministic identity for the whole entrypoint mapping. The logical Name
+// remains unchanged for canonical/API recipe identity.
+func (r *RoutingRecipe) RuntimeScope() RecipeName {
+	if r == nil {
+		return ""
+	}
+	if r.runtimeScope != "" {
+		return r.runtimeScope
+	}
+	return r.Name
+}
+
+// EntrypointMapping is the runtime form of one v0.4 callable virtual Model.
+// Each rule owns a complete action; no detached model-binding state exists.
 type EntrypointMapping struct {
+	ID         string
+	Revision   int64
+	Name       string
 	ModelNames []string
-	Recipe     RecipeName
+	Rules      []EntrypointRule
+
+	// Recipe and derivedRecipe identify the unconditional rule used by the
+	// request-facing virtual Model. They are compiled from Rules and are never
+	// accepted as another public authoring shape.
+	Recipe RecipeName
+
+	derivedRecipe *RoutingRecipe
+}
+
+type EntrypointRule struct {
+	ID      string
+	Name    string
+	Matches []EntrypointMatch
+	Action  EntrypointRuleAction
+
+	derivedRecipe *RoutingRecipe
+}
+
+type EntrypointMatch struct {
+	Claim *EntrypointClaimMatch
+	Path  *EntrypointPathMatch
+}
+
+type EntrypointClaimMatch struct {
+	Name  string
+	Value EntrypointClaimValue
+}
+
+type EntrypointClaimValue struct {
+	Kind    string
+	String  string
+	Boolean bool
+	Integer int64
+}
+
+type EntrypointPathMatch struct {
+	Exact  string
+	Prefix string
+}
+
+type EntrypointRuleAction struct {
+	RecipeID       string
+	RecipeRevision int64
+	Recipe         RecipeName
+	Assignments    map[string]RoutingAssignmentSet
+}
+
+type RoutingAssignmentSet struct {
+	Models   []RoutingModelAssignment
+	Fallback *RoutingFallbackPolicy
+}
+
+type RoutingFallbackPolicy struct {
+	Strategy string
+	On       []string
+}
+
+type RoutingModelAssignment struct {
+	ModelID       string
+	ModelRevision int64
+	ModelName     string
+	Priority      int
+	Weight        string
+	LoRAName      string
+	Reasoning     *RoutingAssignmentReasoning
+}
+
+type RoutingAssignmentReasoning struct {
+	Enabled     bool
+	Effort      string
+	Description string
 }
 
 // RoutingDecisionRef identifies a decision inside its owning recipe. The
@@ -106,18 +196,28 @@ func (c *RouterConfig) RoutingDecisionRefs() []RoutingDecisionRef {
 	if c == nil {
 		return nil
 	}
-	if len(c.Recipes) == 0 {
-		refs := make([]RoutingDecisionRef, 0, len(c.Decisions))
+	refs := make([]RoutingDecisionRef, 0)
+	if c.RoutingScope != "" {
 		for i := range c.Decisions {
-			refs = append(refs, RoutingDecisionRef{Recipe: DefaultRecipeName, Decision: &c.Decisions[i]})
+			refs = append(refs, RoutingDecisionRef{Recipe: c.RoutingScope, Decision: &c.Decisions[i]})
 		}
 		return refs
 	}
-	refs := make([]RoutingDecisionRef, 0)
 	for i := range c.Recipes {
 		recipe := &c.Recipes[i]
 		for j := range recipe.Profile.Decisions {
 			refs = append(refs, RoutingDecisionRef{Recipe: recipe.Name, Decision: &recipe.Profile.Decisions[j]})
+		}
+	}
+	for i := range c.Entrypoints {
+		for ruleIndex := range c.Entrypoints[i].Rules {
+			recipe := c.Entrypoints[i].Rules[ruleIndex].derivedRecipe
+			if recipe == nil || recipe.RuntimeScope() == recipe.Name {
+				continue
+			}
+			for j := range recipe.Profile.Decisions {
+				refs = append(refs, RoutingDecisionRef{Recipe: recipe.RuntimeScope(), Decision: &recipe.Profile.Decisions[j]})
+			}
 		}
 	}
 	return refs
@@ -136,32 +236,39 @@ func (c *RouterConfig) RecipeByName(name RecipeName) (*RoutingRecipe, bool) {
 	return nil, false
 }
 
-// DefaultRecipe returns the recipe backing the flat routing fields. Canonical
-// configs contain an explicit normalized default recipe; programmatically
-// assembled single-profile configs get an equivalent immutable view so callers
-// do not need a second routing path.
+// RecipeByRuntimeScope resolves a stable internal routing scope back to the
+// immutable effective recipe view that owns it. This is used to restore exact
+// entrypoint bindings on router-generated looper requests.
+func (c *RouterConfig) RecipeByRuntimeScope(scope RecipeName) (*RoutingRecipe, bool) {
+	if c == nil || scope == "" {
+		return nil, false
+	}
+	for i := range c.Entrypoints {
+		for ruleIndex := range c.Entrypoints[i].Rules {
+			recipe := c.Entrypoints[i].Rules[ruleIndex].derivedRecipe
+			if recipe != nil && recipe.RuntimeScope() == scope {
+				return recipe, true
+			}
+		}
+	}
+	return c.RecipeByName(scope)
+}
+
+// DefaultRecipe returns the explicit Recipe named "default". Runtime config
+// never synthesizes a Recipe from the scoped flat routing view.
 func (c *RouterConfig) DefaultRecipe() *RoutingRecipe {
 	if c == nil {
 		return nil
 	}
 	recipe, ok := c.RecipeByName(DefaultRecipeName)
-	if ok {
-		return recipe
+	if !ok {
+		return nil
 	}
-	return &RoutingRecipe{
-		Name: DefaultRecipeName,
-		Profile: RoutingProfile{
-			Signals:     c.Signals,
-			Projections: c.Projections,
-			Decisions:   c.Decisions,
-			Strategy:    c.Strategy,
-		},
-	}
+	return recipe
 }
 
 // RecipeForRequestModel resolves a request model name through the entrypoint
-// table. It returns false when the name matches no entrypoint; callers fall
-// back to auto-model or specified-model handling.
+// table. It returns false when the name matches no Entrypoint.
 func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, bool) {
 	if c == nil {
 		return nil, false
@@ -172,60 +279,38 @@ func (c *RouterConfig) RecipeForRequestModel(modelName string) (*RoutingRecipe, 
 	}
 	for _, entrypoint := range c.Entrypoints {
 		if slices.Contains(entrypoint.ModelNames, trimmed) {
-			return c.RecipeByName(entrypoint.Recipe)
+			// Model-only resolution has no trusted path or claim context, so
+			// it may select only the Entrypoint's explicit unconditional rule.
+			return entrypoint.derivedRecipe, entrypoint.derivedRecipe != nil
 		}
 	}
 	return nil, false
 }
 
-// RecipeForRoutingModel resolves every request-facing routing model. Built-in
-// auto and direct-looper aliases select the default recipe; named entrypoints
-// select their mapped recipe. Concrete backend model IDs intentionally do not
-// resolve to a recipe.
-func (c *RouterConfig) RecipeForRoutingModel(modelName string) (*RoutingRecipe, bool) {
-	if c == nil {
-		return nil, false
-	}
-	trimmed := strings.TrimSpace(modelName)
-	if c.IsAutoModelName(trimmed) || c.IsReMoMModelName(trimmed) || c.IsFusionModelName(trimmed) || c.IsFlowModelName(trimmed) {
-		recipe := c.DefaultRecipe()
-		return recipe, recipe != nil
-	}
-	return c.RecipeForRequestModel(modelName)
-}
-
 // ReachableRoutingRecipes returns the profiles that a request-facing routing
-// model can select. The default profile is reachable through configured auto or
-// direct-looper aliases; named profiles are reachable only through entrypoints.
-// Startup resource discovery should use this view instead of treating every
-// declared recipe as request reachable.
+// Entrypoint can select. Startup resource discovery should use this view
+// instead of treating every declared Recipe as request reachable. Bound
+// Entrypoints contribute their derived views rather than the reusable base
+// Recipe, because their effective model targets can differ even when several
+// Entrypoints name the same Recipe.
 func (c *RouterConfig) ReachableRoutingRecipes() []*RoutingRecipe {
 	if c == nil {
 		return nil
 	}
+	return c.entrypointRecipes()
+}
 
-	reachable := make(map[RecipeName]struct{}, len(c.Entrypoints)+1)
-	if c.defaultRecipeHasRoutingEntrypoint() {
-		reachable[DefaultRecipeName] = struct{}{}
-	}
-	for _, entrypoint := range c.Entrypoints {
-		if len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
-			reachable[entrypoint.Recipe] = struct{}{}
+func (c *RouterConfig) entrypointRecipes() []*RoutingRecipe {
+	recipes := make([]*RoutingRecipe, 0, len(c.Entrypoints))
+	for i := range c.Entrypoints {
+		entrypoint := &c.Entrypoints[i]
+		if len(entrypoint.ModelNames) == 0 {
+			continue
 		}
-	}
-
-	if len(c.Recipes) == 0 {
-		if _, ok := reachable[DefaultRecipeName]; !ok {
-			return nil
-		}
-		return []*RoutingRecipe{c.DefaultRecipe()}
-	}
-
-	recipes := make([]*RoutingRecipe, 0, len(reachable))
-	for i := range c.Recipes {
-		recipe := &c.Recipes[i]
-		if _, ok := reachable[recipe.Name]; ok {
-			recipes = append(recipes, recipe)
+		for ruleIndex := range entrypoint.Rules {
+			if derived := entrypoint.Rules[ruleIndex].derivedRecipe; derived != nil {
+				recipes = append(recipes, derived)
+			}
 		}
 	}
 	return recipes
@@ -242,24 +327,6 @@ func (c *RouterConfig) IsRecipeReachableForRouting(name RecipeName) bool {
 	return false
 }
 
-func (c *RouterConfig) defaultRecipeHasRoutingEntrypoint() bool {
-	if len(c.EffectiveAutoModelNames()) > 0 {
-		return true
-	}
-	if len(c.ExposedReMoMModelNames()) > 0 ||
-		len(c.ExposedFusionModelNames()) > 0 ||
-		len(c.ExposedFlowModelNames()) > 0 {
-		return true
-	}
-	for _, entrypoint := range c.Entrypoints {
-		if entrypoint.Recipe == DefaultRecipeName &&
-			len(normalizeAutoModelNames(entrypoint.ModelNames)) > 0 {
-			return true
-		}
-	}
-	return false
-}
-
 // ConfigForRecipe returns an immutable routing view over the shared router
 // configuration. The returned value owns recipe-local routing fields while
 // reusing read-only provider, model, and service configuration. Callers must
@@ -270,6 +337,9 @@ func (c *RouterConfig) ConfigForRecipe(recipe *RoutingRecipe) *RouterConfig {
 	}
 
 	scoped := *c
+	// RoutingScope remains the logical recipe identity because classifiers use
+	// it in public metric labels. Mutable per-entrypoint state is keyed from the
+	// recipe's internal RuntimeScope at the request/runtime seams instead.
 	scoped.RoutingScope = recipe.Name
 	scoped.IntelligentRouting = IntelligentRouting{
 		Signals:         recipe.Profile.Signals,
@@ -315,8 +385,7 @@ func knowledgeBasesForRoutingProfile(catalog []KnowledgeBaseConfig, profile Rout
 }
 
 // IsEntrypointModelName reports whether the name is a request-facing virtual
-// model name from the entrypoint table. Such names never reach a backend; the
-// router resolves them like auto-model aliases.
+// model name from the Entrypoint table. Such names never reach a backend.
 func (c *RouterConfig) IsEntrypointModelName(modelName string) bool {
 	_, ok := c.RecipeForRequestModel(modelName)
 	return ok
@@ -339,29 +408,27 @@ func (c *RouterConfig) AllRoutingDecisions() []Decision {
 	if c == nil {
 		return nil
 	}
-	if len(c.Recipes) == 0 {
+	if c.RoutingScope != "" {
 		return c.Decisions
 	}
 	if len(c.Recipes) == 1 {
 		return c.Recipes[0].Profile.Decisions
 	}
-	all := make([]Decision, 0, 2*len(c.Decisions))
+	all := make([]Decision, 0)
 	for i := range c.Recipes {
 		all = append(all, c.Recipes[i].Profile.Decisions...)
 	}
 	return all
 }
 
-// HasRoutingDecisions reports whether any routing profile declares decisions,
-// without the per-request allocation of AllRoutingDecisions. The flat gate
-// `len(c.Decisions) == 0` is wrong for recipes-only configs, where every
-// decision lives in a non-default recipe.
+// HasRoutingDecisions reports whether the scoped view or any explicit Recipe
+// declares decisions without allocating the aggregate inventory.
 func (c *RouterConfig) HasRoutingDecisions() bool {
 	if c == nil {
 		return false
 	}
-	if len(c.Decisions) > 0 {
-		return true
+	if c.RoutingScope != "" {
+		return len(c.Decisions) > 0
 	}
 	for i := range c.Recipes {
 		if len(c.Recipes[i].Profile.Decisions) > 0 {
@@ -369,28 +436,4 @@ func (c *RouterConfig) HasRoutingDecisions() bool {
 		}
 	}
 	return false
-}
-
-// RoutingProfileSignals returns the default profile's signals for canonical
-// export. The flat Signals field mirrors this value for single-profile readers.
-func (c *RouterConfig) RoutingProfileSignals() Signals {
-	if c == nil {
-		return Signals{}
-	}
-	if recipe := c.DefaultRecipe(); recipe != nil {
-		return recipe.Profile.Signals
-	}
-	return c.Signals
-}
-
-// RoutingProfileProjections is the projections counterpart of
-// RoutingProfileSignals.
-func (c *RouterConfig) RoutingProfileProjections() Projections {
-	if c == nil {
-		return Projections{}
-	}
-	if recipe := c.DefaultRecipe(); recipe != nil {
-		return recipe.Profile.Projections
-	}
-	return c.Projections
 }

@@ -63,8 +63,8 @@ deploy/kserve/deploy.sh \
 ```
 
 Optional flags select the storage class, PVC sizes, embedding model, and
-classifier device. Keep the `--model` value aligned with Router model cards and
-the backend's served-model name.
+classifier device. Keep the `--model` value aligned with the canonical Router
+Model name and the backend's served-model name.
 
 Example KServe resources are under [`inference-examples/`](inference-examples/).
 They are hardware- and platform-sensitive; inspect image, storage, runtime,

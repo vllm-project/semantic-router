@@ -1,6 +1,7 @@
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import styles from './OpenClawPage.module.css'
-import { CANONICAL_AUTO_MODEL } from '../utils/routerModelSelection'
+import { useReadonly } from '../contexts/ReadonlyContext'
+import { routingManagementApi } from '../utils/routingManagementApi'
 import {
   createLatestOpenClawRequest,
   fetchOpenClawJSON,
@@ -8,7 +9,6 @@ import {
   type LatestOpenClawRequest,
 } from '../utils/openClawRequestSupport'
 import {
-  deriveModelBaseUrlFromRouterConfig,
   getInitialModelBaseUrl,
   PROVISION_STEPS,
   type ContainerConfig,
@@ -28,11 +28,13 @@ export const WorkerProvisionWizard: React.FC<{
   onCreated?: () => void
   onBusyChange?: (busy: boolean) => void
 }> = ({ teams, onProvisioned, onSwitchToTeam, onSwitchToStatus, onCreated, onBusyChange }) => {
+  const { routerPublicUrl } = useReadonly()
   const [currentStep, setCurrentStep] = useState(0)
   const [skills, setSkills] = useState<SkillTemplate[]>([])
   const [skillsLoading, setSkillsLoading] = useState(true)
   const [skillsError, setSkillsError] = useState('')
   const [routerDiscoveryError, setRouterDiscoveryError] = useState('')
+  const [routerModels, setRouterModels] = useState<string[]>([])
   const [portDiscoveryError, setPortDiscoveryError] = useState('')
   const [selectedSkills, setSelectedSkills] = useState<string[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState('')
@@ -48,8 +50,8 @@ export const WorkerProvisionWizard: React.FC<{
     containerName: '',
     gatewayPort: 0,
     authToken: '',
-    modelBaseUrl: getInitialModelBaseUrl(),
-    modelName: CANONICAL_AUTO_MODEL,
+    modelBaseUrl: getInitialModelBaseUrl(routerPublicUrl),
+    modelName: '',
     memoryBackend: 'local',
     memoryBaseUrl: '',
     vectorStore: 'openclaw-demo',
@@ -69,19 +71,46 @@ export const WorkerProvisionWizard: React.FC<{
   if (!portRequestRef.current) portRequestRef.current = createLatestOpenClawRequest()
   if (!provisionRequestRef.current) provisionRequestRef.current = createLatestOpenClawRequest()
 
-  const loadRouterConfig = async () => {
+  useEffect(() => {
+    const discoveredBaseURL = getInitialModelBaseUrl(routerPublicUrl)
+    setContainer((current) =>
+      !current.modelBaseUrl || current.modelBaseUrl === getInitialModelBaseUrl()
+        ? { ...current, modelBaseUrl: discoveredBaseURL }
+        : current,
+    )
+  }, [routerPublicUrl])
+
+  const loadRouterModels = useCallback(async () => {
     await routerRequestRef.current?.run(
-      (signal) => fetchOpenClawJSON<unknown>('/api/router/config/all', {}, signal),
+      async (signal) => {
+        const entrypoints = await routingManagementApi.listEntrypoints()
+        if (signal.aborted) throw new DOMException('Request aborted', 'AbortError')
+        return entrypoints
+      },
       {
         onStart: () => setRouterDiscoveryError(''),
-        onSuccess: (data) => {
-          const discoveredModelBaseUrl = deriveModelBaseUrlFromRouterConfig(data)
-          if (!discoveredModelBaseUrl) return
+        onSuccess: (entrypoints) => {
+          const discoveredModels = [
+            ...new Set(
+              entrypoints
+                .filter((entrypoint) => entrypoint.status === 'active')
+                .flatMap((entrypoint) =>
+                  entrypoint.aliases.length > 0 ? entrypoint.aliases : [entrypoint.name],
+                )
+                .map((name) => name.trim())
+                .filter(Boolean),
+            ),
+          ]
+          setRouterModels(discoveredModels)
           setContainer((prev) => {
-            if (prev.modelBaseUrl.trim() && prev.modelBaseUrl !== getInitialModelBaseUrl()) {
-              return prev
+            const nextModel = discoveredModels.includes(prev.modelName)
+              ? prev.modelName
+              : (discoveredModels[0] ?? '')
+            return {
+              ...prev,
+              modelBaseUrl: prev.modelBaseUrl || getInitialModelBaseUrl(routerPublicUrl),
+              modelName: nextModel,
             }
-            return { ...prev, modelBaseUrl: discoveredModelBaseUrl }
           })
         },
         onError: (error) => {
@@ -91,9 +120,9 @@ export const WorkerProvisionWizard: React.FC<{
         },
       },
     )
-  }
+  }, [routerPublicUrl])
 
-  const loadSkills = async () => {
+  const loadSkills = useCallback(async () => {
     await skillsRequestRef.current?.run(
       (signal) => fetchOpenClawJSON<SkillTemplate[]>('/api/openclaw/skills', {}, signal),
       {
@@ -108,9 +137,9 @@ export const WorkerProvisionWizard: React.FC<{
         onFinish: () => setSkillsLoading(false),
       },
     )
-  }
+  }, [])
 
-  const loadNextPort = async () => {
+  const loadNextPort = useCallback(async () => {
     await portRequestRef.current?.run(
       (signal) => fetchOpenClawJSON<{ port?: number }>('/api/openclaw/next-port', {}, signal),
       {
@@ -128,17 +157,17 @@ export const WorkerProvisionWizard: React.FC<{
         },
       },
     )
-  }
+  }, [])
 
   useEffect(() => {
-    void Promise.all([loadRouterConfig(), loadSkills(), loadNextPort()])
+    void Promise.all([loadRouterModels(), loadSkills(), loadNextPort()])
     return () => {
       routerRequestRef.current?.cancel()
       skillsRequestRef.current?.cancel()
       portRequestRef.current?.cancel()
       provisionRequestRef.current?.cancel()
     }
-  }, [])
+  }, [loadNextPort, loadRouterModels, loadSkills])
 
   useEffect(() => {
     onBusyChange?.(provisionLoading)
@@ -261,7 +290,7 @@ export const WorkerProvisionWizard: React.FC<{
           message={routerDiscoveryError}
           tone="warning"
           retryLabel="Retry discovery"
-          onRetry={() => void loadRouterConfig()}
+          onRetry={() => void loadRouterModels()}
         />
       ) : null}
 
@@ -304,7 +333,9 @@ export const WorkerProvisionWizard: React.FC<{
           onRetry={() => void loadSkills()}
         />
       )}
-      {currentStep === 2 && <ConfigStep container={container} setContainer={setContainer} />}
+      {currentStep === 2 && (
+        <ConfigStep container={container} modelOptions={routerModels} setContainer={setContainer} />
+      )}
       {currentStep === 3 && (
         <DeployStep
           identity={identity}
@@ -582,8 +613,9 @@ export const SkillsStep: React.FC<{
 
 const ConfigStep: React.FC<{
   container: ContainerConfig
+  modelOptions: string[]
   setContainer: React.Dispatch<React.SetStateAction<ContainerConfig>>
-}> = ({ container, setContainer }) => {
+}> = ({ container, modelOptions, setContainer }) => {
   const update = (field: keyof ContainerConfig, value: string | number | boolean) =>
     setContainer((prev) => ({ ...prev, [field]: value }))
 
@@ -656,18 +688,24 @@ const ConfigStep: React.FC<{
             value={container.modelBaseUrl}
             onChange={(e) => update('modelBaseUrl', e.target.value)}
           />
-          <div className={styles.formHint}>
-            Auto-discovered from router listeners in current config; editable if needed
-          </div>
+          <div className={styles.formHint}>Semantic Router public endpoint</div>
         </div>
         <div className={styles.formGroup}>
           <label className={styles.formLabel}>Model Name</label>
-          <input
-            className={styles.textInput}
+          <select
+            className={styles.selectInput}
             value={container.modelName}
             onChange={(e) => update('modelName', e.target.value)}
-          />
-          <div className={styles.formHint}>&quot;auto&quot; for SR confidence routing</div>
+            disabled={modelOptions.length === 0}
+          >
+            {modelOptions.length === 0 ? <option value="">No active Models</option> : null}
+            {modelOptions.map((model) => (
+              <option key={model} value={model}>
+                {model}
+              </option>
+            ))}
+          </select>
+          <div className={styles.formHint}>Authorized Mixture-of-Models</div>
         </div>
       </div>
 

@@ -84,4 +84,4 @@ Reconsider the boundary if:
 
 - [Fleet Simulator overview](../fleet-sim/overview)
 - [Latency-aware selection](../tutorials/algorithm/selection/latency-aware)
-- [Model execution fallback](./model-execution-fallback)
+- [Model execution and priority fallback](./router-native-access-control-model-runtime#priority-fallback-between-models)

@@ -297,25 +297,25 @@ func localClassifierRuleRefs(cfg *RouterConfig) []localClassifierRuleRef {
 		return nil
 	}
 	refs := make([]localClassifierRuleRef, 0)
-	if len(cfg.Recipes) > 0 {
-		for _, recipe := range cfg.Recipes {
-			for _, rule := range recipe.Profile.Signals.ClassifierRules {
-				if rule.Type == "local" {
-					refs = append(refs, localClassifierRuleRef{
-						Recipe: recipe.Name,
-						Rule:   rule,
-					})
-				}
+	if cfg.RoutingScope != "" {
+		for _, rule := range cfg.ClassifierRules {
+			if rule.Type == "local" {
+				refs = append(refs, localClassifierRuleRef{
+					Recipe: cfg.RoutingScope,
+					Rule:   rule,
+				})
 			}
 		}
 		return refs
 	}
-	for _, rule := range cfg.ClassifierRules {
-		if rule.Type == "local" {
-			refs = append(refs, localClassifierRuleRef{
-				Recipe: DefaultRecipeName,
-				Rule:   rule,
-			})
+	for _, recipe := range cfg.Recipes {
+		for _, rule := range recipe.Profile.Signals.ClassifierRules {
+			if rule.Type == "local" {
+				refs = append(refs, localClassifierRuleRef{
+					Recipe: recipe.Name,
+					Rule:   rule,
+				})
+			}
 		}
 	}
 	return refs

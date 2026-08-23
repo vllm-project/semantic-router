@@ -85,7 +85,7 @@ func TestValidateDecisionEmitContracts(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := validateDecisionEmitContracts(tc.cfg)
+			err := validateDecisionEmitContracts(scopedRoutingProfileForTest(tc.cfg))
 			if tc.wantErr == "" {
 				if err != nil {
 					t.Fatalf("validateDecisionEmitContracts() unexpected error: %v", err)

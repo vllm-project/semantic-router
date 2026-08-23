@@ -2,9 +2,12 @@
 
 import json
 import math
-import warnings
+import re
+from decimal import Decimal, InvalidOperation
 from enum import Enum
+from pathlib import PurePosixPath
 from typing import Any, Dict, List, Literal, Optional
+from urllib.parse import urlsplit
 
 from pydantic import (
     BaseModel,
@@ -23,21 +26,19 @@ LOCAL_CLASSIFIER_LABEL_COUNT = 2
 PROMPT_MIN_CANDIDATES = 2
 MAX_DECISION_ANNOTATIONS = 32
 MAX_DECISION_ANNOTATION_BYTES = 4096
+MAX_DECIMAL_FRACTIONAL_DIGITS = 9
+MIN_FALLBACK_PRIORITY_TIERS = 2
 
 
 class Listener(BaseModel):
     """Network listener configuration."""
 
+    model_config = ConfigDict(extra="forbid")
+
     name: str
     address: str
     port: int
     timeout: Optional[str] = "300s"
-    api_keys: Optional[List[str]] = Field(
-        default=None,
-        description="Bearer tokens required to call this listener. "
-        "If set, requests without 'Authorization: Bearer <key>' matching one of these "
-        "values are rejected with HTTP 401.",
-    )
 
 
 class KeywordSignal(BaseModel):
@@ -731,9 +732,6 @@ class ResponseCachePluginConfig(BaseModel):
         return self
 
 
-SemanticCachePluginConfig = ResponseCachePluginConfig
-
-
 CompressionTokenLimit = Literal["auto"] | int
 
 
@@ -1188,23 +1186,6 @@ class PluginConfig(BaseModel):
     type: PluginType
     configuration: Dict[str, Any]
 
-    @model_validator(mode="before")
-    @classmethod
-    def normalize_response_cache_aliases(cls, value):
-        if isinstance(value, dict) and value.get("type") in {
-            "semantic-cache",
-            "semantic_cache",
-            "response-cache",
-        }:
-            warnings.warn(
-                f"plugin type {value.get('type')!r} is deprecated; use 'response_cache'",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            value = dict(value)
-            value["type"] = PluginType.RESPONSE_CACHE.value
-        return value
-
     def model_dump(self, **kwargs):
         """Override model_dump to serialize PluginType enum as string value."""
         # Use mode='python' to get Python native types, then convert enum
@@ -1457,46 +1438,67 @@ class OutputContractSpec(BaseModel):
     postprocess: Optional[List[OutputContractPostprocess]] = None
 
 
-class Decision(BaseModel):
-    """Routing decision configuration."""
+class CandidateIterationOutput(BaseModel):
+    """Model-free output declared by a bounded candidate iteration."""
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(extra="forbid")
+
+    type: str
+    value: Optional[str] = None
+
+
+class CandidateIteration(BaseModel):
+    """Recipe-owned iteration metadata; Models are assigned by Entrypoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    variable: str
+    source: str
+    outputs: List[CandidateIterationOutput] = Field(default_factory=list)
+
+
+class RetentionDirective(BaseModel):
+    """Declarative retention side effect emitted by a decision."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    drop: Optional[StrictBool] = None
+    ttl_turns: Optional[int] = Field(default=None, ge=0)
+    keep_current_model: Optional[StrictBool] = None
+    prefer_prefix_retention: Optional[StrictBool] = None
+
+
+class EmitDirective(BaseModel):
+    """Closed decision side-effect directive."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["retention"]
+    retention: RetentionDirective
+
+
+class _DecisionBase(BaseModel):
+    """Model-independent routing decision configuration."""
+
+    model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     name: str
-    description: str
-    priority: int
+    description: str = ""
+    priority: int = 0
     tier: int = Field(default=0, ge=0)
     # A decision without an explicit rule is the canonical match-all fallback.
     # This mirrors the Go runtime and the DSL `ROUTE` form without `WHEN`.
     rules: Rules = Field(default_factory=Rules)
     output_contract: Optional[str] = None
     output_contract_spec: Optional[OutputContractSpec] = None
-    modelRefs: List[ModelRef] = Field(alias="modelRefs")
     algorithm: Optional[AlgorithmConfig] = None  # Multi-model orchestration algorithm
     adaptations: Optional[DecisionAdaptationsConfig] = None
     plugins: Optional[List[PluginConfig]] = []
+    candidate_iterations: List[CandidateIteration] = Field(
+        default_factory=list, alias="candidateIterations"
+    )
+    emits: List[EmitDirective] = Field(default_factory=list)
     annotations: Optional[Dict[str, Any]] = None
-
-    @model_validator(mode="after")
-    def validate_prompt_candidates(self):
-        if (
-            self.algorithm
-            and self.algorithm.type == "prompt"
-            and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
-        ):
-            raise ValueError("algorithm.type=prompt requires at least two modelRefs")
-        if self.algorithm and self.algorithm.type == "prompt":
-            model_names = [model_ref.model for model_ref in self.modelRefs]
-            if len(model_names) != len(set(model_names)):
-                raise ValueError("algorithm.type=prompt requires unique modelRefs")
-            effective_names = [
-                model_ref.lora_name or model_ref.model for model_ref in self.modelRefs
-            ]
-            if len(effective_names) != len(set(effective_names)):
-                raise ValueError(
-                    "algorithm.type=prompt requires unique effective model identities"
-                )
-        return self
 
     @model_validator(mode="after")
     def validate_annotation_bounds(self):
@@ -1518,200 +1520,616 @@ class Decision(BaseModel):
         return self
 
 
+class Decision(_DecisionBase):
+    """Routing decision with an internal physical-Model candidate set."""
+
+    modelRefs: List[ModelRef] = Field(default_factory=list, alias="modelRefs")
+
+    @model_validator(mode="after")
+    def validate_prompt_candidates(self):
+        if (
+            self.algorithm
+            and self.algorithm.type == "prompt"
+            and self.modelRefs
+            and len(self.modelRefs) < PROMPT_MIN_CANDIDATES
+        ):
+            raise ValueError("algorithm.type=prompt requires at least two modelRefs")
+        if self.algorithm and self.algorithm.type == "prompt":
+            model_names = [model_ref.model for model_ref in self.modelRefs]
+            if len(model_names) != len(set(model_names)):
+                raise ValueError("algorithm.type=prompt requires unique modelRefs")
+            effective_names = [
+                model_ref.lora_name or model_ref.model for model_ref in self.modelRefs
+            ]
+            if len(effective_names) != len(set(effective_names)):
+                raise ValueError(
+                    "algorithm.type=prompt requires unique effective model identities"
+                )
+        return self
+
+
+_ADAPTER_ID_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$")
+_DECIMAL_PATTERN = re.compile(r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
+_DURATION_COMPONENT_PATTERN = re.compile(r"([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)")
+
+
+def _trimmed_identifier(value: str, label: str) -> str:
+    if value != value.strip() or not value:
+        raise ValueError(f"{label} must be non-empty and trimmed")
+    return value
+
+
+def _canonical_decimal(
+    value: str,
+    *,
+    label: str,
+    positive: bool,
+    maximum: Decimal | None = None,
+) -> str:
+    if not _DECIMAL_PATTERN.fullmatch(value):
+        raise ValueError(f"{label} must be a plain non-negative decimal string")
+    try:
+        parsed = Decimal(value)
+    except InvalidOperation as error:
+        raise ValueError(f"{label} must be a valid decimal string") from error
+    if not parsed.is_finite() or parsed < 0 or (positive and parsed == 0):
+        qualifier = "positive" if positive else "non-negative"
+        raise ValueError(f"{label} must be {qualifier}")
+    fractional_digits = max(0, -parsed.as_tuple().exponent)
+    if fractional_digits > MAX_DECIMAL_FRACTIONAL_DIGITS:
+        raise ValueError(
+            f"{label} supports at most {MAX_DECIMAL_FRACTIONAL_DIGITS} fractional digits"
+        )
+    if maximum is not None and parsed > maximum:
+        raise ValueError(f"{label} must not exceed {maximum}")
+    rendered = format(parsed, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered or "0"
+
+
+def _duration_seconds(value: str) -> Decimal:
+    units = {
+        "ns": Decimal("0.000000001"),
+        "us": Decimal("0.000001"),
+        "µs": Decimal("0.000001"),
+        "ms": Decimal("0.001"),
+        "s": Decimal(1),
+        "m": Decimal(60),
+        "h": Decimal(3600),
+    }
+    cursor = 0
+    total = Decimal(0)
+    for match in _DURATION_COMPONENT_PATTERN.finditer(value):
+        if match.start() != cursor:
+            raise ValueError("duration must use Go duration syntax")
+        total += Decimal(match.group(1)) * units[match.group(2)]
+        cursor = match.end()
+    if cursor != len(value) or cursor == 0:
+        raise ValueError("duration must use Go duration syntax")
+    return total
+
+
+class ModelRuntime(BaseModel):
+    """Retry and timeout policy for one authored Model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_retries: int = Field(default=0, ge=0, le=5)
+    request_timeout: StrictStr = "300s"
+    stream_timeout: StrictStr = "300s"
+
+    @field_validator("request_timeout", "stream_timeout")
+    @classmethod
+    def validate_duration(cls, value: str) -> str:
+        if value != value.strip():
+            raise ValueError("duration must be trimmed")
+        seconds = _duration_seconds(value)
+        if seconds < 1 or seconds > 24 * 60 * 60:
+            raise ValueError("duration must be between 1s and 24h")
+        return value
+
+
 class ModelPricing(BaseModel):
-    """Model pricing configuration."""
+    """Exact per-million-token prices for one authored Model."""
 
     model_config = ConfigDict(extra="forbid")
 
-    currency: Optional[str] = "USD"
-    prompt_per_1m: Optional[float] = 0.0
-    cached_input_per_1m: Optional[float] = 0.0
-    cache_write_per_1m: Optional[float] = Field(default=None, ge=0)
-    completion_per_1m: Optional[float] = 0.0
+    input_cost_per_million_tokens: Optional[StrictStr] = None
+    output_cost_per_million_tokens: Optional[StrictStr] = None
+    cache_read_cost_per_million_tokens: Optional[StrictStr] = None
+    cache_write_cost_per_million_tokens: Optional[StrictStr] = None
+
+    @field_validator(
+        "input_cost_per_million_tokens",
+        "output_cost_per_million_tokens",
+        "cache_read_cost_per_million_tokens",
+        "cache_write_cost_per_million_tokens",
+    )
+    @classmethod
+    def validate_price(cls, value: str | None, info):
+        if value is None:
+            return None
+        return _canonical_decimal(
+            value,
+            label=info.field_name,
+            positive=False,
+            maximum=Decimal(1_000_000),
+        )
+
+    @model_validator(mode="after")
+    def materialize_cache_price_inheritance(self):
+        if self.cache_read_cost_per_million_tokens is None:
+            self.cache_read_cost_per_million_tokens = self.input_cost_per_million_tokens
+        if self.cache_write_cost_per_million_tokens is None:
+            self.cache_write_cost_per_million_tokens = (
+                self.input_cost_per_million_tokens
+            )
+        return self
 
 
-class ProviderReliability(BaseModel):
-    """Generated Envoy reliability policy for one provider model."""
+class ModelReasoning(BaseModel):
+    """Stable reasoning wire family and its accepted effort values."""
 
     model_config = ConfigDict(extra="forbid")
 
-    lb_policy: Literal["round_robin", "least_request"] = "round_robin"
-    retry_count: int = Field(default=0, ge=0, le=5)
-    retry_on: str = "connect-failure,refused-stream"
-    consecutive_5xx: int = Field(default=0, ge=0)
-    base_ejection_time: str = "30s"
-    max_ejection_percent: int = Field(default=50, ge=0, le=100)
-    health_check_path: Optional[str] = None
-    health_check_interval: str = "10s"
-    health_check_timeout: str = "2s"
+    type: StrictStr = ""
+    efforts: List[StrictStr] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def validate_contract(self):
+        if self.type:
+            _trimmed_identifier(self.type, "reasoning.type")
+        if len(set(self.efforts)) != len(self.efforts):
+            raise ValueError("reasoning.efforts must be unique")
+        for effort in self.efforts:
+            _trimmed_identifier(effort, "reasoning effort")
+        if not self.type and self.efforts:
+            raise ValueError("reasoning.type is required when efforts are configured")
+        return self
+
+
+class ModelCard(BaseModel):
+    """Semantic Model metadata exposed to Recipe and DSL authors."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    aliases: List[StrictStr] = Field(default_factory=list)
+    param_size: StrictStr = ""
+    context_window_size: int = Field(default=0, ge=0)
+    description: StrictStr = ""
+    capabilities: List[StrictStr] = Field(default_factory=list)
+    reasoning: ModelReasoning = Field(default_factory=ModelReasoning)
+    loras: List[StrictStr] = Field(default_factory=list)
+    quality_score: float = Field(default=0, ge=0, le=1)
+    modality: StrictStr = ""
+    tags: List[StrictStr] = Field(default_factory=list)
+
+    @field_validator("param_size", "description", "modality")
+    @classmethod
+    def validate_optional_text(cls, value: str, info) -> str:
+        if value != value.strip():
+            raise ValueError(f"model.card.{info.field_name} must be trimmed")
+        return value
+
+    @model_validator(mode="after")
+    def validate_unique_values(self):
+        for label, values in (
+            ("aliases", self.aliases),
+            ("capabilities", self.capabilities),
+            ("loras", self.loras),
+            ("tags", self.tags),
+        ):
+            if len(set(values)) != len(values):
+                raise ValueError(f"model.card.{label} must be unique")
+            for value in values:
+                _trimmed_identifier(value, f"model card {label[:-1]}")
+        return self
+
+
+class ModelConnection(BaseModel):
+    """Human-readable Provider Integration binding for one physical Model."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    provider: StrictStr
+    interface: Optional[StrictStr] = None
+    endpoint: Optional[StrictStr] = None
+    model: StrictStr
+    credential: Optional[StrictStr] = None
+    weight: StrictStr = "1"
+
+    @field_validator("provider", "interface", "model")
+    @classmethod
+    def validate_identifier(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
+        return _trimmed_identifier(value, f"connection.{info.field_name}")
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if value != value.strip():
+            raise ValueError("connection.endpoint must be trimmed")
+        parsed = urlsplit(value)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("connection.endpoint must be an absolute HTTP(S) URL")
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise ValueError(
+                "connection.endpoint must not contain credentials, query, or fragment"
+            )
+        return value.rstrip("/")
+
+    @field_validator("weight")
+    @classmethod
+    def validate_weight(cls, value: str) -> str:
+        return _canonical_decimal(value, label="connection.weight", positive=True)
+
+    @field_validator("credential")
+    @classmethod
+    def validate_credential(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _trimmed_identifier(value, "connection.credential")
 
 
 class Model(BaseModel):
-    """Provider model binding for canonical providers.models entries."""
+    """One concise logical Model authored for standalone routing."""
 
-    name: str
-    reasoning_family: Optional[str] = None
-    provider_model_id: Optional[str] = None
-    backend_refs: List["BackendRef"] = Field(default_factory=list)
-    pricing: Optional[ModelPricing] = None
-    reliability: Optional[ProviderReliability] = None
-    api_format: Optional[str] = None
-    external_model_ids: Optional[Dict[str, str]] = None
+    model_config = ConfigDict(extra="forbid")
 
+    name: StrictStr
+    card: ModelCard
+    connections: List[ModelConnection] = Field(min_length=1, max_length=32)
+    runtime: ModelRuntime = Field(default_factory=ModelRuntime)
+    pricing: ModelPricing = Field(default_factory=ModelPricing)
 
-class LoRAAdapter(BaseModel):
-    """LoRA adapter metadata exposed under routing.modelCards[].loras."""
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, value: str) -> str:
+        return _trimmed_identifier(value, "model.name")
 
-    name: str
-    description: Optional[str] = None
-
-
-class RoutingModel(BaseModel):
-    """Semantic model catalog entry exposed to routing/DSL."""
-
-    name: str
-    param_size: Optional[str] = None
-    context_window_size: Optional[int] = Field(default=None, ge=1)
-    description: Optional[str] = None
-    capabilities: Optional[List[str]] = None
-    loras: Optional[List[LoRAAdapter]] = None
-    tags: Optional[List[str]] = None
-    quality_score: Optional[float] = Field(default=None, ge=0, le=1)
-    modality: Optional[str] = None
+    @model_validator(mode="after")
+    def validate_aliases(self):
+        if self.name in self.card.aliases:
+            raise ValueError("model.card.aliases must not repeat model.name")
+        return self
 
 
-class ReasoningFamily(BaseModel):
-    """Reasoning family configuration."""
+class AssignmentReasoning(BaseModel):
+    """Per-assignment reasoning controls compiled into an Entrypoint action."""
 
-    type: str
-    parameter: str
+    model_config = ConfigDict(extra="forbid")
 
+    enabled: bool
+    effort: Optional[str] = None
+    description: Optional[str] = Field(default=None, max_length=1024)
 
-class BackendRef(BaseModel):
-    """Inline backend access details carried under providers.models[].backend_refs."""
-
-    name: Optional[str] = None
-    endpoint: Optional[str] = None
-    protocol: str = "http"
-    weight: int = 1
-    type: Optional[str] = None
-    base_url: Optional[str] = None
-    provider: Optional[str] = None
-    auth_header: Optional[str] = None
-    auth_prefix: Optional[str] = None
-    extra_headers: Optional[Dict[str, str]] = None
-    api_version: Optional[str] = None
-    chat_path: Optional[str] = None
-    api_key: Optional[str] = None
-    api_key_env: Optional[str] = None
-
-    def resolve_api_key(self) -> Optional[str]:
-        if self.api_key:
-            return self.api_key
-        if self.api_key_env:
-            import os
-
-            return os.getenv(self.api_key_env)
-        return None
+    @model_validator(mode="after")
+    def validate_disabled_shape(self):
+        if not self.enabled and (
+            self.effort is not None or self.description is not None
+        ):
+            raise ValueError(
+                "disabled assignment reasoning cannot define effort or description"
+            )
+        return self
 
 
-class ProviderDefaults(BaseModel):
-    """Provider-wide defaults that should not be mixed into per-model access bindings."""
+class ModelAssignment(BaseModel):
+    """Readable Model reference owned by one Entrypoint assignment."""
 
-    default_model: Optional[str] = None
-    reasoning_families: Optional[Dict[str, "ReasoningFamily"]] = Field(
-        default_factory=dict
+    model_config = ConfigDict(extra="forbid")
+
+    model: str = Field(min_length=1)
+    priority: int = Field(default=0, ge=0, le=31)
+    weight: StrictStr = "1"
+    lora: Optional[str] = None
+    reasoning: Optional[AssignmentReasoning] = None
+
+    @field_validator("model")
+    @classmethod
+    def validate_model(cls, value: str) -> str:
+        return _trimmed_identifier(value, "assignment.model")
+
+    @field_validator("lora")
+    @classmethod
+    def validate_lora(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return _trimmed_identifier(value, "assignment.lora")
+
+    @field_validator("weight")
+    @classmethod
+    def validate_weight(cls, value: str) -> str:
+        return _canonical_decimal(value, label="assignment.weight", positive=True)
+
+    @model_validator(mode="after")
+    def canonicalize_disabled_reasoning(self):
+        if self.reasoning is not None and not self.reasoning.enabled:
+            self.reasoning = None
+        return self
+
+
+class AssignmentFallback(BaseModel):
+    """Closed cross-Model fallback policy for one decision assignment."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    strategy: Literal["priority"]
+    on: List[Literal["unavailable", "overloaded", "timeout"]] = Field(
+        min_length=1, max_length=3
     )
-    default_reasoning_effort: Optional[str] = "high"
+
+    @field_validator("on")
+    @classmethod
+    def validate_unique_triggers(cls, value):
+        if len(set(value)) != len(value):
+            raise ValueError("fallback triggers must be unique")
+        return value
 
 
-class Providers(BaseModel):
-    """Provider configuration."""
-
-    defaults: ProviderDefaults = Field(default_factory=ProviderDefaults)
-    models: List[Model] = Field(default_factory=list)
-
-    @property
-    def default_model(self) -> Optional[str]:
-        return self.defaults.default_model
-
-    @property
-    def reasoning_families(self) -> Dict[str, "ReasoningFamily"]:
-        return self.defaults.reasoning_families or {}
-
-    @property
-    def default_reasoning_effort(self) -> Optional[str]:
-        return self.defaults.default_reasoning_effort
-
-
-class Routing(BaseModel):
-    """Canonical routing block."""
-
-    model_config = ConfigDict(populate_by_name=True)
-
-    model_cards: List[RoutingModel] = Field(default_factory=list, alias="modelCards")
-    signals: Signals = Field(default_factory=Signals)
-    projections: Projections = Field(default_factory=Projections)
-    decisions: List[Decision] = Field(default_factory=list)
-    strategy: Optional[RoutingStrategy] = None
-
-
-class Entrypoint(BaseModel):
-    """Request-facing virtual model names mapped to one routing recipe."""
+class AssignmentSet(BaseModel):
+    """The only public decision-to-Model assignment shape."""
 
     model_config = ConfigDict(extra="forbid")
 
-    model_names: List[str] = Field(min_length=1)
-    recipe: str = Field(min_length=1)
+    models: List[ModelAssignment] = Field(min_length=1, max_length=32)
+    fallback: Optional[AssignmentFallback] = None
 
-    @field_validator("model_names", mode="before")
-    @classmethod
-    def normalize_model_names(cls, value):
-        if not isinstance(value, list):
-            return value
-        if any(not isinstance(item, str) for item in value):
-            raise ValueError("model_names entries must be strings")
-        normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
-        if not normalized:
-            raise ValueError("model_names must contain at least one non-empty name")
-        return normalized
-
-    @field_validator("recipe")
-    @classmethod
-    def normalize_recipe(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("recipe must not be empty")
-        return normalized
-
-
-class RecipeRouting(BaseModel):
-    """Recipe-owned routing profile; the shared model catalog stays top-level."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    signals: Signals = Field(default_factory=Signals)
-    projections: Projections = Field(default_factory=Projections)
-    decisions: List[Decision] = Field(default_factory=list)
-    strategy: Optional[RoutingStrategy] = None
+    @model_validator(mode="after")
+    def validate_priority_tiers(self):
+        targets = [
+            (
+                model.model,
+                model.lora or "",
+                model.reasoning.enabled if model.reasoning else None,
+                model.reasoning.effort if model.reasoning else "",
+                model.reasoning.description if model.reasoning else "",
+            )
+            for model in self.models
+        ]
+        if len(set(targets)) != len(targets):
+            raise ValueError(
+                "an assignment cannot repeat the same Model, LoRA, and reasoning target"
+            )
+        priorities = {model.priority for model in self.models}
+        if self.fallback is None:
+            if priorities != {0}:
+                raise ValueError(
+                    "model priority must be zero unless fallback is configured"
+                )
+            return self
+        if len(priorities) < MIN_FALLBACK_PRIORITY_TIERS or priorities != set(
+            range(len(priorities))
+        ):
+            raise ValueError("fallback priority tiers must be contiguous from zero")
+        return self
 
 
-class Recipe(BaseModel):
-    """Named routing profile selected through an entrypoint."""
-
+class EntrypointClaimMatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1)
+    exact: str | bool | int
+
+
+class EntrypointPathMatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    exact: Optional[str] = None
+    prefix: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_one_path(self):
+        if bool(self.exact) == bool(self.prefix):
+            raise ValueError("exactly one of exact or prefix is required")
+        return self
+
+
+class EntrypointMatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    claim: Optional[EntrypointClaimMatch] = None
+    path: Optional[EntrypointPathMatch] = None
+
+    @model_validator(mode="after")
+    def validate_one_matcher(self):
+        if (self.claim is None) == (self.path is None):
+            raise ValueError("exactly one matcher kind is required")
+        return self
+
+
+class EntrypointRule(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: StrictStr
+    matches: List[EntrypointMatch] = Field(default_factory=list)
+    recipe: StrictStr
+    assignments: Dict[str, AssignmentSet]
+
+    @field_validator("name", "recipe")
+    @classmethod
+    def validate_identity(cls, value: str, info) -> str:
+        return _trimmed_identifier(value, f"entrypoint rule {info.field_name}")
+
+
+class Entrypoint(BaseModel):
+    """One callable virtual Model using readable Recipe and Model names."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: StrictStr
+    aliases: List[StrictStr] = Field(default_factory=list)
+    recipe: Optional[StrictStr] = None
+    assignments: Optional[Dict[str, AssignmentSet]] = None
+    rules: List[EntrypointRule] = Field(default_factory=list)
+
+    @field_validator("aliases", mode="before")
+    @classmethod
+    def normalize_aliases(cls, value):
+        if not isinstance(value, list):
+            return value
+        if any(not isinstance(item, str) for item in value):
+            raise ValueError("entrypoint aliases must be strings")
+        normalized = list(dict.fromkeys(item.strip() for item in value if item.strip()))
+        return normalized
+
+    @field_validator("name", "recipe")
+    @classmethod
+    def validate_identity(cls, value: str | None, info) -> str | None:
+        if value is None:
+            return None
+        return _trimmed_identifier(value, f"entrypoint.{info.field_name}")
+
+    @model_validator(mode="after")
+    def validate_shape(self):
+        if self.name in self.aliases:
+            raise ValueError("entrypoint.aliases must not repeat entrypoint.name")
+        if self.rules:
+            if self.recipe is not None or self.assignments is not None:
+                raise ValueError(
+                    "entrypoint rules cannot be combined with common recipe or assignments"
+                )
+            rule_names = [rule.name for rule in self.rules]
+            if len(set(rule_names)) != len(rule_names):
+                raise ValueError("entrypoint rule names must be unique")
+            return self
+        if self.recipe is None:
+            raise ValueError("entrypoint.recipe is required when rules are omitted")
+        if self.assignments is None:
+            raise ValueError(
+                "entrypoint.assignments is required when rules are omitted"
+            )
+        return self
+
+
+_RECIPE_MODEL_FIELD_PATHS = (
+    ("modelRefs",),
+    ("candidateIterations", "*", "models"),
+    ("algorithm", "remom", "synthesis_model"),
+    ("algorithm", "fusion", "model"),
+    ("algorithm", "fusion", "analysis_models"),
+    ("algorithm", "fusion", "analysis_overrides"),
+    ("algorithm", "workflows", "planner", "model"),
+    ("algorithm", "workflows", "final", "model"),
+    ("algorithm", "workflows", "roles", "*", "models"),
+    ("algorithm", "prompt", "model"),
+)
+
+
+def _path_exists(value: Any, path: tuple[str, ...]) -> bool:
+    if not path:
+        return True
+    head, *tail = path
+    if head == "*":
+        return isinstance(value, list) and any(
+            _path_exists(item, tuple(tail)) for item in value
+        )
+    return (
+        isinstance(value, dict)
+        and head in value
+        and _path_exists(value[head], tuple(tail))
+    )
+
+
+class RecipeDecision(_DecisionBase):
+    """A named decision with no physical Model selection."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_model_selection(cls, value):
+        if not isinstance(value, dict):
+            return value
+        for path in _RECIPE_MODEL_FIELD_PATHS:
+            if _path_exists(value, path):
+                rendered = ".".join(segment for segment in path if segment != "*")
+                raise ValueError(
+                    f"Recipe decisions cannot contain Model selection at {rendered}; "
+                    "use Entrypoint assignments"
+                )
+        return value
+
+
+class RecipeDocument(BaseModel):
+    """The one model-free Recipe document shared with the Management API."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signals: Signals = Field(default_factory=Signals)
+    projections: Projections = Field(default_factory=Projections)
+    decisions: List[RecipeDecision] = Field(default_factory=list, max_length=256)
+    strategy: Optional[RoutingStrategy] = None
+
+    @model_validator(mode="after")
+    def validate_decision_identity(self):
+        names = [decision.name for decision in self.decisions]
+        if len(set(names)) != len(names):
+            raise ValueError("Recipe decision names must be unique")
+
+        shared_settings: tuple[str | None, int | None] | None = None
+        shared_owner: str | None = None
+        family_settings: dict[str, tuple[str, dict[str, Any]]] = {}
+        for decision in self.decisions:
+            algorithm = decision.algorithm
+            if algorithm is None or algorithm.ml is None:
+                continue
+            shared = (algorithm.ml.models_path, algorithm.ml.embedding_dim)
+            if shared_settings is None:
+                shared_settings = shared
+                shared_owner = decision.name
+            elif shared != shared_settings:
+                raise ValueError(
+                    f"Decisions {shared_owner!r} and {decision.name!r} configure "
+                    "conflicting algorithm.ml shared settings"
+                )
+            family = algorithm.type
+            family_config = getattr(algorithm.ml, family)
+            serialized = family_config.model_dump(exclude_none=True)
+            existing = family_settings.get(family)
+            if existing is None:
+                family_settings[family] = (decision.name, serialized)
+            elif existing[1] != serialized:
+                raise ValueError(
+                    f"Decisions {existing[0]!r} and {decision.name!r} configure "
+                    f"conflicting algorithm.ml.{family} settings"
+                )
+        return self
+
+
+class Recipe(BaseModel):
+    """Named reusable routing Recipe selected through an Entrypoint."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: StrictStr = Field(min_length=1)
     description: Optional[str] = None
-    routing: RecipeRouting = Field(default_factory=RecipeRouting)
+    document: RecipeDocument
 
     @field_validator("name")
     @classmethod
     def normalize_name(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("name must not be empty")
-        return normalized
+        return _trimmed_identifier(value, "recipe.name")
+
+
+class RecipeDistribution(BaseModel):
+    """Portable Recipe-only artifact with no runtime-owned resources."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    version: Literal["v0.4"]
+    recipes: List[Recipe] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_recipe_identity(self):
+        names = [recipe.name for recipe in self.recipes]
+        if len(set(names)) != len(names):
+            raise ValueError("recipes must have unique names")
+        return self
 
 
 class EmbeddingModelsConfig(BaseModel):
@@ -1749,26 +2167,188 @@ class EmbeddingModelsConfig(BaseModel):
 
 
 class UserConfig(BaseModel):
-    """Canonical v0.3 user configuration."""
+    """Canonical v0.4 user configuration."""
 
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
-    version: str
+    version: Literal["v0.4"]
+    billing_currency: Optional[StrictStr] = None
     listeners: List[Listener] = Field(default_factory=list)
-    providers: Providers = Field(default_factory=Providers)
-    routing: Routing = Field(default_factory=Routing)
+    models: List[Model] = Field(default_factory=list)
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
-    setup: Optional[Dict[str, Any]] = None
 
-    @property
-    def signals(self) -> Signals:
-        return self.routing.signals
+    @field_validator("billing_currency")
+    @classmethod
+    def validate_billing_currency(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not re.fullmatch(r"[A-Z]{3}", value):
+            raise ValueError("billing_currency must be an uppercase ISO-4217 code")
+        return value
 
-    @property
-    def decisions(self) -> List[Decision]:
-        return self.routing.decisions
+    @model_validator(mode="after")
+    def validate_resource_boundary(self):
+        model_names = [model.name for model in self.models]
+        if len(set(model_names)) != len(model_names):
+            raise ValueError("models must have unique names")
+        recipe_names = [recipe.name for recipe in self.recipes]
+        if len(set(recipe_names)) != len(recipe_names):
+            raise ValueError("recipes must have unique names")
+        callable_names = [
+            callable_name
+            for entrypoint in self.entrypoints
+            for callable_name in (entrypoint.name, *entrypoint.aliases)
+        ]
+        if len(set(callable_names)) != len(callable_names):
+            raise ValueError("entrypoint names and aliases must be unique")
+
+        priced = any(
+            any(
+                value is not None
+                for value in model.pricing.model_dump(mode="python").values()
+            )
+            for model in self.models
+        )
+        if priced and self.billing_currency is None:
+            raise ValueError(
+                "billing_currency is required when standalone Models define pricing"
+            )
+
+        global_config = self.global_ or {}
+        control_plane = global_config.get("control_plane")
+        mode = (
+            control_plane.get("mode", "standalone")
+            if isinstance(control_plane, dict)
+            else "standalone"
+        )
+        if mode == "managed" and (self.models or self.recipes or self.entrypoints):
+            raise ValueError(
+                "managed bootstrap must not contain Models, Recipes, or Entrypoints"
+            )
+        _validate_agent_service(global_config, mode)
+        _validate_named_backend_credentials(global_config, mode)
+        _validate_backend_egress(global_config)
+        return self
+
+
+def _validate_agent_service(global_config: Dict[str, Any], mode: str) -> None:
+    services = global_config.get("services")
+    agent = services.get("agent") if isinstance(services, dict) else None
+    if agent is None:
+        if mode == "managed":
+            raise ValueError(
+                "managed mode requires global.services.agent.public_inference_endpoint"
+            )
+        return
+    if not isinstance(agent, dict):
+        raise ValueError("global.services.agent must be an object")
+    unknown = set(agent) - {"public_inference_endpoint"}
+    if unknown:
+        raise ValueError(
+            "global.services.agent contains unsupported fields: "
+            + ", ".join(sorted(unknown))
+        )
+    endpoint = agent.get("public_inference_endpoint")
+    if mode != "managed":
+        if endpoint not in (None, ""):
+            raise ValueError("global.services.agent is managed-only")
+        return
+    if not isinstance(endpoint, str) or not endpoint:
+        raise ValueError(
+            "managed mode requires global.services.agent.public_inference_endpoint"
+        )
+    if endpoint != endpoint.strip() or "?" in endpoint or "#" in endpoint:
+        raise ValueError(
+            "global.services.agent.public_inference_endpoint must be an HTTP(S) "
+            "/v1/chat/completions URL"
+        )
+    try:
+        parsed = urlsplit(endpoint)
+        _ = parsed.port
+    except ValueError as exc:
+        raise ValueError(
+            "global.services.agent.public_inference_endpoint must be an HTTP(S) "
+            "/v1/chat/completions URL"
+        ) from exc
+    if (
+        parsed.scheme not in {"http", "https"}
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path != "/v1/chat/completions"
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ValueError(
+            "global.services.agent.public_inference_endpoint must be an HTTP(S) "
+            "/v1/chat/completions URL"
+        )
+
+
+def _validate_named_backend_credentials(
+    global_config: Dict[str, Any], mode: str
+) -> None:
+    services = global_config.get("services")
+    if not isinstance(services, dict):
+        return
+    credentials = services.get("backend_credentials")
+    if not isinstance(credentials, dict):
+        return
+    managed_keys = {"provider_kek_keyring_file", "provider_kek_keyring_env"}
+    standalone_names = set(credentials) - managed_keys
+    if mode == "managed" and standalone_names:
+        raise ValueError("managed mode rejects standalone backend credentials")
+    for name in standalone_names:
+        _trimmed_identifier(str(name), "backend credential name")
+        definition = credentials[name]
+        if not isinstance(definition, dict):
+            raise ValueError(f"backend credential {name!r} must be an object")
+        allowed = {"credential_adapter_id", "secret_env", "secret_file"}
+        unknown = set(definition) - allowed
+        if unknown:
+            raise ValueError(
+                f"backend credential {name!r} contains unsupported fields: "
+                + ", ".join(sorted(unknown))
+            )
+        adapter = definition.get("credential_adapter_id")
+        if not isinstance(adapter, str) or not _ADAPTER_ID_PATTERN.fullmatch(adapter):
+            raise ValueError(
+                f"backend credential {name!r} requires credential_adapter_id"
+            )
+        sources = [key for key in ("secret_env", "secret_file") if definition.get(key)]
+        if len(sources) != 1:
+            raise ValueError(
+                f"backend credential {name!r} requires exactly one of secret_env or secret_file"
+            )
+
+
+def _validate_backend_egress(global_config: Dict[str, Any]) -> None:
+    services = global_config.get("services")
+    if not isinstance(services, dict):
+        raise ValueError("global.services.backend_egress.policy_file is required")
+    backend_egress = services.get("backend_egress")
+    if backend_egress is None:
+        raise ValueError("global.services.backend_egress.policy_file is required")
+    if not isinstance(backend_egress, dict):
+        raise ValueError("global.services.backend_egress must be an object")
+    unknown = set(backend_egress) - {"policy_file"}
+    if unknown:
+        raise ValueError(
+            "global.services.backend_egress contains unsupported fields: "
+            + ", ".join(sorted(unknown))
+        )
+    policy_file = backend_egress.get("policy_file")
+    if not isinstance(policy_file, str) or policy_file != policy_file.strip():
+        raise ValueError(
+            "global.services.backend_egress.policy_file must be a trimmed absolute path"
+        )
+    path = PurePosixPath(policy_file)
+    if not path.is_absolute() or ".." in path.parts:
+        raise ValueError(
+            "global.services.backend_egress.policy_file must be a trimmed absolute path"
+        )
 
 
 # Resolve forward references for recursive condition trees.

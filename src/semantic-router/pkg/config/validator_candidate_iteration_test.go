@@ -71,19 +71,27 @@ func TestValidateCandidateIterationRejectsUnsupportedSource(t *testing.T) {
 	}
 }
 
-func TestValidateCandidateIterationRejectsDecisionCandidatesWithNoModelRefs(t *testing.T) {
+func TestValidateCandidateIterationDefersDecisionCandidatesForModelFreeRecipe(t *testing.T) {
 	d := Decision{
 		Name: "route",
 		CandidateIterations: []CandidateIterationConfig{
 			{Variable: "c", Source: "decision.candidates"},
 		},
 	}
-	err := validateDecisionCandidateIterations(d)
-	if err == nil {
-		t.Fatal("expected error when decision.candidates used without modelRefs, got nil")
+	if err := validateDecisionCandidateIterations(d); err != nil {
+		t.Fatalf("model-free Recipe candidate iteration should be validated after assignment: %v", err)
 	}
-	if !strings.Contains(err.Error(), "non-empty modelRefs") {
-		t.Fatalf("error message = %q, want to contain 'non-empty modelRefs'", err.Error())
+}
+
+func TestValidateCandidateIterationDefersModelSourceForModelFreeRecipe(t *testing.T) {
+	d := Decision{
+		Name: "route",
+		CandidateIterations: []CandidateIterationConfig{
+			{Variable: "c", Source: "models"},
+		},
+	}
+	if err := validateDecisionCandidateIterations(d); err != nil {
+		t.Fatalf("model-free Recipe model iteration should be validated after assignment: %v", err)
 	}
 }
 

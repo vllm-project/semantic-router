@@ -6,13 +6,17 @@ import (
 )
 
 func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + recipeTestPrivacyBlockYAML))
+	cfg, err := parseRecipeFixtureYAML(t, []byte(recipeTestPrivacyYAML))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
 
-	registry := make(map[string]bool, len(cfg.Signals.KeywordRules))
-	for _, rule := range cfg.Signals.KeywordRules {
+	defaultRecipe := cfg.DefaultRecipe()
+	if defaultRecipe == nil {
+		t.Fatal("default Recipe was not compiled")
+	}
+	registry := make(map[string]bool, len(defaultRecipe.Profile.Signals.KeywordRules))
+	for _, rule := range defaultRecipe.Profile.Signals.KeywordRules {
 		registry[rule.Name] = true
 	}
 	if !registry["urgent_keywords"] || registry["pii_keywords"] {
@@ -24,8 +28,14 @@ func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
 	}
 
 	canonical := CanonicalConfigFromRouterConfig(cfg)
-	if len(canonical.Routing.Signals.Keywords) != 1 || canonical.Routing.Signals.Keywords[0].Name != "urgent_keywords" {
-		t.Fatalf("expected the exported top-level routing block to keep only the default profile, got %+v", canonical.Routing.Signals.Keywords)
+	var exportedPrivacy *AuthoringRecipe
+	for index := range canonical.Recipes {
+		if canonical.Recipes[index].Name == "privacy" {
+			exportedPrivacy = &canonical.Recipes[index]
+		}
+	}
+	if len(canonical.Recipes) != 2 || exportedPrivacy == nil || len(exportedPrivacy.Document.Signals.Keywords) != 1 || exportedPrivacy.Document.Signals.Keywords[0].Name != "pii_keywords" {
+		t.Fatalf("expected the exported named Recipe to preserve only its local signals, got %+v", canonical.Recipes)
 	}
 
 	if got := len(cfg.AllRoutingDecisions()); got != 2 {
@@ -34,26 +44,12 @@ func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
 }
 
 func TestUsesSignalTypeInRoutingCoversRecipeDecisions(t *testing.T) {
-	contextRecipeYAML := `
-recipes:
-  - name: privacy
-    routing:
-      signals:
-        context:
-          - name: short_context
-            max_tokens: 1K
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: context
-                name: short_context
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
-`
-	cfg, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + contextRecipeYAML))
+	contextRecipeYAML := strings.Replace(recipeTestPrivacyYAML,
+		"      signals:\n        keywords:\n          - {name: pii_keywords, operator: OR, keywords: [ssn]}\n",
+		"      signals:\n        context:\n          - {name: short_context, max_tokens: 1K}\n", 1)
+	contextRecipeYAML = strings.Replace(contextRecipeYAML,
+		"{type: keyword, name: pii_keywords}", "{type: context, name: short_context}", 1)
+	cfg, err := parseRecipeFixtureYAML(t, []byte(contextRecipeYAML))
 	if err != nil {
 		t.Fatalf("unexpected parse error: %v", err)
 	}
@@ -82,10 +78,9 @@ func TestEntrypointRecipeDescription(t *testing.T) {
 	}
 }
 
-func TestAllRoutingDecisionsFallsBackToFlatDecisions(t *testing.T) {
-	// Configs built without the canonical loader (DSL fragments, hand-built
-	// test configs) carry no recipes; the flat decisions are the only profile.
+func TestAllRoutingDecisionsUsesFlatDecisionsOnlyForScopedView(t *testing.T) {
 	cfg := &RouterConfig{
+		RoutingScope: "scoped",
 		IntelligentRouting: IntelligentRouting{
 			Decisions: []Decision{{Name: "flat_route"}},
 		},
@@ -93,11 +88,15 @@ func TestAllRoutingDecisionsFallsBackToFlatDecisions(t *testing.T) {
 
 	decisions := cfg.AllRoutingDecisions()
 	if len(decisions) != 1 || decisions[0].Name != "flat_route" {
-		t.Fatalf("expected the flat decisions to back the routing view, got %+v", decisions)
+		t.Fatalf("expected the scoped decisions to back the routing view, got %+v", decisions)
+	}
+	cfg.RoutingScope = ""
+	if decisions := cfg.AllRoutingDecisions(); len(decisions) != 0 {
+		t.Fatalf("root runtime config accepted scoped flat decisions: %+v", decisions)
 	}
 }
 
-func TestDefaultRecipeFallsBackToFlatRoutingProfile(t *testing.T) {
+func TestDefaultRecipeNeverSynthesizesFlatRoutingProfile(t *testing.T) {
 	cfg := &RouterConfig{
 		IntelligentRouting: IntelligentRouting{
 			Signals:   Signals{KeywordRules: []KeywordRule{{Name: "default_signal"}}},
@@ -106,65 +105,89 @@ func TestDefaultRecipeFallsBackToFlatRoutingProfile(t *testing.T) {
 		},
 	}
 
-	recipe := cfg.DefaultRecipe()
-	if recipe == nil {
-		t.Fatal("expected a synthetic default recipe for a flat config")
-	}
-	if recipe.Name != DefaultRecipeName || recipe.Profile.Strategy != RoutingStrategyConfidence {
-		t.Fatalf("unexpected default recipe metadata: %+v", recipe)
-	}
-	if len(recipe.Profile.Signals.KeywordRules) != 1 || recipe.Profile.Signals.KeywordRules[0].Name != "default_signal" {
-		t.Fatalf("expected the flat signals in the default recipe, got %+v", recipe.Profile.Signals)
-	}
-	if len(recipe.Profile.Decisions) != 1 || recipe.Profile.Decisions[0].Name != "default_route" {
-		t.Fatalf("expected the flat decisions in the default recipe, got %+v", recipe.Profile.Decisions)
+	if recipe := cfg.DefaultRecipe(); recipe != nil {
+		t.Fatalf("root runtime config synthesized a Recipe from scoped fields: %+v", recipe)
 	}
 
-	resolved, ok := cfg.RecipeForRoutingModel(DefaultVSRAutoModelName)
-	if !ok || resolved == nil || resolved.Name != DefaultRecipeName {
-		t.Fatalf("expected the auto alias to resolve the synthetic default recipe, got %+v, %v", resolved, ok)
+	if resolved, ok := cfg.RecipeForRequestModel("vllm-sr/auto"); ok || resolved != nil {
+		t.Fatalf("unmapped model resolved without an explicit Entrypoint: %+v, %v", resolved, ok)
 	}
 }
 
-func TestReachableRoutingRecipesIncludesAutoDefaultAndEntrypointRecipes(t *testing.T) {
+func TestRoutingProfileVisitorNeverTreatsRootFieldsAsARecipe(t *testing.T) {
+	cfg := &RouterConfig{
+		IntelligentRouting: IntelligentRouting{
+			Decisions: []Decision{{Name: "flat_route"}},
+		},
+	}
+	visits := 0
+	if err := visitRoutingProfileConfigs(cfg, func(*RouterConfig) error {
+		visits++
+		return nil
+	}); err != nil {
+		t.Fatalf("visitRoutingProfileConfigs() error = %v", err)
+	}
+	if visits != 0 {
+		t.Fatalf("root scoped fields were visited as an implicit Recipe %d times", visits)
+	}
+
+	cfg.RoutingScope = "authoring"
+	if err := visitRoutingProfileConfigs(cfg, func(*RouterConfig) error {
+		visits++
+		return nil
+	}); err != nil {
+		t.Fatalf("visitRoutingProfileConfigs(scoped) error = %v", err)
+	}
+	if visits != 1 {
+		t.Fatalf("explicit scoped view visits = %d, want 1", visits)
+	}
+}
+
+func TestReachableRoutingRecipesIncludesOnlyEntrypointRecipes(t *testing.T) {
 	cfg := &RouterConfig{
 		Recipes: []RoutingRecipe{
 			{Name: DefaultRecipeName},
 			{Name: "mapped"},
 			{Name: "unmapped"},
 		},
-		Entrypoints: []EntrypointMapping{{
-			ModelNames: []string{"vllm-sr/mapped"},
-			Recipe:     "mapped",
-		}},
 	}
+	cfg.Entrypoints = []EntrypointMapping{testCompiledEntrypoint("vllm-sr/mapped", &cfg.Recipes[1])}
 
 	reachable := cfg.ReachableRoutingRecipes()
-	if len(reachable) != 2 ||
-		reachable[0].Name != DefaultRecipeName ||
-		reachable[1].Name != "mapped" {
-		t.Fatalf("reachable recipes = %+v, want default and mapped", reachable)
+	if len(reachable) != 1 || reachable[0].Name != "mapped" {
+		t.Fatalf("reachable recipes = %+v, want only mapped", reachable)
+	}
+	if cfg.IsRecipeReachableForRouting(DefaultRecipeName) {
+		t.Fatal("default Recipe became reachable without an Entrypoint")
 	}
 	if cfg.IsRecipeReachableForRouting("unmapped") {
 		t.Fatal("unmapped named recipe unexpectedly reported reachable")
 	}
 }
 
-func TestReachableRoutingRecipesHonorsExplicitlyDisabledAutoAliases(t *testing.T) {
+func TestReachableRoutingRecipesRequiresAnEntrypoint(t *testing.T) {
 	cfg := &RouterConfig{
-		RouterOptions: RouterOptions{AutoModelNames: []string{}},
-		Recipes:       []RoutingRecipe{{Name: DefaultRecipeName}},
+		Recipes: []RoutingRecipe{{Name: DefaultRecipeName}},
 	}
 	if got := cfg.ReachableRoutingRecipes(); len(got) != 0 {
-		t.Fatalf("reachable recipes = %+v, want none with auto aliases disabled", got)
+		t.Fatalf("reachable recipes = %+v, a declared Recipe must not be callable without an Entrypoint", got)
 	}
 
-	cfg.Entrypoints = []EntrypointMapping{{
-		ModelNames: []string{"vllm-sr/default"},
-		Recipe:     DefaultRecipeName,
-	}}
+	cfg.Entrypoints = []EntrypointMapping{testCompiledEntrypoint("vllm-sr/default", &cfg.Recipes[0])}
 	if got := cfg.ReachableRoutingRecipes(); len(got) != 1 || got[0].Name != DefaultRecipeName {
 		t.Fatalf("default entrypoint did not restore reachability: %+v", got)
+	}
+}
+
+func testCompiledEntrypoint(alias string, recipe *RoutingRecipe) EntrypointMapping {
+	rule := EntrypointRule{
+		ID: "rule-test", Name: "default",
+		Action:        EntrypointRuleAction{RecipeID: recipe.ID, RecipeRevision: recipe.Revision, Recipe: recipe.Name},
+		derivedRecipe: recipe,
+	}
+	return EntrypointMapping{
+		ID: "ep-test", Revision: 1, Name: alias, ModelNames: []string{alias},
+		Rules: []EntrypointRule{rule}, Recipe: recipe.Name, derivedRecipe: recipe,
 	}
 }
 
@@ -229,22 +252,10 @@ func TestRoutingNamespaceKeyIsCollisionSafe(t *testing.T) {
 }
 
 func TestRecipeRoutingStrategyIsValidatedLocally(t *testing.T) {
-	_, err := ParseYAMLBytes([]byte(recipeTestBaseYAML + `
-recipes:
-  - name: privacy
-    routing:
-      strategy: random
-      decisions:
-        - name: privacy_route
-          rules:
-            operator: AND
-            conditions:
-              - type: keyword
-                name: urgent_keywords
-          modelRefs:
-            - model: model-b
-              use_reasoning: false
-`))
+	document := strings.Replace(recipeTestPrivacyYAML,
+		"    document:\n      signals:\n        keywords:\n          - {name: pii_keywords",
+		"    document:\n      strategy: random\n      signals:\n        keywords:\n          - {name: pii_keywords", 1)
+	_, err := parseRecipeFixtureYAML(t, []byte(document))
 	if err == nil {
 		t.Fatal("expected an unsupported recipe strategy to fail validation")
 	}

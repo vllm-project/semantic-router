@@ -2,10 +2,13 @@ package extproc
 
 import "bytes"
 
-// sseFrameDelimiter separates two SSE events on the wire: a blank line.
-// Per the SSE spec an event is terminated by a blank line, which on the
-// Anthropic and OpenAI streaming surfaces is the byte sequence "\n\n".
-var sseFrameDelimiter = []byte("\n\n")
+const maxSSEFrameBytes = 1 << 20
+
+var sseFrameDelimiters = [][]byte{
+	[]byte("\n\n"),
+	[]byte("\r\n\r\n"),
+	[]byte("\r\r"),
+}
 
 // reassembleSSEFrames merges any partial SSE frame carried over from a
 // prior response-body chunk (pending) with the newly arrived bytes
@@ -24,20 +27,99 @@ var sseFrameDelimiter = []byte("\n\n")
 // Both are subslices of a freshly allocated buffer, so retaining remainder
 // across calls does not alias Envoy's chunk buffer.
 //
-// This relies on the well-formed-SSE contract that every event ends with a
-// blank line; a stream that never emits the terminating "\n\n" for its
-// final event would leave that event in remainder. That is a malformed
-// upstream, out of scope here.
+// A caller should retain remainder between chunks. At an authoritative
+// end-of-stream boundary it may flush that remainder as the provider's final
+// event, including providers that omit the conventional trailing blank line.
 func reassembleSSEFrames(pending, chunk []byte) (complete, remainder []byte) {
-	buf := make([]byte, 0, len(pending)+len(chunk))
-	buf = append(buf, pending...)
-	buf = append(buf, chunk...)
+	batch := reassembleSSEFramesBounded(pending, chunk, false, false)
+	return batch.complete, batch.remainder
+}
 
-	idx := bytes.LastIndex(buf, sseFrameDelimiter)
-	if idx < 0 {
-		// No frame boundary yet — hold everything until more bytes arrive.
-		return nil, buf
+type sseFrameBatch struct {
+	complete  []byte
+	remainder []byte
+	dropping  bool
+	invalid   bool
+}
+
+// reassembleSSEFramesBounded is the stateful streaming entrypoint shared by
+// every provider path. It caps each incomplete or complete frame, discards an
+// over-limit frame through its delimiter, and can recover to parse later
+// frames from the same stream. EOS authoritatively flushes a final frame whose
+// provider omitted the conventional blank-line delimiter.
+func reassembleSSEFramesBounded(
+	pending, chunk []byte,
+	dropping, endOfStream bool,
+) sseFrameBatch {
+	result := sseFrameBatch{}
+	input := chunk
+	if dropping {
+		_, boundary := firstSSEFrameBoundary(input)
+		if boundary == 0 {
+			result.dropping = !endOfStream
+			result.invalid = true
+			return result
+		}
+		input = input[boundary:]
+		result.invalid = true
 	}
-	boundary := idx + len(sseFrameDelimiter)
-	return buf[:boundary], buf[boundary:]
+
+	buf := make([]byte, 0, len(pending)+len(input))
+	buf = append(buf, pending...)
+	buf = append(buf, input...)
+
+	for len(buf) > 0 {
+		_, boundary := firstSSEFrameBoundary(buf)
+		if boundary == 0 {
+			if endOfStream {
+				if len(buf) <= maxSSEFrameBytes {
+					result.complete = append(result.complete, buf...)
+				} else {
+					result.invalid = true
+				}
+				return result
+			}
+			if len(buf) > maxSSEFrameBytes {
+				result.invalid = true
+				result.dropping = true
+				return result
+			}
+			result.remainder = append(result.remainder, buf...)
+			return result
+		}
+
+		if boundary > maxSSEFrameBytes {
+			result.invalid = true
+		} else {
+			result.complete = append(result.complete, buf[:boundary]...)
+		}
+		buf = buf[boundary:]
+	}
+	return result
+}
+
+func firstSSEFrameBoundary(data []byte) (start, end int) {
+	start = -1
+	for _, delimiter := range sseFrameDelimiters {
+		idx := bytes.Index(data, delimiter)
+		if idx < 0 || (start >= 0 && idx >= start) {
+			continue
+		}
+		start = idx
+		end = idx + len(delimiter)
+	}
+	return start, end
+}
+
+func sseFramesContainDone(data []byte) bool {
+	for _, line := range bytes.Split(data, []byte("\n")) {
+		line = bytes.TrimSpace(line)
+		if !bytes.HasPrefix(line, []byte("data:")) {
+			continue
+		}
+		if bytes.Equal(bytes.TrimSpace(bytes.TrimPrefix(line, []byte("data:"))), []byte("[DONE]")) {
+			return true
+		}
+	}
+	return false
 }

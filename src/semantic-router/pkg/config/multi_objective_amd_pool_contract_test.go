@@ -10,14 +10,14 @@ import (
 func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
 	const asset = "config/recipes/multi-objective/config.yaml"
 	expectedEndpoints := map[string][]string{
-		"local/qwen3.5-122b-frontier":      {"vllm:8000"},
-		"local/qwen3.5-9b-economy":         {"vllm-qwen35-economy:8000"},
-		"local/qwen3.5-9b-economy-replica": {"vllm-qwen35-economy-replica:8000"},
-		"local/qwen3.5-9b-private":         {"vllm-qwen35-economy:8000"},
-		"local/qwen3.6-27b-coder":          {"vllm-qwen36-coder:8000"},
-		"local/qwen3.6-35b-flash":          {"vllm-qwen36-flash:8000"},
-		"local/gemma4-26b-balanced":        {"vllm-gemma4-balanced:8000"},
-		"local/deepseek-v4-flash-analyst":  {"vllm-deepseek-v4:8000"},
+		"local/qwen3.5-122b-frontier":      {"http://vllm:8000/v1"},
+		"local/qwen3.5-9b-economy":         {"http://vllm-qwen35-economy:8000/v1"},
+		"local/qwen3.5-9b-economy-replica": {"http://vllm-qwen35-economy-replica:8000/v1"},
+		"local/qwen3.5-9b-private":         {"http://vllm-qwen35-economy:8000/v1"},
+		"local/qwen3.6-27b-coder":          {"http://vllm-qwen36-coder:8000/v1"},
+		"local/qwen3.6-35b-flash":          {"http://vllm-qwen36-flash:8000/v1"},
+		"local/gemma4-26b-balanced":        {"http://vllm-gemma4-balanced:8000/v1"},
+		"local/deepseek-v4-flash-analyst":  {"http://vllm-deepseek-v4:8000/v1"},
 	}
 
 	var recipe CanonicalConfig
@@ -25,26 +25,26 @@ func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
 		t.Fatalf("failed to decode %s: %v", asset, err)
 	}
 
-	if recipe.Providers.Defaults.DefaultModel != "local/qwen3.5-9b-economy" {
-		t.Fatalf("unexpected multi-objective default model %q", recipe.Providers.Defaults.DefaultModel)
-	}
-	if len(recipe.Providers.Models) != len(expectedEndpoints) {
-		t.Fatalf("expected %d logical model lanes, got %d", len(expectedEndpoints), len(recipe.Providers.Models))
+	if len(recipe.Models) != len(expectedEndpoints) {
+		t.Fatalf("expected %d logical model lanes, got %d", len(expectedEndpoints), len(recipe.Models))
 	}
 
-	physicalEndpoints := make([]string, 0, len(recipe.Providers.Models))
-	for _, model := range recipe.Providers.Models {
+	physicalEndpoints := make([]string, 0, len(recipe.Models))
+	for _, model := range recipe.Models {
 		expectedEndpoint, ok := expectedEndpoints[model.Name]
 		if !ok {
 			t.Fatalf("unexpected multi-objective model lane %q", model.Name)
 		}
-		if len(model.BackendRefs) != len(expectedEndpoint) {
-			t.Fatalf("model lane %q backend count = %d, want %d", model.Name, len(model.BackendRefs), len(expectedEndpoint))
+		if len(model.Connections) != len(expectedEndpoint) {
+			t.Fatalf("model lane %q connection count = %d, want %d", model.Name, len(model.Connections), len(expectedEndpoint))
 		}
-		actualEndpoints := make([]string, 0, len(model.BackendRefs))
-		for _, backend := range model.BackendRefs {
-			actualEndpoints = append(actualEndpoints, backend.Endpoint)
-			physicalEndpoints = append(physicalEndpoints, backend.Endpoint)
+		actualEndpoints := make([]string, 0, len(model.Connections))
+		for _, connection := range model.Connections {
+			if connection.Provider != "vllm" {
+				t.Fatalf("model lane %q has unexpected Provider Integration %q", model.Name, connection.Provider)
+			}
+			actualEndpoints = append(actualEndpoints, connection.Endpoint)
+			physicalEndpoints = append(physicalEndpoints, connection.Endpoint)
 		}
 		slices.Sort(actualEndpoints)
 		slices.Sort(expectedEndpoint)

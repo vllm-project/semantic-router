@@ -1,42 +1,46 @@
-version: v0.3
+version: v0.4
 listeners: []
-providers:
-  defaults:
-    default_model: openai/gpt-oss-120b
-    reasoning_families:
-      qwen3:
-        type: chat_template_kwargs
-        parameter: enable_thinking
-  models:
-    - name: openai/gpt-oss-120b
-      backend_refs:
-        - name: test-endpoint
-          endpoint: 0.0.0.0:8000
-          weight: 1
-routing:
-  decisions:
+models:
+- name: openai/gpt-oss-120b
+  card: {}
+  connections:
+  - provider: vllm
+    endpoint: http://0.0.0.0:8000/v1
+    model: openai/gpt-oss-120b
+  runtime:
+    request_timeout: 300s
+    stream_timeout: 300s
+recipes:
+- name: default
+  description: Default routing recipe.
+  document:
+    signals:
+      domains:
+      - name: other
+        description: General knowledge and miscellaneous topics
+        mmlu_categories:
+        - other
+    decisions:
     - name: default_decision
       description: Default catch-all decision
       priority: 1
       rules:
         operator: OR
         conditions:
-          - type: domain
-            name: other
-      modelRefs:
-        - model: openai/gpt-oss-120b
-          use_reasoning: false
-  signals:
-    domains:
-      - name: other
-        description: General knowledge and miscellaneous topics
-        mmlu_categories:
-          - other
-  modelCards:
-    - name: openai/gpt-oss-120b
+        - type: domain
+          name: other
+entrypoints:
+- name: vllm-sr/auto
+  aliases:
+  - auto
+  recipe: default
+  assignments:
+    default_decision:
+      models:
+      - model: openai/gpt-oss-120b
+        weight: '1'
 global:
-  router:
-    strategy: priority
+  router: {}
   services:
     response_api:
       enabled: true
@@ -55,6 +59,14 @@ global:
         write_timeout: 3
         cluster_mode: false
         tls_enabled: false
+    backend_dispatch:
+      bind_address: 0.0.0.0
+      port: 8180
+      audience: vllm-sr.backend-dispatch
+      capability_ttl: 30s
+      max_request_body_bytes: 67108864
+    backend_egress:
+      policy_file: /app/config/backend-egress-policy.yaml
   stores:
     response_cache:
       enabled: true
@@ -68,3 +80,8 @@ global:
     vector_store:
       embedding_model: mmbert
   integrations: {}
+  model_catalog:
+    embeddings: {}
+    modules:
+      classifier: {}
+      hallucination_mitigation: {}

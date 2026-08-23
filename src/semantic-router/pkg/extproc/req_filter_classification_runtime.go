@@ -43,14 +43,20 @@ func (r *OpenAIRouter) evaluateSignalsForDecision(
 		return nil, fmt.Errorf("classifier for routing recipe %q is unavailable", ctx.Routing.RecipeName())
 	}
 
-	signals, authzErr := classifier.EvaluateAllSignalsWithHeaders(classification.SignalEvaluationInput{
+	trustedIdentity := classification.TrustedRoutingIdentity{}
+	if ctx.InferenceAccess != nil {
+		trustedIdentity.UserID = ctx.InferenceAccess.tenant.UserID
+		trustedIdentity.TeamID = ctx.InferenceAccess.tenant.TeamID
+		trustedIdentity.Claims = ctx.InferenceAccess.tenant.RoutingClaims
+	}
+	signals, authzErr := classifier.EvaluateAllSignalsWithIdentity(classification.SignalEvaluationInput{
 		Text:                   signalInput.compressedText,
 		ContextText:            signalInput.allMessagesText,
 		CurrentUserText:        signalInput.currentUserText,
 		PriorUserMessages:      signalInput.priorUserMessages,
 		NonUserMessages:        nonUserMessages,
 		HasPriorAssistantReply: signalInput.hasAssistantReply,
-		Headers:                ctx.Headers,
+		TrustedIdentity:        trustedIdentity,
 		ImageURL:               ctx.RequestImageURL,
 		UncompressedText:       signalInput.evaluationText,
 		SkipCompressionSignals: signalInput.skipCompressionSignals,
@@ -152,11 +158,10 @@ func logSignalEvaluationResults(ctx *RequestContext, signalLatencyMs int64, sign
 }
 
 func (r *OpenAIRouter) runDecisionEngine(
-	originalModel string,
 	ctx *RequestContext,
 	signals *classification.SignalResults,
 	candidates []config.Decision,
-) (*decision.DecisionResult, string) {
+) *decision.DecisionResult {
 	// llm_decision_evaluation_latency_seconds and llm_decision_match_total are
 	// emitted by decision.DecisionEngine.EvaluateDecisionsWithSignals; do not
 	// emit them here or both metrics will be double-counted.
@@ -169,7 +174,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, "")
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil
 	}
 	strategy := classifier.Config.Strategy
 
@@ -179,7 +184,7 @@ func (r *OpenAIRouter) runDecisionEngine(
 		if len(candidates) == 0 {
 			tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 			ctx.TraceContext = decisionCtx
-			return nil, r.defaultModelForUnmatchedDecision(originalModel)
+			return nil
 		}
 		result, err = classifier.EvaluateDecisionWithEngineForDecisions(signals, candidates)
 	} else {
@@ -193,24 +198,17 @@ func (r *OpenAIRouter) runDecisionEngine(
 		})
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil
 	}
 	if result == nil || result.Decision == nil {
 		tracing.EndDecisionSpan(decisionSpan, 0.0, []string{}, string(strategy))
 		ctx.TraceContext = decisionCtx
-		return nil, r.defaultModelForUnmatchedDecision(originalModel)
+		return nil
 	}
 
 	tracing.EndDecisionSpan(decisionSpan, result.Confidence, result.MatchedRules, string(strategy))
 	ctx.TraceContext = decisionCtx
-	return result, ""
-}
-
-func (r *OpenAIRouter) defaultModelForUnmatchedDecision(originalModel string) string {
-	if r.requestModelActsAsAuto(originalModel) {
-		return r.Config.DefaultModel
-	}
-	return ""
+	return result
 }
 
 func (r *OpenAIRouter) finalizeDecisionEvaluation(
@@ -233,7 +231,7 @@ func (r *OpenAIRouter) finalizeDecisionEvaluation(
 		"matched_rules": result.MatchedRules,
 	})
 
-	if !r.requestModelActsAsAuto(originalModel) {
+	if !r.requestModelIsEntrypoint(originalModel) {
 		logging.ComponentDebugEvent("extproc", "explicit_model_preserved", map[string]interface{}{
 			"request_id":     ctx.RequestID,
 			"original_model": originalModel,

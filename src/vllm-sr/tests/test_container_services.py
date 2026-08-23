@@ -1,6 +1,5 @@
 import subprocess
 
-import pytest
 from cli import container_mounts, container_services
 from cli.runtime_stack import resolve_runtime_stack
 
@@ -38,28 +37,6 @@ def test_container_status_reports_missing_exact_name(monkeypatch):
     )
 
     assert container_services.container_status("missing") == "not found"
-
-
-def test_container_status_strict_only_accepts_explicit_absence(monkeypatch):
-    monkeypatch.setattr(container_services, "get_container_runtime", lambda: "docker")
-    monkeypatch.setattr(
-        container_services.subprocess,
-        "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(
-            command, 1, stdout="", stderr="permission denied"
-        ),
-    )
-    with pytest.raises(RuntimeError, match="inspection failed"):
-        container_services.container_status_strict("unknown")
-
-    monkeypatch.setattr(
-        container_services.subprocess,
-        "run",
-        lambda command, **_kwargs: subprocess.CompletedProcess(
-            command, 1, stdout="", stderr="No such container: missing"
-        ),
-    )
-    assert container_services.container_status_strict("missing") == "not found"
 
 
 def test_container_create_network_does_not_match_namespaced_suffix(monkeypatch):

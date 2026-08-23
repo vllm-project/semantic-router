@@ -107,7 +107,10 @@ type EvalResponse struct {
 // from classification to the live Router selector. It intentionally excludes
 // raw tool schemas and message bodies beyond the current semantic query.
 type EvalModelSelectionInput struct {
-	Recipe            config.RecipeName
+	Recipe config.RecipeName
+	// RuntimeScope is the internal namespace of the effective entrypoint view.
+	// Recipe remains the stable public/logical identity shown in Eval responses.
+	RuntimeScope      config.RecipeName
 	Decision          *config.Decision
 	Query             string
 	Category          string

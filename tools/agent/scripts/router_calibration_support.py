@@ -33,13 +33,7 @@ from router_calibration_evaluation import (
 from router_calibration_evaluation import (
     evaluate_probe as evaluate_probe_request,
 )
-from router_calibration_http import (
-    HTTP_OK_MIN,
-    HTTP_REDIRECT_MIN,
-    ensure_success,
-    http_json,
-    normalize_router_url,
-)
+from router_calibration_http import http_json, normalize_router_url
 from router_calibration_manifest import (
     Probe,
     resolve_acceptance,
@@ -63,7 +57,6 @@ __all__ = [
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SEMANTIC_ROUTER_MODULE_ROOT = REPO_ROOT / "src" / "semantic-router"
-DEFAULT_REPORT_ROOT = REPO_ROOT / ".augment" / "router-loop"
 DEFAULT_EVAL_REQUEST_TIMEOUT_SECONDS = 60.0
 MAX_EVAL_REQUEST_TIMEOUT_SECONDS = 1200.0
 DEFAULT_EVAL_CONCURRENCY = 1
@@ -82,109 +75,6 @@ def resolve_repo_path(path: Path | None) -> Path | None:
     if path.is_absolute():
         return path
     return (REPO_ROOT / path).resolve()
-
-
-def fetch_router_snapshot(router_url: str) -> dict[str, Any]:
-    base = normalize_router_url(router_url)
-    router_cfg = ensure_success(
-        *http_json("GET", f"{base}/config/router"),
-        action="GET /config/router",
-    )
-    versions = ensure_success(
-        *http_json("GET", f"{base}/config/router/versions"),
-        action="GET /config/router/versions",
-    )
-    ready_status, ready_payload = http_json("GET", f"{base}/ready")
-    health_status, health_payload = http_json("GET", f"{base}/health")
-    return {
-        "router_url": base,
-        "captured_at": utc_now(),
-        "config_router": router_cfg,
-        "config_versions": versions,
-        "ready": {"status_code": ready_status, "payload": ready_payload},
-        "health": {"status_code": health_status, "payload": health_payload},
-    }
-
-
-def wait_for_router_ready(
-    router_url: str, timeout_seconds: float = 300.0, interval_seconds: float = 5.0
-) -> dict[str, Any]:
-    base = normalize_router_url(router_url)
-    deadline = time.monotonic() + timeout_seconds
-    last_status = 0
-    last_payload: Any = {"status": "unknown", "ready": False}
-
-    while time.monotonic() < deadline:
-        status, payload = http_json("GET", f"{base}/ready")
-        last_status = status
-        last_payload = payload
-        if (
-            HTTP_OK_MIN <= status < HTTP_REDIRECT_MIN
-            and isinstance(payload, dict)
-            and bool(payload.get("ready"))
-        ):
-            return {
-                "router_url": base,
-                "checked_at": utc_now(),
-                "status_code": status,
-                "payload": payload,
-            }
-        time.sleep(max(interval_seconds, 0.1))
-
-    raise RuntimeError(
-        "router did not become ready after deploy: "
-        f"status={last_status}, payload={json.dumps(last_payload, ensure_ascii=False)}"
-    )
-
-
-def wait_for_config_activation(
-    router_url: str,
-    expected_runtime_hash: str,
-    timeout_seconds: float = 300.0,
-    interval_seconds: float = 5.0,
-) -> dict[str, Any]:
-    """Wait until the immutable runtime matching a deploy is published.
-
-    `/ready` remains true while a replacement router is prepared off-path, so
-    readiness alone cannot close the management API's read-after-write gap.
-    `/config/hash` identifies the exact runtime document that was atomically
-    published and also detects a later deploy superseding this one.
-    """
-    base = normalize_router_url(router_url)
-    expected = expected_runtime_hash.strip()
-    if not expected:
-        raise ValueError("deploy response did not include runtime_hash")
-
-    deadline = time.monotonic() + timeout_seconds
-    last_status = 0
-    last_payload: Any = {"status": "unknown"}
-    while time.monotonic() < deadline:
-        status, payload = http_json("GET", f"{base}/config/hash")
-        last_status = status
-        last_payload = payload
-        if HTTP_OK_MIN <= status < HTTP_REDIRECT_MIN and isinstance(payload, dict):
-            runtime_hash = str(payload.get("runtime_hash") or "").strip()
-            active_hash = str(payload.get("active_hash") or "").strip()
-            activation_status = str(payload.get("status") or "").strip()
-            if runtime_hash and runtime_hash != expected:
-                raise RuntimeError(
-                    "config deploy was superseded before activation: "
-                    f"expected runtime_hash={expected}, current runtime_hash={runtime_hash}"
-                )
-            if activation_status == "active" and active_hash == expected:
-                return {
-                    "router_url": base,
-                    "checked_at": utc_now(),
-                    "status_code": status,
-                    "payload": payload,
-                }
-        time.sleep(max(interval_seconds, 0.1))
-
-    raise RuntimeError(
-        "router config did not become active after deploy: "
-        f"expected_runtime_hash={expected}, status={last_status}, "
-        f"payload={json.dumps(last_payload, ensure_ascii=False)}"
-    )
 
 
 def evaluate_probe(
@@ -511,22 +401,6 @@ def run_validate(dsl_path: Path | None, yaml_path: Path | None) -> dict[str, Any
             temp_dsl.unlink(missing_ok=True)
 
 
-def deploy_config(
-    router_url: str, yaml_path: Path, dsl_path: Path | None
-) -> dict[str, Any]:
-    yaml_path = resolve_repo_path(yaml_path)
-    dsl_path = resolve_repo_path(dsl_path)
-    payload = {"yaml": yaml_path.read_text(encoding="utf-8")}
-    if dsl_path is not None:
-        payload["dsl"] = dsl_path.read_text(encoding="utf-8")
-    status, response = http_json(
-        "PUT",
-        f"{normalize_router_url(router_url)}/config/router",
-        payload,
-    )
-    return ensure_success(status, response, "PUT /config/router")
-
-
 def write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
@@ -537,8 +411,3 @@ def write_json(path: Path, payload: Any) -> None:
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
-
-
-def default_report_dir() -> Path:
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
-    return DEFAULT_REPORT_ROOT / stamp

@@ -6,7 +6,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 func TestLoadClassifierMappingsSkipsUnusedCoreSignals(t *testing.T) {
@@ -19,7 +21,11 @@ func TestLoadClassifierMappingsSkipsUnusedCoreSignals(t *testing.T) {
 	require.Nil(t, mappings.piiMapping)
 	require.Nil(t, mappings.jailbreakMapping)
 
-	components, err := buildRouterComponents(cfg)
+	components, err := buildRouterComponentsWithDependencies(cfg, RuntimeDependencies{
+		DispatchCapabilities: dispatchCapabilityRuntimeStub{},
+		ResponseTerminals:    backendinvoker.NewLocalResponseTerminalStore(),
+		ProtocolCodecs:       protocolcodec.NewBuiltinRegistry(),
+	})
 	require.NoError(t, err)
 	require.NotNil(t, components)
 	require.NotNil(t, components.classifier)
@@ -52,12 +58,13 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newCoreSignalMappingGateConfig(t)
-			cfg.Decisions = []config.Decision{{
-				Name: "guarded-route",
+			cfg.Recipes[0].Profile.Decisions = []config.Decision{{
+				ID: "dec-guarded", Name: "guarded-route",
 				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
 					tt.rule,
 				}},
 			}}
+			require.NoError(t, cfg.PrepareEntrypointRecipes())
 
 			_, err := loadClassifierMappings(cfg)
 			require.Error(t, err)
@@ -69,7 +76,7 @@ func TestLoadClassifierMappingsRequiresUsedCoreSignalMappings(t *testing.T) {
 func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {
 	t.Helper()
 	missingRoot := filepath.Join(t.TempDir(), "missing-model-assets")
-	return &config.RouterConfig{
+	cfg := &config.RouterConfig{
 		InlineModels: config.InlineModels{
 			Classifier: config.Classifier{
 				CategoryModel: config.CategoryModel{
@@ -87,11 +94,42 @@ func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {
 				JailbreakMappingPath: filepath.Join(missingRoot, "jailbreak_type_mapping.json"),
 			},
 		},
-		IntelligentRouting: config.IntelligentRouting{
-			Decisions: []config.Decision{{
-				Name:  "default-route",
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"backend": {ResourceID: "mdl-backend", ResourceRevision: 1},
+		}},
+		Recipes: []config.RoutingRecipe{{
+			ID: "rcp-default", Revision: 1, Name: config.DefaultRecipeName,
+			Profile: config.RoutingProfile{Decisions: []config.Decision{{
+				ID: "dec-guarded", Name: "default-route",
 				Rules: config.RuleNode{Operator: "AND", Conditions: []config.RuleNode{}},
+			}}},
+		}},
+		Entrypoints: []config.EntrypointMapping{{
+			ID: "ep-default", Revision: 1, Name: "default", ModelNames: []string{"router/default"},
+			Rules: []config.EntrypointRule{{
+				ID: "rule-default", Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: "rcp-default", RecipeRevision: 1, Recipe: config.DefaultRecipeName,
+					Assignments: map[string]config.RoutingAssignmentSet{
+						"dec-guarded": {Models: []config.RoutingModelAssignment{{
+							ModelID: "mdl-backend", ModelRevision: 1, ModelName: "backend", Weight: "1",
+						}}},
+					},
+				},
 			}},
-		},
+		}},
 	}
+	require.NoError(t, cfg.PrepareEntrypointRecipes())
+	return cfg
+}
+
+func TestCreateRouterClassifierAllowsEmptyManagedSnapshot(t *testing.T) {
+	classifiers, defaultClassifier, service, err := createRouterClassifier(
+		&config.RouterConfig{},
+		&classifierMappings{},
+	)
+	require.NoError(t, err)
+	require.NotNil(t, classifiers)
+	require.Nil(t, defaultClassifier)
+	require.NotNil(t, service)
 }

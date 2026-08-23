@@ -1,4 +1,4 @@
-// ControlPanel/TestQueryInput.tsx - Test query input (always uses backend verification)
+// ControlPanel/TestQueryInput.tsx - Local topology preview input
 
 import React from 'react'
 import styles from './ControlPanel.module.css'
@@ -25,7 +25,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
   return (
     <div className={styles.section}>
       <div className={styles.testQueryHeader}>
-        <span className={styles.testQueryTitle}>Send Query</span>
+        <span className={styles.testQueryTitle}>Preview path</span>
       </div>
 
       <div className={styles.inputGroup}>
@@ -37,12 +37,8 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
           onKeyDown={handleKeyDown}
           rows={1}
         />
-        <button
-          className={styles.testBtn}
-          onClick={onTest}
-          disabled={isLoading || !value.trim()}
-        >
-          {isLoading ? 'Testing...' : 'Send'}
+        <button className={styles.testBtn} onClick={onTest} disabled={isLoading || !value.trim()}>
+          {isLoading ? 'Previewing…' : 'Preview'}
         </button>
       </div>
     </div>

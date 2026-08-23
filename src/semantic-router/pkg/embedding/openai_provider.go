@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -346,7 +347,7 @@ func shouldRetryEmbeddingError(err error) bool {
 	if errors.As(err, &httpErr) {
 		return httpErr.retryable
 	}
-	return isTimeoutError(err) || isTemporaryNetworkError(err)
+	return isTimeoutError(err) || isRetryableNetworkError(err)
 }
 
 func isTimeoutError(err error) bool {
@@ -357,7 +358,11 @@ func isTimeoutError(err error) bool {
 	return errors.As(err, &netErr) && netErr.Timeout()
 }
 
-func isTemporaryNetworkError(err error) bool {
-	var netErr net.Error
-	return errors.As(err, &netErr) && netErr.Temporary()
+func isRetryableNetworkError(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, io.ErrUnexpectedEOF) ||
+		errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.ECONNREFUSED) ||
+		errors.Is(err, syscall.ECONNRESET) ||
+		errors.Is(err, syscall.EPIPE)
 }

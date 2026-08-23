@@ -54,11 +54,7 @@ export const formatRoutingMetadataValue = (key: string, value: string): string =
   if (normalizedKey === 'x-vsr-selected-decision') {
     return humanizeIdentifier(trimmed, true)
   }
-  if (
-    normalizedKey === 'x-vsr-selected-algorithm' ||
-    normalizedKey === 'x-vsr-looper-algorithm' ||
-    normalizedKey.startsWith('x-vsr-matched-')
-  ) {
+  if (normalizedKey === 'x-vsr-selected-algorithm' || normalizedKey.startsWith('x-vsr-matched-')) {
     return humanizeIdentifier(trimmed, false)
   }
 

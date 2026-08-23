@@ -51,23 +51,18 @@ endpoint picker, or model servers.
 
 ## Define the name contract
 
-The provider model selected by Semantic Router becomes the request header used
+The Model selected by Semantic Router becomes the request header used
 by the Gateway API route. The exact value must agree across all three objects:
 
 ```yaml
 # Router config fragment
-providers:
-  defaults:
-    default_model: local/general
-  models:
-    - name: local/general
-      provider_model_id: served-general
-      api_format: openai
-      backend_refs:
-        - name: general-pool
-          endpoint: general-pool.inference.svc.cluster.local:8000
-          protocol: http
-          weight: 100
+models:
+  - name: local/general
+    card: {capabilities: [chat]}
+    connections:
+      - provider: vllm
+        endpoint: http://general-pool.inference.svc.cluster.local:8000/v1
+        model: served-general
 ```
 
 ```yaml

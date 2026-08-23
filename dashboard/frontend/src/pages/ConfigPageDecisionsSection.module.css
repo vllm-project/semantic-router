@@ -90,6 +90,9 @@
 
 .editorButtonSecondary {
   width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.55rem 0.8rem;
   border-radius: var(--radius-md);
   border: 1px solid var(--color-border);
@@ -100,12 +103,22 @@
 
 .editorButtonDanger {
   width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   padding: 0.55rem 0.8rem;
   border-radius: var(--radius-md);
   border: 1px solid rgba(255, 105, 97, 0.28);
   background: rgba(255, 105, 97, 0.08);
   color: #ffd0ca;
   font-weight: 600;
+}
+
+.editorButtonSecondary svg,
+.editorButtonDanger svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
 }
 
 .editorButtonSecondary:hover,

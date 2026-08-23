@@ -71,9 +71,12 @@ replay store as to the original traffic.
 ## Quick start
 
 ```bash
-vllm-sr validate --config config/recipes/privacy/config.yaml
-vllm-sr serve --config config/recipes/privacy/config.yaml
+vllm-sr serve
 ```
+
+In the Dashboard, connect Models that match the required data boundaries,
+choose **Privacy-First Routing** in **Recipes**, assign every decision, and
+publish the resulting Mixture-of-Model Entrypoint.
 
 ## Evaluation
 

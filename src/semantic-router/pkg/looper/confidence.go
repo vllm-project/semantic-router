@@ -640,14 +640,6 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			modelName = modelRef.LoRAName
 		}
 
-		// Get access key from model params
-		accessKey := ""
-		if req.ModelParams != nil {
-			if params, ok := req.ModelParams[modelRef.Model]; ok {
-				accessKey = params.AccessKey
-			}
-		}
-
 		logging.ComponentDebugEvent("looper", "model_dispatch_started", map[string]interface{}{
 			"looper":    "confidence",
 			"decision":  req.DecisionName,
@@ -658,12 +650,11 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 		attempts++
 		resp, err := l.client.CallModel(
 			ctx,
-			req.OriginalRequest,
+			req.executionRequest,
 			modelName,
 			confidenceModelCallStreaming(req.IsStreaming, evaluator),
 			attempts,
 			logprobsCfg,
-			accessKey,
 		)
 		if err != nil {
 			logging.ComponentWarnEvent("looper", "model_dispatch_failed", map[string]interface{}{
@@ -727,7 +718,6 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 				req,
 				modelName,
 				resp.Content,
-				accessKey,
 				evaluator.Threshold,
 				verificationIteration,
 			)
@@ -854,15 +844,18 @@ func (l *ConfidenceLooper) Execute(ctx context.Context, req *Request) (*Response
 			agg,
 			modelsUsed,
 			attempts,
-			confidenceStreamUsageRequested(req),
+			streamUsageRequested(req),
 		)
 	}
 	return l.formatConfidenceJSONResponse(agg, modelsUsed, attempts)
 }
 
-func confidenceStreamUsageRequested(req *Request) bool {
-	return req != nil && req.OriginalRequest != nil &&
-		req.OriginalRequest.StreamOptions.IncludeUsage.Or(false)
+func streamUsageRequested(req *Request) bool {
+	return req != nil && streamUsageRequestedParams(req.executionRequest)
+}
+
+func streamUsageRequestedParams(req *openai.ChatCompletionNewParams) bool {
+	return req != nil && req.StreamOptions.IncludeUsage.Or(false)
 }
 
 // performSelfVerification implements AutoMix self-verification
@@ -873,12 +866,11 @@ func (l *ConfidenceLooper) performSelfVerification(
 	req *Request,
 	modelName string,
 	responseContent string,
-	accessKey string,
 	threshold float64,
 	iteration int,
 ) (selfVerificationExecution, error) {
 	// Extract original question from the request
-	originalQuestion := l.extractQuestionFromRequest(req.OriginalRequest)
+	originalQuestion := l.extractQuestionFromRequest(req.executionRequest)
 	if originalQuestion == "" {
 		return selfVerificationExecution{}, fmt.Errorf("could not extract user question from request")
 	}
@@ -898,7 +890,7 @@ func (l *ConfidenceLooper) performSelfVerification(
 	})
 
 	// Call the same model to evaluate its answer
-	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, iteration, nil, accessKey)
+	verifyResp, err := l.client.CallModel(ctx, verifyRequest, modelName, false, iteration, nil)
 	if err != nil {
 		return selfVerificationExecution{Attempted: true}, fmt.Errorf("verifier model call failed: %w", err)
 	}
@@ -1053,7 +1045,7 @@ func (l *ConfidenceLooper) performAutoMixEntailment(
 		return 0, false, fmt.Errorf("confidence_method=%s requires verifier_server_url", MethodAutoMixEntailment)
 	}
 
-	question := l.extractQuestionFromRequest(req.OriginalRequest)
+	question := l.extractQuestionFromRequest(req.executionRequest)
 	if question == "" {
 		return 0, false, fmt.Errorf("could not extract user question from request")
 	}
