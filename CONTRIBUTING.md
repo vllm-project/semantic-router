@@ -39,8 +39,8 @@ The issue lifecycle is:
 needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 ```
 
-- A Maintainer applies `accepted` after confirming the goal, scope, roadmap
-  fit, and exactly one owning `wg/*` label.
+- After confirming the goal, scope, roadmap fit, and exactly one owning `wg/*`
+  label, any collaborator with repository write access comments `/accept`.
 - `accepted` work may remain in the backlog until it is sufficiently specified
   and has review capacity.
 - `ready-for-dev` marks accepted, unassigned work that contributors may claim.
@@ -53,6 +53,13 @@ needs-acceptance -> accepted -> ready-for-dev -> in-progress -> closed
 Do not begin a non-trivial implementation or open a PR until the tracking issue
 is accepted. PRs must link an accepted issue with exactly one Workgroup owner;
 the Community check enforces this contract.
+
+Issue and pull-request titles begin with exactly one bracketed category and a
+short description, for example `[Feature] Add standalone serving` or
+`[Bug] Preserve upstream error responses`. The category is intentionally not a
+fixed allowlist. Do not use conventional-commit prefixes such as `feat:` or
+stack multiple prefixes such as `[Router][Docs]`; affected modules belong in
+labels and the issue or PR body.
 
 ## Understand the change surface
 
@@ -172,7 +179,7 @@ of truth for schemas, test selection, or public documentation.
    git commit -s -m "describe the change"
    ```
 
-6. Open a PR using the module prefixes and sections in
+6. Open a PR using the single title category and sections in
    [.github/PULL_REQUEST_TEMPLATE.md](.github/PULL_REQUEST_TEMPLATE.md).
 
 Keep commits reviewable and avoid unrelated cleanup. A PR should explain why

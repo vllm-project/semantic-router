@@ -15,6 +15,26 @@ permissions:
   contents: read
 
 jobs:
+  title-format:
+    name: Check title format
+    if: >-
+      (github.event_name == 'issues'
+      && github.event.issue.user.type != 'Bot')
+      || (github.event_name == 'pull_request'
+      && !github.event.pull_request.draft
+      && github.event.pull_request.user.type != 'Bot')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Verify one bracketed title category
+        run: python3 tools/ci/community_lifecycle.py validate-title --event "$GITHUB_EVENT_PATH"
+
   linked-issue:
     name: Check linked accepted issue
     if: >-
@@ -52,11 +72,31 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python3 tools/ci/community_lifecycle.py sync-issue --event "$GITHUB_EVENT_PATH"
 
+  issue-acceptance:
+    name: Accept scoped issue
+    if: >-
+      github.event_name == 'issue_comment'
+      && github.event.issue.pull_request == null
+      && github.event.comment.body == '/accept'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Apply the explicit acceptance transition
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 tools/ci/community_lifecycle.py accept-issue --event "$GITHUB_EVENT_PATH"
+
   issue-manager:
     name: Issue commands
     if: >-
       github.event_name == 'issue_comment'
       && startsWith(github.event.comment.body, '/')
+      && github.event.comment.body != '/accept'
     runs-on: ubuntu-latest
     permissions:
       contents: read

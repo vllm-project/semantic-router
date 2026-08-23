@@ -18,21 +18,23 @@ CLOSE_CANDIDATE = "close-candidate"
 STALE = "stale"
 
 WORKGROUP_LABELS = (
-    "wg/mom-routing-intelligence",
-    "wg/router-models-runtime-ecosystem",
-    "wg/data-plane-deployment",
-    "wg/platform-operations",
-    "wg/quality-release",
-    "wg/dev-community",
+    "wg/mom-routing",
+    "wg/router-models-inference-runtime",
+    "wg/data-plane-networking",
+    "wg/enterprise-environment",
+    "wg/agentic-context",
+    "wg/developer-experience-ecosystem",
+    "wg/evaluation-quality",
 )
 
 WORKGROUP_OPTIONS = {
-    "MoM & Routing Intelligence": "wg/mom-routing-intelligence",
-    "Router Models, Runtime & Ecosystem": "wg/router-models-runtime-ecosystem",
-    "Data Plane & Deployment": "wg/data-plane-deployment",
-    "Platform & Operations": "wg/platform-operations",
-    "Quality & Release": "wg/quality-release",
-    "Developer Experience & Community": "wg/dev-community",
+    "MoM & Routing": "wg/mom-routing",
+    "Router Models & Inference Runtime": "wg/router-models-inference-runtime",
+    "Data Plane & Networking": "wg/data-plane-networking",
+    "Enterprise & Environment": "wg/enterprise-environment",
+    "Agentic & Context": "wg/agentic-context",
+    "Developer Experience & Ecosystem": "wg/developer-experience-ecosystem",
+    "Evaluation & Quality": "wg/evaluation-quality",
 }
 
 PR_STATE_LABELS = (
@@ -63,6 +65,26 @@ RELATED_PATTERN = re.compile(
     r"(?P<repo>[\w.-]+/[\w.-]+)(?:/issues/|#)|#)(?P<number>\d+)",
     re.IGNORECASE,
 )
+TITLE_PREFIX_PATTERN = re.compile(
+    r"^\[(?P<category>[^\[\]\r\n]+)\]\s+(?P<summary>\S.*)$"
+)
+
+
+def title_format_error(title: str | None) -> str | None:
+    """Return a concise error when a public work-item title is not normalized."""
+
+    match = TITLE_PREFIX_PATTERN.match(title or "")
+    if (
+        not match
+        or not match.group("category").strip()
+        or match.group("summary").startswith("[")
+    ):
+        return (
+            "Title must begin with exactly one bracketed category and a summary, "
+            "for example `[Feature] Add standalone serving`; do not use `feat:` "
+            "or stacked prefixes such as `[Router][Docs]`."
+        )
+    return None
 
 
 def label_names(item: dict[str, Any]) -> set[str]:
@@ -117,6 +139,37 @@ class IssuePlan:
 
     def add_comment(self, code: str, message: str) -> None:
         self.comments.append((code, message))
+
+
+@dataclass(frozen=True)
+class IssueAcceptanceEvaluation:
+    valid: bool
+    error: str | None = None
+    owner_label: str | None = None
+
+
+def evaluate_issue_acceptance(
+    issue: dict[str, Any],
+    *,
+    actor_can_manage: bool,
+) -> IssueAcceptanceEvaluation:
+    """Validate the explicit ``/accept`` transition for one issue."""
+
+    if not actor_can_manage:
+        return IssueAcceptanceEvaluation(
+            False,
+            "`/accept` requires repository write, maintain, or admin permission.",
+        )
+    title_error = title_format_error(issue.get("title"))
+    if title_error:
+        return IssueAcceptanceEvaluation(False, title_error)
+    workgroups = label_names(issue).intersection(WORKGROUP_LABELS)
+    if len(workgroups) != 1:
+        return IssueAcceptanceEvaluation(
+            False,
+            "`/accept` requires exactly one recognized `wg/*` owner label.",
+        )
+    return IssueAcceptanceEvaluation(True, owner_label=next(iter(workgroups)))
 
 
 def guard_protected_label(
@@ -379,7 +432,7 @@ def evaluate_pull_request(
         tuple(errors),
         state_label,
         owner_label=(
-            "wg/quality-release"
+            "wg/evaluation-quality"
             if is_bot
             else next(iter(owner_labels)) if len(owner_labels) == 1 else None
         ),

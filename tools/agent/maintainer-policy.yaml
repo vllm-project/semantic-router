@@ -28,12 +28,13 @@ labels:
     merge_ready: pr/merge-ready
     close_candidate: pr/close-candidate
   workgroups:
-    - wg/mom-routing-intelligence
-    - wg/router-models-runtime-ecosystem
-    - wg/data-plane-deployment
-    - wg/platform-operations
-    - wg/quality-release
-    - wg/dev-community
+    - wg/mom-routing
+    - wg/router-models-inference-runtime
+    - wg/data-plane-networking
+    - wg/enterprise-environment
+    - wg/agentic-context
+    - wg/developer-experience-ecosystem
+    - wg/evaluation-quality
 
 release_tracks:
   contracts:

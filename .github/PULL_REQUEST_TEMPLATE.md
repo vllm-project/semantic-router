@@ -21,8 +21,8 @@ Closes #xxxx
 <details>
 <summary>Semantic Router PR Checklist</summary>
 
-- [ ] PR title uses module-aligned prefixes such as `[Router]`, `[CLI]`, `[Dashboard]`, `[Operator]`, `[Fleet-Sim]`, `[Bindings]`, `[Training]`, `[E2E]`, `[Docs]`, or `[CI/Build]`
-- [ ] If the PR spans multiple modules, the title includes all relevant prefixes
+- [ ] PR title begins with exactly one bracketed category, such as `[Feature]`, `[Bug]`, `[Docs]`, `[Test]`, `[Research]`, `[Community]`, or `[CI/Build]`
+- [ ] The title does not stack prefixes such as `[Router][Docs]`; affected modules belong in labels and the PR body
 - [ ] The PR links an `accepted` issue with exactly one `wg/*` owner
 - [ ] Commits in this PR are signed off with `git commit -s`
 - [ ] The Purpose, Test Plan, and Test Result sections reflect the actual scope, commands, and blockers for this change

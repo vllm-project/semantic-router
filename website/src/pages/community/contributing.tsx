@@ -321,13 +321,13 @@ pre-commit install && pre-commit run --all-files`}
               <Translate id="contributing.workGroups.desc.suffix">to focus your contributions:</Translate>
             </p>
             <div className={styles.tagGrid}>
-              <span className={styles.tag}>area/document</span>
-              <span className={styles.tag}>area/environment</span>
-              <span className={styles.tag}>area/core</span>
-              <span className={styles.tag}>area/networking</span>
-              <span className={styles.tag}>area/benchmark</span>
-              <span className={styles.tag}>area/tooling</span>
-              <span className={styles.tag}>area/user-experience</span>
+              <span className={styles.tag}>wg/mom-routing</span>
+              <span className={styles.tag}>wg/router-models-inference-runtime</span>
+              <span className={styles.tag}>wg/data-plane-networking</span>
+              <span className={styles.tag}>wg/enterprise-environment</span>
+              <span className={styles.tag}>wg/agentic-context</span>
+              <span className={styles.tag}>wg/developer-experience-ecosystem</span>
+              <span className={styles.tag}>wg/evaluation-quality</span>
             </div>
           </section>
 

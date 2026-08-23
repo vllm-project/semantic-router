@@ -21,3 +21,12 @@ track:
   - research-to-product
   - hardening
   - security
+
+wg:
+  - mom-routing
+  - router-models-inference-runtime
+  - data-plane-networking
+  - enterprise-environment
+  - agentic-context
+  - developer-experience-ecosystem
+  - evaluation-quality

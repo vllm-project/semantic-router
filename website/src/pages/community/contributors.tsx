@@ -199,7 +199,7 @@ const ContributorsPage: React.FC = () => {
               </p>
               <p className={styles.methodNote}>
                 <Translate id="community.contributors.method">
-                  Contributors include people with non-merge commits or eligible reviews. First-time commit authors have no earlier commit in repository history. Review credits use the review submission date and count at most once per contributor for each pull request that is ultimately merged.
+                  Contributors include qualifying commit authors and reviewers. “New” means a first repository commit; reviews count once per contributor per merged pull request.
                 </Translate>
               </p>
             </div>

@@ -10,15 +10,19 @@ from typing import Any
 from urllib.parse import quote
 
 from community_lifecycle_policy import (
+    ACCEPTED,
     API_PAGE_SIZE,
     MAINTAINER_PERMISSIONS,
+    NEEDS_ACCEPTANCE,
     PR_STATE_LABELS,
     RELEASE_BLOCKER,
     WORKGROUP_LABELS,
+    evaluate_issue_acceptance,
     evaluate_pull_request,
     extract_related_issue_numbers,
     label_names,
     plan_issue,
+    title_format_error,
 )
 
 
@@ -54,6 +58,16 @@ def repository_name(event: dict[str, Any]) -> str:
     if value:
         return value
     return event["repository"]["full_name"]
+
+
+def validate_title_event(event: dict[str, Any]) -> None:
+    """Validate the issue or pull-request title carried by one webhook event."""
+
+    item = event.get("pull_request") or event.get("issue") or {}
+    error = title_format_error(item.get("title"))
+    if error:
+        print(f"::error::{error}")
+        raise SystemExit(1)
 
 
 def actor_can_manage(client: GitHubClient, repo: str, actor: str | None) -> bool:
@@ -133,6 +147,30 @@ def sync_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
         )
     for code, message in plan.comments:
         comment_once(client, repo, number, code, message)
+
+
+def accept_issue_event(client: GitHubClient, event: dict[str, Any]) -> None:
+    """Apply an explicit acceptance transition requested by ``/accept``."""
+
+    command = ((event.get("comment") or {}).get("body") or "").strip()
+    if command != "/accept":
+        print("::error::The acceptance command must be exactly `/accept`.")
+        raise SystemExit(1)
+
+    repo = repository_name(event)
+    number = int(event["issue"]["number"])
+    actor = (event.get("sender") or {}).get("login")
+    issue = client.request(f"repos/{repo}/issues/{number}")
+    evaluation = evaluate_issue_acceptance(
+        issue,
+        actor_can_manage=actor_can_manage(client, repo, actor),
+    )
+    if not evaluation.valid:
+        print(f"::error::{evaluation.error}")
+        raise SystemExit(1)
+
+    add_labels(client, repo, number, {ACCEPTED})
+    remove_labels(client, repo, number, {NEEDS_ACCEPTANCE})
 
 
 def linked_issues_for_pull_request(
