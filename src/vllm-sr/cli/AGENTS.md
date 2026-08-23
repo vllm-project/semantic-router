@@ -21,3 +21,4 @@
 - Do not encode the same canonical field inventory or signal/plugin type list independently across `models.py`, `config_migration.py`, and `validator.py` when one shared inventory or helper can own it.
 - When adding new config-contract surface area, prefer dedicated schema-family or validation helpers instead of growing the all-in-one `models.py` / `validator.py` hotspots.
 - Keep legacy migration behavior behind explicit compatibility helpers; do not turn `config_migration.py` into a second general-purpose config runtime.
+- Keep recipe packaging and scaffolding in `recipe_package.py` and `recipe_scaffold.py`; register CLI entrypoints from `commands/recipe.py`.

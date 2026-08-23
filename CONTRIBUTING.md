@@ -75,6 +75,12 @@ test references are:
 - [Testing strategy](tools/agent/docs/testing-strategy.md)
 - [Feature-complete checklist](tools/agent/docs/feature-complete-checklist.md)
 
+For deployment, recipe scaffolding, validation, evaluation, and reviewed
+activation workflows, start from
+[tools/agent/skills/contributor/vllm-sr-journey/SKILL.md](tools/agent/skills/contributor/vllm-sr-journey/SKILL.md)
+and the public tutorial at
+[website/docs/tutorials/agent/vllm-sr-journey.md](website/docs/tutorials/agent/vllm-sr-journey.md).
+
 If implementation and intended architecture still differ after your change,
 record the durable gap under
 [tools/agent/docs/tech-debt/](tools/agent/docs/tech-debt/README.md) rather than

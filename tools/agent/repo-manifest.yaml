@@ -140,6 +140,7 @@ docs:
 - tools/agent/docs/testing-strategy.md
 - tools/agent/docs/plans/pl-0032-architecture-scorecard-ratchet.md
 - tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
+- tools/agent/docs/plans/pl-0039-vllm-sr-journey-skill.md
 - tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
 - tools/agent/docs/tech-debt/td-016-fleet-sim-shared-ruff-contract-gap.md
 - tools/agent/docs/tech-debt/td-017-fleet-sim-structure-gate-migration-gap.md
@@ -281,6 +282,9 @@ doc_governance:
   - path: tools/agent/docs/plans/pl-0037-router-flow-eval-campaign.md
     steward: router-core
     freshness: update while the Router Flow four-mode benchmark campaign is active
+  - path: tools/agent/docs/plans/pl-0039-vllm-sr-journey-skill.md
+    steward: agent-contract
+    freshness: update while the contributor journey skill workstream is active
   - path: tools/agent/docs/tech-debt/td-006-structural-rule-exceptions.md
     steward: agent-contract
     freshness: update when the TD006 debt record changes materially
@@ -327,3 +331,4 @@ skills:
 - tools/agent/skills/signal-end-to-end/SKILL.md
 - tools/agent/skills/startup-chain-change/SKILL.md
 - tools/agent/skills/training-stack-change/SKILL.md
+- tools/agent/skills/contributor/vllm-sr-journey/SKILL.md

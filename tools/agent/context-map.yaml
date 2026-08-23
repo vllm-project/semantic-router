@@ -167,3 +167,9 @@ skills:
     resume_refs:
     - path: tools/agent/docs/tech-debt-register.md
       reason: Record remaining cross-surface architecture gaps if they stay open.
+  vllm-sr-journey:
+    resume_refs:
+    - path: tools/agent/docs/plans/pl-0039-vllm-sr-journey-skill.md
+      reason: Active execution plan for contributor deployment, recipe, eval, and tuning journeys.
+    - path: website/docs/tutorials/agent/vllm-sr-journey.md
+      reason: Public contributor journey charter and command reference.

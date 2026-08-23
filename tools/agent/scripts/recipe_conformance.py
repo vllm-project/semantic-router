@@ -50,7 +50,7 @@ REQUIRED_MODEL_CARD_HEADINGS = (
     "## References",
 )
 RUNTIME_RECIPE_DIRECTORIES = frozenset({".vllm-sr"})
-RECIPE_CATALOG_DIRECTORIES = frozenset({"built-in"})
+RECIPE_CATALOG_DIRECTORIES = frozenset({"built-in", "examples"})
 DEFAULT_AUTO_ENTRYPOINTS = ("vllm-sr/auto", "auto")
 DEFAULT_AUTO_MODEL_NAME = "MoM"
 

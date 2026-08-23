@@ -1,0 +1,30 @@
+schema_version: v1
+name: journey-starter
+description: Starter probes for the journey-starter example recipe.
+routing_assets:
+  yaml: config/recipes/examples/journey-starter/config.yaml
+  dsl: config/recipes/examples/journey-starter/recipe.dsl
+router_eval_endpoint: /api/v1/eval
+evaluation:
+  request_timeout_seconds: 300
+  concurrency: 1
+acceptance:
+  min_probe_pass_rate: 100.0
+  min_decision_pass_rate: 100.0
+coverage:
+  min_signal_assertion_percent: 0.0
+  min_projection_assertion_percent: 0.0
+  min_algorithm_assertion_percent: 100.0
+  min_plugin_assertion_percent: 0.0
+  required_request_shapes: [text]
+  min_tag_counts: {}
+  min_tag_pass_rate: {}
+decisions:
+  - id: default-route
+    expected_decision: default-route
+    expected_algorithm: static
+    objective: Default catch-all route for the journey-starter example.
+    variants:
+      - id: hello
+        query: Say hello and confirm the router is reachable.
+        tags: [baseline]

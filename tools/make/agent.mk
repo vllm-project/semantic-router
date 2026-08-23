@@ -44,6 +44,7 @@ agent-help: ## Show help for agent-specific targets
 	@echo "  make test-and-build-local"
 	@echo "  make agent-e2e-affected CHANGED_FILES=\"...\""
 	@echo "  make agent-feature-gate ENV=cpu|amd CHANGED_FILES=\"...\""
+	@echo "  make agent-vllm-sr-journey ARGS=\"detect-env\""
 
 agent-venv-install: ## Create $(AGENT_VENV) and install harness Python requirements
 	@if [ ! -x "$(AGENT_PYTHON)" ]; then \
@@ -306,6 +307,10 @@ agent-feature-gate: ## Run lint, targeted tests, local smoke, and a final report
 	fi; \
 	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py report --env "$(ENV)" --base-ref "$(AGENT_BASE_REF)" --changed-files "$(CHANGED_FILES)" --changed-files-path "$(AGENT_CHANGED_FILES_PATH)"
 
+agent-vllm-sr-journey: agent-venv-install ## Run the contributor vLLM-SR journey helper (ARGS=detect-env|validate|evaluate|review ...)
+	@$(LOG_TARGET)
+	@"$(AGENT_PYTHON)" tools/agent/scripts/vllm_sr_journey.py $(ARGS)
+
 .PHONY: agent-help agent-venv-install agent-bootstrap agent-ci-lint agent-docs-ci-gate agent-dev agent-serve-local agent-stop-local \
 	agent-validate agent-lint agent-fast-gate agent-report agent-ci-gate agent-smoke-local agent-e2e-affected \
-	workflow-ci-validate test-and-build-local agent-pr-gate agent-feature-gate
+	workflow-ci-validate test-and-build-local agent-pr-gate agent-feature-gate agent-vllm-sr-journey

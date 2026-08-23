@@ -770,3 +770,13 @@ skills:
     description: Maintainer workflow for creating, updating, or deleting GitHub issues and PR metadata using repo labels, templates, and validation context.
     acceptance_criteria:
     - Issue or PR management requests use the canonical templates, label taxonomy, and repo validation context instead of ad hoc summaries.
+  - name: vllm-sr-journey
+    path: tools/agent/skills/contributor/vllm-sr-journey/SKILL.md
+    audience: contributor
+    description: Contributor journey for supported deployment paths, recipe scaffolding, contract validation, evaluation gates, reviewed tuning, and explicit activation with rollback hints.
+    owned_surfaces:
+    - contributor_interface
+    - local_smoke
+    - docs_examples
+    acceptance_criteria:
+    - Contributor requests leave behind validated artifacts, evaluation receipts when applicable, and a review bundle that remains explicitly not activated until approved.
