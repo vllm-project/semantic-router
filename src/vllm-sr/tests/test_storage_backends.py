@@ -8,11 +8,12 @@ from cli.container_services import (
     container_start_redis,
 )
 from cli.runtime_stack import resolve_runtime_stack
-from cli.service_defaults import (
-    inject_local_service_runtime_defaults,
-    inject_local_store_runtime_defaults,
-)
 from cli.storage_backends import detect_required_backends, start_storage_backends
+
+# `redis_conf_file` has no default: there is no way to start this stack's Redis
+# without a credential file. The reuse checks below answer before the argv is
+# ever built, so the path only has to satisfy the required keyword.
+UNUSED_REDIS_CONF = "/nonexistent/vllm-sr/redis.conf"
 
 
 def test_detect_required_backends_uses_canonical_defaults():
@@ -240,8 +241,14 @@ def test_managed_storage_ports_bind_only_to_host_loopback(monkeypatch, tmp_path)
     )
     layout = resolve_runtime_stack()
 
-    container_start_redis("test-network", layout)
-    container_start_postgres("test-network", layout)
+    container_start_redis(
+        "test-network", layout, redis_conf_file=str(tmp_path / "redis.conf")
+    )
+    container_start_postgres(
+        "test-network",
+        layout,
+        postgres_password_file=str(tmp_path / "postgres-password"),
+    )
     container_start_milvus("test-network", layout, state_root_dir=str(tmp_path))
 
     assert f"127.0.0.1:{layout.redis_port}:6379" in commands[0]
@@ -269,7 +276,9 @@ def test_running_storage_with_public_port_binding_is_not_reused(monkeypatch):
         )(),
     )
 
-    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+    code, _, stderr = container_start_redis(
+        "test-network", resolve_runtime_stack(), redis_conf_file=UNUSED_REDIS_CONF
+    )
 
     assert code == 1
     assert "unsafe published storage ports" in stderr
@@ -300,7 +309,9 @@ def test_running_storage_with_loopback_binding_remains_reusable(monkeypatch):
 
     monkeypatch.setattr(container_services.subprocess, "run", fake_run)
 
-    code, _, stderr = container_start_redis(None, resolve_runtime_stack())
+    code, _, stderr = container_start_redis(
+        None, resolve_runtime_stack(), redis_conf_file=UNUSED_REDIS_CONF
+    )
 
     assert code == 0
     assert stderr == ""
@@ -327,7 +338,9 @@ def test_running_storage_with_host_network_is_not_reused(monkeypatch):
         )(),
     )
 
-    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+    code, _, stderr = container_start_redis(
+        "test-network", resolve_runtime_stack(), redis_conf_file=UNUSED_REDIS_CONF
+    )
 
     assert code == 1
     assert "host network mode" in stderr
@@ -351,7 +364,9 @@ def test_running_storage_with_container_network_namespace_is_not_reused(monkeypa
         )(),
     )
 
-    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+    code, _, stderr = container_start_redis(
+        "test-network", resolve_runtime_stack(), redis_conf_file=UNUSED_REDIS_CONF
+    )
 
     assert code == 1
     assert "container network mode" in stderr
@@ -410,7 +425,9 @@ def test_running_storage_with_publish_all_ports_is_not_reused(monkeypatch):
         )(),
     )
 
-    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+    code, _, stderr = container_start_redis(
+        "test-network", resolve_runtime_stack(), redis_conf_file=UNUSED_REDIS_CONF
+    )
 
     assert code == 1
     assert "PublishAllPorts" in stderr
@@ -436,7 +453,9 @@ def test_running_storage_with_unsafe_effective_binding_is_not_reused(monkeypatch
         )(),
     )
 
-    code, _, stderr = container_start_redis("test-network", resolve_runtime_stack())
+    code, _, stderr = container_start_redis(
+        "test-network", resolve_runtime_stack(), redis_conf_file=UNUSED_REDIS_CONF
+    )
 
     assert code == 1
     assert (
@@ -577,188 +596,3 @@ def test_detect_required_backends_ignores_disabled_vector_store_metadata():
     }
 
     assert detect_required_backends(config) == set()
-
-
-def test_inject_local_service_runtime_defaults_populates_canonical_connections():
-    config = {
-        "version": "v0.3",
-        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-    }
-
-    changed = inject_local_service_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is True
-    services = config["global"]["services"]
-    assert services["response_api"]["store_backend"] == "redis"
-    assert services["response_api"]["redis"]["address"] == "vllm-sr-redis:6379"
-    assert services["response_api"]["redis"]["db"] == 0
-    assert services["router_replay"] == {
-        "enabled": False,
-        "store_backend": "memory",
-    }
-
-
-def test_inject_local_service_runtime_defaults_keeps_setup_bootstrap_minimal():
-    config = build_bootstrap_config()
-
-    changed = inject_local_service_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is False
-    assert "global" not in config
-
-
-def test_inject_local_service_runtime_defaults_backfills_blank_backend_fields():
-    config = {
-        "version": "v0.3",
-        "global": {
-            "services": {
-                "response_api": {
-                    "enabled": True,
-                    "store_backend": "redis",
-                    "redis": {"address": "", "db": 5},
-                },
-                "router_replay": {
-                    "enabled": True,
-                    "store_backend": "postgres",
-                    "postgres": {"host": "", "user": "custom-user"},
-                },
-            }
-        },
-    }
-
-    changed = inject_local_service_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is True
-    services = config["global"]["services"]
-    assert services["response_api"]["redis"]["address"] == "vllm-sr-redis:6379"
-    assert services["response_api"]["redis"]["db"] == 5
-    assert services["router_replay"]["postgres"]["host"] == "vllm-sr-postgres"
-    assert services["router_replay"]["postgres"]["user"] == "custom-user"
-    assert services["router_replay"]["postgres"]["password"] == "router-secret"
-
-
-def test_inject_local_store_runtime_defaults_populates_milvus_connection():
-    config = {
-        "version": "v0.3",
-        "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": True,
-                    "backend_type": "milvus",
-                }
-            }
-        },
-    }
-
-    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is True
-    stores = config["global"]["stores"]
-    cache = stores["response_cache"]
-    assert cache["backend_type"] == "milvus"
-    milvus = cache["milvus"]
-    conn = milvus["connection"]
-    assert conn["host"] == "vllm-sr-milvus"
-    assert conn["port"] == 19530  # container gRPC port
-    assert conn["database"] == "default"
-    assert conn["timeout"] == 30
-    coll = milvus["collection"]
-    assert coll["name"] == "semantic_cache"
-    assert coll["vector_field"]["dimension"] == 768
-    search = milvus["search"]
-    assert search["params"]["ef"] == 64
-    assert search["topk"] == 10
-    dev = milvus["development"]
-    assert dev["auto_create_collection"] is True
-
-
-def test_inject_local_store_runtime_defaults_populates_vector_store_metadata_postgres():
-    config = {
-        "version": "v0.3",
-        "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": False,
-                },
-                "vector_store": {
-                    "enabled": True,
-                    "metadata_store": "postgres",
-                },
-            }
-        },
-    }
-
-    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is True
-    metadata = config["global"]["stores"]["vector_store"]["metadata_postgres"]
-    assert metadata["host"] == "vllm-sr-postgres"
-    assert metadata["port"] == 5432
-    assert metadata["database"] == "vsr"
-    assert metadata["user"] == "router"
-    assert metadata["password"] == "router-secret"
-    assert metadata["ssl_mode"] == "disable"
-
-
-def test_inject_local_store_runtime_defaults_backfills_vector_store_metadata_postgres():
-    config = {
-        "version": "v0.3",
-        "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": False,
-                },
-                "vector_store": {
-                    "enabled": True,
-                    "metadata_store": "postgres",
-                    "metadata_postgres": {
-                        "host": "",
-                        "database": "custom",
-                    },
-                },
-            }
-        },
-    }
-
-    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
-
-    assert changed is True
-    metadata = config["global"]["stores"]["vector_store"]["metadata_postgres"]
-    assert metadata["host"] == "vllm-sr-postgres"
-    assert metadata["database"] == "custom"
-    assert metadata["user"] == "router"
-
-
-def test_inject_local_store_runtime_defaults_preserves_user_milvus_config():
-    config = {
-        "version": "v0.3",
-        "global": {
-            "stores": {
-                "response_cache": {
-                    "enabled": True,
-                    "backend_type": "milvus",
-                    "milvus": {
-                        "connection": {
-                            "host": "custom-milvus-host",
-                            "port": 19531,
-                        },
-                        "collection": {
-                            "name": "my_custom_collection",
-                        },
-                    },
-                }
-            }
-        },
-    }
-
-    changed = inject_local_store_runtime_defaults(config, resolve_runtime_stack())
-
-    milvus = config["global"]["stores"]["response_cache"]["milvus"]
-    conn = milvus["connection"]
-    assert conn["host"] == "custom-milvus-host"
-    assert conn["port"] == 19531
-    assert conn["database"] == "default"
-    assert conn["timeout"] == 30
-    assert milvus["collection"]["name"] == "my_custom_collection"
-    assert changed is True

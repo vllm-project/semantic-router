@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import yaml
 from cli.commands import runtime as runtime_commands
+from cli.commands import runtime_serve_config as serve_config
 from cli.commands.runtime_management_credentials import (
     catalog_management_credential_environment,
     management_credential_env_names,
@@ -287,7 +288,7 @@ def test_model_list_points_to_catalog_and_custom_serve_flows():
 
 def test_serve_catalog_fails_closed_for_active_recipe(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
-        runtime_commands, "active_recipe_package_for_stack", lambda **_kwargs: True
+        serve_config, "active_recipe_package_for_stack", lambda **_kwargs: True
     )
     result, captured = _invoke_catalog_serve(
         monkeypatch, tmp_path, "vllm-sr/mom-v1-blend"
@@ -305,7 +306,7 @@ def test_serve_catalog_fails_closed_when_runtime_edits_are_preserved(
     preserved.parent.mkdir(parents=True)
     preserved.write_text("version: dashboard-edited\n", encoding="utf-8")
     monkeypatch.setattr(
-        runtime_commands,
+        serve_config,
         "materialize_runtime_config",
         lambda *_args, **_kwargs: preserved,
     )

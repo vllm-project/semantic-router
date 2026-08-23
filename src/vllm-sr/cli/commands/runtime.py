@@ -28,20 +28,14 @@ from cli.commands.runtime_model_source import (
     ServeModelSource,
     resolve_serve_model_request,
 )
-from cli.commands.runtime_paths import (
-    _runtime_config_output_path,
-    materialize_runtime_config,
-)
+from cli.commands.runtime_serve_config import _prepare_effective_serve_config
 from cli.commands.runtime_support import (
     append_passthrough_env_vars,
     apply_container_runtime_override,
     apply_runtime_mode_env_vars,
-    build_effective_config_bytes,
-    build_effective_config_document,
     configure_recipe_env_bindings,
     configure_runtime_override_env_vars,
     log_bootstrap_result,
-    validate_config_recipe_env_bindings,
     validate_setup_mode_flags,
 )
 from cli.consts import (
@@ -54,13 +48,7 @@ from cli.consts import (
     SUPPORTED_CONTAINER_RUNTIMES,
     VLLM_SR_CONTAINER_IMAGE_DEFAULT,
 )
-from cli.container_services import container_status_strict
 from cli.deployment_backend import DEFAULT_TARGET, VALID_TARGETS, resolve_target
-from cli.recipe_activation_recovery import (
-    active_recipe_package_for_stack,
-    recover_pending_recipe_activation_for_stack,
-)
-from cli.runtime_config_lock import acquire_runtime_config_lock
 from cli.runtime_stack import resolve_runtime_stack
 from cli.terminal import fields, heading, success
 from cli.utils import get_logger
@@ -94,81 +82,6 @@ def _build_backend(target: str | None, **k8s_kwargs):
     from cli.container_backend import ContainerBackend  # noqa: PLC0415
 
     return ContainerBackend()
-
-
-def _prepare_docker_runtime_config(
-    config_path: Path,
-    algorithm: str | None,
-    source_setup_mode: bool,
-    platform: str | None,
-    recipe_env_bindings: tuple[str, ...],
-    *,
-    state_root_dir: Path | None = None,
-    require_exact_source: bool = False,
-):
-    stack_layout = resolve_runtime_stack()
-    state_root_dir = state_root_dir or (
-        Path(os.environ["VLLM_SR_STATE_ROOT_DIR"]).expanduser().absolute()
-        if os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
-        else config_path.expanduser().absolute().parent
-    )
-    effective_config_path = _runtime_config_output_path(
-        config_path,
-        state_root_dir=state_root_dir,
-        stack_name=stack_layout.stack_name,
-    )
-    runtime_lock = acquire_runtime_config_lock(
-        runtime_config_path=effective_config_path,
-        state_root_dir=state_root_dir,
-        stack_name=stack_layout.stack_name,
-        timeout_seconds=0,
-    )
-    try:
-        recover_pending_recipe_activation_for_stack(
-            runtime_config_path=effective_config_path,
-            state_root_dir=state_root_dir,
-            stack_name=stack_layout.stack_name,
-            managed_container_names=stack_layout.runtime_container_names,
-            status_provider=container_status_strict,
-        )
-        package_active = active_recipe_package_for_stack(
-            state_root_dir=state_root_dir, stack_name=stack_layout.stack_name
-        )
-        if package_active:
-            if require_exact_source:
-                raise ValueError(
-                    "This stack has an active managed Recipe, so the requested "
-                    "catalog model selection was not applied. Deactivate the Recipe "
-                    "in the Dashboard or use a different VLLM_SR_STACK_NAME."
-                )
-            validate_config_recipe_env_bindings(
-                effective_config_path, recipe_env_bindings
-            )
-        else:
-            effective_config_bytes = build_effective_config_bytes(
-                config_path, algorithm, source_setup_mode, platform
-            )
-            effective_config_path = materialize_runtime_config(
-                config_path,
-                effective_config_bytes,
-                state_root_dir=state_root_dir,
-                stack_name=stack_layout.stack_name,
-            )
-            if (
-                require_exact_source
-                and effective_config_path.read_bytes() != effective_config_bytes
-            ):
-                raise ValueError(
-                    "The requested catalog model selection conflicts with Dashboard "
-                    "changes preserved in this stack's runtime config. Use a different "
-                    "VLLM_SR_STACK_NAME or serve the edited config explicitly with "
-                    "--config."
-                )
-        setup_mode = is_setup_mode_config(effective_config_path)
-        return effective_config_path, setup_mode, runtime_lock
-    except Exception:
-        runtime_lock.close()
-        raise
 
 
 def _resolve_serve_config(
@@ -222,54 +135,6 @@ def _resolve_serve_config(
             "the custom Router image is an operator-managed compatibility override."
         )
     return model_source.config_path, False
-
-
-def _prepare_effective_serve_config(
-    config_path: Path,
-    *,
-    model_source: ServeModelSource | None,
-    resolved_target: str,
-    algorithm: str | None,
-    source_setup_mode: bool,
-    platform: str | None,
-    recipe_env_bindings: tuple[str, ...],
-):
-    """Prepare the target-specific active config and its optional runtime lock."""
-
-    if model_source is not None and resolved_target != "docker":
-        raise ValueError(
-            "serve MODEL currently supports the local Docker target. For Kubernetes, "
-            "materialize an editable config with 'vllm-sr model fork' and deploy it "
-            "through the chart or operator workflow."
-        )
-    if resolved_target != "docker" and recipe_env_bindings:
-        raise ValueError(
-            "--recipe-env is supported only for local Docker Recipe packages"
-        )
-    if resolved_target == "docker":
-        effective_path, setup_mode, runtime_lock = _prepare_docker_runtime_config(
-            config_path,
-            algorithm,
-            source_setup_mode,
-            platform,
-            recipe_env_bindings,
-            state_root_dir=(
-                model_source.state_root if model_source is not None else None
-            ),
-            require_exact_source=model_source is not None,
-        )
-        return effective_path, setup_mode, runtime_lock, None
-
-    # Kubernetes is an in-memory translation flow. Never publish its target-
-    # neutral transforms into the local Docker/Dashboard active config path.
-    effective_config_document = build_effective_config_document(
-        config_path,
-        algorithm,
-        source_setup_mode,
-        platform,
-        materialize_local_runtime=False,
-    )
-    return config_path, source_setup_mode, None, effective_config_document
 
 
 def _validate_target_platform(resolved_target: str, platform: str | None) -> None:
