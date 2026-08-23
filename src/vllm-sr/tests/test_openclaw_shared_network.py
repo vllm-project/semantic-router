@@ -8,6 +8,7 @@ from cli import (
     container_start,
     core,
     runtime_lifecycle,
+    runtime_service_status,
 )
 from cli.runtime_stack import resolve_runtime_stack
 
@@ -25,7 +26,7 @@ def _split_runtime_topology(monkeypatch):
 def _capture_run_commands(monkeypatch):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, env=None):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
@@ -612,7 +613,7 @@ def test_runtime_service_container_name_prefers_split_runtime_container(monkeypa
     )
 
     assert (
-        core._runtime_service_container_name("router", stack_layout)
+        runtime_service_status.runtime_service_container_name("router", stack_layout)
         == stack_layout.router_container_name
     )
 
@@ -628,7 +629,7 @@ def test_runtime_service_container_name_returns_split_name_when_container_missin
     )
 
     assert (
-        core._runtime_service_container_name("router", stack_layout)
+        runtime_service_status.runtime_service_container_name("router", stack_layout)
         == stack_layout.router_container_name
     )
 

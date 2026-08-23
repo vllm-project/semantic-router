@@ -11,6 +11,7 @@ from cli.commands.eval import eval
 from cli.commands.general import config, model, rag, validate
 from cli.commands.recipe import recipe
 from cli.commands.runtime import dashboard, logs, serve, status, stop
+from cli.commands.storage import storage
 from cli.terminal import brand
 
 logo = r"""
@@ -37,6 +38,7 @@ REGISTERED_COMMANDS = (
     chat,
     completion,
     recipe,
+    storage,
 )
 
 
