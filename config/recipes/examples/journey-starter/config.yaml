@@ -1,0 +1,39 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 300s
+
+global:
+  router:
+    auto_model_names:
+      - vllm-sr/auto
+
+providers:
+  defaults:
+    default_model: journey-starter-model
+  models:
+    - name: journey-starter-model
+      backend_refs:
+        - name: primary
+          endpoint: host.docker.internal:8000
+          protocol: http
+          weight: 100
+
+routing:
+  modelCards:
+    - name: journey-starter-model
+  decisions:
+    - name: default-route
+      description: Catch-all route for the journey-starter example recipe.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: journey-starter-model
+          use_reasoning: false
+      algorithm:
+        type: static

@@ -21,6 +21,8 @@ invokes the selected backend and recipe-scoped plugins.
 - Full task routing, primary-skill resolution, local-rule surfacing, loop-mode guidance, and validation planning come from `make agent-report ENV=cpu|amd CHANGED_FILES="..."`.
 - Follow the primary skill selected from [tools/agent/skills/](tools/agent/skills/)
   instead of treating the root entrypoint as a task-specific skill.
+- For contributor deployment, recipe generation, evaluation, and reviewed tuning
+  workflows, use [tools/agent/skills/contributor/vllm-sr-journey/SKILL.md](tools/agent/skills/contributor/vllm-sr-journey/SKILL.md).
 - `tools/agent/**` remains the canonical harness source.
 
 If you need real AMD model deployment details instead of the minimal smoke path, also read [website/docs/installation/amd-rocm.md](website/docs/installation/amd-rocm.md) and [config/recipes/balance/config.yaml](config/recipes/balance/config.yaml).

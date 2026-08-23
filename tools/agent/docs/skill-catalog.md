@@ -35,6 +35,10 @@ Maintainer:
 - `maintainer-issue-pr-management`
 - `routing-calibration-loop`
 
+Contributor:
+
+- `vllm-sr-journey`
+
 ## Source of Truth
 
 - Executable registry: [../../tools/agent/skill-registry.yaml](../../../tools/agent/skill-registry.yaml)

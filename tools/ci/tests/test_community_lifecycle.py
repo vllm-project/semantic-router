@@ -260,6 +260,22 @@ MoM & Routing Intelligence
         self.assertEqual(evaluation.state_label, "pr/needs-rebase")
         self.assertEqual(evaluation.owner_label, "wg/quality-release")
 
+    def test_pr_accepts_legacy_workgroup_label_aliases(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": False, "user": {"type": "User"}},
+            [
+                {
+                    "labels": labels(
+                        "accepted",
+                        "wg/developer-experience-ecosystem",
+                    ),
+                    "milestone": None,
+                }
+            ],
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "wg/dev-community")
+
     def test_pr_rejects_multiple_accepted_workgroup_owners(self) -> None:
         pull_request = {"draft": False, "user": {"type": "User"}}
         linked = [

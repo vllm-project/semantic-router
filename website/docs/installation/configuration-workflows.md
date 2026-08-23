@@ -24,6 +24,10 @@ state without rewriting the source file. Concurrent `serve` and `stop`
 operations for the same runtime and stack are serialized; retry after the
 active lifecycle operation finishes.
 
+For contributor-oriented deployment, recipe scaffolding, validation, evaluation,
+and reviewed activation, see the
+[vLLM-SR contributor journey](../tutorials/agent/vllm-sr-journey.md).
+
 ## Dashboard
 
 An empty local workspace starts the Dashboard in setup mode. Use it to bind
