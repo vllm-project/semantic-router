@@ -489,6 +489,17 @@ profiles:
       - deploy/kubernetes/router-replay/postgres.yaml
       - src/semantic-router/pkg/vectorstore/metadata_registry*.go
       - src/semantic-router/pkg/postgres/**
+  rag-external-api:
+    owner: e2e
+    coverage_role: external-rag-request-and-response-boundary
+    selection: manual
+    paths:
+      - e2e/profiles/rag-external-api/**
+      - e2e/testcases/rag_external_api.go
+      - src/semantic-router/pkg/extproc/req_filter_rag_external.go
+      - src/semantic-router/pkg/config/rag_external_api_template.go
+      - src/semantic-router/pkg/config/rag_plugin_backends.go
+      - src/semantic-router/pkg/config/rag_plugin_validation.go
   rag-hybrid-search:
     owner: e2e
     coverage_role: rag-hybrid-search
