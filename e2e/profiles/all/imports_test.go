@@ -69,3 +69,19 @@ func TestProtocolCodecE2EMatrixProfilesAreClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestAnthropicShimProfileBuildsLocalImage(t *testing.T) {
+	registration, ok := framework.LookupProfileRegistration("anthropic-shim")
+	if !ok {
+		t.Fatal("anthropic-shim profile is not registered")
+	}
+
+	want := []framework.LocalImageBuild{{
+		Dockerfile:   "e2e/testing/anthropic-shim/Dockerfile",
+		Tag:          "ghcr.io/vllm-project/semantic-router/anthropic-shim:e2e-test",
+		BuildContext: "e2e/testing/anthropic-shim",
+	}}
+	if !reflect.DeepEqual(registration.Capabilities.LocalImages, want) {
+		t.Fatalf("anthropic-shim local images = %#v, want %#v", registration.Capabilities.LocalImages, want)
+	}
+}
