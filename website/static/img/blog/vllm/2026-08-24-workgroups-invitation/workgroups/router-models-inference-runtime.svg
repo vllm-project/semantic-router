@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1672" height="941" viewBox="0 0 1672 941" role="img" aria-labelledby="title desc">
   <title id="title">Router Models and Inference Runtime Workgroup</title>
-  <desc id="desc">Specialized Router Models transform request information into typed routing signals through one extensible inference runtime. A controlled lifecycle improves, evaluates, activates, drains, and rolls back versioned model artifacts.</desc>
+  <desc id="desc">A model-family flywheel improves and activates versioned Router Model artifacts. A separate layered inference runtime transforms request features into typed routing signals through a common model contract, lifecycle services, and engine adapters.</desc>
   <defs>
     <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8fbff"/><stop offset="1" stop-color="#eaf3ff"/></linearGradient>
     <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fbfff9"/><stop offset="1" stop-color="#edf8e9"/></linearGradient>
@@ -16,45 +16,128 @@
   <rect width="1672" height="941" fill="#fff"/>
   <g class="s" transform="translate(48 35)"><path d="M0 8.65h16.22V40L0 8.65z" fill="#FDB515"/><path d="M24.33 7.57L38.93 0 28.12 40H16.22l8.11-32.43z" fill="#30A2FF"/><text x="53" y="25" font-size="25" font-weight="780" fill="#111827">vLLM</text><text x="53" y="42" font-size="12" font-weight="720" letter-spacing="1.4" fill="#475467">SEMANTIC ROUTER</text></g>
   <g class="s" text-anchor="end"><text x="1624" y="50" class="tiny">WORKGROUP 02</text><text x="1624" y="75" font-size="16" font-weight="650" fill="#2563eb">@vllm-sr.ai</text></g>
-  <g class="s" text-anchor="middle"><text x="836" y="105" class="t">ROUTER MODELS &amp; INFERENCE RUNTIME</text><text x="836" y="137" class="sub">Turn each request into reliable routing signals through one extensible runtime.</text></g>
+  <g class="s" text-anchor="middle"><text x="836" y="105" class="t">ROUTER MODELS &amp; INFERENCE RUNTIME</text><text x="836" y="137" class="sub">Improve routing intelligence and execute it through one extensible model runtime.</text></g>
 
-  <!-- Input -->
-  <g class="s" filter="url(#shadow)"><rect x="44" y="263" width="212" height="270" rx="15" fill="url(#blue)" class="card"/><text x="150" y="301" text-anchor="middle" class="pt">REQUEST</text><rect x="84" y="329" width="132" height="92" rx="11" fill="#fff" stroke="#111827" stroke-width="2"/><rect x="101" y="348" width="72" height="38" rx="12" fill="#bfdbfe" stroke="#111827" stroke-width="2"/><circle cx="120" cy="367" r="3"/><circle cx="137" cy="367" r="3"/><circle cx="154" cy="367" r="3"/><path d="M115 386l-12 11v-18" fill="#bfdbfe" stroke="#111827" stroke-width="2"/><text x="150" y="458" text-anchor="middle" class="st">Typed input</text><text x="150" y="484" text-anchor="middle" class="sm">Text · metadata · context</text><text x="150" y="506" text-anchor="middle" class="sm">Policy-safe features</text></g>
-  <path d="M256 398h48" class="line"/>
+  <!-- Model family and improvement flywheel -->
+  <g class="s" filter="url(#shadow)">
+    <rect x="43" y="183" width="390" height="612" rx="18" fill="#fcfcfd" class="card"/>
+    <text x="238" y="223" text-anchor="middle" class="pt">MODEL FAMILY + FLYWHEEL</text>
+    <text x="238" y="247" text-anchor="middle" class="sm">Improve model quality without bypassing review</text>
 
-  <!-- Router Model family -->
-  <g class="s" filter="url(#shadow)"><rect x="306" y="187" width="588" height="422" rx="17" fill="#fcfcfd" class="card"/><text x="600" y="225" text-anchor="middle" class="pt">ROUTER MODEL FAMILY</text><text x="600" y="249" text-anchor="middle" class="sm">Specialized, versioned models produce distinct signals and scores</text>
-    <rect x="333" y="279" width="160" height="125" rx="12" fill="url(#blue)" stroke="#111827" stroke-width="2"/><circle cx="413" cy="315" r="20" fill="#bfdbfe" stroke="#111827" stroke-width="2"/><path d="M402 315h22M413 304v22" stroke="#111827" stroke-width="2"/><text x="413" y="358" text-anchor="middle" class="st">INTENT</text><text x="413" y="382" text-anchor="middle" class="sm">class + confidence</text>
-    <rect x="520" y="279" width="160" height="125" rx="12" fill="url(#green)" stroke="#111827" stroke-width="2"/><path d="M579 334l21-39 21 39z" fill="#b9e4ae" stroke="#111827" stroke-width="2"/><line x1="600" y1="305" x2="600" y2="322" stroke="#111827" stroke-width="2"/><circle cx="600" cy="328" r="2.5"/><text x="600" y="358" text-anchor="middle" class="st">COMPLEXITY</text><text x="600" y="382" text-anchor="middle" class="sm">difficulty score</text>
-    <rect x="707" y="279" width="160" height="125" rx="12" fill="url(#amber)" stroke="#111827" stroke-width="2"/><path d="M787 292c10 10 23 12 23 12v18c0 19-12 29-23 35-11-6-23-16-23-35v-18s13-2 23-12z" fill="#fde68a" stroke="#111827" stroke-width="2"/><path d="M777 322l8 8 13-18" fill="none" stroke="#111827" stroke-width="2.5"/><text x="787" y="382" text-anchor="middle" class="st">SAFETY</text>
-    <rect x="380" y="433" width="190" height="132" rx="12" fill="url(#violet)" stroke="#111827" stroke-width="2"/><circle cx="438" cy="482" r="20" fill="#ddd6fe" stroke="#111827" stroke-width="2"/><path d="M428 482l7 7 14-18" fill="none" stroke="#111827" stroke-width="2.5"/><text x="475" y="473" class="st">PREFERENCE</text><text x="475" y="499" class="sm">model affinity</text><text x="475" y="523" class="sm">user or domain fit</text>
-    <rect x="597" y="433" width="217" height="132" rx="12" fill="url(#blue)" stroke="#111827" stroke-width="2"/><path d="M631 519V477M649 519v-27M667 519v-51" stroke="#2563eb" stroke-width="8" stroke-linecap="round"/><text x="695" y="473" class="st">QUALITY</text><text x="695" y="499" class="sm">expected outcome</text><text x="695" y="523" class="sm">per candidate model</text>
+    <rect x="72" y="276" width="332" height="57" rx="11" fill="url(#blue)" stroke="#111827" stroke-width="1.8"/>
+    <circle cx="102" cy="304.5" r="13" fill="#bfdbfe" stroke="#111827" stroke-width="1.8"/>
+    <text x="126" y="300" class="st">CURRENT ROUTER MODELS</text>
+    <text x="126" y="321" font-size="12" fill="#475467">post-train · distill · calibrate</text>
+
+    <rect x="72" y="348" width="332" height="57" rx="11" fill="url(#green)" stroke="#111827" stroke-width="1.8"/>
+    <path d="M89 389l13-27 13 27z" fill="#b9e4ae" stroke="#111827" stroke-width="1.8"/>
+    <text x="126" y="372" class="st">ROUTING-NATIVE SLMs</text>
+    <text x="126" y="393" font-size="12" fill="#475467">new families beyond BERT-only designs</text>
+
+    <rect x="72" y="420" width="332" height="57" rx="11" fill="url(#amber)" stroke="#111827" stroke-width="1.8"/>
+    <path d="M90 437h24v24H90z" fill="#fde68a" stroke="#111827" stroke-width="1.8"/><path d="M96 443h12M96 449h12M96 455h8" stroke="#111827" stroke-width="1.5"/>
+    <text x="126" y="444" class="st">SPECIALIZED SIGNALS</text>
+    <text x="126" y="465" font-size="12" fill="#475467">long context · multimodal · retrieval · agentic</text>
+
+    <rect x="128" y="500" width="220" height="49" rx="10" fill="url(#blue)" stroke="#2563eb" stroke-width="1.8"/>
+    <text x="238" y="530" text-anchor="middle" class="st">DATA + OUTCOMES</text>
+    <rect x="311" y="569" width="98" height="67" rx="10" fill="url(#amber)" stroke="#111827" stroke-width="1.8"/>
+    <text x="360" y="597" text-anchor="middle" class="st">IMPROVE</text>
+    <text x="360" y="619" text-anchor="middle" font-size="12" fill="#475467">train · distill</text>
+    <rect x="128" y="696" width="220" height="49" rx="10" fill="url(#green)" stroke="#111827" stroke-width="1.8"/>
+    <text x="238" y="726" text-anchor="middle" class="st">EVALUATE + CALIBRATE</text>
+    <rect x="67" y="569" width="98" height="67" rx="10" fill="url(#violet)" stroke="#111827" stroke-width="1.8"/>
+    <text x="116" y="596" text-anchor="middle" font-size="15" font-weight="750" fill="#111827">ACTIVATE</text>
+    <text x="116" y="619" text-anchor="middle" font-size="12" fill="#475467">or rollback</text>
+
+    <circle cx="238" cy="612" r="64" fill="#fff" stroke="#2563eb" stroke-width="2.5"/>
+    <path d="M205 590l33-18 33 18-33 18z" fill="#bfdbfe" stroke="#111827" stroke-width="2"/>
+    <path d="M205 590v35l33 19v-36zM271 590v35l-33 19v-36" fill="#8bc1ff" fill-opacity=".7" stroke="#111827" stroke-width="2"/>
+    <text x="238" y="669" text-anchor="middle" class="tiny">VERSIONED ARTIFACT</text>
+
+    <path d="M348 525C392 531 409 548 409 569" class="loop"/>
+    <path d="M360 636C360 673 331 696 300 696" class="loop"/>
+    <path d="M176 721C117 715 67 681 67 635" class="loop"/>
+    <path d="M116 569C116 536 135 516 164 508" class="loop"/>
   </g>
-  <path d="M894 398h48" class="line"/>
 
-  <!-- Runtime -->
-  <g class="s" filter="url(#shadow)"><rect x="944" y="218" width="390" height="360" rx="17" fill="url(#violet)" class="card"/><text x="1139" y="256" text-anchor="middle" class="pt">INFERENCE RUNTIME</text><text x="1139" y="280" text-anchor="middle" class="sm">One typed contract across model engines</text>
-    <rect x="977" y="307" width="324" height="58" rx="10" fill="#fff" stroke="#6d5bd0" stroke-width="2"/><text x="1139" y="331" text-anchor="middle" class="tiny">MODEL CONTRACT</text><text x="1139" y="352" text-anchor="middle" class="b">capabilities · artifact ID · schema</text>
-    <path d="M1139 365v37" class="line"/>
-    <rect x="977" y="404" width="92" height="65" rx="10" fill="#fff" stroke="#111827" stroke-width="1.8"/><text x="1023" y="432" text-anchor="middle" class="st">LOCAL</text><text x="1023" y="453" text-anchor="middle" class="sm">Candle</text>
-    <rect x="1093" y="404" width="92" height="65" rx="10" fill="#fff" stroke="#111827" stroke-width="1.8"/><text x="1139" y="432" text-anchor="middle" class="st">ONNX</text><text x="1139" y="453" text-anchor="middle" class="sm">Runtime</text>
-    <rect x="1209" y="404" width="92" height="65" rx="10" fill="#fff" stroke="#111827" stroke-width="1.8"/><text x="1255" y="432" text-anchor="middle" class="st">REMOTE</text><text x="1255" y="453" text-anchor="middle" class="sm">vLLM · TEI</text>
-    <path d="M1023 469v35h232v-35M1139 469v35" fill="none" stroke="#111827" stroke-width="2"/><path d="M1139 504v24" class="line"/>
-    <text x="1139" y="554" text-anchor="middle" class="sm">Load · warm · diagnose · drain · rollback</text>
+  <!-- Layered runtime architecture -->
+  <g class="s" filter="url(#shadow)">
+    <rect x="465" y="183" width="1163" height="612" rx="18" fill="url(#violet)" class="card"/>
+    <text x="1046.5" y="223" text-anchor="middle" class="pt">TYPED INFERENCE RUNTIME</text>
+    <text x="1046.5" y="247" text-anchor="middle" class="sm">One execution contract separates model intelligence from engine-specific code</text>
+
+    <!-- Request to artifact to signals -->
+    <rect x="500" y="278" width="205" height="157" rx="13" fill="url(#blue)" stroke="#111827" stroke-width="2"/>
+    <text x="602.5" y="310" text-anchor="middle" class="st">REQUEST FEATURES</text>
+    <rect x="532" y="332" width="141" height="49" rx="10" fill="#fff" stroke="#111827" stroke-width="1.8"/>
+    <path d="M548 348h109M548 363h76" stroke="#2563eb" stroke-width="2"/>
+    <text x="602.5" y="408" text-anchor="middle" class="sm">text · metadata · context</text>
+
+    <path d="M705 356h52" class="line"/>
+    <rect x="759" y="264" width="365" height="185" rx="14" fill="#fff" stroke="#111827" stroke-width="2.2"/>
+    <text x="941.5" y="299" text-anchor="middle" class="st">ROUTER MODEL ARTIFACT</text>
+    <text x="941.5" y="322" text-anchor="middle" font-size="12" fill="#475467">immutable identity · capabilities · input/output schema</text>
+    <rect x="789" y="346" width="63" height="31" rx="15" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="820.5" y="367" text-anchor="middle" font-size="13" fill="#475467">intent</text>
+    <rect x="864" y="346" width="88" height="31" rx="15" fill="#dcfce7" stroke="#86d875"/>
+    <text x="908" y="367" text-anchor="middle" font-size="13" fill="#475467">complexity</text>
+    <rect x="964" y="346" width="63" height="31" rx="15" fill="#fef3c7" stroke="#f4c35c"/>
+    <text x="995.5" y="367" text-anchor="middle" font-size="13" fill="#475467">safety</text>
+    <rect x="1039" y="346" width="55" height="31" rx="15" fill="#ede9fe" stroke="#ab9bea"/>
+    <text x="1066.5" y="367" text-anchor="middle" font-size="12" fill="#475467">quality</text>
+    <rect x="836" y="393" width="211" height="34" rx="9" fill="url(#violet)" stroke="#6d5bd0" stroke-width="1.8"/>
+    <text x="941.5" y="416" text-anchor="middle" font-size="11" font-weight="650" fill="#667085">LOAD · WARM · EXECUTE · DRAIN</text>
+
+    <path d="M1124 356h52" class="line"/>
+    <rect x="1178" y="278" width="415" height="157" rx="13" fill="url(#green)" stroke="#111827" stroke-width="2"/>
+    <text x="1385.5" y="310" text-anchor="middle" class="st">TYPED SIGNAL VECTOR</text>
+    <rect x="1210" y="332" width="351" height="73" rx="10" fill="#fff" stroke="#111827" stroke-width="1.8"/>
+    <text x="1229" y="354" font-size="12" fill="#475467">intent</text><rect x="1291" y="344" width="225" height="10" rx="5" fill="#bfdbfe"/>
+    <text x="1229" y="379" font-size="12" fill="#475467">quality</text><rect x="1291" y="369" width="171" height="10" rx="5" fill="#b9e4ae"/>
+    <text x="1385.5" y="425" text-anchor="middle" class="sm">explainable output consumed by MoM recipes</text>
+
+    <!-- Runtime stack -->
+    <rect x="500" y="485" width="1093" height="73" rx="12" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+    <text x="529" y="515" class="st">TYPED MODEL CONTRACT</text>
+    <rect x="793" y="501" width="202" height="40" rx="9" fill="url(#blue)" stroke="#93c5fd"/>
+    <text x="894" y="526" text-anchor="middle" class="sm">artifact identity</text>
+    <rect x="1012" y="501" width="202" height="40" rx="9" fill="url(#green)" stroke="#86d875"/>
+    <text x="1113" y="526" text-anchor="middle" class="sm">capability schema</text>
+    <rect x="1231" y="501" width="331" height="40" rx="9" fill="url(#amber)" stroke="#f4c35c"/>
+    <text x="1396.5" y="526" text-anchor="middle" class="sm">typed input · output · diagnostics</text>
+
+    <rect x="500" y="574" width="1093" height="73" rx="12" fill="#fff" stroke="#388e3c" stroke-width="2"/>
+    <text x="529" y="604" class="st">RUNTIME LIFECYCLE</text>
+    <text x="808" y="615" text-anchor="middle" class="sm">load</text><circle cx="808" cy="594" r="6" fill="#60a5fa"/>
+    <text x="918" y="615" text-anchor="middle" class="sm">warm</text><circle cx="918" cy="594" r="6" fill="#7bc66c"/>
+    <text x="1048" y="615" text-anchor="middle" class="sm">batch</text><circle cx="1048" cy="594" r="6" fill="#f7b84b"/>
+    <text x="1188" y="615" text-anchor="middle" class="sm">diagnose</text><circle cx="1188" cy="594" r="6" fill="#9b8ae6"/>
+    <text x="1338" y="615" text-anchor="middle" class="sm">drain</text><circle cx="1338" cy="594" r="6" fill="#60a5fa"/>
+    <text x="1480" y="615" text-anchor="middle" class="sm">rollback</text><circle cx="1480" cy="594" r="6" fill="#7bc66c"/>
+
+    <rect x="500" y="663" width="1093" height="101" rx="12" fill="#fff" stroke="#6d5bd0" stroke-width="2"/>
+    <text x="529" y="704" class="st">ENGINE ADAPTERS</text>
+    <rect x="734" y="682" width="181" height="61" rx="10" fill="url(#blue)" stroke="#111827" stroke-width="1.8"/>
+    <text x="824.5" y="708" text-anchor="middle" class="st">LOCAL</text><text x="824.5" y="730" text-anchor="middle" font-size="12" fill="#475467">Candle</text>
+    <rect x="934" y="682" width="181" height="61" rx="10" fill="url(#green)" stroke="#111827" stroke-width="1.8"/>
+    <text x="1024.5" y="708" text-anchor="middle" class="st">ONNX</text><text x="1024.5" y="730" text-anchor="middle" font-size="12" fill="#475467">ONNX Runtime</text>
+    <rect x="1134" y="682" width="181" height="61" rx="10" fill="url(#amber)" stroke="#111827" stroke-width="1.8"/>
+    <text x="1224.5" y="708" text-anchor="middle" class="st">REMOTE</text><text x="1224.5" y="730" text-anchor="middle" font-size="12" fill="#475467">vLLM · TEI</text>
+    <rect x="1334" y="682" width="228" height="61" rx="10" fill="url(#violet)" stroke="#111827" stroke-width="1.8"/>
+    <text x="1448" y="708" text-anchor="middle" class="st">ECOSYSTEM</text><text x="1448" y="730" text-anchor="middle" font-size="12" fill="#475467">qualified extensions</text>
   </g>
-  <path d="M1334 398h43" class="line"/>
 
-  <!-- Typed output -->
-  <g class="s" filter="url(#shadow)"><rect x="1379" y="263" width="249" height="270" rx="15" fill="url(#green)" class="card"/><text x="1503.5" y="301" text-anchor="middle" class="pt">ROUTING SIGNALS</text><rect x="1414" y="331" width="179" height="104" rx="11" fill="#fff" stroke="#111827" stroke-width="2"/><text x="1434" y="359" class="sm">intent</text><rect x="1491" y="349" width="80" height="10" rx="5" fill="#bfdbfe"/><text x="1434" y="389" class="sm">complexity</text><rect x="1510" y="379" width="61" height="10" rx="5" fill="#b9e4ae"/><text x="1434" y="419" class="sm">quality</text><rect x="1476" y="409" width="95" height="10" rx="5" fill="#fde68a"/><text x="1503.5" y="474" text-anchor="middle" class="st">Typed + explainable</text><text x="1503.5" y="500" text-anchor="middle" class="sm">Consumed by MoM recipes</text></g>
-
-  <!-- Improvement lifecycle -->
-  <g class="s"><text x="836" y="665" text-anchor="middle" class="pt">ROUTER MODEL LIFECYCLE</text><text x="836" y="690" text-anchor="middle" class="sm">Improve model quality without bypassing evaluation or runtime controls</text>
-    <rect x="112" y="727" width="240" height="95" rx="12" fill="url(#blue)" stroke="#111827" stroke-width="2"/><text x="232" y="763" text-anchor="middle" class="st">DATA + FEEDBACK</text><text x="232" y="790" text-anchor="middle" class="sm">Traces · labels · outcomes</text>
-    <path d="M352 775h48" class="line"/><rect x="402" y="727" width="240" height="95" rx="12" fill="url(#amber)" stroke="#111827" stroke-width="2"/><text x="522" y="763" text-anchor="middle" class="st">IMPROVE</text><text x="522" y="790" text-anchor="middle" class="sm">Train · distill · calibrate</text>
-    <path d="M642 775h48" class="line"/><rect x="692" y="727" width="240" height="95" rx="12" fill="url(#violet)" stroke="#111827" stroke-width="2"/><text x="812" y="763" text-anchor="middle" class="st">VERSIONED ARTIFACT</text><text x="812" y="790" text-anchor="middle" class="sm">Weights · schema · provenance</text>
-    <path d="M932 775h48" class="line"/><rect x="982" y="727" width="240" height="95" rx="12" fill="url(#blue)" stroke="#111827" stroke-width="2"/><text x="1102" y="763" text-anchor="middle" class="st">EVALUATE + GATE</text><text x="1102" y="790" text-anchor="middle" class="sm">Quality · calibration · speed</text>
-    <path d="M1222 775h48" class="line"/><rect x="1272" y="727" width="288" height="95" rx="12" fill="url(#green)" stroke="#111827" stroke-width="2"/><text x="1416" y="763" text-anchor="middle" class="st">ACTIVATE OR ROLLBACK</text><text x="1416" y="790" text-anchor="middle" class="sm">Warm · switch · drain · reverse</text>
-    <path d="M1416 822v42H232v-40" class="loop"/>
+  <g class="s">
+    <rect x="43" y="825" width="1585" height="53" rx="12" fill="#fcfcfd" stroke="#111827" stroke-width="2"/>
+    <text x="238" y="858" text-anchor="middle" class="st">MODEL INTELLIGENCE</text>
+    <text x="511" y="858" class="sm">improves through the flywheel</text>
+    <path d="M736 851h92" class="line"/>
+    <text x="866" y="858" class="st">RUNTIME CONTRACT</text>
+    <text x="1062" y="858" class="sm">keeps execution portable</text>
+    <path d="M1274 851h92" class="line"/>
+    <text x="1404" y="858" class="st">TYPED SIGNALS</text>
+    <text x="1545" y="858" class="sm">guide MoM</text>
   </g>
   <g class="s"><rect x="40" y="900" width="1592" height="1" fill="#e4e7ec"/><text x="48" y="925" class="tiny">OWNS</text><text x="100" y="925" class="sm">Router Model quality · routing-native model families · typed inference runtime · artifact lifecycle</text><text x="1624" y="925" text-anchor="end" class="sm">MoM recipes consume signals · Data Plane carries the live request</text></g>
 </svg>

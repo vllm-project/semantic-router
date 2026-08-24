@@ -95,7 +95,7 @@
     <rect x="333" y="369" width="62" height="28" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
     <text x="364" y="388" text-anchor="middle" class="small">intent</text>
     <rect x="402" y="369" width="87" height="28" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
-    <text x="445.5" y="388" text-anchor="middle" class="small">complexity</text>
+    <text x="445.5" y="388" text-anchor="middle" font-size="13" fill="#475467">complexity</text>
     <rect x="496" y="369" width="49" height="28" rx="14" fill="#dbeafe" stroke="#93c5fd"/>
     <text x="520.5" y="388" text-anchor="middle" class="small">risk</text>
     <text x="333" y="431" class="section-title">Constraints</text>
@@ -190,14 +190,14 @@
     <rect x="559" y="752" width="42" height="48" rx="6" fill="#fff" stroke="#111827" stroke-width="2"/>
     <path d="M570 767h20M570 777h20M570 787h14" stroke="#111827" stroke-width="2"/>
     <text x="619" y="764" class="section-title">CANDIDATE</text>
-    <text x="619" y="790" class="small">Versioned recipe change</text>
+    <text x="619" y="790" class="small">Versioned recipe</text>
 
     <path d="M771 775 H822" class="line"/>
     <rect x="824" y="729" width="238" height="93" rx="12" fill="url(#violet-panel)" stroke="#111827" stroke-width="2"/>
     <path d="M852 796V761l18-11 18 11v35l-18 11z" fill="#ddd6fe" stroke="#111827" stroke-width="2"/>
     <path d="M870 750v57M852 761l18 11 18-11" fill="none" stroke="#111827" stroke-width="1.7"/>
-    <text x="896" y="764" class="section-title">SHADOW / CANARY</text>
-    <text x="906" y="790" class="small">Compare before exposure</text>
+    <text x="900" y="764" font-size="15" font-weight="760" fill="#111827">SHADOW / CANARY</text>
+    <text x="900" y="790" class="small">Compare before traffic</text>
 
     <path d="M1062 775 H1113" class="line"/>
     <rect x="1115" y="729" width="315" height="93" rx="12" fill="url(#green-panel)" stroke="#111827" stroke-width="2"/>
