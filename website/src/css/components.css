@@ -1,13 +1,7 @@
 /*
- * Shared UI primitives.
- *
- * Everything a reader actually looks at on a content page — code blocks,
- * admonitions, tables, quotes, inline code, links, focus rings — styled once
- * here so docs, blog, research and community get the same components instead
- * of each re-styling Infima's defaults locally.
- *
- * All colour comes from `--site-*`, so every rule below works in light and
- * dark without a `[data-theme]` branch.
+ * Shared UI primitives, styled once so docs, blog, research and community
+ * stop re-styling Infima's defaults locally. All colour comes from --site-*,
+ * so every rule works in both themes without a [data-theme] branch.
  */
 
 /* ------------------------------------------------------------------ *
@@ -48,10 +42,8 @@
 }
 
 /* ------------------------------------------------------------------ *
- * Prose links
- *
- * Underlined in body copy so they are distinguishable without relying on
- * colour alone, but never in navigation, cards or headings.
+ * Prose links — underlined in body copy so colour is not the only cue,
+ * but never in navigation, cards or headings.
  * ------------------------------------------------------------------ */
 .theme-doc-markdown a:not(.card):not(.button):not([class*='anchor']),
 .site-prose a:not(.card):not(.button) {
@@ -85,12 +77,8 @@
 /* ------------------------------------------------------------------ *
  * Inline code
  * ------------------------------------------------------------------ */
-/*
- * Same ground as a code block, so a token reads identically whether it sits in
- * a sentence or a fence. docs.css paints inline code with --site-code-bg too,
- * so naming the token here rather than --site-surface-alt is what keeps docs
- * and blog showing the same chip. The border does the separating.
- */
+/* Same ground as a code block, and the same token docs.css uses, so a chip
+ * looks identical in a sentence, in a fence, and across surfaces. */
 :not(pre) > code {
   padding: 0.15em 0.4em;
   border: 1px solid var(--site-border);
@@ -99,12 +87,8 @@
   color: var(--site-text-strong);
   font-size: 0.875em;
   font-weight: var(--site-font-weight-normal);
-  /*
-   * Not `nowrap`: a long token — a config key, a flag, an image ref — would
-   * refuse to break and push its container sideways, which is most visible
-   * in a narrow table cell or a 640px viewport. Breaking only when the token
-   * cannot fit on a line of its own leaves short tokens intact.
-   */
+  /* Not nowrap: a long token would refuse to break and push its container
+   * sideways in a narrow cell or at 640px. */
   overflow-wrap: break-word;
   vertical-align: baseline;
 }
@@ -126,24 +110,9 @@ kbd {
 }
 
 /* ------------------------------------------------------------------ *
- * Code blocks
- *
- * Docusaurus nests these as
- *   div.codeBlockContainer > div.codeBlockContent > pre.prism-code
- *     > code.codeBlockLines
- * with the copy and word-wrap controls absolutely positioned in
- * div.buttonGroup.
- *
- * The card goes on the container. The inset does NOT: it is set through
- * --ifm-pre-padding so Docusaurus's own `.codeBlockLines` rule applies it to
- * the <code>, which is the element that scrolls. Padding the <pre> instead
- * would be scrolled away the moment a long line moves sideways, and setting
- * it on the <code> by hand would mean re-declaring the `float` and
- * `min-width: 100%` that rule relies on to keep the background full-width.
- *
- * docs.css styles this same surface and loads later, so the border, radius
- * and background below are kept equivalent to its values rather than
- * fighting them. Phase 2 deletes the duplicate.
+ * Code blocks — card on the container, inset via --ifm-pre-padding so
+ * Docusaurus pads the <code> that scrolls rather than the <pre> that doesn't.
+ * Values match docs.css, which styles the same surface and loads later.
  * ------------------------------------------------------------------ */
 div[class*='codeBlockContainer'] {
   --ifm-pre-padding: var(--space-4);
@@ -227,10 +196,8 @@ pre:not([class*='codeBlock']) {
 }
 
 /* ------------------------------------------------------------------ *
- * Admonitions
- *
- * Flat tinted cards with a coloured left rail, rather than Infima's heavy
- * saturated blocks.
+ * Admonitions — flat tinted cards with a coloured left rail, rather than
+ * Infima's heavy saturated blocks.
  * ------------------------------------------------------------------ */
 .theme-admonition {
   --admonition-tint: var(--site-muted);
@@ -301,15 +268,9 @@ html[data-theme='dark'] .theme-admonition-danger {
 }
 
 /* ------------------------------------------------------------------ *
- * Tables
- *
- * A wide table scrolls inside its own card and never pushes the page
- * sideways. Infima ships `table { display: block; overflow: auto }` for
- * exactly that reason, so the card treatment goes onto the same block box
- * rather than replacing it with `display: table` — which would hand the
- * table's min-content width straight to the page and let it overrun the
- * column. `overflow-y: hidden` keeps a non-visible overflow on both axes so
- * the border-radius still clips the header row's corners.
+ * Tables — keep Infima's `display: block` so a wide table scrolls itself
+ * instead of overrunning the column; `display: table` would hand its
+ * min-content width to the page. overflow-y clips to the radius.
  * ------------------------------------------------------------------ */
 .theme-doc-markdown table,
 .site-prose table {
@@ -349,12 +310,8 @@ html[data-theme='dark'] .theme-admonition-danger {
   vertical-align: top;
 }
 
-/*
- * Headers wrap rather than forcing the table wide, and a long unbroken token
- * in a cell (a flag, a path, a URL) breaks instead of setting the column's
- * min-content width. Together these keep the common table inside its column
- * so the scroll container above is a fallback, not the everyday case.
- */
+/* Headers wrap and long tokens break, so min-content stays small and the
+ * scroll container above is a fallback rather than the everyday case. */
 .theme-doc-markdown table th,
 .theme-doc-markdown table td,
 .site-prose table th,

@@ -38,12 +38,8 @@
   --site-accent-violet: #a78bfa;
   --site-glow-blue-soft: rgba(48, 162, 255, 0.14);
   --site-glow-violet-soft: rgba(124, 58, 237, 0.16);
-  /*
-   * Neutral ladder, darkest rung first. --site-bg and --site-surface were both
-   * #ffffff, so a card was indistinguishable from the page behind it and only
-   * its border marked the edge. The page now sits a step below the card, and
-   * every rung is distinct: bg-alt < surface-alt < bg < surface < raised.
-   */
+  /* Neutral ladder: bg-alt < surface-alt < bg < surface < raised.
+   * bg and surface were both #ffffff, so cards had no surface to sit on. */
   --site-bg: #f6f8fb;
   --site-bg-alt: #eef2f7;
   --site-surface: #fdfdfe;
@@ -53,13 +49,8 @@
   --site-surface-glass: rgba(255, 255, 255, 0.76);
   --site-text: #111111;
   --site-text-strong: #050505;
-  /*
-   * --site-muted used to be #677487 (4.75:1 on white) and served both navbar
-   * links and secondary body text, so the interactive case could never be
-   * strengthened without over-darkening 60-odd blocks of running text. Split:
-   * --site-muted is secondary text only, --site-interactive-rest is the
-   * resting state of a control and clears 7:1 against bg, surface and card.
-   */
+  /* Split from one #677487 (4.75:1) that served both roles: --site-muted is
+   * secondary text, --site-interactive-rest is a control at rest at 7:1. */
   --site-muted: #556070;
   --site-interactive-rest: #485261;
   --site-muted-bright: #384250;
@@ -71,17 +62,8 @@
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  /*
-   * White, and the border is what defines the surface. This was #f6f2ea, the
-   * one warm value in the palette; it read as a tint against the old pure-white
-   * page but turned muddy once the page became a cool off-white.
-   *
-   * White is not just neutral here, it is the most legible ground available:
-   * the `github` Prism theme is designed for it, and every one of its tones —
-   * string #e3116c worst at 4.60:1 — scores higher on white than on any tint
-   * we could pick. Darkening the surface to make it "read" as code would have
-   * cost syntax contrast on every line to buy one shade of background.
-   */
+  /* White, with the border defining the surface. Was #f6f2ea, the one warm
+   * value here; the github Prism theme scores best on white anyway. */
   --site-code-bg: #ffffff;
   --site-sidebar-bg: rgba(255, 253, 248, 0.9);
   --site-toc-bg: rgba(255, 253, 248, 0.92);
@@ -104,28 +86,16 @@
   --tech-primary-blue: var(--site-accent-strong);
   --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
-  /*
-   * Page geometry — every shell (navbar, footer, docs, blog, research,
-   * community, homepage) derives its width from these four values, so page
-   * edges align by construction instead of by per-surface tuning.
-   *
-   * --page-max and --measure are separate decisions on purpose: the shell may
-   * grow with the viewport while running text stays at a readable line length.
-   */
+  /* Page geometry. --page-max and --measure are separate on purpose: the shell
+   * grows with the viewport while running text stays at a readable length. */
   --page-max: 1360px;
   --gutter: clamp(1rem, 4vw, 2.5rem);
   --measure: 72ch;
   --rail: 17rem;
   --toc: 15rem;
 
-  /*
-   * The four tokens above are deliberately unconsumed here — Phase 2 rebuilds
-   * the shells onto them. The values below stay where main had them so this
-   * phase changes no layout: repointing them now would move the navbar height,
-   * the site container and the /search measure (via search.css) ahead of the
-   * layout that expects the new numbers. Phase 2 repoints these to
-   * --page-max / --measure in the same change that lands the new shells.
-   */
+  /* Held at main's values so this phase moves no layout. Phase 2 repoints them
+   * to --page-max / --measure alongside the shells that expect those numbers. */
   --site-grid-max: 1400px;
   --site-content-max: 1200px;
   --site-doc-max: 840px;
@@ -193,12 +163,8 @@
   --ifm-toc-border-color: var(--site-border);
   --ifm-code-font-size: 0.95rem;
   --ifm-code-background: var(--site-code-bg);
-  /*
-   * Inter and JetBrains Mono are loaded in docusaurus.config.ts `headTags`.
-   * They were previously downloaded but never named here, so every page
-   * rendered in Arial — and the intermediate font-weights in this codebase
-   * (420…690) silently snapped to Arial's only two, 400 and 700.
-   */
+  /* Loaded in docusaurus.config.ts headTags. Previously downloaded but never
+   * named here, so every page rendered in Arial. */
   --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
   --ifm-heading-font-family: var(--ifm-font-family-base);

@@ -1,14 +1,7 @@
 /*
- * Site-wide type.
- *
- * The families are loaded from `headTags` in docusaurus.config.ts rather than
- * an `@import` here: an `@import` at the top of the bundled stylesheet blocks
- * rendering until the font CSS *and* the font files resolve, serially.
- *
- * These rules were previously scoped to `html[data-route-kind='home']`, so the
- * homepage was the only surface with a type scale at all — docs, blog,
- * research and community inherited raw Infima defaults. They now apply
- * everywhere, and the homepage keeps only its own display sizes.
+ * Site-wide type. Families load from headTags in docusaurus.config.ts, not an
+ * @import here, which would block rendering serially. These rules were scoped
+ * to the homepage, leaving every other surface on raw Infima defaults.
  */
 html {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
@@ -57,10 +50,8 @@ p {
   max-width: var(--measure);
 }
 
-/*
- * The homepage hero is the one place that outgrows the shared scale; it keeps
- * the display step while inheriting weight, tracking and wrapping from above.
- */
+/* The hero outgrows the shared scale; it keeps the display step and inherits
+ * weight, tracking and wrapping from above. */
 html[data-route-kind='home'] h1 {
   font-size: var(--site-text-h1);
 }
