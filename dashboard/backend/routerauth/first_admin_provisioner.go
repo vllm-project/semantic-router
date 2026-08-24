@@ -492,11 +492,11 @@ func finalizeBootstrapToken(path string, observed *bootstrapTokenObservation) er
 		return errFirstAdminProvisioning
 	}
 	claimPath := filepath.Join(claimDirectory, "token")
-	if err := os.Rename(path, claimPath); err != nil {
+	if renameErr := os.Rename(path, claimPath); renameErr != nil {
 		if removeErr := os.Remove(claimDirectory); removeErr != nil {
 			return errFirstAdminProvisioning
 		}
-		if errors.Is(err, os.ErrNotExist) {
+		if errors.Is(renameErr, os.ErrNotExist) {
 			// The file disappeared after the observation above. The verified
 			// provisioning result makes that concurrent finalization idempotent.
 			return syncDirectory(directoryPath)

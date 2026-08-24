@@ -274,12 +274,12 @@ func TestFinalizeBootstrapTokenRejectsReplacementAfterFileIdentityReuse(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(path); err != nil {
-		t.Fatal(err)
+	if removeErr := os.Remove(path); removeErr != nil {
+		t.Fatal(removeErr)
 	}
 	replacement := []byte("replacement-bootstrap-token-at-least-32-bytes")
-	if err := os.WriteFile(path, replacement, 0o600); err != nil {
-		t.Fatal(err)
+	if writeErr := os.WriteFile(path, replacement, 0o600); writeErr != nil {
+		t.Fatal(writeErr)
 	}
 	replacementInfo, err := os.Lstat(path)
 	if err != nil {
