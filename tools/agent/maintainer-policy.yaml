@@ -28,12 +28,14 @@ labels:
     merge_ready: pr/merge-ready
     close_candidate: pr/close-candidate
   workgroups:
-    - wg/mom-routing-intelligence
-    - wg/router-models-runtime-ecosystem
-    - wg/data-plane-deployment
-    - wg/platform-operations
-    - wg/quality-release
-    - wg/dev-community
+    - wg/mom-routing
+    - wg/router-models-inference-runtime
+    - wg/data-plane-networking
+    - wg/enterprise-environment
+    - wg/agentic-context
+    - wg/developer-experience-ecosystem
+    - wg/evaluation-quality
+  maintainer_owner: owner/maintainers
 
 release_tracks:
   contracts:
@@ -47,10 +49,10 @@ release_tracks:
     description: Native/runtime parity and performance validation.
   research-to-product:
     label: track/research-to-product
-    description: Research work that directly improves product behavior.
+    description: Research work graduating into supported open-source behavior.
   hardening:
     label: track/hardening
-    description: Dashboard, eval, RAG, memory, protocol, and product hardening.
+    description: Dashboard, eval, RAG, memory, protocol, and runtime hardening.
   security:
     label: track/security
     description: Security, RBAC, observability, and E2E closure.

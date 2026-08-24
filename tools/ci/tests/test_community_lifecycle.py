@@ -28,16 +28,16 @@ Make routing better.
 
 ### Proposed Workgroup
 
-MoM & Routing Intelligence
+MoM & Routing
 """
         self.assertEqual(
             community_lifecycle.proposed_workgroup(body),
-            "wg/mom-routing-intelligence",
+            "wg/mom-routing",
         )
 
     def test_new_issue_enters_acceptance_with_proposed_owner(self) -> None:
         issue = {
-            "body": "### Proposed Workgroup\n\nQuality & Release\n",
+            "body": "### Proposed Workgroup\n\nEvaluation & Quality\n",
             "labels": labels("bug"),
             "assignees": [],
             "milestone": None,
@@ -50,7 +50,7 @@ MoM & Routing Intelligence
         )
         self.assertEqual(
             plan.add_labels,
-            {"needs-acceptance", "wg/quality-release"},
+            {"needs-acceptance", "wg/evaluation-quality"},
         )
 
     def test_unaccepted_issue_cannot_be_assigned_or_prioritized(self) -> None:
@@ -92,7 +92,7 @@ MoM & Routing Intelligence
                 "ready-for-dev",
                 "help wanted",
                 "stale",
-                "wg/data-plane-deployment",
+                "wg/data-plane-networking",
             ),
             "assignees": [{"login": "contributor"}],
             "milestone": None,
@@ -114,7 +114,7 @@ MoM & Routing Intelligence
             "labels": labels(
                 "accepted",
                 "in-progress",
-                "wg/data-plane-deployment",
+                "wg/data-plane-networking",
             ),
             "assignees": [],
             "milestone": None,
@@ -147,7 +147,7 @@ MoM & Routing Intelligence
     def test_protected_label_from_non_maintainer_is_removed(self) -> None:
         issue = {
             "body": "",
-            "labels": labels("accepted", "wg/quality-release"),
+            "labels": labels("accepted", "wg/evaluation-quality"),
             "assignees": [],
             "milestone": None,
         }
@@ -163,7 +163,7 @@ MoM & Routing Intelligence
     def test_protected_label_removed_by_non_maintainer_is_restored(self) -> None:
         issue = {
             "body": "",
-            "labels": labels("accepted", "wg/quality-release"),
+            "labels": labels("accepted", "wg/evaluation-quality"),
             "assignees": [],
             "milestone": None,
         }
@@ -174,6 +174,105 @@ MoM & Routing Intelligence
             actor_can_manage=False,
         )
         self.assertIn("priority/P1", plan.add_labels)
+
+    def test_write_collaborator_can_accept_one_owned_issue(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Feature] Improve context routing",
+                "labels": labels(
+                    "needs-acceptance",
+                    "wg/agentic-context",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "wg/agentic-context")
+
+    def test_accept_command_rejects_actor_without_write_permission(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Feature] Improve context routing",
+                "labels": labels("wg/agentic-context"),
+            },
+            actor_can_manage=False,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("write", evaluation.error or "")
+
+    def test_accept_command_requires_exactly_one_workgroup(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Feature] Improve context routing",
+                "labels": labels(
+                    "wg/agentic-context",
+                    "wg/mom-routing",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("exactly one", evaluation.error or "")
+
+    def test_write_collaborator_can_accept_maintainer_owned_governance(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Governance] Maintain the public roadmap",
+                "labels": labels(
+                    "needs-acceptance",
+                    "owner/maintainers",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "owner/maintainers")
+
+    def test_accept_command_rejects_workgroup_plus_maintainer_owner(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Governance] Maintain the public roadmap",
+                "labels": labels(
+                    "wg/evaluation-quality",
+                    "owner/maintainers",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("exactly one", evaluation.error or "")
+
+    def test_title_format_accepts_one_open_category(self) -> None:
+        for title in (
+            "[Feature] Add standalone serving",
+            "[CI/Build] Validate community titles",
+            "[v0.5] Publish model cards",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNone(community_lifecycle.title_format_error(title))
+
+    def test_title_format_rejects_missing_or_stacked_categories(self) -> None:
+        for title in (
+            "feature: add standalone serving",
+            "Feature: add standalone serving",
+            "[Router][Docs] Add guidance",
+            "[Router] [Docs] Add guidance",
+            "[] Add guidance",
+            "[Bug]",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNotNone(community_lifecycle.title_format_error(title))
+
+    def test_accept_command_requires_normalized_title(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "feature: improve context routing",
+                "labels": labels("wg/agentic-context"),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("bracketed category", evaluation.error or "")
 
     def test_pr_requires_an_accepted_linked_issue(self) -> None:
         pull_request = {"draft": False, "user": {"type": "User"}}
@@ -191,7 +290,7 @@ MoM & Routing Intelligence
                 "labels": labels(
                     "accepted",
                     "release-blocker",
-                    "wg/platform-operations",
+                    "wg/enterprise-environment",
                 ),
                 "milestone": {"number": 7},
             }
@@ -199,15 +298,28 @@ MoM & Routing Intelligence
         evaluation = community_lifecycle.evaluate_pull_request(pull_request, linked)
         self.assertTrue(evaluation.valid)
         self.assertEqual(evaluation.state_label, "pr/needs-review")
-        self.assertEqual(evaluation.owner_label, "wg/platform-operations")
+        self.assertEqual(evaluation.owner_label, "wg/enterprise-environment")
         self.assertEqual(evaluation.milestone_number, 7)
         self.assertTrue(evaluation.release_blocker)
+
+    def test_pr_can_inherit_maintainer_governance_owner(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": False, "user": {"type": "User"}},
+            [
+                {
+                    "labels": labels("accepted", "owner/maintainers"),
+                    "milestone": None,
+                }
+            ],
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "owner/maintainers")
 
     def test_pr_review_and_runtime_signals_select_one_action_state(self) -> None:
         pull_request = {"draft": False, "user": {"type": "User"}}
         linked = [
             {
-                "labels": labels("accepted", "wg/platform-operations"),
+                "labels": labels("accepted", "wg/enterprise-environment"),
                 "milestone": None,
             }
         ]
@@ -215,6 +327,14 @@ MoM & Routing Intelligence
             ({"review_decision": "CHANGES_REQUESTED"}, "pr/needs-author"),
             ({"merge_state": "BEHIND"}, "pr/needs-rebase"),
             ({"checks_state": "FAILURE"}, "pr/blocked"),
+            (
+                {
+                    "review_decision": "APPROVED",
+                    "checks_state": "PENDING",
+                    "merge_state": "CLEAN",
+                },
+                "pr/blocked",
+            ),
             (
                 {
                     "review_decision": "APPROVED",
@@ -240,7 +360,7 @@ MoM & Routing Intelligence
             },
             [
                 {
-                    "labels": labels("accepted", "wg/quality-release"),
+                    "labels": labels("accepted", "wg/evaluation-quality"),
                     "milestone": None,
                 }
             ],
@@ -258,17 +378,17 @@ MoM & Routing Intelligence
         )
         self.assertTrue(evaluation.valid)
         self.assertEqual(evaluation.state_label, "pr/needs-rebase")
-        self.assertEqual(evaluation.owner_label, "wg/quality-release")
+        self.assertEqual(evaluation.owner_label, "wg/evaluation-quality")
 
     def test_pr_rejects_multiple_accepted_workgroup_owners(self) -> None:
         pull_request = {"draft": False, "user": {"type": "User"}}
         linked = [
             {
-                "labels": labels("accepted", "wg/platform-operations"),
+                "labels": labels("accepted", "wg/enterprise-environment"),
                 "milestone": None,
             },
             {
-                "labels": labels("accepted", "wg/quality-release"),
+                "labels": labels("accepted", "wg/evaluation-quality"),
                 "milestone": None,
             },
         ]
@@ -290,14 +410,14 @@ MoM & Routing Intelligence
                     "labels": labels(
                         "accepted",
                         "release-blocker",
-                        "wg/quality-release",
+                        "wg/evaluation-quality",
                     ),
                     "milestone": {"number": 7},
                 }
             ],
         )
         self.assertEqual(evaluation.state_label, "pr/needs-author")
-        self.assertEqual(evaluation.owner_label, "wg/quality-release")
+        self.assertEqual(evaluation.owner_label, "wg/evaluation-quality")
         self.assertEqual(evaluation.milestone_number, 7)
         self.assertTrue(evaluation.release_blocker)
 
@@ -339,6 +459,10 @@ MoM & Routing Intelligence
             options = set(workgroup_field["attributes"]["options"])
             options.discard("Unsure / Maintainer triage")
             self.assertEqual(options, set(community_lifecycle.WORKGROUP_OPTIONS))
+        self.assertEqual(
+            policy["labels"]["maintainer_owner"],
+            community_lifecycle.MAINTAINER_OWNER,
+        )
 
     def test_policy_matches_executable_lifecycle_labels(self) -> None:
         policy = yaml.safe_load(
