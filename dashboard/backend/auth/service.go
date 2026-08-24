@@ -23,8 +23,16 @@ type Service struct {
 
 	// allowOpenBootstrap gates the public web-form bootstrap endpoint (off by default).
 	allowOpenBootstrap bool
-	// setupMode enables bootstrap during dashboard-first local install (trusted phase).
-	setupMode bool
+	// setupModeFn reports whether first-run setup mode is currently active.
+	//
+	// A function rather than a bool because setup mode ends when activation
+	// rewrites the router config, and the dashboard does not restart itself at
+	// that point. A stored bool would keep the unauthenticated bootstrap
+	// endpoint armed until the next restart. See #2795.
+	//
+	// Installed once during route setup, before the server serves, so it needs
+	// no lock. The resolver behind it is goroutine-safe.
+	setupModeFn func() bool
 	// bootstrapMu serializes the check-then-create in BootstrapRegister so that two
 	// concurrent requests cannot both pass the "no users yet" check and each create an
 	// admin. The dashboard runs single-replica (enforced by the chart's replicaCount
@@ -67,11 +75,25 @@ func (s *Service) AddAuditLog(ctx context.Context, entry AuditLog) error {
 // SetAllowOpenBootstrap toggles the public web-form bootstrap endpoint.
 func (s *Service) SetAllowOpenBootstrap(v bool) { s.allowOpenBootstrap = v }
 
-// SetSetupMode toggles dashboard-first setup mode for trusted first-run bootstrap.
-func (s *Service) SetSetupMode(v bool) { s.setupMode = v }
+// SetSetupModeFunc installs the live setup-mode source. Pass the resolver's
+// Active method; the auth service must not read the config itself.
+func (s *Service) SetSetupModeFunc(fn func() bool) { s.setupModeFn = fn }
+
+// SetSetupMode pins setup mode to a fixed value. Retained for tests and for
+// callers with no resolver. Production wiring uses SetSetupModeFunc.
+func (s *Service) SetSetupMode(v bool) { s.setupModeFn = func() bool { return v } }
 
 // OpenBootstrapEnabled reports whether the public web-form bootstrap endpoint is enabled.
-func (s *Service) OpenBootstrapEnabled() bool { return s.allowOpenBootstrap || s.setupMode }
+//
+// allowOpenBootstrap is checked first so an operator who enabled it does not pay
+// a config stat on every unauthenticated request.
+func (s *Service) OpenBootstrapEnabled() bool {
+	if s.allowOpenBootstrap {
+		return true
+	}
+	// Fail closed. NewService installs no source, so an unwired Service stays shut.
+	return s.setupModeFn != nil && s.setupModeFn()
+}
 
 // BootstrapRegister atomically creates the first admin. The "no users yet" check and
 // the create run under bootstrapMu, so two concurrent requests cannot each create an

@@ -46,7 +46,40 @@ def test_runtime_config_lock_is_private_non_inheritable_and_reusable(
         stack_name="audit",
         timeout_seconds=0,
     ):
-        pass
+        lock_path = tmp_path / ".vllm-sr" / "recipe-store" / "audit" / LOCK_FILENAME
+        lock_path.chmod(0o660)
+
+    with acquire_runtime_config_lock(
+        runtime_config_path=runtime_config,
+        state_root_dir=tmp_path,
+        stack_name="audit",
+        timeout_seconds=0,
+    ):
+        assert stat.S_IMODE(lock_path.stat().st_mode) == 0o660
+
+
+def test_runtime_config_lock_repairs_parent_traversal_without_exposing_stack(
+    tmp_path: Path,
+):
+    runtime_dir = tmp_path / ".vllm-sr"
+    store_parent = runtime_dir / "recipe-store"
+    store_parent.mkdir(parents=True)
+    runtime_dir.chmod(0o700)
+    store_parent.chmod(0o700)
+
+    with acquire_runtime_config_lock(
+        runtime_config_path=runtime_dir / "runtime-config.yaml",
+        state_root_dir=tmp_path,
+        stack_name="audit",
+    ) as lock:
+        runtime_mode = stat.S_IMODE(runtime_dir.stat().st_mode)
+        parent_mode = stat.S_IMODE(store_parent.stat().st_mode)
+        stack_mode = stat.S_IMODE(lock.store_dir.stat().st_mode)
+
+    assert runtime_mode == 0o700
+    assert parent_mode == 0o711
+    assert stack_mode == 0o700
+    assert parent_mode & stat.S_IRWXO == stat.S_IXOTH
 
 
 def test_runtime_config_lock_rejects_contention_and_token_mismatch(tmp_path: Path):
@@ -167,6 +200,22 @@ def test_runtime_config_lock_rejects_symlinked_or_linked_lock_file(tmp_path: Pat
     linked = tmp_path / "linked-lock"
     os.link(lock_path, linked)
     with pytest.raises(RuntimeConfigLockError, match="private regular file"):
+        acquire_runtime_config_lock(
+            runtime_config_path=runtime_dir / "runtime-config.yaml",
+            state_root_dir=tmp_path,
+            stack_name="audit",
+        )
+
+
+def test_runtime_config_lock_rejects_access_for_other_users(tmp_path: Path):
+    runtime_dir = tmp_path / ".vllm-sr"
+    store_dir = runtime_dir / "recipe-store" / "audit"
+    store_dir.mkdir(parents=True)
+    lock_path = store_dir / LOCK_FILENAME
+    lock_path.write_text("", encoding="utf-8")
+    lock_path.chmod(0o606)
+
+    with pytest.raises(RuntimeConfigLockError, match="other users"):
         acquire_runtime_config_lock(
             runtime_config_path=runtime_dir / "runtime-config.yaml",
             state_root_dir=tmp_path,

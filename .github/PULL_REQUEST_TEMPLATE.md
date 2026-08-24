@@ -3,10 +3,11 @@ Describe the change and keep commands and results specific to this PR.
 
 Closes #xxxx
 <!-- For split PRs that should not auto-close the issue on merge, use: Related #xxxx -->
+<!-- The linked issue must be accepted and have exactly one recognized owner. -->
 
 ## Purpose
 
-<!-- What changes, why is it needed, and which modules are affected? -->
+<!-- What changes, why is it needed, which modules are affected, and which accepted issue/Workgroup owns it? -->
 
 ## Test Plan
 
@@ -20,8 +21,9 @@ Closes #xxxx
 <details>
 <summary>Semantic Router PR Checklist</summary>
 
-- [ ] PR title uses module-aligned prefixes such as `[Router]`, `[CLI]`, `[Dashboard]`, `[Operator]`, `[Fleet-Sim]`, `[Bindings]`, `[Training]`, `[E2E]`, `[Docs]`, or `[CI/Build]`
-- [ ] If the PR spans multiple modules, the title includes all relevant prefixes
+- [ ] PR title begins with exactly one bracketed category, such as `[Feature]`, `[Bug]`, `[Docs]`, `[Test]`, `[Research]`, `[Community]`, or `[CI/Build]`
+- [ ] The title does not stack prefixes such as `[Router][Docs]`; affected modules belong in labels and the PR body
+- [ ] The PR links an `accepted` issue with exactly one owner: one `wg/*` label for project work or `owner/maintainers` for repository governance
 - [ ] Commits in this PR are signed off with `git commit -s`
 - [ ] The Purpose, Test Plan, and Test Result sections reflect the actual scope, commands, and blockers for this change
 

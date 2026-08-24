@@ -2,14 +2,7 @@
 
 import os
 import subprocess
-from pathlib import Path
 
-from cli.commands.runtime_paths import (
-    _container_readonly_source_config_path,
-    _container_runtime_config_path,
-    _runtime_config_output_path,
-    materialize_runtime_config,
-)
 from cli.commands.runtime_support import (
     RECIPE_ENV_ALLOWLIST_ENV,
     sensitive_env_names,
@@ -31,7 +24,6 @@ from cli.container_log_spool import (
     LOG_SPOOL_READER_DIR,
     LOG_SPOOL_ROOT_ENV,
     bounded_log_spool_entrypoint,
-    prepare_runtime_log_spool,
 )
 from cli.container_management_listener import _managed_management_listener
 from cli.container_openclaw_support import configure_openclaw_support
@@ -52,10 +44,20 @@ from cli.container_services import (
     container_status,
     container_stop_container,
 )
+from cli.container_start_paths import (
+    _active_recipe_mount_specs,
+    _prepare_runtime_paths,
+    _runtime_mount_specs,
+)
 from cli.parser import parse_user_config
-from cli.recipe_directory import resolve_active_recipe_directory
 from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
+from cli.storage_secrets import (
+    STORAGE_SECRET_ENV_NAMES,
+    load_storage_secrets,
+    storage_secret_env,
+    storage_state_path,
+)
 from cli.utils import get_logger
 
 log = get_logger(__name__)
@@ -102,6 +104,7 @@ def container_start_vllm_sr(
         runtime_container_config=runtime_container_config,
         recipe_store_dir=runtime_paths["container_recipe_store_dir"],
     )
+    storage_secret_values = _resolve_storage_secret_env(config_dir, stack_layout)
     _render_split_envoy_config(
         runtime_paths["effective_config_path"],
         runtime_paths["envoy_config_path"],
@@ -124,6 +127,7 @@ def container_start_vllm_sr(
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
+        storage_secret_names=tuple(storage_secret_values),
     )
 
     log.info(f"Starting vLLM Semantic Router runtime with {runtime}...")
@@ -135,7 +139,13 @@ def container_start_vllm_sr(
         log.info(f"Starting {service_name} container: {container_name}")
         log.debug(f"Container command: {' '.join(cmd)}")
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+                env=_service_child_env(service_name, storage_secret_values),
+            )
         except subprocess.CalledProcessError as exc:
             if exc.stdout:
                 stdout_chunks.append(exc.stdout)
@@ -150,6 +160,44 @@ def container_start_vllm_sr(
             stderr_chunks.append(result.stderr)
 
     return (0, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
+
+
+def _resolve_storage_secret_env(
+    state_root_dir: str, stack_layout: RuntimeStackLayout
+) -> dict[str, str]:
+    """Return this stack's storage credentials, for one child process only.
+
+    No credential state means this stack provisions no managed storage, so
+    there is nothing to hand Router. An unreadable state is a different thing
+    and is left to raise: continuing would start Router with no credential and
+    turn a damaged state file into an unexplained authentication failure.
+    """
+
+    path = storage_state_path(state_root_dir, stack_layout=stack_layout)
+    if not os.path.lexists(path):
+        log.debug(f"No storage credential state for this stack: {path}")
+        return {}
+    return storage_secret_env(
+        load_storage_secrets(state_root_dir, stack_layout=stack_layout)
+    )
+
+
+def _service_child_env(
+    service_name: str, storage_secret_values: dict[str, str]
+) -> dict[str, str] | None:
+    """Hand the storage credentials to the Router's ``run`` invocation alone.
+
+    The values travel in this one child's environment, paired with the
+    inheriting ``-e NAME`` flag, so they never appear in a command line. They
+    are never assigned into ``os.environ``: that would expose them to every
+    other process the CLI spawns, including ``docker exec`` and OpenClaw
+    workloads. ``None`` means "inherit", which is what every other service
+    gets.
+    """
+
+    if service_name != "router" or not storage_secret_values:
+        return None
+    return {**os.environ, **storage_secret_values}
 
 
 def _build_common_runtime_env(
@@ -200,6 +248,7 @@ def _resolve_container_specs(
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
+    storage_secret_names: tuple[str, ...] = (),
 ):
     runtime_images = get_runtime_images(
         image=image,
@@ -223,6 +272,7 @@ def _resolve_container_specs(
         runtime_paths=runtime_paths,
         openclaw_network_name=openclaw_network_name,
         stack_layout=stack_layout,
+        storage_secret_names=storage_secret_names,
     )
 
 
@@ -240,6 +290,7 @@ def _runtime_container_specs(
     runtime_paths: dict[str, str],
     openclaw_network_name: str | None,
     stack_layout: RuntimeStackLayout,
+    storage_secret_names: tuple[str, ...] = (),
 ):
     listener_port = _primary_listener_port(listeners)
     management_listener = _managed_management_listener(
@@ -268,6 +319,7 @@ def _runtime_container_specs(
         stack_layout=stack_layout,
         inherited_sensitive_env=inherited_sensitive_env,
         management_listener=management_listener,
+        storage_secret_names=storage_secret_names,
     )
     envoy_cmd = _build_envoy_runtime_command(
         runtime=runtime,
@@ -321,8 +373,16 @@ def _build_router_runtime_command(
     stack_layout: RuntimeStackLayout,
     inherited_sensitive_env: set[str],
     management_listener: dict[str, int | str],
+    storage_secret_names: tuple[str, ...] = (),
 ):
     router_env = router_runtime_env(common_env, normalized_platform)
+    # Names only. Each one is rendered as an inheriting `-e NAME` flag, and the
+    # value reaches Docker through the Router child process environment. They
+    # stay out of `common_env` on purpose: `_build_dashboard_runtime_env()`
+    # copies that mapping, which would hand two unused credentials to the one
+    # container holding the Docker socket.
+    for name in storage_secret_names:
+        router_env.setdefault(name, "")
     service_entrypoint, service_args = bounded_log_spool_entrypoint(
         "/app/start-router.sh",
         [
@@ -497,11 +557,17 @@ def _recipe_env_binding_names(common_env: dict[str, str]) -> set[str]:
 def _sensitive_runtime_env_names(
     common_env: dict[str, str], runtime_paths: dict[str, str]
 ) -> set[str]:
-    """Return value-bearing env names that must stay out of Docker argv/logs."""
+    """Return value-bearing env names that must stay out of Docker argv/logs.
+
+    The storage credential names are added after the intersection rather than
+    through it: they are deliberately kept out of ``common_env`` so only the
+    Router command carries them, which is exactly what the intersection would
+    otherwise filter away.
+    """
 
     names = set(sensitive_env_names(runtime_paths.get("source_config_path")))
     names.update(_recipe_env_binding_names(common_env))
-    return names & set(common_env)
+    return (names & set(common_env)) | set(STORAGE_SECRET_ENV_NAMES)
 
 
 def _build_dashboard_runtime_env(
@@ -578,141 +644,6 @@ def _resolve_nofile_limit():
     if nofile_limit != DEFAULT_NOFILE_LIMIT:
         log.info(f"Using custom file descriptor limit: {nofile_limit}")
     return nofile_limit
-
-
-def _prepare_runtime_paths(
-    config_file,
-    runtime_config_file=None,
-    state_root_dir=None,
-    stack_layout: RuntimeStackLayout | None = None,
-):
-    stack_layout = stack_layout or resolve_runtime_stack()
-    source_config_path = os.path.abspath(config_file)
-    runtime_config_path = os.path.abspath(runtime_config_file or config_file)
-    config_dir = (
-        os.path.abspath(state_root_dir)
-        if state_root_dir
-        else os.path.dirname(source_config_path)
-    )
-
-    vllm_sr_dir = os.path.join(config_dir, ".vllm-sr")
-    os.makedirs(vllm_sr_dir, exist_ok=True)
-    log.info(f"Mounting .vllm-sr directory: {vllm_sr_dir}")
-
-    active_config_path = _runtime_config_output_path(
-        Path(source_config_path),
-        state_root_dir=config_dir,
-        stack_name=stack_layout.stack_name,
-    )
-    if Path(runtime_config_path).resolve() != active_config_path.resolve():
-        active_config_path = materialize_runtime_config(
-            Path(source_config_path),
-            Path(runtime_config_path).read_bytes(),
-            state_root_dir=config_dir,
-            stack_name=stack_layout.stack_name,
-        )
-    runtime_config_path = str(active_config_path)
-
-    active_recipe = resolve_active_recipe_directory(source_config_path)
-    # A managed Recipe source is a distributable five-file directory. Keep
-    # mutable model/runtime state under its explicitly ignored .vllm-sr area
-    # so serving it never changes the package contract.
-    models_dir = (
-        os.path.join(vllm_sr_dir, "models")
-        if active_recipe
-        else os.path.join(config_dir, "models")
-    )
-    os.makedirs(models_dir, exist_ok=True)
-
-    dashboard_data_dir = os.path.join(config_dir, ".vllm-sr", "dashboard-data")
-    os.makedirs(dashboard_data_dir, exist_ok=True)
-    log.info(f"Mounting dashboard data directory: {dashboard_data_dir}")
-
-    recipe_store_dir = os.path.join(
-        vllm_sr_dir, "recipe-store", stack_layout.stack_name
-    )
-    os.makedirs(recipe_store_dir, exist_ok=True)
-
-    log_spool = prepare_runtime_log_spool(vllm_sr_dir, stack_layout.stack_name)
-
-    effective_config_path = runtime_config_path
-    envoy_config_path = os.path.join(vllm_sr_dir, "envoy.yaml")
-
-    runtime_container_config = _container_runtime_config_path(
-        Path(source_config_path), stack_name=stack_layout.stack_name
-    )
-    log.info(
-        "Using read-only source config %s with active runtime config %s",
-        source_config_path,
-        runtime_container_config,
-    )
-
-    active_recipe_paths = {
-        f"active_recipe_{name.replace('.', '_').replace('-', '_')}_path": str(path)
-        for name, path in (active_recipe.assets if active_recipe else ())
-    }
-
-    return (
-        config_dir,
-        {
-            "source_config_path": source_config_path,
-            "effective_config_path": effective_config_path,
-            "vllm_sr_dir": vllm_sr_dir,
-            "models_dir": models_dir,
-            "dashboard_data_dir": dashboard_data_dir,
-            "recipe_store_dir": recipe_store_dir,
-            "log_spool_logs_root": str(log_spool.root.parent),
-            "log_spool_root": str(log_spool.root),
-            "log_spool_gid": str(log_spool.gid),
-            **{
-                f"log_spool_{component}_mount": log_spool.producer_mount(component)
-                for component in ("router", "envoy", "dashboard")
-            },
-            "container_recipe_store_dir": (
-                f"/app/.vllm-sr/recipe-store/{stack_layout.stack_name}"
-            ),
-            "envoy_config_path": envoy_config_path,
-            "runtime_container_config": runtime_container_config,
-            "active_recipe_root": str(active_recipe.root) if active_recipe else "",
-            **active_recipe_paths,
-        },
-        runtime_container_config,
-    )
-
-
-def _runtime_mount_specs(
-    runtime_paths: dict[str, str],
-    *,
-    include_models: bool = False,
-    include_dashboard_data: bool = False,
-):
-    mounts = [
-        f"{runtime_paths['source_config_path']}:{_container_readonly_source_config_path()}:ro,z",
-        f"{runtime_paths['vllm_sr_dir']}:/app/.vllm-sr:z",
-        f"{runtime_paths['log_spool_logs_root']}:/app/.vllm-sr/logs:ro,z",
-    ]
-    if include_models:
-        mounts.append(f"{runtime_paths['models_dir']}:/app/models:z")
-    if include_dashboard_data:
-        mounts.append(f"{runtime_paths['dashboard_data_dir']}:/app/data:z")
-    return mounts
-
-
-def _active_recipe_mount_specs(runtime_paths: dict[str, str]) -> list[str]:
-    if not runtime_paths.get("active_recipe_root"):
-        return []
-
-    mounts = []
-    for filename in (
-        "config.yaml",
-        "metadata.yaml",
-        "probes.yaml",
-        "recipe.dsl",
-        "README.md",
-    ):
-        key = f"active_recipe_{filename.replace('.', '_').replace('-', '_')}_path"
-        mounts.append(f"{runtime_paths[key]}:/app/recipe/{filename}:ro,z")
-    return mounts
 
 
 def _primary_listener_port(listeners):
