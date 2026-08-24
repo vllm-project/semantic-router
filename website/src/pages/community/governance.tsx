@@ -195,8 +195,12 @@ export default function Governance(): ReactNode {
 
             <div className={styles.emeritusGrid}>
               <PolicyStep index="01" title="Measure">
-                Count authored PRs, submitted GitHub reviews, and issues either
-                authored or commented on in the semantic-router repository.
+                Count authored PRs, submitted GitHub reviews, authored issues,
+                and comment participation across at least
+                {' '}
+                {committerActivityWindow.minimumCommentedIssueThreads}
+                {' '}
+                distinct issue threads in the semantic-router repository.
               </PolicyStep>
               <PolicyStep index="02" title="Reclassify">
                 When all three counts are zero, the generated roster moves the

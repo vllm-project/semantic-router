@@ -1,6 +1,6 @@
 ---
 slug: "join-vllm-sr-workgroups"
-title: "Find Your Focus: Join the vLLM Semantic Router Workgroups"
+title: "Find Your Focus and Join a Workgroup"
 description: "Seven durable directions give contributors a clear place to build, lead, and grow with the vLLM Semantic Router community."
 authors:
   - name: "vLLM Semantic Router Team"
@@ -16,11 +16,12 @@ now has seven direction-based Workgroups to make that path clear.
 ![Find your focus and passion across seven vLLM Semantic Router Workgroups](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups-invitation-hero.png)
 
 If you are new to the project, start here: vLLM Semantic Router sits between an
-AI application and a collection of models. It understands each request,
-chooses one model or a bounded way for several models to collaborate, executes
-that choice, and makes the result observable and measurable. The seven
-Workgroups own the durable technical directions needed to make that experience
-intelligent, fast, reliable, and easy to use.
+AI application and its model and agent backends. It understands each request
+and session, selects a qualified model or agent, can coordinate a bounded form
+of model or agent collaboration, executes that route, and makes the result
+observable and measurable. The seven Workgroups own the durable technical
+directions needed to make that experience intelligent, fast, reliable, and
+easy to use.
 
 ## How the Pieces Fit Together
 
@@ -29,16 +30,15 @@ one clear technical home:
 
 1. **Developer Experience & Ecosystem** gives users the CLI, Dashboard, APIs,
    recipes, and guidance needed to describe and operate the system.
-2. **Enterprise & Environment** determines who may use each model, applies
+2. **Enterprise & Environment** determines who may use each backend, applies
    quotas and lifecycle policy, and keeps supported deployments operable.
-3. **Agentic & Context** prepares a bounded context for long-running sessions,
-   while **Router Models & Inference Runtime** turns the request into useful
-   routing signals.
-4. **MoM & Routing** uses those signals and a versioned recipe to choose a model
-   or a bounded form of multi-model collaboration.
-5. **Data Plane & Networking** executes that decision on the live request path,
-   while **Evaluation & Quality** measures behavior and protects it from
-   regression.
+3. **Router Models & Inference Runtime** turns the request and session into
+   useful routing signals.
+4. **Agentic & Context** manages bounded context and uses those signals to
+   select, hand off, or compose agent backends for long-running sessions;
+   **MoM & Routing** selects models or bounded multi-model collaboration.
+5. **Data Plane & Networking** invokes the selected model or agent path, while
+   **Evaluation & Quality** measures behavior and protects it from regression.
 
 The Workgroups therefore form one system. They are separated by responsibility,
 not by isolated code ownership.
@@ -207,18 +207,18 @@ capabilities rather than publishing private product plans.
 
 ## [Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2987)
 
-> **Mission:** Keep long-running agent workloads context-efficient,
-> state-aware, bounded, and safe.
+> **Mission:** Manage context and safely select, hand off, and compose agent
+> backends for long-running workloads.
 
-![Long session history is protected, selected, pruned, compressed, and restructured before safe phase-aware execution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
+![A long session is protected and optimized before the Router selects, hands off to, or composes agent backends within explicit limits](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
 
 ### Why this matters
 
 Long conversations accumulate messages, retrieved memory, tool output, tokens,
 cost, and risk. Important instructions can be lost in that growth, and the best
-model may change as the task moves from planning to tool use to final response.
-vLLM-SR should manage those constraints without becoming a general-purpose
-agent framework.
+model or agent may change as the task moves from planning to tool use to final
+response. vLLM-SR should select and compose agent backends while managing those
+constraints without becoming a general-purpose agent framework.
 
 ### Scope
 
@@ -228,10 +228,15 @@ agent framework.
   safety constraints, tool contracts, and task-critical user intent.
 - Session budgets, state boundaries, retention, recovery, and graceful
   degradation when context or memory capabilities are unavailable.
+- Typed agent identity, capability, tool, state, trust, and lifecycle contracts
+  for selection, fallback, and handoff.
+- Bounded agent composition and multi-agent collaboration with explicit limits
+  on participants, depth, turns, tokens, time, cost, authority, and failures.
 - Requirements and safety constraints for switching models or bounded
   workflows as a session evolves.
-- Evaluation of instruction retention, task quality, token reduction, latency,
-  cost, safety, and critical-information loss.
+- Evaluation of selection quality, collaboration gain, handoff loss,
+  instruction retention, task quality, token reduction, latency, cost, safety,
+  and critical-information loss.
 
 ### Non-scope
 
@@ -243,6 +248,7 @@ training.
 ### Epic directions
 
 - [Optimize context for long-session and agentic workloads](https://github.com/vllm-project/semantic-router/issues/2984)
+- [Enable agent-based routing and multi-agent composition](https://github.com/vllm-project/semantic-router/issues/2994)
 - [Develop safe model and workflow switching for long-running agents](https://github.com/vllm-project/semantic-router/issues/2973)
 - [Define a trusted gateway context envelope for agent memory, tools, and budgets](https://github.com/vllm-project/semantic-router/issues/2546)
 
@@ -294,17 +300,19 @@ policy, and quality standards owned by other Workgroups.
 
 ### Why this matters
 
-Claims about a Router Model, MoM recipe, runtime optimization, or deployment
-are difficult to trust when each uses a different dataset and reporting method.
-The project needs shared evaluation contracts and regression gates, while each
-technical Workgroup remains accountable for the quality of what it builds.
+Claims about a Router Model, MoM recipe, agent-selection policy, runtime
+optimization, or deployment are difficult to trust when each uses a different
+dataset and reporting method. The project needs shared evaluation contracts and
+regression gates, while each technical Workgroup remains accountable for the
+quality of what it builds.
 
 ### Scope
 
 - Common benchmark structure, dataset provenance, metrics, comparison rules,
   reproducibility, and result publication.
-- MoM, recipe, Router Model, context, serving, platform, and developer-workflow
-  evaluation without replacing each domain's objectives.
+- MoM, recipe, Router Model, agent selection and composition, context, serving,
+  platform, and developer-workflow evaluation without replacing each domain's
+  objectives.
 - Model-card and evaluation-result requirements for published MoM identities.
 - CI, E2E, compatibility, security, performance, and operational regression
   coverage across supported modes and environments.
