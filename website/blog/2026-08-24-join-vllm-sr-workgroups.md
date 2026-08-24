@@ -22,12 +22,35 @@ that choice, and makes the result observable and measurable. The seven
 Workgroups own the durable technical directions needed to make that experience
 intelligent, fast, reliable, and easy to use.
 
+## How the Pieces Fit Together
+
+A routed request crosses several responsibilities, but each responsibility has
+one clear technical home:
+
+1. **Developer Experience & Ecosystem** gives users the CLI, Dashboard, APIs,
+   recipes, and guidance needed to describe and operate the system.
+2. **Enterprise & Environment** determines who may use each model, applies
+   quotas and lifecycle policy, and keeps supported deployments operable.
+3. **Agentic & Context** prepares a bounded context for long-running sessions,
+   while **Router Models & Inference Runtime** turns the request into useful
+   routing signals.
+4. **MoM & Routing** uses those signals and a versioned recipe to choose a model
+   or a bounded form of multi-model collaboration.
+5. **Data Plane & Networking** executes that decision on the live request path,
+   while **Evaluation & Quality** measures behavior and protects it from
+   regression.
+
+The Workgroups therefore form one system. They are separated by responsibility,
+not by isolated code ownership.
+
 ## Seven Directions, One Community
 
 ### [MoM & Routing](https://github.com/vllm-project/semantic-router/issues/2965)
 
 > **Mission:** Make a pool of models behave like one measurable,
 > continuously improving Mixture-of-Models.
+
+![One request is routed across a qualified model pool and returns as one measurable model experience](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/mom-routing.png)
 
 #### Why this matters
 
@@ -58,15 +81,16 @@ Workgroups.
 
 #### Epic directions
 
-- [Portable MoM, recipe, evaluation, and model-card contracts](https://github.com/vllm-project/semantic-router/issues/2971)
-- [Router Learning and recipe optimization](https://github.com/vllm-project/semantic-router/issues/2238)
-- [Cross-model KV-cache reuse with LMCache](https://github.com/vllm-project/semantic-router/issues/2976)
-- [Session-aware model and workflow switching with Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2973)
+- [Define portable MoM model pools, routing recipes, evaluation, and model cards](https://github.com/vllm-project/semantic-router/issues/2971)
+- [Optimize routing recipes through an offline-to-online lifecycle](https://github.com/vllm-project/semantic-router/issues/2238)
+- [Enable safe cross-model KV-cache reuse](https://github.com/vllm-project/semantic-router/issues/2976)
 
 ### [Router Models & Inference Runtime](https://github.com/vllm-project/semantic-router/issues/2966)
 
 > **Mission:** Build better Router Models and one extensible runtime for
 > executing them across the ecosystem.
+
+![Specialized Router Models produce routing signals through one extensible inference runtime](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/router-models-inference-runtime.png)
 
 #### Why this matters
 
@@ -97,14 +121,16 @@ the tensor engines and GPU schedulers it integrates with.
 
 #### Epic directions
 
-- [Extensible routing inference runtime](https://github.com/vllm-project/semantic-router/issues/2782)
-- [Built-in model post-training and router-native model families](https://github.com/vllm-project/semantic-router/issues/2974)
-- [SLM self-improvement and fine-tuning with IBM Research](https://github.com/vllm-project/semantic-router/issues/2975)
+- [Build an extensible inference runtime for Router Models](https://github.com/vllm-project/semantic-router/issues/2782)
+- [Improve current Router Models and develop routing-native model families](https://github.com/vllm-project/semantic-router/issues/2974)
+- [Build a reproducible SLM self-improvement and Router Model fine-tuning pipeline](https://github.com/vllm-project/semantic-router/issues/2975)
 
 ### [Data Plane & Networking](https://github.com/vllm-project/semantic-router/issues/2967)
 
 > **Mission:** Execute every live routing decision through a fast, reliable,
 > and portable request path.
+
+![The same routing behavior runs through reliable standalone and gateway-integrated request paths](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/data-plane-networking.png)
 
 #### Why this matters
 
@@ -134,14 +160,16 @@ how a Router Model is trained, or which MoM recipe is best.
 
 #### Epic directions
 
-- [Protocol-neutral data plane and standalone adapter](https://github.com/vllm-project/semantic-router/issues/1138)
-- [Inference-aware backend integration below semantic routing](https://github.com/vllm-project/semantic-router/issues/2332)
-- Request-path performance, streaming, interoperability, and failure hardening
+- [Support standalone and gateway-integrated data plane modes](https://github.com/vllm-project/semantic-router/issues/1138)
+- [Connect semantic routing to inference-aware backend selection](https://github.com/vllm-project/semantic-router/issues/2332)
+- [Optimize data-plane performance, streaming, and failure recovery](https://github.com/vllm-project/semantic-router/issues/2992)
 
 ### [Enterprise & Environment](https://github.com/vllm-project/semantic-router/issues/2968)
 
 > **Mission:** Make vLLM Semantic Router production-grade across supported
 > organizations, environments, and hardware.
+
+![Tenant access, quotas, observability, lifecycle controls, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.png)
 
 #### Why this matters
 
@@ -172,15 +200,16 @@ capabilities rather than publishing private product plans.
 
 #### Epic directions
 
-- [Scalable multi-tenant inference access control](https://github.com/vllm-project/semantic-router/issues/2960)
-- [Versioned management snapshots, activation, and rollback](https://github.com/vllm-project/semantic-router/issues/2326)
-- Production observability, lifecycle controls, and environment/hardware
-  qualification
+- [Build multi-tenant inference access, quotas, and usage controls](https://github.com/vllm-project/semantic-router/issues/2960)
+- [Build versioned configuration activation and rollback](https://github.com/vllm-project/semantic-router/issues/2326)
+- [Establish production observability and supported-environment qualification](https://github.com/vllm-project/semantic-router/issues/2993)
 
 ### [Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2987)
 
 > **Mission:** Keep long-running agent workloads context-efficient,
 > state-aware, bounded, and safe.
+
+![Long session history is protected, selected, compressed, and prepared for safe model-aware execution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.png)
 
 #### Why this matters
 
@@ -212,15 +241,16 @@ training.
 
 #### Epic directions
 
-- [Traceable context optimization](https://github.com/vllm-project/semantic-router/issues/2984)
-- [Long-session model and workflow switching with Looper research](https://github.com/vllm-project/semantic-router/issues/2973)
-- [Gateway context envelope](https://github.com/vllm-project/semantic-router/issues/2546)
-- [Router Memory stabilization](https://github.com/vllm-project/semantic-router/issues/2339)
+- [Optimize context for long-session and agentic workloads](https://github.com/vllm-project/semantic-router/issues/2984)
+- [Develop safe model and workflow switching for long-running agents](https://github.com/vllm-project/semantic-router/issues/2973)
+- [Define a trusted gateway context envelope for agent memory, tools, and budgets](https://github.com/vllm-project/semantic-router/issues/2546)
 
 ### [Developer Experience & Ecosystem](https://github.com/vllm-project/semantic-router/issues/2970)
 
 > **Mission:** Make vLLM Semantic Router easy to discover, install, configure,
 > extend, and operate.
+
+![CLI, Dashboard, recipes, tutorials, extensions, and contributors connect through one approachable developer experience](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/developer-experience-ecosystem.png)
 
 #### Why this matters
 
@@ -250,14 +280,16 @@ policy, and quality standards owned by other Workgroups.
 
 #### Epic directions
 
-- [Agent skill for deployment, recipe generation, evaluation, and tuning](https://github.com/vllm-project/semantic-router/issues/2977)
-- [A faster path to the first successful request](https://github.com/vllm-project/semantic-router/issues/2690)
-- [Maintained reference recipes and tutorials](https://github.com/vllm-project/semantic-router/issues/2334)
+- [Build agent-assisted vLLM-SR deployment, recipe, evaluation, and tuning workflows](https://github.com/vllm-project/semantic-router/issues/2977)
+- [Reduce time to the first successful routed request](https://github.com/vllm-project/semantic-router/issues/2690)
+- [Publish maintained reference recipes and end-to-end tutorials](https://github.com/vllm-project/semantic-router/issues/2334)
 
 ### [Evaluation & Quality](https://github.com/vllm-project/semantic-router/issues/2969)
 
 > **Mission:** Make every supported capability measurable and every change
 > verifiable.
+
+![Shared benchmarks, comparison rules, regression checks, and quality gates validate every supported path](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/evaluation-quality.png)
 
 #### Why this matters
 
@@ -286,10 +318,9 @@ model research itself. It defines shared measurement and gates.
 
 #### Epic directions
 
-- [Evaluation and model cards within the portable MoM contract](https://github.com/vllm-project/semantic-router/issues/2971)
-- [Decision-level routing evaluation](https://github.com/vllm-project/semantic-router/issues/2333)
-- [Cross-platform performance regression coverage](https://github.com/vllm-project/semantic-router/issues/1510)
-- [Module and Dashboard E2E coverage](https://github.com/vllm-project/semantic-router/issues/1519)
+- [Build reproducible decision-level routing evaluation](https://github.com/vllm-project/semantic-router/issues/2333)
+- [Establish cross-platform performance regression coverage](https://github.com/vllm-project/semantic-router/issues/1510)
+- [Expand end-to-end quality coverage across Router, Dashboard, and deployments](https://github.com/vllm-project/semantic-router/issues/1519)
 
 ## What a Workgroup Is
 
