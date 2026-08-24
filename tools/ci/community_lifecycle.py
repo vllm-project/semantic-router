@@ -18,6 +18,8 @@ from community_lifecycle_github import (
     validate_title_event,
 )
 from community_lifecycle_policy import (
+    MAINTAINER_OWNER,
+    OWNER_LABELS,
     PR_STATE_LABELS,
     WORKGROUP_LABELS,
     WORKGROUP_OPTIONS,
@@ -30,6 +32,8 @@ from community_lifecycle_policy import (
 )
 
 __all__ = [
+    "MAINTAINER_OWNER",
+    "OWNER_LABELS",
     "PR_STATE_LABELS",
     "WORKGROUP_LABELS",
     "WORKGROUP_OPTIONS",

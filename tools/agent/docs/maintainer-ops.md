@@ -181,16 +181,17 @@ contract without making roadmap, priority, or close decisions:
 
 - issue forms start at `needs-acceptance` and propose one Workgroup;
 - `/accept` lets a collaborator with write, maintain, or admin permission accept
-  an issue that already has exactly one recognized Workgroup owner;
+  an issue that already has exactly one recognized owner: one Workgroup for
+  project work or `owner/maintainers` for repository governance;
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;
-- non-trivial PRs must link accepted work with exactly one Workgroup owner.
+- non-trivial PRs must link accepted work with exactly one recognized owner.
 
 Because `pull_request_target` is prohibited, the PR check is read-only on the
 untrusted pull-request event. `.github/workflows/community-labels.yml` runs
 after that check from trusted default-branch code and synchronizes one
-`pr/*` state label, Workgroup ownership, release-blocker status, and milestone
+`pr/*` state label, ownership, release-blocker status, and milestone
 inheritance. Review submissions and check-suite completion refresh that state,
 so `pr/needs-review`, `pr/needs-author`, `pr/needs-rebase`, `pr/blocked`, and
 `pr/merge-ready` remain mutually exclusive. The workflow never executes

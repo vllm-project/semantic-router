@@ -214,6 +214,34 @@ MoM & Routing
         self.assertFalse(evaluation.valid)
         self.assertIn("exactly one", evaluation.error or "")
 
+    def test_write_collaborator_can_accept_maintainer_owned_governance(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Governance] Maintain the public roadmap",
+                "labels": labels(
+                    "needs-acceptance",
+                    "owner/maintainers",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "owner/maintainers")
+
+    def test_accept_command_rejects_workgroup_plus_maintainer_owner(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Governance] Maintain the public roadmap",
+                "labels": labels(
+                    "wg/evaluation-quality",
+                    "owner/maintainers",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("exactly one", evaluation.error or "")
+
     def test_title_format_accepts_one_open_category(self) -> None:
         for title in (
             "[Feature] Add standalone serving",
@@ -273,6 +301,19 @@ MoM & Routing
         self.assertEqual(evaluation.owner_label, "wg/enterprise-environment")
         self.assertEqual(evaluation.milestone_number, 7)
         self.assertTrue(evaluation.release_blocker)
+
+    def test_pr_can_inherit_maintainer_governance_owner(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": False, "user": {"type": "User"}},
+            [
+                {
+                    "labels": labels("accepted", "owner/maintainers"),
+                    "milestone": None,
+                }
+            ],
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "owner/maintainers")
 
     def test_pr_review_and_runtime_signals_select_one_action_state(self) -> None:
         pull_request = {"draft": False, "user": {"type": "User"}}
@@ -418,6 +459,10 @@ MoM & Routing
             options = set(workgroup_field["attributes"]["options"])
             options.discard("Unsure / Maintainer triage")
             self.assertEqual(options, set(community_lifecycle.WORKGROUP_OPTIONS))
+        self.assertEqual(
+            policy["labels"]["maintainer_owner"],
+            community_lifecycle.MAINTAINER_OWNER,
+        )
 
     def test_policy_matches_executable_lifecycle_labels(self) -> None:
         policy = yaml.safe_load(

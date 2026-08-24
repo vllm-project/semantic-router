@@ -26,6 +26,8 @@ WORKGROUP_LABELS = (
     "wg/developer-experience-ecosystem",
     "wg/evaluation-quality",
 )
+MAINTAINER_OWNER = "owner/maintainers"
+OWNER_LABELS = (*WORKGROUP_LABELS, MAINTAINER_OWNER)
 
 WORKGROUP_OPTIONS = {
     "MoM & Routing": "wg/mom-routing",
@@ -163,13 +165,14 @@ def evaluate_issue_acceptance(
     title_error = title_format_error(issue.get("title"))
     if title_error:
         return IssueAcceptanceEvaluation(False, title_error)
-    workgroups = label_names(issue).intersection(WORKGROUP_LABELS)
-    if len(workgroups) != 1:
+    owners = label_names(issue).intersection(OWNER_LABELS)
+    if len(owners) != 1:
         return IssueAcceptanceEvaluation(
             False,
-            "`/accept` requires exactly one recognized `wg/*` owner label.",
+            "`/accept` requires exactly one recognized owner label: one `wg/*` "
+            "label for project work or `owner/maintainers` for repository governance.",
         )
-    return IssueAcceptanceEvaluation(True, owner_label=next(iter(workgroups)))
+    return IssueAcceptanceEvaluation(True, owner_label=next(iter(owners)))
 
 
 def guard_protected_label(
@@ -180,7 +183,7 @@ def guard_protected_label(
     event_label: str | None,
     actor_can_manage: bool,
 ) -> None:
-    protected_labels = PROTECTED_ISSUE_LABELS.union(WORKGROUP_LABELS, PRIORITY_LABELS)
+    protected_labels = PROTECTED_ISSUE_LABELS.union(OWNER_LABELS, PRIORITY_LABELS)
     if actor_can_manage or event_label not in protected_labels:
         return
     if event_action == "labeled":
@@ -309,7 +312,8 @@ def plan_issue(
 
     accepted = ACCEPTED in labels
     workgroups = normalize_proposed_workgroup(plan, labels, issue, accepted=accepted)
-    if accepted and len(workgroups) != 1:
+    owners = labels.intersection(OWNER_LABELS)
+    if accepted and len(owners) != 1:
         plan.remove_labels.add(ACCEPTED)
         plan.add_labels.add(NEEDS_ACCEPTANCE)
         labels.discard(ACCEPTED)
@@ -317,8 +321,9 @@ def plan_issue(
         accepted = False
         plan.add_comment(
             "accepted-owner",
-            "`accepted` requires exactly one `wg/*` owner. The issue has been "
-            "returned to `needs-acceptance` for Maintainer triage.",
+            "`accepted` requires exactly one recognized owner: one `wg/*` label "
+            "for project work or `owner/maintainers` for repository governance. "
+            "The issue has been returned to `needs-acceptance` for Maintainer triage.",
         )
 
     if accepted:
@@ -401,11 +406,11 @@ def evaluate_pull_request(
         label
         for issue in accepted_issues
         for label in label_names(issue)
-        if label in WORKGROUP_LABELS
+        if label in OWNER_LABELS
     }
     if accepted_issues and len(owner_labels) != 1:
         errors.append(
-            "Accepted linked work must resolve to exactly one owning `wg/*` label."
+            "Accepted linked work must resolve to exactly one recognized owner label."
         )
 
     milestone_numbers = {

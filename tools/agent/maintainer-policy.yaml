@@ -35,6 +35,7 @@ labels:
     - wg/agentic-context
     - wg/developer-experience-ecosystem
     - wg/evaluation-quality
+  maintainer_owner: owner/maintainers
 
 release_tracks:
   contracts:

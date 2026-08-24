@@ -30,3 +30,6 @@ wg:
   - agentic-context
   - developer-experience-ecosystem
   - evaluation-quality
+
+owner:
+  - maintainers
