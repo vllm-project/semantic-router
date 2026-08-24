@@ -1,129 +1,68 @@
-# MoM Collection Evaluation
+# Classifier Model Evaluation
 
-**Multi-lingual Mixture of Models (MoM) Evaluation Script**
+`mom_collection_eval.py` evaluates the merged and LoRA variants registered in
+`constants.py`:
 
-A clean, unified Python script to evaluate the **10 multi-lingual Mixture of Models (MoM)**  
-from the `llm-semantic-router` collection on Hugging Face , both merged models and LoRA adapters.
+- feedback;
+- jailbreak;
+- fact-check;
+- intent;
+- PII.
 
-Supports:
+It reports classification metrics, latency summaries, and confusion matrices
+where applicable. The registry defines the default model, dataset, label
+mapping, text field, and split for each task.
 
-- **Text Classification** (feedback, jailbreak, fact-check, intent)
-- **Token Classification** (PII detection)
-- Merged models + LoRA variants
-- Custom datasets, language filtering, batch size control, parallel evaluation and more !!!
-
-## Features
-
-- Evaluate **all 10 models** with one script
-- Comprehensive metrics: **Accuracy, Precision, Recall, F1, Confusion Matrix, Latency (avg / p50 / p99)**
-- Special handling for **MMLU-Pro** (intent) and **Presidio** (PII) datasets
-- Works on **GPU** and **CPU**
-- Saves results as **JSON** + **confusion matrix PNG** (for text classification)
-- Robust error handling (missing columns, OOM, network issues, etc.)
-- Supports **custom local datasets** (.json / .csv)
-- Language filtering for multilingual evaluation
-
-## Models Supported
-
-| Model Name | Task Type            | Merged Model ID                                        | LoRA Model ID                                        |
-| ---------- | -------------------- | ------------------------------------------------------ | ---------------------------------------------------- |
-| feedback   | Text Classification  | `llm-semantic-router/mmbert-feedback-detector-merged`  | `llm-semantic-router/mmbert-feedback-detector-lora`  |
-| jailbreak  | Text Classification  | `llm-semantic-router/mmbert-jailbreak-detector-merged` | `llm-semantic-router/mmbert-jailbreak-detector-lora` |
-| fact-check | Text Classification  | `llm-semantic-router/mmbert-fact-check-merged`         | `llm-semantic-router/mmbert-fact-check-lora`         |
-| intent     | Text Classification  | `llm-semantic-router/mmbert-intent-classifier-merged`  | `llm-semantic-router/mmbert-intent-classifier-lora`  |
-| pii        | Token Classification | `llm-semantic-router/mmbert-pii-detector-merged`       | `llm-semantic-router/mmbert-pii-detector-lora`       |
-
-## Installation
-
-1. Clone the repository:
+## Install
 
 ```bash
-git clone https://github.com/vllm-project/semantic-router.git
-cd semantic-routegit clone https://github.com/vllm-project/semantic-router.git
-cd semantic-route
-```
-
-1. Install dependencies:
-
-```bash
+cd src/training/model_eval
 pip install -r requirements.txt
 ```
 
-### Usage Examples
+## Run
 
-**1. Evaluate one model (GPU recommended)**
-
-```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback --device cuda
-```
-
-**2. Evaluate LoRA version**
+Evaluate one merged model:
 
 ```bash
-python src/training/model_eval/mom_collection_eval.py --model fact-check --use_lora --device cuda
+python mom_collection_eval.py --model feedback --device cpu --limit 100
 ```
 
-**3. Evaluate multiple models at once**
+Evaluate several models or their LoRA variants:
 
 ```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback jailbreak fact-check intent pii --device cuda
+python mom_collection_eval.py \
+  --model feedback jailbreak fact-check intent pii \
+  --use_lora \
+  --device cuda
 ```
 
-**4. Quick test with few sample**
+Useful options:
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model pii --limit 100 --device cpu
-```
+| Option | Purpose |
+|---|---|
+| `--model_id` | override the registered checkpoint for a single-model run |
+| `--custom_dataset` | use a local JSON or CSV dataset |
+| `--language` | filter rows when the dataset exposes a supported language field |
+| `--batch_size` | control inference memory use |
+| `--limit` | run a small smoke sample |
+| `--parallel` | evaluate multiple models concurrently |
+| `--output_dir` | choose the result directory |
 
-**5. Use a custom local dataset**
+Use underscores in option names, as shown by
+`python mom_collection_eval.py --help`.
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model intent --custom_dataset ./my_test_data.json
-```
+## Results
 
-**6.  Run models in parallel**
+The default output directory is `src/training/model_eval/results/`. JSON files
+contain the metrics and run metadata; text-classification tasks also produce a
+confusion-matrix image.
 
-```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback jailbreak intent --parallel --device cuda
-```
+Before comparing models, verify that they used the same dataset revision,
+split, label mapping, sample limit, preprocessing, device policy, and batch
+size. A small `--limit` run is a functional smoke test, not a quality result.
 
-**7.  Smaller batch size**
-
-```bash
-python src/training/model_eval/mom_collection_eval.py --model pii --batch_size 8 --device cuda
-```
-
-**8. Filter by language (multilingual evaluation)**
-
-```bash
-python src/training/model_eval/mom_collection_eval.py --model feedback --language es --device cuda
-```
-
-### Output
-
-Results are saved in:
-
-```context
-src/training/model_eval/results/
-```
-
-You will get files like:
-
-- `feedback_results.json`
-- `feedback_cm.png` (confusion matrix heatmap which is only for text classification)
-- ...and similar files for each evaluated model
-
-#### Common Commands
-
-<style type="text/css"></style>
-
-| Goal                            | Command Example                 |
-| ------------------------------- | ------------------------------- |
-| Quick test on CPU               | `--limit 50 --device cpu`       |
-| Fast evaluation on GPU          | `--device cuda --batch_size 64` |
-| Single model                    | `--model jailbreak`             |
-| Use LoRA instead of merged      | `--use_lora`                    |
-| Custom dataset                  | `--custom_dataset ./test.json`  |
-| Run multiple models in parallel | `--parallel`                    |
-| Evaluate only English samples   | `--language en`                 |
-| Debug with very few samples     | `--limit 10`                    |
+`result_to_config.py` can convert supported evaluation summaries into router
+configuration fragments. Review the generated thresholds and model references
+before deployment; generation does not prove that the fragment is suitable for
+your workload.

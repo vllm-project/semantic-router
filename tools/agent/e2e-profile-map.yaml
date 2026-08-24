@@ -196,14 +196,16 @@ manual_profile_rules:
       - deploy/kubernetes/response-api/redis-cluster.yaml
   router-replay:
     owner: e2e
-    coverage_role: router-replay-restart-recovery
+    coverage_role: router-replay-management-boundary-and-restart-recovery
     selection_mode: manual-only
-    summary: Router Replay restart-recovery coverage with Postgres backend, validating that replay records survive pod restarts.
+    summary: Authenticated Router Replay management access, public-listener denial, and Postgres restart recovery.
     paths:
       - e2e/profiles/router-replay/**
       - deploy/kubernetes/router-replay/**
       - src/semantic-router/pkg/routerreplay/**
-      - src/semantic-router/pkg/extproc/router_replay_setup.go
+      - src/semantic-router/pkg/extproc/router_replay*.go
+      - src/semantic-router/pkg/apiserver/route_router_replay*.go
+      - dashboard/backend/router/router_replay*.go
   dynamo:
     owner: e2e
     coverage_role: dynamo-gpu-and-batching
@@ -238,6 +240,15 @@ manual_profile_rules:
       - e2e/testcases/hallucination_detection*.go
       - deploy/kubernetes/hallucination/**
       - e2e/testcases/testdata/hallucination_detection_cases.json
+  jailbreak-onerror:
+    owner: e2e
+    coverage_role: prompt-guard-on-error
+    selection_mode: manual-only
+    summary: PromptGuardConfig.OnError (#2918) coverage against a real, deliberately unreachable classifier endpoint - verifies on_error:block closes the request instead of silently allowing it through.
+    paths:
+      - e2e/profiles/jailbreak-onerror/**
+      - e2e/testcases/jailbreak_onerror_block.go
+      - deploy/kubernetes/jailbreak-onerror/**
 
 workflow_suite_rules:
   recipe-conformance-live:
@@ -249,6 +260,7 @@ workflow_suite_rules:
     local_command: make recipe-conformance-live-cpu-all
     paths:
       - config/recipes/**
+      - config/schemas/recipe-metadata-v1.schema.json
       - src/semantic-router/pkg/config/**
       - src/semantic-router/pkg/classification/**
       - src/semantic-router/pkg/decision/**

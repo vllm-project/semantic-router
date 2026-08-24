@@ -1,0 +1,19 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: knowledge
+name: Knowledge-Aware Routing
+version: 0.1.0
+description: >-
+  Uses versioned knowledge-base evidence to keep low-uplift domains local and
+  escalate questions where measured model capability justifies the cost.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - accuracy
+  - cost
+  - knowledge
+  - mmlu
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/knowledge
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/knowledge/README.md

@@ -67,7 +67,44 @@ func (s *ClassificationService) ClassifyIntentForEval(req IntentRequest) (*EvalR
 	resp.RequestedModel = strings.TrimSpace(req.Model)
 	resp.Recipe = recipeName
 	resp.EvalTrace = traces
+	s.populateEvalModelSelection(resp, input, decisionResult)
 	return resp, nil
+}
+
+func (s *ClassificationService) populateEvalModelSelection(
+	response *EvalResponse,
+	input intentSignalInput,
+	decisionResult *decision.DecisionResult,
+) {
+	if response == nil || decisionResult == nil || decisionResult.Decision == nil {
+		return
+	}
+	selector := s.evalModelSelectorSnapshot()
+	if selector == nil {
+		response.SelectionStatus = EvalSelectionUnavailable
+		response.SelectionReason = "live model selector is unavailable"
+		return
+	}
+	selection := selector.SelectModelForEval(EvalModelSelectionInput{
+		Recipe:            response.Recipe,
+		Decision:          decisionResult.Decision,
+		Query:             input.currentUserText,
+		Category:          evalDecisionCategory(decisionResult.MatchedRules),
+		ContextTokenCount: input.requestFacts.ContextTokenFloor,
+	})
+	response.SelectedModel = selection.SelectedModel
+	response.SelectionStatus = selection.Status
+	response.SelectionMethod = selection.Method
+	response.SelectionReason = selection.Reason
+}
+
+func evalDecisionCategory(matchedRules []string) string {
+	for _, rule := range matchedRules {
+		if strings.HasPrefix(rule, "domain:") {
+			return strings.TrimPrefix(rule, "domain:")
+		}
+	}
+	return ""
 }
 
 func evaluateIntentDecision(

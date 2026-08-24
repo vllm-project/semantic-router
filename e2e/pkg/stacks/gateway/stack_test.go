@@ -42,3 +42,27 @@ func TestSemanticRouterInstallOptionsAppendsWorkspaceOverlay(t *testing.T) {
 		t.Fatalf("unexpected values file order: %#v", opts.ValuesFiles)
 	}
 }
+
+// Teardown must mirror setup in reverse. Prerequisites are applied before the
+// Helm releases, so they have to be removed after them: a profile may create
+// the release's own namespace as a prerequisite, and deleting that namespace
+// before `helm uninstall` takes the release secret with it, leaving the
+// uninstall a no-op and the chart's cluster-scoped RBAC orphaned.
+func TestTeardownRemovesPrerequisitesAfterTheReleasesThatUseThem(t *testing.T) {
+	stack := New(Config{Name: "unit-test"})
+
+	var order []string
+	for _, step := range stack.teardownSteps() {
+		order = append(order, step.name)
+	}
+
+	want := []string{teardownStepResources, teardownStepCoreReleases, teardownStepPrerequisites}
+	if len(order) != len(want) {
+		t.Fatalf("teardown steps = %v, want %v", order, want)
+	}
+	for i := range want {
+		if order[i] != want[i] {
+			t.Fatalf("teardown steps = %v, want %v", order, want)
+		}
+	}
+}

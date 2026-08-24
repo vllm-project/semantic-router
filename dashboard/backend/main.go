@@ -6,6 +6,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/router"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func main() {
@@ -17,8 +18,24 @@ func main() {
 
 	log.Printf("Config file path: %s", cfg.AbsConfigPath)
 
+	if cfg.SetupMode {
+		log.Printf("DEPRECATED: --setup-mode / DASHBOARD_SETUP_MODE no longer decides setup mode; " +
+			"it is read only so a disagreement with the config file's setup.mode block can be detected and reported.")
+	}
+
+	// One setup-mode source for the whole process, built once and passed down.
+	setupResolver := setupmode.New(cfg.AbsConfigPath, cfg.SetupMode)
+	resolution := setupResolver.Resolve()
+	if resolution.Active {
+		log.Printf("Setup mode: ACTIVE (source: %s), first-run bootstrap is open", resolution.Source)
+	} else if resolution.LegacyFlag {
+		log.Printf("Setup mode: inactive")
+	}
+	// A conflict warning is logged by the resolver itself, on this first call.
+	// Repeating it here would duplicate the line.
+
 	// Setup routes
-	srv := router.Setup(cfg)
+	srv := router.Setup(cfg, setupResolver)
 
 	// Log configuration
 	addr := ":" + cfg.Port

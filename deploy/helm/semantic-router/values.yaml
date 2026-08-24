@@ -237,10 +237,14 @@ persistence:
   existingClaim: ""
 # Router runtime feature gates
 router:
-  # -- Honor the x-vsr-skip-processing request header. Default: false.
-  # See https://github.com/vllm-project/semantic-router/issues/1808.
+  # -- Override config.global.router.skip_processing.enabled when non-null.
+  # The Router default remains false when neither value is configured.
   skipProcessing:
-    enabled: false
+    enabled: null
+# -- Complete canonical Router config supplied by deployment tooling. Unlike
+# `config`, this map atomically replaces chart defaults before Kubernetes
+# integration rewrites.
+configOverride: null
 # Application configuration
 config:
   version: v0.3
@@ -1019,7 +1023,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -1054,7 +1058,7 @@ config:
               mode: replace
     signals:
       keywords:
-        - category: thinking
+        - name: thinking
           operator: OR
           keywords:
             - urgent
@@ -1850,7 +1854,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: true
@@ -6438,7 +6442,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: base-model
             lora_name: general-expert
@@ -6473,7 +6477,7 @@ config:
               mode: replace
     signals:
       keywords:
-        - category: thinking
+        - name: thinking
           operator: OR
           keywords:
             - urgent
@@ -7269,7 +7273,7 @@ config:
           operator: OR
           conditions:
             - type: keyword
-              rule_name: thinking
+              name: thinking
         modelRefs:
           - model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
             use_reasoning: true

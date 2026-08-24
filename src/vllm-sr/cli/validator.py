@@ -19,6 +19,7 @@ from cli.models import (
     RAGPluginConfig,
     ImageGenPluginConfig,
 )
+from cli.terminal import echo, error as terminal_error
 from pydantic import ValidationError as PydanticValidationError
 from cli.utils import get_logger
 from cli.validation_error import ValidationError
@@ -598,17 +599,22 @@ def validate_algorithm_configurations(config: UserConfig) -> List[ValidationErro
     return errors
 
 
-def validate_user_config(config: UserConfig) -> List[ValidationError]:
+def validate_user_config(
+    config: UserConfig, *, log_summary: bool = True
+) -> List[ValidationError]:
     """
     Validate user configuration.
 
     Args:
         config: User configuration
+        log_summary: Emit the human-readable validation summary. Machine-readable
+            callers disable this so stdout remains a valid document.
 
     Returns:
         list: List of validation errors
     """
-    log.info("Validating user configuration...")
+    if log_summary:
+        log.info("Validating user configuration...")
 
     errors = []
 
@@ -639,11 +645,11 @@ def validate_user_config(config: UserConfig) -> List[ValidationError]:
     # Validate embedding query_modality compatibility with embedding model
     errors.extend(validate_embedding_modality_compatibility(config))
 
-    if errors:
+    if errors and log_summary:
         log.warning(f"Found {len(errors)} validation error(s)")
         for error in errors:
             log.warning(f"  • {error}")
-    else:
+    elif log_summary:
         log.info("Configuration validation passed")
 
     return errors
@@ -659,7 +665,6 @@ def print_validation_errors(errors: List[ValidationError]):
     if not errors:
         return
 
-    print("\n❌ Configuration validation failed:\n")
-    for i, error in enumerate(errors, 1):
-        print(f"{i}. {error}")
-    print()
+    terminal_error("Configuration validation failed")
+    for i, validation_error in enumerate(errors, 1):
+        echo(f"  {i}. {validation_error}", err=True)

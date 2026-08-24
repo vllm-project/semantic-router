@@ -41,9 +41,12 @@ var maintainedFullConfigAssets = []string{
 var maintainedRecipeFiles = []string{
 	"README.md",
 	"config.yaml",
+	"metadata.yaml",
 	"probes.yaml",
 	"recipe.dsl",
 }
+
+const builtInRecipeCatalogDirectory = "built-in"
 
 var maintainedEmbeddedConfigAssets = []string{
 	"deploy/kserve/configmap-router-config.yaml",
@@ -136,6 +139,9 @@ func TestMaintainedRecipeDirectoriesAreCompleteAndSymmetric(t *testing.T) {
 	var actualDirectories []string
 	for _, entry := range entries {
 		if entry.IsDir() {
+			if entry.Name() == builtInRecipeCatalogDirectory {
+				continue
+			}
 			actualDirectories = append(actualDirectories, entry.Name())
 			continue
 		}

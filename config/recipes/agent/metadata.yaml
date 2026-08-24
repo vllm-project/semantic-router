@@ -1,0 +1,19 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: agent
+name: Agent Routing
+version: 0.2.0
+description: >-
+  Routes agentic, coding, specialist, privacy, and security workloads across
+  local and frontier lanes while collecting replay data for learning.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - agents
+  - privacy
+  - router-learning
+  - security
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/agent
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/agent/README.md

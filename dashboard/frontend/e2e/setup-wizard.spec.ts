@@ -428,4 +428,112 @@ test.describe("Setup wizard routing import", () => {
     await page.getByRole("button", { name: "Retry import" }).click();
     await expect(page.getByText("Remote config ready")).toBeVisible();
   });
+
+  // The frontend half of the #2795 contract.
+  //
+  // Activation ends setup mode by rewriting the router config, and the
+  // dashboard is not restarted. This drives the wizard to activation against a
+  // backend whose /api/setup/state flips at that moment, and checks the shell
+  // leaves /setup and stays off it.
+  //
+  // The API is mocked, so this covers the frontend only. That the real backend
+  // flips within one request is proved by the Go tests.
+  test("leaves the setup wizard once activation clears setup mode", async ({
+    page,
+  }) => {
+    let setupMode = true;
+    let setupStateRequestCount = 0;
+    let activateRequestCount = 0;
+
+    await mockFirstRunSetup(page);
+
+    // mockFirstRunSetup registered a fixed /api/setup/state. Drop it rather
+    // than rely on later-registration-wins, so this handler is the one used.
+    await page.unroute("**/api/setup/state");
+    await page.route("**/api/setup/state", async (route) => {
+      setupStateRequestCount += 1;
+      await route.fulfill({
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          setupMode,
+          listenerPort: 8700,
+          models: setupMode ? 0 : 1,
+          decisions: setupMode ? 0 : 1,
+          hasModels: !setupMode,
+          hasDecisions: !setupMode,
+          canActivate: !setupMode,
+        }),
+      });
+    });
+
+    await page.route("**/api/setup/validate", async (route) => {
+      const payload = route.request().postDataJSON() as {
+        config: Record<string, unknown>;
+      };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          valid: true,
+          config: payload.config,
+          models: 1,
+          decisions: 1,
+          signals: 0,
+          canActivate: true,
+        }),
+      });
+    });
+
+    await page.route("**/api/setup/activate", async (route) => {
+      activateRequestCount += 1;
+      // What the fix guarantees: stripping setup.mode takes effect at once, so
+      // the next read reports false with no restart in between.
+      setupMode = false;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          status: "success",
+          setupMode: false,
+          message: "Setup activated successfully.",
+        }),
+      });
+    });
+
+    await page.goto("/setup");
+
+    await expect(
+      page.getByRole("heading", { name: "Connect your first model" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Next" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Choose how routing should begin" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Next" }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Review and activate" }),
+    ).toBeVisible();
+
+    const activate = page.getByRole("button", { name: "Activate", exact: true });
+    await expect(activate).toBeEnabled();
+    await activate.click();
+
+    await expect.poll(() => activateRequestCount).toBe(1);
+    // The wizard re-reads setup state after activating, so the shell decides
+    // from the new value, not the one loaded on first render.
+    await expect.poll(() => setupStateRequestCount).toBeGreaterThanOrEqual(2);
+
+    await expect(page).toHaveURL(/\/dashboard$/, { timeout: 12000 });
+
+    // Before the fix the reread still said true and the shell bounced back to
+    // /setup. Give that bounce a chance to happen and assert it does not.
+    await page.waitForTimeout(300);
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await expect(
+      page.getByRole("heading", { name: "Review and activate" }),
+    ).toHaveCount(0);
+  });
 });

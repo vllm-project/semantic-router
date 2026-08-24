@@ -7,6 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/configprojection"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -17,9 +18,16 @@ type Server struct {
 }
 
 // Setup configures all routes and returns the dashboard server bundle.
-func Setup(cfg *config.Config) *Server {
+//
+// setupResolver is built by main, not here, so that the process has exactly one
+// resolver and one cache over the config file.
+func Setup(cfg *config.Config, setupResolver *setupmode.Resolver) *Server {
 	mux := http.NewServeMux()
-	authSvc := setupAuthRoutes(mux, cfg)
+
+	// The bootstrap gate consults the resolver on every unauthenticated
+	// can-register / register call, so it must be wired before any request
+	// arrives. Wiring it later compiles but panics at request time.
+	authSvc := setupAuthRoutes(mux, cfg, setupResolver)
 
 	wf, err := workflowstore.Open(cfg.WorkflowDBPath, workflowstore.Options{
 		LegacyOpenClawDir: cfg.OpenClawDataDir,
@@ -44,13 +52,17 @@ func Setup(cfg *config.Config) *Server {
 	log.Printf("Workflow health API registered: /api/workflows/health")
 
 	openClawHandler := newOpenClawHandler(cfg, wf)
+	recipeStore := newDashboardRecipeStore(cfg)
 
-	registerCoreRoutes(mux, cfg)
+	registerCoreRoutes(mux, cfg, setupResolver, coreRouteOptions{
+		recipeStore:              recipeStore,
+		modelVerificationAuditor: authSvc,
+	})
 	registerEvaluationRoutes(mux, cfg)
 	SetupMCP(mux, cfg, wf, openClawHandler)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
-	registerProxyRoutes(mux, cfg)
+	registerProxyRoutes(mux, cfg, recipeStore)
 
 	// Static frontend must be registered last.
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))

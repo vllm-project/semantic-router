@@ -1,0 +1,21 @@
+schema_version: vllm-sr/recipe-metadata/v1
+id: multi-objective
+name: Multi-Objective Mixture-of-Models
+version: 0.1.0
+description: >-
+  Exposes isolated balanced, latency, cost, accuracy, and privacy objectives as
+  stable request-facing unified model entrypoints over one shared model pool.
+authors:
+  - name: vLLM Semantic Router Contributors
+    url: https://github.com/vllm-project/semantic-router/graphs/contributors
+license: Apache-2.0
+tags:
+  - cost
+  - latency
+  - mixture-of-models
+  - multi-objective
+  - privacy
+  - quality
+links:
+  source: https://github.com/vllm-project/semantic-router/tree/main/config/recipes/multi-objective
+  documentation: https://github.com/vllm-project/semantic-router/blob/main/config/recipes/multi-objective/README.md

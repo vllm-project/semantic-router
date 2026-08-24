@@ -1160,8 +1160,9 @@ type HNSWEmbeddingConfig struct {
 	// +optional
 	TargetDimension int `json:"target_dimension,omitempty"`
 
-	// TargetLayer is the layer for mmBERT early exit (only used when ModelType is "mmbert")
-	// Layer 3: ~7x speedup, Layer 6: ~3.6x speedup, Layer 11: ~2x speedup, Layer 22: full accuracy
+	// TargetLayer controls mmBERT early exit and is used only when ModelType is "mmbert".
+	// Lower layers reduce encoder work but may reduce quality; layer 22 uses the full encoder depth.
+	// Evaluate the latency and quality trade-off on representative deployment data.
 	// +kubebuilder:validation:Enum=3;6;11;22
 	// +optional
 	TargetLayer int `json:"target_layer,omitempty"`
@@ -1361,12 +1362,9 @@ type PromptGuardConfig struct {
 	// +kubebuilder:default=true
 	// +optional
 	Enabled bool `json:"enabled,omitempty"`
-	// Variant selects a local Candle-backed model variant. Mutually
-	// exclusive with Protocol. Deliberately has no kubebuilder default: a
-	// per-field CRD default would be injected by the API server even when
-	// only Protocol is set, tripping mutual-exclusion validation - the
-	// mmbert32k default for "neither set" is applied by the canonical config
-	// builder instead (canonical_config_spec.go), after both fields are read.
+	// Variant selects a local Candle-backed model variant. It is mutually
+	// exclusive with Protocol. When both fields are omitted, the operator uses
+	// mmbert32k.
 	// +kubebuilder:validation:Enum=candle;mmbert32k
 	// +optional
 	Variant string `json:"variant,omitempty"`
@@ -1394,6 +1392,15 @@ type PromptGuardConfig struct {
 	// (e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset.
 	// +optional
 	PositiveLabels []string `json:"positive_labels,omitempty"`
+	// OnError selects what a prompt-guard classifier failure does to the rule
+	// that failed to evaluate. "allow" (the default) tolerates the failure and
+	// treats the content as not matching; "block" treats it as a positive
+	// detection, because an inference failure means the content could not be
+	// verified safe. Without this field on the CRD the setting is pruned by the
+	// API server and an operator-managed deployment silently fails open.
+	// +kubebuilder:validation:Enum=allow;block
+	// +optional
+	OnError string `json:"on_error,omitempty"`
 }
 
 // ClassifierConfig defines classifier configuration

@@ -210,7 +210,7 @@ func createJailbreakInference(promptGuardCfg *config.PromptGuardConfig, routerCf
 			// Pass default threshold from PromptGuardConfig.
 			return NewVLLMJailbreakInference(externalCfg, promptGuardCfg.Threshold, jailbreakMapping, promptGuardCfg.PositiveLabels)
 		case config.PromptGuardProtocolHTTPClassify:
-			return NewHTTPClassifierJailbreakInference(externalCfg, jailbreakMapping)
+			return NewHTTPClassifierInference(externalCfg, jailbreakMapping)
 		default:
 			return nil, fmt.Errorf("prompt_guard.protocol: unrecognized value %q", promptGuardCfg.Protocol)
 		}

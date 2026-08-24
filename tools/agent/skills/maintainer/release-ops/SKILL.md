@@ -45,12 +45,13 @@ description: Maintainer release and milestone operating workflow. Use when a mai
 
 - `python3 tools/agent/scripts/maintainer_board.py sync --milestone "<name>"`
 - `python3 tools/agent/scripts/maintainer_board.py brief`
-- `python3 tools/agent/scripts/maintainer_board.py release-report --release-plan tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md --write`
-- `python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan tools/agent/docs/plans/pl-0033-v0-3-themis-release-closure.md --dry-run`
+- `python3 tools/agent/scripts/maintainer_board.py release-report --release-plan tools/agent/docs/plans/RELEASE_PLAN.md --write`
+- `python3 tools/agent/scripts/maintainer_board.py create-issues --release-plan tools/agent/docs/plans/RELEASE_PLAN.md --dry-run`
 
 ## Gotchas
 
-- Milestone assignment is a release commitment; `milestone-candidate` is not.
+- Milestone assignment is a release commitment and requires accepted work;
+  there is no separate candidate state label.
 - Close-candidate PRs should get an explicit grace-period comment before close
   unless the maintainer asks for immediate closure.
 - The generated board is local and gitignored; do not link to local board paths

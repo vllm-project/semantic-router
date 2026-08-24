@@ -8,11 +8,7 @@ import TableHeader from '../components/TableHeader'
 import { DataTable, type Column } from '../components/DataTable'
 import { normalizeStringList } from '../components/structuredFieldEditorSupport'
 import type { ViewSection } from '../components/ViewModal'
-import {
-  ConfigData,
-  NormalizedModel,
-  ReasoningFamily,
-} from './configPageSupport'
+import { ConfigData, NormalizedModel, ReasoningFamily } from './configPageSupport'
 import {
   ensureProviderDefaultsConfig,
   ensureProvidersConfig,
@@ -47,11 +43,13 @@ import {
   ModelPricingEditor,
   ModelTagsEditor,
 } from './configPageModelStructuredEditors'
+import { useModelLiveVerification } from './useModelLiveVerification'
 
 interface ConfigPageModelsSectionProps {
   config: ConfigData | null
   isPythonCLI: boolean
   isReadonly: boolean
+  canVerifyModels: boolean
   models: NormalizedModel[]
   defaultModel: string
   reasoningFamilies: Record<string, ReasoningFamily>
@@ -75,6 +73,7 @@ export default function ConfigPageModelsSection({
   config,
   isPythonCLI,
   isReadonly,
+  canVerifyModels,
   models,
   defaultModel,
   reasoningFamilies,
@@ -94,31 +93,35 @@ export default function ConfigPageModelsSection({
   const [bulkDeletePending, setBulkDeletePending] = useState(false)
   const [operationError, setOperationError] = useState<string | null>(null)
   const [modelsPendingDelete, setModelsPendingDelete] = useState<string[]>([])
-  const [reasoningFamilyPendingDelete, setReasoningFamilyPendingDelete] = useState<string | null>(null)
+  const [reasoningFamilyPendingDelete, setReasoningFamilyPendingDelete] = useState<string | null>(
+    null,
+  )
   const [reasoningFamilyDeletePending, setReasoningFamilyDeletePending] = useState(false)
   const [reasoningFamilyDeleteError, setReasoningFamilyDeleteError] = useState<string | null>(null)
+  const liveVerification = useModelLiveVerification(config)
 
   const reasoningFamilyOptions = useMemo(() => getReasoningFamilyFilterOptions(models), [models])
   const modelReferenceCounts = useMemo(() => getModelReferenceCounts(config), [config])
-  const filteredModels = useMemo(() => filterModelInventory(models, {
-    search: modelsSearch,
-    reasoningFamily: reasoningFamilyFilter,
-    endpointState: endpointFilter,
-    role: roleFilter,
-    defaultModel,
-  }), [defaultModel, endpointFilter, models, modelsSearch, reasoningFamilyFilter, roleFilter])
+  const filteredModels = useMemo(
+    () =>
+      filterModelInventory(models, {
+        search: modelsSearch,
+        reasoningFamily: reasoningFamilyFilter,
+        endpointState: endpointFilter,
+        role: roleFilter,
+        defaultModel,
+      }),
+    [defaultModel, endpointFilter, models, modelsSearch, reasoningFamilyFilter, roleFilter],
+  )
   const filtersActive = Boolean(
-    modelsSearch.trim()
-    || reasoningFamilyFilter !== 'all'
-    || endpointFilter !== 'all'
-    || roleFilter !== 'all',
+    modelsSearch.trim() ||
+      reasoningFamilyFilter !== 'all' ||
+      endpointFilter !== 'all' ||
+      roleFilter !== 'all',
   )
 
-  const getDeleteBlocker = (modelName: string) => getModelDeleteBlocker(
-    modelName,
-    defaultModel,
-    modelReferenceCounts,
-  )
+  const getDeleteBlocker = (modelName: string) =>
+    getModelDeleteBlocker(modelName, defaultModel, modelReferenceCounts)
 
   const clearModelFilters = () => {
     onModelsSearchChange('')
@@ -139,45 +142,110 @@ export default function ConfigPageModelsSection({
 
     return (
       <div style={{ padding: '1rem', background: 'rgba(0, 0, 0, 0.3)' }}>
-        <h4 style={{
-          margin: '0 0 1rem 0',
-          fontSize: '0.875rem',
-          fontWeight: 600,
-          color: 'var(--color-text-secondary)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.05em'
-        }}>
+        <h4
+          style={{
+            margin: '0 0 1rem 0',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            color: 'var(--color-text-secondary)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.05em',
+          }}
+        >
           Endpoints for {model.name}
         </h4>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-              <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Name</th>
-              <th style={{ padding: '0.5rem', textAlign: 'left', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)' }}>Address</th>
-              <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)', width: '100px' }}>Protocol</th>
-              <th style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-text-secondary)', width: '100px' }}>Weight</th>
+              <th
+                style={{
+                  padding: '0.5rem',
+                  textAlign: 'left',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                Name
+              </th>
+              <th
+                style={{
+                  padding: '0.5rem',
+                  textAlign: 'left',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                Address
+              </th>
+              <th
+                style={{
+                  padding: '0.5rem',
+                  textAlign: 'center',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                  width: '100px',
+                }}
+              >
+                Protocol
+              </th>
+              <th
+                style={{
+                  padding: '0.5rem',
+                  textAlign: 'center',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  color: 'var(--color-text-secondary)',
+                  width: '100px',
+                }}
+              >
+                Weight
+              </th>
             </tr>
           </thead>
           <tbody>
             {model.endpoints.map((ep, idx) => (
               <tr key={idx} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-                <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>{ep.name}</td>
-                <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontFamily: 'var(--font-mono)', color: 'var(--color-text-secondary)' }}>
-                  {isReadonly ? '************' : (ep.endpoint || 'N/A')}
+                <td style={{ padding: '0.75rem 0.5rem', fontSize: '0.875rem', fontWeight: 500 }}>
+                  {ep.name}
+                </td>
+                <td
+                  style={{
+                    padding: '0.75rem 0.5rem',
+                    fontSize: '0.875rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--color-text-secondary)',
+                  }}
+                >
+                  {isReadonly ? '************' : ep.endpoint || 'N/A'}
                 </td>
                 <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center' }}>
-                  <span style={{
-                    padding: '0.25rem 0.5rem',
-                    background: ep.protocol === 'https' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                    borderRadius: '4px',
-                    fontSize: '0.75rem',
-                    fontWeight: 600,
-                    textTransform: 'uppercase'
-                  }}>
+                  <span
+                    style={{
+                      padding: '0.25rem 0.5rem',
+                      background:
+                        ep.protocol === 'https'
+                          ? 'rgba(34, 197, 94, 0.15)'
+                          : 'rgba(234, 179, 8, 0.15)',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 600,
+                      textTransform: 'uppercase',
+                    }}
+                  >
                     {ep.protocol}
                   </span>
                 </td>
-                <td style={{ padding: '0.75rem 0.5rem', textAlign: 'center', fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
+                <td
+                  style={{
+                    padding: '0.75rem 0.5rem',
+                    textAlign: 'center',
+                    fontSize: '0.875rem',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
                   {ep.weight}
                 </td>
               </tr>
@@ -200,12 +268,21 @@ export default function ConfigPageModelsSection({
           { label: 'API Format', value: model.api_format || 'N/A' },
           { label: 'Modality', value: model.modality || 'N/A' },
           { label: 'Param Size', value: model.param_size || 'N/A' },
-          { label: 'Context Window', value: model.context_window_size ? `${model.context_window_size}` : 'N/A' },
-        ]
-      }
+          {
+            label: 'Context Window',
+            value: model.context_window_size ? `${model.context_window_size}` : 'N/A',
+          },
+        ],
+      },
     ]
 
-    if (model.description || model.capabilities?.length || model.tags?.length || model.loras?.length || typeof model.quality_score === 'number') {
+    if (
+      model.description ||
+      model.capabilities?.length ||
+      model.tags?.length ||
+      model.loras?.length ||
+      typeof model.quality_score === 'number'
+    ) {
       sections.push({
         title: 'Routing Metadata',
         fields: [
@@ -225,8 +302,11 @@ export default function ConfigPageModelsSection({
             value: <ModelLorasEditor value={model.loras || []} readOnly />,
             fullWidth: true,
           },
-          { label: 'Quality Score', value: typeof model.quality_score === 'number' ? `${model.quality_score}` : 'N/A' },
-        ]
+          {
+            label: 'Quality Score',
+            value: typeof model.quality_score === 'number' ? `${model.quality_score}` : 'N/A',
+          },
+        ],
       })
     }
 
@@ -256,9 +336,9 @@ export default function ConfigPageModelsSection({
                 maskSensitive={isReadonly}
               />
             ),
-            fullWidth: true
-          }
-        ]
+            fullWidth: true,
+          },
+        ],
       })
     }
 
@@ -271,7 +351,7 @@ export default function ConfigPageModelsSection({
             value: <ModelPricingEditor value={model.pricing} readOnly />,
             fullWidth: true,
           },
-        ]
+        ],
       })
     }
 
@@ -297,12 +377,14 @@ export default function ConfigPageModelsSection({
         tags: [],
         quality_score: '',
         modality: '',
-        backend_refs: [{
-          name: 'endpoint-1',
-          endpoint: 'localhost:8000',
-          protocol: 'http' as const,
-          weight: 1,
-        }],
+        backend_refs: [
+          {
+            name: 'endpoint-1',
+            endpoint: 'localhost:8000',
+            protocol: 'http' as const,
+            weight: 1,
+          },
+        ],
         pricing: {
           currency: 'USD',
           prompt_per_1m: 0,
@@ -317,52 +399,53 @@ export default function ConfigPageModelsSection({
           type: 'text',
           required: true,
           placeholder: 'e.g., openai/gpt-4',
-          description: 'Unique identifier for the model'
+          description: 'Unique identifier for the model',
         },
         {
           name: 'reasoning_family',
           label: 'Reasoning Family',
           type: 'select',
           options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families'
+          description: 'Select from configured reasoning families',
         },
         {
           name: 'provider_model_id',
           label: 'Provider Model ID',
           type: 'text',
           placeholder: 'e.g., openai/gpt-4.1',
-          description: 'Concrete upstream model identifier stored under providers.models[].provider_model_id'
+          description:
+            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
         },
         {
           name: 'api_format',
           label: 'API Format',
           type: 'text',
           placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format'
+          description: 'Provider-specific wire format stored under providers.models[].api_format',
         },
         {
           name: 'param_size',
           label: 'Parameter Size',
           type: 'text',
-          placeholder: 'e.g., 8B'
+          placeholder: 'e.g., 8B',
         },
         {
           name: 'context_window_size',
           label: 'Context Window Size',
           type: 'number',
-          placeholder: 'e.g., 131072'
+          placeholder: 'e.g., 131072',
         },
         {
           name: 'modality',
           label: 'Modality',
           type: 'text',
-          placeholder: 'e.g., text, omni, diffusion'
+          placeholder: 'e.g., text, omni, diffusion',
         },
         {
           name: 'description',
           label: 'Description',
           type: 'textarea',
-          placeholder: 'Short routing-facing model description'
+          placeholder: 'Short routing-facing model description',
         },
         ...getModelStructuredFormFields(),
       ],
@@ -382,12 +465,17 @@ export default function ConfigPageModelsSection({
           const providers = ensureProvidersConfig(newConfig)
           upsertRoutingModelCard(newConfig, modelName, {
             param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size ? Number(data.context_window_size) : undefined,
+            context_window_size: data.context_window_size
+              ? Number(data.context_window_size)
+              : undefined,
             description: data.description || undefined,
             capabilities: capabilities.length > 0 ? capabilities : undefined,
             loras: loras.length > 0 ? loras : undefined,
             tags: tags.length > 0 ? tags : undefined,
-            quality_score: data.quality_score === '' || data.quality_score === undefined ? undefined : Number(data.quality_score),
+            quality_score:
+              data.quality_score === '' || data.quality_score === undefined
+                ? undefined
+                : Number(data.quality_score),
             modality: data.modality || undefined,
           })
           providers.models.push(buildProviderModelPayload(modelName, data))
@@ -400,15 +488,18 @@ export default function ConfigPageModelsSection({
             pricing: normalizeModelPricing(data.pricing),
             api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
             external_model_ids: normalizeModelStringMap(data.external_model_ids),
-            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs).map((backendRef) => backendRef.name || '').filter(Boolean),
-            model_id: typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
-              ? data.provider_model_id.trim()
-              : modelName,
+            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs)
+              .map((backendRef) => backendRef.name || '')
+              .filter(Boolean),
+            model_id:
+              typeof data.provider_model_id === 'string' && data.provider_model_id.trim()
+                ? data.provider_model_id.trim()
+                : modelName,
           }
         }
         await saveConfig(newConfig)
       },
-      'add'
+      'add',
     )
   }
 
@@ -431,7 +522,7 @@ export default function ConfigPageModelsSection({
         quality_score: model.quality_score ?? '',
         modality: model.modality || '',
         backend_refs: model.backend_refs || [],
-        pricing: model.pricing || {}
+        pricing: model.pricing || {},
       },
       [
         {
@@ -439,45 +530,46 @@ export default function ConfigPageModelsSection({
           label: 'Reasoning Family',
           type: 'select',
           options: reasoningFamilyNames,
-          description: 'Select from configured reasoning families'
+          description: 'Select from configured reasoning families',
         },
         {
           name: 'provider_model_id',
           label: 'Provider Model ID',
           type: 'text',
           placeholder: 'e.g., openai/gpt-4.1',
-          description: 'Concrete upstream model identifier stored under providers.models[].provider_model_id'
+          description:
+            'Concrete upstream model identifier stored under providers.models[].provider_model_id',
         },
         {
           name: 'api_format',
           label: 'API Format',
           type: 'text',
           placeholder: 'e.g., openai',
-          description: 'Provider-specific wire format stored under providers.models[].api_format'
+          description: 'Provider-specific wire format stored under providers.models[].api_format',
         },
         {
           name: 'param_size',
           label: 'Parameter Size',
           type: 'text',
-          placeholder: 'e.g., 8B'
+          placeholder: 'e.g., 8B',
         },
         {
           name: 'context_window_size',
           label: 'Context Window Size',
           type: 'number',
-          placeholder: 'e.g., 131072'
+          placeholder: 'e.g., 131072',
         },
         {
           name: 'modality',
           label: 'Modality',
           type: 'text',
-          placeholder: 'e.g., text, omni, diffusion'
+          placeholder: 'e.g., text, omni, diffusion',
         },
         {
           name: 'description',
           label: 'Description',
           type: 'textarea',
-          placeholder: 'Short routing-facing model description'
+          placeholder: 'Short routing-facing model description',
         },
         ...getModelStructuredFormFields(),
       ],
@@ -495,20 +587,27 @@ export default function ConfigPageModelsSection({
           const providers = ensureProvidersConfig(newConfig)
           upsertRoutingModelCard(newConfig, model.name, {
             param_size: data.param_size || undefined,
-            context_window_size: data.context_window_size ? Number(data.context_window_size) : undefined,
+            context_window_size: data.context_window_size
+              ? Number(data.context_window_size)
+              : undefined,
             description: data.description || undefined,
             capabilities: capabilities.length > 0 ? capabilities : undefined,
             loras: loras.length > 0 ? loras : undefined,
             tags: tags.length > 0 ? tags : undefined,
-            quality_score: data.quality_score === '' || data.quality_score === undefined ? undefined : Number(data.quality_score),
+            quality_score:
+              data.quality_score === '' || data.quality_score === undefined
+                ? undefined
+                : Number(data.quality_score),
             modality: data.modality || undefined,
           })
           type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
           providers.models = providers.models.map((providerModel: ProviderModel) =>
-            providerModel.name === model.name ? {
-              ...providerModel,
-              ...buildProviderModelPayload(model.name, data, providerModel),
-            } : providerModel
+            providerModel.name === model.name
+              ? {
+                  ...providerModel,
+                  ...buildProviderModelPayload(model.name, data, providerModel),
+                }
+              : providerModel,
           )
         } else if (newConfig.model_config) {
           newConfig.model_config[model.name] = {
@@ -517,13 +616,16 @@ export default function ConfigPageModelsSection({
             pricing: normalizeModelPricing(data.pricing),
             api_format: typeof data.api_format === 'string' ? data.api_format : undefined,
             external_model_ids: normalizeModelStringMap(data.external_model_ids),
-            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs).map((backendRef) => backendRef.name || '').filter(Boolean),
-            model_id: typeof data.provider_model_id === 'string' ? data.provider_model_id : model.name,
+            preferred_endpoints: normalizeModelBackendRefs(data.backend_refs)
+              .map((backendRef) => backendRef.name || '')
+              .filter(Boolean),
+            model_id:
+              typeof data.provider_model_id === 'string' ? data.provider_model_id : model.name,
           }
         }
         await saveConfig(newConfig)
       },
-      'edit'
+      'edit',
     )
   }
 
@@ -546,7 +648,9 @@ export default function ConfigPageModelsSection({
       if (isPythonCLI && newConfig.providers?.models) {
         const providers = ensureProvidersConfig(newConfig)
         type ProviderModel = NonNullable<ConfigData['providers']>['models'][number]
-        providers.models = providers.models.filter((providerModel: ProviderModel) => !namesToDelete.has(providerModel.name))
+        providers.models = providers.models.filter(
+          (providerModel: ProviderModel) => !namesToDelete.has(providerModel.name),
+        )
         for (const modelName of namesToDelete) {
           removeRoutingModelCard(newConfig, modelName)
         }
@@ -563,7 +667,9 @@ export default function ConfigPageModelsSection({
       })
       setModelsPendingDelete([])
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Failed to delete the selected models.')
+      setOperationError(
+        error instanceof Error ? error.message : 'Failed to delete the selected models.',
+      )
     } finally {
       setBulkDeletePending(false)
     }
@@ -580,7 +686,7 @@ export default function ConfigPageModelsSection({
   }
 
   const handleToggleExpand = (model: ModelRow) => {
-    onExpandedModelsChange(prev => {
+    onExpandedModelsChange((prev) => {
       const next = new Set(prev)
       if (next.has(model.name)) {
         next.delete(model.name)
@@ -603,9 +709,9 @@ export default function ConfigPageModelsSection({
           fields: [
             { label: 'Family Name', value: familyName },
             { label: 'Type', value: familyConfig.type },
-            { label: 'Parameter', value: familyConfig.parameter }
-          ]
-        }
+            { label: 'Parameter', value: familyConfig.parameter },
+          ],
+        },
       ],
       () => handleEditReasoningFamily(familyName),
     )
@@ -625,7 +731,7 @@ export default function ConfigPageModelsSection({
           type: 'select',
           options: ['reasoning_effort', 'chat_template_kwargs'],
           required: true,
-          description: 'Type of reasoning family'
+          description: 'Type of reasoning family',
         },
         {
           name: 'parameter',
@@ -633,8 +739,8 @@ export default function ConfigPageModelsSection({
           type: 'text',
           required: true,
           placeholder: 'e.g., reasoning_effort',
-          description: 'Parameter name for reasoning control'
-        }
+          description: 'Parameter name for reasoning control',
+        },
       ],
       async (data) => {
         const newConfig = cloneConfigData(config)
@@ -648,7 +754,7 @@ export default function ConfigPageModelsSection({
           newConfig.reasoning_families[familyName] = data
         }
         await saveConfig(newConfig)
-      }
+      },
     )
   }
 
@@ -665,7 +771,7 @@ export default function ConfigPageModelsSection({
           type: 'text',
           required: true,
           placeholder: 'e.g., o1-reasoning',
-          description: 'Unique name for this reasoning family'
+          description: 'Unique name for this reasoning family',
         },
         {
           name: 'type',
@@ -673,7 +779,7 @@ export default function ConfigPageModelsSection({
           type: 'select',
           options: ['reasoning_effort', 'chat_template_kwargs'],
           required: true,
-          description: 'Type of reasoning family'
+          description: 'Type of reasoning family',
         },
         {
           name: 'parameter',
@@ -681,8 +787,8 @@ export default function ConfigPageModelsSection({
           type: 'text',
           required: true,
           placeholder: 'e.g., reasoning_effort',
-          description: 'Parameter name for reasoning control'
-        }
+          description: 'Parameter name for reasoning control',
+        },
       ],
       async (data) => {
         const familyName = data.name
@@ -706,7 +812,7 @@ export default function ConfigPageModelsSection({
         }
         await saveConfig(newConfig)
       },
-      'add'
+      'add',
     )
   }
 
@@ -745,18 +851,21 @@ export default function ConfigPageModelsSection({
   }
 
   type ReasoningFamilyRow = { name: string; type: string; parameter: string }
-  const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(([name, config]) => ({
-    name,
-    type: config.type,
-    parameter: config.parameter
-  }))
+  const reasoningFamilyData: ReasoningFamilyRow[] = Object.entries(reasoningFamilies).map(
+    ([name, config]) => ({
+      name,
+      type: config.type,
+      parameter: config.parameter,
+    }),
+  )
   const normalizedReasoningFamilySearch = reasoningFamilySearch.trim().toLocaleLowerCase()
   const filteredReasoningFamilyData = normalizedReasoningFamilySearch
-    ? reasoningFamilyData.filter((family) => (
-        family.name.toLocaleLowerCase().includes(normalizedReasoningFamilySearch)
-        || family.type.toLocaleLowerCase().includes(normalizedReasoningFamilySearch)
-        || family.parameter.toLocaleLowerCase().includes(normalizedReasoningFamilySearch)
-      ))
+    ? reasoningFamilyData.filter(
+        (family) =>
+          family.name.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
+          family.type.toLocaleLowerCase().includes(normalizedReasoningFamilySearch) ||
+          family.parameter.toLocaleLowerCase().includes(normalizedReasoningFamilySearch),
+      )
     : reasoningFamilyData
 
   const reasoningFamilyColumns: Column<ReasoningFamilyRow>[] = [
@@ -764,9 +873,7 @@ export default function ConfigPageModelsSection({
       key: 'name',
       header: 'Family Name',
       sortable: true,
-      render: (row) => (
-        <span style={{ fontWeight: 600 }}>{row.name}</span>
-      )
+      render: (row) => <span style={{ fontWeight: 600 }}>{row.name}</span>,
     },
     {
       key: 'type',
@@ -774,24 +881,32 @@ export default function ConfigPageModelsSection({
       width: '200px',
       sortable: true,
       render: (row) => (
-        <span className={styles.badge} style={{ background: 'rgba(166, 171, 179, 0.15)', color: 'var(--color-accent-cyan)' }}>
+        <span
+          className={styles.badge}
+          style={{ background: 'rgba(166, 171, 179, 0.15)', color: 'var(--color-accent-cyan)' }}
+        >
           {row.type}
         </span>
-      )
+      ),
     },
     {
       key: 'parameter',
       header: 'Parameter',
       sortable: true,
       render: (row) => (
-        <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>{row.parameter}</code>
-      )
-    }
+        <code style={{ fontSize: '0.875rem', color: 'var(--color-text-secondary)' }}>
+          {row.parameter}
+        </code>
+      ),
+    },
   ]
 
   return (
     <>
-      <ConfigPageManagerLayout title="Models" description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions.">
+      <ConfigPageManagerLayout
+        title="Models"
+        description="Manage provider models, reasoning families, and the endpoint inventory available to routing decisions."
+      >
         <div className={styles.sectionPanel}>
           <div className={styles.sectionTableBlock}>
             <ConfigPageModelInventoryPanel
@@ -828,6 +943,9 @@ export default function ConfigPageModelsSection({
               onToggleExpand={handleToggleExpand}
               renderExpandedRow={renderModelEndpoints}
               getDeleteBlocker={getDeleteBlocker}
+              liveVerificationStates={liveVerification.states}
+              onVerifyModel={(modelName) => void liveVerification.verify(modelName)}
+              canVerifyModels={canVerifyModels}
             />
           </div>
 
@@ -878,9 +996,11 @@ export default function ConfigPageModelsSection({
         eyebrow="Destructive configuration change"
         confirmLabel="Delete family"
         pending={reasoningFamilyDeletePending}
-        details={reasoningFamilyDeleteError ? (
-          <span role="alert">{reasoningFamilyDeleteError}</span>
-        ) : undefined}
+        details={
+          reasoningFamilyDeleteError ? (
+            <span role="alert">{reasoningFamilyDeleteError}</span>
+          ) : undefined
+        }
         onCancel={() => {
           if (reasoningFamilyDeletePending) return
           setReasoningFamilyPendingDelete(null)

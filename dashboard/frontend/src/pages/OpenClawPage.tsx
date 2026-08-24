@@ -122,9 +122,9 @@ const getPanelId = (tab: OpenClawTab) => `openclaw-panel-${tab}`
 
 const OpenClawPage: React.FC = () => {
   const { user, isLoading: authLoading } = useAuth()
-  const { isReadonly, isLoading: readonlyLoading } = useReadonly()
+  const { serverReadonly, isLoading: readonlyLoading } = useReadonly()
   const permissionsLoading = authLoading || readonlyLoading
-  const canManage = !permissionsLoading && !isReadonly && canManageOpenClaw(user)
+  const canManage = !permissionsLoading && !serverReadonly && canManageOpenClaw(user)
   const managementDisabled = !canManage
   const [activeTab, setActiveTab] = useState<OpenClawTab>('architecture')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
@@ -265,8 +265,11 @@ const OpenClawPage: React.FC = () => {
       {!permissionsLoading && !canManage ? (
         <div className={styles.readOnlyNotice} role="status">
           <strong>View-only access.</strong>{' '}
-          {isReadonly ? (
-            <>This dashboard deployment is in read-only mode, so OpenClaw changes are disabled.</>
+          {serverReadonly ? (
+            <>
+              The server-wide read-only policy disables OpenClaw changes. Runtime config mount
+              availability does not affect OpenClaw management.
+            </>
           ) : (
             <>
               OpenClaw topology, teams, workers, and runtime status remain visible. The{' '}

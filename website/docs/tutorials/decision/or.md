@@ -2,9 +2,8 @@
 
 ## Overview
 
-Use `config/fragments/decision/or/` when one route should handle several equivalent signal matches.
-
-`OR` is the right shape when multiple independent signals lead to the same route outcome.
+An `OR` decision matches when any child condition matches. Use it when several
+independent request types should share the same route outcome.
 
 ## Key Advantages
 
@@ -21,15 +20,13 @@ Without `OR`, teams often duplicate the same route logic several times just to s
 
 ## When to Use
 
-Use `or/` when:
+Use `OR` when:
 
 - two domains share the same model policy
 - several signal variants map to one fallback route
 - one operational plugin should run for several independent cases
 
 ## Configuration
-
-Source fragment: `config/fragments/decision/or/business-or-law.yaml`
 
 ```yaml
 routing:
@@ -50,3 +47,7 @@ routing:
 ```
 
 Use `OR` when the route outcome is the same, but several signals should be allowed to trigger it.
+
+Any child can make the route eligible, so audit each child as if it were a
+standalone route condition. See a complete example:
+[`config/fragments/decision/or/business-or-law.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/decision/or/business-or-law.yaml).

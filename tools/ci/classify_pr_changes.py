@@ -93,8 +93,16 @@ def is_documentation_path(path: str) -> bool:
     return path.endswith((".md", ".mdx"))
 
 
-def non_documentation_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(path for path in paths if not is_documentation_path(path))
+def is_repository_ownership_path(path: str) -> bool:
+    return path == ".github/CODEOWNERS" or Path(path).name == "OWNER"
+
+
+def product_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        path
+        for path in paths
+        if not is_documentation_path(path) and not is_repository_ownership_path(path)
+    )
 
 
 def is_agent_text(path: str) -> bool:
@@ -136,7 +144,7 @@ def is_recipe_conformance_change(changed: tuple[str, ...]) -> bool:
 
 
 def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     domains = _detect_direct_domains(changed, product_changed, full=full)
     domains["router_core"] = any_matches(
         product_changed,
@@ -172,6 +180,7 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
         or domains["helm"]
         or domains["common_e2e"]
         or domains["classifier_contract"]
+        or domains["api_docs_generated"]
         or (domains["make"] and not domains["docs_only"])
     )
     domains["security"] = full or not domains["docs_only"]
@@ -193,6 +202,7 @@ def _detect_direct_domains(
             path.startswith("website/")
             or path.endswith((".md", ".mdx"))
             or is_agent_text(path)
+            or is_repository_ownership_path(path)
             for path in changed
         ),
         "ci": any_matches(
@@ -229,6 +239,16 @@ def _detect_direct_domains(
         ".github/actions/**",
         "tools/ci/**",
     )
+    # The apiserver API reference and OpenAPI JSON are generated from the route
+    # catalog by `make api-docs-generate`. Editing either artifact by hand is
+    # classified as docs-only, which would otherwise skip the `make
+    # api-docs-check` drift gate that keeps them faithful to the catalog.
+    domains["api_docs_generated"] = any_matches(
+        changed,
+        "website/docs/api/apiserver.md",
+        "website/static/openapi/apiserver/**",
+        "tools/openapi-gen/**",
+    )
     domains["cli_source"] = any(
         is_vllm_sr_product_source(path) for path in product_changed
     )
@@ -253,7 +273,7 @@ def _detect_direct_domains(
 def select_profiles(
     changed: tuple[str, ...], domains: dict[str, bool], *, full: bool
 ) -> tuple[str, ...]:
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     profiles = [
         profile
         for profile, patterns in E2E_RULES.items()
@@ -324,7 +344,7 @@ def select_variant_images(
 def select_image_candidates(
     changed: tuple[str, ...], domains: dict[str, bool]
 ) -> tuple[list[str], list[str]]:
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     pr_images, publish_images = select_base_images(product_changed, domains)
     variant_pr, variant_publish = select_variant_images(product_changed)
     append_unique(pr_images, *variant_pr)
@@ -399,7 +419,7 @@ def build_output_signals(
             for profile in E2E_RULES
         }
     )
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     signals.update(
         {
             f"e2e_{profile.replace('-', '_')}": any_matches(product_changed, *patterns)

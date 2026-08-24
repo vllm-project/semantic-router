@@ -14,14 +14,6 @@ priority:
   - P1
   - P2
 
-lifecycle:
-  - needs-triage
-  - needs-info
-  - backlog
-  - milestone-candidate
-  - release-blocker
-  - stale
-
 track:
   - contracts
   - ops
@@ -30,9 +22,14 @@ track:
   - hardening
   - security
 
-pr-state:
-  - needs-review
-  - needs-rebase
-  - blocked
-  - close-candidate
-  - ci/full
+wg:
+  - mom-routing
+  - router-models-inference-runtime
+  - data-plane-networking
+  - enterprise-environment
+  - agentic-context
+  - developer-experience-ecosystem
+  - evaluation-quality
+
+owner:
+  - maintainers
