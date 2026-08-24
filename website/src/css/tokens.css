@@ -38,16 +38,30 @@
   --site-accent-violet: #a78bfa;
   --site-glow-blue-soft: rgba(48, 162, 255, 0.14);
   --site-glow-violet-soft: rgba(124, 58, 237, 0.16);
-  --site-bg: #ffffff;
-  --site-bg-alt: #f7f9fc;
-  --site-surface: #ffffff;
+  /*
+   * Neutral ladder, darkest rung first. --site-bg and --site-surface were both
+   * #ffffff, so a card was indistinguishable from the page behind it and only
+   * its border marked the edge. The page now sits a step below the card, and
+   * every rung is distinct: bg-alt < surface-alt < bg < surface < raised.
+   */
+  --site-bg: #f6f8fb;
+  --site-bg-alt: #eef2f7;
+  --site-surface: #fdfdfe;
   --site-surface-alt: #f3f6fa;
-  --site-surface-raised: #fbfcfe;
+  --site-surface-raised: #ffffff;
   --site-surface-soft: rgba(15, 23, 42, 0.035);
   --site-surface-glass: rgba(255, 255, 255, 0.76);
   --site-text: #111111;
   --site-text-strong: #050505;
-  --site-muted: #677487;
+  /*
+   * --site-muted used to be #677487 (4.75:1 on white) and served both navbar
+   * links and secondary body text, so the interactive case could never be
+   * strengthened without over-darkening 60-odd blocks of running text. Split:
+   * --site-muted is secondary text only, --site-interactive-rest is the
+   * resting state of a control and clears 7:1 against bg, surface and card.
+   */
+  --site-muted: #556070;
+  --site-interactive-rest: #485261;
   --site-muted-bright: #384250;
   --site-border: rgba(15, 23, 42, 0.1);
   --site-border-strong: rgba(15, 23, 42, 0.16);
@@ -79,10 +93,58 @@
   --tech-primary-blue: var(--site-accent-strong);
   --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
+  /*
+   * Page geometry — every shell (navbar, footer, docs, blog, research,
+   * community, homepage) derives its width from these four values, so page
+   * edges align by construction instead of by per-surface tuning.
+   *
+   * --page-max and --measure are separate decisions on purpose: the shell may
+   * grow with the viewport while running text stays at a readable line length.
+   */
+  --page-max: 1360px;
+  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --measure: 72ch;
+  --rail: 17rem;
+  --toc: 15rem;
+
+  /*
+   * The four tokens above are deliberately unconsumed here — Phase 2 rebuilds
+   * the shells onto them. The values below stay where main had them so this
+   * phase changes no layout: repointing them now would move the navbar height,
+   * the site container and the /search measure (via search.css) ahead of the
+   * layout that expects the new numbers. Phase 2 repoints these to
+   * --page-max / --measure in the same change that lands the new shells.
+   */
   --site-grid-max: 1400px;
   --site-content-max: 1200px;
   --site-doc-max: 840px;
   --site-header-height: 4.9rem;
+
+  /* Type scale — eight steps, replacing 78 ad-hoc literals. */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.125rem;
+  --text-4xl: clamp(2.5rem, 5vw, 3.5rem);
+
+  /* Shape — four steps, replacing 41 values. */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 14px;
+  --radius-full: 999px;
+
+  /* Space — one 4px ramp. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-8: 48px;
+  --space-10: 64px;
 
   --ifm-color-primary: #111111;
   --ifm-color-primary-dark: #0b0b0b;
@@ -93,13 +155,14 @@
   --ifm-color-primary-lightest: #4a4a4a;
   --ifm-background-color: var(--site-bg);
   --ifm-background-surface-color: var(--site-surface);
-  --ifm-navbar-background-color: rgba(5, 5, 5, 0.97);
-  --ifm-navbar-link-color: #d4d4d8;
-  --ifm-navbar-link-hover-color: #ffffff;
-  --ifm-footer-background-color: #050505;
-  --ifm-footer-color: #a1a1aa;
-  --ifm-footer-link-color: #f4f4f5;
-  --ifm-footer-title-color: #a1a1aa;
+  /* Chrome follows the color mode; shell.css re-darkens it on the homepage. */
+  --ifm-navbar-background-color: var(--site-surface-glass);
+  --ifm-navbar-link-color: var(--site-interactive-rest);
+  --ifm-navbar-link-hover-color: var(--site-text-strong);
+  --ifm-footer-background-color: var(--site-bg-alt);
+  --ifm-footer-color: var(--site-muted-bright);
+  --ifm-footer-link-color: var(--site-muted-bright);
+  --ifm-footer-title-color: var(--site-muted);
   --ifm-color-content: var(--site-text);
   --ifm-color-content-secondary: var(--site-muted-bright);
   --ifm-font-color-base: var(--site-text);
@@ -119,9 +182,15 @@
   --ifm-toc-border-color: var(--site-border);
   --ifm-code-font-size: 0.95rem;
   --ifm-code-background: var(--site-code-bg);
-  --ifm-font-family-base: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-  --ifm-font-family-monospace: 'SFMono-Regular', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
-  --ifm-heading-font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  /*
+   * Inter and JetBrains Mono are loaded in docusaurus.config.ts `headTags`.
+   * They were previously downloaded but never named here, so every page
+   * rendered in Arial — and the intermediate font-weights in this codebase
+   * (420…690) silently snapped to Arial's only two, 400 and 700.
+   */
+  --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
+  --ifm-heading-font-family: var(--ifm-font-family-base);
   --ifm-global-shadow-lw: none;
   --ifm-global-shadow-md: none;
   --ifm-global-shadow-tl: none;
@@ -139,16 +208,17 @@
 
 html[data-theme='light'],
 [data-theme='light'] {
-  --site-bg: #ffffff;
-  --site-bg-alt: #f7f9fc;
-  --site-surface: #ffffff;
+  --site-bg: #f6f8fb;
+  --site-bg-alt: #eef2f7;
+  --site-surface: #fdfdfe;
   --site-surface-alt: #f3f6fa;
-  --site-surface-raised: #fbfcfe;
+  --site-surface-raised: #ffffff;
   --site-surface-soft: rgba(15, 23, 42, 0.035);
   --site-surface-glass: rgba(255, 255, 255, 0.76);
   --site-text: #111111;
   --site-text-strong: #050505;
-  --site-muted: #677487;
+  --site-muted: #556070;
+  --site-interactive-rest: #485261;
   --site-muted-bright: #384250;
   --site-border: rgba(15, 23, 42, 0.1);
   --site-border-strong: rgba(15, 23, 42, 0.16);
@@ -211,6 +281,7 @@ html[data-theme='dark'],
   --site-text: #fafafa;
   --site-text-strong: #ffffff;
   --site-muted: #a1a1aa;
+  --site-interactive-rest: #b4b4bd;
   --site-muted-bright: #d4d4d8;
   --site-border: rgba(255, 255, 255, 0.1);
   --site-border-strong: rgba(255, 255, 255, 0.16);

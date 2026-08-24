@@ -1,22 +1,66 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@500;600&display=swap');
-
-html[data-route-kind='home'] {
+/*
+ * Site-wide type.
+ *
+ * The families are loaded from `headTags` in docusaurus.config.ts rather than
+ * an `@import` here: an `@import` at the top of the bundled stylesheet blocks
+ * rendering until the font CSS *and* the font files resolve, serially.
+ *
+ * These rules were previously scoped to `html[data-route-kind='home']`, so the
+ * homepage was the only surface with a type scale at all — docs, blog,
+ * research and community inherited raw Infima defaults. They now apply
+ * everywhere, and the homepage keeps only its own display sizes.
+ */
+html {
   font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
 }
 
-html[data-route-kind='home'] h1,
-html[data-route-kind='home'] h2,
-html[data-route-kind='home'] h3,
-html[data-route-kind='home'] h4 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-weight: var(--site-font-weight-semibold);
   letter-spacing: -0.025em;
   line-height: var(--site-leading-tight);
-  text-wrap: pretty;
+  text-wrap: balance;
   overflow-wrap: normal;
   word-break: normal;
   hyphens: manual;
 }
 
+h1 {
+  font-size: var(--text-3xl);
+  letter-spacing: -0.03em;
+}
+
+h2 {
+  font-size: var(--text-2xl);
+}
+
+h3 {
+  font-size: var(--text-xl);
+}
+
+h4 {
+  font-size: var(--text-lg);
+}
+
+p {
+  font-size: var(--text-base);
+  line-height: var(--site-leading-normal);
+  text-wrap: pretty;
+}
+
+/* Running text is capped at a readable measure independently of the shell. */
+.site-measure {
+  max-width: var(--measure);
+}
+
+/*
+ * The homepage hero is the one place that outgrows the shared scale; it keeps
+ * the display step while inheriting weight, tracking and wrapping from above.
+ */
 html[data-route-kind='home'] h1 {
   font-size: var(--site-text-h1);
 }
@@ -27,6 +71,4 @@ html[data-route-kind='home'] h2 {
 
 html[data-route-kind='home'] p {
   font-size: var(--site-text-body);
-  line-height: var(--site-leading-normal);
-  text-wrap: pretty;
 }

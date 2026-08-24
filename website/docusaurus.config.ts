@@ -241,10 +241,15 @@ const config: Config = {
       { name: 'ICBM', content: '37.7749, -122.4194' },
     ],
     navbar: {
-      style: 'dark',
+      // No `style` — the navbar follows the reader's color mode. The homepage
+      // opts back into dark chrome in shell.css, where its palette is pinned.
       logo: {
         alt: 'vLLM Semantic Router Logo',
+        // `src` stays on the white mark until shell.css stops pinning
+        // `.navbar` to rgba(5, 5, 5, 0.97); the dark-ink `.light.png` would be
+        // invisible on that bar, and light is the default color mode.
         src: 'img/vllm-sr-logo.white.png',
+        srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [
         {
@@ -282,11 +287,31 @@ const config: Config = {
           className: 'nav-primary',
           position: 'left',
         },
+        // Secondary destinations live in one overflow menu so the bar fits on a
+        // 1024px laptop instead of collapsing to a hamburger at 1340px.
         {
-          label: 'GitHub',
-          href: 'https://github.com/vllm-project/semantic-router',
+          type: 'dropdown',
+          label: 'More',
           className: 'nav-utility',
           position: 'right',
+          items: [
+            {
+              label: 'GitHub',
+              href: 'https://github.com/vllm-project/semantic-router',
+            },
+            {
+              label: 'Hugging Face',
+              href: 'https://huggingface.co/LLM-Semantic-Router',
+            },
+            {
+              label: 'Discussions',
+              href: 'https://github.com/vllm-project/semantic-router/discussions',
+            },
+            {
+              label: 'Leaderboard',
+              to: '/community/contributors',
+            },
+          ],
         },
         {
           label: 'Dashboard',
@@ -392,6 +417,23 @@ const config: Config = {
     },
   } satisfies Preset.ThemeConfig,
   headTags: [
+    // Inter + JetBrains Mono. Preconnect first so the font CSS and the font
+    // files resolve in parallel rather than in a serial @import waterfall.
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: 'anonymous' },
+    },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap',
+      },
+    },
     {
       tagName: 'script',
       attributes: { type: 'application/ld+json' },
