@@ -49,10 +49,10 @@ release_tracks:
     description: Native/runtime parity and performance validation.
   research-to-product:
     label: track/research-to-product
-    description: Research work that directly improves product behavior.
+    description: Research work graduating into supported open-source behavior.
   hardening:
     label: track/hardening
-    description: Dashboard, eval, RAG, memory, protocol, and product hardening.
+    description: Dashboard, eval, RAG, memory, protocol, and runtime hardening.
   security:
     label: track/security
     description: Security, RBAC, observability, and E2E closure.
