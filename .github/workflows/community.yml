@@ -58,7 +58,11 @@ jobs:
 
   issue-lifecycle:
     name: Enforce issue lifecycle
-    if: github.event_name == 'issues'
+    if: >-
+      github.event_name == 'issues'
+      && !(github.event.action == 'edited'
+      && github.event.changes.title != null
+      && github.event.changes.body == null)
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -186,6 +186,8 @@ contract without making roadmap, priority, or close decisions:
 - `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
   and milestones cannot bypass their prerequisites;
 - assignment moves accepted work to `in-progress`;
+- title-only issue edits validate naming without changing acceptance,
+  assignment, priority, milestone, or delivery state;
 - non-trivial PRs must link accepted work with exactly one recognized owner.
 
 Because `pull_request_target` is prohibited, the PR check is read-only on the
