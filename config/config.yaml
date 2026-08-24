@@ -1640,7 +1640,7 @@ global:
         timeout_ms: 50
         redis:
           address: redis:6379
-          password: redis-secret
+          password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
           database: 2
           key_prefix: "vsr:router-session:v1:"
 
@@ -1671,7 +1671,7 @@ global:
       max_responses: 2000
       redis:
         address: redis:6379
-        password: redis-secret
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
         db: 1
         key_prefix: "vsr:responses:"
         cluster_mode: false
@@ -1792,7 +1792,7 @@ global:
       redis:
         address: redis:6379
         db: 2
-        password: redis-secret
+        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
         use_tls: false
         tls_skip_verify: false
         max_retries: 3
@@ -1803,7 +1803,7 @@ global:
         port: 5432
         database: vsr
         user: router
-        password: router-secret
+        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
         ssl_mode: disable
         max_open_conns: 20
         max_idle_conns: 10
@@ -1812,7 +1812,7 @@ global:
       milvus:
         address: milvus:19530
         username: root
-        password: milvus-secret
+        password: "${MILVUS_PASSWORD}"
         collection_name: router_replay
         consistency_level: Bounded
         shard_num: 2
@@ -1841,7 +1841,7 @@ global:
           auth:
             enabled: true
             username: root
-            password: milvus-secret
+            password: "${MILVUS_PASSWORD}"
           tls:
             enabled: false
             cert_file: certs/milvus.crt
@@ -1968,7 +1968,7 @@ global:
           auth:
             enabled: true
             username: root
-            password: milvus-secret
+            password: "${MILVUS_PASSWORD}"
           tls:
             enabled: false
             cert_file: certs/milvus.crt
@@ -2046,7 +2046,7 @@ global:
         port: 5432
         database: vsr
         user: router
-        password: router-secret
+        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
         ssl_mode: disable
         max_open_conns: 25
         max_idle_conns: 5

@@ -12,15 +12,11 @@ import argparse
 import json
 import os
 import re
-import stat
-import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-import yaml
-
-from cli.container_runtime import get_container_runtime
 from cli.container_services import (
     container_start_milvus,
     container_start_postgres,
@@ -44,26 +40,36 @@ from cli.recipe_topology_clone import (
     _rewrite_router_management_bindings as _rewrite_router_management_bindings_impl,
 )
 from cli.recipe_topology_contract import (
-    _DEFAULT_MANAGEMENT_BIND_ADDRESS,
-    _DEFAULT_MANAGEMENT_PORT,
     _OFFLINE_COMMIT_STATES,
     _RUNTIME_SERVICES,
     _STORAGE,
     TopologyReconcileError,
-    _valid_port,
     load_topology_state,
 )
 from cli.recipe_topology_contract import (
     MANAGEMENT_CREDENTIAL_ENV as _MANAGEMENT_CREDENTIAL_ENV,
 )
 from cli.recipe_topology_contract import TOPOLOGY_SCHEMA as _TOPOLOGY_SCHEMA
+from cli.recipe_topology_reconcile_io import (
+    _management_listener_from_config,
+    _read_bounded_file,
+    _require_regular_file,
+    _run_raw,
+)
 from cli.recipe_topology_storage import (
     assert_storage_contract_preserved,
     storage_clone_contract,
     validate_cloneable_container_snapshot,
     validate_storage_port_isolation,
 )
-from cli.runtime_stack import resolve_runtime_stack
+from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
+from cli.storage_secrets import (
+    STORAGE_SECRETS_DIRECTORY,
+    StorageSecretError,
+    load_storage_secrets,
+    postgres_password_path,
+    redis_conf_path,
+)
 
 MANAGEMENT_CREDENTIAL_ENV = _MANAGEMENT_CREDENTIAL_ENV
 TOPOLOGY_SCHEMA = _TOPOLOGY_SCHEMA
@@ -105,46 +111,6 @@ def _load_state(path: Path) -> dict[str, Any]:
         read_bounded_file=_read_bounded_file,
         expected_container_names=_expected_container_names(),
     )
-
-
-def _management_listener_from_config(path: Path) -> tuple[int, int]:
-    encoded = _read_bounded_file(path, 16 * 1024 * 1024)
-    try:
-        document = yaml.safe_load(encoded)
-    except yaml.YAMLError as error:
-        raise TopologyReconcileError(
-            "runtime management API configuration is invalid"
-        ) from error
-    if not isinstance(document, dict):
-        raise TopologyReconcileError("runtime management API configuration is invalid")
-    global_config = document.get("global", {})
-    if not isinstance(global_config, dict):
-        raise TopologyReconcileError("runtime management API configuration is invalid")
-    services = global_config.get("services", {})
-    if not isinstance(services, dict):
-        raise TopologyReconcileError("runtime management API configuration is invalid")
-    management = services.get("management_api", {})
-    if not isinstance(management, dict):
-        raise TopologyReconcileError("runtime management API configuration is invalid")
-    bind_address = management.get("bind_address", _DEFAULT_MANAGEMENT_BIND_ADDRESS)
-    if not isinstance(bind_address, str):
-        raise TopologyReconcileError("runtime management API bind address is invalid")
-    bind_address = bind_address.strip() or _DEFAULT_MANAGEMENT_BIND_ADDRESS
-    if bind_address != "0.0.0.0":
-        raise TopologyReconcileError(
-            "managed split runtime requires management_api.bind_address 0.0.0.0"
-        )
-    port = management.get("port", _DEFAULT_MANAGEMENT_PORT)
-    if not isinstance(port, int) or isinstance(port, bool):
-        raise TopologyReconcileError("runtime management API port is invalid")
-    if port == 0:
-        port = _DEFAULT_MANAGEMENT_PORT
-    if not _valid_port(port) or port in {50051, 9190}:
-        raise TopologyReconcileError("runtime management API port is invalid")
-    host_port = port + resolve_runtime_stack().port_offset
-    if not _valid_port(host_port):
-        raise TopologyReconcileError("runtime management API host port is invalid")
-    return port, host_port
 
 
 def _apply(
@@ -478,6 +444,11 @@ def _validate_repair_transition(transition: dict[str, Any]) -> None:
     _storage_contract(_inspect(source), transition)
 
 
+# Dashboard mounts the host state root at /app, so a reconciler running inside
+# it reads state through this prefix while bind-mount sources stay host paths.
+CONTAINER_STATE_ROOT_DIR = "/app"
+
+
 def _start_storage(service: str) -> None:
     name = _storage_name(service)
     if _container_status(name) != "not found":
@@ -486,12 +457,22 @@ def _start_storage(service: str) -> None:
         )
     layout = resolve_runtime_stack()
     if service == "redis":
+        credentials = _storage_credentials(layout)
         result = container_start_redis(
-            layout.network_name, layout, reuse_existing=False
+            layout.network_name,
+            layout,
+            reuse_existing=False,
+            redis_conf_file=credentials.redis_conf_file,
+            data_volume=credentials.redis_volume,
         )
     elif service == "postgres":
+        credentials = _storage_credentials(layout)
         result = container_start_postgres(
-            layout.network_name, layout, reuse_existing=False
+            layout.network_name,
+            layout,
+            reuse_existing=False,
+            postgres_password_file=credentials.postgres_password_file,
+            data_volume=credentials.postgres_volume,
         )
     elif service == "milvus":
         result = container_start_milvus(
@@ -510,6 +491,56 @@ def _start_storage(service: str) -> None:
             f"managed {service} exited before topology verification"
         )
     _validate_storage_isolation(name)
+
+
+@dataclass(frozen=True)
+class _StorageCredentials:
+    """Where this stack's storage credentials live, from a reconciler's view."""
+
+    redis_conf_file: str
+    redis_volume: str
+    postgres_password_file: str
+    postgres_volume: str
+
+
+def _storage_credentials(layout: RuntimeStackLayout) -> _StorageCredentials:
+    """Resolve the credential artifacts a managed storage container mounts.
+
+    Reconciliation normally runs inside Dashboard, whose two views of the state
+    directory differ: it reads through the container path, while a bind mount
+    source has to be the host path that only the Dashboard container's own
+    mount can supply. Milvus has the same split and resolves it the same way.
+
+    The credential files are owner-only to the account that ran `vllm-sr serve`,
+    and Dashboard deliberately runs as a different, less trusted account -- it
+    holds the container-runtime socket, so it is exactly the principal these
+    credentials are kept from. It never needs to read them; the runtime
+    performs the bind mount. It does need the recorded volume names, and when
+    those are unreadable that is reported rather than guessed: a guess would
+    start an empty database beside data that is still on disk.
+    """
+
+    try:
+        secrets = load_storage_secrets(CONTAINER_STATE_ROOT_DIR, stack_layout=layout)
+        host_secrets_dir = os.path.join(
+            _host_hidden_state_dir(), STORAGE_SECRETS_DIRECTORY
+        )
+        conf_name = redis_conf_path(CONTAINER_STATE_ROOT_DIR, stack_layout=layout).name
+        password_name = postgres_password_path(
+            CONTAINER_STATE_ROOT_DIR, stack_layout=layout
+        ).name
+    except (StorageSecretError, ValueError, OSError) as error:
+        raise TopologyReconcileError(
+            "this stack's storage credentials are not readable from here: "
+            f"{error} -- provision the backend by running `vllm-sr serve` "
+            "where the stack was started, then activate the Recipe again"
+        ) from error
+    return _StorageCredentials(
+        redis_conf_file=os.path.join(host_secrets_dir, conf_name),
+        redis_volume=secrets.redis.volume,
+        postgres_password_file=os.path.join(host_secrets_dir, password_name),
+        postgres_volume=secrets.postgres.volume,
+    )
 
 
 def _storage_name(service: str) -> str:
@@ -674,55 +705,6 @@ def _run(arguments: list[str], *, pass_fds: tuple[int, ...] = ()) -> None:
         raise TopologyReconcileError(
             f"container runtime command failed: {arguments[0]} ({detail})"
         )
-
-
-def _run_raw(
-    arguments: list[str], *, pass_fds: tuple[int, ...] = ()
-) -> subprocess.CompletedProcess[str]:
-    runtime = get_container_runtime()
-    try:
-        return subprocess.run(
-            [runtime, *arguments],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=120,
-            pass_fds=pass_fds,
-        )
-    except subprocess.TimeoutExpired as error:
-        raise TopologyReconcileError("container runtime command timed out") from error
-
-
-def _require_regular_file(path: Path, limit: int) -> os.stat_result:
-    info = path.lstat()
-    if (
-        stat.S_ISLNK(info.st_mode)
-        or not stat.S_ISREG(info.st_mode)
-        or info.st_size > limit
-    ):
-        raise TopologyReconcileError("topology input is not a bounded regular file")
-    return info
-
-
-def _read_bounded_file(path: Path, limit: int) -> bytes:
-    before = _require_regular_file(path, limit)
-    descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
-    try:
-        opened = os.fstat(descriptor)
-        if (
-            not stat.S_ISREG(opened.st_mode)
-            or opened.st_dev != before.st_dev
-            or opened.st_ino != before.st_ino
-            or opened.st_size > limit
-        ):
-            raise TopologyReconcileError("topology journal changed while opening")
-        with os.fdopen(descriptor, "rb", closefd=False) as handle:
-            data = handle.read(limit + 1)
-        if len(data) > limit:
-            raise TopologyReconcileError("topology journal exceeds its size limit")
-        return data
-    finally:
-        os.close(descriptor)
 
 
 if __name__ == "__main__":
