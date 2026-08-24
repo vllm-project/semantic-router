@@ -2,6 +2,8 @@
 
 package cache
 
+import "context"
+
 // InMemoryCache provides high-performance in-memory semantic caching
 type InMemoryCache struct {
 	enabled bool
@@ -54,6 +56,7 @@ func (c *InMemoryCache) UpdateWithResponse(
 
 // AddEntry stores a complete request-response pair
 func (c *InMemoryCache) AddEntry(
+	_ context.Context,
 	requestID string,
 	model string,
 	query string,
@@ -66,23 +69,16 @@ func (c *InMemoryCache) AddEntry(
 
 // FindSimilar searches for semantically similar cached requests
 func (c *InMemoryCache) FindSimilar(model string, query string) ([]byte, bool, error) {
-	if !c.enabled {
-		return nil, false, nil
-	}
-	// Always return miss for mock unless we want to simulate hits
 	return nil, false, nil
 }
 
 // FindSimilarWithThreshold searches for semantically similar cached requests using a specific threshold
 func (c *InMemoryCache) FindSimilarWithThreshold(model string, query string, threshold float32) ([]byte, bool, error) {
-	if !c.enabled {
-		return nil, false, nil
-	}
 	return nil, false, nil
 }
 
 // LookupSimilarWithThreshold returns a request-scoped miss in stub builds.
-func (c *InMemoryCache) LookupSimilarWithThreshold(model string, query string, threshold float32) (LookupResult, error) {
+func (c *InMemoryCache) LookupSimilarWithThreshold(_ context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	if !c.enabled {
 		return LookupResult{}, nil
 	}
@@ -100,6 +96,6 @@ func (c *InMemoryCache) GetStats() CacheStats {
 }
 
 // CheckConnection checks if the cache backend is reachable
-func (c *InMemoryCache) CheckConnection() error {
+func (c *InMemoryCache) CheckConnection(_ context.Context) error {
 	return nil
 }

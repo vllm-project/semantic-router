@@ -72,6 +72,49 @@ global:
 `http_chat` uses a chat-completions prompt. Both send request text to the
 configured service.
 
+### On a classifier failure
+
+`on_error` controls what an unreachable or failing guardrail classifier does
+to the rule that failed to evaluate: `allow` (the default) tolerates the
+failure and treats the affected content as not matching, so other content
+still evaluates normally; `block` treats the failure itself as a positive
+detection instead, since an inference failure means the content could not be
+verified safe.
+
+```yaml
+global:
+  model_catalog:
+    modules:
+      prompt_guard:
+        enabled: true
+        protocol: http_classify
+        on_error: block
+```
+
+Applies to any prompt guard backend, local or remote - not only the remote
+protocols above - and to both directions: request-side jailbreak signal rules,
+including `method: contrastive` ones, and the response-side `response_jailbreak`
+plugin, which scans LLM output with the same backend.
+
+A failure is reported exactly as a real detection is. On the request side that
+means the jailbreak signal fires at confidence `1.0` with type
+`classification_error`, so `block` only closes a request if a decision actually
+consumes the jailbreak signal (`type: jailbreak`) and acts on it, typically with
+`fast_response` - without one it looks like a no-op. See the `jailbreak-onerror`
+e2e profile's `block_on_classifier_error` decision for a complete example. On
+the response side the plugin's own `action` decides: `block` returns a 403,
+`header` adds the response warning, `none` stays silent.
+
+:::note
+
+This is not the same key as the `on_error` on a decision's classifier
+condition, which takes `no_match` or `match`. That one answers "what should this
+predicate evaluate to when the classifier fails"; `prompt_guard.on_error`
+answers "was the content verified at all", for every rule the guardrail backend
+serves. See [Classifier signals](../signal/learned/classifier.md).
+
+:::
+
 ### Hallucination mitigation
 
 The local detector uses `backend: candle`. An OpenAI-compatible remote detector

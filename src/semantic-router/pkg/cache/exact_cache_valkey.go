@@ -6,12 +6,15 @@ import (
 )
 
 // FindExact returns a Valkey exact-response entry without embedding inference.
-func (c *ValkeyCache) FindExact(partition string, fingerprint string) (LookupResult, error) {
+func (c *ValkeyCache) FindExact(ctx context.Context, partition string, fingerprint string) (LookupResult, error) {
 	if !c.enabled || fingerprint == "" {
 		return LookupResult{}, nil
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	raw, err := c.client.CustomCommand(
-		context.Background(),
+		ctx,
 		[]string{"GET", exactCacheStorageKey(partition, fingerprint)},
 	)
 	if err != nil {
@@ -41,6 +44,7 @@ func (c *ValkeyCache) FindExact(partition string, fingerprint string) (LookupRes
 
 // AddExact writes a Valkey exact-response entry with the effective cache TTL.
 func (c *ValkeyCache) AddExact(
+	ctx context.Context,
 	partition string,
 	fingerprint string,
 	responseBody []byte,
@@ -48,6 +52,9 @@ func (c *ValkeyCache) AddExact(
 ) error {
 	if !c.enabled || fingerprint == "" || ttlSeconds == 0 {
 		return nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
 	}
 	effectiveTTL := effectiveExactTTL(ttlSeconds, c.ttlSeconds)
 	command := []string{
@@ -58,6 +65,6 @@ func (c *ValkeyCache) AddExact(
 	if effectiveTTL > 0 {
 		command = append(command, "EX", fmt.Sprintf("%d", effectiveTTL))
 	}
-	_, err := c.client.CustomCommand(context.Background(), command)
+	_, err := c.client.CustomCommand(ctx, command)
 	return err
 }

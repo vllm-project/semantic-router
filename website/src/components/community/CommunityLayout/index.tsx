@@ -14,7 +14,7 @@ export interface CommunityNavItem {
 }
 
 export const COMMUNITY_NAV_ITEMS: CommunityNavItem[] = [
-  { key: 'team', label: 'Team', to: '/community/team' },
+  { key: 'team', label: 'Open Source Team', to: '/community/team' },
   { key: 'steering-committee', label: 'Steering Committee', to: '/community/steering-committee' },
   { key: 'governance', label: 'Governance', to: '/community/governance' },
   { key: 'work-groups', label: 'Working Groups', to: '/community/work-groups' },

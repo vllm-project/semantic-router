@@ -24,6 +24,9 @@ import yaml
 from cli.runtime_stack import DEFAULT_STACK_NAME, resolve_runtime_stack
 
 HTTP_STATUS_OK = 200
+AGENT_SMOKE_CONFIG_PATH = (
+    Path(__file__).resolve().parents[2] / "config" / "config.agent-smoke.cpu.yaml"
+)
 
 
 def _coerce_timeout_stream(value: str | bytes | None) -> str:
@@ -33,6 +36,15 @@ def _coerce_timeout_stream(value: str | bytes | None) -> str:
     if isinstance(value, bytes):
         return value.decode(errors="replace")
     return value
+
+
+def _api_only_global_config() -> dict[str, object]:
+    """Reuse the canonical smoke global block for API-only integration tests."""
+    smoke_config = yaml.safe_load(AGENT_SMOKE_CONFIG_PATH.read_text(encoding="utf-8"))
+    global_config = smoke_config.get("global")
+    if not isinstance(global_config, dict):
+        raise AssertionError(f"{AGENT_SMOKE_CONFIG_PATH} must define a global mapping")
+    return global_config
 
 
 class CLITestBase(unittest.TestCase):
@@ -298,9 +310,24 @@ class CLITestBase(unittest.TestCase):
         port: int = 8888,
         model_name: str = "test-model",
         endpoint: str = "host.docker.internal:8000",
+        base_url: str | None = None,
+        provider: str | None = None,
+        api_only: bool = False,
     ) -> str:
         """Write a minimal runnable canonical v0.3 config into the temp workspace."""
         config_path = Path(self.test_dir) / "config.yaml"
+        backend_ref: dict[str, object] = {
+            "name": "primary",
+            "weight": 100,
+        }
+        if base_url is not None:
+            backend_ref["base_url"] = base_url
+        else:
+            backend_ref["endpoint"] = endpoint
+            backend_ref["protocol"] = "http"
+        if provider is not None:
+            backend_ref["provider"] = provider
+
         config = {
             "version": "v0.3",
             "listeners": [
@@ -320,14 +347,7 @@ class CLITestBase(unittest.TestCase):
                     {
                         "name": model_name,
                         "provider_model_id": model_name,
-                        "backend_refs": [
-                            {
-                                "name": "primary",
-                                "weight": 100,
-                                "endpoint": endpoint,
-                                "protocol": "http",
-                            }
-                        ],
+                        "backend_refs": [backend_ref],
                     }
                 ],
             },
@@ -344,6 +364,8 @@ class CLITestBase(unittest.TestCase):
                 ],
             },
         }
+        if api_only:
+            config["global"] = _api_only_global_config()
         config_path.write_text(
             yaml.safe_dump(config, sort_keys=False),
             encoding="utf-8",

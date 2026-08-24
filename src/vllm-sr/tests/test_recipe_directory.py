@@ -24,7 +24,7 @@ def _write_managed_recipe(tmp_path):
 def _capture_run_commands(monkeypatch):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, env=None):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 

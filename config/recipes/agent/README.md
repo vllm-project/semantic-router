@@ -57,8 +57,10 @@ not accidentally match several peer lanes.
 - `POSTGRES_PASSWORD` supplied from the environment rather than committed to
   the recipe.
 
-The repository's local Postgres service uses a development password only. Use
-a separately managed credential and database for production.
+The repository ships no Postgres password. `vllm-sr serve` generates a distinct
+credential per stack for the Postgres service it manages, so this binding
+matters when the recipe points at a Postgres you run yourself. Use a separately
+managed credential and database for production.
 
 ## Data handling and safety
 
@@ -75,7 +77,7 @@ capture when prompts and responses must not be stored.
 ## Quick start
 
 ```bash
-export POSTGRES_PASSWORD=router-secret  # local development only
+export POSTGRES_PASSWORD="$(openssl rand -base64 24)"  # your own value
 vllm-sr validate --config config/recipes/agent/config.yaml
 vllm-sr serve --config config/recipes/agent/config.yaml \
   --recipe-env POSTGRES_PASSWORD
