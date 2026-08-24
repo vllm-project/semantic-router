@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/dashboard/backend/mlpipeline"
 	"github.com/vllm-project/semantic-router/dashboard/backend/recipe"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routercontract"
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -27,13 +28,15 @@ type configRouteOptions struct {
 	modelVerificationAuditor handlers.ModelVerificationAuditor
 }
 
-func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions ...coreRouteOptions) {
+// setupResolver is required, not an option, because the setup routes have no
+// fallback source of truth for setup mode.
+func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver, routeOptions ...coreRouteOptions) {
 	options := coreRouteOptions{}
 	if len(routeOptions) > 0 {
 		options = routeOptions[0]
 	}
 	store := selectedRecipeStore(cfg, []*recipe.Store{options.recipeStore})
-	registerHealthAndSetupRoutes(mux, cfg)
+	registerHealthAndSetupRoutes(mux, cfg, setupResolver)
 	registerConfigRoutes(mux, cfg, configRouteOptions{
 		credentialStore:          store,
 		modelVerificationAuditor: options.modelVerificationAuditor,
@@ -126,14 +129,14 @@ func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
 	log.Printf("Security Policy API endpoints registered: /api/security/policy, /api/security/policy/preview")
 }
 
-func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
-	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
-	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath))
-	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
+	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg, setupResolver))
+	mux.HandleFunc("/api/setup/state", handlers.SetupStateHandler(cfg.AbsConfigPath, setupResolver))
+	mux.HandleFunc("/api/setup/import-remote", handlers.SetupImportRemoteHandler(cfg.AbsConfigPath, setupResolver))
+	mux.HandleFunc("/api/setup/validate", handlers.SetupValidateHandler(cfg.AbsConfigPath, setupResolver))
+	mux.HandleFunc("/api/setup/activate", handlers.SetupActivateHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir, setupResolver))
 	mux.HandleFunc("/api/setup/presets", handlers.PresetsHandler())
 	mux.HandleFunc("/api/setup/presets/delta", handlers.PresetDeltaHandler())
 }

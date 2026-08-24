@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/setupmode"
 )
 
 func TestOrdinaryRuntimeMutationRejectsAnyManagedMarkerWithoutMutation(t *testing.T) {
@@ -57,6 +59,54 @@ func TestRuntimeMutationCrossProcessLockIsNonBlocking(t *testing.T) {
 			_ = second.close()
 		}
 		t.Fatalf("second lock error = %v", err)
+	}
+}
+
+func TestRuntimeMutationLockPreservesSharedGroupAccess(t *testing.T) {
+	storeDir := t.TempDir()
+	lockPath := filepath.Join(storeDir, runtimeConfigLockName)
+	if err := os.WriteFile(lockPath, nil, 0o660); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockPath, 0o660); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+	if err != nil || !exists {
+		t.Fatalf("lock = %#v, %v", lock, err)
+	}
+	if closeErr := lock.close(); closeErr != nil {
+		t.Fatal(closeErr)
+	}
+	info, err := os.Stat(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o660 {
+		t.Fatalf("lock mode = %o, want 660", info.Mode().Perm())
+	}
+}
+
+func TestRuntimeMutationLockRejectsAccessForOtherUsers(t *testing.T) {
+	storeDir := t.TempDir()
+	lockPath := filepath.Join(storeDir, runtimeConfigLockName)
+	if err := os.WriteFile(lockPath, nil, 0o606); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(lockPath, 0o606); err != nil {
+		t.Fatal(err)
+	}
+
+	lock, exists, err := acquireRuntimeConfigStoreLock(storeDir)
+	if lock != nil {
+		_ = lock.close()
+	}
+	if err == nil || exists {
+		t.Fatalf("lock = %#v, exists = %t, err = %v", lock, exists, err)
+	}
+	if err.Error() != "runtime config lock must not grant access to other users" {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
@@ -148,7 +198,7 @@ func TestManagedMarkerGuardsSetupActivationAndSecurityPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	response := httptest.NewRecorder()
-	SetupActivateHandler(setupPath, false, root)(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
+	SetupActivateHandler(setupPath, false, root, setupmode.New(setupPath, false))(response, httptest.NewRequest(http.MethodPost, "/api/setup/activate", bytes.NewReader(setupBody)))
 	if response.Code != http.StatusConflict || !bytes.Contains(response.Body.Bytes(), []byte(`"error":"managed_recipe_active"`)) {
 		t.Fatalf("setup response=%d body=%s", response.Code, response.Body.String())
 	}

@@ -20,6 +20,7 @@ type ContrastiveJailbreakResult struct {
 	JailbreakSim   float32 // max_sim(worstMsg, jailbreak_kb) for the worst message
 	BenignSim      float32 // max_sim(worstMsg, benign_kb) for the worst message
 	TotalMessages  int     // Number of messages analysed
+	FailedMessages int     // Messages that could not be embedded, so were never scored
 	ProcessingTime time.Duration
 }
 
@@ -97,6 +98,10 @@ func (c *ContrastiveJailbreakClassifier) AnalyzeMessages(messages []string) Cont
 		}
 		msgEmb, err := c.embedText(msg)
 		if err != nil {
+			// Counted, not just logged: a message that was never scored is
+			// unverified content, which prompt_guard's on_error policy has to
+			// be able to act on.
+			result.FailedMessages++
 			logging.Warnf("[Contrastive Jailbreak] Failed to embed message %d: %v", i, err)
 			continue
 		}

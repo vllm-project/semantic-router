@@ -33,6 +33,7 @@ func TestBuildCanonicalConfigAppliesOperatorSpecFamilies(t *testing.T) {
 					ModelID:        "guardrail-model",
 					Threshold:      "0.6",
 					PositiveLabels: []string{"jailbreak", "INJECTION"},
+					OnError:        "block",
 				},
 				Classifier: &vllmv1alpha1.ClassifierConfig{
 					CategoryModel: &vllmv1alpha1.CategoryModelConfig{
@@ -386,6 +387,15 @@ func assertOperatorPromptGuardConfig(t *testing.T, promptGuard routerconfig.Cano
 	// backend (#2759) was unreachable via the Kubernetes Operator path.
 	if promptGuard.Protocol != "http_classify" {
 		t.Fatalf("unexpected prompt guard protocol: %q", promptGuard.Protocol)
+	}
+	// Same gap class, for on_error (#2918): without the field on the CRD type
+	// the API server prunes it and an operator-managed deployment silently
+	// fails open, which is the exact failure on_error: block exists to stop.
+	if promptGuard.OnError != routerconfig.OnErrorBlock {
+		t.Fatalf("unexpected prompt guard on_error: %q", promptGuard.OnError)
+	}
+	if !promptGuard.IsBlock() {
+		t.Fatalf("expected IsBlock() to be true for on_error: %q", promptGuard.OnError)
 	}
 	if promptGuard.Variant != "" {
 		t.Fatalf("expected variant to stay unset when protocol is set, got %q", promptGuard.Variant)

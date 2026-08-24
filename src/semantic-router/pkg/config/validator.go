@@ -103,34 +103,7 @@ var validPromptGuardVariants = map[string]bool{
 	PromptGuardVariantMmBERT32K: true,
 }
 
-// validPromptGuardProtocols is the set of recognized PromptGuardConfig.Protocol values.
-var validPromptGuardProtocols = map[string]bool{
-	PromptGuardProtocolHTTPChat:     true,
-	PromptGuardProtocolHTTPClassify: true,
-}
-
-// validatePromptGuardBackendConfig validates the prompt_guard backend selection.
-// external_models with model_role="guardrail" is required for Protocol; that
-// requirement is checked by IsPromptGuardEnabled/the main config validation,
-// not here.
-func validatePromptGuardBackendConfig(cfg *PromptGuardConfig) error {
-	if cfg.Variant != "" && cfg.Protocol != "" {
-		return fmt.Errorf("prompt_guard: variant %q and protocol %q are mutually exclusive - "+
-			"variant selects a local model, protocol selects a remote one", cfg.Variant, cfg.Protocol)
-	}
-	if cfg.Protocol != "" {
-		if !validPromptGuardProtocols[cfg.Protocol] {
-			return fmt.Errorf("prompt_guard.protocol: unrecognized value %q, must be one of: %s, %s",
-				cfg.Protocol, PromptGuardProtocolHTTPChat, PromptGuardProtocolHTTPClassify)
-		}
-		return nil
-	}
-	if !validPromptGuardVariants[cfg.Variant] {
-		return fmt.Errorf("prompt_guard.variant: unrecognized value %q, must be one of: %s, %s",
-			cfg.Variant, PromptGuardVariantCandle, PromptGuardVariantMmBERT32K)
-	}
-	return nil
-}
+// prompt_guard backend validation lives in validator_prompt_guard.go.
 
 // isValidIPv4 checks if the address is a valid IPv4 address
 func isValidIPv4(address string) bool {
@@ -193,7 +166,7 @@ func runConfigContractValidators(cfg *RouterConfig, validators []configContractV
 }
 
 func validateModelSelectionConfig(cfg *RouterConfig) error {
-	if err := validatePromptGuardBackendConfig(&cfg.PromptGuard); err != nil {
+	if err := validatePromptGuardBackend(cfg); err != nil {
 		return err
 	}
 	if isSessionAwareSelectionConfigConfigured(cfg.ModelSelection.SessionAware) {
