@@ -196,18 +196,24 @@ pre:not([class*='codeBlock']) {
 }
 
 /* ------------------------------------------------------------------ *
- * Admonitions — flat tinted cards with a coloured left rail, rather than
- * Infima's heavy saturated blocks.
+ * Admonitions — a single tinted field carrying the variant colour, rather
+ * than a grey card with a coloured rail. Each variant sets three values:
+ * --admonition-tint  the icon, and the colour the field is derived from
+ * --admonition-field the background wash
+ * --admonition-edge  the hairline, which runs the whole way round
+ * Heading and body stay in normal text colours; the tint alone identifies
+ * the variant, which is what keeps a page of admonitions calm.
  * ------------------------------------------------------------------ */
 .theme-admonition {
   --admonition-tint: var(--site-muted);
+  --admonition-field: rgba(15, 23, 42, 0.04);
+  --admonition-edge: rgba(15, 23, 42, 0.12);
   margin-bottom: var(--space-5);
-  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-5);
-  border: 1px solid var(--site-border);
-  border-left: 3px solid var(--admonition-tint);
+  padding: var(--space-4);
+  border: 1px solid var(--admonition-edge);
   border-radius: var(--radius-md);
-  background: var(--site-surface-alt);
-  color: var(--site-muted-bright);
+  background: var(--admonition-field);
+  color: var(--site-text);
   box-shadow: none;
   font-size: var(--text-base);
 }
@@ -215,11 +221,15 @@ pre:not([class*='codeBlock']) {
 .theme-admonition > div:first-child,
 .theme-admonition [class*='admonitionHeading'] {
   margin-bottom: var(--space-2);
-  color: var(--admonition-tint);
-  font-size: var(--text-xs);
+  color: var(--site-text-strong);
+  font-size: var(--text-base);
   font-weight: var(--site-font-weight-semibold);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.theme-admonition [class*='admonitionIcon'] {
+  color: var(--admonition-tint);
 }
 
 .theme-admonition [class*='admonitionIcon'] svg {
@@ -233,38 +243,68 @@ pre:not([class*='codeBlock']) {
 .theme-admonition-note,
 .theme-admonition-secondary {
   --admonition-tint: var(--site-muted);
+  --admonition-field: rgba(15, 23, 42, 0.04);
+  --admonition-edge: rgba(15, 23, 42, 0.12);
 }
 
 .theme-admonition-tip,
 .theme-admonition-success {
   --admonition-tint: #0d8f5e;
+  --admonition-field: rgba(13, 143, 94, 0.08);
+  --admonition-edge: rgba(13, 143, 94, 0.24);
 }
 
 .theme-admonition-info {
-  --admonition-tint: var(--site-accent);
+  --admonition-tint: var(--site-accent-strong);
+  --admonition-field: rgba(48, 162, 255, 0.09);
+  --admonition-edge: rgba(48, 162, 255, 0.28);
 }
 
 .theme-admonition-warning,
 .theme-admonition-caution {
   --admonition-tint: #b06d0a;
+  --admonition-field: rgba(176, 109, 10, 0.09);
+  --admonition-edge: rgba(176, 109, 10, 0.26);
 }
 
 .theme-admonition-danger {
   --admonition-tint: #c2410c;
+  --admonition-field: rgba(194, 65, 12, 0.08);
+  --admonition-edge: rgba(194, 65, 12, 0.24);
+}
+
+/* Dark mode. Every variant is restated so no field or edge is inherited from
+ * the light ramp — a wash tuned against white goes muddy on a dark ground. */
+html[data-theme='dark'] .theme-admonition-note,
+html[data-theme='dark'] .theme-admonition-secondary {
+  --admonition-field: rgba(255, 255, 255, 0.05);
+  --admonition-edge: rgba(255, 255, 255, 0.13);
 }
 
 html[data-theme='dark'] .theme-admonition-tip,
 html[data-theme='dark'] .theme-admonition-success {
   --admonition-tint: #4ade80;
+  --admonition-field: rgba(74, 222, 128, 0.11);
+  --admonition-edge: rgba(74, 222, 128, 0.28);
+}
+
+html[data-theme='dark'] .theme-admonition-info {
+  --admonition-tint: #6cc0ff;
+  --admonition-field: rgba(108, 192, 255, 0.11);
+  --admonition-edge: rgba(108, 192, 255, 0.3);
 }
 
 html[data-theme='dark'] .theme-admonition-warning,
 html[data-theme='dark'] .theme-admonition-caution {
   --admonition-tint: #fbbf24;
+  --admonition-field: rgba(251, 191, 36, 0.11);
+  --admonition-edge: rgba(251, 191, 36, 0.28);
 }
 
 html[data-theme='dark'] .theme-admonition-danger {
   --admonition-tint: #fb923c;
+  --admonition-field: rgba(251, 146, 60, 0.11);
+  --admonition-edge: rgba(251, 146, 60, 0.28);
 }
 
 /* ------------------------------------------------------------------ *

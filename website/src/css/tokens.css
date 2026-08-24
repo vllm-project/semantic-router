@@ -88,11 +88,11 @@
   --tech-shadow: var(--site-shadow-soft);
   /* Page geometry. --page-max and --measure are separate on purpose: the shell
    * grows with the viewport while running text stays at a readable length. */
-  --page-max: 1360px;
-  --gutter: clamp(1rem, 4vw, 2.5rem);
+  --page-max: 1760px;
+  --gutter: clamp(1rem, 5vw, 4.5rem);
   --measure: 72ch;
-  --rail: 17rem;
-  --toc: 15rem;
+  --rail: 20rem;
+  --toc: 17rem;
 
   /* Held at main's values so this phase moves no layout. Phase 2 repoints them
    * to --page-max / --measure alongside the shells that expect those numbers. */
