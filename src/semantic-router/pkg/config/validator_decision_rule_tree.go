@@ -82,8 +82,28 @@ func validateRuleNodeShape(decisionName, path string, node *RuleNode) error {
 	if node.Name == "" {
 		return ruleTreeError(decisionName, path, "leaf condition requires a name")
 	}
+	if err := validateRuleLeafSignalType(decisionName, path, node.Type); err != nil {
+		return err
+	}
 	if len(node.Conditions) > 0 {
 		return ruleTreeError(decisionName, path, "leaf condition cannot declare child conditions")
+	}
+	return nil
+}
+
+// validateRuleLeafSignalType keeps the leaf's type inside the supported catalog
+// on every load path. validateDecisionSignalReferences enforces this too, but it
+// only runs on the full-config path, so a routing fragment or a canonical
+// routing document could otherwise carry a type no evaluator can resolve.
+func validateRuleLeafSignalType(decisionName, path, nodeType string) error {
+	signalType := strings.ToLower(nodeType)
+	// Projection outputs are resolved against the projection DAG once its output
+	// names are known, so they are deliberately outside the signal catalog.
+	if signalType == SignalTypeProjection {
+		return nil
+	}
+	if !IsSupportedSignalType(signalType) {
+		return ruleTreeError(decisionName, path, fmt.Sprintf("unsupported signal type %q", nodeType))
 	}
 	return nil
 }

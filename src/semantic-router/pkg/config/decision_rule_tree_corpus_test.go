@@ -306,6 +306,36 @@ var ruleTreeFragmentCorpus = []ruleTreeCase{
 		rules:   "operator: AND\nconditions:\n  - type: keyword",
 		wantErr: "rules.conditions[0]: leaf condition requires a name",
 	},
+	{
+		name:  "leaf_type_is_case_insensitive",
+		rules: "type: KEYWORD\nname: k1",
+	},
+	{
+		// Projection outputs are intentionally absent from the supported-signal
+		// catalog: they are resolved against the projection DAG instead. Reaching
+		// that error proves the catalog check exempted the type rather than
+		// rejecting it as unsupported.
+		name:    "leaf_type_projection_defers_to_the_projection_dag",
+		rules:   "type: projection\nname: request_band",
+		wantErr: `references projection "request_band"`,
+	},
+	{
+		name:    "leaf_type_unsupported",
+		rules:   "type: nonsense\nname: k1",
+		wantErr: `rules: unsupported signal type "nonsense"`,
+	},
+	{
+		name:    "nested_leaf_type_unsupported",
+		rules:   "operator: AND\nconditions:\n  - type: nonsense\n    name: k1",
+		wantErr: `rules.conditions[0]: unsupported signal type "nonsense"`,
+	},
+	{
+		// Nothing trims the type for the evaluator, so a padded spelling is simply
+		// not a known signal type.
+		name:    "leaf_type_padded",
+		rules:   "type: \" keyword\"\nname: k1",
+		wantErr: `rules: unsupported signal type " keyword"`,
+	},
 }
 
 func TestDecisionRuleTreeFragmentCorpus(t *testing.T) {
