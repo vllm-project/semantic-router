@@ -45,34 +45,47 @@ func TestRuleTreeOperatorsAgreeWithEvaluator(t *testing.T) {
 		// evaluator has to as well.
 		for _, spelling := range []string{operator, strings.ToLower(operator)} {
 			t.Run(spelling, func(t *testing.T) {
-				engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
-					ruleDecision("d", 10, spelling, tc.conditions...),
-				}, config.RoutingStrategyPriority)
-				signals := &SignalMatches{KeywordRules: []string{"present"}}
-
-				result, err := engine.EvaluateDecisionsWithSignals(signals)
-				if err != nil {
-					t.Fatalf("EvaluateDecisionsWithSignals: %v", err)
-				}
-				if matched := result != nil; matched != tc.wantMatch {
-					t.Fatalf("evalNode, operator %q: matched=%v, want %v "+
-						"(an operator that reaches the default branch is evaluated as OR)",
-						spelling, matched, tc.wantMatch)
-				}
-
-				tracedResult, traces := engine.EvaluateDecisionsWithTrace(signals)
-				if matched := tracedResult != nil; matched != tc.wantMatch {
-					t.Fatalf("evalNodeWithTrace, operator %q: matched=%v, want %v",
-						spelling, matched, tc.wantMatch)
-				}
-				if len(traces) != 1 {
-					t.Fatalf("expected one decision trace, got %d", len(traces))
-				}
-				if traces[0].Matched != tc.wantMatch {
-					t.Fatalf("trace for operator %q reports matched=%v but the decision is %v",
-						spelling, traces[0].Matched, tc.wantMatch)
-				}
+				assertOperatorReachesItsOwnBranch(t, spelling, tc.conditions, tc.wantMatch)
 			})
 		}
+	}
+}
+
+// assertOperatorReachesItsOwnBranch drives one operator spelling through both
+// evaluators and checks the verdict they produce, including the flag the trace
+// reports for itself.
+func assertOperatorReachesItsOwnBranch(
+	t *testing.T,
+	operator string,
+	conditions []config.RuleCondition,
+	wantMatch bool,
+) {
+	t.Helper()
+	engine := NewDecisionEngine(nil, nil, nil, []config.Decision{
+		ruleDecision("d", 10, operator, conditions...),
+	}, config.RoutingStrategyPriority)
+	signals := &SignalMatches{KeywordRules: []string{"present"}}
+
+	result, err := engine.EvaluateDecisionsWithSignals(signals)
+	if err != nil {
+		t.Fatalf("EvaluateDecisionsWithSignals: %v", err)
+	}
+	if matched := result != nil; matched != wantMatch {
+		t.Fatalf("evalNode, operator %q: matched=%v, want %v "+
+			"(an operator that reaches the default branch is evaluated as OR)",
+			operator, matched, wantMatch)
+	}
+
+	tracedResult, traces := engine.EvaluateDecisionsWithTrace(signals)
+	if matched := tracedResult != nil; matched != wantMatch {
+		t.Fatalf("evalNodeWithTrace, operator %q: matched=%v, want %v",
+			operator, matched, wantMatch)
+	}
+	if len(traces) != 1 {
+		t.Fatalf("expected one decision trace, got %d", len(traces))
+	}
+	if traces[0].Matched != wantMatch {
+		t.Fatalf("trace for operator %q reports matched=%v but the decision is %v",
+			operator, traces[0].Matched, wantMatch)
 	}
 }
