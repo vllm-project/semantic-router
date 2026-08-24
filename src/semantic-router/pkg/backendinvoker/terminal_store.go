@@ -320,7 +320,7 @@ func validateResponseTerminal(terminal ResponseTerminal) error {
 		return fmt.Errorf("%w: successful terminal has an invalid stop reason", ErrResponseTerminalInvalid)
 	}
 	if err := llmprotocol.ValidateUsage(terminal.Usage); err != nil {
-		return fmt.Errorf("%w: %v", ErrResponseTerminalInvalid, err)
+		return fmt.Errorf("%w: %w", ErrResponseTerminalInvalid, err)
 	}
 	return nil
 }

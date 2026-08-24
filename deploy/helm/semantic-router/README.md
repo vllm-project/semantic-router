@@ -92,6 +92,9 @@ values. The chart does not install the authoritative managed stores.
 | config.global.services.backend_dispatch.max_request_body_bytes | int | `67108864` |  |
 | config.global.services.backend_dispatch.port | int | `8180` |  |
 | config.global.services.backend_egress.policy_file | string | `"/app/config/backend-egress-policy.yaml"` |  |
+| config.global.services.management_api.bind_address | string | `"0.0.0.0"` |  |
+| config.global.services.management_api.port | int | `8080` |  |
+| config.global.services.management_api.remote_exposure | bool | `false` |  |
 | config.global.services.observability.tracing.enabled | bool | `false` |  |
 | config.global.services.observability.tracing.exporter.endpoint | string | `"jaeger:4317"` |  |
 | config.global.services.observability.tracing.exporter.insecure | bool | `true` |  |

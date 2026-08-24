@@ -81,6 +81,21 @@ if ! grep -A5 'readinessProbe:' "$TEMP_DIR/default-template.yaml" | grep -q 'sch
     log_error "Standalone readiness probe does not use HTTP"
     exit 1
 fi
+if ! grep -A3 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
+    grep -q 'bind_address: 0.0.0.0'; then
+    log_error "Default chart config does not expose the container-internal Management listener"
+    exit 1
+fi
+if ! grep -A3 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
+    grep -q 'port: 8080'; then
+    log_error "Default chart config does not pin the Management listener port"
+    exit 1
+fi
+if ! grep -A3 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
+    grep -q 'remote_exposure: false'; then
+    log_error "Default chart config unexpectedly marks the Management listener as remotely exposed"
+    exit 1
+fi
 echo ""
 
 # Test 3: Canonical config override must be atomic and preserve explicit gates

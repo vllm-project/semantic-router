@@ -3,6 +3,8 @@ package routerauth
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -27,6 +29,11 @@ const (
 )
 
 var errFirstAdminProvisioning = dashboardauth.ErrFirstAdminProvisioningUnavailable
+
+type bootstrapTokenObservation struct {
+	fileInfo      os.FileInfo
+	contentDigest [sha256.Size]byte
+}
 
 type namespaceView struct {
 	NamespaceID      string    `json:"namespaceId"`
@@ -60,20 +67,23 @@ func (provider *managementSessionProvider) ProvisionFirstAdmin(
 		ExpiresAt: identity.ExpiresAt.UTC(),
 	}
 	accessToken, err := provider.ManagementAccessToken(ctx, actor)
-	var bootstrapFile os.FileInfo
+	var bootstrapToken *bootstrapTokenObservation
 	if err != nil {
-		bootstrapFile, err = observeBootstrapToken(provider.bootstrapTokenFile)
+		var token string
+		token, bootstrapToken, err = readBootstrapToken(provider.bootstrapTokenFile)
 		if err != nil {
 			return err
 		}
-		if bootstrapErr := provider.bootstrapExternalPrincipal(ctx, identity); bootstrapErr != nil {
+		bootstrapErr := provider.bootstrapExternalPrincipal(ctx, identity, token)
+		zeroStringValue(&token)
+		if bootstrapErr != nil {
 			return bootstrapErr
 		}
 		accessToken, err = provider.ManagementAccessToken(ctx, actor)
 		if err != nil {
 			return errFirstAdminProvisioning
 		}
-	} else if bootstrapFile, err = observeBootstrapTokenIfPresent(provider.bootstrapTokenFile); err != nil {
+	} else if bootstrapToken, err = observeBootstrapTokenIfPresent(provider.bootstrapTokenFile); err != nil {
 		return err
 	}
 
@@ -102,24 +112,23 @@ func (provider *managementSessionProvider) ProvisionFirstAdmin(
 	if err := provider.verifyFirstAdmin(ctx, accessToken, namespaceID, principalID, userID, role.RoleID); err != nil {
 		return err
 	}
-	if bootstrapFile == nil {
+	if bootstrapToken == nil {
 		// An already trusted principal proves that Router bootstrap completed.
 		// This is the normal retry path after an external Kubernetes operator
 		// removed the projected one-time credential and rolled the Router.
 		return nil
 	}
-	return finalizeBootstrapToken(provider.bootstrapTokenFile, bootstrapFile)
+	return finalizeBootstrapToken(provider.bootstrapTokenFile, bootstrapToken)
 }
 
 func (provider *managementSessionProvider) bootstrapExternalPrincipal(
 	ctx context.Context,
 	identity dashboardauth.FirstAdminIdentity,
+	token string,
 ) error {
-	token, err := readBootstrapToken(provider.bootstrapTokenFile)
-	if err != nil {
+	if token == "" {
 		return errFirstAdminProvisioning
 	}
-	defer zeroStringValue(&token)
 	request := managementapi.BootstrapRequest{
 		Kind: "external_principal", DisplayName: identity.DisplayName,
 		External: &managementapi.BootstrapExternalIdentity{
@@ -129,7 +138,7 @@ func (provider *managementSessionProvider) bootstrapExternalPrincipal(
 		},
 	}
 	var result managementapi.BootstrapResponse
-	err = provider.managementRequest(ctx, http.MethodPost, managementBasePath+"/auth/bootstrap", request,
+	err := provider.managementRequest(ctx, http.MethodPost, managementBasePath+"/auth/bootstrap", request,
 		map[string]string{
 			"Authorization":                    "VSR-Bootstrap " + token,
 			managementapi.HeaderIdempotencyKey: installationKey("bootstrap", identity.UserID),
@@ -402,9 +411,16 @@ func (provider *managementSessionProvider) managementRequest(
 	return nil
 }
 
-func observeBootstrapToken(path string) (os.FileInfo, error) {
+func validateBootstrapTokenPath(path string) error {
 	if path == "" || !filepath.IsAbs(path) || filepath.Clean(path) != path {
-		return nil, errFirstAdminProvisioning
+		return errFirstAdminProvisioning
+	}
+	return nil
+}
+
+func observeBootstrapToken(path string) (*bootstrapTokenObservation, error) {
+	if err := validateBootstrapTokenPath(path); err != nil {
+		return nil, err
 	}
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -413,57 +429,138 @@ func observeBootstrapToken(path string) (os.FileInfo, error) {
 	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
 		return nil, errFirstAdminProvisioning
 	}
-	return info, nil
+	token, observation, err := readObservedBootstrapToken(path, info)
+	zeroStringValue(&token)
+	return observation, err
 }
 
-func readBootstrapToken(path string) (string, error) {
-	info, err := observeBootstrapToken(path)
-	if err != nil || info == nil {
-		return "", errFirstAdminProvisioning
+func readBootstrapToken(path string) (string, *bootstrapTokenObservation, error) {
+	if err := validateBootstrapTokenPath(path); err != nil {
+		return "", nil, err
 	}
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+		return "", nil, errFirstAdminProvisioning
+	}
+	return readObservedBootstrapToken(path, info)
+}
+
+func readObservedBootstrapToken(path string, observed os.FileInfo) (string, *bootstrapTokenObservation, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return "", errFirstAdminProvisioning
+		return "", nil, errFirstAdminProvisioning
 	}
 	defer file.Close()
 	payload, err := io.ReadAll(io.LimitReader(file, maximumBootstrapTokenLen+1))
 	if err != nil || len(payload) == 0 || len(payload) > maximumBootstrapTokenLen {
-		return "", errFirstAdminProvisioning
+		return "", nil, errFirstAdminProvisioning
 	}
 	defer zeroByteSlice(payload)
 	token := strings.TrimSpace(string(payload))
 	if len(token) < 32 || strings.ContainsAny(token, "\r\n\t ") {
-		return "", errFirstAdminProvisioning
+		return "", nil, errFirstAdminProvisioning
 	}
 	openedInfo, err := file.Stat()
-	if err != nil || !os.SameFile(info, openedInfo) {
-		return "", errFirstAdminProvisioning
+	if err != nil || !os.SameFile(observed, openedInfo) {
+		return "", nil, errFirstAdminProvisioning
 	}
-	return token, nil
+	currentInfo, err := os.Lstat(path)
+	if err != nil || !os.SameFile(openedInfo, currentInfo) {
+		return "", nil, errFirstAdminProvisioning
+	}
+	return token, &bootstrapTokenObservation{
+		fileInfo:      openedInfo,
+		contentDigest: sha256.Sum256(payload),
+	}, nil
 }
 
-func finalizeBootstrapToken(path string, observed os.FileInfo) error {
-	if path == "" {
+func finalizeBootstrapToken(path string, observed *bootstrapTokenObservation) error {
+	if observed == nil || validateBootstrapTokenPath(path) != nil {
 		return errFirstAdminProvisioning
 	}
-	info, err := os.Lstat(path)
-	if errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {
 		// Provisioning has already been verified through /me. A concurrent
 		// finalizer removing the same one-time credential is therefore the
-		// desired terminal state, regardless of whether this process observed
-		// the file at the start of the saga.
+		// desired terminal state.
 		return nil
-	}
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o077 != 0 {
+	} else if err != nil {
 		return errFirstAdminProvisioning
 	}
-	if observed == nil || !os.SameFile(observed, info) {
+	directoryPath := filepath.Dir(path)
+	claimDirectory, err := os.MkdirTemp(directoryPath, ".vllm-sr-bootstrap-finalize-")
+	if err != nil {
 		return errFirstAdminProvisioning
 	}
-	if removeErr := os.Remove(path); removeErr != nil {
+	claimPath := filepath.Join(claimDirectory, "token")
+	if err := os.Rename(path, claimPath); err != nil {
+		if removeErr := os.Remove(claimDirectory); removeErr != nil {
+			return errFirstAdminProvisioning
+		}
+		if errors.Is(err, os.ErrNotExist) {
+			// The file disappeared after the observation above. The verified
+			// provisioning result makes that concurrent finalization idempotent.
+			return syncDirectory(directoryPath)
+		}
 		return errFirstAdminProvisioning
 	}
-	directory, err := os.Open(filepath.Dir(path))
+
+	currentToken, current, err := readBootstrapToken(claimPath)
+	zeroStringValue(&currentToken)
+	if err != nil || current == nil || !os.SameFile(observed.fileInfo, current.fileInfo) ||
+		subtle.ConstantTimeCompare(observed.contentDigest[:], current.contentDigest[:]) != 1 {
+		if restoreErr := restoreBootstrapTokenClaim(path, claimPath, claimDirectory); restoreErr != nil {
+			return errFirstAdminProvisioning
+		}
+		return errFirstAdminProvisioning
+	}
+	return finalizeVerifiedBootstrapTokenClaim(path, claimPath, claimDirectory)
+}
+
+func finalizeVerifiedBootstrapTokenClaim(path, claimPath, claimDirectory string) error {
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		if cleanupErr := removeBootstrapTokenClaim(claimPath, claimDirectory); cleanupErr != nil {
+			return errFirstAdminProvisioning
+		}
+		return errFirstAdminProvisioning
+	}
+	if err := removeBootstrapTokenClaim(claimPath, claimDirectory); err != nil {
+		return err
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+		return errFirstAdminProvisioning
+	}
+	return nil
+}
+
+func restoreBootstrapTokenClaim(path, claimPath, claimDirectory string) error {
+	// A hard link restores the claimed inode without the replacement race of
+	// checking for absence and then using rename, which may overwrite a token
+	// created between those two operations.
+	if err := os.Link(claimPath, path); err != nil {
+		_ = removeBootstrapTokenClaim(claimPath, claimDirectory)
+		return errFirstAdminProvisioning
+	}
+	if err := os.Remove(claimPath); err != nil {
+		return errFirstAdminProvisioning
+	}
+	if err := os.Remove(claimDirectory); err != nil {
+		return errFirstAdminProvisioning
+	}
+	return syncDirectory(filepath.Dir(path))
+}
+
+func removeBootstrapTokenClaim(claimPath, claimDirectory string) error {
+	if err := os.Remove(claimPath); err != nil {
+		return errFirstAdminProvisioning
+	}
+	if err := os.Remove(claimDirectory); err != nil {
+		return errFirstAdminProvisioning
+	}
+	return syncDirectory(filepath.Dir(claimDirectory))
+}
+
+func syncDirectory(path string) error {
+	directory, err := os.Open(path)
 	if err != nil {
 		return errFirstAdminProvisioning
 	}
@@ -474,8 +571,8 @@ func finalizeBootstrapToken(path string, observed os.FileInfo) error {
 	return nil
 }
 
-func observeBootstrapTokenIfPresent(path string) (os.FileInfo, error) {
-	if path == "" {
+func observeBootstrapTokenIfPresent(path string) (*bootstrapTokenObservation, error) {
+	if validateBootstrapTokenPath(path) != nil {
 		return nil, errFirstAdminProvisioning
 	}
 	if _, err := os.Lstat(path); errors.Is(err, os.ErrNotExist) {

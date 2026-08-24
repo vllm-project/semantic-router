@@ -100,12 +100,15 @@ config:
         policy_file: /app/config/backend-egress-policy.yaml
     stores:
       response_cache:
+        enabled: false
         embedding_model: mmbert
       memory:
         embedding_model: mmbert
       vector_store:
         embedding_model: mmbert
-    integrations: {}
+    integrations:
+      tools:
+        enabled: false
     model_catalog:
       kbs: []
       modules:
@@ -126,7 +129,13 @@ config:
             pii_mapping_path: ''
             use_mmbert_32k: false
         hallucination_mitigation: {}
-      embeddings: {}
+      embeddings:
+        semantic:
+          qwen3_model_path: ''
+          gemma_model_path: ''
+          mmbert_model_path: ''
+          multimodal_model_path: ''
+          bert_model_path: ''
 resources:
   limits:
     cpu: '2'

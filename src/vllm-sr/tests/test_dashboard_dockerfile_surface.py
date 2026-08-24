@@ -19,6 +19,8 @@ VLLM_SR_CUDA_DOCKERIGNORE = (
 )
 EXTPROC_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc"
 EXTPROC_ROCM_DOCKERFILE = REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm"
+VLLM_SR_ENTRYPOINT = REPO_ROOT / "src" / "vllm-sr" / "start-router.sh"
+EXTPROC_ENTRYPOINT = REPO_ROOT / "tools" / "docker" / "entrypoint.sh"
 DASHBOARD_ENTRYPOINT = REPO_ROOT / "dashboard" / "backend" / "entrypoint.sh"
 DASHBOARD_PERMISSION_HELPER = (
     REPO_ROOT / "dashboard" / "backend" / "entrypoint_permissions.py"
@@ -544,10 +546,28 @@ def test_dashboard_runtime_image_binds_cli_version_metadata() -> None:
 
 
 def test_router_entrypoint_does_not_override_management_listener_config() -> None:
-    content = (REPO_ROOT / "src" / "vllm-sr" / "start-router.sh").read_text()
+    content = VLLM_SR_ENTRYPOINT.read_text()
     assert "-enable-api=true" in content
     assert "-api-port=" not in content
     assert "-api-bind=" not in content
+
+
+@pytest.mark.parametrize("entrypoint", [VLLM_SR_ENTRYPOINT, EXTPROC_ENTRYPOINT])
+def test_router_entrypoints_preserve_public_roots_with_custom_ca(
+    entrypoint: Path,
+) -> None:
+    content = entrypoint.read_text(encoding="utf-8")
+
+    assert "merge_custom_ca_with_system_roots" in content
+    assert "/etc/ssl/certs/ca-certificates.crt" in content
+    assert "/etc/pki/tls/certs/ca-bundle.crt" in content
+    assert "mktemp /tmp/vllm-sr-ca-bundle.XXXXXX" in content
+    assert 'cat "$system_bundle"' in content
+    assert 'cat "$custom_bundle"' in content
+    assert 'chmod 0600 "$combined_bundle"' in content
+    assert 'SSL_CERT_FILE="$combined_bundle"' in content
+    assert "--insecure" not in content
+    assert "-k " not in content
 
 
 def test_vllm_sr_cuda_dockerignore_excludes_runtime_state_and_large_unused_inputs() -> (

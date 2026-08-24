@@ -10,6 +10,7 @@ import (
 func TestResolveProductionManagementFactoryUsesRouterNativeComposition(t *testing.T) {
 	cfg := config.DefaultGlobalConfig()
 	cfg.ControlPlane.Mode = config.ControlPlaneModeManaged
+	cfg.Agent.PublicInferenceEndpoint = "http://public-inference.internal/v1/chat/completions"
 	cfg.ManagementAPI.Auth.Mode = config.ManagementAuthModeRouter
 	cfg.ManagementAPI.Auth.Roles = nil
 	cfg.AccessRuntimeStore = &config.AccessRuntimeStoreConfig{

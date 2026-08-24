@@ -25,7 +25,7 @@ const vLLMChatResponseExtensionsFixture = `{
 
 func TestOpenAIChatResponseAcceptsClosedVLLMExecutionMetadata(t *testing.T) {
 	engine := NewBuiltinEngine()
-	translated, err := engine.TranslateResponse(
+	translated, translateErr := engine.TranslateResponse(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIChatV1,
 		[]byte(vLLMChatResponseExtensionsFixture),
@@ -34,8 +34,8 @@ func TestOpenAIChatResponseAcceptsClosedVLLMExecutionMetadata(t *testing.T) {
 			return nil
 		},
 	)
-	if err != nil {
-		t.Fatalf("TranslateResponse() error = %v", err)
+	if translateErr != nil {
+		t.Fatalf("TranslateResponse() error = %v", translateErr)
 	}
 	if translated.Response.Model != "public-model" || translated.Response.Usage.Total.Value == nil ||
 		*translated.Response.Usage.Total.Value != 3 {
@@ -46,23 +46,23 @@ func TestOpenAIChatResponseAcceptsClosedVLLMExecutionMetadata(t *testing.T) {
 func TestOpenAIChatResponseExtensionEnvelopeRoundTripAndUnknownRejection(t *testing.T) {
 	engine := NewBuiltinEngine()
 	raw := []byte(vLLMChatResponseExtensionsFixture)
-	translated, err := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, raw, nil)
-	if err != nil {
-		t.Fatalf("TranslateResponse() error = %v", err)
+	translated, translateErr := engine.TranslateResponse(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, raw, nil)
+	if translateErr != nil {
+		t.Fatalf("TranslateResponse() error = %v", translateErr)
 	}
 	if !bytes.Equal(translated.Body, raw) {
 		t.Fatal("same-format response envelope was not replayed byte-for-byte")
 	}
 
 	future := bytes.Replace(raw, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{},"future_field":true`), 1)
-	_, err = engine.TranslateResponse(
+	_, translateErr = engine.TranslateResponse(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIChatV1,
 		future,
 		func(*llmprotocol.Response) error { return nil },
 	)
-	if err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
-		t.Fatalf("future field error = %v", err)
+	if translateErr == nil || !strings.Contains(translateErr.Error(), "invalid_upstream_json") {
+		t.Fatalf("future field error = %v", translateErr)
 	}
 }
 
@@ -74,14 +74,14 @@ func TestOpenAIChatResponseRejectsUnsupportedNonNullOutputExtensions(t *testing.
 	} {
 		t.Run(field, func(t *testing.T) {
 			raw := strings.Replace(vLLMChatResponseExtensionsFixture, `"`+field+`":null`, replacement, 1)
-			_, err := engine.TranslateResponse(
+			_, translateErr := engine.TranslateResponse(
 				llmprotocol.OpenAIChatV1,
 				llmprotocol.OpenAIChatV1,
 				[]byte(raw),
 				func(*llmprotocol.Response) error { return nil },
 			)
-			if err == nil || !strings.Contains(err.Error(), "unsupported_upstream") {
-				t.Fatalf("non-null %s error = %v", field, err)
+			if translateErr == nil || !strings.Contains(translateErr.Error(), "unsupported_upstream") {
+				t.Fatalf("non-null %s error = %v", field, translateErr)
 			}
 		})
 	}
@@ -111,13 +111,13 @@ func TestOpenAIChatResponseRejectsInvalidClosedExecutionMetadata(t *testing.T) {
 	}
 	for name, raw := range tests {
 		t.Run(name, func(t *testing.T) {
-			_, err := engine.TranslateResponse(
+			_, translateErr := engine.TranslateResponse(
 				llmprotocol.OpenAIChatV1,
 				llmprotocol.OpenAIChatV1,
 				[]byte(raw),
 				func(*llmprotocol.Response) error { return nil },
 			)
-			if err == nil {
+			if translateErr == nil {
 				t.Fatal("invalid closed metadata was accepted")
 			}
 		})
@@ -127,18 +127,18 @@ func TestOpenAIChatResponseRejectsInvalidClosedExecutionMetadata(t *testing.T) {
 func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureFields(t *testing.T) {
 	engine := NewBuiltinEngine()
 	context := llmprotocol.StreamContext{PublicModel: "public-model", ProviderModel: "provider-model"}
-	stream, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
-	if err != nil {
-		t.Fatal(err)
+	stream, streamErr := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
+	if streamErr != nil {
+		t.Fatal(streamErr)
 	}
 	frame := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7," +
 		"\"model\":\"provider-model\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_1\"," +
 		"\"prompt_logprobs\":null,\"prompt_token_ids\":[11],\"kv_transfer_params\":{}," +
 		"\"choices\":[{\"index\":0,\"finish_reason\":null,\"stop_reason\":null,\"token_ids\":[12]," +
 		"\"logprobs\":null,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\",\"audio\":null,\"function_call\":null}}]}\n\n")
-	frames, events, _, err := stream.Push(frame)
-	if err != nil {
-		t.Fatalf("Push() error = %v", err)
+	frames, events, _, pushErr := stream.Push(frame)
+	if pushErr != nil {
+		t.Fatalf("Push() error = %v", pushErr)
 	}
 	for _, event := range events {
 		if event.Model != "public-model" {
@@ -150,49 +150,49 @@ func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureField
 		t.Fatalf("rewritten frames = %q", bytes.Join(frames, nil))
 	}
 
-	unknown, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
-	if err != nil {
-		t.Fatal(err)
+	unknown, streamErr := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
+	if streamErr != nil {
+		t.Fatal(streamErr)
 	}
 	future := bytes.Replace(frame, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{},"future_field":true`), 1)
-	if _, _, _, err := unknown.Push(future); err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
-		t.Fatalf("future stream field error = %v", err)
+	if _, _, _, pushErr := unknown.Push(future); pushErr == nil || !strings.Contains(pushErr.Error(), "invalid_upstream_json") {
+		t.Fatalf("future stream field error = %v", pushErr)
 	}
 
-	sameModel, err := engine.NewStream(
+	sameModel, streamErr := engine.NewStream(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.StreamContext{PublicModel: "same-model", ProviderModel: "same-model"},
 	)
-	if err != nil {
-		t.Fatal(err)
+	if streamErr != nil {
+		t.Fatal(streamErr)
 	}
-	if _, _, _, err := sameModel.Push(future); err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
-		t.Fatalf("same-model future stream field error = %v", err)
+	if _, _, _, pushErr := sameModel.Push(future); pushErr == nil || !strings.Contains(pushErr.Error(), "invalid_upstream_json") {
+		t.Fatalf("same-model future stream field error = %v", pushErr)
 	}
-	if _, _, err := engine.DecodeResponseStream(
+	if _, _, decodeErr := engine.DecodeResponseStream(
 		llmprotocol.OpenAIChatV1,
 		append(append([]byte(nil), future...), []byte("data: [DONE]\n\n")...),
 		llmprotocol.StreamContext{PublicModel: "same-model", ProviderModel: "same-model"},
-	); err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
-		t.Fatalf("DecodeResponseStream future field error = %v", err)
+	); decodeErr == nil || !strings.Contains(decodeErr.Error(), "invalid_upstream_json") {
+		t.Fatalf("DecodeResponseStream future field error = %v", decodeErr)
 	}
 
-	nested, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
-	if err != nil {
-		t.Fatal(err)
+	nested, streamErr := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
+	if streamErr != nil {
+		t.Fatal(streamErr)
 	}
 	nestedFuture := bytes.Replace(frame, []byte(`"kv_transfer_params":{}`), []byte(`"kv_transfer_params":{"future":true}`), 1)
-	if _, _, _, err := nested.Push(nestedFuture); err == nil || !strings.Contains(err.Error(), "invalid_upstream_json") {
-		t.Fatalf("future nested stream field error = %v", err)
+	if _, _, _, pushErr := nested.Push(nestedFuture); pushErr == nil || !strings.Contains(pushErr.Error(), "invalid_upstream_json") {
+		t.Fatalf("future nested stream field error = %v", pushErr)
 	}
 
-	streamLogprobs, err := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
-	if err != nil {
-		t.Fatal(err)
+	streamLogprobs, streamErr := engine.NewStream(llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, context)
+	if streamErr != nil {
+		t.Fatal(streamErr)
 	}
 	withLogprobs := bytes.Replace(frame, []byte(`"logprobs":null`), []byte(`"logprobs":{"content":[]}`), 1)
-	if _, _, _, err := streamLogprobs.Push(withLogprobs); err == nil || !strings.Contains(err.Error(), "unsupported_upstream_stream_logprobs") {
-		t.Fatalf("stream logprobs error = %v", err)
+	if _, _, _, pushErr := streamLogprobs.Push(withLogprobs); pushErr == nil || !strings.Contains(pushErr.Error(), "unsupported_upstream_stream_logprobs") {
+		t.Fatalf("stream logprobs error = %v", pushErr)
 	}
 }

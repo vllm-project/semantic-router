@@ -582,7 +582,7 @@ func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
 		*tier = chatServiceTierWire(value)
 		return nil
 	default:
-		return fmt.Errorf("unsupported Chat service tier")
+		return fmt.Errorf("unsupported chat service tier")
 	}
 }
 
@@ -593,7 +593,7 @@ type chatNullOnlyWire struct{}
 
 func (*chatNullOnlyWire) UnmarshalJSON(raw []byte) error {
 	if !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
-		return fmt.Errorf("Chat execution field must be null")
+		return fmt.Errorf("chat execution field must be null")
 	}
 	return nil
 }
@@ -611,7 +611,7 @@ func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
 	var text string
 	if err := json.Unmarshal(raw, &text); err == nil {
 		if len(text) == 0 || len(text) > 128 {
-			return fmt.Errorf("Chat stop reason string is invalid")
+			return fmt.Errorf("chat stop reason string is invalid")
 		}
 		reason.Text = &text
 		return nil
@@ -621,7 +621,7 @@ func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
 		reason.Integer = &integer
 		return nil
 	}
-	return fmt.Errorf("Chat stop reason must be a string or integer")
+	return fmt.Errorf("chat stop reason must be a string or integer")
 }
 
 // Chat logprobs are private model-execution evidence. The neutral response

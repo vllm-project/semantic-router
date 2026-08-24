@@ -168,6 +168,10 @@ config:
     control_plane:
       mode: standalone
     services:
+      management_api:
+        bind_address: 0.0.0.0
+        port: 8080
+        remote_exposure: false
       response_api:
         enabled: false
         store_backend: memory
