@@ -50,7 +50,7 @@ not by isolated code ownership.
 > **Mission:** Make a pool of models behave like one measurable,
 > continuously improving Mixture-of-Models.
 
-![One request is routed across a qualified model pool and returns as one measurable model experience](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/mom-routing.png)
+![One request enters a versioned recipe and qualified model pool, which can select, cascade, compare, or combine models before returning one measurable response](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/mom-routing.svg)
 
 #### Why this matters
 
@@ -90,7 +90,7 @@ Workgroups.
 > **Mission:** Build better Router Models and one extensible runtime for
 > executing them across the ecosystem.
 
-![Specialized Router Models produce routing signals through one extensible inference runtime](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/router-models-inference-runtime.png)
+![Specialized Router Models produce typed routing signals through one extensible inference runtime and controlled artifact lifecycle](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/router-models-inference-runtime.svg)
 
 #### Why this matters
 
@@ -130,7 +130,7 @@ the tensor engines and GPU schedulers it integrates with.
 > **Mission:** Execute every live routing decision through a fast, reliable,
 > and portable request path.
 
-![The same routing behavior runs through reliable standalone and gateway-integrated request paths](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/data-plane-networking.png)
+![Standalone HTTP and Envoy gateway entry modes converge on one shared routing core, backend dispatch path, and response stream](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/data-plane-networking.svg)
 
 #### Why this matters
 
@@ -169,7 +169,7 @@ how a Router Model is trained, or which MoM recipe is best.
 > **Mission:** Make vLLM Semantic Router production-grade across supported
 > organizations, environments, and hardware.
 
-![Tenant access, quotas, observability, lifecycle controls, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.png)
+![Identity, access, quotas, production lifecycle controls, observability, and supported environments form one production platform](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/enterprise-environment.svg)
 
 #### Why this matters
 
@@ -209,7 +209,7 @@ capabilities rather than publishing private product plans.
 > **Mission:** Keep long-running agent workloads context-efficient,
 > state-aware, bounded, and safe.
 
-![Long session history is protected, selected, compressed, and prepared for safe model-aware execution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.png)
+![Long session history is protected, selected, pruned, compressed, and restructured before safe phase-aware execution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/agentic-context.svg)
 
 #### Why this matters
 
@@ -250,7 +250,7 @@ training.
 > **Mission:** Make vLLM Semantic Router easy to discover, install, configure,
 > extend, and operate.
 
-![CLI, Dashboard, recipes, tutorials, extensions, and contributors connect through one approachable developer experience](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/developer-experience-ecosystem.png)
+![A developer journey connects discovery, installation, configuration, the first routed request, understanding, sharing, and contribution](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/developer-experience-ecosystem.svg)
 
 #### Why this matters
 
@@ -289,7 +289,7 @@ policy, and quality standards owned by other Workgroups.
 > **Mission:** Make every supported capability measurable and every change
 > verifiable.
 
-![Shared benchmarks, comparison rules, regression checks, and quality gates validate every supported path](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/evaluation-quality.png)
+![Capabilities from every direction enter a common evaluation contract, layered evaluation stack, regression gates, and published results](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/evaluation-quality.svg)
 
 #### Why this matters
 
