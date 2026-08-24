@@ -69,11 +69,11 @@ export const workGroups: WorkGroup[] = [
     name: 'Agentic & Context',
     label: 'wg/agentic-context',
     charterIssue: 2987,
-    goal: 'Keep long-running agent workloads context-efficient, state-aware, bounded, and safe.',
+    goal: 'Manage context and safely select, hand off, and compose agent backends for long-running workloads.',
     scope: [
-      'Context compression, pruning, retrieval, and memory',
-      'Session budgets, retention, recovery, and state',
-      'Long-session model and workflow switching',
+      'Context optimization, memory, and session state',
+      'Agent backend selection, handoff, and composition',
+      'Bounded multi-agent collaboration and long-session model or workflow switching',
     ],
   },
   {
@@ -95,7 +95,7 @@ export const workGroups: WorkGroup[] = [
     charterIssue: 2969,
     goal: 'Provide common evaluation and quality gates across every project direction.',
     scope: [
-      'MoM, Router Model, context, and workflow evaluation',
+      'MoM, Router Model, agent, context, and workflow evaluation',
       'Model cards, benchmarks, and reproducibility',
       'CI, E2E, compatibility, and regression gates',
     ],
