@@ -71,7 +71,18 @@
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  --site-code-bg: #f6f2ea;
+  /*
+   * White, and the border is what defines the surface. This was #f6f2ea, the
+   * one warm value in the palette; it read as a tint against the old pure-white
+   * page but turned muddy once the page became a cool off-white.
+   *
+   * White is not just neutral here, it is the most legible ground available:
+   * the `github` Prism theme is designed for it, and every one of its tones —
+   * string #e3116c worst at 4.60:1 — scores higher on white than on any tint
+   * we could pick. Darkening the surface to make it "read" as code would have
+   * cost syntax contrast on every line to buy one shade of background.
+   */
+  --site-code-bg: #ffffff;
   --site-sidebar-bg: rgba(255, 253, 248, 0.9);
   --site-toc-bg: rgba(255, 253, 248, 0.92);
   --site-mermaid-bg: rgba(255, 255, 255, 0.72);
@@ -228,7 +239,7 @@ html[data-theme='light'],
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  --site-code-bg: #f6f2ea;
+  --site-code-bg: #ffffff;
   --site-sidebar-bg: rgba(255, 253, 248, 0.9);
   --site-toc-bg: rgba(255, 253, 248, 0.92);
   --site-mermaid-bg: rgba(255, 255, 255, 0.72);

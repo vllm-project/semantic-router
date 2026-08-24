@@ -85,11 +85,17 @@
 /* ------------------------------------------------------------------ *
  * Inline code
  * ------------------------------------------------------------------ */
+/*
+ * Same ground as a code block, so a token reads identically whether it sits in
+ * a sentence or a fence. docs.css paints inline code with --site-code-bg too,
+ * so naming the token here rather than --site-surface-alt is what keeps docs
+ * and blog showing the same chip. The border does the separating.
+ */
 :not(pre) > code {
   padding: 0.15em 0.4em;
   border: 1px solid var(--site-border);
   border-radius: var(--radius-sm);
-  background: var(--site-surface-alt);
+  background: var(--site-code-bg);
   color: var(--site-text-strong);
   font-size: 0.875em;
   font-weight: var(--site-font-weight-normal);
@@ -122,20 +128,35 @@ kbd {
 /* ------------------------------------------------------------------ *
  * Code blocks
  *
- * One bordered card with a header rail carrying the language (or the title
- * when the fence sets one) and the copy control.
+ * Docusaurus nests these as
+ *   div.codeBlockContainer > div.codeBlockContent > pre.prism-code
+ *     > code.codeBlockLines
+ * with the copy and word-wrap controls absolutely positioned in
+ * div.buttonGroup.
+ *
+ * The card goes on the container. The inset does NOT: it is set through
+ * --ifm-pre-padding so Docusaurus's own `.codeBlockLines` rule applies it to
+ * the <code>, which is the element that scrolls. Padding the <pre> instead
+ * would be scrolled away the moment a long line moves sideways, and setting
+ * it on the <code> by hand would mean re-declaring the `float` and
+ * `min-width: 100%` that rule relies on to keep the background full-width.
+ *
+ * docs.css styles this same surface and loads later, so the border, radius
+ * and background below are kept equivalent to its values rather than
+ * fighting them. Phase 2 deletes the duplicate.
  * ------------------------------------------------------------------ */
 div[class*='codeBlockContainer'] {
+  --ifm-pre-padding: var(--space-4);
   margin-bottom: var(--space-5);
   border: 1px solid var(--site-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--site-code-bg);
   box-shadow: none;
   overflow: hidden;
 }
 
 div[class*='codeBlockTitle'] {
-  padding: 0.55rem 0.9rem;
+  padding: 0.55rem var(--ifm-pre-padding, var(--space-4));
   border-bottom: 1px solid var(--site-border);
   background: var(--site-surface-alt);
   color: var(--site-muted-bright);
@@ -158,16 +179,10 @@ div[class*='codeBlockContainer'] pre {
   background: transparent;
 }
 
+/* Type only — the padding comes from --ifm-pre-padding above. */
 div[class*='codeBlockContainer'] pre code {
-  padding: var(--space-4) 0;
   font-size: var(--text-sm);
-  line-height: 1.65;
-}
-
-div[class*='codeBlockLines'] {
-  padding: var(--space-4) 0;
-  font-size: var(--text-sm);
-  line-height: 1.65;
+  line-height: 1.6;
 }
 
 /* The copy and word-wrap controls sit in the corner, quiet until hover. */
@@ -204,10 +219,10 @@ div[class*='buttonGroup'] button:hover {
 pre:not([class*='codeBlock']) {
   padding: var(--space-4);
   border: 1px solid var(--site-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md);
   background: var(--site-code-bg);
   font-size: var(--text-sm);
-  line-height: 1.65;
+  line-height: 1.6;
   overflow-x: auto;
 }
 
