@@ -540,8 +540,9 @@ entrypoints:
         weight: '1'
       - model: glm52-finalizer
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   router: {}
   integrations:
     looper:

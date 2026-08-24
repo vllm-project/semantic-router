@@ -102,7 +102,7 @@ func CompileManagedRoutingSnapshot(
 	}
 
 	bootstrap := CanonicalConfig{
-		Version: "v0.4", BillingCurrency: base.BillingCurrency,
+		Version:   "v0.4",
 		Listeners: append([]Listener(nil), base.Listeners...),
 		Global:    CanonicalGlobalFromRouterConfig(base),
 	}

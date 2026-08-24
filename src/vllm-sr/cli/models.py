@@ -2172,21 +2172,11 @@ class UserConfig(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     version: Literal["v0.4"]
-    billing_currency: Optional[StrictStr] = None
     listeners: List[Listener] = Field(default_factory=list)
     models: List[Model] = Field(default_factory=list)
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
-
-    @field_validator("billing_currency")
-    @classmethod
-    def validate_billing_currency(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        if not re.fullmatch(r"[A-Z]{3}", value):
-            raise ValueError("billing_currency must be an uppercase ISO-4217 code")
-        return value
 
     @model_validator(mode="after")
     def validate_resource_boundary(self):
@@ -2204,18 +2194,6 @@ class UserConfig(BaseModel):
         if len(set(callable_names)) != len(callable_names):
             raise ValueError("entrypoint names and aliases must be unique")
 
-        priced = any(
-            any(
-                value is not None
-                for value in model.pricing.model_dump(mode="python").values()
-            )
-            for model in self.models
-        )
-        if priced and self.billing_currency is None:
-            raise ValueError(
-                "billing_currency is required when standalone Models define pricing"
-            )
-
         global_config = self.global_ or {}
         control_plane = global_config.get("control_plane")
         mode = (
@@ -2223,6 +2201,20 @@ class UserConfig(BaseModel):
             if isinstance(control_plane, dict)
             else "standalone"
         )
+        currency = _validate_global_billing(global_config, mode)
+
+        priced = any(
+            any(
+                value is not None
+                for value in model.pricing.model_dump(mode="python").values()
+            )
+            for model in self.models
+        )
+        if mode == "standalone" and priced and currency is None:
+            raise ValueError(
+                "global.billing.currency is required when standalone Models define pricing"
+            )
+
         if mode == "managed" and (self.models or self.recipes or self.entrypoints):
             raise ValueError(
                 "managed bootstrap must not contain Models, Recipes, or Entrypoints"
@@ -2231,6 +2223,32 @@ class UserConfig(BaseModel):
         _validate_named_backend_credentials(global_config, mode)
         _validate_backend_egress(global_config)
         return self
+
+
+def _validate_global_billing(global_config: Dict[str, Any], mode: str) -> str | None:
+    billing = global_config.get("billing")
+    if billing is None:
+        return None
+    if not isinstance(billing, dict):
+        raise ValueError("global.billing must be an object")
+    if mode == "managed":
+        raise ValueError(
+            "global.billing.currency is standalone-only; managed mode takes "
+            "currency from Namespace"
+        )
+    unknown = set(billing) - {"currency"}
+    if unknown:
+        raise ValueError(
+            "global.billing contains unsupported fields: " + ", ".join(sorted(unknown))
+        )
+    currency = billing.get("currency")
+    if currency is None:
+        raise ValueError(
+            "global.billing.currency is required when global.billing is configured"
+        )
+    if not isinstance(currency, str) or not re.fullmatch(r"[A-Z]{3}", currency):
+        raise ValueError("global.billing.currency must be an uppercase ISO-4217 code")
+    return currency
 
 
 def _validate_agent_service(global_config: Dict[str, Any], mode: str) -> None:

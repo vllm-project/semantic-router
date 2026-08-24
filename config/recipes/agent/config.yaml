@@ -1222,8 +1222,9 @@ entrypoints:
       models:
       - model: qwen/qwen3.6-rocm
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   services:
     response_api:
       enabled: true

@@ -9,7 +9,6 @@ import (
 
 const humanAuthoringFixture = `
 version: v0.4
-billing_currency: USD
 models:
   - name: local/primary
     card:
@@ -41,6 +40,8 @@ entrypoints:
         models:
           - model: local/primary
 global:
+  billing:
+    currency: USD
   services:
     backend_egress: {policy_file: /app/config/backend-egress-policy.yaml}
 `
@@ -99,6 +100,19 @@ func TestHumanV04AuthoringRejectsMachineFields(t *testing.T) {
 				t.Fatalf("ParseYAMLBytes() error = %v", err)
 			}
 		})
+	}
+}
+
+func TestHumanV04AuthoringRejectsRootBillingCurrency(t *testing.T) {
+	document := strings.Replace(
+		humanAuthoringFixture,
+		"version: v0.4",
+		"version: v0.4\nbilling_currency: USD",
+		1,
+	)
+	_, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
+	if err == nil || !strings.Contains(err.Error(), "unexpected top-level keys: billing_currency") {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
 }
 

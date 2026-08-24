@@ -320,8 +320,9 @@ config:
         models:
         - model: base-model
           weight: '1'
-  billing_currency: USD
   global:
+    billing:
+      currency: USD
     model_catalog:
       kbs: []
       embeddings: {}

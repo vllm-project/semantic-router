@@ -1,13 +1,11 @@
 import pytest
-from pydantic import ValidationError
-
 from cli.models import UserConfig
+from pydantic import ValidationError
 
 
 def human_config() -> dict:
     return {
         "version": "v0.4",
-        "billing_currency": "USD",
         "models": [
             {
                 "name": "local/primary",
@@ -60,11 +58,12 @@ def human_config() -> dict:
             }
         ],
         "global": {
+            "billing": {"currency": "USD"},
             "services": {
                 "backend_egress": {
                     "policy_file": "/app/config/backend-egress-policy.yaml"
                 }
-            }
+            },
         },
     }
 
@@ -149,6 +148,46 @@ def test_human_v04_contract_rejects_compiler_owned_fields(
     targets[section][field] = value
 
     with pytest.raises(ValidationError, match=field):
+        UserConfig.model_validate(payload)
+
+
+def test_human_v04_contract_rejects_root_billing_currency() -> None:
+    payload = human_config()
+    payload["billing_currency"] = "USD"
+
+    with pytest.raises(ValidationError, match="billing_currency"):
+        UserConfig.model_validate(payload)
+
+
+def test_human_v04_contract_requires_one_global_currency_for_priced_models() -> None:
+    payload = human_config()
+    del payload["global"]["billing"]
+
+    with pytest.raises(ValidationError, match=r"global\.billing\.currency"):
+        UserConfig.model_validate(payload)
+
+
+def test_human_v04_contract_rejects_empty_billing_block() -> None:
+    payload = human_config()
+    payload["global"]["billing"] = {}
+
+    with pytest.raises(
+        ValidationError,
+        match=r"global\.billing\.currency is required when global\.billing is configured",
+    ):
+        UserConfig.model_validate(payload)
+
+
+def test_human_v04_contract_rejects_managed_bootstrap_currency() -> None:
+    payload = human_config()
+    payload["models"] = []
+    payload["recipes"] = []
+    payload["entrypoints"] = []
+    payload["global"]["control_plane"] = {"mode": "managed"}
+
+    with pytest.raises(
+        ValidationError, match="managed mode takes currency from Namespace"
+    ):
         UserConfig.model_validate(payload)
 
 

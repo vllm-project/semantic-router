@@ -12,7 +12,7 @@
 - Keep canonical import/export and normalization in `canonical_*.go` instead of drifting that logic back into `config.go`.
 - Keep plugin-family-specific contracts and backend decoders in dedicated files; do not let one plugin hotspot become a second schema table.
 - Keep semantic validation split by family; `validator.go` can coordinate shared checks, but broad type-specific logic should move to focused support files.
-- Treat canonical `version/billing_currency/listeners/models/recipes/entrypoints/global`
+- Treat canonical `version/listeners/models/recipes/entrypoints/global`
   parsing as the only steady-state runtime contract.
 - Accept only the current v0.4 human authoring contract. Removed layouts have
   no runtime or offline config-conversion path in this package.
@@ -29,6 +29,7 @@
   - Model pools and mixtures are derived views, not stored resources; no
     detached model-binding authority is allowed
 - Keep canonical `global` layered, not flat:
+  - `global.billing` for the standalone accounting currency shared by every Model price and cost quota
   - `global.router` for router-engine control knobs
   - `global.services` for shared APIs and control-plane services
   - `global.stores` for shared storage-backed services

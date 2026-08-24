@@ -26,14 +26,55 @@ func TestModelRuntimeValuesMaterializeEffectiveDefaults(t *testing.T) {
 	}
 }
 
-func TestCanonicalExportPreservesBillingCurrency(t *testing.T) {
-	document := strings.Replace(entrypointRulesYAML, "version: v0.4\n", "version: v0.4\nbilling_currency: USD\n", 1)
+func TestCanonicalExportPreservesGlobalBillingCurrency(t *testing.T) {
+	document := strings.Replace(entrypointRulesYAML, "global:\n", "global:\n  billing:\n    currency: USD\n", 1)
 	document = strings.Replace(document, "  - name: model-a\n", "  - name: model-a\n    pricing: {input_cost_per_million_tokens: \"0.25\"}\n", 1)
 	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes() error = %v", err)
 	}
-	if got := CanonicalConfigFromRouterConfig(cfg).BillingCurrency; got != "USD" {
+	exported := CanonicalConfigFromRouterConfig(cfg)
+	if exported.Global == nil || exported.Global.Billing == nil || exported.Global.Billing.Currency != "USD" {
+		got := ""
+		if exported.Global != nil && exported.Global.Billing != nil {
+			got = exported.Global.Billing.Currency
+		}
 		t.Fatalf("billing currency = %q, want USD", got)
+	}
+}
+
+func TestCanonicalBillingCurrencyOwnership(t *testing.T) {
+	priced := strings.Replace(
+		entrypointRulesYAML,
+		"  - name: model-a\n",
+		"  - name: model-a\n    pricing: {input_cost_per_million_tokens: \"0.25\"}\n",
+		1,
+	)
+
+	if _, err := testAuthoringParser(t).ParseYAMLBytes([]byte(priced)); err == nil ||
+		!strings.Contains(err.Error(), "global.billing.currency is required") {
+		t.Fatalf("missing currency error = %v", err)
+	}
+	empty := strings.Replace(priced, "global:\n", "global:\n  billing: {}\n", 1)
+	if _, err := testAuthoringParser(t).ParseYAMLBytes([]byte(empty)); err == nil ||
+		!strings.Contains(err.Error(), "global.billing.currency is required when global.billing is configured") {
+		t.Fatalf("empty billing error = %v", err)
+	}
+
+	invalid := strings.Replace(priced, "global:\n", "global:\n  billing:\n    currency: usd\n", 1)
+	if _, err := testAuthoringParser(t).ParseYAMLBytes([]byte(invalid)); err == nil ||
+		!strings.Contains(err.Error(), "global.billing.currency must be an uppercase ISO-4217 code") {
+		t.Fatalf("invalid currency error = %v", err)
+	}
+
+	_, err := ParseYAMLBytes([]byte(`
+version: v0.4
+global:
+  control_plane: {mode: managed}
+  billing: {currency: USD}
+`))
+	if err == nil ||
+		!strings.Contains(err.Error(), "managed mode takes currency from Namespace") {
+		t.Fatalf("managed currency error = %v", err)
 	}
 }

@@ -42,12 +42,13 @@ func CompileStandaloneRoutingSnapshot(
 	if err != nil {
 		return nil, fmt.Errorf("encode standalone routing identity: %w", err)
 	}
+	currency, _ := canonicalBillingCurrency(&canonical)
 	bundle := routingsnapshot.Bundle{
 		NamespaceID: uuid.NewSHA1(
 			uuid.NameSpaceOID,
 			append([]byte("vllm-sr/standalone-routing/v1\x00"), identityPayload...),
 		).String(),
-		Revision: standaloneRoutingRevision, Currency: canonical.BillingCurrency,
+		Revision: standaloneRoutingRevision, Currency: currency,
 		Models: models, Recipes: recipes, Entrypoints: entrypoints,
 	}
 	verified, err := routingsnapshot.Compile(bundle)

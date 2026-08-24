@@ -540,8 +540,9 @@ entrypoints:
         weight: '1'
       - model: kimi-k27-code-finalizer
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   router: {}
   integrations:
     looper:

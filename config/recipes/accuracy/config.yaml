@@ -195,8 +195,9 @@ entrypoints:
       models:
       - model: gpt55-worker
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   services:
     backend_credentials:
       accuracy_remote:

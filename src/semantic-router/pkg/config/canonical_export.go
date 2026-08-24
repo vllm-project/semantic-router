@@ -21,13 +21,12 @@ func CanonicalConfigFromRouterConfig(cfg *RouterConfig) CanonicalConfig {
 	}
 
 	return CanonicalConfig{
-		Version:         "v0.4",
-		BillingCurrency: cfg.BillingCurrency,
-		Listeners:       append([]Listener(nil), cfg.Listeners...),
-		Models:          models,
-		Entrypoints:     entrypoints,
-		Recipes:         recipes,
-		Global:          CanonicalGlobalFromRouterConfig(cfg),
+		Version:     "v0.4",
+		Listeners:   append([]Listener(nil), cfg.Listeners...),
+		Models:      models,
+		Entrypoints: entrypoints,
+		Recipes:     recipes,
+		Global:      CanonicalGlobalFromRouterConfig(cfg),
 	}
 }
 
@@ -155,8 +154,17 @@ func CanonicalGlobalFromRouterConfig(cfg *RouterConfig) *CanonicalGlobal {
 		return nil
 	}
 
+	currency := cfg.BillingCurrency
+	if cfg.ControlPlane.Mode == ControlPlaneModeManaged {
+		currency = ""
+	}
+	var billing *CanonicalBillingGlobal
+	if currency != "" {
+		billing = &CanonicalBillingGlobal{Currency: currency}
+	}
 	global := &CanonicalGlobal{
 		ControlPlane: cloneControlPlaneConfig(cfg.ControlPlane),
+		Billing:      billing,
 		Router: CanonicalRouterGlobal{
 			ClearRouteCache: cfg.ClearRouteCache,
 			StreamedBody: CanonicalStreamedBody{

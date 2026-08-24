@@ -1555,8 +1555,9 @@ entrypoints:
       models:
       - model: local/qwen3.5-9b-private
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   integrations:
     looper:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions

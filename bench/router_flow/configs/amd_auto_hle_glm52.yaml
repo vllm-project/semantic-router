@@ -430,8 +430,9 @@ entrypoints:
         reasoning:
           enabled: true
           effort: high
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   router: {}
   integrations:
     looper:

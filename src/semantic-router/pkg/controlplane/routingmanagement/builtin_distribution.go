@@ -117,8 +117,8 @@ func ParseBuiltInRecipeDistribution(metadataBytes, configBytes []byte) (BuiltInR
 	if document.Version != "v0.4" {
 		return BuiltInRecipeDistribution{}, fmt.Errorf("%w: built-in Recipe distribution version must be v0.4", ErrInvalid)
 	}
-	if document.BillingCurrency != "" || len(document.Listeners) != 0 ||
-		len(document.Models) != 0 || len(document.Entrypoints) != 0 || document.Global != nil {
+	if len(document.Listeners) != 0 || len(document.Models) != 0 ||
+		len(document.Entrypoints) != 0 || document.Global != nil {
 		return BuiltInRecipeDistribution{}, fmt.Errorf(
 			"%w: built-in Recipe distribution may contain only version and recipes", ErrInvalid,
 		)

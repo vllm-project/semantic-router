@@ -23,6 +23,9 @@ func TestCompileManagedRoutingSnapshotBuildsEntrypointRuntimeWithoutProviderRout
 	if compiled.DocumentHash != snapshot.Digest || compiled.ControlPlane.Mode != ControlPlaneModeManaged {
 		t.Fatalf("compiled identity = hash %q mode %q", compiled.DocumentHash, compiled.ControlPlane.Mode)
 	}
+	if compiled.BillingCurrency != snapshot.Currency {
+		t.Fatalf("compiled billing currency = %q, want %q", compiled.BillingCurrency, snapshot.Currency)
+	}
 	if len(compiled.VLLMEndpoints) != 0 {
 		t.Fatalf("managed snapshot created source provider endpoints: %+v", compiled.VLLMEndpoints)
 	}
@@ -61,7 +64,7 @@ func TestCompileManagedRoutingSnapshotBuildsEntrypointRuntimeWithoutProviderRout
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, compilerState := range []string{"provider-credential-fast", "mdl_fast", "backends:"} {
+	for _, compilerState := range []string{"provider-credential-fast", "mdl_fast", "backends:", "billing:"} {
 		if strings.Contains(string(exported), compilerState) {
 			t.Fatalf("managed authoring export contains %q:\n%s", compilerState, exported)
 		}

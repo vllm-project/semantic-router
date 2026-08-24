@@ -75,7 +75,9 @@ const (
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
 	CanonicalVersion string `yaml:"-" json:"-"`
-	BillingCurrency  string `yaml:"-" json:"-"`
+	// BillingCurrency is effective runtime state. Standalone sources it from
+	// global.billing.currency; managed mode pins it from Namespace publication.
+	BillingCurrency string `yaml:"-" json:"-"`
 	// RoutingSnapshot is the immutable compiled Model/Recipe/Entrypoint value
 	// used by BackendInvoker. It is built once at the standalone manifest
 	// boundary or supplied by the managed publication replica. Runtime routing

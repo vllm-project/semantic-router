@@ -16,8 +16,8 @@ func parseRecipeBundleYAML(data []byte) (*config.RouterConfig, error) {
 	if err := yaml.UnmarshalStrict(data, &source); err != nil {
 		return nil, fmt.Errorf("decode Recipe bundle: %w", err)
 	}
-	if source.Version != "v0.4" || len(source.Recipes) == 0 || source.BillingCurrency != "" ||
-		len(source.Listeners) != 0 || len(source.Models) != 0 || len(source.Entrypoints) != 0 || source.Global != nil {
+	if source.Version != "v0.4" || len(source.Recipes) == 0 || len(source.Listeners) != 0 ||
+		len(source.Models) != 0 || len(source.Entrypoints) != 0 || source.Global != nil {
 		return nil, fmt.Errorf("recipe bundle must contain only version v0.4 and recipes")
 	}
 	if _, err := config.CompileStandaloneRoutingSnapshot(source, nil); err != nil {

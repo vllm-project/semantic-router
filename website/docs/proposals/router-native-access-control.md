@@ -256,7 +256,6 @@ provenance exist only after validation at the internal snapshot boundary.
 
 ```yaml
 version: v0.4
-billing_currency: USD
 models:
   - name: local/fast
     card:
@@ -324,12 +323,23 @@ entrypoints:
         fallback:
           strategy: priority
           on: [unavailable, overloaded]
+
+global:
+  billing:
+    currency: USD
 ```
 
 The common Entrypoint form is `name + recipe + assignments`; the Dashboard presents
 exactly that flow. Each assignment selects Models by readable name and may add a
 priority fallback. Empty arrays, zero values, effective defaults, and
 compiler-owned fields are omitted from authoring exports.
+
+Each Model owns only its per-million-token rates. Standalone manifests put the
+single cross-Model denomination in `global.billing.currency`; it is optional
+until any Model is priced. Managed deployments omit that block because the
+Namespace owns the immutable billing currency used by snapshots, usage, and
+cost quotas. Per-Model currencies and implicit conversion are intentionally not
+part of the contract.
 
 One Model reference inside that value has this complete v0.4 shape:
 

@@ -692,8 +692,9 @@ entrypoints:
         reasoning:
           enabled: true
           effort: medium
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   stores:
     response_cache:
       enabled: false

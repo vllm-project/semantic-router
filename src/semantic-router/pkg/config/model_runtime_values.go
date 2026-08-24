@@ -118,15 +118,29 @@ func validateCanonicalBilling(canonical *CanonicalConfig) error {
 	for _, model := range canonical.Models {
 		priced = priced || modelRuntimeIsPriced(model.RuntimePricing)
 	}
-	if canonical.BillingCurrency != "" && !billingCurrencyPattern.MatchString(canonical.BillingCurrency) {
-		return fmt.Errorf("billing_currency must be an uppercase ISO-4217 code")
-	}
+	currency, configured := canonicalBillingCurrency(canonical)
 	mode := ControlPlaneModeStandalone
 	if canonical.Global != nil && strings.TrimSpace(canonical.Global.ControlPlane.Mode) != "" {
 		mode = strings.TrimSpace(canonical.Global.ControlPlane.Mode)
 	}
-	if mode == ControlPlaneModeStandalone && priced && canonical.BillingCurrency == "" {
-		return fmt.Errorf("billing_currency is required when standalone Models define pricing")
+	if mode == ControlPlaneModeManaged && configured {
+		return fmt.Errorf("global.billing.currency is standalone-only; managed mode takes currency from Namespace")
+	}
+	if configured && currency == "" {
+		return fmt.Errorf("global.billing.currency is required when global.billing is configured")
+	}
+	if configured && !billingCurrencyPattern.MatchString(currency) {
+		return fmt.Errorf("global.billing.currency must be an uppercase ISO-4217 code")
+	}
+	if mode == ControlPlaneModeStandalone && priced && !configured {
+		return fmt.Errorf("global.billing.currency is required when standalone Models define pricing")
 	}
 	return nil
+}
+
+func canonicalBillingCurrency(canonical *CanonicalConfig) (string, bool) {
+	if canonical == nil || canonical.Global == nil || canonical.Global.Billing == nil {
+		return "", false
+	}
+	return canonical.Global.Billing.Currency, true
 }

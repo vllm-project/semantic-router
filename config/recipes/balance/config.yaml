@@ -2223,8 +2223,9 @@ entrypoints:
         weight: '1'
       - model: google/gemini-2.5-flash-lite
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   stores:
     response_cache:
       enabled: false

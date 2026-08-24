@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+# ruff: noqa: E402 -- tests add the source tree before importing the CLI package.
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -111,7 +112,7 @@ def test_upgrade_splits_models_recipes_and_entrypoint_assignments() -> None:
     document = result.document
 
     assert document["version"] == "v0.4"
-    assert document["billing_currency"] == "USD"
+    assert document["global"]["billing"]["currency"] == "USD"
     assert result.summary.models == 1
     assert result.summary.recipes == 1
     assert result.summary.entrypoints == 1

@@ -116,7 +116,7 @@ def migrate_v03_config_data(source: dict[str, Any]) -> MigrationResult:
         "global": global_config,
     }
     if model_result.billing_currency:
-        document["billing_currency"] = model_result.billing_currency
+        global_config["billing"] = {"currency": model_result.billing_currency}
 
     context.raise_if_blocked()
     _validate_v04_document(document)

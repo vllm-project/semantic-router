@@ -57,7 +57,9 @@ adapter. Provider products, logos, form fields, default origins, and discovery
 behavior remain in the control-plane
 [Provider catalog](./router-native-access-control-provider-catalog) and are absent
 from the inference data plane. Managed mode takes currency from Namespace;
-standalone requires `billing_currency` when any Model is priced.
+standalone requires `global.billing.currency` when any Model is priced. Models
+own rates, while this single global value owns their shared denomination; the
+Router performs no currency conversion.
 
 ## Retry and timeout semantics
 

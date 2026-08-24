@@ -518,7 +518,6 @@ def validate_recipe_distribution(
         log.info("Validating Recipe distribution...")
     validation_view = UserConfig.model_construct(
         version=distribution.version,
-        billing_currency=None,
         listeners=[],
         models=[],
         entrypoints=[],

@@ -1579,8 +1579,9 @@ entrypoints:
       privacy_recipe_route:
         models:
         - model: qwen3-8b
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   integrations:
     looper:
       endpoint: http://localhost:8899/v1/chat/completions

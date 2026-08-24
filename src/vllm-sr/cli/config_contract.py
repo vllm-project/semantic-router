@@ -25,7 +25,6 @@ CONDITION_TYPE_PROJECTION = "projection"
 CANONICAL_TOP_LEVEL_KEYS = frozenset(
     {
         "version",
-        "billing_currency",
         "listeners",
         "models",
         "entrypoints",

@@ -172,7 +172,7 @@ func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *t
 }
 
 func TestParseYAMLBytesPreservesNativeModelPricing(t *testing.T) {
-	document := strings.Replace(entrypointRulesYAML, "version: v0.4\n", "version: v0.4\nbilling_currency: USD\n", 1)
+	document := strings.Replace(entrypointRulesYAML, "global:\n", "global:\n  billing:\n    currency: USD\n", 1)
 	document = strings.Replace(document, "  - name: model-a\n", `  - name: model-a
     pricing:
       input_cost_per_million_tokens: "0.24"

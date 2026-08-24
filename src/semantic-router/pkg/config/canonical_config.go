@@ -13,15 +13,12 @@ import (
 // contract. Managed routing resources are imported through the Management API;
 // standalone embeds the same Model, Recipe, and Entrypoint values here.
 type CanonicalConfig struct {
-	Version string `yaml:"version"`
-	// BillingCurrency is required in standalone mode whenever any Model is
-	// priced. Managed mode takes the immutable currency from Namespace.
-	BillingCurrency string                `yaml:"billing_currency,omitempty"`
-	Listeners       []Listener            `yaml:"listeners,omitempty"`
-	Models          []AuthoringModel      `yaml:"models,omitempty"`
-	Entrypoints     []AuthoringEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes         []AuthoringRecipe     `yaml:"recipes,omitempty"`
-	Global          *CanonicalGlobal      `yaml:"global,omitempty"`
+	Version     string                `yaml:"version"`
+	Listeners   []Listener            `yaml:"listeners,omitempty"`
+	Models      []AuthoringModel      `yaml:"models,omitempty"`
+	Entrypoints []AuthoringEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []AuthoringRecipe     `yaml:"recipes,omitempty"`
+	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }
@@ -111,7 +108,6 @@ func normalizeCanonicalConfig(
 
 	cfg := DefaultGlobalConfig()
 	cfg.CanonicalVersion = normalizedCanonicalVersion(canonical.Version)
-	cfg.BillingCurrency = canonical.BillingCurrency
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}

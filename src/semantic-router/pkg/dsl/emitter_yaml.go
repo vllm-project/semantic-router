@@ -58,7 +58,7 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
-	canonicalOrder := []string{"version", "billing_currency", "listeners", "models", "recipes", "entrypoints", "global"}
+	canonicalOrder := []string{"version", "listeners", "models", "recipes", "entrypoints", "global"}
 	added := make(map[string]bool)
 	for _, key := range canonicalOrder {
 		if value, ok := base[key]; ok {

@@ -250,6 +250,7 @@ func assertReferenceConfigGlobalCoverage(t testingT, root map[string]interface{}
 	// bootstrap inputs are exercised separately because they require external
 	// stores, secrets, and provider packs.
 	assertMapCoversStructFields(t, global, reflect.TypeOf(CanonicalGlobal{}), "global", "control_plane")
+	assertMapCoversStructFields(t, mustMapAt(t, global, "billing"), reflect.TypeOf(CanonicalBillingGlobal{}), "global.billing")
 	assertReferenceConfigRouterGlobalCoverage(t, mustMapAt(t, global, "router"))
 	assertReferenceConfigServiceGlobalCoverage(t, mustMapAt(t, global, "services"))
 	assertReferenceConfigStoreGlobalCoverage(t, mustMapAt(t, global, "stores"))

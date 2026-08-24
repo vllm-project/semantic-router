@@ -6,11 +6,19 @@ import "fmt"
 // overrides, organized into explicit platform modules.
 type CanonicalGlobal struct {
 	ControlPlane ControlPlaneConfig         `yaml:"control_plane,omitempty"`
+	Billing      *CanonicalBillingGlobal    `yaml:"billing,omitempty"`
 	Router       CanonicalRouterGlobal      `yaml:"router"`
 	Services     CanonicalServiceGlobal     `yaml:"services"`
 	Stores       CanonicalStoreGlobal       `yaml:"stores"`
 	Integrations CanonicalIntegrationGlobal `yaml:"integrations"`
 	ModelCatalog CanonicalModelCatalog      `yaml:"model_catalog"`
+}
+
+// CanonicalBillingGlobal defines the one currency used to aggregate Model
+// prices, usage, and cost quotas across a standalone Router. Managed mode owns
+// this value on Namespace instead of accepting a second bootstrap authority.
+type CanonicalBillingGlobal struct {
+	Currency string `yaml:"currency,omitempty"`
 }
 
 // CanonicalRouterGlobal captures router-engine control knobs.
@@ -195,6 +203,10 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 		return nil
 	}
 
+	cfg.BillingCurrency = ""
+	if global.Billing != nil {
+		cfg.BillingCurrency = global.Billing.Currency
+	}
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes

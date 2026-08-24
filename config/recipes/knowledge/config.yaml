@@ -211,8 +211,9 @@ entrypoints:
       models:
       - model: local/small-7b
         weight: '1'
-billing_currency: USD
 global:
+  billing:
+    currency: USD
   stores:
     response_cache:
       enabled: false

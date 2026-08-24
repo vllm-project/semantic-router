@@ -635,13 +635,12 @@ func rawRoutingDocuments(raw map[string]interface{}) []rawRoutingDocument {
 
 func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 	allowed := map[string]bool{
-		"version":          true,
-		"billing_currency": true,
-		"listeners":        true,
-		"models":           true,
-		"recipes":          true,
-		"entrypoints":      true,
-		"global":           true,
+		"version":     true,
+		"listeners":   true,
+		"models":      true,
+		"recipes":     true,
+		"entrypoints": true,
+		"global":      true,
 	}
 
 	fields := make([]string, 0)

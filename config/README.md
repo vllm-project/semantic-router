@@ -42,8 +42,11 @@ global: {}
   pool or binding resource. Each effective rule runs in its own routing-state
   scope while sharing Models and router-wide services. See
   [`tutorials/global/entrypoints-and-recipes.md`](../website/docs/tutorials/global/entrypoints-and-recipes.md).
-- `global` owns cross-cutting router settings, services, stores, integrations,
-  and router-managed model assets.
+- `global` owns cross-cutting billing, router settings, services, stores,
+  integrations, and router-managed model assets. Standalone configs require
+  `global.billing.currency` when any Model has pricing; otherwise the block is
+  optional. Managed deployments take the immutable currency from their
+  Namespace.
 
 Validate a file before serving it:
 

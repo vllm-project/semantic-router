@@ -40,6 +40,20 @@ Managed deployments create Models, Recipes, and Entrypoints through the Router's
 versioned `/management/v1` resources. This keeps PostgreSQL-backed desired state as
 the only mutable routing authority.
 
+### Billing currency
+
+```yaml
+global:
+  billing:
+    currency: USD
+```
+
+Standalone manifests require this when any Model defines `models[].pricing`;
+otherwise the block is optional. It is the one ISO-4217 denomination used
+across Model fallback, multi-model execution, usage, and cost quotas. Managed
+deployments omit it because Namespace owns the currency and publishes it with
+every immutable routing snapshot.
+
 ### API
 
 ```yaml

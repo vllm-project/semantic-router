@@ -119,7 +119,7 @@ def test_parse_user_config_rejects_v03_at_steady_state(tmp_path: Path) -> None:
     data["version"] = "v0.3"
     config_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 
-    with pytest.raises(ConfigParseError, match="v0.4"):
+    with pytest.raises(ConfigParseError, match=r"v0\.4"):
         parse_user_config(str(config_path))
 
 
@@ -238,7 +238,7 @@ def test_parse_config_artifact_accepts_recipe_only_distribution(tmp_path: Path) 
     assert isinstance(artifact, RecipeDistribution)
     assert artifact.recipes[0].name == "balance"
 
-    with pytest.raises(ConfigParseError, match="backend_egress.policy_file"):
+    with pytest.raises(ConfigParseError, match=r"backend_egress\.policy_file"):
         parse_user_config(str(config_path))
 
 
@@ -323,7 +323,7 @@ def test_parse_user_config_preserves_cache_pricing(tmp_path: Path) -> None:
     config_path = tmp_path / "config.yaml"
     write_minimal_config(config_path)
     data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-    data["billing_currency"] = "USD"
+    data.setdefault("global", {})["billing"] = {"currency": "USD"}
     data["models"][0]["pricing"] = {
         "input_cost_per_million_tokens": "2",
         "cache_read_cost_per_million_tokens": "0.25",

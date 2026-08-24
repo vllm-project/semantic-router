@@ -55,7 +55,6 @@ pricing policy, plus one or more provider connections. The connection's
 `model` value is sent to the upstream provider:
 
 ```yaml
-billing_currency: USD
 models:
   - name: local-small
     card:
@@ -69,10 +68,15 @@ models:
     pricing:
       input_cost_per_million_tokens: "0"
       output_cost_per_million_tokens: "0"
+global:
+  billing:
+    currency: USD
 ```
 
 Pricing is operator-supplied metadata, not a live quote. Keep it aligned with
 the provider contract when cost-aware selection or replay accounting uses it.
+All Model rates in one standalone manifest use `global.billing.currency`;
+managed deployments take that currency from their Namespace.
 
 ### Responses API
 

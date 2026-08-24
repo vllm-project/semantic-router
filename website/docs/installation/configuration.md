@@ -30,7 +30,7 @@ runtime behavior that differs from the built-in defaults.
 | `models` | Logical Models with a readable card, provider connections, execution policy, and pricing. |
 | `recipes` | Model-free routing documents containing signals, projections, decisions, strategy, algorithms, and route plugins. |
 | `entrypoints` | Public virtual model aliases, rule matches, Recipe references, and complete decision-to-Model assignments. |
-| `global` | Router services, stores, integrations, observability, learning, and router-owned model assets. |
+| `global` | Shared billing, Router services, stores, integrations, observability, learning, and router-owned model assets. |
 
 Keep these boundaries clear:
 
@@ -40,6 +40,20 @@ Keep these boundaries clear:
 - algorithms choose or coordinate candidate models;
 - plugins add behavior at route-specific hook points; and
 - Entrypoints bind each Recipe decision to one or more Models.
+
+Model rates belong in each `models[].pricing` block. Their common denomination
+belongs in one place:
+
+```yaml
+global:
+  billing:
+    currency: USD
+```
+
+This block is optional when no Model is priced. A priced standalone manifest
+must set one uppercase ISO-4217 currency so fallback, multi-model execution,
+usage, and cost quotas share an unambiguous unit. Managed deployments omit it;
+the Namespace is the only currency authority.
 
 In standalone mode, a backend can select an operator-owned secret by name:
 
