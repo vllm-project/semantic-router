@@ -63,6 +63,13 @@ func NewService(store *Store, secret string, ttlHours int) *Service {
 	}
 }
 
+func (s *Service) currentTime() time.Time {
+	if s != nil && s.now != nil {
+		return s.now().UTC()
+	}
+	return time.Now().UTC()
+}
+
 // AddAuditLog records one authenticated control-plane action without exposing
 // the underlying auth store to other dashboard packages.
 func (s *Service) AddAuditLog(ctx context.Context, entry AuditLog) error {
@@ -107,7 +114,7 @@ func (s *Service) BootstrapRegister(
 		return user, token, err
 	}
 
-	now := s.now().UTC().Truncate(time.Second)
+	now := s.currentTime().Truncate(time.Second)
 	pending, storedHash, created, err := s.store.PrepareBootstrapAdmin(
 		ctx, strings.TrimSpace(email), defaultAdminName(name), hash, now, now.Add(s.ttlDuration),
 	)
@@ -132,7 +139,7 @@ func (s *Service) BootstrapRegister(
 		return nil, "", err
 	}
 	user, err := s.store.CompleteBootstrapAdmin(
-		ctx, pending.User.ID, session, s.now().UTC().Truncate(time.Second),
+		ctx, pending.User.ID, session, s.currentTime().Truncate(time.Second),
 	)
 	if err != nil {
 		return nil, "", err
@@ -202,7 +209,7 @@ func (s *Service) issueTokenForContext(ctx context.Context, user *User) (string,
 }
 
 func (s *Service) prepareToken(user *User) (string, localSessionDraft, error) {
-	now := s.now().UTC().Truncate(time.Second)
+	now := s.currentTime().Truncate(time.Second)
 	return s.prepareTokenAt(user, now, now.Add(s.ttlDuration))
 }
 
@@ -246,11 +253,11 @@ func (s *Service) prepareTokenForSession(
 func (s *Service) ParseToken(raw string) (*TokenClaims, error) {
 	t := &TokenClaims{}
 	token, err := jwt.ParseWithClaims(raw, t, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if token.Method.Alg() != jwt.SigningMethodHS256.Alg() {
 			return nil, fmt.Errorf("unexpected signing method")
 		}
 		return s.jwtSecret, nil
-	})
+	}, jwt.WithTimeFunc(s.currentTime), jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +295,7 @@ func (s *Service) ensureSessionActive(ctx context.Context, claims *TokenClaims) 
 	if sessionID == "" {
 		return nil
 	}
-	active, err := s.store.SessionActive(ctx, sessionID, claims.UserID, time.Now().Unix())
+	active, err := s.store.SessionActive(ctx, sessionID, claims.UserID, s.currentTime().Unix())
 	if err != nil {
 		return err
 	}

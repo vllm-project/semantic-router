@@ -84,6 +84,26 @@ func TestAuthenticateRequestRejectsSessionWithoutExpiry(t *testing.T) {
 	}
 }
 
+func TestParseTokenRejectsAlternateHMACAlgorithm(t *testing.T) {
+	t.Parallel()
+	svc := newTestAuthService(t)
+	now := svc.currentTime()
+	token := jwt.NewWithClaims(jwt.SigningMethodHS384, TokenClaims{
+		UserID: "10000000-0000-4000-8000-000000000001",
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(now.Add(time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(now),
+		},
+	})
+	signed, err := token.SignedString(svc.jwtSecret)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.ParseToken(signed); err == nil {
+		t.Fatal("ParseToken() accepted an alternate HMAC algorithm")
+	}
+}
+
 func TestLoginHandlerSetsHttpOnlySessionCookie(t *testing.T) {
 	t.Parallel()
 

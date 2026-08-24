@@ -49,7 +49,7 @@ func AuthenticateRequest(service *Service) func(http.Handler) http.Handler {
 				return
 			}
 
-			now := time.Now().UTC()
+			now := service.currentTime()
 			if claims.ExpiresAt == nil || !now.Before(claims.ExpiresAt.Time.UTC()) {
 				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
