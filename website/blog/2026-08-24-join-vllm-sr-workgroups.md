@@ -31,9 +31,9 @@ one clear technical home:
    recipes, and guidance needed to describe and operate the system.
 2. **Enterprise & Environment** determines who may use each model, applies
    quotas and lifecycle policy, and keeps supported deployments operable.
-3. **Agentic & Context** prepares a bounded context for long-running sessions,
-   while **Router Models & Inference Runtime** turns the request into useful
-   routing signals.
+3. **Agentic & Context** prepares bounded context and agent-level collaboration
+   for long-running sessions, while **Router Models & Inference Runtime** turns
+   the request into useful routing signals.
 4. **MoM & Routing** uses those signals and a versioned recipe to choose a model
    or a bounded form of multi-model collaboration.
 5. **Data Plane & Networking** executes that decision on the live request path,
@@ -216,9 +216,9 @@ capabilities rather than publishing private product plans.
 
 Long conversations accumulate messages, retrieved memory, tool output, tokens,
 cost, and risk. Important instructions can be lost in that growth, and the best
-model may change as the task moves from planning to tool use to final response.
-vLLM-SR should manage those constraints without becoming a general-purpose
-agent framework.
+model or agent may change as the task moves from planning to tool use to final
+response. vLLM-SR should select and compose agent backends while managing those
+constraints without becoming a general-purpose agent framework.
 
 ### Scope
 
@@ -228,6 +228,10 @@ agent framework.
   safety constraints, tool contracts, and task-critical user intent.
 - Session budgets, state boundaries, retention, recovery, and graceful
   degradation when context or memory capabilities are unavailable.
+- Typed agent identity, capability, tool, state, trust, and lifecycle contracts
+  for selection, fallback, and handoff.
+- Bounded agent composition and multi-agent collaboration with explicit limits
+  on participants, depth, turns, tokens, time, cost, authority, and failures.
 - Requirements and safety constraints for switching models or bounded
   workflows as a session evolves.
 - Evaluation of instruction retention, task quality, token reduction, latency,
@@ -243,6 +247,7 @@ training.
 ### Epic directions
 
 - [Optimize context for long-session and agentic workloads](https://github.com/vllm-project/semantic-router/issues/2984)
+- [Enable agent-based routing and multi-agent composition](https://github.com/vllm-project/semantic-router/issues/2994)
 - [Develop safe model and workflow switching for long-running agents](https://github.com/vllm-project/semantic-router/issues/2973)
 - [Define a trusted gateway context envelope for agent memory, tools, and budgets](https://github.com/vllm-project/semantic-router/issues/2546)
 
