@@ -775,6 +775,7 @@ _Appears in:_
 | `use_cpu` _boolean_ |  | true | Optional: \{\} <br /> |
 | `jailbreak_mapping_path` _string_ |  |  | Optional: \{\} <br /> |
 | `positive_labels` _string array_ | PositiveLabels lists the jailbreak_mapping labels that count as unsafe,<br />for a custom backend whose positive class isn't named "jailbreak"<br />(e.g. "INJECTION", "malicious"). Defaults to ["jailbreak"] when unset. |  | Optional: \{\} <br /> |
+| `on_error` _string_ | OnError selects what a prompt-guard classifier failure does to the rule<br />that failed to evaluate. "allow" (the default) tolerates the failure and<br />treats the content as not matching; "block" treats it as a positive<br />detection, because an inference failure means the content could not be<br />verified safe. Without this field on the CRD the setting is pruned by the<br />API server and an operator-managed deployment silently fails open. |  | Enum: [allow block] <br />Optional: \{\} <br /> |
 
 #### QdrantCacheConfig
 

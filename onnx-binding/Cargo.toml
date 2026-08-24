@@ -29,6 +29,8 @@ openvino-dynamic = ["ort/load-dynamic", "ort/openvino"]
 migraphx-dynamic = ["migraphx", "rocm", "ort/load-dynamic"]
 # ROCm via dynamic loading (for Docker containers with ROCm ORT)
 rocm-dynamic = ["rocm", "ort/load-dynamic"]
+# CUDA via dynamic loading (for Docker containers with CUDA ORT)
+cuda-dynamic = ["cuda", "ort/load-dynamic"]
 
 [dependencies]
 # ONNX Runtime via ort crate - supports AMD GPU (ROCm), NVIDIA GPU (CUDA), and more

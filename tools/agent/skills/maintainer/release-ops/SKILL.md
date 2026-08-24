@@ -50,7 +50,8 @@ description: Maintainer release and milestone operating workflow. Use when a mai
 
 ## Gotchas
 
-- Milestone assignment is a release commitment; `milestone-candidate` is not.
+- Milestone assignment is a release commitment and requires accepted work;
+  there is no separate candidate state label.
 - Close-candidate PRs should get an explicit grace-period comment before close
   unless the maintainer asks for immediate closure.
 - The generated board is local and gitignored; do not link to local board paths

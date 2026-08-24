@@ -1606,20 +1606,20 @@
   "team.members.YankaiChen.expertise.mining": {
     "message": "知识挖掘"
   },
-  "team.members.FuyuanLyu.role": {
-    "message": "PhD Candidate @ McGill University / Mila"
+  "team.members.HaolunWu.role": {
+    "message": "加拿大总督学术金奖 · McGill / Mila 博士 · Stanford 访问学者"
   },
-  "team.members.FuyuanLyu.bio": {
-    "message": "研究方向包括数据中心 AI、自动特征选择，以及面向深度学习和基础模型的自动标注。"
+  "team.members.HaolunWu.bio": {
+    "message": "研究方向覆盖可信 AI 和从反馈中学习，拥有 McGill、Mila 与 Stanford 的学术经历。"
   },
-  "team.members.FuyuanLyu.expertise.data": {
-    "message": "数据中心 AI"
+  "team.members.HaolunWu.expertise.feedback": {
+    "message": "从反馈中学习"
   },
-  "team.members.FuyuanLyu.expertise.features": {
-    "message": "自动特征选择"
+  "team.members.HaolunWu.expertise.trustworthy": {
+    "message": "可信 AI"
   },
-  "team.members.FuyuanLyu.expertise.labeling": {
-    "message": "自动标注"
+  "team.members.HaolunWu.expertise.alignment": {
+    "message": "AI 对齐"
   },
   "team.members.SteveLiu.role": {
     "message": "@MBZUAI / McGill / Mila"
@@ -1652,7 +1652,7 @@
     "message": "@AMD"
   },
   "team.members.XunzhuoLiu.bio": {
-    "message": "LLM routing builder at vLLM。"
+    "message": "Building the Mixture-of-Models for the next era of computing."
   },
   "team.members.XunzhuoLiu.expertise.routing": {
     "message": "LLM 路由"
@@ -2616,7 +2616,7 @@
     "message": "更新于"
   },
   "community.contributors.method": {
-    "message": "贡献者包括产生非合并提交或有效审阅的人。首次提交作者在更早的仓库历史中没有提交记录。审阅贡献按审阅提交日期归类；对每个最终合并的拉取请求，每位贡献者最多计一次。"
+    "message": "贡献者包括符合条件的提交作者和审阅者。“新贡献者”指首次向仓库提交；每个已合并 PR 对每位审阅者最多计一次。"
   },
   "community.contributors.sort.label": {
     "message": "排序"

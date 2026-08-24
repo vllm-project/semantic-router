@@ -138,6 +138,7 @@ until the selected cases are known to be isolated.
 - **vectorstore-registry**: manual metadata restart-recovery coverage.
 - **rag-hybrid-search**: manual Llama Stack hybrid-search coverage.
 - **hallucination**: manual fact-check gating and warning behavior.
+- **jailbreak-onerror**: manual PromptGuardConfig.OnError coverage against an unreachable classifier endpoint.
 
 ### Coverage Ownership Matrix
 

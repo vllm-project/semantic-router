@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
 import os
@@ -23,6 +24,11 @@ MAX_PROVENANCE_BYTES = 64 * 1024
 _SHA256_PATTERN = re.compile(r"^sha256:[0-9a-f]{64}$")
 _PRIVATE_STATE_DIRECTORY = re.compile(r"^[a-z0-9][a-z0-9-]{0,63}$")
 _PRIVATE_DIRECTORY_MODE = 0o700
+_RECIPE_ASSET_MODE = 0o644
+STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
+PRIVATE_STATE_FILE_MODE = 0o600
+CONTAINER_READABLE_STATE_FILE_MODE = 0o644
+MAX_PRIVATE_STATE_BYTES = 64 * 1024
 
 log = get_logger(__name__)
 
@@ -123,13 +129,30 @@ def _assert_filename_fits(runtime_dir: Path, filename: str) -> None:
         )
 
 
+def resolve_state_root_dir(
+    source_config_file: str, env_vars: dict[str, str] | None = None
+) -> str:
+    """Return the directory that holds this stack's private runtime state.
+
+    An explicit override wins; otherwise the state lives beside the config file
+    the caller named, which is what makes a stack self-contained in whatever
+    directory it was served from.
+    """
+
+    env_vars = env_vars or {}
+    override = env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV)
+    if override:
+        return os.path.abspath(override)
+    return os.path.dirname(os.path.abspath(source_config_file))
+
+
 def _runtime_config_output_dir(
     config_path: Path, state_root_dir: str | Path | None = None
 ) -> Path:
     state_root = (
         str(state_root_dir).strip()
         if state_root_dir is not None
-        else os.getenv("VLLM_SR_STATE_ROOT_DIR", "").strip()
+        else os.getenv(STATE_ROOT_DIR_ENV, "").strip()
     )
     base_dir = Path(state_root).expanduser() if state_root else config_path.parent
     runtime_dir = base_dir / ".vllm-sr"
@@ -149,6 +172,21 @@ def private_runtime_state_subdirectory(state_root_dir: str | Path, name: str) ->
     _create_or_harden_private_directory(directory)
     if directory.parent.resolve(strict=True) != runtime_dir.resolve(strict=True):
         raise ValueError(f"Runtime state directory escapes {runtime_dir}: {directory}")
+    return directory
+
+
+def private_runtime_state_nested_directory(
+    state_root_dir: str | Path, parent_name: str, name: str
+) -> Path:
+    """Create one private child below a validated runtime-state directory."""
+
+    if not _PRIVATE_STATE_DIRECTORY.fullmatch(name):
+        raise ValueError(f"Runtime state directory name is invalid: {name}")
+    parent = private_runtime_state_subdirectory(state_root_dir, parent_name)
+    directory = parent / name
+    _create_or_harden_private_directory(directory)
+    if directory.parent.resolve(strict=True) != parent.resolve(strict=True):
+        raise ValueError(f"Runtime state directory escapes {parent}: {directory}")
     return directory
 
 
@@ -207,7 +245,7 @@ def _fsync_directory(directory: Path) -> None:
         os.close(directory_fd)
 
 
-def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
+def _atomic_write_bytes(path: Path, data: bytes, mode: int) -> None:
     runtime_dir = path.parent
     _assert_direct_child(runtime_dir, path)
     fd, temp_name = tempfile.mkstemp(
@@ -215,7 +253,7 @@ def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
     )
     temp_path = Path(temp_name)
     try:
-        os.fchmod(fd, 0o600)
+        os.fchmod(fd, mode)
         handle = os.fdopen(fd, "wb")
         fd = -1
         with handle:
@@ -232,6 +270,10 @@ def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
             temp_path.unlink()
 
 
+def _atomic_write_private_bytes(path: Path, data: bytes) -> None:
+    _atomic_write_bytes(path, data, 0o600)
+
+
 def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
     """Atomically replace an explicit runtime-owned config path."""
 
@@ -243,6 +285,117 @@ def write_runtime_config_bytes(path: Path, data: bytes) -> Path:
         )
     _atomic_write_private_bytes(path, data)
     return path
+
+
+def write_runtime_recipe_asset_bytes(path: Path, data: bytes) -> Path:
+    """Atomically write an embedded Recipe asset inside a private directory.
+
+    The containing runtime-state directories remain owner-only. Files use the
+    read-only asset mode expected by the non-root Dashboard after bind mount.
+    """
+
+    path = path.expanduser().absolute()
+    if path.parent.is_symlink() or not path.parent.is_dir():
+        raise ValueError(
+            f"Runtime Recipe parent must be an owned directory: {path.parent}"
+        )
+    _atomic_write_bytes(path, data, _RECIPE_ASSET_MODE)
+    return path
+
+
+def write_private_state_bytes(
+    path: Path, data: bytes, *, mode: int = PRIVATE_STATE_FILE_MODE
+) -> Path:
+    """Atomically write one runtime-state file inside an owned private directory.
+
+    The containing directory is created or hardened first, so the write always
+    lands in an owner-only 0700 directory. ``mode`` defaults to owner-only and
+    exists for the narrow case of a file an unprivileged container uid must
+    read after bind mount; the directory stays 0700 either way, which keeps a
+    relaxed file mode unreachable for other host users.
+    """
+
+    path = path.expanduser().absolute()
+    directory = _create_or_harden_private_directory(path.parent)
+    _assert_filename_fits(directory, path.name)
+    _atomic_write_bytes(path, data, mode)
+    return path
+
+
+def read_private_state_bytes(path: Path) -> bytes | None:
+    """Read one owner-only runtime-state file or fail closed on unsafe state.
+
+    A missing file returns ``None`` so callers can tell an absent state from a
+    damaged one and never silently regenerate over the latter. Symlink, file
+    type, and ownership anomalies are hard failures because no safe in-place
+    repair exists. A drifted permission bit is hardened and reported instead,
+    mirroring how ``_create_or_harden_private_directory`` splits those cases.
+
+    Hardening is unconditional, so this must not be used on a file written with
+    a relaxed ``mode`` for a container to read: reading it back would revoke the
+    access the relaxed mode exists to grant.
+    """
+
+    path = path.expanduser().absolute()
+    directory = _create_or_harden_private_directory(path.parent)
+    _assert_direct_child(directory, path)
+
+    open_flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, open_flags)
+    except FileNotFoundError:
+        return None
+    except OSError as error:
+        if error.errno in {errno.ELOOP, errno.EMLINK}:
+            raise ValueError(
+                f"Runtime state file must not be a symbolic link: {path}"
+            ) from error
+        raise ValueError(f"Runtime state file cannot be opened: {path}") from error
+
+    try:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode):
+            raise ValueError(f"Runtime state path must be a regular file: {path}")
+        if info.st_size > MAX_PRIVATE_STATE_BYTES:
+            raise ValueError(
+                f"Runtime state file exceeds {MAX_PRIVATE_STATE_BYTES} bytes: {path}"
+            )
+        _harden_private_state_file(fd, info, path)
+        handle = os.fdopen(fd, "rb")
+        fd = -1
+        with handle:
+            return handle.read()
+    finally:
+        if fd >= 0:
+            os.close(fd)
+
+
+def _harden_private_state_file(fd: int, info: os.stat_result, path: Path) -> None:
+    """Fail closed on foreign ownership; repair a drifted permission bit."""
+
+    current_user_id = _current_posix_user_id()
+    if current_user_id is None:
+        return
+    if info.st_uid != current_user_id:
+        raise ValueError(
+            f"Runtime state file must be owned by the current user: {path}"
+        )
+    if stat.S_IMODE(info.st_mode) == PRIVATE_STATE_FILE_MODE:
+        return
+    log.warning("Restoring owner-only permissions on runtime state file: %s", path)
+    try:
+        os.fchmod(fd, PRIVATE_STATE_FILE_MODE)
+    except (NotImplementedError, OSError) as error:
+        raise ValueError(
+            f"Runtime state file permissions cannot be secured: {path}"
+        ) from error
+    secured_info = os.fstat(fd)
+    if (
+        not stat.S_ISREG(secured_info.st_mode)
+        or secured_info.st_uid != current_user_id
+        or stat.S_IMODE(secured_info.st_mode) != PRIVATE_STATE_FILE_MODE
+    ):
+        raise ValueError(f"Runtime state file permissions are not private: {path}")
 
 
 def _provenance_document(source_data: bytes, active_data: bytes) -> dict[str, str]:

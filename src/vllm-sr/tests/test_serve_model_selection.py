@@ -7,12 +7,15 @@ from pathlib import Path
 import pytest
 import yaml
 from cli.commands import runtime as runtime_commands
+from cli.commands import runtime_serve_config as serve_config
 from cli.commands.runtime_management_credentials import (
     catalog_management_credential_environment,
     management_credential_env_names,
 )
 from cli.commands.runtime_support import sensitive_env_names
 from cli.main import main
+from cli.model_bundle import MODEL_BUNDLE_FILES
+from cli.recipe_directory import resolve_active_recipe_directory
 from cli.recipe_topology_contract import MANAGEMENT_CREDENTIAL_ENV
 from click.testing import CliRunner
 
@@ -60,14 +63,31 @@ def test_serve_one_catalog_virtual_model_uses_private_workspace_source(
     assert len(captured) == 1
     deployment = captured[0]
     source_path = Path(str(deployment["source_config_file"]))
-    assert source_path.parent == tmp_path / ".vllm-sr" / "catalog-sources"
-    assert stat.S_IMODE(source_path.stat().st_mode) == 0o600
+    assert source_path.name == "config.yaml"
+    assert source_path.parent.parent == tmp_path / ".vllm-sr" / "catalog-sources"
+    assert stat.S_IMODE(source_path.parent.stat().st_mode) == 0o700
+    assert stat.S_IMODE(source_path.stat().st_mode) == 0o644
+    assert {path.name for path in source_path.parent.iterdir()} == set(
+        MODEL_BUNDLE_FILES
+    )
+    assert all(
+        stat.S_IMODE((source_path.parent / name).stat().st_mode) == 0o644
+        for name in MODEL_BUNDLE_FILES
+    )
+    assert resolve_active_recipe_directory(source_path) is not None
     assert not (tmp_path / "config.yaml").exists()
 
     document = _source_document(deployment)
     assert _entrypoint_models(document) == ["vllm-sr/mom-v1-blend"]
     assert len(document["recipes"]) == 1
     assert len(document["providers"]["models"]) == 7
+    metadata = yaml.safe_load((source_path.parent / "metadata.yaml").read_text())
+    probes = yaml.safe_load((source_path.parent / "probes.yaml").read_text())
+    assert metadata["id"] == probes["name"] == "mom-v1"
+    assert {decision["model"] for decision in probes["decisions"]} == {
+        "vllm-sr/mom-v1-blend"
+    }
+    assert sum(len(decision["variants"]) for decision in probes["decisions"]) > 0
 
     env_vars = deployment["env_vars"]
     token = env_vars[MANAGEMENT_CREDENTIAL_ENV]
@@ -103,6 +123,12 @@ def test_serve_multiple_catalog_models_preserves_operand_order(
     assert len(document["providers"]["models"]) == 7
     assert "vllm-sr/mom-v1-blend" not in _entrypoint_models(document)
     assert captured[0]["enable_observability"] is False
+    source_path = Path(str(captured[0]["source_config_file"]))
+    probes = yaml.safe_load((source_path.parent / "probes.yaml").read_text())
+    assert {decision["model"] for decision in probes["decisions"]} == {
+        "vllm-sr/mom-v1-flash",
+        "vllm-sr/mom-v1-lite",
+    }
 
 
 def test_serve_catalog_source_and_management_token_are_stable(
@@ -262,7 +288,7 @@ def test_model_list_points_to_catalog_and_custom_serve_flows():
 
 def test_serve_catalog_fails_closed_for_active_recipe(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(
-        runtime_commands, "active_recipe_package_for_stack", lambda **_kwargs: True
+        serve_config, "active_recipe_package_for_stack", lambda **_kwargs: True
     )
     result, captured = _invoke_catalog_serve(
         monkeypatch, tmp_path, "vllm-sr/mom-v1-blend"
@@ -280,7 +306,7 @@ def test_serve_catalog_fails_closed_when_runtime_edits_are_preserved(
     preserved.parent.mkdir(parents=True)
     preserved.write_text("version: dashboard-edited\n", encoding="utf-8")
     monkeypatch.setattr(
-        runtime_commands,
+        serve_config,
         "materialize_runtime_config",
         lambda *_args, **_kwargs: preserved,
     )

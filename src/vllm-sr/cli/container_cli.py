@@ -12,16 +12,13 @@ from cli.container_services import (
     container_logs,
     container_logs_output,
     container_logs_since,
+    container_mount_destinations,
     container_network_connect,
     container_network_disconnect,
     container_remove_container,
     container_remove_network,
     container_start_container,
-    container_start_fleet_sim,
-    container_start_grafana,
-    container_start_jaeger,
     container_start_postgres,
-    container_start_prometheus,
     container_start_redis,
     container_status,
     container_status_strict,
@@ -29,6 +26,12 @@ from cli.container_services import (
     load_openclaw_registry,
 )
 from cli.container_start import container_start_vllm_sr
+from cli.container_support_services import (
+    container_start_fleet_sim,
+    container_start_grafana,
+    container_start_jaeger,
+    container_start_prometheus,
+)
 
 __all__ = [
     "container_create_network",
@@ -37,6 +40,7 @@ __all__ = [
     "container_logs",
     "container_logs_output",
     "container_logs_since",
+    "container_mount_destinations",
     "container_network_connect",
     "container_network_disconnect",
     "container_pull_image",
