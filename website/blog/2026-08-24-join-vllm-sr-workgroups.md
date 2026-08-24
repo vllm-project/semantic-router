@@ -1,6 +1,6 @@
 ---
 slug: "join-vllm-sr-workgroups"
-title: "Find Your Focus: Join the vLLM Semantic Router Workgroups"
+title: "Find Your Focus and Join a Workgroup"
 description: "Seven durable directions give contributors a clear place to build, lead, and grow with the vLLM Semantic Router community."
 authors:
   - name: "vLLM Semantic Router Team"

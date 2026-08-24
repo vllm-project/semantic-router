@@ -92,6 +92,9 @@ See [environments.md](environments.md) for the concrete commands.
 
 - Behavior-visible routing, startup, config, Docker, CLI, or API changes require updated or new E2E coverage unless the change is a pure refactor.
 - Documentation-only changes should not trigger local smoke or heavy E2E unless the task matrix escalates them.
+- Repository ownership metadata (`OWNER` files and `.github/CODEOWNERS`) stays
+  on the lightweight quality path and does not select adjacent product domains,
+  images, or E2E profiles.
 - `tools/agent/test-domain-registry.yaml` is the path, ownership, command,
   workflow, receipt, cadence, and report source for test domains.
   `tools/ci/classify_pr_changes.py` and the local agent resolver consume it;
