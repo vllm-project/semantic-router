@@ -59,9 +59,23 @@ type chatMessageWire struct {
 	Refusal            string               `json:"refusal,omitempty"`
 	Reasoning          string               `json:"reasoning_content,omitempty"`
 	AlternateReasoning string               `json:"reasoning,omitempty"`
+	Audio              *chatAudioOutputWire `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire  `json:"function_call,omitempty"`
 	ToolCalls          []chatToolCallWire   `json:"tool_calls,omitempty"`
 	ToolCallID         string               `json:"tool_call_id,omitempty"`
 	Annotations        []chatAnnotationWire `json:"annotations,omitempty"`
+}
+
+type chatAudioOutputWire struct {
+	ID         string `json:"id"`
+	Data       string `json:"data"`
+	ExpiresAt  int64  `json:"expires_at"`
+	Transcript string `json:"transcript"`
+}
+
+type chatLegacyCallWire struct {
+	Name      string `json:"name"`
+	Arguments string `json:"arguments"`
 }
 
 type chatAnnotationWire struct {
@@ -189,6 +203,16 @@ func (OpenAIChatCodec) DecodeRequest(body []byte, policy llmprotocol.Policy) (ll
 }
 
 func decodeChatMessage(wire chatMessageWire, index int, policy llmprotocol.Policy) (llmprotocol.Message, error) {
+	if wire.Audio != nil {
+		return llmprotocol.Message{}, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_output_audio", "Chat output audio is unsupported", nil,
+		)
+	}
+	if wire.LegacyFunctionCall != nil {
+		return llmprotocol.Message{}, llmprotocol.NewError(
+			llmprotocol.ErrorUnsupportedFeature, "unsupported_legacy_function_call", "legacy Chat function calls are unsupported", nil,
+		)
+	}
 	role, err := canonicalRole(wire.Role)
 	if err != nil {
 		return llmprotocol.Message{}, err
@@ -523,20 +547,81 @@ func encodeChatOutputFormat(format llmprotocol.OutputFormat) (*chatOutputWire, e
 }
 
 type chatResponseWire struct {
-	ID      string           `json:"id"`
-	Object  string           `json:"object,omitempty"`
-	Created int64            `json:"created,omitempty"`
-	Model   string           `json:"model"`
-	Choices []chatChoiceWire `json:"choices"`
-	Usage   *chatUsageWire   `json:"usage,omitempty"`
-	Error   *chatErrorWire   `json:"error,omitempty"`
+	ID                string                    `json:"id"`
+	Object            string                    `json:"object,omitempty"`
+	Created           int64                     `json:"created,omitempty"`
+	Model             string                    `json:"model"`
+	Choices           []chatChoiceWire          `json:"choices"`
+	Usage             *chatUsageWire            `json:"usage,omitempty"`
+	Error             *chatErrorWire            `json:"error,omitempty"`
+	ServiceTier       *chatServiceTierWire      `json:"service_tier,omitempty"`
+	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
+	PromptLogprobs    *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
+	PromptTokenIDs    []int64                   `json:"prompt_token_ids,omitempty"`
+	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
 }
 
 type chatChoiceWire struct {
-	Index        int               `json:"index"`
-	Message      chatMessageWire   `json:"message"`
-	FinishReason *string           `json:"finish_reason"`
-	Logprobs     *chatLogprobsWire `json:"logprobs,omitempty"`
+	Index        int                 `json:"index"`
+	Message      chatMessageWire     `json:"message"`
+	FinishReason *string             `json:"finish_reason"`
+	Logprobs     *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason   *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs     []int64             `json:"token_ids,omitempty"`
+}
+
+type chatServiceTierWire string
+
+func (tier *chatServiceTierWire) UnmarshalJSON(raw []byte) error {
+	var value string
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return err
+	}
+	switch value {
+	case "auto", "default", "flex", "priority", "scale":
+		*tier = chatServiceTierWire(value)
+		return nil
+	default:
+		return fmt.Errorf("unsupported Chat service tier")
+	}
+}
+
+// chatNullOnlyWire closes provider fields which this protocol version only
+// observes as null. A future non-null representation must be modeled before it
+// can cross the strict provider boundary.
+type chatNullOnlyWire struct{}
+
+func (*chatNullOnlyWire) UnmarshalJSON(raw []byte) error {
+	if !bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return fmt.Errorf("Chat execution field must be null")
+	}
+	return nil
+}
+
+// An empty object is the complete supported kv-transfer marker. Provider
+// additions fail decode under DisallowUnknownFields.
+type chatKVTransferParamsWire struct{}
+
+type chatStopReasonWire struct {
+	Text    *string
+	Integer *int64
+}
+
+func (reason *chatStopReasonWire) UnmarshalJSON(raw []byte) error {
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		if len(text) == 0 || len(text) > 128 {
+			return fmt.Errorf("Chat stop reason string is invalid")
+		}
+		reason.Text = &text
+		return nil
+	}
+	var integer int64
+	if err := json.Unmarshal(raw, &integer); err == nil {
+		reason.Integer = &integer
+		return nil
+	}
+	return fmt.Errorf("Chat stop reason must be a string or integer")
 }
 
 // Chat logprobs are private model-execution evidence. The neutral response
@@ -562,15 +647,23 @@ type chatTopTokenLogprobWire struct {
 }
 
 type chatUsageWire struct {
-	PromptTokens        int64 `json:"prompt_tokens"`
-	CompletionTokens    int64 `json:"completion_tokens"`
-	TotalTokens         int64 `json:"total_tokens"`
-	PromptTokensDetails *struct {
-		CachedTokens int64 `json:"cached_tokens"`
-	} `json:"prompt_tokens_details,omitempty"`
-	CompletionTokensDetails *struct {
-		ReasoningTokens int64 `json:"reasoning_tokens"`
-	} `json:"completion_tokens_details,omitempty"`
+	PromptTokens            int64                            `json:"prompt_tokens"`
+	CompletionTokens        int64                            `json:"completion_tokens"`
+	TotalTokens             int64                            `json:"total_tokens"`
+	PromptTokensDetails     *chatPromptTokensDetailsWire     `json:"prompt_tokens_details,omitempty"`
+	CompletionTokensDetails *chatCompletionTokensDetailsWire `json:"completion_tokens_details,omitempty"`
+}
+
+type chatPromptTokensDetailsWire struct {
+	CachedTokens int64 `json:"cached_tokens"`
+	AudioTokens  int64 `json:"audio_tokens,omitempty"`
+}
+
+type chatCompletionTokensDetailsWire struct {
+	AcceptedPredictionTokens int64 `json:"accepted_prediction_tokens,omitempty"`
+	AudioTokens              int64 `json:"audio_tokens,omitempty"`
+	ReasoningTokens          int64 `json:"reasoning_tokens"`
+	RejectedPredictionTokens int64 `json:"rejected_prediction_tokens,omitempty"`
 }
 
 type chatErrorWire struct {
@@ -580,9 +673,66 @@ type chatErrorWire struct {
 	Code    string `json:"code,omitempty"`
 }
 
+func validateChatExecutionMetadata(systemFingerprint *string) error {
+	if systemFingerprint != nil && (len(*systemFingerprint) == 0 || len(*systemFingerprint) > 256) {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"invalid_upstream_execution_metadata",
+			"upstream Chat system fingerprint is invalid",
+			nil,
+		)
+	}
+	return nil
+}
+
+func validateChatChoiceExtensions(choice chatChoiceWire) error {
+	return validateChatOutputExtensions(choice.Message.Audio, choice.Message.LegacyFunctionCall)
+}
+
+func validateChatChunkChoiceExtensions(choice chatChunkChoiceWire) error {
+	// Neutral stream events intentionally have no token-logprob evidence slot.
+	// Reject non-null evidence instead of silently dropping it during the
+	// provider-to-public stream rewrite.
+	if choice.Logprobs != nil {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"unsupported_upstream_stream_logprobs",
+			"upstream streamed Chat log probabilities are unsupported",
+			nil,
+		)
+	}
+	return validateChatOutputExtensions(choice.Delta.Audio, choice.Delta.LegacyFunctionCall)
+}
+
+func validateChatOutputExtensions(
+	audio *chatAudioOutputWire,
+	legacyFunctionCall *chatLegacyCallWire,
+) error {
+	if audio != nil {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"unsupported_upstream_audio",
+			"upstream Chat output audio is unsupported",
+			nil,
+		)
+	}
+	if legacyFunctionCall != nil {
+		return llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"unsupported_upstream_function_call",
+			"upstream legacy Chat function calls are unsupported",
+			nil,
+		)
+	}
+	return nil
+}
+
 func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire chatResponseWire
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
+		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
+	}
+	if err := validateChatExecutionMetadata(wire.SystemFingerprint); err != nil {
 		return llmprotocol.Response{}, llmprotocol.Envelope{}, nil, err
 	}
 	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
@@ -595,6 +745,9 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 	}
 	var diagnostics llmprotocol.Diagnostics
 	for choiceIndex, choice := range wire.Choices {
+		if err := validateChatChoiceExtensions(choice); err != nil {
+			return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
+		}
 		message, err := decodeChatMessage(choice.Message, choice.Index, policy)
 		if err != nil {
 			return llmprotocol.Response{}, llmprotocol.Envelope{}, diagnostics, err
@@ -723,14 +876,10 @@ func encodeChatUsage(usage llmprotocol.Usage) *chatUsageWire {
 	}
 	wire := &chatUsageWire{PromptTokens: prompt, CompletionTokens: completion, TotalTokens: total}
 	if usage.InputCacheRead.Value != nil {
-		wire.PromptTokensDetails = &struct {
-			CachedTokens int64 `json:"cached_tokens"`
-		}{CachedTokens: tokenValue(usage.InputCacheRead)}
+		wire.PromptTokensDetails = &chatPromptTokensDetailsWire{CachedTokens: tokenValue(usage.InputCacheRead)}
 	}
 	if usage.OutputReasoning.Value != nil {
-		wire.CompletionTokensDetails = &struct {
-			ReasoningTokens int64 `json:"reasoning_tokens"`
-		}{ReasoningTokens: tokenValue(usage.OutputReasoning)}
+		wire.CompletionTokensDetails = &chatCompletionTokensDetailsWire{ReasoningTokens: tokenValue(usage.OutputReasoning)}
 	}
 	return wire
 }

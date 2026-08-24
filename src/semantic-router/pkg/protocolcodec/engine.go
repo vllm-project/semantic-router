@@ -212,16 +212,25 @@ func (engine *Engine) NewStream(source, target llmprotocol.WireFormat, context l
 	}
 	context.Source = source
 	context.Target = target
-	streamPolicy := engine.policy
-	if streamPolicy.UnknownFields == llmprotocol.UnknownPreserveSameFormat && source != target {
-		streamPolicy.UnknownFields = llmprotocol.UnknownReject
-		streamPolicy.SourcePreservation = llmprotocol.SourceDisabled
-	}
+	streamPolicy := engine.strictStreamPolicy()
 	return &StreamEngine{
 		decoder:        sourcePair.stream.NewDecoder(context, streamPolicy),
 		encoder:        targetPair.stream.NewEncoder(context, streamPolicy),
 		maxDiagnostics: engine.policy.Limits.Diagnostics,
 	}, nil
+}
+
+// Streams are always decoded into neutral events before re-encoding or
+// accumulation. Unlike buffered same-format envelopes, they have no complete
+// byte-for-byte replay path, so accepting unknown fields would silently drop
+// provider semantics.
+func (engine *Engine) strictStreamPolicy() llmprotocol.Policy {
+	policy := engine.policy
+	if policy.UnknownFields == llmprotocol.UnknownPreserveSameFormat {
+		policy.UnknownFields = llmprotocol.UnknownReject
+		policy.SourcePreservation = llmprotocol.SourceDisabled
+	}
+	return policy
 }
 
 // EventStreamEncoder renders router-produced semantic events directly into a

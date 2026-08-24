@@ -209,7 +209,7 @@ func (state *streamState) next(event llmprotocol.Event) (llmprotocol.Event, erro
 	if event.ResponseID == "" {
 		event.ResponseID = state.context.ResponseID
 	}
-	if event.Model == "" {
+	if state.context.PublicModel != "" {
 		event.Model = state.context.PublicModel
 	}
 	if state.items == nil {
@@ -508,19 +508,27 @@ func (OpenAIChatCodec) NewEncoder(context llmprotocol.StreamContext, policy llmp
 }
 
 type chatChunkWire struct {
-	ID      string                `json:"id"`
-	Object  string                `json:"object,omitempty"`
-	Created int64                 `json:"created,omitempty"`
-	Model   string                `json:"model,omitempty"`
-	Choices []chatChunkChoiceWire `json:"choices,omitempty"`
-	Usage   *chatUsageWire        `json:"usage,omitempty"`
-	Error   *chatErrorWire        `json:"error,omitempty"`
+	ID                string                    `json:"id"`
+	Object            string                    `json:"object,omitempty"`
+	Created           int64                     `json:"created,omitempty"`
+	Model             string                    `json:"model,omitempty"`
+	Choices           []chatChunkChoiceWire     `json:"choices,omitempty"`
+	Usage             *chatUsageWire            `json:"usage,omitempty"`
+	Error             *chatErrorWire            `json:"error,omitempty"`
+	ServiceTier       *chatServiceTierWire      `json:"service_tier,omitempty"`
+	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
+	PromptLogprobs    *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
+	PromptTokenIDs    []int64                   `json:"prompt_token_ids,omitempty"`
+	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
 }
 
 type chatChunkChoiceWire struct {
-	Index        int                `json:"index"`
-	Delta        chatChunkDeltaWire `json:"delta"`
-	FinishReason *string            `json:"finish_reason"`
+	Index        int                 `json:"index"`
+	Delta        chatChunkDeltaWire  `json:"delta"`
+	FinishReason *string             `json:"finish_reason"`
+	Logprobs     *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason   *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs     []int64             `json:"token_ids,omitempty"`
 }
 
 type chatChunkDeltaWire struct {
@@ -529,6 +537,8 @@ type chatChunkDeltaWire struct {
 	Reasoning          *string                 `json:"reasoning_content,omitempty"`
 	AlternateReasoning *string                 `json:"reasoning,omitempty"`
 	Refusal            *string                 `json:"refusal,omitempty"`
+	Audio              *chatAudioOutputWire    `json:"audio,omitempty"`
+	LegacyFunctionCall *chatLegacyCallWire     `json:"function_call,omitempty"`
 	ToolCalls          []chatChunkToolCallWire `json:"tool_calls,omitempty"`
 	Annotations        []chatAnnotationWire    `json:"annotations,omitempty"`
 }
@@ -570,6 +580,14 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 	var chunk chatChunkWire
 	if err := decodeProviderWire(parsed.Data, &chunk, decoder.policy); err != nil {
 		return nil, nil, err
+	}
+	if err := validateChatExecutionMetadata(chunk.SystemFingerprint); err != nil {
+		return nil, nil, err
+	}
+	for _, choice := range chunk.Choices {
+		if err := validateChatChunkChoiceExtensions(choice); err != nil {
+			return nil, nil, err
+		}
 	}
 	if chunk.Error != nil {
 		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseFailed, Error: &llmprotocol.ProtocolError{Category: llmprotocol.ErrorUpstreamUnavailable, Code: chunk.Error.Code, Message: chunk.Error.Message}, StopReason: llmprotocol.StopError})
