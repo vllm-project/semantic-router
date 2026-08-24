@@ -2,9 +2,9 @@
 
 import os
 
-from cli.consts import DEFAULT_API_PORT, DEFAULT_ENVOY_PORT, IMAGE_PULL_POLICY_NEVER
+from cli.commands.runtime_paths import resolve_state_root_dir
+from cli.consts import IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
-    container_exec,
     container_logs,
     container_logs_output,
     container_network_disconnect,
@@ -44,27 +44,24 @@ from cli.runtime_management_config import (
     _configured_management_port,
     _configured_management_readiness_token_env,
 )
+from cli.runtime_service_status import (
+    report_service_status,
+    runtime_service_container_name,
+)
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
-from cli.storage_backends import provision_storage_backends
+from cli.storage_backends import (
+    detach_preserved_storage_container,
+    provision_storage_backends,
+    storage_data_volume_is_recorded,
+)
 from cli.terminal import echo, fields, heading, hint, success, warning
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
-STATE_ROOT_DIR_ENV = "VLLM_SR_STATE_ROOT_DIR"
 MANAGED_STORAGE_BACKENDS_ENV = "VLLM_SR_MANAGED_STORAGE_BACKENDS"
 
 RUNTIME_LOG_SERVICES = ("router", "dashboard", "envoy")
-
-
-def _resolve_state_root_dir(
-    source_config_file: str, env_vars: dict[str, str] | None = None
-) -> str:
-    env_vars = env_vars or {}
-    override = env_vars.get(STATE_ROOT_DIR_ENV) or os.getenv(STATE_ROOT_DIR_ENV)
-    if override:
-        return os.path.abspath(override)
-    return os.path.dirname(os.path.abspath(source_config_file))
 
 
 def _load_runtime_config(runtime_config_file):
@@ -89,7 +86,7 @@ def _prepare_runtime_network(
     dashboard_disabled,
 ):
     shared_network_name = stack_layout.network_name
-    state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
+    state_root_dir = resolve_state_root_dir(source_config_file, env_vars)
     ensure_shared_network(shared_network_name)
     ensure_runtime_images_for_pull_policy(
         image,
@@ -163,7 +160,7 @@ def start_vllm_sr(
     runtime_topology = resolve_runtime_topology(topology)
     source_config_file = source_config_file or config_file
     runtime_config_file = runtime_config_file or config_file
-    state_root_dir = _resolve_state_root_dir(source_config_file, env_vars)
+    state_root_dir = resolve_state_root_dir(source_config_file, env_vars)
     with runtime_config_lock_scope(
         runtime_config_lock,
         runtime_config_file,
@@ -415,12 +412,20 @@ def stop_vllm_sr():
             stopped_message=f"{container_name} stopped",
         ):
             failures.append(container_name)
+    # Only Redis and Postgres keep their data in a volume this CLI has to name;
+    # Milvus writes to a host bind mount, so removing it orphans nothing.
+    credentialed_storage = {
+        stack_layout.redis_container_name,
+        stack_layout.postgres_container_name,
+    }
     for container_name in _storage_container_names(stack_layout):
         if not _stop_managed_container(
             container_name,
             container_statuses[container_name],
             stop_message=f"Stopping {container_name}...",
             stopped_message=f"{container_name} stopped",
+            preserve_unadopted_data=container_name in credentialed_storage,
+            network_name=network_name,
         ):
             failures.append(container_name)
     if not _remove_runtime_network(network_name):
@@ -452,12 +457,6 @@ def _all_containers_absent(container_statuses: dict[str, str]) -> bool:
 
 def _runtime_container_names(stack_layout: RuntimeStackLayout) -> tuple[str, ...]:
     return stack_layout.runtime_container_names
-
-
-def _runtime_service_container_name(
-    service: str, stack_layout: RuntimeStackLayout
-) -> str:
-    return stack_layout.service_container_name(service)
 
 
 def _runtime_stack_status(stack_layout: RuntimeStackLayout) -> str:
@@ -511,6 +510,8 @@ def _stop_managed_container(
     *,
     stop_message: str | None = None,
     stopped_message: str | None = None,
+    preserve_unadopted_data: bool = False,
+    network_name: str | None = None,
 ) -> bool:
     if container_status == "not found":
         return True
@@ -518,6 +519,22 @@ def _stop_managed_container(
         log.info(stop_message)
     if container_status == "running" and not container_stop_container(container_name):
         return False
+    if preserve_unadopted_data and not storage_data_volume_is_recorded(container_name):
+        log.info(
+            f"{container_name} stopped but kept: it predates this CLI's "
+            "per-stack storage credentials, so nothing has recorded which "
+            "volume holds its data and removing it would orphan that volume. "
+            "The next `vllm-sr serve` adopts the volume and takes the "
+            "container over."
+        )
+        # A kept container stays attached to the stack network, which Podman
+        # counts as a user of that network and refuses to remove. Detaching it
+        # costs nothing -- the next `serve` recreates it on the new network
+        # anyway -- and follows what the OpenClaw teardown already does for the
+        # containers it likewise stops without removing.
+        if network_name:
+            detach_preserved_storage_container(network_name, container_name)
+        return True
     if not container_remove_container(container_name):
         return False
     if stopped_message:
@@ -559,7 +576,7 @@ def show_logs(service: str, follow: bool = False):
     container_name = (
         stack_layout.fleet_sim_container_name
         if service == "simulator"
-        else _runtime_service_container_name(service, stack_layout)
+        else runtime_service_container_name(service, stack_layout)
     )
     _ensure_runtime_container_available(container_name)
 
@@ -614,7 +631,7 @@ def show_status(service: str = "all"):
     echo()
 
     for requested_service in _requested_services(service):
-        _report_service_status(requested_service, stack_layout)
+        report_service_status(requested_service, stack_layout)
 
     echo()
     echo("Detailed logs: vllm-sr logs <envoy|router|dashboard|simulator>")
@@ -656,129 +673,3 @@ def _ensure_runtime_container_available(container_name: str) -> None:
     log.error("Container not found. Is vLLM Semantic Router running?")
     hint("Start it with: vllm-sr serve")
     raise SystemExit(1)
-
-
-def _report_service_status(service: str, stack_layout) -> None:
-    checkers = {
-        "router": ("Router", _check_router_status, None),
-        "envoy": (
-            "Envoy",
-            lambda container_name: _check_envoy_status(container_name, stack_layout),
-            None,
-        ),
-        "dashboard": (
-            "Dashboard",
-            _check_dashboard_status,
-            stack_layout.dashboard_url,
-        ),
-        "simulator": (
-            "Fleet Sim",
-            _check_fleet_sim_status,
-            stack_layout.fleet_sim_url,
-        ),
-    }
-    label, checker, detail = checkers[service]
-    try:
-        container_name = (
-            stack_layout.fleet_sim_container_name
-            if service == "simulator"
-            else _runtime_service_container_name(service, stack_layout)
-        )
-        is_running = checker(container_name)
-        _log_service_status(label, is_running, detail if is_running else None)
-    except Exception as exc:
-        log.error(f"Failed to check {service} status: {exc}")
-
-
-def _check_router_status(container_name: str) -> bool:
-    return_code, _stdout, _stderr = container_exec(
-        container_name,
-        ["curl", "-f", "-s", f"http://localhost:{DEFAULT_API_PORT}/health"],
-    )
-    return return_code == 0
-
-
-def _check_envoy_status(container_name: str, stack_layout: RuntimeStackLayout) -> bool:
-    return_code, stdout, _stderr = container_exec(
-        container_name,
-        [
-            "curl",
-            "-f",
-            "-s",
-            "-o",
-            "/dev/null",
-            "-w",
-            "%{http_code}",
-            f"http://localhost:{DEFAULT_ENVOY_PORT}/ready",
-        ],
-    )
-    if return_code == 0 and stdout.strip() == "200":
-        return True
-
-    return _fallback_check_envoy_status(container_name, stack_layout)
-
-
-def _fallback_check_envoy_status(
-    container_name: str, stack_layout: RuntimeStackLayout
-) -> bool:
-    if container_name != stack_layout.envoy_container_name:
-        return False
-    if container_status(container_name) != "running":
-        return False
-
-    return_code, _stdout, _stderr = container_exec(
-        container_name,
-        [
-            "/usr/local/bin/envoy",
-            "--mode",
-            "validate",
-            "-c",
-            "/etc/envoy/envoy.yaml",
-        ],
-    )
-    return return_code == 0
-
-
-def _check_dashboard_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = container_exec(
-        container_name,
-        [
-            "curl",
-            "-f",
-            "-s",
-            "-o",
-            "/dev/null",
-            "-w",
-            "%{http_code}",
-            "http://localhost:8700",
-        ],
-    )
-    return return_code == 0 and stdout.strip() in {"200", "301", "302"}
-
-
-def _check_fleet_sim_status(container_name: str) -> bool:
-    return_code, stdout, _stderr = container_exec(
-        container_name,
-        [
-            "python",
-            "-c",
-            (
-                "import sys, urllib.request; "
-                "resp = urllib.request.urlopen('http://localhost:8000/healthz', timeout=3); "
-                "sys.stdout.write(str(resp.getcode()))"
-            ),
-        ],
-    )
-    return return_code == 0 and stdout.strip() == "200"
-
-
-def _log_service_status(
-    label: str, is_running: bool, detail: str | None = None
-) -> None:
-    if not is_running:
-        fields(((label, "Status unknown"),))
-        return
-    if detail:
-        fields(((label, f"Running ({detail})"),))
-        return
-    fields(((label, "Running"),))

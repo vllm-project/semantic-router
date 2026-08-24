@@ -48,10 +48,11 @@ jobs:
           # Remove the stale label as soon as there is new activity.
           remove-stale-when-updated: true
 
-          # Labels that exempt an item from being marked stale. Empty for now;
-          # add comma-separated labels here when overrides are needed.
-          exempt-issue-labels: ""
-          exempt-pr-labels: ""
+          # Accepted/release work must return to Maintainers instead of being
+          # closed by inactivity automation. Author-owned blocked work may
+          # still follow the normal stale lifecycle.
+          exempt-issue-labels: "accepted,in-progress,release-blocker"
+          exempt-pr-labels: "release-blocker,pr/needs-review,pr/merge-ready"
 
           # Skip PRs that are still open as drafts.
           exempt-draft-pr: true

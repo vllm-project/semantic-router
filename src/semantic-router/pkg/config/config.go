@@ -52,6 +52,11 @@ const (
 	PromptGuardProtocolHTTPClassify = "http_classify"
 )
 
+// PromptGuardConfig.OnError values live in classifier_on_error.go as
+// OnErrorAllow/OnErrorBlock - shared with every other pluggable classifier
+// backend (CategoryModel, PIIModel, ClassifierSignalRule), not just prompt
+// guard.
+
 // Signal type constants for rule conditions.
 const (
 	SignalTypeKeyword      = "keyword"

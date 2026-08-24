@@ -33,18 +33,39 @@ directory:
 These files are local operating artifacts. They are not canonical repo docs and
 must not be committed.
 
+## Maintainer Label View
+
+Maintainers do not need to scan every area label. The daily operating view is:
+
+- `needs-acceptance`: decide whether the issue fits the roadmap, which one
+  Workgroup owns it, and whether to accept, request information, backlog, or
+  close it.
+- `in-progress`: accepted issue work with an accountable assignee.
+- `pr/needs-review`: pull requests ready for Maintainer review.
+- `release-blocker`: urgent accepted work that blocks a time-bound milestone.
+- `close-candidate` and `pr/close-candidate`: weekly cleanup decisions, never
+  automatic Maintainer conclusions.
+
+`ready-for-dev` is the delegation queue: accepted, sufficiently specified,
+unassigned work with review capacity. `help wanted` and `good first issue` are
+optional curated subsets, not additional Maintainer queues.
+
 ## Issue Groups
 
-- `milestone-bound`: assigned to the active milestone
-- `milestone-candidate`: labelled as a candidate for the active milestone
-- `incoming-triage`: new or unclassified bug/feature/user report
-- `backlog`: valuable but not current-release work
-- `stale`: inactive or directionally obsolete issue that needs maintainer action
+- `release-blocker`: accepted issue work requiring release attention
+- `needs-acceptance`: the Maintainer intake queue
+- `in-progress`: accepted and assigned delivery
+- `ready-for-dev`: accepted and available for assignment
+- `close-candidate`: explicit Maintainer cleanup decision
+- `milestone-bound`: accepted work assigned to the active milestone
+- `backlog`: accepted but not current-release work
+- `stale`: inactive work that still needs lifecycle review
 
 ## PR Groups
 
 - `merge-candidate`: approved and green
 - `review-now`: ready for maintainer review
+- `needs-author`: draft or waiting for contributor changes
 - `unblock`: failing, blocked, or waiting on maintainer decision
 - `needs-rebase`: dirty or stale against the base branch
 - `close-candidate`: inactive or no longer aligned with current mainline
@@ -54,8 +75,9 @@ must not be committed.
 Seed issues should come from the release plan, not from scattered historical
 notes. The default creation mode is dry-run. Public issue bodies must not
 include private infrastructure paths, private hosts, local workspace paths, or
-AI/tool attribution. Newly created issues receive `help wanted` by default
-unless the maintainer explicitly disables it.
+AI/tool attribution. Newly created issues receive `needs-acceptance`; issue
+creation never grants `accepted`, `ready-for-dev`, `help wanted`, priority, or
+release commitment implicitly.
 
 Maintainer ops owns two release-management actions that should not appear as
 active release-plan tasks:
@@ -147,8 +169,31 @@ workflow invokes the reusable `.github/workflows/maintainer-board.yml`, which ca
   `proposed-actions.json`, and milestone notes
 
 The scheduled workflow does not label, comment on, or close issues or pull
-requests. `proposed-actions.json` is informational only in CI; use the local
-`apply` command after maintainer review when mutations are intended.
+requests. It fetches the complete current queue by default (up to 500 issues
+and 300 PRs). `proposed-actions.json` is informational only in CI; use the
+local `apply` command after maintainer review when mutations are intended.
+
+## Intake Automation
+
+`.github/workflows/community.yml` and `tools/ci/community_lifecycle.py`
+perform only deterministic intake-state normalization. They enforce this
+contract without making roadmap, priority, or close decisions:
+
+- issue forms start at `needs-acceptance` and propose one Workgroup;
+- `accepted`, `ready-for-dev`, contributor-ready labels, priority, assignment,
+  and milestones cannot bypass their prerequisites;
+- assignment moves accepted work to `in-progress`;
+- non-trivial PRs must link accepted work with exactly one Workgroup owner.
+
+Because `pull_request_target` is prohibited, the PR check is read-only on the
+untrusted pull-request event. `.github/workflows/community-labels.yml` runs
+after that check from trusted default-branch code and synchronizes one
+`pr/*` state label, Workgroup ownership, release-blocker status, and milestone
+inheritance. Review submissions and check-suite completion refresh that state,
+so `pr/needs-review`, `pr/needs-author`, `pr/needs-rebase`, `pr/blocked`, and
+`pr/merge-ready` remain mutually exclusive. The workflow never executes
+pull-request code with a write token. An hourly reconciliation covers status
+changes that do not emit a trusted write-capable event.
 
 ### Relationship to `stale.yml`
 
@@ -158,6 +203,9 @@ requests. `proposed-actions.json` is informational only in CI; use the local
 - `.github/workflows/maintainer-board.yml` is visibility-only: it classifies
   the current queue using `tools/agent/maintainer-policy.yaml` and gives
   maintainers a daily brief without changing GitHub state.
+- Accepted, in-progress, and release-blocking issues are exempt from automatic
+  stale closure. PRs waiting for Maintainer review or marked merge-ready are
+  also exempt; author-owned blocked/rebase work may still age normally.
 
 Use the maintainer board to decide what needs review, rebase, unblock, or
 close-candidate follow-up. Use `stale.yml` only for the automated stale/close
@@ -171,6 +219,7 @@ gh workflow run maintenance.yml -f task=board -f milestone=MILESTONE_NAME
 
 ## Apply Policy
 
-GitHub mutations are never implicit. Applying proposed labels, comments, issue
-creation, or close actions requires an explicit apply command and a maintainer
-review of the generated payload.
+Roadmap, release, and cleanup decisions are never implicit. Applying proposed
+labels, comments, issue creation, or close actions from the Maintainer board
+requires an explicit apply command and a Maintainer review of the generated
+payload. The bounded intake normalization described above is automatic.

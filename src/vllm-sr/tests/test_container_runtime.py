@@ -132,6 +132,39 @@ def test_detect_container_runtime_falls_back_to_podman_when_only_podman_exists(
     assert container_runtime.get_container_runtime() == "podman"
 
 
+def test_detect_container_runtime_falls_back_to_podman_on_macos_when_only_podman_exists(
+    monkeypatch,
+):
+    """Reproduces #2954: macOS with only Podman installed (podman machine running)."""
+    monkeypatch.setattr(container_runtime.sys, "platform", "darwin")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/opt/homebrew/bin/podman" if name == "podman" else None,
+    )
+    _stub_podman_info(monkeypatch)
+
+    assert container_runtime.get_container_runtime() == "podman"
+
+
+def test_detect_container_runtime_reports_unreachable_when_macos_podman_machine_stopped(
+    monkeypatch,
+):
+    """A stopped `podman machine` should fail as unreachable, not unsupported."""
+    monkeypatch.setattr(container_runtime.sys, "platform", "darwin")
+    monkeypatch.delenv("CONTAINER_RUNTIME", raising=False)
+    monkeypatch.setattr(
+        container_runtime.shutil,
+        "which",
+        lambda name: "/opt/homebrew/bin/podman" if name == "podman" else None,
+    )
+    _stub_podman_info(monkeypatch, ok=False)
+
+    with pytest.raises(SystemExit):
+        container_runtime.get_container_runtime()
+
+
 def test_detect_container_runtime_falls_back_to_podman_when_docker_is_podman_symlink(
     monkeypatch,
 ):
