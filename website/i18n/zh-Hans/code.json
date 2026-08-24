@@ -1652,7 +1652,7 @@
     "message": "@AMD"
   },
   "team.members.XunzhuoLiu.bio": {
-    "message": "LLM routing builder at vLLM。"
+    "message": "Building the Mixture-of-Models for the next era of computing."
   },
   "team.members.XunzhuoLiu.expertise.routing": {
     "message": "LLM 路由"

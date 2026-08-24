@@ -31,7 +31,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
     externalLinks: [
       { label: 'Website', href: 'https://www.liuxunzhuo.com/' },
     ],
-    bio: <Translate id="team.members.XunzhuoLiu.bio">LLM routing builder at vLLM.</Translate>,
+    bio: <Translate id="team.members.XunzhuoLiu.bio">Building the Mixture-of-Models for the next era of computing.</Translate>,
     expertise: [
       <Translate id="team.members.XunzhuoLiu.expertise.routing">LLM routing</Translate>,
       <Translate id="team.members.XunzhuoLiu.expertise.gateway">Kubernetes AI Gateway</Translate>,
