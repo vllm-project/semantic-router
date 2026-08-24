@@ -15,20 +15,10 @@ type ruleTreeCase struct {
 	wantErr string // "" means the tree must be accepted
 }
 
-// decisionRuleTreeConfig renders a minimal config whose single decision carries
-// the given rules block.
-func decisionRuleTreeConfig(rules string) []byte {
-	return []byte(`
-version: v0.3
-listeners: []
-providers:
-  defaults:
-    default_model: m1
-  models:
-    - name: m1
-      backend_refs:
-        - endpoint: 127.0.0.1:8000
-          api_key: k
+// routingBlockWithRules renders the `routing:` block both load paths share: one
+// decision carrying the given rules, plus the signal its leaves reference.
+func routingBlockWithRules(rules string) string {
+	return `
 routing:
   modelCards:
     - name: m1
@@ -46,7 +36,23 @@ routing:
       modelRefs:
         - model: m1
           use_reasoning: false
-`)
+`
+}
+
+// decisionRuleTreeConfig renders a minimal full config whose single decision
+// carries the given rules block.
+func decisionRuleTreeConfig(rules string) []byte {
+	return []byte(`
+version: v0.3
+listeners: []
+providers:
+  defaults:
+    default_model: m1
+  models:
+    - name: m1
+      backend_refs:
+        - endpoint: 127.0.0.1:8000
+          api_key: k` + routingBlockWithRules(rules))
 }
 
 func indentRuleBlock(rules string) string {
@@ -60,11 +66,25 @@ func indentRuleBlock(rules string) string {
 	return strings.Join(lines, "\n")
 }
 
-func runRuleTreeCorpus(t *testing.T, corpus []ruleTreeCase) {
+// loadFullConfig and loadRoutingFragment are the two entry points a rule tree can
+// arrive through. The full config path also runs the signal-reference validators;
+// the fragment path is what the DSL round-trips, and runs only the contract
+// validators.
+func loadFullConfig(rules string) error {
+	_, err := ParseYAMLBytes(decisionRuleTreeConfig(rules))
+	return err
+}
+
+func loadRoutingFragment(rules string) error {
+	_, err := ParseRoutingYAMLBytes(routingFragmentWithRules(rules))
+	return err
+}
+
+func runRuleTreeCorpus(t *testing.T, corpus []ruleTreeCase, load func(string) error) {
 	t.Helper()
 	for _, tc := range corpus {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseYAMLBytes(decisionRuleTreeConfig(tc.rules))
+			err := load(tc.rules)
 			switch {
 			case tc.wantErr == "" && err != nil:
 				t.Fatalf("rule tree should be accepted, got: %v", err)
@@ -126,7 +146,7 @@ var ruleTreeOperatorCorpus = []ruleTreeCase{
 }
 
 func TestDecisionRuleTreeOperatorCorpus(t *testing.T) {
-	runRuleTreeCorpus(t, ruleTreeOperatorCorpus)
+	runRuleTreeCorpus(t, ruleTreeOperatorCorpus, loadFullConfig)
 }
 
 // NOT is strictly unary. evalNOT logs a warning and reports a non-match for any
@@ -154,7 +174,7 @@ var ruleTreeArityCorpus = []ruleTreeCase{
 }
 
 func TestDecisionRuleTreeArityCorpus(t *testing.T) {
-	runRuleTreeCorpus(t, ruleTreeArityCorpus)
+	runRuleTreeCorpus(t, ruleTreeArityCorpus, loadFullConfig)
 }
 
 // A node is either a leaf (a signal reference) or a combination of children.
@@ -234,7 +254,7 @@ var ruleTreeShapeCorpus = []ruleTreeCase{
 }
 
 func TestDecisionRuleTreeShapeCorpus(t *testing.T) {
-	runRuleTreeCorpus(t, ruleTreeShapeCorpus)
+	runRuleTreeCorpus(t, ruleTreeShapeCorpus, loadFullConfig)
 }
 
 // Every rule-tree error names the decision and the node, including the leaf
@@ -260,7 +280,7 @@ var ruleTreeErrorLocationCorpus = []ruleTreeCase{
 }
 
 func TestDecisionRuleTreeErrorLocationCorpus(t *testing.T) {
-	runRuleTreeCorpus(t, ruleTreeErrorLocationCorpus)
+	runRuleTreeCorpus(t, ruleTreeErrorLocationCorpus, loadFullConfig)
 }
 
 // routingFragmentWithRules renders the DSL-owned routing fragment surface, which
@@ -269,24 +289,7 @@ func TestDecisionRuleTreeErrorLocationCorpus(t *testing.T) {
 // therefore has to be enforced by validateDecisionContracts to hold on this path
 // too, not only on the full-config path.
 func routingFragmentWithRules(rules string) []byte {
-	return []byte(`
-routing:
-  modelCards:
-    - name: m1
-  signals:
-    keywords:
-      - name: k1
-        operator: OR
-        keywords:
-          - alpha
-  decisions:
-    - name: d1
-      priority: 1
-      rules:
-` + indentRuleBlock(rules) + `
-      modelRefs:
-        - model: m1
-`)
+	return []byte(routingBlockWithRules(rules))
 }
 
 // A leaf without a name references no signal at all: evalLeaf looks for a
@@ -339,17 +342,5 @@ var ruleTreeFragmentCorpus = []ruleTreeCase{
 }
 
 func TestDecisionRuleTreeFragmentCorpus(t *testing.T) {
-	for _, tc := range ruleTreeFragmentCorpus {
-		t.Run(tc.name, func(t *testing.T) {
-			_, err := ParseRoutingYAMLBytes(routingFragmentWithRules(tc.rules))
-			switch {
-			case tc.wantErr == "" && err != nil:
-				t.Fatalf("rule tree should be accepted, got: %v", err)
-			case tc.wantErr != "" && err == nil:
-				t.Fatalf("rule tree should be rejected with %q, got nil", tc.wantErr)
-			case tc.wantErr != "" && !strings.Contains(err.Error(), tc.wantErr):
-				t.Fatalf("error should mention %q, got: %v", tc.wantErr, err)
-			}
-		})
-	}
+	runRuleTreeCorpus(t, ruleTreeFragmentCorpus, loadRoutingFragment)
 }
