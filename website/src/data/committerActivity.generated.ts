@@ -15,11 +15,11 @@ export interface CommitterActivityEntry {
 }
 
 export const committerActivityWindow = {
-  "generatedAt": "2026-08-23",
-  "cutoffDate": "2026-05-23",
+  "generatedAt": "2026-08-24",
+  "cutoffDate": "2026-05-24",
   "months": 3,
   "activeCount": 10,
-  "emeritusCount": 19
+  "emeritusCount": 20
 }
 
 export const committerActivityEntries: CommitterActivityEntry[] = [
@@ -45,9 +45,9 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "yangw",
     "login": "drivebyer",
     "pullRequests": 22,
-    "reviews": 50,
+    "reviews": 51,
     "issues": 17,
-    "total": 89,
+    "total": 90,
     "status": "active"
   },
   {
@@ -60,30 +60,39 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "status": "active"
   },
   {
-    "name": "WUKUNTAI",
-    "login": "WUKUNTAI-0211",
-    "pullRequests": 54,
-    "reviews": 25,
-    "issues": 39,
-    "total": 118,
-    "status": "active"
-  },
-  {
-    "name": "Aayush Saini",
-    "login": "AayushSaini101",
-    "pullRequests": 14,
-    "reviews": 119,
-    "issues": 54,
-    "total": 187,
-    "status": "active"
-  },
-  {
     "name": "siloteemu",
     "login": "siloteemu",
     "pullRequests": 11,
     "reviews": 1,
     "issues": 5,
     "total": 17,
+    "status": "active"
+  },
+  {
+    "name": "Theo Hsiung",
+    "login": "theohsiung",
+    "pullRequests": 55,
+    "reviews": 13,
+    "issues": 76,
+    "total": 144,
+    "status": "active"
+  },
+  {
+    "name": "Wilson Wu",
+    "login": "wilsonwu",
+    "pullRequests": 40,
+    "reviews": 3,
+    "issues": 26,
+    "total": 69,
+    "status": "active"
+  },
+  {
+    "name": "Yincheng Ren",
+    "login": "Peterren",
+    "pullRequests": 22,
+    "reviews": 5,
+    "issues": 14,
+    "total": 41,
     "status": "active"
   },
   {
@@ -118,9 +127,9 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "login": "yossiovadia",
     "pullRequests": 0,
     "reviews": 0,
-    "issues": 1,
-    "total": 1,
-    "status": "active"
+    "issues": 0,
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "samzong",

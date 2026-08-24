@@ -22,6 +22,11 @@ const teamMembersPath = resolve(
 const githubOwner = 'vllm-project'
 const githubRepo = 'semantic-router'
 const reviewStates = new Set(['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED'])
+// Maintainer-reviewed comments that do not constitute substantive project activity.
+// Keep exclusions scoped to an exact GitHub comment so future work is counted normally.
+const excludedIssueComments = new Set([
+  'yossiovadia:5124432868',
+])
 
 const pullRequestsQuery = `
 query($cursor: String) {
@@ -57,6 +62,7 @@ query($cursor: String) {
         author { login }
         comments(last: 100) {
           nodes {
+            databaseId
             author { login }
             createdAt
           }
@@ -228,6 +234,7 @@ function recordIssueActivity(activity, cutoffDate) {
         commenter
         && activity.has(commenter)
         && isOnOrAfter(comment.createdAt, cutoffDate)
+        && !excludedIssueComments.has(`${commenter}:${comment.databaseId}`)
       ) {
         activity.get(commenter).issues.add(issue.number)
       }
