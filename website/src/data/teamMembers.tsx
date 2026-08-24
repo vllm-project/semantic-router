@@ -31,7 +31,7 @@ export const steeringCommitteeMembers: TeamMember[] = [
     externalLinks: [
       { label: 'Website', href: 'https://www.liuxunzhuo.com/' },
     ],
-    bio: <Translate id="team.members.XunzhuoLiu.bio">LLM routing builder at vLLM.</Translate>,
+    bio: <Translate id="team.members.XunzhuoLiu.bio">Building the Mixture-of-Models for the next era of computing.</Translate>,
     expertise: [
       <Translate id="team.members.XunzhuoLiu.expertise.routing">LLM routing</Translate>,
       <Translate id="team.members.XunzhuoLiu.expertise.gateway">Kubernetes AI Gateway</Translate>,
@@ -94,19 +94,19 @@ export const steeringCommitteeMembers: TeamMember[] = [
     steeringTrack: 'academic',
   },
   {
-    name: 'Fuyuan Lyu',
-    role: <Translate id="team.members.FuyuanLyu.role">PhD Candidate @ McGill University / Mila</Translate>,
-    avatar: 'https://agentic-in.ai/people/fuyuan-lv.jpeg',
-    linkedin: 'https://www.linkedin.com/in/fuyuan-lyu-560756167/',
+    name: 'Haolun Wu',
+    role: <Translate id="team.members.HaolunWu.role">Governor General's Gold Medal · PhD @ McGill / Mila · Visiting Scholar @ Stanford</Translate>,
+    avatar: 'https://haolun-wu.github.io/assets/img/abobu2.jpg',
+    linkedin: 'https://www.linkedin.com/in/haolun-wu-23ba08133/',
     externalLinks: [
-      { label: 'Website', href: 'https://fuyuanlyu.github.io/' },
-      { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=dOjmAVQAAAAJ&hl=en' },
+      { label: 'Website', href: 'https://haolun-wu.github.io/' },
+      { label: 'Google Scholar', href: 'https://scholar.google.com/citations?user=-KcBDLcAAAAJ&hl=en' },
     ],
-    bio: <Translate id="team.members.FuyuanLyu.bio">Research in data-centric AI, automatic feature selection, and automatic labeling for deep learning and foundation models.</Translate>,
+    bio: <Translate id="team.members.HaolunWu.bio">Researcher in trustworthy AI and learning from feedback, with academic experience across McGill, Mila, and Stanford.</Translate>,
     expertise: [
-      <Translate id="team.members.FuyuanLyu.expertise.data">Data-centric AI</Translate>,
-      <Translate id="team.members.FuyuanLyu.expertise.features">Automatic feature selection</Translate>,
-      <Translate id="team.members.FuyuanLyu.expertise.labeling">Automatic labeling</Translate>,
+      <Translate id="team.members.HaolunWu.expertise.feedback">Learning from feedback</Translate>,
+      <Translate id="team.members.HaolunWu.expertise.trustworthy">Trustworthy AI</Translate>,
+      <Translate id="team.members.HaolunWu.expertise.alignment">AI alignment</Translate>,
     ],
     memberType: 'steering',
     steeringTrack: 'academic',

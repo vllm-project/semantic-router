@@ -10,29 +10,39 @@ from typing import Any
 
 from community_lifecycle_github import (
     GitHubClient,
+    accept_issue_event,
     sync_issue_event,
     sync_open_pull_requests,
     sync_pull_request_event,
     validate_pull_request_event,
+    validate_title_event,
 )
 from community_lifecycle_policy import (
+    MAINTAINER_OWNER,
+    OWNER_LABELS,
     PR_STATE_LABELS,
     WORKGROUP_LABELS,
     WORKGROUP_OPTIONS,
+    evaluate_issue_acceptance,
     evaluate_pull_request,
     extract_related_issue_numbers,
     plan_issue,
     proposed_workgroup,
+    title_format_error,
 )
 
 __all__ = [
+    "MAINTAINER_OWNER",
+    "OWNER_LABELS",
     "PR_STATE_LABELS",
     "WORKGROUP_LABELS",
     "WORKGROUP_OPTIONS",
+    "evaluate_issue_acceptance",
     "evaluate_pull_request",
     "extract_related_issue_numbers",
     "plan_issue",
     "proposed_workgroup",
+    "title_format_error",
 ]
 
 
@@ -44,7 +54,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "command",
-        choices=("sync-issue", "validate-pr", "sync-pr", "sync-prs"),
+        choices=(
+            "sync-issue",
+            "accept-issue",
+            "validate-pr",
+            "sync-pr",
+            "sync-prs",
+            "validate-title",
+        ),
     )
     parser.add_argument("--event", required=True)
     return parser
@@ -53,9 +70,14 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     event = load_event(args.event)
+    if args.command == "validate-title":
+        validate_title_event(event)
+        return 0
     client = GitHubClient()
     if args.command == "sync-issue":
         sync_issue_event(client, event)
+    elif args.command == "accept-issue":
+        accept_issue_event(client, event)
     elif args.command == "validate-pr":
         validate_pull_request_event(client, event)
     elif args.command == "sync-pr":

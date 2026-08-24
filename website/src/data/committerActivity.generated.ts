@@ -15,66 +15,66 @@ export interface CommitterActivityEntry {
 }
 
 export const committerActivityWindow = {
-  "generatedAt": "2026-07-14",
-  "cutoffDate": "2026-04-14",
+  "generatedAt": "2026-08-23",
+  "cutoffDate": "2026-05-23",
   "months": 3,
-  "activeCount": 15,
-  "emeritusCount": 14
+  "activeCount": 10,
+  "emeritusCount": 19
 }
 
 export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "FAUST",
     "login": "FAUST-BENCHOU",
-    "pullRequests": 29,
-    "reviews": 49,
+    "pullRequests": 19,
+    "reviews": 73,
     "issues": 27,
-    "total": 105,
+    "total": 119,
     "status": "active"
   },
   {
     "name": "David Shrader",
     "login": "shraderdm",
-    "pullRequests": 27,
-    "reviews": 7,
-    "issues": 15,
-    "total": 49,
+    "pullRequests": 18,
+    "reviews": 6,
+    "issues": 16,
+    "total": 40,
     "status": "active"
   },
   {
     "name": "yangw",
     "login": "drivebyer",
-    "pullRequests": 10,
-    "reviews": 17,
-    "issues": 7,
-    "total": 34,
+    "pullRequests": 22,
+    "reviews": 50,
+    "issues": 17,
+    "total": 89,
     "status": "active"
   },
   {
     "name": "Ramakrishnan Sathyavageeswaran",
     "login": "ramkrishs",
-    "pullRequests": 6,
+    "pullRequests": 1,
     "reviews": 0,
-    "issues": 5,
-    "total": 11,
+    "issues": 0,
+    "total": 1,
     "status": "active"
   },
   {
     "name": "WUKUNTAI",
     "login": "WUKUNTAI-0211",
-    "pullRequests": 41,
-    "reviews": 19,
-    "issues": 22,
-    "total": 82,
+    "pullRequests": 54,
+    "reviews": 25,
+    "issues": 39,
+    "total": 118,
     "status": "active"
   },
   {
     "name": "Aayush Saini",
     "login": "AayushSaini101",
-    "pullRequests": 13,
-    "reviews": 44,
-    "issues": 38,
-    "total": 95,
+    "pullRequests": 14,
+    "reviews": 119,
+    "issues": 54,
+    "total": 187,
     "status": "active"
   },
   {
@@ -118,18 +118,18 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "login": "yossiovadia",
     "pullRequests": 0,
     "reviews": 0,
-    "issues": 0,
-    "total": 0,
-    "status": "emeritus"
+    "issues": 1,
+    "total": 1,
+    "status": "active"
   },
   {
     "name": "samzong",
     "login": "samzong",
     "pullRequests": 0,
-    "reviews": 1,
+    "reviews": 0,
     "issues": 0,
-    "total": 1,
-    "status": "active"
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "Liav Weiss",
@@ -143,11 +143,11 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Asaad Balum",
     "login": "asaadbalum",
-    "pullRequests": 1,
+    "pullRequests": 0,
     "reviews": 0,
     "issues": 0,
-    "total": 1,
-    "status": "active"
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "Yehudit",
@@ -161,11 +161,11 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Noa Limoy",
     "login": "noalimoy",
-    "pullRequests": 1,
+    "pullRequests": 0,
     "reviews": 0,
-    "issues": 1,
-    "total": 2,
-    "status": "active"
+    "issues": 0,
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "Marina Koushnir",
@@ -188,20 +188,20 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Abdallah Samara",
     "login": "abdallahsamabd",
-    "pullRequests": 1,
+    "pullRequests": 0,
     "reviews": 0,
     "issues": 0,
-    "total": 1,
-    "status": "active"
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "Hen Schwartz",
     "login": "henschwartz",
-    "pullRequests": 1,
+    "pullRequests": 0,
     "reviews": 0,
     "issues": 0,
-    "total": 1,
-    "status": "active"
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "Srinivas A",
@@ -234,18 +234,18 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "yuluo-yx",
     "login": "yuluo-yx",
     "pullRequests": 0,
-    "reviews": 1,
+    "reviews": 0,
     "issues": 0,
-    "total": 1,
-    "status": "active"
+    "total": 0,
+    "status": "emeritus"
   },
   {
     "name": "cryo-zd",
     "login": "cryo-zd",
-    "pullRequests": 9,
-    "reviews": 4,
+    "pullRequests": 4,
+    "reviews": 2,
     "issues": 1,
-    "total": 14,
+    "total": 7,
     "status": "active"
   },
   {
@@ -269,10 +269,10 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Hao Wu",
     "login": "haowu1234",
-    "pullRequests": 12,
-    "reviews": 6,
+    "pullRequests": 15,
+    "reviews": 14,
     "issues": 12,
-    "total": 30,
+    "total": 41,
     "status": "active"
   },
   {
