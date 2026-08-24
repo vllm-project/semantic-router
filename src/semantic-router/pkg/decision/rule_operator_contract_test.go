@@ -30,13 +30,13 @@ func TestRuleTreeOperatorsAgreeWithEvaluator(t *testing.T) {
 		config.RuleOperatorNot: {[]config.RuleCondition{absent}, true},
 	}
 
-	if len(expected) != len(config.RuleTreeOperators) {
+	if len(expected) != len(config.RuleTreeOperators()) {
 		t.Fatalf("config.RuleTreeOperators has %d operators but this contract covers %d: "+
 			"teach evalNode and this test about the new operator",
-			len(config.RuleTreeOperators), len(expected))
+			len(config.RuleTreeOperators()), len(expected))
 	}
 
-	for _, operator := range config.RuleTreeOperators {
+	for _, operator := range config.RuleTreeOperators() {
 		tc, ok := expected[operator]
 		if !ok {
 			t.Fatalf("operator %q is accepted by config validation but has no evaluator contract here", operator)

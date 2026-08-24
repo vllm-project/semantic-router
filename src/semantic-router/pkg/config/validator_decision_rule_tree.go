@@ -2,33 +2,8 @@ package config
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 )
-
-// Rule-tree combination operators. They are exported so the evaluators can be
-// pinned to the same set instead of restating it as literals: config validation
-// rejects everything outside RuleTreeOperators, which is only safe while every
-// member reaches its own branch in pkg/decision.(*DecisionEngine).evalNode. That
-// agreement is asserted by TestRuleTreeOperatorsAgreeWithEvaluator.
-const (
-	// RuleOperatorAnd matches when every condition matches. It is also the only
-	// operator that matches on zero children.
-	RuleOperatorAnd = "AND"
-	// RuleOperatorOr matches when at least one condition matches. It is the
-	// evaluator's default branch, so an unrecognized operator quietly widens the
-	// rule instead of failing at runtime.
-	RuleOperatorOr = "OR"
-	// RuleOperatorNot is strictly unary: evalNOT negates its single child and
-	// warns and reports a non-match for any other child count.
-	RuleOperatorNot = "NOT"
-)
-
-// RuleTreeOperators is the closed set of combination operators a decision rule
-// tree may use. The slice order is the order used in error messages. The
-// nested-node half of this contract is already enforced by the CLI in
-// src/vllm-sr/cli/models.py (Condition.validate_node_shape).
-var RuleTreeOperators = []string{RuleOperatorAnd, RuleOperatorOr, RuleOperatorNot}
 
 // decisionRuleRootPath names a decision's rule-tree root in validation errors.
 const decisionRuleRootPath = "rules"
@@ -121,10 +96,10 @@ func ruleNodeHasLeafFields(node *RuleNode) bool {
 // fall through to the evaluator's default branch anyway.
 func validateRuleCombinationNode(decisionName, path string, node *RuleNode, isRoot bool) error {
 	operator := strings.ToUpper(node.Operator)
-	if operator != "" && !slices.Contains(RuleTreeOperators, operator) {
+	if operator != "" && !IsRuleTreeOperator(operator) {
 		return ruleTreeError(decisionName, path, fmt.Sprintf(
 			"invalid rule operator %q (valid: %s)",
-			node.Operator, strings.Join(RuleTreeOperators, ", ")))
+			node.Operator, strings.Join(RuleTreeOperators(), ", ")))
 	}
 	if operator == RuleOperatorNot && len(node.Conditions) != 1 {
 		return ruleTreeError(decisionName, path, fmt.Sprintf(
