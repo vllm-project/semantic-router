@@ -38,6 +38,13 @@ from cli.container_run_command import (
     maybe_append_nvidia_gpu_passthrough,
 )
 from cli.container_runtime import get_container_runtime, resolve_container_cli_path
+from cli.container_runtime_policy import (
+    DockerHealthcheck,
+    append_docker_runtime_policy,
+    dashboard_healthcheck,
+    envoy_healthcheck,
+    router_healthcheck,
+)
 from cli.container_runtime_preparation import (
     prepare_runtime_paths as _prepare_runtime_paths,
 )
@@ -469,6 +476,10 @@ def _build_router_runtime_command(
         enable_nvidia_gpu=normalized_platform == PLATFORM_NVIDIA,
         start_immediately=True,
         inherited_env_keys=inherited_sensitive_env | set(router_child_env_names),
+        docker_healthcheck=router_healthcheck(
+            int(management_listener["port"]),
+            tls_enabled=bool(management_listener["tls_enabled"]),
+        ),
     )
 
 
@@ -516,6 +527,7 @@ def _build_envoy_runtime_command(
         command_args=service_args,
         start_immediately=True,
         supplemental_gids=[int(runtime_paths["log_spool_gid"])],
+        docker_healthcheck=envoy_healthcheck(),
     )
 
 
@@ -612,6 +624,7 @@ def _build_dashboard_runtime_command(
         entrypoint=service_entrypoint,
         command_args=service_args,
         inherited_env_keys=set(DASHBOARD_SECRET_ENV_NAMES),
+        docker_healthcheck=dashboard_healthcheck(),
     )
 
 
@@ -743,6 +756,7 @@ def _build_service_run_command(
     port_mappings: list[tuple[int, int] | tuple[str, int, int]],
     entrypoint: str,
     command_args: list[str],
+    docker_healthcheck: DockerHealthcheck,
     enable_amd_gpu: bool = False,
     enable_nvidia_gpu: bool = False,
     start_immediately: bool = True,
@@ -756,6 +770,7 @@ def _build_service_run_command(
         container_name,
         start_immediately=start_immediately,
     )
+    append_docker_runtime_policy(cmd, runtime, docker_healthcheck)
     maybe_append_amd_gpu_passthrough(cmd, enable_amd_gpu)
     maybe_append_nvidia_gpu_passthrough(cmd, enable_nvidia_gpu, runtime)
     append_supplemental_gids(cmd, supplemental_gids or [], runtime)

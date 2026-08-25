@@ -114,6 +114,10 @@ def test_redis_reads_its_password_from_a_mounted_config_not_the_argv(
         "redis-server",
         container_services.CONTAINER_REDIS_CONF_PATH,
     ]
+    assert command[command.index("--restart") + 1] == "unless-stopped"
+    redis_healthcheck = command[command.index("--health-cmd") + 1]
+    assert container_services.CONTAINER_REDIS_CONF_PATH in redis_healthcheck
+    assert 'REDISCLI_AUTH="$password"' in redis_healthcheck
     # The container process is a host process, so argv is world readable.
     assert not any(argument.startswith("--requirepass") for argument in command)
     assert not any("never-in-argv" in argument for argument in command)
@@ -149,6 +153,10 @@ def test_postgres_reads_its_password_from_a_file_never_from_argv(monkeypatch, tm
     assert not any(argument.startswith("POSTGRES_PASSWORD=") for argument in command)
     assert not any("never-in-argv" in argument for argument in command)
     assert not any("router-secret" in argument for argument in command)
+    assert command[command.index("--restart") + 1] == "unless-stopped"
+    assert command[command.index("--health-cmd") + 1] == (
+        "pg_isready -q -U router -d vsr"
+    )
 
 
 def test_replacing_a_storage_container_reads_its_volume_before_removing_it(

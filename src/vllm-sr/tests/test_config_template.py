@@ -1,5 +1,6 @@
 """Validate the distributed CLI config template."""
 
+import importlib
 import sys
 import unittest
 from pathlib import Path
@@ -9,6 +10,9 @@ import yaml
 CLI_ROOT = Path(__file__).resolve().parents[1]
 if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
+
+parse_user_config = importlib.import_module("cli.parser").parse_user_config
+validate_user_config = importlib.import_module("cli.validator").validate_user_config
 
 TEMPLATE_PATH = CLI_ROOT / "cli" / "templates" / "config.template.yaml"
 
@@ -46,9 +50,6 @@ class TestConfigTemplate(unittest.TestCase):
             self.assertNotIn(demo_name, content)
 
     def test_template_validates_directly(self):
-        from cli.parser import parse_user_config
-        from cli.validator import validate_user_config
-
         user_config = parse_user_config(str(TEMPLATE_PATH))
         user_errors = validate_user_config(user_config)
 

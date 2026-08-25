@@ -15,6 +15,11 @@ from cli.container_observability import (
     render_observability_template as _render_observability_template,
 )
 from cli.container_runtime import get_container_runtime
+from cli.container_runtime_policy import (
+    append_docker_runtime_policy,
+    postgres_healthcheck,
+    redis_healthcheck,
+)
 from cli.container_storage_security import validate_storage_port_isolation
 from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.storage_secrets import (
@@ -236,6 +241,11 @@ def container_start_redis(
         "-p",
         f"127.0.0.1:{stack_layout.redis_port}:6379",
     ]
+    append_docker_runtime_policy(
+        cmd,
+        runtime,
+        redis_healthcheck(CONTAINER_REDIS_CONF_PATH),
+    )
     cmd += [
         "-v",
         f"{os.path.abspath(redis_conf_file)}:{CONTAINER_REDIS_CONF_PATH}:ro,z",
@@ -310,6 +320,11 @@ def container_start_postgres(
         "-e",
         f"POSTGRES_USER={MANAGED_POSTGRES_USER}",
     ]
+    append_docker_runtime_policy(
+        cmd,
+        runtime,
+        postgres_healthcheck(MANAGED_POSTGRES_USER, MANAGED_POSTGRES_DATABASE),
+    )
     cmd += [
         "-e",
         f"POSTGRES_PASSWORD_FILE={CONTAINER_POSTGRES_PASSWORD_PATH}",

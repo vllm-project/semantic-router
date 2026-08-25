@@ -34,10 +34,7 @@ func (transport *managementTransport) ServeHTTP(response http.ResponseWriter, re
 			"Use the Management API media type for the request body.", requestID)
 		return
 	}
-	supported := []string{managementapi.JSONMediaType}
-	if isAgentEventRequest(request) {
-		supported = append(supported, managementapi.EventStreamMediaType)
-	}
+	supported := supportedManagementResponseMedia(request)
 	selected, ok := selectManagementResponseMedia(request.Header.Values("Accept"), supported)
 	if !ok {
 		writeProviderError(response, http.StatusNotAcceptable, "not_acceptable",
@@ -46,6 +43,16 @@ func (transport *managementTransport) ServeHTTP(response http.ResponseWriter, re
 	}
 	ctx := context.WithValue(request.Context(), negotiatedMediaContextKey{}, selected)
 	transport.next.ServeHTTP(response, request.WithContext(ctx))
+}
+
+func supportedManagementResponseMedia(request *http.Request) []string {
+	if request != nil && request.Method == http.MethodGet && request.URL != nil && request.URL.Path == routingCurrentExportPath {
+		return []string{managementapi.YAMLMediaType}
+	}
+	if isAgentEventRequest(request) {
+		return []string{managementapi.JSONMediaType, managementapi.EventStreamMediaType}
+	}
+	return []string{managementapi.JSONMediaType}
 }
 
 func requestHasBody(request *http.Request) bool {

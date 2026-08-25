@@ -94,6 +94,17 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
     assert "0.0.0.0:8899:8899" in envoy_cmd
 
+    for command in (router_cmd, envoy_cmd, dashboard_cmd):
+        assert command[command.index("--restart") + 1] == "unless-stopped"
+    assert (
+        "http://127.0.0.1:8080/health"
+        in router_cmd[router_cmd.index("--health-cmd") + 1]
+    )
+    assert "/ready" in envoy_cmd[envoy_cmd.index("--health-cmd") + 1]
+    assert dashboard_cmd[dashboard_cmd.index("--health-cmd") + 1].endswith(
+        "http://127.0.0.1:8700/healthz"
+    )
+
     for component, command in (
         ("router", router_cmd),
         ("envoy", envoy_cmd),
@@ -188,6 +199,10 @@ def test_split_runtime_honors_management_listener_port(tmp_path, monkeypatch):
     router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
     assert "127.0.0.1:9090:9090" in router_cmd
+    assert (
+        "http://127.0.0.1:9090/health"
+        in router_cmd[router_cmd.index("--health-cmd") + 1]
+    )
     assert "127.0.0.1:8080:8080" not in router_cmd
     assert "TARGET_ROUTER_API_URL=http://vllm-sr-router-container:9090" in dashboard_cmd
     assert "TARGET_ROUTER_API_URL=http://stale-router:8080" not in dashboard_cmd

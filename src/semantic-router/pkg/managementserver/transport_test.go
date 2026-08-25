@@ -29,6 +29,11 @@ func (transportRegistrar) Register(mux *http.ServeMux) {
 		}
 		writeProviderJSON(response, http.StatusOK, map[string]bool{"history": true}, "transport-request")
 	})
+	mux.HandleFunc("GET "+routingCurrentExportPath, func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Content-Type", managementapi.YAMLMediaType+"; charset=utf-8")
+		response.WriteHeader(http.StatusOK)
+		_, _ = response.Write([]byte("version: v0.3\n"))
+	})
 	mux.HandleFunc("GET /management/v1/no-content", func(response http.ResponseWriter, _ *http.Request) {
 		setProviderResponseHeaders(response, "transport-request")
 		response.WriteHeader(http.StatusNoContent)
@@ -36,6 +41,38 @@ func (transportRegistrar) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /management/v1/typed-error", func(response http.ResponseWriter, _ *http.Request) {
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Request is invalid.", "transport-request")
 	})
+}
+
+func TestManagementTransportNegotiatesYAMLOnlyForRoutingExport(t *testing.T) {
+	handler := newTransportTestHandler(t)
+	tests := []struct {
+		name       string
+		accept     string
+		wantStatus int
+	}{
+		{name: "YAML export", accept: managementapi.YAMLMediaType, wantStatus: http.StatusOK},
+		{name: "vendor JSON rejected", accept: managementapi.JSONMediaType, wantStatus: http.StatusNotAcceptable},
+		{name: "wildcard rejected", accept: "*/*", wantStatus: http.StatusNotAcceptable},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, routingCurrentExportPath, nil)
+			request.Header.Set("Accept", test.accept)
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			if response.Code != test.wantStatus {
+				t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+			}
+			if test.wantStatus == http.StatusOK {
+				if got := response.Header().Get("Content-Type"); got != managementapi.YAMLMediaType+"; charset=utf-8" {
+					t.Fatalf("Content-Type = %q", got)
+				}
+				if got := response.Body.String(); got != "version: v0.3\n" {
+					t.Fatalf("body = %q", got)
+				}
+			}
+		})
+	}
 }
 
 func TestManagementTransportNegotiatesExplicitVendorAccept(t *testing.T) {
