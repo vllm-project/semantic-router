@@ -18,10 +18,12 @@ describe('access-control modal experience', () => {
   it('keeps the generated key connected to its detail view', () => {
     const dialog = readSource('./AccessControlDialog.tsx')
     const page = readSource('./AccessControlPage.tsx')
+    const overlays = readSource('./AccessControlPageOverlays.tsx')
 
     expect(dialog).toContain('onViewDetails: () => void')
     expect(dialog).toContain('View details')
-    expect(page).toContain("openDetail('key', keyID)")
+    expect(page).toContain("openDetail('key', keyId)")
+    expect(overlays).toContain('onCreatedKeyDetails(createdKey.id)')
     expect(page).toContain('onboardingKey')
     expect(page).toContain('state: null')
   })
@@ -69,6 +71,7 @@ describe('access-control modal experience', () => {
     expect(detail).toContain('Usage unavailable')
     expect(detail).toContain('Edit access & quota')
     expect(detail).not.toContain('Rotate key')
+    expect(detail.match(/<dt>Owner<\/dt>/g)).toHaveLength(1)
   })
 
   it('refreshes an open key quota without replacing the dialog with a loading state', () => {
@@ -124,6 +127,28 @@ describe('access-control modal experience', () => {
     expect(usage).not.toContain('props.users.find')
   })
 
+  it('lets viewers read Dashboard identities without requesting invitation authority', () => {
+    const page = readSource('./AccessControlPage.tsx')
+    const identities = readSource('./AccessControlIdentityViews.tsx')
+
+    expect(page).toContain('if (!canReadDashboardMembers) return')
+    expect(page).toContain('canManageDashboardMembers')
+    expect(page).toContain('? dashboardMemberInvitationApi.list()')
+    expect(page).toContain(': Promise.resolve({ items: [] as DashboardMemberInvitation[] })')
+    expect(identities).toContain(
+      "props.canManageDashboardMembers && props.identityTab === 'invitations'",
+    )
+  })
+
+  it('keeps dense access tables navigable on narrow screens', () => {
+    const styles = readSource('./AccessControlPage.module.css')
+
+    expect(styles).toMatch(/\.dataTable\s*{[^}]*overscroll-behavior-inline: contain;/s)
+    expect(styles).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*\.dataRow > :first-child\s*{[^}]*position: sticky;/,
+    )
+  })
+
   it('exposes pending state on long-running access dialogs', () => {
     const editor = readSource('./AccessControlDialog.tsx')
     const keyDetail = readSource('./APIKeyDetail.tsx')
@@ -132,5 +157,18 @@ describe('access-control modal experience', () => {
     expect(editor).toContain('aria-busy={saving}')
     expect(keyDetail).toContain('aria-busy={loading || pending}')
     expect(logDetail).toContain('aria-busy={loading}')
+  })
+
+  it('submits access editors as a form so required fields are enforced before saving', () => {
+    const editor = readSource('./AccessControlDialog.tsx')
+    const dashboardAccess = readSource('./DashboardAccessDialog.tsx')
+
+    expect(editor).toContain('useAccessibleDialog<HTMLFormElement>')
+    expect(editor).toContain('<form')
+    expect(editor).toContain('onSubmit={(event) => {')
+    expect(editor).toContain('<button type="submit"')
+    expect(dashboardAccess).toContain('useAccessibleDialog<HTMLFormElement>')
+    expect(dashboardAccess).toContain('type="submit"')
+    expect(dashboardAccess).toContain('minLength={9}')
   })
 })

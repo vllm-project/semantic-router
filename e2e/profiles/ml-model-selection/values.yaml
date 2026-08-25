@@ -7,49 +7,56 @@ service:
   type: ClusterIP
   port: 8080
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: llama-3.2-1b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
-      model: llama-3.2-1b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-  - name: llama-3.2-3b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
-      model: llama-3.2-3b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-  - name: codellama-7b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
-      model: codellama-7b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-  - name: mistral-7b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
-      model: mistral-7b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+  providers:
+    models:
+    - name: llama-3.2-1b
+      provider_model_id: llama-3.2-1b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+    - name: llama-3.2-3b
+      provider_model_id: llama-3.2-3b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+    - name: codellama-7b
+      provider_model_id: codellama-7b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+    - name: mistral-7b
+      provider_model_id: mistral-7b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://mock-llm-service.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+  routing:
+    modelCards:
+    - name: llama-3.2-1b
+    - name: llama-3.2-3b
+    - name: codellama-7b
+    - name: mistral-7b
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals:
         domains:
         - name: math
@@ -254,8 +261,8 @@ config:
               k: 5
               pretrained_path: /tmp/ml-models/knn_model.json
   entrypoints:
-  - name: vllm-sr/auto
-    aliases:
+  - model_names:
+    - vllm-sr/auto
     - auto
     recipe: default
     assignments:

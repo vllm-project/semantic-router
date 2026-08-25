@@ -315,8 +315,8 @@ func (routes *InvitationRoutes) onboard(response http.ResponseWriter, request *h
 		"role_binding_requested":    len(grants) != 0,
 		"team_membership_requested": team != nil,
 		"first_key_requested":       body.CreateFirstKey,
-		"access_binding_requested":  true,
-		"rate_binding_requested":    true,
+		"access_binding_requested":  team == nil,
+		"rate_binding_requested":    team == nil,
 	}
 	if !routes.authorize(response, request, requestID, session, namespaceID,
 		routes.operation(managementapi.MethodPOST, onboardingPath), targets, conditions, false) {
@@ -519,13 +519,16 @@ func onboardingTargets(namespaceID string, snapshot invitationmanagement.Onboard
 	userNamespace := accesscontrol.ScopedTarget{Scope: accesscontrol.NamespaceScope(accesscontrol.NamespaceID(namespaceID))}
 	targets := map[string][]accesscontrol.ScopedTarget{
 		"target": {userNamespace}, "user": {userNamespace}, "owner": {userNamespace},
-		"access_policy": {{Scope: accesscontrol.ResourceScope(accesscontrol.NamespaceID(namespaceID),
-			accesscontrol.ScopeResourceAccessPolicy, accesscontrol.ResourceID(snapshot.AccessPolicyID))}},
-		"rate_policy": {{Scope: accesscontrol.ResourceScope(accesscontrol.NamespaceID(namespaceID),
-			accesscontrol.ScopeResourceRateLimitPolicy, accesscontrol.ResourceID(snapshot.RateLimitPolicyID))}},
 	}
 	if snapshot.Team != nil {
 		targets["team"] = []accesscontrol.ScopedTarget{subjectTeamTarget(namespaceID, snapshot.Team.TeamID)}
+	} else {
+		targets["access_policy"] = []accesscontrol.ScopedTarget{{Scope: accesscontrol.ResourceScope(
+			accesscontrol.NamespaceID(namespaceID), accesscontrol.ScopeResourceAccessPolicy,
+			accesscontrol.ResourceID(snapshot.AccessPolicyID))}}
+		targets["rate_policy"] = []accesscontrol.ScopedTarget{{Scope: accesscontrol.ResourceScope(
+			accesscontrol.NamespaceID(namespaceID), accesscontrol.ScopeResourceRateLimitPolicy,
+			accesscontrol.ResourceID(snapshot.RateLimitPolicyID))}}
 	}
 	return targets
 }

@@ -1,129 +1,149 @@
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8899
   address: 0.0.0.0
   port: 8899
   timeout: 1800s
-models:
-- name: glm52-breadth-a
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      glm52-breadth-a:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      glm52-breadth-b:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gpt55-verifier:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      opus48-verifier:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gemini31-finalizer:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: glm52-breadth-a
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-breadth-a
+  - name: glm52-breadth-b
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-breadth-b
+  - name: gpt55-verifier
+    provider_model_id: openai/gpt-5.5
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '5'
+      output_cost_per_million_tokens: '30'
+      cache_read_cost_per_million_tokens: '0'
+      cache_write_cost_per_million_tokens: '5'
+    reasoning_family: gpt55-verifier
+  - name: opus48-verifier
+    provider_model_id: anthropic/claude-opus-4.8
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '15'
+      output_cost_per_million_tokens: '75'
+      cache_read_cost_per_million_tokens: '0'
+      cache_write_cost_per_million_tokens: '15'
+    reasoning_family: opus48-verifier
+  - name: gemini31-finalizer
+    provider_model_id: google/gemini-3.1-pro-preview
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '2'
+      output_cost_per_million_tokens: '12'
+      cache_read_cost_per_million_tokens: '0'
+      cache_write_cost_per_million_tokens: '2'
+    reasoning_family: gemini31-finalizer
+routing:
+  modelCards:
+  - name: glm52-breadth-a
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
-- name: glm52-breadth-b
-  card:
+  - name: glm52-breadth-b
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
-- name: gpt55-verifier
-  card:
+  - name: gpt55-verifier
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: openai/gpt-5.5
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '5'
-    output_cost_per_million_tokens: '30'
-    cache_read_cost_per_million_tokens: '0'
-    cache_write_cost_per_million_tokens: '5'
-- name: opus48-verifier
-  card:
+  - name: opus48-verifier
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: anthropic/claude-opus-4.8
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '15'
-    output_cost_per_million_tokens: '75'
-    cache_read_cost_per_million_tokens: '0'
-    cache_write_cost_per_million_tokens: '15'
-- name: gemini31-finalizer
-  card:
+  - name: gemini31-finalizer
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: google/gemini-3.1-pro-preview
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '2'
-    output_cost_per_million_tokens: '12'
-    cache_read_cost_per_million_tokens: '0'
-    cache_write_cost_per_million_tokens: '2'
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: hle_any
@@ -373,7 +393,8 @@ recipes:
 
             Confidence: {integer percentage between 0% and 100%}'
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     hle_high_risk_hybrid_remom:
@@ -451,10 +472,6 @@ global:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1800
   services:
-    backend_credentials:
-      openrouter_api_key:
-        credential_adapter_id: bearer
-        secret_env: OPENROUTER_API_KEY
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180

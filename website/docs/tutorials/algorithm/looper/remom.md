@@ -89,7 +89,7 @@ Assign Models and expose the Recipe through an Entrypoint:
 
 ```yaml
 entrypoints:
-  - name: vllm-sr/remom
+  - model_names: [vllm-sr/remom]
     recipe: deliberation
     assignments:
       reasoning-panel:
@@ -102,7 +102,7 @@ entrypoints:
 Configure a ReMoM decision:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: reasoning_panel
       description: Combine a bounded reasoning panel into one answer.

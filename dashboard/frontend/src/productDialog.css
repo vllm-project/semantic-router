@@ -7,6 +7,9 @@
  */
 
 :where([role='dialog'], [role='alertdialog'])[aria-modal='true'] {
+  max-width: calc(100vw - 2rem);
+  max-height: calc(100dvh - 2rem);
+  box-sizing: border-box;
   border: 2px solid rgba(255, 255, 255, 0.72) !important;
   border-radius: 18px !important;
   outline: none;
@@ -77,8 +80,16 @@
 
 @media (max-width: 640px) {
   :where([role='dialog'], [role='alertdialog'])[aria-modal='true'] {
-    border-width: 1px !important;
+    width: calc(100vw - 0.75rem);
+    max-width: calc(100vw - 0.75rem);
+    max-height: calc(100dvh - 0.75rem);
+    border-width: 2px !important;
     border-radius: 14px !important;
+  }
+
+  :where([role='dialog'], [role='alertdialog'])[aria-modal='true']
+    :where(input:not([type='checkbox'], [type='radio']), select, textarea) {
+    font-size: 1rem !important;
   }
 }
 

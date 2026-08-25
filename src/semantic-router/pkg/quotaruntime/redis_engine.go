@@ -161,6 +161,27 @@ func (e *RedisEngine) Admit(ctx context.Context, request AdmissionRequest) (Admi
 		preconditions,
 		rules,
 	)
+	keys, args, admitErr := e.buildAdmissionScriptInput(request, partition, preconditions, rules, planFingerprint)
+	if admitErr != nil {
+		return AdmissionResult{}, admitErr
+	}
+	value, admitErr := admitScript.Run(ctx, e.client, keys, args...).Result()
+	if admitErr != nil {
+		return AdmissionResult{
+			Disposition:    AdmissionUnavailable,
+			BlockingReason: "quota_runtime_error",
+		}, mapScriptError(admitErr)
+	}
+	return parseAdmissionResult(value, rules, planFingerprint)
+}
+
+func (e *RedisEngine) buildAdmissionScriptInput(
+	request AdmissionRequest,
+	partition partitionKeys,
+	preconditions []AdmissionPrecondition,
+	rules []compiledRule,
+	planFingerprint string,
+) ([]string, []any, error) {
 	keys := []string{
 		partition.pendingIndex,
 		partition.pending(request.AdmissionID),
@@ -211,33 +232,30 @@ func (e *RedisEngine) Admit(ctx context.Context, request AdmissionRequest) (Admi
 	keys = append(keys, partition.usageStream)
 	args = append(args, strconv.FormatInt(e.maxUsageBacklog, 10))
 	if err := validateRuntimeKeys(keys, partition.tag, e.keyPrefix); err != nil {
-		return AdmissionResult{}, err
+		return nil, nil, err
 	}
+	return keys, args, nil
+}
 
-	value, admitErr := admitScript.Run(ctx, e.client, keys, args...).Result()
-	if admitErr != nil {
-		return AdmissionResult{
-			Disposition:    AdmissionUnavailable,
-			BlockingReason: "quota_runtime_error",
-		}, mapScriptError(admitErr)
-	}
-	fields, admitErr := scriptStrings(value, 7)
-	if admitErr != nil {
-		return AdmissionResult{}, admitErr
+func parseAdmissionResult(value any, rules []compiledRule, planFingerprint string) (AdmissionResult, error) {
+	fields, err := scriptStrings(value, 7)
+	if err != nil {
+		return AdmissionResult{}, err
 	}
 	result := AdmissionResult{
 		Disposition:    AdmissionDisposition(fields[0]),
 		Idempotent:     fields[1] == "1",
 		BlockingReason: fields[6],
+		PlanDigest:     planFingerprint,
 	}
-	result.ServerTime, admitErr = parseMilliseconds(fields[3])
-	if admitErr != nil {
-		return AdmissionResult{}, admitErr
+	result.ServerTime, err = parseMilliseconds(fields[3])
+	if err != nil {
+		return AdmissionResult{}, err
 	}
 	if fields[4] != "" {
-		result.Deadline, admitErr = parseMilliseconds(fields[4])
-		if admitErr != nil {
-			return AdmissionResult{}, admitErr
+		result.Deadline, err = parseMilliseconds(fields[4])
+		if err != nil {
+			return AdmissionResult{}, err
 		}
 	}
 	if fields[5] != "" {

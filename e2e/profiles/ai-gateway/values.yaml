@@ -1,46 +1,53 @@
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: base-model
-    card:
-      reasoning:
-        type: chat_template_kwargs
-        efforts:
-        - high
+  providers:
+    defaults:
+      reasoning_families:
+        base-model:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+        base-model/math-expert:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+    models:
+    - name: base-model
+      provider_model_id: base-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+      reasoning_family: base-model
+    - name: base-model/math-expert
+      provider_model_id: base-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+      reasoning_family: base-model/math-expert
+  routing:
+    modelCards:
+    - name: base-model
       loras:
-      - science-expert
-      - social-expert
-      - math-expert
-      - law-expert
-      - humanities-expert
-      - general-expert
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: base-model
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-  - name: base-model/math-expert
-    card:
-      reasoning:
-        type: chat_template_kwargs
-        efforts:
-        - high
+      - name: science-expert
+      - name: social-expert
+      - name: math-expert
+      - name: law-expert
+      - name: humanities-expert
+      - name: general-expert
+    - name: base-model/math-expert
       loras:
-      - math-expert
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: base-model
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+      - name: math-expert
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals:
         keywords:
         - name: thinking
@@ -631,7 +638,7 @@ config:
   - name: entrypoint-probe
     description: 'Deterministic keyword-gated recipe used by the entrypoint-recipe-routing
       E2E (issue #2331).'
-    document:
+    routing:
       signals:
         keywords:
         - name: retention_probe_keywords
@@ -651,7 +658,7 @@ config:
       strategy: priority
   - name: metadata-policy
     description: Deterministic recipe-local metadata routing probe.
-    document:
+    routing:
       signals:
         metadata:
         - name: canary_cohort
@@ -669,7 +676,8 @@ config:
             name: canary_cohort
       strategy: priority
   entrypoints:
-  - name: vllm-sr/e2e-recipe-probe
+  - model_names:
+    - vllm-sr/e2e-recipe-probe
     recipe: entrypoint-probe
     assignments:
       entrypoint_probe_decision:
@@ -677,7 +685,8 @@ config:
         - model: base-model
           weight: '1'
           lora: general-expert
-  - name: vllm-sr/metadata-policy
+  - model_names:
+    - vllm-sr/metadata-policy
     recipe: metadata-policy
     assignments:
       metadata_recipe_decision:
@@ -685,7 +694,8 @@ config:
         - model: base-model
           weight: '1'
           lora: general-expert
-  - name: vllm-sr/e2e-default-alias
+  - model_names:
+    - vllm-sr/e2e-default-alias
     recipe: default
     assignments:
       block_jailbreak:

@@ -18,6 +18,7 @@ import (
 type Service struct {
 	repository Repository
 	applied    AppliedPolicyReader
+	routing    RoutingSnapshotReader
 	meters     MeterReader
 	waiter     PublicationWaiter
 }
@@ -25,15 +26,19 @@ type Service struct {
 type ServiceOptions struct {
 	Repository Repository
 	Applied    AppliedPolicyReader
+	Routing    RoutingSnapshotReader
 	Meters     MeterReader
 	Waiter     PublicationWaiter
 }
 
 func NewService(options ServiceOptions) (*Service, error) {
-	if options.Repository == nil || options.Applied == nil || options.Meters == nil || options.Waiter == nil {
-		return nil, fmt.Errorf("access management requires desired state, applied projection, meter, and publication dependencies")
+	if options.Repository == nil || options.Applied == nil || options.Routing == nil || options.Meters == nil || options.Waiter == nil {
+		return nil, fmt.Errorf("access management requires desired state, applied projection, routing snapshot, meter, and publication dependencies")
 	}
-	return &Service{repository: options.Repository, applied: options.Applied, meters: options.Meters, waiter: options.Waiter}, nil
+	return &Service{
+		repository: options.Repository, applied: options.Applied, routing: options.Routing,
+		meters: options.Meters, waiter: options.Waiter,
+	}, nil
 }
 
 func (service *Service) Ready(ctx context.Context) error {
@@ -193,12 +198,9 @@ func (service *Service) load(ctx context.Context, namespaceID string, subject Su
 
 func (service *Service) appliedProjection(ctx context.Context, snapshot PolicySnapshot) (accessprojection.Projection, uint64, error) {
 	if snapshot.Subject.Kind == accesscontrol.SubjectKindAPIKey {
-		applied, err := service.applied.ReadAppliedPolicy(ctx, snapshot.NamespaceID, snapshot.QuotaPartition, snapshot.Subject.ID)
+		applied, err := service.appliedKeyPolicy(ctx, snapshot)
 		if err != nil {
-			if errors.Is(err, accessruntime.ErrProjectionNotFound) {
-				return accessprojection.Projection{}, 0, ErrNotFound
-			}
-			return accessprojection.Projection{}, 0, fmt.Errorf("%w: read applied key policy: %w", ErrUnavailable, err)
+			return accessprojection.Projection{}, 0, err
 		}
 		return applied.Projection, applied.Active.Revision, nil
 	}
@@ -217,15 +219,29 @@ func (service *Service) readQuota(ctx context.Context, snapshot PolicySnapshot, 
 	if len(read.Meters) != len(rules) {
 		return EffectiveQuota{}, fmt.Errorf("%w: quota meter plan changed", ErrUnavailable)
 	}
+	meters := make(map[quota.CounterIdentity]quotaruntime.Meter, len(read.Meters))
+	for _, meter := range read.Meters {
+		identity, identityErr := quota.NewCounterIdentity(meter.BindingID, meter.RuleID)
+		if identityErr != nil {
+			return EffectiveQuota{}, fmt.Errorf("%w: quota meter identity is invalid", ErrUnavailable)
+		}
+		if _, exists := meters[identity]; exists {
+			return EffectiveQuota{}, fmt.Errorf("%w: quota meter identity is duplicated", ErrUnavailable)
+		}
+		meters[identity] = meter
+	}
 	result := EffectiveQuota{AsOf: read.AsOf}
-	index := 0
 	for _, binding := range projection.RateBindings {
 		for _, rule := range binding.Rules {
-			meter := read.Meters[index]
-			index++
-			if meter.BindingID != binding.BindingID || meter.RuleID != rule.Rule.ID {
+			identity, identityErr := quota.NewCounterIdentity(binding.BindingID, rule.Rule.ID)
+			if identityErr != nil {
+				return EffectiveQuota{}, fmt.Errorf("%w: projected quota identity is invalid", ErrUnavailable)
+			}
+			meter, exists := meters[identity]
+			if !exists {
 				return EffectiveQuota{}, fmt.Errorf("%w: quota meter identity mismatch", ErrUnavailable)
 			}
+			delete(meters, identity)
 			result.Meters = append(result.Meters, QuotaMeterView{
 				Binding: binding, Rule: rule,
 				Source: snapshot.LayerSubjects.Source(binding.Source), Meter: meter,
@@ -237,6 +253,9 @@ func (service *Service) readQuota(ctx context.Context, snapshot PolicySnapshot, 
 				result.LimitingRuleID = meter.RuleID
 			}
 		}
+	}
+	if len(meters) != 0 {
+		return EffectiveQuota{}, fmt.Errorf("%w: quota meter plan contains unknown counters", ErrUnavailable)
 	}
 	sort.Strings(result.FenceIDs)
 	result.FenceIDs = uniqueStrings(result.FenceIDs)

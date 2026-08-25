@@ -3,29 +3,30 @@ package config
 import (
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelauthoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
 
-// CanonicalConfig is the public v0.4 bootstrap and standalone-manifest
-// contract. Managed routing resources are imported through the Management API;
-// standalone embeds the same Model, Recipe, and Entrypoint values here.
+// CanonicalConfig is the additive public v0.3 authoring contract. Physical
+// Model connections stay under providers.models while connection-free Model
+// metadata stays under routing.modelCards.
 type CanonicalConfig struct {
-	Version     string                `yaml:"version"`
+	Version     string                `yaml:"version,omitempty"`
 	Listeners   []Listener            `yaml:"listeners,omitempty"`
-	Models      []AuthoringModel      `yaml:"models,omitempty"`
-	Entrypoints []AuthoringEntrypoint `yaml:"entrypoints,omitempty"`
-	Recipes     []AuthoringRecipe     `yaml:"recipes,omitempty"`
+	Providers   CanonicalProviders    `yaml:"providers,omitempty"`
+	Routing     CanonicalRouting      `yaml:"routing,omitempty"`
+	Entrypoints []CanonicalEntrypoint `yaml:"entrypoints,omitempty"`
+	Recipes     []CanonicalRecipe     `yaml:"recipes,omitempty"`
 	Global      *CanonicalGlobal      `yaml:"global,omitempty"`
 
 	globalOverrideRaw *StructuredPayload `yaml:"-"`
 }
 
-// CanonicalRouting is a Model-free Recipe document. Physical Model selection
-// belongs exclusively to Entrypoint assignments.
+// CanonicalRouting owns the DSL routing surface. ModelCards is accepted only
+// on the top-level routing value; Recipe routing values share the other fields.
 type CanonicalRouting struct {
+	ModelCards  []RoutingModel       `yaml:"modelCards,omitempty"`
 	Signals     CanonicalSignals     `yaml:"signals,omitempty"`
 	Projections CanonicalProjections `yaml:"projections,omitempty"`
 	Decisions   []Decision           `yaml:"decisions,omitempty"`
@@ -63,8 +64,8 @@ type CanonicalProjections struct {
 	Mappings   []ProjectionMapping   `yaml:"mappings,omitempty"`
 }
 
-// AuthoringModel is the single v0.4 human Model source shape. It deliberately
-// contains no publication identity or compiled backend state.
+// AuthoringModel is the internal Management compiler input. Public file YAML
+// uses the v0.3 providers.models/routing.modelCards split instead.
 type AuthoringModel struct {
 	Name           string                      `yaml:"name" json:"name"`
 	Card           AuthoringModelCard          `yaml:"card" json:"card"`
@@ -107,31 +108,40 @@ func normalizeCanonicalConfig(
 	}
 
 	cfg := DefaultGlobalConfig()
-	cfg.CanonicalVersion = normalizedCanonicalVersion(canonical.Version)
+	cfg.CanonicalVersion = canonical.Version
 	if applyErr := applyCanonicalGlobal(&cfg, &global); applyErr != nil {
 		return nil, applyErr
 	}
 	cfg.Listeners = append([]Listener(nil), canonical.Listeners...)
 
-	if cfg.ControlPlane.Mode == ControlPlaneModeStandalone {
-		snapshot, snapshotErr := CompileStandaloneRoutingSnapshot(*canonical, connectionCompiler)
+	if canonicalHasInlineRouting(canonical) {
+		bundle, bundleErr := buildFileAuthoringBundle(canonical)
+		if bundleErr != nil {
+			return nil, bundleErr
+		}
+		if mergeErr := mergeGeneratedBackendCredentials(&cfg.BackendCredentials, bundle.Credentials); mergeErr != nil {
+			return nil, mergeErr
+		}
+		snapshot, snapshotErr := compileFileAuthoringBundle(bundle, canonical, connectionCompiler)
 		if snapshotErr != nil {
 			return nil, snapshotErr
 		}
 		if applyErr := applyRoutingSnapshotState(&cfg, snapshot); applyErr != nil {
 			return nil, applyErr
 		}
+		applyPublicProviderRuntimeMetadata(&cfg, canonical.Providers)
 	}
 
 	if cfg.VectorStore != nil {
 		cfg.VectorStore.ApplyDefaults()
 	}
+	fileAuthoring, cloneErr := cloneCanonicalConfig(canonical)
+	if cloneErr != nil {
+		return nil, cloneErr
+	}
+	cfg.fileAuthoring = fileAuthoring
 
 	return &cfg, nil
-}
-
-func normalizedCanonicalVersion(version string) string {
-	return strings.TrimSpace(version)
 }
 
 func reasoningParameter(reasoningType string) string {
@@ -146,47 +156,77 @@ func reasoningParameter(reasoningType string) string {
 }
 
 func validateCanonicalContract(canonical *CanonicalConfig) error {
-	version := normalizedCanonicalVersion(canonical.Version)
-	if version != "v0.4" {
-		return fmt.Errorf("version must be v0.4, got %q", canonical.Version)
+	if canonical.Version != "v0.3" {
+		return fmt.Errorf("version must be v0.3, got %q", canonical.Version)
+	}
+	if err := validateCanonicalStores(canonical); err != nil {
+		return err
 	}
 	if err := validateCanonicalBilling(canonical); err != nil {
 		return err
 	}
-	mode := ControlPlaneModeStandalone
-	if canonical.Global != nil && strings.TrimSpace(canonical.Global.ControlPlane.Mode) != "" {
-		mode = strings.TrimSpace(canonical.Global.ControlPlane.Mode)
-	}
-	if mode == ControlPlaneModeManaged {
-		if len(canonical.Models) != 0 || len(canonical.Recipes) != 0 || len(canonical.Entrypoints) != 0 {
-			return fmt.Errorf("managed bootstrap rejects inline models, recipes, and entrypoints; publish them through the Management API")
+	if !canonicalHasInlineRouting(canonical) {
+		// A durable Management store may start without a file routing baseline;
+		// its active Namespace publication becomes the routing authority.
+		if canonicalHasDynamicRoutingAuthority(canonical) {
+			return nil
 		}
+		return fmt.Errorf("public routing requires providers.models, routing.modelCards, a routing profile or Recipe, and entrypoints")
+	}
+	hasEntrypoint := len(canonical.Entrypoints) != 0 || len(canonicalImplicitAutoModelNames(canonical)) != 0
+	if len(canonical.Providers.Models) == 0 || len(canonical.Routing.ModelCards) == 0 ||
+		(!canonicalRoutingHasProfile(canonical.Routing) && len(canonical.Recipes) == 0) ||
+		!hasEntrypoint {
+		return fmt.Errorf("public routing requires providers.models, routing.modelCards, a routing profile or Recipe, and entrypoints")
+	}
+	_, err := buildFileAuthoringBundle(canonical)
+	return err
+}
+
+func validateCanonicalStores(canonical *CanonicalConfig) error {
+	if canonical == nil || canonical.Global == nil {
 		return nil
 	}
-	if len(canonical.Models) == 0 || len(canonical.Recipes) == 0 || len(canonical.Entrypoints) == 0 {
-		return fmt.Errorf("standalone mode requires models, recipes, and entrypoints")
+	stores := canonical.Global.Stores
+	if stores.Management != nil && stores.Management.Postgres == nil {
+		return fmt.Errorf("global.stores.management requires postgres")
 	}
-	modelsByName := make(map[string]AuthoringModel, len(canonical.Models))
-	for modelIndex := range canonical.Models {
-		model := &canonical.Models[modelIndex]
-		if strings.TrimSpace(model.Name) == "" || strings.TrimSpace(model.Name) != model.Name {
-			return fmt.Errorf("models[%d].name cannot be empty", modelIndex)
-		}
-		if _, exists := modelsByName[model.Name]; exists {
-			return fmt.Errorf("models[%s]: duplicate model name", model.Name)
-		}
-		if err := validateModelRuntimeValues("models["+model.Name+"]", &model.Execution, &model.RuntimePricing); err != nil {
-			return err
-		}
-		if len(model.Connections) == 0 {
-			return fmt.Errorf("models[%s].connections must contain at least one connection", model.Name)
-		}
-		modelsByName[model.Name] = *model
+	if stores.Runtime != nil && stores.Runtime.Redis == nil {
+		return fmt.Errorf("global.stores.runtime requires redis")
 	}
-	if err := validateAuthoringRecipes(canonical.Recipes); err != nil {
-		return err
+	return nil
+}
+
+func canonicalHasDynamicRoutingAuthority(canonical *CanonicalConfig) bool {
+	return canonical != nil && canonical.Global != nil &&
+		canonical.Global.Stores.Management != nil && canonical.Global.Stores.Management.Postgres != nil
+}
+
+func canonicalHasInlineRouting(canonical *CanonicalConfig) bool {
+	return canonical != nil && (len(canonical.Providers.Models) != 0 || len(canonical.Routing.ModelCards) != 0 ||
+		canonicalRoutingHasProfile(canonical.Routing) || len(canonical.Recipes) != 0 || len(canonical.Entrypoints) != 0)
+}
+
+func applyPublicProviderRuntimeMetadata(cfg *RouterConfig, providers CanonicalProviders) {
+	if cfg == nil {
+		return
 	}
-	return validateAuthoringEntrypoints(canonical.Entrypoints, canonical.Recipes, modelsByName)
+	defaults := canonicalProviderDefaults(providers)
+	cfg.DefaultModel = defaults.DefaultModel
+	cfg.DefaultReasoningEffort = defaults.DefaultReasoningEffort
+	cfg.ReasoningFamilies = copyReasoningFamilies(defaults.ReasoningFamilies)
+	for _, source := range providers.Models {
+		params, found := cfg.ModelConfig[source.Name]
+		if !found {
+			continue
+		}
+		params.ReasoningFamily = source.ReasoningFamily
+		params.ExternalModelIDs = copyStringMap(source.ExternalModelIDs)
+		if len(params.ExternalModelIDs) == 0 && source.ProviderModelID != "" {
+			params.ExternalModelIDs = map[string]string{"default": source.ProviderModelID}
+		}
+		cfg.ModelConfig[source.Name] = params
+	}
 }
 
 func normalizeSignals(signals CanonicalSignals, decisions []Decision) Signals {

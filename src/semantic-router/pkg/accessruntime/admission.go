@@ -39,11 +39,16 @@ func (r *Runtime) Admit(ctx context.Context, request AdmissionRequest) (Admissio
 			PreparedAt: preparedAt,
 		}, nil
 	}
+	if strings.TrimSpace(result.PlanDigest) == "" {
+		return Admission{Result: unavailable("atomic_admission_plan_missing"), Target: request.Target},
+			fmt.Errorf("atomic admission did not return its immutable plan digest")
+	}
 	tenant := cloneTenantContext(state.tenant)
 	tenant.AdmissionID = request.AdmissionID
 	internal := &admissionState{
 		owner: r.identity, tenant: cloneTenantContext(tenant), rules: cloneRuleBindings(state.rules),
 		target: request.Target, requestDigest: request.RequestDigest,
+		planDigest: result.PlanDigest, leaseDuration: request.LeaseDuration,
 	}
 	return Admission{
 		Result: result, Tenant: tenant, Rules: cloneRuleBindings(state.rules), Target: request.Target,

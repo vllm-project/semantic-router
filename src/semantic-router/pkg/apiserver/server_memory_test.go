@@ -98,7 +98,7 @@ func TestResolveAPIServerConfigUsesRuntimeRegistryOnly(t *testing.T) {
 	}
 }
 
-func TestResolveAPIServerConfigUsesStandaloneProcessConfig(t *testing.T) {
+func TestResolveAPIServerConfigUsesFileProcessConfig(t *testing.T) {
 	globalCfg := &config.RouterConfig{}
 
 	restoreGlobalConfig := replaceGlobalConfigForTest(globalCfg)
@@ -124,12 +124,12 @@ func TestResolveClassificationServiceUsesRuntimeRegistryOnly(t *testing.T) {
 	}
 }
 
-func TestResolveClassificationServiceBuildsCanonicalStandaloneComposition(t *testing.T) {
+func TestResolveClassificationServiceBuildsCanonicalFileComposition(t *testing.T) {
 	cfg := &config.RouterConfig{Recipes: []config.RoutingRecipe{{Name: config.DefaultRecipeName}}}
 
 	got := resolveClassificationService(cfg, nil)
 	if got == nil {
-		t.Fatal("resolveClassificationService() returned nil for canonical standalone config")
+		t.Fatal("resolveClassificationService() returned nil for canonical file config")
 	}
 	if got.GetConfig() != cfg {
 		t.Fatalf("resolveClassificationService() config = %p, want %p", got.GetConfig(), cfg)

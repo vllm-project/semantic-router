@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -42,7 +43,7 @@ func parseRuntimeOptions() runtimeOptions {
 		port                   = flag.Int("port", 50051, "Port to listen on for gRPC ExtProc")
 		apiPort                = flag.Int("api-port", 0, "Port to listen on for the router apiserver (default from config: 8080)")
 		apiBind                = flag.String("api-bind", "", "Bind address for the router apiserver (default from config: 127.0.0.1)")
-		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: disabled or bearer for standalone; router for managed")
+		managementAuthMode     = flag.String("management-auth-mode", "", "Management API auth mode: disabled, bearer, or router")
 		managementRemoteExpose = flag.Bool("management-remote-exposure", false, "Allow remote exposure of the management API (requires configured authentication)")
 		metricsPort            = flag.Int("metrics-port", 9190, "Port for Prometheus metrics")
 		enableAPI              = flag.Bool("enable-api", true, "Enable the router apiserver")
@@ -74,12 +75,16 @@ func resolveRuntimeManagementOptions(opts runtimeOptions, cfg *config.RouterConf
 	if cfg == nil {
 		return runtimeOptions{}, errors.New("management API configuration is unavailable")
 	}
+	capabilities, err := runtimecapabilities.Derive(cfg)
+	if err != nil {
+		return runtimeOptions{}, fmt.Errorf("derive runtime capabilities: %w", err)
+	}
 	resolved, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
-		ControlPlaneMode: cfg.ControlPlane.Mode,
-		Port:             opts.apiPort,
-		BindAddress:      opts.apiBind,
-		RemoteExposure:   opts.managementRemoteExpose,
-		AuthMode:         opts.managementAuthMode,
+		DurableRouting: capabilities.DurableRouting,
+		Port:           opts.apiPort,
+		BindAddress:    opts.apiBind,
+		RemoteExposure: opts.managementRemoteExpose,
+		AuthMode:       opts.managementAuthMode,
 	})
 	if err != nil {
 		return runtimeOptions{}, fmt.Errorf("invalid management API configuration: %w", err)
@@ -499,7 +504,7 @@ func startAPIServerIfEnabled(
 	ctx context.Context,
 	opts runtimeOptions,
 	runtimeRegistry *routerruntime.Registry,
-	managedAPI apiserver.ManagedAPI,
+	managementAPI apiserver.ManagementAPI,
 ) (*apiServerLifecycle, error) {
 	if !opts.enableAPI {
 		return &apiServerLifecycle{done: closedErrorChannel()}, nil
@@ -533,7 +538,7 @@ func startAPIServerIfEnabled(
 			RemoteExposure:  opts.managementRemoteExpose,
 			AuthMode:        opts.managementAuthMode,
 			RuntimeRegistry: runtimeRegistry,
-			ManagedAPI:      managedAPI,
+			ManagementAPI:   managementAPI,
 		}); err != nil {
 			logging.ComponentErrorEvent("router", "api_server_failed", map[string]interface{}{
 				"api_port": opts.apiPort,

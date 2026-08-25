@@ -35,7 +35,7 @@ configure a storage backend.
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: sensitive-turn
       description: Drop retained state for sensitive turns.

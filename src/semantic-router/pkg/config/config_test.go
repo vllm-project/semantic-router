@@ -117,7 +117,7 @@ func parseLegacyRuntimeConfigForTest(data []byte) (*RouterConfig, error) {
 }
 
 func writeCanonicalLoadTestConfig(path string) error {
-	return os.WriteFile(path, []byte(validManagedBootstrapYAML), 0o644)
+	return os.WriteFile(path, []byte(validDurableBootstrapYAML), 0o644)
 }
 
 func TestConfig(t *testing.T) {
@@ -2358,7 +2358,7 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 
 		// Create real config target
 		target := filepath.Join(tempDir, "real-config.yaml")
-		content := []byte(validManagedBootstrapYAML)
+		content := []byte(validDurableBootstrapYAML)
 		Expect(os.WriteFile(target, content, 0o644)).To(Succeed())
 
 		// Create symlink pointing to target
@@ -2368,7 +2368,8 @@ var _ = Describe("ParseConfigFile and ReplaceGlobalConfig", func() {
 		cfg, err := Parse(link)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cfg).NotTo(BeNil())
-		Expect(cfg.ControlPlane.Mode).To(Equal(ControlPlaneModeManaged))
+		Expect(cfg.AccessStore).NotTo(BeNil())
+		Expect(cfg.AccessRuntimeStore).NotTo(BeNil())
 	})
 
 	It("should return error when file does not exist", func() {

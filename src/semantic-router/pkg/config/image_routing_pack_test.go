@@ -103,13 +103,13 @@ func loadImageRoutingPackRules(t *testing.T) []EmbeddingRule {
 		t.Fatalf("failed to read %s: %v", path, err)
 	}
 	var fragment struct {
-		Document CanonicalRouting `yaml:"document"`
+		Routing CanonicalRouting `yaml:"routing"`
 	}
 	if err := yaml.Unmarshal(data, &fragment); err != nil {
-		t.Fatalf("failed to parse %s as a Recipe document fragment: %v", path, err)
+		t.Fatalf("failed to parse %s as a Recipe routing fragment: %v", path, err)
 	}
-	if len(fragment.Document.Signals.Embeddings) == 0 {
-		t.Fatalf("%s parsed cleanly but contains zero embedding rules under document.signals.embeddings", path)
+	if len(fragment.Routing.Signals.Embeddings) == 0 {
+		t.Fatalf("%s parsed cleanly but contains zero embedding rules under routing.signals.embeddings", path)
 	}
-	return fragment.Document.Signals.Embeddings
+	return fragment.Routing.Signals.Embeddings
 }

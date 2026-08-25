@@ -31,8 +31,12 @@ func replayResourceReceipt(
 	if stored.Resource == nil || stored.Resource.ResourceType != resourceType || stored.Resource.ResourceID != resourceID {
 		return routingmanagement.RevisionReceipt{}, managementcommand.ErrConflict
 	}
+	resourceRevision, revisionErr := postgresRevision(stored.Resource.ResourceRevision, "stored resource revision")
+	if revisionErr != nil {
+		return routingmanagement.RevisionReceipt{}, managementcommand.ErrConflict
+	}
 	return routingmanagement.RevisionReceipt{
-		ResourceRevision: int64(stored.Resource.ResourceRevision), Replayed: true,
+		ResourceRevision: resourceRevision, Replayed: true,
 	}, nil
 }
 

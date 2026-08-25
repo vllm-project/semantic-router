@@ -20,9 +20,9 @@ func newPolicyBulkOperation(value policybulk.Operation) managementapi.Operation 
 			Failed:    managementapi.WholeQuantity(strconv.FormatUint(value.Failed, 10)),
 		},
 		Revisions: managementapi.RevisionState{
-			DesiredRevision:     int64(value.DesiredRevision),
-			PublicationRevision: int64(value.PublicationRevision),
-			AppliedRevision:     int64(value.AppliedRevision),
+			DesiredRevision:     safeRevisionAllowZero(value.DesiredRevision),
+			PublicationRevision: safeRevisionAllowZero(value.PublicationRevision),
+			AppliedRevision:     safeRevisionAllowZero(value.AppliedRevision),
 		},
 		TargetIDs: append([]string(nil), value.TargetIDs...), ItemErrors: itemErrors,
 		CreatedAt: value.CreatedAt, UpdatedAt: value.UpdatedAt, CompletedAt: cloneResponseTime(value.CompletedAt),

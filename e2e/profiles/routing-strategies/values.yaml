@@ -1,52 +1,60 @@
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: base-model
-    card:
-      reasoning:
-        type: chat_template_kwargs
-        efforts:
-        - high
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: base-model
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-  - name: premium-model
-    card:
+  providers:
+    defaults:
+      reasoning_families:
+        base-model:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+    models:
+    - name: base-model
+      provider_model_id: base-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+      reasoning_family: base-model
+    - name: premium-model
+      provider_model_id: base-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+      pricing:
+        input_cost_per_million_tokens: '10'
+        cache_read_cost_per_million_tokens: '10'
+        cache_write_cost_per_million_tokens: '10'
+    - name: economy-model
+      provider_model_id: base-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+      pricing:
+        input_cost_per_million_tokens: '1'
+        cache_read_cost_per_million_tokens: '1'
+        cache_write_cost_per_million_tokens: '1'
+  routing:
+    modelCards:
+    - name: base-model
+    - name: premium-model
       quality_score: 0.9
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: base-model
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-    pricing:
-      input_cost_per_million_tokens: '10'
-      cache_read_cost_per_million_tokens: '10'
-      cache_write_cost_per_million_tokens: '10'
-  - name: economy-model
-    card:
+    - name: economy-model
       quality_score: 0.1
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: base-model
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-    pricing:
-      input_cost_per_million_tokens: '1'
-      cache_read_cost_per_million_tokens: '1'
-      cache_write_cost_per_million_tokens: '1'
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals:
         keywords:
         - name: quality_policy
@@ -295,7 +303,7 @@ config:
               similarity_threshold: 0.75
   - name: metadata-policy
     description: Deterministic recipe-local metadata routing probe.
-    document:
+    routing:
       signals:
         metadata:
         - name: canary_cohort
@@ -313,7 +321,8 @@ config:
             name: canary_cohort
       strategy: priority
   entrypoints:
-  - name: vllm-sr/metadata-policy
+  - model_names:
+    - vllm-sr/metadata-policy
     recipe: metadata-policy
     assignments:
       metadata_recipe_decision:

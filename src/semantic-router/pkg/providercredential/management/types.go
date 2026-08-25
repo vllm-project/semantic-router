@@ -22,15 +22,35 @@ type EgressPolicy interface {
 }
 
 type Repository interface {
+	RepositoryLifecycle
+	CredentialReader
+	CredentialCommandReplay
+	CredentialMutationRepository
+	CredentialDeletionRepository
+}
+
+type RepositoryLifecycle interface {
 	ValidateManagementCommandHMACVersions(context.Context, *managementcommand.Codec) error
+}
+
+type CredentialReader interface {
 	GetProviderCredential(context.Context, accesscontrol.NamespaceID, string) (providercredential.Credential, error)
 	ListProviderCredentials(context.Context, accesscontrol.NamespaceID, accesspostgres.ProviderCredentialListRequest) (accesspostgres.ProviderCredentialListResult, error)
+}
+
+type CredentialCommandReplay interface {
 	ReplayProviderCredentialCommand(context.Context, managementcommand.Command) (accesspostgres.MutationResult[providercredential.Credential], bool, error)
+}
+
+type CredentialMutationRepository interface {
 	CreateProviderCredential(context.Context, providercredential.Credential, providercredential.Version, managementcommand.Command, accesspostgres.MutationMeta) (accesspostgres.MutationResult[providercredential.Credential], error)
 	RenameProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, string, accesspostgres.MutationMeta) (accesspostgres.MutationResult[providercredential.Credential], error)
 	RotateProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, accesspostgres.ProviderCredentialRotation, managementcommand.Command, accesspostgres.MutationMeta) (accesspostgres.MutationResult[providercredential.Credential], error)
 	ReactivateProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, providercredential.Version, accesspostgres.MutationMeta) (accesspostgres.MutationResult[providercredential.Credential], error)
 	DisableProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, accesspostgres.MutationMeta) (accesspostgres.MutationResult[providercredential.Credential], error)
+}
+
+type CredentialDeletionRepository interface {
 	DeleteProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, accesspostgres.MutationMeta) (accesspostgres.MutationResult[providercredential.Credential], error)
 }
 

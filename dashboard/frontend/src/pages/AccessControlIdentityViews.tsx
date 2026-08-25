@@ -60,15 +60,17 @@ export function UsersView(props: Props) {
         >
           <ProductIcon name="user" /> Users <span>{props.entityTotals.users}</span>
         </button>
-        <button
-          type="button"
-          className={props.identityTab === 'invitations' ? styles.tabActive : ''}
-          onClick={() => props.onIdentityTabChange('invitations')}
-        >
-          <ProductIcon name="inbox" /> Invitations <span>{activeInvites}</span>
-        </button>
+        {props.canManageDashboardMembers ? (
+          <button
+            type="button"
+            className={props.identityTab === 'invitations' ? styles.tabActive : ''}
+            onClick={() => props.onIdentityTabChange('invitations')}
+          >
+            <ProductIcon name="inbox" /> Invitations <span>{activeInvites}</span>
+          </button>
+        ) : null}
       </div>
-      {props.identityTab === 'invitations' ? (
+      {props.canManageDashboardMembers && props.identityTab === 'invitations' ? (
         <InvitationsView {...props} />
       ) : (
         <>

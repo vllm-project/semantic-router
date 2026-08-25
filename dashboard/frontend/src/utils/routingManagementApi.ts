@@ -6,301 +6,34 @@ import {
   managementOperationRequest,
 } from './managementApiContract'
 import { MANAGEMENT_API_HEADERS } from '../generated/managementApiContract'
+import type {
+  ManagementOperation,
+  RoutingAssignmentModel,
+  RoutingAssignmentSet,
+  RoutingBulkImportRequest,
+  RoutingClaimValue,
+  RoutingDecision,
+  RoutingEntrypoint,
+  RoutingEntrypointRule,
+  RoutingEntrypointWrite,
+  RoutingFallbackPolicy,
+  RoutingListParams,
+  RoutingModel,
+  RoutingModelCardView,
+  RoutingModelControl,
+  RoutingModelPatch,
+  RoutingModelWrite,
+  RoutingMutationReceipt,
+  RoutingPage,
+  RoutingProbeResponse,
+  RoutingRecipe,
+  RoutingRecipeProvenance,
+  RoutingRecipeWrite,
+  RoutingResolveResponse,
+  RoutingStatus,
+} from './routingManagementTypes'
 
-export type RoutingStatus = 'draft' | 'active' | 'disabled'
-export type DispatchCardinality = 'single' | 'multi'
-export type FallbackTrigger = 'unavailable' | 'overloaded' | 'timeout'
-
-export interface RoutingDecision {
-  id: string
-  name: string
-  dispatchCardinality: DispatchCardinality
-}
-
-export interface RoutingAssignmentReasoning {
-  enabled: boolean
-  effort?: string
-  description?: string
-}
-
-export interface RoutingAssignmentModel {
-  modelId: string
-  modelRevision: number
-  priority: number
-  weight: string
-  loraName?: string
-  reasoning?: RoutingAssignmentReasoning
-}
-
-export interface RoutingFallbackPolicy {
-  strategy: 'priority'
-  on: FallbackTrigger[]
-}
-
-export interface RoutingAssignmentSet {
-  models: RoutingAssignmentModel[]
-  fallback?: RoutingFallbackPolicy
-}
-
-export interface RoutingAssignmentModelWrite {
-  modelId: string
-  priority?: number
-  weight?: string
-  loraName?: string
-  reasoning?: RoutingAssignmentReasoning
-}
-
-export interface RoutingAssignmentSetWrite {
-  models: RoutingAssignmentModelWrite[]
-  fallback?: RoutingFallbackPolicy
-}
-
-export interface RoutingMatcher {
-  claim?: { name: string; value: RoutingClaimValue }
-  exactPath?: string
-  pathPrefix?: string
-}
-
-export type RoutingClaimValue =
-  | { kind: 'string'; string: string }
-  | { kind: 'boolean'; boolean: boolean }
-  | { kind: 'integer'; integer: number }
-
-export interface RoutingModel {
-  id: string
-  name: string
-  status: RoutingStatus
-  revision: number
-  modelRevision: number
-  catalogRevision: string
-  aliases: string[]
-  capabilities: string[]
-  reasoning?: { type?: string; efforts?: string[] }
-  loras: string[]
-  execution: {
-    maxRetries: number
-    requestTimeout: string
-    streamTimeout: string
-  }
-  pricing: Record<string, string | null>
-  backends: Array<{
-    providerId: string
-    providerModelId: string
-    credentialConfigured: boolean
-    weight: string
-  }>
-  createdAt: string
-  updatedAt: string
-}
-
-export interface RoutingModelCard {
-  aliases: string[]
-  paramSize?: string
-  contextWindowSize?: number
-  description?: string
-  capabilities: string[]
-  reasoning?: { type?: string; efforts?: string[] }
-  loras: string[]
-  qualityScore?: number
-  modality?: string
-  tags: string[]
-}
-
-/** Semantic-only Model projection used by Recipe and Entrypoint authoring. */
-export interface RoutingModelCardView {
-  id: string
-  name: string
-  card: RoutingModelCard
-}
-
-export interface RoutingExecution {
-  maxRetries: number
-  requestTimeout: string
-  streamTimeout: string
-}
-
-export interface RoutingPricing {
-  inputCostPerMillionTokens: string | null
-  outputCostPerMillionTokens: string | null
-  cacheReadCostPerMillionTokens: string | null
-  cacheWriteCostPerMillionTokens: string | null
-}
-
-export interface RoutingModelBackendWrite {
-  providerId: string
-  interfaceId?: string
-  providerModelId: string
-  credentialId?: string
-  baseUrl?: string
-  connectionFields?: Record<string, unknown>
-  weight?: string
-}
-
-export interface RoutingModelWrite {
-  id?: string
-  name: string
-  aliases?: string[]
-  capabilities?: string[]
-  reasoning?: { type?: string; efforts?: string[] }
-  loras?: string[]
-  execution: RoutingExecution
-  pricing: RoutingPricing
-  backends: RoutingModelBackendWrite[]
-}
-
-export interface RoutingModelPatch {
-  name?: string
-  aliases?: string[]
-  capabilities?: string[]
-  reasoning?: { type?: string; efforts?: string[] }
-  loras?: string[]
-  execution?: RoutingExecution
-  pricing?: RoutingPricing
-  backends?: RoutingModelBackendWrite[]
-}
-
-export interface RoutingBulkModelSelection {
-  catalogItemId: string
-  id?: string
-  name: string
-  aliases?: string[]
-  capabilities?: string[]
-  reasoning?: { type?: string; efforts?: string[] }
-  loras?: string[]
-  execution: RoutingExecution
-  pricing: RoutingPricing
-}
-
-export interface RoutingBulkImportRequest {
-  providerId: string
-  interfaceId?: string
-  catalogRevision: string
-  discoveryClaim: string
-  credentialId?: string
-  baseUrl?: string
-  connectionFields?: Record<string, unknown>
-  weight?: string
-  selections: RoutingBulkModelSelection[]
-}
-
-export interface RoutingRecipe {
-  id: string
-  name: string
-  description?: string
-  status: RoutingStatus
-  revision: number
-  recipeRevision: number
-  origin: 'custom' | 'distribution'
-  immutable: boolean
-  provenance?: RoutingRecipeProvenance
-  decisions: RoutingDecision[]
-  document: Record<string, unknown>
-  createdAt: string
-  updatedAt: string
-}
-
-export interface RoutingRecipeProvenance {
-  distributionId: string
-  distributionVersion: string
-  assetDigest: string
-  sourceRecipeId: string
-  sourceRevision: number
-  recipeDigest: string
-  installedAt: string
-}
-
-export interface RoutingEntrypointRule {
-  id: string
-  name: string
-  matchers?: RoutingMatcher[]
-  recipeId: string
-  recipeRevision: number
-  assignments: Record<string, RoutingAssignmentSet>
-}
-
-export interface RoutingEntrypoint {
-  id: string
-  name: string
-  status: RoutingStatus
-  revision: number
-  entrypointRevision: number
-  aliases: string[]
-  ruleCount: number
-  assignedModelCount: number
-  rules?: RoutingEntrypointRule[]
-  createdAt: string
-  updatedAt: string
-}
-
-export interface RoutingEntrypointWrite {
-  id?: string
-  name: string
-  aliases: string[]
-  rules: Array<{
-    id?: string
-    name: string
-    matchers?: RoutingMatcher[]
-    recipeId: string
-    assignments: Record<string, RoutingAssignmentSetWrite>
-  }>
-}
-
-export interface RoutingRecipeWrite {
-  id?: string
-  name: string
-  description?: string
-  document: Record<string, unknown>
-}
-
-export interface RoutingMutationReceipt {
-  resource?: { kind: string; id: string; revision: number }
-  operation?: { operationId: string; desiredRevision?: number }
-  idempotency?: { replayed: boolean; originalRequestId?: string }
-}
-
-export interface RoutingResolveResponse {
-  outcome: 'matched' | 'claimed_no_match' | 'unclaimed'
-  entrypoint?: {
-    id: string
-    revision: number
-    name: string
-    aliases: string[]
-  }
-  rule?: RoutingEntrypointRule
-  recipe?: {
-    id: string
-    revision: number
-    name: string
-    decisions: RoutingDecision[]
-    document: Record<string, unknown>
-  }
-}
-
-export interface RoutingProbeResponse {
-  reachable: boolean
-  latencyMilliseconds: number
-  checkedAt: string
-}
-
-export interface ManagementOperation {
-  operationId: string
-  kind: string
-  state: 'pending' | 'running' | 'succeeded' | 'partially_succeeded' | 'failed' | 'cancelled'
-  itemErrors?: Array<{ itemId?: string; code: string; reason: string }>
-}
-
-export interface RoutingPage<T> {
-  data: T[]
-  page: { nextCursor?: string; hasMore: boolean; pageSize: number }
-}
-
-export interface RoutingListParams {
-  search?: string
-  cursor?: string
-  pageSize?: number
-  status?: RoutingStatus
-  signal?: AbortSignal
-}
+export type * from './routingManagementTypes'
 
 const isFiniteInteger = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value)
@@ -364,6 +97,30 @@ function assertAssignmentSet(value: unknown): RoutingAssignmentSet {
   return { models, ...(fallback ? { fallback } : {}) }
 }
 
+function assertModelControl(value: unknown): RoutingModelControl {
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, ['retry', 'timeout']) ||
+    !isRecord(value.retry) ||
+    !hasOnlyKeys(value.retry, ['count', 'on']) ||
+    !isFiniteInteger(value.retry.count) ||
+    value.retry.count < 0 ||
+    value.retry.count > 5 ||
+    !Array.isArray(value.retry.on) ||
+    !value.retry.on.every(
+      (trigger) => trigger === 'unavailable' || trigger === 'overloaded' || trigger === 'timeout',
+    ) ||
+    new Set(value.retry.on).size !== value.retry.on.length ||
+    !isRecord(value.timeout) ||
+    !hasOnlyKeys(value.timeout, ['request', 'stream']) ||
+    !isNonEmptyString(value.timeout.request) ||
+    !isNonEmptyString(value.timeout.stream)
+  ) {
+    throw new Error('Router returned invalid Model control.')
+  }
+  return value as unknown as RoutingModelControl
+}
+
 function assertModel(value: unknown): RoutingModel {
   if (
     !isRecord(value) ||
@@ -375,11 +132,12 @@ function assertModel(value: unknown): RoutingModel {
     !isStringArray(value.aliases) ||
     !Array.isArray(value.capabilities) ||
     !Array.isArray(value.loras) ||
+    !isRecord(value.control) ||
     !Array.isArray(value.backends)
   ) {
     throw new Error('Router returned an invalid Model.')
   }
-  return value as unknown as RoutingModel
+  return { ...(value as unknown as RoutingModel), control: assertModelControl(value.control) }
 }
 
 function assertModelCard(value: unknown): RoutingModelCardView {

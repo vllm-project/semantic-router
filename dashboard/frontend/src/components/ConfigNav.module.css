@@ -100,3 +100,41 @@
 .navItem.active .navItemDesc {
   color: var(--color-text-secondary);
 }
+
+@media (max-width: 960px) {
+  .nav {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .navHeader {
+    display: none;
+  }
+
+  .navList {
+    width: max-content;
+    min-width: 100%;
+    display: flex;
+    gap: 0.25rem;
+  }
+
+  .navItem {
+    width: auto;
+    min-width: 10rem;
+    margin: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .navItem {
+    min-width: 8.5rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .navItemDesc {
+    display: none;
+  }
+}

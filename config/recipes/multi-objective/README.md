@@ -20,7 +20,7 @@ physical model server.
 | `vllm-sr/mom-v1-ultra` | Use direct frontier or bounded orchestration for accuracy. | Higher latency and compute use. |
 | `vllm-sr/mom-v1-vault` | Keep sensitive and suspicious traffic local. | Reduced provider diversity and no cloud escalation. |
 
-The reference configuration shares eight logical provider models across these
+The reference configuration shares nine logical provider models across these
 five policies. Operators can replace that pool while keeping the public
 entrypoint names.
 
@@ -45,6 +45,10 @@ provider pool, live health, latency, load, and cost metadata.
 | Cost | Uses economical local replicas and enables bounded reasoning only when the request calls for it. |
 | Accuracy | Keeps ordinary work direct; explicit verification, expert comparison, multi-path reasoning, or workflows can use confidence, fusion, ReMoM, or Router Flow. |
 | Privacy | Contains jailbreak and sensitive-data signals locally and defaults to a local model. |
+
+Every objective includes an `omni` decision. Image-bearing requests use the
+shared local visual-language model; the privacy objective still gives attack
+containment higher priority.
 
 Workflow owns tool interruption and resume. Fusion and confidence routes may
 return a tool call only from the final selected model. Multi-response routes do

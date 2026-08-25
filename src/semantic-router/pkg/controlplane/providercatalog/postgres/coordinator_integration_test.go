@@ -76,6 +76,19 @@ func TestCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroups(t *testing
 		t.Fatalf("stale acknowledgement = %v", err)
 	}
 
+	active := assertStableRolloutActivation(t, ctx, coordinator, first, staged)
+	assertSecondCatalogStage(t, ctx, db, coordinator, first, second, active)
+}
+
+func assertStableRolloutActivation(
+	t *testing.T,
+	ctx context.Context,
+	coordinator *Coordinator,
+	first *providercatalog.Snapshot,
+	staged State,
+) State {
+	t.Helper()
+	var testCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroupsErr error
 	_, testCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroupsErr = coordinator.Activate(ctx, ActivateRequest{Revision: first.Revision(), ExpectedGeneration: staged.Generation})
 	blocked := activationBlockers(t, testCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroupsErr)
 	if !reflect.DeepEqual(blocked.Missing, []providercatalog.RolloutGroup{dataRolloutGroup()}) {
@@ -133,6 +146,19 @@ func TestCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroups(t *testing
 		t.Fatalf("ActiveSnapshot() = %v, %v", loaded, testCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroupsErr)
 	}
 
+	return active
+}
+
+func assertSecondCatalogStage(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	coordinator *Coordinator,
+	first *providercatalog.Snapshot,
+	second *providercatalog.Snapshot,
+	active State,
+) {
+	t.Helper()
 	stagedSecond, testCoordinatorStagesAcknowledgesAndActivatesStableRolloutGroupsErr := coordinator.Stage(ctx, StageRequest{
 		Snapshot: second, ExpectedDesiredRevision: first.Revision(), ExpectedGeneration: active.Generation,
 		RequiredRolloutGroups: []providercatalog.RolloutGroup{dataRolloutGroup()},

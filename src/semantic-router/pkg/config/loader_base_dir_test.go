@@ -14,7 +14,7 @@ func TestParseUsesAbsoluteConfigBaseDirOverride(t *testing.T) {
 		t.Fatal(err)
 	}
 	configPath := filepath.Join(stateDir, "runtime-config.yaml")
-	if err := os.WriteFile(configPath, []byte(entrypointRulesYAML), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(strictV03AuthoringYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(ConfigBaseDirEnv, root)
@@ -30,7 +30,7 @@ func TestParseUsesAbsoluteConfigBaseDirOverride(t *testing.T) {
 
 func TestParseRejectsRelativeConfigBaseDirOverride(t *testing.T) {
 	configPath := filepath.Join(t.TempDir(), "config.yaml")
-	if err := os.WriteFile(configPath, []byte(entrypointRulesYAML), 0o600); err != nil {
+	if err := os.WriteFile(configPath, []byte(strictV03AuthoringYAML), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv(ConfigBaseDirEnv, "relative-assets")
@@ -44,7 +44,7 @@ func TestParseRejectsRelativeConfigBaseDirOverride(t *testing.T) {
 func TestParseYAMLBytesDoesNotConsultConfigBaseDirOverride(t *testing.T) {
 	t.Setenv(ConfigBaseDirEnv, "/path/that/does/not/exist")
 
-	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML))
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strictV03AuthoringYAML))
 	if err != nil {
 		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes() error = %v", err)
 	}

@@ -87,6 +87,10 @@ func (c *Coordinator) Stage(ctx context.Context, request StageRequest) (State, e
 		return State{}, fmt.Errorf("provider catalog generation is exhausted")
 	}
 	nextGeneration := current.Generation + 1
+	// #nosec G115 -- current.Generation is checked below MaxInt64 before incrementing.
+	nextGenerationValue := int64(nextGeneration)
+	// #nosec G115 -- Stage rejects ExpectedGeneration values above MaxInt64.
+	expectedGenerationValue := int64(request.ExpectedGeneration)
 	var updated State
 	var desired, active sql.NullString
 	stageErr = tx.QueryRowContext(ctx, `UPDATE provider_catalog_state
@@ -94,7 +98,7 @@ SET desired_revision = $1, generation = $2, updated_at = clock_timestamp()
 WHERE singleton = TRUE AND generation = $3
   AND desired_revision IS NOT DISTINCT FROM NULLIF($4, '')
 RETURNING desired_revision, active_revision, generation, updated_at`,
-		compiled.revision, int64(nextGeneration), int64(request.ExpectedGeneration), request.ExpectedDesiredRevision,
+		compiled.revision, nextGenerationValue, expectedGenerationValue, request.ExpectedDesiredRevision,
 	).Scan(&desired, &active, &updated.Generation, &updated.UpdatedAt)
 	if errors.Is(stageErr, sql.ErrNoRows) {
 		return State{}, providercatalog.ErrPublicationConflict
@@ -106,7 +110,7 @@ RETURNING desired_revision, active_revision, generation, updated_at`,
 	for _, group := range required {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO provider_catalog_required_rollout_groups
   (generation, revision, plane, rollout_group) VALUES ($1, $2, $3, $4)`,
-			int64(nextGeneration), compiled.revision, group.Plane, group.ID); err != nil {
+			nextGenerationValue, compiled.revision, group.Plane, group.ID); err != nil {
 			return State{}, fmt.Errorf("persist required Provider Catalog rollout group %s: %w", group.Key(), err)
 		}
 	}
@@ -219,11 +223,13 @@ func (c *Coordinator) Activate(ctx context.Context, request ActivateRequest) (St
 		return State{}, &providercatalog.ActivationBlockedError{Revision: request.Revision, Blockers: blockers}
 	}
 	var desired, active sql.NullString
+	// #nosec G115 -- Activate rejects ExpectedGeneration values above MaxInt64.
+	expectedGenerationValue := int64(request.ExpectedGeneration)
 	activateErr = tx.QueryRowContext(ctx, `UPDATE provider_catalog_state
 SET active_revision = $1, updated_at = clock_timestamp()
 WHERE singleton = TRUE AND desired_revision = $1 AND generation = $2
 RETURNING desired_revision, active_revision, generation, updated_at`,
-		request.Revision, int64(request.ExpectedGeneration),
+		request.Revision, expectedGenerationValue,
 	).Scan(&desired, &active, &state.Generation, &state.UpdatedAt)
 	if errors.Is(activateErr, sql.ErrNoRows) {
 		return State{}, providercatalog.ErrPublicationConflict
@@ -303,6 +309,7 @@ FROM provider_catalog_state WHERE singleton = TRUE`
 		(active.Valid && !validRevision(active.String)) {
 		return State{}, fmt.Errorf("%w: provider catalog state is invalid", ErrCorruptState)
 	}
+	// #nosec G115 -- corrupt non-positive database generations are rejected above.
 	state.DesiredRevision, state.ActiveRevision, state.Generation = desired.String, active.String, uint64(generation)
 	return state, nil
 }
@@ -316,9 +323,14 @@ func readRequiredRolloutGroups(
 	if revision == "" {
 		return nil, nil
 	}
+	if generation == 0 || generation > math.MaxInt64 {
+		return nil, fmt.Errorf("%w: required rollout-group generation is invalid", ErrCorruptState)
+	}
+	// #nosec G115 -- the PostgreSQL BIGINT range is checked above.
+	generationValue := int64(generation)
 	rows, err := queryRows(ctx, query, `SELECT plane, rollout_group
-FROM provider_catalog_required_rollout_groups
-WHERE generation = $1 AND revision = $2 ORDER BY plane, rollout_group`, int64(generation), revision)
+	FROM provider_catalog_required_rollout_groups
+	WHERE generation = $1 AND revision = $2 ORDER BY plane, rollout_group`, generationValue, revision)
 	if err != nil {
 		return nil, fmt.Errorf("read required Provider Catalog rollout groups: %w", err)
 	}

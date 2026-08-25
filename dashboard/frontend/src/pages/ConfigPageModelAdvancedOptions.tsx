@@ -2,8 +2,9 @@ import type { ProviderConnectionField, ProviderInterface } from '../utils/provid
 import ConfigPageProviderConnectionField from './ConfigPageProviderConnectionField'
 import {
   initialProviderFieldValue,
+  MODEL_RETRY_TRIGGERS,
   type EditableConnectionValue,
-  type ExecutionFormValues,
+  type ControlFormValues,
   type PricingFormValues,
 } from './configPageModelOnboardingSupport'
 import styles from './ConfigPageAddModelsDialog.module.css'
@@ -17,8 +18,8 @@ interface Props {
   onConnectionValue: (name: string, value: EditableConnectionValue) => void
   namePrefix: string
   onNamePrefix: (value: string) => void
-  execution: ExecutionFormValues
-  onExecution: (field: keyof ExecutionFormValues, value: string) => void
+  control: ControlFormValues
+  onControl: (value: ControlFormValues) => void
   pricing: PricingFormValues
   onPricing: (field: keyof PricingFormValues, value: string) => void
 }
@@ -32,8 +33,8 @@ export default function ConfigPageModelAdvancedOptions({
   onConnectionValue,
   namePrefix,
   onNamePrefix,
-  execution,
-  onExecution,
+  control,
+  onControl,
   pricing,
   onPricing,
 }: Props) {
@@ -41,7 +42,7 @@ export default function ConfigPageModelAdvancedOptions({
     <details className={styles.advanced}>
       <summary>
         <span>Advanced</span>
-        <small>Connection, execution, and pricing</small>
+        <small>Connection, control, and pricing</small>
       </summary>
       <div className={styles.advancedContent}>
         {interfaces.length > 1 || connectionFields.length > 0 ? (
@@ -97,7 +98,7 @@ export default function ConfigPageModelAdvancedOptions({
         </section>
         <section className={styles.advancedSection}>
           <div className={styles.advancedHeading}>
-            <strong>Execution</strong>
+            <strong>Control</strong>
             <span>Override only when this model needs it.</span>
           </div>
           <div className={styles.advancedGrid}>
@@ -110,18 +111,59 @@ export default function ConfigPageModelAdvancedOptions({
                 min="0"
                 max="5"
                 step="1"
-                value={execution.maxRetries}
-                onChange={(event) => onExecution('maxRetries', event.target.value)}
+                value={control.maxRetries}
+                onChange={(event) => {
+                  const maxRetries = event.target.value
+                  onControl({
+                    ...control,
+                    maxRetries,
+                    ...(!maxRetries || Number(maxRetries) <= 0 ? { retryOn: [] } : {}),
+                  })
+                }}
                 placeholder="Default"
               />
             </label>
+            <fieldset className={`${styles.field} ${styles.retryField}`}>
+              <legend>
+                Retry on <small>Optional</small>
+              </legend>
+              <div className={styles.retryChoices}>
+                {MODEL_RETRY_TRIGGERS.map((trigger) => {
+                  const selected = control.retryOn.includes(trigger)
+                  return (
+                    <label
+                      key={trigger}
+                      className={`${styles.retryChoice} ${selected ? styles.retryChoiceActive : ''}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        disabled={!control.maxRetries || Number(control.maxRetries) <= 0}
+                        onChange={(event) =>
+                          onControl({
+                            ...control,
+                            retryOn: event.target.checked
+                              ? [...control.retryOn, trigger]
+                              : control.retryOn.filter((value) => value !== trigger),
+                          })
+                        }
+                      />
+                      <span>{trigger}</span>
+                    </label>
+                  )
+                })}
+              </div>
+              {!control.maxRetries || Number(control.maxRetries) <= 0 ? (
+                <small className={styles.retryHint}>Set retries to choose conditions.</small>
+              ) : null}
+            </fieldset>
             <label className={styles.field}>
               <span>
                 Request timeout <small>Optional</small>
               </span>
               <input
-                value={execution.requestTimeout}
-                onChange={(event) => onExecution('requestTimeout', event.target.value)}
+                value={control.requestTimeout}
+                onChange={(event) => onControl({ ...control, requestTimeout: event.target.value })}
                 placeholder="5m"
               />
             </label>
@@ -130,8 +172,8 @@ export default function ConfigPageModelAdvancedOptions({
                 Stream timeout <small>Optional</small>
               </span>
               <input
-                value={execution.streamTimeout}
-                onChange={(event) => onExecution('streamTimeout', event.target.value)}
+                value={control.streamTimeout}
+                onChange={(event) => onControl({ ...control, streamTimeout: event.target.value })}
                 placeholder="5m"
               />
             </label>

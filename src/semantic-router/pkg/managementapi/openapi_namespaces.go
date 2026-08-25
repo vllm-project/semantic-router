@@ -55,12 +55,12 @@ func namespaceParameters(contract OperationContract) []OpenAPIParameter {
 func namespaceSchemas() map[string]JSONSchema {
 	text, uuid := JSONSchema{Type: "string"}, JSONSchema{Type: "string", Format: "uuid"}
 	nullableUUID := JSONSchema{OneOf: []JSONSchema{uuid, {Type: "string", Enum: []string{""}}}}
-	timestamp, integer := JSONSchema{Type: "string", Format: "date-time"}, JSONSchema{Type: "integer", Format: "int64"}
+	dateTimeSchema, integer := JSONSchema{Type: "string", Format: "date-time"}, JSONSchema{Type: "integer", Format: "int64"}
 	boolean := JSONSchema{Type: "boolean"}
 	namespace := objectSchema([]string{"namespaceId", "name", "quotaPartitionId", "billingCurrency", "status", "revision", "runtimeEpoch", "createdAt", "updatedAt"}, map[string]JSONSchema{
 		"namespaceId": uuid, "name": text, "quotaPartitionId": text,
 		"billingCurrency": {Type: "string", Pattern: `^[A-Z]{3}$`}, "status": {Type: "string", Enum: []string{"active", "disabled"}},
-		"revision": integer, "runtimeEpoch": integer, "createdAt": timestamp, "updatedAt": timestamp,
+		"revision": integer, "runtimeEpoch": integer, "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema,
 	})
 	human := objectSchema([]string{"minimumAal", "acceptedAmr", "maxAuthenticationAgeSeconds"}, map[string]JSONSchema{
 		"minimumAal": {Type: "string", Enum: []string{"aal1", "aal2", "aal3"}}, "acceptedAmr": arraySchema(text),
@@ -78,17 +78,17 @@ func namespaceSchemas() map[string]JSONSchema {
 		"namespaceId": uuid, "maxKeysPerUser": boundedIntegerSchema(0, 1000), "maxDelegatedSessions": boundedIntegerSchema(0, 10000),
 		"delegatedSessionTtlSeconds": boundedIntegerSchema(60, 86400), "allowTeamKeyDelegation": boolean, "automaticFirstKey": boolean,
 		"teamAdminCapabilities": arraySchema(JSONSchema{Type: "string", Enum: []string{"membership.manage", "key.manage"}}),
-		"defaultAccessPolicyId": nullableUUID, "defaultRateLimitPolicyId": nullableUUID, "revision": integer, "seedVersion": integer, "updatedAt": timestamp,
+		"defaultAccessPolicyId": nullableUUID, "defaultRateLimitPolicyId": nullableUUID, "revision": integer, "seedVersion": integer, "updatedAt": dateTimeSchema,
 	})
 	claimDefinition := objectSchema([]string{"kind"}, map[string]JSONSchema{
 		"kind": {Type: "string", Enum: []string{"string", "boolean", "integer"}}, "minimum": integer, "maximum": integer, "maxLength": boundedIntegerSchema(1, 4096),
 	})
 	claimMap := JSONSchema{Type: "object", PatternProperties: map[string]JSONSchema{`^[A-Za-z][A-Za-z0-9_.-]{0,63}$`: claimDefinition}, AdditionalProperties: boolPointer(false)}
 	security := objectSchema([]string{"namespaceId", "actionRequirements", "seedVersion", "revision", "updatedAt"}, map[string]JSONSchema{
-		"namespaceId": uuid, "actionRequirements": actionRequirements, "seedVersion": integer, "revision": integer, "updatedAt": timestamp,
+		"namespaceId": uuid, "actionRequirements": actionRequirements, "seedVersion": integer, "revision": integer, "updatedAt": dateTimeSchema,
 	})
 	claims := objectSchema([]string{"namespaceId", "definitions", "revision", "updatedAt"}, map[string]JSONSchema{
-		"namespaceId": uuid, "definitions": claimMap, "revision": integer, "updatedAt": timestamp,
+		"namespaceId": uuid, "definitions": claimMap, "revision": integer, "updatedAt": dateTimeSchema,
 	})
 	return map[string]JSONSchema{
 		"Namespace":                                     namespace,

@@ -3,6 +3,7 @@ package postgres
 import (
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/netip"
 	"os"
@@ -86,6 +87,37 @@ VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rate
 		IdempotencyKey:    "atomic-api-key-create-0001", Actor: actor,
 	}
 
+	result := createAPIKeyAcrossReplicas(t, ctx, services, request)
+	var issued apikeymanagement.IssuedSecret
+	if err := json.Unmarshal(result.CanonicalJSON, &issued); err != nil {
+		t.Fatal(err)
+	}
+	if len(issued.AccessPolicyBindings) != 1 || issued.AccessPolicyBindings[0].PolicyID != accessPolicy ||
+		issued.RateLimitOverride == nil || issued.RateLimitOverride.PolicyID != ratePolicy ||
+		issued.RateLimitOverride.Created {
+		t.Fatalf("one-time policy receipts = %#v / %#v", issued.AccessPolicyBindings, issued.RateLimitOverride)
+	}
+
+	keyID := string(result.Key.ID)
+	accessBindingID := issued.AccessPolicyBindings[0].BindingID
+	rateBindingID := issued.RateLimitOverride.BindingID
+	assertCreatedAPIKeyRows(t, ctx, db, namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy)
+	searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr := services[0].List(ctx, apikeymanagement.ListKeysRequest{
+		NamespaceID: namespaceID, Search: "ATOMIC DEV", PageSize: 1,
+		Scope: accesscontrol.ResultScope{NamespaceID: namespaceID, All: true},
+	})
+	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil || len(searched.Items) != 1 || searched.Items[0].ID != result.Key.ID || searched.HasMore {
+		t.Fatalf("searched API-key page = %#v, %v", searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr)
+	}
+}
+
+func createAPIKeyAcrossReplicas(
+	t *testing.T,
+	ctx context.Context,
+	services []*apikeymanagement.Service,
+	request apikeymanagement.CreateRequest,
+) apikeymanagement.SecretMutationResult {
+	t.Helper()
 	const replicas = 8
 	results := make([]apikeymanagement.SecretMutationResult, replicas)
 	errors := make([]error, replicas)
@@ -105,26 +137,26 @@ VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rate
 		if err != nil {
 			t.Fatalf("replica %d create: %v", index, err)
 		}
-		if results[index].Secret != results[0].Secret || !bytes.Equal(results[index].CanonicalJSON, results[0].CanonicalJSON) ||
+		if results[index].Secret != results[0].Secret ||
+			!bytes.Equal(results[index].CanonicalJSON, results[0].CanonicalJSON) ||
 			results[index].Key.ID != results[0].Key.ID {
 			t.Fatalf("replica %d did not receive exact replay", index)
 		}
 	}
-	var issued apikeymanagement.IssuedSecret
-	if err := json.Unmarshal(results[0].CanonicalJSON, &issued); err != nil {
-		t.Fatal(err)
-	}
-	if len(issued.AccessPolicyBindings) != 1 || issued.AccessPolicyBindings[0].PolicyID != accessPolicy ||
-		issued.RateLimitOverride == nil || issued.RateLimitOverride.PolicyID != ratePolicy ||
-		issued.RateLimitOverride.Created {
-		t.Fatalf("one-time policy receipts = %#v / %#v", issued.AccessPolicyBindings, issued.RateLimitOverride)
-	}
+	return results[0]
+}
 
-	keyID := string(results[0].Key.ID)
-	accessBindingID := issued.AccessPolicyBindings[0].BindingID
-	rateBindingID := issued.RateLimitOverride.BindingID
+func assertCreatedAPIKeyRows(
+	t *testing.T,
+	ctx context.Context,
+	db interface {
+		QueryRowContext(context.Context, string, ...any) *sql.Row
+	},
+	namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy string,
+) {
+	t.Helper()
 	var keys, credentials, accessBindings, rateBindings, desiredRevisions, outboxRows int
-	if err := db.QueryRowContext(ctx, `SELECT
+	err := db.QueryRowContext(ctx, `SELECT
   (SELECT count(*) FROM access_api_keys WHERE namespace_id=$1 AND name='Atomic developer key'),
   (SELECT count(*) FROM access_api_key_credentials WHERE namespace_id=$1 AND api_key_id=$2 AND status='active'),
   (SELECT count(*) FROM access_policy_bindings WHERE namespace_id=$1 AND id=$3 AND subject_id=$2 AND policy_id=$4),
@@ -133,21 +165,15 @@ VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rate
 	  (SELECT count(DISTINCT desired_revision) FROM policy_outbox
 	     WHERE namespace_id=$1 AND aggregate_id IN ($2::text,$3::text,$5::text)),
 	  (SELECT count(*) FROM policy_outbox WHERE namespace_id=$1 AND aggregate_id IN ($2::text,$3::text,$5::text))`,
-		namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy).Scan(
-		&keys, &credentials, &accessBindings, &rateBindings, &desiredRevisions, &outboxRows); err != nil {
+		namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy,
+	).Scan(&keys, &credentials, &accessBindings, &rateBindings, &desiredRevisions, &outboxRows)
+	if err != nil {
 		t.Fatal(err)
 	}
 	if keys != 1 || credentials != 1 || accessBindings != 1 || rateBindings != 1 ||
 		desiredRevisions != 1 || outboxRows != 3 {
 		t.Fatalf("atomic rows key/credential/access/rate/revision/outbox = %d/%d/%d/%d/%d/%d",
 			keys, credentials, accessBindings, rateBindings, desiredRevisions, outboxRows)
-	}
-	searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr := services[0].List(ctx, apikeymanagement.ListKeysRequest{
-		NamespaceID: namespaceID, Search: "ATOMIC DEV", PageSize: 1,
-		Scope: accesscontrol.ResultScope{NamespaceID: namespaceID, All: true},
-	})
-	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil || len(searched.Items) != 1 || searched.Items[0].ID != results[0].Key.ID || searched.HasMore {
-		t.Fatalf("searched API-key page = %#v, %v", searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr)
 	}
 }
 

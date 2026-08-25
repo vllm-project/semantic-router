@@ -47,7 +47,7 @@ type Worker struct {
 
 func NewWorker(options WorkerOptions) (*Worker, error) {
 	if options.Processor == nil {
-		return nil, errors.New("access publication processor is required")
+		return nil, errors.New("routing publication processor is required")
 	}
 	if options.IdleDelay == 0 {
 		options.IdleDelay = defaultWorkerIdleDelay
@@ -61,7 +61,7 @@ func NewWorker(options WorkerOptions) (*Worker, error) {
 	if options.IdleDelay < time.Millisecond || options.IdleDelay > time.Minute ||
 		options.MinBackoff < time.Millisecond || options.MinBackoff > time.Minute ||
 		options.MaxBackoff < options.MinBackoff || options.MaxBackoff > time.Minute {
-		return nil, errors.New("access publication worker delays are invalid")
+		return nil, errors.New("routing publication worker delays are invalid")
 	}
 	return &Worker{
 		processor: options.Processor, idleDelay: options.IdleDelay,
@@ -84,22 +84,22 @@ func (worker *Worker) Started() <-chan struct{} {
 
 func (worker *Worker) Ready(context.Context) error {
 	if worker == nil || worker.processor == nil {
-		return errors.New("access publication worker is unavailable")
+		return errors.New("routing publication worker is unavailable")
 	}
 	worker.mu.RLock()
 	defer worker.mu.RUnlock()
 	if !worker.started {
-		return errors.New("access publication worker has not started")
+		return errors.New("routing publication worker has not started")
 	}
 	if worker.lastErr != nil {
-		return fmt.Errorf("access publication worker is unhealthy: %w", worker.lastErr)
+		return fmt.Errorf("routing publication worker is unhealthy: %w", worker.lastErr)
 	}
 	return nil
 }
 
 func (worker *Worker) Run(ctx context.Context) error {
 	if worker == nil || worker.processor == nil {
-		return errors.New("access publication worker is unavailable")
+		return errors.New("routing publication worker is unavailable")
 	}
 	worker.setStarted()
 	backoff := worker.minBackoff

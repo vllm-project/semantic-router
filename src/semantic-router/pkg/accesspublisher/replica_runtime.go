@@ -110,7 +110,7 @@ type PublicationHeads struct {
 
 // LoadedRoutingPublication is a strictly decoded and digest-verified runtime
 // generation. Snapshot contains rebuilt lookup indexes and is ready for a
-// loader to compile or warm; it is never sourced from PostgreSQL.
+// loader to compile or warm, independent of the durable-store implementation.
 type LoadedRoutingPublication struct {
 	Identity RuntimePublicationIdentity
 	Manifest Manifest
@@ -429,7 +429,8 @@ func (s *RedisStore) LoadRoutingPublication(
 		}
 	}
 	compiled, loadRoutingPublicationErr := routingsnapshot.Compile(routing.Snapshot.Bundle)
-	if loadRoutingPublicationErr != nil || compiled.Digest != routing.Snapshot.Digest {
+	if loadRoutingPublicationErr != nil || compiled.Digest != routing.Snapshot.Digest ||
+		compiled.SemanticDigest != routing.Snapshot.SemanticDigest {
 		return LoadedRoutingPublication{}, fmt.Errorf("%w: routing snapshot cannot be rebuilt", ErrStagedCorrupt)
 	}
 	routing.Snapshot = *compiled

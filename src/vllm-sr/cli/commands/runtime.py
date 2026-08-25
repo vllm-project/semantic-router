@@ -117,8 +117,8 @@ def _resolve_serve_config(
         config_path = requested_config
         if not config_path.is_file():
             raise ValueError(
-                "Kubernetes deployment requires a complete ./config.yaml; local "
-                "managed bootstrap is supported only by the Docker target"
+                "Kubernetes deployment requires a complete ./config.yaml; "
+                "automatic first-run workspace creation is available only for Docker"
             )
         try:
             document = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
@@ -129,7 +129,7 @@ def _resolve_serve_config(
         if isinstance(document, dict) and document.get("setup") is not None:
             raise ValueError(
                 "Kubernetes deployment does not support Dashboard setup-mode configs; "
-                "provide a complete managed Router config and explicit Kubernetes Secrets"
+                "provide a complete Router config and explicit Kubernetes Secrets"
             )
         return config_path
     state_root_dir = (
@@ -320,8 +320,8 @@ def _execute_serve(
     default=None,
     metavar="PATH",
     help=(
-        "Immutable v0.4 bootstrap manifest (default: ./config.yaml; "
-        "a missing default starts first-run managed setup)."
+        "Canonical v0.3 config (default: ./config.yaml; a missing default creates "
+        "a secure local Management workspace for Docker)."
     ),
 )
 @click.option(
@@ -373,8 +373,8 @@ def _execute_serve(
     is_flag=True,
     default=False,
     help=(
-        "Omit Dashboard and optional observability. Managed mode still starts "
-        "its required PostgreSQL and Valkey services when external stores are not configured."
+        "Omit Dashboard and optional observability. Configured Management and "
+        "runtime stores still start when external endpoints are not provided."
     ),
 )
 @click.option(

@@ -26,7 +26,7 @@ func CompileRecipeDocument(recipeID string, document json.RawMessage) (json.RawM
 	if len(document) > maximumRecipeDocumentBytes {
 		return nil, nil, fmt.Errorf("%w: recipe document exceeds %d bytes", ErrInvalid, maximumRecipeDocumentBytes)
 	}
-	parsed, canonical, err := config.ParseManagedRecipeDocument(document)
+	parsed, canonical, err := config.ParseRoutingRecipeDocument(document)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: %w", ErrInvalid, err)
 	}

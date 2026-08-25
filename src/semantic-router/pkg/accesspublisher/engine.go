@@ -19,7 +19,7 @@ type EngineOptions struct {
 
 // Engine is a deliberately small orchestration layer. Correct transition
 // ordering lives in State, PostgreSQL owns desired/applied durability, and
-// RedisStore owns publication CAS. ProcessOnce is safe for repeated workers;
+// the selected runtime store owns publication CAS. ProcessOnce is safe for repeated workers;
 // namespace ownership is acquired from the transactional outbox.
 type Engine struct {
 	outbox          OutboxStore
@@ -146,37 +146,7 @@ func (e *Engine) ProcessOnce(ctx context.Context) (ProcessResult, error) {
 	}
 
 	processOnceErr = e.outbox.WithRevisionFence(ctx, batch, func(fenced context.Context) error {
-		// Recheck acknowledgements inside the PostgreSQL namespace fence. Redis
-		// activation also performs the same check atomically against live leases,
-		// closing the replica-join race.
-		if plan.Restrictive() {
-			status, checkErr := e.runtime.BarrierAcknowledgements(fenced, plan)
-			if checkErr != nil {
-				return checkErr
-			}
-			if !status.Complete() {
-				return ErrAcknowledgements
-			}
-		}
-		status, checkErr := e.runtime.RoutingAcknowledgements(fenced, plan)
-		if checkErr != nil {
-			return checkErr
-		}
-		if !status.Complete() {
-			return ErrAcknowledgements
-		}
-		if err := e.runtime.Activate(fenced, plan); err != nil {
-			return err
-		}
-		for {
-			complete, compactErr := e.runtime.Compact(fenced, plan, e.compactionBatch)
-			if compactErr != nil {
-				return compactErr
-			}
-			if complete {
-				return nil
-			}
-		}
+		return e.activateFenced(fenced, plan)
 	})
 	if processOnceErr != nil {
 		if errors.Is(processOnceErr, ErrSuperseded) {
@@ -191,7 +161,7 @@ func (e *Engine) ProcessOnce(ctx context.Context) (ProcessResult, error) {
 	if err := e.runtime.MarkApplied(ctx, plan); err != nil {
 		// PostgreSQL is already applied. Do not fail or release the applied outbox;
 		// a retry/reconciler must finish this idempotent Redis watermark step.
-		return result, fmt.Errorf("mark applied Redis publication: %w", err)
+		return result, fmt.Errorf("mark applied runtime publication: %w", err)
 	}
 	if err := e.runtime.ClearAppliedBarriers(ctx, plan); err != nil {
 		return result, fmt.Errorf("clear applied publication barriers: %w", err)
@@ -200,7 +170,41 @@ func (e *Engine) ProcessOnce(ctx context.Context) (ProcessResult, error) {
 	return result, nil
 }
 
-// ReconcileApplied completes idempotent Redis finalization after a process
+func (e *Engine) activateFenced(ctx context.Context, plan PublicationPlan) error {
+	// Recheck acknowledgements inside the PostgreSQL namespace fence. Redis
+	// activation also performs the same check atomically against live leases,
+	// closing the replica-join race.
+	if plan.Restrictive() {
+		status, err := e.runtime.BarrierAcknowledgements(ctx, plan)
+		if err != nil {
+			return err
+		}
+		if !status.Complete() {
+			return ErrAcknowledgements
+		}
+	}
+	status, err := e.runtime.RoutingAcknowledgements(ctx, plan)
+	if err != nil {
+		return err
+	}
+	if !status.Complete() {
+		return ErrAcknowledgements
+	}
+	if err := e.runtime.Activate(ctx, plan); err != nil {
+		return err
+	}
+	for {
+		complete, err := e.runtime.Compact(ctx, plan, e.compactionBatch)
+		if err != nil {
+			return err
+		}
+		if complete {
+			return nil
+		}
+	}
+}
+
+// ReconcileApplied completes idempotent runtime-store finalization after a process
 // loss between the PostgreSQL applied commit and MarkApplied/ClearBarriers.
 // It never advances PostgreSQL and therefore cannot publish a desired revision.
 func (e *Engine) ReconcileApplied(ctx context.Context, namespaceID string) (ProcessResult, error) {

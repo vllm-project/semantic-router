@@ -7,33 +7,38 @@ metadata:
     component: config
 data:
   config.yaml: |
-    version: v0.4
+    version: v0.3
     listeners: []
-    models:
-    - name: '{{MODEL_NAME_A}}'
-      card:
-        reasoning:
-          type: chat_template_kwargs
-          efforts:
-          - high
-      connections:
-      - provider: vllm
-        endpoint: http://{{PREDICTOR_SERVICE_IP_A}}:8000/v1
-        model: '{{MODEL_NAME_A}}'
-    - name: '{{MODEL_NAME_B}}'
-      card:
-        reasoning:
-          type: chat_template_kwargs
-          efforts:
-          - high
-      connections:
-      - provider: vllm
-        endpoint: http://{{PREDICTOR_SERVICE_IP_B}}:8000/v1
-        model: '{{MODEL_NAME_B}}'
+    providers:
+      defaults:
+        reasoning_families:
+          '{{MODEL_NAME_A}}':
+            type: chat_template_kwargs
+            parameter: enable_thinking
+          '{{MODEL_NAME_B}}':
+            type: chat_template_kwargs
+            parameter: enable_thinking
+      models:
+      - name: '{{MODEL_NAME_A}}'
+        provider_model_id: '{{MODEL_NAME_A}}'
+        backend_refs:
+        - provider: vllm
+          endpoint: http://{{PREDICTOR_SERVICE_IP_A}}:8000/v1
+        reasoning_family: '{{MODEL_NAME_A}}'
+      - name: '{{MODEL_NAME_B}}'
+        provider_model_id: '{{MODEL_NAME_B}}'
+        backend_refs:
+        - provider: vllm
+          endpoint: http://{{PREDICTOR_SERVICE_IP_B}}:8000/v1
+        reasoning_family: '{{MODEL_NAME_B}}'
+    routing:
+      modelCards:
+      - name: '{{MODEL_NAME_A}}'
+      - name: '{{MODEL_NAME_B}}'
     recipes:
     - name: default
       description: Default routing recipe.
-      document:
+      routing:
         signals:
           domains:
           - name: business
@@ -135,8 +140,8 @@ data:
               semantic:
                 similarity_threshold: 0.75
     entrypoints:
-    - name: vllm-sr/auto
-      aliases:
+    - model_names:
+      - vllm-sr/auto
       - auto
       recipe: default
       assignments:

@@ -1,0 +1,26 @@
+{{ template "chart.header" . }}
+{{ template "chart.deprecationWarning" . }}
+
+{{ template "chart.badgesSection" . }}
+
+{{ template "chart.description" . }}
+
+`config` is the single additive v0.3 Router manifest. The chart stores it in a
+content-addressed immutable ConfigMap and mounts `config.yaml` read-only; a
+manifest change creates a new ConfigMap name and rolls Router Pods. Models,
+Recipes, and Entrypoints remain readable in the same schema. Adding
+`global.stores.management.postgres` makes routing state durable; enabling
+Router-native access also requires `global.stores.runtime.redis`.
+
+Dashboard and observability dependencies are optional and disabled in the base
+values. The chart does not install PostgreSQL or the access Runtime store.
+
+{{ template "chart.homepageLine" . }}
+
+{{ template "chart.maintainersSection" . }}
+
+{{ template "chart.sourcesSection" . }}
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}

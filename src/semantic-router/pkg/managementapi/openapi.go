@@ -245,6 +245,10 @@ func operationParameters(contract OperationContract) []OpenAPIParameter {
 func managementAcceptParameter(contract OperationContract) OpenAPIParameter {
 	mediaTypes := []string{JSONMediaType}
 	description := "Required response media type. Generic JSON and wildcard negotiation are not supported."
+	if contract.Method == MethodGET && contract.Path == BasePath+"/routing/exports/current" {
+		mediaTypes = []string{YAMLMediaType}
+		description = "Required response media type for the portable routing manifest."
+	}
 	if contract.Method == MethodGET && contract.Path == BasePath+"/agent-sessions/{session}/events" {
 		mediaTypes = append(mediaTypes, EventStreamMediaType)
 		description = "Required response media type. Use text/event-stream for live delivery or the Management API media type for durable history."

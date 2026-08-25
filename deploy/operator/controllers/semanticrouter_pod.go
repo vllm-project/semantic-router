@@ -66,7 +66,7 @@ func (r *SemanticRouterReconciler) generateDeployment(
 					NodeSelector:              sr.Spec.NodeSelector,
 					Tolerations:               sr.Spec.Tolerations,
 					Affinity:                  sr.Spec.Affinity,
-					TopologySpreadConstraints: topologySpreadConstraints(sr, bootstrap.Mode),
+					TopologySpreadConstraints: topologySpreadConstraints(sr, bootstrap.enablesAvailabilityDefaults()),
 				},
 			},
 		},
@@ -90,8 +90,8 @@ func semanticRouterLabels(sr *vllmv1alpha1.SemanticRouter) map[string]string {
 	}
 }
 
-func topologySpreadConstraints(sr *vllmv1alpha1.SemanticRouter, mode string) []corev1.TopologySpreadConstraint {
-	if !modeAwareEnabled(sr.Spec.TopologySpread.Enabled, mode == controlPlaneModeManaged) {
+func topologySpreadConstraints(sr *vllmv1alpha1.SemanticRouter, defaultEnabled bool) []corev1.TopologySpreadConstraint {
+	if !configuredOrDefault(sr.Spec.TopologySpread.Enabled, defaultEnabled) {
 		return nil
 	}
 	maxSkew := sr.Spec.TopologySpread.MaxSkew
@@ -114,9 +114,9 @@ func topologySpreadConstraints(sr *vllmv1alpha1.SemanticRouter, mode string) []c
 	}}
 }
 
-func modeAwareEnabled(value *bool, modeDefault bool) bool {
+func configuredOrDefault(value *bool, defaultValue bool) bool {
 	if value == nil {
-		return modeDefault
+		return defaultValue
 	}
 	return *value
 }
@@ -202,17 +202,21 @@ func (r *SemanticRouterReconciler) buildSemanticRouterContainer(
 			Protocol:      corev1.ProtocolTCP,
 		},
 	}
-	if bootstrap.Mode == controlPlaneModeManaged {
+	if bootstrap.usesDurableState() {
 		ports = append(ports,
 			corev1.ContainerPort{Name: "management", ContainerPort: bootstrap.ManagementPort, Protocol: corev1.ProtocolTCP},
-			corev1.ContainerPort{Name: backendDispatchPortName, ContainerPort: bootstrap.BackendDispatchPort, Protocol: corev1.ProtocolTCP},
 		)
 	} else {
 		ports = append(ports, corev1.ContainerPort{Name: "api", ContainerPort: DefaultAPIPort, Protocol: corev1.ProtocolTCP})
 	}
+	if bootstrap.usesBackendDispatch() {
+		ports = append(ports, corev1.ContainerPort{
+			Name: backendDispatchPortName, ContainerPort: bootstrap.BackendDispatchPort, Protocol: corev1.ProtocolTCP,
+		})
+	}
 
 	environment := []corev1.EnvVar{{Name: "CONFIG_FILE", Value: "/app/config.yaml"}}
-	if bootstrap.Mode == controlPlaneModeManaged {
+	if bootstrap.usesDurableState() {
 		environment = append(environment, corev1.EnvVar{Name: managementInternalListenerEnv, Value: "true"})
 	}
 
@@ -283,11 +287,15 @@ func semanticRouterProbeHandler(
 	bootstrap bootstrapDeploymentContract,
 	path string,
 ) corev1.ProbeHandler {
-	if bootstrap.Mode == controlPlaneModeManaged {
+	if bootstrap.usesDurableState() {
+		scheme := corev1.URISchemeHTTP
+		if bootstrap.exposesManagementAPI() {
+			scheme = corev1.URISchemeHTTPS
+		}
 		return corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{
 			Path:   path,
 			Port:   intstr.FromString("management"),
-			Scheme: corev1.URISchemeHTTPS,
+			Scheme: scheme,
 		}}
 	}
 	return corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{

@@ -5,6 +5,11 @@
 MODEL cloud/frontier-72b {
 }
 
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
+}
+
 MODEL local/small-7b {
 }
 
@@ -18,6 +23,7 @@ ENTRYPOINT {
   assignments: [
     { decision: "escalate_72b", models: [{ model: "cloud/frontier-72b", weight: "1" }] },
     { decision: "keep_7b", models: [{ model: "local/small-7b", weight: "1" }] },
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
   ]
 }
 
@@ -38,6 +44,11 @@ RECIPE default (description = "Default routing recipe.") {
   SIGNAL keyword local_domain_override {
     operator: "OR"
     keywords: ["blood cells", "transporting oxygen", "contract law", "legal consideration", "ideal transformer", "measured in joules", "share electron pairs"]
+  }
+
+  SIGNAL conversation knowledge_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
   }
 
   SIGNAL kb best_biology {
@@ -138,6 +149,12 @@ RECIPE default (description = "Default routing recipe.") {
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Understand image-bearing knowledge requests with the dedicated visual-language model.") {
+    PRIORITY 300
+    WHEN conversation("knowledge_has_images")
+    ALGORITHM static
+  }
 
   ROUTE escalate_72b (description = "Escalate high-uplift MMLU domains to the frontier 72B lane.") {
     PRIORITY 200

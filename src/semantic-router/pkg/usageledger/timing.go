@@ -3,6 +3,7 @@ package usageledger
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"math/big"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
@@ -16,7 +17,7 @@ var timingBucketUpperBoundsMilliseconds = [...]int64{
 	0, 1, 2, 4, 8, 16, 32, 64, 125, 250, 500, 750,
 	1_000, 1_500, 2_000, 3_000, 5_000, 7_500, 10_000,
 	15_000, 20_000, 30_000, 45_000, 60_000, 90_000, 120_000,
-	180_000, 300_000, 600_000, 1_200_000, 3_600_000, int64(^uint64(0) >> 1),
+	180_000, 300_000, 600_000, 1_200_000, 3_600_000, math.MaxInt64,
 }
 
 type timingAggregate struct {

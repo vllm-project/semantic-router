@@ -1,14 +1,95 @@
-version: v0.4
+version: v0.3
 listeners:
 - address: 0.0.0.0
   name: http-8899
   port: 8899
   timeout: 300s
-models:
-- name: qwen3-8b
-  card:
-    aliases:
-    - qwen3-routing
+providers:
+  defaults:
+    default_model: qwen3-8b
+    default_reasoning_effort: medium
+    reasoning_families:
+      qwen3-8b:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      qwen3-32b:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: qwen3-8b
+    provider_model_id: qwen3-8b-instruct
+    backend_refs:
+    - name: local-primary
+      endpoint: 127.0.0.1:8000/v1
+      protocol: http
+      type: chat
+      provider: vllm
+      weight: 80
+    - name: remote-secondary
+      base_url: https://api.example.com/v1
+      provider: openai-compatible
+      weight: 20
+      api_key_env: REFERENCE_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+      extra_headers:
+        X-Tenant: reference-config
+      chat_path: /chat/completions
+    api_format: openai
+    control:
+      retry:
+        count: 2
+        'on':
+        - unavailable
+      timeout:
+        request: 180s
+        stream: 900s
+    pricing:
+      input_cost_per_million_tokens: '0.18'
+      output_cost_per_million_tokens: '0.42'
+      cache_read_cost_per_million_tokens: '0.04'
+      cache_write_cost_per_million_tokens: '0.225'
+    reasoning_family: qwen3-8b
+    external_model_ids:
+      openai: qwen3-8b
+      analytics: qwen3-routing
+  - name: qwen3-32b
+    provider_model_id: qwen3-32b-instruct
+    backend_refs:
+    - endpoint: http://127.0.0.1:8001
+      provider: anthropic-compatible
+      credential: reference-anthropic
+      weight: 100
+    api_format: anthropic
+    pricing:
+      input_cost_per_million_tokens: '1.2'
+      output_cost_per_million_tokens: '3.4'
+      cache_read_cost_per_million_tokens: '0.3'
+    reasoning_family: qwen3-32b
+  - name: llava-omni
+    provider_model_id: llava-omni-preview
+    backend_refs:
+    - endpoint: http://127.0.0.1:8002/v1
+      provider: vllm
+      weight: 100
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '2.5'
+      output_cost_per_million_tokens: '4'
+      cache_read_cost_per_million_tokens: '0.5'
+  - name: sdxl-image
+    provider_model_id: sdxl-image
+    backend_refs:
+    - endpoint: http://127.0.0.1:8003/v1
+      provider: vllm
+      weight: 100
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '4'
+      output_cost_per_million_tokens: '4'
+routing:
+  modelCards:
+  - name: qwen3-8b
     param_size: 8B
     context_window_size: 32768
     description: Fast general-purpose chat and tool model.
@@ -19,35 +100,13 @@ models:
     - ar
     reasoning:
       type: chat_template_kwargs
-      efforts:
-      - medium
+      efforts: [medium]
     modality: ar
     quality_score: 0.78
     tags:
     - local
     - fast
-  connections:
-  - provider: vllm
-    interface: chat
-    endpoint: http://127.0.0.1:8000/v1
-    model: qwen3-8b-instruct
-    weight: '80'
-  - provider: openai-compatible
-    endpoint: https://api.example.com/v1
-    model: qwen3-8b-instruct
-    credential: reference_api_key
-    weight: '20'
-  runtime:
-    max_retries: 2
-    request_timeout: 180s
-    stream_timeout: 900s
-  pricing:
-    input_cost_per_million_tokens: '0.18'
-    output_cost_per_million_tokens: '0.42'
-    cache_read_cost_per_million_tokens: '0.04'
-    cache_write_cost_per_million_tokens: '0.225'
-- name: qwen3-32b
-  card:
+  - name: qwen3-32b
     description: High-capacity reasoning and long-context model.
     capabilities:
     - chat
@@ -56,60 +115,26 @@ models:
     - ar
     reasoning:
       type: reasoning_effort
-      efforts:
-      - high
-      - medium
-    loras:
-    - computer-science-expert
+      efforts: [high]
     modality: ar
-  connections:
-  - provider: anthropic-compatible
-    endpoint: http://127.0.0.1:8001
-    model: qwen3-32b-instruct
-    weight: '100'
-  pricing:
-    input_cost_per_million_tokens: '1.2'
-    output_cost_per_million_tokens: '3.4'
-    cache_read_cost_per_million_tokens: '0.3'
-- name: llava-omni
-  card:
-    aliases:
-    - llava-omni-preview
+    loras:
+    - name: computer-science-expert
+  - name: llava-omni
     capabilities:
     - chat
     - vision
     - multimodal
     - omni
     modality: omni
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8002/v1
-    model: llava-omni-preview
-    weight: '100'
-  pricing:
-    input_cost_per_million_tokens: '2.5'
-    output_cost_per_million_tokens: '4'
-    cache_read_cost_per_million_tokens: '0.5'
-- name: sdxl-image
-  card:
-    aliases:
-    - gpt-image-1
+  - name: sdxl-image
     capabilities:
     - image_generation
     - diffusion
     modality: diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8003/v1
-    model: sdxl-image
-    weight: '100'
-  pricing:
-    input_cost_per_million_tokens: '4'
-    output_cost_per_million_tokens: '4'
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       classifiers:
       - description: Generic binary safety classification head.
@@ -121,8 +146,7 @@ recipes:
         type: local
         use_cpu: true
       - description: Prompted tool execution risk labeler.
-        instructions: Choose RISKY only for destructive, privileged, or irreversible
-          tool operations.
+        instructions: Choose RISKY only for destructive, privileged, or irreversible tool operations.
         labels:
         - SAFE
         - RISKY
@@ -263,8 +287,7 @@ recipes:
       events:
       - action_codes:
         - TXN_DECLINE
-        description: Critical payment or transaction events that need incident-grade
-          routing.
+        description: Critical payment or transaction events that need incident-grade routing.
         event_types:
         - payment_failed
         - transaction_declined
@@ -396,8 +419,7 @@ recipes:
         name: terse_answers
         threshold: 0.7
       reasks:
-      - description: The current user turn closely repeats the immediately previous
-          user turn.
+      - description: The current user turn closely repeats the immediately previous user turn.
         lookback_turns: 1
         name: likely_dissatisfied
         threshold: 0.8
@@ -422,7 +444,7 @@ recipes:
       - description: Prompts that contain many explicit questions.
         feature:
           source:
-            pattern: "[?\uFF1F]"
+            pattern: '[?？]'
             type: regex
           type: count
         name: many_questions
@@ -431,7 +453,7 @@ recipes:
       - description: Prompts with one or fewer explicit questions.
         feature:
           source:
-            pattern: "[?\uFF1F]"
+            pattern: '[?？]'
             type: regex
           type: count
         name: at_most_one_question
@@ -454,15 +476,14 @@ recipes:
             - - first
               - next
               - finally
-            - - "\u9996\u5148"
-              - "\u7136\u540E"
-            - - "\u5148"
-              - "\u518D"
+            - - 首先
+              - 然后
+            - - 先
+              - 再
             type: sequence
           type: sequence
         name: first_then_flow
-      - description: Prompts with dense explicit constraints relative to multilingual
-          text units.
+      - description: Prompts with dense explicit constraints relative to multilingual text units.
         feature:
           source:
             case_sensitive: false
@@ -472,16 +493,15 @@ recipes:
             - at least
             - within
             - no more than
-            - "\u4E0D\u8D85\u8FC7"
-            - "\u81F3\u5C11"
-            - "\u6700\u591A"
+            - 不超过
+            - 至少
+            - 最多
             type: keyword_set
           type: density
         name: constraint_dense
         predicate:
           gt: 0.08
-      - description: Prompts with dense output-format directives relative to multilingual
-          text units.
+      - description: Prompts with dense output-format directives relative to multilingual text units.
         feature:
           source:
             keywords:
@@ -489,19 +509,18 @@ recipes:
             - bullet
             - json
             - markdown
-            - "\u8868\u683C"
-            - "\u5217\u8868"
+            - 表格
+            - 列表
             - JSON
             type: keyword_set
           type: density
         name: format_directive_dense
         predicate:
           gt: 0.08
-      - description: Prompts with very low question density relative to multilingual
-          text units.
+      - description: Prompts with very low question density relative to multilingual text units.
         feature:
           source:
-            pattern: "[?\uFF1F]"
+            pattern: '[?？]'
             type: regex
           type: density
         name: low_question_density
@@ -604,8 +623,7 @@ recipes:
       - configuration:
           enabled: true
           mode: insert
-          system_prompt: You are a senior business consultant. Give practical recommendations
-            and clear tradeoffs.
+          system_prompt: You are a senior business consultant. Give practical recommendations and clear tradeoffs.
         type: system_prompt
       - configuration:
           enabled: true
@@ -882,13 +900,11 @@ recipes:
     - adaptations:
         adaptation:
           mode: apply
-      description: Terse-answer route that allows Router Learning adaptation to adjust
-        feedback-driven routing.
+      description: Terse-answer route that allows Router Learning adaptation to adjust feedback-driven routing.
       name: terse_feedback_route
       plugins:
       - configuration:
-          message: The primary model is saturated, so a lightweight response was returned
-            immediately.
+          message: The primary model is saturated, so a lightweight response was returned immediately.
         type: fast_response
       - configuration:
           blocked_params:
@@ -914,8 +930,7 @@ recipes:
           use_model_contrastive: true
           use_query_contrastive: true
         type: router_dc
-      description: Embedding-driven support route that escalates only when the derived
-        projection band says the request is not a simple support query.
+      description: Embedding-driven support route that escalates only when the derived projection band says the request is not a simple support query.
       name: support_router_dc_route
       plugins:
       - configuration:
@@ -998,8 +1013,7 @@ recipes:
         protection:
           stability_weight: 1.2
           switch_margin: 0.04
-      description: Spanish-language route that observes Router Learning adaptation
-        with Milvus RAG.
+      description: Spanish-language route that observes Router Learning adaptation with Milvus RAG.
       name: spanish_adaptive_route
       plugins:
       - configuration:
@@ -1094,8 +1108,7 @@ recipes:
     - algorithm:
         on_error: fallback
         prompt:
-          instructions: Choose qwen3-8b for ordinary requests and qwen3-32b for hard
-            reasoning, coding, or multi-step analysis.
+          instructions: Choose qwen3-8b for ordinary requests and qwen3-32b for hard reasoning, coding, or multi-step analysis.
           timeout_seconds: 5
         type: prompt
       description: Prompt-driven selection among bounded decision candidates.
@@ -1133,8 +1146,7 @@ recipes:
             load: 0.2
             quality: 0.4
         type: multi_factor
-      description: Compose quality, latency, cost, and load signals into a single
-        weighted score.
+      description: Compose quality, latency, cost, and load signals into a single weighted score.
       name: multi_factor_route
       priority: 124
       rules:
@@ -1150,8 +1162,7 @@ recipes:
             pretrained_path: /models/selection/knn_model.json
           models_path: /models/selection
         type: knn
-      description: KNN fallback route for general traffic with OpenAI vector-store
-        RAG.
+      description: KNN fallback route for general traffic with OpenAI vector-store RAG.
       name: fallback_knn_route
       plugins:
       - configuration:
@@ -1193,8 +1204,7 @@ recipes:
             pretrained_path: /models/selection/kmeans_model.json
           models_path: /models/selection
         type: kmeans
-      description: KMeans route for clarification requests with local vector-store
-        RAG.
+      description: KMeans route for clarification requests with local vector-store RAG.
       name: clarification_kmeans_route
       plugins:
       - configuration:
@@ -1222,8 +1232,7 @@ recipes:
         operator: AND
     - algorithm:
         type: static
-      description: Escalate when the user repeats the same question after an unsatisfying
-        answer.
+      description: Escalate when the user repeats the same question after an unsatisfying answer.
       name: repeat_question_escalation
       plugins:
       - configuration:
@@ -1355,7 +1364,7 @@ recipes:
     strategy: priority
 - name: privacy-first
   description: Keeps privacy-sensitive traffic on the local default-tier model.
-  document:
+  routing:
     signals:
       keywords:
       - bm25_threshold: 0.1
@@ -1380,10 +1389,7 @@ recipes:
         operator: AND
     strategy: confidence
 entrypoints:
-- name: vllm-sr/exhaustive-default
-  aliases:
-  - auto
-  recipe: default
+- recipe: default
   assignments:
     static_business_route:
       models:
@@ -1562,23 +1568,16 @@ entrypoints:
           enabled: true
       - model: sdxl-image
         weight: '1'
-- name: vllm-sr/exhaustive-privacy
-  rules:
-  - name: private-path
-    matches:
-    - path:
-        prefix: /private
-    recipe: privacy-first
-    assignments:
-      privacy_recipe_route:
-        models:
-        - model: qwen3-8b
-  - name: default
-    recipe: privacy-first
-    assignments:
-      privacy_recipe_route:
-        models:
-        - model: qwen3-8b
+  model_names:
+  - vllm-sr/exhaustive-default
+  - auto
+- recipe: privacy-first
+  assignments:
+    privacy_recipe_route:
+      models:
+      - model: qwen3-8b
+  model_names:
+  - vllm-sr/exhaustive-privacy
 global:
   billing:
     currency: USD
@@ -1944,7 +1943,29 @@ global:
       pii_classifier: models/mmbert32k-pii-detector-merged
       prompt_guard: models/mmbert32k-jailbreak-detector-merged
   router:
+    strategy: priority
+    auto_model_name: MoM
+    auto_model_names: []
+    include_config_models_in_list: true
     clear_route_cache: false
+    model_selection:
+      enabled: true
+      method: knn
+      router_dc:
+        temperature: 0.07
+        dimension_size: 768
+        min_similarity: 0.3
+        use_query_contrastive: true
+        use_model_contrastive: true
+        require_descriptions: false
+        use_capabilities: true
+      hybrid:
+        experience_weight: 0.3
+        router_dc_weight: 0.3
+        automix_weight: 0.2
+        cost_weight: 0.2
+        quality_gap_threshold: 0.1
+        normalize_scores: true
     learning:
       adaptation:
         candidate_set: decision
@@ -1969,7 +1990,7 @@ global:
           address: redis:6379
           database: 2
           key_prefix: 'vsr:router-session:v1:'
-          password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+          password: ${VLLM_SR_STACK_REDIS_PASSWORD}
         timeout_ms: 50
         ttl_seconds: 86400
     streamed_body:
@@ -1979,10 +2000,6 @@ global:
   services:
     agent:
       public_inference_endpoint: ''
-    backend_credentials:
-      reference_api_key:
-        credential_adapter_id: bearer
-        secret_env: REFERENCE_API_KEY
     api:
       batch_classification:
         concurrency_threshold: 5
@@ -2017,10 +2034,13 @@ global:
       capability_ttl: 30s
       max_request_body_bytes: 67108864
       port: 8180
+    backend_credentials:
+      reference-anthropic:
+        credential_adapter_id: x-api-key
+        secret_env: REFERENCE_ANTHROPIC_API_KEY
     management_api:
+      enabled: false
       auth:
-        control_plane_hmac_keyring_env: ''
-        control_plane_hmac_keyring_file: ''
         mode: disabled
         roles:
           admin:
@@ -2087,7 +2107,7 @@ global:
         resource:
           deployment_environment: development
           service_name: vllm-sr
-          service_version: v0.4.0
+          service_version: v0.3.0
         sampling:
           rate: 0.5
           type: probabilistic
@@ -2106,7 +2126,7 @@ global:
         key_prefix: 'vsr:responses:'
         max_retries: 3
         min_idle_conns: 2
-        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+        password: ${VLLM_SR_STACK_REDIS_PASSWORD}
         pool_size: 10
         read_timeout: 5
         tls_ca_path: certs/ca.crt
@@ -2116,6 +2136,9 @@ global:
         write_timeout: 5
       store_backend: redis
       ttl_seconds: 86400
+    routing_security:
+      hmac_keyring_env: ''
+      hmac_keyring_file: ''
     router_replay:
       async_writes: true
       enabled: true
@@ -2123,7 +2146,7 @@ global:
         address: milvus:19530
         collection_name: router_replay
         consistency_level: Bounded
-        password: "${MILVUS_PASSWORD}"
+        password: ${MILVUS_PASSWORD}
         shard_num: 2
         username: root
       postgres:
@@ -2132,7 +2155,7 @@ global:
         host: postgres
         max_idle_conns: 10
         max_open_conns: 20
-        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
+        password: ${VLLM_SR_STACK_POSTGRES_PASSWORD}
         port: 5432
         ssl_mode: disable
         table_name: router_replay
@@ -2148,7 +2171,7 @@ global:
         db: 2
         key_prefix: 'vsr:replay:'
         max_retries: 3
-        password: "${VLLM_SR_STACK_REDIS_PASSWORD}"
+        password: ${VLLM_SR_STACK_REDIS_PASSWORD}
         pool_size: 20
         tls_skip_verify: false
         use_tls: false
@@ -2214,7 +2237,7 @@ global:
         index_m: 16
         index_name: mem_idx
         metric_type: COSINE
-        password: "${VALKEY_PASSWORD}"
+        password: ${VALKEY_PASSWORD}
         port: 6379
         timeout: 10
         tls_ca_path: ''
@@ -2242,7 +2265,7 @@ global:
         connection:
           auth:
             enabled: true
-            password: "${MILVUS_PASSWORD}"
+            password: ${MILVUS_PASSWORD}
             username: root
           database: default
           host: milvus
@@ -2293,7 +2316,7 @@ global:
       ingestion_drain_timeout_seconds: 30
       ingestion_workers: 4
       llama_stack:
-        auth_token: "${LLAMA_STACK_AUTH_TOKEN}"
+        auth_token: ${LLAMA_STACK_AUTH_TOKEN}
         embedding_model: all-MiniLM-L6-v2
         endpoint: http://llama-stack:8321
         request_timeout_seconds: 30
@@ -2307,7 +2330,7 @@ global:
         host: postgres
         max_idle_conns: 5
         max_open_conns: 25
-        password: "${VLLM_SR_STACK_POSTGRES_PASSWORD}"
+        password: ${VLLM_SR_STACK_POSTGRES_PASSWORD}
         port: 5432
         ssl_mode: disable
         table_name: vector_store_registry
@@ -2329,7 +2352,7 @@ global:
         connection:
           auth:
             enabled: true
-            password: "${MILVUS_PASSWORD}"
+            password: ${MILVUS_PASSWORD}
             username: root
           database: vector_store
           host: milvus
@@ -2391,5 +2414,5 @@ global:
         index_ef_construction: 200
         index_m: 16
         metric_type: COSINE
-        password: "${VALKEY_PASSWORD}"
+        password: ${VALKEY_PASSWORD}
         port: 6379

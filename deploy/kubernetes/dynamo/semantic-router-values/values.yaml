@@ -1,20 +1,24 @@
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://dynamo-vllm-frontend.dynamo-system.svc.cluster.local:8000/v1
-      model: TinyLlama/TinyLlama-1.1B-Chat-v1.0
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+  providers:
+    models:
+    - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      provider_model_id: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+      backend_refs:
+      - provider: vllm
+        endpoint: http://dynamo-vllm-frontend.dynamo-system.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+  routing:
+    modelCards:
+    - name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals:
         keywords:
         - name: thinking
@@ -344,8 +348,8 @@ config:
               accurate, helpful responses across a wide range of topics.
             mode: replace
   entrypoints:
-  - name: vllm-sr/auto
-    aliases:
+  - model_names:
+    - vllm-sr/auto
     - auto
     recipe: default
     assignments:

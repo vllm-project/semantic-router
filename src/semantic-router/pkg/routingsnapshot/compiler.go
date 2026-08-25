@@ -46,7 +46,31 @@ func Compile(input Bundle) (*Snapshot, error) {
 	}
 	digest := sha256.Sum256(payload)
 	snapshot.Digest = hex.EncodeToString(digest[:])
+	semanticPayload, err := json.Marshal(routingSemantics{
+		NamespaceID: bundle.NamespaceID,
+		Currency:    bundle.Currency,
+		Models:      bundle.Models,
+		Recipes:     bundle.Recipes,
+		Entrypoints: bundle.Entrypoints,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal canonical routing semantics: %w", err)
+	}
+	semanticDigest := sha256.Sum256(semanticPayload)
+	snapshot.SemanticDigest = hex.EncodeToString(semanticDigest[:])
 	return snapshot, nil
+}
+
+// routingSemantics is the executable routing value. The aggregate publication
+// revision is deliberately absent: resource revisions and every field that can
+// change request routing remain in the digest, while an access-only publication
+// can prove that its already-warmed router runtime is reusable.
+type routingSemantics struct {
+	NamespaceID string       `json:"namespaceId"`
+	Currency    string       `json:"currency,omitempty"`
+	Models      []Model      `json:"models"`
+	Recipes     []Recipe     `json:"recipes"`
+	Entrypoints []Entrypoint `json:"entrypoints"`
 }
 
 func cloneBundle(input Bundle) Bundle {
@@ -121,6 +145,9 @@ func normalizeModel(model *Model) error {
 	if model.Execution.MaxRetries < 0 || model.Execution.MaxRetries > 5 {
 		return fmt.Errorf("execution.maxRetries must be between 0 and 5")
 	}
+	if err := normalizeRetryTriggers(&model.Execution); err != nil {
+		return err
+	}
 	if model.Execution.RequestTimeout == "" {
 		model.Execution.RequestTimeout = "300s"
 	}
@@ -183,6 +210,37 @@ func normalizeModel(model *Model) error {
 		backend.Weight = weight
 	}
 	sort.Slice(model.Backends, func(i, j int) bool { return model.Backends[i].ID < model.Backends[j].ID })
+	return nil
+}
+
+func normalizeRetryTriggers(execution *ModelExecution) error {
+	if execution.MaxRetries == 0 {
+		if len(execution.RetryOn) != 0 {
+			return fmt.Errorf("execution.retryOn must be empty when maxRetries is 0")
+		}
+		return nil
+	}
+	if len(execution.RetryOn) == 0 {
+		execution.RetryOn = []string{"unavailable"}
+		return nil
+	}
+	if len(execution.RetryOn) > 3 {
+		return fmt.Errorf("execution.retryOn must contain at most 3 failure classes")
+	}
+	order := map[string]int{"unavailable": 0, "overloaded": 1, "timeout": 2}
+	seen := make(map[string]struct{}, len(execution.RetryOn))
+	for _, trigger := range execution.RetryOn {
+		if _, ok := order[trigger]; !ok {
+			return fmt.Errorf("execution.retryOn contains unsupported failure class %q", trigger)
+		}
+		if _, duplicate := seen[trigger]; duplicate {
+			return fmt.Errorf("execution.retryOn contains duplicate failure class %q", trigger)
+		}
+		seen[trigger] = struct{}{}
+	}
+	sort.Slice(execution.RetryOn, func(i, j int) bool {
+		return order[execution.RetryOn[i]] < order[execution.RetryOn[j]]
+	})
 	return nil
 }
 
@@ -274,62 +332,82 @@ func normalizeEntrypoint(entrypoint *Entrypoint) error {
 	}
 	seenRules := make(map[string]struct{}, len(entrypoint.Rules))
 	for i := range entrypoint.Rules {
-		rule := &entrypoint.Rules[i]
-		if strings.TrimSpace(rule.ID) == "" || strings.TrimSpace(rule.Name) == "" || strings.TrimSpace(rule.RecipeID) == "" || rule.RecipeRevision <= 0 {
-			return fmt.Errorf("rules[%d] requires id, name, recipeId, and recipeRevision", i)
-		}
-		if _, exists := seenRules[rule.ID]; exists {
-			return fmt.Errorf("duplicate rule id %q", rule.ID)
-		}
-		seenRules[rule.ID] = struct{}{}
-		if err := normalizeMatchers(rule.Matchers); err != nil {
-			return fmt.Errorf("rules[%d].matchers: %w", i, err)
-		}
-		for decisionID, assignmentSet := range rule.Assignments {
-			if len(assignmentSet.Models) == 0 || len(assignmentSet.Models) > 32 {
-				return fmt.Errorf("rules[%d].assignments[%s].models must contain between 1 and 32 Models", i, decisionID)
-			}
-			priorities := make(map[int]struct{})
-			for assignmentIndex := range assignmentSet.Models {
-				assignment := &assignmentSet.Models[assignmentIndex]
-				if assignment.Priority < 0 || assignment.Priority > 31 {
-					return fmt.Errorf("rules[%d].assignments[%s].models[%d].priority must be between 0 and 31", i, decisionID, assignmentIndex)
-				}
-				priorities[assignment.Priority] = struct{}{}
-				weight, err := canonicalPositiveDecimal(assignment.Weight, 9)
-				if err != nil {
-					return fmt.Errorf("rules[%d].assignments[%s].models[%d].weight: %w", i, decisionID, assignmentIndex, err)
-				}
-				assignment.Weight = weight
-				if assignment.Reasoning != nil && !assignment.Reasoning.Enabled {
-					if assignment.Reasoning.Effort != "" || assignment.Reasoning.Description != "" {
-						return fmt.Errorf("rules[%d].assignments[%s].models[%d].reasoning cannot set effort or description when disabled", i, decisionID, assignmentIndex)
-					}
-					// Explicit disabled and omission have identical execution semantics.
-					// Canonicalize them before duplicate detection and digesting.
-					assignment.Reasoning = nil
-				}
-			}
-			if assignmentSet.Fallback == nil {
-				if len(priorities) != 1 {
-					return fmt.Errorf("rules[%d].assignments[%s] requires fallback when a Model priority is greater than zero", i, decisionID)
-				}
-				if _, ok := priorities[0]; !ok {
-					return fmt.Errorf("rules[%d].assignments[%s] requires priority zero when fallback is absent", i, decisionID)
-				}
-			} else {
-				if err := normalizeFallbackPolicy(assignmentSet.Fallback, priorities); err != nil {
-					return fmt.Errorf("rules[%d].assignments[%s].fallback: %w", i, decisionID, err)
-				}
-			}
-			sort.SliceStable(assignmentSet.Models, func(i, j int) bool {
-				return assignmentSet.Models[i].Priority < assignmentSet.Models[j].Priority
-			})
-			rule.Assignments[decisionID] = assignmentSet
+		if err := normalizeEntrypointRule(&entrypoint.Rules[i], i, seenRules); err != nil {
+			return err
 		}
 	}
 	sort.Slice(entrypoint.Rules, func(i, j int) bool { return entrypoint.Rules[i].ID < entrypoint.Rules[j].ID })
 	return validateRuleAmbiguity(entrypoint.Rules)
+}
+
+func normalizeEntrypointRule(rule *EntrypointRule, ruleIndex int, seenRules map[string]struct{}) error {
+	if strings.TrimSpace(rule.ID) == "" || strings.TrimSpace(rule.Name) == "" || strings.TrimSpace(rule.RecipeID) == "" || rule.RecipeRevision <= 0 {
+		return fmt.Errorf("rules[%d] requires id, name, recipeId, and recipeRevision", ruleIndex)
+	}
+	if _, exists := seenRules[rule.ID]; exists {
+		return fmt.Errorf("duplicate rule id %q", rule.ID)
+	}
+	seenRules[rule.ID] = struct{}{}
+	if err := normalizeMatchers(rule.Matchers); err != nil {
+		return fmt.Errorf("rules[%d].matchers: %w", ruleIndex, err)
+	}
+	for decisionID, assignmentSet := range rule.Assignments {
+		normalized, err := normalizeAssignmentSet(assignmentSet, ruleIndex, decisionID)
+		if err != nil {
+			return err
+		}
+		rule.Assignments[decisionID] = normalized
+	}
+	return nil
+}
+
+func normalizeAssignmentSet(assignmentSet AssignmentSet, ruleIndex int, decisionID string) (AssignmentSet, error) {
+	if len(assignmentSet.Models) == 0 || len(assignmentSet.Models) > 32 {
+		return AssignmentSet{}, fmt.Errorf("rules[%d].assignments[%s].models must contain between 1 and 32 Models", ruleIndex, decisionID)
+	}
+	priorities := make(map[int]struct{})
+	for assignmentIndex := range assignmentSet.Models {
+		assignment := &assignmentSet.Models[assignmentIndex]
+		if err := normalizeModelAssignment(assignment, ruleIndex, decisionID, assignmentIndex); err != nil {
+			return AssignmentSet{}, err
+		}
+		priorities[assignment.Priority] = struct{}{}
+	}
+	if assignmentSet.Fallback == nil {
+		if len(priorities) != 1 {
+			return AssignmentSet{}, fmt.Errorf("rules[%d].assignments[%s] requires fallback when a Model priority is greater than zero", ruleIndex, decisionID)
+		}
+		if _, ok := priorities[0]; !ok {
+			return AssignmentSet{}, fmt.Errorf("rules[%d].assignments[%s] requires priority zero when fallback is absent", ruleIndex, decisionID)
+		}
+	} else if err := normalizeFallbackPolicy(assignmentSet.Fallback, priorities); err != nil {
+		return AssignmentSet{}, fmt.Errorf("rules[%d].assignments[%s].fallback: %w", ruleIndex, decisionID, err)
+	}
+	sort.SliceStable(assignmentSet.Models, func(i, j int) bool {
+		return assignmentSet.Models[i].Priority < assignmentSet.Models[j].Priority
+	})
+	return assignmentSet, nil
+}
+
+func normalizeModelAssignment(assignment *Assignment, ruleIndex int, decisionID string, assignmentIndex int) error {
+	if assignment.Priority < 0 || assignment.Priority > 31 {
+		return fmt.Errorf("rules[%d].assignments[%s].models[%d].priority must be between 0 and 31", ruleIndex, decisionID, assignmentIndex)
+	}
+	weight, err := canonicalPositiveDecimal(assignment.Weight, 9)
+	if err != nil {
+		return fmt.Errorf("rules[%d].assignments[%s].models[%d].weight: %w", ruleIndex, decisionID, assignmentIndex, err)
+	}
+	assignment.Weight = weight
+	if assignment.Reasoning == nil || assignment.Reasoning.Enabled {
+		return nil
+	}
+	if assignment.Reasoning.Effort != "" || assignment.Reasoning.Description != "" {
+		return fmt.Errorf("rules[%d].assignments[%s].models[%d].reasoning cannot set effort or description when disabled", ruleIndex, decisionID, assignmentIndex)
+	}
+	// Explicit disabled and omission have identical execution semantics.
+	// Canonicalize them before duplicate detection and digesting.
+	assignment.Reasoning = nil
+	return nil
 }
 
 func normalizeFallbackPolicy(policy *FallbackPolicy, priorities map[int]struct{}) error {
@@ -463,58 +541,93 @@ func (snapshot *Snapshot) buildIndexes() error {
 func (snapshot *Snapshot) validateReferences() error {
 	for _, entrypoint := range snapshot.Entrypoints {
 		for _, rule := range entrypoint.Rules {
-			recipe, exists := snapshot.recipesByID[rule.RecipeID]
-			if !exists || recipe.Revision != rule.RecipeRevision {
-				return fmt.Errorf("entrypoint %s rule %s references unavailable recipe revision %s@%d", entrypoint.ID, rule.ID, rule.RecipeID, rule.RecipeRevision)
-			}
-			decisions := make(map[string]Decision, len(recipe.Decisions))
-			for _, decision := range recipe.Decisions {
-				decisions[decision.ID] = decision
-			}
-			if len(rule.Assignments) != len(decisions) {
-				return fmt.Errorf("entrypoint %s rule %s must assign every recipe decision", entrypoint.ID, rule.ID)
-			}
-			for decisionID, assignmentSet := range rule.Assignments {
-				decision, exists := decisions[decisionID]
-				if !exists {
-					return fmt.Errorf("entrypoint %s rule %s assigns unknown decision %s", entrypoint.ID, rule.ID, decisionID)
-				}
-				if len(assignmentSet.Models) == 0 {
-					return fmt.Errorf("entrypoint %s rule %s decision %s has no model", entrypoint.ID, rule.ID, decisionID)
-				}
-				if assignmentSet.Fallback != nil && decision.DispatchCardinality != DispatchCardinalitySingle {
-					return fmt.Errorf("entrypoint %s rule %s decision %s cannot use fallback with %s dispatch cardinality", entrypoint.ID, rule.ID, decisionID, decision.DispatchCardinality)
-				}
-				seenTargets := make(map[string]struct{}, len(assignmentSet.Models))
-				for i := range assignmentSet.Models {
-					assignment := &assignmentSet.Models[i]
-					model, exists := snapshot.modelsByID[assignment.ModelID]
-					if !exists || model.Revision != assignment.ModelRevision {
-						return fmt.Errorf("entrypoint %s rule %s references unavailable model revision %s@%d", entrypoint.ID, rule.ID, assignment.ModelID, assignment.ModelRevision)
-					}
-					reasoningKey, _ := json.Marshal(assignment.Reasoning)
-					targetKey := assignment.ModelID + "\x00" + assignment.LoRAName + "\x00" + string(reasoningKey)
-					if _, duplicate := seenTargets[targetKey]; duplicate {
-						return fmt.Errorf("entrypoint %s rule %s decision %s repeats the same model, LoRA, and reasoning target", entrypoint.ID, rule.ID, decisionID)
-					}
-					seenTargets[targetKey] = struct{}{}
-					if assignment.LoRAName != "" && !slices.Contains(model.LoRAs, assignment.LoRAName) {
-						return fmt.Errorf("model %s does not declare LoRA %q", model.ID, assignment.LoRAName)
-					}
-					if assignment.Reasoning != nil {
-						if model.Reasoning.Type == "" {
-							return fmt.Errorf("model %s does not support reasoning controls", model.ID)
-						}
-						if assignment.Reasoning.Effort != "" && !slices.Contains(model.Reasoning.Efforts, assignment.Reasoning.Effort) {
-							return fmt.Errorf("model %s does not support reasoning effort %q", model.ID, assignment.Reasoning.Effort)
-						}
-						if len(assignment.Reasoning.Description) > 1024 {
-							return fmt.Errorf("reasoning description exceeds 1024 bytes")
-						}
-					}
-				}
+			if err := snapshot.validateEntrypointRuleReferences(entrypoint.ID, rule); err != nil {
+				return err
 			}
 		}
+	}
+	return nil
+}
+
+func (snapshot *Snapshot) validateEntrypointRuleReferences(entrypointID string, rule EntrypointRule) error {
+	recipe, exists := snapshot.recipesByID[rule.RecipeID]
+	if !exists || recipe.Revision != rule.RecipeRevision {
+		return fmt.Errorf("entrypoint %s rule %s references unavailable recipe revision %s@%d", entrypointID, rule.ID, rule.RecipeID, rule.RecipeRevision)
+	}
+	decisions := make(map[string]Decision, len(recipe.Decisions))
+	for _, decision := range recipe.Decisions {
+		decisions[decision.ID] = decision
+	}
+	if len(rule.Assignments) != len(decisions) {
+		return fmt.Errorf("entrypoint %s rule %s must assign every recipe decision", entrypointID, rule.ID)
+	}
+	for decisionID, assignmentSet := range rule.Assignments {
+		decision, found := decisions[decisionID]
+		if !found {
+			return fmt.Errorf("entrypoint %s rule %s assigns unknown decision %s", entrypointID, rule.ID, decisionID)
+		}
+		if err := snapshot.validateAssignmentReferences(entrypointID, rule.ID, decisionID, decision, assignmentSet); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (snapshot *Snapshot) validateAssignmentReferences(
+	entrypointID string,
+	ruleID string,
+	decisionID string,
+	decision Decision,
+	assignmentSet AssignmentSet,
+) error {
+	if len(assignmentSet.Models) == 0 {
+		return fmt.Errorf("entrypoint %s rule %s decision %s has no model", entrypointID, ruleID, decisionID)
+	}
+	if assignmentSet.Fallback != nil && decision.DispatchCardinality != DispatchCardinalitySingle {
+		return fmt.Errorf("entrypoint %s rule %s decision %s cannot use fallback with %s dispatch cardinality", entrypointID, ruleID, decisionID, decision.DispatchCardinality)
+	}
+	seenTargets := make(map[string]struct{}, len(assignmentSet.Models))
+	for i := range assignmentSet.Models {
+		assignment := &assignmentSet.Models[i]
+		model, exists := snapshot.modelsByID[assignment.ModelID]
+		if !exists || model.Revision != assignment.ModelRevision {
+			return fmt.Errorf("entrypoint %s rule %s references unavailable model revision %s@%d", entrypointID, ruleID, assignment.ModelID, assignment.ModelRevision)
+		}
+		if err := validateAssignmentTarget(model, assignment, entrypointID, ruleID, decisionID, seenTargets); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateAssignmentTarget(
+	model Model,
+	assignment *Assignment,
+	entrypointID string,
+	ruleID string,
+	decisionID string,
+	seenTargets map[string]struct{},
+) error {
+	reasoningKey, _ := json.Marshal(assignment.Reasoning)
+	targetKey := assignment.ModelID + "\x00" + assignment.LoRAName + "\x00" + string(reasoningKey)
+	if _, duplicate := seenTargets[targetKey]; duplicate {
+		return fmt.Errorf("entrypoint %s rule %s decision %s repeats the same model, LoRA, and reasoning target", entrypointID, ruleID, decisionID)
+	}
+	seenTargets[targetKey] = struct{}{}
+	if assignment.LoRAName != "" && !slices.Contains(model.LoRAs, assignment.LoRAName) {
+		return fmt.Errorf("model %s does not declare LoRA %q", model.ID, assignment.LoRAName)
+	}
+	if assignment.Reasoning == nil {
+		return nil
+	}
+	if model.Reasoning.Type == "" {
+		return fmt.Errorf("model %s does not support reasoning controls", model.ID)
+	}
+	if assignment.Reasoning.Effort != "" && !slices.Contains(model.Reasoning.Efforts, assignment.Reasoning.Effort) {
+		return fmt.Errorf("model %s does not support reasoning effort %q", model.ID, assignment.Reasoning.Effort)
+	}
+	if len(assignment.Reasoning.Description) > 1024 {
+		return fmt.Errorf("reasoning description exceeds 1024 bytes")
 	}
 	return nil
 }

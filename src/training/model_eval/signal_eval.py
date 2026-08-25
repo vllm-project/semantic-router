@@ -21,17 +21,10 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 
 import requests
 from datasets import load_dataset
 from tqdm import tqdm
-
-# Import constants from mom_collection_eval
-try:
-    from .constants import MODEL_REGISTRY
-except ImportError:
-    from constants import MODEL_REGISTRY
 
 # Configure logging
 logging.basicConfig(
@@ -44,7 +37,7 @@ logger = logging.getLogger("SignalEval")
 EVALUATION_BEARER_TOKEN_ENV = "VLLM_SR_EVALUATION_BEARER_TOKEN"
 
 
-def evaluation_authorization_headers() -> Dict[str, str]:
+def evaluation_authorization_headers() -> dict[str, str]:
     """Return the in-memory delegated credential without logging or persisting it."""
     token = os.environ.get(EVALUATION_BEARER_TOKEN_ENV, "")
     if not token:
@@ -496,7 +489,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_dataset_by_id(dataset_id: str, max_samples: Optional[int] = None):
+def load_dataset_by_id(dataset_id: str, max_samples: int | None = None):
     """Load dataset by dataset ID from registry."""
     config = DATASET_REGISTRY[dataset_id]
     dimension = config["dimension"]
@@ -544,7 +537,7 @@ def load_dataset_by_id(dataset_id: str, max_samples: Optional[int] = None):
         raise
 
 
-def call_eval_api(query: str, endpoint: str, timeout: int) -> Optional[Dict]:
+def call_eval_api(query: str, endpoint: str, timeout: int) -> dict | None:
     """Call the eval API and return the response."""
     try:
         response = requests.post(
@@ -560,7 +553,7 @@ def call_eval_api(query: str, endpoint: str, timeout: int) -> Optional[Dict]:
         return None
 
 
-def extract_signal_output(api_response: Dict, signal_field: str) -> Optional[str]:
+def extract_signal_output(api_response: dict, signal_field: str) -> str | None:
     """Extract signal output from API response."""
     try:
         matched_signals = api_response.get("decision_result", {}).get(
@@ -578,7 +571,7 @@ def extract_signal_output(api_response: Dict, signal_field: str) -> Optional[str
         return None
 
 
-def map_label(label, label_mapping: Optional[Dict]) -> str:
+def map_label(label, label_mapping: dict | None) -> str:
     """Map dataset label to signal name.
 
     Args:
@@ -597,11 +590,11 @@ def map_label(label, label_mapping: Optional[Dict]) -> str:
 
 
 def evaluate_single_sample(
-    sample: Dict,
-    config: Dict,
+    sample: dict,
+    config: dict,
     endpoint: str,
     timeout: int,
-) -> Dict:
+) -> dict:
     """Evaluate a single sample and return the result."""
     query = sample[config["text_col"]]
     expected_label = sample[config["label_col"]]
@@ -648,10 +641,10 @@ def evaluate_single_sample(
 def evaluate_dataset(
     dataset_id: str,
     endpoint: str,
-    max_samples: Optional[int],
+    max_samples: int | None,
     timeout: int,
     concurrent: int = 1,
-) -> Dict:
+) -> dict:
     """Evaluate a single dataset."""
     dataset, config = load_dataset_by_id(dataset_id, max_samples)
     dimension = config["dimension"]

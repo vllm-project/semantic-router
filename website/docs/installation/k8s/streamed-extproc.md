@@ -142,7 +142,7 @@ Looper algorithms are the main immediate-response path added by the full-duplex 
 Example decision fragment:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: streamed_confidence_route
       description: Escalate code requests when the first model is uncertain.
@@ -193,7 +193,7 @@ Look for:
 `fast_response` can also short-circuit requests that arrive as streamed body chunks. This is useful for safety decisions such as PII or jailbreak blocking.
 
 ```yaml
-document:
+routing:
   signals:
     jailbreak:
       - name: streamed_jailbreak

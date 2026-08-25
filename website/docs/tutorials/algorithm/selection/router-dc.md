@@ -59,23 +59,26 @@ Models need descriptions for embedding-based matching. Put them in each
 human-authored Model card:
 
 ```yaml
-models:
-  - name: llama-3.2-1b
-    card:
+providers:
+  models:
+    - name: llama-3.2-1b
+      provider_model_id: llama-3.2-1b
+      backend_refs:
+        - provider: vllm
+          endpoint: http://llama-3-2-1b:8000/v1
+    - name: codellama-7b
+      provider_model_id: codellama-7b
+      backend_refs:
+        - provider: vllm
+          endpoint: http://codellama-7b:8000/v1
+routing:
+  modelCards:
+    - name: llama-3.2-1b
       description: Fast small model for simple tasks, low cost.
       capabilities: [summarization, simple_qa]
-    connections:
-      - provider: vllm
-        endpoint: http://llama-3-2-1b:8000/v1
-        model: llama-3.2-1b
-  - name: codellama-7b
-    card:
+    - name: codellama-7b
       description: Code generation specialist for programming tasks.
       capabilities: [code_generation, debugging]
-    connections:
-      - provider: vllm
-        endpoint: http://codellama-7b:8000/v1
-        model: codellama-7b
 ```
 
 When `use_capabilities: true`, capability tags are concatenated with descriptions to enrich embeddings.

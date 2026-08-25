@@ -110,9 +110,9 @@ export function usePlaygroundRoutingModel(
           const automaticModel = selectRouterAutoModel(routerPayload)
           const defaultModel = models.some((option) => option.id === automaticModel)
             ? automaticModel
-            : routingModels[0]?.id
-          if (!defaultModel || routingModels.length === 0) {
-            throw new Error('The router did not advertise a selectable routing model.')
+            : (routingModels[0]?.id ?? models[0]?.id)
+          if (!defaultModel || models.length === 0) {
+            throw new Error('The router did not advertise a selectable model.')
           }
           const expectedVisible =
             expected.size === 0 || models.some((model) => expected.has(model.id))

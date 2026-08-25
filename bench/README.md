@@ -88,19 +88,31 @@ patch is a review aid, not an automatically safe deployment change. Confirm the
 model name, reasoning family, measured trade-offs, and existing config entries
 before merging it.
 
-A known-family patch uses the human v0.4 Model card:
+A known-family patch keeps the physical binding and reasoning family under
+`providers`, with connection-free metadata under `routing.modelCards`:
 
 ```yaml
-models:
-  - name: qwen3-14b
-    card:
-      reasoning:
+version: v0.3
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
         type: chat_template_kwargs
-        efforts: [medium, high]
-    connections:
-      - provider: vllm
-        endpoint: http://model-server:8000/v1
-        model: qwen3-14b
+        parameter: enable_thinking
+  models:
+    - name: qwen3-14b
+      reasoning_family: qwen3
+      provider_model_id: qwen3-14b
+      backend_refs:
+        - provider: vllm
+          endpoint: http://model-server:8000/v1
+      control:
+        retry: {count: 2, on: [unavailable, timeout]}
+        timeout: {request: 60s, stream: 10m}
+routing:
+  modelCards:
+    - name: qwen3-14b
+      capabilities: [chat, reasoning]
 ```
 
 Reasoning is enabled per decision reference, after the evaluated model has been
@@ -108,7 +120,7 @@ merged into the existing configuration:
 
 ```yaml
 entrypoints:
-  - name: benchmark/reasoning
+  - model_names: [benchmark/reasoning]
     recipe: benchmark
     assignments:
       math-reasoning:

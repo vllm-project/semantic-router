@@ -20,6 +20,7 @@ operators calibrate against their own models and traffic.
 | Deep reasoning and formal math | `openai/gpt5.4` |
 | Premium legal analysis | `anthropic/claude-opus-4.6` |
 | Secondary high-care health reviewer | `anthropic/claude-opus-4.6` |
+| Visual understanding | `local/omni` |
 
 These are routing aliases, not required vendor choices. Connect the Models you
 operate, then review each decision assignment before publishing the Entrypoint.
@@ -32,6 +33,7 @@ Use this recipe for mixed assistant traffic where:
 - complex reasoning and specialist domains justify stronger models;
 - corrections and repeated questions should trigger a recovery path;
 - evidence-sensitive requests need additional verification; and
+- image-bearing requests need an explicit visual-capability lane; and
 - one request-facing model name is preferred over several client-side tiers.
 
 Choose a more specialized recipe when privacy, minimum latency, or minimum cost
@@ -41,6 +43,7 @@ must dominate every decision.
 
 | Request pattern | Typical behavior |
 | --- | --- |
+| Image content | Use the dedicated visual-language model. |
 | Legal, health, formal proof, or deep reasoning | Prefer premium or high-reasoning candidates. |
 | Complex specialist or coding work | Use a capable specialist, with a stronger fallback where configured. |
 | Explicit correction, repeated dissatisfaction, or verification request | Move to a recovery or reviewed-answer lane. |

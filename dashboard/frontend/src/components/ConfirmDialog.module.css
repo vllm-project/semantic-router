@@ -195,8 +195,8 @@
 
 @media (max-width: 520px), (max-height: 560px) {
   .overlay {
-    align-items: flex-start;
-    padding: 0.5rem;
+    align-items: center;
+    padding: max(0.5rem, env(safe-area-inset-top)) 0.5rem max(0.5rem, env(safe-area-inset-bottom));
   }
 
   .dialog {
@@ -207,5 +207,16 @@
   .actions {
     display: grid;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .cancelButton,
+  .confirmButton {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 360px) {
+  .actions {
+    grid-template-columns: 1fr;
   }
 }

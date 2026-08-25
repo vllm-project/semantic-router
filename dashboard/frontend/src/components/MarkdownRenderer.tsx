@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm'
 import rehypeHighlight from 'rehype-highlight'
 import styles from './MarkdownRenderer.module.css'
 import type { Components } from 'react-markdown'
+import { copyText } from '../utils/clipboard'
 
 interface MarkdownRendererProps {
   content: string
@@ -15,38 +16,19 @@ const CopyButton = ({ text }: { text: string }) => {
   const [copied, setCopied] = useState(false)
 
   const handleCopy = useCallback(async () => {
-    if (!text) {
-      console.warn('No text to copy')
-      return
-    }
-    try {
-      // Try modern clipboard API first
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text)
-      } else {
-        // Fallback for older browsers or non-HTTPS
-        const textArea = document.createElement('textarea')
-        textArea.value = text
-        textArea.style.position = 'fixed'
-        textArea.style.left = '-9999px'
-        document.body.appendChild(textArea)
-        textArea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textArea)
-      }
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error('Failed to copy:', err)
-    }
+    if (!(await copyText(text))) return
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 2000)
   }, [text])
 
   return (
     <button
+      type="button"
       className={styles.copyButton}
       onClick={handleCopy}
       title={copied ? 'Copied!' : 'Copy code'}
       aria-label={copied ? 'Copied!' : 'Copy code'}
+      aria-live="polite"
     >
       {copied ? (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">

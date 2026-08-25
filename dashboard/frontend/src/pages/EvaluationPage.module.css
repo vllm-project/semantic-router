@@ -186,3 +186,41 @@
   height: 14px;
   flex: 0 0 14px;
 }
+
+@media (max-width: 720px) {
+  .container {
+    min-width: 0;
+    gap: 1rem;
+    padding: 0.75rem;
+  }
+
+  .header,
+  .errorBanner {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .errorBanner button {
+    min-height: 40px;
+  }
+
+  .tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+  }
+
+  .tab {
+    min-height: 42px;
+    flex: 1 0 auto;
+    justify-content: center;
+    padding-inline: 1rem;
+    white-space: nowrap;
+  }
+
+  .asyncState {
+    min-height: 220px;
+    padding: 1.25rem;
+  }
+}

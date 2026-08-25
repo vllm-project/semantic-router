@@ -30,7 +30,7 @@ Use `event` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     events:
       - name: critical_payment_event
@@ -62,7 +62,7 @@ A rule matches when at least one configured criterion is satisfied. **Confidence
 ## Example Decision
 
 ```yaml
-document:
+routing:
   decisions:
     - name: route_critical_event
       description: Route critical payment events to the fast response model.

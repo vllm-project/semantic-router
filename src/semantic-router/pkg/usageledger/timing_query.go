@@ -16,6 +16,7 @@ func (q PostgresQueries) timingHistograms(
 ) (timingPair, error) {
 	result := emptyTimingPair()
 	for _, metric := range timingMetrics() {
+		// #nosec G201 -- table/predicate and metric columns originate in the closed usage-query catalogs.
 		statement := fmt.Sprintf(`SELECT histogram.ordinality::integer - 1,
   sum(histogram.value::numeric)::text
 FROM %s r
@@ -54,6 +55,7 @@ func (q PostgresQueries) timingHistogramsByBucket(
 ) (map[string]timingPair, error) {
 	result := make(map[string]timingPair)
 	for _, metric := range timingMetrics() {
+		// #nosec G201 -- bucket/table/predicate and metric columns originate in closed catalogs.
 		statement := fmt.Sprintf(`SELECT %s AS bucket_start, histogram.ordinality::integer - 1,
   sum(histogram.value::numeric)::text
 FROM %s r
@@ -98,6 +100,7 @@ func (q PostgresQueries) timingHistogramsByValue(
 ) (map[string]timingPair, error) {
 	result := make(map[string]timingPair)
 	for _, metric := range timingMetrics() {
+		// #nosec G201 -- dimension/table/predicate and metric columns originate in closed catalogs.
 		statement := fmt.Sprintf(`SELECT %s AS dimension_value, histogram.ordinality::integer - 1,
   sum(histogram.value::numeric)::text
 FROM %s r

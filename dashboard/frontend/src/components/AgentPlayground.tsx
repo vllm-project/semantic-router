@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { useAuth } from '../contexts/AuthContext'
+import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
 import { useDelegatedInferenceSession } from '../hooks/useDelegatedInferenceSession'
 import { useAgentSessionRuntime } from '../hooks/useAgentSessionRuntime'
 import type { PlaygroundInvocation } from '../types/playgroundInvocation'
@@ -16,11 +17,10 @@ import type {
   AgentContentBlock,
   AgentSession,
   AgentSessionMode,
-  AgentTarget,
 } from '../generated/managementApiContract'
 import { routingManagementApi } from '../utils/routingManagementApi'
-import type { RouterModelOption } from '../utils/routerModelSelection'
 import ConfirmDialog from './ConfirmDialog'
+import InferenceKeySelector from './InferenceKeySelector'
 import {
   buildPromptWithAttachments,
   isPlaygroundImageAttachment,
@@ -34,6 +34,7 @@ import AgentConversationSidebar from './AgentConversationSidebar'
 import AgentPublicationReviewDialog from './AgentPublicationReviewDialog'
 import AgentTimeline from './AgentTimeline'
 import ProductIcon from './ProductIcon'
+import { buildAgentSessionInput } from './agentPlaygroundSession'
 import styles from './AgentPlayground.module.css'
 
 interface AgentPlaygroundProps {
@@ -41,10 +42,6 @@ interface AgentPlaygroundProps {
   fullscreen?: boolean
   invocation?: PlaygroundInvocation | null
   onInvocationConsumed?: () => void
-}
-
-function targetForModel(model: RouterModelOption): AgentTarget {
-  return { kind: model.kind === 'individual' ? 'model' : 'entrypoint', id: model.id }
 }
 
 function titleFromPrompt(prompt: string, mode: AgentSessionMode): string {
@@ -90,6 +87,7 @@ export default function AgentPlayground({
   onInvocationConsumed,
 }: AgentPlaygroundProps) {
   const { user } = useAuth()
+  const { selectedKey, setSelectedKeyId } = useInferenceRoutingAccess()
   const canUse = canUseAgent(user)
   const builderAvailable = canUseBuilderAgent(user)
   const canPublish = canPublishRouting(user)
@@ -105,7 +103,6 @@ export default function AgentPlayground({
   const runtime = useAgentSessionRuntime({ enabled: canUse, search })
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth >= 960)
   const [draftMode, setDraftMode] = useState<AgentSessionMode>('chat')
-  const [effectiveTeamId, setEffectiveTeamId] = useState('')
   const [input, setInput] = useState('')
   const [attachments, setAttachments] = useState<PlaygroundAttachment[]>([])
   const [localError, setLocalError] = useState<string | null>(null)
@@ -115,6 +112,7 @@ export default function AgentPlayground({
   const invocationHandled = useRef(false)
 
   const activeMode = runtime.activeSession?.mode ?? draftMode
+  const effectiveTeamId = runtime.activeSession?.effectiveTeamId ?? selectedKey?.contextTeamId ?? ''
   const activeApproval = useMemo(() => pendingApproval(runtime.events), [runtime.events])
   const activeApprovalPlanId = activeApproval?.planId
 
@@ -127,9 +125,9 @@ export default function AgentPlayground({
 
   useEffect(() => {
     if (!runtime.activeSession) return
+    setSelectedKeyId(runtime.activeSession.keyId)
     routing.setModel(runtime.activeSession.target.id)
     setDraftMode(runtime.activeSession.mode)
-    setEffectiveTeamId(runtime.activeSession.effectiveTeamId ?? '')
     setAttachments([])
     setInput('')
     setLocalError(null)
@@ -171,7 +169,6 @@ export default function AgentPlayground({
       setDraftMode(mode)
       setInput('')
       setAttachments([])
-      setEffectiveTeamId('')
       setLocalError(null)
       if (window.innerWidth < 960) setSidebarOpen(false)
     },
@@ -216,12 +213,16 @@ export default function AgentPlayground({
     try {
       let sessionId = runtime.activeSessionId
       if (!sessionId) {
-        const session = await runtime.createSession({
-          mode: activeMode,
-          ...(effectiveTeamId ? { effectiveTeamId } : {}),
-          target: targetForModel(selectedOption),
-          title: titleFromPrompt(input, activeMode),
-        })
+        if (!selectedKey) throw new Error('Choose an API key before starting a conversation.')
+        const session = await runtime.createSession(
+          buildAgentSessionInput({
+            keyId: selectedKey.keyId,
+            mode: activeMode,
+            effectiveTeamId,
+            model: selectedOption,
+            title: titleFromPrompt(input, activeMode),
+          }),
+        )
         sessionId = session.id
       }
       await runtime.sendTurn(content, sessionId)
@@ -300,26 +301,11 @@ export default function AgentPlayground({
           </div>
           <div className={styles.topbarActions}>
             <StreamState status={runtime.streamStatus} />
-            {(user?.managementTeams?.length ?? 0) > 1 && !runtime.activeSession ? (
-              <label className={styles.teamContext}>
-                <span className={styles.srOnly}>Team context</span>
-                <select
-                  value={effectiveTeamId}
-                  onChange={(event) => setEffectiveTeamId(event.target.value)}
-                  aria-label="Team context"
-                  disabled={runtime.mutating}
-                >
-                  <option value="">Personal</option>
-                  {user?.managementTeams
-                    ?.filter((team) => team.status === 'active')
-                    .map((team) => (
-                      <option key={team.teamId} value={team.teamId}>
-                        {team.name}
-                      </option>
-                    ))}
-                </select>
-              </label>
-            ) : null}
+            <InferenceKeySelector
+              className={styles.playgroundKeySelector}
+              disabled={Boolean(runtime.activeSession) || runtime.mutating}
+              label="Use"
+            />
             <button
               type="button"
               className={styles.iconButton}

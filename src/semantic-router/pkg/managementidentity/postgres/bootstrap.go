@@ -270,18 +270,18 @@ func (service *BootstrapService) bootstrapTransaction(ctx context.Context, reque
 			return bootstrapTransactionResult{result: result}, replayErr
 		}
 		var existingAdmin bool
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(
-  SELECT 1 FROM management_role_bindings binding
+		if queryErr := tx.QueryRowContext(ctx, `SELECT EXISTS(
+	  SELECT 1 FROM management_role_bindings binding
   JOIN management_roles role ON role.id=binding.role_id
   WHERE role.name='cluster_admin' AND role.builtin=TRUE
-		    AND binding.scope_kind='cluster' AND binding.status='active')`).Scan(&existingAdmin); err != nil {
-			return bootstrapTransactionResult{}, err
+			    AND binding.scope_kind='cluster' AND binding.status='active')`).Scan(&existingAdmin); queryErr != nil {
+			return bootstrapTransactionResult{}, queryErr
 		}
 		if existingAdmin {
 			return bootstrapTransactionResult{}, managementidentity.ErrBootstrapConsumed
 		}
-		if err := validateBootstrapSeed(ctx, tx); err != nil {
-			return bootstrapTransactionResult{}, err
+		if seedErr := validateBootstrapSeed(ctx, tx); seedErr != nil {
+			return bootstrapTransactionResult{}, seedErr
 		}
 		result, err := service.commitBootstrap(ctx, tx, request, digests, now)
 		return bootstrapTransactionResult{result: result}, err

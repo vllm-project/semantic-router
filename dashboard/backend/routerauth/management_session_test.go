@@ -95,6 +95,12 @@ func TestManagementSessionProviderExchangesPrincipalAssertionAndCachesToken(t *t
 			t.Fatalf("ManagementAccessToken() token=%q error=%v", token, tokenErr)
 		}
 	}
+	credential, credentialErr := provider.(*managementSessionProvider).managementCredential(
+		context.Background(), principal,
+	)
+	if credentialErr != nil || credential.managementSessionID != "10000000-0000-4000-8000-000000000003" {
+		t.Fatalf("management session ID = %q, error = %v", credential.managementSessionID, credentialErr)
+	}
 	if challengeCalls != 1 || exchangeCalls != 1 {
 		t.Fatalf("challenge calls=%d exchange calls=%d", challengeCalls, exchangeCalls)
 	}
@@ -145,6 +151,66 @@ func TestManagementSessionProviderRejectsInvalidSourceSessionExpiry(t *testing.T
 				t.Fatalf("assertion() error = %v, want ErrManagementSessionUnavailable", err)
 			}
 		})
+	}
+}
+
+func TestManagementSessionProviderRetiresDerivedSessionByIssuerSessionID(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	issuerID := "10000000-0000-4000-8000-000000000001"
+	var requestBody map[string]string
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", managementMediaType)
+		if request.URL.Path != managementBasePath+"/auth/backchannel-logout" {
+			http.NotFound(response, request)
+			return
+		}
+		if err := json.NewDecoder(request.Body).Decode(&requestBody); err != nil {
+			t.Error(err)
+		}
+		_ = json.NewEncoder(response).Encode(map[string]bool{"applied": true, "replayed": false})
+	}))
+	defer server.Close()
+
+	signer := &recordingAssertionSigner{}
+	providerValue, err := NewManagementSessionProvider(ManagementSessionOptions{
+		RouterURL: server.URL, IssuerURL: "https://dashboard.example.test", IssuerID: issuerID,
+		Signer: signer, Client: server.Client(), Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	provider := providerValue.(*managementSessionProvider)
+	provider.cache["dashboard-session-1"] = cachedManagementToken{
+		accessToken: "cached", managementSessionID: "router-session", expiresAt: now.Add(time.Minute),
+	}
+	if err := provider.RetireDashboardSession(context.Background(), "dashboard-session-1"); err != nil {
+		t.Fatal(err)
+	}
+	if requestBody["issuerId"] != issuerID || requestBody["logoutToken"] != "signed-dashboard-assertion" {
+		t.Fatalf("logout body = %#v", requestBody)
+	}
+	provider.mu.Lock()
+	_, cached := provider.cache["dashboard-session-1"]
+	provider.mu.Unlock()
+	if cached {
+		t.Fatal("retired Dashboard session remained in Management token cache")
+	}
+	signer.mu.Lock()
+	claims := signer.claims
+	signer.mu.Unlock()
+	if claims["iss"] != "https://dashboard.example.test" || claims["aud"] != managementAudience ||
+		claims["sid"] != "dashboard-session-1" {
+		t.Fatalf("logout claims = %#v", claims)
+	}
+	events, ok := claims["events"].(map[string]any)
+	if !ok || len(events) != 1 {
+		t.Fatalf("logout events = %#v", claims["events"])
+	}
+	if payload, exists := events[backchannelLogoutEvent]; !exists {
+		t.Fatalf("logout event is absent: %#v", events)
+	} else if details, valid := payload.(map[string]any); !valid || len(details) != 0 {
+		t.Fatalf("logout event payload = %#v", payload)
 	}
 }
 

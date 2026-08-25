@@ -65,15 +65,11 @@ def _bearer_management_auth(management: dict) -> dict | None:
     if mode is None or mode == "":
         mode = "disabled"
     if not isinstance(mode, str):
-        raise ValueError(
-            "management API auth mode must be disabled or bearer in standalone mode, or router in managed mode"
-        )
+        raise ValueError("management API auth mode must be disabled, bearer, or router")
     if mode in {"disabled", "router"}:
         return None
     if mode != "bearer":
-        raise ValueError(
-            "management API auth mode must be disabled or bearer in standalone mode, or router in managed mode"
-        )
+        raise ValueError("management API auth mode must be disabled, bearer, or router")
     return auth
 
 

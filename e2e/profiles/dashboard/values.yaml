@@ -1,30 +1,14 @@
 replicaCount: 2
 
 configOverride:
-  version: v0.4
+  version: v0.3
   global:
-    control_plane:
-      mode: managed
-      provider_catalog:
-        replica_id_env: VLLM_SR_REPLICA_ID
-        rollout_groups:
-        - plane: control
-          id: management
-        - plane: data
-          id: router
-        required_rollout_groups:
-        - plane: control
-          id: management
-        - plane: data
-          id: router
     stores:
-      access:
-        type: postgres
+      management:
         postgres:
           dsn_env: VLLM_SR_ACCESS_DATABASE_URL
           max_connections: 20
-      access_runtime:
-        type: redis
+      runtime:
         redis:
           url_env: VLLM_SR_ACCESS_REDIS_URL
           key_prefix: vllm-sr:e2e:access
@@ -49,7 +33,10 @@ configOverride:
         provider_kek_keyring_env: VLLM_SR_PROVIDER_KEK_KEYRING
       backend_egress:
         policy_file: /run/config/vllm-sr/backend-egress/policy.yaml
+      routing_security:
+        hmac_keyring_env: VLLM_SR_ROUTING_HMAC_KEYRING
       management_api:
+        enabled: true
         bind_address: 0.0.0.0
         port: 8080
         remote_exposure: false
@@ -61,7 +48,6 @@ configOverride:
           token_signing_keyring_env: VLLM_SR_MANAGEMENT_TOKEN_KEYRING
           service_account_hmac_keyring_env: VLLM_SR_SERVICE_ACCOUNT_HMAC_KEYRING
           invitation_hmac_keyring_env: VLLM_SR_INVITATION_HMAC_KEYRING
-          control_plane_hmac_keyring_env: VLLM_SR_CONTROL_PLANE_HMAC_KEYRING
           response_kek_keyring_env: VLLM_SR_RESPONSE_KEK_KEYRING
           bootstrap:
             token_file: /run/secrets/vllm-sr/bootstrap/bootstrap/router-token
@@ -83,7 +69,6 @@ configOverride:
         capability_ttl: 30s
         max_request_body_bytes: 67108864
     integrations: {}
-
 envFromSecrets:
 - semantic-router-dashboard-e2e-router
 extraEnv:

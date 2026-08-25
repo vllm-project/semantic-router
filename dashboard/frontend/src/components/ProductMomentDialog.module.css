@@ -170,10 +170,17 @@
 }
 
 @media (max-width: 620px) {
+  .backdrop {
+    align-items: center;
+    padding: 0.5rem;
+  }
+
   .dialog {
     height: auto;
-    min-height: 420px;
+    max-height: calc(100dvh - 1rem);
+    min-height: min(420px, calc(100dvh - 1rem));
     padding: 2rem 1.25rem 1.4rem;
+    border-radius: 16px;
   }
 
   .actions {

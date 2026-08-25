@@ -65,13 +65,13 @@ high-accuracy tasks, not as a default for all traffic.
 
 ## Virtual models and recipes
 
-An Entrypoint maps one public name and optional aliases to a Recipe and a
+An Entrypoint maps one or more public `model_names` to a Recipe and a
 complete decision assignment. The compiler pins immutable identities when it
 publishes the routing snapshot:
 
 ```yaml
 entrypoints:
-  - name: acme/assistant-fast
+  - model_names: [acme/assistant-fast]
     recipe: fast
     assignments:
       default-fast-route:
@@ -81,7 +81,7 @@ entrypoints:
 
 recipes:
   - name: fast
-    document:
+    routing:
       strategy: priority
       decisions:
         - name: default-fast-route

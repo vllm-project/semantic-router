@@ -69,12 +69,12 @@ func (runtime *capturingDispatchCapabilityRuntime) VerifyDispatchOutcome(
 	return runtime.outcome, runtime.verifyErr
 }
 
-func TestManagedDispatchCapabilityBindsFinalMutatedBody(t *testing.T) {
+func TestDispatchStateCapabilityBindsFinalMutatedBody(t *testing.T) {
 	runtime := &capturingDispatchCapabilityRuntime{}
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{
-			ControlPlane: config.ControlPlaneConfig{Mode: config.ControlPlaneModeManaged},
-			Access:       config.AccessServiceConfig{Enabled: true},
+			AccessStore: &config.AccessStoreConfig{Type: config.AccessStoreTypePostgres},
+			Access:      config.AccessServiceConfig{Enabled: true},
 			BackendModels: config.BackendModels{
 				ModelConfig: map[string]config.ModelParams{
 					"public-model": {ResourceID: "model-id", ResourceRevision: 7},
@@ -102,7 +102,7 @@ func TestManagedDispatchCapabilityBindsFinalMutatedBody(t *testing.T) {
 				RequestDigest: admissionDigest,
 			},
 		},
-		ManagedDispatch: &managedRequestDispatch{
+		DispatchState: &requestDispatchState{
 			primaryDispatchID: "dispatch", primaryCandidateCount: 1,
 			dispatches: []*inferenceDispatch{{
 				id: "dispatch", model: "public-model", modelID: "model-id",

@@ -38,8 +38,22 @@ func TestPolicyOpenAPIUsesOneOfForExistingOrInlineRateBinding(t *testing.T) {
 		bulk.Properties["items"].MaxItems == nil || *bulk.Properties["items"].MaxItems != 1000 {
 		t.Fatalf("RateLimitBindingBulkApplyRequest = %#v, found=%t", bulk, found)
 	}
-	duration := document.Components.Schemas["RateLimitRuleInput"].Properties["window"]
-	if duration.Type != "string" || duration.Pattern != canonicalISODurationPattern {
-		t.Fatalf("RateLimitRuleInput.window = %#v", duration)
+	rules := document.Components.Schemas["RateLimitRuleInput"]
+	if len(rules.OneOf) != 9 {
+		t.Fatalf("RateLimitRuleInput variants = %d, want 9", len(rules.OneOf))
+	}
+	for _, variant := range rules.OneOf {
+		algorithm := variant.Properties["algorithm"]
+		if len(algorithm.Enum) != 1 || variant.AdditionalProperties == nil || *variant.AdditionalProperties {
+			t.Fatalf("RateLimitRuleInput variant is not closed and discriminated: %#v", variant)
+		}
+		if window, found := variant.Properties["window"]; found &&
+			(window.Type != "string" || window.Pattern != canonicalISODurationPattern) {
+			t.Fatalf("RateLimitRuleInput.window = %#v", window)
+		}
+	}
+	inline := document.Components.Schemas["APIKeyInlineRateLimitPolicy"].Properties["rules"].Items
+	if inline == nil || len(inline.OneOf) != len(rules.OneOf) {
+		t.Fatalf("API-key inline rules do not share the policy union: %#v", inline)
 	}
 }

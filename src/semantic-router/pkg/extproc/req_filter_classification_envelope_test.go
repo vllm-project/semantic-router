@@ -9,17 +9,20 @@ import (
 
 func TestMetadataDecisionEvaluatesWithoutTextContent(t *testing.T) {
 	cfg, err := parseExtProcAuthoringConfig(t, `
-version: v0.4
-models:
-  - name: model-a
-    card: {}
-    connections:
-      - provider: vllm
-        endpoint: http://127.0.0.1:8000
-        model: model-a
+version: v0.3
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000
+routing:
+  modelCards:
+    - name: model-a
 recipes:
   - name: canary
-    document:
+    routing:
       signals:
         metadata:
           - name: canary
@@ -33,7 +36,7 @@ recipes:
             type: metadata
             name: canary
 entrypoints:
-  - name: vllm-sr/auto
+  - model_names: [vllm-sr/auto]
     recipe: canary
     assignments:
       canary-route:

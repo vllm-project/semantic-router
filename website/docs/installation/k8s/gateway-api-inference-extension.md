@@ -56,13 +56,17 @@ by the Gateway API route. The exact value must agree across all three objects:
 
 ```yaml
 # Router config fragment
-models:
-  - name: local/general
-    card: {capabilities: [chat]}
-    connections:
-      - provider: vllm
-        endpoint: http://general-pool.inference.svc.cluster.local:8000/v1
-        model: served-general
+providers:
+  models:
+    - name: local/general
+      provider_model_id: served-general
+      backend_refs:
+        - provider: vllm
+          endpoint: http://general-pool.inference.svc.cluster.local:8000/v1
+routing:
+  modelCards:
+    - name: local/general
+      capabilities: [chat]
 ```
 
 ```yaml

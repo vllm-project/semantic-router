@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
+import { copyText } from '../utils/clipboard'
 import styles from './OpenClawPage.module.css'
 import type {
   ContainerConfig,
@@ -49,15 +50,16 @@ export function OpenClawWorkerDeployStep({
   )
 
   const copyToClipboard = (text: string, label: string) => {
-    void navigator.clipboard.writeText(text).then(
-      () => {
+    void copyText(text).then((success) => {
+      if (success) {
         setCopyError('')
         setCopied(label)
         if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
         copyTimerRef.current = window.setTimeout(() => setCopied(''), 2000)
-      },
-      () => setCopyError('Clipboard access was denied. Select and copy the command manually.'),
-    )
+        return
+      }
+      setCopyError('Copy is unavailable. Select the command and copy it manually.')
+    })
   }
 
   const selectedSkillNames = skills.filter((skill) => selectedSkills.includes(skill.id))
@@ -226,6 +228,7 @@ export function OpenClawWorkerDeployStep({
                         type="button"
                         className={styles.codePreviewCopy}
                         onClick={() => copyToClipboard(provisionResult.dockerCmd, 'docker')}
+                        aria-live="polite"
                       >
                         {copied === 'docker' ? 'Copied!' : 'Copy'}
                       </button>
@@ -242,6 +245,7 @@ export function OpenClawWorkerDeployStep({
                         type="button"
                         className={styles.codePreviewCopy}
                         onClick={() => copyToClipboard(provisionResult.composeYaml, 'compose')}
+                        aria-live="polite"
                       >
                         {copied === 'compose' ? 'Copied!' : 'Copy'}
                       </button>

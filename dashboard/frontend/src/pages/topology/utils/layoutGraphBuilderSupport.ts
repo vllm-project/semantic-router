@@ -1,6 +1,6 @@
-import { Edge } from 'reactflow'
-import { DecisionConfig, ModelRefConfig } from '../types'
-import { LAYOUT_CONFIG } from '../constants'
+import { Edge, MarkerType, Node } from 'reactflow'
+import { DecisionConfig, ModelRefConfig, SignalType, TestQueryResult } from '../types'
+import { EDGE_COLORS, LAYOUT_CONFIG, SIGNAL_LATENCY } from '../constants'
 import { collectRuleConditions, summarizeRuleNode } from './ruleTree'
 
 export interface ModelConnection {
@@ -90,6 +90,70 @@ export function getSignalGroupHeight(signals: { name: string }[], collapsed: boo
   if (collapsed) return 70
   const itemCount = Math.min(signals.length, 5)
   return signalGroupBaseHeight + itemCount * signalItemHeight
+}
+
+export function appendDynamicSignalGroups({
+  testResult,
+  activeSignalTypes,
+  nodes,
+  edges,
+  nodeDimensions,
+  sourceId,
+}: {
+  testResult?: TestQueryResult | null
+  activeSignalTypes: SignalType[]
+  nodes: Node[]
+  edges: Edge[]
+  nodeDimensions: Map<string, { width: number; height: number }>
+  sourceId: string
+}): void {
+  if (!testResult?.matchedSignals?.length) return
+  const existingGroupTypes = new Set(activeSignalTypes)
+  const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number }[]>()
+  testResult.matchedSignals.forEach((signal) => {
+    if (existingGroupTypes.has(signal.type)) return
+    const signals = dynamicSignalsByType.get(signal.type) ?? []
+    signals.push({ name: signal.name, confidence: signal.score })
+    dynamicSignalsByType.set(signal.type, signals)
+  })
+  dynamicSignalsByType.forEach((signals, signalType) => {
+    const signalGroupId = `signal-group-${signalType}`
+    const syntheticSignals = signals.map((signal) => ({
+      type: signalType,
+      name: signal.name,
+      description: `Detected by ML model (confidence: ${signal.confidence ? `${(signal.confidence * 100).toFixed(0)}%` : 'N/A'})`,
+      latency: SIGNAL_LATENCY[signalType] || '~100ms',
+      config: {},
+      isDynamic: true,
+    }))
+    nodeDimensions.set(signalGroupId, {
+      width: 160,
+      height: getSignalGroupHeight(syntheticSignals, false),
+    })
+    nodes.push({
+      id: signalGroupId,
+      type: 'signalGroupNode',
+      position: { x: 0, y: 0 },
+      data: {
+        signalType,
+        signals: syntheticSignals,
+        collapsed: false,
+        isHighlighted: true,
+        isDynamic: true,
+      },
+    })
+    edges.push(
+      createFlowEdge({
+        id: `e-${sourceId}-${signalGroupId}`,
+        source: sourceId,
+        target: signalGroupId,
+        animated: true,
+        style: { stroke: EDGE_COLORS.normal, strokeWidth: 2, strokeDasharray: '5, 5' },
+        markerEnd: { type: MarkerType.ArrowClosed, color: EDGE_COLORS.normal },
+      }),
+    )
+    activeSignalTypes.push(signalType)
+  })
 }
 
 export function getPluginChainHeight(plugins: { type: string }[], collapsed: boolean): number {

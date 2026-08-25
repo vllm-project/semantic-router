@@ -405,16 +405,20 @@ WHERE namespace_id = $1 AND id = $2 RETURNING revision, revoked_at`, request.Nam
 		if revokeErr != nil {
 			return delegationmanagement.MutationResult{}, revokeErr
 		}
+		revisionValue, revisionErr := positiveUint64(revision, "delegated session revision")
+		if revisionErr != nil {
+			return delegationmanagement.MutationResult{}, revisionErr
+		}
 		receipt, revokeErr := appendMutationRecords(ctx, tx, accesscontrol.NamespaceID(request.NamespaceID), outboxMutation{
 			AggregateType: "delegated_inference_session", AggregateID: session.ID,
-			AggregateRevision: accesscontrol.Revision(revision), Operation: outboxDeleted,
+			AggregateRevision: accesscontrol.Revision(revisionValue), Operation: outboxDeleted,
 			References: map[string]string{"apiKeyId": session.APIKeyID},
 		}, meta)
 		if revokeErr != nil {
 			return delegationmanagement.MutationResult{}, revokeErr
 		}
 		revokedAt = revokedAt.UTC()
-		session.Status, session.RevokedAt, session.Revision = delegationmanagement.SessionRevoked, &revokedAt, uint64(revision)
+		session.Status, session.RevokedAt, session.Revision = delegationmanagement.SessionRevoked, &revokedAt, revisionValue
 		session.TokenHMAC = nil
 		return delegationmanagement.MutationResult{Session: session, DesiredRevision: uint64(receipt.DesiredRevision)}, nil
 	})
@@ -449,6 +453,14 @@ RETURNING delegation_epoch, revision`, mutation.NamespaceID, mutation.KeyID).Sca
 		if revokeAllErr != nil {
 			return delegationmanagement.RevokeAllResult{}, revokeAllErr
 		}
+		epochValue, conversionErr := positiveUint64(epoch, "delegation epoch")
+		if conversionErr != nil {
+			return delegationmanagement.RevokeAllResult{}, conversionErr
+		}
+		revisionValue, conversionErr := positiveUint64(revision, "API-key revision")
+		if conversionErr != nil {
+			return delegationmanagement.RevokeAllResult{}, conversionErr
+		}
 		if _, err := tx.ExecContext(ctx, `UPDATE delegated_inference_sessions
 SET status = 'revoked', revoked_at = clock_timestamp(), revision = revision + 1
 WHERE namespace_id = $1 AND api_key_id = $2 AND status = 'active'`, mutation.NamespaceID, mutation.KeyID); err != nil {
@@ -456,14 +468,14 @@ WHERE namespace_id = $1 AND api_key_id = $2 AND status = 'active'`, mutation.Nam
 		}
 		receipt, revokeAllErr := appendMutationRecords(ctx, tx, accesscontrol.NamespaceID(mutation.NamespaceID), outboxMutation{
 			AggregateType: "api_key", AggregateID: mutation.KeyID,
-			AggregateRevision: accesscontrol.Revision(revision), Operation: outboxUpdated,
+			AggregateRevision: accesscontrol.Revision(revisionValue), Operation: outboxUpdated,
 			References: map[string]string{"delegationEpoch": fmt.Sprint(epoch)},
 		}, meta)
 		if revokeAllErr != nil {
 			return delegationmanagement.RevokeAllResult{}, revokeAllErr
 		}
 		if err := commandpostgres.CompleteResource(ctx, tx, mutation.Command, managementcommand.ResourceResult{
-			ResourceType: "api_key", ResourceID: mutation.KeyID, ResourceRevision: uint64(revision), ResponseStatus: 204,
+			ResourceType: "api_key", ResourceID: mutation.KeyID, ResourceRevision: revisionValue, ResponseStatus: 204,
 		}); err != nil {
 			return delegationmanagement.RevokeAllResult{}, err
 		}
@@ -472,7 +484,7 @@ WHERE namespace_id = $1 AND api_key_id = $2 AND status = 'active'`, mutation.Nam
 			return delegationmanagement.RevokeAllResult{}, err
 		}
 		return delegationmanagement.RevokeAllResult{
-			KeyID: mutation.KeyID, DelegationEpoch: uint64(epoch),
+			KeyID: mutation.KeyID, DelegationEpoch: epochValue,
 			DesiredRevision: uint64(receipt.DesiredRevision), QuotaPartition: partition,
 		}, nil
 	})
@@ -531,7 +543,11 @@ WHERE aggregate_id = $1 ORDER BY desired_revision DESC LIMIT 1`, aggregateID).Sc
 	if err != nil || desired <= 0 {
 		return 0, delegationmanagement.ErrUnavailable
 	}
-	return uint64(desired), nil
+	desiredValue, err := positiveUint64(desired, "desired policy revision")
+	if err != nil {
+		return 0, delegationmanagement.ErrUnavailable
+	}
+	return desiredValue, nil
 }
 
 func latestNamespaceDesiredRevision(ctx context.Context, source queryRower, namespaceID string) (uint64, error) {
@@ -552,9 +568,13 @@ FROM access_api_keys k JOIN access_namespaces n ON n.id = k.namespace_id
 WHERE k.namespace_id = $1 AND k.id = $2`, namespaceID, keyID).Scan(&epoch, &partition); err != nil {
 		return delegationmanagement.RevokeAllResult{}, err
 	}
+	epochValue, err := positiveUint64(epoch, "delegation epoch")
+	if err != nil {
+		return delegationmanagement.RevokeAllResult{}, err
+	}
 	desired, err := latestAggregateDesiredRevision(ctx, tx, keyID)
 	return delegationmanagement.RevokeAllResult{
-		KeyID: keyID, DelegationEpoch: uint64(epoch),
+		KeyID: keyID, DelegationEpoch: epochValue,
 		DesiredRevision: desired, QuotaPartition: partition, Replayed: replayed,
 	}, err
 }

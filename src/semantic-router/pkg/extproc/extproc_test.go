@@ -2215,8 +2215,8 @@ func (r *OpenAIRouter) HandleRequestBody(v *ext_proc.ProcessingRequest_RequestBo
 		}
 		ctx.TraceContext = newExtprocTestRoutingContext(parent)
 	}
-	if ctx.ManagedDispatch == nil {
-		ctx.ManagedDispatch = &managedRequestDispatch{requestID: ctx.RequestID}
+	if ctx.DispatchState == nil {
+		ctx.DispatchState = &requestDispatchState{requestID: ctx.RequestID}
 	}
 	return r.handleRequestBody(v, ctx)
 }

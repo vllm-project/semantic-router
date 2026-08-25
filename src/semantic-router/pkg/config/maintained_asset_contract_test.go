@@ -122,7 +122,7 @@ var maintainedTemplatedConfigAssets = []templatedConfigAsset{
 	},
 }
 
-func TestMaintainedConfigAssetsUseCanonicalV04Contract(t *testing.T) {
+func TestMaintainedConfigAssetsUseCanonicalV03Contract(t *testing.T) {
 	for _, rel := range maintainedFullConfigAssets {
 		t.Run(rel, func(t *testing.T) {
 			validateMaintainedConfigAsset(t, rel, readMaintainedConfigAsset(t, rel))
@@ -349,7 +349,7 @@ func assertCanonicalTopLevelKeys(t *testing.T, rel string, raw map[string]interf
 		"bert_model",
 	} {
 		if _, ok := raw[key]; ok {
-			t.Fatalf("%s uses unsupported top-level key %q; use the v0.4 models/recipes/entrypoints/global contract", rel, key)
+			t.Fatalf("%s uses unsupported top-level key %q; use the v0.3 providers/routing/recipes/entrypoints/global contract", rel, key)
 		}
 	}
 }

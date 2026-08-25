@@ -134,6 +134,13 @@ make recipe-conformance-eval \
   RECIPE_CONFORMANCE_RECIPE=<name> \
   RECIPE_CONFORMANCE_ROUTER_URL=http://127.0.0.1:8080
 
+# A distribution containing several Recipes has no bundled Models or Entrypoints.
+# Bind each Recipe to the published Entrypoint used by this live environment.
+make recipe-conformance-eval \
+  RECIPE_CONFORMANCE_RECIPE=mom-v1 \
+  RECIPE_CONFORMANCE_ROUTER_URL=http://127.0.0.1:8080 \
+  RECIPE_CONFORMANCE_ENTRYPOINTS="balance=vllm-sr/blend speed=vllm-sr/lite cost=vllm-sr/cost accuracy=vllm-sr/ultra vault=vllm-sr/vault"
+
 # Build the CPU router and run every maintained recipe.
 make recipe-conformance-live-cpu-all
 ```

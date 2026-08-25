@@ -57,7 +57,7 @@ func TestRegistryReturnsDefensiveCopies(t *testing.T) {
 
 func TestRegistryMatchesNormativeEndpointInventory(t *testing.T) {
 	const (
-		coreManagementEndpointCount = 192
+		coreManagementEndpointCount = 195
 		agentEndpointCount          = 36
 	)
 	documentPath := filepath.Join("..", "..", "..", "..", "website", "docs", "proposals", "router-native-access-control-management-api.md")
@@ -98,6 +98,7 @@ func TestCrossFamilyPermissionExpressions(t *testing.T) {
 	}{
 		{MethodGET, BasePath + "/users/{userId}/effective-policy", []string{"user.read@user", "access_policy.read@user", "rate_policy.read@user"}},
 		{MethodGET, BasePath + "/api-keys/{keyId}/quota", []string{"key.read@key", "quota.read@all_returned_bindings"}},
+		{MethodGET, BasePath + "/api-keys/{keyId}/routing-catalog", []string{"key.read@key", "access_policy.read@key", "routing_context.read@key"}},
 		{MethodPOST, BasePath + "/providers/{providerId}:discover-models", []string{"provider_catalog.read@request_namespace", "provider_credential.read@credential", "provider_credential.use@credential", "routing.manage@request_namespace"}},
 		{MethodPOST, BasePath + "/routing/entrypoints/{entrypointId}:resolve", []string{"routing.read@target", "routing.read@all_dependencies", "routing_context.read@subject", "routing_context.manage@subject"}},
 		{MethodPOST, BasePath + "/operations/{operationId}:cancel", []string{"self.manage@intrinsic_self", "operation.manage@operation_targets", "RECORDED(original_domain_mutation)"}},

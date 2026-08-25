@@ -3,15 +3,20 @@
 # =============================================================================
 
 MODEL anthropic/claude-opus-4.6 {
-  capabilities: ["chat", "health_guidance", "high_stakes", "legal_analysis", "text"]
+  capabilities: ["chat", "legal_analysis", "health_guidance", "high_stakes", "text"]
 }
 
 MODEL google/gemini-2.5-flash-lite {
-  capabilities: ["chat", "coding", "explanation", "low_cost", "text"]
+  capabilities: ["chat", "low_cost", "explanation", "coding", "text"]
 }
 
 MODEL google/gemini-3.1-pro {
-  capabilities: ["architecture", "chat", "code", "reasoning", "research", "text"]
+  capabilities: ["chat", "reasoning", "architecture", "research", "code", "text"]
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL openai/gpt5.4 {
@@ -19,8 +24,8 @@ MODEL openai/gpt5.4 {
 }
 
 MODEL qwen/qwen3.6-rocm {
-  capabilities: ["chat", "privacy_locality", "private_code", "simple_qa", "text", "tool_use"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
+  capabilities: ["chat", "privacy_locality", "private_code", "simple_qa", "tool_use", "text"]
+  reasoning: { type: "chat_template_kwargs" }
 }
 
 # =============================================================================
@@ -40,6 +45,7 @@ ENTRYPOINT {
     { decision: "local_privacy_policy", models: [{ model: "qwen/qwen3.6-rocm", weight: "1" }] },
     { decision: "local_security_containment", models: [{ model: "qwen/qwen3.6-rocm", weight: "1" }] },
     { decision: "medium_general", models: [{ model: "google/gemini-2.5-flash-lite", weight: "1" }] },
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "simple_general", models: [{ model: "qwen/qwen3.6-rocm", weight: "1" }] },
     { decision: "simple_math_fast_path", models: [{ model: "qwen/qwen3.6-rocm", weight: "1" }] },
   ]
@@ -254,6 +260,11 @@ RECIPE default (description = "Default routing recipe.") {
     predicate: { gt: 0.08 }
   }
 
+  SIGNAL conversation agent_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL conversation multi_turn_user {
     feature: { source: { role: "user", type: "message" }, type: "count" }
     predicate: { gte: 2 }
@@ -369,6 +380,21 @@ RECIPE default (description = "Default routing recipe.") {
     PRIORITY 340
     TIER 1
     WHEN projection("policy_security_local_only")
+    PLUGIN router_replay {
+      enabled: true
+      max_records: 10000
+      capture_request_body: true
+      capture_response_body: true
+      max_body_bytes: 2048
+      max_tool_trace_steps: 100
+    }
+  }
+
+  ROUTE omni (description = "Understand image-bearing requests locally without bypassing security containment.") {
+    PRIORITY 330
+    TIER 1
+    WHEN conversation("agent_has_images")
+    ALGORITHM static
     PLUGIN router_replay {
       enabled: true
       max_records: 10000

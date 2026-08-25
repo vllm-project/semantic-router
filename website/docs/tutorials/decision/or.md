@@ -29,7 +29,7 @@ Use `OR` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: business_or_law_route
       description: Share one route across either business or law traffic.

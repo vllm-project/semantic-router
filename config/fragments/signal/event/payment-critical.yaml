@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     events:
       - name: critical_payment_event

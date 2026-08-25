@@ -63,6 +63,22 @@ func TestManagerCoordinatesFirstNonrestrictiveAndRestrictivePublications(t *test
 	})
 }
 
+func TestManagerFailsClosedUntilDiscoveredNamespaceHasAnActivePublication(t *testing.T) {
+	reference := accesspublisher.NamespacePublication{NamespaceID: "namespace-unpublished", QuotaPartition: "partition-unpublished"}
+	store := newFakeStore(reference)
+	manager, cancel := runTestManager(t, store, newFakeSnapshots(), "replica-unpublished")
+	defer cancel()
+
+	waitFor(t, "unpublished namespace fail closed", func() bool {
+		status := manager.Status()
+		return !status.Ready && len(status.Namespaces) == 1 &&
+			status.Namespaces[0].Reason == "publication_unavailable"
+	})
+	if _, ready := manager.Current(reference.NamespaceID); ready {
+		t.Fatal("Current returned a generation before the namespace had an active publication")
+	}
+}
+
 func TestManagerFailsClosedOnCorruptCandidate(t *testing.T) {
 	reference := accesspublisher.NamespacePublication{NamespaceID: "namespace-corrupt", QuotaPartition: "partition-corrupt"}
 	active := runtimeIdentity(reference, 1, false)
@@ -112,6 +128,30 @@ func TestManagerRetriesActivationRaceWithoutSwitchingStaleGeneration(t *testing.
 	if snapshots.wasActivated(first.PublicationID) {
 		t.Fatal("stale generation was switched after the active gate raced ahead")
 	}
+}
+
+func TestManagerPollingRecoversWhenPublicationNotificationsAreLost(t *testing.T) {
+	reference := accesspublisher.NamespacePublication{NamespaceID: "namespace-lost-notify", QuotaPartition: "partition-lost-notify"}
+	first := runtimeIdentity(reference, 1, false)
+	second := runtimeIdentity(reference, 2, false)
+	store := newFakeStore(reference)
+	store.activate(first)
+	snapshots := newFakeSnapshots()
+	manager, cancel := runTestManager(t, store, snapshots, "replica-lost-notify")
+	defer cancel()
+	waitFor(t, "initial publication without notification", func() bool { return manager.Ready() == nil })
+
+	// Deliberately mutate the durable store without sending a wake-up. Periodic
+	// polling, rather than the lossy notification channel, remains authoritative.
+	store.setCandidate(second)
+	waitFor(t, "candidate acknowledgement after lost notification", func() bool {
+		return store.routingAcked(second.PublicationID)
+	})
+	store.activate(second)
+	waitFor(t, "activation after lost notification", func() bool {
+		identity, ready := manager.Current(reference.NamespaceID)
+		return ready && identity.SameGeneration(second)
+	})
 }
 
 func TestManagerFailsClosedWhenLeaseRenewalIsLost(t *testing.T) {
@@ -276,6 +316,11 @@ type fakeStore struct {
 	registerErr      error
 	fleetRegisterErr error
 	lease            time.Duration
+	notifications    chan struct{}
+}
+
+func (s *fakeStore) PublicationNotifications(context.Context) <-chan struct{} {
+	return s.notifications
 }
 
 func (s *fakeStore) RegisterFleetReplica(_ context.Context, _ string) (time.Time, error) {
@@ -295,7 +340,7 @@ func newFakeStore(reference accesspublisher.NamespacePublication) *fakeStore {
 		},
 		publications: make(map[string]accesspublisher.LoadedRoutingPublication),
 		loadErrors:   make(map[string]error), routingAcks: make(map[string]bool), barrierAcks: make(map[string]bool),
-		lease: 200 * time.Millisecond,
+		lease: 200 * time.Millisecond, notifications: make(chan struct{}, 1),
 	}
 }
 

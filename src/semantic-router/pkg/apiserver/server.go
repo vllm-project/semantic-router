@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
@@ -41,7 +42,7 @@ type InitOptions struct {
 	RemoteExposure  *bool
 	AuthMode        string
 	RuntimeRegistry *routerruntime.Registry
-	ManagedAPI      ManagedAPI
+	ManagementAPI   ManagementAPI
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
@@ -62,36 +63,87 @@ func InitWithOptions(opts InitOptions) (resultErr error) {
 			opts.OnListenerStart(resultErr)
 		}
 	}()
-	// Get the global configuration instead of loading from file
-	// This ensures we use the same config as the rest of the application
+	apiServer, managementCfg, err := prepareClassificationAPIServer(opts)
+	if err != nil {
+		return err
+	}
+	server := &http.Server{
+		Addr:         managementCfg.ListenAddress(),
+		Handler:      apiServer.setupRoutes(),
+		ReadTimeout:  apiReadTimeout,
+		WriteTimeout: apiWriteTimeout,
+		IdleTimeout:  apiIdleTimeout,
+	}
+	if apiServer.managementTLS != nil {
+		server.TLSConfig = apiServer.managementTLS.config
+	}
+
+	logging.ComponentEvent("apiserver", "server_listening", map[string]interface{}{
+		"address":         managementCfg.ListenAddress(),
+		"bind_address":    managementCfg.BindAddress,
+		"port":            managementCfg.Port,
+		"remote_exposure": managementCfg.RemoteExposure,
+		"auth_mode":       managementCfg.Auth.Mode,
+		"transport":       managementListenerTransport(apiServer.managementTLS),
+	})
+	runtimeContext := opts.Context
+	if runtimeContext == nil {
+		runtimeContext = context.Background()
+	}
+	listenerContext, stopListener := context.WithCancel(runtimeContext)
+	var tlsReloadDone <-chan struct{}
+	if apiServer.managementTLS != nil {
+		tlsReloadDone = apiServer.managementTLS.Watch(listenerContext)
+	}
+	err = serveManagementListener(listenerContext, server, func() {
+		listenerStarted = true
+		if opts.OnListenerStart != nil {
+			opts.OnListenerStart(nil)
+		}
+	})
+	stopListener()
+	if tlsReloadDone != nil {
+		<-tlsReloadDone
+	}
+	return err
+}
+
+func prepareClassificationAPIServer(
+	opts InitOptions,
+) (*ClassificationAPIServer, config.ManagementAPIConfig, error) {
+	// Resolve the live Router generation so the API and data plane share one
+	// configuration authority.
 	cfg := resolveAPIServerConfig(opts.RuntimeRegistry)
 	if cfg == nil {
-		return fmt.Errorf("configuration not initialized")
+		return nil, config.ManagementAPIConfig{}, fmt.Errorf("configuration not initialized")
+	}
+	capabilities, err := runtimecapabilities.Derive(cfg)
+	if err != nil {
+		return nil, config.ManagementAPIConfig{}, fmt.Errorf("derive runtime capabilities: %w", err)
 	}
 
 	managementCfg, err := cfg.ManagementAPI.ResolvedManagementAPI(config.ManagementAPIRuntimeOptions{
-		ControlPlaneMode: cfg.ControlPlane.Mode,
-		Port:             opts.Port,
-		BindAddress:      opts.BindAddress,
-		RemoteExposure:   opts.RemoteExposure,
-		AuthMode:         opts.AuthMode,
+		DurableRouting: capabilities.DurableRouting,
+		Port:           opts.Port,
+		BindAddress:    opts.BindAddress,
+		RemoteExposure: opts.RemoteExposure,
+		AuthMode:       opts.AuthMode,
 	})
 	if err != nil {
-		return fmt.Errorf("invalid management API configuration: %w", err)
+		return nil, config.ManagementAPIConfig{}, fmt.Errorf("invalid management API configuration: %w", err)
 	}
 	cfg.ManagementAPI = managementCfg
-	managedMode := cfg.ControlPlane.Mode == config.ControlPlaneModeManaged
-	if managedMode && opts.ManagedAPI == nil {
-		return fmt.Errorf("managed control-plane mode requires a Router-native Management API")
+	if capabilities.ManagementAPI && opts.ManagementAPI == nil {
+		return nil, config.ManagementAPIConfig{}, fmt.Errorf("enabled Management API requires a Router-native Management application")
 	}
-	if !managedMode && opts.ManagedAPI != nil {
-		return fmt.Errorf("standalone control-plane mode rejects a Router-native Management API")
+	if !capabilities.ManagementAPI && opts.ManagementAPI != nil {
+		return nil, config.ManagementAPIConfig{}, fmt.Errorf("disabled Management API rejects a Router-native Management application")
 	}
 	var listenerTLS *managementListenerTLS
-	if managedMode {
+	if capabilities.ManagementAPI {
 		listenerTLS, err = loadManagementListenerTLS(managementCfg.TLS, time.Now())
 		if err != nil {
-			return fmt.Errorf("initialize managed Management listener TLS: %w", err)
+			return nil, config.ManagementAPIConfig{}, fmt.Errorf("initialize Management API listener TLS: %w", err)
 		}
 	}
 
@@ -135,64 +187,23 @@ func InitWithOptions(opts InitOptions) (resultErr error) {
 		buildClassificationResolver(opts.RuntimeRegistry),
 	)
 
-	// Create server instance
 	apiServer := &ClassificationAPIServer{
 		classificationSvc:   liveClassificationSvc,
 		config:              cfg,
 		runtimeConfig:       newLiveRuntimeConfig(cfg, buildConfigResolver(opts.RuntimeRegistry)),
 		runtimeRegistry:     opts.RuntimeRegistry,
+		capabilities:        capabilities,
 		configPath:          opts.ConfigPath,
 		memoryStore:         memoryStore,
 		startupStatusConfig: &cfg.StartupStatus,
-		managedAPI:          opts.ManagedAPI,
+		managementAPI:       opts.ManagementAPI,
 		managementTLS:       listenerTLS,
 	}
-
-	// Create HTTP server with routes
-	mux := apiServer.setupRoutes()
-	server := &http.Server{
-		Addr:         managementCfg.ListenAddress(),
-		Handler:      mux,
-		ReadTimeout:  apiReadTimeout,
-		WriteTimeout: apiWriteTimeout,
-		IdleTimeout:  apiIdleTimeout,
-	}
-	if listenerTLS != nil {
-		server.TLSConfig = listenerTLS.config
-	}
-
-	logging.ComponentEvent("apiserver", "server_listening", map[string]interface{}{
-		"address":         managementCfg.ListenAddress(),
-		"bind_address":    managementCfg.BindAddress,
-		"port":            managementCfg.Port,
-		"remote_exposure": managementCfg.RemoteExposure,
-		"auth_mode":       managementCfg.Auth.Mode,
-		"transport":       managementListenerTransport(managedMode),
-	})
-	runtimeContext := opts.Context
-	if runtimeContext == nil {
-		runtimeContext = context.Background()
-	}
-	listenerContext, stopListener := context.WithCancel(runtimeContext)
-	var tlsReloadDone <-chan struct{}
-	if listenerTLS != nil {
-		tlsReloadDone = listenerTLS.Watch(listenerContext)
-	}
-	err = serveManagementListener(listenerContext, server, managedMode, func() {
-		listenerStarted = true
-		if opts.OnListenerStart != nil {
-			opts.OnListenerStart(nil)
-		}
-	})
-	stopListener()
-	if tlsReloadDone != nil {
-		<-tlsReloadDone
-	}
-	return err
+	return apiServer, managementCfg, nil
 }
 
-func managementListenerTransport(managed bool) string {
-	if managed {
+func managementListenerTransport(listenerTLS *managementListenerTLS) string {
+	if listenerTLS != nil {
 		return "tls"
 	}
 	return "plaintext"
@@ -212,9 +223,9 @@ func resolveClassificationService(
 	if runtimeRegistry != nil {
 		return runtimeRegistry.ClassificationService()
 	}
-	service, err := services.NewStandaloneClassificationService(cfg)
+	service, err := services.NewFileClassificationService(cfg)
 	if err != nil {
-		logging.ComponentWarnEvent("apiserver", "standalone_classification_service_failed", map[string]interface{}{
+		logging.ComponentWarnEvent("apiserver", "file_classification_service_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
 		return nil
@@ -237,7 +248,7 @@ func ensureClassificationService(
 		return services.NewPlaceholderClassificationService()
 	}
 
-	logging.ComponentWarnEvent("apiserver", "standalone_classification_service_unavailable", map[string]interface{}{
+	logging.ComponentWarnEvent("apiserver", "file_classification_service_unavailable", map[string]interface{}{
 		"using_placeholder": true,
 	})
 	return services.NewPlaceholderClassificationService()
@@ -251,7 +262,7 @@ func resolveMemoryStore(cfg *config.RouterConfig, runtimeRegistry *routerruntime
 }
 
 // buildClassificationResolver follows published runtime snapshots when a
-// Registry exists. Standalone composition is immutable and remains the live
+// Registry exists. File-authoritative composition is immutable and remains the live
 // service's initial value.
 func buildClassificationResolver(runtimeRegistry *routerruntime.Registry) func() classificationService {
 	return func() classificationService {
@@ -348,7 +359,14 @@ func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, request *ht
 		})
 		return
 	}
-	if s.controlPlaneMode() == config.ControlPlaneModeManaged {
+	if s.capabilities.ManagementAPI {
+		if s.managementTLS == nil {
+			s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
+				"status": "starting", "service": "classification-api", "ready": false,
+				"phase": "management_tls", "message": "Management listener TLS is unavailable.",
+			})
+			return
+		}
 		if err := s.managementTLS.Ready(time.Now()); err != nil {
 			s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
 				"status": "starting", "service": "classification-api", "ready": false,
@@ -357,11 +375,11 @@ func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, request *ht
 			return
 		}
 	}
-	if s.managedAPI != nil {
-		if err := s.managedAPI.Ready(request.Context()); err != nil {
+	if s.managementAPI != nil {
+		if err := s.managementAPI.Ready(request.Context()); err != nil {
 			s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
 				"status": "starting", "service": "classification-api", "ready": false,
-				"phase": "managed_control_plane", "message": "Managed control plane is not ready.",
+				"phase": "routing_runtime", "message": "Routing runtime is not ready.",
 			})
 			return
 		}

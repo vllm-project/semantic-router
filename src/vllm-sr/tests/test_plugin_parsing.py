@@ -20,28 +20,35 @@ from cli.validator import validate_user_config
 
 def _write_config(plugins: list[dict]) -> str:
     data = {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http-8888", "address": "0.0.0.0", "port": 8888}],
-        "models": [
-            {
-                "name": "test_model",
-                "card": {
+        "providers": {
+            "models": [
+                {
+                    "name": "test_model",
+                    "provider_model_id": "test_model",
+                    "backend_refs": [
+                        {
+                            "provider": "vllm",
+                            "base_url": "http://localhost:8000/v1",
+                        }
+                    ],
+                }
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {
+                    "name": "test_model",
                     "description": "Test model",
                     "capabilities": ["chat"],
-                },
-                "connections": [
-                    {
-                        "provider": "vllm",
-                        "endpoint": "http://localhost:8000/v1",
-                        "model": "test_model",
-                    }
-                ],
-            }
-        ],
+                }
+            ]
+        },
         "recipes": [
             {
                 "name": "test_recipe",
-                "document": {
+                "routing": {
                     "signals": {
                         "keywords": [
                             {
@@ -71,7 +78,7 @@ def _write_config(plugins: list[dict]) -> str:
         ],
         "entrypoints": [
             {
-                "name": "test_entrypoint",
+                "model_names": ["test_entrypoint"],
                 "recipe": "test_recipe",
                 "assignments": {"test_decision": {"models": [{"model": "test_model"}]}},
             }
@@ -220,7 +227,7 @@ class TestRouterReplayPluginConfig:
 
         try:
             config = parse_user_config(temp_path)
-            decisions = config.recipes[0].document.decisions
+            decisions = config.recipes[0].routing.decisions
             assert len(decisions) == 1
             assert len(decisions[0].plugins) == 1
 
@@ -536,7 +543,7 @@ class TestRAGPluginConfig:
 
         try:
             config = parse_user_config(temp_path)
-            decisions = config.recipes[0].document.decisions
+            decisions = config.recipes[0].routing.decisions
             assert len(decisions) == 1
             assert len(decisions[0].plugins) == 1
 

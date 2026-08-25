@@ -178,6 +178,7 @@ func revisionAsInt64(revision accesscontrol.Revision) (int64, error) {
 	if revision == 0 || revision > math.MaxInt64 {
 		return 0, fmt.Errorf("revision must fit a positive PostgreSQL BIGINT")
 	}
+	// #nosec G115 -- the positive PostgreSQL BIGINT bound above proves this conversion is lossless.
 	return int64(revision), nil
 }
 
@@ -185,6 +186,7 @@ func scanRevision(revision int64) (accesscontrol.Revision, error) {
 	if revision <= 0 {
 		return 0, fmt.Errorf("database returned invalid revision %d", revision)
 	}
+	// #nosec G115 -- the positivity check above proves this conversion is lossless.
 	return accesscontrol.Revision(revision), nil
 }
 

@@ -63,7 +63,7 @@ def test_compiled_bootstrap_path_rejects_long_values_before_write(
     monkeypatch.setenv("VLLM_SR_STACK_NAME", "a" * 300)
 
     with pytest.raises(ValueError, match="filesystem limit"):
-        _write_compiled_bootstrap(tmp_path / "config.yaml", {"version": "v0.4"})
+        _write_compiled_bootstrap(tmp_path / "config.yaml", {"version": "v0.3"})
 
     runtime_dir = tmp_path / ".vllm-sr"
     assert list(runtime_dir.iterdir()) == []
@@ -106,7 +106,7 @@ def test_write_compiled_bootstrap_uses_same_directory_atomic_private_replacement
 
     monkeypatch.setattr(runtime_paths.os, "replace", record_replace)
 
-    result = _write_compiled_bootstrap(config_path, {"version": "v0.4"})
+    result = _write_compiled_bootstrap(config_path, {"version": "v0.3"})
 
     assert result == runtime_path
     assert observed == {
@@ -116,7 +116,7 @@ def test_write_compiled_bootstrap_uses_same_directory_atomic_private_replacement
         "old_content": "version: old\n",
     }
     assert yaml.safe_load(runtime_path.read_text(encoding="utf-8")) == {
-        "version": "v0.4"
+        "version": "v0.3"
     }
     assert stat.S_IMODE(runtime_path.stat().st_mode) == 0o600
     assert runtime_path.stat().st_ino != old_inode
@@ -133,7 +133,7 @@ def test_write_compiled_bootstrap_rejects_file_symlink_without_following_it(
     runtime_path.symlink_to(outside_path)
 
     with pytest.raises(ValueError, match="symbolic link"):
-        _write_compiled_bootstrap(config_path, {"version": "v0.4"})
+        _write_compiled_bootstrap(config_path, {"version": "v0.3"})
 
     assert runtime_path.is_symlink()
     assert outside_path.read_text(encoding="utf-8") == "sentinel\n"
@@ -150,7 +150,7 @@ def test_compiled_bootstrap_output_rejects_symlinked_owned_directory(
     monkeypatch.setenv("VLLM_SR_STATE_ROOT_DIR", str(state_root))
 
     with pytest.raises(ValueError, match="symbolic link"):
-        _write_compiled_bootstrap(tmp_path / "config.yaml", {"version": "v0.4"})
+        _write_compiled_bootstrap(tmp_path / "config.yaml", {"version": "v0.3"})
 
     assert list(outside_dir.iterdir()) == []
 
@@ -278,7 +278,7 @@ def test_atomic_write_failure_preserves_target_and_removes_temporary_file(
     monkeypatch.setattr(runtime_paths.yaml, "dump", fail_dump)
 
     with pytest.raises(RuntimeError, match="serialization failed"):
-        _write_compiled_bootstrap(config_path, {"version": "v0.4"})
+        _write_compiled_bootstrap(config_path, {"version": "v0.3"})
 
     assert runtime_path.read_text(encoding="utf-8") == "version: old\n"
     assert list(runtime_path.parent.glob(f".{runtime_path.name}.*.tmp")) == []
@@ -297,7 +297,7 @@ def test_replace_failure_preserves_target_and_removes_temporary_file(
     monkeypatch.setattr(runtime_paths.os, "replace", fail_replace)
 
     with pytest.raises(OSError, match="replace failed"):
-        _write_compiled_bootstrap(config_path, {"version": "v0.4"})
+        _write_compiled_bootstrap(config_path, {"version": "v0.3"})
 
     assert runtime_path.read_text(encoding="utf-8") == "version: old\n"
     assert list(runtime_path.parent.glob(f".{runtime_path.name}.*.tmp")) == []
@@ -362,7 +362,7 @@ def test_materialize_compiled_bootstrap_uses_custom_host_state_without_path_leak
 ):
     source = tmp_path / "source" / "config.yaml"
     source.parent.mkdir()
-    source.write_text("version: v0.4\n", encoding="utf-8")
+    source.write_text("version: v0.3\n", encoding="utf-8")
     state_root = tmp_path / "host-state"
 
     compiled = materialize_compiled_bootstrap(
@@ -379,7 +379,7 @@ def test_materialize_compiled_bootstrap_uses_custom_host_state_without_path_leak
 def test_generated_private_state_cannot_be_selected_as_user_bootstrap(tmp_path: Path):
     generated = tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     generated.parent.mkdir()
-    generated.write_text("version: v0.4\n", encoding="utf-8")
+    generated.write_text("version: v0.3\n", encoding="utf-8")
 
     with pytest.raises(ValueError, match="must select an immutable user bootstrap"):
         assert_user_bootstrap_source(generated)

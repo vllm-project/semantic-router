@@ -1,38 +1,43 @@
-version: v0.4
+version: v0.3
 listeners:
 - name: remote-embedding-smoke-http
   address: 0.0.0.0
   port: 18888
   timeout: 60s
-models:
-- name: billing-model
-  card:
+providers:
+  models:
+  - name: billing-model
+    provider_model_id: billing-model
+    backend_refs:
+    - provider: vllm
+      endpoint: http://host.docker.internal:18000/v1
+      weight: 100
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: default-model
+    provider_model_id: default-model
+    backend_refs:
+    - provider: vllm
+      endpoint: http://host.docker.internal:18001/v1
+      weight: 100
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: billing-model
     capabilities:
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://host.docker.internal:18000/v1
-    model: billing-model
-    weight: '100'
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: default-model
-  card:
+  - name: default-model
     capabilities:
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://host.docker.internal:18001/v1
-    model: default-model
-    weight: '100'
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       embeddings:
       - name: billing_support
@@ -57,8 +62,8 @@ recipes:
         operator: AND
         conditions: []
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

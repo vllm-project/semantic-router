@@ -10,13 +10,15 @@ import (
 )
 
 const (
+	// #nosec G101 -- this is a database column list and contains no credential value.
 	credentialColumns = `id, namespace_id, api_key_id, kid, secret_hmac, pepper_version,
        secret_ciphertext, ciphertext_nonce, kek_version, status,
        not_before, expires_at, revoked_at, created_at`
 	listCredentialsQuery = `SELECT ` + credentialColumns + `
 FROM access_api_key_credentials
-WHERE namespace_id = $1 AND api_key_id = $2
-ORDER BY created_at DESC, id`
+	WHERE namespace_id = $1 AND api_key_id = $2
+	ORDER BY created_at DESC, id`
+	// #nosec G101 -- this is a parameterized insert statement and contains no credential value.
 	insertCredentialQuery = `INSERT INTO access_api_key_credentials
   (id, namespace_id, api_key_id, kid, secret_hmac, pepper_version,
    secret_ciphertext, ciphertext_nonce, kek_version, status,

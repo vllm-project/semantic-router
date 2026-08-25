@@ -279,7 +279,7 @@ RUN if [ "$TARGETARCH" != "amd64" ]; then \
     CGO_CFLAGS="-I/build/../onnx-binding" \
     CGO_LDFLAGS="-L/build/../onnx-binding/target/release -L/build/../ml-binding/target/release -L/build/../nlp-binding/target/release -lonnx_semantic_router -lml_semantic_router -lnlp_binding" \
     go build -buildvcs=false -modfile=go.onnx.mod -tags=onnx -ldflags="-w -s" -o router ./cmd && \
-    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-w -s" -o access-migrate ./cmd/access-migrate
+    CGO_ENABLED=0 go build -buildvcs=false -ldflags="-w -s" -o management-migrate ./cmd/management-migrate
 
 # Stage 3: Final router runtime image (CUDA 12.4 + ONNX Runtime GPU)
 # ============================================================================
@@ -352,7 +352,7 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
     ln -sf /opt/onnxruntime/capi/libonnxruntime.so.* /opt/onnxruntime/capi/libonnxruntime.so
 
 COPY --from=go-builder /build/router /usr/local/bin/router
-COPY --from=go-builder /build/access-migrate /usr/local/bin/access-migrate
+COPY --from=go-builder /build/management-migrate /usr/local/bin/management-migrate
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=onnx-builder /build/out/libonnx_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/

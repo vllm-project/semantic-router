@@ -454,7 +454,11 @@
 }
 
 .dataTable {
+  max-width: 100%;
   overflow: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 10px;
   background: #0b0c0e;
@@ -1427,7 +1431,7 @@
 }
 .modal {
   width: min(720px, 100%);
-  max-height: calc(100vh - 2.8rem);
+  max-height: calc(100dvh - 2.8rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1440,6 +1444,12 @@
     0 36px 110px rgba(0, 0, 0, 0.62),
     inset 0 1px 0 rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(28px) saturate(140%);
+}
+.modal > form {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 .modalHeader {
   display: flex;
@@ -1500,10 +1510,15 @@
   margin: auto;
 }
 .modalBody {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 1.2rem 1.35rem 1.35rem;
 }
 .modalFooter {
+  flex: 0 0 auto;
+  flex-wrap: wrap;
   justify-content: flex-end;
   padding: 0.9rem 1.35rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -1560,11 +1575,14 @@
 .formGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 0.9rem;
 }
 .formField {
   min-width: 0;
   display: grid;
+  align-self: start;
+  align-content: start;
   gap: 0.38rem;
   color: rgba(255, 255, 255, 0.7);
   font-size: 0.69rem;
@@ -1608,6 +1626,7 @@
   line-height: 1.45;
 }
 .selectionSection {
+  min-width: 0;
   grid-column: 1 / -1;
   margin: 0.1rem 0 0;
   padding: 0.8rem;
@@ -1776,7 +1795,7 @@
 }
 .asyncPickerMemberRole {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(108px, auto);
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.7rem;
   padding: 0.58rem 0.66rem;
@@ -1804,8 +1823,50 @@
   color: rgba(255, 255, 255, 0.35);
   font-size: 0.59rem;
 }
-.asyncPickerMemberRole select {
+.memberRoleChoices,
+.teamRoleChoices {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+}
+.memberRoleChoices button,
+.teamRoleChoices button {
   min-height: 32px;
+  padding: 0 0.62rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.62rem;
+  font-weight: 650;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease;
+}
+.memberRoleChoices button:hover,
+.teamRoleChoices button:hover {
+  color: rgba(255, 255, 255, 0.76);
+}
+.memberRoleChoices button:focus-visible,
+.teamRoleChoices button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+.memberRoleChoices .memberRoleChoiceActive,
+.teamRoleChoices .teamRoleChoiceActive {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0b0c0e;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.28);
+}
+.teamRoleChoices {
+  min-height: 42px;
+}
+.teamRoleChoices button {
+  min-height: 36px;
 }
 .asyncPickerHydrationError {
   margin: 0;
@@ -1814,6 +1875,10 @@
   position: relative;
   min-width: 190px;
   padding-top: 0;
+}
+.formField > .asyncPickerCompact {
+  width: 100%;
+  min-width: 0;
 }
 .asyncPickerCompactValue {
   min-height: 34px;
@@ -2374,7 +2439,7 @@
 }
 .detailDrawer {
   width: min(900px, 100%);
-  max-height: calc(100vh - 2.8rem);
+  max-height: calc(100dvh - 2.8rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2398,7 +2463,7 @@
 }
 .entityDetailDialog {
   width: min(900px, 100%);
-  max-height: calc(100vh - 2.8rem);
+  max-height: calc(100dvh - 2.8rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -3083,6 +3148,21 @@
   .pageSize {
     align-self: flex-end;
   }
+  .dataRow > :first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    padding-right: 0.6rem;
+    background: #0b0c0e;
+    box-shadow: 12px 0 18px rgba(4, 5, 7, 0.32);
+  }
+  .dataHeader > :first-child {
+    z-index: 3;
+    background: #101114;
+  }
+  .dataRow:not(.dataHeader):hover > :first-child {
+    background: #0f1012;
+  }
   .filterRail {
     align-items: stretch;
   }
@@ -3107,12 +3187,62 @@
     grid-template-columns: 1fr;
   }
   .modalBackdrop {
-    padding: 0.6rem;
     align-items: center;
+    padding: 0.5rem;
   }
   .modal {
-    max-height: calc(100vh - 1.2rem);
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
     border-radius: 14px;
+  }
+  .modalHeader {
+    gap: 0.8rem;
+    padding: max(0.9rem, env(safe-area-inset-top)) 0.9rem 0.8rem;
+  }
+  .modalHeading {
+    gap: 0.7rem;
+  }
+  .modalLogo {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+    border-radius: 10px;
+  }
+  .modalLogo img {
+    width: 24px;
+    height: 24px;
+  }
+  .modalHeader h2 {
+    margin-top: 0.2rem;
+    font-size: 1.25rem;
+  }
+  .modalHeader p {
+    margin-top: 0.3rem;
+  }
+  .modalBody {
+    padding: 0.9rem;
+  }
+  .modalFooter {
+    padding: 0.75rem 0.9rem max(0.75rem, env(safe-area-inset-bottom));
+  }
+  .modalFooter .primaryButton,
+  .modalFooter .secondaryButton {
+    flex: 1 1 9rem;
+  }
+  .asyncPickerCompact {
+    width: 100%;
+    min-width: 0;
+  }
+  .asyncPickerCompact .asyncPickerMenu {
+    position: static;
+    width: 100%;
+    margin-top: 0.35rem;
+  }
+  .asyncPickerMemberRole {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .memberRoleChoices {
+    width: 100%;
   }
   .pagination {
     align-items: flex-start;
@@ -3127,7 +3257,7 @@
   .detailDrawer {
     width: 100%;
     max-width: none;
-    max-height: calc(100vh - 1.2rem);
+    max-height: calc(100dvh - 1.2rem);
     border-radius: 14px;
   }
   .entityDetailBackdrop {
@@ -3135,7 +3265,7 @@
   }
   .entityDetailDialog {
     width: 100%;
-    max-height: calc(100vh - 1.2rem);
+    max-height: calc(100dvh - 1.2rem);
     border-radius: 14px;
   }
   .detailBody,
@@ -3169,5 +3299,38 @@
   .logHero > div {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding-inline: 0.5rem;
+  }
+  .modalBackdrop {
+    padding: 0.35rem;
+  }
+  .modal {
+    max-height: calc(100dvh - 0.7rem);
+  }
+  .modalHeader p {
+    font-size: 0.71rem;
+  }
+  .selectionSection legend,
+  .ownerSection legend,
+  .advancedSection summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .secretValue,
+  .secretInline,
+  .inviteLink {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .secretValue button,
+  .secretInline button,
+  .inviteLink button {
+    width: 100%;
+    justify-content: center;
   }
 }

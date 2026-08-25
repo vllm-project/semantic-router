@@ -1,5 +1,6 @@
 """Latency-algorithm compatibility validation."""
 
+from cli.config_contract import iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -8,9 +9,13 @@ MAX_PERCENTILE = 100
 
 
 def _all_decisions(config: UserConfig):
-    for recipe in config.recipes:
-        field_prefix = f"recipes.{recipe.name}.document.decisions"
-        for decision in recipe.document.decisions:
+    for profile_name, routing in iter_routing_profiles(config):
+        field_prefix = (
+            "routing.decisions"
+            if profile_name == "default"
+            else f"recipes.{profile_name}.routing.decisions"
+        )
+        for decision in routing.decisions:
             yield field_prefix, decision
 
 

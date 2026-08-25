@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesspublisher"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimediagnostics"
 )
 
 func composeRuntimeDiagnostics(
-	dependencies managedruntime.ManagementDependencies,
+	dependencies routingruntime.ManagementDependencies,
 	keyPrefix string,
 	maxUsageBacklog int64,
 	sessions managementserver.SessionAuthenticator,

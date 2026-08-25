@@ -41,7 +41,7 @@ def _count_items(value) -> int:
 
 
 def _signal_summary_lines(signals) -> list[str]:
-    """Return non-empty signal summary lines for the canonical v0.4 surface."""
+    """Return non-empty signal summary lines for the canonical v0.3 surface."""
     if not signals:
         return []
 
@@ -166,7 +166,7 @@ def validate_command(config_path: str):
     )
 
     routing_profiles = (
-        [(recipe.name, recipe.document) for recipe in config.recipes]
+        [(recipe.name, recipe.routing) for recipe in config.recipes]
         if isinstance(config, RecipeDistribution)
         else list(iter_routing_profiles(config))
     )
@@ -195,4 +195,4 @@ def validate_command(config_path: str):
         echo(line)
 
     if isinstance(config, UserConfig):
-        echo(f"  Models: {len(config.models)}")
+        echo(f"  Models: {len(config.providers.models)}")

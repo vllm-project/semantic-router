@@ -1,6 +1,7 @@
 package pii
 
 import (
+	"slices"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -185,34 +186,33 @@ func TestCheckPolicy(t *testing.T) {
 			cfg := tt.setupConfig()
 			checker := NewPolicyChecker(cfg)
 			allowed, denied, err := checker.CheckPolicy(tt.decisionName, tt.detectedPII)
-			if err != nil {
-				t.Errorf("CheckPolicy() returned unexpected error: %v", err)
-			}
-
-			if allowed != tt.expectAllowed {
-				t.Errorf("CheckPolicy() allowed = %v, want %v", allowed, tt.expectAllowed)
-			}
-
-			if len(denied) != len(tt.expectDenied) {
-				t.Errorf("CheckPolicy() denied = %v, want %v", denied, tt.expectDenied)
-			}
-
-			// Check if denied types match
-			if tt.expectDenied != nil {
-				for _, expectedDenied := range tt.expectDenied {
-					found := false
-					for _, d := range denied {
-						if d == expectedDenied {
-							found = true
-							break
-						}
-					}
-					if !found {
-						t.Errorf("Expected denied PII type %s not found in result", expectedDenied)
-					}
-				}
-			}
+			assertPIIPolicyResult(t, allowed, denied, err, tt.expectAllowed, tt.expectDenied)
 		})
+	}
+}
+
+func assertPIIPolicyResult(
+	t *testing.T,
+	allowed bool,
+	denied []string,
+	err error,
+	wantAllowed bool,
+	wantDenied []string,
+) {
+	t.Helper()
+	if err != nil {
+		t.Errorf("CheckPolicy() returned unexpected error: %v", err)
+	}
+	if allowed != wantAllowed {
+		t.Errorf("CheckPolicy() allowed = %v, want %v", allowed, wantAllowed)
+	}
+	if len(denied) != len(wantDenied) {
+		t.Errorf("CheckPolicy() denied = %v, want %v", denied, wantDenied)
+	}
+	for _, expectedDenied := range wantDenied {
+		if !slices.Contains(denied, expectedDenied) {
+			t.Errorf("Expected denied PII type %s not found in result", expectedDenied)
+		}
 	}
 }
 

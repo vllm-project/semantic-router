@@ -8,13 +8,6 @@ from cli.commands.runtime_paths import (
     resolve_state_root_dir,
 )
 from cli.consts import IMAGE_PULL_POLICY_NEVER
-from cli.control_plane_deployment import (
-    LocalControlPlanePlan,
-    plan_local_control_plane,
-    required_storage_secret_backends,
-    resolve_local_router_bindings,
-)
-from cli.control_plane_migration import run_control_plane_migration
 from cli.container_cli import (
     container_logs,
     container_logs_output,
@@ -27,7 +20,14 @@ from cli.container_cli import (
     load_openclaw_registry,
 )
 from cli.container_images import get_fleet_sim_container_image, get_runtime_images
+from cli.control_plane_deployment import (
+    LocalControlPlanePlan,
+    plan_local_control_plane,
+    required_storage_secret_backends,
+    resolve_local_router_bindings,
+)
 from cli.logo import print_vllm_logo
+from cli.management_migration import run_management_migration
 from cli.runtime_config_coordination import compiled_bootstrap_lock_scope
 from cli.runtime_config_lock import CompiledBootstrapLock
 from cli.runtime_lifecycle import (
@@ -320,7 +320,7 @@ def _start_runtime_stack(
         state_root_dir,
         stack_layout,
     )
-    run_control_plane_migration(
+    run_management_migration(
         user_config,
         env_vars={**env_vars, **router_child_env},
         network_name=shared_network_name,

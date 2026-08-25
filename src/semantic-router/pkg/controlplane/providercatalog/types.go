@@ -1,4 +1,4 @@
-// Package providercatalog composes provider integrations in the managed
+// Package providercatalog composes provider integrations in the Management
 // control plane. Product providers are control-plane data; inference receives
 // only compiled provider-neutral routing backends.
 package providercatalog

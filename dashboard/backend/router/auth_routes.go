@@ -15,6 +15,7 @@ type authRouteSpec struct {
 }
 
 type dashboardManagementIdentity interface {
+	auth.DashboardSessionRetirer
 	auth.InvitationAuthority
 	auth.FirstAdminProvisioner
 }
@@ -50,6 +51,7 @@ func setupAuthRoutes(
 	}
 
 	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
+	authSvc.ConfigureDashboardSessionRetirer(managementIdentity)
 	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
 	if cfg.RouterBootstrapTokenFile != "" {
 		var firstAdminProvisioner auth.FirstAdminProvisioner = unavailableFirstAdminProvisioner{}

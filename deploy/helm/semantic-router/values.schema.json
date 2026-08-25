@@ -40,12 +40,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "enabled",
         "minAvailable"
       ],
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Overrides the capability-derived default; null enables this resource when a Management store is configured."
         },
         "minAvailable": {
           "type": [
@@ -59,14 +62,17 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "enabled",
         "maxSkew",
         "topologyKey",
         "whenUnsatisfiable"
       ],
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Overrides the capability-derived default; null enables this resource when a Management store is configured."
         },
         "maxSkew": {
           "type": "integer",
@@ -89,12 +95,15 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "enabled",
         "ingress"
       ],
       "properties": {
         "enabled": {
-          "type": "boolean"
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Overrides the capability-derived default; null enables this resource when a Management store is configured."
         },
         "ingress": {
           "type": "object",
@@ -227,19 +236,20 @@
       "additionalProperties": true,
       "required": [
         "version",
-        "models",
+        "providers",
+        "routing",
         "recipes",
         "entrypoints"
       ],
       "properties": {
         "version": {
-          "const": "v0.4"
+          "const": "v0.3"
         },
-        "models": {
-          "type": "array",
-          "items": {
-            "type": "object"
-          }
+        "providers": {
+          "type": "object"
+        },
+        "routing": {
+          "type": "object"
         },
         "recipes": {
           "type": "array",

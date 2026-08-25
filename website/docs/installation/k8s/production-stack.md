@@ -60,13 +60,17 @@ Create one Semantic Router Model for each model pool you want policy to select.
 A Kubernetes connection uses this shape:
 
 ```yaml
-models:
-  - name: production/qwen3
-    card: {capabilities: [chat]}
-    connections:
-      - provider: vllm
-        endpoint: http://vllm-router-service.default.svc.cluster.local:80/v1
-        model: Qwen/Qwen3-8B
+providers:
+  models:
+    - name: production/qwen3
+      provider_model_id: Qwen/Qwen3-8B
+      backend_refs:
+        - provider: vllm
+          endpoint: http://vllm-router-service.default.svc.cluster.local:80/v1
+routing:
+  modelCards:
+    - name: production/qwen3
+      capabilities: [chat]
 ```
 
 Replace the endpoint and model identifier with values from your deployment.

@@ -12,6 +12,9 @@ type StatusHistorySample = {
 
 const STATUS_HISTORY_KEY = 'vllm-sr.status.history.v1'
 
+const formatStatusLabel = (value: string) =>
+  value.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
+
 const StatusPage: React.FC = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [loading, setLoading] = useState(true)
@@ -101,17 +104,25 @@ const StatusPage: React.FC = () => {
     )
   }
 
-  const healthLabel = status
-    ? status.overall.replace(/_/g, ' ').replace(/\b\w/g, (character) => character.toUpperCase())
-    : 'Unavailable'
+  const healthLabel = status ? formatStatusLabel(status.overall) : 'Unavailable'
   const servicesReady = Boolean(
-    status && status.overall === 'healthy' && healthyServices === status.services.length,
+    status &&
+      status.services.length > 0 &&
+      status.overall === 'healthy' &&
+      healthyServices === status.services.length,
   )
   const fullyOperational = servicesReady
-  const bannerTitle = fullyOperational ? 'All systems operational' : healthLabel
+  const noServices = Boolean(status && status.services.length === 0)
+  const bannerTitle = fullyOperational
+    ? 'All systems operational'
+    : noServices
+      ? 'No running services detected'
+      : healthLabel
   const bannerCopy = fullyOperational
     ? 'Services are responding normally.'
-    : 'One or more components need attention.'
+    : noServices
+      ? 'Start the Router to see live availability.'
+      : 'One or more components need attention.'
 
   return (
     <div className={styles.container} data-testid="status-page">
@@ -142,7 +153,9 @@ const StatusPage: React.FC = () => {
       </header>
 
       <section
+        data-testid="status-overview"
         className={`${styles.overallBanner} ${fullyOperational ? styles.overallHealthy : styles.overallDegraded}`}
+        aria-live="polite"
       >
         <span className={styles.overallIcon}>
           <ProductIcon name={fullyOperational ? 'check' : 'alert'} aria-hidden="true" />
@@ -168,7 +181,11 @@ const StatusPage: React.FC = () => {
       </section>
 
       {status ? (
-        <section className={styles.componentBoard} aria-labelledby="component-status-title">
+        <section
+          className={styles.componentBoard}
+          aria-labelledby="component-status-title"
+          data-testid="status-services-section"
+        >
           <div className={styles.componentBoardHeader}>
             <div>
               <span>Current availability</span>
@@ -179,6 +196,12 @@ const StatusPage: React.FC = () => {
             </span>
           </div>
           <div>
+            {status.services.length === 0 ? (
+              <div className={styles.noServices}>
+                <strong>No services reported</strong>
+                <span>Availability appears here when the Router starts.</span>
+              </div>
+            ) : null}
             {status.services.map((service) => {
               const samples = history.slice(-30)
               return (
@@ -209,7 +232,7 @@ const StatusPage: React.FC = () => {
                       service.healthy ? styles.componentOperational : styles.componentIssue
                     }
                   >
-                    {service.healthy ? 'Operational' : service.status}
+                    {service.healthy ? 'Operational' : formatStatusLabel(service.status)}
                   </span>
                 </article>
               )

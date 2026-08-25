@@ -241,9 +241,13 @@ WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL`, namespa
 			return recipeMutationResult{}, updateRecipeErr
 		}
 		if meta.Command != nil {
+			resourceRevision, revisionErr := publicRevision(expected+1, "updated Recipe revision")
+			if revisionErr != nil {
+				return recipeMutationResult{}, revisionErr
+			}
 			if err := commandpostgres.CompleteResource(ctx, tx, *meta.Command, managementcommand.ResourceResult{
 				ResourceType: "routing_recipe", ResourceID: id,
-				ResourceRevision: uint64(expected + 1), ResponseStatus: 200,
+				ResourceRevision: resourceRevision, ResponseStatus: 200,
 			}); err != nil {
 				return recipeMutationResult{}, err
 			}
@@ -293,9 +297,13 @@ revision=revision+1,updated_at=clock_timestamp() WHERE namespace_id=$1 AND id=$2
 			return routingmanagement.RevisionReceipt{}, err
 		}
 		if meta.Command != nil {
+			resourceRevision, revisionErr := publicRevision(expected+1, "deleted Recipe revision")
+			if revisionErr != nil {
+				return routingmanagement.RevisionReceipt{}, revisionErr
+			}
 			if err := commandpostgres.CompleteResource(ctx, tx, *meta.Command, managementcommand.ResourceResult{
 				ResourceType: "routing_recipe", ResourceID: id,
-				ResourceRevision: uint64(expected + 1), ResponseStatus: 204,
+				ResourceRevision: resourceRevision, ResponseStatus: 204,
 			}); err != nil {
 				return routingmanagement.RevisionReceipt{}, err
 			}
@@ -315,9 +323,13 @@ func replayRecipe(
 	if err != nil {
 		return result, managementcommand.ErrConflict
 	}
+	resourceRevision, revisionErr := postgresRevision(stored.Resource.ResourceRevision, "stored Recipe revision")
+	if revisionErr != nil {
+		return result, managementcommand.ErrConflict
+	}
 	result.recipe = recipe
 	result.receipt = routingmanagement.RevisionReceipt{
-		ResourceRevision: int64(stored.Resource.ResourceRevision), Replayed: true,
+		ResourceRevision: resourceRevision, Replayed: true,
 	}
 	return result, nil
 }

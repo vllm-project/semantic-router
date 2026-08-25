@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 
 import ProductIcon from '@/components/ProductIcon'
+import { copyText } from '@/utils/clipboard'
 
 import styles from './BuilderPage.module.css'
 
@@ -32,8 +33,7 @@ export function BuilderOutputPanel({
     [dslSource, recipeDocument, tab],
   )
   const copy = useCallback(async () => {
-    if (!content) return
-    await navigator.clipboard.writeText(content)
+    if (!(await copyText(content))) return
     setCopied(true)
     window.setTimeout(() => setCopied(false), 1600)
   }, [content])
@@ -79,7 +79,12 @@ export function BuilderOutputPanel({
           </button>
           <div className={styles.builderOutputActions}>
             {content ? (
-              <button type="button" className={styles.outputPanelCopyBtn} onClick={copy}>
+              <button
+                type="button"
+                className={styles.outputPanelCopyBtn}
+                onClick={copy}
+                aria-live="polite"
+              >
                 <ProductIcon name={copied ? 'check' : 'copy'} /> {copied ? 'Copied' : 'Copy'}
               </button>
             ) : null}

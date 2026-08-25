@@ -11,6 +11,7 @@ log = get_logger(__name__)
 
 OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV = "OPENCLAW_CONTAINER_RUNTIME_DISABLED"
 CONTAINER_SOCKET_ENV = "VLLM_SR_CONTAINER_SOCKET"
+_CONTAINER_SOCKET_MODE = stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP
 
 
 def configure_openclaw_support(
@@ -62,19 +63,20 @@ def configure_openclaw_support(
                 env_vars,
                 resolve_container_cli=resolve_container_cli,
             )
-    elif runtime == "podman":
+    elif runtime == "podman" and _attach_container_socket(
+        mount_specs, runtime, socket_path
+    ):
         # Podman exposes a Docker-Engine-API-compatible socket. The dashboard
         # image already ships a real `docker` CLI; mounting podman.sock at the
         # canonical /var/run/docker.sock path lets the in-image docker CLI
         # drive container lifecycle (start/stop/inspect/logs) through podman
         # transparently — no Go-side changes needed.
-        if _attach_container_socket(mount_specs, runtime, socket_path):
-            env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "false"
-            env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
-            log.info(
-                "Podman runtime: dashboard will use the in-image Docker CLI against "
-                "the mounted podman.sock for container lifecycle"
-            )
+        env_vars[OPENCLAW_CONTAINER_RUNTIME_DISABLED_ENV] = "false"
+        env_vars["OPENCLAW_CONTAINER_RUNTIME"] = "docker"
+        log.info(
+            "Podman runtime: dashboard will use the in-image Docker CLI against "
+            "the mounted podman.sock for container lifecycle"
+        )
 
 
 def _explicit_container_socket_path() -> str | None:
@@ -144,7 +146,7 @@ def _runtime_socket_is_group_safe(path: str, *, lstat_path=os.lstat) -> bool:
         stat.S_ISSOCK(info.st_mode)
         and info.st_uid in allowed_owners
         and info.st_gid != 0
-        and stat.S_IMODE(info.st_mode) == 0o660
+        and stat.S_IMODE(info.st_mode) == _CONTAINER_SOCKET_MODE
     )
 
 

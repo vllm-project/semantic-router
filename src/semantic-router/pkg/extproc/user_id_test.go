@@ -75,6 +75,6 @@ func TestRouterLearningSessionIsPartitionedByAuthenticatedTenant(t *testing.T) {
 
 	ctx.InferenceAccess.tenant.APIKeyID = ""
 	if _, ok := (&OpenAIRouter{}).protectionIdentity(ctx, cfg); ok {
-		t.Fatal("managed learning identity accepted incomplete TenantContext")
+		t.Fatal("authenticated learning identity accepted incomplete TenantContext")
 	}
 }

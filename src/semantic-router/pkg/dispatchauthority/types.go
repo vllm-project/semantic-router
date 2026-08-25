@@ -162,14 +162,22 @@ type RoutingSnapshotAttacher interface {
 
 // CapabilityRuntime is the only authority exposed to ExtProc. Mode-specific
 // methods keep metered and routing-only authorization impossible to confuse.
-type CapabilityRuntime interface {
+type CapabilityIssuer interface {
 	Metered() bool
 	IssueMeteredPrimary(PrimaryIssueRequest) (string, error)
 	IssueMeteredGrant(GrantIssueRequest) (string, error)
 	IssueRoutingOnlyPrimary(context.Context, RoutingOnlyIssueRequest) (string, error)
 	IssueRoutingOnlyGrant(context.Context, RoutingOnlyGrantIssueRequest) (string, error)
+}
+
+type GrantRuntime interface {
 	VerifyGrant(context.Context, string, GrantVerificationRequest) (VerifiedGrant, error)
 	IssueFromGrant(context.Context, VerifiedGrant, FinalRequest) (string, error)
+}
+
+type CapabilityRuntime interface {
+	CapabilityIssuer
+	GrantRuntime
 }
 
 // VerifiedGrant is process-local proof that a serialized internal dispatch

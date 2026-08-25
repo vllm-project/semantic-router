@@ -280,25 +280,45 @@ type DesiredStateReader interface {
 }
 
 type OutboxStore interface {
+	OutboxClaimStore
+	OutboxCommitStore
+}
+
+type OutboxClaimStore interface {
 	ClaimLatest(context.Context, string, time.Duration) (OutboxBatch, error)
 	RecordStaged(context.Context, OutboxBatch, Publication) error
 	Release(context.Context, OutboxBatch, error, time.Duration) error
+}
+
+type OutboxCommitStore interface {
 	Fail(context.Context, OutboxBatch, error) error
 	WithRevisionFence(context.Context, OutboxBatch, func(context.Context) error) error
 	Applied(context.Context, string) (AppliedState, error)
 }
 
 type RuntimeStore interface {
+	RuntimeStagingStore
+	RuntimeActivationStore
+	RuntimeLifecycleStore
+}
+
+type RuntimeStagingStore interface {
 	Prepare(context.Context, Publication) (PublicationPlan, error)
 	InstallBarriers(context.Context, PublicationPlan) error
 	Stage(context.Context, PublicationPlan) error
 	ValidateStaged(context.Context, PublicationPlan) error
 	BarrierAcknowledgements(context.Context, PublicationPlan) (AckStatus, error)
+}
+
+type RuntimeActivationStore interface {
 	RoutingAcknowledgements(context.Context, PublicationPlan) (AckStatus, error)
 	Activate(context.Context, PublicationPlan) error
 	Compact(context.Context, PublicationPlan, int) (bool, error)
 	MarkApplied(context.Context, PublicationPlan) error
 	ClearAppliedBarriers(context.Context, PublicationPlan) error
+}
+
+type RuntimeLifecycleStore interface {
 	ReconcileApplied(context.Context, AppliedState) error
 	Readiness(context.Context, string, string) (Readiness, error)
 }

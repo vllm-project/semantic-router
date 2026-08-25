@@ -1,4 +1,4 @@
-// Package postgres persists managed routing desired state and immutable
+// Package postgres persists durable routing desired state and immutable
 // revisions in PostgreSQL. Every mutation appends audit and outbox records in
 // the same transaction as the resource change.
 package postgres

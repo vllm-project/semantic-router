@@ -59,7 +59,7 @@ type SemanticRouterSpec struct {
 	// +optional
 	Persistence PersistenceSpec `json:"persistence,omitempty"`
 
-	// Bootstrap selects the immutable v0.4 Router manifest mounted into every
+	// Bootstrap selects the immutable v0.3 Router manifest mounted into every
 	// replica. The Operator never authors or mutates Router configuration.
 	Bootstrap BootstrapSpec `json:"bootstrap"`
 
@@ -103,7 +103,7 @@ type SemanticRouterSpec struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
-	// EnvFrom adds environment sources to the Router and managed schema
+	// EnvFrom adds environment sources to the Router and Management schema
 	// migration containers.
 	// +optional
 	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
@@ -113,7 +113,7 @@ type SemanticRouterSpec struct {
 	// +optional
 	Volumes []corev1.Volume `json:"volumes,omitempty"`
 
-	// VolumeMounts mounts deployment-owned volumes into the Router and managed
+	// VolumeMounts mounts deployment-owned volumes into the Router and Management
 	// schema migration containers.
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
@@ -134,18 +134,18 @@ type SemanticRouterSpec struct {
 	// +optional
 	Ingress IngressSpec `json:"ingress,omitempty"`
 
-	// PodDisruptionBudget protects managed Router availability during
-	// voluntary disruptions. It is enabled by default in managed mode.
+	// PodDisruptionBudget protects Router availability during voluntary
+	// disruptions. It defaults on when a Management store is configured.
 	// +optional
 	PodDisruptionBudget PodDisruptionBudgetSpec `json:"podDisruptionBudget,omitempty"`
 
-	// TopologySpread distributes managed Router replicas across failure
-	// domains. It is enabled by default in managed mode.
+	// TopologySpread distributes Router replicas across failure domains. It
+	// defaults on when a Management store is configured.
 	// +optional
 	TopologySpread TopologySpreadSpec `json:"topologySpread,omitempty"`
 
 	// NetworkPolicy isolates inference, Management, internal dispatch, and
-	// metrics listeners. It is enabled by default in managed mode.
+	// metrics listeners. It defaults on when a Management store is configured.
 	// +optional
 	NetworkPolicy NetworkPolicySpec `json:"networkPolicy,omitempty"`
 }
@@ -223,7 +223,7 @@ type ServiceSpec struct {
 	// +optional
 	API PortSpec `json:"api,omitempty"`
 
-	// Management configures the private managed-mode Service port. The target
+	// Management configures the private Management API Service port. The target
 	// port remains owned by global.services.management_api in the bootstrap.
 	// +optional
 	Management ManagementServiceSpec `json:"management,omitempty"`
@@ -491,11 +491,6 @@ type SemanticRouterStatus struct {
 	// +optional
 	GatewayMode string `json:"gatewayMode,omitempty"`
 
-	// ControlPlaneMode is the validated mode from the selected bootstrap.
-	// +kubebuilder:validation:Enum=standalone;managed
-	// +optional
-	ControlPlaneMode string `json:"controlPlaneMode,omitempty"`
-
 	// BootstrapRevision is the content digest of the selected immutable
 	// bootstrap manifest observed by the controller.
 	// +optional
@@ -505,11 +500,11 @@ type SemanticRouterStatus struct {
 	// +optional
 	PublicService string `json:"publicService,omitempty"`
 
-	// ManagementService is the private managed-mode Service name.
+	// ManagementService is the private Management API Service name.
 	// +optional
 	ManagementService string `json:"managementService,omitempty"`
 
-	// Migration reports the schema gate for managed deployments.
+	// Migration reports the Management schema gate when a durable store is configured.
 	// +optional
 	Migration *MigrationStatus `json:"migration,omitempty"`
 
@@ -533,7 +528,6 @@ type OpenShiftFeaturesStatus struct {
 // +kubebuilder:resource:path=semanticrouters,scope=Namespaced,shortName=sr
 // +kubebuilder:printcolumn:name="Replicas",type=integer,JSONPath=`.spec.replicas`
 // +kubebuilder:printcolumn:name="Ready",type=integer,JSONPath=`.status.readyReplicas`
-// +kubebuilder:printcolumn:name="Mode",type=string,JSONPath=`.status.controlPlaneMode`
 // +kubebuilder:printcolumn:name="Phase",type=string,JSONPath=`.status.phase`
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 

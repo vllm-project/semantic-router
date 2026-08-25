@@ -5,7 +5,7 @@
   width: 100%;
   max-width: 1440px;
   margin: 0 auto;
-  min-height: calc(100vh - 80px);
+  min-height: calc(100dvh - 80px);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -254,8 +254,8 @@
   flex: 1;
   width: 100%;
   aspect-ratio: 4 / 3;
-  min-height: 680px;
-  max-height: 78vh;
+  min-height: min(680px, 78dvh);
+  max-height: 78dvh;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   overflow: hidden;
@@ -293,16 +293,16 @@
 
 .iframeContainer:fullscreen {
   width: 100vw;
-  height: 100vh;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
   border: none;
   border-radius: 0;
   background: #000;
 }
 
 .iframeContainer:fullscreen .iframe {
-  height: 100vh;
-  min-height: 100vh;
+  height: 100dvh;
+  min-height: 100dvh;
 }
 
 .iframePlaceholder {
@@ -2067,7 +2067,7 @@
 
 .ocModal {
   width: min(960px, 100%);
-  max-height: min(92vh, 980px);
+  max-height: min(92dvh, 980px);
   border: 2px solid rgba(255, 255, 255, 0.72);
   border-radius: 18px;
   background:
@@ -2475,6 +2475,9 @@
 .containerTableWrap {
   width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   background: var(--color-bg-secondary);
@@ -2678,8 +2681,12 @@
   }
 
   .iframeContainer {
-    min-height: 560px;
-    max-height: 74vh;
+    min-height: min(560px, 74dvh);
+    max-height: 74dvh;
+  }
+
+  .containerTableWrap .containerTable {
+    min-width: 720px;
   }
 
   .agentMetaRow {

@@ -1,31 +1,37 @@
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: base-model
-    card:
-      reasoning:
-        type: chat_template_kwargs
-        efforts:
-        - high
+  providers:
+    defaults:
+      reasoning_families:
+        base-model:
+          type: chat_template_kwargs
+          parameter: enable_thinking
+    models:
+    - name: base-model
+      provider_model_id: base-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+      reasoning_family: base-model
+  routing:
+    modelCards:
+    - name: base-model
       loras:
-      - science-expert
-      - social-expert
-      - math-expert
-      - law-expert
-      - humanities-expert
-      - general-expert
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: base-model
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+      - name: science-expert
+      - name: social-expert
+      - name: math-expert
+      - name: law-expert
+      - name: humanities-expert
+      - name: general-expert
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals:
         domains:
         - name: business
@@ -225,8 +231,8 @@ config:
             semantic:
               similarity_threshold: 0.8
   entrypoints:
-  - name: vllm-sr/auto
-    aliases:
+  - model_names:
+    - vllm-sr/auto
     - auto
     recipe: default
     assignments:

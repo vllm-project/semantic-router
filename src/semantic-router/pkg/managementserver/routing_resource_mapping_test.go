@@ -106,7 +106,7 @@ func TestRoutingModelCardViewContainsOnlySemanticAuthoringData(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"status", "revision", "catalogRevision", "execution", "pricing", "backends",
+		"status", "revision", "catalogRevision", "control", "execution", "pricing", "backends",
 		"private-provider", "private/model", "11111111-1111-4111-8111-111111111111",
 		"createdAt", "updatedAt",
 	} {

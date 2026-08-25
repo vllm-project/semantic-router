@@ -519,7 +519,7 @@
 
 .teamDetailsDialog {
   width: min(960px, calc(100vw - 2.4rem));
-  max-height: calc(100vh - 2.4rem);
+  max-height: calc(100dvh - 2.4rem);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1857,7 +1857,7 @@
 
   .teamDetailsDialog {
     width: calc(100vw - 1.6rem);
-    max-height: calc(100vh - 1.6rem);
+    max-height: calc(100dvh - 1.6rem);
   }
 
   .teamDetailsMemberGrid {

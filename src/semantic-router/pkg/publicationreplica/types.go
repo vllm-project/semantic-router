@@ -14,17 +14,33 @@ import (
 
 var ErrNotReady = errors.New("routing publication replica is not ready")
 
-// Store is the complete Redis-facing contract used by a data-plane replica.
-// Implementations keep namespace operations partition-local. The only global
-// operations are the bounded namespace locator read and process-liveness lease.
+// Store is the complete durable-publication contract used by a data-plane
+// replica. Implementations keep namespace operations partition-local. The only
+// global operations are the bounded namespace locator read and process-liveness
+// lease.
 type Store interface {
+	PublicationDirectoryStore
+	PublicationReplicaStore
+}
+
+type PublicationDirectoryStore interface {
 	RegisterFleetReplica(context.Context, string) (time.Time, error)
 	ListPublicationNamespaces(context.Context) ([]accesspublisher.NamespacePublication, error)
 	ReadPublicationHeads(context.Context, accesspublisher.NamespacePublication) (accesspublisher.PublicationHeads, error)
 	LoadRoutingPublication(context.Context, accesspublisher.RuntimePublicationIdentity) (accesspublisher.LoadedRoutingPublication, error)
+}
+
+type PublicationReplicaStore interface {
 	RegisterReplica(context.Context, string, string, accesspublisher.ReplicaRegistration) (time.Time, error)
 	AcknowledgeBarriers(context.Context, string, string, string, string, string) error
 	AcknowledgeRouting(context.Context, string, string, string, string, string) error
+}
+
+// NotificationStore is an optional wake-up accelerator. Notifications carry
+// no state and may be dropped; Manager always retains bounded periodic polling
+// as the correctness path.
+type NotificationStore interface {
+	PublicationNotifications(context.Context) <-chan struct{}
 }
 
 // SnapshotLifecycle is the seam to an in-process routing generation registry.
@@ -171,8 +187,8 @@ func (m *Manager) Status() Status {
 }
 
 // Current returns a generation only while its namespace lease and process
-// state are healthy. Request admission can compare this identity with its
-// Redis-pinned tenant context and fail closed on a rollout boundary.
+// state are healthy. Request admission compares this identity with the
+// request's pinned publication context and fails closed on a rollout boundary.
 func (m *Manager) Current(namespaceID string) (accesspublisher.RuntimePublicationIdentity, bool) {
 	m.mu.RLock()
 	worker := m.workers[namespaceID]

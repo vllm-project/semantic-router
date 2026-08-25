@@ -1,18 +1,19 @@
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
-{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
-{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- $durableRouting := eq (include "semantic-router.hasManagementStore" .) "true" -}}
+{{- $managementAPIEnabled := eq (include "semantic-router.managementAPIEnabled" .) "true" -}}
 {{- $services := (get $global "services") | default (dict) -}}
 {{- $responseAPI := (get $services "response_api") | default (dict) -}}
 {{- $responseEnabled := (get $responseAPI "enabled") | default false -}}
 {{- $responseBackend := (get $responseAPI "store_backend") | default "" -}}
-{{- if $managedMode }}
-Semantic Router is running in managed mode.
+{{- if $durableRouting }}
+Semantic Router is using durable routing state.
 
 1. Point an Envoy-compatible Gateway at the ExtProc Service:
 
   {{ include "semantic-router.fullname" . }}.{{ include "semantic-router.namespace" . }}.svc:{{ .Values.service.grpc.port }}
 
+{{- if $managementAPIEnabled }}
 2. The Management API is private and uses Router-terminated HTTPS:
 
   {{ include "semantic-router.fullname" . }}-management.{{ include "semantic-router.namespace" . }}.svc:{{ .Values.service.management.port }}
@@ -36,7 +37,13 @@ Semantic Router is running in managed mode.
   echo http://127.0.0.1:8700
 {{- end }}
 {{- else }}
-Semantic Router is running in standalone mode.
+2. Access Router metrics:
+
+  kubectl --namespace {{ include "semantic-router.namespace" . }} port-forward \
+    svc/{{ include "semantic-router.fullname" . }}-metrics 9190:{{ .Values.service.metrics.port }}
+{{- end }}
+{{- else }}
+Semantic Router is using file-backed routing configuration.
 
 1. Access the HTTP API through the Service:
 

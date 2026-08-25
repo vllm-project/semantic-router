@@ -27,17 +27,18 @@ holds the named routing policies.
 ## How the pieces fit
 
 ```text
-request model name -> Entrypoint rule -> Recipe -> decision assignment -> backend
+request model name -> Entrypoint -> Recipe -> decision assignment -> backend
 ```
 
-When the request `model` matches an Entrypoint `name` or one of its `aliases`, the Router
-resolves exactly one rule. That rule selects the Recipe and assigns Models to
-every Decision name. The virtual model name is then replaced by the
+When the request `model` matches one of an Entrypoint's `model_names`, the Router
+selects its Recipe and assigns Models to every Decision name. The virtual Model
+name is then replaced by the
 selected backend Model.
 
 There is no implicit default Recipe or automatic alias. Every virtual model is
-an explicit Entrypoint, and every effective rule assigns all of its Recipe's
+an explicit Entrypoint, and every Entrypoint assigns all of its Recipe's
 decisions. Generated snapshot identities are not part of human authoring.
+`model_names` lists every callable alias; these aliases all resolve to the same Entrypoint.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for
@@ -50,20 +51,28 @@ Models are shared resources. Each named Recipe owns its signals, projections,
 decisions, strategy, algorithms, and route-local plugins.
 
 ```yaml
-models:
-  - name: local/fast
-    card: {description: Fast general-purpose model}
-    connections:
-      - {provider: vllm, endpoint: http://fast-model:8000/v1, model: fast-model}
-  - name: local/accurate
-    card: {description: Higher-quality model}
-    connections:
-      - {provider: vllm, endpoint: http://accurate-model:8000/v1, model: accurate-model}
+providers:
+  models:
+    - name: local/fast
+      provider_model_id: fast-model
+      backend_refs:
+        - {provider: vllm, endpoint: http://fast-model:8000/v1}
+    - name: local/accurate
+      provider_model_id: accurate-model
+      backend_refs:
+        - {provider: vllm, endpoint: http://accurate-model:8000/v1}
+
+routing:
+  modelCards:
+    - name: local/fast
+      description: Fast general-purpose model
+    - name: local/accurate
+      description: Higher-quality model
 
 recipes:
   - name: flash
     description: Prefer the lowest-latency eligible backend.
-    document:
+    routing:
       strategy: priority
       decisions:
         - name: fast-path
@@ -75,7 +84,7 @@ recipes:
 
   - name: ultra
     description: Prefer the highest-quality eligible backend.
-    document:
+    routing:
       strategy: priority
       decisions:
         - name: quality-path
@@ -86,11 +95,11 @@ recipes:
             conditions: []
 
 entrypoints:
-  - name: vllm-sr/mom-v1-flash
+  - model_names: [vllm-sr/mom-v1-flash]
     recipe: flash
     assignments:
       fast-path: {models: [{model: local/fast}]}
-  - name: vllm-sr/mom-v1-ultra
+  - model_names: [vllm-sr/mom-v1-ultra]
     recipe: ultra
     assignments:
       quality-path:

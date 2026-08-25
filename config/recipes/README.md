@@ -22,6 +22,10 @@ start those inference backends.
 | [Multi-Objective](multi-objective/README.md) | Five request-facing balance, speed, cost, accuracy, and privacy profiles over one shared pool. |
 | [Privacy-First](privacy/README.md) | Local containment for sensitive and suspicious requests. |
 
+Every maintained recipe includes an `omni` decision backed by an explicit
+image-content signal. Bind that decision to a configured visual-language Model
+when publishing the Entrypoint; text-only decisions remain unchanged.
+
 The [built-in Recipe distribution](built-in/README.md) is a separate,
 Recipe-only surface. Its [MoM V1 Model
 Card](built-in/latest/mom-v1/README.md) describes the routing profiles bundled

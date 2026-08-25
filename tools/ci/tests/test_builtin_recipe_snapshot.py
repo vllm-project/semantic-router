@@ -11,8 +11,8 @@ from unittest import mock
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "release"))
 
-from recipe_bundle import RECIPE_BUNDLE_FILES  # noqa: E402
 import snapshot_builtin_recipes as snapshot  # noqa: E402
+from recipe_bundle import RECIPE_BUNDLE_FILES  # noqa: E402
 
 
 class BuiltInRecipeSnapshotTests(unittest.TestCase):

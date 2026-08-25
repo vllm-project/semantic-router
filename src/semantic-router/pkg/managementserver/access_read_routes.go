@@ -122,6 +122,13 @@ func (routes *AccessReadRoutes) ServeHTTP(response http.ResponseWriter, request 
 			return
 		}
 		writeProviderJSON(response, http.StatusOK, effectiveQuotaDTO(quota), requestID)
+	case "routing-catalog":
+		catalog, err := routes.service.GetRoutingCatalog(request.Context(), namespaceID, subject)
+		if err != nil {
+			writeAccessReadError(response, err, requestID)
+			return
+		}
+		writeProviderJSON(response, http.StatusOK, routingCatalogDTO(catalog), requestID)
 	case "routing-context":
 		if request.Method == http.MethodGet {
 			value, err := routes.service.GetRoutingContext(request.Context(), namespaceID, subject)
@@ -323,6 +330,10 @@ func accessReadHTTPContracts() []accessReadHTTPContract {
 			}
 		}
 	}
+	contracts = append(contracts, accessReadHTTPContract{
+		method: managementapi.MethodGET,
+		path:   managementapi.BasePath + "/api-keys/{keyId}/routing-catalog",
+	})
 	return contracts
 }
 
@@ -348,7 +359,8 @@ func accessReadSubjectRequest(request *http.Request) (accessmanagement.Subject, 
 		return accessmanagement.Subject{}, "", "", false
 	}
 	action := request.URL.Path[strings.LastIndexByte(request.URL.Path, '/')+1:]
-	if action != "effective-policy" && action != "routing-context" && action != "quota" {
+	if action != "effective-policy" && action != "routing-context" && action != "quota" &&
+		(kind != accesscontrol.SubjectKindAPIKey || action != "routing-catalog") {
 		return accessmanagement.Subject{}, "", "", false
 	}
 	return accessmanagement.Subject{Kind: kind, ID: id}, action, base + "/{" + parameter + "}/" + action, true

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -48,25 +49,13 @@ func (r *OpenAIRouter) buildTerminalUsageEvent(
 		occurredAt = completedAt
 	}
 
-	dispatches := make([]usageledger.Dispatch, 0, len(requestDispatches))
-	known, unknown := 0, 0
-	for index, dispatch := range requestDispatches {
-		item, err := terminalUsageDispatch(request, dispatch, index, statusCode)
-		if err != nil {
-			return usageledger.TerminalEvent{}, err
-		}
-		dispatches = append(dispatches, item)
-		if item.UsageState == usageledger.UsageUnknown {
-			unknown++
-		} else {
-			known++
-		}
+	dispatches, evidence, dispatchErr := terminalUsageDispatches(request, requestDispatches, statusCode)
+	if dispatchErr != nil {
+		return usageledger.TerminalEvent{}, dispatchErr
 	}
-	evidence := usageledger.EvidenceKnown
-	if unknown > 0 && known > 0 {
-		evidence = usageledger.EvidenceMixed
-	} else if unknown > 0 {
-		evidence = usageledger.EvidenceUnknown
+	routing, routingErr := terminalRoutingSnapshot(request, state)
+	if routingErr != nil {
+		return usageledger.TerminalEvent{}, routingErr
 	}
 
 	event := usageledger.TerminalEvent{
@@ -91,7 +80,7 @@ func (r *OpenAIRouter) buildTerminalUsageEvent(
 			UserID:   tenant.UserID,
 			TeamID:   tenant.TeamID,
 		},
-		Routing:       terminalRoutingSnapshot(request, state),
+		Routing:       routing,
 		Served:        terminalServedUsage(aggregate),
 		Dispatches:    dispatches,
 		QuotaReceipts: terminalQuotaReceipts(admission.Rules, aggregate),
@@ -111,9 +100,9 @@ func (r *OpenAIRouter) buildTerminalUsageEvent(
 	if _, err := event.Validate(); err != nil {
 		return usageledger.TerminalEvent{}, fmt.Errorf("validate terminal usage event: %w", err)
 	}
-	canonical, err := json.Marshal(event)
-	if err != nil {
-		return usageledger.TerminalEvent{}, fmt.Errorf("encode terminal usage digest input: %w", err)
+	canonical, marshalErr := json.Marshal(event)
+	if marshalErr != nil {
+		return usageledger.TerminalEvent{}, fmt.Errorf("encode terminal usage digest input: %w", marshalErr)
 	}
 	digest := sha256.Sum256(canonical)
 	event.FinalizationDigest = hex.EncodeToString(digest[:])
@@ -121,6 +110,34 @@ func (r *OpenAIRouter) buildTerminalUsageEvent(
 		return usageledger.TerminalEvent{}, fmt.Errorf("validate finalized terminal usage event: %w", err)
 	}
 	return event, nil
+}
+
+func terminalUsageDispatches(
+	request *RequestContext,
+	requestDispatches []*inferenceDispatch,
+	statusCode int,
+) ([]usageledger.Dispatch, usageledger.EvidenceState, error) {
+	dispatches := make([]usageledger.Dispatch, 0, len(requestDispatches))
+	known, unknown := 0, 0
+	for index, dispatch := range requestDispatches {
+		item, err := terminalUsageDispatch(request, dispatch, index, statusCode)
+		if err != nil {
+			return nil, "", err
+		}
+		dispatches = append(dispatches, item)
+		if item.UsageState == usageledger.UsageUnknown {
+			unknown++
+		} else {
+			known++
+		}
+	}
+	evidence := usageledger.EvidenceKnown
+	if unknown > 0 && known > 0 {
+		evidence = usageledger.EvidenceMixed
+	} else if unknown > 0 {
+		evidence = usageledger.EvidenceUnknown
+	}
+	return dispatches, evidence, nil
 }
 
 func terminalUsageDispatch(
@@ -261,8 +278,13 @@ func terminalDispatchEvidenceDigest(dispatch usageledger.Dispatch) string {
 	return hex.EncodeToString(digest[:])
 }
 
-func terminalRoutingSnapshot(request *RequestContext, state *inferenceRequestAccess) usageledger.RoutingSnapshot {
-	result := usageledger.RoutingSnapshot{AccessRevision: int64(state.admission.Tenant.PolicyRevision)}
+func terminalRoutingSnapshot(request *RequestContext, state *inferenceRequestAccess) (usageledger.RoutingSnapshot, error) {
+	if state.admission.Tenant.PolicyRevision > math.MaxInt64 {
+		return usageledger.RoutingSnapshot{}, fmt.Errorf("access policy revision exceeds the usage ledger range")
+	}
+	// #nosec G115 -- the policy revision is bounded to MaxInt64 above.
+	accessRevision := int64(state.admission.Tenant.PolicyRevision)
+	result := usageledger.RoutingSnapshot{AccessRevision: accessRevision}
 	if state.entrypoint != nil {
 		result.EntrypointID = canonicalOptionalUUID(state.entrypoint.ID)
 		result.EntrypointName = state.entrypoint.Name
@@ -279,7 +301,7 @@ func terminalRoutingSnapshot(request *RequestContext, state *inferenceRequestAcc
 			result.RecipeRevision = recipe.Revision
 		}
 	}
-	return result
+	return result, nil
 }
 
 func terminalServedUsage(aggregate usageaccounting.Aggregate) usageledger.ServedUsage {

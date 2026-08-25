@@ -42,7 +42,7 @@ func TestPolicyBulkExecutionAuthorizerRebuildsCurrentItemScope(t *testing.T) {
 	if runtime.request.PrincipalID != accesscontrol.ManagementPrincipalID(testPrincipalID) ||
 		runtime.request.NamespaceID != accesscontrol.NamespaceID(testNamespaceID) ||
 		!runtime.request.Authenticated || !runtime.request.Conditions["user_owner"] ||
-		runtime.request.Conditions["team_owner"] {
+		runtime.request.Conditions["team_owner"] || runtime.request.Conditions["key_owner"] {
 		t.Fatalf("execution authorization request = %#v", runtime.request)
 	}
 	policyTargets := runtime.request.Targets["policy"]

@@ -4,13 +4,14 @@ name: vLLM-SR MoM V1
 version: 1.2.0
 description: >-
   Five reusable, model-free routing profiles for balanced, cost, speed,
-  accuracy, and privacy objectives.
+  accuracy, privacy, and image-understanding workloads.
 authors:
   - name: vLLM Semantic Router Maintainers
 license: Apache-2.0
 tags:
   - model-free
   - mixture-of-models
+  - multimodal
   - entrypoint-assignments
   - semantic-routing
 links:

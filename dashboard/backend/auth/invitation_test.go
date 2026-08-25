@@ -150,13 +150,46 @@ func TestDashboardInvitationRoleMappingIsExact(t *testing.T) {
 	for role, roleID := range map[string]string{
 		RoleAdmin: routerPlatformAdminRoleID,
 		RoleWrite: routerOperatorRoleID,
-		RoleRead:  routerViewerRoleID,
 	} {
 		grants, err := invitationRoleGrants(role)
 		if err != nil || len(grants) != 2 || grants[0].RoleID != roleID || grants[0].ScopeKind != "namespace" ||
 			grants[1].RoleID != routerConsumerRoleID || grants[1].ScopeKind != "user" {
 			t.Fatalf("invitationRoleGrants(%q) = %#v, %v", role, grants, err)
 		}
+	}
+	grants, err := invitationRoleGrants(RoleRead)
+	if err != nil || len(grants) != 1 || grants[0].RoleID != routerConsumerRoleID ||
+		grants[0].ScopeKind != "user" {
+		t.Fatalf("invitationRoleGrants(%q) = %#v, %v", RoleRead, grants, err)
+	}
+	resolved, err := dashboardRoleFromGrants([]managementapi.InvitationRoleGrant{{
+		RoleID: routerConsumerRoleID, ScopeKind: "user",
+	}})
+	if err != nil || resolved != RoleRead {
+		t.Fatalf("dashboardRoleFromGrants(consumer) = %q, %v", resolved, err)
+	}
+}
+
+func TestDashboardReadRoleRequiresConsumerBindingForTheInvitedUser(t *testing.T) {
+	now := time.Now().UTC()
+	binding := managementapi.ManagementRoleBinding{
+		BindingID: "binding", PrincipalID: testInvitationPrincipal, RoleID: routerConsumerRoleID,
+		Scope: managementapi.ManagementScope{
+			Kind: "user", NamespaceID: testInvitationNamespace, UserID: testInvitationUserID,
+		},
+		Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now,
+	}
+	role, err := DashboardRoleFromManagementBindings(
+		[]managementapi.ManagementRoleBinding{binding}, testInvitationNamespace, testInvitationUserID,
+	)
+	if err != nil || role != RoleRead {
+		t.Fatalf("owned consumer role = %q, %v", role, err)
+	}
+	binding.Scope.UserID = "20000000-0000-4000-8000-000000000099"
+	if _, err := DashboardRoleFromManagementBindings(
+		[]managementapi.ManagementRoleBinding{binding}, testInvitationNamespace, testInvitationUserID,
+	); !errors.Is(err, ErrInvitationAuthorityUnavailable) {
+		t.Fatalf("cross-user consumer role error = %v", err)
 	}
 }
 

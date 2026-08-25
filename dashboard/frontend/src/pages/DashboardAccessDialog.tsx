@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ConfirmDialog from '../components/ConfirmDialog'
 import ProductIcon from '../components/ProductIcon'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import type { DashboardMember } from './AccessControlViewTypes'
@@ -18,8 +19,9 @@ export function DashboardAccessDialog({
   const [password, setPassword] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({
-    isOpen: true,
+  const [confirmingRemove, setConfirmingRemove] = useState(false)
+  const dialogRef = useAccessibleDialog<HTMLFormElement>({
+    isOpen: !confirmingRemove,
     onClose,
     dismissible: !saving,
   })
@@ -51,7 +53,6 @@ export function DashboardAccessDialog({
     }
   }
   const remove = async () => {
-    if (!window.confirm(`Remove Dashboard access for ${member.name}?`)) return
     setSaving(true)
     setError('')
     try {
@@ -60,10 +61,28 @@ export function DashboardAccessDialog({
       onChanged()
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Could not remove Dashboard access')
+      setConfirmingRemove(false)
     } finally {
       setSaving(false)
     }
   }
+
+  if (confirmingRemove) {
+    return (
+      <ConfirmDialog
+        isOpen
+        title={`Remove ${member.name}’s login?`}
+        description="They will no longer be able to sign in to this Dashboard. Their inference identity, Team memberships, and API keys are not deleted."
+        eyebrow="Dashboard access"
+        confirmLabel="Remove login"
+        pending={saving}
+        tone="danger"
+        onCancel={() => setConfirmingRemove(false)}
+        onConfirm={remove}
+      />
+    )
+  }
+
   return (
     <div
       className={styles.modalBackdrop}
@@ -71,13 +90,17 @@ export function DashboardAccessDialog({
         if (event.target === event.currentTarget && !saving) onClose()
       }}
     >
-      <section
+      <form
         ref={dialogRef}
         className={styles.modal}
         role="dialog"
         aria-modal="true"
         aria-labelledby="dashboard-access-title"
         tabIndex={-1}
+        onSubmit={(event) => {
+          event.preventDefault()
+          void save()
+        }}
       >
         <header className={styles.modalHeader}>
           <div className={styles.modalHeading}>
@@ -148,7 +171,7 @@ export function DashboardAccessDialog({
           <button
             type="button"
             className={styles.dangerButton}
-            onClick={() => void remove()}
+            onClick={() => setConfirmingRemove(true)}
             disabled={saving}
           >
             <ProductIcon name="trash" /> Remove login
@@ -160,19 +183,15 @@ export function DashboardAccessDialog({
             onClick={onClose}
             disabled={saving}
           >
+            <ProductIcon name="close" />
             Cancel
           </button>
-          <button
-            type="button"
-            className={styles.primaryButton}
-            onClick={() => void save()}
-            disabled={saving}
-          >
+          <button type="submit" className={styles.primaryButton} disabled={saving}>
             {!saving ? <ProductIcon name="check" /> : null}
             {saving ? 'Saving…' : 'Save changes'}
           </button>
         </footer>
-      </section>
+      </form>
     </div>
   )
 }

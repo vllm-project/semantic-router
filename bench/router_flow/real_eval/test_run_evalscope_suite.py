@@ -23,12 +23,13 @@ TERMINUS2_MAX_TURNS = 200
 
 
 def _config_decisions(config: dict) -> list[dict]:
-    return config["recipes"][0]["document"]["decisions"]
+    return config["recipes"][0]["routing"]["decisions"]
 
 
 def _model_upstreams(config: dict) -> dict[str, str]:
     return {
-        model["name"]: model["connections"][0]["model"] for model in config["models"]
+        model["name"]: model["provider_model_id"]
+        for model in config["providers"]["models"]
     }
 
 

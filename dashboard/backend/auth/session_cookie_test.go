@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,18 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 )
+
+type recordingDashboardSessionRetirer struct {
+	sessionID string
+}
+
+func (retirer *recordingDashboardSessionRetirer) RetireDashboardSession(
+	_ context.Context,
+	sessionID string,
+) error {
+	retirer.sessionID = sessionID
+	return nil
+}
 
 func responseCookie(t *testing.T, recorder *httptest.ResponseRecorder, name string) *http.Cookie {
 	t.Helper()
@@ -190,6 +203,8 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestAuthService(t)
+	retirer := &recordingDashboardSessionRetirer{}
+	svc.ConfigureDashboardSessionRetirer(retirer)
 	user := newTestUser(t, svc, "revoked-session@example.com", RoleRead, "active")
 	token, err := svc.issueToken(user)
 	if err != nil {
@@ -202,6 +217,13 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 	logoutHandler(svc).ServeHTTP(logoutRecorder, logoutReq)
 	if logoutRecorder.Code != http.StatusOK {
 		t.Fatalf("logout status = %d, want %d", logoutRecorder.Code, http.StatusOK)
+	}
+	claims, err := svc.ParseToken(token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if retirer.sessionID != claims.ID {
+		t.Fatalf("retired Dashboard session = %q, want %q", retirer.sessionID, claims.ID)
 	}
 
 	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

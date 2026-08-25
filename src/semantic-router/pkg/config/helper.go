@@ -3,6 +3,13 @@ package config
 import (
 	"fmt"
 	"slices"
+	"strings"
+)
+
+const (
+	DefaultAutoModelName    = "MoM"
+	LegacyAutoModelAlias    = "auto"
+	DefaultVSRAutoModelName = "vllm-sr/auto"
 )
 
 // GetModelReasoningFamily returns the reasoning family configuration for a given model name
@@ -37,6 +44,53 @@ func (rc *RouterConfig) GetModelReasoningFamilyName(modelName string) (string, b
 	}
 	_, exists = rc.ReasoningFamilies[modelParams.ReasoningFamily]
 	return modelParams.ReasoningFamily, exists
+}
+
+// GetEffectiveAutoModelName returns the configured primary automatic-routing
+// name, or the stable v0.3 default when omitted.
+func (c *RouterConfig) GetEffectiveAutoModelName() string {
+	if c != nil && c.AutoModelName != "" {
+		return c.AutoModelName
+	}
+	return DefaultAutoModelName
+}
+
+func DefaultAutoModelNames() []string {
+	return []string{DefaultVSRAutoModelName, LegacyAutoModelAlias, DefaultAutoModelName}
+}
+
+// EffectiveAutoModelNames returns the existing v0.3 implicit Entrypoint names.
+// A present empty auto_model_names list disables implicit names so explicit
+// Entrypoints can own the request-facing surface without collisions.
+func (c *RouterConfig) EffectiveAutoModelNames() []string {
+	if c == nil {
+		return DefaultAutoModelNames()
+	}
+	if c.AutoModelNames != nil {
+		return normalizeAutoModelNames(c.AutoModelNames)
+	}
+	return normalizeAutoModelNames([]string{
+		DefaultVSRAutoModelName,
+		LegacyAutoModelAlias,
+		c.GetEffectiveAutoModelName(),
+	})
+}
+
+func normalizeAutoModelNames(names []string) []string {
+	seen := make(map[string]struct{}, len(names))
+	result := make([]string, 0, len(names))
+	for _, name := range names {
+		normalized := strings.TrimSpace(name)
+		if normalized == "" {
+			continue
+		}
+		if _, duplicate := seen[normalized]; duplicate {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+	return result
 }
 
 func (rc *RouterConfig) ModelNameMatches(candidateName string, modelName string) bool {

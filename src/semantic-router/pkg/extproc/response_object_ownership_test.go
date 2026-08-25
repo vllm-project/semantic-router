@@ -17,7 +17,7 @@ import (
 )
 
 func TestResponseObjectOwnerUsesOnlyTrustedInferenceContext(t *testing.T) {
-	managed := &OpenAIRouter{Config: &config.RouterConfig{
+	durableRouter := &OpenAIRouter{Config: &config.RouterConfig{
 		Access: config.AccessServiceConfig{Enabled: true},
 	}}
 	ctx := &RequestContext{
@@ -35,13 +35,13 @@ func TestResponseObjectOwnerUsesOnlyTrustedInferenceContext(t *testing.T) {
 			"user_id":      "spoofed-body-user",
 		}},
 	}
-	owner, ok := managed.responseObjectOwner(ctx)
+	owner, ok := durableRouter.responseObjectOwner(ctx)
 	want := responseapi.ResponseOwner{
 		Mode:        responseapi.ResponseOwnerAuthenticated,
 		NamespaceID: "trusted-namespace", APIKeyID: "trusted-key", UserID: "trusted-user",
 	}
 	if !ok || owner != want {
-		t.Fatalf("managed owner = (%+v, %t), want %+v", owner, ok, want)
+		t.Fatalf("durableRouter owner = (%+v, %t), want %+v", owner, ok, want)
 	}
 
 	publicTrace := testResponseObjectGeneration(t, "public-namespace")
@@ -53,8 +53,8 @@ func TestResponseObjectOwnerUsesOnlyTrustedInferenceContext(t *testing.T) {
 		t.Fatalf("public owner = (%+v, %t)", publicOwner, ok)
 	}
 
-	if fallback, ok := managed.responseObjectOwner(&RequestContext{TraceContext: publicTrace}); ok || fallback.Valid() {
-		t.Fatalf("managed access fell back to public owner: %+v", fallback)
+	if fallback, ok := durableRouter.responseObjectOwner(&RequestContext{TraceContext: publicTrace}); ok || fallback.Valid() {
+		t.Fatalf("durableRouter access fell back to public owner: %+v", fallback)
 	}
 }
 
@@ -125,7 +125,7 @@ func TestResponseObjectEndpointsDoNotDiscloseCrossOwnerObjects(t *testing.T) {
 	}
 }
 
-func TestNonStreamingProductionEdgeRetainsStandaloneResponse(t *testing.T) {
+func TestNonStreamingProductionEdgeRetainsFileAuthorityResponse(t *testing.T) {
 	store, err := responsestore.NewMemoryStore(responsestore.StoreConfig{Enabled: true})
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +134,7 @@ func TestNonStreamingProductionEdgeRetainsStandaloneResponse(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{}, ResponseAPIFilter: NewResponseAPIFilter(store),
 	}
-	traceContext := testResponseObjectGeneration(t, "standalone-namespace")
+	traceContext := testResponseObjectGeneration(t, "file-authority-namespace")
 	ctx := &RequestContext{
 		TraceContext: traceContext, SourceFormat: llmprotocol.OpenAIResponsesV1,
 		RequestID: "retention-request", UpstreamStatusCode: 200,
@@ -160,7 +160,7 @@ func TestNonStreamingProductionEdgeRetainsStandaloneResponse(t *testing.T) {
 	router.handleNonStreamingResponseBody(encoded, ctx, 0)
 
 	owner := responseapi.ResponseOwner{
-		Mode: responseapi.ResponseOwnerAnonymousPublicNamespace, NamespaceID: "standalone-namespace",
+		Mode: responseapi.ResponseOwnerAnonymousPublicNamespace, NamespaceID: "file-authority-namespace",
 	}
 	stored, err := store.GetResponse(context.Background(), owner, semantic.ID)
 	if err != nil {
@@ -169,16 +169,16 @@ func TestNonStreamingProductionEdgeRetainsStandaloneResponse(t *testing.T) {
 	if stored.Owner != owner || stored.OutputText != "retained answer" ||
 		len(stored.Input) != 1 || string(stored.Input[0].Content) != `"hello"` ||
 		stored.Metadata["purpose"] != "retention" {
-		t.Fatalf("stored standalone response = %+v", stored)
+		t.Fatalf("stored file-authority response = %+v", stored)
 	}
 	publicResponse, err := router.ResponseAPIFilter.HandleGetResponse(context.Background(), owner, semantic.ID)
 	if err != nil || int(publicResponse.GetImmediateResponse().GetStatus().GetCode()) != 200 {
-		t.Fatalf("standalone retained GET = (%v, %v)", publicResponse, err)
+		t.Fatalf("file-authority retained GET = (%v, %v)", publicResponse, err)
 	}
 	otherNamespace := owner
-	otherNamespace.NamespaceID = "other-standalone-namespace"
+	otherNamespace.NamespaceID = "other-file-authority-namespace"
 	if _, err := store.GetResponse(context.Background(), otherNamespace, semantic.ID); !errors.Is(err, responsestore.ErrNotFound) {
-		t.Fatalf("standalone namespace crossover error = %v", err)
+		t.Fatalf("file-authority namespace crossover error = %v", err)
 	}
 }
 

@@ -85,12 +85,12 @@ func materializeManagedInlineRateLimit(
 	}, nil
 }
 
-// materializeManagedAPIKeyRateLimitOverride is the atomic API-key rate-policy
+// materializeManagementAPIKeyRateLimitOverride is the atomic API-key rate-policy
 // composition seam. The API-key row and subject must already have been inserted
 // by the same transaction. A caller either binds an existing policy or creates
 // and binds one inline; invalid one-of or non-key/non-allocation inputs fail
 // before a partial binding can exist.
-func materializeManagedAPIKeyRateLimitOverride(
+func materializeManagementAPIKeyRateLimitOverride(
 	ctx context.Context,
 	tx *sql.Tx,
 	override managedRateLimitOverride,

@@ -1,5 +1,7 @@
 package managementapi
 
+import "sort"
+
 // ISODuration performs the final canonical-value check. The schema pattern
 // keeps generated clients on the same fixed day/time syntax and excludes
 // calendar years and months, which have different quota semantics.
@@ -14,9 +16,9 @@ func init() {
 }
 
 func policySchemas() map[string]JSONSchema {
-	stringSchema := JSONSchema{Type: "string"}
+	textSchema := JSONSchema{Type: "string"}
 	uuidSchema := JSONSchema{Type: "string", Format: "uuid"}
-	timestampSchema := JSONSchema{Type: "string", Format: "date-time"}
+	dateTimeSchema := JSONSchema{Type: "string", Format: "date-time"}
 	revisionSchema := JSONSchema{Type: "integer", Format: "int64", Minimum: intPointer(1)}
 	policyStatus := JSONSchema{Type: "string", Enum: []string{"draft", "active", "disabled"}}
 	bindingStatus := JSONSchema{Type: "string", Enum: []string{"active", "disabled"}}
@@ -25,7 +27,7 @@ func policySchemas() map[string]JSONSchema {
 	})
 	grant := objectSchema([]string{"resourceType", "resourceId", "permission", "effect"}, map[string]JSONSchema{
 		"resourceType": {Type: "string", Enum: []string{"entrypoint", "model"}},
-		"resourceId":   stringSchema, "permission": {Type: "string", Enum: []string{"discover", "invoke"}},
+		"resourceId":   textSchema, "permission": {Type: "string", Enum: []string{"discover", "invoke"}},
 		"effect": {Type: "string", Enum: []string{"allow", "deny"}},
 	})
 	grants := arraySchema(grant)
@@ -43,27 +45,27 @@ func policySchemas() map[string]JSONSchema {
 	})
 
 	accessPolicy := objectSchema([]string{"policyId", "name", "description", "status", "revision", "grants", "createdAt", "updatedAt"}, map[string]JSONSchema{
-		"policyId": uuidSchema, "name": stringSchema, "description": stringSchema,
+		"policyId": uuidSchema, "name": textSchema, "description": textSchema,
 		"status": policyStatus, "revision": revisionSchema, "grants": grants,
-		"createdAt": timestampSchema, "updatedAt": timestampSchema,
+		"createdAt": dateTimeSchema, "updatedAt": dateTimeSchema,
 	})
 	ratePolicyRules := arraySchema(rateRule)
 	ratePolicyRules.MaxItems = intPointer(128)
 	ratePolicy := objectSchema([]string{"policyId", "name", "description", "status", "revision", "rules", "createdAt", "updatedAt"}, map[string]JSONSchema{
-		"policyId": uuidSchema, "name": stringSchema, "description": stringSchema,
+		"policyId": uuidSchema, "name": textSchema, "description": textSchema,
 		"status": policyStatus, "revision": revisionSchema, "rules": ratePolicyRules,
-		"createdAt": timestampSchema, "updatedAt": timestampSchema,
+		"createdAt": dateTimeSchema, "updatedAt": dateTimeSchema,
 	})
 	accessBinding := objectSchema([]string{"bindingId", "policyId", "subject", "status", "revision", "createdAt", "updatedAt"}, map[string]JSONSchema{
 		"bindingId": uuidSchema, "policyId": uuidSchema, "subject": subject,
 		"status": bindingStatus, "revision": revisionSchema,
-		"createdAt": timestampSchema, "updatedAt": timestampSchema,
+		"createdAt": dateTimeSchema, "updatedAt": dateTimeSchema,
 	})
 	rateBinding := objectSchema([]string{"bindingId", "policyId", "subject", "mode", "quotaPartitionId", "status", "revision", "createdAt", "updatedAt"}, map[string]JSONSchema{
 		"bindingId": uuidSchema, "policyId": uuidSchema, "subject": subject,
 		"mode":             {Type: "string", Enum: []string{"allocation", "hard_cap"}},
 		"quotaPartitionId": uuidSchema, "status": bindingStatus, "revision": revisionSchema,
-		"createdAt": timestampSchema, "updatedAt": timestampSchema,
+		"createdAt": dateTimeSchema, "updatedAt": dateTimeSchema,
 	})
 	existingRateBinding := objectSchema([]string{"policyId", "subject", "mode"}, map[string]JSONSchema{
 		"policyId": uuidSchema, "subject": subject,
@@ -93,76 +95,156 @@ func policySchemas() map[string]JSONSchema {
 	rateBulkItems := arraySchema(JSONSchema{OneOf: []JSONSchema{existingRateBulkItem, inlineRateBulkItem}})
 	rateBulkItems.MinItems, rateBulkItems.MaxItems = intPointer(1), intPointer(1000)
 
+	return policySchemaMap(policySchemaParts{
+		stringSchema: textSchema, uuidSchema: uuidSchema, revisionSchema: revisionSchema,
+		policyStatus: policyStatus, bindingStatus: bindingStatus, subject: subject, grant: grant,
+		grants: grants, rules: rules, inlinePolicy: inlinePolicy, rateRuleInput: rateRuleInput, rateRule: rateRule,
+		accessPolicy: accessPolicy, ratePolicy: ratePolicy, accessBinding: accessBinding, rateBinding: rateBinding,
+		rateBindingCreate: rateBindingCreate, accessBindingCreate: accessBindingCreate,
+		accessBulkItems: accessBulkItems, rateBulkItems: rateBulkItems,
+	})
+}
+
+type policySchemaParts struct {
+	stringSchema, uuidSchema, revisionSchema, policyStatus, bindingStatus JSONSchema
+	subject, grant, grants, rules, inlinePolicy                           JSONSchema
+	rateRuleInput, rateRule, accessPolicy, ratePolicy                     JSONSchema
+	accessBinding, rateBinding, rateBindingCreate, accessBindingCreate    JSONSchema
+	accessBulkItems, rateBulkItems                                        JSONSchema
+}
+
+func policySchemaMap(parts policySchemaParts) map[string]JSONSchema {
 	return map[string]JSONSchema{
-		"PolicySubject": subject, "AccessPolicyGrant": grant,
+		"PolicySubject": parts.subject, "AccessPolicyGrant": parts.grant,
 		"AccessPolicyCreateRequest": objectSchema([]string{"name"}, map[string]JSONSchema{
 			"name":        {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": policyStatus, "grants": grants,
+			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": parts.policyStatus, "grants": parts.grants,
 		}),
 		"AccessPolicyPatchRequest": objectSchema(nil, map[string]JSONSchema{
 			"name":        {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": policyStatus, "grants": grants,
+			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": parts.policyStatus, "grants": parts.grants,
 		}),
-		"AccessPolicy": accessPolicy,
+		"AccessPolicy": parts.accessPolicy,
 		"AccessPolicyPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
-			"data": arraySchema(accessPolicy), "page": refSchema("PageInfo"),
+			"data": arraySchema(parts.accessPolicy), "page": refSchema("PageInfo"),
 		}),
-		"AccessPolicyDetail": objectSchema([]string{"data"}, map[string]JSONSchema{"data": accessPolicy}),
-		"RateLimitRuleInput": rateRuleInput, "RateLimitRule": rateRule,
+		"AccessPolicyDetail": objectSchema([]string{"data"}, map[string]JSONSchema{"data": parts.accessPolicy}),
+		"RateLimitRuleInput": parts.rateRuleInput, "RateLimitRule": parts.rateRule,
 		"RateLimitPolicyCreateRequest": objectSchema([]string{"name"}, map[string]JSONSchema{
 			"name":        {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": policyStatus, "rules": rules,
+			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": parts.policyStatus, "rules": parts.rules,
 		}),
 		"RateLimitPolicyPatchRequest": objectSchema(nil, map[string]JSONSchema{
 			"name":        {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": policyStatus, "rules": rules,
+			"description": {Type: "string", MaxLength: intPointer(1000)}, "status": parts.policyStatus, "rules": parts.rules,
 		}),
-		"RateLimitPolicy": ratePolicy,
+		"RateLimitPolicy": parts.ratePolicy,
 		"RateLimitPolicyPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
-			"data": arraySchema(ratePolicy), "page": refSchema("PageInfo"),
+			"data": arraySchema(parts.ratePolicy), "page": refSchema("PageInfo"),
 		}),
-		"RateLimitPolicyDetail":            objectSchema([]string{"data"}, map[string]JSONSchema{"data": ratePolicy}),
-		"AccessPolicyBindingCreateRequest": accessBindingCreate,
-		"AccessPolicyBindingPatchRequest":  objectSchema([]string{"status"}, map[string]JSONSchema{"status": bindingStatus}),
-		"AccessPolicyBinding":              accessBinding,
+		"RateLimitPolicyDetail":            objectSchema([]string{"data"}, map[string]JSONSchema{"data": parts.ratePolicy}),
+		"AccessPolicyBindingCreateRequest": parts.accessBindingCreate,
+		"AccessPolicyBindingPatchRequest":  objectSchema([]string{"status"}, map[string]JSONSchema{"status": parts.bindingStatus}),
+		"AccessPolicyBinding":              parts.accessBinding,
 		"AccessPolicyBindingPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
-			"data": arraySchema(accessBinding), "page": refSchema("PageInfo"),
+			"data": arraySchema(parts.accessBinding), "page": refSchema("PageInfo"),
 		}),
-		"AccessPolicyBindingDetail":     objectSchema([]string{"data"}, map[string]JSONSchema{"data": accessBinding}),
-		"InlineRateLimitPolicy":         inlinePolicy,
-		"RateLimitBindingCreateRequest": rateBindingCreate,
-		"RateLimitBindingPatchRequest":  objectSchema([]string{"status"}, map[string]JSONSchema{"status": bindingStatus}),
-		"RateLimitBinding":              rateBinding,
+		"AccessPolicyBindingDetail":     objectSchema([]string{"data"}, map[string]JSONSchema{"data": parts.accessBinding}),
+		"InlineRateLimitPolicy":         parts.inlinePolicy,
+		"RateLimitBindingCreateRequest": parts.rateBindingCreate,
+		"RateLimitBindingPatchRequest":  objectSchema([]string{"status"}, map[string]JSONSchema{"status": parts.bindingStatus}),
+		"RateLimitBinding":              parts.rateBinding,
 		"RateLimitBindingPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
-			"data": arraySchema(rateBinding), "page": refSchema("PageInfo"),
+			"data": arraySchema(parts.rateBinding), "page": refSchema("PageInfo"),
 		}),
-		"RateLimitBindingDetail": objectSchema([]string{"data"}, map[string]JSONSchema{"data": rateBinding}),
+		"RateLimitBindingDetail": objectSchema([]string{"data"}, map[string]JSONSchema{"data": parts.rateBinding}),
 		"RateLimitBindingCreateReceipt": objectSchema([]string{"bindingId", "policyId", "revision", "createdPolicy"}, map[string]JSONSchema{
-			"bindingId": uuidSchema, "policyId": uuidSchema, "revision": revisionSchema,
+			"bindingId": parts.uuidSchema, "policyId": parts.uuidSchema, "revision": parts.revisionSchema,
 			"createdPolicy": {Type: "boolean"}, "idempotency": refSchema("IdempotencyMetadata"),
 		}),
-		"AccessPolicyBindingBulkApplyRequest": objectSchema([]string{"items"}, map[string]JSONSchema{"items": accessBulkItems}),
-		"RateLimitBindingBulkApplyRequest":    objectSchema([]string{"items"}, map[string]JSONSchema{"items": rateBulkItems}),
+		"AccessPolicyBindingBulkApplyRequest": objectSchema([]string{"items"}, map[string]JSONSchema{"items": parts.accessBulkItems}),
+		"RateLimitBindingBulkApplyRequest":    objectSchema([]string{"items"}, map[string]JSONSchema{"items": parts.rateBulkItems}),
 	}
 }
 
 func policyRateRuleSchema(output bool) JSONSchema {
-	quota := JSONSchema{Type: "string", Pattern: `^(?:0|[1-9][0-9]*)(?:\.[0-9]{1,15})?$`}
-	properties := map[string]JSONSchema{
-		"ruleId":    {Type: "string", Format: "uuid"},
-		"metric":    {Type: "string", Enum: []string{"requests", "input_tokens", "output_tokens", "total_tokens", "concurrent_requests", "served_input_tokens", "served_output_tokens", "served_total_tokens", "cost"}},
-		"algorithm": {Type: "string", Enum: []string{"sliding_log", "calendar_window", "token_bucket", "gcra", "concurrency"}},
-		"limit":     quota, "window": {Type: "string", Pattern: canonicalISODurationPattern},
-		"period": {Type: "string", Enum: []string{"day", "month"}}, "timezone": {Type: "string"},
-		"capacity": quota, "refillAmount": quota,
-		"refillPeriod":     {Type: "string", Pattern: canonicalISODurationPattern},
-		"emissionInterval": {Type: "string", Pattern: canonicalISODurationPattern},
-		"burstTolerance":   {Type: "integer", Minimum: intPointer(0)},
-		"accounting":       {Type: "string", Enum: []string{"request", "response_actual"}},
-		"enforcement":      {Type: "string", Enum: []string{"enforce", "shadow"}},
+	positiveInteger := JSONSchema{Type: "string", Pattern: `^[1-9][0-9]{0,41}$`}
+	cost := JSONSchema{
+		Type: "string", MaxLength: intPointer(43),
+		Pattern: `^(?:0\.(?=[0-9]{1,15}$)(?=[0-9]*[1-9])[0-9]+|[1-9][0-9]*(?:\.[0-9]{1,15})?)$`,
 	}
-	required := []string{"metric", "algorithm", "accounting", "enforcement"}
+	duration := JSONSchema{Type: "string", Pattern: canonicalISODurationPattern}
+	tokenMetrics := []string{"input_tokens", "output_tokens", "total_tokens", "served_input_tokens", "served_output_tokens", "served_total_tokens"}
+
+	windowRule := func(metric []string, algorithm, accounting string, limit JSONSchema, fields map[string]JSONSchema) JSONSchema {
+		properties := map[string]JSONSchema{
+			"metric": {Type: "string", Enum: metric}, "algorithm": {Type: "string", Enum: []string{algorithm}},
+			"limit": limit, "accounting": {Type: "string", Enum: []string{accounting}},
+			"enforcement": {Type: "string", Enum: []string{"enforce", "shadow"}},
+		}
+		required := []string{"metric", "algorithm", "limit", "accounting", "enforcement"}
+		fieldNames := make([]string, 0, len(fields))
+		for name := range fields {
+			fieldNames = append(fieldNames, name)
+		}
+		sort.Strings(fieldNames)
+		for _, name := range fieldNames {
+			schema := fields[name]
+			properties[name] = schema
+			required = append(required, name)
+		}
+		return rateRuleObjectSchema(output, required, properties)
+	}
+
+	variants := make([]JSONSchema, 0, 9)
+	for _, selection := range []struct {
+		metrics    []string
+		accounting string
+		limit      JSONSchema
+	}{
+		{[]string{"requests"}, "request", positiveInteger},
+		{tokenMetrics, "response_actual", positiveInteger},
+		{[]string{"cost"}, "response_actual", cost},
+	} {
+		variants = append(variants,
+			windowRule(selection.metrics, "sliding_log", selection.accounting, selection.limit,
+				map[string]JSONSchema{"window": duration}),
+			windowRule(selection.metrics, "calendar_window", selection.accounting, selection.limit,
+				map[string]JSONSchema{
+					"period":   {Type: "string", Enum: []string{"day", "month"}},
+					"timezone": {Type: "string", MinLength: intPointer(1)},
+				}),
+		)
+	}
+	variants = append(variants,
+		rateRuleObjectSchema(output,
+			[]string{"metric", "algorithm", "capacity", "refillAmount", "refillPeriod", "accounting", "enforcement"},
+			map[string]JSONSchema{
+				"metric": {Type: "string", Enum: []string{"requests"}}, "algorithm": {Type: "string", Enum: []string{"token_bucket"}},
+				"capacity": positiveInteger, "refillAmount": positiveInteger, "refillPeriod": duration,
+				"accounting": {Type: "string", Enum: []string{"request"}}, "enforcement": {Type: "string", Enum: []string{"enforce", "shadow"}},
+			}),
+		rateRuleObjectSchema(output,
+			[]string{"metric", "algorithm", "emissionInterval", "burstTolerance", "accounting", "enforcement"},
+			map[string]JSONSchema{
+				"metric": {Type: "string", Enum: []string{"requests"}}, "algorithm": {Type: "string", Enum: []string{"gcra"}},
+				"emissionInterval": duration, "burstTolerance": {Type: "integer", Minimum: intPointer(0)},
+				"accounting": {Type: "string", Enum: []string{"request"}}, "enforcement": {Type: "string", Enum: []string{"enforce", "shadow"}},
+			}),
+		rateRuleObjectSchema(output,
+			[]string{"metric", "algorithm", "limit", "accounting", "enforcement"},
+			map[string]JSONSchema{
+				"metric": {Type: "string", Enum: []string{"concurrent_requests"}}, "algorithm": {Type: "string", Enum: []string{"concurrency"}},
+				"limit": positiveInteger, "accounting": {Type: "string", Enum: []string{"request"}},
+				"enforcement": {Type: "string", Enum: []string{"enforce", "shadow"}},
+			}),
+	)
+	return JSONSchema{OneOf: variants}
+}
+
+func rateRuleObjectSchema(output bool, required []string, properties map[string]JSONSchema) JSONSchema {
 	if output {
+		properties["ruleId"] = JSONSchema{Type: "string", Format: "uuid"}
 		properties["ordinal"] = boundedIntegerSchema(0, 127)
 		required = append(required, "ruleId", "ordinal")
 	}

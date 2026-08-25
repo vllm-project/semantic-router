@@ -17,7 +17,7 @@ def test_resolve_effective_config_path_enables_amd_gpu_by_default(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -70,7 +70,7 @@ def test_resolve_effective_config_path_enables_nvidia_gpu_by_default(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -123,7 +123,7 @@ def test_resolve_effective_config_path_preserves_nvidia_use_cpu_when_requested(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -167,7 +167,7 @@ def test_resolve_effective_config_path_preserves_amd_use_cpu_when_requested(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "embeddings": {
@@ -220,11 +220,11 @@ def test_resolve_effective_config_path_preserves_algorithm_and_applies_platform(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "recipes": [
                     {
                         "name": "default",
-                        "document": {
+                        "routing": {
                             "decisions": [
                                 {
                                     "name": "default",
@@ -257,7 +257,7 @@ def test_resolve_effective_config_path_preserves_algorithm_and_applies_platform(
     assert effective_path == tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     effective = yaml.safe_load(effective_path.read_text())
     assert (
-        effective["recipes"][0]["document"]["decisions"][0]["algorithm"]["type"]
+        effective["recipes"][0]["routing"]["decisions"][0]["algorithm"]["type"]
         == "hybrid"
     )
     assert (
@@ -275,7 +275,7 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [
                     {
                         "name": "http",
@@ -283,23 +283,32 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
                         "port": 8899,
                     }
                 ],
-                "models": [
-                    {
-                        "name": "test-model",
-                        "card": {"capabilities": ["chat"]},
-                        "connections": [
-                            {
-                                "provider": "vllm",
-                                "endpoint": "http://127.0.0.1:8000/v1",
-                                "model": "test-model",
-                            }
-                        ],
-                    }
-                ],
+                "providers": {
+                    "models": [
+                        {
+                            "name": "test-model",
+                            "provider_model_id": "test-model",
+                            "backend_refs": [
+                                {
+                                    "provider": "vllm",
+                                    "base_url": "http://127.0.0.1:8000/v1",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "routing": {
+                    "modelCards": [
+                        {
+                            "name": "test-model",
+                            "capabilities": ["chat"],
+                        }
+                    ]
+                },
                 "recipes": [
                     {
                         "name": "default",
-                        "document": {
+                        "routing": {
                             "decisions": [
                                 {
                                     "name": "default-route",
@@ -315,8 +324,7 @@ def test_resolve_effective_config_path_injects_missing_amd_gpu_defaults_by_defau
                 ],
                 "entrypoints": [
                     {
-                        "name": "vllm-sr/default",
-                        "aliases": ["auto"],
+                        "model_names": ["vllm-sr/default", "auto"],
                         "recipe": "default",
                         "assignments": {
                             "default-route": {"models": [{"model": "test-model"}]}
@@ -381,7 +389,7 @@ def test_resolve_effective_config_path_uses_state_root_for_runtime_override(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [
                     {
                         "name": "http-8899",

@@ -17,10 +17,11 @@ const (
 	ManagementPermWildcard = "*"
 )
 
-// ManagementAPIConfig configures the router management HTTP listener (#2463).
-// Listener on/off is controlled by the legacy -enable-api flag at startup, not
-// by a config enabled field.
+// ManagementAPIConfig configures the Router Management HTTP surface. Enabled
+// controls versioned Management routes; the process listener remains an
+// independent startup concern so operational probes can stay available.
 type ManagementAPIConfig struct {
+	Enabled        bool                    `yaml:"enabled"`
 	BindAddress    string                  `yaml:"bind_address,omitempty"`
 	Port           int                     `yaml:"port,omitempty"`
 	RemoteExposure bool                    `yaml:"remote_exposure,omitempty"`
@@ -39,8 +40,6 @@ type ManagementAPIAuthConfig struct {
 	ServiceAccountHMACKeyringEnv  string                       `yaml:"service_account_hmac_keyring_env,omitempty"`
 	InvitationHMACKeyringFile     string                       `yaml:"invitation_hmac_keyring_file,omitempty"`
 	InvitationHMACKeyringEnv      string                       `yaml:"invitation_hmac_keyring_env,omitempty"`
-	ControlPlaneHMACKeyringFile   string                       `yaml:"control_plane_hmac_keyring_file,omitempty"`
-	ControlPlaneHMACKeyringEnv    string                       `yaml:"control_plane_hmac_keyring_env,omitempty"`
 	ResponseKEKKeyringFile        string                       `yaml:"response_kek_keyring_file,omitempty"`
 	ResponseKEKKeyringEnv         string                       `yaml:"response_kek_keyring_env,omitempty"`
 	Bootstrap                     ManagementAPIBootstrapConfig `yaml:"bootstrap,omitempty"`
@@ -55,11 +54,11 @@ type ManagementAPITokenRef struct {
 
 // ManagementAPIRuntimeOptions carries CLI overrides for management listener startup.
 type ManagementAPIRuntimeOptions struct {
-	ControlPlaneMode string
-	Port             int
-	BindAddress      string
-	RemoteExposure   *bool
-	AuthMode         string
+	DurableRouting bool
+	Port           int
+	BindAddress    string
+	RemoteExposure *bool
+	AuthMode       string
 }
 
 // DefaultManagementAPIConfig returns safe local defaults for the management listener.
@@ -72,7 +71,7 @@ func DefaultManagementAPIConfig() ManagementAPIConfig {
 			Mode: ManagementAuthModeDisabled,
 		},
 	}
-	config.applyV04SecurityDefaults()
+	config.applySecurityDefaults()
 	return config
 }
 
@@ -123,11 +122,7 @@ func DefaultManagementAPIRoles() map[string][]string {
 func (c ManagementAPIConfig) ResolvedManagementAPI(opts ManagementAPIRuntimeOptions) (ManagementAPIConfig, error) {
 	resolved := c
 	resolved.applyManagementAPIDefaults(opts)
-	mode := opts.ControlPlaneMode
-	if mode == "" {
-		mode = ControlPlaneModeStandalone
-	}
-	if err := resolved.validateManagementAPI(mode); err != nil {
+	if err := resolved.validateManagementAPI(opts.DurableRouting); err != nil {
 		return ManagementAPIConfig{}, err
 	}
 	return resolved, nil
@@ -153,35 +148,28 @@ func (c *ManagementAPIConfig) applyManagementAPIDefaults(opts ManagementAPIRunti
 	if opts.AuthMode != "" {
 		c.Auth.Mode = opts.AuthMode
 	}
-	controlPlaneMode := opts.ControlPlaneMode
-	if controlPlaneMode == "" {
-		controlPlaneMode = ControlPlaneModeStandalone
-	}
 	if c.Auth.Mode == "" {
-		if controlPlaneMode == ControlPlaneModeManaged {
+		if opts.DurableRouting && c.Enabled {
 			c.Auth.Mode = ManagementAuthModeRouter
 		} else {
 			c.Auth.Mode = ManagementAuthModeDisabled
 		}
 	}
-	if controlPlaneMode != ControlPlaneModeManaged && len(c.Auth.Roles) == 0 {
+	if !opts.DurableRouting && len(c.Auth.Roles) == 0 {
 		c.Auth.Roles = DefaultManagementAPIRoles()
 	}
-	c.applyV04SecurityDefaults()
+	c.applySecurityDefaults()
 }
 
-func (c ManagementAPIConfig) validateManagementAPI(controlPlaneMode string) error {
-	if controlPlaneMode != ControlPlaneModeStandalone && controlPlaneMode != ControlPlaneModeManaged {
-		return fmt.Errorf("control-plane mode must be standalone or managed")
-	}
+func (c ManagementAPIConfig) validateManagementAPI(durableRouting bool) error {
 	validators := []func() error{
 		c.validateBindAddress,
 		c.validatePort,
 		c.validateAuthMode,
-		func() error { return c.validateAuthModeForControlPlane(controlPlaneMode) },
+		func() error { return c.validateAuthModeForAuthority(durableRouting) },
 		c.validateExposurePolicy,
 		c.validateBindExposureConsistency,
-		func() error { return validateManagementBootstrapSecurity(controlPlaneMode, c) },
+		func() error { return validateManagementBootstrapSecurity(c) },
 	}
 	for _, validate := range validators {
 		if err := validate(); err != nil {
@@ -199,18 +187,18 @@ func (c ManagementAPIConfig) validateAuthMode() error {
 	return nil
 }
 
-func (c ManagementAPIConfig) validateAuthModeForControlPlane(controlPlaneMode string) error {
-	if controlPlaneMode == ControlPlaneModeManaged {
+func (c ManagementAPIConfig) validateAuthModeForAuthority(durableRouting bool) error {
+	if durableRouting && c.Enabled {
 		if c.Auth.Mode != ManagementAuthModeRouter {
-			return fmt.Errorf("managed control-plane mode requires management_api.auth.mode router")
+			return fmt.Errorf("enabled durable Management API requires management_api.auth.mode router")
 		}
 		if len(c.Auth.Tokens) != 0 || len(c.Auth.Roles) != 0 {
-			return fmt.Errorf("managed control-plane mode rejects static management_api.auth tokens and roles")
+			return fmt.Errorf("durable Management rejects static management_api.auth tokens and roles")
 		}
 		return nil
 	}
-	if c.Auth.Mode == ManagementAuthModeRouter {
-		return fmt.Errorf("standalone control-plane mode rejects management_api.auth.mode router")
+	if c.Auth.Mode == ManagementAuthModeRouter && (!durableRouting || !c.Enabled) {
+		return fmt.Errorf("management_api.auth.mode router requires enabled Management API with global.stores.management.postgres")
 	}
 	return nil
 }

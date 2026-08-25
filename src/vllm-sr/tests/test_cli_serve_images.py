@@ -12,28 +12,31 @@ def _capture_serve_deployment(monkeypatch, tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],
-                "models": [
-                    {
-                        "name": "default-model",
-                        "card": {"capabilities": ["chat"]},
-                        "connections": [
-                            {
-                                "provider": "vllm",
-                                "endpoint": "http://127.0.0.1:8000/v1",
-                                "model": "default-model",
-                                "weight": "1",
-                            }
-                        ],
-                    }
-                ],
+                "providers": {
+                    "models": [
+                        {
+                            "name": "default-model",
+                            "provider_model_id": "default-model",
+                            "backend_refs": [
+                                {
+                                    "provider": "vllm",
+                                    "base_url": "http://127.0.0.1:8000/v1",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "routing": {
+                    "modelCards": [{"name": "default-model", "capabilities": ["chat"]}]
+                },
                 "recipes": [
                     {
                         "name": "default",
-                        "document": {
+                        "routing": {
                             "decisions": [
                                 {
                                     "name": "default",
@@ -46,8 +49,7 @@ def _capture_serve_deployment(monkeypatch, tmp_path: Path):
                 ],
                 "entrypoints": [
                     {
-                        "name": "vllm-sr/default",
-                        "aliases": ["default"],
+                        "model_names": ["vllm-sr/default", "default"],
                         "recipe": "default",
                         "assignments": {
                             "default": {"models": [{"model": "default-model"}]}
@@ -110,7 +112,7 @@ def test_serve_preserves_configured_recipe_algorithm(monkeypatch, tmp_path: Path
     assert "VLLM_SR_STATE_ROOT_DIR" not in captured["env_vars"]
     assert "VLLM_SR_ALGORITHM_OVERRIDE" not in captured["env_vars"]
     assert (
-        translated["recipes"][0]["document"]["decisions"][0]["algorithm"]["type"]
+        translated["recipes"][0]["routing"]["decisions"][0]["algorithm"]["type"]
         == "static"
     )
     assert captured["pull_policy"] == "never"

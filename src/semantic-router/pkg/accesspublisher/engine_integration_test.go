@@ -92,28 +92,42 @@ FROM rate_limit_policies p WHERE p.id = r.policy_id AND p.namespace_id = $1`, na
 	if client.Exists(ctx, denyKey).Val() != 0 {
 		t.Fatal("applied engine publication retained its deny barrier")
 	}
+	assertEngineCrashRecovery(t, ctx, engine, redisStore, client, keys, namespaceID, partition, keyID, second)
+}
 
+func assertEngineCrashRecovery(
+	t *testing.T,
+	ctx context.Context,
+	engine *Engine,
+	store *RedisStore,
+	client *redis.Client,
+	keys Keyspace,
+	namespaceID, partition, keyID string,
+	publication ProcessResult,
+) {
+	t.Helper()
 	// Recreate the exact post-PostgreSQL/pre-Redis-finalization crash window.
-	if err := client.HSet(ctx, keys.Publication(second.PublicationID), "state", "compacted").Err(); err != nil {
+	if err := client.HSet(ctx, keys.Publication(publication.PublicationID), "state", "compacted").Err(); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.Del(ctx, keys.AppliedRevision()).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.SAdd(ctx, denyKey, second.PublicationID).Err(); err != nil {
+	denyKey := keys.Deny("api_key", keyID)
+	if err := client.SAdd(ctx, denyKey, publication.PublicationID).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.SAdd(ctx, keys.PublicationBarriers(second.PublicationID), denyKey).Err(); err != nil {
+	if err := client.SAdd(ctx, keys.PublicationBarriers(publication.PublicationID), denyKey).Err(); err != nil {
 		t.Fatal(err)
 	}
-	if err := client.ZAdd(ctx, keys.OpenPublications(), redis.Z{Score: 2, Member: second.PublicationID}).Err(); err != nil {
+	if err := client.ZAdd(ctx, keys.OpenPublications(), redis.Z{Score: 2, Member: publication.PublicationID}).Err(); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := engine.ReconcileApplied(ctx, namespaceID); err != nil {
 		t.Fatalf("ReconcileApplied() error = %v", err)
 	}
-	readiness, testEnginePublishesCompletePostgresDesiredStateThroughRedisGateErr = redisStore.Readiness(ctx, namespaceID, partition)
-	if testEnginePublishesCompletePostgresDesiredStateThroughRedisGateErr != nil || !readiness.Ready || client.Exists(ctx, denyKey).Val() != 0 {
-		t.Fatalf("reconciled readiness = %+v, deny=%d, err=%v", readiness, client.Exists(ctx, denyKey).Val(), testEnginePublishesCompletePostgresDesiredStateThroughRedisGateErr)
+	readiness, err := store.Readiness(ctx, namespaceID, partition)
+	if err != nil || !readiness.Ready || client.Exists(ctx, denyKey).Val() != 0 {
+		t.Fatalf("reconciled readiness = %+v, deny=%d, err=%v", readiness, client.Exists(ctx, denyKey).Val(), err)
 	}
 }

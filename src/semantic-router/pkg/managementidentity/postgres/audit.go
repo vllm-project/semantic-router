@@ -49,15 +49,8 @@ type auditDocument struct {
 }
 
 func appendAudit(ctx context.Context, tx *sql.Tx, mutation auditMutation) error {
-	validActor := canonicalUUID(mutation.Actor.PrincipalID)
-	if mutation.ExternalActor {
-		validActor = mutation.Actor.PrincipalID == "" && len(mutation.Actor.ActorChain) == 0 &&
-			!mutation.Actor.SourceIP.IsValid()
-	}
-	if mutation.AfterRevision == 0 || mutation.Action == "" || mutation.ResourceType == "" ||
-		!canonicalAuditResourceID(mutation.ResourceID) || !validActor ||
-		mutation.Actor.RequestID == "" || mutation.Actor.Reason == "" {
-		return errors.New("management identity audit mutation is invalid")
+	if err := validateAuditMutation(mutation); err != nil {
+		return err
 	}
 	var sequence int64
 	var previousHash []byte
@@ -152,6 +145,20 @@ WHERE namespace_id=$1 AND event_count=$5`, mutation.NamespaceID, document.EventI
 		if err != nil || count != 1 {
 			return errors.New("management identity audit head changed concurrently")
 		}
+	}
+	return nil
+}
+
+func validateAuditMutation(mutation auditMutation) error {
+	validActor := canonicalUUID(mutation.Actor.PrincipalID)
+	if mutation.ExternalActor {
+		validActor = mutation.Actor.PrincipalID == "" && len(mutation.Actor.ActorChain) == 0 &&
+			!mutation.Actor.SourceIP.IsValid()
+	}
+	if mutation.AfterRevision == 0 || mutation.Action == "" || mutation.ResourceType == "" ||
+		!canonicalAuditResourceID(mutation.ResourceID) || !validActor ||
+		mutation.Actor.RequestID == "" || mutation.Actor.Reason == "" {
+		return errors.New("management identity audit mutation is invalid")
 	}
 	return nil
 }

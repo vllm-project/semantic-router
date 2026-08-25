@@ -31,7 +31,7 @@ chosen Looper supports and needs a single-model execution plan.
 Algorithms are decision-local:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: responsive-route
       description: Prefer the model with the best observed latency.

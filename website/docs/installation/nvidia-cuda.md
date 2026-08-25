@@ -90,18 +90,22 @@ Bind the served model in your canonical config. For the local Docker stack,
 the Router can reach a host-published port through `host.docker.internal`:
 
 ```yaml
-models:
-  - name: local/qwen
-    card: {capabilities: [chat]}
-    connections:
-      - provider: vllm
-        endpoint: http://host.docker.internal:8000/v1
-        model: Qwen/Qwen3-0.6B
+providers:
+  models:
+    - name: local/qwen
+      provider_model_id: Qwen/Qwen3-0.6B
+      backend_refs:
+        - provider: vllm
+          endpoint: http://host.docker.internal:8000/v1
+routing:
+  modelCards:
+    - name: local/qwen
+      capabilities: [chat]
 ```
 
 This is a Model fragment, not a complete Router config. Add a Recipe and
-Entrypoint, or configure the connection in the Dashboard. The connection's
-`model` must match a model returned by vLLM's
+Entrypoint, or configure the Model in the Dashboard. `provider_model_id` must
+match a model returned by vLLM's
 `/v1/models` endpoint. See [Configuration](configuration) for a complete
 minimal document and
 [Models, Entrypoints, and Serving](../tutorials/global/models-entrypoints-serving)

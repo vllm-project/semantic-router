@@ -161,14 +161,16 @@ func TestRateLimitRuleRejectsInvalidVariants(t *testing.T) {
 	}
 }
 
+type invalidRuleCase struct {
+	name string
+	rule RateLimitRule
+}
+
 func TestRateLimitRuleRejectsInvalidAlgorithmParameters(t *testing.T) {
 	t.Parallel()
 
 	limit := quotaIntegerPointer(t, "12")
-	tests := []struct {
-		name string
-		rule RateLimitRule
-	}{
+	tests := []invalidRuleCase{
 		{
 			name: "calendar missing timezone",
 			rule: RateLimitRule{
@@ -258,6 +260,11 @@ func TestRateLimitRuleRejectsInvalidAlgorithmParameters(t *testing.T) {
 			},
 		},
 	}
+	assertInvalidRules(t, tests)
+}
+
+func assertInvalidRules(t *testing.T, tests []invalidRuleCase) {
+	t.Helper()
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Parallel()

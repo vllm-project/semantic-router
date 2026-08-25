@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
-	managementcommandpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotareconciliation"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
@@ -34,128 +33,16 @@ func (s *Store) PrepareUnknownUsageReconciliation(
 		return quotareconciliation.EnqueueResult{}, fmt.Errorf("begin unknown-usage reconciliation: %w", prepareUnknownUsageReconciliationErr)
 	}
 	defer func() { _ = tx.Rollback() }()
-	replay, replayed, prepareUnknownUsageReconciliationErr := managementcommandpostgres.Lock(ctx, tx, command)
+	result, prepareUnknownUsageReconciliationErr := prepareUnknownUsageInTransaction(
+		ctx, tx, command, request, operationID, now,
+	)
 	if prepareUnknownUsageReconciliationErr != nil {
 		return quotareconciliation.EnqueueResult{}, prepareUnknownUsageReconciliationErr
-	}
-	if replayed {
-		if replay.Operation == nil {
-			return quotareconciliation.EnqueueResult{}, errors.New("unknown-usage command replay is not an operation")
-		}
-		operation, err := loadQuotaReconciliationOperation(ctx, tx, request.NamespaceID, replay.Operation.OperationID)
-		if err != nil {
-			return quotareconciliation.EnqueueResult{}, err
-		}
-		if err := tx.Commit(); err != nil {
-			return quotareconciliation.EnqueueResult{}, err
-		}
-		return quotareconciliation.EnqueueResult{Operation: operation, Replayed: true}, nil
-	}
-
-	var state quotareconciliation.FenceState
-	var revision int64
-	if err := tx.QueryRowContext(ctx, `SELECT state, etag_revision
-FROM unknown_usage_fences WHERE namespace_id=$1 AND id=$2 FOR UPDATE`,
-		request.NamespaceID, request.FenceID).Scan(&state, &revision); errors.Is(err, sql.ErrNoRows) {
-		return quotareconciliation.EnqueueResult{}, quotareconciliation.ErrNotFound
-	} else if err != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("lock unknown-usage fence: %w", err)
-	}
-	if state == quotareconciliation.FenceResolved {
-		return quotareconciliation.EnqueueResult{}, quotareconciliation.ErrResolved
-	}
-	if state == quotareconciliation.FenceReconciling {
-		return quotareconciliation.EnqueueResult{}, quotareconciliation.ErrReconciliationConflict
-	}
-	if revision <= 0 || uint64(revision) != request.ExpectedRevision {
-		return quotareconciliation.EnqueueResult{}, quotareconciliation.ErrRevisionConflict
-	}
-	fence, prepareUnknownUsageReconciliationErr := loadQuotaFence(ctx, tx, request.NamespaceID, request.FenceID)
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, prepareUnknownUsageReconciliationErr
-	}
-	ledger, prepareUnknownUsageReconciliationErr := loadReconciliationLedger(ctx, tx, fence)
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, prepareUnknownUsageReconciliationErr
-	}
-	reconciliationID := uuid.NewString()
-	plan, prepareUnknownUsageReconciliationErr := buildReconciliationPlan(request, fence, ledger, operationID,
-		reconciliationID, uuid.NewString(), now)
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, prepareUnknownUsageReconciliationErr
-	}
-	digestText, payload, prepareUnknownUsageReconciliationErr := quotareconciliation.DigestPlan(plan)
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, prepareUnknownUsageReconciliationErr
-	}
-	digest, _ := hex.DecodeString(digestText)
-	actorChain, prepareUnknownUsageReconciliationErr := json.Marshal(request.Actor.ActorChain)
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("encode reconciliation actor chain: %w", prepareUnknownUsageReconciliationErr)
-	}
-	targetScope, prepareUnknownUsageReconciliationErr := json.Marshal(struct {
-		Version    int      `json:"version"`
-		FenceID    string   `json:"fenceId"`
-		BindingIDs []string `json:"bindingIds"`
-	}{1, fence.ID, fenceBindingIDs(fence.Bindings)})
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("encode reconciliation target scope: %w", prepareUnknownUsageReconciliationErr)
-	}
-	targetIDs, prepareUnknownUsageReconciliationErr := json.Marshal([]string{fence.ID})
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("encode reconciliation target ids: %w", prepareUnknownUsageReconciliationErr)
-	}
-	active := command.ActiveDigest()
-	if _, err := tx.ExecContext(ctx, `INSERT INTO management_operations (
-  id,namespace_id,kind,origin_principal_id,actor_chain,request_digest,state,
-  progress_completed,progress_total,target_scope,target_ids,created_at,updated_at
-) VALUES ($1,$2,$3,$4,$5,$6,'pending',0,1,$7,$8,$9,$9)`,
-		operationID, request.NamespaceID, quotareconciliation.OperationKind,
-		request.Actor.PrincipalID, actorChain, active.RequestDigest[:], targetScope, targetIDs, now); err != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("insert unknown-usage reconciliation operation: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO unknown_usage_reconciliation_plans (
-  reconciliation_id,namespace_id,fence_id,operation_id,strategy,plan_digest,plan_payload,
-  phase,available_at,created_at,updated_at
-) VALUES ($1,$2,$3,$4,$5,$6,$7,'runtime_pending',$8,$8,$8)`,
-		reconciliationID, request.NamespaceID, fence.ID, operationID, request.Strategy,
-		digest, payload, now); err != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("insert unknown-usage reconciliation plan: %w", err)
-	}
-	newRevision := revision + 1
-	result, prepareUnknownUsageReconciliationErr := tx.ExecContext(ctx, `UPDATE unknown_usage_fences
-SET state='reconciling',etag_revision=$3,reconciliation_id=$4,
-  reconciliation_strategy=$5,reconciliation_actor_id=$6,reconciliation_reason=$7,
-  updated_at=$8
-WHERE namespace_id=$1 AND id=$2 AND state='open' AND etag_revision=$9`,
-		request.NamespaceID, fence.ID, newRevision, reconciliationID, request.Strategy,
-		request.Actor.PrincipalID, request.Reason, now, revision)
-	if prepareUnknownUsageReconciliationErr != nil {
-		return quotareconciliation.EnqueueResult{}, fmt.Errorf("mark unknown-usage fence reconciling: %w", prepareUnknownUsageReconciliationErr)
-	}
-	if count, _ := result.RowsAffected(); count != 1 {
-		return quotareconciliation.EnqueueResult{}, quotareconciliation.ErrRevisionConflict
-	}
-	if err := managementcommandpostgres.CompleteOperation(ctx, tx, command, managementcommand.OperationResult{
-		OperationID: operationID, ResponseStatus: 202,
-	}); err != nil {
-		return quotareconciliation.EnqueueResult{}, err
-	}
-	if err := appendQuotaReconciliationAudit(ctx, tx, request, fence.ID,
-		uint64(newRevision), "quota.unknown_usage_fence.reconcile_requested", "Reconcile unknown usage.",
-		map[string]string{"strategy": string(request.Strategy), "reconciliation_id": reconciliationID}); err != nil {
-		return quotareconciliation.EnqueueResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return quotareconciliation.EnqueueResult{}, fmt.Errorf("commit unknown-usage reconciliation: %w", err)
 	}
-	return quotareconciliation.EnqueueResult{Operation: quotareconciliation.Operation{
-		ID: operationID, NamespaceID: request.NamespaceID, FenceID: fence.ID,
-		Kind: quotareconciliation.OperationKind, OriginPrincipalID: request.Actor.PrincipalID,
-		ActorChain: append([]string(nil), request.Actor.ActorChain...), Version: 1,
-		State: quotareconciliation.OperationPending,
-		Total: 1, CreatedAt: now, UpdatedAt: now,
-	}}, nil
+	return result, nil
 }
 
 func (s *Store) Prepare(
@@ -374,27 +261,9 @@ func validateActualReconciliation(
 	quota.QuotaInteger, quota.QuotaInteger, error,
 ) {
 	zero, _ := quota.ParseQuotaInteger("0")
-	actual := reconciledActual{
-		ByID:  make(map[string]quotareconciliation.ActualDispatchUsage),
-		Input: zero, Output: zero, Costs: make(map[string]quota.QuotaInteger),
-	}
-	servedInput, servedOutput := zero, zero
-	if request.Strategy == quotareconciliation.StrategyActual {
-		var err error
-		servedInput, err = quota.ParseQuotaInteger(request.Actual.ServedInputTokens)
-		if err != nil {
-			return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrInvalidRequest
-		}
-		servedOutput, err = quota.ParseQuotaInteger(request.Actual.ServedOutputTokens)
-		if err != nil {
-			return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrInvalidRequest
-		}
-		for _, supplied := range request.Actual.Dispatches {
-			if _, duplicate := actual.ByID[supplied.DispatchID]; duplicate {
-				return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrEvidenceConflict
-			}
-			actual.ByID[supplied.DispatchID] = supplied
-		}
+	actual, servedInput, servedOutput, err := parseActualReconciliation(request, zero)
+	if err != nil {
+		return actual, nil, quotareconciliation.Charge{}, zero, zero, err
 	}
 	corrections := make([]quotareconciliation.CorrectionDispatch, 0)
 	unknownEvidence := make(map[string]quotareconciliation.UnknownDispatch, len(fence.Unknown))
@@ -405,76 +274,152 @@ func validateActualReconciliation(
 		if !original.Unknown {
 			continue
 		}
-		input, cacheRead, cacheWrite, output := zero, zero, zero, zero
-		cost := zero
-		if request.Strategy == quotareconciliation.StrategyActual {
-			supplied, exists := actual.ByID[original.DispatchID]
-			evidence := unknownEvidence[original.DispatchID]
-			if !exists || supplied.EvidenceDigest != original.EvidenceDigest ||
-				supplied.EvidenceDigest != evidence.EvidenceDigest || supplied.Cost.Currency != original.Currency {
-				return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrEvidenceConflict
-			}
-			var err error
-			values := []struct {
-				text   string
-				target *quota.QuotaInteger
-			}{
-				{supplied.InputTokens, &input},
-				{supplied.CacheReadTokens, &cacheRead},
-				{supplied.CacheWriteTokens, &cacheWrite},
-				{supplied.OutputTokens, &output},
-				{supplied.Cost.Numerator, &cost},
-			}
-			for _, value := range values {
-				*value.target, err = quota.ParseQuotaInteger(value.text)
-				if err != nil {
-					return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrInvalidRequest
-				}
-			}
-			actual.Input, err = actual.Input.Add(input)
-			if err == nil {
-				actual.Output, err = actual.Output.Add(output)
-			}
-			if err != nil {
-				return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrEvidenceConflict
-			}
-			total := actual.Costs[original.Currency]
-			total, err = total.Add(cost)
-			if err != nil {
-				return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrEvidenceConflict
-			}
-			actual.Costs[original.Currency] = total
+		correction, reconcileErr := reconcileUnknownDispatch(
+			request.Strategy, original, unknownEvidence[original.DispatchID], ledger.Snapshot.CompletedAt,
+			&actual, zero,
+		)
+		if reconcileErr != nil {
+			return actual, nil, quotareconciliation.Charge{}, zero, zero, reconcileErr
 		}
-		completed := ledger.Snapshot.CompletedAt
-		if original.CompletedAt != nil {
-			completed = *original.CompletedAt
-		}
-		corrections = append(corrections, quotareconciliation.CorrectionDispatch{
-			DispatchID: uuid.NewString(), CorrectsDispatchID: original.DispatchID,
-			Ordinal: original.Ordinal, DispatchType: original.DispatchType,
-			ModelID: original.ModelID, ModelRevision: original.ModelRevision,
-			BackendID: original.BackendID, ProviderID: original.ProviderID,
-			ProviderModelID: original.ProviderModelID, PricingRevision: original.PricingRevision,
-			InputTokens: input.String(), CacheReadTokens: cacheRead.String(),
-			CacheWriteTokens: cacheWrite.String(), OutputTokens: output.String(),
-			Cost:           quotareconciliation.Cost{Currency: original.Currency, Numerator: cost.String()},
-			EvidenceDigest: original.EvidenceDigest, StartedAt: original.StartedAt, CompletedAt: completed,
-		})
+		corrections = append(corrections, correction)
 	}
 	if request.Strategy == quotareconciliation.StrategyActual && len(actual.ByID) != len(corrections) {
 		return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrEvidenceConflict
 	}
-	charge := quotareconciliation.Charge{InputTokens: actual.Input.String(), OutputTokens: actual.Output.String()}
-	total, err := actual.Input.Add(actual.Output)
+	charge, err := reconciliationCharge(actual)
 	if err != nil {
 		return actual, nil, quotareconciliation.Charge{}, zero, zero, quotareconciliation.ErrEvidenceConflict
 	}
+	return actual, corrections, charge, servedInput, servedOutput, nil
+}
+
+func parseActualReconciliation(
+	request quotareconciliation.ReconcileRequest,
+	zero quota.QuotaInteger,
+) (reconciledActual, quota.QuotaInteger, quota.QuotaInteger, error) {
+	actual := reconciledActual{
+		ByID:  make(map[string]quotareconciliation.ActualDispatchUsage),
+		Input: zero, Output: zero, Costs: make(map[string]quota.QuotaInteger),
+	}
+	if request.Strategy != quotareconciliation.StrategyActual {
+		return actual, zero, zero, nil
+	}
+	servedInput, err := quota.ParseQuotaInteger(request.Actual.ServedInputTokens)
+	if err != nil {
+		return actual, zero, zero, quotareconciliation.ErrInvalidRequest
+	}
+	servedOutput, err := quota.ParseQuotaInteger(request.Actual.ServedOutputTokens)
+	if err != nil {
+		return actual, zero, zero, quotareconciliation.ErrInvalidRequest
+	}
+	for _, supplied := range request.Actual.Dispatches {
+		if _, duplicate := actual.ByID[supplied.DispatchID]; duplicate {
+			return actual, zero, zero, quotareconciliation.ErrEvidenceConflict
+		}
+		actual.ByID[supplied.DispatchID] = supplied
+	}
+	return actual, servedInput, servedOutput, nil
+}
+
+func reconcileUnknownDispatch(
+	strategy quotareconciliation.Strategy,
+	original ledgerDispatch,
+	evidence quotareconciliation.UnknownDispatch,
+	defaultCompleted time.Time,
+	actual *reconciledActual,
+	zero quota.QuotaInteger,
+) (quotareconciliation.CorrectionDispatch, error) {
+	input, cacheRead, cacheWrite, output, cost := zero, zero, zero, zero, zero
+	if strategy == quotareconciliation.StrategyActual {
+		supplied, exists := actual.ByID[original.DispatchID]
+		if !exists || supplied.EvidenceDigest != original.EvidenceDigest ||
+			supplied.EvidenceDigest != evidence.EvidenceDigest || supplied.Cost.Currency != original.Currency {
+			return quotareconciliation.CorrectionDispatch{}, quotareconciliation.ErrEvidenceConflict
+		}
+		var err error
+		input, cacheRead, cacheWrite, output, cost, err = parseActualDispatchUsage(supplied)
+		if err != nil {
+			return quotareconciliation.CorrectionDispatch{}, err
+		}
+		if err := accumulateActualDispatch(actual, original.Currency, input, output, cost); err != nil {
+			return quotareconciliation.CorrectionDispatch{}, err
+		}
+	}
+	completed := defaultCompleted
+	if original.CompletedAt != nil {
+		completed = *original.CompletedAt
+	}
+	return quotareconciliation.CorrectionDispatch{
+		DispatchID: uuid.NewString(), CorrectsDispatchID: original.DispatchID,
+		Ordinal: original.Ordinal, DispatchType: original.DispatchType,
+		ModelID: original.ModelID, ModelRevision: original.ModelRevision,
+		BackendID: original.BackendID, ProviderID: original.ProviderID,
+		ProviderModelID: original.ProviderModelID, PricingRevision: original.PricingRevision,
+		InputTokens: input.String(), CacheReadTokens: cacheRead.String(),
+		CacheWriteTokens: cacheWrite.String(), OutputTokens: output.String(),
+		Cost:           quotareconciliation.Cost{Currency: original.Currency, Numerator: cost.String()},
+		EvidenceDigest: original.EvidenceDigest, StartedAt: original.StartedAt, CompletedAt: completed,
+	}, nil
+}
+
+func parseActualDispatchUsage(
+	supplied quotareconciliation.ActualDispatchUsage,
+) (quota.QuotaInteger, quota.QuotaInteger, quota.QuotaInteger, quota.QuotaInteger, quota.QuotaInteger, error) {
+	values := []string{
+		supplied.InputTokens, supplied.CacheReadTokens, supplied.CacheWriteTokens,
+		supplied.OutputTokens, supplied.Cost.Numerator,
+	}
+	parsed := make([]quota.QuotaInteger, len(values))
+	for index, value := range values {
+		amount, err := quota.ParseQuotaInteger(value)
+		if err != nil {
+			return quota.QuotaInteger{}, quota.QuotaInteger{}, quota.QuotaInteger{},
+				quota.QuotaInteger{}, quota.QuotaInteger{}, quotareconciliation.ErrInvalidRequest
+		}
+		parsed[index] = amount
+	}
+	return parsed[0], parsed[1], parsed[2], parsed[3], parsed[4], nil
+}
+
+func accumulateActualDispatch(
+	actual *reconciledActual,
+	currency string,
+	input quota.QuotaInteger,
+	output quota.QuotaInteger,
+	cost quota.QuotaInteger,
+) error {
+	var err error
+	actual.Input, err = actual.Input.Add(input)
+	if err == nil {
+		actual.Output, err = actual.Output.Add(output)
+	}
+	if err != nil {
+		return quotareconciliation.ErrEvidenceConflict
+	}
+	total, err := actual.Costs[currency].Add(cost)
+	if err != nil {
+		return quotareconciliation.ErrEvidenceConflict
+	}
+	actual.Costs[currency] = total
+	return nil
+}
+
+func reconciliationCharge(actual reconciledActual) (quotareconciliation.Charge, error) {
+	charge := quotareconciliation.Charge{
+		InputTokens: actual.Input.String(), OutputTokens: actual.Output.String(),
+	}
+	total, err := actual.Input.Add(actual.Output)
+	if err != nil {
+		return quotareconciliation.Charge{}, err
+	}
 	charge.TotalTokens = total.String()
 	for currency, numerator := range actual.Costs {
-		charge.Costs = append(charge.Costs, quotareconciliation.Cost{Currency: currency, Numerator: numerator.String()})
+		charge.Costs = append(charge.Costs, quotareconciliation.Cost{
+			Currency: currency, Numerator: numerator.String(),
+		})
 	}
 	sort.Slice(charge.Costs, func(i, j int) bool { return charge.Costs[i].Currency < charge.Costs[j].Currency })
-	return actual, corrections, charge, servedInput, servedOutput, nil
+	return charge, nil
 }
 
 func actualMetricAmount(binding quotareconciliation.Binding, ledger reconciliationLedger,

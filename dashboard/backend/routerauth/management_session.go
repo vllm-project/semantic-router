@@ -24,6 +24,7 @@ const (
 	managementAudience               = "vllm-sr-management"
 	managementMediaType              = "application/vnd.vllm-semantic-router.management.v1+json"
 	managementBasePath               = "/management/v1"
+	backchannelLogoutEvent           = "http://schemas.openid.net/event/backchannel-logout"
 	assertionLifetime                = time.Minute
 	maximumSourceSessionLifetime     = 30 * 24 * time.Hour
 	routerSourceExpiryClaim          = "source_session_exp"
@@ -34,15 +35,16 @@ const (
 var ErrManagementSessionUnavailable = errors.New("router Management session is unavailable")
 
 // ManagementSessionProvider exchanges one authenticated Dashboard browser
-// session for a Router-owned, short-lived Management session. Implementations
-// may cache only the returned session token; they never receive inference API
-// keys, rate-limit state, or access-policy data.
+// session for a Router-owned, short-lived Management session. Its Management
+// cache holds only the returned token and opaque session ID; it never receives
+// inference API keys, rate-limit state, or access-policy data.
 type ManagementSessionProvider interface {
 	ManagementAccessToken(context.Context, dashboardauth.AuthContext) (string, error)
 }
 
 type ManagementIdentityProvider interface {
 	ManagementSessionProvider
+	dashboardauth.DashboardSessionRetirer
 	dashboardauth.InvitationAuthority
 	dashboardauth.FirstAdminProvisioner
 	ResolveEvaluationScope(
@@ -76,20 +78,22 @@ type managementSessionProvider struct {
 	now                func() time.Time
 	bootstrapTokenFile string
 
-	mu       sync.Mutex
-	cache    map[string]cachedManagementToken
-	inflight map[string]*managementTokenExchange
+	mu          sync.Mutex
+	cache       map[string]cachedManagementToken
+	inflight    map[string]*managementTokenExchange
+	delegations map[evaluationDelegationCacheKey]cachedEvaluationDelegation
 }
 
 type cachedManagementToken struct {
-	accessToken string
-	expiresAt   time.Time
+	accessToken         string
+	managementSessionID string
+	expiresAt           time.Time
 }
 
 type managementTokenExchange struct {
-	done  chan struct{}
-	token string
-	err   error
+	done       chan struct{}
+	credential cachedManagementToken
+	err        error
 }
 
 type exchangeChallenge struct {
@@ -137,6 +141,7 @@ func NewManagementSessionProvider(options ManagementSessionOptions) (ManagementI
 		signer: options.Signer, client: client, now: now,
 		bootstrapTokenFile: strings.TrimSpace(options.BootstrapTokenFile),
 		cache:              make(map[string]cachedManagementToken), inflight: make(map[string]*managementTokenExchange),
+		delegations: make(map[evaluationDelegationCacheKey]cachedEvaluationDelegation),
 	}, nil
 }
 
@@ -169,65 +174,127 @@ func (provider *managementSessionProvider) ManagementAccessToken(
 	ctx context.Context,
 	principal dashboardauth.AuthContext,
 ) (string, error) {
+	credential, err := provider.managementCredential(ctx, principal)
+	return credential.accessToken, err
+}
+
+func (provider *managementSessionProvider) managementCredential(
+	ctx context.Context,
+	principal dashboardauth.AuthContext,
+) (cachedManagementToken, error) {
 	if provider == nil || principal.UserID == "" || principal.SessionID == "" {
-		return "", ErrManagementSessionUnavailable
+		return cachedManagementToken{}, ErrManagementSessionUnavailable
 	}
 	now := provider.now().UTC()
 	if !validSourceSessionExpiry(now, principal.ExpiresAt) {
-		return "", ErrManagementSessionUnavailable
+		return cachedManagementToken{}, ErrManagementSessionUnavailable
 	}
 	provider.mu.Lock()
 	cached, ok := provider.cache[principal.SessionID]
 	if ok && now.Add(tokenRefreshSkew).Before(cached.expiresAt) {
 		provider.mu.Unlock()
-		return cached.accessToken, nil
+		return cached, nil
 	}
 	delete(provider.cache, principal.SessionID)
 	if pending := provider.inflight[principal.SessionID]; pending != nil {
 		provider.mu.Unlock()
 		select {
 		case <-pending.done:
-			return pending.token, pending.err
+			return pending.credential, pending.err
 		case <-ctx.Done():
-			return "", ErrManagementSessionUnavailable
+			return cachedManagementToken{}, ErrManagementSessionUnavailable
 		}
 	}
 	pending := &managementTokenExchange{done: make(chan struct{})}
 	provider.inflight[principal.SessionID] = pending
 	provider.mu.Unlock()
 
-	token, expiresAt, err := provider.issueManagementToken(ctx, principal, now)
+	token, managementSessionID, expiresAt, err := provider.issueManagementToken(ctx, principal, now)
+	credential := cachedManagementToken{
+		accessToken: token, managementSessionID: managementSessionID, expiresAt: expiresAt,
+	}
 	provider.mu.Lock()
 	if err == nil {
 		provider.pruneCacheLocked(now)
-		provider.cache[principal.SessionID] = cachedManagementToken{accessToken: token, expiresAt: expiresAt}
+		provider.cache[principal.SessionID] = credential
 	}
-	pending.token, pending.err = token, err
+	pending.credential, pending.err = credential, err
 	delete(provider.inflight, principal.SessionID)
 	close(pending.done)
 	provider.mu.Unlock()
-	return token, err
+	return credential, err
 }
 
 func (provider *managementSessionProvider) issueManagementToken(
 	ctx context.Context,
 	principal dashboardauth.AuthContext,
 	now time.Time,
-) (string, time.Time, error) {
+) (string, string, time.Time, error) {
 	challenge, err := provider.challenge(ctx)
 	if err != nil || challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
-		return "", time.Time{}, ErrManagementSessionUnavailable
+		return "", "", time.Time{}, ErrManagementSessionUnavailable
 	}
 	assertion, err := provider.assertion(principal, challenge.Nonce, now)
 	if err != nil {
-		return "", time.Time{}, ErrManagementSessionUnavailable
+		return "", "", time.Time{}, ErrManagementSessionUnavailable
 	}
 	envelope, err := provider.exchange(ctx, challenge.ExchangeChallengeID, assertion)
-	if err != nil || envelope.AccessToken == "" || envelope.TokenType != "Bearer" || envelope.ExpiresIn <= 0 {
-		return "", time.Time{}, ErrManagementSessionUnavailable
+	managementSessionID, sessionIDErr := uuid.Parse(envelope.ManagementSessionID)
+	if err != nil || envelope.AccessToken == "" || envelope.TokenType != "Bearer" || envelope.ExpiresIn <= 0 ||
+		sessionIDErr != nil || managementSessionID.String() != envelope.ManagementSessionID {
+		return "", "", time.Time{}, ErrManagementSessionUnavailable
 	}
 	expiresAt := now.Add(time.Duration(envelope.ExpiresIn) * time.Second)
-	return envelope.AccessToken, expiresAt, nil
+	return envelope.AccessToken, envelope.ManagementSessionID, expiresAt, nil
+}
+
+// RetireDashboardSession performs issuer-authenticated back-channel logout.
+// The Router selects the derived Management session by the original Dashboard
+// session ID, so logout works even after the short-lived Management bearer has
+// expired or the Dashboard process has restarted.
+func (provider *managementSessionProvider) RetireDashboardSession(
+	ctx context.Context,
+	dashboardSessionID string,
+) error {
+	if provider == nil || strings.TrimSpace(dashboardSessionID) == "" {
+		return ErrManagementSessionUnavailable
+	}
+	now := provider.now().UTC()
+	claims := jwt.MapClaims{
+		"iss": provider.issuerURL,
+		"aud": managementAudience,
+		"iat": now.Unix(),
+		"exp": now.Add(assertionLifetime).Unix(),
+		"jti": uuid.NewString(),
+		"sid": dashboardSessionID,
+		"events": map[string]any{
+			backchannelLogoutEvent: map[string]any{},
+		},
+	}
+	logoutToken, err := provider.signer.Sign(claims)
+	if err != nil {
+		return ErrManagementSessionUnavailable
+	}
+	var response struct {
+		Applied  bool `json:"applied"`
+		Replayed bool `json:"replayed"`
+	}
+	if err := provider.request(
+		ctx,
+		http.MethodPost,
+		managementBasePath+"/auth/backchannel-logout",
+		map[string]string{"issuerId": provider.issuerID, "logoutToken": logoutToken},
+		http.StatusOK,
+		&response,
+	); err != nil || (!response.Applied && !response.Replayed) {
+		return ErrManagementSessionUnavailable
+	}
+	provider.mu.Lock()
+	cached := provider.cache[dashboardSessionID]
+	delete(provider.cache, dashboardSessionID)
+	provider.clearEvaluationDelegationsLocked(cached.managementSessionID)
+	provider.mu.Unlock()
+	return nil
 }
 
 func (provider *managementSessionProvider) pruneCacheLocked(now time.Time) {

@@ -19,24 +19,27 @@ import (
 
 // testRouterConfigYAML is a minimal canonical config with a single backed model.
 const testRouterConfigYAML = `
-version: v0.4
+version: v0.3
 listeners: []
-models:
-  - name: known-model
-    card: {}
-    connections:
-      - provider: vllm
-        endpoint: http://127.0.0.1:8000
-        model: known-model
+providers:
+  models:
+    - name: known-model
+      provider_model_id: known-model
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000
+routing:
+  modelCards:
+    - name: known-model
 recipes:
   - name: default
-    document:
+    routing:
       decisions:
         - name: default_route
           priority: 1
           rules: {operator: AND, conditions: []}
 entrypoints:
-  - name: router/default
+  - model_names: [router/default]
     recipe: default
     assignments:
       default_route:
@@ -64,7 +67,7 @@ func newModelResolutionTestContext(t *testing.T) *RequestContext {
 		RequestID:           "test-req",
 		Headers:             map[string]string{},
 		TraceContext:        traceContext,
-		ManagedDispatch:     &managedRequestDispatch{requestID: "test-req"},
+		DispatchState:       &requestDispatchState{requestID: "test-req"},
 		ProcessingStartTime: time.Now(),
 		SemanticRequest:     modelResolutionRequest("x"),
 	}

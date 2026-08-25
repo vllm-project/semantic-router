@@ -28,13 +28,13 @@ func TestCanonicalRecipeSignalsRemainIsolated(t *testing.T) {
 	}
 
 	canonical := CanonicalConfigFromRouterConfig(cfg)
-	var exportedPrivacy *AuthoringRecipe
+	var exportedPrivacy *CanonicalRecipe
 	for index := range canonical.Recipes {
 		if canonical.Recipes[index].Name == "privacy" {
 			exportedPrivacy = &canonical.Recipes[index]
 		}
 	}
-	if len(canonical.Recipes) != 2 || exportedPrivacy == nil || len(exportedPrivacy.Document.Signals.Keywords) != 1 || exportedPrivacy.Document.Signals.Keywords[0].Name != "pii_keywords" {
+	if len(canonical.Recipes) != 2 || exportedPrivacy == nil || len(exportedPrivacy.Routing.Signals.Keywords) != 1 || exportedPrivacy.Routing.Signals.Keywords[0].Name != "pii_keywords" {
 		t.Fatalf("expected the exported named Recipe to preserve only its local signals, got %+v", canonical.Recipes)
 	}
 
@@ -253,8 +253,8 @@ func TestRoutingNamespaceKeyIsCollisionSafe(t *testing.T) {
 
 func TestRecipeRoutingStrategyIsValidatedLocally(t *testing.T) {
 	document := strings.Replace(recipeTestPrivacyYAML,
-		"    document:\n      signals:\n        keywords:\n          - {name: pii_keywords",
-		"    document:\n      strategy: random\n      signals:\n        keywords:\n          - {name: pii_keywords", 1)
+		"    routing:\n      signals:\n        keywords:\n          - {name: pii_keywords",
+		"    routing:\n      strategy: random\n      signals:\n        keywords:\n          - {name: pii_keywords", 1)
 	_, err := parseRecipeFixtureYAML(t, []byte(document))
 	if err == nil {
 		t.Fatal("expected an unsupported recipe strategy to fail validation")

@@ -1,25 +1,32 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: auto
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      auto:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: auto
+    provider_model_id: auto
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8091/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: auto
+routing:
+  modelCards:
+  - name: auto
     capabilities:
     - chat
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8091/v1
-    model: auto
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -44,8 +51,7 @@ recipes:
         - computer science
     decisions:
     - name: default
-      description: Benchmark route that keeps signal extraction active for any supported
-        domain.
+      description: Benchmark route that keeps signal extraction active for any supported domain.
       priority: 100
       rules:
         operator: OR
@@ -61,7 +67,8 @@ recipes:
         - type: domain
           name: computer science
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     default:

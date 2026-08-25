@@ -46,54 +46,92 @@ func loadPublishedEntrypoints(
 	ctx context.Context,
 	tx *sql.Tx,
 	namespaceID string,
-) (_ []routingsnapshot.Entrypoint, returnErr error) {
-	rows, queryContextErr := tx.QueryContext(ctx, `SELECT e.id, e.published_revision, r.name, r.aliases
+) ([]routingsnapshot.Entrypoint, error) {
+	result, byID, err := loadPublishedEntrypointHeaders(ctx, tx, namespaceID)
+	if err != nil {
+		return nil, err
+	}
+	rules, err := loadPublishedEntrypointRules(ctx, tx, namespaceID, result, byID)
+	if err != nil {
+		return nil, err
+	}
+	if err := loadPublishedDecisionAssignments(ctx, tx, namespaceID, result, rules); err != nil {
+		return nil, err
+	}
+	if err := loadPublishedAssignmentModels(ctx, tx, namespaceID, result, rules); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func loadPublishedEntrypointHeaders(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+) (_ []routingsnapshot.Entrypoint, _ map[string]int, returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT e.id, e.published_revision, r.name, r.aliases
 FROM routing_entrypoints e
 JOIN routing_entrypoint_revisions r ON r.entrypoint_id = e.id AND r.revision = e.published_revision
 WHERE e.namespace_id = $1 AND e.status = 'active' AND e.deleted_at IS NULL
 ORDER BY e.id`, namespaceID)
-	if queryContextErr != nil {
-		return nil, fmt.Errorf("list published Entrypoints: %w", queryContextErr)
+	if err != nil {
+		return nil, nil, fmt.Errorf("list published Entrypoints: %w", err)
 	}
-	defer func() {
-		returnErr = errors.Join(returnErr, rows.Close())
-	}()
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
 	result := make([]routingsnapshot.Entrypoint, 0)
 	byID := make(map[string]int)
 	for rows.Next() {
 		var value routingsnapshot.Entrypoint
 		var aliases []byte
 		if err := rows.Scan(&value.ID, &value.Revision, &value.Name, &aliases); err != nil {
-			return nil, fmt.Errorf("scan published Entrypoint: %w", err)
+			return nil, nil, fmt.Errorf("scan published Entrypoint: %w", err)
 		}
 		if err := strictJSON(aliases, &value.Aliases); err != nil {
-			return nil, fmt.Errorf("decode published Entrypoint %s aliases: %w", value.ID, err)
+			return nil, nil, fmt.Errorf("decode published Entrypoint %s aliases: %w", value.ID, err)
 		}
 		result = append(result, value)
 		byID[value.ID] = len(result) - 1
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	ruleRows, queryContextErr := tx.QueryContext(ctx, `SELECT r.entrypoint_id, r.id, r.name, r.matchers, r.recipe_id, r.recipe_revision
+	return result, byID, nil
+}
+
+type publishedRuleKey struct {
+	entrypointID string
+	ruleID       string
+}
+
+type publishedRuleLocation struct {
+	entrypointIndex int
+	ruleIndex       int
+}
+
+func loadPublishedEntrypointRules(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+	entrypoints []routingsnapshot.Entrypoint,
+	byID map[string]int,
+) (_ map[publishedRuleKey]publishedRuleLocation, returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT r.entrypoint_id, r.id, r.name, r.matchers, r.recipe_id, r.recipe_revision
 FROM routing_entrypoint_rules r
 JOIN routing_entrypoints e ON e.id = r.entrypoint_id AND e.published_revision = r.entrypoint_revision
 WHERE e.namespace_id = $1 AND e.status = 'active' AND e.deleted_at IS NULL
 ORDER BY r.entrypoint_id, r.ordinal`, namespaceID)
-	if queryContextErr != nil {
-		return nil, fmt.Errorf("list published Entrypoint rules: %w", queryContextErr)
+	if err != nil {
+		return nil, fmt.Errorf("list published Entrypoint rules: %w", err)
 	}
-	defer func() {
-		returnErr = errors.Join(returnErr, ruleRows.Close())
-	}()
-	type ruleKey struct{ entrypointID, ruleID string }
-	type ruleLocation struct{ entrypointIndex, ruleIndex int }
-	rules := make(map[ruleKey]ruleLocation)
-	for ruleRows.Next() {
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+	rules := make(map[publishedRuleKey]publishedRuleLocation)
+	for rows.Next() {
 		var entrypointID string
 		var rule routingsnapshot.EntrypointRule
 		var matchers []byte
-		if err := ruleRows.Scan(&entrypointID, &rule.ID, &rule.Name, &matchers, &rule.RecipeID, &rule.RecipeRevision); err != nil {
+		if err := rows.Scan(
+			&entrypointID, &rule.ID, &rule.Name, &matchers, &rule.RecipeID, &rule.RecipeRevision,
+		); err != nil {
 			return nil, fmt.Errorf("scan published Entrypoint rule: %w", err)
 		}
 		if err := strictJSON(matchers, &rule.Matchers); err != nil {
@@ -104,72 +142,85 @@ ORDER BY r.entrypoint_id, r.ordinal`, namespaceID)
 		if !exists {
 			return nil, fmt.Errorf("published rule references absent Entrypoint %s", entrypointID)
 		}
-		entrypoint := &result[entrypointIndex]
+		entrypoint := &entrypoints[entrypointIndex]
 		entrypoint.Rules = append(entrypoint.Rules, rule)
-		rules[ruleKey{entrypointID, rule.ID}] = ruleLocation{
-			entrypointIndex: entrypointIndex,
-			ruleIndex:       len(entrypoint.Rules) - 1,
+		rules[publishedRuleKey{entrypointID: entrypointID, ruleID: rule.ID}] = publishedRuleLocation{
+			entrypointIndex: entrypointIndex, ruleIndex: len(entrypoint.Rules) - 1,
 		}
 	}
-	if err := ruleRows.Err(); err != nil {
+	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	decisionAssignmentRows, queryContextErr := tx.QueryContext(ctx, `SELECT a.entrypoint_id, a.rule_id, a.decision_id,
+	return rules, nil
+}
+
+func loadPublishedDecisionAssignments(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+	entrypoints []routingsnapshot.Entrypoint,
+	rules map[publishedRuleKey]publishedRuleLocation,
+) (returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT a.entrypoint_id, a.rule_id, a.decision_id,
 a.fallback_strategy, a.fallback_on
 FROM routing_decision_assignments a
 JOIN routing_entrypoints e ON e.id = a.entrypoint_id AND e.published_revision = a.entrypoint_revision
 WHERE e.namespace_id = $1 AND e.status = 'active' AND e.deleted_at IS NULL
 ORDER BY a.entrypoint_id, a.rule_id, a.decision_id`, namespaceID)
-	if queryContextErr != nil {
-		return nil, fmt.Errorf("list published decision assignments: %w", queryContextErr)
+	if err != nil {
+		return fmt.Errorf("list published decision assignments: %w", err)
 	}
-	defer func() {
-		returnErr = errors.Join(returnErr, decisionAssignmentRows.Close())
-	}()
-	for decisionAssignmentRows.Next() {
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+	for rows.Next() {
 		var entrypointID, ruleID, decisionID string
 		var strategy sql.NullString
 		var on []byte
-		if err := decisionAssignmentRows.Scan(&entrypointID, &ruleID, &decisionID, &strategy, &on); err != nil {
-			return nil, fmt.Errorf("scan published decision assignment: %w", err)
+		if err := rows.Scan(&entrypointID, &ruleID, &decisionID, &strategy, &on); err != nil {
+			return fmt.Errorf("scan published decision assignment: %w", err)
 		}
-		location, exists := rules[ruleKey{entrypointID, ruleID}]
+		location, exists := rules[publishedRuleKey{entrypointID: entrypointID, ruleID: ruleID}]
 		if !exists {
-			return nil, fmt.Errorf("decision assignment references absent published rule %s/%s", entrypointID, ruleID)
+			return fmt.Errorf("decision assignment references absent published rule %s/%s", entrypointID, ruleID)
 		}
-		rule := &result[location.entrypointIndex].Rules[location.ruleIndex]
 		assignmentSet := routingsnapshot.AssignmentSet{}
 		if strategy.Valid {
 			assignmentSet.Fallback = &routingsnapshot.FallbackPolicy{Strategy: strategy.String}
 			if err := strictJSON(on, &assignmentSet.Fallback.On); err != nil {
-				return nil, fmt.Errorf("decode published fallback policy: %w", err)
+				return fmt.Errorf("decode published fallback policy: %w", err)
 			}
 		}
-		rule.Assignments[decisionID] = assignmentSet
+		entrypoints[location.entrypointIndex].Rules[location.ruleIndex].Assignments[decisionID] = assignmentSet
 	}
-	if err := decisionAssignmentRows.Err(); err != nil {
-		return nil, err
-	}
-	assignmentRows, queryContextErr := tx.QueryContext(ctx, `SELECT a.entrypoint_id, a.rule_id, a.decision_id, a.model_id,
+	return rows.Err()
+}
+
+func loadPublishedAssignmentModels(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+	entrypoints []routingsnapshot.Entrypoint,
+	rules map[publishedRuleKey]publishedRuleLocation,
+) (returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT a.entrypoint_id, a.rule_id, a.decision_id, a.model_id,
 a.model_revision, a.priority, a.weight::text, a.lora_name, a.reasoning
 FROM routing_assignment_models a
 JOIN routing_entrypoints e ON e.id = a.entrypoint_id AND e.published_revision = a.entrypoint_revision
 WHERE e.namespace_id = $1 AND e.status = 'active' AND e.deleted_at IS NULL
 ORDER BY a.entrypoint_id, a.rule_id, a.decision_id, a.priority, a.ordinal`, namespaceID)
-	if queryContextErr != nil {
-		return nil, fmt.Errorf("list published assignments: %w", queryContextErr)
+	if err != nil {
+		return fmt.Errorf("list published assignments: %w", err)
 	}
-	defer func() {
-		returnErr = errors.Join(returnErr, assignmentRows.Close())
-	}()
-	for assignmentRows.Next() {
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+	for rows.Next() {
 		var entrypointID, ruleID, decisionID string
 		var assignment routingsnapshot.Assignment
 		var lora sql.NullString
 		var reasoning []byte
-		if err := assignmentRows.Scan(&entrypointID, &ruleID, &decisionID, &assignment.ModelID,
-			&assignment.ModelRevision, &assignment.Priority, &assignment.Weight, &lora, &reasoning); err != nil {
-			return nil, fmt.Errorf("scan published assignment: %w", err)
+		if err := rows.Scan(
+			&entrypointID, &ruleID, &decisionID, &assignment.ModelID,
+			&assignment.ModelRevision, &assignment.Priority, &assignment.Weight, &lora, &reasoning,
+		); err != nil {
+			return fmt.Errorf("scan published assignment: %w", err)
 		}
 		if lora.Valid {
 			assignment.LoRAName = lora.String
@@ -177,23 +228,23 @@ ORDER BY a.entrypoint_id, a.rule_id, a.decision_id, a.priority, a.ordinal`, name
 		if len(reasoning) != 0 && string(reasoning) != "null" {
 			var value routingsnapshot.AssignmentReasoning
 			if err := strictJSON(reasoning, &value); err != nil {
-				return nil, fmt.Errorf("decode published assignment reasoning: %w", err)
+				return fmt.Errorf("decode published assignment reasoning: %w", err)
 			}
 			assignment.Reasoning = &value
 		}
-		location, exists := rules[ruleKey{entrypointID, ruleID}]
+		location, exists := rules[publishedRuleKey{entrypointID: entrypointID, ruleID: ruleID}]
 		if !exists {
-			return nil, fmt.Errorf("assignment references absent published rule %s/%s", entrypointID, ruleID)
+			return fmt.Errorf("assignment references absent published rule %s/%s", entrypointID, ruleID)
 		}
-		rule := &result[location.entrypointIndex].Rules[location.ruleIndex]
+		rule := &entrypoints[location.entrypointIndex].Rules[location.ruleIndex]
 		assignmentSet, exists := rule.Assignments[decisionID]
 		if !exists {
-			return nil, fmt.Errorf("model assignment references absent published decision assignment %s/%s/%s", entrypointID, ruleID, decisionID)
+			return fmt.Errorf("model assignment references absent published decision assignment %s/%s/%s", entrypointID, ruleID, decisionID)
 		}
 		assignmentSet.Models = append(assignmentSet.Models, assignment)
 		rule.Assignments[decisionID] = assignmentSet
 	}
-	return result, assignmentRows.Err()
+	return rows.Err()
 }
 
 func loadPublishedRecipes(
@@ -300,21 +351,10 @@ ORDER BY mr.model_id`, namespaceID)
 		if exists {
 			continue
 		}
-		for _, field := range []struct {
-			payload []byte
-			target  any
-		}{
-			{aliases, &model.Aliases},
-			{capabilities, &model.Capabilities},
-			{reasoning, &model.Reasoning},
-			{loras, &model.LoRAs},
-			{tags, &model.Tags},
-			{execution, &model.Execution},
-			{pricing, &model.Pricing},
-		} {
-			if err := strictJSON(field.payload, field.target); err != nil {
-				return nil, fmt.Errorf("decode published Model %s: %w", model.ID, err)
-			}
+		if err := decodePublishedModelMetadata(
+			&model, aliases, capabilities, reasoning, loras, tags, execution, pricing,
+		); err != nil {
+			return nil, fmt.Errorf("decode published Model %s: %w", model.ID, err)
 		}
 		result = append(result, model)
 		byID[model.ID] = len(result) - 1
@@ -361,6 +401,27 @@ ORDER BY b.model_id, b.ordinal`, namespaceID)
 		model.Backends = append(model.Backends, backend)
 	}
 	return result, backendRows.Err()
+}
+
+func decodePublishedModelMetadata(model *routingsnapshot.Model, payloads ...[]byte) error {
+	targets := []any{
+		&model.Aliases,
+		&model.Capabilities,
+		&model.Reasoning,
+		&model.LoRAs,
+		&model.Tags,
+		&model.Execution,
+		&model.Pricing,
+	}
+	if len(payloads) != len(targets) {
+		return fmt.Errorf("published Model metadata is incomplete")
+	}
+	for index, payload := range payloads {
+		if err := strictJSON(payload, targets[index]); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func strictJSON(payload []byte, target any) error {

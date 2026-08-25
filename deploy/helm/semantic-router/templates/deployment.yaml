@@ -6,10 +6,24 @@
 {{- end -}}
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
-{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
-{{- $controlPlaneMode := (get $controlPlane "mode") | default "standalone" -}}
-{{- $managedMode := eq $controlPlaneMode "managed" -}}
-{{- $managementProbeScheme := ternary "HTTPS" "HTTP" $managedMode -}}
+{{- $durableRouting := eq (include "semantic-router.hasManagementStore" .) "true" -}}
+{{- $runtimeStore := eq (include "semantic-router.hasRuntimeStore" .) "true" -}}
+{{- $managementAPIEnabled := eq (include "semantic-router.managementAPIEnabled" .) "true" -}}
+{{- $accessEnabled := eq (include "semantic-router.accessEnabled" .) "true" -}}
+{{- if and $runtimeStore (not $durableRouting) -}}
+{{- fail "global.stores.runtime.redis requires global.stores.management.postgres" -}}
+{{- end -}}
+{{- if and $managementAPIEnabled (not $durableRouting) -}}
+{{- fail "global.services.management_api.enabled requires global.stores.management.postgres" -}}
+{{- end -}}
+{{- if and $accessEnabled (not (and $durableRouting $runtimeStore)) -}}
+{{- fail "global.services.access.enabled requires both global.stores.management.postgres and global.stores.runtime.redis" -}}
+{{- end -}}
+{{- $operationalProbeScheme := ternary "HTTPS" "HTTP" $managementAPIEnabled -}}
+{{- $topologySpreadEnabled := $durableRouting -}}
+{{- if ne .Values.topologySpread.enabled nil -}}
+{{- $topologySpreadEnabled = .Values.topologySpread.enabled -}}
+{{- end -}}
 {{- $services := (get $global "services") | default (dict) -}}
 {{- $managementAPI := (get $services "management_api") | default (dict) -}}
 {{- $managementPort := (get $managementAPI "port") | default .Values.service.api.targetPort -}}
@@ -85,7 +99,7 @@ spec:
       serviceAccountName: {{ include "semantic-router.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
-      {{- if .Values.topologySpread.enabled }}
+      {{- if $topologySpreadEnabled }}
       topologySpreadConstraints:
       - maxSkew: {{ .Values.topologySpread.maxSkew }}
         topologyKey: {{ .Values.topologySpread.topologyKey | quote }}
@@ -119,10 +133,10 @@ spec:
         - containerPort: {{ .Values.service.metrics.targetPort }}
           name: metrics
           protocol: TCP
-        - containerPort: {{ ternary $managementPort .Values.service.api.targetPort $managedMode }}
+        - containerPort: {{ ternary $managementPort .Values.service.api.targetPort $durableRouting }}
           name: classify-api
           protocol: TCP
-        {{- if $managedMode }}
+        {{- if $durableRouting }}
         - containerPort: {{ $backendDispatchPort }}
           name: backend-dsp
           protocol: TCP
@@ -130,8 +144,10 @@ spec:
         env:
           - name: CONFIG_FILE
             value: /app/config/config.yaml
+        {{- if $durableRouting }}
           - name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER
             value: "true"
+        {{- end }}
         {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
         {{- end }}
@@ -167,15 +183,16 @@ spec:
           mountPath: /app/models
         {{- end }}
         {{- if .Values.startupProbe.enabled }}
-        # Readiness includes model loading and, in managed mode, publication and
-        # durable-store recovery. TLS certificate verification is intentionally
-        # delegated to the Router; kubelet HTTPS probes do not validate the
-        # serving certificate.
+        # Readiness includes model loading and, with durable routing state,
+        # publication and recovery. When the Management API is enabled, TLS
+        # certificate verification remains Router-owned; kubelet HTTPS probes do
+        # not validate the serving certificate. Store-only operational probes use
+        # plaintext on the Pod-local listener.
         startupProbe:
           httpGet:
             path: /ready
             port: classify-api
-            scheme: {{ $managementProbeScheme }}
+            scheme: {{ $operationalProbeScheme }}
           periodSeconds: {{ .Values.startupProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.startupProbe.timeoutSeconds }}
           failureThreshold: {{ .Values.startupProbe.failureThreshold }}
@@ -185,7 +202,7 @@ spec:
           httpGet:
             path: /health
             port: classify-api
-            scheme: {{ $managementProbeScheme }}
+            scheme: {{ $operationalProbeScheme }}
           initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.livenessProbe.timeoutSeconds }}
@@ -196,7 +213,7 @@ spec:
           httpGet:
             path: /ready
             port: classify-api
-            scheme: {{ $managementProbeScheme }}
+            scheme: {{ $operationalProbeScheme }}
           initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
           periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
           timeoutSeconds: {{ .Values.readinessProbe.timeoutSeconds }}

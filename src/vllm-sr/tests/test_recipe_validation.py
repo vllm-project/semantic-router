@@ -1,6 +1,4 @@
 import pytest
-from pydantic import ValidationError as PydanticValidationError
-
 from cli.models import (
     AssignmentSet,
     Condition,
@@ -11,52 +9,38 @@ from cli.models import (
     UserConfig,
 )
 from cli.validator import validate_user_config
+from pydantic import ValidationError as PydanticValidationError
 
 
-def _user_config(document: dict) -> UserConfig:
-    global_config = document.setdefault("global", {})
-    services = global_config.setdefault("services", {})
-    services.setdefault(
-        "backend_egress",
-        {"policy_file": "/app/config/backend-egress-policy.yaml"},
-    )
-    return UserConfig.model_validate(document)
-
-
-def model_value(name: str, port: int) -> dict:
+def model_value(name: str, port: int, *, reasoning_family: str | None = None) -> dict:
     return {
         "name": name,
-        "card": {"capabilities": ["chat"]},
-        "runtime": {
-            "max_retries": 0,
-            "request_timeout": "300s",
-            "stream_timeout": "300s",
-        },
-        "pricing": {},
-        "connections": [
+        "provider_model_id": name,
+        "reasoning_family": reasoning_family,
+        "backend_refs": [
             {
                 "provider": "openai-compatible",
-                "endpoint": f"http://127.0.0.1:{port}/v1",
-                "model": name,
-                "weight": "1",
+                "base_url": f"http://127.0.0.1:{port}/v1",
             }
         ],
     }
 
 
-def recipe_config(*, assigned_model: str | None = None, recipe_name: str | None = None):
-    model = model_value("model-a", 8000)
+def recipe_config(
+    *,
+    assigned_model: str | None = None,
+    recipe_name: str | None = None,
+) -> UserConfig:
     selected_recipe = recipe_name or "private"
-    return _user_config(
+    return UserConfig.model_validate(
         {
-            "version": "v0.4",
-            "models": [model],
+            "version": "v0.3",
+            "providers": {"models": [model_value("model-a", 8000)]},
+            "routing": {"modelCards": [{"name": "model-a", "capabilities": ["chat"]}]},
             "recipes": [
                 {
                     "name": "private",
-                    "document": {
-                        "signals": {},
-                        "projections": {},
+                    "routing": {
                         "decisions": [
                             {
                                 "name": "private-route",
@@ -71,11 +55,11 @@ def recipe_config(*, assigned_model: str | None = None, recipe_name: str | None 
             ],
             "entrypoints": [
                 {
-                    "name": "amd/rocm-v1-private",
+                    "model_names": ["amd/rocm-v1-private"],
                     "recipe": selected_recipe,
                     "assignments": {
                         "private-route": {
-                            "models": [{"model": assigned_model or model["name"]}]
+                            "models": [{"model": assigned_model or "model-a"}]
                         }
                     },
                 }
@@ -93,34 +77,44 @@ def test_entrypoint_assignment_references_are_validated():
 def test_recipe_decision_tier_survives_schema_parse():
     config = recipe_config()
 
-    assert config.recipes[0].document.decisions[0].tier == 7
+    assert config.recipes[0].routing.decisions[0].tier == 7
 
 
 def test_recipe_requires_at_least_one_decision():
     config = recipe_config()
-    config.recipes[0].document.decisions = []
+    config.recipes[0].routing.decisions = []
 
     errors = validate_user_config(config)
 
     assert any("at least one decision" in error.message for error in errors)
 
 
-def test_runtime_manifest_requires_backend_egress_policy():
-    with pytest.raises(
-        PydanticValidationError,
-        match="global.services.backend_egress.policy_file is required",
-    ):
-        UserConfig.model_validate({"version": "v0.4"})
+def test_minimal_v03_runtime_manifest_is_valid():
+    config = UserConfig.model_validate({"version": "v0.3"})
+
+    assert config.providers.models == []
+    assert config.routing.model_cards == []
 
 
-def test_recipe_rejects_physical_model_selection():
+def test_entrypoint_can_derive_complete_recipe_model_refs():
     document = recipe_config().model_dump(mode="json", by_alias=True)
-    document["recipes"][0]["document"]["decisions"][0]["modelRefs"] = [
-        {"model": "model-a"}
-    ]
+    decision = document["recipes"][0]["routing"]["decisions"][0]
+    decision["modelRefs"] = [{"model": "model-a"}]
+    document["entrypoints"][0].pop("assignments")
 
-    with pytest.raises(PydanticValidationError, match="Entrypoint assignments"):
-        _user_config(document)
+    config = UserConfig.model_validate(document)
+    errors = validate_user_config(config)
+
+    assert not any("assignments are required" in error.message for error in errors)
+
+
+def test_entrypoint_without_assignments_rejects_incomplete_recipe_defaults():
+    document = recipe_config().model_dump(mode="json", by_alias=True)
+    document["entrypoints"][0].pop("assignments")
+
+    errors = validate_user_config(UserConfig.model_validate(document))
+
+    assert any("assignments are required" in error.message for error in errors)
 
 
 def test_entrypoints_must_reference_known_recipe():
@@ -131,7 +125,7 @@ def test_entrypoints_must_reference_known_recipe():
 
 def test_entrypoint_names_cannot_collide_with_models():
     config = recipe_config()
-    config.entrypoints[0].name = "model-a"
+    config.entrypoints[0].model_names = ["model-a"]
 
     errors = validate_user_config(config)
 
@@ -143,94 +137,67 @@ def test_decision_adaptation_mode_boundaries_apply_inside_recipes():
         DecisionAdaptationsConfig(mode="bypass", adaptation={"mode": "apply"})
 
 
-def test_entrypoint_identifiers_are_trimmed_and_aliases_deduplicated():
+def test_entrypoint_identifiers_are_trimmed_and_deduplicated():
     entrypoint = Entrypoint.model_validate(
         {
-            "name": "balanced",
-            "aliases": [" amd/rocm-v1-balanced ", "amd/rocm-v1-balanced"],
+            "model_names": [
+                " amd/rocm-v1-balanced ",
+                "amd/rocm-v1-balanced",
+            ],
             "recipe": "balanced",
             "assignments": {"route": {"models": [{"model": "model-a"}]}},
         }
     )
 
-    assert entrypoint.aliases == ["amd/rocm-v1-balanced"]
+    assert entrypoint.model_names == ["amd/rocm-v1-balanced"]
     with pytest.raises(PydanticValidationError, match="must be strings"):
         Entrypoint.model_validate(
             {
-                "name": "balanced",
-                "aliases": ["amd/rocm-v1-balanced", 123],
+                "model_names": ["amd/rocm-v1-balanced", 123],
                 "recipe": "balanced",
-                "assignments": {"route": {"models": [{"model": "model-a"}]}},
             }
         )
 
 
 def test_entrypoint_assignments_round_trip_in_order():
     document = recipe_config().model_dump(mode="json", by_alias=True)
-    model_b = model_value("model-b", 8001)
-    model_b["card"]["reasoning"] = {
-        "type": "reasoning_effort",
-        "efforts": ["medium", "high"],
-    }
-    document["models"].append(model_b)
-    decision_name = document["recipes"][0]["document"]["decisions"][0]["name"]
+    document["providers"]["models"].append(
+        model_value("model-b", 8001, reasoning_family="qwen")
+    )
+    document["routing"]["modelCards"].append(
+        {"name": "model-b", "capabilities": ["chat", "reasoning"]}
+    )
+    decision_name = document["recipes"][0]["routing"]["decisions"][0]["name"]
     document["entrypoints"][0]["assignments"] = {
         decision_name: {
             "models": [
-                {"model": model_b["name"], "reasoning": {"enabled": True}},
-                {
-                    "model": document["models"][0]["name"],
-                    "reasoning": {"enabled": False},
-                },
+                {"model": "model-b", "reasoning": {"enabled": True}},
+                {"model": "model-a", "reasoning": {"enabled": False}},
             ]
         }
     }
 
-    config = _user_config(document)
+    config = UserConfig.model_validate(document)
     refs = config.entrypoints[0].assignments[decision_name].models
 
-    assert [ref.model for ref in refs] == [
-        model_b["name"],
-        document["models"][0]["name"],
-    ]
+    assert [ref.model for ref in refs] == ["model-b", "model-a"]
     assert refs[1].reasoning is None
-    assert "reasoning" not in refs[1].model_dump(mode="json", exclude_none=True)
     assert not any(
         "Entrypoint assignment" in error.message
         for error in validate_user_config(config)
     )
 
 
-def test_entrypoint_reasoning_requires_model_capability():
+def test_entrypoint_reasoning_requires_model_family():
     document = recipe_config().model_dump(mode="json", by_alias=True)
-    decision_name = document["recipes"][0]["document"]["decisions"][0]["name"]
+    decision_name = document["recipes"][0]["routing"]["decisions"][0]["name"]
     assignment = document["entrypoints"][0]["assignments"][decision_name]
     assignment["models"][0]["reasoning"] = {"enabled": True}
 
-    errors = validate_user_config(_user_config(document))
+    errors = validate_user_config(UserConfig.model_validate(document))
 
     assert any(
         "does not support reasoning controls" in error.message for error in errors
-    )
-
-
-def test_entrypoint_reasoning_effort_must_be_declared_by_model():
-    document = recipe_config().model_dump(mode="json", by_alias=True)
-    document["models"][0]["card"]["reasoning"] = {
-        "type": "reasoning_effort",
-        "efforts": ["medium"],
-    }
-    decision_name = document["recipes"][0]["document"]["decisions"][0]["name"]
-    assignment = document["entrypoints"][0]["assignments"][decision_name]
-    assignment["models"][0]["reasoning"] = {
-        "enabled": True,
-        "effort": "high",
-    }
-
-    errors = validate_user_config(_user_config(document))
-
-    assert any(
-        "does not support reasoning effort 'high'" in error.message for error in errors
     )
 
 
@@ -278,7 +245,7 @@ def test_invalid_entrypoint_assignments_are_reported(assignments, expected):
 def test_signal_names_are_isolated_across_recipes():
     config = recipe_config()
     first = config.recipes[0]
-    first.document.signals.keywords = [
+    first.routing.signals.keywords = [
         KeywordSignal(
             name="shared-keyword",
             operator="OR",
@@ -288,7 +255,7 @@ def test_signal_names_are_isolated_across_recipes():
     ]
     second = first.model_copy(deep=True)
     second.name = "second"
-    second.document.signals.keywords[0].keywords = ["two"]
+    second.routing.signals.keywords[0].keywords = ["two"]
     config.recipes.append(second)
 
     errors = validate_user_config(config)
@@ -298,7 +265,7 @@ def test_signal_names_are_isolated_across_recipes():
 
 def test_signal_references_cannot_cross_recipe_boundaries():
     config = recipe_config()
-    config.recipes[0].document.decisions[0].rules.conditions = [
+    config.recipes[0].routing.decisions[0].rules.conditions = [
         Condition(type="keyword", name="other-recipe-only")
     ]
 

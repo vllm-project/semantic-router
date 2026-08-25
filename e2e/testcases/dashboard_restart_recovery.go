@@ -306,6 +306,20 @@ func assertDashboardAgentState(
 		return fmt.Errorf("Agent Session identity or target changed %s", phase)
 	}
 
+	return assertDashboardAgentTranscript(
+		ctx, client, baseURL, token, state, verbose, phase,
+	)
+}
+
+func assertDashboardAgentTranscript(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	state dashboardRestartAgentState,
+	verbose bool,
+	phase string,
+) error {
 	var events struct {
 		Data []struct {
 			TurnID  string          `json:"turnId"`

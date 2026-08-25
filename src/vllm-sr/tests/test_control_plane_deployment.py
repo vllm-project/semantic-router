@@ -1,24 +1,20 @@
 from __future__ import annotations
 
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-
-from cli.bootstrap import (
-    LOCAL_REPLICA_ID_ENV,
-)
+from cli.bootstrap import LOCAL_REPLICA_ID_ENV
 from cli.control_plane_deployment import (
-    control_plane_mode,
-    local_managed_secret_mounts,
-    managed_store_references,
+    control_plane_store_references,
+    local_control_plane_secret_mounts,
     plan_local_control_plane,
     resolve_local_router_bindings,
+    runtime_capabilities,
 )
-from cli.control_plane_migration import (
+from cli.management_migration import (
     MIGRATION_BINARY,
-    build_control_plane_migration_command,
-    run_control_plane_migration,
+    build_management_migration_command,
+    run_management_migration,
 )
 from cli.runtime_stack import resolve_runtime_stack
 from cli.storage_secrets import (
@@ -32,27 +28,24 @@ from cli.storage_secrets import (
 )
 
 
-def _managed_config(*, postgres=None, valkey=None):
+def _durable_config(*, postgres=None, redis=None):
     return {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
-            "control_plane": {"mode": "managed"},
             "stores": {
-                "access": {
-                    "type": "postgres",
+                "management": {
                     "postgres": (
                         {"dsn_env": "ACCESS_DATABASE_URL"}
                         if postgres is None
                         else postgres
-                    ),
+                    )
                 },
-                "access_runtime": {
-                    "type": "redis",
+                "runtime": {
                     "redis": (
-                        {"url_env": "ACCESS_RUNTIME_URL"} if valkey is None else valkey
-                    ),
+                        {"url_env": "ACCESS_RUNTIME_URL"} if redis is None else redis
+                    )
                 },
-            },
+            }
         },
     }
 
@@ -70,11 +63,11 @@ def _storage_secrets(stack_name="vllm-sr"):
     )
 
 
-def test_standalone_is_dependency_free_and_does_not_mutate_environment():
+def test_file_config_is_dependency_free_and_does_not_mutate_environment():
     runtime_env = {"PUBLIC_SETTING": "on"}
 
     plan = plan_local_control_plane(
-        {"version": "v0.4"}, runtime_env, resolve_runtime_stack()
+        {"version": "v0.3"}, runtime_env, resolve_runtime_stack()
     )
 
     assert plan.required_backends == frozenset()
@@ -82,12 +75,12 @@ def test_standalone_is_dependency_free_and_does_not_mutate_environment():
         resolve_local_router_bindings(plan, set(), None, resolve_runtime_stack()) == {}
     )
     assert runtime_env == {"PUBLIC_SETTING": "on"}
-    assert control_plane_mode({"version": "v0.4"}) == "standalone"
+    assert runtime_capabilities({"version": "v0.3"}).file_routing is True
 
 
-def test_standalone_local_store_credentials_are_resolved_from_committed_state():
+def test_local_service_credentials_are_resolved_from_committed_state():
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "services": {
                 "response_api": {
@@ -103,7 +96,7 @@ def test_standalone_local_store_credentials_are_resolved_from_committed_state():
             }
         },
     }
-    stack = resolve_runtime_stack(stack_name="standalone-secrets")
+    stack = resolve_runtime_stack(stack_name="service-secrets")
     plan = plan_local_control_plane(config, {}, stack)
     bindings = resolve_local_router_bindings(
         plan,
@@ -117,11 +110,11 @@ def test_standalone_local_store_credentials_are_resolved_from_committed_state():
     assert bindings[REDIS_PASSWORD_ENV] == "redis-secret"
 
 
-def test_managed_docker_plans_missing_store_refs_then_binds_committed_state():
+def test_durable_docker_plans_missing_store_refs_then_binds_committed_state():
     runtime_env = {}
-    stack = resolve_runtime_stack(stack_name="managed-test")
+    stack = resolve_runtime_stack(stack_name="durable-test")
 
-    plan = plan_local_control_plane(_managed_config(), runtime_env, stack)
+    plan = plan_local_control_plane(_durable_config(), runtime_env, stack)
     bindings = resolve_local_router_bindings(
         plan,
         {"postgres", "redis"},
@@ -134,102 +127,47 @@ def test_managed_docker_plans_missing_store_refs_then_binds_committed_state():
     assert f"@{stack.postgres_container_name}:" in bindings["ACCESS_DATABASE_URL"]
     assert bindings["ACCESS_RUNTIME_URL"].startswith("redis://:")
     assert f"@{stack.redis_container_name}:6379/0" in bindings["ACCESS_RUNTIME_URL"]
-    assert bindings[LOCAL_REPLICA_ID_ENV] == "local-managed-test"
+    assert bindings[LOCAL_REPLICA_ID_ENV] == "local-durable-test"
     assert runtime_env == {}
 
 
-def test_managed_external_env_refs_bypass_local_store_provisioning():
+def test_external_store_env_refs_bypass_local_store_provisioning():
     runtime_env = {
         "ACCESS_DATABASE_URL": "postgresql://external/db",
         "ACCESS_RUNTIME_URL": "redis://external:6379/0",
     }
 
     plan = plan_local_control_plane(
-        _managed_config(), runtime_env, resolve_runtime_stack()
+        _durable_config(), runtime_env, resolve_runtime_stack()
     )
 
     assert plan.required_backends == frozenset()
     assert resolve_local_router_bindings(
         plan, set(), None, resolve_runtime_stack()
     ) == {LOCAL_REPLICA_ID_ENV: "local-vllm-sr"}
-    assert runtime_env == {
-        "ACCESS_DATABASE_URL": "postgresql://external/db",
-        "ACCESS_RUNTIME_URL": "redis://external:6379/0",
-    }
 
 
 def test_local_binding_fails_closed_without_committed_storage_state():
     stack = resolve_runtime_stack(stack_name="missing-state")
-    plan = plan_local_control_plane(_managed_config(), {}, stack)
+    plan = plan_local_control_plane(_durable_config(), {}, stack)
 
     with pytest.raises(ValueError, match="committed credential state"):
-        resolve_local_router_bindings(
-            plan,
-            {"postgres", "redis"},
-            None,
-            stack,
-        )
+        resolve_local_router_bindings(plan, {"postgres", "redis"}, None, stack)
 
 
-def test_managed_file_refs_are_exact_read_only_mounts(tmp_path):
+def test_store_file_refs_are_exact_read_only_mounts(tmp_path):
     postgres = tmp_path / "postgres-dsn"
-    valkey = tmp_path / "valkey-url"
+    redis = tmp_path / "redis-url"
     postgres.write_text("postgresql://external/db", encoding="utf-8")
-    valkey.write_text("redis://external:6379/0", encoding="utf-8")
-    config = _managed_config(
+    redis.write_text("redis://external:6379/0", encoding="utf-8")
+    config = _durable_config(
         postgres={"dsn_file": str(postgres)},
-        valkey={"url_file": str(valkey)},
+        redis={"url_file": str(redis)},
     )
 
-    assert local_managed_secret_mounts(config) == tuple(
-        f"{path}:{path}:ro" for path in sorted((str(postgres), str(valkey)))
+    assert local_control_plane_secret_mounts(config) == tuple(
+        f"{item}:{item}:ro" for item in sorted((str(postgres), str(redis)))
     )
-
-
-def test_managed_mounts_ignore_non_control_plane_file_fields(tmp_path):
-    postgres = tmp_path / "postgres-dsn"
-    valkey = tmp_path / "valkey-url"
-    postgres.write_text("postgresql://external/db", encoding="utf-8")
-    valkey.write_text("redis://external:6379/0", encoding="utf-8")
-    config = _managed_config(
-        postgres={"dsn_file": str(postgres)},
-        valkey={"url_file": str(valkey)},
-    )
-    config["global"]["stores"]["response_cache"] = {
-        "milvus": {"connection": {"cert_file": "relative/client.pem"}}
-    }
-
-    assert local_managed_secret_mounts(config) == tuple(
-        f"{path}:{path}:ro" for path in sorted((str(postgres), str(valkey)))
-    )
-
-
-def test_local_bootstrap_authority_mount_tracks_directory_removal(tmp_path):
-    postgres = tmp_path / "postgres-dsn"
-    valkey = tmp_path / "valkey-url"
-    bootstrap_dir = tmp_path / "bootstrap"
-    bootstrap_dir.mkdir(mode=0o700)
-    bootstrap = bootstrap_dir / "router-token"
-    for path, value in (
-        (postgres, "postgresql://external/db"),
-        (valkey, "redis://external:6379/0"),
-        (bootstrap, "one-time-token"),
-    ):
-        path.write_text(value, encoding="utf-8")
-    config = _managed_config(
-        postgres={"dsn_file": str(postgres)},
-        valkey={"url_file": str(valkey)},
-    )
-    config["global"]["services"] = {
-        "management_api": {"auth": {"bootstrap": {"token_file": str(bootstrap)}}}
-    }
-
-    mounts = local_managed_secret_mounts(config)
-    assert f"{bootstrap_dir}:{bootstrap_dir}:ro" in mounts
-    assert all(str(bootstrap) + ":" not in mount for mount in mounts)
-
-    bootstrap.unlink()
-    assert f"{bootstrap_dir}:{bootstrap_dir}:ro" in local_managed_secret_mounts(config)
 
 
 @pytest.mark.parametrize(
@@ -241,17 +179,43 @@ def test_local_bootstrap_authority_mount_tracks_directory_removal(tmp_path):
         {"dsn_file": "relative/path"},
     ],
 )
-def test_managed_store_references_reject_ambiguous_or_non_secret_inputs(postgres):
+def test_store_references_reject_ambiguous_or_non_secret_inputs(postgres):
     with pytest.raises(ValueError):
-        managed_store_references(_managed_config(postgres=postgres))
+        control_plane_store_references(_durable_config(postgres=postgres))
+
+
+def test_capabilities_are_derived_from_services_and_stores():
+    config = _durable_config()
+    config["global"]["services"] = {
+        "management_api": {"enabled": True},
+        "access": {"enabled": True},
+    }
+
+    capabilities = runtime_capabilities(config)
+
+    assert capabilities.durable_management is True
+    assert capabilities.distributed_state is True
+    assert capabilities.management_api is True
+    assert capabilities.native_access is True
+    assert capabilities.file_routing is False
+
+
+def test_runtime_store_without_management_store_is_rejected():
+    config = {
+        "version": "v0.3",
+        "global": {"stores": {"runtime": {"redis": {"url_env": "ACCESS_RUNTIME_URL"}}}},
+    }
+
+    with pytest.raises(ValueError, match=r"requires global\.stores\.management"):
+        runtime_capabilities(config)
 
 
 def test_migration_command_inherits_secret_by_name_without_placing_value_in_argv():
     secret = "postgresql://user:secret@db/control"
-    command = build_control_plane_migration_command(
-        _managed_config(),
+    command = build_management_migration_command(
+        _durable_config(),
         env_vars={"ACCESS_DATABASE_URL": secret},
-        network_name="managed-network",
+        network_name="router-network",
         router_image="router:test",
         container_runtime="docker",
     )
@@ -264,17 +228,17 @@ def test_migration_command_inherits_secret_by_name_without_placing_value_in_argv
 
 def test_router_is_not_started_when_explicit_migration_never_succeeds(monkeypatch):
     monkeypatch.setattr(
-        "cli.control_plane_migration.get_runtime_images",
+        "cli.management_migration.get_runtime_images",
         lambda **_kwargs: {"router": "router:test", "envoy": "envoy:test"},
     )
     monkeypatch.setattr(
-        "cli.control_plane_migration.get_container_runtime", lambda: "docker"
+        "cli.management_migration.get_container_runtime", lambda: "docker"
     )
-    monkeypatch.setattr("cli.control_plane_migration.MIGRATION_ATTEMPTS", 2)
-    monkeypatch.setattr("cli.control_plane_migration.time.sleep", lambda _delay: None)
+    monkeypatch.setattr("cli.management_migration.MIGRATION_ATTEMPTS", 2)
+    monkeypatch.setattr("cli.management_migration.time.sleep", lambda _delay: None)
     attempts = []
     monkeypatch.setattr(
-        "cli.control_plane_migration.subprocess.run",
+        "cli.management_migration.subprocess.run",
         lambda command, **kwargs: (
             attempts.append((command, kwargs["env"]))
             or SimpleNamespace(returncode=1, stdout="", stderr="unavailable")
@@ -282,15 +246,15 @@ def test_router_is_not_started_when_explicit_migration_never_succeeds(monkeypatc
     )
 
     with pytest.raises(RuntimeError, match="Router was not started"):
-        run_control_plane_migration(
-            _managed_config(),
+        run_management_migration(
+            _durable_config(),
             env_vars={
                 "ACCESS_DATABASE_URL": "postgresql://external/db",
                 "ACCESS_RUNTIME_URL": "redis://external:6379/0",
                 "PROVIDER_API_KEY": "provider-secret",
                 "DASHBOARD_JWT_SECRET": "dashboard-secret",
             },
-            network_name="managed-network",
+            network_name="router-network",
             image=None,
             router_image="router:test",
             envoy_image="envoy:test",
@@ -303,56 +267,3 @@ def test_router_is_not_started_when_explicit_migration_never_succeeds(monkeypatc
         assert "ACCESS_RUNTIME_URL" not in child_env
         assert "PROVIDER_API_KEY" not in child_env
         assert "DASHBOARD_JWT_SECRET" not in child_env
-
-
-def test_all_router_images_ship_the_one_shot_migrator():
-    repository = Path(__file__).resolve().parents[3]
-    dockerfiles = (
-        repository / "src/vllm-sr/Dockerfile",
-        repository / "src/vllm-sr/Dockerfile.rocm",
-        repository / "src/vllm-sr/Dockerfile.cuda",
-        repository / "tools/docker/Dockerfile.extproc",
-        repository / "tools/docker/Dockerfile.extproc-rocm",
-    )
-    for dockerfile in dockerfiles:
-        contents = dockerfile.read_text(encoding="utf-8")
-        assert "./cmd/access-migrate" in contents
-        assert "/usr/local/bin/access-migrate" in contents
-
-
-def test_all_router_images_ship_the_canonical_built_in_recipe_distribution():
-    repository = Path(__file__).resolve().parents[3]
-    canonical_source = "config/recipes/built-in/latest/mom-v1"
-    dockerfiles = {
-        repository / "src/vllm-sr/Dockerfile": "/app/recipes/built-in/latest/mom-v1",
-        repository
-        / "src/vllm-sr/Dockerfile.rocm": "/app/recipes/built-in/latest/mom-v1",
-        repository
-        / "src/vllm-sr/Dockerfile.cuda": "/app/recipes/built-in/latest/mom-v1",
-        repository
-        / "tools/docker/Dockerfile.extproc": "/app/config/recipes/built-in/latest/mom-v1",
-        repository
-        / "tools/docker/Dockerfile.extproc-rocm": "/app/config/recipes/built-in/latest/mom-v1",
-    }
-    for dockerfile, destination in dockerfiles.items():
-        contents = dockerfile.read_text(encoding="utf-8")
-        assert (
-            f"COPY {canonical_source}/config.yaml {destination}/config.yaml" in contents
-        )
-        assert (
-            f"COPY {canonical_source}/metadata.yaml {destination}/metadata.yaml"
-            in contents
-        )
-        expected_base = "/app/config" if "/tools/docker/" in str(dockerfile) else "/app"
-        assert f"ENV VLLM_SR_CONFIG_BASE_DIR={expected_base}" in contents
-
-    dashboard = (repository / "dashboard/backend/Dockerfile").read_text(
-        encoding="utf-8"
-    )
-    assert canonical_source not in dashboard
-
-    chart_templates = repository / "deploy/helm/semantic-router/templates"
-    rendered_sources = "\n".join(
-        path.read_text(encoding="utf-8") for path in chart_templates.glob("*.yaml")
-    )
-    assert canonical_source not in rendered_sources

@@ -69,6 +69,7 @@ type agentToolPage struct {
 type agentSessionCreateWire struct {
 	Mode            agentmanagement.SessionMode `json:"mode"`
 	ProfileID       string                      `json:"profileId,omitempty"`
+	KeyID           string                      `json:"keyId"`
 	EffectiveTeamID string                      `json:"effectiveTeamId,omitempty"`
 	Target          agentmanagement.Target      `json:"target"`
 	Title           string                      `json:"title,omitempty"`

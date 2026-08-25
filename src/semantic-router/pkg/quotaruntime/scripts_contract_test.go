@@ -27,6 +27,7 @@ func TestScriptsUseServerTimeAndExactQuotaArithmetic(t *testing.T) {
 		script string
 	}{
 		{name: "admit", script: admitLua},
+		{name: "heartbeat", script: heartbeatLua},
 		{name: "check access", script: checkAccessLua},
 		{name: "journal dispatch", script: journalDispatchLua},
 		{name: "begin dispatch", script: beginDispatchLua},
@@ -45,6 +46,28 @@ func TestScriptsUseServerTimeAndExactQuotaArithmetic(t *testing.T) {
 				t.Fatal("operation does not source its time from Redis")
 			}
 		})
+	}
+}
+
+func TestAdmissionHeartbeatCannotRetargetOrReviveWork(t *testing.T) {
+	t.Parallel()
+
+	for _, contract := range []string{
+		`admission_digest`,
+		`plan_digest`,
+		`lease_ms`,
+		`concurrency_count`,
+		`concurrency fingerprint differs`,
+		`expired admission cannot be renewed`,
+		`admission_plan_digest`,
+		`redis.call("ZADD", KEYS[1], new_deadline, admission_id)`,
+	} {
+		if !strings.Contains(heartbeatLua, contract) {
+			t.Fatalf("admission heartbeat is missing contract %q", contract)
+		}
+	}
+	if !strings.Contains(finalizeLua, `"admission_plan_digest", admission_plan_digest`) {
+		t.Fatal("terminal settlement does not retain the admission plan identity for a racing heartbeat")
 	}
 }
 
@@ -169,9 +192,10 @@ func TestScriptsBindTerminalMutationsToAdmissionDigests(t *testing.T) {
 	t.Parallel()
 
 	for name, script := range map[string]string{
-		"dispatch": journalDispatchLua,
-		"finalize": finalizeLua,
-		"release":  releaseConcurrencyLua,
+		"dispatch":  journalDispatchLua,
+		"finalize":  finalizeLua,
+		"heartbeat": heartbeatLua,
+		"release":   releaseConcurrencyLua,
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

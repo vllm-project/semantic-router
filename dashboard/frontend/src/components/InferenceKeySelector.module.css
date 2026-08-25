@@ -1,0 +1,55 @@
+.control {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.control > svg {
+  width: 0.9rem;
+  height: 0.9rem;
+  flex: 0 0 auto;
+}
+
+.control select {
+  min-width: 8.5rem;
+  max-width: min(16rem, 42vw);
+  height: 2.1rem;
+  padding: 0 1.8rem 0 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.55rem;
+  background: rgba(10, 10, 12, 0.72);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.75rem;
+  letter-spacing: normal;
+  text-transform: none;
+  text-overflow: ellipsis;
+}
+
+.control select:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.88);
+  outline-offset: 2px;
+}
+
+.control select:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+@media (max-width: 480px) {
+  .control {
+    width: 100%;
+  }
+
+  .control select {
+    min-width: 0;
+    max-width: none;
+    flex: 1;
+  }
+}

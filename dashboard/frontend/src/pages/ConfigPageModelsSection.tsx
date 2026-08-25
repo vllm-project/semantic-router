@@ -8,12 +8,14 @@ import type { ViewSection } from '../components/ViewModal'
 import {
   routingManagementApi,
   waitForRoutingMutation,
+  type FallbackTrigger,
   type RoutingModel,
   type RoutingModelPatch,
 } from '../utils/routingManagementApi'
 import ConfigPageAddModelsDialog, { type ModelBatchImportInput } from './ConfigPageAddModelsDialog'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ModelProviderLogo from './ModelProviderLogo'
+import { buildModelControlOverrides } from './configPageModelOnboardingSupport'
 import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupport'
 import { useProviderCatalogDisplayMap } from './useProviderCatalogDisplayMap'
 import styles from './ConfigPage.module.css'
@@ -36,6 +38,7 @@ interface ModelFormState {
   reasoningEfforts: string
   loras: string
   maxRetries: number
+  retryOn: FallbackTrigger[]
   requestTimeout: string
   streamTimeout: string
   inputCost: string
@@ -156,9 +159,10 @@ export default function ConfigPageModelsSection({
       reasoningType: model.reasoning?.type ?? '',
       reasoningEfforts: model.reasoning?.efforts?.join(', ') ?? '',
       loras: model.loras.join(', '),
-      maxRetries: model.execution.maxRetries,
-      requestTimeout: model.execution.requestTimeout,
-      streamTimeout: model.execution.streamTimeout,
+      maxRetries: model.control.retry.count,
+      retryOn: [...model.control.retry.on],
+      requestTimeout: model.control.timeout.request,
+      streamTimeout: model.control.timeout.stream,
       inputCost: model.pricing.inputCostPerMillionTokens ?? '',
       outputCost: model.pricing.outputCostPerMillionTokens ?? '',
       cacheReadCost: model.pricing.cacheReadCostPerMillionTokens ?? '',
@@ -190,6 +194,13 @@ export default function ConfigPageModelsSection({
         },
         { name: 'loras', label: 'LoRA adapters', type: 'textarea' },
         { name: 'maxRetries', label: 'Max retries', type: 'number', min: 0, max: 5 },
+        {
+          name: 'retryOn',
+          label: 'Retry on',
+          type: 'multiselect',
+          options: ['unavailable', 'overloaded', 'timeout'],
+          description: 'Only retries attempts proven safe to repeat.',
+        },
         {
           name: 'requestTimeout',
           label: 'Request timeout',
@@ -230,8 +241,14 @@ export default function ConfigPageModelsSection({
       async (next) => {
         const name = next.name.trim()
         if (!name) throw new Error('Name is required.')
-        if (!next.requestTimeout.trim() || !next.streamTimeout.trim()) {
-          throw new Error('Both timeouts are required.')
+        const control = buildModelControlOverrides({
+          maxRetries: String(next.maxRetries),
+          retryOn: next.retryOn,
+          requestTimeout: next.requestTimeout,
+          streamTimeout: next.streamTimeout,
+        })
+        if (!control?.retry || !control.timeout?.request || !control.timeout.stream) {
+          throw new Error('Retry count and both timeouts are required.')
         }
         const patch: RoutingModelPatch = {
           name,
@@ -244,10 +261,15 @@ export default function ConfigPageModelsSection({
               : {}),
           },
           loras: splitList(next.loras),
-          execution: {
-            maxRetries: next.maxRetries,
-            requestTimeout: next.requestTimeout.trim(),
-            streamTimeout: next.streamTimeout.trim(),
+          control: {
+            retry: {
+              count: control.retry.count ?? 0,
+              on: control.retry.on ?? [],
+            },
+            timeout: {
+              request: control.timeout.request,
+              stream: control.timeout.stream,
+            },
           },
           pricing: {
             inputCostPerMillionTokens: nullableCost(next.inputCost),
@@ -282,11 +304,12 @@ export default function ConfigPageModelsSection({
         ],
       },
       {
-        title: 'Execution',
+        title: 'Control',
         fields: [
-          { label: 'Max retries', value: model.execution.maxRetries },
-          { label: 'Request timeout', value: model.execution.requestTimeout },
-          { label: 'Stream timeout', value: model.execution.streamTimeout },
+          { label: 'Max retries', value: model.control.retry.count },
+          { label: 'Retry on', value: model.control.retry.on.join(', ') || 'Never' },
+          { label: 'Request timeout', value: model.control.timeout.request },
+          { label: 'Stream timeout', value: model.control.timeout.stream },
         ],
       },
       {
@@ -397,11 +420,10 @@ export default function ConfigPageModelsSection({
         ]
       : []),
     {
-      key: 'execution',
-      header: 'Execution',
+      key: 'control',
+      header: 'Control',
       width: '170px',
-      render: (model) =>
-        `${model.execution.requestTimeout} · ${model.execution.maxRetries} retries`,
+      render: (model) => `${model.control.timeout.request} · ${model.control.retry.count} retries`,
     },
     {
       key: 'pricing',

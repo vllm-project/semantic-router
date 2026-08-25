@@ -55,111 +55,111 @@ func buildAuxiliaryModelsConfig(t *testing.T) *config.RouterConfig {
 		recipeID     = "recipe-auxiliary-models"
 	)
 	cfg := &config.RouterConfig{
-		InlineModels: config.InlineModels{
-			Classifier: config.Classifier{
-				CategoryModel: config.CategoryModel{
-					ModelID:             "models/mmbert32k-intent-classifier-merged",
-					Threshold:           0.42,
-					UseMmBERT32K:        true,
-					CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
-				},
-				PIIModel: config.PIIModel{
-					ModelID:        "models/mmbert32k-pii-detector-merged",
-					Threshold:      0.73,
-					UseMmBERT32K:   true,
-					PIIMappingPath: "models/mmbert32k-pii-detector-merged/label_mapping.json",
-				},
-			},
-			PromptGuard: config.PromptGuardConfig{
-				Enabled:              true,
-				ModelID:              "models/mmbert32k-jailbreak-detector-merged",
-				Variant:              config.PromptGuardVariantMmBERT32K,
-				JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
-			},
-			HallucinationMitigation: config.HallucinationMitigationConfig{
-				Enabled: true,
-				FactCheckModel: config.FactCheckModelConfig{
-					ModelID:      "models/mmbert32k-factcheck-classifier-merged",
-					Threshold:    0.61,
-					UseCPU:       true,
-					UseMmBERT32K: true,
-				},
-				HallucinationModel: config.HallucinationModelConfig{
-					ModelID:                "models/mom-halugate-detector",
-					Threshold:              0.80,
-					UseCPU:                 true,
-					MinSpanLength:          2,
-					MinSpanConfidence:      0.60,
-					ContextWindowSize:      50,
-					EnableNLIFiltering:     true,
-					NLIEntailmentThreshold: 0.75,
-				},
-				NLIModel: config.NLIModelConfig{
-					ModelID:   "models/mom-halugate-explainer",
-					Threshold: 0.90,
-					UseCPU:    true,
-				},
-			},
-			FeedbackDetector: config.FeedbackDetectorConfig{
-				Enabled:      true,
-				ModelID:      "models/mmbert32k-feedback-detector-merged",
-				Threshold:    0.70,
-				UseCPU:       true,
-				UseMmBERT32K: true,
-			},
-		},
+		InlineModels: auxiliaryInlineModels(),
 		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
 			backendModel: {ResourceID: backendID, ResourceRevision: 1},
 		}},
-		Recipes: []config.RoutingRecipe{{
-			ID: recipeID, Revision: 1, Name: "auxiliary-models",
-			Profile: config.RoutingProfile{
-				Signals: config.Signals{
-					Categories: []config.Category{
-						{CategoryMetadata: config.CategoryMetadata{Name: "billing"}},
-					},
-					FactCheckRules: []config.FactCheckRule{
-						{Name: "verification-needed"},
-					},
-					UserFeedbackRules: []config.UserFeedbackRule{
-						{Name: "satisfied"},
-					},
-				},
-				Decisions: []config.Decision{{
-					ID: decisionID, Name: "model-backed-route",
-					Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
-						{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
-						{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
-					}},
-					Plugins: []config.DecisionPlugin{{
-						Type: config.DecisionPluginHallucination,
-						Configuration: config.MustStructuredPayload(map[string]interface{}{
-							"enabled": true,
-							"use_nli": true,
-						}),
-					}},
-				}},
-			},
-		}},
-		Entrypoints: []config.EntrypointMapping{{
-			ID: "entrypoint-auxiliary-models", Revision: 1, Name: requestModel, ModelNames: []string{requestModel},
-			Rules: []config.EntrypointRule{{
-				ID: "rule-auxiliary-models", Name: "default",
-				Action: config.EntrypointRuleAction{
-					RecipeID: recipeID, RecipeRevision: 1, Recipe: "auxiliary-models",
-					Assignments: map[string]config.RoutingAssignmentSet{
-						decisionID: {Models: []config.RoutingModelAssignment{{
-							ModelID: backendID, ModelRevision: 1, ModelName: backendModel, Weight: "1",
-						}}},
-					},
-				},
-			}},
-		}},
+		Recipes:     []config.RoutingRecipe{auxiliaryRoutingRecipe(recipeID, decisionID)},
+		Entrypoints: []config.EntrypointMapping{auxiliaryEntrypoint(requestModel, recipeID, decisionID, backendID, backendModel)},
 	}
 	if err := cfg.PrepareEntrypointRecipes(); err != nil {
 		t.Fatalf("prepare auxiliary-models Entrypoint: %v", err)
 	}
 	return cfg
+}
+
+func auxiliaryInlineModels() config.InlineModels {
+	return config.InlineModels{
+		Classifier: config.Classifier{
+			CategoryModel: config.CategoryModel{
+				ModelID:             "models/mmbert32k-intent-classifier-merged",
+				Threshold:           0.42,
+				UseMmBERT32K:        true,
+				CategoryMappingPath: "models/mmbert32k-intent-classifier-merged/category_mapping.json",
+			},
+			PIIModel: config.PIIModel{
+				ModelID:        "models/mmbert32k-pii-detector-merged",
+				Threshold:      0.73,
+				UseMmBERT32K:   true,
+				PIIMappingPath: "models/mmbert32k-pii-detector-merged/label_mapping.json",
+			},
+		},
+		PromptGuard: config.PromptGuardConfig{
+			Enabled:              true,
+			ModelID:              "models/mmbert32k-jailbreak-detector-merged",
+			Variant:              config.PromptGuardVariantMmBERT32K,
+			JailbreakMappingPath: "models/mmbert32k-jailbreak-detector-merged/jailbreak_type_mapping.json",
+		},
+		HallucinationMitigation: auxiliaryHallucinationModels(),
+		FeedbackDetector: config.FeedbackDetectorConfig{
+			Enabled: true, ModelID: "models/mmbert32k-feedback-detector-merged",
+			Threshold: 0.70, UseCPU: true, UseMmBERT32K: true,
+		},
+	}
+}
+
+func auxiliaryHallucinationModels() config.HallucinationMitigationConfig {
+	return config.HallucinationMitigationConfig{
+		Enabled: true,
+		FactCheckModel: config.FactCheckModelConfig{
+			ModelID: "models/mmbert32k-factcheck-classifier-merged", Threshold: 0.61,
+			UseCPU: true, UseMmBERT32K: true,
+		},
+		HallucinationModel: config.HallucinationModelConfig{
+			ModelID: "models/mom-halugate-detector", Threshold: 0.80, UseCPU: true,
+			MinSpanLength: 2, MinSpanConfidence: 0.60, ContextWindowSize: 50,
+			EnableNLIFiltering: true, NLIEntailmentThreshold: 0.75,
+		},
+		NLIModel: config.NLIModelConfig{
+			ModelID: "models/mom-halugate-explainer", Threshold: 0.90, UseCPU: true,
+		},
+	}
+}
+
+func auxiliaryRoutingRecipe(recipeID, decisionID string) config.RoutingRecipe {
+	return config.RoutingRecipe{
+		ID: recipeID, Revision: 1, Name: "auxiliary-models",
+		Profile: config.RoutingProfile{
+			Signals: config.Signals{
+				Categories:        []config.Category{{CategoryMetadata: config.CategoryMetadata{Name: "billing"}}},
+				FactCheckRules:    []config.FactCheckRule{{Name: "verification-needed"}},
+				UserFeedbackRules: []config.UserFeedbackRule{{Name: "satisfied"}},
+			},
+			Decisions: []config.Decision{{
+				ID: decisionID, Name: "model-backed-route",
+				Rules: config.RuleNode{Operator: "OR", Conditions: []config.RuleNode{
+					{Type: config.SignalTypeFactCheck, Name: "verification-needed"},
+					{Type: config.SignalTypeUserFeedback, Name: "satisfied"},
+				}},
+				Plugins: []config.DecisionPlugin{{
+					Type: config.DecisionPluginHallucination,
+					Configuration: config.MustStructuredPayload(map[string]interface{}{
+						"enabled": true, "use_nli": true,
+					}),
+				}},
+			}},
+		},
+	}
+}
+
+func auxiliaryEntrypoint(
+	requestModel, recipeID, decisionID, backendID, backendModel string,
+) config.EntrypointMapping {
+	return config.EntrypointMapping{
+		ID: "entrypoint-auxiliary-models", Revision: 1,
+		Name: requestModel, ModelNames: []string{requestModel},
+		Rules: []config.EntrypointRule{{
+			ID: "rule-auxiliary-models", Name: "default",
+			Action: config.EntrypointRuleAction{
+				RecipeID: recipeID, RecipeRevision: 1, Recipe: "auxiliary-models",
+				Assignments: map[string]config.RoutingAssignmentSet{
+					decisionID: {Models: []config.RoutingModelAssignment{{
+						ModelID: backendID, ModelRevision: 1, ModelName: backendModel, Weight: "1",
+					}}},
+				},
+			},
+		}},
+	}
 }
 
 func TestBuildModelsInfoResponseIncludesRuntimeSummaryAndRegistryMetadata(t *testing.T) {

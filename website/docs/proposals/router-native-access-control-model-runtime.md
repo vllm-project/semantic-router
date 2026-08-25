@@ -1,6 +1,6 @@
 ---
 title: Router-Native Model Runtime Appendix
-description: Specifies Model execution, retry, timeout, pricing, and cost-accounting contracts for Router-native managed routing.
+description: Specifies Model invocation control, retry, timeout, pricing, and cost-accounting contracts for Router-native routing.
 created: 2026-08-22
 status: Proposal
 ---
@@ -15,25 +15,26 @@ owns Model CRUD and Dashboard-facing fields.
 
 ## One readable Model, one compiled revision
 
-Users configure one Model value. The semantic `card` is deliberately separate from
-`connections`, so Recipe and DSL authors can reason about capability without seeing
-endpoint or credential details. Runtime and pricing are optional advanced settings:
+The existing v0.3 name join remains the public boundary. `providers.models` owns
+connection, invocation control, and pricing fields; `routing.modelCards` owns only semantic
+metadata. Recipe and DSL authors receive the latter and therefore never see an
+endpoint or credential. Control and pricing are optional advanced settings on the
+provider Model:
 
 ```yaml
 name: local/primary
-card:
-  description: General model with tool support
-  capabilities: [chat, tools]
-  modality: text
-connections:
+provider_model_id: primary
+backend_refs:
   - provider: vllm
-    interface: chat
-    endpoint: http://model:8000/v1
-    model: primary
-runtime:
-  max_retries: 2
-  request_timeout: 5m
-  stream_timeout: 15m
+    endpoint: http://model:8000
+    protocol: http
+control:
+  retry:
+    count: 2
+    on: [unavailable, timeout]
+  timeout:
+    request: 5m
+    stream: 15m
 pricing:
   input_cost_per_million_tokens: "0.50"
   output_cost_per_million_tokens: "1.50"
@@ -41,12 +42,20 @@ pricing:
   cache_write_cost_per_million_tokens: "0.625"
 ```
 
-Managed CRUD/import/export and standalone authoring use this same shape. Empty and
-default-only fields are omitted. A fixed-origin Integration lets `endpoint` disappear;
-a no-auth connection omits `credential`. The authoring value never contains generated
-IDs, revisions, catalog hashes, compiled backend data, or secret material.
-`interface` is the optional readable Provider API style; omission selects the
-Provider's single declared default.
+Static authoring and Management CRUD/import/export use this same logical shape.
+Empty and default-only fields are omitted. A fixed-origin Integration lets the
+control plane fill its default endpoint; a no-auth backend omits key fields. The
+authoring value never contains generated IDs, revisions, catalog hashes, or compiled
+backend data. File authoring preserves the existing mutually exclusive
+`backend_refs[].api_key` and `backend_refs[].api_key_env` inputs; environment
+references are preferred for shared manifests. Dynamic resource APIs accept only
+ProviderCredential references and never return secret material in Model responses.
+
+Reasoning keeps wire behavior and semantic support separate as well. The physical
+Model selects a named `providers.defaults.reasoning_families` entry through
+`reasoning_family`; its `routing.modelCards` record declares the supported assignment
+values as `reasoning: {type: reasoning_effort, efforts: [medium, high]}`. The type must
+match. An Entrypoint cannot request an effort that its Model card does not declare.
 
 Publication resolves readable names, validates the Provider Integration, creates
 immutable identity and revision state, and compiles each connection into a
@@ -56,22 +65,33 @@ reference, and weight. Dispatch is selected exclusively by the stable protocol
 adapter. Provider products, logos, form fields, default origins, and discovery
 behavior remain in the control-plane
 [Provider catalog](./router-native-access-control-provider-catalog) and are absent
-from the inference data plane. Managed mode takes currency from Namespace;
-standalone requires `global.billing.currency` when any Model is priced. Models
-own rates, while this single global value owns their shared denomination; the
-Router performs no currency conversion.
+from the inference data plane. A manifest requires `global.billing.currency` when
+any Model is priced. Seeding an empty Management store copies that value into the
+initial Namespace; the persisted Namespace value is authoritative thereafter.
+Models own rates, while this single Namespace value owns their shared denomination;
+the Router performs no currency conversion.
+
+One logical Model may reference several physical backends. Their existing positive
+`weight` values are the only public physical traffic-distribution input in this
+contract. Load-balancing algorithms, active health checks, and outlier ejection are
+not authoring fields until a Router-owned implementation can validate, execute,
+observe, and test their complete behavior.
 
 ## Retry and timeout semantics
 
-`max_retries` is additional attempts after the first and is bounded from zero to
-five. It applies only to Router's fixed safe-retry predicate: protocol/transport must
+`control.retry.count` is additional attempts after the first and is bounded from zero
+to five. `control.retry.on` is a duplicate-free subset of
+`unavailable|overloaded|timeout`; when count is positive and `on` is omitted it
+defaults to `unavailable`. A configured trigger applies only to Router's fixed
+safe-retry predicate: protocol/transport must
 prove that inference and billable processing never began, although bytes may have
-reached the peer. Such an attempt is `known_zero`; failure classes are not user
-configuration. `request_timeout` is the total
-non-streaming invocation deadline including retries. `stream_timeout` is the total
+reached the peer. Such an attempt is `known_zero`; Envoy transport spellings and
+status-code lists are not user configuration. `control.timeout.request` is the total
+non-streaming invocation deadline including retries. `control.timeout.stream` is the total
 streaming lifetime, including retries before the first client-visible byte. Durations
 are 1 second through 24 hours. Defaults are zero retries and 300 seconds for each
-timeout; every read returns configured and effective values.
+timeout. Management reads return effective immutable values; readable file export
+keeps default-only values omitted.
 
 The public gateway strips caller-supplied transport-control, destination, identity,
 and credential headers. Envoy forwards every post-ExtProc inference request through
@@ -84,7 +104,7 @@ then performs the upstream call. Primary, Looper, fusion, workflow, multimodal, 
 future adapter dispatches all use this same interface rather than calling an endpoint
 directly.
 
-Managed and standalone startup inject the same mandatory dispatch-capability runtime
+File-backed and persisted-snapshot startup inject the same mandatory dispatch-capability runtime
 into each immutable Router generation. The public edge decodes the selected client
 format into the neutral request IR; ExtProc routes and applies plugins to semantic
 views of that IR, then hands BackendInvoker the neutral request, client format, pinned
@@ -97,8 +117,9 @@ the client codec renders the response. Internal Looper calls use the same typed
 dispatch plan and authorization boundary. Missing generation, capability, codec, or
 immutable Model identity fails closed instead of activating an unmanaged direct call.
 
-The terminal hand-off follows the deployment topology. Standalone mode uses one
-bounded, expiring process-local store. Managed mode writes the bounded neutral
+The terminal hand-off follows the configured deployment capabilities. A single
+replica without a runtime store uses one bounded, expiring process-local store. A
+multi-replica deployment writes the bounded neutral
 terminal to Valkey with `SET NX`, keyed by a digest of the immutable namespace,
 publication, admission, request, dispatch, and Model identities. The owning ExtProc
 replica consumes it exactly once with one atomic get-and-delete operation. This
@@ -132,14 +153,14 @@ invoker returns a typed terminal record to the request finalizer; no caller or E
 header can claim attempt evidence.
 
 External RPM is charged once. Transport-capacity proofs multiply a Model call by
-`max_retries + 1`; billable-dispatch bounds do not because every earlier retry is
+`control.retry.count + 1`; billable-dispatch bounds do not because every earlier retry is
 proven pre-inference. Snapshot validation derives a finite whole-admission deadline
 from Recipe control flow, Model timeouts/retries, bounded loops, and parallel critical
 paths. The dispatch journal pins that deadline and heartbeats cannot extend it.
 
 ## Priority fallback between Models
 
-Model `max_retries` repeats the same immutable Model revision. Cross-Model fallback
+Model `control.retry.count` repeats the same immutable Model revision. Cross-Model fallback
 is instead an optional value on one Entrypoint decision assignment:
 
 ```yaml
@@ -185,8 +206,8 @@ second routing authority.
 Prices are plain non-negative decimal strings in the namespace's immutable ISO-4217
 currency, with at most nine fractional digits and a maximum of 1,000,000 currency
 units per million tokens. Exponent, NaN, infinity, overflow, and silent rounding are
-rejected. Explicit `"0"` means free; null input/output means unpriced. Blank cache-read
-or cache-write prices inherit input. All physical backends of one logical Model share
+rejected. Explicit `"0"` means free; null input/output means unpriced. Omitted or null
+cache-read and cache-write prices inherit input. All physical backends of one logical Model share
 one price contract; a differently priced endpoint is a different Model.
 
 Usage separates uncached input, cache-read input, cache-write input, and output
@@ -215,7 +236,8 @@ shadow-only.
 
 ## Deliberate simplicity
 
-There is no PriceBook, RetryPolicy, TimeoutPolicy, configurable retry-failure list,
-backend-price override, or second transport API. Users edit one Model. The Dashboard
+There is no PriceBook, separate reusable RetryPolicy or TimeoutPolicy resource,
+backend-price override, or second transport API. The bounded `control.retry.on`
+evidence set remains part of the Model itself. Users edit one Model. The Dashboard
 keeps these fields inside **Advanced settings**; the Router compiler, BackendInvoker,
 immutable revisions, usage arithmetic, and consistency gates remain implementation details.

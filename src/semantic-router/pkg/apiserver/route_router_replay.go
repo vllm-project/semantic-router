@@ -12,27 +12,27 @@ import (
 func apiRouterReplayRoutes() []apiRoute {
 	policy := routePolicy{Permission: PermReplayRead, Sensitivity: SensitivityReplay}
 	return []apiRoute{
-		managedRoute(
+		authorizedRoute(
 			EndpointMetadata{Path: "/v1/router_replay", Method: "GET", Description: "List Router Replay records"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
-		managedRoute(
+		authorizedRoute(
 			EndpointMetadata{Path: "/v1/router_replay/", Method: "GET", Description: "List Router Replay records (trailing-slash compatibility)"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
-		managedRoute(
+		authorizedRoute(
 			EndpointMetadata{Path: "/v1/router_replay/aggregate", Method: "GET", Description: "Aggregate Router Replay routing and cost metadata"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
-		managedRoute(
+		authorizedRoute(
 			EndpointMetadata{Path: "/v1/router_replay/trajectory", Method: "GET", Description: "Build a Router Replay session trajectory"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,
 		),
-		managedRoute(
+		authorizedRoute(
 			EndpointMetadata{Path: "/v1/router_replay/{id}", Method: "GET", Description: "Read one Router Replay record"},
 			policy,
 			(*ClassificationAPIServer).handleRouterReplay,

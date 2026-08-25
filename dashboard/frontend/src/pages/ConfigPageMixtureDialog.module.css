@@ -11,7 +11,7 @@
 
 .dialog {
   width: min(900px, 100%);
-  max-height: min(880px, calc(100vh - 48px));
+  max-height: min(880px, calc(100dvh - 48px));
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -252,9 +252,26 @@
 }
 
 .pickerToolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 7px;
   margin-bottom: 8px;
+}
+
+.pickerToolbar label {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  align-items: center;
+  gap: 8px;
+}
+
+.pickerToolbar code {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .pickerToolbar input {
@@ -410,12 +427,16 @@
   }
 
   .dialog {
-    max-height: 94vh;
+    max-height: calc(100dvh - 12px);
     border-radius: 18px 18px 0 0;
   }
 
   .identityGrid,
   .modelPicker {
+    grid-template-columns: 1fr;
+  }
+
+  .pickerToolbar {
     grid-template-columns: 1fr;
   }
 }

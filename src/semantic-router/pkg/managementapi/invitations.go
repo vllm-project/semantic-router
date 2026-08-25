@@ -56,10 +56,10 @@ type InvitationOnboardingSnapshot struct {
 	RoleGrants                []InvitationRoleGrant     `json:"roleGrants"`
 	Team                      *InvitationTeamAssignment `json:"team,omitempty"`
 	SelfServicePolicyRevision uint64                    `json:"selfServicePolicyRevision"`
-	AccessPolicyID            string                    `json:"accessPolicyId"`
-	AccessPolicyRevision      uint64                    `json:"accessPolicyRevision"`
-	RateLimitPolicyID         string                    `json:"rateLimitPolicyId"`
-	RateLimitPolicyRevision   uint64                    `json:"rateLimitPolicyRevision"`
+	AccessPolicyID            string                    `json:"accessPolicyId,omitempty"`
+	AccessPolicyRevision      uint64                    `json:"accessPolicyRevision,omitempty"`
+	RateLimitPolicyID         string                    `json:"rateLimitPolicyId,omitempty"`
+	RateLimitPolicyRevision   uint64                    `json:"rateLimitPolicyRevision,omitempty"`
 	AutomaticFirstKey         bool                      `json:"automaticFirstKey"`
 }
 

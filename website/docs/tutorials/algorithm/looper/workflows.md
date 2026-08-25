@@ -39,7 +39,7 @@ Expose the Recipe and assign its worker pool:
 
 ```yaml
 entrypoints:
-  - name: vllm-sr/flow
+  - model_names: [vllm-sr/flow]
     recipe: agent
     assignments:
       coding-flow:
@@ -51,7 +51,7 @@ entrypoints:
 Configure a dynamic Flow decision:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: coding_flow
       description: Coordinate coding work through planned worker steps.
@@ -86,7 +86,7 @@ cannot introduce another Model.
 Static mode uses an explicit role plan over the assigned worker pool.
 
 ```yaml
-document:
+routing:
   decisions:
     - name: static_flow
       description: Coordinate a fixed sequence of worker roles.

@@ -161,12 +161,11 @@ Request/response payload capture is disabled by default and must use its own
 short, bounded retention when enabled; it is never required for quota, usage,
 or audit correctness.
 
-The v0.4 partition layout is a fresh-schema contract. To replace a preview
-schema, fence new admission, drain usage-stream pending entries and unknown
-reconciliation, export retained usage and audit data, rebuild with
-`access-migrate`, import the validated export, and verify settlement/rollup
-watermarks before removing the fence. The Router does not carry a runtime
-dual-schema compatibility branch.
+Durable schema upgrades run through the release's one-shot
+`management-migrate` command before new Router replicas become ready. Back up
+PostgreSQL and the active keyring set, then verify settlement and rollup watermarks
+after the upgrade. See [Upgrade and rollback](../../installation/upgrade-rollback)
+for the complete order; serving replicas read only the target schema.
 
 ## Operate safely
 

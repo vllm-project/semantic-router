@@ -13,7 +13,6 @@ export const loadFleetSimRunsPage = () => import('../pages/FleetSimRunsPage')
 export const loadFleetSimWorkloadsPage = () => import('../pages/FleetSimWorkloadsPage')
 export const loadInsightsPage = () => import('../pages/InsightsPage')
 export const loadInsightsRecordPage = () => import('../pages/InsightsRecordPage')
-export const loadLogsPage = () => import('../pages/LogsPage')
 export const loadMLSetupPage = () => import('../pages/MLSetupPage')
 export const loadMonitoringPage = () => import('../pages/MonitoringPage')
 export const loadOpenClawPage = () => import('../pages/OpenClawPage')
@@ -51,7 +50,9 @@ const routeLoaders: Array<{ matches: (pathname: string) => boolean; load: RouteL
   { matches: (pathname) => pathname.startsWith('/ml-setup'), load: loadMLSetupPage },
   { matches: (pathname) => pathname.startsWith('/status'), load: loadStatusPage },
   { matches: (pathname) => pathname.startsWith('/plugins'), load: loadPluginOperationsPage },
-  { matches: (pathname) => pathname.startsWith('/logs'), load: loadLogsPage },
+  // Request Logs is an Access surface. Keep intent preloading aligned with
+  // the component rendered by the authenticated route.
+  { matches: (pathname) => pathname.startsWith('/logs'), load: loadAccessControlPage },
   { matches: (pathname) => pathname.startsWith('/monitoring'), load: loadMonitoringPage },
   { matches: (pathname) => pathname.startsWith('/tracing'), load: loadTracingPage },
 ]

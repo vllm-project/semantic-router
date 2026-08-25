@@ -24,6 +24,7 @@ const (
 	invitationSession    = "30000000-0000-4000-8000-000000000009"
 	invitationTeam       = "30000000-0000-4000-8000-000000000010"
 	operatorRoleID       = "10000000-0000-5000-8000-000000000003"
+	consumerRoleID       = "10000000-0000-5000-8000-000000000008"
 )
 
 func writeManagementJSON(t *testing.T, response http.ResponseWriter, value any) {
@@ -215,6 +216,33 @@ func TestInvitationAcceptReturnsBoundedOnboardingWithoutCachingSecret(t *testing
 		if cached.accessToken == result.Onboarding.APIKey {
 			t.Fatal("one-time onboarding key entered the normal Management session cache")
 		}
+	}
+}
+
+func TestInvitedDashboardRoleAcceptsOnlyTheInvitedUsersConsumerGrant(t *testing.T) {
+	now := time.Now().UTC()
+	identity := managementapi.Me{Namespaces: []managementapi.MeNamespaceScope{{
+		Namespace: managementapi.MeNamespace{NamespaceID: invitationNamespace},
+		User:      &managementapi.MeUser{UserID: invitationUser},
+		RoleBindings: []managementapi.ManagementRoleBinding{{
+			BindingID: "consumer-binding", PrincipalID: invitationPrincipal, RoleID: consumerRoleID,
+			Scope: managementapi.ManagementScope{
+				Kind: "user", NamespaceID: invitationNamespace, UserID: invitationUser,
+			},
+			Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now,
+		}},
+	}}}
+	role, err := invitedDashboardRole(identity, invitationNamespace, managementapi.OnboardingResult{
+		UserID: invitationUser,
+	})
+	if err != nil || role != dashboardauth.RoleRead {
+		t.Fatalf("consumer invitation role = %q, %v", role, err)
+	}
+	identity.Namespaces[0].RoleBindings[0].Scope.UserID = invitationSubject
+	if _, err := invitedDashboardRole(identity, invitationNamespace, managementapi.OnboardingResult{
+		UserID: invitationUser,
+	}); err == nil {
+		t.Fatal("cross-user consumer binding granted a Dashboard role")
 	}
 }
 

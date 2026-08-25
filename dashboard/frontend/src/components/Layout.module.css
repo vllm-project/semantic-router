@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   background: transparent;
 }
 
@@ -447,7 +448,8 @@ button.navLink {
     display: flex;
     justify-content: space-between;
     height: 56px;
-    padding: 0 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 
   .headerRight {
@@ -467,6 +469,7 @@ button.navLink {
     max-height: calc(100dvh - 56px);
     overflow-y: auto;
     overscroll-behavior: contain;
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
 }
 
@@ -481,6 +484,28 @@ button.navLink {
   }
 
   .hideHeaderMobile .mainContent {
-    height: 100vh;
+    height: 100dvh;
+  }
+}
+
+@media (max-width: 640px) {
+  .headerContent {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+
+  .iconButton,
+  .utilityDivider {
+    display: none;
+  }
+
+  .headerRight {
+    gap: 0.35rem;
+  }
+}
+
+@media (max-width: 400px) {
+  .brandPlacement {
+    width: 6.75rem;
   }
 }

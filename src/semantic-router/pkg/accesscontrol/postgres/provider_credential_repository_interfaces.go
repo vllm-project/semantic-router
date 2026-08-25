@@ -35,15 +35,35 @@ type ProviderCredentialRotation struct {
 // returns ciphertext only to the in-process backend resolver, never to API
 // serializers.
 type ProviderCredentialRepository interface {
+	ProviderCredentialReader
+	ProviderCredentialLoader
+	ProviderCredentialCommandReplay
+	ProviderCredentialMutationRepository
+	ProviderCredentialDeletionRepository
+}
+
+type ProviderCredentialReader interface {
 	GetProviderCredential(context.Context, accesscontrol.NamespaceID, string) (providercredential.Credential, error)
 	ListProviderCredentials(context.Context, accesscontrol.NamespaceID, ProviderCredentialListRequest) (ProviderCredentialListResult, error)
+}
+
+type ProviderCredentialCommandReplay interface {
 	ReplayProviderCredentialCommand(context.Context, managementcommand.Command) (MutationResult[providercredential.Credential], bool, error)
+}
+
+type ProviderCredentialLoader interface {
 	LoadActiveProviderCredential(context.Context, string) (providercredential.Credential, providercredential.Version, error)
 	LoadPinnedProviderCredential(context.Context, string, string) (providercredential.Credential, providercredential.Version, error)
+}
+
+type ProviderCredentialMutationRepository interface {
 	CreateProviderCredential(context.Context, providercredential.Credential, providercredential.Version, managementcommand.Command, MutationMeta) (MutationResult[providercredential.Credential], error)
 	RenameProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, string, MutationMeta) (MutationResult[providercredential.Credential], error)
 	RotateProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, ProviderCredentialRotation, managementcommand.Command, MutationMeta) (MutationResult[providercredential.Credential], error)
 	ReactivateProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, providercredential.Version, MutationMeta) (MutationResult[providercredential.Credential], error)
 	DisableProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, MutationMeta) (MutationResult[providercredential.Credential], error)
+}
+
+type ProviderCredentialDeletionRepository interface {
 	DeleteProviderCredential(context.Context, accesscontrol.NamespaceID, string, accesscontrol.Revision, MutationMeta) (MutationResult[providercredential.Credential], error)
 }

@@ -4,14 +4,15 @@
 
 A Helm chart for deploying Semantic Router - an intelligent routing system for LLM applications
 
-`config` is the single v0.4 Router manifest. The chart stores it in a
+`config` is the single additive v0.3 Router manifest. The chart stores it in a
 content-addressed immutable ConfigMap and mounts `config.yaml` read-only; a
-manifest change creates a new ConfigMap name and rolls Router Pods. Standalone
-manifests contain Models, Recipes, and Entrypoints. Managed manifests contain
-infrastructure bootstrap only and require external PostgreSQL and Valkey.
+manifest change creates a new ConfigMap name and rolls Router Pods. Models,
+Recipes, and Entrypoints remain readable in the same schema. Adding
+`global.stores.management.postgres` makes routing state durable; enabling
+Router-native access also requires `global.stores.runtime.redis`.
 
 Dashboard and observability dependencies are optional and disabled in the base
-values. The chart does not install the authoritative managed stores.
+values. The chart does not install PostgreSQL or the access Runtime store.
 
 **Homepage:** <https://github.com/vllm-project/semantic-router>
 
@@ -42,17 +43,14 @@ values. The chart does not install the authoritative managed stores.
 |-----|------|---------|-------------|
 | affinity | object | `{}` |  |
 | args[0] | string | `"--secure=false"` |  |
-| autoscaling.enabled | bool | `false` | Enable horizontal pod autoscaling |
-| autoscaling.maxReplicas | int | `10` | Maximum number of replicas |
-| autoscaling.minReplicas | int | `1` | Minimum number of replicas |
-| autoscaling.targetCPUUtilizationPercentage | int | `80` | Target CPU utilization percentage |
-| config.entrypoints[0].aliases[0] | string | `"auto"` |  |
-| config.entrypoints[0].name | string | `"vllm-sr/auto"` |  |
-| config.entrypoints[0].rules[0].assignments.default-route.models[0].model | string | `"replace-with-your-model"` |  |
-| config.entrypoints[0].rules[0].matches | list | `[]` |  |
-| config.entrypoints[0].rules[0].name | string | `"default"` |  |
-| config.entrypoints[0].rules[0].recipe | string | `"default"` |  |
-| config.global.control_plane.mode | string | `"standalone"` |  |
+| autoscaling.enabled | bool | `false` |  |
+| autoscaling.maxReplicas | int | `10` |  |
+| autoscaling.minReplicas | int | `1` |  |
+| autoscaling.targetCPUUtilizationPercentage | int | `80` |  |
+| config.entrypoints[0].assignments.default-route.models[0].model | string | `"replace-with-your-model"` |  |
+| config.entrypoints[0].model_names[0] | string | `"vllm-sr/auto"` |  |
+| config.entrypoints[0].model_names[1] | string | `"auto"` |  |
+| config.entrypoints[0].recipe | string | `"default"` |  |
 | config.global.integrations.tools.enabled | bool | `true` |  |
 | config.global.integrations.tools.fallback_to_empty | bool | `true` |  |
 | config.global.integrations.tools.similarity_threshold | float | `0.2` |  |
@@ -93,6 +91,7 @@ values. The chart does not install the authoritative managed stores.
 | config.global.services.backend_dispatch.port | int | `8180` |  |
 | config.global.services.backend_egress.policy_file | string | `"/app/config/backend-egress-policy.yaml"` |  |
 | config.global.services.management_api.bind_address | string | `"0.0.0.0"` |  |
+| config.global.services.management_api.enabled | bool | `false` |  |
 | config.global.services.management_api.port | int | `8080` |  |
 | config.global.services.management_api.remote_exposure | bool | `false` |  |
 | config.global.services.observability.tracing.enabled | bool | `false` |  |
@@ -126,56 +125,61 @@ values. The chart does not install the authoritative managed stores.
 | config.listeners[1].name | string | `"http-8080"` |  |
 | config.listeners[1].port | int | `8080` |  |
 | config.listeners[1].timeout | string | `"300s"` |  |
-| config.models[0].connections[0].endpoint | string | `"http://replace-with-your-vllm-service:8000/v1"` |  |
-| config.models[0].connections[0].model | string | `"replace-with-your-model"` |  |
-| config.models[0].connections[0].provider | string | `"vllm"` |  |
-| config.models[0].name | string | `"replace-with-your-model"` |  |
+| config.providers.models[0].api_format | string | `"openai"` |  |
+| config.providers.models[0].backend_refs[0].endpoint | string | `"http://replace-with-your-vllm-service:8000/v1"` |  |
+| config.providers.models[0].backend_refs[0].provider | string | `"vllm"` |  |
+| config.providers.models[0].control.retry.count | int | `2` |  |
+| config.providers.models[0].control.retry.on[0] | string | `"unavailable"` |  |
+| config.providers.models[0].control.retry.on[1] | string | `"timeout"` |  |
+| config.providers.models[0].control.timeout.request | string | `"60s"` |  |
+| config.providers.models[0].control.timeout.stream | string | `"10m"` |  |
+| config.providers.models[0].name | string | `"replace-with-your-model"` |  |
+| config.providers.models[0].provider_model_id | string | `"replace-with-your-model"` |  |
 | config.recipes[0].description | string | `"Default routing recipe."` |  |
-| config.recipes[0].document.decisions[0].description | string | `"Default route for every request while you wire real backends."` |  |
-| config.recipes[0].document.decisions[0].name | string | `"default-route"` |  |
-| config.recipes[0].document.decisions[0].priority | int | `100` |  |
-| config.recipes[0].document.decisions[0].rules | object | `{}` |  |
-| config.recipes[0].document.signals.domains[0].description | string | `"Catch-all domain"` |  |
-| config.recipes[0].document.signals.domains[0].mmlu_categories[0] | string | `"other"` |  |
-| config.recipes[0].document.signals.domains[0].name | string | `"general"` |  |
 | config.recipes[0].name | string | `"default"` |  |
-| config.version | string | `"v0.4"` |  |
-| dashboard.allowOpenBootstrap | bool | `false` | Allow first-admin creation via the public, unauthenticated web-form bootstrap endpoint. Off by default: a fresh, internet-reachable deployment should not be claimable by the first stranger who finds it. Production provisions the admin via the DASHBOARD_ADMIN_* env vars (which create it at startup and close the bootstrap path automatically). Set this to true only for demos where signing up the first admin through the UI is acceptable. |
-| dashboard.enabled | bool | `false` | Enable the vLLM-SR dashboard |
-| dashboard.envFrom | list | `[]` | Extra envFrom sources for the dashboard container (configMapRef / secretRef). Standard core/v1 EnvFromSource list. |
-| dashboard.extraEnv | list | `[]` | Extra environment variables for the dashboard container, appended after the chart-managed TARGET_* vars. Use this to set optional integration env the chart does not expose explicitly (for example OPENCLAW_*, TARGET_ENVOY_URL, or PROXY_OVERRIDE_ORIGIN) without forking the chart. Standard core/v1 EnvVar list. Avoid redefining a chart-managed var (TARGET_*, DASHBOARD_JWT_SECRET): it produces a duplicate env key and Kubernetes applies last-wins. |
-| dashboard.httpRoute.annotations | object | `{}` | Annotations to add to the HTTPRoute |
-| dashboard.httpRoute.enabled | bool | `false` | Enable HTTPRoute for the dashboard (requires Gateway API CRDs and a Gateway in the cluster) |
-| dashboard.httpRoute.hostname | string | `"semantic-router-dashboard.local"` | Hostname the HTTPRoute will accept traffic for |
-| dashboard.httpRoute.parentRef | object | `{"name":"","namespace":"","sectionName":""}` | Reference to the parent Gateway |
-| dashboard.httpRoute.parentRef.name | string | `""` | Name of the Gateway resource |
-| dashboard.httpRoute.parentRef.namespace | string | `""` | Namespace of the Gateway resource |
-| dashboard.httpRoute.parentRef.sectionName | string | `""` | Optional: listener section name on the Gateway (e.g. "https") |
-| dashboard.image.pullPolicy | string | `"IfNotPresent"` | Dashboard image pull policy |
-| dashboard.image.repository | string | `"ghcr.io/vllm-project/semantic-router/dashboard"` | Dashboard image repository |
-| dashboard.image.tag | string | `"latest"` | Dashboard image tag |
-| dashboard.jwtSecret | object | `{"existingSecret":"","existingSecretKey":"jwt-secret"}` | JWT signing secret for dashboard auth sessions. Point this at a Secret you manage (ideally an ExternalSecret) so the signing key is stable. If you leave it unset, the dashboard binary falls back to generating a random secret on every pod start, which invalidates all login sessions on each restart (rolling update, chart bump, or node move forces a re-login). A zero-config install still works (the random fallback is a valid signing key, you can log in and use the dashboard); you just lose existing sessions whenever the pod restarts, so leaving it unset is fine for demos but set this for any deployment where sessions need to survive restarts. |
-| dashboard.jwtSecret.existingSecret | string | `""` | Name of an existing Secret holding the JWT signing key. When set, the dashboard reads DASHBOARD_JWT_SECRET from it via secretKeyRef. When empty, no env is injected and the binary uses its per-start random fallback. |
-| dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` | Key within existingSecret holding the JWT signing secret. |
-| dashboard.persistence.accessMode | string | `"ReadWriteOnce"` | Access mode for the dashboard-local state PVC. |
-| dashboard.persistence.annotations | object | `{}` | Annotations for the dashboard-local state PVC. |
-| dashboard.persistence.enabled | bool | `false` | Persist dashboard-local SQLite state for auth/session/workflow data. This is restart-safe for one dashboard replica, not a shared HA session store. |
-| dashboard.persistence.existingClaim | string | `""` | Existing PVC to mount for dashboard-local state. |
-| dashboard.persistence.mountPath | string | `"/app/data"` | Container mount path for dashboard-local state. |
-| dashboard.persistence.size | string | `"1Gi"` | Requested dashboard-local state size. |
-| dashboard.persistence.storageClassName | string | `""` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
-| dashboard.podSecurityContext | object | `{"fsGroup":65532}` | Pod-level security context. The default fsGroup matches the non-root user (UID/GID 65532) baked into the upstream dashboard image, ensuring the persistence PVC mount at /app/data is writable by the binary. Without this, the dashboard crashloops with "unable to open database file" when persistence is enabled on storage classes that mount as root:root 0755 (which is the default behavior for most cloud-provider CSI drivers). Override if you build a custom dashboard image with a different non-root UID. |
-| dashboard.readonly | bool | `false` | Run dashboard in read-only mode |
-| dashboard.replicaCount | int | `1` | Dashboard replica count. Must stay 1 until the dashboard auth/session store supports a shared multi-replica backend. |
+| config.recipes[0].routing.decisions[0].description | string | `"Route every request to the connected model."` |  |
+| config.recipes[0].routing.decisions[0].name | string | `"default-route"` |  |
+| config.recipes[0].routing.decisions[0].rules.conditions | list | `[]` |  |
+| config.recipes[0].routing.decisions[0].rules.operator | string | `"AND"` |  |
+| config.routing.modelCards[0].capabilities[0] | string | `"chat"` |  |
+| config.routing.modelCards[0].description | string | `"Replace this example with a connected model."` |  |
+| config.routing.modelCards[0].modality | string | `"text"` |  |
+| config.routing.modelCards[0].name | string | `"replace-with-your-model"` |  |
+| config.version | string | `"v0.3"` |  |
+| dashboard.allowOpenBootstrap | bool | `false` |  |
+| dashboard.enabled | bool | `false` |  |
+| dashboard.envFrom | list | `[]` |  |
+| dashboard.extraEnv | list | `[]` |  |
+| dashboard.httpRoute.annotations | object | `{}` |  |
+| dashboard.httpRoute.enabled | bool | `false` |  |
+| dashboard.httpRoute.hostname | string | `"semantic-router-dashboard.local"` |  |
+| dashboard.httpRoute.parentRef.name | string | `""` |  |
+| dashboard.httpRoute.parentRef.namespace | string | `""` |  |
+| dashboard.httpRoute.parentRef.sectionName | string | `""` |  |
+| dashboard.image.pullPolicy | string | `"IfNotPresent"` |  |
+| dashboard.image.repository | string | `"ghcr.io/vllm-project/semantic-router/dashboard"` |  |
+| dashboard.image.tag | string | `"latest"` |  |
+| dashboard.jwtSecret.existingSecret | string | `""` |  |
+| dashboard.jwtSecret.existingSecretKey | string | `"jwt-secret"` |  |
+| dashboard.persistence.accessMode | string | `"ReadWriteOnce"` |  |
+| dashboard.persistence.annotations | object | `{}` |  |
+| dashboard.persistence.enabled | bool | `false` |  |
+| dashboard.persistence.existingClaim | string | `""` |  |
+| dashboard.persistence.mountPath | string | `"/app/data"` |  |
+| dashboard.persistence.size | string | `"1Gi"` |  |
+| dashboard.persistence.storageClassName | string | `""` |  |
+| dashboard.podSecurityContext.fsGroup | int | `65532` |  |
+| dashboard.readonly | bool | `false` |  |
+| dashboard.replicaCount | int | `1` |  |
 | dashboard.resources.limits.cpu | string | `"500m"` |  |
 | dashboard.resources.limits.memory | string | `"512Mi"` |  |
 | dashboard.resources.requests.cpu | string | `"100m"` |  |
 | dashboard.resources.requests.memory | string | `"128Mi"` |  |
-| dashboard.routerTLS.ca.existingSecret | string | `""` | Existing Secret containing the Router Management serving CA |
-| dashboard.routerTLS.ca.existingSecretKey | string | `"ca.crt"` | Key within the Router Management CA Secret |
-| dashboard.service.port | int | `8700` | Dashboard service port |
-| dashboard.service.targetPort | int | `8700` | Dashboard target port |
-| dashboard.service.type | string | `"ClusterIP"` | Dashboard service type |
+| dashboard.routerTLS.ca.existingSecret | string | `""` |  |
+| dashboard.routerTLS.ca.existingSecretKey | string | `"ca.crt"` |  |
+| dashboard.service.port | int | `8700` |  |
+| dashboard.service.targetPort | int | `8700` |  |
+| dashboard.service.type | string | `"ClusterIP"` |  |
 | dependencies.observability.grafana.adminPassword | string | `"admin"` |  |
 | dependencies.observability.grafana.adminUser | string | `"admin"` |  |
 | dependencies.observability.grafana.enabled | bool | `false` |  |
@@ -249,38 +253,41 @@ values. The chart does not install the authoritative managed stores.
 | extraEnv | list | `[]` |  |
 | extraVolumeMounts | list | `[]` |  |
 | extraVolumes | list | `[]` |  |
-| fullnameOverride | string | `""` | Override the full name of the chart |
-| global.imageRegistry | string | `""` | Optional registry prefix applied to all images (e.g., mirror in China such as registry.cn-hangzhou.aliyuncs.com) |
-| global.namespace | string | `""` | Namespace for all resources (if not specified, uses Release.Namespace) |
+| fullnameOverride | string | `""` |  |
+| global.imageRegistry | string | `""` |  |
+| global.namespace | string | `""` |  |
 | grafana.image.tag | string | `"11.5.1"` |  |
 | grafana.sidecar.datasources.enabled | bool | `true` |  |
-| image.pullPolicy | string | `"IfNotPresent"` | Image pull policy |
-| image.repository | string | `"ghcr.io/vllm-project/semantic-router/extproc"` | Image repository |
-| image.tag | string | `""` | Image tag (overrides the image tag whose default is the chart appVersion) |
-| imagePullSecrets | list | `[]` | Image pull secrets for private registries |
-| ingress.annotations | object | `{}` | Ingress annotations |
-| ingress.className | string | `""` | Ingress class name |
-| ingress.enabled | bool | `false` | Enable ingress |
-| ingress.hosts | list | `[{"host":"semantic-router.local","paths":[{"path":"/","pathType":"Prefix","servicePort":8080}]}]` | Ingress hosts configuration |
-| ingress.tls | list | `[]` | Ingress TLS configuration |
+| image.pullPolicy | string | `"IfNotPresent"` |  |
+| image.repository | string | `"ghcr.io/vllm-project/semantic-router/extproc"` |  |
+| image.tag | string | `""` |  |
+| imagePullSecrets | list | `[]` |  |
+| ingress.annotations | object | `{}` |  |
+| ingress.className | string | `""` |  |
+| ingress.enabled | bool | `false` |  |
+| ingress.hosts[0].host | string | `"semantic-router.local"` |  |
+| ingress.hosts[0].paths[0].path | string | `"/"` |  |
+| ingress.hosts[0].paths[0].pathType | string | `"Prefix"` |  |
+| ingress.hosts[0].paths[0].servicePort | int | `8080` |  |
+| ingress.tls | list | `[]` |  |
 | jaeger.allInOne.image.tag | string | `"latest"` |  |
-| knowledgeBases.enabled | bool | `false` | Mount an existing ConfigMap over /app/config/knowledge_bases (overrides image-bundled seeds when set) |
-| knowledgeBases.existingConfigMap | string | `""` | Name of a ConfigMap in the release namespace containing KB files |
-| knowledgeBases.mountPath | string | `"/app/config/knowledge_bases"` | Container path; must stay aligned with builtin resolution under /app/config |
-| livenessProbe.enabled | bool | `true` | Enable liveness probe |
-| livenessProbe.failureThreshold | int | `5` | Failure threshold |
-| livenessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
-| livenessProbe.periodSeconds | int | `30` | Period seconds |
-| livenessProbe.timeoutSeconds | int | `10` | Timeout seconds |
-| nameOverride | string | `""` | Override the name of the chart |
-| networkPolicy.enabled | bool | `false` | Render a port-scoped ingress NetworkPolicy for Router Pods |
-| networkPolicy.ingress.backendDispatchPeers | list | `[]` | Peers allowed to call the internal backend-dispatch listener |
-| networkPolicy.ingress.extProcPeers | list | `[]` | NetworkPolicyPeer entries allowed to call the ExtProc gRPC listener |
-| networkPolicy.ingress.managementPeers | list | `[]` | Additional peers allowed to call the private Management listener |
-| networkPolicy.ingress.metricsPeers | list | `[]` | Peers allowed to scrape Router metrics |
+| knowledgeBases.enabled | bool | `false` |  |
+| knowledgeBases.existingConfigMap | string | `""` |  |
+| knowledgeBases.mountPath | string | `"/app/config/knowledge_bases"` |  |
+| livenessProbe.enabled | bool | `true` |  |
+| livenessProbe.failureThreshold | int | `5` |  |
+| livenessProbe.initialDelaySeconds | int | `30` |  |
+| livenessProbe.periodSeconds | int | `30` |  |
+| livenessProbe.timeoutSeconds | int | `10` |  |
+| nameOverride | string | `""` |  |
+| networkPolicy.enabled | string | `nil` |  |
+| networkPolicy.ingress.backendDispatchPeers | list | `[]` |  |
+| networkPolicy.ingress.extProcPeers | list | `[]` |  |
+| networkPolicy.ingress.managementPeers | list | `[]` |  |
+| networkPolicy.ingress.metricsPeers | list | `[]` |  |
 | nodeSelector | object | `{}` |  |
-| observability.alerts.enabled | bool | `false` | Render a PrometheusRule for Semantic Router alerts. Requires Prometheus Operator or another controller that watches PrometheusRule. |
-| observability.alerts.labels | object | `{}` | Additional labels added to the PrometheusRule. |
+| observability.alerts.enabled | bool | `false` |  |
+| observability.alerts.labels | object | `{}` |  |
 | observability.alerts.thresholds.cacheHitRate | float | `0.2` |  |
 | observability.alerts.thresholds.completionLatencyP95Seconds | int | `30` |  |
 | observability.alerts.thresholds.inflightRequests | int | `50` |  |
@@ -288,52 +295,54 @@ values. The chart does not install the authoritative managed stores.
 | observability.alerts.thresholds.routingLatencyP95Seconds | float | `0.1` |  |
 | observability.alerts.thresholds.tpotP95Seconds | float | `0.25` |  |
 | observability.alerts.thresholds.ttftP95Seconds | int | `5` |  |
-| persistence.accessMode | string | `"ReadWriteOnce"` | Access mode |
-| persistence.annotations | object | `{}` | Annotations for PVC |
-| persistence.enabled | bool | `true` | Enable persistent volume |
-| persistence.existingClaim | string | `""` | Existing claim name (if provided, will use existing PVC instead of creating new one) |
-| persistence.size | string | `"10Gi"` | Storage size |
-| persistence.storageClassName | string | `"standard"` | Storage class name. Leave empty for the cluster default; use "-" to render storageClassName: "". |
+| persistence.accessMode | string | `"ReadWriteOnce"` |  |
+| persistence.annotations | object | `{}` |  |
+| persistence.enabled | bool | `true` |  |
+| persistence.existingClaim | string | `""` |  |
+| persistence.size | string | `"10Gi"` |  |
+| persistence.storageClassName | string | `"standard"` |  |
 | podAnnotations | object | `{}` |  |
-| podDisruptionBudget.enabled | bool | `false` | Render a PodDisruptionBudget for Router replicas |
-| podDisruptionBudget.minAvailable | int | `1` | Minimum number of Router Pods that must remain available |
+| podDisruptionBudget.enabled | string | `nil` |  |
+| podDisruptionBudget.minAvailable | int | `1` |  |
 | podSecurityContext | object | `{}` |  |
 | prometheus.server.image.tag | string | `"v2.53.0"` |  |
-| readinessProbe.enabled | bool | `true` | Enable readiness probe |
-| readinessProbe.failureThreshold | int | `5` | Failure threshold |
-| readinessProbe.initialDelaySeconds | int | `30` | Initial delay seconds |
-| readinessProbe.periodSeconds | int | `30` | Period seconds |
-| readinessProbe.timeoutSeconds | int | `10` | Timeout seconds |
-| replicaCount | int | `1` | Number of replicas for the deployment |
-| resources.limits | object | `{"cpu":"2","memory":"7Gi"}` | Resource limits |
-| resources.requests | object | `{"cpu":"1","memory":"3Gi"}` | Resource requests |
+| readinessProbe.enabled | bool | `true` |  |
+| readinessProbe.failureThreshold | int | `5` |  |
+| readinessProbe.initialDelaySeconds | int | `30` |  |
+| readinessProbe.periodSeconds | int | `30` |  |
+| readinessProbe.timeoutSeconds | int | `10` |  |
+| replicaCount | int | `1` |  |
+| resources.limits.cpu | string | `"2"` |  |
+| resources.limits.memory | string | `"7Gi"` |  |
+| resources.requests.cpu | string | `"1"` |  |
+| resources.requests.memory | string | `"3Gi"` |  |
 | response-api-redis.architecture | string | `"standalone"` |  |
 | response-api-redis.auth.enabled | bool | `false` |  |
-| safetyGuards.rejectMultiReplicaLocalLearningState | bool | `true` | Reject multi-replica router deployments when Router Learning uses request-time local state. Disable only when accepting replica-local learning divergence or when routing traffic with sticky sessions. |
-| securityContext.allowPrivilegeEscalation | bool | `false` | Allow privilege escalation |
-| securityContext.runAsNonRoot | bool | `false` | Run as non-root user |
+| safetyGuards.rejectMultiReplicaLocalLearningState | bool | `true` |  |
+| securityContext.allowPrivilegeEscalation | bool | `false` |  |
+| securityContext.runAsNonRoot | bool | `false` |  |
 | semantic-cache-milvus.cluster.enabled | bool | `false` |  |
 | semantic-cache-redis.architecture | string | `"standalone"` |  |
 | semantic-cache-redis.auth.enabled | bool | `false` |  |
-| service.api.port | int | `8080` | HTTP API port number |
-| service.api.protocol | string | `"TCP"` | HTTP API protocol |
-| service.api.targetPort | int | `8080` | HTTP API target port |
-| service.grpc.port | int | `50051` | gRPC port number |
-| service.grpc.protocol | string | `"TCP"` | gRPC protocol |
-| service.grpc.targetPort | int | `50051` | gRPC target port |
-| service.management.port | int | `8080` | Private Management Service port |
-| service.metrics.enabled | bool | `true` | Enable metrics service |
-| service.metrics.port | int | `9190` | Metrics port number |
-| service.metrics.protocol | string | `"TCP"` | Metrics protocol |
-| service.metrics.targetPort | int | `9190` | Metrics target port |
-| service.type | string | `"ClusterIP"` | Service type |
-| serviceAccount.annotations | object | `{}` | Annotations to add to the service account |
-| serviceAccount.create | bool | `true` | Specifies whether a service account should be created |
-| serviceAccount.name | string | `""` | The name of the service account to use |
-| startupProbe.enabled | bool | `true` | Enable startup probe |
-| startupProbe.failureThreshold | int | `360` | Failure threshold (360 * 10s = 60 minutes total timeout for model downloads) |
-| startupProbe.periodSeconds | int | `10` | Period seconds |
-| startupProbe.timeoutSeconds | int | `5` | Timeout seconds |
+| service.api.port | int | `8080` |  |
+| service.api.protocol | string | `"TCP"` |  |
+| service.api.targetPort | int | `8080` |  |
+| service.grpc.port | int | `50051` |  |
+| service.grpc.protocol | string | `"TCP"` |  |
+| service.grpc.targetPort | int | `50051` |  |
+| service.management.port | int | `8080` |  |
+| service.metrics.enabled | bool | `true` |  |
+| service.metrics.port | int | `9190` |  |
+| service.metrics.protocol | string | `"TCP"` |  |
+| service.metrics.targetPort | int | `9190` |  |
+| service.type | string | `"ClusterIP"` |  |
+| serviceAccount.annotations | object | `{}` |  |
+| serviceAccount.create | bool | `true` |  |
+| serviceAccount.name | string | `""` |  |
+| startupProbe.enabled | bool | `true` |  |
+| startupProbe.failureThreshold | int | `360` |  |
+| startupProbe.periodSeconds | int | `10` |  |
+| startupProbe.timeoutSeconds | int | `5` |  |
 | tolerations | list | `[]` |  |
 | toolsDb[0].category | string | `"weather"` |  |
 | toolsDb[0].description | string | `"Get current weather information, temperature, conditions, forecast for any location, city, or place. Check weather today, now, current conditions, temperature, rain, sun, cloudy, hot, cold, storm, snow"` |  |
@@ -425,7 +434,7 @@ values. The chart does not install the authoritative managed stores.
 | toolsDb[4].tool.function.parameters.required[2] | string | `"time"` |  |
 | toolsDb[4].tool.function.parameters.type | string | `"object"` |  |
 | toolsDb[4].tool.type | string | `"function"` |  |
-| topologySpread.enabled | bool | `false` | Spread Router Pods across failure domains |
-| topologySpread.maxSkew | int | `1` | Maximum permitted skew between topology domains |
-| topologySpread.topologyKey | string | `"kubernetes.io/hostname"` | Node label used as the failure domain |
-| topologySpread.whenUnsatisfiable | string | `"ScheduleAnyway"` | Scheduling behavior when the spread constraint cannot be satisfied |
+| topologySpread.enabled | string | `nil` |  |
+| topologySpread.maxSkew | int | `1` |  |
+| topologySpread.topologyKey | string | `"kubernetes.io/hostname"` |  |
+| topologySpread.whenUnsatisfiable | string | `"ScheduleAnyway"` |  |

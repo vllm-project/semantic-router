@@ -8,44 +8,83 @@ import (
 
 func validateCanonicalAuthoringFields(raw map[string]interface{}) error {
 	unsupported := make([]string, 0)
-	models, _ := raw["models"].([]interface{})
+	providers := nestedStringMap(raw["providers"])
+	collectUnsupportedFields("providers", providers, []string{"defaults", "models"}, &unsupported)
+	defaults := nestedStringMap(providers["defaults"])
+	collectUnsupportedFields("providers.defaults", defaults, []string{
+		"default_model", "reasoning_families", "default_reasoning_effort",
+	}, &unsupported)
+	for familyName, rawFamily := range nestedStringMap(defaults["reasoning_families"]) {
+		collectUnsupportedFields(
+			"providers.defaults.reasoning_families."+familyName,
+			nestedStringMap(rawFamily), []string{"type", "parameter"}, &unsupported,
+		)
+	}
+	models, _ := providers["models"].([]interface{})
 	for modelIndex, rawModel := range models {
-		path := fmt.Sprintf("models[%d]", modelIndex)
+		path := fmt.Sprintf("providers.models[%d]", modelIndex)
 		model := nestedStringMap(rawModel)
-		collectUnsupportedFields(path, model, []string{"name", "card", "connections", "runtime", "pricing"}, &unsupported)
-		collectUnsupportedFields(path+".card", nestedStringMap(model["card"]), []string{
-			"aliases", "param_size", "context_window_size", "description", "capabilities",
-			"reasoning", "loras", "quality_score", "modality", "tags",
+		collectUnsupportedFields(path, model, []string{
+			"name", "reasoning_family", "provider_model_id", "backend_refs", "control",
+			"pricing", "api_format", "external_model_ids",
 		}, &unsupported)
-		connections, _ := model["connections"].([]interface{})
-		for connectionIndex, rawConnection := range connections {
+		backendRefs, _ := model["backend_refs"].([]interface{})
+		for connectionIndex, rawConnection := range backendRefs {
 			collectUnsupportedFields(
-				fmt.Sprintf("%s.connections[%d]", path, connectionIndex),
+				fmt.Sprintf("%s.backend_refs[%d]", path, connectionIndex),
 				nestedStringMap(rawConnection),
-				[]string{"provider", "interface", "endpoint", "model", "credential", "weight"},
+				[]string{
+					"name", "endpoint", "protocol", "weight", "type", "base_url", "provider",
+					"auth_header", "auth_prefix", "extra_headers", "api_version", "chat_path",
+					"credential", "api_key", "api_key_env",
+				},
 				&unsupported,
 			)
 		}
-		collectUnsupportedFields(path+".runtime", nestedStringMap(model["runtime"]), []string{
-			"max_retries", "request_timeout", "stream_timeout",
-		}, &unsupported)
-		collectUnsupportedFields(path+".pricing", nestedStringMap(model["pricing"]), []string{
+		control := nestedStringMap(model["control"])
+		collectUnsupportedFields(path+".control", control, []string{"retry", "timeout"}, &unsupported)
+		collectUnsupportedFields(
+			path+".control.retry", nestedStringMap(control["retry"]),
+			[]string{"count", "on"}, &unsupported,
+		)
+		timeout := nestedStringMap(control["timeout"])
+		collectUnsupportedFields(
+			path+".control.timeout", timeout, []string{"request", "stream"}, &unsupported,
+		)
+		for _, field := range []string{"request", "stream"} {
+			if value, found := timeout[field]; found && value == "" {
+				return fmt.Errorf("%s.control.timeout.%s must be omitted or contain a duration", path, field)
+			}
+		}
+		pricing := nestedStringMap(model["pricing"])
+		pricingFields := []string{
 			"input_cost_per_million_tokens", "output_cost_per_million_tokens",
 			"cache_read_cost_per_million_tokens", "cache_write_cost_per_million_tokens",
-		}, &unsupported)
+		}
+		collectUnsupportedFields(path+".pricing", pricing, pricingFields, &unsupported)
+		for _, field := range pricingFields {
+			if value, found := pricing[field]; found {
+				if value == nil {
+					continue
+				}
+				if _, isString := value.(string); !isString {
+					return fmt.Errorf("%s.pricing.%s must be a quoted decimal string", path, field)
+				}
+			}
+		}
 	}
 
 	recipes, _ := raw["recipes"].([]interface{})
 	for recipeIndex, rawRecipe := range recipes {
 		path := fmt.Sprintf("recipes[%d]", recipeIndex)
 		recipe := nestedStringMap(rawRecipe)
-		collectUnsupportedFields(path, recipe, []string{"name", "description", "document"}, &unsupported)
-		document := nestedStringMap(recipe["document"])
-		decisions, _ := document["decisions"].([]interface{})
+		collectUnsupportedFields(path, recipe, []string{"name", "description", "routing"}, &unsupported)
+	}
+	for _, source := range rawRoutingDocuments(raw) {
+		decisions, _ := source.document["decisions"].([]interface{})
 		for decisionIndex, rawDecision := range decisions {
-			decision := nestedStringMap(rawDecision)
-			if _, found := decision["id"]; found {
-				unsupported = append(unsupported, fmt.Sprintf("%s.document.decisions[%d].id", path, decisionIndex))
+			if _, found := nestedStringMap(rawDecision)["id"]; found {
+				unsupported = append(unsupported, fmt.Sprintf("%s.decisions[%d].id", source.prefix, decisionIndex))
 			}
 		}
 	}
@@ -55,23 +94,16 @@ func validateCanonicalAuthoringFields(raw map[string]interface{}) error {
 		path := fmt.Sprintf("entrypoints[%d]", entrypointIndex)
 		entrypoint := nestedStringMap(rawEntrypoint)
 		collectUnsupportedFields(path, entrypoint, []string{
-			"name", "aliases", "recipe", "assignments", "rules",
+			"model_names", "recipe", "assignments",
 		}, &unsupported)
 		validateAuthoringAssignments(path+".assignments", nestedStringMap(entrypoint["assignments"]), &unsupported)
-		rules, _ := entrypoint["rules"].([]interface{})
-		for ruleIndex, rawRule := range rules {
-			rulePath := fmt.Sprintf("%s.rules[%d]", path, ruleIndex)
-			rule := nestedStringMap(rawRule)
-			collectUnsupportedFields(rulePath, rule, []string{"name", "matches", "recipe", "assignments"}, &unsupported)
-			validateAuthoringAssignments(rulePath+".assignments", nestedStringMap(rule["assignments"]), &unsupported)
-		}
 	}
 
 	if len(unsupported) == 0 {
 		return nil
 	}
 	sort.Strings(unsupported)
-	return fmt.Errorf("unsupported v0.4 authoring fields: %s", strings.Join(unsupported, ", "))
+	return fmt.Errorf("unsupported v0.3 authoring fields: %s", strings.Join(unsupported, ", "))
 }
 
 func validateAuthoringAssignments(path string, assignments map[string]interface{}, unsupported *[]string) {
@@ -81,11 +113,20 @@ func validateAuthoringAssignments(path string, assignments map[string]interface{
 		collectUnsupportedFields(setPath, set, []string{"models", "fallback"}, unsupported)
 		models, _ := set["models"].([]interface{})
 		for modelIndex, rawModel := range models {
+			modelPath := fmt.Sprintf("%s.models[%d]", setPath, modelIndex)
+			model := nestedStringMap(rawModel)
 			collectUnsupportedFields(
-				fmt.Sprintf("%s.models[%d]", setPath, modelIndex), nestedStringMap(rawModel),
+				modelPath, model,
 				[]string{"model", "priority", "weight", "lora", "reasoning"}, unsupported,
 			)
+			collectUnsupportedFields(
+				modelPath+".reasoning", nestedStringMap(model["reasoning"]),
+				[]string{"enabled", "effort", "description"}, unsupported,
+			)
 		}
+		collectUnsupportedFields(
+			setPath+".fallback", nestedStringMap(set["fallback"]), []string{"strategy", "on"}, unsupported,
+		)
 	}
 }
 

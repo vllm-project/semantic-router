@@ -99,6 +99,35 @@ const managementPage = (data: unknown[]) => ({
   page: { hasMore: false, pageSize: 20 },
 })
 
+async function expectCenteredProductDialog(page: Page, dialogName: string) {
+  const dialog = page.getByRole('dialog', { name: dialogName })
+  await expect(dialog).toBeVisible()
+  const metrics = await dialog.evaluate((element) => {
+    const bounds = element.getBoundingClientRect()
+    const style = window.getComputedStyle(element)
+    const backdropStyle = element.parentElement
+      ? window.getComputedStyle(element.parentElement)
+      : null
+    return {
+      centerX: bounds.left + bounds.width / 2,
+      centerY: bounds.top + bounds.height / 2,
+      borderWidth: Number.parseFloat(style.borderTopWidth),
+      right: bounds.right,
+      bottom: bounds.bottom,
+      backdropFilter: backdropStyle?.backdropFilter || backdropStyle?.webkitBackdropFilter || '',
+    }
+  })
+  const viewport = page.viewportSize()!
+
+  expect(Math.abs(metrics.centerX - viewport.width / 2)).toBeLessThanOrEqual(2)
+  expect(Math.abs(metrics.centerY - viewport.height / 2)).toBeLessThanOrEqual(4)
+  expect(metrics.borderWidth).toBeGreaterThanOrEqual(1.5)
+  expect(metrics.right).toBeLessThanOrEqual(viewport.width)
+  expect(metrics.bottom).toBeLessThanOrEqual(viewport.height)
+  expect(metrics.backdropFilter).toContain('blur')
+  return dialog
+}
+
 async function mockAccessControl(page: Page) {
   await mockAuthenticatedAppShell(page, {
     user: {
@@ -186,14 +215,56 @@ test.describe('Access control identity', () => {
     await expect(advanced.getByText('Key override · optional').first()).toBeVisible()
   })
 
-  test('keeps Dashboard invitations independent from Router team assignment', async ({ page }) => {
+  test('keeps Team assignment optional while making Dashboard access explicit', async ({
+    page,
+  }) => {
     await page.goto('/access/users')
     await page.getByRole('button', { name: 'Invite user' }).click()
 
     const dialog = page.getByRole('dialog', { name: 'Invite a user' })
     await expect(dialog.getByLabel('Dashboard role')).toBeVisible()
-    await expect(dialog.getByText('Team (optional)')).toHaveCount(0)
+    await expect(dialog.getByRole('button', { name: 'Choose a Team' })).toBeVisible()
     await expect(dialog.getByRole('radiogroup', { name: 'Team role' })).toHaveCount(0)
+  })
+
+  test('keeps invitation and Team creation dialogs centered and usable on mobile', async ({
+    page,
+  }) => {
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+    ]) {
+      await page.setViewportSize(viewport)
+      await page.goto('/access/users')
+      await page.getByRole('button', { name: 'Invite user' }).click()
+      const inviteDialog = await expectCenteredProductDialog(page, 'Invite a user')
+      await inviteDialog.getByRole('button', { name: 'Close' }).click()
+
+      await page.goto('/access/teams')
+      await page.getByRole('button', { name: 'New team' }).click()
+      const teamDialog = await expectCenteredProductDialog(page, 'Create team')
+      await teamDialog.getByRole('button', { name: 'Close' }).click()
+    }
+  })
+
+  test('presents member and administrator roles as a compact choice, not a raw select', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/access/users')
+    await page.getByRole('button', { name: 'Invite user' }).click()
+    const inviteDialog = page.getByRole('dialog', { name: 'Invite a user' })
+    await inviteDialog.getByRole('button', { name: 'Choose a Team' }).click()
+    await inviteDialog.getByRole('option', { name: /Platform/ }).click()
+
+    const roles = inviteDialog.getByRole('radiogroup', { name: 'Team role' })
+    await expect(roles.getByRole('radio', { name: 'Member' })).toBeVisible()
+    await expect(roles.getByRole('radio', { name: 'Admin' })).toBeVisible()
+    await expect(roles.getByRole('radio', { name: 'Member' })).toHaveAttribute(
+      'aria-checked',
+      'true',
+    )
   })
 
   test('opens Team membership in a centered detail dialog', async ({ page }) => {

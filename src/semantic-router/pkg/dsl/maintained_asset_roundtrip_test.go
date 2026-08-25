@@ -70,8 +70,8 @@ func TestMaintainedBalanceRoutingAssetsStayInSync(t *testing.T) {
 	yamlPath := filepath.Join("..", "..", "..", "..", "config", "recipes", "balance", "config.yaml")
 
 	prog := mustLoadMaintainedBalanceDSLProgram(t, dslPath)
-	want := mustCompileMaintainedRoutingDSL(t, prog)
-	got := mustLoadMaintainedBalanceRoutingYAML(t, yamlPath)
+	want := normalizeDSLRuleOperatorsInRouting(mustCompileMaintainedRoutingDSL(t, prog))
+	got := normalizeDSLRuleOperatorsInRouting(mustLoadMaintainedBalanceRoutingYAML(t, yamlPath))
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("maintained DSL/YAML examples diverged\nwant: %+v\ngot: %+v", want, got)
 	}
@@ -220,6 +220,12 @@ func assertMaintainedBalanceDecisionTiers(t *testing.T, decisions []config.Decis
 	t.Helper()
 
 	for _, decision := range decisions {
+		if decision.Name == "omni" {
+			if decision.Tier != 0 {
+				t.Fatalf("expected dedicated omni route to stay outside text tiers, got %d", decision.Tier)
+			}
+			continue
+		}
 		if decision.Tier <= 0 {
 			t.Fatalf("expected decision %q to define a positive tier", decision.Name)
 		}
@@ -330,9 +336,9 @@ func mustCompileMaintainedRoutingDSL(t *testing.T, prog *Program) config.Canonic
 	if err != nil {
 		t.Fatalf("EmitRoutingYAMLFromConfig error: %v", err)
 	}
-	compiledParsedCfg, err := config.ParseRoutingYAMLBytes(compiledYAML)
+	compiledParsedCfg, err := parseRoutingFragmentYAML(compiledYAML)
 	if err != nil {
-		t.Fatalf("ParseRoutingYAMLBytes(compiledYAML) error: %v", err)
+		t.Fatalf("parseRoutingFragmentYAML(compiledYAML) error: %v", err)
 	}
 	canonical, err := canonicalRecipeDocument(compiledParsedCfg)
 	if err != nil {

@@ -41,7 +41,7 @@ func (r *OpenAIRouter) handleOutcomeFeedbackRequestHeaders(
 	if method != http.MethodPost {
 		return r.createErrorResponse(http.StatusMethodNotAllowed, "method not allowed")
 	}
-	if r == nil || r.OutcomeFeedback == nil || !r.managedInferenceAccessEnabled() ||
+	if r == nil || r.OutcomeFeedback == nil || !r.nativeAccessEnabled() ||
 		ctx == nil || ctx.InferenceAccess == nil {
 		return r.outcomeFeedbackError(http.StatusNotFound, "outcome endpoint not found", 0)
 	}

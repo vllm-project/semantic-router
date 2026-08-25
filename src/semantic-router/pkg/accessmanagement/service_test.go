@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,6 +42,15 @@ func (stub *repositoryStub) UpdateRoutingContext(_ context.Context, request Upda
 type appliedStub struct {
 	policy accessruntime.AppliedPolicy
 	err    error
+}
+
+type routingSnapshotStub struct {
+	snapshot *routingsnapshot.Snapshot
+	err      error
+}
+
+func (stub *routingSnapshotStub) ReadRoutingSnapshot(context.Context, string, int64) (*routingsnapshot.Snapshot, error) {
+	return stub.snapshot, stub.err
 }
 
 func (stub *appliedStub) ReadAppliedPolicy(context.Context, string, string, string) (accessruntime.AppliedPolicy, error) {
@@ -85,9 +95,7 @@ func TestGetQuotaReturnsExactLiveMeterAndFenceState(t *testing.T) {
 		Algorithm: quota.AlgorithmSlidingLog, Accounting: quota.AccountingRequest,
 		ActiveFenceIDs: []string{"fence-b", "fence-a"},
 	}}}}
-	service := newTestService(t, repository, &appliedStub{policy: accessruntime.AppliedPolicy{
-		Active: accessruntime.ActivePolicy{Revision: 7}, Projection: projection,
-	}}, meters, &waiterStub{})
+	service := newTestService(t, repository, &appliedStub{policy: testAppliedPolicy(projection)}, meters, &waiterStub{})
 
 	result, err := service.GetQuota(context.Background(), testNamespaceID, testKeySubject)
 	if err != nil {
@@ -107,13 +115,80 @@ func TestGetQuotaReturnsExactLiveMeterAndFenceState(t *testing.T) {
 	}
 }
 
+func TestGetQuotaMatchesRuntimeSortedMetersByCounterIdentity(t *testing.T) {
+	now := time.Unix(1_800_000_100, 0).UTC()
+	projection := testProjection()
+	limit, err := quota.ParseQuotaInteger("100")
+	if err != nil {
+		t.Fatal(err)
+	}
+	projection.RateBindings = []accessprojection.RateBinding{
+		{
+			BindingID: "binding-a", PolicyID: "policy-a",
+			SubjectID: "33333333-3333-4333-8333-333333333333", Source: accesscontrol.InheritanceLayerTeam,
+			Mode: accesscontrol.RateBindingHardCap,
+			Rules: []accessprojection.ProjectedRateRule{
+				{Rule: quota.RateLimitRule{
+					ID: "rule-a0", Metric: quota.MetricRequests, Algorithm: quota.AlgorithmSlidingLog,
+					Accounting: quota.AccountingRequest, Enforcement: quota.EnforcementEnforce,
+					WholeLimit: &limit, Window: time.Minute, Ordinal: 0,
+				}},
+				{Rule: quota.RateLimitRule{
+					ID: "rule-a1", Metric: quota.MetricRequests, Algorithm: quota.AlgorithmSlidingLog,
+					Accounting: quota.AccountingRequest, Enforcement: quota.EnforcementEnforce,
+					WholeLimit: &limit, Window: time.Hour, Ordinal: 1,
+				}},
+			},
+		},
+		{
+			BindingID: "binding-b", PolicyID: "policy-b",
+			SubjectID: testKeySubject.ID, Source: accesscontrol.InheritanceLayerKey,
+			Mode: accesscontrol.RateBindingAllocation,
+			Rules: []accessprojection.ProjectedRateRule{{Rule: quota.RateLimitRule{
+				ID: "rule-b0", Metric: quota.MetricRequests, Algorithm: quota.AlgorithmSlidingLog,
+				Accounting: quota.AccountingRequest, Enforcement: quota.EnforcementEnforce,
+				WholeLimit: &limit, Window: time.Minute, Ordinal: 0,
+			}}},
+		},
+	}
+
+	meter := func(bindingID, ruleID, used string) quotaruntime.Meter {
+		remaining := "99"
+		return quotaruntime.Meter{PublicMeter: quota.PublicMeter{
+			BindingID: bindingID, RuleID: ruleID, Metric: quota.MetricRequests,
+			Enforcement: quota.EnforcementEnforce, Limit: "100", Used: used,
+			Remaining: &remaining, Completeness: quota.CompletenessComplete,
+			KnownDispatches: used, IncompleteDispatches: "0", CapacityState: quota.CapacityAvailable,
+		}, Algorithm: quota.AlgorithmSlidingLog, Accounting: quota.AccountingRequest}
+	}
+	// QuotaRuntime sorts globally by rule ordinal, then counter identity. That
+	// differs from the projection's binding-major order whenever a binding has
+	// more than one rule and another binding shares an earlier ordinal.
+	meters := &meterStub{result: quotaruntime.MeterReadResult{AsOf: now, Meters: []quotaruntime.Meter{
+		meter("binding-a", "rule-a0", "1"),
+		meter("binding-b", "rule-b0", "2"),
+		meter("binding-a", "rule-a1", "3"),
+	}}}
+	repository := &repositoryStub{snapshot: testSnapshot(projection)}
+	service := newTestService(t, repository, &appliedStub{policy: testAppliedPolicy(projection)}, meters, &waiterStub{})
+
+	result, err := service.GetQuota(context.Background(), testNamespaceID, testKeySubject)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Meters) != 3 ||
+		result.Meters[0].Binding.BindingID != "binding-a" || result.Meters[0].Rule.Rule.ID != "rule-a0" || result.Meters[0].Meter.Used != "1" ||
+		result.Meters[1].Binding.BindingID != "binding-a" || result.Meters[1].Rule.Rule.ID != "rule-a1" || result.Meters[1].Meter.Used != "3" ||
+		result.Meters[2].Binding.BindingID != "binding-b" || result.Meters[2].Rule.Rule.ID != "rule-b0" || result.Meters[2].Meter.Used != "2" {
+		t.Fatalf("quota meters were not joined by counter identity: %#v", result.Meters)
+	}
+}
+
 func TestAccessCheckUsesStoredProjectionWithoutReadingOrConsumingQuota(t *testing.T) {
 	projection := testProjection()
 	repository := &repositoryStub{snapshot: testSnapshot(projection), exists: true}
 	meters := &meterStub{err: errors.New("meter reads are forbidden for access simulation")}
-	service := newTestService(t, repository, &appliedStub{policy: accessruntime.AppliedPolicy{
-		Active: accessruntime.ActivePolicy{Revision: 7}, Projection: projection,
-	}}, meters, &waiterStub{})
+	service := newTestService(t, repository, &appliedStub{policy: testAppliedPolicy(projection)}, meters, &waiterStub{})
 
 	result, err := service.Check(context.Background(), AccessCheckRequest{
 		NamespaceID: testNamespaceID, Subject: testKeySubject,
@@ -143,9 +218,7 @@ func TestAccessCheckMarksPrivilegedContextOverrideAsSimulation(t *testing.T) {
 		Value: routingsnapshot.ClaimValue{Kind: "integer", Integer: 1},
 	}, Source: *snapshot.LayerSubjects.Team}}
 	repository := &repositoryStub{snapshot: snapshot, exists: true}
-	service := newTestService(t, repository, &appliedStub{policy: accessruntime.AppliedPolicy{
-		Active: accessruntime.ActivePolicy{Revision: 7}, Projection: projection,
-	}}, &meterStub{}, &waiterStub{})
+	service := newTestService(t, repository, &appliedStub{policy: testAppliedPolicy(projection)}, &meterStub{}, &waiterStub{})
 
 	result, err := service.Check(context.Background(), AccessCheckRequest{
 		NamespaceID: testNamespaceID, Subject: testKeySubject,
@@ -208,7 +281,7 @@ func testProjection() accessprojection.Projection {
 	}
 	return accessprojection.Projection{
 		NamespaceID: testNamespaceID, QuotaPartition: "partition-1", BillingCurrency: "USD",
-		KeyID: testKeySubject.ID, Revision: 7,
+		KeyID: testKeySubject.ID, Revision: 7, Digest: strings.Repeat("d", 64),
 		Grants: []accessprojection.Grant{{
 			BindingID: "access-binding-1", PolicyID: "access-policy-1",
 			Source: accesscontrol.InheritanceLayerUser, ResourceType: accesscontrol.GrantResourceModel,
@@ -231,6 +304,16 @@ func testProjection() accessprojection.Projection {
 	}
 }
 
+func testAppliedPolicy(projection accessprojection.Projection) accessruntime.AppliedPolicy {
+	return accessruntime.AppliedPolicy{
+		Active: accessruntime.ActivePolicy{
+			KeyID: testKeySubject.ID, Revision: projection.Revision, Digest: projection.Digest,
+			RoutingRevision: 9, RoutingSnapshotHash: strings.Repeat("e", 64),
+		},
+		Projection: projection,
+	}
+}
+
 func testSnapshot(projection accessprojection.Projection) PolicySnapshot {
 	user := Subject{Kind: accesscontrol.SubjectKindUser, ID: "44444444-4444-4444-8444-444444444444"}
 	team := Subject{Kind: accesscontrol.SubjectKindTeam, ID: "33333333-3333-4333-8333-333333333333"}
@@ -250,7 +333,9 @@ func newTestService(
 	waiter PublicationWaiter,
 ) *Service {
 	t.Helper()
-	service, err := NewService(ServiceOptions{Repository: repository, Applied: applied, Meters: meters, Waiter: waiter})
+	service, err := NewService(ServiceOptions{
+		Repository: repository, Applied: applied, Routing: &routingSnapshotStub{}, Meters: meters, Waiter: waiter,
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

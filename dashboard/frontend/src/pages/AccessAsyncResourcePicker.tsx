@@ -97,8 +97,9 @@ export default function AccessAsyncResourcePicker<T>({
   )
 
   useEffect(() => {
+    if (compact && !expanded) return
     void load()
-  }, [load])
+  }, [compact, expanded, load])
 
   useEffect(() => {
     let cancelled = false
@@ -148,6 +149,11 @@ export default function AccessAsyncResourcePicker<T>({
     const selected = new Set(selectedIds)
     return [...selectedItems, ...items.filter((item) => !selected.has(source.id(item)))]
   }, [items, selectedIds, selectedItems, source])
+  const compactLabel = selectedItems[0]
+    ? `${source.title(selectedItems[0])}${selectedIds.length > 1 ? ` +${selectedIds.length - 1}` : ''}`
+    : selectedIds.length
+      ? `${selectedIds.length} selected`
+      : compactEmptyLabel
 
   const toggle = (id: string) => {
     if (!multiple) {
@@ -186,11 +192,7 @@ export default function AccessAsyncResourcePicker<T>({
           aria-haspopup="listbox"
           aria-expanded="false"
         >
-          <span>
-            {selectedItems[0]
-              ? source.title(selectedItems[0])
-              : selectedIds[0] || compactEmptyLabel}
-          </span>
+          <span>{compactLabel}</span>
           <ProductIcon name="chevron-down" aria-hidden="true" />
         </button>
       ) : (
@@ -259,7 +261,7 @@ export default function AccessAsyncResourcePicker<T>({
                 </button>
               )
             })}
-            {!visibleItems.length && !loading ? <p>{emptyText}</p> : null}
+            {!visibleItems.length && !loading && !error ? <p>{emptyText}</p> : null}
           </div>
           {renderSelectedDetail && selectedItems.length ? (
             <div className={styles.asyncPickerSelectedDetails}>
@@ -276,8 +278,18 @@ export default function AccessAsyncResourcePicker<T>({
             </p>
           ) : null}
           <div className={styles.asyncPickerFooter} aria-live="polite">
-            <span>{error || (loading ? 'Loading…' : `${selectedIds.length} selected`)}</span>
-            {hasMore && nextCursor ? (
+            <span>
+              {error
+                ? 'Options unavailable'
+                : loading
+                  ? 'Loading…'
+                  : `${selectedIds.length} selected`}
+            </span>
+            {error ? (
+              <button type="button" onClick={() => void load()} disabled={loading}>
+                <ProductIcon name="refresh" /> Retry
+              </button>
+            ) : hasMore && nextCursor ? (
               <button type="button" onClick={() => void load(nextCursor)} disabled={loading}>
                 <ProductIcon name="chevron-down" /> More
               </button>

@@ -9,10 +9,6 @@ from pathlib import Path
 import yaml
 
 from cli.bootstrap import BootstrapResult
-from cli.compiled_bootstrap_overrides import (
-    _platform_requires_gpu_defaults,
-    apply_platform_gpu_defaults,
-)
 from cli.commands.runtime_kb import (
     _sync_runtime_kb_store,
 )
@@ -21,6 +17,10 @@ from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
 from cli.commands.runtime_paths import _write_compiled_bootstrap
+from cli.compiled_bootstrap_overrides import (
+    _platform_requires_gpu_defaults,
+    apply_platform_gpu_defaults,
+)
 from cli.consts import (
     CONTAINER_RUNTIME_ENV,
     SUPPORTED_CONTAINER_RUNTIMES,
@@ -86,7 +86,7 @@ def log_bootstrap_result(requested_config: str, bootstrap: BootstrapResult) -> N
     """Report any workspace files created during bootstrap."""
     if bootstrap.created_config:
         log.warning(f"Config file not found: {requested_config}")
-        log.info(f"Created managed bootstrap config: {bootstrap.config_path}")
+        log.info(f"Created Management workspace config: {bootstrap.config_path}")
     if bootstrap.created_output_dir:
         log.info(f"Created bootstrap output directory: {bootstrap.output_dir}")
     if bootstrap.created_secrets:
@@ -96,8 +96,8 @@ def log_bootstrap_result(requested_config: str, bootstrap: BootstrapResult) -> N
 def config_env_references(config_path: Path | str | None) -> set[str]:
     """Env names used by trusted source config passthrough.
 
-    Standalone bootstrap credentials use named ``secret_env`` references. Other
-    subsystem-specific ``*_env`` fields and exact braced references are collected
+    Provider credentials use named ``secret_env`` references. Other subsystem-
+    specific ``*_env`` fields and exact braced references are collected
     by the same non-value-bearing traversal.
     """
     if config_path is None:

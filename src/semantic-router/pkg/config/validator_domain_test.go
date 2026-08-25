@@ -16,19 +16,19 @@ func TestSupportedRoutingDomainNamesStayInSyncWithCommittedDomainContract(t *tes
 	}
 
 	var fragment struct {
-		Document struct {
+		Routing struct {
 			Signals struct {
 				Domains []Category `yaml:"domains"`
 			} `yaml:"signals"`
-		} `yaml:"document"`
+		} `yaml:"routing"`
 	}
 	if err := yamlv3.Unmarshal(data, &fragment); err != nil {
 		t.Fatalf("unmarshal committed domain contract: %v", err)
 	}
 
 	got := SupportedRoutingDomainNames()
-	want := make([]string, 0, len(fragment.Document.Signals.Domains))
-	for _, domain := range fragment.Document.Signals.Domains {
+	want := make([]string, 0, len(fragment.Routing.Signals.Domains))
+	for _, domain := range fragment.Routing.Signals.Domains {
 		want = append(want, domain.Name)
 	}
 	slices.Sort(got)

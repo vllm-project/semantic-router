@@ -36,16 +36,20 @@ func (j *AuthoritativeAttemptJournal) BeginDispatch(
 	if j == nil || j.engine == nil {
 		return fmt.Errorf("attempt evidence engine is required")
 	}
-	if plan.Ordinal < 0 || uint64(plan.Ordinal) > math.MaxUint32 ||
+	if plan.Ordinal < 0 || int64(plan.Ordinal) > math.MaxUint32 ||
 		plan.Execution.MaxRetries < 0 || plan.Execution.MaxRetries >= 6 {
 		return fmt.Errorf("dispatch or attempt bound is outside the journal range")
 	}
+	// #nosec G115 -- both values are bounded above before conversion.
+	ordinal := uint32(plan.Ordinal)
+	// #nosec G115 -- MaxRetries is restricted to 0..5 above.
+	maxAttempts := uint32(plan.Execution.MaxRetries + 1)
 	_, err := j.engine.BeginDispatch(ctx, quotaruntime.BeginDispatchRequest{
 		DispatchReference: journalDispatchReference(plan),
 		DispatchType:      plan.DispatchType,
-		Ordinal:           uint32(plan.Ordinal),
+		Ordinal:           ordinal,
 		Deadline:          deadline.UTC().Truncate(time.Millisecond),
-		MaxAttempts:       uint32(plan.Execution.MaxRetries + 1),
+		MaxAttempts:       maxAttempts,
 	})
 	if err != nil {
 		return fmt.Errorf("begin authoritative dispatch evidence: %w", err)
@@ -62,13 +66,15 @@ func (j *AuthoritativeAttemptJournal) BeginAttempt(
 	if err != nil {
 		return err
 	}
-	if attempt.Number < 1 || uint64(attempt.Number) > math.MaxUint32 {
+	if attempt.Number < 1 || int64(attempt.Number) > math.MaxUint32 {
 		return fmt.Errorf("attempt number is outside the journal range")
 	}
+	// #nosec G115 -- attempt.Number is checked against the uint32 range above.
+	attemptNumber := uint32(attempt.Number)
 	_, err = j.engine.BeginAttempt(ctx, quotaruntime.BeginAttemptRequest{
 		DispatchReference: journalDispatchReference(plan),
 		AttemptID:         attempt.ID,
-		AttemptNumber:     uint32(attempt.Number),
+		AttemptNumber:     attemptNumber,
 		BackendID:         backend.ID,
 		ProviderID:        backend.ProviderID,
 	})
@@ -87,9 +93,11 @@ func (j *AuthoritativeAttemptJournal) FinishAttempt(
 	if err != nil {
 		return err
 	}
-	if result.Number < 1 || uint64(result.Number) > math.MaxUint32 {
+	if result.Number < 1 || int64(result.Number) > math.MaxUint32 {
 		return fmt.Errorf("attempt number is outside the journal range")
 	}
+	// #nosec G115 -- result.Number is checked against the uint32 range above.
+	attemptNumber := uint32(result.Number)
 	state, err := runtimeAttemptState(result.State)
 	if err != nil {
 		return err
@@ -97,7 +105,7 @@ func (j *AuthoritativeAttemptJournal) FinishAttempt(
 	_, err = j.engine.FinishAttempt(ctx, quotaruntime.FinishAttemptRequest{
 		DispatchReference: journalDispatchReference(plan),
 		AttemptID:         result.ID,
-		AttemptNumber:     uint32(result.Number),
+		AttemptNumber:     attemptNumber,
 		BackendID:         backend.ID,
 		ProviderID:        backend.ProviderID,
 		State:             state,

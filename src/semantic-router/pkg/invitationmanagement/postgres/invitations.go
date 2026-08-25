@@ -118,10 +118,12 @@ func (store *Store) Create(ctx context.Context, mutation invitationmanagement.Cr
 		created, createErr := scanInvitation(tx.QueryRowContext(ctx, `INSERT INTO management_invitations
   (id,namespace_id,created_by_principal_id,expected_issuer,expected_subject,expected_email,
    display_name,token_hmac,pepper_version,grants,team_id,team_role,
-   pinned_access_policy_id,pinned_access_policy_revision,
-   pinned_rate_limit_policy_id,pinned_rate_limit_policy_revision,
-   expires_at,status,revision,created_at,updated_at)
-VALUES ($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'pending',1,$18,$18)
+	   pinned_access_policy_id,pinned_access_policy_revision,
+	   pinned_rate_limit_policy_id,pinned_rate_limit_policy_revision,
+	   expires_at,status,revision,created_at,updated_at)
+	VALUES ($1,$2,$3,$4,NULLIF($5,''),NULLIF($6,''),$7,$8,$9,$10,$11,$12,
+	        NULLIF($13,'')::uuid,NULLIF($14,0)::bigint,NULLIF($15,'')::uuid,NULLIF($16,0)::bigint,
+	        $17,'pending',1,$18,$18)
 RETURNING `+invitationColumns,
 			mutation.Invitation.ID, mutation.Invitation.NamespaceID, mutation.Invitation.CreatedByPrincipalID,
 			mutation.Invitation.Expected.Issuer, mutation.Invitation.Expected.Subject, mutation.Invitation.Expected.Email,

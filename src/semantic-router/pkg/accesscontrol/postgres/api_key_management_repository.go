@@ -86,6 +86,7 @@ RETURNING ` + apiKeyColumns
 SET status = 'revoked', revoked_at = $4,
     secret_ciphertext = NULL, ciphertext_nonce = NULL, kek_version = NULL
 WHERE namespace_id = $1 AND api_key_id = $2 AND id = $3 AND status = 'active'`
+	// #nosec G101 -- this constant is a parameterized query and contains no credential value.
 	managementRevealCredentialQuery = `SELECT c.id, c.namespace_id, c.api_key_id, c.kid,
        c.secret_hmac, c.pepper_version, c.secret_ciphertext, c.ciphertext_nonce,
        c.kek_version, c.status, c.not_before, c.expires_at, c.revoked_at, c.created_at
@@ -98,7 +99,8 @@ WHERE c.namespace_id = $1 AND c.api_key_id = $2 AND c.id = $3
   AND c.not_before <= clock_timestamp()
   AND (c.expires_at IS NULL OR c.expires_at > clock_timestamp())
   AND c.secret_ciphertext IS NOT NULL`
-	managementLockRevealCredentialQuery   = managementRevealCredentialQuery + ` FOR UPDATE OF c, k`
+	managementLockRevealCredentialQuery = managementRevealCredentialQuery + ` FOR UPDATE OF c, k`
+	// #nosec G101 -- this constant is a parameterized count query and contains no credential value.
 	managementCountUsableCredentialsQuery = `SELECT count(*)
 FROM access_api_key_credentials
 WHERE namespace_id = $1 AND api_key_id = $2
@@ -223,101 +225,7 @@ func (adapter *apiKeyRepositoryAdapter) CreateKey(ctx context.Context, mutation 
 		return apikeymanagement.MutationResult{}, apikeymanagement.ErrInvalidRequest
 	}
 	return inTransaction(ctx, adapter.store, func(tx *sql.Tx) (apikeymanagement.MutationResult, error) {
-		if replay, found, err := lockAPIKeySecretCommand(ctx, tx, mutation.Command); err != nil || found {
-			if err != nil {
-				return apikeymanagement.MutationResult{}, err
-			}
-			key, err := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery, mutation.Key.NamespaceID, replay.Result.ResourceID))
-			if err != nil {
-				return apikeymanagement.MutationResult{}, mapAPIKeyReadError(err, "read replayed API key")
-			}
-			return apikeymanagement.MutationResult{Key: key, HTTPStatus: replay.Result.ResponseStatus, Replayed: true, Stored: &replay}, nil
-		}
-		if err := validateAPIKeyRelationshipsTx(ctx, tx, mutation.Key); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		if _, err := tx.ExecContext(ctx, insertSubjectQuery, mutation.Key.NamespaceID, mutation.Key.ID,
-			accesscontrol.SubjectKindAPIKey, mutation.Key.CreatedAt); err != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCreateError(err, "insert API-key subject")
-		}
-		ownerUser, ownerTeam := apiKeyOwnerValues(mutation.Key.Owner)
-		created, err := scanAPIKey(tx.QueryRowContext(ctx, insertAPIKeyQuery,
-			mutation.Key.ID, mutation.Key.NamespaceID, mutation.Key.Name, ownerUser, ownerTeam,
-			nullableTeamID(mutation.Key.ContextTeamID), mutation.Key.Status, mutation.Key.ExpiresAt,
-			mutation.Key.PolicyEpoch, mutation.Key.DelegationEpoch, mutation.Key.Revision,
-			mutation.Key.CreatedAt, mutation.Key.UpdatedAt))
-		if err != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCreateError(err, "insert API key")
-		}
-		if err := insertCredential(ctx, tx, mutation.Key.NamespaceID, mutation.Credential); err != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCreateError(err, "insert API-key credential")
-		}
-		mutations := []compoundMutation{{Mutation: outboxMutation{
-			AggregateType: "api_key", AggregateID: string(mutation.Key.ID), AggregateRevision: created.Revision,
-			Operation: outboxCreated, References: map[string]string{"credentialId": string(mutation.Credential.ID)},
-		}, Meta: meta}}
-		policyActor := apiKeyPolicyActor(mutation.Actor)
-		for _, binding := range mutation.AccessBindings {
-			materialized, err := materializeManagedAccessBinding(ctx, tx, binding)
-			if err != nil {
-				return apikeymanagement.MutationResult{}, err
-			}
-			bindingMeta, err := managedPolicyMutationMeta(policyActor, "access_policy_binding.create",
-				"Bind AccessPolicy to API key.", map[string]string{"apiKeyId": string(mutation.Key.ID)})
-			if err != nil {
-				return apikeymanagement.MutationResult{}, err
-			}
-			mutations = append(mutations, compoundMutation{Mutation: outboxMutation{
-				AggregateType: "access_policy_binding", AggregateID: materialized.ID,
-				AggregateRevision: accesscontrol.Revision(materialized.Revision), Operation: outboxCreated,
-				References: managedBindingReferences(materialized.PolicyID, materialized.Subject),
-			}, Meta: bindingMeta})
-		}
-		if mutation.RateLimitOverride != nil {
-			materialized, createKeyErr := materializeManagedAPIKeyRateLimitOverride(ctx, tx, managedRateLimitOverride{
-				PolicyID: mutation.RateLimitOverride.PolicyID, InlinePolicy: mutation.RateLimitOverride.InlinePolicy,
-				Binding: mutation.RateLimitOverride.Binding,
-			})
-			if createKeyErr != nil {
-				return apikeymanagement.MutationResult{}, createKeyErr
-			}
-			if materialized.Created {
-				policyMeta, err := managedPolicyMutationMeta(policyActor, "rate_limit_policy.create",
-					"Create inline RateLimitPolicy for API key.", map[string]string{"apiKeyId": string(mutation.Key.ID)})
-				if err != nil {
-					return apikeymanagement.MutationResult{}, err
-				}
-				mutations = append(mutations, compoundMutation{Mutation: outboxMutation{
-					AggregateType: "rate_limit_policy", AggregateID: materialized.Policy.ID,
-					AggregateRevision: accesscontrol.Revision(materialized.Policy.Revision), Operation: outboxCreated,
-				}, Meta: policyMeta})
-			}
-			bindingMeta, createKeyErr := managedPolicyMutationMeta(policyActor, "rate_limit_binding.create",
-				"Bind RateLimitPolicy to API key.", map[string]string{"apiKeyId": string(mutation.Key.ID)})
-			if createKeyErr != nil {
-				return apikeymanagement.MutationResult{}, createKeyErr
-			}
-			mutations = append(mutations, compoundMutation{Mutation: outboxMutation{
-				AggregateType: "rate_limit_binding", AggregateID: materialized.Binding.ID,
-				AggregateRevision: accesscontrol.Revision(materialized.Binding.Revision), Operation: outboxCreated,
-				References: managedRateBindingReferences(materialized.Binding),
-			}, Meta: bindingMeta})
-		}
-		if err := appendAPIKeyCreateMutationRecords(ctx, tx, mutation.Key.NamespaceID, mutations); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		if err := commandpostgres.CompleteSecretResource(ctx, tx, mutation.Command,
-			managementcommand.ResourceResult{
-				ResourceType: "api_key", ResourceID: string(created.ID),
-				ResourceRevision: uint64(created.Revision), ResponseStatus: 201,
-			},
-			managementcommand.SecretResponse{
-				Ciphertext: mutation.Response.Ciphertext, Nonce: mutation.Response.Nonce,
-				KEKVersion: mutation.Response.KeyVersion, ExpiresAt: mutation.ResponseExpiresAt,
-			}); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		return apikeymanagement.MutationResult{Key: created, HTTPStatus: 201}, nil
+		return createAPIKeyInTransaction(ctx, tx, mutation, meta)
 	})
 }
 
@@ -540,6 +448,10 @@ func (adapter *apiKeyRepositoryAdapter) RevokeCredential(ctx context.Context, na
 	if err != nil || expected == 0 {
 		return apikeymanagement.MutationResult{}, apikeymanagement.ErrInvalidRequest
 	}
+	expectedRevision, err := postgresInt64(expected, "expected API-key revision")
+	if err != nil {
+		return apikeymanagement.MutationResult{}, apikeymanagement.ErrInvalidRequest
+	}
 	return inTransaction(ctx, adapter.store, func(tx *sql.Tx) (apikeymanagement.MutationResult, error) {
 		key, revokeCredentialErr := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery+" FOR UPDATE", namespaceID, keyID))
 		if revokeCredentialErr != nil {
@@ -557,7 +469,9 @@ func (adapter *apiKeyRepositoryAdapter) RevokeCredential(ctx context.Context, na
 				return apikeymanagement.MutationResult{}, apikeymanagement.ErrLastActiveCredential
 			}
 		}
-		updated, revokeCredentialErr := advanceAPIKeyRevision(ctx, tx, accesscontrol.NamespaceID(namespaceID), accesscontrol.APIKeyID(keyID), int64(expected))
+		updated, revokeCredentialErr := advanceAPIKeyRevision(
+			ctx, tx, accesscontrol.NamespaceID(namespaceID), accesscontrol.APIKeyID(keyID), expectedRevision,
+		)
 		if revokeCredentialErr != nil {
 			return apikeymanagement.MutationResult{}, mapAPIKeyCAS(revokeCredentialErr, "revoke API-key credential")
 		}

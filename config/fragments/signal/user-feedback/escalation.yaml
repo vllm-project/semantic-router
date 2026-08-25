@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     user_feedbacks:
       - name: wrong_answer

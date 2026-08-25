@@ -25,32 +25,28 @@ from k8s_env_secret_test_support import _backend, _plan
 
 def _config_with_backend_credential(environment_name: str) -> dict[str, object]:
     return {
-        "version": "v0.4",
-        "models": [
-            {
-                "name": "demo-model",
-                "card": {},
-                "connections": [
-                    {
-                        "provider": "openai-compatible",
-                        "model": "demo-model",
-                        "credential": "private-provider",
-                    }
-                ],
-            }
-        ],
+        "version": "v0.3",
+        "providers": {
+            "models": [
+                {
+                    "name": "demo-model",
+                    "provider_model_id": "demo-model",
+                    "backend_refs": [
+                        {
+                            "provider": "openai-compatible",
+                            "api_key_env": environment_name,
+                        }
+                    ],
+                }
+            ]
+        },
+        "routing": {"modelCards": [{"name": "demo-model"}]},
         "recipes": [],
         "entrypoints": [],
         "global": {
             "services": {
                 "backend_egress": {
                     "policy_file": "/app/config/backend-egress-policy.yaml"
-                },
-                "backend_credentials": {
-                    "private-provider": {
-                        "credential_adapter_id": "bearer",
-                        "secret_env": environment_name,
-                    }
                 },
             }
         },
@@ -156,13 +152,8 @@ def test_profile_env_and_secret_refs_are_preserved_without_mutation(tmp_path):
         "envFromSecrets": ["operator-db-secret"],
         "podAnnotations": {"operator.example/owned": "true"},
         "configOverride": {
-            "models": [
-                {
-                    "name": "stale-profile",
-                    "card": {},
-                    "connections": [],
-                }
-            ]
+            "providers": {"models": [{"name": "stale-profile"}]},
+            "routing": {"modelCards": [{"name": "stale-profile"}]},
         },
     }
     original = copy.deepcopy(profile)
@@ -302,7 +293,7 @@ def test_profile_kubernetes_secret_references_are_not_literal_credentials(tmp_pa
 
 def test_atomic_config_drops_ignored_profile_config_from_helm_values(tmp_path):
     config = tmp_path / "config.yaml"
-    source = {"version": "v0.4", "listeners": []}
+    source = {"version": "v0.3", "listeners": []}
     config.write_text(yaml.safe_dump(source), encoding="utf-8")
     canary = "stale-profile-secret-canary"
 
@@ -310,13 +301,14 @@ def test_atomic_config_drops_ignored_profile_config_from_helm_values(tmp_path):
         str(config),
         profile_values={
             "config": {
-                "models": [
-                    {
-                        "name": "stale-model",
-                        "card": {},
-                        "connections": [{"api_key": canary}],
-                    }
-                ]
+                "providers": {
+                    "models": [
+                        {
+                            "name": "stale-model",
+                            "backend_refs": [{"api_key": canary}],
+                        }
+                    ]
+                }
             },
             "configOverride": {"api_key": canary},
         },
@@ -349,25 +341,27 @@ def test_sensitive_profile_env_rejects_configmap_value_from(tmp_path):
 def test_modern_router_config_and_management_auth_survive_helm_translation(tmp_path):
     config = tmp_path / "config.yaml"
     source = {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http", "port": 8899}],
-        "models": [
-            {
-                "name": "local/custom",
-                "card": {"capabilities": ["chat"]},
-                "connections": [
-                    {
-                        "provider": "openai-compatible",
-                        "endpoint": "http://model-server:8000/v1",
-                        "model": "local/custom",
-                    }
-                ],
-            }
-        ],
+        "providers": {
+            "models": [
+                {
+                    "name": "local/custom",
+                    "provider_model_id": "local/custom",
+                    "backend_refs": [
+                        {
+                            "provider": "openai-compatible",
+                            "base_url": "http://model-server:8000/v1",
+                        }
+                    ],
+                }
+            ]
+        },
+        "routing": {"modelCards": [{"name": "local/custom", "capabilities": ["chat"]}]},
         "recipes": [
             {
                 "name": "custom-recipe",
-                "document": {
+                "routing": {
                     "decisions": [
                         {
                             "name": "custom-route",
@@ -380,7 +374,7 @@ def test_modern_router_config_and_management_auth_survive_helm_translation(tmp_p
         ],
         "entrypoints": [
             {
-                "name": "custom-model",
+                "model_names": ["custom-model"],
                 "recipe": "custom-recipe",
                 "assignments": {
                     "custom-route": {"models": [{"model": "local/custom"}]}
@@ -406,7 +400,13 @@ def test_modern_router_config_and_management_auth_survive_helm_translation(tmp_p
     stale_effective = tmp_path / "stale-effective.yaml"
     stale_effective.write_text(
         yaml.safe_dump(
-            {"version": "v0.4", "models": [], "recipes": [], "entrypoints": []}
+            {
+                "version": "v0.3",
+                "providers": {"models": []},
+                "routing": {"modelCards": []},
+                "recipes": [],
+                "entrypoints": [],
+            }
         ),
         encoding="utf-8",
     )

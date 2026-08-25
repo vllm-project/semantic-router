@@ -1,4 +1,4 @@
-// Package backendcredential resolves standalone backend secrets from named,
+// Package backendcredential resolves file-authored backend secrets from named,
 // operator-owned bootstrap references. Request data is deliberately absent
 // from this contract so callers cannot select or supply an upstream secret.
 package backendcredential
@@ -25,7 +25,7 @@ type materializedSecret struct {
 	version   string
 }
 
-// Resolver is an immutable process-local view of standalone backend secrets.
+// Resolver is an immutable process-local view of file-authored backend secrets.
 // Secrets are materialized once during startup and are never exposed through
 // configuration or management responses.
 type Resolver struct {
@@ -45,7 +45,7 @@ func (r *Resolver) GoString() string {
 	return r.String()
 }
 
-// NewResolver materializes all named standalone secret references. A missing
+// NewResolver materializes all named file-authored secret references. A missing
 // or empty secret fails startup rather than silently forwarding caller auth.
 func NewResolver(definitions map[string]config.BackendCredentialConfig) (_ *Resolver, resultErr error) {
 	registry, err := backendresolver.BuiltinRegistry()
@@ -79,13 +79,16 @@ func NewResolver(definitions map[string]config.BackendCredentialConfig) (_ *Reso
 		resolver.secrets[name] = materializedSecret{
 			adapterID: definition.CredentialAdapterID,
 			secret:    secretBytes,
-			version:   standaloneCredentialVersion(name, definition.CredentialAdapterID, secretBytes),
+			version:   fileCredentialVersion(name, definition.CredentialAdapterID, secretBytes),
 		}
 	}
 	return resolver, nil
 }
 
 func readSecret(definition config.BackendCredentialConfig) (string, error) {
+	if definition.SecretValue != "" {
+		return definition.SecretValue, nil
+	}
 	if definition.SecretFile != "" {
 		value, err := os.ReadFile(definition.SecretFile)
 		if err != nil {
@@ -103,9 +106,9 @@ func readSecret(definition config.BackendCredentialConfig) (string, error) {
 	return "", fmt.Errorf("no secret reference configured")
 }
 
-func standaloneCredentialVersion(name, adapterID string, secret []byte) string {
+func fileCredentialVersion(name, adapterID string, secret []byte) string {
 	digest := sha256.New()
-	_, _ = digest.Write([]byte("vllm-sr/standalone-provider-credential/v1\x00"))
+	_, _ = digest.Write([]byte("vllm-sr/file-provider-credential/v1\x00"))
 	_, _ = digest.Write([]byte(name))
 	_, _ = digest.Write([]byte{0})
 	_, _ = digest.Write([]byte(adapterID))

@@ -7,6 +7,7 @@ const (
 	ContractVersion           = "0.4"
 	BasePath                  = "/management/v1"
 	JSONMediaType             = "application/vnd.vllm-semantic-router.management.v1+json"
+	YAMLMediaType             = "application/yaml"
 	EventStreamMediaType      = "text/event-stream"
 	HeaderIdempotencyKey      = "Idempotency-Key"
 	HeaderIfMatch             = "If-Match"

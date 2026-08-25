@@ -44,20 +44,22 @@ This proposal makes the following decisions:
    and the durable usage-ingestion stream.
 4. The Dashboard is an optional Management API client. It never registers or
    proxies public inference routes and never reads access-control tables directly.
-5. Managed mode uses PostgreSQL as its only desired-state authority; Router YAML and
-   Kubernetes resources contain infrastructure bootstrap only. Standalone mode may
-   use one local routing manifest compiled by the same validator/snapshot compiler,
-   but exposes no dynamic routing or access Management mutations.
+5. Router YAML is always the static bootstrap contract. Without a Management store
+   it is the active file authority. With a Management store, an empty store is seeded
+   atomically from that contract and PostgreSQL then becomes the only mutable
+   desired-state authority. There is no public deployment-mode switch or implicit
+   merge between file and persisted state.
 6. API-key authentication, model discovery, invocation authorization, and quota
    admission use the same compiled effective policy.
 7. Request counts are admitted before inference. Token quotas use authoritative
    response usage only: the current request may cross a token limit, and the next
    request is blocked.
-8. An Entrypoint is the callable Mixture-of-Models. Decision assignments are embedded
-   directly in its action; pools and mixtures are derived views, not resources.
-9. Default standalone Docker requires neither PostgreSQL nor Valkey. Managed mode
-   requires both stores even if API-key enforcement is off, and enabling access
-   requires managed mode. Kubernetes uses the same modes and semantics.
+8. An Entrypoint is the callable Mixture-of-Models. Decision assignments belong
+   directly to the Entrypoint; pools and mixtures are derived views, not resources.
+9. The default Docker deployment requires neither PostgreSQL nor Valkey. Adding the
+   optional Management store enables durable dynamic resources; adding the runtime
+   store and AccessRuntime enables native API keys and global quotas. Kubernetes
+   composes the same capabilities without a separate configuration mode.
 10. Runtime code accepts exactly the contracts defined here. Each resource has one
     authoritative writer, one validated read path, and one publication path.
 11. Provider products are application-installed control-plane Integrations. Their
@@ -115,9 +117,9 @@ This proposal makes the following decisions:
 
 ## Product and trust boundaries
 
-The following diagram is managed mode. Standalone omits Dashboard, Management,
-PostgreSQL, Valkey, projector, and writers and loads one locally compiled routing
-snapshot before serving.
+The following diagram shows every optional control-plane component. A file-only
+deployment omits Dashboard, Management, PostgreSQL, Valkey, projector, and writers
+and loads one locally compiled routing snapshot before serving.
 
 ```mermaid
 flowchart LR
@@ -153,12 +155,12 @@ flowchart LR
 | Dashboard | Product UX over the Management and inference APIs | Direct database access or a required data-plane hop |
 
 One Router image can expose the ExtProc gRPC service, internal authentication and
-quota gRPC services, Management HTTP, health, and metrics. When managed access is
+quota gRPC services, Management HTTP, health, and metrics. When native access is
 enabled, every ingress adapter executes access authentication, authorization, and
 quota admission before semantic ExtProc. After verification, the Router removes the
 inference `Authorization` header; backend dispatch injects a separate
 ProviderCredential. No access-enabled adapter may bypass the shared `AccessRuntime`.
-Standalone and managed routing-only modes do not start `AccessRuntime`; their public
+Deployments without native access do not start `AccessRuntime`; their public
 discovery and invocation paths still share the same Entrypoint resolver and active
 routing snapshot.
 
@@ -222,74 +224,141 @@ compiler.
 
 Only three persistent routing concepts are needed:
 
-- **Model**: one logical model with a semantic `card`, one or more human-readable
-  `connections`, and optional advanced runtime and pricing settings.
+- **Model**: the existing `providers.models` connection record joined by name to
+  its connection-free `routing.modelCards` semantic record, with optional
+  advanced invocation control and pricing settings on the provider Model.
 - **Recipe**: reusable signals, projections, decisions, algorithms, and plugins.
 - **Entrypoint**: a callable Mixture-of-Models that selects a Recipe and assigns
   Models to that Recipe's readable decision names.
 
-The manifest represents those concepts directly as top-level `models`, `recipes`,
-and `entrypoints` collections. Human YAML, DSL, and Dashboard authoring use readable
+The manifest extends the existing public `v0.3` sections instead of introducing a
+second top-level Model shape. Human YAML, DSL, and Dashboard authoring use readable
 names. They never expose resource UIDs, revision hashes, backend IDs, catalog digests,
 compiled adapters, or database keys. The importer resolves names within one Namespace
 and generates publication identity internally. The Management API still returns
 stable resource IDs, revisions, and ETags for safe automation and optimistic
 concurrency; those values are never serialized back into human source.
 
+The target v0.3 boundary is deliberately narrow. Users, Teams, inference API keys,
+access policies, quota policies, bindings, counters, usage, and audit are dynamic
+Management resources and never Router YAML. Model rates are exact quoted decimal
+strings under `providers.models[].pricing`; per-Model retries and deadlines are
+structured under `providers.models[].control.retry` and
+`providers.models[].control.timeout`. Runtime authority is derived from the configured
+stores, and no caller-controlled Router bypass participates in inference. The
+[upgrade guide](../installation/upgrade-rollback.md) owns offline conversion from an
+earlier manifest; serving code implements only this target contract. Every other
+public v0.3 concept keeps its existing role.
+
 This boundary does not expose connections to Recipe authors. Every Model read has a
-permission-filtered **ModelCardView** projection containing semantic identity,
+permission-filtered **ModelCardView** projection from `routing.modelCards`, containing semantic identity,
 modality, capabilities, context, reasoning family, quality, LoRAs, and tags. Recipe
 and DSL editors never receive an origin, ProviderCredential, authentication field,
 or compiled backend. `ModelCardView` has no independent CRUD or persistence: it is
-derived from the same Model revision, so card metadata cannot drift from the Model
-selected by an Entrypoint.
+joined to the provider Model by its unique readable name, so validation cannot publish
+a connection without metadata or metadata without a connection.
 
 The DSL may render that projection as a `MODEL` card block for authoring context, but
 the block contains no connection, credential, UID, or revision syntax. Saving a
-Recipe mutates only `Recipe.document`; executable Model selection remains an
+Recipe mutates only `Recipe.routing`; executable Model selection remains an
 Entrypoint assignment action.
 
-An Entrypoint is the product's Mixture-of-Models. Its decision assignments are the
-only stored mapping from a Recipe to Models; aggregate Model views are calculated
-from those assignments. Immutable UIDs, revisions, compiled backends, and catalog
-provenance exist only after validation at the internal snapshot boundary.
+An Entrypoint is the product's Mixture-of-Models. When `assignments` is absent, each
+Decision's complete `modelRefs` candidate set is authoritative. When `assignments` is
+present, it is the complete mapping for every dispatching Decision in the selected
+Recipe and replaces those embedded references as one validated unit. Entrypoint
+assignments are the only persistent Model-to-Recipe association; immutable UIDs,
+revisions, compiled backends, and catalog provenance exist only after validation at
+the internal snapshot boundary.
+
+The established top-level routing shorthand is preserved. A default routing profile
+with complete Decision `modelRefs` compiles through the same Entrypoint pipeline and
+keeps `vllm-sr/auto`, `auto`, and `MoM` (or the configured primary name). A supplied
+`global.router.auto_model_names` list is the complete implicit name set, and `[]`
+disables it. If an explicit Entrypoint claims any established automatic-routing
+name, that explicit Entrypoint is authoritative and the compiler does not create a
+competing implicit one. There is no parallel auto-router runtime.
+
+### Static bootstrap plus optional dynamic API
+
+Startup derives capabilities directly from the presence of typed services and
+stores:
+
+| Configuration | Result |
+| --- | --- |
+| no `global.stores.management` | the validated v0.3 file is the active routing authority |
+| Management store | an empty store is seeded from the file; existing PostgreSQL desired state is authoritative |
+| Management API enabled plus Management store | versioned Management identity, Namespace, Provider credential, and routing CRUD/import are exposed over the configured listener |
+| Access enabled plus Management and runtime stores | User, Team, API-key, policy, quota, usage, request-log, and audit APIs are exposed; authentication, authorization, global quota, and settlement run on every inference path |
+
+There is never an automatic merge between a later file and existing desired state.
+The explicit `POST /management/v1/routing/imports` operation validates a complete
+manifest, reports the diff, requires optimistic concurrency and idempotency, records
+audit, and publishes the resulting atomic snapshot. Users, Teams, inference API keys,
+Access Policies, and Rate Limit Policies are dynamic Management API state only and
+never appear in the manifest.
+
+Invalid component combinations fail before listeners become ready: Management API
+requires a Management store; native access requires Management and runtime stores;
+and a runtime store without durable Management state is rejected. These are
+capabilities derived by process composition, not authoring modes.
+
+Durable routing always requires exactly one
+`backend_credentials.provider_kek_keyring_file|provider_kek_keyring_env` source and
+exactly one `routing_security.hmac_keyring_file|hmac_keyring_env` source. Management
+listener TLS, token signing, service-account, invitation, response-encryption,
+bootstrap, and recovery secrets are required only when `management_api.enabled` is
+true; disabling that listener never disables the PostgreSQL publication authority.
 
 ```yaml
-version: v0.4
-models:
-  - name: local/fast
-    card:
+version: v0.3
+providers:
+  defaults:
+    reasoning_families:
+      remote/frontier:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+    - name: local/fast
+      provider_model_id: fast-model
+      backend_refs:
+        - endpoint: http://model:8000
+          protocol: http
+          provider: vllm
+      control:
+        retry:
+          count: 1
+          on: [unavailable]
+        timeout:
+          request: 60s
+          stream: 10m
+      pricing:
+        input_cost_per_million_tokens: "0.10"
+        output_cost_per_million_tokens: "0.40"
+    - name: remote/frontier
+      provider_model_id: frontier-model
+      reasoning_family: remote/frontier
+      backend_refs:
+        - base_url: https://models.example.com/v1
+          provider: openai-compatible
+          api_key_env: FRONTIER_API_KEY
+
+routing:
+  modelCards:
+    - name: local/fast
       description: Fast general model
       capabilities: [chat, tools]
       modality: text
-    connections:
-      - provider: vllm
-        interface: chat
-        endpoint: http://model:8000/v1
-        model: fast-model
-    runtime:
-      max_retries: 1
-      request_timeout: 60s
-      stream_timeout: 10m
-    pricing:
-      input_cost_per_million_tokens: "0.10"
-      output_cost_per_million_tokens: "0.40"
-  - name: remote/frontier
-    card:
+    - name: remote/frontier
       description: Deep reasoning model
       capabilities: [chat, tools, reasoning]
+      reasoning: {type: reasoning_effort, efforts: [high]}
       modality: text
-    connections:
-      - provider: openai-compatible
-        interface: chat
-        endpoint: https://models.example.com/v1
-        model: frontier-model
-        credential: frontier-api
 
 recipes:
   - name: balance
     description: Match each request to the right capability.
-    document:
+    routing:
       signals:
         complexity:
           - name: workload
@@ -307,8 +376,7 @@ recipes:
             conditions: [{type: complexity, name: workload}]
 
 entrypoints:
-  - name: vllm-sr/blend
-    aliases: [blend]
+  - model_names: [vllm-sr/blend, blend]
     recipe: balance
     assignments:
       Simple:
@@ -327,21 +395,185 @@ entrypoints:
 global:
   billing:
     currency: USD
+  services:
+    agent:
+      public_inference_endpoint: https://inference.example.com/v1/chat/completions
+    backend_credentials:
+      provider_kek_keyring_env: VLLM_SR_PROVIDER_CREDENTIAL_KEKS
+    backend_egress:
+      policy_file: /etc/vllm-sr/backend-egress-policy.yaml
+    routing_security:
+      hmac_keyring_env: VLLM_SR_ROUTING_HMAC_KEYS
+    management_api:
+      enabled: true
+      tls:
+        certificate_env: VLLM_SR_MANAGEMENT_TLS_CERTIFICATE
+        private_key_env: VLLM_SR_MANAGEMENT_TLS_PRIVATE_KEY
+      auth:
+        mode: router
+        token_signing_keyring_env: VLLM_SR_MANAGEMENT_SIGNING_KEYS
+        service_account_hmac_keyring_env: VLLM_SR_MANAGEMENT_SERVICE_ACCOUNT_KEYS
+        invitation_hmac_keyring_env: VLLM_SR_INVITATION_KEYS
+        response_kek_keyring_env: VLLM_SR_MANAGEMENT_RESPONSE_KEKS
+    access:
+      enabled: true
+      credentials:
+        api_key_hmac_keyring_env: VLLM_SR_API_KEY_HMAC_KEYS
+        delegation_hmac_keyring_env: VLLM_SR_DELEGATION_HMAC_KEYS
+      tenant_context:
+        signing_key_env: VLLM_SR_TENANT_CONTEXT_KEYS
+  stores:
+    management:
+      postgres:
+        dsn_env: VLLM_SR_POSTGRES_DSN
+    runtime:
+      redis:
+        url_env: VLLM_SR_REDIS_URL
 ```
 
-The common Entrypoint form is `name + recipe + assignments`; the Dashboard presents
+The public decoder extends the existing structs as follows; omitted fields on
+`CanonicalConfig`, `CanonicalProviderModel`, `CanonicalGlobal`, and
+`CanonicalRouting` retain their v0.3 definitions:
+
+```go
+type CanonicalProviderModel struct {
+  Name             string                `yaml:"name"`
+  ReasoningFamily  string                `yaml:"reasoning_family,omitempty"`
+  ProviderModelID  string                `yaml:"provider_model_id,omitempty"`
+  BackendRefs      []CanonicalBackendRef `yaml:"backend_refs,omitempty"`
+  Control          ModelControl          `yaml:"control,omitempty"`
+  Pricing          ModelRuntimePricing   `yaml:"pricing,omitempty"`
+  APIFormat        string                `yaml:"api_format,omitempty"`
+  ExternalModelIDs map[string]string     `yaml:"external_model_ids,omitempty"`
+}
+
+type ModelControl struct {
+  Retry   *ModelRetry   `yaml:"retry,omitempty"`
+  Timeout *ModelTimeout `yaml:"timeout,omitempty"`
+}
+
+type ModelRetry struct {
+  Count int      `yaml:"count,omitempty"`
+  On    []string `yaml:"on,omitempty"`
+}
+
+type ModelTimeout struct {
+  Request string `yaml:"request,omitempty"`
+  Stream  string `yaml:"stream,omitempty"`
+}
+
+type ModelRuntimePricing struct {
+  InputCostPerMillionTokens      *string `yaml:"input_cost_per_million_tokens,omitempty"`
+  OutputCostPerMillionTokens     *string `yaml:"output_cost_per_million_tokens,omitempty"`
+  CacheReadCostPerMillionTokens  *string `yaml:"cache_read_cost_per_million_tokens,omitempty"`
+  CacheWriteCostPerMillionTokens *string `yaml:"cache_write_cost_per_million_tokens,omitempty"`
+}
+
+type RoutingModel struct {
+  Name      string         `yaml:"name"`
+  Reasoning ModelReasoning `yaml:"reasoning,omitempty"`
+  // Existing connection-free metadata fields are unchanged.
+}
+
+type ModelReasoning struct {
+  Type    string   `yaml:"type,omitempty"`
+  Efforts []string `yaml:"efforts,omitempty"`
+}
+
+type CanonicalEntrypoint struct {
+  ModelNames  []string                           `yaml:"model_names"`
+  Recipe      string                             `yaml:"recipe"`
+  Assignments map[string]EntrypointAssignmentSet `yaml:"assignments,omitempty"`
+}
+
+type EntrypointAssignmentSet struct {
+  Models   []EntrypointModelAssignment `yaml:"models"`
+  Fallback *EntrypointFallbackPolicy   `yaml:"fallback,omitempty"`
+}
+
+type EntrypointModelAssignment struct {
+  Model     string                         `yaml:"model"`
+  Priority  int                            `yaml:"priority,omitempty"`
+  Weight    string                         `yaml:"weight,omitempty"`
+  LoRA      string                         `yaml:"lora,omitempty"`
+  Reasoning *EntrypointAssignmentReasoning `yaml:"reasoning,omitempty"`
+}
+
+type EntrypointFallbackPolicy struct {
+  Strategy string   `yaml:"strategy"`
+  On       []string `yaml:"on"`
+}
+
+type EntrypointAssignmentReasoning struct {
+  Enabled     bool   `yaml:"enabled"`
+  Effort      string `yaml:"effort,omitempty"`
+  Description string `yaml:"description,omitempty"`
+}
+
+type CanonicalBillingGlobal struct {
+  Currency string `yaml:"currency,omitempty"`
+}
+
+type ManagementAPIConfig struct {
+  Enabled        bool                    `yaml:"enabled"`
+  BindAddress    string                  `yaml:"bind_address,omitempty"`
+  Port           int                     `yaml:"port,omitempty"`
+  RemoteExposure bool                    `yaml:"remote_exposure,omitempty"`
+  Auth           ManagementAPIAuthConfig `yaml:"auth,omitempty"`
+  TLS            ManagementAPITLSConfig  `yaml:"tls,omitempty"`
+}
+
+type CanonicalManagementStore struct {
+  Postgres *PostgresAccessStoreConfig `yaml:"postgres,omitempty"`
+}
+
+type PostgresAccessStoreConfig struct {
+  DSNFile        string `yaml:"dsn_file,omitempty"`
+  DSNEnv         string `yaml:"dsn_env,omitempty"`
+  MaxConnections int    `yaml:"max_connections,omitempty"`
+}
+
+type CanonicalRuntimeStore struct {
+  Redis *RedisAccessRuntimeStoreConfig `yaml:"redis,omitempty"`
+}
+
+type RedisAccessRuntimeStoreConfig struct {
+  URLFile   string `yaml:"url_file,omitempty"`
+  URLEnv    string `yaml:"url_env,omitempty"`
+  KeyPrefix string `yaml:"key_prefix,omitempty"`
+}
+```
+
+`CanonicalConfig` adds no new top-level collection: it keeps `providers`,
+`routing`, `recipes`, `entrypoints`, and `global`. `CanonicalGlobal` adds optional
+`billing`, Management service, Access service, and store configuration at the human
+boundary. Replica IDs, derived capability states, leases,
+rollout groups, immutable resource IDs, revisions, compiled backends, and catalog
+digests are derived internal state rather than YAML fields.
+
+File authoring preserves the existing mutually exclusive
+`providers.models[].backend_refs[].api_key` and `api_key_env` inputs. The latter is
+preferred for shared manifests. Dynamic Model APIs never accept a secret inline;
+they bind a versioned ProviderCredential and return only redacted metadata.
+
+The strict v0.3 pricing surface contains only the four quoted per-million-token
+fields above. Its invocation surface contains only `control.retry` and
+`control.timeout`. Runtime parsing does not accept aliases or a second flattened
+control shape.
+
+The common Entrypoint form is `model_names + recipe + assignments`; the Dashboard presents
 exactly that flow. Each assignment selects Models by readable name and may add a
 priority fallback. Empty arrays, zero values, effective defaults, and
 compiler-owned fields are omitted from authoring exports.
 
-Each Model owns only its per-million-token rates. Standalone manifests put the
-single cross-Model denomination in `global.billing.currency`; it is optional
-until any Model is priced. Managed deployments omit that block because the
-Namespace owns the immutable billing currency used by snapshots, usage, and
-cost quotas. Per-Model currencies and implicit conversion are intentionally not
-part of the contract.
+Each Model owns only its per-million-token rates. The bootstrap manifest puts the
+single cross-Model denomination in `global.billing.currency`; it is optional until
+any Model is priced. When an empty Management store is initialized, that value
+becomes the initial Namespace billing currency. The persisted Namespace value is
+then immutable and authoritative for snapshots, usage, and cost quotas. Per-Model
+currencies and implicit conversion are intentionally not part of the contract.
 
-One Model reference inside that value has this complete v0.4 shape:
+One Model reference inside that value has this complete v0.3 extension shape:
 
 ```yaml
 model: remote/frontier
@@ -361,8 +593,8 @@ algorithms that select or sample several assigned Models; it defaults to `"1"`.
 an assignment-local invocation control because the same logical Model may serve a
 reasoning role in one decision and a direct-answer role in another. `effort` must be
 accepted by the Model's reasoning family, and `description` is a bounded runtime
-instruction rather than display metadata. Model endpoint, capability, execution,
-pricing, and provider credential fields remain on Model; algorithm orchestration
+instruction rather than display metadata. Model endpoint, capability, invocation
+control, pricing, and provider credential fields remain on Model; algorithm orchestration
 remains on Recipe. Publication rejects assignment fields that the pinned Model or
 Recipe decision cannot consume. There is no second assignment or pool resource.
 
@@ -393,58 +625,52 @@ immutable Codec Registry,
 not on a product name. The complete extension and rolling-update contract is in the
 [Provider catalog appendix](./router-native-access-control-provider-catalog).
 
-In managed mode, PostgreSQL owns Model, Recipe, and Entrypoint desired state. Draft
+When a Management store is configured, PostgreSQL owns Model, Recipe, and Entrypoint desired state. Draft
 Models and Recipes can be edited independently, but they do not enter the data plane.
 Publishing an Entrypoint validates the complete referenced chain, compiles a
 content-addressed routing snapshot, stages it in Valkey, and atomically advances the
 namespace routing pointer only after every active Router replica can load it. Only
 resources reachable from a published Entrypoint enter that snapshot.
 
-In managed mode, YAML is an authoring/import manifest for Management API clients, not
+After store initialization, YAML is an authoring/import manifest for Management API clients, not
 a second runtime source of truth. A Dashboard, custom console, or automation imports
 Models, Recipes, and Entrypoints through the ordinary resource APIs with the same
 ETags, validation, outbox, and publication gates as interactive edits. Built-in
 Recipes are versioned artifacts installed through that same control-plane path.
 
-Standalone mode has no PostgreSQL, Valkey, dynamic access control, or routing
+A file-backed deployment has no PostgreSQL, Valkey, dynamic access control, or routing
 Management mutations. One local manifest is its sole routing authority and is
-compiled into the identical immutable snapshot shape before readiness. Switching
-between modes is an explicit export/import and restart, never live dual authority or
-a runtime fallback.
+compiled into the identical immutable snapshot shape before readiness. Adding a
+Management store seeds only an empty Namespace from that file; every later change is
+an explicit import or resource mutation, never live dual authority or a runtime
+fallback.
 
-Entrypoint-local rules can select a different Recipe or assignment set from trusted
-claims without adding another resource layer:
+Each Entrypoint intentionally selects one Recipe and one complete assignment set.
+Publish another Entrypoint when clients need a different routing product, then grant
+that name through AccessPolicy:
 
 ```yaml
 entrypoints:
-  - name: vllm-sr/blend
-    aliases: [blend]
-    rules:
-      - name: premium
-        matches:
-          - claim:
-              name: routing_tier
-              exact: premium
-        recipe: balance
-        assignments:
-          Simple: {models: [{model: local/fast}]}
-          Complex: {models: [{model: remote/frontier}]}
-      - name: default
-        recipe: balance
-        assignments:
-          Simple: {models: [{model: local/fast}]}
-          Complex: {models: [{model: local/fast}]}
+  - model_names: [vllm-sr/blend, blend]
+    recipe: balance
+    assignments:
+      Simple: {models: [{model: local/fast}]}
+      Complex: {models: [{model: remote/frontier}]}
 ```
 
-Entrypoint matching and access authorization remain separate:
+Entrypoint resolution and access authorization remain separate:
 
 - AccessPolicy decides whether the caller may discover or invoke the Entrypoint.
-- The Entrypoint resolver then selects one Recipe and assignment set from the trusted
-  TenantContext and normalized inference path.
-- Entrypoint rules never contain API keys, Users, Teams, quota, or another global
+- The Entrypoint resolver evaluates the one compiled Recipe and assignment set.
+- Entrypoints never contain API keys, Users, Teams, quota, or another global
   grant table.
 
-Routing claims have one authoritative source. In managed-access mode, a namespace
+The public v0.3 YAML form compiles to one default Entrypoint rule. The versioned
+Management API additionally supports bounded claim and path matchers for clients
+that need several assignment actions behind one stable Entrypoint; those rules are
+durable resources, not another YAML shape or persistent association resource.
+
+Routing claims have one authoritative source. With native access enabled, a namespace
 defines a bounded typed claim schema, and the Management API stores values against a
 Key, User, or Team subject. Effective values resolve field by field at Key, then User,
 then context Team; a Team-owned key resolves Key then owner Team. The policy projector
@@ -457,8 +683,8 @@ access or Management authority.
 The initial schema permits at most 16 namespaced string, boolean, or bounded-integer
 claims and exact comparisons. `routing_tier: premium` is an ordinary schema-validated
 value, not a hard-coded header. Claim-schema or subject-value changes use their own
-Management permission, revision, audit, and key-policy publication fan-out. Managed
-routing-only and standalone modes have no authenticated subject source, so they reject
+Management permission, revision, audit, and key-policy publication fan-out. A
+deployment without native access has no authenticated subject source, so it rejects
 claim matchers at publication and use path rules or distinct Entrypoints instead.
 
 The initial matcher surface is intentionally small: exact trusted-claim match, exact
@@ -478,17 +704,17 @@ encountered at runtime.
 The access layer grants `discover` and `invoke` on the resolved Entrypoint identity. It does not
 duplicate or mutate assignments. Recipe and Entrypoint CRUD remain separate in the
 [Management API contract](./router-native-access-control-management-api).
-`resolve` is a permission-checked dry run over path and, in managed access, an optional
-subject context. A subject is required only for claim rules. Managed routing-only
-evaluates path/default rules without a subject; standalone has no Management resolve.
+`resolve` is a permission-checked dry run over path and, with native access, an optional
+subject context. A subject is required only for claim rules. Without native access it
+evaluates path/default rules without a subject; file-only deployments expose no Management resolve.
 Overrides are separately authorized simulations. The response reports outcome,
 Recipe, assignments, and explanation without invocation. When access is enabled,
 `GET /v1/models` first
 applies AccessPolicy, then includes only Entrypoints whose resolver is visible for the
 caller and optional `for_path`; invocation uses that same resolver. When access is
 disabled, discovery exposes only published aliases from the active snapshot and
-invocation uses the same resolver without credential policy. There is no separate
-pool or mixture resource API.
+invocation uses the same resolver without credential policy. Entrypoint CRUD is the
+only API for that callable routing product and its assignments.
 
 ## Canonical resource and API contracts
 
@@ -513,7 +739,7 @@ particular:
 
 ## Data-plane request flow
 
-The following flow applies when managed access is enabled. Standalone has no
+The following flow applies when native access is enabled. A file-only deployment has no
 inference identity or quota resources and begins from its already compiled routing
 snapshot.
 
@@ -782,24 +1008,27 @@ replica may observe an access grant whose referenced routing object is absent.
 The normative Router configuration, Docker-first stack, Kubernetes topology,
 readiness, failure behavior, persistence guarantees, and Valkey catastrophic-loss
 procedure live in the
-[deployment appendix](./router-native-access-control-deployment). Standalone
-deployments add no stores. Managed deployments use PostgreSQL and a shared highly
-available single-writer Valkey; API-key access requires managed mode. Dashboard and
+[deployment appendix](./router-native-access-control-deployment). File-only
+deployments add no stores. Durable dynamic routing uses PostgreSQL; native access also
+uses a shared highly available single-writer Valkey. Dashboard and
 observability remain optional.
 
 ## Dashboard client and interaction contract
 
 The Dashboard renders server-authorized capabilities; it does not infer authority
-from a coarse `readonly` flag or hide Router data by account label. A principal with
-the complete `routing.read` conjunction for an Entrypoint and its dependencies can
-always open topology. Creating or editing an Entrypoint, choosing a Recipe, assigning
+from a coarse `readonly` flag or hide Router data by account label. A namespace
+operator with the complete `routing.read` conjunction for an Entrypoint and its
+dependencies can open its full authoring topology. A User-scoped consumer instead
+opens Routing, Topology, and Playground through an owned key's applied
+`routing-catalog`; the same projection filters all three surfaces and remains
+read-only. Creating or editing an Entrypoint, choosing a Recipe, assigning
 Models, configuring priority fallback, and publishing additionally require the exact
 `routing.manage` expression returned by the Management contract. Cluster
 administrators include both sets. Role-matrix tests cover cluster administrator,
 namespace operator, Team administrator, and read-only User for every visible route,
 button, direct URL, and API mutation—not only navigation.
 
-Managed onboarding has one routing flow: connect Models, inspect or author a Recipe,
+Dashboard onboarding has one routing flow: connect Models, inspect or author a Recipe,
 create an Entrypoint, then assign one or more configured Models to each decision.
 Fallback controls stay collapsed until a decision has more than one eligible Model;
 enabling them reveals simple priority tiers and failure behavior without exposing
@@ -898,10 +1127,9 @@ algorithm when exact event history is not required.
 
 The runtime has one configuration, API, and persistence contract. It contains no
 dual reader, dual writer, hidden Dashboard authority, mounted routing mutation path,
-or historical configuration translator. The v0.4 runtime accepts only a
-`version: v0.4` manifest. `vllm-sr config migrate` is a separate offline tool that
-accepts exactly v0.3, produces and validates a new v0.4 file, and is never imported
-by the runtime. There is no dual-read deployment mode.
+or in-process configuration translator. It accepts one strict `version: v0.3`
+manifest and rejects unknown request fields. Upgrade tooling and procedures remain
+outside the serving runtime and cannot become another configuration authority.
 
 ### Contract versioning and upgrade
 
@@ -915,13 +1143,12 @@ defaults. Removing, renaming, reinterpreting, or changing the default of a field
 requires `/management/v2` and a new media type. Clients never silently fall back
 between versions.
 
-Standalone v0.3 manifests are converted offline before rollout. Managed upgrades
-also run the release's forward-only PostgreSQL migration before new replicas become
-ready. The operational sequence, validation boundary, and rollback requirements are
-defined in [Upgrade and rollback](../installation/upgrade-rollback.md) and the
+Durable-store upgrades run the release's forward-only PostgreSQL migration before new
+replicas become ready. Manifest conversion, validation, and rollback stay offline and
+are defined in [Upgrade and rollback](../installation/upgrade-rollback.md) and the
 [deployment contract](./router-native-access-control-deployment.md).
 
-PostgreSQL uses ordinary forward-only schema migrations. A managed Router verifies
+PostgreSQL uses ordinary forward-only schema migrations. A Router configured with that store verifies
 the schema before readiness and never performs destructive automatic conversion.
 Valkey state is a rebuildable projection of PostgreSQL desired state and durable
 usage evidence; a new runtime epoch is published only after policy and routing
@@ -929,7 +1156,7 @@ snapshots validate together.
 
 The Dashboard uses only Management and inference APIs. Public discovery, Playground,
 direct inference, topology, access policy, quota, usage, and audit all exercise the
-same Router authority. `vllm-sr serve --config` may select one immutable standalone
+same Router authority. `vllm-sr serve --config` may select one immutable bootstrap
 manifest; it never selects a Recipe, authors a Model, or creates a second active
 routing pointer. Built-in Recipes are immutable Namespace resources installed by the
 Router and customized by duplication.
@@ -947,13 +1174,13 @@ Router and customized by duplication.
 | RPM | More than 12 requests in an exact rolling minute, boundary timestamps, concurrent admission, and idempotent retry. |
 | Tokens | Actual input/output/total usage, crossing request allowed, next request denied, reset, overshoot bound only with concurrency plus generation caps, and unknown-usage reconciliation. |
 | Cost | Eight-hour sliding and calendar budgets, crossing request then next-request denial, exact decimal arithmetic, API-key breakdown/detail parity, live remaining/reset, inherited bindings, unpriced/incomplete/fenced state, and multi-currency separation. |
-| Execution shapes | Managed/standalone Model digest parity; defaults/bounds and Dashboard Advanced round-trip; only proven-pre-inference retry, no retry after a visible byte, total request/stream timeout; priority fallback selection, same-Model retry exhaustion, unavailable/overloaded/proven-zero timeout, deadline preservation, no fallback after output or unknown usage; four exclusive billing buckets, cache inheritance, explicit zero/unpriced state, pinned historical price revision; and non-streaming, streaming, disconnect, fusion, workflow, and looper accounting. |
+| Execution shapes | File/persisted Model digest parity; defaults/bounds and Dashboard Advanced round-trip; only proven-pre-inference retry, no retry after a visible byte, total request/stream timeout; priority fallback selection, same-Model retry exhaustion, unavailable/overloaded/proven-zero timeout, deadline preservation, no fallback after output or unknown usage; four exclusive billing buckets, cache inheritance, explicit zero/unpriced state, pinned historical price revision; and non-streaming, streaming, disconnect, fusion, workflow, and looper accounting. |
 | Consistency | Staged expansion gate, restrictive deny barrier, routing snapshot acknowledgements, access/routing dependency order, contiguous watermarks, failed-operation blocking, overlapping mutations, lost projector, duplicate outbox delivery, policy-only rebuild, and stale revision conflict. |
 | Replicas | Identical result from every Router replica with no sticky session and no local cache dependence. |
 | Usage | Counter/ledger agreement, duplicate stream delivery, PostgreSQL outage backlog, rollup reconciliation, retention, and cursor pagination. |
 | Outcome feedback | Public-listener authentication, delegated-session use, exact logical-key replay ownership, served-Model match, bounded payload, cross-replica duplicate submission, failed-claim retry, global abuse limit, and learning projection rebuild. |
-| Docker | Standalone manifest with no stores, managed routing with access off, managed access, embedded/external stores, migration ordering, secret files, restart persistence, and optional Dashboard absence. |
-| Kubernetes | Standalone manifest, managed HPA scale, routing revision rollout, Pod loss, migration Job, NetworkPolicy, Management isolation, store failover, projector contention, and PDB behavior. |
+| Docker | File-only manifest, Management store with access off, native access, embedded/external stores, migration ordering, secret files, restart persistence, and optional Dashboard absence. |
+| Kubernetes | File-only manifest, dynamic HPA scale, routing revision rollout, Pod loss, migration Job, NetworkPolicy, Management isolation, store failover, projector contention, and PDB behavior. |
 | Management RBAC | Every permission and subject scope at API level, including self-service and forbidden cross-Team queries. |
 | Dashboard capability UX | Topology for every fully authorized reader; Entrypoint/assignment/publish mutation only for exact manage authority; direct-URL/API denial; aligned accessible icons/actions; and no coarse account-label heuristic. |
 | CLI surface | `vllm-sr serve`, optional immutable-bootstrap selection through `--config`, infrastructure options, and proof that Model/Recipe operands, model command group, catalog materialization, and launch-time algorithm override are absent. |
@@ -993,17 +1220,17 @@ and behavior during store failover.
 - A Dashboard cookie has no Router authority until a valid identity exchange, and
   Playground uses a short-lived delegated credential against the public inference
   listener with no proxy, shared key, or quota exception.
-- Standalone `vllm-sr serve` adds no PostgreSQL or Valkey dependency; managed mode
-  always declares both stores and access-enabled mode cannot start without them.
+- File-only `vllm-sr serve` adds no PostgreSQL or Valkey dependency; dynamic routing
+  declares PostgreSQL, and native access cannot start without both stores.
 - `vllm-sr serve` starts the selected deployment topology. The optional `--config`
   flag selects one immutable bootstrap manifest; routing resources are authored
-  through the manifest in standalone mode or the Management API in managed mode.
+  through the manifest before store initialization and through the Management API afterward.
 - The Dashboard reads built-in Recipes through the same Router Management API as an
   independent console; it never shells out to, mirrors, or exports a CLI model
   catalog.
 - Router and schema-migration images carry only canonical built-in Recipe assets.
-  The distribution contains no Models, virtual Models, Model pools, or recommended
-  assignments. Dashboard images, ConfigMaps, CRDs, and Helm values carry no copy;
+  The distribution contains no Models or recommended assignments. Dashboard images,
+  ConfigMaps, CRDs, and Helm values carry no copy;
   immutable provenance makes source version, asset digest, source Recipe revision,
   and projected Recipe digest observable through ordinary Recipe reads and audit.
 - Access-enabled Docker and Kubernetes use one semantic implementation.

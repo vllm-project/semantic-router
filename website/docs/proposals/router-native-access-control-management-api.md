@@ -213,8 +213,8 @@ therefore cannot bypass discovery, authorization, quota, logs, or usage accounti
 ## Router Management API
 
 The Router publishes one generated OpenAPI contract under
-<code>/management/v1</code>. It is the sole authority for managed mutations;
-standalone does not start a mutable Management control plane.
+<code>/management/v1</code>. It is the sole authority for dynamic mutations;
+file-only deployments do not start a mutable Management API.
 
 ### Version negotiation
 
@@ -352,19 +352,24 @@ permanently disabled. Recovery uses a separately enabled, loopback-only break-gl
 mode and never reactivates bootstrap.
 
 An invitation stores token HMAC, expected identity, grants, optional TeamRole, expiry,
-and an immutable onboarding snapshot. It pins active same-namespace Access/Rate policy
-IDs/revisions from self-service defaults; invitations cannot override them. This
+and an immutable onboarding snapshot. A Team invitation pins the Team assignment and
+requires that Team to retain an active AccessPolicy layer and RateLimit allocation at
+acceptance; it does not create a User-level policy override. An invitation without a
+Team instead pins active same-namespace Access/Rate policy IDs and revisions from the
+self-service defaults. Invitations cannot choose either policy path directly. This
 namespace-authorized capability is consumable with `invitation.manage`; TeamRole also
 needs membership manage. Create/rotate returns the secret once. Accept verifies
-identity, delegation ceiling, and unchanged policy revisions in one CAS; stale or
+identity, delegation ceiling, and the selected inheritance path in one CAS; stale or
 conflict neither reveals nor consumes it.
 
 The namespace self-service policy defines maximum logical keys per User,
 delegated-session count and TTL, whether active members may use Team-owned keys,
 automatic first-key behavior, Team-admin capabilities, and default AccessPolicy and
 RateLimitPolicy IDs. A write authorizes both current and target defaults and accepts
-only active same-namespace policies. Onboarding materializes them as real bindings;
-there is no hidden namespace layer in runtime inheritance.
+only active same-namespace policies. Onboarding without a Team materializes them as
+real User bindings; Team onboarding creates only the membership so the User and first
+key continue to inherit current Team policy. There is no hidden namespace layer in
+runtime inheritance.
 `POST /onboarding` is the privileged, idempotent administrative form of the same
 transaction for a pre-created external principal.
 
@@ -460,6 +465,7 @@ DELETE /management/v1/api-keys/{keyId}/inference-sessions/{sessionId}
 POST   /management/v1/api-keys/{keyId}/inference-sessions:revoke-all
 GET    /management/v1/api-keys/{keyId}/effective-policy
 GET    /management/v1/api-keys/{keyId}/routing-context
+GET    /management/v1/api-keys/{keyId}/routing-catalog
 PUT    /management/v1/api-keys/{keyId}/routing-context
 GET    /management/v1/api-keys/{keyId}/quota
 GET    /management/v1/api-keys/{keyId}/usage
@@ -572,6 +578,8 @@ and limit remain through resolution, and its fixed debit uses the same counter l
 ~~~text
 GET    /management/v1/routing/models
 GET    /management/v1/routing/model-cards
+POST   /management/v1/routing/imports
+GET    /management/v1/routing/exports/current
 POST   /management/v1/routing/models
 POST   /management/v1/routing/models:bulk-import
 GET    /management/v1/routing/models/{modelId}
@@ -611,7 +619,30 @@ actions. Publish alone activates a snapshot; unpublish uses deny barriers. Write
 require read on the exact Recipe/Models and publish rechecks them. Entrypoint-scoped
 read returns identity/lifecycle only; topology requires every dependency. Lists omit
 unauthorized topology per item, while snapshot members/export need namespace-wide
-read. There is no ModelPool, Mixture, or detached assignment API.
+read. Decision assignments are embedded in Entrypoint writes and reads; there is no
+detached assignment API.
+
+The API-key `routing-catalog` endpoint is the consumer projection for Routing,
+Topology, and Playground. It joins that key's exact applied access projection to the
+immutable routing snapshot pinned by the same publication, then returns only
+discoverable Models and Entrypoints, the referenced Recipe metadata, and assignments
+to discoverable Models. It cannot represent Provider backends, credentials, or Recipe
+source. A User-scoped `consumer` may read the catalog only for a key under that User;
+switching among owned keys changes the effective projection but never broadens it.
+
+`POST /routing/imports` is the only bridge from a later static manifest to an
+initialized Management store. It accepts one strict v0.3 manifest, `If-Match`, and
+`Idempotency-Key`; validates the complete Model/modelCard/Recipe/Entrypoint closure;
+returns a typed diff whose arrays contain stable resource names; and creates one
+Operation whose publication is atomic. Referenced credentials require
+`provider_credential.use` on every exact credential and are checked active in the
+same PostgreSQL transaction. It never
+imports Users, Teams, keys, policies, counters, credentials, or generated IDs. A
+dry-run request performs the same compilation without writing. Current export emits
+readable v0.3 routing source with secrets represented only by references, requires
+namespace-wide Routing and Provider Credential read, and omits
+default-only fields. Startup uses the same importer exactly once when the target
+Namespace store is genuinely empty; a nonempty store is never reconciled implicitly.
 
 The snapshot collection is an immutable, newest-first audit surface. Its signed
 cursor is bound to the path Namespace and returns revision, content digest,
@@ -632,7 +663,7 @@ The ModelCard endpoint is a read-only semantic projection for Recipe and
 Entrypoint authoring, assignment, and topology views. It exposes a model's
 human-readable identity and capability metadata, while excluding connection
 details, provider credentials, compiled backends, provider-catalog state,
-runtime settings, pricing, health state, revisions, and timestamps. The view is
+invocation control, pricing, health state, revisions, and timestamps. The view is
 searchable and cursor-paginated under `routing.read`; it is never mutated as an
 independent resource.
 
@@ -645,11 +676,11 @@ not expose a free-form status-code list, gateway retry knobs, or another fallbac
 resource. Create, update, resolve, topology, snapshot, import, and export use this one
 shape.
 
-Entrypoint `:resolve` accepts path and optional subject. In managed access a subject
+Entrypoint `:resolve` accepts path and optional subject. With native access a subject
 is required only for claim rules and loads stored effective context; an override is
 a privileged simulation. Its full atomic result requires `routing.read` on the
 Entrypoint, exact Recipe revision, and every returned Model; there is no partial
-topology response. Managed routing-only rejects subject/override fields.
+topology response. Deployments without native access reject subject/override fields.
 
 The read-only provider catalog is the active, content-addressed value produced by
 the application-installed control-plane Integration Registry. It is not generated
@@ -674,7 +705,7 @@ resources. The coordinator validates installed compiler, protocol, credential, a
 discovery adapter IDs, stores the immutable catalog by digest, and activates it only
 after the declared control-plane and data-plane rollout groups report compatibility.
 
-On a genuinely empty durable store, managed replicas automatically stage and activate
+On a genuinely empty durable store, Router replicas automatically stage and activate
 the unique application-installed Integration Registry through the same
 compare-and-swap and rollout-gate contract. Concurrent startup is idempotent: each
 replica ACKs its declared groups, conflicts are reread, and a missing peer ACK leaves
@@ -734,19 +765,34 @@ Credential-backed discovery requires credential read/use; no-auth
 discovery additionally requires namespace `routing.manage`. Thus catalog read alone
 never grants arbitrary Router-side network access.
 
-Model create, update, probe, bulk-import overrides, standalone manifests, and exports
-share the [Model runtime contract](./router-native-access-control-model-runtime). The Model revision contains `execution.maxRetries` (0-5
-additional attempts governed by Router's fixed safe-retry predicate), duration strings
-`execution.requestTimeout` and `execution.streamTimeout` (1 second-24 hours), plus
+Model create, update, probe, bulk-import overrides, bootstrap manifests, and exports
+share the [Model control contract](./router-native-access-control-model-runtime). The
+Model revision contains `control.retry.count` (0-5 additional attempts governed by
+Router's fixed safe-retry predicate), a duplicate-free closed
+`control.retry.on` list, duration strings `control.timeout.request` and
+`control.timeout.stream` (1 second-24 hours), plus
 four nullable non-negative decimal-string prices per million tokens:
 `inputCostPerMillionTokens`, `outputCostPerMillionTokens`,
 `cacheReadCostPerMillionTokens`, and `cacheWriteCostPerMillionTokens`. Cache prices
 inherit input when omitted; explicit zero means free, while absent input/output means
-unpriced. The namespace supplies the immutable billing currency. Reads return both
-configured and effective defaults, and probe uses the saved execution revision.
+unpriced. The namespace supplies the immutable billing currency. Management reads
+return the effective immutable revision; readable file export omits values that were
+only defaulted. Probe uses that same saved control revision.
+
+The Model create, update, and read surface uses one nested value; flattened retry or
+timeout fields are not accepted:
+
+~~~json
+{
+  "control": {
+    "retry": {"count": 2, "on": ["unavailable", "timeout"]},
+    "timeout": {"request": "60s", "stream": "10m"}
+  }
+}
+~~~
 
 Model PATCH is sparse: omitted fields retain their server-owned value. Changing
-execution, pricing, name, aliases, capabilities, reasoning, or LoRAs therefore never
+control, pricing, name, aliases, capabilities, reasoning, or LoRAs therefore never
 requires a client to read or resubmit backend origins, compiled connection values, or
 ProviderCredential references. Supplying `backends` is an explicit whole-list
 replacement and conditionally requires `provider_credential.use` on every referenced
@@ -755,8 +801,8 @@ immutable revision, audits the diff, and enters the normal routing publication g
 Discovery suggestions are never another authority.
 The Dashboard keeps provider, credential/base URL, and discovered Model selection in
 the primary flow. A collapsed **Advanced settings** section contains Max retries,
-Request timeout, Stream timeout, and Input/Output/Cache Read/Cache Write Cost, each
-labeled **per 1M tokens** with inline defaults and validation. It edits the Model
+Retry on, Request timeout, Stream timeout, and Input/Output/Cache Read/Cache Write
+Cost, each labeled **per 1M tokens** with inline defaults and validation. It edits the Model
 value directly; there is no separate pricing, retry, or timeout resource. List/detail
 show effective values, while Usage/Insights expose cost, currency, and incomplete-cost
 state instead of treating missing prices or usage as zero.

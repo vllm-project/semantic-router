@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     kb:
       - name: privacy_policy

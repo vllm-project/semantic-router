@@ -291,6 +291,22 @@
   padding: 1.2rem 1.15rem;
 }
 
+.noServices {
+  display: grid;
+  gap: 0.28rem;
+  padding: 1.2rem 1.15rem;
+}
+
+.noServices strong {
+  color: var(--color-text);
+  font-size: 0.84rem;
+}
+
+.noServices span {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+
 .loading {
   display: flex;
   flex-direction: column;
@@ -419,5 +435,39 @@
   .uptimeBars {
     grid-column: 1 / -1;
     grid-row: 2;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding-inline: 0.6rem;
+  }
+
+  .statusMasthead {
+    min-height: 0;
+    gap: 1rem;
+    padding: 1.1rem;
+  }
+
+  .eyebrowRow,
+  .componentBoardHeader,
+  .incidentHistory > div:first-child {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .overallBanner dl {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .componentRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.65rem;
+  }
+
+  .uptimeBars {
+    grid-column: 1;
+    grid-row: auto;
   }
 }

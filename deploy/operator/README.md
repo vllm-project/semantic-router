@@ -6,15 +6,15 @@ explicit source: the immutable ConfigMap selected by
 `spec.bootstrap.configMapRef`.
 
 The Operator does not author Models, Recipes, Entrypoints, provider
-connections, access policy, or quota policy. Standalone deployments put their
-immutable routing resources in the selected v0.4 manifest. Managed deployments
-put only infrastructure bootstrap in that manifest and change desired state
+connections, access policy, or quota policy. The selected v0.3 file is always
+the static bootstrap. Without a Management store it is the routing authority;
+with a Management store it seeds an empty database and later changes flow
 through the Router Management API.
 
-Managed reconciliation is deliberately ordered. A content-addressed migration
+Durable reconciliation is deliberately ordered. A content-addressed migration
 Job must complete before a new Router Deployment is created or rolled. The
 Operator then creates separate inference, Management, backend-dispatch, and
-metrics Services, plus mode-aware PodDisruptionBudget, topology-spread, and
+metrics Services, plus capability-aware PodDisruptionBudget, topology-spread, and
 NetworkPolicy resources. Management and backend-dispatch Services are always
 private `ClusterIP` Services; `spec.service.type` applies only to inference.
 
@@ -61,11 +61,9 @@ metadata:
 immutable: true
 data:
   config.yaml: |
-    version: v0.4
-    global:
-      control_plane:
-        mode: standalone
-    # Standalone Models, Recipes, and Entrypoints belong in this same file.
+    version: v0.3
+    # Providers, routing, Recipes, Entrypoints, and global settings use the
+    # same contract as Docker.
 ---
 apiVersion: vllm.ai/v1alpha1
 kind: SemanticRouter
@@ -83,30 +81,31 @@ Apply one of the maintained examples:
 
 | Sample | Contract |
 | --- | --- |
-| `vllm.ai_v1alpha1_semanticrouter_standalone.yaml` | Immutable v0.4 manifest with routing resources. |
-| `vllm.ai_v1alpha1_semanticrouter_managed.yaml` | Infrastructure-only managed bootstrap. |
+| `vllm.ai_v1alpha1_semanticrouter_file.yaml` | File-authoritative v0.3 routing. |
+| `vllm.ai_v1alpha1_semanticrouter_durable.yaml` | PostgreSQL desired state plus Valkey access and quota runtime. |
 
 ```bash
 kubectl apply -f \
-  config/samples/vllm.ai_v1alpha1_semanticrouter_standalone.yaml
+  config/samples/vllm.ai_v1alpha1_semanticrouter_file.yaml
 kubectl get semanticrouters
 ```
 
 The controller requires the referenced ConfigMap to set `immutable: true` and
-to contain the selected key. It checks the v0.4 mode boundary before creating
-the workload; full Router validation remains a Router startup responsibility.
+to contain the selected key. It checks the v0.3 deployment boundary before
+creating the workload; full Router validation remains a Router startup
+responsibility.
 
-Managed mode additionally requires exactly one PostgreSQL migration source at
-`global.stores.access.postgres.dsn_env` or `.dsn_file`. The referenced
+Configuring `global.stores.management.postgres` requires exactly one migration
+source at `.dsn_env` or `.dsn_file`. The referenced
 environment variable or mounted file is passed to the explicit migration Job;
 the DSN value never enters the custom resource or ConfigMap.
 
 To change an immutable bootstrap, create a new ConfigMap and update the
-reference. In managed mode the new migration Job gates the rollout. In
-standalone mode the resulting Pod-template change performs a normal rollout.
-There is no in-place config reload or Operator-side routing synthesis.
+reference. A Management-store change is gated by the new migration Job; a
+file-only change performs a normal rollout. There is no in-place ConfigMap
+reload or Operator-side routing synthesis.
 
-## Deployment modes
+## Gateway topology
 
 Without `spec.gateway.existingRef`, the reconciled pod includes the local Envoy
 sidecar that sends requests through the Router ExtProc service. With an
@@ -117,11 +116,12 @@ that route separately.
 On OpenShift, `spec.openshift.routes.enabled` may create a Route. Its TLS
 termination must match the backend contract.
 
-## Managed deployment controls
+## Durable deployment controls
 
-Managed mode enables disruption protection, topology spread, and ingress
-isolation by default. NetworkPolicy is fail closed: an omitted peer family
-remains denied. Supply only the peers that should reach each listener:
+A configured Management store enables disruption protection, topology spread,
+and ingress isolation by default. NetworkPolicy is fail closed: an omitted
+peer family remains denied. Supply only the peers that should reach each
+listener:
 
 ```yaml
 spec:

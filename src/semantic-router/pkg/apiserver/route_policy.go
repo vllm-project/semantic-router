@@ -56,7 +56,7 @@ type routePolicy struct {
 	AuditAction RouteAuditAction
 }
 
-func managedRoute(
+func authorizedRoute(
 	meta EndpointMetadata,
 	policy routePolicy,
 	handler apiRouteHandler,

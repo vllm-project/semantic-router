@@ -63,7 +63,7 @@ type OpenAIRouter struct {
 	ReplayRecorders      map[string]*routerreplay.Recorder
 	MemoryStore          memory.Store
 	MemoryExtractor      *memory.MemoryExtractor
-	// InferenceAccess is the Router-native managed inference access runtime.
+	// InferenceAccess is the Router-native native access runtime.
 	// Nil is valid only when global.services.access.enabled=false.
 	InferenceAccess InferenceAccessRuntime
 	// OutcomeFeedback owns the authenticated public, replay-bound feedback seam.
@@ -71,7 +71,7 @@ type OpenAIRouter struct {
 	// OutcomeProjection reads the globally published, rebuildable learning view.
 	OutcomeProjection OutcomeLearningProjectionRuntime
 	// DispatchCapabilities signs exact, short-lived calls to the private
-	// backend invoker in every control-plane mode.
+	// backend invoker in every runtime composition.
 	DispatchCapabilities DispatchCapabilityRuntime
 	// ResponseTerminals carries the neutral completion decoded by
 	// BackendInvoker; response accounting never reparses client wire.

@@ -221,8 +221,10 @@ export default function InviteAcceptPage() {
               {error}
             </div>
           ) : null}
-          <label className={authStyles.inputBlock} htmlFor="invite-password">
-            <span className={authStyles.label}>Password</span>
+          <div className={authStyles.inputBlock}>
+            <label className={authStyles.label} htmlFor="invite-password">
+              Password
+            </label>
             <div className={styles.passwordInput}>
               <input
                 id="invite-password"
@@ -253,7 +255,7 @@ export default function InviteAcceptPage() {
             >
               {passwordReady ? 'Looks good' : '9 characters minimum'}
             </small>
-          </label>
+          </div>
           <button className={authStyles.primaryButton} type="submit" disabled={submitting}>
             {submitting ? 'Joining the workspace…' : 'Join the workspace'}
             <ProductIcon name="arrow-right" aria-hidden="true" />

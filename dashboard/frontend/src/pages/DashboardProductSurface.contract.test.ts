@@ -15,6 +15,21 @@ describe('dashboard product surfaces', () => {
     expect(hero).not.toContain('routeDots')
   })
 
+  it('keeps model density and routing metrics readable at phone widths', () => {
+    const pageStyles = readSource('./DashboardPage.module.css')
+    const heroStyles = readSource('./DashboardRoutingHero.module.css')
+
+    expect(pageStyles).toMatch(
+      /\.modelList\s*{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/s,
+    )
+    expect(pageStyles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*\.modelList\s*{[^}]*grid-template-columns: minmax\(0, 1fr\);/,
+    )
+    expect(heroStyles).toMatch(
+      /@media \(max-width: 420px\)[\s\S]*\.metricStrip\s*{[^}]*grid-template-columns: minmax\(0, 1fr\);/,
+    )
+  })
+
   it('does not fetch Router Management routing data without routing.read', () => {
     const page = readSource('./DashboardPage.tsx')
 
@@ -22,6 +37,20 @@ describe('dashboard product surfaces', () => {
       'canReadConfig ? configRequest.run({ allowHidden: true }) : Promise.resolve()',
     )
     expect(page).toContain('if (!canReadConfig) return')
+  })
+
+  it('does not present dashboard actions that the current identity cannot open', () => {
+    const page = readSource('./DashboardPage.tsx')
+    const hero = readSource('./DashboardRoutingHero.tsx')
+
+    expect(page).toContain("canAccessDashboardPath(user, '/status')")
+    expect(page).toContain("canAccessDashboardPath(user, '/playground')")
+    expect(page).toContain('showRoutingMetrics={canReadConfig}')
+    expect(page).toContain('showAPIKeyMetric={canReadAccess}')
+    expect(page).toContain('showPlaygroundAction={canUsePlayground}')
+    expect(hero).toContain('{showPlaygroundAction ? (')
+    expect(hero).toContain('{showRoutingMetrics ? (')
+    expect(hero).toContain('{showAPIKeyMetric ? (')
   })
 
   it('uses one shared authentication composition for login and invitations', () => {
@@ -61,9 +90,10 @@ describe('dashboard product surfaces', () => {
 
   it('uses invitation as the only dashboard user creation path', () => {
     const access = readSource('./AccessControlPage.tsx')
+    const workspace = readSource('./AccessControlWorkspace.tsx')
     const invitation = readSource('./DashboardMemberInviteDialog.tsx')
 
-    expect(access).toContain('<ProductIcon name="plus" /> Invite user')
+    expect(workspace).toContain('<ProductIcon name="plus" /> Invite user')
     expect(access).not.toContain("target === 'user'")
     expect(access).not.toContain("? 'New user'")
     expect(invitation).toContain('Dashboard role')
@@ -93,7 +123,9 @@ describe('dashboard product surfaces', () => {
       './topology/components/CustomNodes/SignalGroupNode.tsx',
       './topology/components/ResultCard/ResultCard.tsx',
     ].map(readSource)
-    const accessFields = readSource('./AccessControlEditorFields.tsx')
+    const accessFields =
+      readSource('./AccessControlEditorFields.tsx') +
+      readSource('./AccessControlEditorPrimitives.tsx')
 
     for (const source of topologyFiles) {
       expect(source).toContain('ProductIcon')

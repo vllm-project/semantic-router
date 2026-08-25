@@ -11,8 +11,8 @@ from cli.bootstrap import BootstrapResult
 from cli.commands import runtime as runtime_commands
 from cli.main import main
 from cli.runtime_config_lock import (
-    CompiledBootstrapLockError,
     LOCK_FILENAME,
+    CompiledBootstrapLockError,
     acquire_compiled_bootstrap_lock,
 )
 from click.testing import CliRunner
@@ -117,7 +117,7 @@ def test_serve_fails_fast_when_compiled_bootstrap_is_locked(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],

@@ -188,3 +188,20 @@
     font-size: 2.75rem;
   }
 }
+
+@media (max-width: 420px) {
+  .inviteStoryTitle {
+    font-size: 2.35rem;
+  }
+
+  .ticketTopline,
+  .ticketExpiry {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .passwordInput input {
+    padding-right: 3.8rem;
+  }
+}

@@ -16,9 +16,9 @@ from .probes import load_probes, save_results
 from .scenario import CandidateTuner, Scenario
 
 __all__ = [
+    "CandidateTuner",
     "OfflineAnalyzer",
     "RouterClient",
-    "CandidateTuner",
     "Scenario",
     "load_probes",
     "save_results",

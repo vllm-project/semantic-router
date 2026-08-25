@@ -1,20 +1,29 @@
 ---
 title: Configuration Workflows
-description: Keep deployment bootstrap, standalone manifests, and managed Router resources under one clear owner.
+description: Keep the v0.3 bootstrap and dynamic Router resources under one clear authority.
 ---
 
 # Configuration Workflows
 
-Semantic Router has two explicit authorities. A standalone deployment reads one
-immutable routing manifest. A managed deployment stores Models, Recipes,
-Entrypoints, identities, keys, and policies behind the Router Management API.
-Bootstrap YAML configures the process and its infrastructure; it never becomes a
-second managed-resource store.
+Semantic Router always starts from one readable `version: v0.3` manifest. The
+components configured in that manifest determine which capabilities are active;
+there is no separate deployment-mode switch.
+
+- Without `global.stores.management`, the file is the immutable routing authority.
+- With a Management store, Router initializes an empty store atomically from the
+  file. PostgreSQL is the sole desired-state authority after that transaction.
+- Enabling the Management API exposes versioned CRUD, import, and query operations.
+- Enabling Router-native access also requires the runtime store for global API-key
+  authentication, authorization, quota, settlement, usage, and audit state.
+
+A later file edit never merges into initialized Management state. Apply a reviewed
+manifest deliberately through `POST /management/v1/routing/imports`, with its
+idempotency key and expected revision.
 
 ## CLI and bootstrap YAML
 
-Use YAML for deployment bootstrap and infrastructure settings. Start the local
-control plane with one command:
+Use YAML for physical connections, an initial routing graph, listeners, and
+infrastructure settings. Start the local stack with one command:
 
 ```bash
 vllm-sr validate --config config.yaml
@@ -23,48 +32,34 @@ vllm-sr serve
 vllm-sr serve --config /path/to/config.yaml
 ```
 
-The local runtime derives stack-specific service addresses in runtime-owned
-state without rewriting the source file. Concurrent `serve` and `stop`
-operations for the same runtime and stack are serialized; retry after the
-active lifecycle operation finishes.
+`--config` chooses one v0.3 bootstrap manifest. It is not a Model or Recipe
+operand. The CLI has no second launch path that authors a Mixture-of-Models.
+Runtime-owned addresses and generated identities stay outside the source file.
 
-`--config` chooses one immutable v0.4 bootstrap manifest. Dynamic Models,
-Recipes, decision assignments, Entrypoints, identities, keys,
-and policies live in Router-owned stores and are managed through the versioned
-Management API. The CLI has no Model/Recipe operand and does not author routing
-at launch time.
+## Dashboard and other control planes
 
-## Dashboard
+The Dashboard is an optional Management API client. Connect physical backends in
+**Models**. Fixed-origin Providers ask for a credential and provider model; private
+Providers also ask for a base URL. Discovery can import one or many provider models.
 
-An empty local workspace creates and starts a managed Router in one `serve`
-run. Connect physical backends in **Models**; fixed-origin integrations ask only for a credential,
-while private endpoints also ask for their base URL. Discovery can import one
-or many Provider model IDs into Router-owned Model resources.
+The **Mixture-of-Models** workspace keeps two concepts separate:
 
-The **Mixture-of-Models** workspace then separates the two concepts users need:
+- **Recipes** owns reusable signals, projections, decisions, algorithms, and plugins.
+- **Models** publishes a request-facing Entrypoint by choosing a Recipe and assigning
+  connected Models to each Decision.
 
-- **Recipes** defines reusable signals, projections, decisions, and algorithms;
-- **Models** publishes an Entrypoint by choosing a Recipe and assigning configured
-  physical Models to each stable decision.
-
-Provider probes verify generation separately from Recipe evaluation. An
-Entrypoint can route correctly even when a selected backend is unhealthy, so
-publication validation and live probes report those states independently. The
-Dashboard performs this lifecycle through the same Management API available to
-automation and independent control planes; it has no setup-only config writer.
+The Dashboard never owns inference authentication, policy evaluation, rate limiting,
+usage settlement, or routing publication. An independent console can implement the
+same workflows through `/management/v1` and send inference directly to `/v1`.
 
 ## Helm
 
-For **standalone mode**, direct Helm deployments place a complete canonical
-routing manifest under `configOverride`. This replaces the chart's example as one
-document before the chart applies explicit Kubernetes integration rewrites; it
-does not merge sample Models or decisions into your policy. Author and validate
-the manifest as `config.yaml`, then place it under `configOverride` in the Helm
-values file.
+Place one complete v0.3 document under `configOverride`. It replaces the chart
+example atomically; Helm does not merge sample Models or Decisions into it.
 
 ```yaml
 configOverride:
-  version: v0.4
+  version: v0.3
   listeners:
     - name: grpc-50051
       address: 0.0.0.0
@@ -74,18 +69,21 @@ configOverride:
       address: 0.0.0.0
       port: 8080
       timeout: 300s
-  models:
-    - name: local/general
-      card:
+  providers:
+    models:
+      - name: local/general
+        provider_model_id: my-served-model
+        backend_refs:
+          - provider: vllm
+            base_url: http://model-server.default.svc.cluster.local:8000/v1
+  routing:
+    modelCards:
+      - name: local/general
         modality: text
         capabilities: [chat]
-      connections:
-        - provider: vllm
-          endpoint: http://model-server.default.svc.cluster.local:8000/v1
-          model: my-served-model
   recipes:
     - name: default
-      document:
+      routing:
         strategy: priority
         decisions:
           - name: default-route
@@ -93,23 +91,59 @@ configOverride:
             priority: 1
             rules: {operator: AND, conditions: []}
   entrypoints:
-    - name: vllm-sr/default
+    - model_names: [vllm-sr/default, default]
       recipe: default
       assignments:
         default-route:
           models: [{model: local/general}]
-  global:
-    services:
-      backend_dispatch:
-        bind_address: 0.0.0.0
-        port: 8180
-        audience: vllm-sr.backend-dispatch
-        capability_ttl: 30s
-        max_request_body_bytes: 67108864
-      response_api:
-        enabled: false
-        store_backend: memory
 ```
+
+Add dynamic capabilities without changing this routing vocabulary:
+
+```yaml
+configOverride:
+  version: v0.3
+  global:
+    stores:
+      management:
+        postgres:
+          dsn_env: VLLM_SR_POSTGRES_DSN
+      runtime:
+        redis:
+          url_env: VLLM_SR_REDIS_URL
+    services:
+      agent:
+        public_inference_endpoint: https://inference.example.com/v1/chat/completions
+      backend_credentials:
+        provider_kek_keyring_env: VLLM_SR_PROVIDER_CREDENTIAL_KEKS
+      backend_egress:
+        policy_file: /etc/vllm-sr/backend-egress-policy.yaml
+      routing_security:
+        hmac_keyring_env: VLLM_SR_ROUTING_HMAC_KEYS
+      management_api:
+        enabled: true
+        tls:
+          certificate_env: VLLM_SR_MANAGEMENT_TLS_CERTIFICATE
+          private_key_env: VLLM_SR_MANAGEMENT_TLS_PRIVATE_KEY
+        auth:
+          mode: router
+          token_signing_keyring_env: VLLM_SR_MANAGEMENT_SIGNING_KEYS
+          service_account_hmac_keyring_env: VLLM_SR_MANAGEMENT_SERVICE_ACCOUNT_KEYS
+          invitation_hmac_keyring_env: VLLM_SR_INVITATION_KEYS
+          response_kek_keyring_env: VLLM_SR_MANAGEMENT_RESPONSE_KEKS
+      access:
+        enabled: true
+        credentials:
+          api_key_hmac_keyring_env: VLLM_SR_API_KEY_HMAC_KEYS
+          delegation_hmac_keyring_env: VLLM_SR_DELEGATION_HMAC_KEYS
+        tenant_context:
+          signing_key_env: VLLM_SR_TENANT_CONTEXT_KEYS
+```
+
+Bind DSNs and keyrings through Kubernetes Secrets and environment references.
+The chart runs the release's migration Job before new Router replicas become ready.
+Dynamic resources never enter Helm values, ConfigMaps, gateway routes, or per-key
+Kubernetes objects.
 
 ```bash
 vllm-sr validate --config config.yaml
@@ -119,96 +153,44 @@ helm upgrade --install semantic-router \
   -f values.yaml
 ```
 
-`vllm-sr serve --target k8s` passes the workspace `config.yaml` document as an
-atomic override, so chart example routes cannot merge into it. The command
-rejects an empty or setup-only document and does not inject local-Docker service
-addresses or knowledge-base paths. Run `vllm-sr validate` first so schema and
-reference errors fail before deployment.
-
-For **managed mode**, `configOverride` contains only Router bootstrap and service
-configuration. Bind PostgreSQL and Valkey references to Kubernetes Secrets with
-`extraEnv` entries. The chart runs one pre-install or pre-upgrade migration Job
-from the Router image, then rolls out Router only after migration succeeds. It
-also creates a dedicated `ClusterIP` Service for the backend-dispatch listener.
-Point the gateway's one stable internal upstream at that Service; do not create a
-route or cluster for each Model or API key.
-
-```yaml
-extraEnv:
-  - name: ACCESS_DATABASE_URL
-    valueFrom:
-      secretKeyRef:
-        name: router-stores
-        key: postgres-dsn
-  - name: ACCESS_RUNTIME_URL
-    valueFrom:
-      secretKeyRef:
-        name: router-stores
-        key: valkey-url
-```
-
-The ConfigMap contains immutable Router bootstrap only. Dynamic routing and
-access resources remain in Router-owned stores and never enter Helm values,
-ConfigMaps, gateway resources, or CRDs. Dashboard and observability remain
-independent opt-ins.
-
-Choose Kubernetes GPU images, resources, and device plugins through Helm or the
-Operator. The local `--platform amd` and `--platform nvidia` shortcuts do not
-configure Kubernetes scheduling.
+`vllm-sr serve --target k8s` passes the workspace document as the same atomic
+override. Run validation first so schema and reference errors fail before rollout.
 
 ## Operator
 
-The Operator may provide a Kubernetes-native authoring adapter for routing
-resources:
+The Operator owns Kubernetes objects and rollout state. A file-authoritative
+deployment rolls when its immutable ConfigMap reference changes. When a Management
+store is configured, the Operator still reconciles only deployment and bootstrap
+concerns. Models, Recipes, and Entrypoints are changed through the ordinary
+Management API; the Operator does not maintain a second routing authority.
 
-- `spec.vllmEndpoints` discovers model services and creates Model backends; and
-- `spec.config.routing` is an Operator authoring adapter compiled into Recipes
-  and Entrypoints.
+Typed Operator adapters such as `spec.vllmEndpoints` may discover model Services and
+render the same public Model contract. They must not place generated resource IDs,
+credentials, users, API keys, policies, or counters in the CRD.
 
-Other `spec.config` fields are typed Operator adapters for response cache,
-classifiers, tools, observability, and related shared settings. In standalone
-mode the Operator compiles one immutable manifest. In managed mode it reconciles
-Models, Recipes, and Entrypoints through the ordinary versioned Management API;
-it does not write a second mounted routing document.
-
-```yaml
-spec:
-  vllmEndpoints:
-    - name: local-backend
-      model: local/model
-      backend:
-        type: service
-        service:
-          name: model-server
-          port: 8000
-  config:
-    routing:
-      strategy: priority
-```
-
-Do not copy arbitrary `models` or `global` keys directly under `spec.config`;
-they are not CRD fields. See [Kubernetes Operator](k8s/operator) and the
+See [Kubernetes Operator](k8s/operator) and the
 [SemanticRouter CRD reference](../api/semantic-router-crd).
 
 ## Routing DSL
 
-The DSL Builder is a focused authoring surface for one model-free Recipe:
-signals, projections, decisions, algorithms, and Recipe-scoped plugins. Models,
-decision assignments, and Entrypoints remain Management API resources. Providers,
-listeners, credentials, and global services are outside the Recipe DSL.
+The DSL Builder authors one model-free Recipe: signals, projections, decisions,
+algorithms, and Recipe-scoped plugins. Models, Decision assignments, and Entrypoints
+remain Management resources. Providers, listeners, credentials, stores, and global
+services are outside the Recipe DSL.
 
-Use DSL when Recipe policy benefits from a compact, reviewable representation.
-Publish the Recipe and connect it to an Entrypoint through the same Management API
-used by the Dashboard.
+The Playground Builder uses the Router's schema and catalog tools, probes candidate
+routes, and asks for confirmation before publishing through the same Management API.
 
 ## Avoid split ownership
 
-- Do not edit a generated runtime config as if it were the source document.
-- Do not let both GitOps and an interactive Dashboard session write the same
-  deployment without an explicit handoff.
-- Do not put secrets in DSL, ConfigMaps, or committed YAML.
-- Do not assume an evaluated route proves backend readiness; verify generation.
-- Preview and validate a complete change before applying it to a live stack.
+- Do not edit generated runtime state as if it were the source manifest.
+- Do not change an initialized Management deployment by replacing its bootstrap file;
+  use the explicit import or resource APIs.
+- Do not let GitOps and an interactive client write the same resource revision without
+  optimistic concurrency and an explicit handoff.
+- Do not put secrets in DSL, ConfigMaps, committed YAML, or Dashboard local storage.
+- Do not assume a valid Recipe proves backend readiness; run generation probes.
+- Preview and validate a complete change before applying it to live traffic.
 
-For management endpoints and concurrency contracts, see the
-[management API reference](../api/apiserver).
+For endpoint and concurrency contracts, see the
+[Management API reference](../api/apiserver).

@@ -13,6 +13,9 @@ var (
 	//go:embed scripts/admit.lua
 	admitLua string
 
+	//go:embed scripts/heartbeat.lua
+	heartbeatLua string
+
 	//go:embed scripts/check_access.lua
 	checkAccessLua string
 
@@ -50,6 +53,7 @@ var (
 var (
 	checkAccessScript           = redis.NewScript(exactLua + "\n" + checkAccessLua)
 	admitScript                 = redis.NewScript(exactLua + "\n" + admitLua)
+	heartbeatScript             = redis.NewScript(exactLua + "\n" + heartbeatLua)
 	journalDispatchScript       = redis.NewScript(exactLua + "\n" + journalDispatchLua)
 	beginDispatchScript         = redis.NewScript(exactLua + "\n" + beginDispatchLua)
 	beginAttemptScript          = redis.NewScript(exactLua + "\n" + beginAttemptLua)

@@ -23,9 +23,6 @@ spec:
     - jsonPath: .status.readyReplicas
       name: Ready
       type: integer
-    - jsonPath: .status.controlPlaneMode
-      name: Mode
-      type: string
     - jsonPath: .status.phase
       name: Phase
       type: string
@@ -1005,7 +1002,7 @@ spec:
                 type: object
               bootstrap:
                 description: |-
-                  Bootstrap selects the immutable v0.4 Router manifest mounted into every
+                  Bootstrap selects the immutable v0.3 Router manifest mounted into every
                   replica. The Operator never authors or mutates Router configuration.
                 properties:
                   configMapRef:
@@ -1188,7 +1185,7 @@ spec:
                 type: array
               envFrom:
                 description: |-
-                  EnvFrom adds environment sources to the Router and managed schema
+                  EnvFrom adds environment sources to the Router and Management schema
                   migration containers.
                 items:
                   description: EnvFromSource represents the source of a set of ConfigMaps
@@ -1374,12 +1371,13 @@ spec:
               networkPolicy:
                 description: |-
                   NetworkPolicy isolates inference, Management, internal dispatch, and
-                  metrics listeners. It is enabled by default in managed mode.
+                  metrics listeners. It defaults on when a Management store is configured.
                 properties:
                   enabled:
                     description: |-
-                      Enabled overrides the mode-aware default. Managed mode defaults to true;
-                      standalone mode defaults to false.
+                      Enabled overrides the capability-derived default. Deployments with a
+                      durable Management store default to true; file-only deployments default
+                      to false.
                     type: boolean
                   inferencePeers:
                     description: InferencePeers may reach the public ExtProc and sidecar
@@ -1866,13 +1864,14 @@ spec:
                 type: object
               podDisruptionBudget:
                 description: |-
-                  PodDisruptionBudget protects managed Router availability during
-                  voluntary disruptions. It is enabled by default in managed mode.
+                  PodDisruptionBudget protects Router availability during voluntary
+                  disruptions. It defaults on when a Management store is configured.
                 properties:
                   enabled:
                     description: |-
-                      Enabled overrides the mode-aware default. Managed mode defaults to true;
-                      standalone mode defaults to false.
+                      Enabled overrides the capability-derived default. Deployments with a
+                      durable Management store default to true; file-only deployments default
+                      to false.
                     type: boolean
                   minAvailable:
                     default: 1
@@ -2438,7 +2437,7 @@ spec:
                     type: object
                   management:
                     description: |-
-                      Management configures the private managed-mode Service port. The target
+                      Management configures the private Management API Service port. The target
                       port remains owned by global.services.management_api in the bootstrap.
                     properties:
                       port:
@@ -2563,13 +2562,14 @@ spec:
                 type: array
               topologySpread:
                 description: |-
-                  TopologySpread distributes managed Router replicas across failure
-                  domains. It is enabled by default in managed mode.
+                  TopologySpread distributes Router replicas across failure domains. It
+                  defaults on when a Management store is configured.
                 properties:
                   enabled:
                     description: |-
-                      Enabled overrides the mode-aware default. Managed mode defaults to true;
-                      standalone mode defaults to false.
+                      Enabled overrides the capability-derived default. Deployments with a
+                      durable Management store default to true; file-only deployments default
+                      to false.
                     type: boolean
                   maxSkew:
                     default: 1
@@ -2595,7 +2595,7 @@ spec:
                 type: object
               volumeMounts:
                 description: |-
-                  VolumeMounts mounts deployment-owned volumes into the Router and managed
+                  VolumeMounts mounts deployment-owned volumes into the Router and Management
                   schema migration containers.
                 items:
                   description: VolumeMount describes a mounting of a Volume within
@@ -4614,13 +4614,6 @@ spec:
                   - type
                   type: object
                 type: array
-              controlPlaneMode:
-                description: ControlPlaneMode is the validated mode from the selected
-                  bootstrap.
-                enum:
-                - standalone
-                - managed
-                type: string
               gatewayMode:
                 description: 'GatewayMode indicates inference gateway topology: sidecar
                   or external.'
@@ -4629,11 +4622,12 @@ spec:
                 - external
                 type: string
               managementService:
-                description: ManagementService is the private managed-mode Service
+                description: ManagementService is the private Management API Service
                   name.
                 type: string
               migration:
-                description: Migration reports the schema gate for managed deployments.
+                description: Migration reports the Management schema gate when a durable
+                  store is configured.
                 properties:
                   jobName:
                     description: |-

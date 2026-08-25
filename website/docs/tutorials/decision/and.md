@@ -29,7 +29,7 @@ Use `AND` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: urgent_business_route
       description: Match only when business intent and urgent language appear together.

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+
 from cli.consts import PLATFORM_AMD, PLATFORM_NVIDIA
 from cli.utils import get_logger
 

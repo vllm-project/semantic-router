@@ -1,7 +1,10 @@
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default dict -}}
-{{- $controlPlane := (get $global "control_plane") | default dict -}}
-{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- $durableRouting := eq (include "semantic-router.hasManagementStore" .) "true" -}}
+{{- $managementAPIEnabled := eq (include "semantic-router.managementAPIEnabled" .) "true" -}}
+{{- if and .Values.dashboard.enabled $durableRouting (not $managementAPIEnabled) }}
+{{- fail "dashboard.enabled with durable routing requires global.services.management_api.enabled" }}
+{{- end }}
 {{- if and .Values.dashboard.enabled (gt (int .Values.dashboard.replicaCount) 1) }}
 {{- fail "dashboard.replicaCount > 1 is not supported with the current SQLite auth/session store; use one dashboard replica until a shared auth/session store is configured" }}
 {{- end }}
@@ -60,12 +63,12 @@ spec:
           protocol: TCP
         env:
         - name: TARGET_ROUTER_API_URL
-          {{- if $managedMode }}
+          {{- if $managementAPIEnabled }}
           value: "https://{{ include "semantic-router.fullname" . }}-management:{{ .Values.service.management.port }}"
           {{- else }}
           value: "http://{{ include "semantic-router.fullname" . }}:{{ .Values.service.api.port }}"
           {{- end }}
-        {{- if and $managedMode .Values.dashboard.routerTLS.ca.existingSecret }}
+        {{- if and $managementAPIEnabled .Values.dashboard.routerTLS.ca.existingSecret }}
         - name: SSL_CERT_FILE
           value: "/var/run/secrets/vllm-sr/router-management-ca/ca.crt"
         {{- end }}
@@ -116,7 +119,7 @@ spec:
           mountPath: /app/config/config.yaml
           subPath: config.yaml
           readOnly: true
-        {{- if and $managedMode .Values.dashboard.routerTLS.ca.existingSecret }}
+        {{- if and $managementAPIEnabled .Values.dashboard.routerTLS.ca.existingSecret }}
         - name: router-management-ca
           mountPath: /var/run/secrets/vllm-sr/router-management-ca
           readOnly: true
@@ -146,7 +149,7 @@ spec:
           items:
           - key: config.yaml
             path: config.yaml
-      {{- if and $managedMode .Values.dashboard.routerTLS.ca.existingSecret }}
+      {{- if and $managementAPIEnabled .Values.dashboard.routerTLS.ca.existingSecret }}
       - name: router-management-ca
         secret:
           secretName: {{ .Values.dashboard.routerTLS.ca.existingSecret }}

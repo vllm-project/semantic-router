@@ -53,11 +53,11 @@ func TestResolvedSecretNeverEntersCanonicalConfigExport(t *testing.T) {
 	const canary = "backend-secret-export-canary"
 	t.Setenv("TEST_BACKEND_EXPORT_CREDENTIAL", canary)
 	cfg := &config.RouterConfig{
-		BackendCredentials: config.BackendCredentialsConfig{Standalone: map[string]config.BackendCredentialConfig{
+		BackendCredentials: config.BackendCredentialsConfig{File: map[string]config.BackendCredentialConfig{
 			"private": {CredentialAdapterID: "bearer", SecretEnv: "TEST_BACKEND_EXPORT_CREDENTIAL"},
 		}},
 	}
-	if _, err := NewResolver(cfg.BackendCredentials.Standalone); err != nil {
+	if _, err := NewResolver(cfg.BackendCredentials.File); err != nil {
 		t.Fatal(err)
 	}
 	exported, err := yaml.Marshal(config.CanonicalConfigFromRouterConfig(cfg))
@@ -70,6 +70,35 @@ func TestResolvedSecretNeverEntersCanonicalConfigExport(t *testing.T) {
 	}
 	if !strings.Contains(text, "secret_env: TEST_BACKEND_EXPORT_CREDENTIAL") {
 		t.Fatalf("canonical config export lost the operator-owned reference:\n%s", text)
+	}
+}
+
+func TestResolverMaterializesRedactedInMemoryLiteral(t *testing.T) {
+	const canary = "literal-provider-secret-canary"
+	definition := config.BackendCredentialConfig{
+		CredentialAdapterID: "x-api-key", SecretValue: canary,
+	}
+	for _, rendered := range []string{fmt.Sprintf("%v", definition), fmt.Sprintf("%#v", definition)} {
+		if strings.Contains(rendered, canary) {
+			t.Fatalf("credential diagnostics exposed a literal secret: %s", rendered)
+		}
+	}
+	resolver, err := NewResolver(map[string]config.BackendCredentialConfig{"private": definition})
+	if err != nil {
+		t.Fatal(err)
+	}
+	publication := backendinvoker.CredentialPublication{
+		NamespaceID: "ns", QuotaPartition: "ns", PublicationID: "publication",
+	}
+	version, err := resolver.Pin(context.Background(), publication, "private", "provider", "https://models.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential, err := resolver.ResolvePinned(
+		context.Background(), publication, "private", version, "provider", "https://models.example",
+	)
+	if err != nil || credential.Secret != canary || credential.Header != "X-Api-Key" {
+		t.Fatalf("ResolvePinned() = %+v, %v", credential, err)
 	}
 }
 

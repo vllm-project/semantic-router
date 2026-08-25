@@ -75,15 +75,18 @@ const (
 // RouterConfig represents the main configuration for the LLM Router.
 type RouterConfig struct {
 	CanonicalVersion string `yaml:"-" json:"-"`
-	// BillingCurrency is effective runtime state. Standalone sources it from
-	// global.billing.currency; managed mode pins it from Namespace publication.
+	// fileAuthoring preserves the normalized, human-readable v0.3 source for
+	// lossless export. Immutable snapshots intentionally omit authoring-only
+	// names and secret-source references.
+	fileAuthoring *CanonicalConfig
+	// BillingCurrency is effective runtime state. File authoring sources it from
+	// global.billing.currency; a namespace publication pins it in its snapshot.
 	BillingCurrency string `yaml:"-" json:"-"`
 	// RoutingSnapshot is the immutable compiled Model/Recipe/Entrypoint value
-	// used by BackendInvoker. It is built once at the standalone manifest
-	// boundary or supplied by the managed publication replica. Runtime routing
+	// used by BackendInvoker. It is built once at the file-authoring boundary or
+	// supplied by a publication replica. Runtime routing
 	// views are derived from it and never act as physical-backend authority.
 	RoutingSnapshot *routingsnapshot.Snapshot `yaml:"-" json:"-"`
-	ControlPlane    ControlPlaneConfig        `yaml:"control_plane,omitempty"`
 	MoMRegistry     map[string]string         `yaml:"mom_registry,omitempty"`
 	// SkipExternalAssetValidation is set only for untrusted read-only
 	// validation requests, which must never trigger filesystem reads.
@@ -125,13 +128,14 @@ type RouterConfig struct {
 	BackendCredentials BackendCredentialsConfig  `yaml:"backend_credentials,omitempty"`
 	BackendEgress      BackendEgressConfig       `yaml:"backend_egress,omitempty"`
 	BackendDispatch    BackendDispatchConfig     `yaml:"backend_dispatch,omitempty"`
+	RoutingSecurity    RoutingSecurityConfig     `yaml:"routing_security,omitempty"`
 
 	// Runtime-only knowledge bases loaded from global.model_catalog.
 	KnowledgeBases []KnowledgeBaseConfig `yaml:"knowledge_bases,omitempty"`
 	ConfigBaseDir  string                `yaml:"-"`
-	// DocumentHash identifies the exact YAML document from which this immutable
-	// runtime snapshot was parsed. Management APIs use it to distinguish a
-	// persisted config from the config that has completed hot reload.
+	// DocumentHash identifies the configuration content behind this immutable
+	// runtime. File routing hashes the exact YAML document; publication routing hashes
+	// executable routing semantics so access-only publications share one runtime.
 	DocumentHash string `yaml:"-"`
 }
 
@@ -156,11 +160,13 @@ type LLMObservability struct {
 }
 
 type RouterOptions struct {
-	IncludeConfigModelsInList bool  `yaml:"include_config_models_in_list,omitempty"`
-	ClearRouteCache           bool  `yaml:"clear_route_cache"`
-	StreamedBodyMode          bool  `yaml:"streamed_body_mode,omitempty"`
-	MaxStreamedBodyBytes      int64 `yaml:"max_streamed_body_bytes,omitempty"`
-	StreamedBodyTimeoutSec    int   `yaml:"streamed_body_timeout_sec,omitempty"`
+	AutoModelName             string   `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            []string `yaml:"auto_model_names,omitempty"`
+	IncludeConfigModelsInList bool     `yaml:"include_config_models_in_list,omitempty"`
+	ClearRouteCache           bool     `yaml:"clear_route_cache"`
+	StreamedBodyMode          bool     `yaml:"streamed_body_mode,omitempty"`
+	MaxStreamedBodyBytes      int64    `yaml:"max_streamed_body_bytes,omitempty"`
+	StreamedBodyTimeoutSec    int      `yaml:"streamed_body_timeout_sec,omitempty"`
 }
 
 // InlineModels captures built-in model families and prompt-processing settings.

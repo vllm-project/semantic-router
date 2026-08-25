@@ -105,6 +105,7 @@ func TestHandlerFailureReturnsOneSignedDispatchOutcome(t *testing.T) {
 	}
 	plan := testPlan()
 	plan.Execution.MaxRetries = 0
+	plan.Execution.RetryOn = nil
 	invoker := &Invoker{Journal: &journalStub{}, Transport: transportFunc(func(*http.Request) (*http.Response, error) {
 		return nil, NewKnownZeroTransportFailure(FallbackUnavailable, errors.New("dial failed"))
 	})}

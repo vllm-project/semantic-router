@@ -1,23 +1,29 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-20b
-  card:
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.10:8000/v1
-    model: openai/gpt-oss-20b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      openai/gpt-oss-20b:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: openai/gpt-oss-20b
+    provider_model_id: openai/gpt-oss-20b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.10:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: openai/gpt-oss-20b
+routing:
+  modelCards:
+  - name: openai/gpt-oss-20b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       metadata:
       - name: canary_cohort
@@ -49,7 +55,7 @@ recipes:
           name: other
 - name: metadata-policy
   description: Exercise recipe-local request metadata routing.
-  document:
+  routing:
     signals:
       metadata:
       - name: canary_cohort
@@ -67,7 +73,8 @@ recipes:
         - type: metadata
           name: canary_cohort
 entrypoints:
-- name: vllm-sr/metadata-policy
+- model_names:
+  - vllm-sr/metadata-policy
   recipe: metadata-policy
   assignments:
     metadata_recipe_decision:

@@ -5,7 +5,6 @@ import "fmt"
 // CanonicalGlobal contains router-managed runtime defaults plus sparse
 // overrides, organized into explicit platform modules.
 type CanonicalGlobal struct {
-	ControlPlane ControlPlaneConfig         `yaml:"control_plane,omitempty"`
 	Billing      *CanonicalBillingGlobal    `yaml:"billing,omitempty"`
 	Router       CanonicalRouterGlobal      `yaml:"router"`
 	Services     CanonicalServiceGlobal     `yaml:"services"`
@@ -15,17 +14,22 @@ type CanonicalGlobal struct {
 }
 
 // CanonicalBillingGlobal defines the one currency used to aggregate Model
-// prices, usage, and cost quotas across a standalone Router. Managed mode owns
-// this value on Namespace instead of accepting a second bootstrap authority.
+// prices, usage, and cost quotas across one Router deployment. A dynamic
+// namespace publication may replace it as part of the immutable snapshot.
 type CanonicalBillingGlobal struct {
 	Currency string `yaml:"currency,omitempty"`
 }
 
 // CanonicalRouterGlobal captures router-engine control knobs.
 type CanonicalRouterGlobal struct {
-	ClearRouteCache bool                  `yaml:"clear_route_cache"`
-	StreamedBody    CanonicalStreamedBody `yaml:"streamed_body"`
-	Learning        RouterLearningConfig  `yaml:"learning,omitempty"`
+	Strategy                  RoutingStrategy       `yaml:"strategy,omitempty"`
+	AutoModelName             string                `yaml:"auto_model_name,omitempty"`
+	AutoModelNames            *[]string             `yaml:"auto_model_names,omitempty"`
+	IncludeConfigModelsInList bool                  `yaml:"include_config_models_in_list"`
+	ClearRouteCache           bool                  `yaml:"clear_route_cache"`
+	StreamedBody              CanonicalStreamedBody `yaml:"streamed_body"`
+	ModelSelection            ModelSelectionConfig  `yaml:"model_selection"`
+	Learning                  RouterLearningConfig  `yaml:"learning,omitempty"`
 }
 
 // CanonicalStreamedBody groups streaming request body controls.
@@ -46,6 +50,7 @@ type CanonicalServiceGlobal struct {
 	BackendCredentials BackendCredentialsConfig `yaml:"backend_credentials,omitempty"`
 	BackendEgress      BackendEgressConfig      `yaml:"backend_egress,omitempty"`
 	BackendDispatch    BackendDispatchConfig    `yaml:"backend_dispatch"`
+	RoutingSecurity    RoutingSecurityConfig    `yaml:"routing_security,omitempty"`
 	RouterReplay       RouterReplayConfig       `yaml:"router_replay"`
 	StartupStatus      StartupStatusConfig      `yaml:"startup_status"`
 }
@@ -55,8 +60,16 @@ type CanonicalStoreGlobal struct {
 	ResponseCache ResponseCacheStoreConfig  `yaml:"response_cache"`
 	Memory        MemoryConfig              `yaml:"memory"`
 	VectorStore   *VectorStoreConfig        `yaml:"vector_store,omitempty"`
-	Access        *AccessStoreConfig        `yaml:"access,omitempty"`
-	AccessRuntime *AccessRuntimeStoreConfig `yaml:"access_runtime,omitempty"`
+	Management    *CanonicalManagementStore `yaml:"management,omitempty"`
+	Runtime       *CanonicalRuntimeStore    `yaml:"runtime,omitempty"`
+}
+
+type CanonicalManagementStore struct {
+	Postgres *PostgresAccessStoreConfig `yaml:"postgres,omitempty"`
+}
+
+type CanonicalRuntimeStore struct {
+	Redis *RedisAccessRuntimeStoreConfig `yaml:"redis,omitempty"`
 }
 
 // CanonicalIntegrationGlobal groups external helper services used by the router.
@@ -180,7 +193,7 @@ func (m CanonicalHallucinationModule) runtimeConfig() HallucinationMitigationCon
 func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPayload) (CanonicalGlobal, error) {
 	defaults := DefaultCanonicalGlobal()
 	if rawOverride == nil && override == nil {
-		applyControlPlaneBootstrapDefaults(&defaults)
+		applyCanonicalCapabilityDefaults(&defaults)
 		if err := resolveModuleModelRefs(&defaults); err != nil {
 			return CanonicalGlobal{}, err
 		}
@@ -191,7 +204,7 @@ func resolveCanonicalGlobal(override *CanonicalGlobal, rawOverride *StructuredPa
 	if err != nil {
 		return CanonicalGlobal{}, err
 	}
-	applyControlPlaneBootstrapDefaults(&resolved)
+	applyCanonicalCapabilityDefaults(&resolved)
 	if err := resolveModuleModelRefs(&resolved); err != nil {
 		return CanonicalGlobal{}, err
 	}
@@ -207,13 +220,19 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	if global.Billing != nil {
 		cfg.BillingCurrency = global.Billing.Currency
 	}
+	cfg.Strategy = global.Router.Strategy
+	cfg.AutoModelName = global.Router.AutoModelName
+	cfg.AutoModelNames = nil
+	if global.Router.AutoModelNames != nil {
+		cfg.AutoModelNames = append([]string{}, (*global.Router.AutoModelNames)...)
+	}
+	cfg.IncludeConfigModelsInList = global.Router.IncludeConfigModelsInList
 	cfg.ClearRouteCache = global.Router.ClearRouteCache
 	cfg.StreamedBodyMode = global.Router.StreamedBody.Enabled
 	cfg.MaxStreamedBodyBytes = global.Router.StreamedBody.MaxBytes
 	cfg.StreamedBodyTimeoutSec = global.Router.StreamedBody.TimeoutSec
+	cfg.ModelSelection = global.Router.ModelSelection
 	cfg.RouterLearning = global.Router.Learning
-	cfg.ControlPlane = cloneControlPlaneConfig(global.ControlPlane)
-
 	cfg.API = global.Services.API
 	cfg.ResponseAPI = global.Services.ResponseAPI
 	cfg.Agent = global.Services.Agent
@@ -223,14 +242,15 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.BackendCredentials = cloneBackendCredentialsConfig(global.Services.BackendCredentials)
 	cfg.BackendEgress = global.Services.BackendEgress
 	cfg.BackendDispatch = global.Services.BackendDispatch
+	cfg.RoutingSecurity = global.Services.RoutingSecurity
 	cfg.RouterReplay = global.Services.RouterReplay
 	cfg.StartupStatus = global.Services.StartupStatus
 
 	cfg.SemanticCache = global.Stores.ResponseCache
 	cfg.Memory = global.Stores.Memory
 	cfg.VectorStore = global.Stores.VectorStore
-	cfg.AccessStore = cloneAccessStoreConfig(global.Stores.Access)
-	cfg.AccessRuntimeStore = cloneAccessRuntimeStoreConfig(global.Stores.AccessRuntime)
+	cfg.AccessStore = managementStoreFromCanonical(global.Stores.Management)
+	cfg.AccessRuntimeStore = runtimeStoreFromCanonical(global.Stores.Runtime)
 
 	cfg.Tools = global.Integrations.Tools
 	cfg.Looper = global.Integrations.Looper
@@ -248,6 +268,47 @@ func applyCanonicalGlobal(cfg *RouterConfig, global *CanonicalGlobal) error {
 	cfg.ModalityDetector = global.ModelCatalog.Modules.ModalityDetector
 
 	return nil
+}
+
+func applyCanonicalCapabilityDefaults(global *CanonicalGlobal) {
+	if global == nil {
+		return
+	}
+	access := managementStoreFromCanonical(global.Stores.Management)
+	runtime := runtimeStoreFromCanonical(global.Stores.Runtime)
+	applyAccessStoreDefaults(access, runtime)
+	applyCanonicalStoreDefaults(global, access, runtime)
+	applyAccessServiceDefaults(&global.Services.Access)
+	global.Services.ManagementAPI.applySecurityDefaults()
+}
+
+func managementStoreFromCanonical(source *CanonicalManagementStore) *AccessStoreConfig {
+	if source == nil || source.Postgres == nil {
+		return nil
+	}
+	return &AccessStoreConfig{Type: AccessStoreTypePostgres, Postgres: *source.Postgres}
+}
+
+func runtimeStoreFromCanonical(source *CanonicalRuntimeStore) *AccessRuntimeStoreConfig {
+	if source == nil || source.Redis == nil {
+		return nil
+	}
+	return &AccessRuntimeStoreConfig{Type: AccessRuntimeStoreTypeRedis, Redis: *source.Redis}
+}
+
+func applyCanonicalStoreDefaults(
+	global *CanonicalGlobal,
+	management *AccessStoreConfig,
+	runtime *AccessRuntimeStoreConfig,
+) {
+	if global.Stores.Management != nil && global.Stores.Management.Postgres != nil && management != nil {
+		postgres := management.Postgres
+		global.Stores.Management.Postgres = &postgres
+	}
+	if global.Stores.Runtime != nil && global.Stores.Runtime.Redis != nil && runtime != nil {
+		redis := runtime.Redis
+		global.Stores.Runtime.Redis = &redis
+	}
 }
 
 func resolveModuleModelRefs(global *CanonicalGlobal) error {

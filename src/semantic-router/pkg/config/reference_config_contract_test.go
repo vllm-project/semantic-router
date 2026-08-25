@@ -18,8 +18,8 @@ func TestReferenceConfigUsesStrictCanonicalSchema(t *testing.T) {
 		t.Fatalf("config/config.yaml no longer matches the strict canonical schema: %v", err)
 	}
 
-	if canonical.Version != "v0.4" {
-		t.Fatalf("expected reference config version v0.4, got %q", canonical.Version)
+	if canonical.Version != "v0.3" {
+		t.Fatalf("expected reference config version v0.3, got %q", canonical.Version)
 	}
 
 	if _, err := testAuthoringParser(t).ParseYAMLBytes(data); err != nil {

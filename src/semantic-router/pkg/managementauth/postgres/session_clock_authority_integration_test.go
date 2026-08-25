@@ -31,6 +31,7 @@ func (clockAuthorityChallenges) Ready(context.Context) error { return nil }
 func (clockAuthorityChallenges) Create(context.Context, string, string, time.Time) (managementauth.ExchangeChallenge, error) {
 	return managementauth.ExchangeChallenge{}, errors.New("not used")
 }
+
 func (clockAuthorityChallenges) Consume(context.Context, string, string, string, time.Time) error {
 	return errors.New("not used")
 }
@@ -40,6 +41,7 @@ type clockAuthorityAssertions struct{}
 func (clockAuthorityAssertions) ValidateIssuer(context.Context, string) error {
 	return errors.New("not used")
 }
+
 func (clockAuthorityAssertions) Verify(context.Context, string, managementauth.SubjectTokenType, string, time.Time) (managementauth.VerifiedExternalIdentity, error) {
 	return managementauth.VerifiedExternalIdentity{}, errors.New("not used")
 }
@@ -47,6 +49,7 @@ func (clockAuthorityAssertions) Verify(context.Context, string, managementauth.S
 type clockAuthorityExchanges struct{}
 
 func (clockAuthorityExchanges) Ready(context.Context) error { return nil }
+
 func (clockAuthorityExchanges) ExchangeIdentity(context.Context, managementauth.IdentityExchangeRequest, managementauth.PreparedSessionIssuer) (managementauth.IdentityExchangeResult, error) {
 	return managementauth.IdentityExchangeResult{}, errors.New("not used")
 }
@@ -62,6 +65,7 @@ type clockAuthorityBarriers struct{}
 func (clockAuthorityBarriers) Check(context.Context, managementauth.BarrierCheck) (managementauth.BarrierState, error) {
 	return managementauth.BarrierState{Ready: true}, nil
 }
+
 func (clockAuthorityBarriers) InstallDeny(context.Context, managementauth.BarrierKind, string) error {
 	return nil
 }

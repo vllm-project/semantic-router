@@ -17,11 +17,11 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 )
 
-type runtimeManagedAPIStub struct{}
+type runtimeManagementAPIStub struct{}
 
-func (runtimeManagedAPIStub) Register(*http.ServeMux)     {}
-func (runtimeManagedAPIStub) Ready(context.Context) error { return nil }
-func (runtimeManagedAPIStub) Run(ctx context.Context) error {
+func (runtimeManagementAPIStub) Register(*http.ServeMux)     {}
+func (runtimeManagementAPIStub) Ready(context.Context) error { return nil }
+func (runtimeManagementAPIStub) Run(ctx context.Context) error {
 	<-ctx.Done()
 	return ctx.Err()
 }
@@ -127,7 +127,7 @@ func TestStartAPIServerWaitsForListenerAndShutsDown(t *testing.T) {
 	}
 }
 
-func TestStartAPIServerRejectsInvalidManagedTLSBeforeReturning(t *testing.T) {
+func TestStartAPIServerRejectsInvalidManagementTLSBeforeReturning(t *testing.T) {
 	directory := t.TempDir()
 	certificateFile := filepath.Join(directory, "certificate.pem")
 	privateKeyFile := filepath.Join(directory, "private-key.pem")
@@ -139,7 +139,8 @@ func TestStartAPIServerRejectsInvalidManagedTLSBeforeReturning(t *testing.T) {
 	}
 	port := reserveRuntimeManagementPort(t)
 	cfg := config.DefaultGlobalConfig()
-	cfg.ControlPlane.Mode = config.ControlPlaneModeManaged
+	cfg.AccessStore = &config.AccessStoreConfig{}
+	cfg.ManagementAPI.Enabled = true
 	cfg.ManagementAPI.BindAddress = "127.0.0.1"
 	cfg.ManagementAPI.Port = port
 	cfg.ManagementAPI.Auth.Mode = config.ManagementAuthModeRouter
@@ -147,15 +148,14 @@ func TestStartAPIServerRejectsInvalidManagedTLSBeforeReturning(t *testing.T) {
 	cfg.ManagementAPI.Auth.TokenSigningKeyringFile = "/unused/management-signing"
 	cfg.ManagementAPI.Auth.ServiceAccountHMACKeyringFile = "/unused/service-account-hmac"
 	cfg.ManagementAPI.Auth.InvitationHMACKeyringFile = "/unused/invitation-hmac"
-	cfg.ManagementAPI.Auth.ControlPlaneHMACKeyringFile = "/unused/control-plane-hmac"
 	cfg.ManagementAPI.Auth.ResponseKEKKeyringFile = "/unused/response-kek"
 	cfg.ManagementAPI.TLS.CertificateFile = certificateFile
 	cfg.ManagementAPI.TLS.PrivateKeyFile = privateKeyFile
 	_, err := startAPIServerIfEnabled(context.Background(), runtimeOptions{
 		enableAPI: true, apiPort: port, apiBind: "127.0.0.1", port: 50051, metricsPort: 9190,
-	}, routerruntime.NewRegistry(&cfg), runtimeManagedAPIStub{})
+	}, routerruntime.NewRegistry(&cfg), runtimeManagementAPIStub{})
 	if err == nil || !strings.Contains(err.Error(), "invalid or do not match") {
-		t.Fatalf("invalid managed TLS startup error = %v", err)
+		t.Fatalf("invalid durable Management API TLS startup error = %v", err)
 	}
 }
 

@@ -5,21 +5,21 @@ import (
 	"testing"
 )
 
-func TestParseRoutingYAMLBytesRequiresExactDocumentWrapper(t *testing.T) {
+func TestParseRoutingYAMLBytesRequiresExactRoutingWrapper(t *testing.T) {
 	for _, source := range []string{
-		"version: v0.4\nmodels: []\nrecipes: []\nentrypoints: []\n",
-		"document: {}\nversion: v0.4\n",
+		"version: v0.3\nproviders: {}\nrecipes: []\nentrypoints: []\n",
+		"routing: {}\nversion: v0.3\n",
 		"decisions: []\n",
 	} {
 		if _, err := ParseRoutingYAMLBytes([]byte(source)); err == nil ||
-			!strings.Contains(err.Error(), "exactly one top-level document field") {
+			!strings.Contains(err.Error(), "exactly one top-level routing field") {
 			t.Fatalf("ParseRoutingYAMLBytes(%q) error = %v", source, err)
 		}
 	}
 }
 
-func TestParseRoutingYAMLBytesRejectsUnknownDocumentField(t *testing.T) {
-	_, err := ParseRoutingYAMLBytes([]byte("document:\n  decisions: []\n  technical_explanation: leaked\n"))
+func TestParseRoutingYAMLBytesRejectsUnknownRoutingField(t *testing.T) {
+	_, err := ParseRoutingYAMLBytes([]byte("routing:\n  decisions: []\n  technical_explanation: leaked\n"))
 	if err == nil || !strings.Contains(err.Error(), "field technical_explanation not found") {
 		t.Fatalf("ParseRoutingYAMLBytes() error = %v", err)
 	}
@@ -27,7 +27,7 @@ func TestParseRoutingYAMLBytesRejectsUnknownDocumentField(t *testing.T) {
 
 func TestParseRoutingYAMLBytesPreservesRecipeStrategy(t *testing.T) {
 	cfg, err := ParseRoutingYAMLBytes([]byte(`
-document:
+routing:
   strategy: confidence
   decisions:
     - name: direct

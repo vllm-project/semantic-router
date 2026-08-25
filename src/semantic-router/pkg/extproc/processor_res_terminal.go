@@ -12,10 +12,10 @@ import (
 // BackendInvoker for the selected physical dispatch. No public response body
 // or SSE frame is parsed on this accounting path.
 func (r *OpenAIRouter) takeNeutralResponseUsage(ctx *RequestContext) responseUsageMetrics {
-	if r == nil || r.ResponseTerminals == nil || ctx == nil || ctx.ManagedDispatch == nil {
+	if r == nil || r.ResponseTerminals == nil || ctx == nil || ctx.DispatchState == nil {
 		return invalidResponseTerminalUsage("response_terminal_missing")
 	}
-	state := ctx.ManagedDispatch
+	state := ctx.DispatchState
 	state.mu.Lock()
 	dispatchID := state.selectedDispatchID
 	if dispatchID == "" {

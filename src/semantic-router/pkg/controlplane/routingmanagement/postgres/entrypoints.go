@@ -29,16 +29,29 @@ func (store *Store) ListEntrypoints(
 		return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, err
 	}
 	if !scope.all && len(scope.ids) == 0 {
-		return routingmanagement.ListResult[routingmanagement.Entrypoint]{Items: []routingmanagement.Entrypoint{}}, nil
+		return routingmanagement.ListResult[routingmanagement.Entrypoint]{
+			Items: []routingmanagement.Entrypoint{},
+		}, nil
 	}
 	return inReadTransaction(ctx, store, func(
 		tx *sql.Tx,
-	) (_ routingmanagement.ListResult[routingmanagement.Entrypoint], returnErr error) {
-		var cursorTime, cursorID any
-		if request.After != nil {
-			cursorTime, cursorID = request.After.CreatedAt, request.After.ID
-		}
-		query := `WITH page AS (
+	) (routingmanagement.ListResult[routingmanagement.Entrypoint], error) {
+		return listEntrypointsTx(ctx, tx, namespaceID, request, scope)
+	})
+}
+
+func listEntrypointsTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+	request routingmanagement.ListQuery,
+	scope listScope,
+) (_ routingmanagement.ListResult[routingmanagement.Entrypoint], returnErr error) {
+	var cursorTime, cursorID any
+	if request.After != nil {
+		cursorTime, cursorID = request.After.CreatedAt, request.After.ID
+	}
+	query := `WITH page AS (
   SELECT namespace_id,id,status,revision,created_at,updated_at,current_revision
   FROM routing_entrypoints
   WHERE namespace_id=$1 AND deleted_at IS NULL
@@ -57,12 +70,12 @@ FROM page
 JOIN routing_entrypoint_revisions revision
   ON revision.entrypoint_id=page.id AND revision.revision=page.current_revision
 ORDER BY page.created_at DESC,page.id DESC`
-		arguments := []any{
-			namespaceID, scope.all, pq.Array(scope.ids), request.Status,
-			cursorTime, cursorID, request.Limit + 1,
-		}
-		if request.Search != "" {
-			query = `WITH page AS (
+	arguments := []any{
+		namespaceID, scope.all, pq.Array(scope.ids), request.Status,
+		cursorTime, cursorID, request.Limit + 1,
+	}
+	if request.Search != "" {
+		query = `WITH page AS (
   SELECT namespace_id,id,status,revision,created_at,updated_at,current_revision
   FROM routing_entrypoints
   WHERE namespace_id=$1 AND deleted_at IS NULL
@@ -82,47 +95,54 @@ FROM page
 JOIN routing_entrypoint_revisions revision
   ON revision.entrypoint_id=page.id AND revision.revision=page.current_revision
 ORDER BY page.created_at DESC,page.id DESC`
-			arguments = []any{
-				namespaceID, scope.all, pq.Array(scope.ids), request.Status,
-				managementsearch.PrefixPattern(request.Search), cursorTime, cursorID, request.Limit + 1,
-			}
+		arguments = []any{
+			namespaceID, scope.all, pq.Array(scope.ids), request.Status,
+			managementsearch.PrefixPattern(request.Search), cursorTime, cursorID, request.Limit + 1,
 		}
-		rows, err := tx.QueryContext(ctx, query, arguments...)
-		if err != nil {
-			return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, fmt.Errorf("list routing Entrypoints: %w", err)
+	}
+	rows, err := tx.QueryContext(ctx, query, arguments...)
+	if err != nil {
+		return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, fmt.Errorf("list routing Entrypoints: %w", err)
+	}
+	defer func() {
+		returnErr = errors.Join(returnErr, rows.Close())
+	}()
+	items := make([]routingmanagement.Entrypoint, 0, request.Limit+1)
+	for rows.Next() {
+		entrypoint, scanErr := scanEntrypointSummary(rows)
+		if scanErr != nil {
+			return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, scanErr
 		}
-		defer func() {
-			returnErr = errors.Join(returnErr, rows.Close())
-		}()
-		items := make([]routingmanagement.Entrypoint, 0, request.Limit+1)
-		for rows.Next() {
-			var entrypoint routingmanagement.Entrypoint
-			var aliases []byte
-			if err := rows.Scan(
-				&entrypoint.NamespaceID, &entrypoint.ID, &entrypoint.Name, &entrypoint.Status,
-				&entrypoint.Revision, &entrypoint.CreatedAt, &entrypoint.UpdatedAt,
-				&entrypoint.Current.Revision, &aliases, &entrypoint.RuleCount,
-				&entrypoint.AssignedModelCount,
-			); err != nil {
-				return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, err
-			}
-			entrypoint.Current.ID, entrypoint.Current.Name = entrypoint.ID, entrypoint.Name
-			if err := strictJSON(aliases, &entrypoint.Current.Aliases); err != nil {
-				return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, fmt.Errorf("decode routing Entrypoint aliases: %w", err)
-			}
-			items = append(items, entrypoint)
-		}
-		if err := rows.Err(); err != nil {
-			return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, err
-		}
-		result := routingmanagement.ListResult[routingmanagement.Entrypoint]{
-			Items: items, HasMore: len(items) > request.Limit,
-		}
-		if result.HasMore {
-			result.Items = result.Items[:request.Limit]
-		}
-		return result, nil
-	})
+		items = append(items, entrypoint)
+	}
+	if err := rows.Err(); err != nil {
+		return routingmanagement.ListResult[routingmanagement.Entrypoint]{}, err
+	}
+	result := routingmanagement.ListResult[routingmanagement.Entrypoint]{
+		Items: items, HasMore: len(items) > request.Limit,
+	}
+	if result.HasMore {
+		result.Items = result.Items[:request.Limit]
+	}
+	return result, nil
+}
+
+func scanEntrypointSummary(rows *sql.Rows) (routingmanagement.Entrypoint, error) {
+	var entrypoint routingmanagement.Entrypoint
+	var aliases []byte
+	if err := rows.Scan(
+		&entrypoint.NamespaceID, &entrypoint.ID, &entrypoint.Name, &entrypoint.Status,
+		&entrypoint.Revision, &entrypoint.CreatedAt, &entrypoint.UpdatedAt,
+		&entrypoint.Current.Revision, &aliases, &entrypoint.RuleCount,
+		&entrypoint.AssignedModelCount,
+	); err != nil {
+		return routingmanagement.Entrypoint{}, err
+	}
+	entrypoint.Current.ID, entrypoint.Current.Name = entrypoint.ID, entrypoint.Name
+	if err := strictJSON(aliases, &entrypoint.Current.Aliases); err != nil {
+		return routingmanagement.Entrypoint{}, fmt.Errorf("decode routing Entrypoint aliases: %w", err)
+	}
+	return entrypoint, nil
 }
 
 func (store *Store) GetEntrypoint(ctx context.Context, namespaceID, id string) (routingmanagement.Entrypoint, error) {
@@ -136,107 +156,160 @@ func loadEntrypointTx(
 	tx *sql.Tx,
 	namespaceID string,
 	id string,
-) (_ routingmanagement.Entrypoint, returnErr error) {
+) (routingmanagement.Entrypoint, error) {
+	result, err := loadEntrypointHeader(ctx, tx, namespaceID, id)
+	if err != nil {
+		return routingmanagement.Entrypoint{}, err
+	}
+	rules, ruleIndexes, err := loadEntrypointRules(ctx, tx, id, result.Current.Revision)
+	if err != nil {
+		return routingmanagement.Entrypoint{}, err
+	}
+	result.Current.Rules = rules
+	if assignmentErr := loadEntrypointDecisionAssignments(
+		ctx, tx, id, result.Current.Revision, result.Current.Rules, ruleIndexes,
+	); assignmentErr != nil {
+		return routingmanagement.Entrypoint{}, assignmentErr
+	}
+	assignedModels, err := loadEntrypointModelAssignments(
+		ctx, tx, id, result.Current.Revision, result.Current.Rules, ruleIndexes,
+	)
+	if err != nil {
+		return routingmanagement.Entrypoint{}, err
+	}
+	result.RuleCount = len(result.Current.Rules)
+	result.AssignedModelCount = assignedModels
+	return result, nil
+}
+
+func loadEntrypointHeader(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+	id string,
+) (routingmanagement.Entrypoint, error) {
 	var result routingmanagement.Entrypoint
 	var aliases []byte
-	loadEntrypointTxErr := tx.QueryRowContext(ctx, `SELECT e.namespace_id,e.id,r.name,e.status,e.revision,e.created_at,e.updated_at,
+	err := tx.QueryRowContext(ctx, `SELECT e.namespace_id,e.id,r.name,e.status,e.revision,e.created_at,e.updated_at,
 r.revision,r.aliases FROM routing_entrypoints e
 JOIN routing_entrypoint_revisions r ON r.entrypoint_id=e.id AND r.revision=e.current_revision
 WHERE e.namespace_id=$1 AND e.id=$2 AND e.deleted_at IS NULL`, namespaceID, id).Scan(
 		&result.NamespaceID, &result.ID, &result.Name, &result.Status, &result.Revision,
 		&result.CreatedAt, &result.UpdatedAt, &result.Current.Revision, &aliases,
 	)
-	if errors.Is(loadEntrypointTxErr, sql.ErrNoRows) {
+	if errors.Is(err, sql.ErrNoRows) {
 		return routingmanagement.Entrypoint{}, routingmanagement.ErrNotFound
 	}
-	if loadEntrypointTxErr != nil {
-		return routingmanagement.Entrypoint{}, fmt.Errorf("read routing Entrypoint: %w", loadEntrypointTxErr)
+	if err != nil {
+		return routingmanagement.Entrypoint{}, fmt.Errorf("read routing Entrypoint: %w", err)
 	}
 	result.Current.ID, result.Current.Name = result.ID, result.Name
 	if err := strictJSON(aliases, &result.Current.Aliases); err != nil {
 		return routingmanagement.Entrypoint{}, fmt.Errorf("decode routing Entrypoint aliases: %w", err)
 	}
-	rows, loadEntrypointTxErr := tx.QueryContext(ctx, `SELECT id,name,matchers,recipe_id,recipe_revision
+	return result, nil
+}
+
+type entrypointRuleIndexes map[string]int
+
+func loadEntrypointRules(
+	ctx context.Context,
+	tx *sql.Tx,
+	id string,
+	revision int64,
+) (_ []routingsnapshot.EntrypointRule, _ entrypointRuleIndexes, returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id,name,matchers,recipe_id,recipe_revision
 FROM routing_entrypoint_rules WHERE entrypoint_id=$1 AND entrypoint_revision=$2 ORDER BY ordinal`,
-		id, result.Current.Revision)
-	if loadEntrypointTxErr != nil {
-		return routingmanagement.Entrypoint{}, fmt.Errorf("read routing Entrypoint rules: %w", loadEntrypointTxErr)
+		id, revision)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read routing Entrypoint rules: %w", err)
 	}
-	type ruleKey struct{ id string }
-	rules := make(map[ruleKey]int)
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+	rules := make([]routingsnapshot.EntrypointRule, 0)
+	indexes := make(entrypointRuleIndexes)
 	for rows.Next() {
 		var rule routingsnapshot.EntrypointRule
 		var matchers []byte
 		if err := rows.Scan(&rule.ID, &rule.Name, &matchers, &rule.RecipeID, &rule.RecipeRevision); err != nil {
-			return routingmanagement.Entrypoint{}, errors.Join(err, rows.Close())
+			return nil, nil, err
 		}
 		if err := strictJSON(matchers, &rule.Matchers); err != nil {
-			return routingmanagement.Entrypoint{}, errors.Join(err, rows.Close())
+			return nil, nil, err
 		}
 		rule.Assignments = make(map[string]routingsnapshot.AssignmentSet)
-		result.Current.Rules = append(result.Current.Rules, rule)
-		rules[ruleKey{rule.ID}] = len(result.Current.Rules) - 1
+		rules = append(rules, rule)
+		indexes[rule.ID] = len(rules) - 1
 	}
 	if err := rows.Err(); err != nil {
-		return routingmanagement.Entrypoint{}, errors.Join(err, rows.Close())
+		return nil, nil, err
 	}
-	if err := rows.Close(); err != nil {
-		return routingmanagement.Entrypoint{}, err
-	}
-	decisionRows, loadEntrypointTxErr := tx.QueryContext(ctx, `SELECT rule_id,decision_id,fallback_strategy,fallback_on
+	return rules, indexes, nil
+}
+
+func loadEntrypointDecisionAssignments(
+	ctx context.Context,
+	tx *sql.Tx,
+	id string,
+	revision int64,
+	rules []routingsnapshot.EntrypointRule,
+	indexes entrypointRuleIndexes,
+) (returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT rule_id,decision_id,fallback_strategy,fallback_on
 FROM routing_decision_assignments
-WHERE entrypoint_id=$1 AND entrypoint_revision=$2 ORDER BY rule_id,decision_id`, id, result.Current.Revision)
-	if loadEntrypointTxErr != nil {
-		return routingmanagement.Entrypoint{}, fmt.Errorf("read routing Entrypoint decision assignments: %w", loadEntrypointTxErr)
+WHERE entrypoint_id=$1 AND entrypoint_revision=$2 ORDER BY rule_id,decision_id`, id, revision)
+	if err != nil {
+		return fmt.Errorf("read routing Entrypoint decision assignments: %w", err)
 	}
-	for decisionRows.Next() {
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+	for rows.Next() {
 		var ruleID, decisionID string
 		var strategy sql.NullString
 		var on []byte
-		if err := decisionRows.Scan(&ruleID, &decisionID, &strategy, &on); err != nil {
-			return routingmanagement.Entrypoint{}, errors.Join(err, decisionRows.Close())
+		if err := rows.Scan(&ruleID, &decisionID, &strategy, &on); err != nil {
+			return err
 		}
-		ruleIndex, exists := rules[ruleKey{ruleID}]
+		ruleIndex, exists := indexes[ruleID]
 		if !exists {
-			return routingmanagement.Entrypoint{}, errors.Join(
-				fmt.Errorf("stored decision assignment references absent rule"),
-				decisionRows.Close(),
-			)
+			return fmt.Errorf("stored decision assignment references absent rule")
 		}
-		rule := &result.Current.Rules[ruleIndex]
 		assignmentSet := routingsnapshot.AssignmentSet{}
 		if strategy.Valid {
 			assignmentSet.Fallback = &routingsnapshot.FallbackPolicy{Strategy: strategy.String}
 			if err := strictJSON(on, &assignmentSet.Fallback.On); err != nil {
-				return routingmanagement.Entrypoint{}, errors.Join(err, decisionRows.Close())
+				return err
 			}
 		}
-		rule.Assignments[decisionID] = assignmentSet
+		rules[ruleIndex].Assignments[decisionID] = assignmentSet
 	}
-	if err := decisionRows.Err(); err != nil {
-		return routingmanagement.Entrypoint{}, errors.Join(err, decisionRows.Close())
-	}
-	if err := decisionRows.Close(); err != nil {
-		return routingmanagement.Entrypoint{}, err
-	}
-	assignmentRows, loadEntrypointTxErr := tx.QueryContext(ctx, `SELECT rule_id,decision_id,model_id,model_revision,
+	return rows.Err()
+}
+
+func loadEntrypointModelAssignments(
+	ctx context.Context,
+	tx *sql.Tx,
+	id string,
+	revision int64,
+	rules []routingsnapshot.EntrypointRule,
+	indexes entrypointRuleIndexes,
+) (_ int, returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT rule_id,decision_id,model_id,model_revision,
 priority,weight::text,lora_name,reasoning FROM routing_assignment_models
-WHERE entrypoint_id=$1 AND entrypoint_revision=$2 ORDER BY rule_id,decision_id,priority,ordinal`, id, result.Current.Revision)
-	if loadEntrypointTxErr != nil {
-		return routingmanagement.Entrypoint{}, fmt.Errorf("read routing Entrypoint assignments: %w", loadEntrypointTxErr)
+WHERE entrypoint_id=$1 AND entrypoint_revision=$2 ORDER BY rule_id,decision_id,priority,ordinal`, id, revision)
+	if err != nil {
+		return 0, fmt.Errorf("read routing Entrypoint assignments: %w", err)
 	}
-	defer func() {
-		returnErr = errors.Join(returnErr, assignmentRows.Close())
-	}()
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
 	assignedModels := make(map[string]struct{})
-	for assignmentRows.Next() {
+	for rows.Next() {
 		var ruleID, decisionID string
 		var assignment routingsnapshot.Assignment
 		var lora sql.NullString
 		var reasoning []byte
-		if err := assignmentRows.Scan(&ruleID, &decisionID, &assignment.ModelID, &assignment.ModelRevision,
-			&assignment.Priority, &assignment.Weight, &lora, &reasoning); err != nil {
-			return routingmanagement.Entrypoint{}, err
+		if err := rows.Scan(
+			&ruleID, &decisionID, &assignment.ModelID, &assignment.ModelRevision,
+			&assignment.Priority, &assignment.Weight, &lora, &reasoning,
+		); err != nil {
+			return 0, err
 		}
 		if lora.Valid {
 			assignment.LoRAName = lora.String
@@ -244,29 +317,26 @@ WHERE entrypoint_id=$1 AND entrypoint_revision=$2 ORDER BY rule_id,decision_id,p
 		if len(reasoning) != 0 && string(reasoning) != "null" {
 			var value routingsnapshot.AssignmentReasoning
 			if err := strictJSON(reasoning, &value); err != nil {
-				return routingmanagement.Entrypoint{}, err
+				return 0, err
 			}
 			assignment.Reasoning = &value
 		}
-		ruleIndex, exists := rules[ruleKey{ruleID}]
+		ruleIndex, exists := indexes[ruleID]
 		if !exists {
-			return routingmanagement.Entrypoint{}, fmt.Errorf("stored assignment references absent rule")
+			return 0, fmt.Errorf("stored assignment references absent rule")
 		}
-		rule := &result.Current.Rules[ruleIndex]
-		assignmentSet, exists := rule.Assignments[decisionID]
+		assignmentSet, exists := rules[ruleIndex].Assignments[decisionID]
 		if !exists {
-			return routingmanagement.Entrypoint{}, fmt.Errorf("stored Model assignment references absent decision assignment")
+			return 0, fmt.Errorf("stored Model assignment references absent decision assignment")
 		}
 		assignmentSet.Models = append(assignmentSet.Models, assignment)
-		rule.Assignments[decisionID] = assignmentSet
+		rules[ruleIndex].Assignments[decisionID] = assignmentSet
 		assignedModels[assignment.ModelID] = struct{}{}
 	}
-	if err := assignmentRows.Err(); err != nil {
-		return routingmanagement.Entrypoint{}, err
+	if err := rows.Err(); err != nil {
+		return 0, err
 	}
-	result.RuleCount = len(result.Current.Rules)
-	result.AssignedModelCount = len(assignedModels)
-	return result, nil
+	return len(assignedModels), nil
 }
 
 func (store *Store) CreateEntrypoint(
@@ -404,9 +474,13 @@ WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL`, namespa
 			return entrypointMutationResult{}, updateEntrypointErr
 		}
 		if meta.Command != nil {
+			resourceRevision, revisionErr := publicRevision(expected+1, "updated Entrypoint revision")
+			if revisionErr != nil {
+				return entrypointMutationResult{}, revisionErr
+			}
 			if err := commandpostgres.CompleteResource(ctx, tx, *meta.Command, managementcommand.ResourceResult{
 				ResourceType: "routing_entrypoint", ResourceID: id,
-				ResourceRevision: uint64(expected + 1), ResponseStatus: 200,
+				ResourceRevision: resourceRevision, ResponseStatus: 200,
 			}); err != nil {
 				return entrypointMutationResult{}, err
 			}
@@ -451,9 +525,13 @@ AND status<>'active' AND deleted_at IS NULL`, namespaceID, id, expected)
 			return routingmanagement.RevisionReceipt{}, err
 		}
 		if meta.Command != nil {
+			resourceRevision, revisionErr := publicRevision(expected+1, "deleted Entrypoint revision")
+			if revisionErr != nil {
+				return routingmanagement.RevisionReceipt{}, revisionErr
+			}
 			if err := commandpostgres.CompleteResource(ctx, tx, *meta.Command, managementcommand.ResourceResult{
 				ResourceType: "routing_entrypoint", ResourceID: id,
-				ResourceRevision: uint64(expected + 1), ResponseStatus: 204,
+				ResourceRevision: resourceRevision, ResponseStatus: 204,
 			}); err != nil {
 				return routingmanagement.RevisionReceipt{}, err
 			}
@@ -547,7 +625,10 @@ VALUES ($1,$2,$3,$4,$5,$6,'pending',1,$7,$8,$9)`, operationID, namespaceID,
 				targetIDs, receipt.DesiredRevision); err != nil {
 				return publicationMutationResult{}, fmt.Errorf("insert routing publication operation: %w", err)
 			}
-			desired := uint64(receipt.DesiredRevision)
+			desired, revisionErr := publicRevision(receipt.DesiredRevision, "published Entrypoint desired revision")
+			if revisionErr != nil {
+				return publicationMutationResult{}, revisionErr
+			}
 			if err := commandpostgres.CompleteOperation(ctx, tx, *meta.Command, managementcommand.OperationResult{
 				OperationID: operationID, DesiredRevision: &desired, ResponseStatus: 202,
 			}); err != nil {
@@ -578,10 +659,14 @@ func replayEntrypoint(
 	if err != nil {
 		return entrypointMutationResult{}, managementcommand.ErrConflict
 	}
+	resourceRevision, revisionErr := postgresRevision(stored.Resource.ResourceRevision, "stored Entrypoint revision")
+	if revisionErr != nil {
+		return entrypointMutationResult{}, managementcommand.ErrConflict
+	}
 	return entrypointMutationResult{
 		entrypoint: entrypoint,
 		receipt: routingmanagement.RevisionReceipt{
-			ResourceRevision: int64(stored.Resource.ResourceRevision), Replayed: true,
+			ResourceRevision: resourceRevision, Replayed: true,
 		},
 	}, nil
 }
@@ -595,8 +680,12 @@ func replayPublication(stored managementcommand.StoredResult) (publicationMutati
 	if stored.Operation == nil || stored.Operation.DesiredRevision == nil {
 		return publicationMutationResult{}, managementcommand.ErrConflict
 	}
+	desiredRevision, revisionErr := postgresRevision(*stored.Operation.DesiredRevision, "stored publication desired revision")
+	if revisionErr != nil {
+		return publicationMutationResult{}, managementcommand.ErrConflict
+	}
 	return publicationMutationResult{receipt: routingmanagement.RevisionReceipt{
-		DesiredRevision: int64(*stored.Operation.DesiredRevision), OperationID: stored.Operation.OperationID,
+		DesiredRevision: desiredRevision, OperationID: stored.Operation.OperationID,
 		Replayed: true,
 	}}, nil
 }

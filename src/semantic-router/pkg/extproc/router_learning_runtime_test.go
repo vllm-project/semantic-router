@@ -20,7 +20,7 @@ func (projection staticOutcomeProjection) Read(context.Context, string) (outcome
 	return projection.projection, projection.err
 }
 
-func TestManagedRouterLearningUsesOnlyRevisionedOutcomeProjection(t *testing.T) {
+func TestDurableRoutingLearningUsesOnlyRevisionedOutcomeProjection(t *testing.T) {
 	namespaceID := "00000000-0000-4000-8000-000000000101"
 	projection := outcomefeedback.Projection{
 		Schema: outcomefeedback.ProjectionSchema, NamespaceID: namespaceID, Revision: 8,
@@ -42,7 +42,7 @@ func TestManagedRouterLearningUsesOnlyRevisionedOutcomeProjection(t *testing.T) 
 	first.recordModelExperience("complex", 3, "model-a", routerLearningOutcomeFailed, 25)
 	observed := first.experienceSnapshotForRequest(request, "complex", 3, "model-a")
 	if observed.GoodFitCount != 2 || observed.FailedCount != 1 {
-		t.Fatalf("managed experience = %+v, want only durable projection counts", observed)
+		t.Fatalf("durable experience = %+v, want only durable projection counts", observed)
 	}
 
 	// A fresh runtime observes the same global state without inheriting a local

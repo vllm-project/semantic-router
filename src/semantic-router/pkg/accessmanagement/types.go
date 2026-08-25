@@ -133,6 +133,68 @@ type EffectivePolicy struct {
 	Quota           EffectiveQuota
 }
 
+// RoutingCatalog is the credential-free, key-scoped routing view consumed by
+// read-only Management clients. It is compiled from the same applied policy
+// and immutable routing snapshot used by inference. Backend origins,
+// credentials, and Recipe documents are intentionally unrepresentable.
+type RoutingCatalog struct {
+	Subject         Subject
+	PolicyRevision  uint64
+	PolicyDigest    string
+	RoutingRevision int64
+	RoutingDigest   string
+	Models          []RoutingCatalogModel
+	Recipes         []RoutingCatalogRecipe
+	Entrypoints     []RoutingCatalogEntrypoint
+}
+
+type RoutingCatalogModel struct {
+	ID                string
+	Revision          int64
+	Name              string
+	Aliases           []string
+	ParamSize         string
+	ContextWindowSize int
+	Description       string
+	Capabilities      []string
+	Reasoning         routingsnapshot.ReasoningFamily
+	LoRAs             []string
+	QualityScore      float64
+	Modality          string
+	Tags              []string
+	Pricing           routingsnapshot.ModelPricing
+}
+
+type RoutingCatalogRecipe struct {
+	ID          string
+	Revision    int64
+	Name        string
+	Description string
+	Decisions   []routingsnapshot.Decision
+}
+
+type RoutingCatalogEntrypoint struct {
+	ID       string
+	Revision int64
+	Name     string
+	Aliases  []string
+	Rules    []RoutingCatalogRule
+}
+
+type RoutingCatalogRule struct {
+	ID             string
+	Name           string
+	Matchers       []routingsnapshot.Matcher
+	RecipeID       string
+	RecipeRevision int64
+	Assignments    map[string]RoutingCatalogAssignmentSet
+}
+
+type RoutingCatalogAssignmentSet struct {
+	Models   []routingsnapshot.Assignment
+	Fallback *routingsnapshot.FallbackPolicy
+}
+
 type AccessCheckRequest struct {
 	NamespaceID     string
 	Subject         Subject

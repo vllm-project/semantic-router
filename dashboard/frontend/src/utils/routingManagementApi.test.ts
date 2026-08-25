@@ -18,7 +18,10 @@ const model = (id: string) => ({
   aliases: [],
   capabilities: ['text'],
   loras: [],
-  execution: { maxRetries: 0, requestTimeout: '30s', streamTimeout: '60s' },
+  control: {
+    retry: { count: 0, on: [] },
+    timeout: { request: '30s', stream: '60s' },
+  },
   pricing: {
     inputCostPerMillionTokens: null,
     outputCostPerMillionTokens: null,
@@ -313,13 +316,19 @@ describe('routingManagementApi', () => {
     )
 
     await routingManagementApi.updateModel('model-one', 4, {
-      execution: { maxRetries: 3, requestTimeout: '45s', streamTimeout: '5m' },
+      control: {
+        retry: { count: 3, on: ['unavailable'] },
+        timeout: { request: '45s', stream: '5m' },
+      },
     })
 
     expect(requests).toHaveLength(1)
     expect(requests[0].headers.get('If-Match')).toBe('"mdl:4"')
     expect(await requests[0].json()).toEqual({
-      execution: { maxRetries: 3, requestTimeout: '45s', streamTimeout: '5m' },
+      control: {
+        retry: { count: 3, on: ['unavailable'] },
+        timeout: { request: '45s', stream: '5m' },
+      },
     })
   })
 

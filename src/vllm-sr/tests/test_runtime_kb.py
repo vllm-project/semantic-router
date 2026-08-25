@@ -25,7 +25,7 @@ def test_resolve_effective_config_path_seeds_relative_kb_assets_into_runtime_sto
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "kbs": [
@@ -78,7 +78,7 @@ def test_resolve_effective_config_path_seeds_builtin_kb_assets_once(tmp_path: Pa
         config_path.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.4",
+                    "version": "v0.3",
                     "global": {
                         "model_catalog": {
                             "kbs": [
@@ -125,7 +125,7 @@ def test_resolve_effective_config_path_seeds_builtin_kb_assets_once(tmp_path: Pa
 
 def test_runtime_kb_bootstrap_state_ignores_corrupt_yaml(tmp_path: Path):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.4\n")
+    config_path.write_text("version: v0.3\n")
     state_path = _runtime_kb_bootstrap_state_path(config_path)
     state_path.write_text("processed: [unterminated", encoding="utf-8")
 
@@ -136,7 +136,7 @@ def test_runtime_kb_bootstrap_state_write_replaces_file_without_temp_leftovers(
     tmp_path: Path,
 ):
     config_path = tmp_path / "config.yaml"
-    config_path.write_text("version: v0.4\n")
+    config_path.write_text("version: v0.3\n")
 
     _write_runtime_kb_bootstrap_state(
         config_path,
@@ -167,7 +167,7 @@ def test_runtime_kb_bootstrap_rejects_paths_outside_allowed_roots(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "kbs": [
@@ -204,7 +204,7 @@ def test_runtime_kb_bootstrap_rejects_symlinked_source_tree(tmp_path: Path):
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "global": {
                     "model_catalog": {
                         "kbs": [

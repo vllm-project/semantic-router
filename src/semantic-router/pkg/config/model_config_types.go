@@ -325,7 +325,7 @@ type ModelPricing struct {
 
 type ModelParams struct {
 	// ResourceID and ResourceRevision are the immutable routing identity pinned
-	// by v0.4 Entrypoint assignments and routing snapshots. Model remains a
+	// by compiled Entrypoint assignments and routing snapshots. Model remains a
 	// human-facing, mutable name at request/backend seams.
 	ResourceID       string                 `yaml:"-" json:"-"`
 	ResourceRevision int64                  `yaml:"-" json:"-"`
@@ -338,7 +338,6 @@ type ModelParams struct {
 	Reasoning          routingsnapshot.ReasoningFamily `yaml:"-" json:"-"`
 	PreferredEndpoints []string                        `yaml:"preferred_endpoints,omitempty"`
 	Pricing            ModelPricing                    `yaml:"pricing,omitempty"`
-	Reliability        ProviderReliability             `yaml:"reliability,omitempty"`
 	ReasoningFamily    string                          `yaml:"reasoning_family,omitempty"`
 	LoRAs              []LoRAAdapter                   `yaml:"loras,omitempty"`
 	ParamSize          string                          `yaml:"param_size,omitempty"`

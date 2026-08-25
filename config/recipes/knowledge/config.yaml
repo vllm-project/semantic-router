@@ -1,30 +1,54 @@
-version: v0.4
+version: v0.3
 listeners:
 - address: 0.0.0.0
   name: http-8899
   port: 8899
   timeout: 1200s
-models:
-- name: local/small-7b
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: qwen/qwen3.5-rocm
-  pricing:
-    input_cost_per_million_tokens: '0.04'
-    output_cost_per_million_tokens: '0.1'
-- name: cloud/frontier-72b
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: anthropic/claude-opus-4.6
-  pricing:
-    input_cost_per_million_tokens: '0.12'
-    output_cost_per_million_tokens: '0.39'
+providers:
+  defaults:
+    default_model: local/small-7b
+  models:
+  - name: local/small-7b
+    provider_model_id: qwen/qwen3.5-rocm
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '0.04'
+      output_cost_per_million_tokens: '0.1'
+  - name: cloud/frontier-72b
+    provider_model_id: anthropic/claude-opus-4.6
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '0.12'
+      output_cost_per_million_tokens: '0.39'
+  - name: local/omni
+    provider_model_id: local/omni
+    backend_refs:
+    - endpoint: http://vllm-omni:8000/v1
+      provider: vllm
+    api_format: openai
+routing:
+  modelCards:
+  - name: local/small-7b
+  - name: cloud/frontier-72b
+  - name: local/omni
+    capabilities:
+    - chat
+    - image_understanding
+    - multimodal
+    - omni
+    - text
+    - vision
+    modality: omni
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: escalation_domain_override
@@ -133,6 +157,13 @@ recipes:
           kind: label
           value: chemistry
         match: best
+      conversation:
+      - name: knowledge_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     projections:
       scores:
       - name: escalation_pressure
@@ -153,6 +184,16 @@ recipes:
         - name: escalation_signal
           gte: 2.0
     decisions:
+    - name: omni
+      description: Understand image-bearing knowledge requests with the dedicated visual-language model.
+      priority: 300
+      rules:
+        operator: OR
+        conditions:
+        - type: conversation
+          name: knowledge_has_images
+      algorithm:
+        type: static
     - name: escalate_72b
       description: Escalate high-uplift MMLU domains to the frontier 72B lane.
       priority: 200
@@ -200,8 +241,7 @@ recipes:
           - type: keyword
             name: local_domain_override
 entrypoints:
-- name: vllm-sr/auto
-  recipe: default
+- recipe: default
   assignments:
     escalate_72b:
       models:
@@ -211,6 +251,12 @@ entrypoints:
       models:
       - model: local/small-7b
         weight: '1'
+    omni:
+      models:
+      - model: local/omni
+        weight: '1'
+  model_names:
+  - vllm-sr/auto
 global:
   billing:
     currency: USD

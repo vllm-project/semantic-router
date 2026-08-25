@@ -78,20 +78,20 @@ if ! grep -A5 'livenessProbe:' "$TEMP_DIR/default-template.yaml" | grep -q 'path
     exit 1
 fi
 if ! grep -A5 'readinessProbe:' "$TEMP_DIR/default-template.yaml" | grep -q 'scheme: HTTP'; then
-    log_error "Standalone readiness probe does not use HTTP"
+    log_error "File-authoritative readiness probe does not use HTTP"
     exit 1
 fi
-if ! grep -A3 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
+if ! grep -A4 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
     grep -q 'bind_address: 0.0.0.0'; then
-    log_error "Default chart config does not expose the container-internal Management listener"
+    log_error "Default chart config does not pin the container-internal API listener"
     exit 1
 fi
-if ! grep -A3 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
+if ! grep -A4 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
     grep -q 'port: 8080'; then
     log_error "Default chart config does not pin the Management listener port"
     exit 1
 fi
-if ! grep -A3 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
+if ! grep -A4 '^        management_api:$' "$TEMP_DIR/default-template.yaml" | \
     grep -q 'remote_exposure: false'; then
     log_error "Default chart config unexpectedly marks the Management listener as remotely exposed"
     exit 1
@@ -102,26 +102,31 @@ echo ""
 log_info "Testing atomic canonical Router config rendering..."
 cat > "$TEMP_DIR/canonical-config.yaml" <<'EOF'
 configOverride:
-  version: v0.4
+  version: v0.3
   listeners:
     - name: http
       address: 0.0.0.0
       port: 8899
-  models:
-    - name: local/custom
-      connections:
+  providers:
+    models:
+      - name: local/custom
+        provider_model_id: local/custom
+        backend_refs:
         - provider: vllm
           endpoint: http://custom-model.default.svc.cluster.local:8000/v1
-          model: local/custom
+  routing:
+    modelCards:
+      - name: local/custom
+        capabilities: [chat]
   recipes:
     - name: custom
-      document:
+      routing:
         decisions:
           - name: custom-route
             priority: 100
             rules: {}
   entrypoints:
-    - name: local/custom
+    - model_names: [vllm-sr/custom]
       recipe: custom
       assignments:
         custom-route:
@@ -180,20 +185,78 @@ fi
 log_success "Empty canonical config fails closed instead of using chart samples"
 echo ""
 
-# Test 4: Managed mode must isolate Management and render availability controls.
-log_info "Testing managed listener isolation and availability resources..."
-cat > "$TEMP_DIR/managed-config.yaml" <<'EOF'
+# PostgreSQL-only routing keeps the operational listener plaintext while
+# capability-derived availability controls default on. Explicit chart values
+# remain the only opt-out.
+cat > "$TEMP_DIR/store-only-config.yaml" <<'EOF'
 configOverride:
-  version: v0.4
+  version: v0.3
   global:
-    control_plane:
-      mode: managed
     stores:
-      access:
+      management:
         postgres:
           dsn_env: TEST_DATABASE_URL
     services:
       management_api:
+        enabled: false
+        port: 9080
+EOF
+
+helm template store-only-release "$CHART_PATH" \
+    -f "$TEMP_DIR/store-only-config.yaml" \
+    > "$TEMP_DIR/store-only-template.yaml"
+
+if ! grep -A5 'readinessProbe:' "$TEMP_DIR/store-only-template.yaml" | grep -q 'scheme: HTTP'; then
+    log_error "Store-only readiness probe does not use the plaintext operational listener"
+    exit 1
+fi
+if ! grep -q 'containerPort: 9080' "$TEMP_DIR/store-only-template.yaml"; then
+    log_error "Store-only deployment did not use the configured operational listener port"
+    exit 1
+fi
+if grep -q '^  name: store-only-release-semantic-router-management$' "$TEMP_DIR/store-only-template.yaml"; then
+    log_error "Store-only routing exposed a disabled Management API Service"
+    exit 1
+fi
+for contract in 'kind: PodDisruptionBudget' 'kind: NetworkPolicy' 'topologySpreadConstraints:'; do
+    if ! grep -q "$contract" "$TEMP_DIR/store-only-template.yaml"; then
+        log_error "Store-only routing did not enable capability-derived availability contract: $contract"
+        exit 1
+    fi
+done
+if ! grep -A12 '^  - from:$' "$TEMP_DIR/store-only-template.yaml" | \
+    grep -q 'app.kubernetes.io/component: router'; then
+    log_error "Store-only NetworkPolicy did not admit same-deployment backend dispatch"
+    exit 1
+fi
+
+helm template store-only-opt-out-release "$CHART_PATH" \
+    -f "$TEMP_DIR/store-only-config.yaml" \
+    --set podDisruptionBudget.enabled=false \
+    --set topologySpread.enabled=false \
+    --set networkPolicy.enabled=false \
+    > "$TEMP_DIR/store-only-opt-out-template.yaml"
+if grep -Eq 'kind: (PodDisruptionBudget|NetworkPolicy)|topologySpreadConstraints:' \
+    "$TEMP_DIR/store-only-opt-out-template.yaml"; then
+    log_error "Explicit availability overrides did not disable store-only defaults"
+    exit 1
+fi
+log_success "Store-only routing uses HTTP health and capability-derived availability defaults"
+echo ""
+
+# Test 4: Durable routing must isolate Management and render availability controls.
+log_info "Testing durable routing isolation and availability resources..."
+cat > "$TEMP_DIR/durable-config.yaml" <<'EOF'
+configOverride:
+  version: v0.3
+  global:
+    stores:
+      management:
+        postgres:
+          dsn_env: TEST_DATABASE_URL
+    services:
+      management_api:
+        enabled: true
         port: 9443
       backend_dispatch:
         port: 8181
@@ -218,94 +281,95 @@ dashboard:
       existingSecretKey: trust.pem
 EOF
 
-helm template managed-release "$CHART_PATH" \
-    -f "$TEMP_DIR/managed-config.yaml" \
-    > "$TEMP_DIR/managed-template.yaml"
+helm template durable-release "$CHART_PATH" \
+    -f "$TEMP_DIR/durable-config.yaml" \
+    > "$TEMP_DIR/durable-template.yaml"
 
 awk '
     $0 == "kind: ConfigMap" { in_router_configmap = 1; next }
     in_router_configmap && $0 ~ /^  config\.yaml: \|/ { in_config = 1; next }
     in_config && $0 ~ /^  [^ ]/ { exit }
     in_config { sub(/^    /, ""); print }
-' "$TEMP_DIR/managed-template.yaml" > "$TEMP_DIR/managed-rendered-config.yaml"
+' "$TEMP_DIR/durable-template.yaml" > "$TEMP_DIR/durable-rendered-config.yaml"
 
-if ! grep -Eq '^[[:space:]]+mode: managed$' "$TEMP_DIR/managed-rendered-config.yaml"; then
-    log_error "Managed mode was not preserved in the rendered Router config"
+if ! grep -A3 '^    management:$' "$TEMP_DIR/durable-rendered-config.yaml" | \
+    grep -q '^      postgres:$'; then
+    log_error "Durable Management store was not preserved in the rendered Router config"
     exit 1
 fi
-if grep -Eq '^(models|recipes|entrypoints):' "$TEMP_DIR/managed-rendered-config.yaml"; then
-    log_error "Chart sample routes leaked into the managed Router bootstrap"
+if grep -Eq '^(providers|routing|recipes|entrypoints):' "$TEMP_DIR/durable-rendered-config.yaml"; then
+    log_error "Chart sample routes leaked into the atomic durable Router bootstrap"
     exit 1
 fi
-if ! grep -q 'name: managed-release-semantic-router-management' "$TEMP_DIR/managed-template.yaml"; then
-    log_error "Managed mode did not render a dedicated Management Service"
+if ! grep -q 'name: durable-release-semantic-router-management' "$TEMP_DIR/durable-template.yaml"; then
+    log_error "Enabled Management API did not render a dedicated Service"
     exit 1
 fi
 if ! awk '
     /^---$/ { in_service = 0; is_management = 0; publishes_not_ready = 0 }
     /^kind: Service$/ { in_service = 1 }
-    in_service && $1 == "name:" && $2 == "managed-release-semantic-router-management" { is_management = 1 }
+    in_service && $1 == "name:" && $2 == "durable-release-semantic-router-management" { is_management = 1 }
     in_service && $1 == "publishNotReadyAddresses:" && $2 == "true" { publishes_not_ready = 1 }
     is_management && publishes_not_ready { found = 1 }
     END { exit(found ? 0 : 1) }
-' "$TEMP_DIR/managed-template.yaml"; then
+' "$TEMP_DIR/durable-template.yaml"; then
     log_error "Private Management Service does not publish bootstrap endpoints before inference readiness"
     exit 1
 fi
-publish_not_ready_count=$(grep -c '^  publishNotReadyAddresses: true$' "$TEMP_DIR/managed-template.yaml" || true)
+publish_not_ready_count=$(grep -c '^  publishNotReadyAddresses: true$' "$TEMP_DIR/durable-template.yaml" || true)
 if [ "$publish_not_ready_count" -ne 1 ]; then
     log_error "Only the private Management Service may publish not-ready Router addresses"
     exit 1
 fi
-if ! grep -A5 'readinessProbe:' "$TEMP_DIR/managed-template.yaml" | grep -q 'scheme: HTTPS'; then
-    log_error "Managed readiness probe does not use HTTPS"
+if ! grep -A5 'readinessProbe:' "$TEMP_DIR/durable-template.yaml" | grep -q 'scheme: HTTPS'; then
+    log_error "Durable-state readiness probe does not use HTTPS"
     exit 1
 fi
-if ! grep -A1 'name: TARGET_ROUTER_API_URL' "$TEMP_DIR/managed-template.yaml" | \
-    grep -q 'https://managed-release-semantic-router-management:8080'; then
-    log_error "Dashboard does not use the private managed HTTPS Service"
+if ! grep -A1 'name: TARGET_ROUTER_API_URL' "$TEMP_DIR/durable-template.yaml" | \
+    grep -q 'https://durable-release-semantic-router-management:8080'; then
+    log_error "Dashboard does not use the private Management HTTPS Service"
     exit 1
 fi
-if ! grep -A1 'name: SSL_CERT_FILE' "$TEMP_DIR/managed-template.yaml" | \
+if ! grep -A1 'name: SSL_CERT_FILE' "$TEMP_DIR/durable-template.yaml" | \
     grep -q '/var/run/secrets/vllm-sr/router-management-ca/ca.crt'; then
     log_error "Dashboard does not use the configured Router Management trust bundle"
     exit 1
 fi
-if ! grep -A5 'name: router-management-ca' "$TEMP_DIR/managed-template.yaml" | \
+if ! grep -A5 'name: router-management-ca' "$TEMP_DIR/durable-template.yaml" | \
     grep -q 'secretName: router-management-client-ca'; then
     log_error "Dashboard does not mount the configured Router Management CA Secret"
     exit 1
 fi
-if ! grep -A6 'name: router-management-ca' "$TEMP_DIR/managed-template.yaml" | \
+if ! grep -A6 'name: router-management-ca' "$TEMP_DIR/durable-template.yaml" | \
     grep -q 'key: trust.pem'; then
     log_error "Dashboard Router Management CA Secret key was not projected"
     exit 1
 fi
-if ! grep -q 'kind: PodDisruptionBudget' "$TEMP_DIR/managed-template.yaml"; then
+if ! grep -q 'kind: PodDisruptionBudget' "$TEMP_DIR/durable-template.yaml"; then
     log_error "Enabled Router PodDisruptionBudget was not rendered"
     exit 1
 fi
-if ! grep -q 'kind: NetworkPolicy' "$TEMP_DIR/managed-template.yaml"; then
+if ! grep -q 'kind: NetworkPolicy' "$TEMP_DIR/durable-template.yaml"; then
     log_error "Enabled Router NetworkPolicy was not rendered"
     exit 1
 fi
-if ! grep -q 'topologySpreadConstraints:' "$TEMP_DIR/managed-template.yaml"; then
+if ! grep -q 'topologySpreadConstraints:' "$TEMP_DIR/durable-template.yaml"; then
     log_error "Enabled Router topology spread was not rendered"
     exit 1
 fi
-if helm template unsafe-managed-ingress "$CHART_PATH" \
-    -f "$TEMP_DIR/managed-config.yaml" \
+if helm template unsafe-durable-ingress "$CHART_PATH" \
+    -f "$TEMP_DIR/durable-config.yaml" \
     --set ingress.enabled=true \
-    > "$TEMP_DIR/unsafe-managed-ingress.yaml" 2>&1; then
-    log_error "Managed mode allowed the private Management listener through Ingress"
+    > "$TEMP_DIR/unsafe-durable-ingress.yaml" 2>&1; then
+    log_error "Durable routing allowed the private listener through Ingress"
     exit 1
 fi
-if ! grep -q 'ingress cannot expose the managed Management listener' \
-    "$TEMP_DIR/unsafe-managed-ingress.yaml"; then
-    log_error "Managed Ingress rejection did not explain the isolation contract"
+if ! grep -q 'ingress cannot expose the private durable-state listener' \
+    "$TEMP_DIR/unsafe-durable-ingress.yaml"; then
+    log_error "Durable-state Ingress rejection did not explain the isolation contract"
     exit 1
 fi
-log_success "Managed listener isolation and availability resources are explicit"
+log_success "Durable routing isolation and availability resources are explicit"
 echo ""
 
 
@@ -331,7 +395,7 @@ required_files=(
     "README.md"
     ".helmignore"
     "templates/_helpers.tpl"
-    "templates/access-migrate-job.yaml"
+    "templates/management-migrate-job.yaml"
     "templates/deployment.yaml"
     "templates/service.yaml"
     "templates/configmap.yaml"

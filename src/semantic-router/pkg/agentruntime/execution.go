@@ -17,6 +17,16 @@ type publishPrepareOutput struct {
 	Approval agentmanagement.ApprovalRequestEvent `json:"approval"`
 }
 
+type modelStepPreparation struct {
+	credential    []byte
+	tools         []llmprotocol.Tool
+	projection    executionContext
+	request       llmprotocol.Request
+	requestDigest []byte
+	ordinal       int64
+	id            string
+}
+
 func (worker *Worker) executeTurn(
 	ctx context.Context, lease agentmanagement.TurnLease,
 ) (agentmanagement.TurnTransition, error) {
@@ -122,17 +132,71 @@ func (worker *Worker) runModelStep(
 	registry *agentmanagement.ToolRegistry,
 	projection executionContext,
 ) error {
-	if err := worker.authority.Reauthorize(ctx, session, profile.MinimumTargetCapabilities); err != nil {
-		return err
-	}
-	if err := worker.authority.RenewDelegation(ctx, session, worker.delegationTTL); err != nil {
-		return err
-	}
-	credential, err := worker.authority.ResolveInferenceCredential(ctx, session)
+	prepared, err := worker.prepareModelStep(ctx, lease, session, profile, registry, projection)
 	if err != nil {
 		return err
 	}
-	defer clear(credential)
+	defer clear(prepared.credential)
+	step, replayed, err := worker.store.BeginModelStep(ctx, agentmanagement.ModelStep{
+		ID: prepared.id, NamespaceID: lease.NamespaceID, SessionID: lease.SessionID,
+		TurnID: lease.TurnID, Ordinal: prepared.ordinal, WorkerID: lease.WorkerID, Fence: lease.Fence,
+		RegistryRevision: lease.RegistryRevision, RequestDigest: prepared.requestDigest,
+	})
+	if err != nil {
+		return err
+	}
+	if replayed {
+		if step.Status == "completed" {
+			return nil
+		}
+		return fmt.Errorf("%w: public inference outcome is unknown and cannot be repeated", agentmanagement.ErrConflict)
+	}
+	collector := newModelStepCollector(
+		ctx, worker, lease, registry, profile.ToolPolicy, prepared.id, prepared.projection.ToolSteps,
+	)
+	committedLiveOutput := false
+	defer func() {
+		if !committedLiveOutput {
+			collector.publishLiveTerminal(agentmanagement.LiveModelStepDiscarded)
+		}
+	}()
+	if generateErr := worker.inference.Generate(ctx, prepared.credential, prepared.request, collector.consume); generateErr != nil {
+		return generateErr
+	}
+	output, err := collector.finish()
+	if err != nil {
+		return err
+	}
+	if commitErr := worker.commitModelStep(ctx, lease, profile, prepared, output); commitErr != nil {
+		return commitErr
+	}
+	committedLiveOutput = true
+	collector.publishLiveTerminal(agentmanagement.LiveModelStepCommitted)
+	return nil
+}
+
+func (worker *Worker) prepareModelStep(
+	ctx context.Context,
+	lease agentmanagement.TurnLease,
+	session agentmanagement.Session,
+	profile agentmanagement.Profile,
+	registry *agentmanagement.ToolRegistry,
+	projection executionContext,
+) (modelStepPreparation, error) {
+	if err := worker.authority.Reauthorize(ctx, session, profile.MinimumTargetCapabilities); err != nil {
+		return modelStepPreparation{}, err
+	}
+	if err := worker.authority.RenewDelegation(ctx, session, worker.delegationTTL); err != nil {
+		return modelStepPreparation{}, err
+	}
+	credential, err := worker.authority.ResolveInferenceCredential(ctx, session)
+	if err != nil {
+		return modelStepPreparation{}, err
+	}
+	fail := func(err error) (modelStepPreparation, error) {
+		clear(credential)
+		return modelStepPreparation{}, err
+	}
 	definitions := registry.Definitions(profile.ToolPolicy)
 	tools := make([]llmprotocol.Tool, 0, len(definitions))
 	for _, definition := range definitions {
@@ -146,12 +210,12 @@ func (worker *Worker) runModelStep(
 		projection, profile.ContextTokenBudget, tools,
 	)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	if compacted {
 		projection, err = worker.commitExecutionCheckpoint(ctx, lease, projection)
 		if err != nil {
-			return err
+			return fail(err)
 		}
 	}
 	parallel := false
@@ -162,46 +226,28 @@ func (worker *Worker) runModelStep(
 	}
 	requestDigest, err := canonicalModelStepRequest(request, profile, lease.RegistryRevision)
 	if err != nil {
-		return err
+		return fail(err)
 	}
 	stepOrdinal := int64(projection.ModelSteps + 1)
 	stepID := deterministicModelStepID(lease.TurnID, stepOrdinal)
-	step, replayed, err := worker.store.BeginModelStep(ctx, agentmanagement.ModelStep{
-		ID: stepID, NamespaceID: lease.NamespaceID, SessionID: lease.SessionID,
-		TurnID: lease.TurnID, Ordinal: stepOrdinal, WorkerID: lease.WorkerID, Fence: lease.Fence,
-		RegistryRevision: lease.RegistryRevision, RequestDigest: requestDigest,
-	})
+	return modelStepPreparation{
+		credential: credential, tools: tools, projection: projection, request: request,
+		requestDigest: requestDigest, ordinal: stepOrdinal, id: stepID,
+	}, nil
+}
+
+func (worker *Worker) commitModelStep(
+	ctx context.Context,
+	lease agentmanagement.TurnLease,
+	profile agentmanagement.Profile,
+	prepared modelStepPreparation,
+	output modelStepOutput,
+) error {
+	next, err := projectModelStepOutput(prepared.projection, output)
 	if err != nil {
 		return err
 	}
-	if replayed {
-		if step.Status == "completed" {
-			return nil
-		}
-		return fmt.Errorf("%w: public inference outcome is unknown and cannot be repeated", agentmanagement.ErrConflict)
-	}
-	collector := newModelStepCollector(
-		ctx, worker, lease, registry, profile.ToolPolicy, stepID, projection.ToolSteps,
-	)
-	committedLiveOutput := false
-	defer func() {
-		if !committedLiveOutput {
-			collector.publishLiveTerminal(agentmanagement.LiveModelStepDiscarded)
-		}
-	}()
-	err = worker.inference.Generate(ctx, credential, request, collector.consume)
-	if err != nil {
-		return err
-	}
-	output, err := collector.finish()
-	if err != nil {
-		return err
-	}
-	next, err := projectModelStepOutput(projection, output)
-	if err != nil {
-		return err
-	}
-	next, _, err = fitExecutionContext(next, profile.ContextTokenBudget, tools)
+	next, _, err = fitExecutionContext(next, profile.ContextTokenBudget, prepared.tools)
 	if err != nil {
 		return err
 	}
@@ -212,8 +258,8 @@ func (worker *Worker) runModelStep(
 	committed, err := worker.store.CommitModelStep(ctx, agentmanagement.ModelStepCommit{
 		Lease: lease,
 		Step: agentmanagement.ModelStep{
-			ID: stepID, Ordinal: stepOrdinal, Fence: lease.Fence,
-			RegistryRevision: lease.RegistryRevision, RequestDigest: requestDigest,
+			ID: prepared.id, Ordinal: prepared.ordinal, Fence: lease.Fence,
+			RegistryRevision: lease.RegistryRevision, RequestDigest: prepared.requestDigest,
 			StopReason: string(output.StopReason),
 		},
 		Events: output.Events, Checkpoint: checkpoint,
@@ -225,8 +271,6 @@ func (worker *Worker) runModelStep(
 		worker.notifyEvent(ctx, lease, event)
 	}
 	worker.notifyEvent(ctx, lease, committed.CheckpointEvent)
-	committedLiveOutput = true
-	collector.publishLiveTerminal(agentmanagement.LiveModelStepCommitted)
 	return nil
 }
 

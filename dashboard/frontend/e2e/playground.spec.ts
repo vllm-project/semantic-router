@@ -8,8 +8,9 @@ const sessionId = '20000000-0000-4000-8000-000000000001'
 const profileId = '20000000-0000-4000-8000-000000000002'
 const turnId = '20000000-0000-4000-8000-000000000003'
 const planId = '20000000-0000-4000-8000-000000000004'
-const entrypointId = '20000000-0000-4000-8000-000000000005'
+const entrypointId = 'blend-v2'
 const artifactId = '20000000-0000-4000-8000-000000000006'
+const inferenceKeyId = '10000000-0000-4000-8000-000000000003'
 const digest = `sha256:${'a'.repeat(64)}`
 const onePixelGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64')
 
@@ -29,6 +30,7 @@ function session(mode: 'chat' | 'builder' = 'chat') {
     id: sessionId,
     namespaceId: '20000000-0000-4000-8000-000000000010',
     ownerPrincipalId: '20000000-0000-4000-8000-000000000011',
+    keyId: inferenceKeyId,
     profileId,
     profileRevision: 1,
     target: { kind: 'entrypoint', id: 'blend' },
@@ -107,6 +109,7 @@ interface AgentMockOptions {
   capabilityLoadFailure?: boolean
   profileCapability?: string
   builtinSkill?: boolean
+  singleModelsOnly?: boolean
 }
 
 async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
@@ -124,32 +127,40 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
     : undefined
   const resumeHeaders: string[] = []
   const turnBodies: unknown[] = []
+  const sessionBodies: unknown[] = []
   const profileQueries: string[] = []
   const connectionPatches: Array<Record<string, unknown>> = []
 
   await page.route('**/v1/models*', async (route) => {
     modelReads += 1
-    const virtualModels = [
-      {
-        id: 'blend',
-        description: 'Balanced model path',
-        routing: { resolution: 'virtual', selectable: true, default_route: false, recipe: 'blend' },
-      },
-      ...(published
-        ? [
-            {
-              id: 'blend-v2',
-              description: 'Published model path',
-              routing: {
-                resolution: 'virtual',
-                selectable: true,
-                default_route: false,
-                recipe: 'blend-v2',
-              },
+    const virtualModels = options.singleModelsOnly
+      ? []
+      : [
+          {
+            id: 'blend',
+            description: 'Balanced model path',
+            routing: {
+              resolution: 'virtual',
+              selectable: true,
+              default_route: false,
+              recipe: 'blend',
             },
-          ]
-        : []),
-    ]
+          },
+          ...(published
+            ? [
+                {
+                  id: 'blend-v2',
+                  description: 'Published model path',
+                  routing: {
+                    resolution: 'virtual',
+                    selectable: true,
+                    default_route: false,
+                    recipe: 'blend-v2',
+                  },
+                },
+              ]
+            : []),
+        ]
     await route.fulfill({
       status: 200,
       headers: { 'Content-Type': 'application/json' },
@@ -191,6 +202,70 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
         },
       ],
       page: { hasMore: false, pageSize: 100 },
+    })
+  })
+
+  await page.route('**/api/router/management/v1/api-keys/*/routing-catalog', async (route) => {
+    const keyId = new URL(route.request().url()).pathname.split('/').at(-2) ?? inferenceKeyId
+    await fulfillJSON(route, {
+      keyId,
+      policyRevision: 1,
+      policyDigest: 'a'.repeat(64),
+      routingRevision: 1,
+      routingDigest: 'b'.repeat(64),
+      models: [
+        {
+          id: 'model_blend',
+          revision: 1,
+          name: 'local/qwen',
+          aliases: [],
+          capabilities: ['text'],
+          loras: [],
+          tags: [],
+          pricing: {
+            inputCostPerMillionTokens: null,
+            outputCostPerMillionTokens: null,
+            cacheReadCostPerMillionTokens: null,
+            cacheWriteCostPerMillionTokens: null,
+          },
+        },
+      ],
+      recipes: [
+        {
+          id: 'recipe_blend',
+          revision: 1,
+          name: 'Blend',
+          decisions: [{ id: 'decision_blend', name: 'Blend', dispatchCardinality: 'single' }],
+        },
+      ],
+      entrypoints: [
+        {
+          id: 'entrypoint_blend',
+          revision: 1,
+          name: 'blend',
+          aliases: ['blend'],
+          rules: [
+            {
+              id: 'rule_blend',
+              name: 'Default',
+              recipeId: 'recipe_blend',
+              recipeRevision: 1,
+              assignments: {
+                decision_blend: {
+                  models: [
+                    {
+                      modelId: 'model_blend',
+                      modelRevision: 1,
+                      priority: 0,
+                      weight: '1',
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
     })
   })
 
@@ -296,12 +371,15 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
 
     if (path.endsWith('/agent-sessions') && method === 'POST') {
       const input = request.postDataJSON() as {
+        keyId: string
         mode: 'chat' | 'builder'
         target: { kind: string; id: string }
         title?: string
       }
+      sessionBodies.push(input)
       activeSession = {
         ...session(input.mode),
+        keyId: input.keyId,
         target: input.target,
         title: input.title ?? 'New conversation',
       }
@@ -322,7 +400,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
     await route.fulfill({ status: 404 })
   })
 
-  await page.route('**/api/router/management/v1/agent-profiles*', async (route) => {
+  await page.route('**/api/router/management/v1/agent-profiles**', async (route) => {
     const url = new URL(route.request().url())
     profileQueries.push(url.search)
     const profiles = ['General', 'Builder'].map((name, index) => ({
@@ -368,7 +446,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
       },
     })
   })
-  await page.route('**/api/router/management/v1/agent-skills*', async (route) => {
+  await page.route('**/api/router/management/v1/agent-skills**', async (route) => {
     const skill = {
       id: '30000000-0000-4000-8000-000000000010',
       name: 'Recipe designer',
@@ -393,14 +471,14 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
       page: { hasMore: false, pageSize: 50 },
     })
   })
-  await page.route('**/api/router/management/v1/agent-tools*', async (route) => {
+  await page.route('**/api/router/management/v1/agent-tools**', async (route) => {
     await fulfillJSON(route, {
       data: [],
       page: { hasMore: false, pageSize: 50 },
       registryRevision: digest,
     })
   })
-  await page.route('**/api/router/management/v1/agent-tool-sources*', async (route) => {
+  await page.route('**/api/router/management/v1/agent-tool-sources**', async (route) => {
     const request = route.request()
     const path = new URL(request.url()).pathname
     const source = {
@@ -482,7 +560,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
       page: { hasMore: false, pageSize: 50 },
     })
   })
-  await page.route('**/api/router/management/v1/agent-tool-credentials*', async (route) => {
+  await page.route('**/api/router/management/v1/agent-tool-credentials**', async (route) => {
     const credential = {
       id: '50000000-0000-4000-8000-000000000001',
       namespaceId: '20000000-0000-4000-8000-000000000010',
@@ -540,12 +618,20 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
       expect(route.request().headers()['idempotency-key']).toBeTruthy()
       published = true
       await fulfillJSON(route, {
-        operation: { operationId: 'publish-operation-1', state: 'pending' },
+        operation: { operationId: 'publish-operation-1' },
       })
     },
   )
   await page.route('**/api/router/management/v1/operations/publish-operation-1', async (route) => {
-    await fulfillJSON(route, { data: { operationId: 'publish-operation-1', state: 'succeeded' } })
+    await fulfillJSON(route, {
+      operationId: 'publish-operation-1',
+      kind: 'routing.publish',
+      state: 'succeeded',
+      progress: { total: '1', completed: '1', failed: '0' },
+      revisions: { desiredRevision: 2, appliedRevision: 2 },
+      createdAt: now,
+      updatedAt: now,
+    })
   })
   await page.route(
     `**/api/router/management/v1/routing/entrypoints/${entrypointId}`,
@@ -575,6 +661,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
     connectionPatches,
     resumeHeaders,
     turnBodies,
+    sessionBodies,
     profileQueries,
   }
 }
@@ -596,6 +683,189 @@ test.describe('Router Agent Playground', () => {
     await expect(page.getByText('Single Model', { exact: true })).toBeVisible()
     await expect(page.getByRole('option', { name: /blend/ })).toBeVisible()
     await expect(page.getByRole('option', { name: /local\/qwen/ })).toBeVisible()
+  })
+
+  test('keeps an authorized Single Model usable before the first mixture is published', async ({
+    page,
+  }) => {
+    await mockAuthenticatedAppShell(page)
+    await mockAgentRuntime(page, { singleModelsOnly: true })
+    await page.goto('/playground')
+
+    await expect(page.getByText('Models are unavailable.', { exact: true })).toHaveCount(0)
+    await page.getByTestId('playground-composer-model-select').click()
+    await expect(page.getByText('Mixture-of-Models', { exact: true })).toHaveCount(0)
+    await expect(page.getByText('Single Model', { exact: true })).toBeVisible()
+    await expect(page.getByRole('option', { name: /local\/qwen/ })).toBeVisible()
+  })
+
+  test('uses one selected owned API key for catalog, model discovery, and Agent execution', async ({
+    page,
+  }) => {
+    const secondKeyId = '10000000-0000-4000-8000-000000000009'
+    await mockAuthenticatedAppShell(page, {
+      user: {
+        id: 'consumer-1',
+        email: 'consumer@example.com',
+        name: 'Consumer',
+        role: 'read',
+        permissions: [],
+      },
+      managementPermissions: [
+        'access_policy.read',
+        'agent.read',
+        'agent.use',
+        'delegation.use',
+        'key.read',
+        'routing_context.read',
+        'tool.invoke',
+        'tool.read',
+      ],
+    })
+    const mock = await mockAgentRuntime(page)
+    const issuedFor: string[] = []
+    const catalogReads: string[] = []
+    const modelAuthorizations: string[] = []
+
+    await page.route('**/api/router/management/v1/self/inference-keys*', async (route) => {
+      await fulfillJSON(route, {
+        data: [
+          {
+            keyId: inferenceKeyId,
+            name: 'Personal',
+            owner: { type: 'user', id: '10000000-0000-4000-8000-000000000011' },
+          },
+          {
+            keyId: secondKeyId,
+            name: 'Team',
+            owner: { type: 'team', id: '10000000-0000-4000-8000-000000000012' },
+            contextTeamId: '10000000-0000-4000-8000-000000000012',
+          },
+        ],
+        page: { hasMore: false, pageSize: 100 },
+      })
+    })
+    await page.route('**/api/router/management/v1/self/inference-sessions', async (route) => {
+      const { keyId } = route.request().postDataJSON() as { keyId: string }
+      issuedFor.push(keyId)
+      await fulfillJSON(route, {
+        resourceId: `session-${keyId}`,
+        kind: 'delegated_inference_credential',
+        secret: keyId === secondKeyId ? 'vsd_key-b' : 'vsd_key-a',
+        expiresAt: '2099-08-23T00:00:00Z',
+      })
+    })
+    await page.route('**/api/router/management/v1/api-keys/*/routing-catalog', async (route) => {
+      const keyId = new URL(route.request().url()).pathname.split('/').at(-2) ?? ''
+      catalogReads.push(keyId)
+      const suffix = keyId === secondKeyId ? 'b' : 'a'
+      await fulfillJSON(route, {
+        keyId,
+        policyRevision: 1,
+        policyDigest: 'a'.repeat(64),
+        routingRevision: 1,
+        routingDigest: 'b'.repeat(64),
+        models: [
+          {
+            id: `model_${suffix}`,
+            revision: 1,
+            name: `local/${suffix}`,
+            aliases: [],
+            capabilities: ['text'],
+            loras: [],
+            tags: [],
+            pricing: {
+              inputCostPerMillionTokens: null,
+              outputCostPerMillionTokens: null,
+              cacheReadCostPerMillionTokens: null,
+              cacheWriteCostPerMillionTokens: null,
+            },
+          },
+        ],
+        recipes: [
+          {
+            id: `recipe_${suffix}`,
+            revision: 1,
+            name: `Recipe ${suffix.toUpperCase()}`,
+            decisions: [{ id: `decision_${suffix}`, name: 'Route', dispatchCardinality: 'single' }],
+          },
+        ],
+        entrypoints: [
+          {
+            id: `entrypoint_${suffix}`,
+            revision: 1,
+            name: `blend-${suffix}`,
+            aliases: [`blend-${suffix}`],
+            rules: [
+              {
+                id: `rule_${suffix}`,
+                name: 'Default',
+                recipeId: `recipe_${suffix}`,
+                recipeRevision: 1,
+                assignments: {
+                  [`decision_${suffix}`]: {
+                    models: [
+                      {
+                        modelId: `model_${suffix}`,
+                        modelRevision: 1,
+                        priority: 0,
+                        weight: '1',
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      })
+    })
+    await page.route('**/v1/models*', async (route) => {
+      const authorization = route.request().headers().authorization ?? ''
+      modelAuthorizations.push(authorization)
+      const suffix = authorization.includes('vsd_key-b') ? 'b' : 'a'
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          data: [
+            {
+              id: `blend-${suffix}`,
+              description: `Key ${suffix.toUpperCase()} model`,
+              routing: {
+                resolution: 'virtual',
+                selectable: true,
+                default_route: false,
+                recipe: `recipe_${suffix}`,
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto('/playground')
+    const keySelect = page.getByRole('combobox', { name: 'Use context' })
+    await expect(keySelect).toHaveValue(inferenceKeyId)
+    await expect.poll(() => catalogReads).toContain(inferenceKeyId)
+    await expect.poll(() => issuedFor).toContain(inferenceKeyId)
+
+    await keySelect.selectOption(secondKeyId)
+    await expect.poll(() => catalogReads).toContain(secondKeyId)
+    await expect.poll(() => issuedFor).toContain(secondKeyId)
+    await expect.poll(() => modelAuthorizations).toContain('Bearer vsd_key-b')
+    await page.getByTestId('playground-composer-model-select').click()
+    await expect(page.getByRole('option', { name: /blend-b/ })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('textbox', { name: 'Message' }).fill('Use my team key')
+    await page.getByRole('button', { name: 'Send message' }).click()
+    await expect.poll(() => mock.sessionBodies.length).toBe(1)
+    expect(mock.sessionBodies[0]).toMatchObject({
+      keyId: secondKeyId,
+      effectiveTeamId: '10000000-0000-4000-8000-000000000012',
+      target: { kind: 'entrypoint', id: 'blend-b' },
+    })
   })
 
   test('streams a durable turn and collapses completed tool work', async ({ page }) => {
@@ -658,7 +928,7 @@ test.describe('Router Agent Playground', () => {
       expireFirstResume: true,
     })
     await page.goto('/playground')
-    await page.getByRole('button', { name: /Existing chat/ }).click()
+    await page.getByRole('button', { name: /^Existing chat\b/ }).click()
 
     await expect(page.getByRole('alert')).toContainText('Earlier events were archived')
     await expect(page.getByTestId('agent-message-assistant')).toContainText('Recovered')
@@ -699,7 +969,7 @@ test.describe('Router Agent Playground', () => {
     }
     const mock = await bootstrap(page, { initialEvents: [approval], existingMode: 'builder' })
     await page.goto('/playground')
-    await page.getByRole('button', { name: /Build a support router/ }).click()
+    await page.getByRole('button', { name: /^Build a support router\b/ }).click()
 
     await expect(page.getByRole('dialog', { name: 'Publish blend-v2' })).toBeVisible()
     expect(mock.publicationCommits()).toBe(0)
@@ -730,8 +1000,10 @@ test.describe('Router Agent Playground', () => {
       managementPermissions: [
         'agent.read',
         'agent.use',
+        'access_policy.read',
         'delegation.use',
-        'routing.read',
+        'key.read',
+        'routing_context.read',
         'tool.read',
         'tool.invoke',
       ],
@@ -747,12 +1019,7 @@ test.describe('Router Agent Playground', () => {
     await expect(page.getByRole('option', { name: /local\/qwen/ })).toHaveCount(0)
 
     await page.goto('/config/agent')
-    await expect(page.getByRole('heading', { name: 'Profiles' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /New profile/ })).toHaveCount(0)
-    await page.getByRole('button', { name: 'Open General' }).click()
-    const detail = page.getByRole('dialog', { name: 'General' })
-    await expect(detail.getByRole('button', { name: 'Edit' })).toHaveCount(0)
-    await expect(detail.getByRole('button', { name: /Delete/ })).toHaveCount(0)
+    await expect(page).toHaveURL(/\/dashboard$/)
   })
 
   test('rejects a direct Agent management URL without Agent or Tool read access', async ({
@@ -817,7 +1084,7 @@ test.describe('Router Agent Playground', () => {
     await expect(dialog.getByText('Not currently advertised', { exact: true })).toBeVisible()
     await expect(dialog.getByRole('checkbox', { name: 'images' })).toBeVisible()
     await expect(dialog.getByRole('checkbox', { name: 'tools' })).toBeVisible()
-    await dialog.getByRole('checkbox', { name: /legacy-audio/ }).uncheck()
+    await dialog.getByRole('checkbox', { name: /legacy-audio/ }).click()
     await expect(dialog.getByRole('checkbox', { name: /legacy-audio/ })).toHaveCount(0)
   })
 
@@ -842,7 +1109,7 @@ test.describe('Router Agent Playground', () => {
     const detail = page.getByRole('dialog', { name: 'Knowledge tools' })
     await expect(detail.getByText('Pending approval', { exact: true })).toBeVisible()
     await detail.getByRole('button', { name: 'Approve tools' }).click()
-    const confirmation = page.getByRole('dialog', { name: 'Approve discovered tools?' })
+    const confirmation = page.getByRole('alertdialog', { name: 'Approve discovered tools?' })
     await expect(confirmation).toBeVisible()
     await confirmation.getByRole('button', { name: 'Approve tools' }).click()
     await expect(confirmation).toBeHidden()

@@ -39,6 +39,7 @@ type namespaceWorker struct {
 	leaseExpiry  time.Time
 	registration *accesspublisher.ReplicaRegistration
 	prepared     map[string]accesspublisher.LoadedRoutingPublication
+	wake         chan struct{}
 
 	registerMu sync.Mutex
 }
@@ -50,10 +51,18 @@ func newNamespaceWorker(options namespaceWorkerOptions) *namespaceWorker {
 		replicaID: options.replicaID, pollInterval: options.pollInterval, renewInterval: options.renewInterval,
 		ctx: ctx, cancel: cancel, processErr: ErrNotReady,
 		leaseErr: ErrNotReady, prepared: make(map[string]accesspublisher.LoadedRoutingPublication),
+		wake: make(chan struct{}, 1),
 	}
 }
 
 func (w *namespaceWorker) stop() { w.stopOnce.Do(w.cancel) }
+
+func (w *namespaceWorker) wakeNow() {
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
+}
 
 func (w *namespaceWorker) run(parent context.Context) {
 	ctx, cancel := context.WithCancel(parent)
@@ -84,6 +93,8 @@ func (w *namespaceWorker) run(parent context.Context) {
 			removeCancel()
 			return
 		case <-ticker.C:
+			w.process(ctx)
+		case <-w.wake:
 			w.process(ctx)
 		}
 	}

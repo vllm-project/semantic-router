@@ -50,7 +50,7 @@ func extractMemoryInfo(ctx *RequestContext) (sessionID string, userID string, hi
 			"provide at least one conversation message")
 	}
 
-	// Managed memory is always scoped by authenticated identity.
+	// Authenticated memory is always scoped by authenticated identity.
 	userID = extractUserID(ctx)
 
 	// Require userID - without it, memory would be orphaned (unretrievable)

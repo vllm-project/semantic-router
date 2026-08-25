@@ -1,8 +1,8 @@
 # vLLM Semantic Router CLI
 
 `vllm-sr` configures and runs the local vLLM Semantic Router stack. It can also
-validate or import bootstrap config, deploy the Router Helm chart, and send
-test requests. Models, Recipes, decision assignments, and Entrypoints are
+validate or import Router config, deploy the Router Helm chart, and send test
+requests. Models, Recipes, decision assignments, and Entrypoints can be
 managed through the Router Management API or Dashboard after startup.
 
 Full documentation: <https://vllm-sr.ai/docs/installation/>
@@ -49,7 +49,7 @@ OpenAI-compatible listener uses the first port in `config.yaml` (`8899` in the
 reference config).
 
 `vllm-sr serve` starts the routing stack. It does not start the physical LLM
-services referenced by `models[].connections`; those endpoints must already be
+services referenced by `providers.models[].backend_refs`; those endpoints must already be
 running and reachable.
 
 Useful lifecycle commands:
@@ -62,7 +62,7 @@ vllm-sr logs simulator
 vllm-sr stop
 ```
 
-On the first run, `serve` creates a managed Router bootstrap and private local
+On the first run, `serve` creates a Router Management workspace and private local
 trust material under `.vllm-sr`. The first Dashboard registration provisions
 that administrator, the default namespace, and its exact Router identity through
 the Management API, then removes the one-time bootstrap credential without a
@@ -105,29 +105,28 @@ vllm-sr chat --base-url https://gateway.example.com "Hello"
 ingress or port-forwarded gateway. It is not the Router management API used by
 `eval` and `rag list`.
 
-## Choose a bootstrap configuration
+## Choose a Router configuration
 
-The CLI reads canonical v0.4 YAML for deployment bootstrap. The ordinary local
+The CLI reads canonical v0.3 YAML. The ordinary local
 flow needs no launch-time routing selection:
 
 ```bash
 vllm-sr validate --config config.yaml
 vllm-sr serve
-# Or select another immutable bootstrap manifest.
+# Or select another canonical config.
 vllm-sr serve --config /path/to/config.yaml
 ```
 
-`--config` selects one immutable standalone or managed v0.4 bootstrap manifest.
-It does not select a Model or Recipe and does not create a second routing-policy
-authority.
+`--config` selects one canonical v0.3 document. It does not select a Model or
+Recipe and does not create a second routing-policy authority.
 
-Route policy lives in `recipes[].document.decisions[]`; physical candidates are
+Route policy lives in `recipes[].routing.decisions[]`; physical candidates are
 assigned by readable Decision name on an Entrypoint. For example:
 
 ```yaml
 recipes:
   - name: local
-    document:
+    routing:
       decisions:
         - name: local-fallback
           description: Handle requests that did not match an earlier decision.
@@ -135,8 +134,7 @@ recipes:
           rules: {operator: AND, conditions: []}
           algorithm: {type: static}
 entrypoints:
-  - name: vllm-sr/local
-    aliases: [local]
+  - model_names: [vllm-sr/local, local]
     recipe: local
     assignments:
       local-fallback:
@@ -158,9 +156,10 @@ Focused examples live under [`config/fragments/`](../../config/fragments/).
 Use those sources instead of copying plugin or algorithm schemas from this
 package README.
 
-Keep credentials out of YAML. In managed mode, provider credentials are
-versioned secret resources created through the Router Management API; the
-Dashboard is one client of that API.
+Keep credentials out of YAML. Dynamic provider credentials are versioned secret
+resources created through the Router Management API; the Dashboard is one
+client of that API. File-authored Provider Models may instead use environment
+or secret-file references supported by their backend bindings.
 
 ## Build a Mixture of Models
 

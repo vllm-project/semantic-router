@@ -32,7 +32,7 @@ Use `keyword` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     keywords:
       - name: code_keywords

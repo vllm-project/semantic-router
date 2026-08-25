@@ -30,7 +30,7 @@ Use a composite decision when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: priority_safe_escalation_route
       description: Combine AND, OR, and NOT for a realistic multi-signal routing case.

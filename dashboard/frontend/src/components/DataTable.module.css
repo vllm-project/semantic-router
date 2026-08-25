@@ -14,6 +14,8 @@
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -371,25 +373,35 @@
   }
 
   .actionButtons {
-    flex-direction: column;
+    flex-direction: row;
     gap: 0.25rem;
-    min-width: 80px; /* Ensure action buttons have enough space */
+    min-width: 0;
   }
 
   .actionButton {
+    width: 40px;
     min-height: 40px;
-    padding: 0.45rem 0.6rem;
+    padding: 0;
     font-size: 0.75rem;
+  }
+
+  .actionLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
     white-space: nowrap;
   }
 
   .actionsColumn {
-    width: 100px;
-    min-width: 100px;
+    width: 144px;
+    min-width: 144px;
   }
 
   .actionsColumnWidth {
-    width: 100px;
+    width: 144px;
   }
 
   .pagination {
@@ -424,21 +436,21 @@
   }
 
   .actionButtons {
-    min-width: 70px;
+    min-width: 0;
   }
 
   .actionButton {
+    width: 36px;
     min-height: 40px;
-    padding: 0.45rem 0.5rem;
-    font-size: 0.6875rem;
+    padding: 0;
   }
 
   .actionsColumn {
-    width: 80px;
-    min-width: 80px;
+    width: 132px;
+    min-width: 132px;
   }
 
   .actionsColumnWidth {
-    width: 80px;
+    width: 132px;
   }
 }

@@ -476,7 +476,7 @@
 
 .dialogPanel {
   width: min(960px, 100%);
-  max-height: calc(100vh - 2.5rem);
+  max-height: calc(100dvh - 2.5rem);
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -562,6 +562,7 @@
 }
 
 .dialogBody {
+  min-height: 0;
   overflow: auto;
 }
 
@@ -576,7 +577,7 @@
   font-size: 0.82rem;
   line-height: 1.62;
   font-family: var(--font-mono);
-  max-height: min(60vh, 720px);
+  max-height: min(60dvh, 720px);
 }
 
 .dialogFooter {
@@ -858,11 +859,14 @@
   }
 
   .dialogOverlay {
-    padding: 0.75rem;
+    align-items: center;
+    padding: 0.5rem;
   }
 
   .dialogPanel {
-    padding: 0.95rem;
+    max-height: calc(100dvh - 1rem);
+    padding: 0.95rem 0.95rem max(0.95rem, env(safe-area-inset-bottom));
+    border-radius: 18px;
   }
 
   .dialogHeader {

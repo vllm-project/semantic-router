@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     metadata:
       - name: consent-denied

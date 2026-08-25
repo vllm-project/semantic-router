@@ -176,17 +176,41 @@ type PatchRoutingClaimSchemaRequest struct {
 }
 
 type Repository interface {
+	RepositoryLifecycle
+	NamespaceReader
+	NamespaceMutationRepository
+	SelfServicePolicyRepository
+	ManagementSecurityPolicyRepository
+	RoutingClaimSchemaRepository
+}
+
+type RepositoryLifecycle interface {
 	Ready(context.Context, *managementcommand.Codec) error
 	Replay(context.Context, managementcommand.Command) (MutationResult, bool, error)
+}
+
+type NamespaceReader interface {
 	GetNamespace(context.Context, string) (Namespace, error)
 	ListNamespaces(context.Context, NamespaceQuery) (RepositoryPage[Namespace], error)
+}
+
+type NamespaceMutationRepository interface {
 	CreateNamespace(context.Context, CreateNamespaceMutation) (MutationResult, error)
 	PatchNamespace(context.Context, Namespace, uint64, Actor) (MutationResult, error)
 	DeleteNamespace(context.Context, string, uint64, Actor) (MutationResult, error)
+}
+
+type SelfServicePolicyRepository interface {
 	GetSelfServicePolicy(context.Context, string) (SelfServicePolicy, error)
 	PatchSelfServicePolicy(context.Context, SelfServicePolicy, uint64, Actor) (MutationResult, error)
+}
+
+type ManagementSecurityPolicyRepository interface {
 	GetManagementSecurityPolicy(context.Context, string) (ManagementSecurityPolicy, error)
 	PatchManagementSecurityPolicy(context.Context, ManagementSecurityPolicy, uint64, Actor) (MutationResult, error)
+}
+
+type RoutingClaimSchemaRepository interface {
 	GetRoutingClaimSchema(context.Context, string) (RoutingClaimSchema, error)
 	PatchRoutingClaimSchema(context.Context, RoutingClaimSchema, uint64, Actor) (MutationResult, error)
 }

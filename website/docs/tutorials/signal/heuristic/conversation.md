@@ -31,7 +31,7 @@ Use `conversation` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     conversation:
       - name: multi_turn_user
@@ -83,7 +83,7 @@ document:
 ## Decision Usage
 
 ```yaml
-document:
+routing:
   decisions:
     - name: agentic_routing
       description: Send tool-heavy chats to an agent-capable model.

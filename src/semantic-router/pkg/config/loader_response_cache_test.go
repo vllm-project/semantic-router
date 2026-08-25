@@ -61,10 +61,8 @@ func TestResponseCacheRejectsRemovedFlatFields(t *testing.T) {
 
 func TestResponseCacheRejectsRemovedStoreAlias(t *testing.T) {
 	input := []byte(`
-version: v0.4
+version: v0.3
 global:
-  control_plane:
-    mode: managed
   stores:
     semantic_cache:
       enabled: true

@@ -20,11 +20,11 @@ func TestEmbeddedMigrationsAreOrderedAndCoverAuthorities(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(migrations) != 1 {
-		t.Fatalf("migration count = %d, want one clean v0.4 baseline", len(migrations))
+		t.Fatalf("migration count = %d, want one clean Management baseline", len(migrations))
 	}
-	if migrations[0].Version != 1 || migrations[0].Name != "0001_v04_control_plane.sql" {
+	if migrations[0].Version != 1 || migrations[0].Name != "0001_management.sql" {
 		t.Fatalf("baseline migration = (%d, %q), want (1, %q)",
-			migrations[0].Version, migrations[0].Name, "0001_v04_control_plane.sql")
+			migrations[0].Version, migrations[0].Name, "0001_management.sql")
 	}
 	var schema strings.Builder
 	for i, migration := range migrations {
@@ -33,14 +33,23 @@ func TestEmbeddedMigrationsAreOrderedAndCoverAuthorities(t *testing.T) {
 		}
 		schema.WriteString(migration.SQL)
 	}
+	assertMigrationTables(t, schema.String())
+	assertMigrationContracts(t, schema.String())
+}
+
+func assertMigrationTables(t *testing.T, schema string) {
+	t.Helper()
 	for _, table := range []string{
 		"access_namespaces", "access_subjects", "access_api_keys",
 		"access_api_key_credentials", "access_policies", "rate_limit_policies",
 		"management_principals", "management_sessions", "management_invitations",
-		"management_backchannel_logout_replays",
+		"management_backchannel_logout_replays", "management_exchange_challenges",
+		"management_revocation_barriers",
 		"provider_credentials", "routing_models", "routing_recipes",
 		"routing_recipe_distributions", "routing_recipe_provenance",
-		"routing_entrypoints", "routing_snapshots", "policy_outbox",
+		"routing_entrypoints", "routing_snapshots", "routing_publications",
+		"routing_publication_heads", "routing_fleet_replicas", "routing_replica_leases",
+		"routing_publication_required_replicas", "routing_publication_acknowledgements", "policy_outbox",
 		"management_idempotency",
 		"provider_catalog_revisions", "provider_catalog_state", "provider_catalog_required_rollout_groups",
 		"provider_catalog_replica_acks",
@@ -52,10 +61,14 @@ func TestEmbeddedMigrationsAreOrderedAndCoverAuthorities(t *testing.T) {
 		"inference_outcome_projection_heads", "inference_outcome_projection_outbox",
 		"inference_outcome_projection_snapshots",
 	} {
-		if !strings.Contains(schema.String(), "CREATE TABLE "+table) {
+		if !strings.Contains(schema, "CREATE TABLE "+table) {
 			t.Errorf("embedded migrations do not create %s", table)
 		}
 	}
+}
+
+func assertMigrationContracts(t *testing.T, schema string) {
+	t.Helper()
 	for _, contract := range []string{
 		"resource_id TEXT NOT NULL",
 		"gcra_burst_tolerance BIGINT",
@@ -112,8 +125,10 @@ func TestEmbeddedMigrationsAreOrderedAndCoverAuthorities(t *testing.T) {
 		"agent_sessions_page_idx",
 		"agent_sessions_title_search_idx",
 		"access_scope JSONB NOT NULL CHECK (jsonb_typeof(access_scope) = 'object')",
+		"policy_outbox_notify_routing_desired_state",
+		"pg_notify('vllm_sr_routing_publication', NEW.namespace_id::text)",
 	} {
-		if !strings.Contains(schema.String(), contract) {
+		if !strings.Contains(schema, contract) {
 			t.Errorf("embedded migrations do not contain contract %q", contract)
 		}
 	}
@@ -168,14 +183,14 @@ func TestBaselineSeedsLeastPrivilegeBuiltInRoles(t *testing.T) {
 		"consumer built-in role seed does not match its least-privilege contract",
 	} {
 		if !strings.Contains(baseline, contract) {
-			t.Fatalf("v0.4 baseline does not contain %q", contract)
+			t.Fatalf("Management baseline does not contain %q", contract)
 		}
 	}
 	if strings.Contains(baseline, "UPDATE management_roles") {
-		t.Fatal("v0.4 baseline contains an unreleased built-in role correction")
+		t.Fatal("Management baseline contains an unreleased built-in role correction")
 	}
 	if strings.Contains(baseline, "preview usage schema") {
-		t.Fatal("v0.4 baseline contains a preview-schema upgrade guard")
+		t.Fatal("Management baseline contains a preview-schema upgrade guard")
 	}
 }
 
@@ -233,7 +248,7 @@ WHERE month_start=date_trunc('month',current_date)::date AND state='active'`).Sc
 	}
 	assertManagementIdentitySeeds(t, ctx, db)
 	var migrationCount int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM router_control_plane_schema_migrations`).Scan(&migrationCount); err != nil {
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM router_management_schema_migrations`).Scan(&migrationCount); err != nil {
 		t.Fatalf("read migration ledger: %v", err)
 	}
 	migrations, err := Migrations()

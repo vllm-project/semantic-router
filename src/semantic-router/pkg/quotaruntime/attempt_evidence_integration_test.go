@@ -48,80 +48,7 @@ func TestRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotent(t *testing.T)
 		DispatchReference: reference, DispatchType: "primary", Ordinal: 2,
 		Deadline: admission.ServerTime.Add(time.Minute), MaxAttempts: 3,
 	}
-	started, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := first.BeginDispatch(context.Background(), begin)
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || started.Idempotent || started.StartedAt.IsZero() ||
-		!started.Deadline.Equal(begin.Deadline) {
-		t.Fatalf("BeginDispatch() = %+v, %v", started, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
-	}
-	repeated, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := second.BeginDispatch(context.Background(), begin)
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || !repeated.Idempotent || !repeated.StartedAt.Equal(started.StartedAt) {
-		t.Fatalf("duplicate cross-replica BeginDispatch() = %+v, %v", repeated, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
-	}
-	changed := begin
-	changed.ModelRevision++
-	if _, err := second.BeginDispatch(context.Background(), changed); !errors.Is(err, ErrConflict) {
-		t.Fatalf("changed BeginDispatch() error = %v, want %v", err, ErrConflict)
-	}
-
-	firstAttempt := BeginAttemptRequest{
-		DispatchReference: reference, AttemptID: "dispatch-1:1", AttemptNumber: 1,
-		BackendID: "backend-a", ProviderID: "provider-a",
-	}
-	wrongRequest := firstAttempt
-	wrongRequest.RequestDigest = testBackendRequestDigest("B")
-	if _, err := first.BeginAttempt(context.Background(), wrongRequest); !errors.Is(err, ErrConflict) {
-		t.Fatalf("BeginAttempt() with changed request identity error = %v, want %v", err, ErrConflict)
-	}
-	if _, err := first.BeginAttempt(context.Background(), firstAttempt); err != nil {
-		t.Fatalf("BeginAttempt(1) error = %v", err)
-	}
-	if _, err := second.BeginAttempt(context.Background(), firstAttempt); !errors.Is(err, ErrConflict) {
-		t.Fatalf("duplicate BeginAttempt(1) error = %v, want %v", err, ErrConflict)
-	}
-	secondAttempt := BeginAttemptRequest{
-		DispatchReference: reference, AttemptID: "dispatch-1:2", AttemptNumber: 2,
-		BackendID: "backend-b", ProviderID: "provider-b",
-	}
-	if _, err := second.BeginAttempt(context.Background(), secondAttempt); !errors.Is(err, ErrConflict) {
-		t.Fatalf("BeginAttempt(2) before known-zero error = %v, want %v", err, ErrConflict)
-	}
-	firstFinish := FinishAttemptRequest{
-		DispatchReference: reference, AttemptID: firstAttempt.AttemptID, AttemptNumber: 1,
-		BackendID: firstAttempt.BackendID, ProviderID: firstAttempt.ProviderID,
-		State: AttemptEvidenceKnownZero, ErrorCode: "transport_error",
-	}
-	finished, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := second.FinishAttempt(context.Background(), firstFinish)
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || finished.Idempotent || finished.CompletedAt.IsZero() {
-		t.Fatalf("FinishAttempt(1) = %+v, %v", finished, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
-	}
-	repeatedFinish, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := first.FinishAttempt(context.Background(), firstFinish)
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || !repeatedFinish.Idempotent ||
-		!repeatedFinish.CompletedAt.Equal(finished.CompletedAt) {
-		t.Fatalf("duplicate FinishAttempt(1) = %+v, %v", repeatedFinish, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
-	}
-	conflictingFinish := firstFinish
-	conflictingFinish.ErrorCode = "different_error"
-	if _, err := first.FinishAttempt(context.Background(), conflictingFinish); !errors.Is(err, ErrConflict) {
-		t.Fatalf("conflicting FinishAttempt(1) error = %v, want %v", err, ErrConflict)
-	}
-	if _, err := second.BeginAttempt(context.Background(), secondAttempt); err != nil {
-		t.Fatalf("BeginAttempt(2) error = %v", err)
-	}
-	secondFinish := FinishAttemptRequest{
-		DispatchReference: reference, AttemptID: secondAttempt.AttemptID, AttemptNumber: 2,
-		BackendID: secondAttempt.BackendID, ProviderID: secondAttempt.ProviderID,
-		State: AttemptEvidenceResponseStarted, StatusCode: http.StatusServiceUnavailable,
-	}
-	if _, err := first.FinishAttempt(context.Background(), secondFinish); err != nil {
-		t.Fatalf("FinishAttempt(2) error = %v", err)
-	}
-	thirdAttempt := BeginAttemptRequest{
-		DispatchReference: reference, AttemptID: "dispatch-1:3", AttemptNumber: 3,
-		BackendID: "backend-c", ProviderID: "provider-c",
-	}
-	if _, err := second.BeginAttempt(context.Background(), thirdAttempt); !errors.Is(err, ErrConflict) {
-		t.Fatalf("retry after response-started error = %v, want %v", err, ErrConflict)
-	}
+	exerciseCrossReplicaAttemptSequence(t, first, second, begin)
 
 	evidence, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := second.ReadAttemptEvidence(context.Background(), ReadAttemptEvidenceRequest{
 		AttemptEvidenceReference: readAttemptReference(reference, 2),
@@ -148,28 +75,121 @@ func TestRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotent(t *testing.T)
 		t.Fatalf("ReadAttemptEvidence() with changed model error = %v, want %v", err, ErrConflict)
 	}
 
+	assertAttemptEvidenceFinalization(t, client, first, second, partition, journal, admissionDigest, rules, evidence.Revision)
+}
+
+func exerciseCrossReplicaAttemptSequence(t *testing.T, first, second *RedisEngine, begin BeginDispatchRequest) {
+	t.Helper()
+	reference := begin.DispatchReference
+	started, err := first.BeginDispatch(context.Background(), begin)
+	if err != nil || started.Idempotent || started.StartedAt.IsZero() ||
+		!started.Deadline.Equal(begin.Deadline) {
+		t.Fatalf("BeginDispatch() = %+v, %v", started, err)
+	}
+	repeated, err := second.BeginDispatch(context.Background(), begin)
+	if err != nil || !repeated.Idempotent || !repeated.StartedAt.Equal(started.StartedAt) {
+		t.Fatalf("duplicate cross-replica BeginDispatch() = %+v, %v", repeated, err)
+	}
+	changed := begin
+	changed.ModelRevision++
+	if _, beginErr := second.BeginDispatch(context.Background(), changed); !errors.Is(beginErr, ErrConflict) {
+		t.Fatalf("changed BeginDispatch() error = %v, want %v", beginErr, ErrConflict)
+	}
+
+	firstAttempt := BeginAttemptRequest{
+		DispatchReference: reference, AttemptID: "dispatch-1:1", AttemptNumber: 1,
+		BackendID: "backend-a", ProviderID: "provider-a",
+	}
+	wrongRequest := firstAttempt
+	wrongRequest.RequestDigest = testBackendRequestDigest("B")
+	if _, beginErr := first.BeginAttempt(context.Background(), wrongRequest); !errors.Is(beginErr, ErrConflict) {
+		t.Fatalf("BeginAttempt() with changed request identity error = %v, want %v", beginErr, ErrConflict)
+	}
+	if _, beginErr := first.BeginAttempt(context.Background(), firstAttempt); beginErr != nil {
+		t.Fatalf("BeginAttempt(1) error = %v", beginErr)
+	}
+	if _, beginErr := second.BeginAttempt(context.Background(), firstAttempt); !errors.Is(beginErr, ErrConflict) {
+		t.Fatalf("duplicate BeginAttempt(1) error = %v, want %v", beginErr, ErrConflict)
+	}
+	secondAttempt := BeginAttemptRequest{
+		DispatchReference: reference, AttemptID: "dispatch-1:2", AttemptNumber: 2,
+		BackendID: "backend-b", ProviderID: "provider-b",
+	}
+	if _, beginErr := second.BeginAttempt(context.Background(), secondAttempt); !errors.Is(beginErr, ErrConflict) {
+		t.Fatalf("BeginAttempt(2) before known-zero error = %v, want %v", beginErr, ErrConflict)
+	}
+	firstFinish := FinishAttemptRequest{
+		DispatchReference: reference, AttemptID: firstAttempt.AttemptID, AttemptNumber: 1,
+		BackendID: firstAttempt.BackendID, ProviderID: firstAttempt.ProviderID,
+		State: AttemptEvidenceKnownZero, ErrorCode: "transport_error",
+	}
+	finished, err := second.FinishAttempt(context.Background(), firstFinish)
+	if err != nil || finished.Idempotent || finished.CompletedAt.IsZero() {
+		t.Fatalf("FinishAttempt(1) = %+v, %v", finished, err)
+	}
+	repeatedFinish, err := first.FinishAttempt(context.Background(), firstFinish)
+	if err != nil || !repeatedFinish.Idempotent ||
+		!repeatedFinish.CompletedAt.Equal(finished.CompletedAt) {
+		t.Fatalf("duplicate FinishAttempt(1) = %+v, %v", repeatedFinish, err)
+	}
+	conflictingFinish := firstFinish
+	conflictingFinish.ErrorCode = "different_error"
+	if _, err := first.FinishAttempt(context.Background(), conflictingFinish); !errors.Is(err, ErrConflict) {
+		t.Fatalf("conflicting FinishAttempt(1) error = %v, want %v", err, ErrConflict)
+	}
+	if _, err := second.BeginAttempt(context.Background(), secondAttempt); err != nil {
+		t.Fatalf("BeginAttempt(2) error = %v", err)
+	}
+	secondFinish := FinishAttemptRequest{
+		DispatchReference: reference, AttemptID: secondAttempt.AttemptID, AttemptNumber: 2,
+		BackendID: secondAttempt.BackendID, ProviderID: secondAttempt.ProviderID,
+		State: AttemptEvidenceResponseStarted, StatusCode: http.StatusServiceUnavailable,
+	}
+	if _, err := first.FinishAttempt(context.Background(), secondFinish); err != nil {
+		t.Fatalf("FinishAttempt(2) error = %v", err)
+	}
+	thirdAttempt := BeginAttemptRequest{
+		DispatchReference: reference, AttemptID: "dispatch-1:3", AttemptNumber: 3,
+		BackendID: "backend-c", ProviderID: "provider-c",
+	}
+	if _, err := second.BeginAttempt(context.Background(), thirdAttempt); !errors.Is(err, ErrConflict) {
+		t.Fatalf("retry after response-started error = %v, want %v", err, ErrConflict)
+	}
+}
+
+func assertAttemptEvidenceFinalization(
+	t *testing.T,
+	client *redis.Client,
+	first, second *RedisEngine,
+	partition string,
+	journal DispatchJournalRequest,
+	admissionDigest string,
+	rules []RuleBinding,
+	evidenceRevision uint64,
+) {
+	t.Helper()
 	finalization := FinalizationRequest{
 		Partition: partition, AdmissionID: journal.AdmissionID, AdmissionDigest: admissionDigest,
 		FinalizationDigest: "final-attempts", DispatchCount: 1,
-		EvidenceRevision: evidence.Revision, Event: `{"admissionId":"admission-attempts"}`,
+		EvidenceRevision: evidenceRevision, Event: `{"admissionId":"admission-attempts"}`,
 		Rules:    rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{},
 	}
-	finalized, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := first.Finalize(context.Background(), finalization)
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || finalized.Idempotent {
-		t.Fatalf("Finalize() = %+v, %v", finalized, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
+	finalized, err := first.Finalize(context.Background(), finalization)
+	if err != nil || finalized.Idempotent {
+		t.Fatalf("Finalize() = %+v, %v", finalized, err)
 	}
 	keys, _ := newPartitionKeys(partition)
-	if exists, err := client.Exists(context.Background(), keys.attempts(journal.AdmissionID)).Result(); err != nil || exists != 0 {
-		t.Fatalf("attempt evidence exists after Finalize = %d, %v", exists, err)
+	if exists, existsErr := client.Exists(context.Background(), keys.attempts(journal.AdmissionID)).Result(); existsErr != nil || exists != 0 {
+		t.Fatalf("attempt evidence exists after Finalize = %d, %v", exists, existsErr)
 	}
-	finalized, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr = second.Finalize(context.Background(), finalization)
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || !finalized.Idempotent {
-		t.Fatalf("cross-replica duplicate Finalize() = %+v, %v", finalized, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
+	finalized, err = second.Finalize(context.Background(), finalization)
+	if err != nil || !finalized.Idempotent {
+		t.Fatalf("cross-replica duplicate Finalize() = %+v, %v", finalized, err)
 	}
-	meters, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr := first.ReadMeters(context.Background(), MeterReadRequest{Partition: partition, Rules: rules})
-	if testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr != nil || len(meters.Meters) != 1 || meters.Meters[0].Used != "1" {
-		t.Fatalf("retry admission RPM meter = %+v, %v; want exactly one request", meters, testRedisAttemptEvidenceIsCrossReplicaContiguousAndIdempotentErr)
+	meters, err := first.ReadMeters(context.Background(), MeterReadRequest{Partition: partition, Rules: rules})
+	if err != nil || len(meters.Meters) != 1 || meters.Meters[0].Used != "1" {
+		t.Fatalf("retry admission RPM meter = %+v, %v; want exactly one request", meters, err)
 	}
 }
 

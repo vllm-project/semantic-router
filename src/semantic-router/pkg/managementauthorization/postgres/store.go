@@ -358,6 +358,41 @@ func loadTeamGrants(
 	if namespaceID == "" {
 		return []managementauthorization.TeamGrant{}, []teamDigestEntry{}, nil
 	}
+	base, loadTeamGrantsErr := loadTeamGrantBase(ctx, transaction, principalID, namespaceID)
+	if loadTeamGrantsErr != nil {
+		return nil, nil, loadTeamGrantsErr
+	}
+	if !base.found {
+		return []managementauthorization.TeamGrant{}, []teamDigestEntry{}, nil
+	}
+	if !base.active {
+		return []managementauthorization.TeamGrant{}, []teamDigestEntry{base.digest}, nil
+	}
+
+	rows, loadTeamGrantsErr := transaction.QueryContext(ctx, teamMembershipsQuery, namespaceID, base.userID)
+	if loadTeamGrantsErr != nil {
+		return nil, nil, fmt.Errorf("load Team memberships: %w", loadTeamGrantsErr)
+	}
+	defer func() {
+		returnErr = errors.Join(returnErr, rows.Close())
+	}()
+	return scanTeamGrants(rows, namespaceID, base)
+}
+
+type teamGrantBase struct {
+	userID  accesscontrol.UserID
+	options accesscontrol.TeamEntitlementOptions
+	digest  teamDigestEntry
+	found   bool
+	active  bool
+}
+
+func loadTeamGrantBase(
+	ctx context.Context,
+	transaction *sql.Tx,
+	principalID accesscontrol.ManagementPrincipalID,
+	namespaceID accesscontrol.NamespaceID,
+) (teamGrantBase, error) {
 	var userID accesscontrol.UserID
 	var linkRevision int64
 	var userStatus accesscontrol.UserStatus
@@ -365,17 +400,17 @@ func loadTeamGrants(
 		ctx, principalUserLinkQuery, principalID, namespaceID,
 	).Scan(&userID, &linkRevision, &userStatus)
 	if errors.Is(loadTeamGrantsErr, sql.ErrNoRows) {
-		return []managementauthorization.TeamGrant{}, []teamDigestEntry{}, nil
+		return teamGrantBase{}, nil
 	}
 	if loadTeamGrantsErr != nil {
-		return nil, nil, fmt.Errorf("load principal User link: %w", loadTeamGrantsErr)
+		return teamGrantBase{}, fmt.Errorf("load principal User link: %w", loadTeamGrantsErr)
 	}
 	parsedLinkRevision, loadTeamGrantsErr := revisionValue(linkRevision)
 	if loadTeamGrantsErr != nil {
-		return nil, nil, loadTeamGrantsErr
+		return teamGrantBase{}, loadTeamGrantsErr
 	}
 	if !userStatus.Valid() {
-		return nil, nil, fmt.Errorf("%w: linked User status", ErrStateInvalid)
+		return teamGrantBase{}, fmt.Errorf("%w: linked User status", ErrStateInvalid)
 	}
 
 	var allowTeamKeyDelegation bool
@@ -385,24 +420,24 @@ func loadTeamGrants(
 		&allowTeamKeyDelegation, &capabilityJSON, &selfServiceRevision,
 	)
 	if errors.Is(loadTeamGrantsErr, sql.ErrNoRows) {
-		return nil, nil, fmt.Errorf("%w: namespace SelfServicePolicy is missing", ErrStateInvalid)
+		return teamGrantBase{}, fmt.Errorf("%w: namespace SelfServicePolicy is missing", ErrStateInvalid)
 	}
 	if loadTeamGrantsErr != nil {
-		return nil, nil, fmt.Errorf("load namespace SelfServicePolicy: %w", loadTeamGrantsErr)
+		return teamGrantBase{}, fmt.Errorf("load namespace SelfServicePolicy: %w", loadTeamGrantsErr)
 	}
 	parsedSelfServiceRevision, loadTeamGrantsErr := revisionValue(selfServiceRevision)
 	if loadTeamGrantsErr != nil {
-		return nil, nil, loadTeamGrantsErr
+		return teamGrantBase{}, loadTeamGrantsErr
 	}
 	var capabilities []accesscontrol.TeamAdminCapability
 	if err := json.Unmarshal(capabilityJSON, &capabilities); err != nil {
-		return nil, nil, fmt.Errorf("%w: Team admin capabilities", ErrStateInvalid)
+		return teamGrantBase{}, fmt.Errorf("%w: Team admin capabilities", ErrStateInvalid)
 	}
 	options, loadTeamGrantsErr := accesscontrol.TeamEntitlementOptionsFromPolicy(
 		allowTeamKeyDelegation, capabilities,
 	)
 	if loadTeamGrantsErr != nil {
-		return nil, nil, fmt.Errorf("%w: %w", ErrStateInvalid, loadTeamGrantsErr)
+		return teamGrantBase{}, fmt.Errorf("%w: %w", ErrStateInvalid, loadTeamGrantsErr)
 	}
 
 	baseDigest := teamDigestEntry{
@@ -412,21 +447,21 @@ func loadTeamGrants(
 		AllowMembershipManage:  options.AllowAdminMembershipManage,
 		AllowKeyManage:         options.AllowAdminKeyManage,
 	}
-	if userStatus != accesscontrol.UserStatusActive {
-		return []managementauthorization.TeamGrant{}, []teamDigestEntry{baseDigest}, nil
-	}
+	return teamGrantBase{
+		userID: userID, options: options, digest: baseDigest,
+		found: true, active: userStatus == accesscontrol.UserStatusActive,
+	}, nil
+}
 
-	rows, loadTeamGrantsErr := transaction.QueryContext(ctx, teamMembershipsQuery, namespaceID, userID)
-	if loadTeamGrantsErr != nil {
-		return nil, nil, fmt.Errorf("load Team memberships: %w", loadTeamGrantsErr)
-	}
-	defer func() {
-		returnErr = errors.Join(returnErr, rows.Close())
-	}()
+func scanTeamGrants(
+	rows *sql.Rows,
+	namespaceID accesscontrol.NamespaceID,
+	base teamGrantBase,
+) ([]managementauthorization.TeamGrant, []teamDigestEntry, error) {
 	grants := make([]managementauthorization.TeamGrant, 0)
-	digestEntries := []teamDigestEntry{baseDigest}
+	digestEntries := []teamDigestEntry{base.digest}
 	for rows.Next() {
-		membership := accesscontrol.TeamMembership{NamespaceID: namespaceID, UserID: userID}
+		membership := accesscontrol.TeamMembership{NamespaceID: namespaceID, UserID: base.userID}
 		var membershipRevision int64
 		var teamStatus accesscontrol.TeamStatus
 		if err := rows.Scan(
@@ -443,7 +478,7 @@ func loadTeamGrants(
 		if err := membership.Validate(); err != nil || !teamStatus.Valid() {
 			return nil, nil, fmt.Errorf("%w: Team membership", ErrStateInvalid)
 		}
-		digestEntry := baseDigest
+		digestEntry := base.digest
 		digestEntry.TeamID = string(membership.TeamID)
 		digestEntry.TeamStatus = string(teamStatus)
 		digestEntry.MembershipRole = string(membership.Role)
@@ -453,7 +488,7 @@ func loadTeamGrants(
 		if teamStatus == accesscontrol.TeamStatusActive {
 			grants = append(grants, managementauthorization.TeamGrant{
 				Membership: membership,
-				Options:    options,
+				Options:    base.options,
 			})
 		}
 	}

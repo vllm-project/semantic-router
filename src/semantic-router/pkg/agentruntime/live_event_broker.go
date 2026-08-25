@@ -107,7 +107,7 @@ func (broker *RedisLiveEventBroker) runPublisher(ctx context.Context) {
 }
 
 // Close stops only the broker's ephemeral publisher. The shared Redis client
-// remains owned by the managed runtime composition.
+// remains owned by the Management runtime composition.
 func (broker *RedisLiveEventBroker) Close() error {
 	if broker == nil {
 		return nil

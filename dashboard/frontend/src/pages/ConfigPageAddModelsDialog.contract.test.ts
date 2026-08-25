@@ -38,11 +38,14 @@ describe('provider catalog model onboarding', () => {
     }
   })
 
-  it('offers the complete safe execution and pricing overrides', () => {
+  it('offers complete, structured model control and pricing overrides', () => {
     const advanced = readSource('./ConfigPageModelAdvancedOptions.tsx')
+    const modelEditor = readSource('./ConfigPageModelsSection.tsx')
+    const styles = readSource('./ConfigPageAddModelsDialog.module.css')
     expect(advanced).toContain('API style')
     for (const label of [
       'Max retries',
+      'Retry on',
       'Request timeout',
       'Stream timeout',
       'Input cost',
@@ -52,6 +55,15 @@ describe('provider catalog model onboarding', () => {
     ]) {
       expect(advanced).toContain(label)
     }
+    expect(advanced).toContain('MODEL_RETRY_TRIGGERS.map')
+    expect(advanced).toContain('type="checkbox"')
+    expect(advanced).not.toContain('placeholder="unavailable"')
+    expect(modelEditor).toMatch(
+      /name: 'retryOn',[\s\S]*?type: 'multiselect',[\s\S]*?options: \['unavailable', 'overloaded', 'timeout'\]/,
+    )
+    expect(styles).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.retryChoices\s*{[\s\S]*?grid-template-columns: 1fr;/,
+    )
   })
 
   it('keeps both the decision list and each model picker independently scrollable', () => {
@@ -69,5 +81,13 @@ describe('provider catalog model onboarding', () => {
     expect(results).toContain("name={allSelected ? 'close' : 'check'}")
     expect(results).toContain('<ProductIcon name="chevron-down"')
     expect(results).not.toContain('Next models')
+  })
+
+  it('keeps model onboarding inside the dynamic mobile viewport', () => {
+    const styles = readSource('./ConfigPageAddModelsDialog.module.css')
+
+    expect(styles).toContain('max-height: min(900px, calc(100dvh - 48px));')
+    expect(styles).toContain('max-height: calc(100dvh - 0.5rem);')
+    expect(styles).toContain('padding-bottom: max(14px, env(safe-area-inset-bottom));')
   })
 })

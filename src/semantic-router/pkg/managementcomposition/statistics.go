@@ -4,15 +4,15 @@ import (
 	"errors"
 	"time"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementserver"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementstatistics"
 	statisticspostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementstatistics/postgres"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 )
 
 func composeStatistics(
-	dependencies managedruntime.ManagementDependencies,
+	dependencies routingruntime.ManagementDependencies,
 	authorization managementauthorization.Runtime,
 	namespaces managementserver.NamespaceResolver,
 	sessions managementserver.SessionAuthenticator,

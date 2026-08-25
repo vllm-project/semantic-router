@@ -68,7 +68,7 @@ global:
             positive_group: private
             negative_group: public
 
-document:
+routing:
   signals:
     kb:
       - name: privacy_policy
@@ -110,7 +110,7 @@ Knowledge base signals are boolean routing inputs. Numeric outputs stay in `rout
 For example:
 
 ```yaml
-document:
+routing:
   projections:
     scores:
       - name: privacy_bias

@@ -30,6 +30,8 @@ import (
 type Options struct {
 	Database                  *sql.DB
 	Valkey                    *redisclient.Client
+	Barriers                  managementidentity.BarrierAdmin
+	Challenges                managementauth.ExchangeChallengeStore
 	SessionStore              *authpostgres.Store
 	KeyPrefix                 string
 	CommandCodec              *managementcommand.Codec
@@ -54,11 +56,11 @@ type Options struct {
 }
 
 // IdentityApplication is the narrow production composition seam consumed by
-// managedruntime. Its registrars authenticate through the Management identity
+// routingruntime. Its registrars authenticate through the Management identity
 // runtime; listener middleware cannot substitute another credential authority.
 type IdentityApplication struct {
 	repository     *identitypostgres.Store
-	barriers       *authredis.Store
+	barriers       managementidentity.BarrierAdmin
 	credentials    *identitypostgres.ServiceCredentialVerifier
 	authentication *managementauth.AuthService
 	lifecycle      *managementidentity.LifecycleService
@@ -71,9 +73,9 @@ type IdentityApplication struct {
 }
 
 func New(ctx context.Context, options Options) (*IdentityApplication, error) {
-	if options.Database == nil || options.Valkey == nil || options.SessionStore == nil || options.CommandCodec == nil ||
+	if options.Database == nil || options.SessionStore == nil || options.CommandCodec == nil ||
 		options.AssertionVerifier == nil || options.BackchannelLogoutVerifier == nil || options.IssuerKeyCache == nil ||
-		options.Exchanges == nil || options.KeyPrefix == "" {
+		options.Exchanges == nil || (options.Valkey != nil && options.KeyPrefix == "") {
 		return nil, errors.New("management identity application dependencies are required")
 	}
 	now := options.Now
@@ -87,130 +89,171 @@ func New(ctx context.Context, options Options) (*IdentityApplication, error) {
 			_ = application.Close()
 		}
 	}()
-	repository, newErr := identitypostgres.New(options.Database, options.CommandCodec)
+	identityService, newErr := application.composeFoundation(ctx, options, now)
 	if newErr != nil {
 		return nil, newErr
 	}
-	application.repository = repository
-	sessionStore := options.SessionStore
-	barriers, newErr := authredis.New(authredis.Options{Client: options.Valkey, KeyPrefix: options.KeyPrefix, Loader: sessionStore})
+	recovery, newErr := application.composeAuthentication(options, now)
 	if newErr != nil {
 		return nil, newErr
 	}
-	application.barriers = barriers
-	if err := barriers.Rebuild(ctx); err != nil {
-		return nil, fmt.Errorf("rebuild Management revocation barriers: %w", err)
-	}
-	identityService, newErr := managementidentity.NewService(repository, barriers)
-	if newErr != nil {
+	if newErr := application.composeRoutes(options, identityService, recovery, now); newErr != nil {
 		return nil, newErr
 	}
-	sessions := managementauth.SessionRuntime{
-		Codec: options.SessionTokenCodec, Sessions: sessionStore, Barriers: barriers,
-		PolicyLoader: sessionStore, NewTokenID: func() (string, error) { return uuid.NewString(), nil },
-	}
-	application.sessions = sessions
-	lifecycle, newErr := managementidentity.NewLifecycleService(
-		repository, sessions, barriers, options.IssuerKeyCache, options.BackchannelLogoutVerifier,
-	)
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.lifecycle = lifecycle
-	credentials, newErr := identitypostgres.NewServiceCredentialVerifier(options.Database, options.ServiceCredentialPeppers)
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.credentials = credentials
-	workloads, newErr := managementidentity.NewWorkloadIdentityService(managementidentity.WorkloadIdentityOptions{
-		Repository: repository, Commands: options.CommandCodec,
-		CursorKeyring: options.WorkloadCursorKeyring, CredentialPeppers: options.ServiceCredentialPeppers,
-		ResponseKEK: options.WorkloadResponseKEKs, Barriers: barriers, SessionPolicy: sessionStore,
-		IdempotencyTTL: options.WorkloadIdempotencyTTL, SecretDeliveryTTL: options.WorkloadSecretDeliveryTTL,
-		MTLSListenerEnabled: options.MTLSListenerEnabled, Now: now,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.workloads = workloads
-	bootstrap, newErr := identitypostgres.NewBootstrapService(identitypostgres.BootstrapOptions{
-		Database: options.Database, BootstrapToken: options.BootstrapToken,
-		BootstrapTokenPresent:    options.BootstrapTokenPresent,
-		IdempotencyKeys:          options.BootstrapIdempotencyKeys,
-		ResponseKEKs:             options.BootstrapResponseKEKs,
-		ServiceCredentialPeppers: options.ServiceCredentialPeppers,
-		Now:                      now,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.bootstrap = bootstrap
-	var recovery *identitypostgres.RecoveryService
-	if len(options.RecoveryToken) != 0 {
-		recovery, newErr = identitypostgres.NewRecoveryService(identitypostgres.RecoveryOptions{
-			Database: options.Database, RecoveryToken: options.RecoveryToken,
-			IdempotencyKeys: options.BootstrapIdempotencyKeys, Now: now,
-		})
-		if newErr != nil {
-			return nil, newErr
-		}
-		application.recovery = recovery
-	}
-	challenges, newErr := authredis.NewChallengeStore(authredis.ChallengeOptions{Client: options.Valkey, KeyPrefix: options.KeyPrefix})
-	if newErr != nil {
-		return nil, newErr
-	}
-	authentication, newErr := managementauth.NewAuthService(managementauth.AuthServiceOptions{
-		Challenges: challenges, Assertions: options.AssertionVerifier, Exchanges: options.Exchanges,
-		ServiceCredentials: credentials, MTLSIdentities: workloads,
-		Sessions: sessionStore, Runtime: sessions, Now: now,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.authentication = authentication
-	authorityStore, newErr := authorizationpostgres.New(options.Database)
-	if newErr != nil {
-		return nil, newErr
-	}
-	authorizer, newErr := managementserver.NewIdentityRuntimeAuthorizer(managementauthorization.Runtime{Loader: authorityStore})
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.authorizer = authorizer
-	authRoutes, newErr := managementserver.NewIdentityAuthRoutes(managementserver.IdentityAuthRoutesOptions{
-		Service: authentication, Bootstrap: bootstrap, Recovery: optionalRecoveryService(recovery),
-		AllowPlaintextForTests: options.AllowPlaintextAuth,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	resourceRoutes, newErr := managementserver.NewIdentityResourceRoutes(managementserver.IdentityResourceRoutesOptions{
-		Service: identityService, Sessions: sessions, Authorization: authorizer,
-		Commands: options.CommandCodec, Now: now,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	lifecycleRoutes, newErr := managementserver.NewIdentityLifecycleRoutes(managementserver.IdentityLifecycleRoutesOptions{
-		Service: lifecycle, Sessions: sessions, Authorization: authorizer,
-		Commands: options.CommandCodec, AllowPlaintextForTests: options.AllowPlaintextAuth, Now: now,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	workloadRoutes, newErr := managementserver.NewWorkloadIdentityRoutes(managementserver.WorkloadIdentityRoutesOptions{
-		Service: workloads, Sessions: sessions, Authorization: authorizer, Now: now,
-	})
-	if newErr != nil {
-		return nil, newErr
-	}
-	application.routes = []managementserver.RouteRegistrar{authRoutes, resourceRoutes, lifecycleRoutes, workloadRoutes}
 	if err := application.Ready(ctx); err != nil {
 		return nil, err
 	}
 	complete = true
 	return application, nil
+}
+
+func (application *IdentityApplication) composeFoundation(
+	ctx context.Context, options Options, now func() time.Time,
+) (*managementidentity.Service, error) {
+	repository, err := identitypostgres.New(options.Database, options.CommandCodec)
+	if err != nil {
+		return nil, err
+	}
+	application.repository = repository
+	barriers := options.Barriers
+	if barriers == nil {
+		if options.Valkey != nil {
+			var redisBarriers *authredis.Store
+			redisBarriers, err = authredis.New(authredis.Options{
+				Client: options.Valkey, KeyPrefix: options.KeyPrefix, Loader: options.SessionStore,
+			})
+			if err == nil {
+				err = redisBarriers.Rebuild(ctx)
+			}
+			barriers = redisBarriers
+		} else {
+			barriers, err = authpostgres.NewBarrierStore(options.Database)
+		}
+	}
+	if err != nil {
+		return nil, fmt.Errorf("compose Management revocation barriers: %w", err)
+	}
+	application.barriers = barriers
+	if readyErr := barriers.Ready(ctx); readyErr != nil {
+		return nil, fmt.Errorf("initialize Management revocation barriers: %w", readyErr)
+	}
+	identityService, err := managementidentity.NewService(repository, barriers)
+	if err != nil {
+		return nil, err
+	}
+	sessions := managementauth.SessionRuntime{
+		Codec: options.SessionTokenCodec, Sessions: options.SessionStore, Barriers: barriers,
+		PolicyLoader: options.SessionStore, NewTokenID: func() (string, error) { return uuid.NewString(), nil },
+	}
+	application.sessions = sessions
+	application.lifecycle, err = managementidentity.NewLifecycleService(
+		repository, sessions, barriers, options.IssuerKeyCache, options.BackchannelLogoutVerifier,
+	)
+	if err != nil {
+		return nil, err
+	}
+	application.credentials, err = identitypostgres.NewServiceCredentialVerifier(options.Database, options.ServiceCredentialPeppers)
+	if err != nil {
+		return nil, err
+	}
+	application.workloads, err = managementidentity.NewWorkloadIdentityService(managementidentity.WorkloadIdentityOptions{
+		Repository: repository, Commands: options.CommandCodec,
+		CursorKeyring: options.WorkloadCursorKeyring, CredentialPeppers: options.ServiceCredentialPeppers,
+		ResponseKEK: options.WorkloadResponseKEKs, Barriers: barriers, SessionPolicy: options.SessionStore,
+		IdempotencyTTL: options.WorkloadIdempotencyTTL, SecretDeliveryTTL: options.WorkloadSecretDeliveryTTL,
+		MTLSListenerEnabled: options.MTLSListenerEnabled, Now: now,
+	})
+	return identityService, err
+}
+
+func (application *IdentityApplication) composeAuthentication(
+	options Options, now func() time.Time,
+) (*identitypostgres.RecoveryService, error) {
+	var err error
+	application.bootstrap, err = identitypostgres.NewBootstrapService(identitypostgres.BootstrapOptions{
+		Database: options.Database, BootstrapToken: options.BootstrapToken,
+		BootstrapTokenPresent: options.BootstrapTokenPresent, IdempotencyKeys: options.BootstrapIdempotencyKeys,
+		ResponseKEKs: options.BootstrapResponseKEKs, ServiceCredentialPeppers: options.ServiceCredentialPeppers,
+		Now: now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(options.RecoveryToken) != 0 {
+		application.recovery, err = identitypostgres.NewRecoveryService(identitypostgres.RecoveryOptions{
+			Database: options.Database, RecoveryToken: options.RecoveryToken,
+			IdempotencyKeys: options.BootstrapIdempotencyKeys, Now: now,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	challenges := options.Challenges
+	if challenges == nil {
+		if options.Valkey != nil {
+			challenges, err = authredis.NewChallengeStore(authredis.ChallengeOptions{
+				Client: options.Valkey, KeyPrefix: options.KeyPrefix,
+			})
+		} else {
+			challenges, err = authpostgres.NewChallengeStore(authpostgres.ChallengeOptions{Database: options.Database})
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	application.authentication, err = managementauth.NewAuthService(managementauth.AuthServiceOptions{
+		Challenges: challenges, Assertions: options.AssertionVerifier, Exchanges: options.Exchanges,
+		ServiceCredentials: application.credentials, MTLSIdentities: application.workloads,
+		Sessions: options.SessionStore, Runtime: application.sessions, Now: now,
+	})
+	if err != nil {
+		return nil, err
+	}
+	authorityStore, err := authorizationpostgres.New(options.Database)
+	if err != nil {
+		return nil, err
+	}
+	application.authorizer, err = managementserver.NewIdentityRuntimeAuthorizer(
+		managementauthorization.Runtime{Loader: authorityStore},
+	)
+	return application.recovery, err
+}
+
+func (application *IdentityApplication) composeRoutes(
+	options Options,
+	identityService *managementidentity.Service,
+	recovery *identitypostgres.RecoveryService,
+	now func() time.Time,
+) error {
+	authRoutes, err := managementserver.NewIdentityAuthRoutes(managementserver.IdentityAuthRoutesOptions{
+		Service: application.authentication, Bootstrap: application.bootstrap,
+		Recovery: optionalRecoveryService(recovery), AllowPlaintextForTests: options.AllowPlaintextAuth,
+	})
+	if err != nil {
+		return err
+	}
+	resourceRoutes, err := managementserver.NewIdentityResourceRoutes(managementserver.IdentityResourceRoutesOptions{
+		Service: identityService, Sessions: application.sessions, Authorization: application.authorizer,
+		Commands: options.CommandCodec, Now: now,
+	})
+	if err != nil {
+		return err
+	}
+	lifecycleRoutes, err := managementserver.NewIdentityLifecycleRoutes(managementserver.IdentityLifecycleRoutesOptions{
+		Service: application.lifecycle, Sessions: application.sessions, Authorization: application.authorizer,
+		Commands: options.CommandCodec, AllowPlaintextForTests: options.AllowPlaintextAuth, Now: now,
+	})
+	if err != nil {
+		return err
+	}
+	workloadRoutes, err := managementserver.NewWorkloadIdentityRoutes(managementserver.WorkloadIdentityRoutesOptions{
+		Service: application.workloads, Sessions: application.sessions, Authorization: application.authorizer, Now: now,
+	})
+	if err != nil {
+		return err
+	}
+	application.routes = []managementserver.RouteRegistrar{authRoutes, resourceRoutes, lifecycleRoutes, workloadRoutes}
+	return nil
 }
 
 func optionalRecoveryService(service *identitypostgres.RecoveryService) managementserver.RecoveryService {

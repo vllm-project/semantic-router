@@ -1,4 +1,4 @@
-document:
+routing:
   decisions:
     - name: prompt-selected-route
       description: Select from the Models assigned by the Entrypoint.

@@ -91,8 +91,8 @@ func assertMultiObjectiveBalancedRecipe(t *testing.T, cfg *RouterConfig) {
 		t.Fatal("balanced recipe must derive an effort projection from recipe-local signals")
 	}
 	recovery := multiObjectiveDecision(t, balanced, "unified_balance_recovery")
-	if !recovery.HasPlugin(DecisionPluginSystemPrompt) {
-		t.Fatal("balanced recovery route must include corrective response behavior")
+	if recovery.HasPlugin(DecisionPluginSystemPrompt) {
+		t.Fatal("built-in recovery routes must not rewrite requests with the system-prompt plugin")
 	}
 	if rules := balanced.Profile.Signals.FactCheckRules; len(rules) != 1 || rules[0].Name != "needs_fact_check" {
 		t.Fatalf("balanced fact-check rules must use the runtime classifier label: %+v", rules)
@@ -119,6 +119,18 @@ func assertMultiObjectiveEfficiencyRecipes(t *testing.T, cfg *RouterConfig) {
 
 	cost := multiObjectiveRecipe(t, cfg, "cost-first")
 	for _, decision := range cost.Profile.Decisions {
+		if decision.Name == "omni" {
+			if len(decision.ModelRefs) != 1 || decision.ModelRefs[0].Model != "local/omni" {
+				t.Fatalf("cost-first omni decision must use the visual-language model: %+v", decision.ModelRefs)
+			}
+			requireMultiObjectiveAlgorithmType(
+				t,
+				decision.Algorithm,
+				DecisionAlgorithmStatic,
+				"cost-first omni decision",
+			)
+			continue
+		}
 		models := make([]string, 0, len(decision.ModelRefs))
 		for _, ref := range decision.ModelRefs {
 			models = append(models, ref.Model)
@@ -247,6 +259,12 @@ func assertMultiObjectivePrivacyRecipe(t *testing.T, cfg *RouterConfig) {
 		t.Fatal("privacy-first recipe must derive local policy from detector and KB evidence")
 	}
 	for _, decision := range privacy.Profile.Decisions {
+		if decision.Name == "omni" {
+			if len(decision.ModelRefs) != 1 || decision.ModelRefs[0].Model != "local/omni" {
+				t.Fatalf("privacy-first omni decision must remain on the local visual-language model: %+v", decision.ModelRefs)
+			}
+			continue
+		}
 		for _, ref := range decision.ModelRefs {
 			if ref.Model != "local/qwen3.5-9b-private" {
 				t.Fatalf("privacy-first decision %q routes to non-local model %q", decision.Name, ref.Model)

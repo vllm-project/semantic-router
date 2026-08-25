@@ -9,21 +9,38 @@ import (
 // LifecycleRepository is the PostgreSQL authority for self identity, durable
 // Management sessions, and trusted issuers. It remains separate from the
 // principal and role repository so each persistence boundary has one purpose.
-type LifecycleRepository interface {
+type LifecycleReadRepository interface {
 	Ready(context.Context) error
-
 	LoadSelf(context.Context, string, string) (SelfView, error)
 	ListManagementSessions(context.Context, string, ListRequest) (ManagementSessionPage, error)
+}
+
+type LifecycleSessionRepository interface {
 	RevokeSelfManagementSession(context.Context, string, string, MutationActor) (managementauth.SessionMutation, error)
 	RevokeManagementSession(context.Context, SessionRevocationCommand) (managementauth.SessionMutation, MutationResult, error)
 	RevokePrincipalManagementSessions(context.Context, PrincipalSessionRevocationCommand) (PrincipalSessionRevocation, error)
+}
 
+type TrustedIssuerReadRepository interface {
 	GetTrustedIdentityIssuer(context.Context, string) (TrustedIdentityIssuer, error)
 	ListTrustedIdentityIssuers(context.Context, ListRequest) (TrustedIdentityIssuerPage, error)
+}
+
+type TrustedIssuerMutationRepository interface {
 	CreateTrustedIdentityIssuer(context.Context, CreateTrustedIdentityIssuer) (IssuerMutation, error)
 	UpdateTrustedIdentityIssuer(context.Context, UpdateTrustedIdentityIssuer) (IssuerMutation, error)
 	DeleteTrustedIdentityIssuer(context.Context, string, uint64, MutationActor) (IssuerMutation, error)
 	RefreshTrustedIdentityIssuer(context.Context, RefreshTrustedIdentityIssuer) (IssuerMutation, error)
+}
 
+type BackchannelLogoutRepository interface {
 	ApplyBackchannelLogout(context.Context, BackchannelLogout) (BackchannelLogoutResult, error)
+}
+
+type LifecycleRepository interface {
+	LifecycleReadRepository
+	LifecycleSessionRepository
+	TrustedIssuerReadRepository
+	TrustedIssuerMutationRepository
+	BackchannelLogoutRepository
 }

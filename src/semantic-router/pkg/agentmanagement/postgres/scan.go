@@ -13,7 +13,7 @@ type rowScanner interface {
 	Scan(...any) error
 }
 
-const profileSelect = `SELECT p.id::text,p.namespace_id::text,p.name,p.description,p.status,p.revision,
+const profileSelectPrefix = `SELECT p.id::text,p.namespace_id::text,p.name,p.description,p.status,p.revision,
        p.created_at,p.updated_at,r.revision,r.target_model_id,r.target_entrypoint_id,
        COALESCE(model.name,entrypoint.name,''),r.minimum_target_capabilities,r.supported_modes,
        r.tool_policy,r.approval_policy,r.maximum_turn_seconds,r.maximum_tool_steps,r.context_token_budget,
@@ -22,13 +22,20 @@ const profileSelect = `SELECT p.id::text,p.namespace_id::text,p.name,p.descripti
                  FROM agent_profile_skills pins
                 WHERE pins.profile_id=p.id AND pins.profile_revision=r.revision),'[]'::jsonb),
        COALESCE((SELECT jsonb_agg(defaults.mode ORDER BY defaults.mode)
-                 FROM agent_profile_defaults defaults
-                WHERE defaults.namespace_id=p.namespace_id AND defaults.profile_id=p.id
-                  AND defaults.profile_revision=r.revision),'[]'::jsonb)
-  FROM agent_profiles p
-  JOIN agent_profile_revisions r ON r.profile_id=p.id AND r.revision=%s
-  LEFT JOIN routing_models model ON model.id=r.target_model_id AND model.namespace_id=p.namespace_id
-  LEFT JOIN routing_entrypoints entrypoint ON entrypoint.id=r.target_entrypoint_id AND entrypoint.namespace_id=p.namespace_id`
+	                 FROM agent_profile_defaults defaults
+	                WHERE defaults.namespace_id=p.namespace_id AND defaults.profile_id=p.id
+	                  AND defaults.profile_revision=r.revision),'[]'::jsonb)
+	  FROM agent_profiles p
+	  JOIN agent_profile_revisions r ON r.profile_id=p.id AND r.revision=`
+
+const profileSelectSuffix = `
+	  LEFT JOIN routing_models model ON model.id=r.target_model_id AND model.namespace_id=p.namespace_id
+	  LEFT JOIN routing_entrypoints entrypoint ON entrypoint.id=r.target_entrypoint_id AND entrypoint.namespace_id=p.namespace_id`
+
+const (
+	profileCurrentSelect  = profileSelectPrefix + "p.current_revision" + profileSelectSuffix
+	profileRevisionSelect = profileSelectPrefix + "$3" + profileSelectSuffix
+)
 
 func scanProfile(scanner rowScanner) (agentmanagement.Profile, error) {
 	var (
@@ -157,6 +164,7 @@ func scanToolSource(scanner rowScanner) (agentmanagement.ToolSource, error) {
 	return value, nil
 }
 
+// #nosec G101 -- this constant selects metadata only and contains no credential value.
 const credentialSelect = `SELECT id::text,namespace_id::text,name,''::text,status,revision,
        created_at,updated_at,COALESCE(active_version_id::text,'')
   FROM agent_tool_credentials`
@@ -175,17 +183,19 @@ func scanToolCredential(scanner rowScanner) (agentmanagement.ToolCredential, err
 
 const sessionSelect = `SELECT session.id::text,session.namespace_id::text,session.owner_principal_id::text,
        COALESCE(session.effective_user_id::text,''),COALESCE(session.effective_team_id::text,''),
-       session.delegated_inference_session_id::text,session.profile_id::text,session.profile_revision,
+       delegation.api_key_id::text,session.delegated_inference_session_id::text,session.profile_id::text,session.profile_revision,
        session.target_model_id,session.target_entrypoint_id,session.target_public_id,session.authority_digest,session.mode,
        session.title,session.status,session.revision,session.created_at,session.updated_at
-  FROM agent_sessions session`
+  FROM agent_sessions session
+  JOIN delegated_inference_sessions delegation
+    ON delegation.namespace_id=session.namespace_id AND delegation.id=session.delegated_inference_session_id`
 
 func scanSession(scanner rowScanner) (agentmanagement.Session, error) {
 	var value agentmanagement.Session
 	var model, entrypoint sql.NullString
 	err := scanner.Scan(
 		&value.ID, &value.NamespaceID, &value.OwnerPrincipalID, &value.EffectiveUserID,
-		&value.EffectiveTeamID, &value.DelegatedInferenceSessionID, &value.ProfileID,
+		&value.EffectiveTeamID, &value.KeyID, &value.DelegatedInferenceSessionID, &value.ProfileID,
 		&value.ProfileRevision, &model, &entrypoint, &value.Target.ID, &value.AuthorityDigest, &value.Mode,
 		&value.Title, &value.Status, &value.Revision, &value.CreatedAt, &value.UpdatedAt,
 	)

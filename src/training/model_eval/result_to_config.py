@@ -1,4 +1,4 @@
-"""Analyze MMLU-Pro results and generate a human-readable v0.4 scaffold."""
+"""Analyze MMLU-Pro results and generate a human-readable v0.3 scaffold."""
 
 import argparse
 import glob
@@ -70,7 +70,7 @@ DEFAULT_PII_CLASSIFIER = {
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="Analyze MMLU-Pro results and generate a human-readable v0.4 config scaffold"
+        description="Analyze MMLU-Pro results and generate a human-readable v0.3 config scaffold"
     )
     parser.add_argument(
         "--results-dir",
@@ -151,33 +151,44 @@ def calculate_average_accuracies(category_accuracies):
     }
 
 
-def build_models(ranked_models, endpoint, provider):
-    """Build concise logical Models from ranked evaluation results."""
-    generated_models = []
-    for model_name, average_accuracy in ranked_models:
-        generated_models.append(
-            {
-                "name": model_name,
-                "card": {
-                    "description": (
-                        "Generated from MMLU-Pro evaluation results for "
-                        "category-aware routing."
-                    ),
-                    "quality_score": round(float(average_accuracy), 6),
-                    "capabilities": ["chat"],
-                    "tags": ["generated", "mmlu-pro"],
-                    "modality": "text",
+def build_provider_models(ranked_models, endpoint, provider):
+    """Build the physical provider bindings for evaluated Models."""
+    return [
+        {
+            "name": model_name,
+            "provider_model_id": model_name,
+            "backend_refs": [{"provider": provider, "endpoint": endpoint}],
+            "control": {
+                "retry": {
+                    "count": 2,
+                    "on": ["unavailable", "timeout"],
                 },
-                "connections": [
-                    {
-                        "provider": provider,
-                        "endpoint": endpoint,
-                        "model": model_name,
-                    }
-                ],
-            }
-        )
-    return generated_models
+                "timeout": {
+                    "request": "60s",
+                    "stream": "10m",
+                },
+            },
+        }
+        for model_name, _ in ranked_models
+    ]
+
+
+def build_model_cards(ranked_models):
+    """Build connection-free routing metadata for evaluated Models."""
+    return [
+        {
+            "name": model_name,
+            "description": (
+                "Generated from MMLU-Pro evaluation results for "
+                "category-aware routing."
+            ),
+            "quality_score": round(float(average_accuracy), 6),
+            "capabilities": ["chat"],
+            "tags": ["generated", "mmlu-pro"],
+            "modality": "text",
+        }
+        for model_name, average_accuracy in ranked_models
+    ]
 
 
 def build_domain_signals(category_accuracies):
@@ -243,7 +254,7 @@ def generate_config_yaml(
     endpoint,
     provider,
 ):
-    """Generate a human-readable v0.4 config scaffold from MMLU-Pro results."""
+    """Generate a human-readable v0.3 config scaffold from MMLU-Pro results."""
     average_accuracies = calculate_average_accuracies(category_accuracies)
     if not average_accuracies:
         raise ValueError("No non-auto model results were found in the input directory")
@@ -259,14 +270,19 @@ def generate_config_yaml(
     )
 
     return {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [],
-        "models": build_models(ranked_models, endpoint, provider),
+        "providers": {
+            "models": build_provider_models(ranked_models, endpoint, provider),
+        },
+        "routing": {
+            "modelCards": build_model_cards(ranked_models),
+        },
         "recipes": [
             {
                 "name": "mmlu-evaluation",
                 "description": "Category routing derived from MMLU-Pro results.",
-                "document": {
+                "routing": {
                     "signals": {
                         "domains": build_domain_signals(category_accuracies),
                     },
@@ -276,8 +292,7 @@ def generate_config_yaml(
         ],
         "entrypoints": [
             {
-                "name": "vllm-sr/eval",
-                "aliases": ["eval"],
+                "model_names": ["vllm-sr/eval", "eval"],
                 "recipe": "mmlu-evaluation",
                 "assignments": assignments,
             }
@@ -336,7 +351,7 @@ def main():
     print(f"Analyzing MMLU-Pro results in {args.results_dir}...")
     category_accuracies = collect_model_accuracies(args.results_dir)
 
-    print("Generating human-readable v0.4 config scaffold...")
+    print("Generating human-readable v0.3 config scaffold...")
     config = generate_config_yaml(
         category_accuracies,
         args.similarity_threshold,

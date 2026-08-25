@@ -70,6 +70,7 @@ type Connection struct {
 
 type Execution struct {
 	MaxRetries     int
+	RetryOn        []FallbackTrigger
 	RequestTimeout time.Duration
 	StreamTimeout  time.Duration
 }

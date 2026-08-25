@@ -43,7 +43,7 @@ So partitions are not "named projection outputs" in the same sense as mappings. 
 ## Configuration
 
 ```yaml
-document:
+routing:
   projections:
     partitions:
       - name: balance_domain_partition

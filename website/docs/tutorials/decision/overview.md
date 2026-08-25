@@ -34,10 +34,10 @@ Use a decision when:
 
 ## Configuration
 
-Decisions live at `recipes[].document.decisions` inside a model-free Recipe:
+Decisions live at `recipes[].routing.decisions` inside a model-free Recipe:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: business_route
       description: Route business requests to the business model.
@@ -51,7 +51,7 @@ document:
 
 Decision matching stays separate from:
 
-- `models[]` and Entrypoint assignments, which carry deployment bindings
+- `providers.models[]` and Entrypoint assignments, which carry deployment bindings
 - `decision.algorithm`, which chooses among multiple candidate models
 - `decision.plugins`, which post-processes a matched route
 

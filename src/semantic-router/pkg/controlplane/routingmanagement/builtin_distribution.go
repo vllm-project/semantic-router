@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -114,10 +115,11 @@ func ParseBuiltInRecipeDistribution(metadataBytes, configBytes []byte) (BuiltInR
 	if err := yaml.UnmarshalStrict(configBytes, &document); err != nil {
 		return BuiltInRecipeDistribution{}, fmt.Errorf("%w: decode built-in Recipe config: %w", ErrInvalid, err)
 	}
-	if document.Version != "v0.4" {
-		return BuiltInRecipeDistribution{}, fmt.Errorf("%w: built-in Recipe distribution version must be v0.4", ErrInvalid)
+	if document.Version != "v0.3" {
+		return BuiltInRecipeDistribution{}, fmt.Errorf("%w: built-in Recipe distribution version must be v0.3", ErrInvalid)
 	}
-	if len(document.Listeners) != 0 || len(document.Models) != 0 ||
+	if len(document.Listeners) != 0 || !reflect.DeepEqual(document.Providers, config.CanonicalProviders{}) ||
+		!reflect.DeepEqual(document.Routing, config.CanonicalRouting{}) ||
 		len(document.Entrypoints) != 0 || document.Global != nil {
 		return BuiltInRecipeDistribution{}, fmt.Errorf(
 			"%w: built-in Recipe distribution may contain only version and recipes", ErrInvalid,
@@ -140,9 +142,9 @@ func ParseBuiltInRecipeDistribution(metadataBytes, configBytes []byte) (BuiltInR
 	seenSourceIDs := make(map[string]struct{}, len(document.Recipes))
 	seenNames := make(map[string]struct{}, len(document.Recipes))
 	for _, source := range document.Recipes {
-		compiled, err := config.CompileStandaloneRoutingSnapshot(config.CanonicalConfig{
-			Version: "v0.4",
-			Recipes: []config.AuthoringRecipe{source},
+		compiled, err := config.CompileFileRoutingSnapshot(config.CanonicalConfig{
+			Version: "v0.3",
+			Recipes: []config.CanonicalRecipe{source},
 		}, nil)
 		if err != nil || len(compiled.Recipes) != 1 {
 			return BuiltInRecipeDistribution{}, fmt.Errorf(

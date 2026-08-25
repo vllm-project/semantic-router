@@ -1,7 +1,7 @@
 .root {
   position: relative;
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-height: 0;
@@ -12,6 +12,7 @@
 
 .fullscreen {
   height: 100vh;
+  height: 100dvh;
 }
 
 .sidebarShell {
@@ -411,8 +412,13 @@
 
 .topbarActions {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 8px;
+}
+
+.playgroundKeySelector select {
+  max-width: 150px;
 }
 
 .streamState {
@@ -438,23 +444,6 @@
 .streamStateLive > span {
   background: #94a3b8;
   box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.1);
-}
-
-.teamContext select {
-  height: 32px;
-  max-width: 170px;
-  padding: 0 26px 0 9px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 8px;
-  outline: none;
-  background: #101114;
-  color: rgba(255, 255, 255, 0.67);
-  font: inherit;
-  font-size: 0.65rem;
-}
-
-.teamContext select:focus-visible {
-  border-color: rgba(255, 255, 255, 0.25);
 }
 
 .timelineViewport {
@@ -1131,7 +1120,7 @@
 
 .reviewDialog {
   width: min(620px, 100%);
-  max-height: min(760px, calc(100vh - 40px));
+  max-height: min(760px, calc(100dvh - 40px));
   overflow: auto;
   padding: 18px;
   border: 2px solid rgba(255, 255, 255, 0.75);
@@ -1384,8 +1373,17 @@
   .topbarIdentity span {
     max-width: 34vw;
   }
-  .teamContext select {
-    max-width: 110px;
+  .playgroundKeySelector {
+    width: auto;
+  }
+  .playgroundKeySelector > svg,
+  .playgroundKeySelector > span {
+    display: none;
+  }
+  .playgroundKeySelector select {
+    width: 100px;
+    min-width: 0;
+    max-width: 100px;
   }
   .timeline {
     width: calc(100% - 24px);
@@ -1414,6 +1412,17 @@
   .dialogLogo {
     width: 38px;
     height: 38px;
+  }
+}
+
+@media (max-width: 390px) {
+  .playgroundKeySelector select {
+    width: 76px;
+    max-width: 76px;
+  }
+
+  .streamState {
+    display: none;
   }
 }
 

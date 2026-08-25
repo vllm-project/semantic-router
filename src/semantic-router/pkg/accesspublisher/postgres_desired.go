@@ -84,21 +84,25 @@ func (r *PostgresDesiredStateReader) LoadDesiredState(
 }
 
 func verifyDesiredRevision(ctx context.Context, tx *sql.Tx, namespaceID string, desired uint64) (time.Time, error) {
+	desiredRevision, err := postgresBigint(desired, "desired revision")
+	if err != nil {
+		return time.Time{}, err
+	}
 	var latest int64
 	if err := tx.QueryRowContext(ctx,
 		`SELECT COALESCE(MAX(revision), 0) FROM policy_revisions WHERE namespace_id = $1`, namespaceID,
 	).Scan(&latest); err != nil {
 		return time.Time{}, fmt.Errorf("read latest desired revision: %w", err)
 	}
-	if latest > int64(desired) {
+	if latest > desiredRevision {
 		return time.Time{}, ErrSuperseded
 	}
-	if latest != int64(desired) {
+	if latest != desiredRevision {
 		return time.Time{}, fmt.Errorf("desired revision %d is absent; latest is %d", desired, latest)
 	}
 	var revisionTime time.Time
 	if err := tx.QueryRowContext(ctx,
-		`SELECT created_at FROM policy_revisions WHERE namespace_id = $1 AND revision = $2`, namespaceID, int64(desired),
+		`SELECT created_at FROM policy_revisions WHERE namespace_id = $1 AND revision = $2`, namespaceID, desiredRevision,
 	).Scan(&revisionTime); err != nil {
 		return time.Time{}, fmt.Errorf("read desired revision timestamp: %w", err)
 	}
@@ -242,80 +246,94 @@ WHERE d.namespace_id = $1`, namespaceID)
 	result := make([]CredentialCandidate, 0)
 	barriers := make([]Barrier, 0)
 	for rows.Next() {
-		var credential accesscontrol.CredentialVersion
-		var status string
-		var revoked sql.NullTime
-		var managementSessionID, principalID, userID, audience string
-		var teamID sql.NullString
-		var delegationEpoch, currentDelegationEpoch int64
-		var sessionPrincipalID, sessionStatus, principalStatus, userStatus string
-		var sessionExpires time.Time
-		var ownerUserID, ownerTeamID, contextTeamID sql.NullString
-		var teamStatus, membershipStatus sql.NullString
-		var linked, allowTeamKeyDelegation bool
-		var databaseNow time.Time
-		if err := rows.Scan(
-			&credential.ID, &credential.KID, &credential.APIKeyID, &credential.SecretHMAC,
-			&credential.PepperVersion, &status, &credential.NotBefore, &credential.ExpiresAt,
-			&revoked, &credential.CreatedAt, &managementSessionID, &principalID,
-			&delegationEpoch, &userID, &teamID, &audience,
-			&sessionPrincipalID, &sessionStatus, &sessionExpires, &principalStatus,
-			&currentDelegationEpoch, &ownerUserID, &ownerTeamID, &contextTeamID,
-			&userStatus, &teamStatus, &membershipStatus, &allowTeamKeyDelegation, &linked,
-			&databaseNow,
-		); err != nil {
-			return nil, nil, fmt.Errorf("scan delegated inference credential: %w", err)
+		candidate, rowBarriers, err := scanDelegatedCredential(rows, included)
+		if err != nil {
+			return nil, nil, err
 		}
-		identity := CredentialKindDelegation + ":" + credential.KID
-		if revoked.Valid {
-			value := revoked.Time.UTC()
-			credential.RevokedAt = &value
+		barriers = append(barriers, rowBarriers...)
+		if candidate != nil {
+			result = append(result, *candidate)
 		}
-		credential.Status = accesscontrol.CredentialStatus(status)
-		_, keyIncluded := included[string(credential.APIKeyID)]
-		databaseNow = databaseNow.UTC()
-		activeSession := sessionStatus == "active" && sessionExpires.After(databaseNow) && sessionPrincipalID == principalID
-		activePrincipal := principalStatus == "active"
-		validSubject := linked && userStatus == string(accesscontrol.UserStatusActive)
-		validTeam := false
-		switch {
-		case ownerUserID.Valid && ownerUserID.String == userID:
-			validTeam = (!contextTeamID.Valid && !teamID.Valid) ||
-				(contextTeamID.Valid && teamID.Valid && contextTeamID.String == teamID.String &&
-					teamStatus.String == string(accesscontrol.TeamStatusActive) &&
-					membershipStatus.String == string(accesscontrol.MembershipStatusActive))
-		case ownerTeamID.Valid && teamID.Valid && ownerTeamID.String == teamID.String:
-			validTeam = allowTeamKeyDelegation && teamStatus.String == string(accesscontrol.TeamStatusActive) &&
-				membershipStatus.String == string(accesscontrol.MembershipStatusActive)
-		}
-		active := status == "active" && !credential.NotBefore.After(databaseNow) &&
-			credential.ExpiresAt != nil && credential.ExpiresAt.After(databaseNow) && keyIncluded &&
-			delegationEpoch > 0 && delegationEpoch == currentDelegationEpoch && activeSession &&
-			activePrincipal && validSubject && validTeam
-		if !active {
-			barriers = append(barriers, Barrier{Kind: "credential", ResourceID: identity, Reason: "delegation_inactive"})
-			if !activeSession {
-				barriers = append(barriers, Barrier{Kind: "management_session", ResourceID: managementSessionID, Reason: "management_session_inactive"})
-			}
-			if !activePrincipal {
-				barriers = append(barriers, Barrier{Kind: "management_principal", ResourceID: principalID, Reason: "management_principal_inactive"})
-			}
-			continue
-		}
-		credential.Status = accesscontrol.CredentialStatusActive
-		context := &accessprojection.DelegationContext{
-			ManagementSessionID: managementSessionID, PrincipalID: principalID,
-			DelegationEpoch: uint64(delegationEpoch), UserID: userID,
-			Audience: audience,
-		}
-		if teamID.Valid {
-			context.TeamID = teamID.String
-		}
-		result = append(result, CredentialCandidate{
-			Kind: CredentialKindDelegation, Credential: credential, Delegation: context,
-		})
 	}
 	return result, barriers, rows.Err()
+}
+
+func scanDelegatedCredential(rows *sql.Rows, included map[string]struct{}) (*CredentialCandidate, []Barrier, error) {
+	var credential accesscontrol.CredentialVersion
+	var status string
+	var revoked sql.NullTime
+	var managementSessionID, principalID, userID, audience string
+	var teamID sql.NullString
+	var delegationEpoch, currentDelegationEpoch int64
+	var sessionPrincipalID, sessionStatus, principalStatus, userStatus string
+	var sessionExpires time.Time
+	var ownerUserID, ownerTeamID, contextTeamID sql.NullString
+	var teamStatus, membershipStatus sql.NullString
+	var linked, allowTeamKeyDelegation bool
+	var databaseNow time.Time
+	if err := rows.Scan(
+		&credential.ID, &credential.KID, &credential.APIKeyID, &credential.SecretHMAC,
+		&credential.PepperVersion, &status, &credential.NotBefore, &credential.ExpiresAt,
+		&revoked, &credential.CreatedAt, &managementSessionID, &principalID,
+		&delegationEpoch, &userID, &teamID, &audience,
+		&sessionPrincipalID, &sessionStatus, &sessionExpires, &principalStatus,
+		&currentDelegationEpoch, &ownerUserID, &ownerTeamID, &contextTeamID,
+		&userStatus, &teamStatus, &membershipStatus, &allowTeamKeyDelegation, &linked,
+		&databaseNow,
+	); err != nil {
+		return nil, nil, fmt.Errorf("scan delegated inference credential: %w", err)
+	}
+	identity := CredentialKindDelegation + ":" + credential.KID
+	if revoked.Valid {
+		value := revoked.Time.UTC()
+		credential.RevokedAt = &value
+	}
+	credential.Status = accesscontrol.CredentialStatus(status)
+	_, keyIncluded := included[string(credential.APIKeyID)]
+	databaseNow = databaseNow.UTC()
+	activeSession := sessionStatus == "active" && sessionExpires.After(databaseNow) && sessionPrincipalID == principalID
+	activePrincipal := principalStatus == "active"
+	validSubject := linked && userStatus == string(accesscontrol.UserStatusActive)
+	validTeam := false
+	switch {
+	case ownerUserID.Valid && ownerUserID.String == userID:
+		validTeam = (!contextTeamID.Valid && !teamID.Valid) ||
+			(contextTeamID.Valid && teamID.Valid && contextTeamID.String == teamID.String &&
+				teamStatus.String == string(accesscontrol.TeamStatusActive) &&
+				membershipStatus.String == string(accesscontrol.MembershipStatusActive))
+	case ownerTeamID.Valid && teamID.Valid && ownerTeamID.String == teamID.String:
+		validTeam = allowTeamKeyDelegation && teamStatus.String == string(accesscontrol.TeamStatusActive) &&
+			membershipStatus.String == string(accesscontrol.MembershipStatusActive)
+	}
+	active := status == "active" && !credential.NotBefore.After(databaseNow) &&
+		credential.ExpiresAt != nil && credential.ExpiresAt.After(databaseNow) && keyIncluded &&
+		delegationEpoch > 0 && delegationEpoch == currentDelegationEpoch && activeSession &&
+		activePrincipal && validSubject && validTeam
+	if !active {
+		barriers := []Barrier{{Kind: "credential", ResourceID: identity, Reason: "delegation_inactive"}}
+		if !activeSession {
+			barriers = append(barriers, Barrier{Kind: "management_session", ResourceID: managementSessionID, Reason: "management_session_inactive"})
+		}
+		if !activePrincipal {
+			barriers = append(barriers, Barrier{Kind: "management_principal", ResourceID: principalID, Reason: "management_principal_inactive"})
+		}
+		return nil, barriers, nil
+	}
+	delegationEpochValue, err := databasePositiveUint64(delegationEpoch, "delegation epoch")
+	if err != nil {
+		return nil, nil, err
+	}
+	credential.Status = accesscontrol.CredentialStatusActive
+	delegation := &accessprojection.DelegationContext{
+		ManagementSessionID: managementSessionID, PrincipalID: principalID,
+		DelegationEpoch: delegationEpochValue, UserID: userID, Audience: audience,
+	}
+	if teamID.Valid {
+		delegation.TeamID = teamID.String
+	}
+	return &CredentialCandidate{
+		Kind: CredentialKindDelegation, Credential: credential, Delegation: delegation,
+	}, nil, nil
 }
 
 func loadRoutingClaims(

@@ -14,17 +14,24 @@ import (
 const defaultEntrypointModel = "vllm-sr/auto"
 
 const entrypointTestConfigYAML = `
-version: v0.4
-models:
-  - name: model-a
-    card: {description: default tier}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8000, model: model-a}]
-  - name: model-b
-    card: {description: privacy tier}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8001, model: model-b}]
+version: v0.3
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8000}]
+    - name: model-b
+      provider_model_id: model-b
+      backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8001}]
+routing:
+  modelCards:
+    - name: model-a
+      description: default tier
+    - name: model-b
+      description: privacy tier
 recipes:
   - name: default
-    document:
+    routing:
       signals:
         keywords:
           - name: route_keyword
@@ -38,7 +45,7 @@ recipes:
               - type: keyword
                 name: route_keyword
   - name: privacy
-    document:
+    routing:
       signals:
         keywords:
           - name: route_keyword
@@ -52,19 +59,19 @@ recipes:
               - type: keyword
                 name: route_keyword
 entrypoints:
-  - name: vllm-sr/auto
+  - model_names: [vllm-sr/auto]
     recipe: default
     assignments:
       default_route: {models: [{model: model-a}]}
-  - name: vllm-sr/privacy
+  - model_names: [vllm-sr/privacy]
     recipe: privacy
     assignments:
       privacy_route: {models: [{model: model-b}]}
-  - name: vllm-sr/privacy-fast
+  - model_names: [vllm-sr/privacy-fast]
     recipe: privacy
     assignments:
       privacy_route: {models: [{model: model-a}]}
-  - name: vllm-sr/default-alias
+  - model_names: [vllm-sr/default-alias]
     recipe: default
     assignments:
       default_route: {models: [{model: model-a}]}
@@ -415,17 +422,24 @@ func TestModelsListingUsesExplicitRoutingMetadata(t *testing.T) {
 // recipe: the flat Decisions field stays empty, which used to trip the
 // "no decisions configured" short-circuit before decision evaluation.
 const entrypointRecipesOnlyConfigYAML = `
-version: v0.4
-models:
-  - name: model-a
-    card: {description: default tier}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8000, model: model-a}]
-  - name: model-b
-    card: {description: privacy tier}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8001, model: model-b}]
+version: v0.3
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8000}]
+    - name: model-b
+      provider_model_id: model-b
+      backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8001}]
+routing:
+  modelCards:
+    - name: model-a
+      description: default tier
+    - name: model-b
+      description: privacy tier
 recipes:
   - name: privacy
-    document:
+    routing:
       signals:
         keywords:
           - name: pii_keywords
@@ -439,7 +453,7 @@ recipes:
               - type: keyword
                 name: pii_keywords
 entrypoints:
-  - name: vllm-sr/privacy
+  - model_names: [vllm-sr/privacy]
     recipe: privacy
     assignments:
       privacy_route: {models: [{model: model-b}]}

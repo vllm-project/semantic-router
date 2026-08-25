@@ -32,7 +32,11 @@ func Compile(state DesiredState) (Publication, error) {
 			Kind: "namespace", ResourceID: string(state.Namespace.ID), Reason: "namespace_disabled",
 		})
 	}
-	if state.Routing.NamespaceID != string(state.Namespace.ID) || state.Routing.Revision != int64(state.Revision) {
+	desiredRevision, err := postgresBigint(state.Revision, "desired revision")
+	if err != nil {
+		return Publication{}, err
+	}
+	if state.Routing.NamespaceID != string(state.Namespace.ID) || state.Routing.Revision != desiredRevision {
 		return Publication{}, fmt.Errorf("routing bundle does not pin the desired namespace revision")
 	}
 	routing, compileErr := compileRouting(state.Routing, state.Revision)
@@ -47,68 +51,14 @@ func Compile(state DesiredState) (Publication, error) {
 		return Publication{}, compileErr
 	}
 
-	access := make([]AccessDocument, 0, len(state.Keys))
-	keyIDs := make(map[string]struct{}, len(state.Keys))
-	for index, candidate := range state.Keys {
-		if candidate.Revision != state.Revision {
-			return Publication{}, fmt.Errorf("key candidate %d has revision %d, want %d", index, candidate.Revision, state.Revision)
-		}
-		projection, compileErr2 := accessprojection.Compile(candidate, accessprojection.CompileOptions{
-			CalendarScheduleStart: state.RevisionTime.UTC().Truncate(time.Millisecond),
-		})
-		if compileErr2 != nil {
-			return Publication{}, fmt.Errorf("compile key candidate %d: %w", index, compileErr2)
-		}
-		if _, exists := keyIDs[projection.KeyID]; exists {
-			return Publication{}, fmt.Errorf("duplicate key projection %s", projection.KeyID)
-		}
-		if err := validateGrantResources(projection, resources); err != nil {
-			return Publication{}, fmt.Errorf("key %s: %w", projection.KeyID, err)
-		}
-		keyIDs[projection.KeyID] = struct{}{}
-		document, compileErr2 := compileAccessDocument(candidate, projection)
-		if compileErr2 != nil {
-			return Publication{}, fmt.Errorf("key %s: %w", projection.KeyID, compileErr2)
-		}
-		access = append(access, document)
+	access, keyIDs, compileErr := compileAccessDocuments(state, resources)
+	if compileErr != nil {
+		return Publication{}, compileErr
 	}
-	sort.Slice(access, func(i, j int) bool { return access[i].KeyID < access[j].KeyID })
-
-	credentials := make([]CredentialDocument, 0, len(state.Credentials))
-	credentialIDs := make(map[string]struct{}, len(state.Credentials))
-	for index, candidate := range state.Credentials {
-		if strings.TrimSpace(candidate.Kind) == "" {
-			return Publication{}, fmt.Errorf("credential candidate %d kind is required", index)
-		}
-		projection, err := accessprojection.CompileCredential(candidate.Kind, candidate.Credential, candidate.Delegation)
-		if err != nil {
-			return Publication{}, fmt.Errorf("compile credential candidate %d: %w", index, err)
-		}
-		if len(projection.SecretHMAC) != 32 {
-			return Publication{}, fmt.Errorf("credential %s HMAC must be exactly 32 bytes", projection.KID)
-		}
-		if _, exists := keyIDs[projection.KeyID]; !exists {
-			return Publication{}, fmt.Errorf("credential %s references unpublished key %s", projection.KID, projection.KeyID)
-		}
-		identity := credentialIdentity(candidate.Kind, projection.KID)
-		if _, exists := credentialIDs[identity]; exists {
-			return Publication{}, fmt.Errorf("duplicate credential projection %s", identity)
-		}
-		credentialIDs[identity] = struct{}{}
-		document := CredentialDocument{
-			NamespaceID: string(state.Namespace.ID), QuotaPartition: string(state.Namespace.QuotaPartitionID),
-			DesiredRevision: state.Revision, Kind: candidate.Kind, PublicID: projection.KID, Projection: projection,
-		}
-		document.Digest, err = canonicalDigest(document)
-		if err != nil {
-			return Publication{}, fmt.Errorf("digest credential %s: %w", identity, err)
-		}
-		credentials = append(credentials, document)
+	credentials, compileErr := compileCredentialDocuments(state, keyIDs)
+	if compileErr != nil {
+		return Publication{}, compileErr
 	}
-	sort.Slice(credentials, func(i, j int) bool {
-		return credentialIdentity(credentials[i].Kind, credentials[i].PublicID) <
-			credentialIdentity(credentials[j].Kind, credentials[j].PublicID)
-	})
 
 	barriers, compileErr := canonicalBarriers(state.BarrierHints)
 	if compileErr != nil {
@@ -147,6 +97,81 @@ func Compile(state DesiredState) (Publication, error) {
 		return Publication{}, err
 	}
 	return publication, nil
+}
+
+func compileAccessDocuments(
+	state DesiredState,
+	resources map[string]struct{},
+) ([]AccessDocument, map[string]struct{}, error) {
+	documents := make([]AccessDocument, 0, len(state.Keys))
+	keyIDs := make(map[string]struct{}, len(state.Keys))
+	for index, candidate := range state.Keys {
+		if candidate.Revision != state.Revision {
+			return nil, nil, fmt.Errorf("key candidate %d has revision %d, want %d", index, candidate.Revision, state.Revision)
+		}
+		projection, compileCandidateErr := accessprojection.Compile(candidate, accessprojection.CompileOptions{
+			CalendarScheduleStart: state.RevisionTime.UTC().Truncate(time.Millisecond),
+		})
+		if compileCandidateErr != nil {
+			return nil, nil, fmt.Errorf("compile key candidate %d: %w", index, compileCandidateErr)
+		}
+		if _, exists := keyIDs[projection.KeyID]; exists {
+			return nil, nil, fmt.Errorf("duplicate key projection %s", projection.KeyID)
+		}
+		if err := validateGrantResources(projection, resources); err != nil {
+			return nil, nil, fmt.Errorf("key %s: %w", projection.KeyID, err)
+		}
+		keyIDs[projection.KeyID] = struct{}{}
+		document, err := compileAccessDocument(candidate, projection)
+		if err != nil {
+			return nil, nil, fmt.Errorf("key %s: %w", projection.KeyID, err)
+		}
+		documents = append(documents, document)
+	}
+	sort.Slice(documents, func(i, j int) bool { return documents[i].KeyID < documents[j].KeyID })
+	return documents, keyIDs, nil
+}
+
+func compileCredentialDocuments(
+	state DesiredState,
+	keyIDs map[string]struct{},
+) ([]CredentialDocument, error) {
+	documents := make([]CredentialDocument, 0, len(state.Credentials))
+	credentialIDs := make(map[string]struct{}, len(state.Credentials))
+	for index, candidate := range state.Credentials {
+		if strings.TrimSpace(candidate.Kind) == "" {
+			return nil, fmt.Errorf("credential candidate %d kind is required", index)
+		}
+		projection, err := accessprojection.CompileCredential(candidate.Kind, candidate.Credential, candidate.Delegation)
+		if err != nil {
+			return nil, fmt.Errorf("compile credential candidate %d: %w", index, err)
+		}
+		if len(projection.SecretHMAC) != 32 {
+			return nil, fmt.Errorf("credential %s HMAC must be exactly 32 bytes", projection.KID)
+		}
+		if _, exists := keyIDs[projection.KeyID]; !exists {
+			return nil, fmt.Errorf("credential %s references unpublished key %s", projection.KID, projection.KeyID)
+		}
+		identity := credentialIdentity(candidate.Kind, projection.KID)
+		if _, exists := credentialIDs[identity]; exists {
+			return nil, fmt.Errorf("duplicate credential projection %s", identity)
+		}
+		credentialIDs[identity] = struct{}{}
+		document := CredentialDocument{
+			NamespaceID: string(state.Namespace.ID), QuotaPartition: string(state.Namespace.QuotaPartitionID),
+			DesiredRevision: state.Revision, Kind: candidate.Kind, PublicID: projection.KID, Projection: projection,
+		}
+		document.Digest, err = canonicalDigest(document)
+		if err != nil {
+			return nil, fmt.Errorf("digest credential %s: %w", identity, err)
+		}
+		documents = append(documents, document)
+	}
+	sort.Slice(documents, func(i, j int) bool {
+		return credentialIdentity(documents[i].Kind, documents[i].PublicID) <
+			credentialIdentity(documents[j].Kind, documents[j].PublicID)
+	})
+	return documents, nil
 }
 
 func compileProviderCredentials(

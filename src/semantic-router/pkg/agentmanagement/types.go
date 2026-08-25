@@ -224,6 +224,7 @@ type Session struct {
 	OwnerPrincipalID            string        `json:"ownerPrincipalId"`
 	EffectiveUserID             string        `json:"effectiveUserId,omitempty"`
 	EffectiveTeamID             string        `json:"effectiveTeamId,omitempty"`
+	KeyID                       string        `json:"keyId"`
 	DelegatedInferenceSessionID string        `json:"-"`
 	ProfileID                   string        `json:"profileId"`
 	ProfileRevision             int64         `json:"profileRevision"`
@@ -240,6 +241,7 @@ type Session struct {
 
 type SessionInput struct {
 	ProfileID       string      `json:"profileId,omitempty"`
+	KeyID           string      `json:"keyId"`
 	EffectiveTeamID string      `json:"effectiveTeamId,omitempty"`
 	Target          Target      `json:"target"`
 	Mode            SessionMode `json:"mode"`

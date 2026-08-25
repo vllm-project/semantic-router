@@ -1,12 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import ProductIcon from '../components/ProductIcon'
 import { useAuth } from '../contexts/AuthContext'
-import {
-  canAccessDashboardPath,
-  canManageUsers,
-  canSelfManageInferenceAccess,
-} from '../utils/accessControl'
 import {
   inferenceAccessApi,
   type AccessAPIKey,
@@ -25,17 +19,16 @@ import {
   dashboardMemberInvitationApi,
   type DashboardMemberInvitation,
 } from '../utils/dashboardMemberInvitations'
-import AccessControlDialog from './AccessControlDialog'
-import AccessControlDetailOverlays from './AccessControlDetailOverlays'
 import AccessControlViews, { type DashboardMember, type IdentityTab } from './AccessControlViews'
-import DashboardMemberInviteDialog from './DashboardMemberInviteDialog'
+import AccessControlPageOverlays from './AccessControlPageOverlays'
+import AccessControlWorkspace from './AccessControlWorkspace'
 import { accessControlSelectorSources } from './accessControlSelectorSources'
 import {
-  ACCESS_NAV_ITEMS,
   EMPTY_ACCESS_OVERVIEW,
   EMPTY_ACCESS_USAGE,
   accessPageQuery,
   emptyAccessPage,
+  resolveAccessControlPage,
   type AccessEditor,
   type AccessView,
 } from './AccessControlPageSupport'
@@ -49,53 +42,20 @@ const AccessControlPage: React.FC = () => {
   const location = useLocation()
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
-  const canSelfManage = canSelfManageInferenceAccess(currentUser)
-  const hasManagementPermission = (permission: string) =>
-    currentUser?.managementPermissions?.includes(permission) ?? false
-  const canReadUsers = hasManagementPermission('user.read')
-  const canReadTeams = hasManagementPermission('team.read')
-  const canReadGroups = hasManagementPermission('access_policy.read')
-  const canReadBudgets = hasManagementPermission('rate_policy.read')
-  const canReadRouting = hasManagementPermission('routing.read')
-  const canAdministerDirectory = Boolean(
-    currentUser?.managementPermissions?.some((permission) =>
-      ['user.manage', 'team.manage', 'access_policy.manage', 'rate_policy.manage'].includes(
-        permission,
-      ),
-    ),
-  )
-  const selfService =
-    Boolean(currentUser?.managementUserId) && canSelfManage && !canAdministerDirectory
-  const canManageDashboardMembers = canManageUsers(currentUser)
+  const {
+    activeView,
+    activeMeta,
+    visibleNavItems,
+    selfService,
+    canManage,
+    canManageDashboardMembers,
+    canReadUsers,
+    canReadTeams,
+    canReadGroups,
+    canReadBudgets,
+    canReadDashboardMembers,
+  } = resolveAccessControlPage(currentUser, location.pathname)
   const selfUserId = currentUser?.managementUserId || ''
-  const routeView = (
-    location.pathname === '/logs'
-      ? 'request-logs'
-      : location.pathname.split('/').filter(Boolean)[1] || 'usage'
-  ) as AccessView
-  const activeView = ACCESS_NAV_ITEMS.some((item) => item.id === routeView) ? routeView : 'usage'
-  const canManage =
-    !selfService &&
-    (activeView === 'api-keys'
-      ? hasManagementPermission('key.manage')
-      : activeView === 'users'
-        ? hasManagementPermission('user.manage')
-        : activeView === 'teams'
-          ? hasManagementPermission('team.manage')
-          : activeView === 'access-groups'
-            ? hasManagementPermission('access_policy.manage') && canReadRouting
-            : activeView === 'budgets'
-              ? hasManagementPermission('rate_policy.manage')
-              : false)
-  const activeMeta =
-    ACCESS_NAV_ITEMS.find((item) => item.id === activeView) ||
-    ACCESS_NAV_ITEMS.find((item) => item.id === 'usage')!
-  const visibleNavItems = ACCESS_NAV_ITEMS.filter((item) =>
-    canAccessDashboardPath(
-      currentUser,
-      item.id === 'request-logs' ? '/logs' : `/access/${item.id}`,
-    ),
-  )
   const detailParams = new URLSearchParams(location.search)
   const invitationOnboardingRequested = detailParams.get('onboarding') === 'invitation'
   const detailKeyId = activeView === 'api-keys' ? detailParams.get('key') || '' : ''
@@ -204,7 +164,7 @@ const AccessControlPage: React.FC = () => {
   )
 
   const loadDashboardIdentities = useCallback(async () => {
-    if (!canManageDashboardMembers) return
+    if (!canReadDashboardMembers) return
     const [members, invitationsResponse] = await Promise.all([
       (async () => {
         const response = await fetch('/api/admin/users?page=1&limit=200')
@@ -212,11 +172,13 @@ const AccessControlPage: React.FC = () => {
         const payload = (await response.json()) as { users: DashboardMember[] }
         return payload.users || []
       })(),
-      dashboardMemberInvitationApi.list(),
+      canManageDashboardMembers
+        ? dashboardMemberInvitationApi.list()
+        : Promise.resolve({ items: [] as DashboardMemberInvitation[] }),
     ])
     setDashboardMembers(members)
     setInvitations(invitationsResponse.items)
-  }, [canManageDashboardMembers])
+  }, [canManageDashboardMembers, canReadDashboardMembers])
 
   const loadCatalog = useCallback(
     async (showSpinner = true) => {
@@ -698,196 +660,95 @@ const AccessControlPage: React.FC = () => {
 
   return (
     <div className={styles.page}>
-      <header className={`${styles.hero} ${styles.heroCompact}`}>
-        <div className={styles.heroCopy}>
-          <div className={styles.heroTopline}>
-            <span className={styles.eyebrow}>Access Control</span>
-            <span className={styles.heroBrand}>
-              <img src="/vllm.png" alt="" />
-              vllm-sr
-            </span>
-          </div>
-          <h1>Every model. The right audience.</h1>
-          <p>Give users and teams exactly the models and capacity they need.</p>
-        </div>
-        <div className={styles.heroPulse}>
-          <button
-            type="button"
-            className={`${styles.liveButton} ${styles[`live${liveState}`]}`}
-            onClick={() => void loadCatalog(false)}
-            aria-label="Check access-control service"
-          >
-            <span />{' '}
-            {liveState === 'checking' ? 'Checking' : liveState === 'live' ? 'Live' : 'Retry'}
-          </button>
-          <div>
-            <strong>{overview.requestsToday.toLocaleString('en-US')}</strong>
-            <span>requests today</span>
-          </div>
-          <div>
-            <strong>{overview.tokensToday.toLocaleString('en-US')}</strong>
-            <span>tokens today</span>
-          </div>
-        </div>
-      </header>
-
-      <nav className={styles.sectionNav} aria-label="Access control">
-        {visibleNavItems.map((item) => (
-          <button
-            type="button"
-            key={item.id}
-            className={activeView === item.id ? styles.sectionNavActive : ''}
-            onClick={() => navigate(item.id === 'request-logs' ? '/logs' : `/access/${item.id}`)}
-            aria-current={activeView === item.id ? 'page' : undefined}
-          >
-            <ProductIcon name={item.icon} />
-            {item.label}
-          </button>
-        ))}
-      </nav>
-
-      <main className={styles.surface}>
-        <div className={styles.surfaceHeader}>
-          <div>
-            <span>{activeMeta.section}</span>
-            <h2>{activeMeta.label}</h2>
-            <p>{activeMeta.description}</p>
-          </div>
-          <div className={styles.headerActions}>
-            {activeView === 'users' && canManageDashboardMembers ? (
-              <button type="button" className={styles.primaryButton} onClick={() => invite()}>
-                <ProductIcon name="plus" /> Invite user
-              </button>
-            ) : null}
-            {canCreateCurrent && hasCreateAction ? (
-              <button type="button" className={styles.primaryButton} onClick={() => openCreate()}>
-                <ProductIcon name="plus" /> {createLabel}
-              </button>
-            ) : null}
-          </div>
-        </div>
-
-        {error ? (
-          <div className={styles.inlineError} role="alert">
-            {error}
-            <button type="button" onClick={() => setError('')}>
-              <ProductIcon name="close" /> Dismiss
-            </button>
-          </div>
-        ) : null}
-        {loading ? (
-          <div className={styles.skeletonGrid}>
-            <i />
-            <i />
-            <i />
-            <i />
-          </div>
-        ) : null}
-        {!loading ? (
-          <AccessControlViews
-            view={activeView}
-            overview={overview}
-            usage={usage}
-            selectors={accessControlSelectorSources}
-            users={users}
-            teams={teams}
-            keys={keys}
-            groups={groups}
-            budgets={budgets}
-            entityTotals={entityTotals}
-            dashboardMembers={dashboardMembers}
-            invitations={invitations}
-            identityTab={identityTab}
-            onIdentityTabChange={setIdentityTab}
-            requestPage={requestPage}
-            auditPage={auditPage}
-            pageState={pageState}
-            onPageStateChange={setPageState}
-            usageScope={usageScope}
-            onUsageScopeChange={setUsageScope}
-            loading={viewLoading}
-            canManage={canManage}
-            canManageDashboardMembers={canManageDashboardMembers}
-            ownerName={ownerName}
-            onOpenKey={(id) => openDetail('key', id)}
-            onOpenLog={(id) => openDetail('log', id)}
-            onOpenEntity={(id) => openDetail('item', id)}
-            onOpenDashboardMember={(id) => openDetail('member', id)}
-            onInvitationsChanged={() => void loadDashboardIdentities()}
-          />
-        ) : null}
-      </main>
-
-      {toast ? (
-        <div className={styles.toast} role="status">
-          <ProductIcon name="check" />
-          {toast}
-        </div>
-      ) : null}
-      {editor ? (
-        <AccessControlDialog
-          editor={editor}
+      <AccessControlWorkspace
+        activeView={activeView}
+        activeMeta={activeMeta}
+        visibleNavItems={visibleNavItems}
+        overview={overview}
+        liveState={liveState}
+        canInvite={activeView === 'users' && canManageDashboardMembers}
+        canCreate={canCreateCurrent && hasCreateAction}
+        createLabel={createLabel}
+        error={error}
+        loading={loading}
+        toast={toast}
+        onCheck={() => void loadCatalog(false)}
+        onNavigate={(view) => navigate(view === 'request-logs' ? '/logs' : `/access/${view}`)}
+        onInvite={invite}
+        onCreate={() => openCreate()}
+        onDismissError={() => setError('')}
+      >
+        <AccessControlViews
+          view={activeView}
+          overview={overview}
+          usage={usage}
+          selectors={accessControlSelectorSources}
+          users={users}
           teams={teams}
           keys={keys}
-          selectors={accessControlSelectorSources}
-          selfService={selfService}
-          selfUserId={selfUserId}
-          error={editorError}
-          saving={saving}
-          onChange={setEditor}
-          onClose={() => {
-            const returnTarget = entityEditorReturn
-            setEditor(null)
-            setEntityEditorReturn(null)
-            setEditorError('')
-            if (returnTarget) {
-              navigate(`${location.pathname}?item=${encodeURIComponent(returnTarget.id)}`, {
-                replace: true,
-              })
-            }
-          }}
-          onSave={() => void saveEditor()}
+          groups={groups}
+          budgets={budgets}
+          entityTotals={entityTotals}
+          dashboardMembers={dashboardMembers}
+          invitations={invitations}
+          identityTab={identityTab}
+          onIdentityTabChange={setIdentityTab}
+          requestPage={requestPage}
+          auditPage={auditPage}
+          pageState={pageState}
+          onPageStateChange={setPageState}
+          usageScope={usageScope}
+          onUsageScopeChange={setUsageScope}
+          loading={viewLoading}
+          canManage={canManage}
+          canManageDashboardMembers={canManageDashboardMembers}
+          ownerName={ownerName}
+          onOpenKey={(id) => openDetail('key', id)}
+          onOpenLog={(id) => openDetail('log', id)}
+          onOpenEntity={(id) => openDetail('item', id)}
+          onOpenDashboardMember={(id) => openDetail('member', id)}
+          onInvitationsChanged={() => void loadDashboardIdentities()}
         />
-      ) : null}
-      {createdKey ? (
-        <AccessControlDialog
-          secret={createdKey}
-          onClose={() => setCreatedKey(null)}
-          onViewDetails={() => {
-            const keyID = createdKey.id
-            setCreatedKey(null)
-            openDetail('key', keyID)
-          }}
-        />
-      ) : null}
-      <DashboardMemberInviteDialog
-        isOpen={inviteOpen}
-        roleOptions={['admin', 'write', 'read']}
-        teamSource={accessControlSelectorSources.teams}
-        onClose={() => {
-          setInviteOpen(false)
+      </AccessControlWorkspace>
+      <AccessControlPageOverlays
+        editor={editor}
+        createdKey={createdKey}
+        inviteOpen={inviteOpen}
+        detail={{
+          keyId: detailKeyId,
+          logId: detailLogId,
+          entityId: detailEntityId,
+          memberId: detailMemberId,
+          entityKind,
         }}
-        onCreated={() => {
+        catalog={{ users, teams, keys, groups, budgets }}
+        permissions={{ canManage, canManageDashboardMembers, selfService, selfUserId }}
+        editorError={editorError}
+        saving={saving}
+        onEditorChange={setEditor}
+        onEditorClose={() => {
+          const returnTarget = entityEditorReturn
+          setEditor(null)
+          setEntityEditorReturn(null)
+          setEditorError('')
+          if (returnTarget) {
+            navigate(`${location.pathname}?item=${encodeURIComponent(returnTarget.id)}`, {
+              replace: true,
+            })
+          }
+        }}
+        onEditorSave={() => void saveEditor()}
+        onCreatedKeyClose={() => setCreatedKey(null)}
+        onCreatedKeyDetails={(keyId) => {
+          setCreatedKey(null)
+          openDetail('key', keyId)
+        }}
+        onInviteClose={() => setInviteOpen(false)}
+        onInviteCreated={() => {
           setToast('Invitation ready')
           void loadDashboardIdentities()
         }}
-      />
-      <AccessControlDetailOverlays
-        detailKeyId={detailKeyId}
-        detailLogId={detailLogId}
-        detailEntityId={detailEntityId}
-        detailMemberId={detailMemberId}
-        entityKind={entityKind}
-        users={users}
-        teams={teams}
-        keys={keys}
-        groups={groups}
-        budgets={budgets}
-        canManage={canManage}
-        canManageDashboardMembers={canManageDashboardMembers}
-        selfService={selfService}
-        selfUserId={selfUserId}
-        onClose={closeDetail}
+        onDetailClose={closeDetail}
         onCatalogChanged={() => void Promise.all([loadCatalog(false), loadCurrentView()])}
         onDashboardMembersChanged={() => void loadDashboardIdentities()}
         onEditKey={(key) => {

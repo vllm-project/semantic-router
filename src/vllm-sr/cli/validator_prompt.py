@@ -1,5 +1,6 @@
 """Prompt-selection dependency validation."""
 
+from cli.config_contract import iter_routing_profiles
 from cli.models import UserConfig
 from cli.validation_error import ValidationError
 
@@ -9,16 +10,19 @@ def validate_prompt_dependencies(
 ) -> list[ValidationError]:
     """Validate process dependencies without reintroducing a helper Model field.
 
-    v0.4 prompt selection consumes the Models assigned to the decision by its
-    Entrypoint. Recipe documents therefore contain instructions and timeout
-    only; assignment cardinality is validated with the Entrypoint contract.
+    Prompt selection consumes the effective Model set from either an
+    Entrypoint assignment or the Recipe's additive v0.3 ``modelRefs`` default.
     """
 
     errors: list[ValidationError] = []
     looper_endpoint = _looper_endpoint(config.global_)
-    for recipe in config.recipes:
-        field_prefix = f"recipes.{recipe.name}.document.decisions"
-        for decision in recipe.document.decisions:
+    for profile_name, routing in iter_routing_profiles(config):
+        field_prefix = (
+            "routing.decisions"
+            if profile_name == "default"
+            else f"recipes.{profile_name}.routing.decisions"
+        )
+        for decision in routing.decisions:
             algorithm = decision.algorithm
             if algorithm is None or algorithm.type != "prompt":
                 continue

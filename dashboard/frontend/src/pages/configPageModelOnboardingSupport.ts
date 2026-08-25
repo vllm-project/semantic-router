@@ -5,8 +5,9 @@ import type {
   ProviderConnectionValue,
 } from '../utils/providerCatalogApi'
 import type {
+  FallbackTrigger,
   RoutingBulkImportRequest,
-  RoutingExecution,
+  RoutingModelControl,
   RoutingPricing,
 } from '../utils/routingManagementApi'
 import { normalizedPrefix } from './configPageModelImportSupport'
@@ -61,36 +62,60 @@ export function validatedProviderConnectionFields(
   return result
 }
 
-export interface ExecutionFormValues {
+export interface ControlFormValues {
   maxRetries: string
+  retryOn: FallbackTrigger[]
   requestTimeout: string
   streamTimeout: string
 }
 
-export type ModelExecutionOverrides = Partial<RoutingExecution>
+export const MODEL_RETRY_TRIGGERS: readonly FallbackTrigger[] = [
+  'unavailable',
+  'overloaded',
+  'timeout',
+]
 
-export function buildModelExecutionOverrides(
-  values: ExecutionFormValues,
-): ModelExecutionOverrides | undefined {
-  const execution: ModelExecutionOverrides = {}
+export interface ModelControlOverrides {
+  retry?: Partial<RoutingModelControl['retry']>
+  timeout?: Partial<RoutingModelControl['timeout']>
+}
+
+export function buildModelControlOverrides(
+  values: ControlFormValues,
+): ModelControlOverrides | undefined {
+  const control: ModelControlOverrides = {}
   if (values.maxRetries.trim()) {
     const retries = Number(values.maxRetries)
     if (!Number.isSafeInteger(retries) || retries < 0 || retries > 5) {
       throw new Error('Max retries must be a whole number from 0 to 5.')
     }
-    execution.maxRetries = retries
+    const triggers = [...new Set(values.retryOn)]
+    if (triggers.some((value) => !MODEL_RETRY_TRIGGERS.includes(value))) {
+      throw new Error('Retry on contains an unsupported condition.')
+    }
+    if (retries === 0 && triggers.length) {
+      throw new Error('Retry conditions require at least one retry.')
+    }
+    control.retry = {
+      count: retries,
+      on: retries > 0 ? (triggers.length ? triggers : ['unavailable']) : [],
+    }
+  } else if (values.retryOn.length > 0) {
+    throw new Error('Set Max retries before choosing retry conditions.')
   }
+  const timeout: Partial<RoutingModelControl['timeout']> = {}
   for (const [label, value, key] of [
-    ['Request timeout', values.requestTimeout, 'requestTimeout'],
-    ['Stream timeout', values.streamTimeout, 'streamTimeout'],
+    ['Request timeout', values.requestTimeout, 'request'],
+    ['Stream timeout', values.streamTimeout, 'stream'],
   ] as const) {
     const normalized = value.trim()
     if (normalized && !validModelTimeout(normalized)) {
       throw new Error(`${label} must be a duration from 1s to 24h, such as 30s or 5m.`)
     }
-    if (normalized) execution[key] = normalized
+    if (normalized) timeout[key] = normalized
   }
-  return Object.keys(execution).length > 0 ? execution : undefined
+  if (Object.keys(timeout).length) control.timeout = timeout
+  return Object.keys(control).length > 0 ? control : undefined
 }
 
 function validModelTimeout(value: string): boolean {
@@ -119,9 +144,16 @@ export interface PricingFormValues {
 export type ModelPricingOverrides = Partial<RoutingPricing>
 
 const decimalPattern = /^(?:0|[1-9]\d*)(?:\.\d+)?$/
+const maximumModelPrice = 1_000_000n
 
-export function isDecimalString(value: string): boolean {
-  return decimalPattern.test(value)
+function isModelPrice(value: string): boolean {
+  if (!decimalPattern.test(value)) return false
+  const [whole, fraction = ''] = value.split('.')
+  if (fraction.length > 9) return false
+  const wholeValue = BigInt(whole)
+  return (
+    wholeValue < maximumModelPrice || (wholeValue === maximumModelPrice && !/[1-9]/.test(fraction))
+  )
 }
 
 export function buildModelPricingOverrides(
@@ -136,8 +168,8 @@ export function buildModelPricingOverrides(
   const pricing: ModelPricingOverrides = {}
   for (const [key, value, label] of inputs) {
     const normalized = value.trim()
-    if (normalized && !isDecimalString(normalized)) {
-      throw new Error(`${label} must be a non-negative decimal.`)
+    if (normalized && !isModelPrice(normalized)) {
+      throw new Error(`${label} must be a decimal from 0 to 1,000,000 with up to 9 decimals.`)
     }
     if (normalized) pricing[key] = normalized
   }
@@ -155,14 +187,13 @@ interface BuildBulkImportRequestInput {
   models: DiscoveredProviderModel[]
   selectedCatalogItemIds: ReadonlySet<string>
   namePrefix: string
-  execution?: ModelExecutionOverrides
+  control?: ModelControlOverrides
   pricing?: ModelPricingOverrides
 }
 
-const defaultExecution: RoutingExecution = {
-  maxRetries: 0,
-  requestTimeout: '300s',
-  streamTimeout: '300s',
+const defaultControl: RoutingModelControl = {
+  retry: { count: 0, on: [] },
+  timeout: { request: '300s', stream: '300s' },
 }
 
 const defaultPricing: RoutingPricing = {
@@ -188,7 +219,7 @@ export function buildRoutingBulkImportRequest({
   models,
   selectedCatalogItemIds,
   namePrefix,
-  execution,
+  control,
   pricing,
 }: BuildBulkImportRequestInput): RoutingBulkImportRequest {
   const prefix = normalizedPrefix(namePrefix)
@@ -200,7 +231,10 @@ export function buildRoutingBulkImportRequest({
       aliases: [],
       capabilities: [...model.capabilities],
       loras: [],
-      execution: { ...defaultExecution, ...execution },
+      control: {
+        retry: { ...defaultControl.retry, ...control?.retry },
+        timeout: { ...defaultControl.timeout, ...control?.timeout },
+      },
       pricing: { ...defaultPricing, ...pricing },
     }))
 

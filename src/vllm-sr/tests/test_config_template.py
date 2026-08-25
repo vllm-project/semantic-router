@@ -17,53 +17,45 @@ TEMPLATE_PATH = CLI_ROOT / "cli" / "templates" / "config.template.yaml"
 
 
 class TestConfigTemplate(unittest.TestCase):
-    def test_template_is_lean_advanced_sample(self):
-        with open(TEMPLATE_PATH, "r") as f:
-            data = yaml.safe_load(f)
+    def test_template_is_a_lean_current_v03_sample(self):
+        data = yaml.safe_load(TEMPLATE_PATH.read_text(encoding="utf-8"))
 
-        self.assertEqual(data["version"], "v0.4")
+        self.assertEqual(data["version"], "v0.3")
         self.assertEqual(len(data["listeners"]), 1)
-        self.assertEqual(data["models"][0]["name"], "replace-with-your-model")
-        self.assertEqual(len(data["models"]), 1)
+        self.assertEqual(data["providers"]["models"][0]["name"], "local/fast")
         self.assertEqual(
-            data["models"][0]["connections"][0]["provider"],
-            "openai-compatible",
+            data["providers"]["models"][0]["control"]["retry"]["count"],
+            2,
         )
+        self.assertIsInstance(
+            data["providers"]["models"][0]["pricing"]["input_cost_per_million_tokens"],
+            str,
+        )
+        self.assertEqual(data["routing"]["modelCards"][0]["name"], "local/fast")
         self.assertEqual(
-            data["entrypoints"][0]["assignments"]["default-route"]["models"],
-            [{"model": "replace-with-your-model"}],
+            data["entrypoints"][0]["assignments"]["Default"]["models"],
+            [{"model": "local/fast"}],
         )
-        self.assertEqual(len(data["recipes"]), 1)
-        decisions = data["recipes"][0]["document"]["decisions"]
-        self.assertEqual(len(decisions), 1)
-        self.assertEqual(decisions[0]["name"], "default-route")
+        decisions = data["recipes"][0]["routing"]["decisions"]
+        self.assertEqual([decision["name"] for decision in decisions], ["Default"])
         self.assertEqual(decisions[0]["rules"]["conditions"], [])
-        self.assertEqual(len(data["entrypoints"]), 1)
-        self.assertNotIn("routing", data)
-        self.assertNotIn("providers", data)
-        self.assertNotIn("memory", data)
+        self.assertNotIn("models", data)
+        self.assertNotIn("control_plane", data["global"])
 
     def test_template_excludes_unrelated_demo_content(self):
-        content = TEMPLATE_PATH.read_text()
+        content = TEMPLATE_PATH.read_text(encoding="utf-8")
 
         for demo_name in ["math_keywords", "block_jailbreak", "remom_route"]:
-            self.assertNotIn(
-                demo_name,
-                content,
-                f"template should not include unrelated demo content: {demo_name}",
-            )
+            self.assertNotIn(demo_name, content)
 
     def test_template_validates_directly(self):
-        config_path = TEMPLATE_PATH
-
-        user_config = parse_user_config(str(config_path))
+        user_config = parse_user_config(str(TEMPLATE_PATH))
         user_errors = validate_user_config(user_config)
+
         self.assertEqual([], user_errors)
-        self.assertEqual(1, len(user_config.recipes[0].document.decisions))
-        self.assertEqual(
-            "default-route", user_config.recipes[0].document.decisions[0].name
-        )
-        self.assertEqual("replace-with-your-model", user_config.models[0].name)
+        self.assertEqual(1, len(user_config.recipes[0].routing.decisions))
+        self.assertEqual("Default", user_config.recipes[0].routing.decisions[0].name)
+        self.assertEqual("local/fast", user_config.providers.models[0].name)
 
 
 if __name__ == "__main__":

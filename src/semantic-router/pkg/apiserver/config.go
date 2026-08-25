@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelinventory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/publicmodels"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -21,6 +22,7 @@ type ClassificationAPIServer struct {
 	config             *config.RouterConfig
 	runtimeConfig      *liveRuntimeConfig
 	runtimeRegistry    *routerruntime.Registry
+	capabilities       runtimecapabilities.RuntimeCapabilities
 	configPath         string // path used to resolve startup-status state
 	memoryStore        memory.Store
 	startupStateLoader func() *startupstatus.State
@@ -28,7 +30,7 @@ type ClassificationAPIServer struct {
 	// its storage contract stable across live config swaps so /ready does not
 	// start reading from a different backend after a successful reload.
 	startupStatusConfig     *config.StartupStatusConfig
-	managedAPI              ManagedAPI
+	managementAPI           ManagementAPI
 	managementTLS           *managementListenerTLS
 	responseCache           *cache.ResponseCacheService
 	contextCompression      *contextcompression.Service

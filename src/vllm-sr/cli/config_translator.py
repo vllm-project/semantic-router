@@ -18,11 +18,10 @@ from contextlib import contextmanager, suppress
 import yaml
 
 from cli.control_plane_deployment import (
-    MANAGED_MODE,
-    control_plane_mode,
-    managed_store_references,
+    control_plane_store_references,
+    runtime_capabilities,
 )
-from cli.managed_envoy_contract import (
+from cli.envoy_dispatch_contract import (
     validate_envoy_dispatch_contract,
     validate_networked_backend_dispatch,
 )
@@ -72,7 +71,7 @@ def translate_config_to_helm_values(
         else load_config(config_file)
     )
     _validate_canonical_config(user_config)
-    _validate_managed_kubernetes_contract(user_config, profile_values, env_vars)
+    _validate_dynamic_kubernetes_contract(user_config, profile_values, env_vars)
     _validate_profile_configmap_credentials(profile_values)
     values: dict = {}
 
@@ -191,14 +190,15 @@ def _validate_canonical_config(user_config: object) -> None:
         )
 
 
-def _validate_managed_kubernetes_contract(
+def _validate_dynamic_kubernetes_contract(
     user_config: dict[str, object],
     profile_values: dict | None,
     env_vars: dict[str, str] | None,
 ) -> None:
-    """Validate the same managed authority boundary used by local Docker."""
+    """Validate optional Management/runtime stores for Kubernetes."""
 
-    if control_plane_mode(user_config) != MANAGED_MODE:
+    capabilities = runtime_capabilities(user_config)
+    if not capabilities.durable_management:
         return
     typed = UserConfig.model_validate(user_config)
     errors = validate_envoy_dispatch_contract(typed)
@@ -207,25 +207,27 @@ def _validate_managed_kubernetes_contract(
         raise ValueError(f"{first.field}: {first.message}")
     validate_networked_backend_dispatch(typed, "Kubernetes")
 
-    references = managed_store_references(user_config)
+    references = control_plane_store_references(user_config)
     secret_env_names = _profile_secret_reference_names(profile_values or {})
     for label, reference in (
         ("PostgreSQL", references.postgres),
         ("Valkey", references.valkey),
     ):
+        if reference is None:
+            continue
         if reference.kind == "env":
             value = (env_vars or {}).get(reference.value, "")
             if not (isinstance(value, str) and value.strip()) and (
                 reference.value not in secret_env_names
             ):
                 raise ValueError(
-                    f"managed Kubernetes {label} reference {reference.value} "
+                    f"Kubernetes {label} reference {reference.value} "
                     "must be supplied by a Secret"
                 )
             continue
         if not _profile_mounts_secret_file(profile_values or {}, reference.value):
             raise ValueError(
-                f"managed Kubernetes {label} file {reference.value} must be "
+                f"Kubernetes {label} file {reference.value} must be "
                 "mounted read-only from a Secret"
             )
 
@@ -464,7 +466,7 @@ def _validated_env_entries(
 def _environment_reference_names(value: object) -> set[str]:
     """Collect named secret and exact braced environment references.
 
-    Standalone backend credentials use ``secret_env``.  Keeping this discovery in
+    File-authored backend credentials use ``secret_env``. Keeping this discovery in
     the deployment translator lets Helm render a Secret reference without ever
     copying the secret value into generated values or Envoy configuration.
     """

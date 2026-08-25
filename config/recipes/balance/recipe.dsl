@@ -3,24 +3,29 @@
 # =============================================================================
 
 MODEL anthropic/claude-opus-4.6 {
-  capabilities: ["high_risk_review", "legal_analysis", "policy_review", "text"]
+  capabilities: ["legal_analysis", "policy_review", "high_risk_review", "text"]
 }
 
 MODEL google/gemini-2.5-flash-lite {
-  capabilities: ["nuanced_explanation", "source_backed_correction", "text", "verified_explanation"]
+  capabilities: ["verified_explanation", "source_backed_correction", "nuanced_explanation", "text"]
 }
 
 MODEL google/gemini-3.1-pro {
-  capabilities: ["architecture", "general_reasoning", "long_context", "stem_analysis", "text"]
+  capabilities: ["architecture", "stem_analysis", "long_context", "general_reasoning", "text"]
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL openai/gpt5.4 {
-  capabilities: ["formal_derivation", "proofs", "reasoning", "text"]
+  capabilities: ["reasoning", "proofs", "formal_derivation", "text"]
 }
 
 MODEL qwen/qwen3.5-rocm {
-  capabilities: ["concise_answers", "creative_drafting", "fast_qa", "general_chat", "self_hosted", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["low", "medium"] }
+  capabilities: ["fast_qa", "self_hosted", "concise_answers", "general_chat", "creative_drafting", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
 }
 
 # =============================================================================
@@ -40,6 +45,7 @@ ENTRYPOINT {
     { decision: "medium_code_general", models: [{ model: "qwen/qwen3.5-rocm", weight: "1", reasoning: { enabled: true, effort: "medium" } }, { model: "google/gemini-2.5-flash-lite", weight: "1" }] },
     { decision: "medium_creative", models: [{ model: "qwen/qwen3.5-rocm", weight: "1" }, { model: "google/gemini-2.5-flash-lite", weight: "1" }] },
     { decision: "medium_explainer", models: [{ model: "qwen/qwen3.5-rocm", weight: "1", reasoning: { enabled: true, effort: "medium" } }, { model: "google/gemini-2.5-flash-lite", weight: "1" }] },
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "premium_legal", models: [{ model: "anthropic/claude-opus-4.6", weight: "1" }, { model: "openai/gpt5.4", weight: "1" }] },
     { decision: "reasoning_deep", models: [{ model: "google/gemini-3.1-pro", weight: "1" }, { model: "openai/gpt5.4", weight: "1" }] },
     { decision: "simple_general", models: [{ model: "qwen/qwen3.5-rocm", weight: "1" }, { model: "google/gemini-2.5-flash-lite", weight: "1" }] },
@@ -369,6 +375,11 @@ RECIPE default (description = "Default routing recipe.") {
     predicate: { gte: 2 }
   }
 
+  SIGNAL conversation balance_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL complexity general_reasoning {
     threshold: 0.14
     description: "General difficulty boundary for simple answers versus synthesis-heavy reasoning."
@@ -499,6 +510,12 @@ RECIPE default (description = "Default routing recipe.") {
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+    PRIORITY 300
+    WHEN conversation("balance_has_images")
+    ALGORITHM static
+  }
 
   ROUTE premium_legal (description = "Premium-only route for high-value legal and compliance analysis.") {
     PRIORITY 260

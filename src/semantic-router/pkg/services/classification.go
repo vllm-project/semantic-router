@@ -75,10 +75,10 @@ func NewUnifiedClassificationService(unifiedClassifier *classification.UnifiedCl
 	}
 }
 
-// NewStandaloneClassificationService creates the canonical standalone
+// NewFileClassificationService creates the canonical file-authoritative
 // composition: optional unified batch discovery plus an explicit Recipe
 // classifier graph. It never constructs a classifier from root routing fields.
-func NewStandaloneClassificationService(config *config.RouterConfig) (*ClassificationService, error) {
+func NewFileClassificationService(config *config.RouterConfig) (*ClassificationService, error) {
 	// Batch classification owns a separate optional unified model. Routing
 	// classification is always compiled from explicit Recipes below.
 	modelsPath := "./models"
@@ -98,7 +98,7 @@ func NewStandaloneClassificationService(config *config.RouterConfig) (*Classific
 	}
 	recipeClassifiers, err := classification.NewRecipeClassifiersFromConfig(config)
 	if err != nil {
-		return nil, fmt.Errorf("initialize standalone Recipe classifiers: %w", err)
+		return nil, fmt.Errorf("initialize file-authority Recipe classifiers: %w", err)
 	}
 	service := NewRecipeClassificationService(recipeClassifiers, config)
 	service.unifiedClassifier = unifiedClassifier

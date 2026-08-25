@@ -66,7 +66,7 @@ When both dimensions are set, `endpoint.dimensions` and
 Embedding signals do not change:
 
 ```yaml
-document:
+routing:
   signals:
     embeddings:
       - name: billing-support

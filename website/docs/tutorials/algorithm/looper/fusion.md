@@ -74,7 +74,7 @@ Some prompts benefit from multiple independent attempts and a judge pass rather 
 Decision-level Fusion:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: deliberation
       description: Compare candidate answers and synthesize one response.
@@ -118,7 +118,7 @@ Entrypoint assignment:
 
 ```yaml
 entrypoints:
-  - name: vllm-sr/fusion
+  - model_names: [vllm-sr/fusion]
     recipe: deliberation
     assignments:
       deliberation:

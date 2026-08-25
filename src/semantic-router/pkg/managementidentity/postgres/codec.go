@@ -18,20 +18,24 @@ func scanPrincipal(row scanner) (managementidentity.Principal, error) {
 		attributes []byte
 		revision   int64
 	)
-	err := row.Scan(
+	scanErr := row.Scan(
 		&principal.Identity.ID, &principal.Identity.Issuer, &principal.Identity.Subject,
 		&principal.DisplayName, &principal.VerifiedEmail, &attributes,
 		&principal.Identity.Status, &revision, &principal.Identity.CreatedAt, &principal.Identity.UpdatedAt,
 	)
-	if err != nil {
-		return managementidentity.Principal{}, err
+	if scanErr != nil {
+		return managementidentity.Principal{}, scanErr
 	}
-	if err := json.Unmarshal(attributes, &principal.Identity.Attributes); err != nil {
+	if decodeErr := json.Unmarshal(attributes, &principal.Identity.Attributes); decodeErr != nil {
 		return managementidentity.Principal{}, errors.New("stored Management principal attributes are invalid")
 	}
 	principal.Identity.CreatedAt = utc(principal.Identity.CreatedAt)
 	principal.Identity.UpdatedAt = utc(principal.Identity.UpdatedAt)
-	principal.Revision = accesscontrol.Revision(revision)
+	principalRevision, revisionErr := databaseRevision(revision, "principal revision")
+	if revisionErr != nil {
+		return managementidentity.Principal{}, errors.New("stored Management principal revision is invalid")
+	}
+	principal.Revision = principalRevision
 	if err := principal.Identity.Validate(); err != nil || principal.Revision == 0 || principal.DisplayName == "" {
 		return managementidentity.Principal{}, errors.New("stored Management principal is invalid")
 	}
@@ -66,7 +70,10 @@ func scanRole(row scanner) (managementidentity.Role, error) {
 		return managementidentity.Role{}, errors.New("stored Management role permission digest is invalid")
 	}
 	role.Role.Permissions = set
-	role.Role.Revision = accesscontrol.Revision(revision)
+	role.Role.Revision, err = databaseRevision(revision, "role revision")
+	if err != nil {
+		return managementidentity.Role{}, errors.New("stored Management role revision is invalid")
+	}
 	role.CreatedAt = utc(role.CreatedAt)
 	role.UpdatedAt = utc(role.UpdatedAt)
 	if err := role.Role.Validate(); err != nil {
@@ -112,7 +119,10 @@ func scanRoleBinding(row scanner) (managementidentity.RoleBinding, error) {
 		return managementidentity.RoleBinding{}, errors.New("stored Management role-binding ceiling is invalid")
 	}
 	binding.Binding.DelegationCeiling = set
-	binding.Binding.Revision = accesscontrol.Revision(revision)
+	binding.Binding.Revision, err = databaseRevision(revision, "role-binding revision")
+	if err != nil {
+		return managementidentity.RoleBinding{}, errors.New("stored Management role-binding revision is invalid")
+	}
 	binding.CreatedAt = utc(binding.CreatedAt)
 	binding.UpdatedAt = utc(binding.UpdatedAt)
 	if err := binding.Binding.Validate(); err != nil {

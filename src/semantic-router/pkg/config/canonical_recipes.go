@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// AuthoringEntrypoint is one callable v0.4 virtual Model. The common form
+// AuthoringEntrypoint is the internal Management compiler form of one callable virtual Model. The common form
 // selects one Recipe directly; advanced authoring may instead provide bounded
 // conditional rules. Generated identity exists only in routingsnapshot.
 type AuthoringEntrypoint struct {
@@ -92,13 +92,13 @@ func validateAuthoringRecipes(recipes []AuthoringRecipe) error {
 		}
 		seenNames[name] = struct{}{}
 		if len(recipe.Document.Decisions) == 0 {
-			return fmt.Errorf("recipes[%s].document.decisions must not be empty", name)
+			return fmt.Errorf("recipes[%s].routing.decisions must not be empty", name)
 		}
-		if err := validateDecisionNames("recipes["+recipe.Name+"].document", recipe.Document.Decisions); err != nil {
+		if err := validateDecisionNames("recipes["+recipe.Name+"].routing", recipe.Document.Decisions); err != nil {
 			return err
 		}
 		if err := validateRecipeDocumentModelFree(recipe.Document); err != nil {
-			return fmt.Errorf("recipes[%s].document: %w", name, err)
+			return fmt.Errorf("recipes[%s].routing: %w", name, err)
 		}
 	}
 	return nil
@@ -227,29 +227,6 @@ func validateAuthoringAssignmentNames(
 	return nil
 }
 
-func canonicalRecipesFromRouterConfig(cfg *RouterConfig) []AuthoringRecipe {
-	if cfg == nil || len(cfg.Recipes) == 0 {
-		return nil
-	}
-	recipes := make([]AuthoringRecipe, 0, len(cfg.Recipes))
-	for _, recipe := range cfg.Recipes {
-		decisions := copyDecisions(recipe.Profile.Decisions)
-		for index := range decisions {
-			decisions[index].ID = ""
-			stripManagedRecipeModelSelection(&decisions[index])
-		}
-		recipes = append(recipes, AuthoringRecipe{
-			Name: string(recipe.Name), Description: recipe.Description,
-			Document: CanonicalRouting{
-				Signals:     canonicalSignalsFromSignals(recipe.Profile.Signals),
-				Projections: canonicalProjectionsFromProjections(recipe.Profile.Projections),
-				Decisions:   decisions, Strategy: recipe.Profile.Strategy,
-			},
-		})
-	}
-	return recipes
-}
-
 func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []AuthoringEntrypoint {
 	if cfg == nil || len(cfg.Entrypoints) == 0 {
 		return nil
@@ -263,6 +240,13 @@ func canonicalEntrypointsFromRouterConfig(cfg *RouterConfig) []AuthoringEntrypoi
 		entrypoints = append(entrypoints, authoringEntrypointFromRuntime(entrypoint, recipesByID))
 	}
 	return entrypoints
+}
+
+// AuthoringEntrypointsFromRouterConfig projects runtime Entrypoints back to
+// their readable control-plane form for DSL tooling. Public v0.3 YAML export
+// remains intentionally source-preserving and does not call this projection.
+func AuthoringEntrypointsFromRouterConfig(cfg *RouterConfig) []AuthoringEntrypoint {
+	return canonicalEntrypointsFromRouterConfig(cfg)
 }
 
 func sortedAssignmentDecisionIDs(assignments map[string]RoutingAssignmentSet) []string {

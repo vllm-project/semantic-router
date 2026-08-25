@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     context:
       - name: long_context

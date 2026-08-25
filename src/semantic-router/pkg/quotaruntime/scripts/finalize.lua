@@ -46,6 +46,10 @@ end
 if redis.call("HGET", KEYS[2], "digest") ~= admission_digest then
   return redis.error_reply("QUOTA_CONFLICT admission digest differs")
 end
+local admission_plan_digest = redis.call("HGET", KEYS[2], "plan_digest")
+if admission_plan_digest == false or admission_plan_digest == "" then
+  return redis.error_reply("QUOTA_CORRUPT admission plan digest is missing")
+end
 if tonumber(redis.call("HGET", KEYS[2], "actual_rule_count") or "-1") ~= actual_count then
   return redis.error_reply("QUOTA_CONFLICT actual rule set differs")
 end
@@ -308,6 +312,7 @@ redis.call("ZREM", KEYS[1], admission_id)
 redis.call("HSET", KEYS[2],
   "state", "finalized",
   "finalization_digest", finalization_digest,
+  "admission_plan_digest", admission_plan_digest,
   "plan_digest", plan_digest,
   "evidence_state", evidence_state,
   "stream_id", stream_id,
@@ -318,6 +323,7 @@ redis.call("HSET", KEYS[4],
   "state", "finalized",
   "admission_digest", admission_digest,
   "finalization_digest", finalization_digest,
+  "admission_plan_digest", admission_plan_digest,
   "plan_digest", plan_digest,
   "evidence_state", evidence_state,
   "stream_id", stream_id,

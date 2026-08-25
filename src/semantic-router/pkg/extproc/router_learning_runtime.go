@@ -25,7 +25,7 @@ type routerLearningRuntime struct {
 }
 
 // routerLearningSharedState retains best-effort runtime telemetry for
-// standalone routing. Managed outcome evidence is read from the globally
+// file-authority routing. Durable outcome evidence is read from the globally
 // revisioned projection and never committed to this process-local map.
 type routerLearningSharedState struct {
 	mu         sync.Mutex
@@ -188,7 +188,7 @@ func (rt *routerLearningRuntime) experienceSnapshot(decisionName string, decisio
 }
 
 // experienceSnapshotForRequest overlays only the durable, globally published
-// outcome counters in managed mode. A request never treats process-local
+// outcome counters in native-access composition. A request never treats process-local
 // feedback state as authoritative, and a restarted replica reconstructs the
 // same view from PostgreSQL through the revisioned Valkey projection.
 func (rt *routerLearningRuntime) experienceSnapshotForRequest(

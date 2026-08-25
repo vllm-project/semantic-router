@@ -34,7 +34,7 @@ Use `domain` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     domains:
       - name: business

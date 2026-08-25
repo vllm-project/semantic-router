@@ -13,12 +13,12 @@ import (
 	"strings"
 )
 
-const migrationLockID int64 = 0x5653524143434553 // "VSRACCES"
+const migrationLockID int64 = 0x5653524D474D5431 // "VSRMGMT1"
 
 //go:embed migrations/*.sql
 var migrationFiles embed.FS
 
-// Migration is one immutable, forward-only managed control-plane schema step.
+// Migration is one immutable, forward-only durable Management schema step.
 type Migration struct {
 	Version int64
 	Name    string
@@ -29,7 +29,7 @@ type Migration struct {
 func Migrations() ([]Migration, error) {
 	entries, err := fs.ReadDir(migrationFiles, "migrations")
 	if err != nil {
-		return nil, fmt.Errorf("read embedded control-plane migrations: %w", err)
+		return nil, fmt.Errorf("read embedded Management migrations: %w", err)
 	}
 	migrations := make([]Migration, 0, len(entries))
 	for _, entry := range entries {
@@ -52,7 +52,7 @@ func Migrations() ([]Migration, error) {
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })
 	for i := range migrations {
 		if i > 0 && migrations[i-1].Version == migrations[i].Version {
-			return nil, fmt.Errorf("duplicate control-plane migration version %d", migrations[i].Version)
+			return nil, fmt.Errorf("duplicate Management migration version %d", migrations[i].Version)
 		}
 	}
 	return migrations, nil
@@ -79,7 +79,7 @@ type Migrator struct {
 // Apply advances the schema to the latest embedded version.
 func (m Migrator) Apply(ctx context.Context) (returnErr error) {
 	if m.DB == nil {
-		return fmt.Errorf("control-plane migration database is required")
+		return fmt.Errorf("management migration database is required")
 	}
 	migrations, applyErr := Migrations()
 	if applyErr != nil {
@@ -95,17 +95,17 @@ func (m Migrator) Apply(ctx context.Context) (returnErr error) {
 		}
 	}()
 	if _, err := conn.ExecContext(ctx, `SELECT pg_advisory_lock($1)`, migrationLockID); err != nil {
-		return fmt.Errorf("lock control-plane migrations: %w", err)
+		return fmt.Errorf("lock Management migrations: %w", err)
 	}
 	defer func() {
 		_, unlockErr := conn.ExecContext(context.Background(), `SELECT pg_advisory_unlock($1)`, migrationLockID)
 		if unlockErr != nil {
-			returnErr = errors.Join(returnErr, fmt.Errorf("unlock control-plane migrations: %w", unlockErr))
+			returnErr = errors.Join(returnErr, fmt.Errorf("unlock Management migrations: %w", unlockErr))
 		}
 	}()
 
 	if _, err := conn.ExecContext(ctx, `
-CREATE TABLE IF NOT EXISTS router_control_plane_schema_migrations (
+CREATE TABLE IF NOT EXISTS router_management_schema_migrations (
   version BIGINT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
@@ -139,7 +139,7 @@ func applyPendingMigrations(
 		}
 		if _, err = tx.ExecContext(ctx, migration.SQL); err == nil {
 			_, err = tx.ExecContext(ctx,
-				`INSERT INTO router_control_plane_schema_migrations(version, name) VALUES ($1, $2)`,
+				`INSERT INTO router_management_schema_migrations(version, name) VALUES ($1, $2)`,
 				migration.Version, migration.Name,
 			)
 		}
@@ -155,7 +155,7 @@ func applyPendingMigrations(
 }
 
 func appliedVersions(ctx context.Context, conn *sql.Conn) (_ map[int64]string, returnErr error) {
-	rows, err := conn.QueryContext(ctx, `SELECT version,name FROM router_control_plane_schema_migrations ORDER BY version`)
+	rows, err := conn.QueryContext(ctx, `SELECT version,name FROM router_management_schema_migrations ORDER BY version`)
 	if err != nil {
 		return nil, fmt.Errorf("read applied migrations: %w", err)
 	}

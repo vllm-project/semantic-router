@@ -1,5 +1,5 @@
-// Package routingsnapshot defines the immutable routing value shared by
-// standalone manifests and the managed publication pipeline.
+// Package routingsnapshot defines the immutable routing value shared by file
+// authoring and durable publication.
 package routingsnapshot
 
 import (
@@ -50,9 +50,10 @@ type ReasoningFamily struct {
 }
 
 type ModelExecution struct {
-	MaxRetries     int    `json:"maxRetries"`
-	RequestTimeout string `json:"requestTimeout"`
-	StreamTimeout  string `json:"streamTimeout"`
+	MaxRetries     int      `json:"maxRetries"`
+	RetryOn        []string `json:"retryOn,omitempty"`
+	RequestTimeout string   `json:"requestTimeout"`
+	StreamTimeout  string   `json:"streamTimeout"`
 }
 
 type ModelPricing struct {
@@ -166,7 +167,11 @@ type AssignmentReasoning struct {
 // Snapshot is a validated, content-addressed runtime value.
 type Snapshot struct {
 	Bundle
+	// Digest identifies the exact Bundle, including its aggregate publication revision.
 	Digest string `json:"digest"`
+	// SemanticDigest identifies executable routing content and excludes only the
+	// aggregate publication revision.
+	SemanticDigest string `json:"semanticDigest"`
 
 	modelsByID      map[string]Model
 	recipesByID     map[string]Recipe

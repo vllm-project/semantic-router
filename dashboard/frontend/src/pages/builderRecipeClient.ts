@@ -15,17 +15,14 @@ export interface CompiledBuilderRecipe {
   preview: string
 }
 
-const recipeEnvelope = (target: BuilderRecipeTarget, document: Record<string, unknown>): string =>
+const recipeBundle = (target: BuilderRecipeTarget, routing: Record<string, unknown>): string =>
   JSON.stringify(
     {
-      version: 'v0.4',
       recipes: [
         {
-          id: target.id,
-          revision: target.recipeRevision,
           name: target.name,
           ...(target.description ? { description: target.description } : {}),
-          document,
+          routing,
         },
       ],
     },
@@ -40,7 +37,7 @@ const compileFailure = (result: CompileResult): string | null => {
 }
 
 export function loadManagedRecipeSource(recipe: RoutingRecipe): CompiledBuilderRecipe {
-  const sourceResult = wasmBridge.decompile(recipeEnvelope(recipe, recipe.document))
+  const sourceResult = wasmBridge.decompile(recipeBundle(recipe, recipe.document))
   if (sourceResult.error || !sourceResult.dsl.trim()) {
     throw new Error(sourceResult.error || 'The selected Recipe could not be opened in Builder.')
   }
@@ -68,7 +65,7 @@ export function compileBuilderRecipe(
   }
 
   const compiled = documents[0]
-  const projectedSource = wasmBridge.decompile(recipeEnvelope(target, compiled.document))
+  const projectedSource = wasmBridge.decompile(recipeBundle(target, compiled.document))
   if (projectedSource.error || !projectedSource.dsl.trim()) {
     throw new Error(projectedSource.error || 'The Recipe draft could not be projected.')
   }

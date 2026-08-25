@@ -314,13 +314,13 @@ class CLITestBase(unittest.TestCase):
         provider: str | None = None,
         api_only: bool = False,
     ) -> str:
-        """Write a minimal runnable canonical v0.4 config into the temp workspace."""
+        """Write a minimal runnable canonical v0.3 config into the temp workspace."""
         config_path = Path(self.test_dir) / "config.yaml"
         connection_endpoint = (base_url or f"http://{endpoint}").rstrip("/")
         provider_id = provider or "openai-compatible"
 
         config = {
-            "version": "v0.4",
+            "version": "v0.3",
             "listeners": [
                 {
                     "name": "test-listener",
@@ -329,30 +329,33 @@ class CLITestBase(unittest.TestCase):
                     "timeout": "60s",
                 }
             ],
-            "models": [
-                {
-                    "name": model_name,
-                    "card": {"capabilities": ["chat"]},
-                    "connections": [
-                        {
-                            "provider": provider_id,
-                            "endpoint": connection_endpoint,
-                            "model": model_name,
-                            "weight": "1",
-                        }
-                    ],
-                    "runtime": {
-                        "max_retries": 0,
-                        "request_timeout": "300s",
-                        "stream_timeout": "300s",
-                    },
-                    "pricing": {},
-                }
-            ],
+            "providers": {
+                "models": [
+                    {
+                        "name": model_name,
+                        "provider_model_id": model_name,
+                        "backend_refs": [
+                            {
+                                "provider": provider_id,
+                                "endpoint": connection_endpoint,
+                                "weight": 1,
+                            }
+                        ],
+                        "control": {
+                            "retry": {"count": 0},
+                            "timeout": {
+                                "request": "300s",
+                                "stream": "300s",
+                            },
+                        },
+                    }
+                ]
+            },
+            "routing": {"modelCards": [{"name": model_name, "capabilities": ["chat"]}]},
             "recipes": [
                 {
                     "name": "default",
-                    "document": {
+                    "routing": {
                         "decisions": [
                             {
                                 "name": "default-route",
@@ -366,8 +369,7 @@ class CLITestBase(unittest.TestCase):
             ],
             "entrypoints": [
                 {
-                    "name": "vllm-sr/default",
-                    "aliases": ["default"],
+                    "model_names": ["vllm-sr/default", "default"],
                     "recipe": "default",
                     "assignments": {
                         "default-route": {"models": [{"model": model_name}]}

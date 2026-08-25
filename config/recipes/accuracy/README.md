@@ -18,6 +18,7 @@ before serving.
 | Request-facing model | `vllm-sr/auto` |
 | Coordinator | `qwen-coordinator` |
 | Review workers | `opus48-worker`, `gemini31-worker`, `gpt55-worker` |
+| Visual understanding | `local/omni` |
 | Default behavior | One direct request to `gpt55-worker` |
 | Orchestration styles | Dynamic workflow and fusion |
 
@@ -31,6 +32,7 @@ Good fits include:
 - research or implementation tasks that explicitly ask for a plan, tools, or
   evidence gathering;
 - reviews that benefit from independent hypotheses or adversarial checking;
+- image-bearing requests that require visual understanding;
 - long documents that need a strong single-model answer without fan-out; and
 - general requests where a direct high-quality answer is sufficient.
 
@@ -41,6 +43,7 @@ simpler recipe when every request must have predictable single-call cost.
 
 | Request pattern | Route | Behavior |
 | --- | --- | --- |
+| Image content | `omni` | One visual-language model handles the request directly. |
 | Explicit planning, tools, or evidence gathering | `accuracy_workflow` | A coordinator creates a bounded workflow and uses up to three workers. |
 | Long context | `accuracy_long_context_direct` | One long-context worker answers directly. |
 | Competing hypotheses or adversarial review | `accuracy_deliberation` | Independent worker responses are fused into one answer. |
@@ -53,6 +56,7 @@ worker failure as long as enough workers remain to complete the request.
 ## Requirements
 
 - An OpenAI-compatible endpoint for the local coordinator.
+- An OpenAI-compatible visual-language endpoint for `local/omni`.
 - An `OPENROUTER_API_KEY` for the three reference review workers, or replacement
   bindings to equivalent backends.
 - Enough provider capacity for up to three concurrent worker calls on
@@ -80,7 +84,7 @@ vllm-sr serve
 In the Dashboard, connect approved physical Models, choose **Accuracy
 Routing** in **Recipes**, assign the coordinator and review lanes, and publish
 the resulting Mixture-of-Model Entrypoint. Provider credentials belong to the
-managed Model resources rather than the Recipe or launch command.
+Model resources rather than the Recipe or launch command.
 
 ## Evaluation
 

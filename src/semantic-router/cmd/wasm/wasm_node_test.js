@@ -88,6 +88,11 @@ ROUTE r1 {
   const compileResult = JSON.parse(compileRaw);
   assert(compileResult.yaml !== "", "YAML output should not be empty");
   assert(compileResult.crd !== "", "CRD output should not be empty");
+  assert(compileResult.yaml.startsWith("routing:"), "YAML should be a routing fragment");
+  assert(compileResult.recipeDocuments.length === 1,
+    "Anonymous routing should project exactly one Recipe document");
+  assert(!("id" in compileResult.recipeDocuments[0]),
+    "Recipe documents must not contain publication identity");
   assert(compileResult.yaml.includes("intent"), "YAML should contain signal name");
   assert(compileResult.yaml.includes("keyword"), "YAML should contain signal type");
   console.log(`  YAML length: ${compileResult.yaml.length} chars`);
@@ -124,7 +129,8 @@ ROUTE r1 {
   const decompileResult = JSON.parse(decompileRaw);
   assert(decompileResult.dsl !== "", "Decompiled DSL should not be empty");
   assert(!decompileResult.error, "Decompile should not error: " + decompileResult.error);
-  assert(decompileResult.dsl.includes("MODEL qwen"), "Decompiled DSL should contain MODEL keyword");
+  assert(!decompileResult.dsl.includes("MODEL qwen"),
+    "Model-free routing fragments must not contain physical Models");
   assert(decompileResult.dsl.includes("SIGNAL"), "Decompiled DSL should contain SIGNAL keyword");
   assert(decompileResult.dsl.includes("ROUTE"), "Decompiled DSL should contain ROUTE keyword");
 

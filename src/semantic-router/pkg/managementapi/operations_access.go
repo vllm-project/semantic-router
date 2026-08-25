@@ -1,64 +1,7 @@
 package managementapi
 
 func accessOperations() []OperationContract {
-	var operations []OperationContract
-
-	keyRead := Require("key.read", "key")
-	keyManage := Require("key.manage", "key")
-	keyCreate := RequireAll(
-		Require("key.manage", "owner"),
-		RequireWhen("access_policy_binding_requested", Require("access_policy.manage", "access_policy")),
-		RequireWhen("rate_policy_binding_requested", Require("rate_policy.manage", "rate_policy")),
-		RequireWhen("inline_rate_policy_requested", Require("rate_policy.manage", "request_namespace")),
-	)
-	operations = append(operations,
-		operation(MethodGET, BasePath+"/api-keys", "API Keys", ScopeResultSet, keyRead, paginated()),
-		operation(MethodPOST, BasePath+"/api-keys", "API Keys", ScopeCompound, keyCreate,
-			secret(SecretInputNone, SecretOutputOneTime, true)),
-		operation(MethodGET, BasePath+"/api-keys/{keyId}", "API Keys", ScopeResource, keyRead),
-		operation(MethodPATCH, BasePath+"/api-keys/{keyId}", "API Keys", ScopeResource, keyManage),
-		operation(MethodDELETE, BasePath+"/api-keys/{keyId}", "API Keys", ScopeResource, keyManage, casRevision()),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}:enable", "API Keys", ScopeResource, keyManage, casRevision()),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}:disable", "API Keys", ScopeResource, keyManage, casRevision()),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}:renew", "API Keys", ScopeResource, keyManage, casRevision()),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}:reassign", "API Keys", ScopeCompound,
-			RequireAll(
-				keyManage,
-				RequireWhen("current_user_owner", Require("user.manage", "current_owner")),
-				RequireWhen("current_team_owner", Require("team.manage", "current_owner")),
-				RequireWhen("target_user_owner", Require("user.manage", "target_owner")),
-				RequireWhen("target_team_owner", Require("team.manage", "target_owner")),
-			), casRevision()),
-	)
-
-	credentialRead := keyRead
-	credentialManage := RequireAll(keyRead, keyManage)
-	operations = append(operations,
-		operation(MethodGET, BasePath+"/api-keys/{keyId}/credentials", "API Key Credentials", ScopeResource, credentialRead, paginated()),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}/credentials:rotate", "API Key Credentials", ScopeResource, credentialManage,
-			secret(SecretInputNone, SecretOutputOneTime, true), casRevision()),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}/credentials/{credentialId}:reveal", "API Key Credentials", ScopeCompound,
-			RequireAll(keyRead, Require("key.reveal", "key")),
-			secret(SecretInputNone, SecretOutputOneTime, true), noIdempotency(), noRevision()),
-		operation(MethodDELETE, BasePath+"/api-keys/{keyId}/credentials/{credentialId}", "API Key Credentials", ScopeResource, credentialManage, casRevision()),
-	)
-
-	delegationManage := RequireAll(keyRead, Require("delegation.manage", "key"))
-	operations = append(operations,
-		operation(MethodGET, BasePath+"/api-keys/{keyId}/inference-sessions", "Delegation", ScopeResource, delegationManage, paginated()),
-		operation(MethodDELETE, BasePath+"/api-keys/{keyId}/inference-sessions/{sessionId}", "Delegation", ScopeResource, delegationManage),
-		operation(MethodPOST, BasePath+"/api-keys/{keyId}/inference-sessions:revoke-all", "Delegation", ScopeResource, delegationManage),
-		operation(MethodGET, BasePath+"/api-keys/{keyId}/effective-policy", "API Keys", ScopeCompound,
-			RequireAll(keyRead, Require("access_policy.read", "key"), Require("rate_policy.read", "key"))),
-		operation(MethodGET, BasePath+"/api-keys/{keyId}/routing-context", "Routing Context", ScopeCompound,
-			RequireAll(keyRead, Require("routing_context.read", "key"))),
-		operation(MethodPUT, BasePath+"/api-keys/{keyId}/routing-context", "Routing Context", ScopeCompound,
-			RequireAll(keyManage, Require("routing_context.manage", "key")), casRevision()),
-		operation(MethodGET, BasePath+"/api-keys/{keyId}/quota", "Quota", ScopeCompound,
-			RequireAll(keyRead, Require("quota.read", "all_returned_bindings"))),
-		operation(MethodGET, BasePath+"/api-keys/{keyId}/usage", "Usage", ScopeCompound,
-			RequireAll(keyRead, Require("usage.read", "key"))),
-	)
+	operations := accessKeyOperations()
 
 	accessPolicyRead := Require("access_policy.read", "policy")
 	accessPolicyManage := Require("access_policy.manage", "policy")
@@ -144,10 +87,68 @@ func accessOperations() []OperationContract {
 	return operations
 }
 
+func accessKeyOperations() []OperationContract {
+	keyRead := Require("key.read", "key")
+	keyManage := Require("key.manage", "key")
+	keyCreate := RequireAll(
+		Require("key.manage", "owner"),
+		RequireWhen("access_policy_binding_requested", Require("access_policy.manage", "access_policy")),
+		RequireWhen("rate_policy_binding_requested", Require("rate_policy.manage", "rate_policy")),
+		RequireWhen("inline_rate_policy_requested", Require("rate_policy.manage", "request_namespace")),
+	)
+	operations := []OperationContract{
+		operation(MethodGET, BasePath+"/api-keys", "API Keys", ScopeResultSet, keyRead, paginated()),
+		operation(MethodPOST, BasePath+"/api-keys", "API Keys", ScopeCompound, keyCreate,
+			secret(SecretInputNone, SecretOutputOneTime, true)),
+		operation(MethodGET, BasePath+"/api-keys/{keyId}", "API Keys", ScopeResource, keyRead),
+		operation(MethodPATCH, BasePath+"/api-keys/{keyId}", "API Keys", ScopeResource, keyManage),
+		operation(MethodDELETE, BasePath+"/api-keys/{keyId}", "API Keys", ScopeResource, keyManage, casRevision()),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}:enable", "API Keys", ScopeResource, keyManage, casRevision()),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}:disable", "API Keys", ScopeResource, keyManage, casRevision()),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}:renew", "API Keys", ScopeResource, keyManage, casRevision()),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}:reassign", "API Keys", ScopeCompound,
+			RequireAll(
+				keyManage,
+				RequireWhen("current_user_owner", Require("user.manage", "current_owner")),
+				RequireWhen("current_team_owner", Require("team.manage", "current_owner")),
+				RequireWhen("target_user_owner", Require("user.manage", "target_owner")),
+				RequireWhen("target_team_owner", Require("team.manage", "target_owner")),
+			), casRevision()),
+	}
+	credentialManage := RequireAll(keyRead, keyManage)
+	operations = append(operations,
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/credentials", "API Key Credentials", ScopeResource, keyRead, paginated()),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}/credentials:rotate", "API Key Credentials", ScopeResource, credentialManage,
+			secret(SecretInputNone, SecretOutputOneTime, true), casRevision()),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}/credentials/{credentialId}:reveal", "API Key Credentials", ScopeCompound,
+			RequireAll(keyRead, Require("key.reveal", "key")),
+			secret(SecretInputNone, SecretOutputOneTime, true), noIdempotency(), noRevision()),
+		operation(MethodDELETE, BasePath+"/api-keys/{keyId}/credentials/{credentialId}", "API Key Credentials", ScopeResource, credentialManage, casRevision()),
+	)
+	delegationManage := RequireAll(keyRead, Require("delegation.manage", "key"))
+	return append(operations,
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/inference-sessions", "Delegation", ScopeResource, delegationManage, paginated()),
+		operation(MethodDELETE, BasePath+"/api-keys/{keyId}/inference-sessions/{sessionId}", "Delegation", ScopeResource, delegationManage),
+		operation(MethodPOST, BasePath+"/api-keys/{keyId}/inference-sessions:revoke-all", "Delegation", ScopeResource, delegationManage),
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/effective-policy", "API Keys", ScopeCompound,
+			RequireAll(keyRead, Require("access_policy.read", "key"), Require("rate_policy.read", "key"))),
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/routing-context", "Routing Context", ScopeCompound,
+			RequireAll(keyRead, Require("routing_context.read", "key"))),
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/routing-catalog", "Routing Catalog", ScopeCompound,
+			RequireAll(keyRead, Require("access_policy.read", "key"), Require("routing_context.read", "key"))),
+		operation(MethodPUT, BasePath+"/api-keys/{keyId}/routing-context", "Routing Context", ScopeCompound,
+			RequireAll(keyManage, Require("routing_context.manage", "key")), casRevision()),
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/quota", "Quota", ScopeCompound,
+			RequireAll(keyRead, Require("quota.read", "all_returned_bindings"))),
+		operation(MethodGET, BasePath+"/api-keys/{keyId}/usage", "Usage", ScopeCompound,
+			RequireAll(keyRead, Require("usage.read", "key"))),
+	)
+}
+
 func subjectManageRequirement() PermissionExpression {
-	return RequireAny(
+	return RequireAll(
 		RequireWhen("user_owner", Require("user.manage", "subject")),
 		RequireWhen("team_owner", Require("team.manage", "subject")),
-		Require("key.manage", "subject"),
+		RequireWhen("key_owner", Require("key.manage", "subject")),
 	)
 }

@@ -58,29 +58,26 @@ func TestRouterLearningTierCandidatesStayInsideRecipe(t *testing.T) {
 
 func TestRouterLearningTierCandidatesStayInsideEntrypointBindings(t *testing.T) {
 	cfg, err := parseExtProcAuthoringConfig(t, `
-version: v0.4
-models:
-  - name: base-a
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8000, model: base-a}]
-  - name: base-b
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8001, model: base-b}]
-  - name: edge-a
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8002, model: edge-a}]
-  - name: edge-b
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8003, model: edge-b}]
-  - name: other-a
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8004, model: other-a}]
-  - name: other-b
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8005, model: other-b}]
+version: v0.3
+providers:
+  models:
+    - {name: base-a, provider_model_id: base-a, backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8000}]}
+    - {name: base-b, provider_model_id: base-b, backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8001}]}
+    - {name: edge-a, provider_model_id: edge-a, backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8002}]}
+    - {name: edge-b, provider_model_id: edge-b, backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8003}]}
+    - {name: other-a, provider_model_id: other-a, backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8004}]}
+    - {name: other-b, provider_model_id: other-b, backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8005}]}
+routing:
+  modelCards:
+    - {name: base-a}
+    - {name: base-b}
+    - {name: edge-a}
+    - {name: edge-b}
+    - {name: other-a}
+    - {name: other-b}
 recipes:
   - name: shared
-    document:
+    routing:
       decisions:
         - name: simple
           tier: 1
@@ -89,12 +86,12 @@ recipes:
           tier: 1
           rules: {}
 entrypoints:
-  - name: mom/edge
+  - model_names: [mom/edge]
     recipe: shared
     assignments:
       simple: {models: [{model: edge-a}]}
       peer: {models: [{model: edge-b}]}
-  - name: mom/other
+  - model_names: [mom/other]
     recipe: shared
     assignments:
       simple: {models: [{model: other-a}]}

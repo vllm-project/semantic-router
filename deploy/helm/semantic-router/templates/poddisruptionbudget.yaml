@@ -1,4 +1,8 @@
-{{- if .Values.podDisruptionBudget.enabled }}
+{{- $enabled := eq (include "semantic-router.hasManagementStore" .) "true" -}}
+{{- if ne .Values.podDisruptionBudget.enabled nil -}}
+{{- $enabled = .Values.podDisruptionBudget.enabled -}}
+{{- end -}}
+{{- if $enabled }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:

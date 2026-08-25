@@ -174,33 +174,9 @@ func (c *Client) CallSemanticModel(
 //   - iteration: 1-based iteration number for tracking
 //   - logprobsCfg: controls whether to enable logprobs and top_logprobs (nil = disabled)
 func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewParams, modelName string, streaming bool, iteration int, logprobsCfg *LogprobsConfig) (*ModelResponse, error) {
-	// Clone and modify the request with the target model
-	modifiedReq := cloneRequest(req)
-	modifiedReq.Model = modelName
-
-	// Configure logprobs based on config
-	if logprobsCfg != nil && logprobsCfg.Enabled {
-		modifiedReq.Logprobs = openai.Bool(true)
-		topLogprobs := logprobsCfg.TopLogprobs
-		if topLogprobs < 1 {
-			topLogprobs = 1 // Need at least 1 for margin calculation
-		}
-		if topLogprobs > 5 {
-			topLogprobs = 5 // API limit
-		}
-		modifiedReq.TopLogprobs = openai.Int(int64(topLogprobs))
-	}
-
-	// Marshal request to JSON first
-	body, err := json.Marshal(modifiedReq)
+	body, err := buildModelRequestBody(req, modelName, streaming, logprobsCfg)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// Add stream parameter via JSON manipulation (SDK doesn't expose Stream field)
-	body, err = setStreamParam(body, streaming)
-	if err != nil {
-		return nil, fmt.Errorf("failed to set stream param: %w", err)
+		return nil, err
 	}
 
 	logprobsEnabled := logprobsCfg != nil && logprobsCfg.Enabled
@@ -214,16 +190,9 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 		"logprobs":  logprobsEnabled,
 	})
 
-	// Create HTTP request
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewReader(body))
+	httpReq, err := c.newModelHTTPRequest(ctx, endpoint, body)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// Set headers
-	httpReq.Header.Set("Content-Type", "application/json")
-	for k, v := range c.headers {
-		httpReq.Header.Set(k, v)
+		return nil, err
 	}
 
 	observer := dispatchObserverFromContext(ctx)
@@ -281,6 +250,46 @@ func (c *Client) CallModel(ctx context.Context, req *openai.ChatCompletionNewPar
 	result.LatencyMs = time.Since(start).Milliseconds()
 	complete("")
 	return result, nil
+}
+
+func buildModelRequestBody(
+	req *openai.ChatCompletionNewParams,
+	modelName string,
+	streaming bool,
+	logprobsCfg *LogprobsConfig,
+) ([]byte, error) {
+	modifiedReq := cloneRequest(req)
+	modifiedReq.Model = modelName
+	if logprobsCfg != nil && logprobsCfg.Enabled {
+		modifiedReq.Logprobs = openai.Bool(true)
+		topLogprobs := max(1, min(logprobsCfg.TopLogprobs, 5))
+		modifiedReq.TopLogprobs = openai.Int(int64(topLogprobs))
+	}
+	body, err := json.Marshal(modifiedReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	}
+	body, err = setStreamParam(body, streaming)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set stream param: %w", err)
+	}
+	return body, nil
+}
+
+func (c *Client) newModelHTTPRequest(
+	ctx context.Context,
+	endpoint string,
+	body []byte,
+) (*http.Request, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+	request.Header.Set("Content-Type", "application/json")
+	for key, value := range c.headers {
+		request.Header.Set(key, value)
+	}
+	return request, nil
 }
 
 // parseNonStreamingResponse parses a non-streaming JSON response

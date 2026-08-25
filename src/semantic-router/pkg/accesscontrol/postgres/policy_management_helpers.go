@@ -57,40 +57,46 @@ func appendCompoundMutationRecords(
 			return MutationReceipt{}, err
 		}
 	}
-	runtimeEpoch, desiredRevision, err := allocateDesiredRevision(ctx, tx, accesscontrol.NamespaceID(namespaceID))
-	if err != nil {
-		return MutationReceipt{}, err
+	runtimeEpoch, desiredRevision, allocationErr := allocateDesiredRevision(
+		ctx, tx, accesscontrol.NamespaceID(namespaceID),
+	)
+	if allocationErr != nil {
+		return MutationReceipt{}, allocationErr
 	}
-	if _, err := tx.ExecContext(ctx, insertRevisionQuery, namespaceID, desiredRevision,
-		runtimeEpoch, mutations[0].Meta.Reason, actorValue(mutations[0].Meta.ActorPrincipalID)); err != nil {
-		return MutationReceipt{}, fmt.Errorf("insert compound policy revision: %w", err)
+	if _, insertRevisionErr := tx.ExecContext(ctx, insertRevisionQuery, namespaceID, desiredRevision,
+		runtimeEpoch, mutations[0].Meta.Reason, actorValue(mutations[0].Meta.ActorPrincipalID)); insertRevisionErr != nil {
+		return MutationReceipt{}, fmt.Errorf("insert compound policy revision: %w", insertRevisionErr)
 	}
 	for _, item := range mutations {
-		revision, err := revisionAsInt64(item.Mutation.AggregateRevision)
-		if err != nil {
-			return MutationReceipt{}, err
+		revision, revisionErr := revisionAsInt64(item.Mutation.AggregateRevision)
+		if revisionErr != nil {
+			return MutationReceipt{}, revisionErr
 		}
-		payload, err := json.Marshal(outboxPayload{
+		payload, encodeErr := json.Marshal(outboxPayload{
 			AggregateRevision: fmt.Sprintf("%d", revision), References: item.Mutation.References,
 		})
-		if err != nil {
-			return MutationReceipt{}, fmt.Errorf("encode compound policy outbox: %w", err)
+		if encodeErr != nil {
+			return MutationReceipt{}, fmt.Errorf("encode compound policy outbox: %w", encodeErr)
 		}
-		if _, err := tx.ExecContext(ctx, insertOutboxQuery, uuid.NewString(), namespaceID,
+		if _, insertOutboxErr := tx.ExecContext(ctx, insertOutboxQuery, uuid.NewString(), namespaceID,
 			desiredRevision, item.Mutation.AggregateType, item.Mutation.AggregateID,
-			item.Mutation.Operation, payload); err != nil {
-			return MutationReceipt{}, fmt.Errorf("insert compound policy outbox: %w", err)
+			item.Mutation.Operation, payload); insertOutboxErr != nil {
+			return MutationReceipt{}, fmt.Errorf("insert compound policy outbox: %w", insertOutboxErr)
 		}
 	}
 	// Audit is one immutable command record per desired revision. The outbox may
 	// contain several aggregates, but the schema intentionally forbids several
 	// audit events from claiming the same revision. The first mutation is the
 	// command root (API key for issuance, policy for standalone inline create).
-	if err := appendAuditEvent(ctx, tx, accesscontrol.NamespaceID(namespaceID),
-		mutations[0].Mutation, mutations[0].Meta, desiredRevision); err != nil {
-		return MutationReceipt{}, err
+	if auditErr := appendAuditEvent(ctx, tx, accesscontrol.NamespaceID(namespaceID),
+		mutations[0].Mutation, mutations[0].Meta, desiredRevision); auditErr != nil {
+		return MutationReceipt{}, auditErr
 	}
-	return MutationReceipt{DesiredRevision: accesscontrol.Revision(desiredRevision)}, nil
+	desiredRevisionValue, revisionErr := scanRevision(desiredRevision)
+	if revisionErr != nil {
+		return MutationReceipt{}, revisionErr
+	}
+	return MutationReceipt{DesiredRevision: desiredRevisionValue}, nil
 }
 
 func managedPolicyMutationMeta(

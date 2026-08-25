@@ -104,7 +104,7 @@ function APIKeySecretDialog({ secret, onClose, onViewDetails }: SecretProps) {
 }
 
 function AccessEditorDialog(props: EditorProps) {
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+  const dialogRef = useAccessibleDialog<HTMLFormElement>({
     isOpen: true,
     onClose: props.onClose,
     dismissible: !props.saving,
@@ -128,7 +128,7 @@ function AccessEditorDialog(props: EditorProps) {
       className={styles.modalBackdrop}
       onMouseDown={(event) => event.target === event.currentTarget && !saving && onClose()}
     >
-      <section
+      <form
         ref={dialogRef}
         className={styles.modal}
         role="dialog"
@@ -136,6 +136,10 @@ function AccessEditorDialog(props: EditorProps) {
         aria-labelledby="access-dialog-title"
         aria-busy={saving}
         tabIndex={-1}
+        onSubmit={(event) => {
+          event.preventDefault()
+          onSave()
+        }}
       >
         <header className={styles.modalHeader}>
           <div className={styles.modalHeading}>
@@ -185,14 +189,15 @@ function AccessEditorDialog(props: EditorProps) {
             onClick={onClose}
             disabled={saving}
           >
+            <ProductIcon name="close" />
             Cancel
           </button>
-          <button type="button" className={styles.primaryButton} onClick={onSave} disabled={saving}>
+          <button type="submit" className={styles.primaryButton} disabled={saving}>
             {!saving ? <ProductIcon name={editor.value.id ? 'check' : 'plus'} /> : null}
             {saving ? 'Saving…' : editor.value.id ? 'Save changes' : 'Create'}
           </button>
         </footer>
-      </section>
+      </form>
     </div>
   )
 }

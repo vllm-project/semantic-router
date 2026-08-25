@@ -9,10 +9,10 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementserver"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 )
 
 func TestComposeStatisticsWiresBorrowedDatabaseAndAuthorizationRuntime(t *testing.T) {
@@ -23,7 +23,7 @@ func TestComposeStatisticsWiresBorrowedDatabaseAndAuthorizationRuntime(t *testin
 	t.Cleanup(func() { _ = database.Close() })
 	mock.ExpectPing()
 	routes, err := composeStatistics(
-		managedruntime.ManagementDependencies{Database: database},
+		routingruntime.ManagementDependencies{Database: database},
 		managementauthorization.Runtime{Loader: statisticsSnapshotLoader{}},
 		managementserver.NamespaceResolverFunc(func(context.Context, *http.Request) (string, error) {
 			return "11111111-1111-4111-8111-111111111111", nil
@@ -44,7 +44,7 @@ func TestComposeStatisticsWiresBorrowedDatabaseAndAuthorizationRuntime(t *testin
 
 func TestComposeStatisticsRejectsIncompleteDependencies(t *testing.T) {
 	if _, err := composeStatistics(
-		managedruntime.ManagementDependencies{}, managementauthorization.Runtime{}, nil, nil, nil,
+		routingruntime.ManagementDependencies{}, managementauthorization.Runtime{}, nil, nil, nil,
 	); err == nil {
 		t.Fatal("composeStatistics accepted incomplete dependencies")
 	}

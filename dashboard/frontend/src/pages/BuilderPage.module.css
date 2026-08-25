@@ -3,7 +3,7 @@
 .page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 72px);
+  height: calc(100dvh - 72px);
   overflow: hidden;
 }
 
@@ -411,29 +411,37 @@
 
 .guideDrawerOverlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 3, 4, 0.64);
+  backdrop-filter: blur(18px);
   animation: fadeIn 0.2s ease;
 }
 
 .guideDrawer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  position: relative;
   /* width set via inline style */
   min-width: 300px;
   max-width: 90vw;
-  background: var(--color-bg);
-  border-left: 1px solid var(--color-border);
+  height: min(820px, calc(100dvh - 2rem));
+  max-height: calc(100dvh - 2rem);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
   display: flex;
   flex-direction: column;
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.2);
-  animation: slideInRight 0.25s ease;
+  overflow: hidden;
+  box-shadow:
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
+  animation: guideDialogIn 0.22s ease;
   outline: none;
 }
 
@@ -472,12 +480,14 @@
   height: 48px;
 }
 
-@keyframes slideInRight {
+@keyframes guideDialogIn {
   from {
-    transform: translateX(100%);
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
   }
   to {
-    transform: translateX(0);
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -494,20 +504,59 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--spacing-sm) var(--spacing-md);
+  min-height: 74px;
+  padding: 0.8rem 1rem;
   border-bottom: 1px solid var(--color-border);
-  background: var(--color-bg-secondary);
+  background: rgba(9, 9, 10, 0.82);
   flex-shrink: 0;
 }
 
-.guideDrawerTitle {
+.guideDrawerIdentity {
+  min-width: 0;
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
-  font-size: var(--text-sm);
-  font-weight: 600;
+  gap: 0.75rem;
+}
+
+.guideDrawerIdentity > div:last-child {
+  min-width: 0;
+}
+
+.guideDrawerLogo {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.guideDrawerLogo img {
+  width: 24px;
+  height: 24px;
+  object-fit: contain;
+}
+
+.guideDrawerEyebrow {
+  display: block;
+  margin-bottom: 0.18rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.guideDrawerTitle {
+  min-width: 0;
+  font-size: 1rem;
+  font-weight: 680;
   color: var(--color-text);
   margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .guideDrawerClose {
@@ -2312,10 +2361,29 @@
   }
 
   .outputPanel {
-    width: 100%;
+    width: 100% !important;
+    min-width: 0;
     max-height: 300px;
     border-left: none;
     border-top: 1px solid var(--color-border);
+  }
+
+  .resizeHandle,
+  .guideDrawerResizeHandle {
+    display: none;
+  }
+
+  .guideDrawer {
+    width: 100% !important;
+    min-width: 0;
+    max-width: 100%;
+    height: calc(100dvh - 0.75rem);
+    max-height: calc(100dvh - 0.75rem);
+    border-radius: 14px;
+  }
+
+  .guideDrawerOverlay {
+    padding: 0.375rem;
   }
 }
 
@@ -2339,7 +2407,7 @@
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   width: min(600px, 90vw);
-  max-height: 80vh;
+  max-height: 80dvh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
@@ -2444,6 +2512,35 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
+}
+
+@media (max-width: 768px) {
+  .modalOverlay {
+    align-items: center;
+    padding: 0.5rem;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+    border-radius: var(--radius-lg);
+  }
+
+  .modalFooter {
+    flex-wrap: wrap;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-md) var(--spacing-md) max(var(--spacing-md), env(safe-area-inset-bottom));
+  }
+
+  .modalFooterImportActions,
+  .modalFooterPrimaryActions {
+    width: 100%;
+  }
+
+  .modalFooterPrimaryActions {
+    margin-left: 0;
+    justify-content: flex-end;
+  }
 }
 
 /* ===== Validation Panel (Visual Mode) ===== */
@@ -2954,7 +3051,7 @@
 
 .builderExpression {
   min-height: 22rem;
-  max-height: 50vh;
+  max-height: 50dvh;
   padding: var(--spacing-md);
 }
 

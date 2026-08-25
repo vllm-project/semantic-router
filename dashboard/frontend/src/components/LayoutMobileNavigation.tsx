@@ -3,10 +3,10 @@ import { NavLink } from 'react-router-dom'
 import styles from './Layout.module.css'
 import {
   isLayoutMenuItemActive,
-  PRIMARY_NAV_LINKS,
   type LayoutDropdownKey,
   type LayoutMenuCategory,
   type LayoutMenuItem,
+  type LayoutNavLink,
 } from './LayoutNavSupport'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 import ProductIcon from './ProductIcon'
@@ -22,6 +22,7 @@ interface LayoutMobileNavigationProps {
   isConfigPage: boolean
   openSection: LayoutDropdownKey | null
   pathname: string
+  primaryLinks: LayoutNavLink[]
   sections: LayoutMobileNavigationSection[]
   onConfigSelect: (item: LayoutMenuItem) => void
   onNavigate: () => void
@@ -33,6 +34,7 @@ export default function LayoutMobileNavigation({
   isConfigPage,
   openSection,
   pathname,
+  primaryLinks,
   sections,
   onConfigSelect,
   onNavigate,
@@ -131,7 +133,7 @@ export default function LayoutMobileNavigation({
       aria-label="Mobile navigation"
       onKeyDown={handleNavigationKeyDown}
     >
-      {PRIMARY_NAV_LINKS.map((link) => (
+      {primaryLinks.map((link) => (
         <NavLink
           key={`mobile-${link.to}`}
           end={link.matchMode !== 'prefix'}

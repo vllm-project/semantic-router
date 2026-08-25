@@ -1,25 +1,29 @@
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8888
   address: 0.0.0.0
   port: 8888
   timeout: 300s
-models:
-- name: qwen3
-  card:
+providers:
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://host.docker.internal:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen3
     capabilities:
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://host.docker.internal:8000/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: no_memory_trigger
@@ -87,8 +91,8 @@ recipes:
           similarity_threshold: 0.1
           auto_store: true
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

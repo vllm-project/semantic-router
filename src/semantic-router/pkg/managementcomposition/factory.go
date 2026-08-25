@@ -1,5 +1,5 @@
 // Package managementcomposition binds Router-native Management domains to
-// process-owned managedruntime resources. It has no Dashboard dependency and
+// process-owned routingruntime resources. It has no Dashboard dependency and
 // exposes one Management authentication authority.
 package managementcomposition
 
@@ -14,41 +14,24 @@ import (
 	"sync"
 	"time"
 
-	accesspostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscredential"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessmanagement"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercatalog"
-	catalogmanaged "github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercatalog/managed"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement"
-	routingmanaged "github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement/managed"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/delegationmanagement"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization"
-	authorizationpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization/postgres"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementidentity"
-	identityapplication "github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementidentity/application"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementserver"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/namespacemanagement"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/policybulk"
-	policybulkpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/policybulk/postgres"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/policymanagement"
-	credentialmanagement "github.com/vllm-project/semantic-router/src/semantic-router/pkg/providercredential/management"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotareconciliation"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/securitykeyring"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/subjectmanagement"
 )
 
 const (
 	defaultIdempotencyTTL       = time.Hour
 	defaultSecretDeliveryTTL    = 10 * time.Minute
 	defaultCredentialRetirement = 30 * time.Second
-	managementTokenIssuer       = "vllm-sr"
+	// #nosec G101 -- this is a public JWT issuer label, not a credential.
+	managementTokenIssuer = "vllm-sr"
+	// #nosec G101 -- this is a public JWT audience label, not a credential.
 	managementTokenAudience     = "vllm-sr-management"
 	managementTokenClockSkew    = 5 * time.Second
 	policyWorkerConcurrency     = 4
@@ -59,7 +42,7 @@ const (
 )
 
 // Options exposes test and embedding seams. Production composes the Router's
-// dynamic trusted-issuer verifier from managed dependencies when no verifier
+// dynamic trusted-issuer verifier from composed Management dependencies when no verifier
 // is injected.
 type Options struct {
 	AssertionVerifier         managementauth.SubjectAssertionVerifier
@@ -71,6 +54,7 @@ type Options struct {
 }
 
 type Factory struct {
+	nativeAccess               bool
 	keyPrefix                  string
 	agentInferenceEndpoint     string
 	assertionVerifier          managementauth.SubjectAssertionVerifier
@@ -87,8 +71,12 @@ type Factory struct {
 }
 
 func NewFactory(cfg *config.RouterConfig, options Options) (*Factory, error) {
-	if cfg == nil || cfg.ControlPlane.Mode != config.ControlPlaneModeManaged {
-		return nil, errors.New("management composition requires managed control-plane mode")
+	capabilities, err := runtimecapabilities.Derive(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("derive runtime capabilities: %w", err)
+	}
+	if !capabilities.DurableRouting {
+		return nil, errors.New("management composition requires durable Management")
 	}
 	if cfg.ManagementAPI.Auth.Mode != config.ManagementAuthModeRouter {
 		return nil, errors.New("management composition requires Router-native authentication")
@@ -96,11 +84,15 @@ func NewFactory(cfg *config.RouterConfig, options Options) (*Factory, error) {
 	if len(cfg.ManagementAPI.Auth.Tokens) != 0 || len(cfg.ManagementAPI.Auth.Roles) != 0 {
 		return nil, errors.New("management composition rejects static tokens and roles")
 	}
-	if cfg.AccessRuntimeStore == nil || cfg.AccessRuntimeStore.Redis.KeyPrefix == "" {
-		return nil, errors.New("management composition requires a durable runtime key prefix")
-	}
-	if strings.TrimSpace(cfg.Agent.PublicInferenceEndpoint) == "" {
-		return nil, errors.New("management composition requires the Agent public inference endpoint")
+	keyPrefix := ""
+	if capabilities.NativeAccess {
+		if !capabilities.DistributedState || cfg.AccessRuntimeStore == nil || cfg.AccessRuntimeStore.Redis.KeyPrefix == "" {
+			return nil, errors.New("native access composition requires a durable runtime key prefix")
+		}
+		keyPrefix = cfg.AccessRuntimeStore.Redis.KeyPrefix
+		if strings.TrimSpace(cfg.Agent.PublicInferenceEndpoint) == "" {
+			return nil, errors.New("native access composition requires the Agent public inference endpoint")
+		}
 	}
 	identityOverrides := 0
 	if options.AssertionVerifier != nil {
@@ -131,11 +123,12 @@ func NewFactory(cfg *config.RouterConfig, options Options) (*Factory, error) {
 	}
 	bootstrap := *cfg
 	validateRoutingPublication := func(snapshot *routingsnapshot.Snapshot) error {
-		_, err := config.CompileManagedRoutingSnapshot(&bootstrap, snapshot)
+		_, err := config.CompileDurableRoutingSnapshot(&bootstrap, snapshot)
 		return err
 	}
 	return &Factory{
-		keyPrefix:                  cfg.AccessRuntimeStore.Redis.KeyPrefix,
+		nativeAccess:               capabilities.NativeAccess,
+		keyPrefix:                  keyPrefix,
 		agentInferenceEndpoint:     cfg.Agent.PublicInferenceEndpoint,
 		assertionVerifier:          options.AssertionVerifier,
 		issuerKeyCache:             options.IssuerKeyCache,
@@ -153,372 +146,50 @@ func NewFactory(cfg *config.RouterConfig, options Options) (*Factory, error) {
 
 func (factory *Factory) Build(
 	ctx context.Context,
-	dependencies managedruntime.ManagementDependencies,
-) (managedruntime.ManagedAPI, error) {
-	if factory == nil || factory.keyPrefix == "" {
+	dependencies routingruntime.ManagementDependencies,
+) (routingruntime.ManagementAPI, error) {
+	if factory == nil || (factory.nativeAccess && factory.keyPrefix == "") {
 		return nil, errors.New("management composition factory is unavailable")
+	}
+	if !factory.nativeAccess {
+		return factory.buildDurableRouting(ctx, dependencies)
 	}
 	if err := validateDependencies(dependencies); err != nil {
 		return nil, err
 	}
-	builtInRecipes, buildErr := factory.loadBuiltInRecipes()
-	if buildErr != nil {
-		return nil, buildErr
-	}
-	modelProber := factory.modelProber
-	if modelProber == nil {
-		modelProber = dependencies.ModelProber
-	}
-	if modelProber == nil {
-		return nil, errors.New("management composition requires a Router-owned Model prober")
-	}
-
-	commandCodec, buildErr := managementcommand.NewCodec(
-		dependencies.Keyrings.ControlPlane.ManagementCommand.Symmetric(),
-	)
-	if buildErr != nil {
-		return nil, fmt.Errorf("compose Management command codec: %w", buildErr)
-	}
-	owned := &application{}
-	owned.addCloser(commandCodec.Close)
-	fail := func(err error) (managedruntime.ManagedAPI, error) {
-		_ = owned.Close()
+	builder, err := newNativeCompositionBuilder(ctx, factory, dependencies)
+	if err != nil {
 		return nil, err
 	}
-	assertions := factory.assertionVerifier
-	issuerKeys := factory.issuerKeyCache
-	logoutVerifier := factory.backchannelLogoutVerifier
-	if assertions == nil {
-		assertionComposition, err := composeAssertionVerifier(dependencies)
-		if err != nil {
-			return fail(err)
+	succeeded := false
+	defer func() {
+		if !succeeded {
+			_ = builder.owned.Close()
 		}
-		owned.addCloser(assertionComposition.Close)
-		assertions = assertionComposition.Verifier()
-		issuerKeys = assertionComposition.keys
-		logoutVerifier = assertionComposition.verifier
+	}()
+	if err := builder.composeIdentity(); err != nil {
+		return nil, err
 	}
-
-	accessIdentity, buildErr := composeAccessIdentity(
-		dependencies,
-		commandCodec,
-		factory.defaultRevealable,
-		factory.keyPrefix,
-		factory.now,
-	)
-	if buildErr != nil {
-		return fail(buildErr)
+	if err := builder.composeSubjectsAndCredentials(); err != nil {
+		return nil, err
 	}
-	owned.addCloser(accessIdentity.Close)
-
-	identity, buildErr := identityapplication.New(ctx, identityapplication.Options{
-		Database: dependencies.Database, Valkey: dependencies.Redis,
-		SessionStore: dependencies.SessionStore, KeyPrefix: factory.keyPrefix,
-		CommandCodec: commandCodec,
-		SessionTokenCodec: managementauth.TokenCodec{
-			Keyring: cloneSigning(dependencies.Keyrings.ManagementSigning),
-			Issuer:  managementTokenIssuer, Audience: managementTokenAudience,
-			MaxSkew: managementTokenClockSkew,
-		},
-		ServiceCredentialPeppers:  pepperSymmetric(dependencies.Keyrings.ServiceAccounts),
-		BootstrapToken:            dependencies.BootstrapToken,
-		BootstrapTokenPresent:     dependencies.BootstrapTokenPresent,
-		RecoveryToken:             dependencies.RecoveryToken,
-		BootstrapIdempotencyKeys:  dependencies.Keyrings.ControlPlane.BootstrapIdempotency.Symmetric(),
-		BootstrapResponseKEKs:     dependencies.Keyrings.ResponseKEK,
-		WorkloadCursorKeyring:     dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		WorkloadResponseKEKs:      dependencies.Keyrings.ResponseKEK,
-		WorkloadIdempotencyTTL:    defaultIdempotencyTTL,
-		WorkloadSecretDeliveryTTL: defaultSecretDeliveryTTL,
-		MTLSListenerEnabled:       factory.mtlsListenerEnabled,
-		AssertionVerifier:         assertions,
-		IssuerKeyCache:            issuerKeys,
-		BackchannelLogoutVerifier: logoutVerifier,
-		Now:                       factory.now,
-		Exchanges:                 accessIdentity.exchanges,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Management identity: %w", buildErr))
+	if err := builder.composeRouting(); err != nil {
+		return nil, err
 	}
-	owned.addCloser(identity.Close)
-	authorityStore, buildErr := authorizationpostgres.New(dependencies.Database)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Management authority store: %w", buildErr))
+	if err := builder.composePolicies(); err != nil {
+		return nil, err
 	}
-	authorizationRuntime := managementauthorization.Runtime{Loader: authorityStore}
-
-	namespaceRepository, buildErr := accesspostgres.NewNamespaceManagementRepository(dependencies.AccessStore)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Namespace repository: %w", buildErr))
+	if err := builder.composeAccessRuntime(); err != nil {
+		return nil, err
 	}
-	namespaceService, buildErr := namespacemanagement.NewService(namespacemanagement.Options{
-		Repository: namespaceRepository, CommandCodec: commandCodec,
-		CursorKeyring:  dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL: defaultIdempotencyTTL, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Namespace Management: %w", buildErr))
+	if err := builder.composeObservabilityAndAgent(); err != nil {
+		return nil, err
 	}
-	owned.addCloser(func() error { namespaceService.Close(); return nil })
-	namespaceRoutes, buildErr := managementserver.NewNamespaceRoutes(managementserver.NamespaceRoutesOptions{
-		Service: namespaceService, Sessions: identity.SessionAuthenticator(),
-		Authorization: identity.Authorizer(), Scopes: authorityStore, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Namespace Management routes: %w", buildErr))
+	if err := builder.composeServer(); err != nil {
+		return nil, err
 	}
-
-	namespaces := managementserver.ExplicitNamespaceResolver{}
-	subjectRepository, buildErr := accesspostgres.NewSubjectRepository(dependencies.AccessStore)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose subject repository: %w", buildErr))
-	}
-	subjects, buildErr := subjectmanagement.NewService(subjectmanagement.Options{
-		Repository: subjectRepository, CommandCodec: commandCodec,
-		CursorKeyring:  dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL: defaultIdempotencyTTL, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose subject Management: %w", buildErr))
-	}
-	owned.addCloser(func() error { subjects.Close(); return nil })
-	subjectRoutes, buildErr := managementserver.NewSubjectRoutes(managementserver.SubjectRoutesOptions{
-		Service: subjects, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose subject Management routes: %w", buildErr))
-	}
-	apiKeyRoutes, buildErr := managementserver.NewAPIKeyRoutes(managementserver.APIKeyRoutesOptions{
-		Service: accessIdentity.apiKeys, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose API-key Management routes: %w", buildErr))
-	}
-	delegationRoutes, buildErr := managementserver.NewDelegationRoutes(managementserver.DelegationRoutesOptions{
-		Service: accessIdentity.delegations, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose delegation Management routes: %w", buildErr))
-	}
-	invitationRoutes, buildErr := managementserver.NewInvitationRoutes(managementserver.InvitationRoutesOptions{
-		Service: accessIdentity.invitations, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose invitation Management routes: %w", buildErr))
-	}
-
-	credentials, buildErr := credentialmanagement.NewService(credentialmanagement.Options{
-		Repository: dependencies.AccessStore, Catalog: dependencies.Catalog.Catalog,
-		Egress: dependencies.EgressPolicy, CredentialCodec: dependencies.ProviderCredentialCodec,
-		CommandCodec:    commandCodec,
-		CursorKeyring:   dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL:  defaultIdempotencyTTL,
-		RetiringOverlap: defaultCredentialRetirement, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose ProviderCredential Management: %w", buildErr))
-	}
-	owned.addCloser(credentials.Close)
-	credentialRoutes, buildErr := managementserver.NewProviderCredentialRoutes(managementserver.ProviderCredentialRoutesOptions{
-		Service: credentials, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose ProviderCredential Management routes: %w", buildErr))
-	}
-
-	routing, buildErr := routingmanaged.NewApplication(routingmanaged.ApplicationOptions{
-		DB: dependencies.Database,
-		ModelCompiler: providercatalog.ModelCompiler{
-			Catalog:     dependencies.Catalog.Coordinator,
-			Registry:    dependencies.Catalog.Registry,
-			Credentials: dependencies.AccessStore,
-			Egress:      dependencies.EgressPolicy,
-		},
-		DiscoveryClaims:    dependencies.Catalog.Discovery.Claims,
-		CredentialVersions: dependencies.ProviderCredentialResolver,
-		Prober:             modelProber, ValidatePublication: factory.validateRoutingPublication,
-		CommandCodec:   commandCodec,
-		CursorKeyring:  dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL: defaultIdempotencyTTL, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(),
-		BuiltInRecipes: builtInRecipes, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Routing Management: %w", buildErr))
-	}
-	owned.addCloser(routing.Close)
-	if err := routing.ReconcileBuiltInRecipes(ctx); err != nil {
-		return fail(fmt.Errorf("install built-in Recipes: %w", err))
-	}
-	owned.workers = append(owned.workers, routing)
-
-	policyRepository, buildErr := accesspostgres.NewPolicyManagementRepository(dependencies.AccessStore)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose policy repository: %w", buildErr))
-	}
-	policies, buildErr := policymanagement.NewService(policymanagement.Options{
-		Repository: policyRepository, CommandCodec: commandCodec,
-		CursorKeyring:  dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL: defaultIdempotencyTTL, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose policy Management: %w", buildErr))
-	}
-	owned.addCloser(func() error { policies.Close(); return nil })
-
-	executionAuthorizer, buildErr := managementserver.NewPolicyBulkExecutionAuthorizer(
-		authorizationRuntime,
-	)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose policy execution authorizer: %w", buildErr))
-	}
-	bulkRepository, buildErr := policybulkpostgres.NewRepository(dependencies.Database)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose policy operation repository: %w", buildErr))
-	}
-	bulk, buildErr := policybulk.NewService(policybulk.Options{
-		Repository: bulkRepository, Policies: policies, Authorization: executionAuthorizer,
-		CommandCodec:   commandCodec,
-		CursorKeyring:  dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL: defaultIdempotencyTTL, WorkerID: dependencies.ReplicaID,
-		WorkerConcurrency: policyWorkerConcurrency, PollInterval: policyWorkerPollInterval,
-		ClaimLease: policyWorkerClaimLease, MaximumAttempts: policyWorkerMaximumAttempts,
-		Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose policy operation worker: %w", buildErr))
-	}
-	owned.addCloser(func() error { bulk.Close(); return nil })
-	owned.workers = append(owned.workers, bulk)
-
-	policyRoutes, buildErr := managementserver.NewPolicyRoutes(managementserver.PolicyRoutesOptions{
-		Service: policies, Bulk: bulk, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose policy Management routes: %w", buildErr))
-	}
-	quotaRuntime, buildErr := quotaruntime.NewRedisEngine(dependencies.Redis, quotaruntime.RedisEngineOptions{
-		KeyPrefix: factory.keyPrefix,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose quota reconciliation runtime: %w", buildErr))
-	}
-	appliedPolicies, buildErr := accessruntime.NewRedisProjectionReader(accessruntime.RedisProjectionReaderOptions{
-		Client: dependencies.Redis, KeyPrefix: factory.keyPrefix,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose applied access-policy reader: %w", buildErr))
-	}
-	publicationWaiter, buildErr := delegationmanagement.NewRedisPublicationWaiter(dependencies.Redis, factory.keyPrefix)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose access publication waiter: %w", buildErr))
-	}
-	accessReads, buildErr := accessmanagement.NewService(accessmanagement.ServiceOptions{
-		Repository: dependencies.AccessStore, Applied: appliedPolicies,
-		Meters: quotaRuntime, Waiter: publicationWaiter,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose access read service: %w", buildErr))
-	}
-	accessReadRoutes, buildErr := managementserver.NewAccessReadRoutes(managementserver.AccessReadRoutesOptions{
-		Service: accessReads, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose access read routes: %w", buildErr))
-	}
-	quotaReconciliation, buildErr := quotareconciliation.NewService(quotareconciliation.Options{
-		Repository: dependencies.AccessStore, Runtime: quotaRuntime, WaiveAuth: dependencies.AccessStore,
-		CommandCodec:   commandCodec,
-		CursorKeyring:  dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		IdempotencyTTL: defaultIdempotencyTTL, WorkerID: dependencies.ReplicaID,
-		WorkerConcurrency: quotaReconciliationWorkers, PollInterval: policyWorkerPollInterval,
-		ClaimLease: policyWorkerClaimLease, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose quota reconciliation: %w", buildErr))
-	}
-	owned.addCloser(func() error { quotaReconciliation.Close(); return nil })
-	owned.workers = append(owned.workers, quotaReconciliation)
-	unknownUsageRoutes, buildErr := managementserver.NewUnknownUsageRoutes(managementserver.UnknownUsageRoutesOptions{
-		Service: quotaReconciliation, Namespaces: namespaces,
-		Sessions: identity.SessionAuthenticator(), Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose unknown-usage Management routes: %w", buildErr))
-	}
-	unknownUsageOperationReader, buildErr := managementserver.NewUnknownUsageOperationDetailReader(
-		quotaReconciliation, identity.Authorizer(),
-	)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose unknown-usage Operation reader: %w", buildErr))
-	}
-	operationRoutes, buildErr := managementserver.NewOperationRoutes(managementserver.OperationRoutesOptions{
-		Service: bulk, DetailReaders: []managementserver.OperationDetailReader{unknownUsageOperationReader},
-		Namespaces: namespaces, Sessions: identity.SessionAuthenticator(),
-		Authorization: identity.Authorizer(), Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Management Operation routes: %w", buildErr))
-	}
-	observability, buildErr := composeObservability(
-		dependencies, authorizationRuntime, namespaces, identity.SessionAuthenticator(), identity.Authorizer(),
-		subjects, accessIdentity.apiKeys, factory.now,
-	)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Management observability: %w", buildErr))
-	}
-	owned.addCloser(observability.Close)
-	statistics, buildErr := composeStatistics(
-		dependencies, authorizationRuntime, namespaces, identity.SessionAuthenticator(), factory.now,
-	)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Management statistics: %w", buildErr))
-	}
-	runtimeDiagnostics, buildErr := composeRuntimeDiagnostics(
-		dependencies, factory.keyPrefix, factory.maxUsageBacklog,
-		identity.SessionAuthenticator(), identity.Authorizer(), factory.now,
-	)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Management runtime diagnostics: %w", buildErr))
-	}
-	agentRuntime, buildErr := composeAgentRuntime(
-		ctx, dependencies, commandCodec, authorityStore, authorizationRuntime,
-		namespaces, identity.SessionAuthenticator(), identity.Authorizer(), routing,
-		builtInRecipes, factory.agentInferenceEndpoint, factory.keyPrefix, factory.now,
-	)
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose Router-native Agent runtime: %w", buildErr))
-	}
-	owned.addCloser(agentRuntime.Close)
-	owned.workers = append(owned.workers, agentRuntime.workers...)
-
-	server, buildErr := dependencies.Catalog.NewManagementServer(catalogmanaged.ManagementServerOptions{
-		Namespaces: namespaces, Sessions: identity.SessionAuthenticator(),
-		Authorization: identity.Authorizer(), AdditionalRoutes: []managementserver.RouteRegistrar{
-			identity, namespaceRoutes, subjectRoutes, apiKeyRoutes, delegationRoutes, invitationRoutes,
-			credentialRoutes, routing, policyRoutes, accessReadRoutes, operationRoutes, unknownUsageRoutes,
-			observability.routes, statistics, runtimeDiagnostics, agentRuntime.routes,
-		}, Now: factory.now,
-	})
-	if buildErr != nil {
-		return fail(fmt.Errorf("compose managed HTTP server: %w", buildErr))
-	}
-	disabledOperations := []string(nil)
-	if len(dependencies.RecoveryToken) == 0 {
-		disabledOperations = append(disabledOperations, "postAuthRecovery")
-	}
-	if err := managementserver.ValidateRegisteredOperations(server, disabledOperations...); err != nil {
-		return fail(fmt.Errorf("validate Management registry route coverage: %w", err))
-	}
-	owned.server = server
-	return owned, nil
+	succeeded = true
+	return builder.owned, nil
 }
 
 func (factory *Factory) loadBuiltInRecipes() (routingmanagement.BuiltInRecipeDistribution, error) {
@@ -549,7 +220,7 @@ func cloneBuiltInRecipeDistribution(
 	return result
 }
 
-func validateDependencies(dependencies managedruntime.ManagementDependencies) error {
+func validateDependencies(dependencies routingruntime.ManagementDependencies) error {
 	if dependencies.Database == nil || dependencies.Redis == nil || dependencies.AccessStore == nil ||
 		dependencies.SessionStore == nil || dependencies.Catalog == nil || dependencies.Catalog.Catalog == nil ||
 		dependencies.Catalog.Coordinator == nil || dependencies.Catalog.Registry == nil ||
@@ -679,6 +350,6 @@ func pepperSymmetric(source accesscredential.PepperKeyring) securitykeyring.Symm
 }
 
 var (
-	_ managedruntime.ManagementFactory = (*Factory)(nil)
-	_ managedruntime.ManagedAPI        = (*application)(nil)
+	_ routingruntime.ManagementFactory = (*Factory)(nil)
+	_ routingruntime.ManagementAPI     = (*application)(nil)
 )

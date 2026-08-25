@@ -9,52 +9,34 @@ func init() {
 }
 
 func apiKeySchemas() map[string]JSONSchema {
-	stringSchema := JSONSchema{Type: "string"}
+	textSchema := JSONSchema{Type: "string"}
 	uuidSchema := JSONSchema{Type: "string", Format: "uuid"}
-	timestampSchema := JSONSchema{Type: "string", Format: "date-time"}
+	dateTimeSchema := JSONSchema{Type: "string", Format: "date-time"}
 	owner := objectSchema([]string{"type", "id"}, map[string]JSONSchema{
 		"type": {Type: "string", Enum: []string{"user", "team"}},
 		"id":   uuidSchema,
 	})
 	key := objectSchema([]string{"keyId", "name", "owner", "status", "revision", "createdAt", "updatedAt"}, map[string]JSONSchema{
-		"keyId": uuidSchema, "name": stringSchema, "owner": owner,
+		"keyId": uuidSchema, "name": textSchema, "owner": owner,
 		"contextTeamId": uuidSchema,
 		"status":        {Type: "string", Enum: []string{"active", "disabled", "deleted"}},
-		"expiresAt":     timestampSchema, "lastUsedAt": timestampSchema,
-		"revision": {Type: "integer", Format: "int64"}, "createdAt": timestampSchema,
-		"updatedAt": timestampSchema, "deletedAt": timestampSchema,
+		"expiresAt":     dateTimeSchema, "lastUsedAt": dateTimeSchema,
+		"revision": {Type: "integer", Format: "int64"}, "createdAt": dateTimeSchema,
+		"updatedAt": dateTimeSchema, "deletedAt": dateTimeSchema,
 	})
 	credential := objectSchema([]string{
 		"credentialId", "keyId", "kid", "status", "revealable", "notBefore", "createdAt",
 	}, map[string]JSONSchema{
-		"credentialId": uuidSchema, "keyId": uuidSchema, "kid": stringSchema,
+		"credentialId": uuidSchema, "keyId": uuidSchema, "kid": textSchema,
 		"status":     {Type: "string", Enum: []string{"active", "retiring", "expired", "revoked"}},
-		"revealable": {Type: "boolean"}, "notBefore": timestampSchema,
-		"expiresAt": timestampSchema, "revokedAt": timestampSchema, "createdAt": timestampSchema,
+		"revealable": {Type: "boolean"}, "notBefore": dateTimeSchema,
+		"expiresAt": dateTimeSchema, "revokedAt": dateTimeSchema, "createdAt": dateTimeSchema,
 	})
-	quotaValue := JSONSchema{Type: "string", Pattern: `^[0-9]+(?:\.[0-9]{1,15})?$`}
-	isoDuration := JSONSchema{Type: "string", Pattern: `^P(?:(0|[1-9][0-9]*)D)?(?:T(?:(0|[1-9][0-9]*)H)?(?:(0|[1-9][0-9]*)M)?(?:(0|[1-9][0-9]*)(?:\.[0-9]{1,9})?S)?)?$`}
-	rateRule := objectSchema([]string{"metric", "algorithm", "accounting", "enforcement"}, map[string]JSONSchema{
-		"ruleId": uuidSchema,
-		"metric": {Type: "string", Enum: []string{
-			"requests", "input_tokens", "output_tokens", "total_tokens",
-			"concurrent_requests", "served_input_tokens", "served_output_tokens", "served_total_tokens", "cost",
-		}},
-		"algorithm": {Type: "string", Enum: []string{"sliding_log", "calendar_window", "token_bucket", "gcra", "concurrency"}},
-		"limit":     quotaValue, "window": isoDuration,
-		"period": {Type: "string", Enum: []string{"day", "month"}}, "timezone": stringSchema,
-		"capacity": quotaValue, "refillAmount": quotaValue,
-		"refillPeriod":     isoDuration,
-		"emissionInterval": isoDuration,
-		"burstTolerance":   {Type: "integer", Minimum: intPointer(0)},
-		"accounting":       {Type: "string", Enum: []string{"request", "response_actual"}},
-		"enforcement":      {Type: "string", Enum: []string{"enforce", "shadow"}},
-	})
-	rateRules := arraySchema(rateRule)
+	rateRules := arraySchema(policyRateRuleSchema(false))
 	rateRules.MinItems, rateRules.MaxItems = intPointer(1), intPointer(128)
 	inlineRatePolicy := objectSchema([]string{"name", "rules"}, map[string]JSONSchema{
 		"name":        {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-		"description": {Type: "string", MaxLength: intPointer(2000)}, "rules": rateRules,
+		"description": {Type: "string", MaxLength: intPointer(1000)}, "rules": rateRules,
 	})
 	rateOverride := JSONSchema{OneOf: []JSONSchema{
 		objectSchema([]string{"policyId"}, map[string]JSONSchema{"policyId": uuidSchema}),
@@ -76,7 +58,7 @@ func apiKeySchemas() map[string]JSONSchema {
 		"RateLimitOverrideReceipt":    rateReceipt,
 		"APIKeyCreateRequest": objectSchema([]string{"name", "owner"}, map[string]JSONSchema{
 			"name":  {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-			"owner": owner, "contextTeamId": uuidSchema, "expiresAt": timestampSchema,
+			"owner": owner, "contextTeamId": uuidSchema, "expiresAt": dateTimeSchema,
 			"revealable": {Type: "boolean"}, "accessPolicyIds": accessPolicyIDs,
 			"rateLimitOverride": rateOverride,
 		}),
@@ -85,7 +67,7 @@ func apiKeySchemas() map[string]JSONSchema {
 		}),
 		"APIKeyLifecycleRequest": objectSchema(nil, map[string]JSONSchema{}),
 		"APIKeyRenewRequest": objectSchema([]string{"expiresAt"}, map[string]JSONSchema{
-			"expiresAt": {OneOf: []JSONSchema{timestampSchema, {Type: "null"}}},
+			"expiresAt": {OneOf: []JSONSchema{dateTimeSchema, {Type: "null"}}},
 		}),
 		"APIKeyReassignRequest": objectSchema([]string{"owner"}, map[string]JSONSchema{
 			"owner": owner, "contextTeamId": uuidSchema,
@@ -106,7 +88,7 @@ func apiKeySchemas() map[string]JSONSchema {
 			"data": key, "credential": credential,
 			"secret":               {Type: "string", Format: "password", Description: "One-time inference API key."},
 			"accessPolicyBindings": arraySchema(policyReceipt), "rateLimitOverride": rateReceipt,
-			"deliveryExpiresAt": timestampSchema,
+			"deliveryExpiresAt": dateTimeSchema,
 		}),
 		"APIKeyRevealResponse": objectSchema([]string{"keyId", "credentialId", "secret"}, map[string]JSONSchema{
 			"keyId": uuidSchema, "credentialId": uuidSchema,

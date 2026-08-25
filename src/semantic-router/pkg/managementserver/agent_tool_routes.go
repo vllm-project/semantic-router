@@ -134,7 +134,7 @@ func (routes *AgentRoutes) createCredential(response http.ResponseWriter, reques
 	setIdempotencyReplayHeader(response, result.Replayed)
 	response.Header().Set("Location", agentCredentialsPath+"/"+result.ResourceID)
 	writeProviderJSON(response, http.StatusCreated, managementapi.NewResourceMutationReceipt(
-		"agent_tool_credential", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+		"agent_tool_credential", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 	), requestID)
 }
 
@@ -192,7 +192,7 @@ func (routes *AgentRoutes) credential(response http.ResponseWriter, request *htt
 		}
 		setAgentETag(response, credential.Revision)
 		writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-			"agent_tool_credential", credential.ID, uint64(credential.Revision), nil,
+			"agent_tool_credential", credential.ID, publicRevision(credential.Revision), nil,
 		), requestID)
 	case request.Method == http.MethodDelete && action == "":
 		revision, ok := requireAgentRevision(response, request, requestID)
@@ -246,7 +246,7 @@ func (routes *AgentRoutes) rotateCredential(
 	setAgentETag(response, result.ResourceRevision)
 	setIdempotencyReplayHeader(response, result.Replayed)
 	writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-		"agent_tool_credential", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+		"agent_tool_credential", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 	), requestID)
 }
 
@@ -321,7 +321,7 @@ func (routes *AgentRoutes) createSource(response http.ResponseWriter, request *h
 	setIdempotencyReplayHeader(response, result.Replayed)
 	response.Header().Set("Location", agentSourcesPath+"/"+result.ResourceID)
 	writeProviderJSON(response, http.StatusCreated, managementapi.NewResourceMutationReceipt(
-		"agent_tool_source", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+		"agent_tool_source", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 	), requestID)
 }
 
@@ -424,7 +424,7 @@ func (routes *AgentRoutes) patchSource(
 	}
 	setAgentETag(response, source.Revision)
 	writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-		"agent_tool_source", source.ID, uint64(source.Revision), nil,
+		"agent_tool_source", source.ID, publicRevision(source.Revision), nil,
 	), requestID)
 }
 
@@ -450,7 +450,7 @@ func (routes *AgentRoutes) testSource(
 	setAgentETag(response, result.ResourceRevision)
 	setIdempotencyReplayHeader(response, result.Replayed)
 	writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-		"agent_tool_source", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+		"agent_tool_source", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 	), requestID)
 }
 
@@ -481,7 +481,7 @@ func (routes *AgentRoutes) approveSource(
 	setAgentETag(response, result.ResourceRevision)
 	setIdempotencyReplayHeader(response, result.Replayed)
 	writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-		"agent_tool_source", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+		"agent_tool_source", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 	), requestID)
 }
 

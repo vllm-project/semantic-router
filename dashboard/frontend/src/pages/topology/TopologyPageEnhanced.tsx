@@ -18,6 +18,8 @@ import { useSearchParams } from 'react-router-dom'
 
 import { useTopologyData, useCollapseState, useTestQuery } from './hooks'
 import { useTheme } from '../../hooks'
+import { useInferenceRoutingAccess } from '../../contexts/InferenceRoutingAccessContext'
+import InferenceKeySelector from '../../components/InferenceKeySelector'
 import ProductIcon from '../../components/ProductIcon'
 import { customNodeTypes } from './components/CustomNodes'
 import { TestQueryInput } from './components/ControlPanel'
@@ -27,6 +29,7 @@ import styles from './TopologyPageEnhanced.module.css'
 
 // ============== Inner Flow Component ==============
 const TopologyFlow: React.FC = () => {
+  const { usesKeyScopedCatalog } = useInferenceRoutingAccess()
   const { data, loading, error, refresh, routingScopes, selectedScopeId, setSelectedScopeId } =
     useTopologyData()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -224,6 +227,7 @@ const TopologyFlow: React.FC = () => {
                 </select>
               </div>
             )}
+            {usesKeyScopedCatalog ? <InferenceKeySelector label="View as" /> : null}
           </div>
           <div className={styles.layoutToolbar}>
             <div className={`${styles.toolbarSection} ${styles.densitySection}`}>
@@ -349,35 +353,39 @@ const TopologyFlow: React.FC = () => {
         </div>
 
         {/* Bottom Control Panel */}
-        <div className={`${styles.bottomPanel} ${sidebarCollapsed ? styles.collapsed : ''}`}>
-          {/* Toggle Button */}
-          <button
-            className={styles.bottomToggle}
-            onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-            type="button"
-            aria-expanded={!sidebarCollapsed}
-            aria-label={sidebarCollapsed ? 'Expand test query panel' : 'Collapse test query panel'}
-          >
-            <ProductIcon
-              className={sidebarCollapsed ? styles.bottomToggleCollapsed : undefined}
-              name="chevron-right"
-              aria-hidden="true"
-            />
-          </button>
+        {!usesKeyScopedCatalog ? (
+          <div className={`${styles.bottomPanel} ${sidebarCollapsed ? styles.collapsed : ''}`}>
+            {/* Toggle Button */}
+            <button
+              className={styles.bottomToggle}
+              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+              type="button"
+              aria-expanded={!sidebarCollapsed}
+              aria-label={
+                sidebarCollapsed ? 'Expand test query panel' : 'Collapse test query panel'
+              }
+            >
+              <ProductIcon
+                className={sidebarCollapsed ? styles.bottomToggleCollapsed : undefined}
+                name="chevron-right"
+                aria-hidden="true"
+              />
+            </button>
 
-          {/* Panel Content */}
-          <div className={styles.bottomPanelContent}>
-            <TestQueryInput
-              value={testQuery}
-              onChange={setTestQuery}
-              onTest={runTest}
-              isLoading={isTestLoading}
-            />
+            {/* Panel Content */}
+            <div className={styles.bottomPanelContent}>
+              <TestQueryInput
+                value={testQuery}
+                onChange={setTestQuery}
+                onTest={runTest}
+                isLoading={isTestLoading}
+              />
+            </div>
           </div>
-        </div>
+        ) : null}
 
         {/* Result Card */}
-        <ResultCard result={testResult} onClose={clearResult} />
+        {!usesKeyScopedCatalog ? <ResultCard result={testResult} onClose={clearResult} /> : null}
       </div>
     </div>
   )

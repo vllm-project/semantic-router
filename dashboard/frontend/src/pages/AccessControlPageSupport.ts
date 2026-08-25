@@ -10,6 +10,13 @@ import type {
   UsageSummary,
 } from '../utils/inferenceAccessApi'
 import type { ProductIconName } from '../components/ProductIcon'
+import {
+  canAccessDashboardPath,
+  canManageUsers,
+  canSelfManageInferenceAccess,
+  canViewUsers,
+  type PermissionUser,
+} from '../utils/accessControl'
 
 export type AccessView =
   | 'api-keys'
@@ -148,3 +155,52 @@ export const accessPageQuery = (
   limit: state.pageSize,
   cursor,
 })
+
+const hasManagementPermission = (user: PermissionUser | null, permission: string) =>
+  user?.managementPermissions?.includes(permission) ?? false
+
+export function resolveAccessControlPage(user: PermissionUser | null, pathname: string) {
+  const routeView = (
+    pathname === '/logs' ? 'request-logs' : pathname.split('/').filter(Boolean)[1] || 'usage'
+  ) as AccessView
+  const activeView = ACCESS_NAV_ITEMS.some((item) => item.id === routeView) ? routeView : 'usage'
+  const canAdministerDirectory = Boolean(
+    user?.managementPermissions?.some((permission) =>
+      ['user.manage', 'team.manage', 'access_policy.manage', 'rate_policy.manage'].includes(
+        permission,
+      ),
+    ),
+  )
+  const selfService =
+    Boolean(user?.managementUserId) && canSelfManageInferenceAccess(user) && !canAdministerDirectory
+  const canReadRouting = hasManagementPermission(user, 'routing.read')
+  const canManage =
+    !selfService &&
+    (activeView === 'api-keys'
+      ? hasManagementPermission(user, 'key.manage')
+      : activeView === 'users'
+        ? hasManagementPermission(user, 'user.manage')
+        : activeView === 'teams'
+          ? hasManagementPermission(user, 'team.manage')
+          : activeView === 'access-groups'
+            ? hasManagementPermission(user, 'access_policy.manage') && canReadRouting
+            : activeView === 'budgets'
+              ? hasManagementPermission(user, 'rate_policy.manage')
+              : false)
+
+  return {
+    activeView,
+    activeMeta: ACCESS_NAV_ITEMS.find((item) => item.id === activeView) ?? ACCESS_NAV_ITEMS[0],
+    visibleNavItems: ACCESS_NAV_ITEMS.filter((item) =>
+      canAccessDashboardPath(user, item.id === 'request-logs' ? '/logs' : `/access/${item.id}`),
+    ),
+    selfService,
+    canManage,
+    canReadDashboardMembers: canViewUsers(user),
+    canManageDashboardMembers: canManageUsers(user),
+    canReadUsers: hasManagementPermission(user, 'user.read'),
+    canReadTeams: hasManagementPermission(user, 'team.read'),
+    canReadGroups: hasManagementPermission(user, 'access_policy.read'),
+    canReadBudgets: hasManagementPermission(user, 'rate_policy.read'),
+  }
+}

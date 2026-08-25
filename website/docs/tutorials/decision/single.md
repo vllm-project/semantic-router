@@ -29,7 +29,7 @@ Use a single-condition decision when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: business_route
       description: Route business and management questions.

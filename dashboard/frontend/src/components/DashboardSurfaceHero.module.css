@@ -335,6 +335,35 @@
   }
 
   .metaRow {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .hero {
+    gap: 1rem;
+    padding: 1rem 0.9rem;
+    border-radius: 11px;
+  }
+
+  .title {
+    font-size: clamp(1.85rem, 10vw, 2.5rem);
+  }
+
+  .description {
+    margin-top: 0.65rem;
+    font-size: 0.9rem;
+  }
+
+  .heroCompact .title {
+    font-size: 1.55rem;
+  }
+
+  .heroPanel {
+    padding: 0.8rem;
+  }
+
+  .panelPillButton {
+    flex: 1 1 auto;
   }
 }

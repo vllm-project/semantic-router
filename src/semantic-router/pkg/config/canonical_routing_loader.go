@@ -7,13 +7,13 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-type routingFragmentDocument struct {
-	Document CanonicalRouting `yaml:"document"`
+type routingFragment struct {
+	Routing CanonicalRouting `yaml:"routing"`
 }
 
 const routingFragmentScope RecipeName = "authoring-document"
 
-// ParseRoutingYAMLBytes parses a model-free Recipe document fragment. The
+// ParseRoutingYAMLBytes parses a model-free Recipe routing fragment. The
 // fragment is an authoring value and cannot be served until a Recipe and an
 // Entrypoint bind it to immutable Models.
 func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
@@ -21,13 +21,13 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
-	if _, found := raw["document"]; !found || len(raw) != 1 {
+	if _, found := raw["routing"]; !found || len(raw) != 1 {
 		fields := make([]string, 0, len(raw))
 		for field := range raw {
 			fields = append(fields, field)
 		}
 		sort.Strings(fields)
-		return nil, fmt.Errorf("routing fragment must contain exactly one top-level document field, got %v", fields)
+		return nil, fmt.Errorf("routing fragment must contain exactly one top-level routing field, got %v", fields)
 	}
 	for _, validate := range []func(map[string]interface{}) error{
 		rejectRemovedStructureFields,
@@ -41,8 +41,8 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 		}
 	}
 
-	doc := &routingFragmentDocument{}
-	if err := yaml.UnmarshalStrict(data, doc); err != nil {
+	fragment := &routingFragment{}
+	if err := yaml.UnmarshalStrict(data, fragment); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
 
@@ -51,11 +51,11 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	// config. Marking the view explicitly lets shared validators read its flat
 	// fields without reviving the removed implicit-default Recipe path.
 	cfg.RoutingScope = routingFragmentScope
-	cfg.Decisions = copyDecisions(doc.Document.Decisions)
+	cfg.Decisions = copyDecisions(fragment.Routing.Decisions)
 	ensureModelRefDefaults(cfg.Decisions)
-	cfg.Signals = normalizeSignals(doc.Document.Signals, cfg.Decisions)
-	cfg.Projections = normalizeProjections(doc.Document.Projections)
-	cfg.Strategy = doc.Document.Strategy
+	cfg.Signals = normalizeSignals(fragment.Routing.Signals, cfg.Decisions)
+	cfg.Projections = normalizeProjections(fragment.Routing.Projections)
+	cfg.Strategy = fragment.Routing.Strategy
 	cfg.ModelConfig = make(map[string]ModelParams)
 
 	if cfg.VectorStore != nil {

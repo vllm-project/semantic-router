@@ -14,7 +14,7 @@ describe('Mixture-of-Models Management API workspace', () => {
 
   it('uses Router permissions as the only UI capability signal', () => {
     const source = readSource('./ConfigPageEntrypointsRecipesSection.tsx')
-    expect(source).toContain('canReadRouting(user)')
+    expect(source).toContain('canReadRoutingCatalog(user)')
     expect(source).toContain('canManageRouting(user)')
     expect(source).not.toMatch(/configEditorReadonly|canWriteConfig|isReadonly/)
   })

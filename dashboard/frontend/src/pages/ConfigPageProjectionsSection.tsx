@@ -37,6 +37,11 @@ import type { OpenEditModal, OpenViewModal } from './configPageRouterSectionSupp
 import { useRoutingScopeManager } from './configPageRoutingScopeSupport'
 import ConfigPageRoutingScopeState from './ConfigPageRoutingScopeState'
 import {
+  matchesProjectionMapping,
+  matchesProjectionPartition,
+  matchesProjectionScore,
+} from './configPageProjectionSearch'
+import {
   cloneProjections,
   EMPTY_MAPPINGS,
   EMPTY_PARTITIONS,
@@ -92,49 +97,17 @@ export default function ConfigPageProjectionsSection({
   const scoreOptions = scores.map((score) => score.name)
 
   const filteredPartitions = useMemo(
-    () =>
-      partitions.filter((partition) =>
-        [partition.name, partition.semantics, partition.default || '', ...(partition.members || [])]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
+    () => partitions.filter((partition) => matchesProjectionPartition(partition, search)),
     [partitions, search],
   )
 
   const filteredScores = useMemo(
-    () =>
-      scores.filter((score) =>
-        [
-          score.name,
-          score.method,
-          ...(score.inputs || []).flatMap((input) => [
-            input.type,
-            input.name,
-            input.value_source || '',
-          ]),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
+    () => scores.filter((score) => matchesProjectionScore(score, search)),
     [scores, search],
   )
 
   const filteredMappings = useMemo(
-    () =>
-      mappings.filter((mapping) =>
-        [
-          mapping.name,
-          mapping.source,
-          mapping.method,
-          mapping.calibration?.method || '',
-          ...(mapping.outputs || []).map((output) => output.name),
-        ]
-          .join(' ')
-          .toLowerCase()
-          .includes(search.toLowerCase()),
-      ),
+    () => mappings.filter((mapping) => matchesProjectionMapping(mapping, search)),
     [mappings, search],
   )
 

@@ -22,6 +22,12 @@ func (s *RedisStore) LoadActivePublishedProviderCredential(
 	if err != nil {
 		return providercredential.Credential{}, providercredential.Version{}, err
 	}
+	return activePublishedProviderCredential(document)
+}
+
+func activePublishedProviderCredential(
+	document ProviderCredentialDocument,
+) (providercredential.Credential, providercredential.Version, error) {
 	if document.Credential.Status != providercredential.StatusActive || document.Credential.ActiveVersionID == nil {
 		return providercredential.Credential{}, providercredential.Version{}, providercredential.ErrUnavailable
 	}
@@ -46,6 +52,13 @@ func (s *RedisStore) LoadPinnedPublishedProviderCredential(
 	if err != nil {
 		return providercredential.Credential{}, providercredential.Version{}, err
 	}
+	return pinnedPublishedProviderCredential(document, versionID)
+}
+
+func pinnedPublishedProviderCredential(
+	document ProviderCredentialDocument,
+	versionID string,
+) (providercredential.Credential, providercredential.Version, error) {
 	for _, version := range document.Versions {
 		if version.ID == versionID {
 			return document.Credential, version, nil

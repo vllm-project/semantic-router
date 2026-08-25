@@ -1,6 +1,7 @@
 .container {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   overflow-y: auto;
   background: #050505;
@@ -34,6 +35,7 @@
   position: relative;
   z-index: 1;
   min-height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   display: flex;
   align-items: center;
@@ -274,5 +276,21 @@
   }
   .actions {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 420px) {
+  .mainContent {
+    padding: 0.5rem;
+  }
+
+  .storyPanel,
+  .card {
+    min-height: 0;
+    padding: 1rem;
+  }
+
+  .storyTitle {
+    font-size: 2.7rem;
   }
 }

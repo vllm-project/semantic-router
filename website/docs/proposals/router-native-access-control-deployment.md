@@ -20,39 +20,26 @@ Integration Registry composition and adapter rollout.
 
 ## Router bootstrap configuration
 
-Managed-mode Router YAML declares infrastructure and runtime semantics only.
-Standalone additionally declares its sole immutable routing manifest.
+Router YAML always declares the v0.3 routing bootstrap plus optional infrastructure
+and service capabilities. A file-only deployment serves that routing value directly;
+with a Management store, Router seeds only an empty store and uses persisted desired
+state thereafter.
 `global.services.management_api` owns the Management listener, transport
-authentication entrypoint, and bootstrap mode. Durable principals, roles,
+authentication entrypoint, and one-time bootstrap ceremony. Durable principals, roles,
 bindings, issuers, and sessions are Management resources, not YAML mappings. The
 access service registers resources on that listener; it does not create another HTTP
 listener.
 
 ```yaml
-version: v0.4
+version: v0.3
 
 global:
-  control_plane:
-    mode: managed
-    provider_catalog:
-      replica_id_env: VLLM_SR_REPLICA_ID
-      lease: 45s
-      renew_interval: 15s
-      rollout_groups:
-        - {plane: control, id: management}
-        - {plane: data, id: router}
-      required_rollout_groups:
-        - {plane: control, id: management}
-        - {plane: data, id: router}
-
   stores:
-    access:
-      type: postgres
+    management:
       postgres:
         dsn_file: /run/secrets/vllm_sr_access_database_url
         max_connections: 40
-    access_runtime:
-      type: redis
+    runtime:
       redis:
         url_file: /run/secrets/vllm_sr_access_redis_url
         key_prefix: vllm-sr:access
@@ -82,8 +69,11 @@ global:
       provider_kek_keyring_file: /run/secrets/vllm_sr_provider_credential_keks
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
+    routing_security:
+      hmac_keyring_file: /run/secrets/vllm_sr_routing_hmac_roots
 
     management_api:
+      enabled: true
       bind_address: 0.0.0.0
       port: 8080
       remote_exposure: false
@@ -96,7 +86,6 @@ global:
         token_signing_keyring_file: /run/secrets/vllm_sr_management_token_keys
         service_account_hmac_keyring_file: /run/secrets/vllm_sr_management_peppers
         invitation_hmac_keyring_file: /run/secrets/vllm_sr_invitation_peppers
-        control_plane_hmac_keyring_file: /run/secrets/vllm_sr_control_plane_hmac_roots
         response_kek_keyring_file: /run/secrets/vllm_sr_management_response_keks
         bootstrap:
           token_file: /run/secrets/vllm_sr_management_bootstrap_token
@@ -109,11 +98,14 @@ global:
 Every secret field supports one environment reference or one secret-file reference,
 never both. Keyrings contain an active version and retained verification/decryption
 versions so pepper, KEK, and signing-key rotation do not require an unsafe flag day.
-Literal DSNs or key material are rejected in production mode. Enabling recovery also
+Literal DSNs or key material are rejected by the runtime contract. Enabling recovery also
 requires a separate `token_file`; omitting it, reusing the bootstrap token, or exposing
 the recovery route off loopback is a startup error.
 
-`control_plane_hmac_keyring` is a dedicated 256-bit, versioned root authority. The
+The configured `routing_security.hmac_keyring_file` or
+`routing_security.hmac_keyring_env` source provides a dedicated 256-bit, versioned
+root authority. It
+belongs to durable routing rather than the optional Management API listener. The
 process derives catalog-cursor, discovery-claim, Management-command,
 Management-cursor, and bootstrap-idempotency keys with HKDF-SHA256 using fixed
 schema-versioned, domain-separated labels. The Management domains are shared by all
@@ -136,16 +128,12 @@ ordinary compatible Provider changes the control-plane Integration set, not Rout
 runtime configuration or Dashboard product code. See the
 [Provider catalog appendix](./router-native-access-control-provider-catalog).
 
-`provider_catalog.rollout_groups` identifies the stable deployment groups served by
-this process; `required_rollout_groups` is the explicit catalog activation gate.
-`replica_id_env` supplies only the current process instance identity used for a
-renewable lease. Pod or container IDs never enter the required set, so autoscaling
-does not change policy. A rolling upgrade blocks a new catalog while any live
-instance in a required group reports incompatible capabilities, or while compatible
-live instances in that group report different plane-specific capability digests.
-Expired instances do not satisfy the group. This lets an old replica age out through
-its lease before a new binary activates catalog semantics that are not homogeneous
-across the rollout group.
+Replica identity, publication leases, rollout groups, and catalog capability digests
+are generated deployment/runtime state. The Docker and Kubernetes composers derive
+them from the running topology; users do not copy them into Router YAML. A rolling
+upgrade still blocks a catalog revision while a live required deployment group has
+incompatible capabilities, but that safety mechanism is intentionally below the
+public authoring contract.
 
 ### Versioned security seeds
 
@@ -169,7 +157,7 @@ qualified actor must explicitly register or upgrade a strong source. Operators e
 onboarding only after selecting policies. A missing companion row rolls back creation
 and fails readiness for an existing namespace; runtime code has no implicit fallback.
 
-The v0.4 schema migration installs these restrictive seeds and blocks managed
+The schema migration installs these restrictive seeds and blocks Management
 readiness until every namespace validates. Later seed revisions are audited schema
 changes, never startup guesses.
 
@@ -178,70 +166,67 @@ discovery, probes, and inference. It allowlists schemes/hosts/ports/CIDRs and pr
 network exceptions, rechecks DNS and redirects, and denies metadata/link-local targets
 by default. It is not a Dashboard preference or a dynamically supplied URL bypass.
 
-Managed production requires Router-terminated TLS on the Management listener. Server
+Production with a remotely exposed Management API requires Router-terminated TLS on
+the Management listener. Server
 certificate and key files are mandatory; the client CA bundle is mandatory when an
 mTLS mapping exists. Readiness verifies key/certificate match, chain and SAN policy,
 validity margin, file permissions, and a loopback handshake. The listener requires
 TLS 1.3 or newer. Files rotate through atomic replacement and bounded live reload; a
 failed reload retains the last valid context and makes readiness unhealthy before
-expiry. v0.4 never trusts forwarded
+expiry. The Router never trusts forwarded
 certificate headers. A service mesh may use TCP passthrough, but the Router remains
 the mTLS identity verifier and Management access-token issuer.
 
-Standalone uses the mutually exclusive bootstrap:
+The same file can be used without dynamic services by omitting Management, Access,
+and store blocks:
 
 ```yaml
-version: v0.4
+version: v0.3
 global:
-  control_plane:
-    mode: standalone
   services:
     backend_credentials:
       private_provider:
+        credential_adapter_id: bearer
         secret_file: /run/secrets/private_provider_api_key
-    access:
-      enabled: false
 ```
 
-The manifest is read-only and compiled before readiness. A standalone backend may
+The manifest is read-only and compiled before readiness. A file-backed backend may
 reference a named environment/file/Secret credential declared in bootstrap, never a
-literal secret or managed ProviderCredential UID. The compiler creates the same
-in-process backend-credential interface without persistence or reveal. Standalone
-rejects store configuration, access enablement, and routing Management mutation
-routes instead of falling back between authorities.
-
-In managed mode the YAML contains no Models, Recipes, Entrypoints, Users, Teams,
-keys, policies, bindings, usage, or audit. The Dashboard and independent consoles use
-the same versioned Management API; automation may use its generated client directly.
+literal secret or dynamic ProviderCredential UID. The compiler creates the same
+in-process backend-credential interface without persistence or reveal. Users, Teams,
+keys, policies, bindings, usage, and audit never appear in YAML. When the Management
+store is present, Models, Recipes, and Entrypoints are seeded only into an empty
+Namespace and later changed through explicit Management API imports or mutations.
 
 The user-facing launch contract is one command: `vllm-sr serve`. It resolves
-`./config.yaml`, or the immutable v0.4 bootstrap selected by `--config`, and starts
-the selected standalone or managed topology. Built-in Recipes are installed into
-managed desired state; Models, Entrypoints, decision assignments, and fallback
+`./config.yaml`, or the immutable v0.3 manifest selected by `--config`, and starts
+the capability-derived topology. Built-in Recipes are installed into persistent
+desired state when configured; Models, Entrypoints, decision assignments, and fallback
 priorities are configured through the Management API. Portable Recipe packages are
 validated or imported through those same resources. Infrastructure flags such as
 target, image, platform, namespace, and secret sources configure deployment only.
-Standalone reads exactly one immutable manifest, and `--config` selects that
+File-backed startup reads exactly one immutable manifest, and `--config` selects that
 bootstrap manifest without authoring routing state.
 
 ## Docker-first deployment
 
-The minimum topology depends on the explicit control-plane mode:
+The minimum topology depends on configured capabilities:
 
-| Mode | Required | Dynamic behavior |
+| Configuration | Required | Dynamic behavior |
 | --- | --- | --- |
-| Standalone | Public gateway, Semantic Router, one local routing manifest | No routing Management mutations and no API-key access control. |
-| Managed routing | Public gateway, Semantic Router, PostgreSQL, Valkey | Dynamic Model/Recipe/Entrypoint CRUD and snapshot publication; access enforcement may remain off. |
-| Managed access | Public gateway, Semantic Router, PostgreSQL, Valkey | Managed routing plus API keys, authorization, quota, usage, and audit. |
+| File only | Public gateway, Semantic Router, one local routing manifest | No routing Management mutations and no native API-key access control. |
+| Management store | Public gateway, Semantic Router, PostgreSQL | Durable desired state, restart-safe snapshot publication, and optional Management API; access enforcement may remain off. |
+| Management API | Management-store topology plus listener TLS and Management identity keyrings | Dynamic Model/Recipe/Entrypoint CRUD, import, and audit. |
+| Native access | Public gateway, Semantic Router, PostgreSQL, Valkey/Redis | Dynamic routing plus API keys, authorization, quota, usage, and audit. |
 
 The ordinary local Docker experience includes Dashboard. `--minimal` omits it for
-an operator-managed control plane, while observability is added only with
-`--with-observability`. The managed Docker stack contains:
+an operator-controlled deployment, while observability is added only with
+`--with-observability`. The dynamic Docker stack contains:
 
 ```text
 postgres          authoritative desired state and ledger
 valkey            policy projection, counters, idempotency, usage stream
-access-migrate    one-shot schema migration using the Router image
+management-migrate    one-shot schema migration using the Router image
 router            ExtProc, access runtime, backend invoker, Management API, projector, workers
 gateway           only public inference endpoint and one stable Router invoker upstream
 dashboard         Management API client (omitted only with --minimal)
@@ -269,7 +254,7 @@ keyring; it is bound to namespace, admission, dispatch ordinal, Model revision,
 request digest, audience, and a short expiry. A public request cannot call the
 internal invoker listener or synthesize those fields.
 
-The managed single-host profile starts one PostgreSQL and one Valkey with named
+The persistent single-host profile starts one PostgreSQL and one Valkey with named
 volumes. It is the smallest persistent topology, not an HA claim. A production HA
 profile supplies external or separately managed PostgreSQL and a fenced,
 single-writer Valkey topology:
@@ -301,7 +286,7 @@ that the API already reported revoked.
 
 ### ProviderCredential runtime projection
 
-Managed ProviderCredentials follow the same immutable publication boundary as routing;
+Dynamic ProviderCredentials follow the same immutable publication boundary as routing;
 they are not request-time PostgreSQL resources. The desired-state reader opens one
 repeatable-read transaction, loads the routing snapshot, derives its exact set of
 referenced ProviderCredential IDs, and loads only those credential rows and versions
@@ -332,7 +317,7 @@ resolver is not composed into the inference dispatch path.
 ### Startup and readiness
 
 1. PostgreSQL and Valkey pass dependency health checks.
-2. `access-migrate` obtains a PostgreSQL advisory lock, runs forward-only migrations,
+2. `management-migrate` obtains a PostgreSQL advisory lock, runs forward-only migrations,
    and verifies the cluster singleton and every namespace companion-policy row.
 3. The projector verifies the active runtime epoch, loads or rebuilds policy
    projections, the routing snapshot, and its referenced encrypted ProviderCredential
@@ -350,7 +335,8 @@ resolver is not composed into the inference dispatch path.
 7. On a fresh installation, an authorized Management client completes identity
    bootstrap and publishes the first coupled policy and routing revision. The
    Dashboard may perform this workflow, but it is not required.
-8. Managed Router readiness waits for compatible schema, Valkey, Provider Catalog,
+8. Dynamic Router readiness waits for every configured dependency: compatible schema,
+   optional Valkey, Provider Catalog,
    routing and policy
    publication, quota recovery when access is enabled, and every runtime-verifiable
    property of the selected durability profile. After bootstrap commits, readiness
@@ -362,9 +348,9 @@ resolver is not composed into the inference dispatch path.
 and reason codes. It deliberately remains false before the first complete publication;
 operators must not use `helm --wait` as the first-install bootstrap mechanism. The
 private Management Service is the only pre-readiness path and never exposes inference.
-Every managed mode requires Valkey continuously because active routing and
-ProviderCredential lifecycle are one revisioned runtime boundary; no replica serves a
-pinned snapshot with unverifiable credential state. Managed access also requires a
+Native access requires Valkey continuously because credential projections and global
+quota counters are one revisioned runtime boundary; no replica serves a pinned
+snapshot with unverifiable credential state. Native access also requires a
 valid epoch and applied policy revision. The same Valkey deployment carries the
 bounded, expiring response-terminal rendezvous used when private backend dispatch and
 the owning ExtProc request land on different Router replicas; its atomic one-time
@@ -393,10 +379,10 @@ transaction.
 Raw usage and audit history are indefinite by default. Explicit raw usage retention
 can retire only a complete month after rollups are durable and no replay or unresolved
 reconciliation reference remains. Settlement digest tombstones and rollups are not
-deleted. The v0.4 baseline creates the aligned range-partition hierarchy directly;
+deleted. The durable baseline creates the aligned range-partition hierarchy directly;
 there is no runtime dual-schema mode.
 
-PostgreSQL and Valkey use named volumes in the managed profile. Router configuration
+PostgreSQL and Valkey use named volumes when those stores are enabled. Router configuration
 mounts read-only. Secrets, Management TLS material, and its optional client CA use
 Docker secrets or `/run/secrets/*`. PostgreSQL,
 Valkey, and the Management listener are not public; a local CLI binding is limited to
@@ -407,14 +393,14 @@ route. Browser requests use short-lived Management tokens exchanged from
 Dashboard-signed subject assertions; no broad Dashboard service identity is mounted.
 OIDC and mTLS remain optional integrations.
 
-`vllm-sr serve` follows one mode contract:
+`vllm-sr serve` derives one process composition from configured capabilities:
 
-- standalone: compile the one local manifest with the canonical snapshot compiler
+- no Management store: compile the one local manifest with the canonical snapshot compiler
   and start no stores, Management mutation workers, or access runtime;
-- managed with no external store URLs: start PostgreSQL and Valkey as managed Docker
-  services;
-- managed with external store URLs: start only the gateway and Router roles; and
-- access may be enabled only in managed mode; local Dashboard is included unless
+- Management store with no external DSN: start PostgreSQL as a bundled Docker service;
+- runtime store with no external URL: start Valkey as a bundled Docker service;
+- external store references: start only the gateway and Router roles for those stores; and
+- native access may be enabled only with both stores; local Dashboard is included unless
   `--minimal` is explicit, while observability remains opt-in.
 
 ### Local first-administrator installation
@@ -472,11 +458,11 @@ flowchart TB
     R2 --> DB
 ```
 
-In Kubernetes, standalone is one stateless deployment with a mounted immutable
-manifest and no Management Service or stateful stores. The remaining topology
-describes managed mode.
+In Kubernetes, a file-only installation is one stateless deployment with a mounted
+immutable manifest and no Management Service or stateful stores. The remaining
+topology shows the optional dynamic components.
 
-The managed Router Pod is stateless. One Router process owns ExtProc, the private
+The Router Pod remains stateless when stores are configured. One Router process owns ExtProc, the private
 Management listener, the backend invoker, projectors, reconcilers, and usage workers.
 Workers coordinate through durable claims and consumer groups, so adding a replica does
 not create a second authority or require a singleton control-plane Pod. A gateway
@@ -488,7 +474,7 @@ Keeping one Deployment is intentional. A separate control-plane Deployment would
 another role configuration, rollout order, certificate boundary, health contract, and
 failure mode without changing the resource or consistency model. If independent role
 sizing becomes necessary later, it can be introduced as an operational optimization;
-it is not part of the v0.4 contract.
+it is not part of the initial deployment contract.
 
 Required Kubernetes resources are:
 
@@ -566,9 +552,9 @@ manifest-and-rollout boundary. Secret values enter through Kubernetes Secrets or
 ExternalSecrets and are referenced from the manifest by file or environment name.
 
 The Operator reads only the shallow deployment boundary needed to reconcile
-Kubernetes resources: v0.4 mode, Management and backend-dispatch listener
+Kubernetes resources: the v0.3 bootstrap, Management and backend-dispatch listener
 ports, and the PostgreSQL DSN environment or file reference used by the
-migrator. The Router remains the sole full manifest compiler. Managed
+migrator. The Router remains the sole full manifest compiler. Dynamic
 reconciliation creates a content-addressed migration Job from the Router image
 and gates each new rollout until it succeeds. Status publishes the observed
 bootstrap digest, migration Job/state, listener Service names, and readiness
@@ -576,7 +562,7 @@ conditions.
 
 The inference Service follows the requested Service type. Management and
 backend-dispatch Services are always private ClusterIP Services, with metrics
-on its own ClusterIP Service when enabled. Managed mode enables a
+on its own ClusterIP Service when enabled. Dynamic capabilities enable a
 PodDisruptionBudget, topology spread, and listener-specific ingress
 NetworkPolicy by default. Empty peer families stay denied; backend dispatch is
 limited to Pods of the same `SemanticRouter`. These deployment controls never
@@ -585,20 +571,18 @@ contain or project per-key access policy.
 Creating a User, key, policy, or UsageEvent never updates a custom resource, etcd,
 xDS, or a gateway route and never rolls a Pod.
 
-## Upgrade compatibility contract
+## Upgrade contract
 
-Every Router process reads one manifest contract. The v0.4 runtime accepts only
-`version: v0.4`; it has no v0.3 reader or fallback mode. A standalone deployment
-converts v0.3 offline with `vllm-sr config migrate`, stores source and output as
-separate immutable artifacts, validates the output with the target release, and
-rolls back by restoring the previous image together with its retained source
-manifest. Conversion never runs in a serving Pod.
+Every Router process reads one strict `version: v0.3` manifest and has no fallback
+parser. Manifest conversion, when required by a release, runs offline, keeps source
+and output as separate immutable artifacts, and validates the result with the target
+release. It never runs in a serving Pod.
 
-A managed deployment additionally runs the target release's forward-only
-PostgreSQL migration job before new replicas become ready. Rollback without a
-database restore is allowed only when the previous release declares the resulting
-schema revision readable. Otherwise operators restore the recorded database backup
-and required keyring versions before starting the previous image. Valkey projections
+When a Management store is configured, the target release's forward-only PostgreSQL
+migration job must finish before new replicas become ready. Rollback without a database
+restore is allowed only when the previous release declares the resulting schema
+revision readable. Otherwise operators restore the recorded database backup and
+required keyring versions before starting the previous image. Runtime-store projections
 are rebuilt from authoritative state rather than translated in place.
 
 The manifest version does not negotiate the Management HTTP API. Clients pin
@@ -614,7 +598,7 @@ operator checklist.
 | --- | --- | --- |
 | Dashboard unavailable | No inference impact | Other Management API clients continue. |
 | PostgreSQL unavailable | Already applied keys continue from Valkey while the usage stream remains below its safety bound | Mutations and long-range queries stop; no false success. |
-| Valkey unavailable | Every managed mode fails closed with `503` and replicas become unready | Mutations and snapshot activation remain pending or fail. |
+| Valkey unavailable while native access is enabled | Admission fails closed with `503` and replicas become unready | Mutations and snapshot activation remain pending or fail. |
 | Projector lag | Existing complete per-key revisions continue | Mutation reports `pending`; expansions remain gated and restrictions keep deny barriers. |
 | Usage writer unavailable | Counters continue and events queue in the durable stream | Analytics freshness reports lag. |
 | Usage backlog over bound | New admission fails with `503` to avoid unaccounted traffic | Operators receive explicit backlog health and alerts. |
@@ -640,7 +624,7 @@ zero-loss.
 Policy projections and routing snapshots can be rebuilt from PostgreSQL. Live
 rolling counters, pending admissions, not-yet-persisted stream entries, and
 settlement markers cannot be assumed recoverable from desired state. An empty or
-unknown-epoch Valkey therefore keeps managed access not ready.
+unknown-epoch Valkey therefore keeps native access not ready.
 
 Recovery requires one of these audited paths:
 
@@ -701,5 +685,5 @@ commit, the recovery is invalid and must continue WAL/backup recovery or remain
 blocked. Standard and single-host profiles may lose changes inside their declared
 window; those resources are not reconstructed from Valkey, and the recovery report
 lists the gap. Loss of both authoritative backups and required keyring versions is not
-an automatic-reset path: managed access remains unavailable until a privileged,
+an automatic-reset path: native access remains unavailable until a privileged,
 audited re-bootstrap and credential migration is completed.

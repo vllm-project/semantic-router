@@ -9,7 +9,7 @@ import (
 
 func TestDecompileRoutingPreservesRawPluginConfigMaps(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-document:
+routing:
   signals:
     domains:
       - name: test
@@ -95,7 +95,7 @@ func TestDecompileRoutingRoundTripsHeaderAndResponsePlugins(t *testing.T) {
 
 func TestDecompileRoutingRoundTripsToolsDynamicRetrievalPluginConfig(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-document:
+routing:
   signals:
     domains:
       - name: test
@@ -299,7 +299,7 @@ func assertRoundTripToolsPluginBasics(t *testing.T, cfg *config.ToolsPluginConfi
 
 func TestDecompileRoutingRoundTripsToolsStripHistory(t *testing.T) {
 	cfg := mustParseRoutingPluginConfigTest(t, `
-document:
+routing:
   decisions:
     - name: privacy_route
       priority: 100

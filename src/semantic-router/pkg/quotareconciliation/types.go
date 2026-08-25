@@ -303,11 +303,23 @@ type Claim struct {
 }
 
 type Repository interface {
+	ReconciliationStateRepository
+	ReconciliationCommandRepository
+	ReconciliationWorkerRepository
+}
+
+type ReconciliationStateRepository interface {
 	ReadyQuotaReconciliation(context.Context, *managementcommand.Codec) error
 	Get(context.Context, string, string) (Fence, error)
 	GetOperation(context.Context, string, string) (Operation, error)
 	List(context.Context, FenceQuery) (RepositoryPage, error)
+}
+
+type ReconciliationCommandRepository interface {
 	Prepare(context.Context, managementcommand.Command, ReconcileRequest, string, time.Time) (EnqueueResult, error)
+}
+
+type ReconciliationWorkerRepository interface {
 	Claim(context.Context, string, time.Time, time.Duration) (Claim, bool, error)
 	MarkRuntimeApplied(context.Context, Claim, string, time.Time) error
 	SettleLedger(context.Context, Claim, time.Time) error

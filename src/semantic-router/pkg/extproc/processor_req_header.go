@@ -50,7 +50,7 @@ func (r *OpenAIRouter) handleRequestHeaders(v *ext_proc.ProcessingRequest_Reques
 	if validationResp := r.validateRequestHeaders(method, path); validationResp != nil {
 		return validationResp, nil
 	}
-	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation(r.managedInferenceAccessEnabled())), nil
+	return newContinueRequestHeadersResponse(buildIdentityEncodingRequestMutation(r.nativeAccessEnabled())), nil
 }
 
 func startRequestHeaderSpan(

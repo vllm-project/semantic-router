@@ -1,35 +1,40 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen-Image
+    provider_model_id: Qwen/Qwen-Image
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct
     capabilities:
     - ar
     modality: ar
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen-Image
-  card:
+  - name: Qwen/Qwen-Image
     capabilities:
     - image_generation
     - diffusion
     modality: diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen-Image
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: text_generation
@@ -97,8 +102,8 @@ recipes:
         - type: domain
           name: text_generation
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

@@ -33,8 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
-var testStandaloneBootstrap = bootstrapDeploymentContract{
-	Mode:                controlPlaneModeStandalone,
+var testFileBootstrap = bootstrapDeploymentContract{
 	Revision:            "sha256:test",
 	ManagementPort:      DefaultManagementPort,
 	BackendDispatchPort: DefaultBackendDispatchPort,
@@ -191,7 +190,7 @@ func TestGenerateDeployment(t *testing.T) {
 		},
 	}
 
-	deployment := r.generateDeployment(sr, gatewayModeSidecar, testStandaloneBootstrap)
+	deployment := r.generateDeployment(sr, gatewayModeSidecar, testFileBootstrap)
 
 	if deployment == nil {
 		t.Fatal("generateDeployment() returned nil")
@@ -367,7 +366,7 @@ func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
 
 	baseSR := sr.DeepCopy()
 
-	sr.Status.GatewayMode = "standalone"
+	sr.Status.GatewayMode = gatewayModeSidecar
 	sr.Status.OpenShiftFeatures = &vllmv1alpha1.OpenShiftFeaturesStatus{
 		RoutesEnabled: true,
 		RouteHostname: "sr.apps.example.com",
@@ -382,8 +381,8 @@ func TestUpdateStatusPreservesReconcileDerivedFields(t *testing.T) {
 		t.Fatalf("failed to get updated SemanticRouter: %v", err)
 	}
 
-	if got.Status.GatewayMode != "standalone" {
-		t.Errorf("GatewayMode: want %q, got %q", "standalone", got.Status.GatewayMode)
+	if got.Status.GatewayMode != gatewayModeSidecar {
+		t.Errorf("GatewayMode: want %q, got %q", gatewayModeSidecar, got.Status.GatewayMode)
 	}
 
 	if got.Status.OpenShiftFeatures == nil {
@@ -485,7 +484,7 @@ func TestGenerateService(t *testing.T) {
 		Spec: vllmv1alpha1.SemanticRouterSpec{},
 	}
 
-	services := r.generateServices(sr, gatewayModeExternal, testStandaloneBootstrap)
+	services := r.generateServices(sr, gatewayModeExternal, testFileBootstrap)
 	if len(services) == 0 {
 		t.Fatal("generateServices() returned no Services")
 	}
@@ -640,7 +639,7 @@ func TestGenerateContainers(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			containers := r.generateContainers(tt.sr, gatewayModeExternal, testStandaloneBootstrap)
+			containers := r.generateContainers(tt.sr, gatewayModeExternal, testFileBootstrap)
 
 			if len(containers) != 1 {
 				t.Fatalf("expected 1 container, got %d", len(containers))
@@ -733,7 +732,7 @@ func TestReconcileService(t *testing.T) {
 	}
 
 	// Test service creation
-	desired := r.generateServices(sr, gatewayModeExternal, testStandaloneBootstrap)[0]
+	desired := r.generateServices(sr, gatewayModeExternal, testFileBootstrap)[0]
 	err := r.reconcileService(context.Background(), sr, desired)
 	if err != nil {
 		t.Fatalf("reconcileService() failed: %v", err)

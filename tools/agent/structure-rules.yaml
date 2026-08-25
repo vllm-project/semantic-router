@@ -61,6 +61,8 @@ ignore_globs:
   - models/**
   - '**/*.pb.go'
   - '**/zz_generated*'
+  # Canonical Management API generator output; validate drift at its source gate.
+  - dashboard/frontend/src/generated/managementApiContract.ts
   - '**/node_modules/**'
   - candle-binding/src/ffi/embedding.rs
   - candle-binding/src/ffi/classify.rs

@@ -25,7 +25,7 @@ const (
 )
 
 // managementListenerTLS owns the validated, Router-terminated TLS context for
-// one managed listener. The certificate is parsed before the socket is opened;
+// one Management listener. The certificate is parsed before the socket is opened;
 // readiness continues checking its validity so an expiring certificate cannot
 // leave a replica advertising ready.
 type managementListenerTLS struct {

@@ -141,9 +141,9 @@ func TestBootstrapReadinessFailsWhenRetainedKeysAreRemoved(t *testing.T) {
 	}
 	finalizedOptions := bootstrapTestOptions(database, func() time.Time { return now })
 	finalizedOptions.BootstrapToken = nil
-	finalized, err := NewBootstrapService(finalizedOptions)
-	if err != nil {
-		t.Fatal(err)
+	finalized, finalizedErr := NewBootstrapService(finalizedOptions)
+	if finalizedErr != nil {
+		t.Fatal(finalizedErr)
 	}
 	if err := finalized.Ready(context.Background()); err != nil {
 		t.Fatalf("finalized bootstrap readiness: %v", err)
@@ -153,9 +153,9 @@ func TestBootstrapReadinessFailsWhenRetainedKeysAreRemoved(t *testing.T) {
 	missing.IdempotencyKeys = securitykeyring.Symmetric{
 		ActiveVersion: "v2", Keys: map[string][]byte{"v2": bytes.Repeat([]byte{9}, 32)},
 	}
-	withoutRetained, err := NewBootstrapService(missing)
-	if err != nil {
-		t.Fatal(err)
+	withoutRetained, retainedErr := NewBootstrapService(missing)
+	if retainedErr != nil {
+		t.Fatal(retainedErr)
 	}
 	if err := withoutRetained.Ready(context.Background()); err == nil {
 		t.Fatal("readiness accepted a live bootstrap result with a missing HMAC version")
@@ -210,9 +210,9 @@ VALUES ($1,$2,'10000000-0000-5000-8000-000000000001','cluster','active',1)`, uui
 
 	database = bootstrapTestDatabase(t)
 	service = newBootstrapTestService(t, database, func() time.Time { return now })
-	result, err := service.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0001", "Bootstrap administrator"), bootstrapTestToken)
-	if err != nil {
-		t.Fatal(err)
+	result, bootstrapErr := service.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0001", "Bootstrap administrator"), bootstrapTestToken)
+	if bootstrapErr != nil {
+		t.Fatal(bootstrapErr)
 	}
 	if _, err := database.Exec(`UPDATE management_service_account_credentials
 SET status='revoked',revoked_at=clock_timestamp() WHERE id=$1`, result.ServiceCredentialID); err != nil {
@@ -220,9 +220,9 @@ SET status='revoked',revoked_at=clock_timestamp() WHERE id=$1`, result.ServiceCr
 	}
 	options := bootstrapTestOptions(database, func() time.Time { return now })
 	options.BootstrapToken = nil
-	finalized, err := NewBootstrapService(options)
-	if err != nil {
-		t.Fatal(err)
+	finalized, finalizedErr := NewBootstrapService(options)
+	if finalizedErr != nil {
+		t.Fatal(finalizedErr)
 	}
 	if err := finalized.Ready(context.Background()); err == nil {
 		t.Fatal("readiness accepted a consumed installation without a login-capable cluster administrator")
@@ -233,9 +233,9 @@ func TestBootstrapReadinessAcceptsTrustedExternalAdministrator(t *testing.T) {
 	database := bootstrapTestDatabase(t)
 	now := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 	bootstrap := newBootstrapTestService(t, database, func() time.Time { return now })
-	bootstrapResult, err := bootstrap.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0002", "Bootstrap administrator"), bootstrapTestToken)
-	if err != nil {
-		t.Fatal(err)
+	bootstrapResult, bootstrapErr := bootstrap.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0002", "Bootstrap administrator"), bootstrapTestToken)
+	if bootstrapErr != nil {
+		t.Fatal(bootstrapErr)
 	}
 	if _, err := database.Exec(`UPDATE management_principals
 SET status='disabled',revision=revision+1 WHERE id=$1`, bootstrapResult.PrincipalID); err != nil {
@@ -261,9 +261,9 @@ VALUES ($1,$2,'10000000-0000-5000-8000-000000000001','cluster','active',1)`, uui
 	}
 	options := bootstrapTestOptions(database, func() time.Time { return now })
 	options.BootstrapToken = nil
-	service, err := NewBootstrapService(options)
-	if err != nil {
-		t.Fatal(err)
+	service, serviceErr := NewBootstrapService(options)
+	if serviceErr != nil {
+		t.Fatal(serviceErr)
 	}
 	if err := service.Ready(context.Background()); err != nil {
 		t.Fatalf("trusted external administrator readiness: %v", err)
@@ -274,9 +274,9 @@ func TestBootstrapReadinessAcceptsRetiringServiceCredential(t *testing.T) {
 	database := bootstrapTestDatabase(t)
 	now := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 	bootstrap := newBootstrapTestService(t, database, func() time.Time { return now })
-	result, err := bootstrap.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0003", "Bootstrap administrator"), bootstrapTestToken)
-	if err != nil {
-		t.Fatal(err)
+	result, bootstrapErr := bootstrap.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0003", "Bootstrap administrator"), bootstrapTestToken)
+	if bootstrapErr != nil {
+		t.Fatal(bootstrapErr)
 	}
 	if _, err := database.Exec(`UPDATE management_service_account_credentials
 SET status='retiring' WHERE id=$1`, result.ServiceCredentialID); err != nil {
@@ -284,9 +284,9 @@ SET status='retiring' WHERE id=$1`, result.ServiceCredentialID); err != nil {
 	}
 	options := bootstrapTestOptions(database, func() time.Time { return now })
 	options.BootstrapToken = nil
-	service, err := NewBootstrapService(options)
-	if err != nil {
-		t.Fatal(err)
+	service, serviceErr := NewBootstrapService(options)
+	if serviceErr != nil {
+		t.Fatal(serviceErr)
 	}
 	if err := service.Ready(context.Background()); err != nil {
 		t.Fatalf("retiring service credential readiness: %v", err)
@@ -297,9 +297,9 @@ func TestBootstrapReadinessRejectsFutureServiceCredentialAssurance(t *testing.T)
 	database := bootstrapTestDatabase(t)
 	now := time.Date(2026, 8, 24, 0, 0, 0, 0, time.UTC)
 	bootstrap := newBootstrapTestService(t, database, func() time.Time { return now })
-	result, err := bootstrap.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0004", "Bootstrap administrator"), bootstrapTestToken)
-	if err != nil {
-		t.Fatal(err)
+	result, bootstrapErr := bootstrap.Bootstrap(context.Background(), bootstrapTestRequest("bootstrap-key-readiness-0004", "Bootstrap administrator"), bootstrapTestToken)
+	if bootstrapErr != nil {
+		t.Fatal(bootstrapErr)
 	}
 	if _, err := database.Exec(`UPDATE management_service_account_credentials
 SET source_assured_at=$2 WHERE id=$1`, result.ServiceCredentialID, now.Add(time.Minute)); err != nil {
@@ -307,9 +307,9 @@ SET source_assured_at=$2 WHERE id=$1`, result.ServiceCredentialID, now.Add(time.
 	}
 	options := bootstrapTestOptions(database, func() time.Time { return now })
 	options.BootstrapToken = nil
-	service, err := NewBootstrapService(options)
-	if err != nil {
-		t.Fatal(err)
+	service, serviceErr := NewBootstrapService(options)
+	if serviceErr != nil {
+		t.Fatal(serviceErr)
 	}
 	if err := service.Ready(context.Background()); err == nil {
 		t.Fatal("readiness accepted a service credential with future assurance")
@@ -395,9 +395,9 @@ func bootstrapTestDatabase(t *testing.T) *sql.DB {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	t.Cleanup(cancel)
-	admin, err := sql.Open("postgres", databaseURL)
-	if err != nil {
-		t.Fatal(err)
+	admin, openErr := sql.Open("postgres", databaseURL)
+	if openErr != nil {
+		t.Fatal(openErr)
 	}
 	t.Cleanup(func() { _ = admin.Close() })
 	schema := "vsr_bootstrap_test_" + strings.ReplaceAll(uuid.NewString(), "-", "")

@@ -168,8 +168,9 @@ func TestWarnUnknownFields_MapValues(t *testing.T) {
 
 func TestWarnUnknownFields_CanonicalConfig(t *testing.T) {
 	raw := map[string]interface{}{
-		"version":     "v0.4",
-		"models":      []interface{}{},
+		"version":     "v0.3",
+		"providers":   map[interface{}]interface{}{},
+		"routing":     map[interface{}]interface{}{},
 		"recipes":     []interface{}{},
 		"entrypoints": []interface{}{},
 		"global":      map[interface{}]interface{}{},
@@ -180,7 +181,7 @@ func TestWarnUnknownFields_CanonicalConfig(t *testing.T) {
 
 func TestWarnUnknownFields_CanonicalConfigTypo(t *testing.T) {
 	raw := map[string]interface{}{
-		"version":  "v0.4",
+		"version":  "v0.3",
 		"recipess": map[interface{}]interface{}{}, // typo
 	}
 	warnings := collectUnknownFields(raw, reflect.TypeOf(CanonicalConfig{}))

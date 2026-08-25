@@ -22,7 +22,6 @@ import {
   loadFleetSimWorkloadsPage,
   loadInsightsPage,
   loadInsightsRecordPage,
-  loadLogsPage,
   loadMLSetupPage,
   loadMonitoringPage,
   loadOpenClawPage,
@@ -60,7 +59,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   'insights-record': (
     <RecoverableLazyRoute loader={loadInsightsRecordPage} routeLabel="Insight record" />
   ),
-  logs: <RecoverableLazyRoute loader={loadLogsPage} routeLabel="Logs" />,
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   openclaw: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
@@ -101,7 +99,7 @@ interface AuthorizedShellRouteProps {
   user: PermissionUser | null
 }
 
-const AuthorizedStandaloneRoute: React.FC<{
+const AuthorizedFullscreenRoute: React.FC<{
   children: React.ReactElement
   user: PermissionUser | null
 }> = ({ children, user }) => {
@@ -162,12 +160,12 @@ export const renderAuthenticatedAppRoutes = ({
     <Route
       path="/playground/fullscreen"
       element={
-        <AuthorizedStandaloneRoute user={user}>
+        <AuthorizedFullscreenRoute user={user}>
           <RecoverableLazyRoute
             loader={loadPlaygroundFullscreenPage}
             routeLabel="Fullscreen playground"
           />
-        </AuthorizedStandaloneRoute>
+        </AuthorizedFullscreenRoute>
       }
     />
     <Route

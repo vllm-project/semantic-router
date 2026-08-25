@@ -26,7 +26,7 @@ const routingCatalogRevision = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
 func newRoutingStore(t *testing.T, db *sql.DB) *Store {
 	t.Helper()
-	store, err := New(db, config.ValidateManagedRoutingSnapshot)
+	store, err := New(db, config.ValidateDurableRoutingSnapshot)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -336,132 +336,163 @@ func TestPriorityFallbackPublishesIntoTheImmutableSnapshot(t *testing.T) {
 	}
 }
 
+type builtInRecipeFixture struct {
+	ctx              context.Context
+	db               *sql.DB
+	firstNamespaceID string
+	firstStore       *Store
+	secondStore      *Store
+	distribution     routingmanagement.BuiltInRecipeDistribution
+}
+
 func TestBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutable(t *testing.T) {
-	db, firstNamespaceID := routingIntegrationDatabase(t)
-	firstStore := newRoutingStore(t, db)
-	secondStore := newRoutingStore(t, db)
+	db, namespaceID := routingIntegrationDatabase(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	distribution := routingTestBuiltInDistribution(t, "1.0.0", "Simple")
+	fixture := builtInRecipeFixture{
+		ctx: ctx, db: db, firstNamespaceID: namespaceID,
+		firstStore: newRoutingStore(t, db), secondStore: newRoutingStore(t, db),
+		distribution: routingTestBuiltInDistribution(t, "1.0.0", "Simple"),
+	}
+	assertConcurrentBuiltInInstallation(t, fixture)
+	expected := assertBuiltInRecipeImmutability(t, fixture)
+	assertBuiltInRecipeNamespaceAndUpgrade(t, fixture, expected)
+}
 
+func assertConcurrentBuiltInInstallation(t *testing.T, fixture builtInRecipeFixture) {
+	t.Helper()
 	start := make(chan struct{})
 	errorsOut := make(chan error, 2)
 	var wait sync.WaitGroup
-	for index, store := range []*Store{firstStore, secondStore} {
+	for index, store := range []*Store{fixture.firstStore, fixture.secondStore} {
 		wait.Add(1)
 		go func(replica int, active *Store) {
 			defer wait.Done()
 			<-start
-			_, installErr := active.InstallBuiltInRecipes(
-				ctx, firstNamespaceID, distribution,
+			_, err := active.InstallBuiltInRecipes(
+				fixture.ctx, fixture.firstNamespaceID, fixture.distribution,
 				routingmanagement.MutationContext{
 					RequestID: uuid.NewString(), Reason: fmt.Sprintf("replica %d install", replica),
 				},
 			)
-			errorsOut <- installErr
+			errorsOut <- err
 		}(index, store)
 	}
 	close(start)
 	wait.Wait()
 	close(errorsOut)
-	for installErr := range errorsOut {
-		if installErr != nil {
-			t.Fatalf("concurrent InstallBuiltInRecipes() error = %v", installErr)
+	for err := range errorsOut {
+		if err != nil {
+			t.Fatalf("concurrent InstallBuiltInRecipes() error = %v", err)
 		}
 	}
-	assertBuiltInRecipeCounts(t, ctx, db, firstNamespaceID, 1, 1)
-	if err := firstStore.VerifyBuiltInRecipes(ctx, distribution); err != nil {
+	assertBuiltInRecipeCounts(t, fixture.ctx, fixture.db, fixture.firstNamespaceID, 1, 1)
+	if err := fixture.firstStore.VerifyBuiltInRecipes(fixture.ctx, fixture.distribution); err != nil {
 		t.Fatal(err)
 	}
+}
 
-	expected, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := distribution.RecipesForNamespace(firstNamespaceID)
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
+func assertBuiltInRecipeImmutability(
+	t *testing.T,
+	fixture builtInRecipeFixture,
+) routingsnapshot.Recipe {
+	t.Helper()
+	expected, err := fixture.distribution.RecipesForNamespace(fixture.firstNamespaceID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	installed, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := firstStore.GetRecipe(ctx, firstNamespaceID, expected[0].ID)
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
+	installed, err := fixture.firstStore.GetRecipe(
+		fixture.ctx, fixture.firstNamespaceID, expected[0].ID,
+	)
+	if err != nil {
+		t.Fatal(err)
 	}
 	if installed.Origin != routingmanagement.RecipeOriginDistribution || installed.Provenance == nil ||
-		installed.Provenance.DistributionID != distribution.ID ||
-		installed.Provenance.DistributionVersion != distribution.Version ||
-		installed.Provenance.SourceRecipeID != distribution.Recipes[0].SourceID {
+		installed.Provenance.DistributionID != fixture.distribution.ID ||
+		installed.Provenance.DistributionVersion != fixture.distribution.Version ||
+		installed.Provenance.SourceRecipeID != fixture.distribution.Recipes[0].SourceID {
 		t.Fatalf("installed provenance = %#v", installed)
 	}
 	changed := expected[0]
 	changed.Revision++
 	changed.Name = "Changed"
-	if _, _, err := firstStore.UpdateRecipe(
-		ctx, firstNamespaceID, installed.ID, installed.Revision, "changed", changed, mutationMeta("reject built-in edit"),
+	if _, _, err := fixture.firstStore.UpdateRecipe(
+		fixture.ctx, fixture.firstNamespaceID, installed.ID, installed.Revision,
+		"changed", changed, mutationMeta("reject built-in edit"),
 	); !errors.Is(err, routingmanagement.ErrImmutable) {
 		t.Fatalf("UpdateRecipe() error = %v, want ErrImmutable", err)
 	}
-	if _, err := firstStore.DeleteRecipe(
-		ctx, firstNamespaceID, installed.ID, installed.Revision, mutationMeta("reject built-in delete"),
+	if _, err := fixture.firstStore.DeleteRecipe(
+		fixture.ctx, fixture.firstNamespaceID, installed.ID, installed.Revision,
+		mutationMeta("reject built-in delete"),
 	); !errors.Is(err, routingmanagement.ErrImmutable) {
 		t.Fatalf("DeleteRecipe() error = %v, want ErrImmutable", err)
 	}
+	return expected[0]
+}
 
-	secondNamespaceID := insertRoutingNamespace(t, ctx, db)
-	installer, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
-		Store: firstStore, Distribution: distribution,
+func assertBuiltInRecipeNamespaceAndUpgrade(
+	t *testing.T,
+	fixture builtInRecipeFixture,
+	expected routingsnapshot.Recipe,
+) {
+	t.Helper()
+	secondNamespaceID := insertRoutingNamespace(t, fixture.ctx, fixture.db)
+	installer, err := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
+		Store: fixture.firstStore, Distribution: fixture.distribution,
 	})
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
-	}
-	if err := installer.Reconcile(ctx); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
-	assertBuiltInRecipeCounts(t, ctx, db, secondNamespaceID, 1, 1)
-	secondExpected, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := distribution.RecipesForNamespace(secondNamespaceID)
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
+	if reconcileErr := installer.Reconcile(fixture.ctx); reconcileErr != nil {
+		t.Fatal(reconcileErr)
 	}
-	if expected[0].ID == secondExpected[0].ID {
+	assertBuiltInRecipeCounts(t, fixture.ctx, fixture.db, secondNamespaceID, 1, 1)
+	secondExpected, err := fixture.distribution.RecipesForNamespace(secondNamespaceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expected.ID == secondExpected[0].ID {
 		t.Fatal("globally keyed Recipe identity collided across Namespaces")
 	}
-
-	restarted, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
-		Store: secondStore, Distribution: distribution,
+	restarted, err := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
+		Store: fixture.secondStore, Distribution: fixture.distribution,
 	})
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
-	}
-	if err := restarted.Reconcile(ctx); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
-	assertBuiltInRecipeCounts(t, ctx, db, firstNamespaceID, 1, 1)
-	assertBuiltInRecipeCounts(t, ctx, db, secondNamespaceID, 1, 1)
-
+	if reconcileErr := restarted.Reconcile(fixture.ctx); reconcileErr != nil {
+		t.Fatal(reconcileErr)
+	}
+	assertBuiltInRecipeCounts(t, fixture.ctx, fixture.db, fixture.firstNamespaceID, 1, 1)
+	assertBuiltInRecipeCounts(t, fixture.ctx, fixture.db, secondNamespaceID, 1, 1)
 	upgrade := routingTestBuiltInDistribution(t, "1.1.0", "Simple v2")
-	upgrader, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
-		Store: firstStore, Distribution: upgrade,
+	upgrader, err := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
+		Store: fixture.firstStore, Distribution: upgrade,
 	})
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
-	}
-	if err := upgrader.Reconcile(ctx); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
-	assertBuiltInRecipeCounts(t, ctx, db, firstNamespaceID, 2, 2)
-	assertBuiltInRecipeCounts(t, ctx, db, secondNamespaceID, 2, 2)
-
-	changedInPlace := routingTestBuiltInDistribution(t, "1.0.0", "Changed in place")
-	conflicting, testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
-		Store: firstStore, Distribution: changedInPlace,
-	})
-	if testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr != nil {
-		t.Fatal(testBuiltInRecipeInstallationIsCrossReplicaNamespaceSafeAndImmutableErr)
+	if reconcileErr := upgrader.Reconcile(fixture.ctx); reconcileErr != nil {
+		t.Fatal(reconcileErr)
 	}
-	if err := conflicting.Reconcile(ctx); !errors.Is(err, routingmanagement.ErrConflict) {
+	assertBuiltInRecipeCounts(t, fixture.ctx, fixture.db, fixture.firstNamespaceID, 2, 2)
+	assertBuiltInRecipeCounts(t, fixture.ctx, fixture.db, secondNamespaceID, 2, 2)
+	changedInPlace := routingTestBuiltInDistribution(t, "1.0.0", "Changed in place")
+	conflicting, err := routingmanagement.NewBuiltInRecipeInstaller(routingmanagement.BuiltInRecipeInstallerOptions{
+		Store: fixture.firstStore, Distribution: changedInPlace,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := conflicting.Reconcile(fixture.ctx); !errors.Is(err, routingmanagement.ErrConflict) {
 		t.Fatalf("changed-in-place reconciliation error = %v, want ErrConflict", err)
 	}
-
-	if _, err := db.ExecContext(ctx, `UPDATE routing_recipes SET description='tampered'
-WHERE namespace_id=$1 AND id=$2`, firstNamespaceID, expected[0].ID); err != nil {
+	if _, err := fixture.db.ExecContext(fixture.ctx, `UPDATE routing_recipes SET description='tampered'
+WHERE namespace_id=$1 AND id=$2`, fixture.firstNamespaceID, expected.ID); err != nil {
 		t.Fatal(err)
 	}
-	if err := firstStore.VerifyBuiltInRecipes(ctx, distribution); !errors.Is(err, routingmanagement.ErrConflict) {
+	if err := fixture.firstStore.VerifyBuiltInRecipes(fixture.ctx, fixture.distribution); !errors.Is(err, routingmanagement.ErrConflict) {
 		t.Fatalf("immutable-state verification error = %v, want ErrConflict", err)
 	}
 }
@@ -469,10 +500,10 @@ WHERE namespace_id=$1 AND id=$2`, firstNamespaceID, expected[0].ID); err != nil 
 func routingTestBuiltInDistribution(t *testing.T, version, decisionName string) routingmanagement.BuiltInRecipeDistribution {
 	t.Helper()
 	metadata := []byte("schema_version: vllm-sr/recipe-metadata/v1\nid: test-recipes\nname: Test Recipes\nversion: " + version + "\n")
-	document := []byte("version: v0.4\nrecipes:\n" +
+	document := []byte("version: v0.3\nrecipes:\n" +
 		"  - name: Simple\n" +
 		"    description: A reusable test Recipe.\n" +
-		"    document:\n" +
+		"    routing:\n" +
 		"      decisions:\n" +
 		"        - name: " + decisionName + "\n" +
 		"          rules: {}\n")

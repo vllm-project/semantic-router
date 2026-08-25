@@ -1,25 +1,32 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: auto
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      auto:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: auto
+    provider_model_id: auto
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8091/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: auto
+routing:
+  modelCards:
+  - name: auto
     capabilities:
     - chat
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8091/v1
-    model: auto
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -61,7 +68,8 @@ recipes:
         - type: domain
           name: computer science
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     default:
@@ -102,28 +110,35 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: auto
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      auto:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: auto
+    provider_model_id: auto
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8091/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: auto
+routing:
+  modelCards:
+  - name: auto
     capabilities:
     - chat
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8091/v1
-    model: auto
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -165,7 +180,8 @@ recipes:
         - type: domain
           name: computer science
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     default:
@@ -206,30 +222,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct-AWQ
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      Qwen/Qwen2.5-14B-Instruct-AWQ:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8083/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Qwen/Qwen2.5-14B-Instruct-AWQ
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
     capabilities:
     - chat
     - reasoning
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8083/v1
-    model: Qwen/Qwen2.5-14B-Instruct-AWQ
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -303,8 +325,8 @@ recipes:
           unverified_factual_action: header
           include_hallucination_details: false
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -357,30 +379,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct-AWQ
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      Qwen/Qwen2.5-14B-Instruct-AWQ:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8083/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Qwen/Qwen2.5-14B-Instruct-AWQ
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
     capabilities:
     - chat
     - reasoning
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8083/v1
-    model: Qwen/Qwen2.5-14B-Instruct-AWQ
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -454,8 +482,8 @@ recipes:
           unverified_factual_action: header
           include_hallucination_details: false
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -508,9 +536,12 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global:
@@ -532,9 +563,12 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global:
@@ -556,9 +590,12 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global:
@@ -580,31 +617,36 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: phi4-mini
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://phi4-mini:80/v1
-    model: phi4-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: phi4-mini
+    provider_model_id: phi4-mini
+    backend_refs:
+    - provider: vllm
+      endpoint: http://phi4-mini:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: phi4-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -900,8 +942,8 @@ recipes:
             and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -1050,31 +1092,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: phi4-mini
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://phi4-mini:80/v1
-    model: phi4-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: phi4-mini
+    provider_model_id: phi4-mini
+    backend_refs:
+    - provider: vllm
+      endpoint: http://phi4-mini:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: phi4-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -1370,8 +1417,8 @@ recipes:
             and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -1520,31 +1567,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: gpt-4o-mini
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: gpt-4o-mini
+    provider_model_id: gpt-4o-mini
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: gpt-4o-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -1840,8 +1892,8 @@ recipes:
             and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -1990,26 +2042,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen3
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.20:8002/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.20:8002/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen3
+routing:
+  modelCards:
+  - name: qwen3
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -2172,7 +2230,8 @@ recipes:
         operator: AND
         conditions: []
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     default-route:
@@ -2264,37 +2323,46 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Model-A
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://DYNAMIC_MODEL_A_IP:8000/v1
-    model: Model-A
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Model-B
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://DYNAMIC_MODEL_B_IP:8001/v1
-    model: Model-B
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      Model-A:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      Model-B:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Model-A
+    provider_model_id: Model-A
+    backend_refs:
+    - provider: vllm
+      endpoint: http://DYNAMIC_MODEL_A_IP:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Model-A
+  - name: Model-B
+    provider_model_id: Model-B
+    backend_refs:
+    - provider: vllm
+      endpoint: http://DYNAMIC_MODEL_B_IP:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Model-B
+routing:
+  modelCards:
+  - name: Model-A
+  - name: Model-B
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -2552,8 +2620,8 @@ recipes:
           system_prompt: You are a knowledgeable assistant for general questions.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -2675,43 +2743,44 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen14b-admin
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+providers:
+  models:
+  - name: qwen14b-admin
+    provider_model_id: qwen14b-admin
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8100/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: qwen14b-free
+    provider_model_id: qwen14b-free
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8200/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen14b-admin
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8100/v1
-    model: qwen14b-admin
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: qwen14b-free
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+  - name: qwen14b-free
     capabilities:
     - chat
     - code
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8200/v1
-    model: qwen14b-free
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       role_bindings:
       - name: admin-binding
@@ -2755,8 +2824,8 @@ recipes:
         - type: authz
           name: free_user
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -2776,11 +2845,6 @@ global:
   router:
     clear_route_cache: true
   services:
-    authz:
-      fail_open: true
-      identity:
-        user_id_header: x-jwt-sub
-        user_groups_header: x-jwt-groups
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180
@@ -2804,39 +2868,44 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen2.5-7B-Instruct
+    provider_model_id: Qwen/Qwen2.5-7B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen2.5-7B-Instruct
-  card:
+  - name: Qwen/Qwen2.5-7B-Instruct
     capabilities:
     - chat
     - code
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen2.5-7B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: complex_analysis
@@ -2922,8 +2991,8 @@ recipes:
         - type: authz
           name: free_user
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -2953,8 +3022,6 @@ global:
   router:
     clear_route_cache: true
   services:
-    authz:
-      fail_open: true
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180
@@ -2978,35 +3045,42 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Model-A
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Model-A
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Model-B
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Model-B
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      Model-A:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Model-A
+    provider_model_id: Model-A
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Model-A
+  - name: Model-B
+    provider_model_id: Model-B
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Model-A
+  - name: Model-B
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -3185,8 +3259,8 @@ recipes:
         operator: OR
         conditions: []
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -3318,25 +3392,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen3
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8002/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8002/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen3
+routing:
+  modelCards:
+  - name: qwen3
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -3370,8 +3451,8 @@ recipes:
           unverified_factual_action: header
           include_hallucination_details: true
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -3412,25 +3493,29 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen-Image
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen-Image
+    provider_model_id: Qwen/Qwen-Image
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen-Image
     capabilities:
     - image_generation
     - diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen-Image
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       modality:
       - name: DIFFUSION
@@ -3458,8 +3543,8 @@ recipes:
           default_height: 1024
           timeout_seconds: 120
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -3500,28 +3585,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8888
   address: 0.0.0.0
   port: 8888
   timeout: 300s
-models:
-- name: qwen3
-  card:
+providers:
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.17.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen3
     capabilities:
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://172.17.0.1:8000/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -3552,8 +3641,8 @@ recipes:
           similarity_threshold: 0.45
           auto_store: true
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -3594,36 +3683,41 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen-Image
+    provider_model_id: Qwen/Qwen-Image
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct
     capabilities:
     - ar
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen-Image
-  card:
+  - name: Qwen/Qwen-Image
     capabilities:
     - image_generation
     - diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen-Image
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: text_generation
@@ -3691,8 +3785,8 @@ recipes:
         - type: domain
           name: text_generation
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -3753,45 +3847,46 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen14b-dev
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+providers:
+  models:
+  - name: qwen14b-dev
+    provider_model_id: qwen14b-dev
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8100/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: qwen14b-prod
+    provider_model_id: qwen14b-prod
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8200/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen14b-dev
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8100/v1
-    model: qwen14b-dev
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: qwen14b-prod
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+  - name: qwen14b-prod
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8200/v1
-    model: qwen14b-prod
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -3858,8 +3953,8 @@ recipes:
             by the user. If a user shares personal data, remind them to avoid sharing
             sensitive details.
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -3898,52 +3993,58 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: gpt-4o
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o
-  - provider: openai-compatible
-    endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o/v1
-    model: gpt-4o
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: gpt-4o-mini
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: claude-sonnet-4-20250514
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.anthropic.com
-    model: claude-sonnet-4-20250514
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen2.5-14B-Instruct
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: gpt-4o
+    provider_model_id: gpt-4o
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+    - provider: openai-compatible
+      endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: gpt-4o-mini
+    provider_model_id: gpt-4o-mini
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: claude-sonnet-4-20250514
+    provider_model_id: claude-sonnet-4-20250514
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.anthropic.com
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: gpt-4o
+  - name: gpt-4o-mini
+  - name: claude-sonnet-4-20250514
+  - name: Qwen/Qwen2.5-14B-Instruct
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -3987,8 +4088,8 @@ recipes:
         - type: keyword
           name: general_keywords
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -4004,15 +4105,6 @@ global:
   router:
     clear_route_cache: true
   services:
-    authz:
-      fail_open: false
-      providers:
-      - type: header-injection
-        headers:
-          openai: x-user-openai-key
-          anthropic: x-user-anthropic-key
-          azure-openai: x-user-azure-openai-key
-      - type: static-config
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180
@@ -4036,22 +4128,26 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-120b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://0.0.0.0:8000/v1
-    model: openai/gpt-oss-120b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: openai/gpt-oss-120b
+    provider_model_id: openai/gpt-oss-120b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://0.0.0.0:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: openai/gpt-oss-120b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -4068,8 +4164,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -4124,22 +4220,26 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-120b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://0.0.0.0:8000/v1
-    model: openai/gpt-oss-120b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: openai/gpt-oss-120b
+    provider_model_id: openai/gpt-oss-120b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://0.0.0.0:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: openai/gpt-oss-120b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -4156,8 +4256,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -4200,26 +4300,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-20b
-  card:
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.10:8000/v1
-    model: openai/gpt-oss-20b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      openai/gpt-oss-20b:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: openai/gpt-oss-20b
+    provider_model_id: openai/gpt-oss-20b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.10:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: openai/gpt-oss-20b
+routing:
+  modelCards:
+  - name: openai/gpt-oss-20b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -4236,8 +4342,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -4315,26 +4421,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen3
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.20:8002/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.20:8002/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen3
+routing:
+  modelCards:
+  - name: qwen3
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -4645,8 +4757,8 @@ recipes:
           enabled: true
           similarity_threshold: 0.75
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -4751,28 +4863,35 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: auto
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      auto:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: auto
+    provider_model_id: auto
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8091/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: auto
+routing:
+  modelCards:
+  - name: auto
     capabilities:
     - chat
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8091/v1
-    model: auto
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -4814,7 +4933,8 @@ recipes:
         - type: domain
           name: computer science
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     default:
@@ -4855,30 +4975,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct-AWQ
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      Qwen/Qwen2.5-14B-Instruct-AWQ:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8083/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Qwen/Qwen2.5-14B-Instruct-AWQ
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
     capabilities:
     - chat
     - reasoning
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8083/v1
-    model: Qwen/Qwen2.5-14B-Instruct-AWQ
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -4952,8 +5078,8 @@ recipes:
           unverified_factual_action: header
           include_hallucination_details: false
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -5006,30 +5132,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct-AWQ
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      Qwen/Qwen2.5-14B-Instruct-AWQ:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct-AWQ
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8083/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Qwen/Qwen2.5-14B-Instruct-AWQ
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct-AWQ
     capabilities:
     - chat
     - reasoning
     - ar
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8083/v1
-    model: Qwen/Qwen2.5-14B-Instruct-AWQ
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -5103,8 +5235,8 @@ recipes:
           unverified_factual_action: header
           include_hallucination_details: false
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -5157,9 +5289,12 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global:
@@ -5181,9 +5316,12 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global:
@@ -5205,9 +5343,12 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global:
@@ -5229,31 +5370,36 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: phi4-mini
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://phi4-mini:80/v1
-    model: phi4-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: phi4-mini
+    provider_model_id: phi4-mini
+    backend_refs:
+    - provider: vllm
+      endpoint: http://phi4-mini:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: phi4-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -5549,8 +5695,8 @@ recipes:
             and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -5699,31 +5845,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: phi4-mini
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://phi4-mini:80/v1
-    model: phi4-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: phi4-mini
+    provider_model_id: phi4-mini
+    backend_refs:
+    - provider: vllm
+      endpoint: http://phi4-mini:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: phi4-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -6019,8 +6170,8 @@ recipes:
             and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -6169,31 +6320,36 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: gpt-4o-mini
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: gpt-4o-mini
+    provider_model_id: gpt-4o-mini
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: gpt-4o-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -6489,8 +6645,8 @@ recipes:
             and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -6639,26 +6795,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen3
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.20:8002/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.20:8002/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen3
+routing:
+  modelCards:
+  - name: qwen3
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -6821,7 +6983,8 @@ recipes:
         operator: AND
         conditions: []
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     default-route:
@@ -6913,37 +7076,46 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Model-A
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://DYNAMIC_MODEL_A_IP:8000/v1
-    model: Model-A
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Model-B
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://DYNAMIC_MODEL_B_IP:8001/v1
-    model: Model-B
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      Model-A:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+      Model-B:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Model-A
+    provider_model_id: Model-A
+    backend_refs:
+    - provider: vllm
+      endpoint: http://DYNAMIC_MODEL_A_IP:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Model-A
+  - name: Model-B
+    provider_model_id: Model-B
+    backend_refs:
+    - provider: vllm
+      endpoint: http://DYNAMIC_MODEL_B_IP:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Model-B
+routing:
+  modelCards:
+  - name: Model-A
+  - name: Model-B
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -7201,8 +7373,8 @@ recipes:
           system_prompt: You are a knowledgeable assistant for general questions.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -7324,43 +7496,44 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen14b-admin
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+providers:
+  models:
+  - name: qwen14b-admin
+    provider_model_id: qwen14b-admin
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8100/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: qwen14b-free
+    provider_model_id: qwen14b-free
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8200/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen14b-admin
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8100/v1
-    model: qwen14b-admin
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: qwen14b-free
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+  - name: qwen14b-free
     capabilities:
     - chat
     - code
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8200/v1
-    model: qwen14b-free
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       role_bindings:
       - name: admin-binding
@@ -7404,8 +7577,8 @@ recipes:
         - type: authz
           name: free_user
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -7425,11 +7598,6 @@ global:
   router:
     clear_route_cache: true
   services:
-    authz:
-      fail_open: true
-      identity:
-        user_id_header: x-jwt-sub
-        user_groups_header: x-jwt-groups
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180
@@ -7453,39 +7621,44 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen2.5-7B-Instruct
+    provider_model_id: Qwen/Qwen2.5-7B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen2.5-7B-Instruct
-  card:
+  - name: Qwen/Qwen2.5-7B-Instruct
     capabilities:
     - chat
     - code
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen2.5-7B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: complex_analysis
@@ -7571,8 +7744,8 @@ recipes:
         - type: authz
           name: free_user
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -7602,8 +7775,6 @@ global:
   router:
     clear_route_cache: true
   services:
-    authz:
-      fail_open: true
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180
@@ -7627,35 +7798,42 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Model-A
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Model-A
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Model-B
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Model-B
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      Model-A:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: Model-A
+    provider_model_id: Model-A
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: Model-A
+  - name: Model-B
+    provider_model_id: Model-B
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Model-A
+  - name: Model-B
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -7834,8 +8012,8 @@ recipes:
         operator: OR
         conditions: []
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -7967,25 +8145,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen3
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8002/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8002/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen3
+routing:
+  modelCards:
+  - name: qwen3
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -8019,8 +8204,8 @@ recipes:
           unverified_factual_action: header
           include_hallucination_details: true
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8061,25 +8246,29 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen-Image
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen-Image
+    provider_model_id: Qwen/Qwen-Image
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen-Image
     capabilities:
     - image_generation
     - diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen-Image
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       modality:
       - name: DIFFUSION
@@ -8107,8 +8296,8 @@ recipes:
           default_height: 1024
           timeout_seconds: 120
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8149,28 +8338,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8888
   address: 0.0.0.0
   port: 8888
   timeout: 300s
-models:
-- name: qwen3
-  card:
+providers:
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.17.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen3
     capabilities:
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://172.17.0.1:8000/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -8201,8 +8394,8 @@ recipes:
           similarity_threshold: 0.45
           auto_store: true
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8243,36 +8436,41 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen2.5-14B-Instruct
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen-Image
+    provider_model_id: Qwen/Qwen-Image
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen2.5-14B-Instruct
     capabilities:
     - ar
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen-Image
-  card:
+  - name: Qwen/Qwen-Image
     capabilities:
     - image_generation
     - diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen-Image
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: text_generation
@@ -8340,8 +8538,8 @@ recipes:
         - type: domain
           name: text_generation
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8402,45 +8600,46 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen14b-dev
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+providers:
+  models:
+  - name: qwen14b-dev
+    provider_model_id: qwen14b-dev
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8100/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: qwen14b-prod
+    provider_model_id: qwen14b-prod
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8200/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen14b-dev
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8100/v1
-    model: qwen14b-dev
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: qwen14b-prod
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+  - name: qwen14b-prod
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8200/v1
-    model: qwen14b-prod
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -8507,8 +8706,8 @@ recipes:
             by the user. If a user shares personal data, remind them to avoid sharing
             sensitive details.
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8547,52 +8746,58 @@ global:
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: gpt-4o
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o
-  - provider: openai-compatible
-    endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o/v1
-    model: gpt-4o
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: gpt-4o-mini
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o-mini
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: claude-sonnet-4-20250514
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.anthropic.com
-    model: claude-sonnet-4-20250514
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen2.5-14B-Instruct
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: gpt-4o
+    provider_model_id: gpt-4o
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+    - provider: openai-compatible
+      endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: gpt-4o-mini
+    provider_model_id: gpt-4o-mini
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: claude-sonnet-4-20250514
+    provider_model_id: claude-sonnet-4-20250514
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.anthropic.com
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: gpt-4o
+  - name: gpt-4o-mini
+  - name: claude-sonnet-4-20250514
+  - name: Qwen/Qwen2.5-14B-Instruct
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -8636,8 +8841,8 @@ recipes:
         - type: keyword
           name: general_keywords
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8653,15 +8858,6 @@ global:
   router:
     clear_route_cache: true
   services:
-    authz:
-      fail_open: false
-      providers:
-      - type: header-injection
-        headers:
-          openai: x-user-openai-key
-          anthropic: x-user-anthropic-key
-          azure-openai: x-user-azure-openai-key
-      - type: static-config
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180
@@ -8685,22 +8881,26 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-120b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://0.0.0.0:8000/v1
-    model: openai/gpt-oss-120b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: openai/gpt-oss-120b
+    provider_model_id: openai/gpt-oss-120b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://0.0.0.0:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: openai/gpt-oss-120b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -8717,8 +8917,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8773,22 +8973,26 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-120b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://0.0.0.0:8000/v1
-    model: openai/gpt-oss-120b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: openai/gpt-oss-120b
+    provider_model_id: openai/gpt-oss-120b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://0.0.0.0:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: openai/gpt-oss-120b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -8805,8 +9009,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8849,26 +9053,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-20b
-  card:
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.10:8000/v1
-    model: openai/gpt-oss-20b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      openai/gpt-oss-20b:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: openai/gpt-oss-20b
+    provider_model_id: openai/gpt-oss-20b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.10:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: openai/gpt-oss-20b
+routing:
+  modelCards:
+  - name: openai/gpt-oss-20b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -8885,8 +9095,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -8964,26 +9174,32 @@ global:
       classifier: {}
       hallucination_mitigation: {}
 ---
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen3
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - high
-  connections:
-  - provider: vllm
-    endpoint: http://172.28.0.20:8002/v1
-    model: qwen3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen3:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen3
+    provider_model_id: qwen3
+    backend_refs:
+    - provider: vllm
+      endpoint: http://172.28.0.20:8002/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen3
+routing:
+  modelCards:
+  - name: qwen3
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -9294,8 +9510,8 @@ recipes:
           enabled: true
           similarity_threshold: 0.75
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

@@ -249,9 +249,9 @@ def test_resolve_container_cli_path_returns_none_for_podman_shim(monkeypatch):
 @pytest.mark.parametrize(
     "reference",
     [
-        "example/router:v0.4.0",
+        "example/router:v0.3.0",
         "example/router@sha256:" + "a" * 64,
-        "example/router:v0.4.0@sha256:" + "b" * 64,
+        "example/router:v0.3.0@sha256:" + "b" * 64,
     ],
 )
 def test_container_image_exists_inspects_exact_reference(monkeypatch, reference):

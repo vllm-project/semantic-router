@@ -32,18 +32,32 @@ import (
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
-const (
-	controlPlaneModeStandalone = "standalone"
-	controlPlaneModeManaged    = "managed"
-)
-
 type bootstrapDeploymentContract struct {
-	Mode                string
-	Revision            string
-	ManagementPort      int32
-	BackendDispatchPort int32
-	PostgresDSNEnv      string
-	PostgresDSNFile     string
+	Revision             string
+	ManagementStore      bool
+	RuntimeStore         bool
+	ManagementAPIEnabled bool
+	AccessEnabled        bool
+	ManagementPort       int32
+	BackendDispatchPort  int32
+	PostgresDSNEnv       string
+	PostgresDSNFile      string
+}
+
+func (contract bootstrapDeploymentContract) usesDurableState() bool {
+	return contract.ManagementStore
+}
+
+func (contract bootstrapDeploymentContract) exposesManagementAPI() bool {
+	return contract.ManagementAPIEnabled
+}
+
+func (contract bootstrapDeploymentContract) usesBackendDispatch() bool {
+	return contract.ManagementStore
+}
+
+func (contract bootstrapDeploymentContract) enablesAvailabilityDefaults() bool {
+	return contract.ManagementStore
 }
 
 // validateBootstrapConfigMap verifies the deployment boundary without
@@ -77,69 +91,88 @@ func (r *SemanticRouterReconciler) validateBootstrapConfigMap(
 }
 
 func validateBootstrapManifest(data []byte) (bootstrapDeploymentContract, error) {
-	decoder := yaml.NewDecoder(bytes.NewReader(data))
-	var document yaml.Node
-	if err := decoder.Decode(&document); err != nil {
-		return bootstrapDeploymentContract{}, fmt.Errorf("decode YAML: %w", err)
-	}
-	var trailing yaml.Node
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		if err != nil {
-			return bootstrapDeploymentContract{}, fmt.Errorf("decode trailing YAML: %w", err)
-		}
-		return bootstrapDeploymentContract{}, fmt.Errorf("manifest must contain exactly one YAML document")
-	}
-	root := documentRootMapping(&document)
-	if root == nil {
-		return bootstrapDeploymentContract{}, fmt.Errorf("manifest must be a YAML mapping")
-	}
-	if err := validateUniqueMappingKeys(root, "manifest"); err != nil {
+	root, err := decodeBootstrapManifestRoot(data)
+	if err != nil {
 		return bootstrapDeploymentContract{}, err
-	}
-	version := mappingScalar(root, "version")
-	if version != "v0.4" {
-		return bootstrapDeploymentContract{}, fmt.Errorf("version must be v0.4")
 	}
 
 	global := mappingNode(root, "global")
-	controlPlane := mappingNode(global, "control_plane")
-	mode := strings.TrimSpace(mappingScalar(controlPlane, "mode"))
-	if mode != controlPlaneModeStandalone && mode != controlPlaneModeManaged {
-		return bootstrapDeploymentContract{}, fmt.Errorf("global.control_plane.mode must be standalone or managed")
-	}
 	digest := sha256.Sum256(data)
 	contract := bootstrapDeploymentContract{
-		Mode:                mode,
 		Revision:            fmt.Sprintf("sha256:%x", digest),
 		ManagementPort:      DefaultAPIPort,
 		BackendDispatchPort: DefaultBackendDispatchPort,
 	}
-	if mode == controlPlaneModeManaged {
-		for _, field := range []string{"models", "recipes", "entrypoints"} {
-			if mappingNode(root, field) != nil {
-				return bootstrapDeploymentContract{}, fmt.Errorf("managed bootstrap must not declare top-level %s", field)
-			}
+	stores := mappingNode(global, "stores")
+	managementStore := mappingNode(stores, "management")
+	runtimeStore := mappingNode(stores, "runtime")
+	contract.ManagementStore = managementStore != nil
+	contract.RuntimeStore = runtimeStore != nil
+	if contract.ManagementStore {
+		postgres := mappingNode(managementStore, "postgres")
+		if postgres == nil {
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.management requires postgres")
 		}
-
-		stores := mappingNode(global, "stores")
-		accessStore := mappingNode(stores, "access")
-		postgres := mappingNode(accessStore, "postgres")
 		contract.PostgresDSNEnv = strings.TrimSpace(mappingScalar(postgres, "dsn_env"))
 		contract.PostgresDSNFile = strings.TrimSpace(mappingScalar(postgres, "dsn_file"))
 		if (contract.PostgresDSNEnv == "") == (contract.PostgresDSNFile == "") {
-			return bootstrapDeploymentContract{}, fmt.Errorf("managed bootstrap requires exactly one global.stores.access.postgres dsn_env or dsn_file")
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.management.postgres requires exactly one dsn_env or dsn_file")
 		}
 		if contract.PostgresDSNFile != "" && !strings.HasPrefix(contract.PostgresDSNFile, "/") {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.access.postgres.dsn_file must be an absolute path")
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.management.postgres.dsn_file must be an absolute path")
 		}
+	}
+	if contract.RuntimeStore {
+		redis := mappingNode(runtimeStore, "redis")
+		if redis == nil {
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime requires redis")
+		}
+		urlEnv := strings.TrimSpace(mappingScalar(redis, "url_env"))
+		urlFile := strings.TrimSpace(mappingScalar(redis, "url_file"))
+		if (urlEnv == "") == (urlFile == "") {
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime.redis requires exactly one url_env or url_file")
+		}
+		if urlFile != "" && !strings.HasPrefix(urlFile, "/") {
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime.redis.url_file must be an absolute path")
+		}
+		if !contract.ManagementStore {
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime requires global.stores.management")
+		}
+	}
 
-		services := mappingNode(global, "services")
-		managementAPI := mappingNode(services, "management_api")
+	services := mappingNode(global, "services")
+	managementAPI := mappingNode(services, "management_api")
+	managementEnabled, err := mappingBool(managementAPI, "enabled", false)
+	if err != nil {
+		return bootstrapDeploymentContract{}, fmt.Errorf("global.services.management_api.enabled: %w", err)
+	}
+	contract.ManagementAPIEnabled = managementEnabled
+	if contract.ManagementAPIEnabled {
+		if !contract.ManagementStore {
+			return bootstrapDeploymentContract{}, fmt.Errorf("global.services.management_api.enabled requires global.stores.management")
+		}
+	}
+	// The same HTTP listener serves operational probes even when versioned
+	// Management routes are disabled. Its port therefore comes from the
+	// listener configuration whenever durable routing owns that surface; TLS
+	// remains gated by ManagementAPIEnabled.
+	if contract.ManagementStore {
 		managementPort, err := mappingPort(managementAPI, "port", DefaultAPIPort)
 		if err != nil {
 			return bootstrapDeploymentContract{}, fmt.Errorf("global.services.management_api.port: %w", err)
 		}
 		contract.ManagementPort = managementPort
+	}
+	access := mappingNode(services, "access")
+	accessEnabled, err := mappingBool(access, "enabled", false)
+	if err != nil {
+		return bootstrapDeploymentContract{}, fmt.Errorf("global.services.access.enabled: %w", err)
+	}
+	contract.AccessEnabled = accessEnabled
+	if contract.AccessEnabled && (!contract.ManagementStore || !contract.RuntimeStore) {
+		return bootstrapDeploymentContract{}, fmt.Errorf("global.services.access.enabled requires management and runtime stores")
+	}
+	if contract.usesBackendDispatch() {
 		backendDispatch := mappingNode(services, "backend_dispatch")
 		backendDispatchPort, err := mappingPort(backendDispatch, "port", DefaultBackendDispatchPort)
 		if err != nil {
@@ -148,6 +181,45 @@ func validateBootstrapManifest(data []byte) (bootstrapDeploymentContract, error)
 		contract.BackendDispatchPort = backendDispatchPort
 	}
 	return contract, nil
+}
+
+func decodeBootstrapManifestRoot(data []byte) (*yaml.Node, error) {
+	decoder := yaml.NewDecoder(bytes.NewReader(data))
+	var document yaml.Node
+	if err := decoder.Decode(&document); err != nil {
+		return nil, fmt.Errorf("decode YAML: %w", err)
+	}
+	var trailing yaml.Node
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err != nil {
+			return nil, fmt.Errorf("decode trailing YAML: %w", err)
+		}
+		return nil, fmt.Errorf("manifest must contain exactly one YAML document")
+	}
+	root := documentRootMapping(&document)
+	if root == nil {
+		return nil, fmt.Errorf("manifest must be a YAML mapping")
+	}
+	if err := validateUniqueMappingKeys(root, "manifest"); err != nil {
+		return nil, err
+	}
+	version := mappingScalar(root, "version")
+	if version != "v0.3" {
+		return nil, fmt.Errorf("version must be v0.3")
+	}
+	return root, nil
+}
+
+func mappingBool(mapping *yaml.Node, key string, fallback bool) (bool, error) {
+	value := strings.TrimSpace(mappingScalar(mapping, key))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, fmt.Errorf("must be true or false")
+	}
+	return parsed, nil
 }
 
 func mappingPort(mapping *yaml.Node, key string, fallback int32) (int32, error) {

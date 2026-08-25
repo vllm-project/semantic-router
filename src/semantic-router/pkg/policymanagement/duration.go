@@ -69,11 +69,11 @@ func parseISODuration(value string) (time.Duration, error) {
 		if component.value == "" {
 			continue
 		}
-		parsed, err := strconv.ParseUint(component.value, 10, 64)
-		if err != nil || parsed > uint64(math.MaxInt64/int64(component.unit)) {
+		parsed, err := strconv.ParseInt(component.value, 10, 64)
+		if err != nil || parsed > math.MaxInt64/int64(component.unit) {
 			return 0, ErrInvalidRequest
 		}
-		part := int64(parsed) * int64(component.unit)
+		part := parsed * int64(component.unit)
 		if part > math.MaxInt64-total {
 			return 0, ErrInvalidRequest
 		}

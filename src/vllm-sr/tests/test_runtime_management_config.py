@@ -165,7 +165,9 @@ def test_management_readiness_matches_router_auth_mode_exactly():
         mode=" bearer ", tokens=[{"env": "TOKEN", "role": "viewer"}]
     )
 
-    with pytest.raises(ValueError, match="auth mode must be disabled or bearer"):
+    with pytest.raises(
+        ValueError, match="auth mode must be disabled, bearer, or router"
+    ):
         _configured_management_readiness_token_env(config, {"TOKEN": "secret-value"})
 
 
@@ -173,7 +175,9 @@ def test_management_readiness_matches_router_auth_mode_exactly():
 def test_management_readiness_rejects_falsey_non_string_auth_mode(mode: object):
     config = _management_config(mode=mode, tokens=[{"env": "TOKEN", "role": "viewer"}])
 
-    with pytest.raises(ValueError, match="auth mode must be disabled or bearer"):
+    with pytest.raises(
+        ValueError, match="auth mode must be disabled, bearer, or router"
+    ):
         _configured_management_readiness_token_env(config, {"TOKEN": "secret-value"})
 
 
@@ -241,7 +245,7 @@ def test_custom_serve_forwards_management_readiness_credential(monkeypatch, tmp_
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [
                     {"name": "http-8899", "address": "0.0.0.0", "port": 8899}
                 ],

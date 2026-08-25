@@ -161,8 +161,9 @@ func (builder *managedAccessFixtureBuilder) createFixtureModel() error {
 			"id": builder.modelID, "name": "managed-access-model-" + builder.seed,
 			"aliases":      []string{"managed-access-model-" + builder.seed},
 			"capabilities": []string{"streaming", "text", "tools"},
-			"execution": map[string]interface{}{
-				"maxRetries": 1, "requestTimeout": "30s", "streamTimeout": "2m",
+			"control": map[string]interface{}{
+				"retry":   map[string]interface{}{"count": 1, "on": []string{"unavailable"}},
+				"timeout": map[string]interface{}{"request": "30s", "stream": "2m"},
 			},
 			"pricing": map[string]interface{}{
 				"inputCostPerMillionTokens": "1000000", "outputCostPerMillionTokens": "1000000",

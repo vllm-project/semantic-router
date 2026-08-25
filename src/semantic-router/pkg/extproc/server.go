@@ -26,6 +26,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingcontext"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	tlsutil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/tls"
 )
 
@@ -46,18 +47,18 @@ type ConfigParser func(string) (*config.RouterConfig, error)
 
 // ServerDependencies are process-owned request and dispatch resources.
 type ServerDependencies struct {
-	ManagedRequests      *ManagedRequestRuntime
-	StandaloneRequests   *StandaloneRequestRuntime
-	DispatchCapabilities DispatchCapabilityRuntime
-	OutcomeFeedback      OutcomeFeedbackRuntime
-	OutcomeProjection    OutcomeLearningProjectionRuntime
-	ResponseTerminals    backendinvoker.ResponseTerminalReader
-	ProtocolCodecs       *protocolcodec.Registry
-	ParseConfig          ConfigParser
+	DurableRoutingRequests *DurableRoutingRequestRuntime
+	FileRequests           *FileRequestRuntime
+	DispatchCapabilities   DispatchCapabilityRuntime
+	OutcomeFeedback        OutcomeFeedbackRuntime
+	OutcomeProjection      OutcomeLearningProjectionRuntime
+	ResponseTerminals      backendinvoker.ResponseTerminalReader
+	ProtocolCodecs         *protocolcodec.Registry
+	ParseConfig            ConfigParser
 }
 
 func (dependencies ServerDependencies) routerDependencies() RuntimeDependencies {
-	if dependencies.ManagedRequests == nil {
+	if dependencies.DurableRoutingRequests == nil {
 		return RuntimeDependencies{
 			DispatchCapabilities: dependencies.DispatchCapabilities,
 			OutcomeFeedback:      dependencies.OutcomeFeedback,
@@ -67,7 +68,7 @@ func (dependencies ServerDependencies) routerDependencies() RuntimeDependencies 
 		}
 	}
 	return RuntimeDependencies{
-		InferenceAccess:      dependencies.ManagedRequests.access,
+		InferenceAccess:      dependencies.DurableRoutingRequests.access,
 		DispatchCapabilities: dependencies.DispatchCapabilities,
 		OutcomeFeedback:      dependencies.OutcomeFeedback,
 		OutcomeProjection:    dependencies.OutcomeProjection,
@@ -95,36 +96,41 @@ func NewServerWithDependencies(
 	if err != nil {
 		return nil, err
 	}
-	managedMode := router.Config.ControlPlane.Mode == config.ControlPlaneModeManaged
-	if managedMode && dependencies.ManagedRequests == nil {
+	capabilities, err := runtimecapabilities.Derive(router.Config)
+	if err != nil {
 		_ = router.Close()
-		return nil, errors.New("managed inference listener requires a managed request runtime")
+		return nil, fmt.Errorf("derive runtime capabilities: %w", err)
 	}
-	if !managedMode && dependencies.ManagedRequests != nil {
+	durableRouting := capabilities.DurableRouting
+	if durableRouting && dependencies.DurableRoutingRequests == nil {
 		_ = router.Close()
-		return nil, errors.New("managed request runtime was injected outside managed mode")
+		return nil, errors.New("durable routing requires a published request runtime")
 	}
-	if managedMode && dependencies.StandaloneRequests != nil {
+	if !durableRouting && dependencies.DurableRoutingRequests != nil {
 		_ = router.Close()
-		return nil, errors.New("standalone request runtime was injected in managed mode")
+		return nil, errors.New("published request runtime requires durable routing")
 	}
-	if !managedMode && dependencies.StandaloneRequests == nil {
+	if durableRouting && dependencies.FileRequests != nil {
 		_ = router.Close()
-		return nil, errors.New("standalone inference listener requires a standalone request runtime")
+		return nil, errors.New("file-routing request runtime was injected with durable Management")
 	}
-	if !managedMode && !dependencies.StandaloneRequests.matches(router.Config.RoutingSnapshot) {
+	if !durableRouting && dependencies.FileRequests == nil {
 		_ = router.Close()
-		return nil, errors.New("standalone Router does not match the process routing snapshot")
+		return nil, errors.New("file routing requires a file request runtime")
 	}
-	if managedMode && router.Config.Access.Enabled != dependencies.ManagedRequests.accessEnabled() {
+	if !durableRouting && !dependencies.FileRequests.matches(router.Config.RoutingSnapshot) {
 		_ = router.Close()
-		return nil, errors.New("managed request runtime access mode does not match Router configuration")
+		return nil, errors.New("file Router does not match the process routing snapshot")
+	}
+	if durableRouting && capabilities.NativeAccess != dependencies.DurableRoutingRequests.accessEnabled() {
+		_ = router.Close()
+		return nil, errors.New("published request runtime access capability does not match Router configuration")
 	}
 	attachRuntimeRegistry(router, runtimeRegistry)
 	publishRouterState(router.Config, router, runtimeRegistry)
 
 	service := newRouterServiceWithRequestRuntimes(
-		router, dependencies.ManagedRequests, dependencies.StandaloneRequests,
+		router, dependencies.DurableRoutingRequests, dependencies.FileRequests,
 	)
 	return &Server{
 		service:  service,
@@ -251,18 +257,18 @@ func (s *Server) Stop() {
 	})
 }
 
-// RouterService owns the immutable bootstrap Router used by standalone streams
-// and managed error responses. Managed request generations come from the
+// RouterService owns the immutable bootstrap Router used by file-backed streams
+// and durable-publication error responses. Published request generations come from the
 // process-owned publication registry.
 type RouterService struct {
-	current    atomic.Pointer[routerGeneration]
-	managed    *ManagedRequestRuntime
-	standalone *StandaloneRequestRuntime
-	mu         sync.Mutex
-	closed     bool
-	retired    sync.WaitGroup
-	errMu      sync.Mutex
-	errors     []error
+	current        atomic.Pointer[routerGeneration]
+	durableRouting *DurableRoutingRequestRuntime
+	fileRequests   *FileRequestRuntime
+	mu             sync.Mutex
+	closed         bool
+	retired        sync.WaitGroup
+	errMu          sync.Mutex
+	errors         []error
 }
 
 type routerGeneration struct {
@@ -272,10 +278,10 @@ type routerGeneration struct {
 
 func newRouterServiceWithRequestRuntimes(
 	r *OpenAIRouter,
-	managed *ManagedRequestRuntime,
-	standalone *StandaloneRequestRuntime,
+	durableRouting *DurableRoutingRequestRuntime,
+	fileRequests *FileRequestRuntime,
 ) *RouterService {
-	rs := &RouterService{managed: managed, standalone: standalone}
+	rs := &RouterService{durableRouting: durableRouting, fileRequests: fileRequests}
 	rs.current.Store(&routerGeneration{router: r})
 	return rs
 }
@@ -289,16 +295,16 @@ func (rs *RouterService) GetRouter() *OpenAIRouter {
 	return generation.router
 }
 
-// Process delegates standalone streams to the process-global generation. In
-// managed mode it authenticates once, verifies the active publication lease,
+// Process delegates file-backed streams to the process-global generation. With
+// durable routing it authenticates once, verifies the active publication lease,
 // and acquires the exactly pinned namespace generation before replaying the
 // first header frame.
 func (rs *RouterService) Process(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	if rs.managed != nil {
-		return rs.processManaged(stream)
+	if rs.durableRouting != nil {
+		return rs.processDurableRouting(stream)
 	}
-	if rs.standalone != nil {
-		return rs.processStandalone(stream)
+	if rs.fileRequests != nil {
+		return rs.processFileRequest(stream)
 	}
 	generation, err := rs.acquireCurrent()
 	if err != nil {
@@ -320,35 +326,35 @@ func (rs *RouterService) acquireCurrent() (*routerGeneration, error) {
 	return generation, nil
 }
 
-func (rs *RouterService) processManaged(stream ext_proc.ExternalProcessor_ProcessServer) error {
-	first, processManagedErr := stream.Recv()
-	if processManagedErr != nil {
-		return processManagedErr
+func (rs *RouterService) processDurableRouting(stream ext_proc.ExternalProcessor_ProcessServer) error {
+	first, processDurableRoutingErr := stream.Recv()
+	if processDurableRoutingErr != nil {
+		return processDurableRoutingErr
 	}
-	headerMap, processManagedErr := managedRequestHeaders(first)
-	if processManagedErr != nil {
-		return processManagedErr
+	headerMap, processDurableRoutingErr := durableRoutingRequestHeaders(first)
+	if processDurableRoutingErr != nil {
+		return processDurableRoutingErr
 	}
-	if managedInternalAuthenticated(headerMap) {
-		generation, ok := managedInternalGeneration(headerMap)
+	if durableRoutingInternalAuthenticated(headerMap) {
+		generation, ok := durableRoutingInternalGeneration(headerMap)
 		if !ok {
-			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+			return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnavailable)
 		}
-		lease, err := rs.managed.resolveInternal(generation)
+		lease, err := rs.durableRouting.resolveInternal(generation)
 		if err != nil {
-			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+			return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnavailable)
 		}
 		defer lease.Release()
 		grant, err := consumeDispatchGrant(
-			headerMap, rs.managed.dispatch, stream.Context(), generation,
+			headerMap, rs.durableRouting.dispatch, stream.Context(), generation,
 			strings.TrimSpace(headerMapValue(headerMap, headers.RequestID)),
 		)
 		if err != nil {
-			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+			return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnavailable)
 		}
 		requestContext, err := routingcontext.WithGeneration(stream.Context(), generation)
 		if err != nil {
-			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+			return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnavailable)
 		}
 		requestContext = withVerifiedDispatchGrant(requestContext, grant)
 		return lease.Router.Process(&replayProcessStream{
@@ -357,42 +363,42 @@ func (rs *RouterService) processManaged(stream ext_proc.ExternalProcessor_Proces
 	}
 
 	var (
-		resolution     managedExternalResolution
+		resolution     durableRoutingExternalResolution
 		requestContext = stream.Context()
 	)
-	if rs.managed.accessEnabled() {
+	if rs.durableRouting.accessEnabled() {
 		credential, ok := consumeBearerCredential(headerMap)
 		if !ok {
-			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnauthenticated)
+			return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnauthenticated)
 		}
 		var result quotaruntime.AccessCheckResult
 		var resolveErr error
-		resolution, result, resolveErr = rs.managed.resolveExternal(stream.Context(), credential)
+		resolution, result, resolveErr = rs.durableRouting.resolveExternal(stream.Context(), credential)
 		if resolveErr != nil || !result.Allowed() || resolution.lease == nil {
-			return rs.sendManagedInferenceError(stream, result.Disposition)
+			return rs.sendDurableRoutingInferenceError(stream, result.Disposition)
 		}
 		requestContext = withInferenceAuthentication(requestContext, resolution.authentication)
 	} else {
-		// Routing-only mode has no inference identity. Remove any caller bearer
+		// Without native access has no inference identity. Remove any caller bearer
 		// before replay so it can never become an accidental backend credential.
 		_, _ = consumeBearerCredential(headerMap)
 		var resolveErr error
-		resolution, resolveErr = rs.managed.resolvePublic()
+		resolution, resolveErr = rs.durableRouting.resolvePublic()
 		if resolveErr != nil || resolution.lease == nil {
-			return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+			return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnavailable)
 		}
 	}
 	defer resolution.lease.Release()
-	requestContext, processManagedErr = routingcontext.WithGeneration(requestContext, resolution.generation)
-	if processManagedErr != nil {
-		return rs.sendManagedInferenceError(stream, quotaruntime.AdmissionUnavailable)
+	requestContext, processDurableRoutingErr = routingcontext.WithGeneration(requestContext, resolution.generation)
+	if processDurableRoutingErr != nil {
+		return rs.sendDurableRoutingInferenceError(stream, quotaruntime.AdmissionUnavailable)
 	}
 	return resolution.lease.Router.Process(&replayProcessStream{
 		ExternalProcessor_ProcessServer: stream, ctx: requestContext, first: first,
 	})
 }
 
-func (rs *RouterService) sendManagedInferenceError(
+func (rs *RouterService) sendDurableRoutingInferenceError(
 	stream ext_proc.ExternalProcessor_ProcessServer,
 	disposition quotaruntime.AdmissionDisposition,
 ) error {

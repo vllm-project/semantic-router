@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
 
 func validatePromptAlgorithmConfig(
@@ -111,19 +112,30 @@ func validateDecisionPromptModel(cfg *RouterConfig, decision Decision) error {
 
 func promptHelperHasChatBackend(cfg *RouterConfig, model string) bool {
 	if cfg.RoutingSnapshot != nil {
-		for _, candidate := range cfg.RoutingSnapshot.Models {
-			if candidate.Name == model || slices.Contains(candidate.Aliases, model) {
-				for _, backend := range candidate.Backends {
-					if backend.WireFormat == llmprotocol.OpenAIChatV1 {
-						return true
-					}
-				}
-				return false
-			}
+		if candidate, ok := promptHelperSnapshotModel(cfg, model); ok {
+			return promptHelperModelSupportsChat(candidate)
 		}
 	}
 	for _, endpoint := range cfg.VLLMEndpoints {
 		if endpoint.Model == model || endpoint.Name == model {
+			return true
+		}
+	}
+	return false
+}
+
+func promptHelperSnapshotModel(cfg *RouterConfig, model string) (routingsnapshot.Model, bool) {
+	for _, candidate := range cfg.RoutingSnapshot.Models {
+		if candidate.Name == model || slices.Contains(candidate.Aliases, model) {
+			return candidate, true
+		}
+	}
+	return routingsnapshot.Model{}, false
+}
+
+func promptHelperModelSupportsChat(model routingsnapshot.Model) bool {
+	for _, backend := range model.Backends {
+		if backend.WireFormat == llmprotocol.OpenAIChatV1 {
 			return true
 		}
 	}

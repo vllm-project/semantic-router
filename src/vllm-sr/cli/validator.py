@@ -3,9 +3,11 @@
 from typing import Any, List
 
 from cli.config_contract import iter_routing_profiles
-from cli.managed_envoy_contract import validate_envoy_dispatch_contract
+from cli.envoy_dispatch_contract import validate_envoy_dispatch_contract
 from cli.models import (
+    Providers,
     RecipeDistribution,
+    Routing,
     UserConfig,
     PluginType,
     ResponseCachePluginConfig,
@@ -112,8 +114,15 @@ MIGRATED_LEARNING_ALGORITHM_TARGETS = {
 
 def _routing_profiles(config: UserConfig):
     return [
-        (f"recipes.{recipe.name}.document.decisions", recipe.document)
-        for recipe in config.recipes
+        (
+            (
+                "routing.decisions"
+                if name == "default"
+                else f"recipes.{name}.routing.decisions"
+            ),
+            routing,
+        )
+        for name, routing in iter_routing_profiles(config)
     ]
 
 
@@ -352,57 +361,46 @@ def validate_plugin_configurations(config: UserConfig) -> List[ValidationError]:
 
 
 def _router_dc_missing_description_errors(config: UserConfig) -> List[ValidationError]:
-    models = {model.name: model for model in config.models}
-    recipes = {recipe.name: recipe for recipe in config.recipes}
+    model_cards = {model.name: model for model in config.routing.model_cards}
+    recipes = {"default": config.routing}
+    recipes.update({recipe.name: recipe.routing for recipe in config.recipes})
     errors: List[ValidationError] = []
     for entrypoint_index, entrypoint in enumerate(config.entrypoints):
-        routes = (
-            [
-                (
-                    entrypoint.recipe,
-                    entrypoint.assignments or {},
-                    f"entrypoints.{entrypoint_index}",
-                )
-            ]
-            if not entrypoint.rules
-            else [
-                (
-                    rule.recipe,
-                    rule.assignments,
-                    f"entrypoints.{entrypoint_index}.rules.{rule_index}",
-                )
-                for rule_index, rule in enumerate(entrypoint.rules)
-            ]
-        )
-        for recipe_name, assignments, field in routes:
-            recipe = recipes.get(recipe_name or "")
-            if recipe is None:
+        routing = recipes.get(entrypoint.recipe)
+        if routing is None:
+            continue
+        decisions = {decision.name: decision for decision in routing.decisions}
+        assignments = entrypoint.assignments or {}
+        for decision_name, decision in decisions.items():
+            algorithm = decision.algorithm
+            if (
+                algorithm is None
+                or algorithm.type != "router_dc"
+                or algorithm.router_dc is None
+                or not algorithm.router_dc.require_descriptions
+            ):
                 continue
-            decisions = {
-                decision.name: decision for decision in recipe.document.decisions
-            }
-            for decision_name, assignment in assignments.items():
-                decision = decisions.get(decision_name)
-                algorithm = decision.algorithm if decision is not None else None
-                if (
-                    algorithm is None
-                    or algorithm.type != "router_dc"
-                    or algorithm.router_dc is None
-                    or not algorithm.router_dc.require_descriptions
-                ):
+            assigned_models = (
+                assignments[decision_name].models
+                if decision_name in assignments
+                else decision.modelRefs
+            )
+            for model_ref in assigned_models:
+                card = model_cards.get(model_ref.model)
+                if card is None or card.description:
                     continue
-                for model_ref in assignment.models:
-                    model = models.get(model_ref.model)
-                    if model is None or model.card.description:
-                        continue
-                    errors.append(
-                        ValidationError(
-                            f"Decision '{decision.name}' uses router_dc with "
-                            "require_descriptions=true, but assigned Model "
-                            f"'{model_ref.model}' has no description",
-                            field=f"{field}.assignments.{decision_name}",
-                        )
+                errors.append(
+                    ValidationError(
+                        f"Decision '{decision.name}' uses router_dc with "
+                        "require_descriptions=true, but assigned Model "
+                        f"'{model_ref.model}' has no description",
+                        field=(
+                            f"entrypoints.{entrypoint_index}.assignments.{decision_name}"
+                            if decision_name in assignments
+                            else f"recipes.{entrypoint.recipe}.routing.decisions.{decision_name}.modelRefs"
+                        ),
                     )
+                )
     return errors
 
 
@@ -519,7 +517,8 @@ def validate_recipe_distribution(
     validation_view = UserConfig.model_construct(
         version=distribution.version,
         listeners=[],
-        models=[],
+        providers=Providers(),
+        routing=Routing(),
         entrypoints=[],
         recipes=distribution.recipes,
         global_=None,

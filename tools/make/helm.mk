@@ -170,7 +170,23 @@ helm-safety-validate: helm-ci-setup
 	grep -q "immutable: true" "$$tmp_dir/prod.yaml"; \
 	grep -Eq "name: .*config-[0-9a-f]{12}" "$$tmp_dir/prod.yaml"; \
 	grep -q "name: CONFIG_FILE" "$$tmp_dir/prod.yaml"; \
-	grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/prod.yaml"; \
+	if grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/prod.yaml"; then \
+		echo "File-authority production values must not enable the durable routing listener"; \
+		exit 1; \
+	fi; \
+	echo "Validating durable routing operational listener..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-string 'config.global.stores.management.postgres.dsn_env=ROUTER_MANAGEMENT_DSN' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/durable-routing.yaml"; \
+	grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/durable-routing.yaml"; \
+	grep -A6 "startupProbe:" "$$tmp_dir/durable-routing.yaml" | grep -q "scheme: HTTP"; \
+	echo "Validating enabled Management API probe protocol..."; \
+	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
+		--set-string 'config.global.stores.management.postgres.dsn_env=ROUTER_MANAGEMENT_DSN' \
+		--set 'config.global.services.management_api.enabled=true' \
+		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/management-api.yaml"; \
+	grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/management-api.yaml"; \
+	grep -A6 "startupProbe:" "$$tmp_dir/management-api.yaml" | grep -q "scheme: HTTPS"; \
 	echo "Validating chart-owned bootstrap environment rejection..."; \
 	if helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set 'extraEnv[0].name=CONFIG_FILE' \

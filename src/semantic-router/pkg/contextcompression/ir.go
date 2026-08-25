@@ -69,33 +69,7 @@ func ParseSemanticRequest(request *llmprotocol.Request, provenance Provenance) *
 		entry := &MessageIR{Index: index, Role: string(message.Role)}
 		for contentIndex := range message.Content {
 			content := &message.Content[contentIndex]
-			switch content.Kind {
-			case llmprotocol.ContentText, llmprotocol.ContentRefusal, llmprotocol.ContentReasoning:
-				entry.Blocks = append(entry.Blocks, semanticTextBlock(entry, contentIndex, "", TargetHistory, content))
-			case llmprotocol.ContentToolCall:
-				if content.ToolCall == nil {
-					continue
-				}
-				call := content.ToolCall
-				entry.ToolCallIDs = append(entry.ToolCallIDs, call.ID)
-				ir.ToolIntents[call.ID] = strings.TrimSpace(call.Name + " " + call.Arguments)
-			case llmprotocol.ContentToolResult:
-				if content.ToolResult == nil {
-					continue
-				}
-				callID := content.ToolResult.CallID
-				entry.ToolCallID = callID
-				source := TargetToolOutput
-				if isRAGToolMessage(callID, provenance) {
-					source = TargetRAG
-				}
-				for nestedIndex := range content.ToolResult.Content {
-					nested := &content.ToolResult.Content[nestedIndex]
-					if nested.Kind == llmprotocol.ContentText || nested.Kind == llmprotocol.ContentRefusal {
-						entry.Blocks = append(entry.Blocks, semanticTextBlock(entry, contentIndex*1000+nestedIndex, callID, source, nested))
-					}
-				}
-			}
+			appendSemanticContent(ir, entry, contentIndex, content, provenance)
 		}
 		if _, memory := provenance.MemoryMessageIndexes[index]; memory {
 			for _, block := range entry.Blocks {
@@ -120,6 +94,52 @@ func ParseSemanticRequest(request *llmprotocol.Request, provenance Provenance) *
 	}
 	protectAtomicToolExchanges(ir.Messages)
 	return ir
+}
+
+func appendSemanticContent(
+	ir *RequestIR,
+	message *MessageIR,
+	contentIndex int,
+	content *llmprotocol.Content,
+	provenance Provenance,
+) {
+	switch content.Kind {
+	case llmprotocol.ContentText, llmprotocol.ContentRefusal, llmprotocol.ContentReasoning:
+		message.Blocks = append(message.Blocks, semanticTextBlock(message, contentIndex, "", TargetHistory, content))
+	case llmprotocol.ContentToolCall:
+		if content.ToolCall == nil {
+			return
+		}
+		call := content.ToolCall
+		message.ToolCallIDs = append(message.ToolCallIDs, call.ID)
+		ir.ToolIntents[call.ID] = strings.TrimSpace(call.Name + " " + call.Arguments)
+	case llmprotocol.ContentToolResult:
+		appendSemanticToolResult(message, contentIndex, content.ToolResult, provenance)
+	}
+}
+
+func appendSemanticToolResult(
+	message *MessageIR,
+	contentIndex int,
+	result *llmprotocol.ToolResult,
+	provenance Provenance,
+) {
+	if result == nil {
+		return
+	}
+	message.ToolCallID = result.CallID
+	source := TargetToolOutput
+	if isRAGToolMessage(result.CallID, provenance) {
+		source = TargetRAG
+	}
+	for nestedIndex := range result.Content {
+		nested := &result.Content[nestedIndex]
+		if nested.Kind == llmprotocol.ContentText || nested.Kind == llmprotocol.ContentRefusal {
+			message.Blocks = append(message.Blocks, semanticTextBlock(
+				message, contentIndex*1000+nestedIndex, result.CallID, source, nested,
+			))
+		}
+	}
 }
 
 func semanticTextBlock(

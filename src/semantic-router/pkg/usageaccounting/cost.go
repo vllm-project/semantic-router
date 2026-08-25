@@ -80,7 +80,7 @@ func CompilePricing(input PricingInput) (Pricing, error) {
 
 // CompileSnapshotPricing is the only bridge from an immutable routing Model
 // revision into accounting. It preserves nil versus explicit zero and relies
-// on the same cache-inheritance rules used by standalone and managed snapshots.
+// on the same cache-inheritance rules used by file-backed and persisted snapshots.
 func CompileSnapshotPricing(currency string, model routingsnapshot.Model) (Pricing, error) {
 	return CompilePricing(PricingInput{
 		Currency:   currency,

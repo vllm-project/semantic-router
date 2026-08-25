@@ -10,7 +10,8 @@ import random
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple
+from http import HTTPStatus
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -97,7 +98,7 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
+def get_available_models(endpoint: str, api_key: str = "") -> list[str]:
     """Get the list of available models from the vLLM OpenAI API endpoint."""
     client = OpenAI(
         base_url=endpoint,
@@ -115,7 +116,7 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
                 headers={"Authorization": f"Bearer {api_key}"} if api_key else {},
                 timeout=TIMEOUT_SECONDS,
             )
-            if response.status_code == 200:
+            if response.status_code == HTTPStatus.OK:
                 models_data = response.json()
                 return [model["id"] for model in models_data.get("data", [])]
             else:
@@ -126,10 +127,10 @@ def get_available_models(endpoint: str, api_key: str = "") -> List[str]:
 
 
 def load_mmlu_pro_dataset(
-    categories: Optional[List[str]] = None,
-    samples_per_category: Optional[int] = None,
+    categories: list[str] | None = None,
+    samples_per_category: int | None = None,
     seed: int = 42,
-) -> Tuple[pd.DataFrame, List[str]]:
+) -> tuple[pd.DataFrame, list[str]]:
     """Load the MMLU-Pro dataset and filter by categories if specified."""
     dataset = load_dataset("TIGER-Lab/MMLU-Pro", split="test")
     df = pd.DataFrame(dataset)
@@ -162,7 +163,7 @@ def load_mmlu_pro_dataset(
     return df, all_categories
 
 
-def format_cot_prompt(question: str, options: List[str], use_cot: bool = False) -> str:
+def format_cot_prompt(question: str, options: list[str], use_cot: bool = False) -> str:
     """Format the prompt for the model with or without Chain-of-Thought."""
     letter_mapping = {
         0: "A",
@@ -190,7 +191,7 @@ def format_cot_prompt(question: str, options: List[str], use_cot: bool = False) 
     return prompt
 
 
-def extract_answer(response: str) -> Optional[str]:
+def extract_answer(response: str) -> str | None:
     """Extract the answer letter from the model's response."""
     # Try to find the answer using regex pattern
     match = ANSWER_PATTERN.search(response)
@@ -207,7 +208,7 @@ def extract_answer(response: str) -> Optional[str]:
 
 def call_model_with_retry(
     client: OpenAI, model: str, prompt: str, max_tokens: int, temperature: float
-) -> Tuple[str, bool]:
+) -> tuple[str, bool]:
     """Call the model with retry logic for handling timeouts and errors."""
     for attempt in range(MAX_RETRIES):
         try:
@@ -233,11 +234,11 @@ def call_model_with_retry(
 def process_question(
     client: OpenAI,
     model: str,
-    question_data: Dict[str, Any],
+    question_data: dict[str, Any],
     use_cot: bool,
     max_tokens: int,
     temperature: float,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Process a single question and return the results."""
     question = question_data["question"]
     options = question_data["options"]
@@ -315,7 +316,7 @@ def evaluate_model(
     return results_df
 
 
-def analyze_results(results_df: pd.DataFrame) -> Dict[str, float]:
+def analyze_results(results_df: pd.DataFrame) -> dict[str, float]:
     """Analyze the results and compute statistics."""
     # Skip failed requests in the analysis
     valid_results = results_df[results_df["success"]]
@@ -348,7 +349,7 @@ def analyze_results(results_df: pd.DataFrame) -> Dict[str, float]:
 
 def save_results(
     results_df: pd.DataFrame,
-    analysis: Dict[str, Any],
+    analysis: dict[str, Any],
     model: str,
     output_dir: str,
     use_cot: bool,

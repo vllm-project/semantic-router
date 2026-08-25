@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     reasks:
       - name: likely_dissatisfied

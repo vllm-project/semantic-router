@@ -107,9 +107,20 @@ func resolveSnapshotCandidate(
 		Ordinal: candidate.Ordinal, Priority: candidate.Priority,
 		DispatchPlanDigest: candidate.DispatchPlanDigest,
 		ModelID:            model.ID, ModelRevision: model.Revision,
-		Execution: Execution{MaxRetries: model.Execution.MaxRetries, RequestTimeout: requestTimeout, StreamTimeout: streamTimeout},
-		Backends:  backends, RequestDigest: capability.RequestDigest, SourceFormat: capability.WireFormat,
+		Execution: Execution{
+			MaxRetries: model.Execution.MaxRetries, RetryOn: runtimeRetryTriggers(model.Execution.RetryOn),
+			RequestTimeout: requestTimeout, StreamTimeout: streamTimeout,
+		},
+		Backends: backends, RequestDigest: capability.RequestDigest, SourceFormat: capability.WireFormat,
 	}, nil
+}
+
+func runtimeRetryTriggers(source []string) []FallbackTrigger {
+	result := make([]FallbackTrigger, len(source))
+	for index, trigger := range source {
+		result[index] = FallbackTrigger(trigger)
+	}
+	return result
 }
 
 func runtimeConnection(source routingsnapshot.BackendConnection) Connection {

@@ -29,7 +29,7 @@ type ManagementAPIRecoveryConfig struct {
 	LoopbackOnly bool   `yaml:"loopback_only"`
 }
 
-func (c *ManagementAPIConfig) applyV04SecurityDefaults() {
+func (c *ManagementAPIConfig) applySecurityDefaults() {
 	if c == nil {
 		return
 	}
@@ -45,9 +45,8 @@ func (c *ManagementAPIConfig) applyV04SecurityDefaults() {
 	}
 }
 
-func validateManagementBootstrapSecurity(mode string, management ManagementAPIConfig) error {
-	managed := mode == ControlPlaneModeManaged
-	if err := validateManagementTLS(management.TLS, managed); err != nil {
+func validateManagementBootstrapSecurity(management ManagementAPIConfig) error {
+	if err := validateManagementTLS(management.TLS, management.Enabled); err != nil {
 		return err
 	}
 	auth := management.Auth
@@ -57,21 +56,16 @@ func validateManagementBootstrapSecurity(mode string, management ManagementAPICo
 		env      string
 		required bool
 	}{
-		{"global.services.management_api.auth.token_signing_keyring", auth.TokenSigningKeyringFile, auth.TokenSigningKeyringEnv, managed},
-		{"global.services.management_api.auth.service_account_hmac_keyring", auth.ServiceAccountHMACKeyringFile, auth.ServiceAccountHMACKeyringEnv, managed},
-		{"global.services.management_api.auth.invitation_hmac_keyring", auth.InvitationHMACKeyringFile, auth.InvitationHMACKeyringEnv, managed},
-		{"global.services.management_api.auth.control_plane_hmac_keyring", auth.ControlPlaneHMACKeyringFile, auth.ControlPlaneHMACKeyringEnv, managed},
-		{"global.services.management_api.auth.response_kek_keyring", auth.ResponseKEKKeyringFile, auth.ResponseKEKKeyringEnv, managed},
+		{"global.services.management_api.auth.token_signing_keyring", auth.TokenSigningKeyringFile, auth.TokenSigningKeyringEnv, management.Enabled},
+		{"global.services.management_api.auth.service_account_hmac_keyring", auth.ServiceAccountHMACKeyringFile, auth.ServiceAccountHMACKeyringEnv, management.Enabled},
+		{"global.services.management_api.auth.invitation_hmac_keyring", auth.InvitationHMACKeyringFile, auth.InvitationHMACKeyringEnv, management.Enabled},
+		{"global.services.management_api.auth.response_kek_keyring", auth.ResponseKEKKeyringFile, auth.ResponseKEKKeyringEnv, management.Enabled},
 	}
 	for _, keyring := range keyrings {
 		if err := validateSecretSource(keyring.path, keyring.file, keyring.env, keyring.required); err != nil {
 			return err
 		}
 	}
-	if !managed && (auth.ControlPlaneHMACKeyringFile != "" || auth.ControlPlaneHMACKeyringEnv != "") {
-		return fmt.Errorf("global.services.management_api.auth.control_plane_hmac_keyring is managed-only")
-	}
-
 	bootstrapConfigured := auth.Bootstrap.TokenFile != "" || auth.Bootstrap.TokenEnv != ""
 	if err := validateSecretSource(
 		"global.services.management_api.auth.bootstrap.token",
@@ -83,6 +77,9 @@ func validateManagementBootstrapSecurity(mode string, management ManagementAPICo
 	}
 	if bootstrapConfigured && !auth.Bootstrap.DisableAfterFirstClusterAdmin {
 		return fmt.Errorf("global.services.management_api.auth.bootstrap.disable_after_first_cluster_admin must be true")
+	}
+	if bootstrapConfigured && !management.Enabled {
+		return fmt.Errorf("management bootstrap token requires management_api.enabled=true")
 	}
 
 	recoveryConfigured := auth.Recovery.TokenFile != "" || auth.Recovery.TokenEnv != ""
@@ -96,6 +93,9 @@ func validateManagementBootstrapSecurity(mode string, management ManagementAPICo
 	}
 	if !auth.Recovery.Enabled && recoveryConfigured {
 		return fmt.Errorf("global.services.management_api.auth.recovery token requires enabled=true")
+	}
+	if auth.Recovery.Enabled && !management.Enabled {
+		return fmt.Errorf("management recovery requires management_api.enabled=true")
 	}
 	if auth.Recovery.Enabled && !auth.Recovery.LoopbackOnly {
 		return fmt.Errorf("global.services.management_api.auth.recovery.loopback_only must be true")

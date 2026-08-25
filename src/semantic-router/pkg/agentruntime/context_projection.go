@@ -198,138 +198,186 @@ Inspect Router state and schemas through tools instead of guessing. Treat tool d
 	}, nil
 }
 
-func projectEvents(projection *executionContext, events []agentmanagement.Event) error {
-	pendingOrder := make([]string, 0, len(projection.Pending)+len(events))
-	pending := make(map[string]pendingToolCall, len(projection.Pending)+len(events))
+type eventProjection struct {
+	context      *executionContext
+	pendingOrder []string
+	pending      map[string]pendingToolCall
+	assistant    strings.Builder
+}
+
+func newEventProjection(projection *executionContext, eventCount int) *eventProjection {
+	state := &eventProjection{
+		context:      projection,
+		pendingOrder: make([]string, 0, len(projection.Pending)+eventCount),
+		pending:      make(map[string]pendingToolCall, len(projection.Pending)+eventCount),
+	}
 	for _, call := range projection.Pending {
-		pending[call.InvocationID] = call
-		pendingOrder = append(pendingOrder, call.InvocationID)
+		state.pending[call.InvocationID] = call
+		state.pendingOrder = append(state.pendingOrder, call.InvocationID)
 	}
-	var assistant strings.Builder
-	flushAssistant := func() {
-		if assistant.Len() == 0 {
-			return
-		}
-		projection.Messages = append(projection.Messages, llmprotocol.Message{
-			Role:    llmprotocol.RoleAssistant,
-			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: assistant.String()}},
-		})
-		assistant.Reset()
-	}
+	return state
+}
+
+func projectEvents(projection *executionContext, events []agentmanagement.Event) error {
+	state := newEventProjection(projection, len(events))
 	for _, event := range events {
-		if event.Sequence <= projection.ThroughSequence {
-			return fmt.Errorf("%w: Agent event sequence is not monotonic", agentmanagement.ErrConflict)
-		}
-		projection.ThroughSequence = event.Sequence
-		switch event.Type {
-		case agentmanagement.EventUserInput:
-			flushAssistant()
-			var payload agentmanagement.UserInputEvent
-			if err := decodeEventPayload(event.Payload, &payload); err != nil {
-				return err
-			}
-			content, err := protocolContent(payload.Content)
-			if err != nil {
-				return err
-			}
-			projection.Messages = append(projection.Messages, llmprotocol.Message{Role: llmprotocol.RoleUser, Content: content})
-			if len(pending) != 0 {
-				return fmt.Errorf("%w: a new Agent turn cannot bypass pending tools", agentmanagement.ErrConflict)
-			}
-			projection.ToolSteps = 0
-			projection.ModelSteps = 0
-			projection.LastModelStopReason = ""
-		case agentmanagement.EventAssistantDelta:
-			var payload agentmanagement.AssistantDeltaEvent
-			if err := decodeEventPayload(event.Payload, &payload); err != nil {
-				return err
-			}
-			if payload.Delta.Kind == agentmanagement.AssistantTextDelta {
-				assistant.WriteString(payload.Delta.Text)
-			}
-		case agentmanagement.EventToolRequest:
-			flushAssistant()
-			var payload agentmanagement.ToolRequestEvent
-			if err := decodeEventPayload(event.Payload, &payload); err != nil {
-				return err
-			}
-			if _, duplicate := pending[payload.InvocationID]; duplicate {
-				return fmt.Errorf("%w: duplicate Agent tool invocation", agentmanagement.ErrConflict)
-			}
-			call := pendingToolCall{InvocationID: payload.InvocationID, Name: payload.ToolName, Arguments: payload.Arguments}
-			pending[payload.InvocationID] = call
-			pendingOrder = append(pendingOrder, payload.InvocationID)
-			projection.ToolSteps++
-			projection.Messages = append(projection.Messages, llmprotocol.Message{
-				Role: llmprotocol.RoleAssistant,
-				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
-					ID: payload.InvocationID, Name: payload.ToolName, Arguments: string(payload.Arguments),
-				}}},
-			})
-			observeResourceReferences(&projection.Memory, payload.Arguments, payload.ToolName)
-		case agentmanagement.EventToolResult:
-			flushAssistant()
-			var payload agentmanagement.ToolResultEvent
-			if err := decodeEventPayload(event.Payload, &payload); err != nil {
-				return err
-			}
-			if _, exists := pending[payload.InvocationID]; !exists {
-				return fmt.Errorf("%w: Agent tool result has no pending invocation", agentmanagement.ErrConflict)
-			}
-			delete(pending, payload.InvocationID)
-			isError := payload.Status != "completed"
-			text := string(payload.Result)
-			if payload.ArtifactID != "" {
-				text = `{"artifactId":` + strconv.Quote(payload.ArtifactID) + `}`
-			}
-			if payload.Error != nil {
-				encoded, _ := json.Marshal(payload.Error)
-				text = string(encoded)
-				appendToolFailure(&projection.Memory, payload)
-			}
-			appendToolResultReference(&projection.Memory, payload)
-			observeResourceReferences(&projection.Memory, payload.Result, payload.ToolName)
-			appendDecision(&projection.Memory, payload.ToolName+":"+payload.Status)
-			projection.Messages = append(projection.Messages, llmprotocol.Message{
-				Role: llmprotocol.RoleTool,
-				Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
-					CallID:  payload.InvocationID,
-					Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}},
-					IsError: &isError,
-				}}},
-			})
-		case agentmanagement.EventApprovalRequest:
-			flushAssistant()
-			var payload agentmanagement.ApprovalRequestEvent
-			if err := decodeEventPayload(event.Payload, &payload); err != nil {
-				return err
-			}
-			copy := payload
-			projection.Memory.PendingApproval = &copy
-			appendResourceReference(&projection.Memory, agentmanagement.ResourceReference{
-				Kind: "publication_plan", ID: payload.PlanID, Revision: payload.PlanETag,
-			})
-		case agentmanagement.EventApprovalResult:
-			flushAssistant()
-			var payload agentmanagement.ApprovalResultEvent
-			if err := decodeEventPayload(event.Payload, &payload); err != nil {
-				return err
-			}
-			if projection.Memory.PendingApproval != nil &&
-				projection.Memory.PendingApproval.PlanID == payload.PlanID {
-				projection.Memory.PendingApproval = nil
-			}
-			appendDecision(&projection.Memory, "publication:"+payload.Status)
+		if err := state.apply(event); err != nil {
+			return err
 		}
 	}
-	flushAssistant()
-	projection.Pending = projection.Pending[:0]
-	for _, id := range pendingOrder {
-		if call, exists := pending[id]; exists {
-			projection.Pending = append(projection.Pending, call)
+	state.finish()
+	return nil
+}
+
+func (state *eventProjection) apply(event agentmanagement.Event) error {
+	if event.Sequence <= state.context.ThroughSequence {
+		return fmt.Errorf("%w: Agent event sequence is not monotonic", agentmanagement.ErrConflict)
+	}
+	state.context.ThroughSequence = event.Sequence
+	switch event.Type {
+	case agentmanagement.EventUserInput:
+		return state.applyUserInput(event.Payload)
+	case agentmanagement.EventAssistantDelta:
+		var payload agentmanagement.AssistantDeltaEvent
+		if err := decodeEventPayload(event.Payload, &payload); err != nil {
+			return err
 		}
+		if payload.Delta.Kind == agentmanagement.AssistantTextDelta {
+			state.assistant.WriteString(payload.Delta.Text)
+		}
+	case agentmanagement.EventToolRequest:
+		return state.applyToolRequest(event.Payload)
+	case agentmanagement.EventToolResult:
+		return state.applyToolResult(event.Payload)
+	case agentmanagement.EventApprovalRequest:
+		return state.applyApprovalRequest(event.Payload)
+	case agentmanagement.EventApprovalResult:
+		return state.applyApprovalResult(event.Payload)
 	}
 	return nil
+}
+
+func (state *eventProjection) applyUserInput(raw json.RawMessage) error {
+	state.flushAssistant()
+	var payload agentmanagement.UserInputEvent
+	if err := decodeEventPayload(raw, &payload); err != nil {
+		return err
+	}
+	content, err := protocolContent(payload.Content)
+	if err != nil {
+		return err
+	}
+	state.context.Messages = append(state.context.Messages, llmprotocol.Message{Role: llmprotocol.RoleUser, Content: content})
+	if len(state.pending) != 0 {
+		return fmt.Errorf("%w: a new Agent turn cannot bypass pending tools", agentmanagement.ErrConflict)
+	}
+	state.context.ToolSteps = 0
+	state.context.ModelSteps = 0
+	state.context.LastModelStopReason = ""
+	return nil
+}
+
+func (state *eventProjection) applyToolRequest(raw json.RawMessage) error {
+	state.flushAssistant()
+	var payload agentmanagement.ToolRequestEvent
+	if err := decodeEventPayload(raw, &payload); err != nil {
+		return err
+	}
+	if _, duplicate := state.pending[payload.InvocationID]; duplicate {
+		return fmt.Errorf("%w: duplicate Agent tool invocation", agentmanagement.ErrConflict)
+	}
+	call := pendingToolCall{InvocationID: payload.InvocationID, Name: payload.ToolName, Arguments: payload.Arguments}
+	state.pending[payload.InvocationID] = call
+	state.pendingOrder = append(state.pendingOrder, payload.InvocationID)
+	state.context.ToolSteps++
+	state.context.Messages = append(state.context.Messages, llmprotocol.Message{
+		Role: llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolCall, ToolCall: &llmprotocol.ToolCall{
+			ID: payload.InvocationID, Name: payload.ToolName, Arguments: string(payload.Arguments),
+		}}},
+	})
+	observeResourceReferences(&state.context.Memory, payload.Arguments, payload.ToolName)
+	return nil
+}
+
+func (state *eventProjection) applyToolResult(raw json.RawMessage) error {
+	state.flushAssistant()
+	var payload agentmanagement.ToolResultEvent
+	if err := decodeEventPayload(raw, &payload); err != nil {
+		return err
+	}
+	if _, exists := state.pending[payload.InvocationID]; !exists {
+		return fmt.Errorf("%w: Agent tool result has no pending invocation", agentmanagement.ErrConflict)
+	}
+	delete(state.pending, payload.InvocationID)
+	isError := payload.Status != "completed"
+	text := string(payload.Result)
+	if payload.ArtifactID != "" {
+		text = `{"artifactId":` + strconv.Quote(payload.ArtifactID) + `}`
+	}
+	if payload.Error != nil {
+		encoded, _ := json.Marshal(payload.Error)
+		text = string(encoded)
+		appendToolFailure(&state.context.Memory, payload)
+	}
+	appendToolResultReference(&state.context.Memory, payload)
+	observeResourceReferences(&state.context.Memory, payload.Result, payload.ToolName)
+	appendDecision(&state.context.Memory, payload.ToolName+":"+payload.Status)
+	state.context.Messages = append(state.context.Messages, llmprotocol.Message{
+		Role: llmprotocol.RoleTool,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentToolResult, ToolResult: &llmprotocol.ToolResult{
+			CallID: payload.InvocationID, Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: text}}, IsError: &isError,
+		}}},
+	})
+	return nil
+}
+
+func (state *eventProjection) applyApprovalRequest(raw json.RawMessage) error {
+	state.flushAssistant()
+	var payload agentmanagement.ApprovalRequestEvent
+	if err := decodeEventPayload(raw, &payload); err != nil {
+		return err
+	}
+	copy := payload
+	state.context.Memory.PendingApproval = &copy
+	appendResourceReference(&state.context.Memory, agentmanagement.ResourceReference{
+		Kind: "publication_plan", ID: payload.PlanID, Revision: payload.PlanETag,
+	})
+	return nil
+}
+
+func (state *eventProjection) applyApprovalResult(raw json.RawMessage) error {
+	state.flushAssistant()
+	var payload agentmanagement.ApprovalResultEvent
+	if err := decodeEventPayload(raw, &payload); err != nil {
+		return err
+	}
+	if state.context.Memory.PendingApproval != nil && state.context.Memory.PendingApproval.PlanID == payload.PlanID {
+		state.context.Memory.PendingApproval = nil
+	}
+	appendDecision(&state.context.Memory, "publication:"+payload.Status)
+	return nil
+}
+
+func (state *eventProjection) flushAssistant() {
+	if state.assistant.Len() == 0 {
+		return
+	}
+	state.context.Messages = append(state.context.Messages, llmprotocol.Message{
+		Role:    llmprotocol.RoleAssistant,
+		Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: state.assistant.String()}},
+	})
+	state.assistant.Reset()
+}
+
+func (state *eventProjection) finish() {
+	state.flushAssistant()
+	state.context.Pending = state.context.Pending[:0]
+	for _, id := range state.pendingOrder {
+		if call, exists := state.pending[id]; exists {
+			state.context.Pending = append(state.context.Pending, call)
+		}
+	}
 }
 
 func protocolContent(blocks []agentmanagement.ContentBlock) ([]llmprotocol.Content, error) {

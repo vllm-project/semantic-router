@@ -68,6 +68,8 @@ func TestPatchModelPreservesServerOwnedBackendConfiguration(t *testing.T) {
 	}
 
 	execution := routingsnapshot.ModelExecution{MaxRetries: 4, RequestTimeout: "45s", StreamTimeout: "5m"}
+	expectedExecution := execution
+	expectedExecution.RetryOn = []string{"unavailable"}
 	aliases := []string{}
 	inputPrice, outputPrice := "0.25", "1.5"
 	pricing := routingsnapshot.ModelPricing{
@@ -87,7 +89,7 @@ func TestPatchModelPreservesServerOwnedBackendConfiguration(t *testing.T) {
 		!reflect.DeepEqual(store.updated.Backends, []routingsnapshot.Backend{backend}) {
 		t.Fatalf("server-owned backend changed: %#v", store.updated)
 	}
-	if store.updated.Execution != execution || store.updated.Pricing.InputCostPerMillionTokens == nil ||
+	if !reflect.DeepEqual(store.updated.Execution, expectedExecution) || store.updated.Pricing.InputCostPerMillionTokens == nil ||
 		*store.updated.Pricing.InputCostPerMillionTokens != inputPrice ||
 		store.updated.Pricing.CacheReadCostPerMillionTokens == nil ||
 		*store.updated.Pricing.CacheReadCostPerMillionTokens != inputPrice {

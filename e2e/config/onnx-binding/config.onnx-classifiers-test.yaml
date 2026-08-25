@@ -1,22 +1,29 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen2.5:3b
-  card:
-    reasoning:
-      type: chat_template_kwargs
-      efforts: []
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:11434/v1
-    model: qwen2.5:3b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  defaults:
+    reasoning_families:
+      qwen2.5:3b:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen2.5:3b
+    provider_model_id: qwen2.5:3b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:11434/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    reasoning_family: qwen2.5:3b
+routing:
+  modelCards:
+  - name: qwen2.5:3b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: general
@@ -96,8 +103,8 @@ recipes:
         - type: domain
           name: general
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

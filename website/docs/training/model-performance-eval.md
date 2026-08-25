@@ -123,9 +123,10 @@ python result_to_config.py \
   --provider openai-compatible
 ```
 
-The generator creates a human-readable v0.4 scaffold with:
+The generator creates a human-readable v0.3 scaffold with:
 
-- one logical Model and connection for each evaluated model
+- one provider binding, structured invocation control, and connection-free
+  Model card per evaluated model
 - one domain signal and decision per observed MMLU-Pro category
 - each decision assigned to its best evaluated Model
 - a default decision assigned to the best model overall
@@ -136,9 +137,12 @@ abbreviated here; inspect `config.eval.yaml` for the evaluated models, scores,
 category signals, decisions, and assignments.
 
 ```yaml
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global: {}
@@ -149,16 +153,17 @@ one logical Model. For each category, the generator keeps the higher observed
 accuracy and assigns the best evaluated Model. Review those assignments before
 publishing them as routing policy.
 
-The generated backend address is applied to every model unless you override
-it. Replace it with the real endpoint topology, credentials, reliability
-settings, and pricing for each provider.
+The generated backend address and invocation control are applied to every model
+unless you override them. Review the endpoint topology, credentials, retry and
+timeout policy, and pricing for each provider.
 
 ## Turn the scaffold into a routing policy
 
 `config.eval.yaml` is intentionally incomplete:
 
 - `listeners` is empty.
-- Model connections use command-line defaults rather than deployment discovery.
+- Model connections use command-line defaults and conservative scaffold control
+  values.
 - evaluation categories may not match your user-facing decisions.
 - the sparse `global` section may not match your runtime or security policy.
 

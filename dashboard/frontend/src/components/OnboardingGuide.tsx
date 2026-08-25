@@ -196,11 +196,16 @@ const OnboardingGuide: React.FC = () => {
         onMouseDown={(event) => event.stopPropagation()}
       >
         <div className={styles.header}>
-          <div>
-            <div className={styles.eyebrow}>Product guide</div>
-            <h2 id={titleId} className={styles.title}>
-              {step.title}
-            </h2>
+          <div className={styles.headerIdentity}>
+            <div className={styles.logo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <div className={styles.eyebrow}>Product guide</div>
+              <h2 id={titleId} className={styles.title}>
+                {step.title}
+              </h2>
+            </div>
           </div>
           <button
             type="button"

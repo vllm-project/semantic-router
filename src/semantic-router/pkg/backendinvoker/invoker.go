@@ -225,7 +225,9 @@ func (i *Invoker) invokeCandidate(
 			execution.state, execution.appendOutcome = candidateExecutionRequestFailed, true
 			return execution
 		case candidateAttemptTransportFailed:
-			if attemptExecution.attempt.State == AttemptKnownZero && number <= plan.Execution.MaxRetries {
+			if attemptExecution.attempt.State == AttemptKnownZero &&
+				number <= plan.Execution.MaxRetries &&
+				fallbackEnabled(FallbackPolicy{On: plan.Execution.RetryOn}, attemptExecution.attempt.FallbackTrigger) {
 				continue
 			}
 		}
@@ -601,6 +603,15 @@ func validatePlan(plan Plan) error {
 	}
 	if plan.Execution.MaxRetries < 0 || plan.Execution.MaxRetries > 5 {
 		return fmt.Errorf("max retries must be between 0 and 5")
+	}
+	if plan.Execution.MaxRetries == 0 && len(plan.Execution.RetryOn) != 0 {
+		return fmt.Errorf("retry triggers require at least one retry")
+	}
+	if plan.Execution.MaxRetries > 0 && len(plan.Execution.RetryOn) == 0 {
+		return fmt.Errorf("retry triggers are required when retries are enabled")
+	}
+	if err := validateFallbackPolicy(FallbackPolicy{On: plan.Execution.RetryOn}); err != nil {
+		return fmt.Errorf("retry policy: %w", err)
 	}
 	var totalWeight uint64
 	for _, backend := range plan.Backends {

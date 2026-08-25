@@ -1,95 +1,99 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: test-model
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000
-    model: test-model
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+    - name: test-model
+      provider_model_id: test-model
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+routing:
+  modelCards:
+    - name: test-model
 recipes:
-- name: default
-  description: Default routing recipe.
-  document:
-    signals: {}
-    decisions:
-    - name: default-route
-      rules:
-        operator: AND
-        conditions: []
-- name: verification
-  document:
-    signals:
-      fact_check:
-      - name: verification-needed
-        description: Requests that require verification.
-    projections:
-      scores:
-      - name: verification-score
-        method: weighted_sum
-        inputs:
-        - type: fact_check
-          name: verification-needed
-          weight: 1
-      mappings:
-      - name: verification-band
-        source: verification-score
-        method: threshold_bands
-        outputs:
-        - name: verify
-          gte: 0.5
-    decisions:
-    - name: verification-route
-      rules:
-        type: projection
-        name: verify
-      plugins:
-      - type: hallucination
-        configuration:
-          enabled: true
-          use_nli: true
-- name: feedback
-  document:
-    signals:
-      user_feedbacks:
-      - name: correction-needed
-        description: Requests that correct an earlier response.
-    projections:
-      scores:
-      - name: feedback-score
-        method: weighted_sum
-        inputs:
-        - type: user_feedback
-          name: correction-needed
-          weight: 1
-      mappings:
-      - name: feedback-band
-        source: feedback-score
-        method: threshold_bands
-        outputs:
-        - name: recover
-          gte: 0.5
-    decisions:
-    - name: feedback-route
-      rules:
-        type: projection
-        name: recover
+  - name: default
+    description: Default routing recipe.
+    routing:
+      signals: {}
+      decisions:
+        - name: default-route
+          rules:
+            operator: AND
+            conditions: []
+  - name: verification
+    routing:
+      signals:
+        fact_check:
+          - name: verification-needed
+            description: Requests that require verification.
+      projections:
+        scores:
+          - name: verification-score
+            method: weighted_sum
+            inputs:
+              - type: fact_check
+                name: verification-needed
+                weight: 1
+        mappings:
+          - name: verification-band
+            source: verification-score
+            method: threshold_bands
+            outputs:
+              - name: verify
+                gte: 0.5
+      decisions:
+        - name: verification-route
+          rules:
+            type: projection
+            name: verify
+          plugins:
+            - type: hallucination
+              configuration:
+                enabled: true
+                use_nli: true
+  - name: feedback
+    routing:
+      signals:
+        user_feedbacks:
+          - name: correction-needed
+            description: Requests that correct an earlier response.
+      projections:
+        scores:
+          - name: feedback-score
+            method: weighted_sum
+            inputs:
+              - type: user_feedback
+                name: correction-needed
+                weight: 1
+        mappings:
+          - name: feedback-band
+            source: feedback-score
+            method: threshold_bands
+            outputs:
+              - name: recover
+                gte: 0.5
+      decisions:
+        - name: feedback-route
+          rules:
+            type: projection
+            name: recover
 entrypoints:
-- name: vllm-sr/verification
-  recipe: verification
-  assignments:
-    verification-route:
-      models:
-      - model: test-model
-- name: vllm-sr/feedback
-  recipe: feedback
-  assignments:
-    feedback-route:
-      models:
-      - model: test-model
+  - model_names: [vllm-sr/verification]
+    recipe: verification
+    assignments:
+      verification-route:
+        models:
+          - model: test-model
+  - model_names: [vllm-sr/feedback]
+    recipe: feedback
+    assignments:
+      feedback-route:
+        models:
+          - model: test-model
 global:
   model_catalog:
     system:

@@ -314,6 +314,22 @@ func (s *RedisStore) Stage(ctx context.Context, plan PublicationPlan) error {
 	}
 	p := plan.Publication
 	keys, _ := NewKeyspace(s.keyPrefix, p.NamespaceID, p.QuotaPartition)
+	if err := s.stagePublicationDocuments(ctx, keys, p); err != nil {
+		return err
+	}
+	if err := s.stageAccessDocuments(ctx, keys, plan); err != nil {
+		return err
+	}
+	if err := s.stageCredentialDocuments(ctx, keys, plan); err != nil {
+		return err
+	}
+	if err := s.finalizeRedisStage(ctx, keys, plan, fleetReplicas); err != nil {
+		return err
+	}
+	return s.registerNamespace(ctx, p.NamespaceID, p.QuotaPartition)
+}
+
+func (s *RedisStore) stagePublicationDocuments(ctx context.Context, keys Keyspace, p Publication) error {
 	manifestPayload, stageErr := json.Marshal(p.Manifest)
 	if stageErr != nil {
 		return stageErr
@@ -338,7 +354,11 @@ func (s *RedisStore) Stage(ctx context.Context, plan PublicationPlan) error {
 			return fmt.Errorf("stage provider credential document: %w", err)
 		}
 	}
+	return nil
+}
 
+func (s *RedisStore) stageAccessDocuments(ctx context.Context, keys Keyspace, plan PublicationPlan) error {
+	p := plan.Publication
 	currentAccess := make(map[string]struct{}, len(p.Access))
 	for _, document := range p.Access {
 		currentAccess[document.KeyID] = struct{}{}
@@ -372,7 +392,11 @@ func (s *RedisStore) Stage(ctx context.Context, plan PublicationPlan) error {
 			}
 		}
 	}
+	return nil
+}
 
+func (s *RedisStore) stageCredentialDocuments(ctx context.Context, keys Keyspace, plan PublicationPlan) error {
+	p := plan.Publication
 	currentCredentials := make(map[string]struct{}, len(p.Credentials))
 	for _, document := range p.Credentials {
 		identity := credentialIdentity(document.Kind, document.PublicID)
@@ -418,6 +442,16 @@ func (s *RedisStore) Stage(ctx context.Context, plan PublicationPlan) error {
 			}
 		}
 	}
+	return nil
+}
+
+func (s *RedisStore) finalizeRedisStage(
+	ctx context.Context,
+	keys Keyspace,
+	plan PublicationPlan,
+	fleetReplicas []string,
+) error {
+	p := plan.Publication
 	pointerCount, stageErr := s.client.ZCard(ctx, keys.PublicationPointers(p.ID)).Result()
 	if stageErr != nil {
 		return fmt.Errorf("count staged pointers: %w", stageErr)
@@ -433,7 +467,7 @@ func (s *RedisStore) Stage(ctx context.Context, plan PublicationPlan) error {
 	if stageErr != nil {
 		return classifyRedisPublicationError(stageErr)
 	}
-	return s.registerNamespace(ctx, p.NamespaceID, p.QuotaPartition)
+	return nil
 }
 
 func (s *RedisStore) putImmutableString(ctx context.Context, key string, payload []byte) error {

@@ -64,6 +64,7 @@ const Layout: React.FC<LayoutProps> = ({
   const location = useLocation()
   const navigate = useNavigate()
   const canUseMLSetup = canAccessMLSetup(user)
+  const primaryNavLinks = PRIMARY_NAV_LINKS.filter((link) => canAccessDashboardPath(user, link.to))
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
@@ -312,7 +313,7 @@ const Layout: React.FC<LayoutProps> = ({
 
           <nav className={styles.nav} aria-label="Global navigation">
             <div className={styles.navSection} role="group" aria-label="Primary navigation">
-              {PRIMARY_NAV_LINKS.map(renderTopNavLink)}
+              {primaryNavLinks.map(renderTopNavLink)}
             </div>
 
             {hasWorkflowNavigation ? (
@@ -443,6 +444,7 @@ const Layout: React.FC<LayoutProps> = ({
             isConfigPage={isConfigPage}
             openSection={openMobileSection}
             pathname={location.pathname}
+            primaryLinks={primaryNavLinks}
             sections={[
               { key: 'build', label: 'Build', categories: buildMenuCategories },
               { key: 'operate', label: 'Operate', categories: operateMenuCategories },

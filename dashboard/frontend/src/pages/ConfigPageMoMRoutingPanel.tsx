@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
+import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
 import {
   routingManagementApi,
   waitForRoutingMutation,
@@ -28,6 +29,8 @@ type PendingDelete =
   | { kind: 'recipe'; value: RoutingRecipe }
 
 export default function ConfigPageMoMRoutingPanel({ activeView, canRead, canManage }: Props) {
+  const { catalogError, catalogSnapshot, catalogStatus, retryCatalog, usesKeyScopedCatalog } =
+    useInferenceRoutingAccess()
   const [models, setModels] = useState<RoutingModelCardView[]>([])
   const [recipes, setRecipes] = useState<RoutingRecipe[]>([])
   const [entrypoints, setEntrypoints] = useState<RoutingEntrypoint[]>([])
@@ -49,6 +52,24 @@ export default function ConfigPageMoMRoutingPanel({ activeView, canRead, canMana
       setLoading(false)
       return
     }
+    if (usesKeyScopedCatalog) {
+      setError(catalogError)
+      if (catalogStatus === 'ready' && catalogSnapshot) {
+        setModels(catalogSnapshot.models)
+        setRecipes(catalogSnapshot.recipes)
+        setEntrypoints(catalogSnapshot.entrypoints)
+        setLoading(false)
+        return
+      }
+      setModels([])
+      setRecipes([])
+      setEntrypoints([])
+      setLoading(catalogStatus === 'idle' || catalogStatus === 'loading')
+      if (catalogStatus === 'unavailable') {
+        setError('Create an API key to view your available models.')
+      }
+      return
+    }
     setLoading(true)
     setError(null)
     try {
@@ -65,7 +86,7 @@ export default function ConfigPageMoMRoutingPanel({ activeView, canRead, canMana
     } finally {
       setLoading(false)
     }
-  }, [canRead])
+  }, [canRead, catalogError, catalogSnapshot, catalogStatus, usesKeyScopedCatalog])
 
   useEffect(() => {
     void load()
@@ -166,6 +187,16 @@ export default function ConfigPageMoMRoutingPanel({ activeView, canRead, canMana
     return <div className={pageStyles.emptyState}>Routing access is required.</div>
   }
   if (loading) return <div className={pageStyles.emptyState}>Loading routing…</div>
+  if (error && usesKeyScopedCatalog) {
+    return (
+      <div className={pageStyles.emptyState} role="alert">
+        <span>{error}</span>
+        <button type="button" onClick={retryCatalog}>
+          Try again
+        </button>
+      </div>
+    )
+  }
 
   return (
     <>

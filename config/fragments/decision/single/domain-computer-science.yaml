@@ -1,4 +1,4 @@
-document:
+routing:
   decisions:
     - name: computer-science-route
       description: Route computer science requests to the higher-reasoning model tier.

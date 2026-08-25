@@ -308,6 +308,7 @@ func canonicalInteger(raw any) (string, error) {
 		if uint64(number) > math.MaxInt64 {
 			return "", errors.New("integer exceeds int64")
 		}
+		// #nosec G115 -- the int64 upper bound is checked above.
 		value = int64(number)
 	case uint8:
 		value = int64(number)
@@ -319,6 +320,7 @@ func canonicalInteger(raw any) (string, error) {
 		if number > math.MaxInt64 {
 			return "", errors.New("integer exceeds int64")
 		}
+		// #nosec G115 -- the int64 upper bound is checked above.
 		value = int64(number)
 	case json.Number:
 		parsed, err := strconv.ParseInt(string(number), 10, 64)

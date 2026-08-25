@@ -17,8 +17,10 @@ import (
 )
 
 const (
+	// #nosec G101 -- this is a database column list and contains no provider secret.
 	providerCredentialColumns = `id, namespace_id, name, provider_id, credential_mode, credential_adapter_id, provider_catalog_revision, normalized_origin,
-       status, active_version_id, revision, created_at, updated_at, deleted_at`
+	       status, active_version_id, revision, created_at, updated_at, deleted_at`
+	// #nosec G101 -- this is a database column list and contains no provider secret.
 	providerCredentialVersionColumns = `id, namespace_id, provider_credential_id,
        secret_ciphertext, ciphertext_nonce, kek_version, status, not_before,
        expires_at, revoked_at, created_at`
@@ -41,8 +43,9 @@ WHERE provider_credential_id = $1 AND id = $2`
 	insertProviderCredentialQuery = `INSERT INTO provider_credentials
 	  (id, namespace_id, name, provider_id, credential_mode, credential_adapter_id, provider_catalog_revision, normalized_origin, status,
 	   active_version_id, revision, created_at, updated_at)
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11, $12)
-RETURNING ` + providerCredentialColumns
+	VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 1, $11, $12)
+	RETURNING ` + providerCredentialColumns
+	// #nosec G101 -- this is a parameterized insert statement and contains no provider secret.
 	insertProviderCredentialVersionQuery = `INSERT INTO provider_credential_versions
   (id, namespace_id, provider_credential_id, secret_ciphertext,
    ciphertext_nonce, kek_version, status, not_before, expires_at,

@@ -9,7 +9,7 @@ from cli.service_defaults import inject_local_store_runtime_defaults
 
 def test_inject_local_store_runtime_defaults_skips_memory_backend():
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "stores": {
                 "response_cache": {

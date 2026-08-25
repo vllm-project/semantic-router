@@ -1,4 +1,4 @@
-// Package providerdiscovery executes model discovery in the managed control
+// Package providerdiscovery executes model discovery in the Management control
 // plane. Provider products remain declarative catalog data; adapters implement
 // only stable discovery wire protocols.
 package providerdiscovery

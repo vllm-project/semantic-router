@@ -1,3 +1,11 @@
+.workspaceToolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .tabs {
   display: flex;
   width: fit-content;
@@ -94,6 +102,20 @@
 }
 
 @media (max-width: 640px) {
+  .workspaceToolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .tabs {
+    width: 100%;
+  }
+
+  .tab {
+    flex: 1;
+  }
+
   .identityError {
     grid-template-columns: auto minmax(0, 1fr);
   }

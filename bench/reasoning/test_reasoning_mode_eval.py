@@ -33,12 +33,17 @@ def test_generate_vsr_canonical_patch_emits_canonical_patch() -> None:
     assert recommendation["reasoning_family"] == "qwen3"
     assert "manual_follow_up" not in recommendation
     assert recommendation["suggested_vsr_patch"] == {
-        "models": [
-            {
-                "name": "qwen3-14b",
-                "card": {"reasoning": {"type": "chat_template_kwargs"}},
-            }
-        ]
+        "providers": {
+            "defaults": {
+                "reasoning_families": {
+                    "qwen3": {
+                        "type": "chat_template_kwargs",
+                        "parameter": "enable_thinking",
+                    }
+                }
+            },
+            "models": [{"name": "qwen3-14b", "reasoning_family": "qwen3"}],
+        }
     }
 
 
@@ -51,6 +56,9 @@ def test_generate_vsr_canonical_patch_requires_follow_up_for_unknown_family() ->
 
     assert recommendation["reasoning_family"] == "auto"
     assert recommendation["suggested_vsr_patch"] == {
-        "models": [{"name": "custom-model", "card": {}}],
+        "providers": {
+            "defaults": {"reasoning_families": {}},
+            "models": [{"name": "custom-model"}],
+        },
     }
     assert "manual_follow_up" in recommendation

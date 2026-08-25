@@ -228,6 +228,7 @@ var knownPermissionConditions = stringSet(
 	"rate_binding_requested",
 	"user_owner",
 	"team_owner",
+	"key_owner",
 	"current_user_owner",
 	"current_team_owner",
 	"target_user_owner",

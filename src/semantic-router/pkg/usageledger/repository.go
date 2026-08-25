@@ -126,18 +126,57 @@ func persistTerminal(
 		eventKind = "unknown"
 	}
 	partitionDate := event.OccurredAt.UTC().Format("2006-01-02")
-	result, persistTerminalErr := tx.ExecContext(ctx, `INSERT INTO usage_settlements (
+	inserted, retained, err := insertUsageSettlement(ctx, tx, event, digest, settlementState, partitionDate)
+	if err != nil || !inserted {
+		return inserted, retained, err
+	}
+	month := usageMonth(event.OccurredAt)
+	if _, exists := ensuredMonths[month]; !exists {
+		if err := partitions.EnsureTx(ctx, tx, []time.Time{event.OccurredAt}); err != nil {
+			return false, false, err
+		}
+		ensuredMonths[month] = struct{}{}
+	}
+	if err := persistUsageEvent(ctx, tx, event, aggregate, eventKind, partitionDate); err != nil {
+		return false, false, err
+	}
+	for _, dispatch := range event.Dispatches {
+		if err := persistDispatch(ctx, tx, event, partitionDate, dispatch); err != nil {
+			return false, false, err
+		}
+	}
+	if event.ReplayID != "" {
+		if err := persistInferenceReplay(ctx, tx, event, partitionDate); err != nil {
+			return false, false, err
+		}
+	}
+	if event.Fence != nil {
+		if err := persistFence(ctx, tx, event, *event.Fence); err != nil {
+			return false, false, err
+		}
+	}
+	return true, true, nil
+}
+
+func insertUsageSettlement(
+	ctx context.Context,
+	tx *sql.Tx,
+	event TerminalEvent,
+	digest []byte,
+	settlementState, partitionDate string,
+) (bool, bool, error) {
+	result, err := tx.ExecContext(ctx, `INSERT INTO usage_settlements (
   namespace_id, admission_id, state, canonical_usage_digest, settled_at, event_partition_date
 ) VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (namespace_id, admission_id) DO NOTHING`,
 		event.NamespaceID, event.AdmissionID, settlementState, digest, event.CompletedAt, partitionDate,
 	)
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("insert usage settlement: %w", persistTerminalErr)
+	if err != nil {
+		return false, false, fmt.Errorf("insert usage settlement: %w", err)
 	}
-	rows, persistTerminalErr := result.RowsAffected()
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("inspect usage settlement insert: %w", persistTerminalErr)
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return false, false, fmt.Errorf("inspect usage settlement insert: %w", err)
 	}
 	if rows == 0 {
 		var existingDigest []byte
@@ -161,31 +200,33 @@ FOR UPDATE`, event.NamespaceID, event.AdmissionID).Scan(&existingDigest, &eventR
 		}
 		return false, eventRetained, nil
 	}
-	month := usageMonth(event.OccurredAt)
-	if _, exists := ensuredMonths[month]; !exists {
-		if err := partitions.EnsureTx(ctx, tx, []time.Time{event.OccurredAt}); err != nil {
-			return false, false, err
-		}
-		ensuredMonths[month] = struct{}{}
-	}
+	return true, true, nil
+}
 
-	costs, persistTerminalErr := json.Marshal(internalCostRows(aggregate.Costs))
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("encode usage costs: %w", persistTerminalErr)
+func persistUsageEvent(
+	ctx context.Context,
+	tx *sql.Tx,
+	event TerminalEvent,
+	aggregate EventAggregate,
+	eventKind, partitionDate string,
+) error {
+	costs, err := json.Marshal(internalCostRows(aggregate.Costs))
+	if err != nil {
+		return fmt.Errorf("encode usage costs: %w", err)
 	}
-	metadata, persistTerminalErr := json.Marshal(eventMetadata(event))
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("encode request metadata: %w", persistTerminalErr)
+	metadata, err := json.Marshal(eventMetadata(event))
+	if err != nil {
+		return fmt.Errorf("encode request metadata: %w", err)
 	}
-	servedTotal, persistTerminalErr := aggregate.ServedInputTokens.Add(aggregate.ServedOutputTokens)
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("served token total: %w", persistTerminalErr)
+	servedTotal, err := aggregate.ServedInputTokens.Add(aggregate.ServedOutputTokens)
+	if err != nil {
+		return fmt.Errorf("served token total: %w", err)
 	}
-	total, persistTerminalErr := aggregate.InputTokens.Add(aggregate.OutputTokens)
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("backend token total: %w", persistTerminalErr)
+	total, err := aggregate.InputTokens.Add(aggregate.OutputTokens)
+	if err != nil {
+		return fmt.Errorf("backend token total: %w", err)
 	}
-	_, persistTerminalErr = tx.ExecContext(ctx, `INSERT INTO usage_events (
+	_, err = tx.ExecContext(ctx, `INSERT INTO usage_events (
   namespace_id, admission_id, event_date, event_id, event_kind, external_request_id,
   protocol, path, api_key_id, credential_id, user_id, team_id, entrypoint_id,
   entrypoint_rule_id, recipe_id, routing_revision, status_code, error_code,
@@ -208,25 +249,10 @@ FOR UPDATE`, event.NamespaceID, event.AdmissionID).Scan(&existingDigest, &eventR
 		nullInt64Pointer(event.TTFTMilliseconds), string(aggregate.UsageState), costs, metadata,
 		event.OccurredAt,
 	)
-	if persistTerminalErr != nil {
-		return false, false, fmt.Errorf("insert immutable usage event: %w", persistTerminalErr)
+	if err != nil {
+		return fmt.Errorf("insert immutable usage event: %w", err)
 	}
-	for _, dispatch := range event.Dispatches {
-		if err := persistDispatch(ctx, tx, event, partitionDate, dispatch); err != nil {
-			return false, false, err
-		}
-	}
-	if event.ReplayID != "" {
-		if err := persistInferenceReplay(ctx, tx, event, partitionDate); err != nil {
-			return false, false, err
-		}
-	}
-	if event.Fence != nil {
-		if err := persistFence(ctx, tx, event, *event.Fence); err != nil {
-			return false, false, err
-		}
-	}
-	return true, true, nil
+	return nil
 }
 
 func persistInferenceReplay(ctx context.Context, tx *sql.Tx, event TerminalEvent, partitionDate string) error {

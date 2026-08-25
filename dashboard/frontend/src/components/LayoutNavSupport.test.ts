@@ -77,13 +77,18 @@ describe('layout navigation route matching', () => {
       role: 'read',
       permissions: ['config.read', 'topology.read', 'tools.use'],
       managementPermissions: [
+        'agent.read',
+        'agent.use',
+        'access_policy.read',
         'delegation.use',
         'key.read',
         'quota.read',
-        'routing.read',
+        'routing_context.read',
         'team.read',
         'usage.read',
         'user.read',
+        'tool.invoke',
+        'tool.read',
       ],
     }
     const visibleBuild = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, (item) =>
@@ -104,15 +109,7 @@ describe('layout navigation route matching', () => {
     expect(visibleBuild.map((category) => category.key)).toEqual(['routing'])
     expect(
       visibleBuild[0].sections.flatMap((section) => section.items.map((item) => item.label)),
-    ).toEqual([
-      'Models',
-      'Mixture-of-Models',
-      'Signals',
-      'Projections',
-      'Decisions',
-      'Brain Topology',
-      'DSL Builder',
-    ])
+    ).toEqual(['Mixture-of-Models', 'Brain Topology'])
     expect(visibleOperate).toEqual([])
   })
 })

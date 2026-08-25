@@ -29,7 +29,7 @@ privacy, and other deterministic gates in signals and decisions.
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: adaptive-model-choice
       description: Let a helper model choose the best eligible candidate.

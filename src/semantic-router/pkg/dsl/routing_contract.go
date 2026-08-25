@@ -12,10 +12,10 @@ import (
 )
 
 type routingYAMLDocument struct {
-	Document config.CanonicalRouting `yaml:"document"`
+	Routing config.CanonicalRouting `yaml:"routing"`
 }
 
-// EmitRoutingYAML compiles DSL source and emits the v0.4 routing fragment.
+// EmitRoutingYAML compiles DSL source and emits the v0.3 routing fragment.
 func EmitRoutingYAML(input string) ([]byte, []error) {
 	cfg, errs := Compile(input)
 	if len(errs) > 0 {
@@ -34,7 +34,7 @@ func EmitRoutingYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	doc := routingYAMLDocument{Document: document}
+	doc := routingYAMLDocument{Routing: document}
 	return yaml.Marshal(doc)
 }
 
@@ -47,11 +47,11 @@ func canonicalRecipeDocument(cfg *config.RouterConfig) (config.CanonicalRouting,
 	if err != nil {
 		return config.CanonicalRouting{}, err
 	}
-	raw, err := config.MarshalManagedRecipeDocument(document)
+	raw, err := config.MarshalRoutingRecipeDocument(document)
 	if err != nil {
 		return config.CanonicalRouting{}, err
 	}
-	parsed, _, err := config.ParseManagedRecipeDocument(raw)
+	parsed, _, err := config.ParseRoutingRecipeDocument(raw)
 	if err != nil {
 		return config.CanonicalRouting{}, err
 	}
@@ -60,7 +60,7 @@ func canonicalRecipeDocument(cfg *config.RouterConfig) (config.CanonicalRouting,
 	for index := range parsed.Decisions {
 		parsed.Decisions[index].ID = ""
 	}
-	return config.CanonicalRouting(parsed), nil
+	return config.CanonicalRoutingFromRecipeDocument(parsed), nil
 }
 
 // selectRoutingDocument keeps the routing-only helper deliberately narrow:
@@ -268,31 +268,53 @@ func (d *decompiler) appendModelsToProgram(prog *Program) {
 	}
 }
 
-func canonicalDSLModels(cfg *config.RouterConfig) []config.AuthoringModel {
-	models := append([]config.AuthoringModel(nil), config.CanonicalConfigFromRouterConfig(cfg).Models...)
+type dslModelCard struct {
+	config.RoutingModel
+	Aliases []string
+}
+
+func canonicalDSLModels(cfg *config.RouterConfig) []dslModelCard {
+	models := append([]config.RoutingModel(nil), config.CanonicalConfigFromRouterConfig(cfg).Routing.ModelCards...)
+	if len(models) == 0 {
+		models = config.CanonicalRoutingFromRouterConfig(cfg).ModelCards
+	}
 	if len(models) == 0 && cfg != nil {
-		models = make([]config.AuthoringModel, 0, len(cfg.ModelConfig))
+		models = make([]config.RoutingModel, 0, len(cfg.ModelConfig))
 		for name, params := range cfg.ModelConfig {
-			loras := make([]string, 0, len(params.LoRAs))
+			loras := make([]config.LoRAAdapter, 0, len(params.LoRAs))
 			for _, adapter := range params.LoRAs {
-				loras = append(loras, adapter.Name)
+				loras = append(loras, config.LoRAAdapter{Name: adapter.Name, Description: adapter.Description})
 			}
-			models = append(models, config.AuthoringModel{
-				Name: name,
-				Card: config.AuthoringModelCard{
-					Aliases: append([]string(nil), params.Aliases...), Reasoning: params.Reasoning,
-					ParamSize: params.ParamSize, ContextWindowSize: params.ContextWindowSize,
-					Description: params.Description, Capabilities: append([]string(nil), params.Capabilities...),
-					LoRAs: loras, QualityScore: params.QualityScore,
-					Modality: params.Modality, Tags: append([]string(nil), params.Tags...),
+			models = append(models, config.RoutingModel{
+				Name: name, ParamSize: params.ParamSize,
+				ContextWindowSize: params.ContextWindowSize, Description: params.Description,
+				Capabilities: append([]string(nil), params.Capabilities...), LoRAs: loras,
+				Reasoning: config.ModelReasoning{
+					Type: params.Reasoning.Type, Efforts: append([]string(nil), params.Reasoning.Efforts...),
 				},
+				QualityScore: params.QualityScore, Modality: params.Modality,
+				Tags: append([]string(nil), params.Tags...),
 			})
 		}
 	}
-	sort.SliceStable(models, func(i, j int) bool {
-		return models[i].Name < models[j].Name
+	views := make([]dslModelCard, 0, len(models))
+	for _, model := range models {
+		view := dslModelCard{RoutingModel: model}
+		if cfg != nil {
+			params := cfg.ModelConfig[model.Name]
+			view.Aliases = append([]string(nil), params.Aliases...)
+			if view.Reasoning.Type == "" {
+				view.Reasoning = config.ModelReasoning{
+					Type: params.Reasoning.Type, Efforts: append([]string(nil), params.Reasoning.Efforts...),
+				}
+			}
+		}
+		views = append(views, view)
+	}
+	sort.SliceStable(views, func(i, j int) bool {
+		return views[i].Name < views[j].Name
 	})
-	return models
+	return views
 }
 
 func (d *decompiler) appendRoutesToProgram(prog *Program) {
@@ -301,7 +323,7 @@ func (d *decompiler) appendRoutesToProgram(prog *Program) {
 	}
 }
 
-func (d *decompiler) decompileRoutingModels(models []config.AuthoringModel) {
+func (d *decompiler) decompileRoutingModels(models []dslModelCard) {
 	for _, model := range models {
 		d.write("MODEL %s {\n", quoteName(model.Name))
 		d.writeRoutingModelFields(model)
@@ -309,30 +331,36 @@ func (d *decompiler) decompileRoutingModels(models []config.AuthoringModel) {
 	}
 }
 
-func (d *decompiler) writeRoutingModelFields(model config.AuthoringModel) {
-	d.writeOptionalRoutingModelArray("aliases", model.Card.Aliases)
-	d.writeOptionalRoutingModelString("param_size", model.Card.ParamSize)
-	if model.Card.ContextWindowSize > 0 {
-		d.write("  context_window_size: %d\n", model.Card.ContextWindowSize)
+func (d *decompiler) writeRoutingModelFields(model dslModelCard) {
+	d.writeOptionalRoutingModelArray("aliases", model.Aliases)
+	d.writeOptionalRoutingModelString("param_size", model.ParamSize)
+	if model.ContextWindowSize > 0 {
+		d.write("  context_window_size: %d\n", model.ContextWindowSize)
 	}
-	d.writeOptionalRoutingModelString("description", model.Card.Description)
-	d.writeOptionalRoutingModelArray("capabilities", model.Card.Capabilities)
-	if model.Card.Reasoning.Type != "" {
-		d.write("  reasoning: { type: %q", model.Card.Reasoning.Type)
-		if len(model.Card.Reasoning.Efforts) > 0 {
-			d.write(", efforts: %s", quotedStringArray(model.Card.Reasoning.Efforts))
+	d.writeOptionalRoutingModelString("description", model.Description)
+	d.writeOptionalRoutingModelArray("capabilities", model.Capabilities)
+	if model.Reasoning.Type != "" {
+		d.write("  reasoning: { type: %q", model.Reasoning.Type)
+		if len(model.Reasoning.Efforts) > 0 {
+			d.write(", efforts: %s", quotedStringArray(model.Reasoning.Efforts))
 		}
 		d.write(" }\n")
 	}
-	d.writeOptionalRoutingModelArray("loras", model.Card.LoRAs)
-	d.writeOptionalRoutingModelArray("tags", model.Card.Tags)
-	if model.Card.QualityScore != 0 {
+	if len(model.LoRAs) > 0 {
+		loras := make([]string, 0, len(model.LoRAs))
+		for _, adapter := range model.LoRAs {
+			loras = append(loras, adapter.Name)
+		}
+		d.writeOptionalRoutingModelArray("loras", loras)
+	}
+	d.writeOptionalRoutingModelArray("tags", model.Tags)
+	if model.QualityScore != 0 {
 		d.write(
 			"  quality_score: %s\n",
-			strconv.FormatFloat(model.Card.QualityScore, 'f', -1, 64),
+			strconv.FormatFloat(model.QualityScore, 'f', -1, 64),
 		)
 	}
-	d.writeOptionalRoutingModelString("modality", model.Card.Modality)
+	d.writeOptionalRoutingModelString("modality", model.Modality)
 }
 
 func (d *decompiler) writeOptionalRoutingModelString(key, value string) {
@@ -349,41 +377,45 @@ func (d *decompiler) writeOptionalRoutingModelArray(key string, values []string)
 	d.write("  %s: %s\n", key, quotedStringArray(values))
 }
 
-func routingModelToDecl(model config.AuthoringModel) *ModelDecl {
+func routingModelToDecl(model dslModelCard) *ModelDecl {
 	fields := make(map[string]Value)
-	if len(model.Card.Aliases) > 0 {
-		fields["aliases"] = stringsToArray(model.Card.Aliases)
+	if len(model.Aliases) > 0 {
+		fields["aliases"] = stringsToArray(model.Aliases)
 	}
-	if model.Card.ParamSize != "" {
-		fields["param_size"] = StringValue{V: model.Card.ParamSize}
+	if model.ParamSize != "" {
+		fields["param_size"] = StringValue{V: model.ParamSize}
 	}
-	if model.Card.ContextWindowSize > 0 {
-		fields["context_window_size"] = IntValue{V: model.Card.ContextWindowSize}
+	if model.ContextWindowSize > 0 {
+		fields["context_window_size"] = IntValue{V: model.ContextWindowSize}
 	}
-	if model.Card.Description != "" {
-		fields["description"] = StringValue{V: model.Card.Description}
+	if model.Description != "" {
+		fields["description"] = StringValue{V: model.Description}
 	}
-	if len(model.Card.Capabilities) > 0 {
-		fields["capabilities"] = stringsToArray(model.Card.Capabilities)
+	if len(model.Capabilities) > 0 {
+		fields["capabilities"] = stringsToArray(model.Capabilities)
 	}
-	if model.Card.Reasoning.Type != "" {
-		reasoningFields := map[string]Value{"type": StringValue{V: model.Card.Reasoning.Type}}
-		if len(model.Card.Reasoning.Efforts) > 0 {
-			reasoningFields["efforts"] = stringsToArray(model.Card.Reasoning.Efforts)
+	if model.Reasoning.Type != "" {
+		reasoningFields := map[string]Value{"type": StringValue{V: model.Reasoning.Type}}
+		if len(model.Reasoning.Efforts) > 0 {
+			reasoningFields["efforts"] = stringsToArray(model.Reasoning.Efforts)
 		}
 		fields["reasoning"] = ObjectValue{Fields: reasoningFields}
 	}
-	if len(model.Card.LoRAs) > 0 {
-		fields["loras"] = stringsToArray(model.Card.LoRAs)
+	if len(model.LoRAs) > 0 {
+		loras := make([]string, 0, len(model.LoRAs))
+		for _, adapter := range model.LoRAs {
+			loras = append(loras, adapter.Name)
+		}
+		fields["loras"] = stringsToArray(loras)
 	}
-	if len(model.Card.Tags) > 0 {
-		fields["tags"] = stringsToArray(model.Card.Tags)
+	if len(model.Tags) > 0 {
+		fields["tags"] = stringsToArray(model.Tags)
 	}
-	if model.Card.QualityScore != 0 {
-		fields["quality_score"] = FloatValue{V: model.Card.QualityScore}
+	if model.QualityScore != 0 {
+		fields["quality_score"] = FloatValue{V: model.QualityScore}
 	}
-	if model.Card.Modality != "" {
-		fields["modality"] = StringValue{V: model.Card.Modality}
+	if model.Modality != "" {
+		fields["modality"] = StringValue{V: model.Modality}
 	}
 	return &ModelDecl{Name: model.Name, Fields: fields}
 }

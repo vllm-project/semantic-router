@@ -88,6 +88,8 @@
     display: flex;
     justify-content: space-between;
     gap: 0.75rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 
   .utilityLink {
@@ -99,5 +101,18 @@
     margin-left: 0;
     padding: 0 0.72rem;
     font-size: 0.72rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .inner {
+    padding-left: max(0.75rem, env(safe-area-inset-left));
+    padding-right: max(0.75rem, env(safe-area-inset-right));
+  }
+}
+
+@media (max-width: 400px) {
+  .brandPlacement {
+    width: 6.75rem;
   }
 }

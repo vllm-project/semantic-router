@@ -21,10 +21,12 @@ type CompileResult struct {
 }
 
 // CompiledRecipeDocument is the exact Router Management Recipe payload
-// produced from one DSL Recipe scope. Physical Models and Entrypoints are
-// deliberately absent because those are independent managed resources.
+// produced from one DSL Recipe scope. Name is absent for an anonymous routing
+// fragment; the Builder supplies the selected Recipe identity. Physical Models
+// and Entrypoints are deliberately absent because those are independent
+// durable resources.
 type CompiledRecipeDocument struct {
-	Name        string          `json:"name"`
+	Name        string          `json:"name,omitempty"`
 	Description string          `json:"description,omitempty"`
 	Document    json.RawMessage `json:"document"`
 }
@@ -164,6 +166,16 @@ func compile(_ js.Value, args []js.Value) interface{} {
 }
 
 func compileRecipeDocuments(cfg *config.RouterConfig) ([]CompiledRecipeDocument, error) {
+	if len(cfg.Recipes) == 0 {
+		document, err := config.MarshalRoutingRecipeDocument(
+			config.CanonicalRoutingFromRouterConfig(cfg),
+		)
+		if err != nil {
+			return nil, err
+		}
+		return []CompiledRecipeDocument{{Document: document}}, nil
+	}
+
 	documents := make([]CompiledRecipeDocument, 0, len(cfg.Recipes))
 	for index := range cfg.Recipes {
 		recipe := &cfg.Recipes[index]
@@ -171,7 +183,7 @@ func compileRecipeDocuments(cfg *config.RouterConfig) ([]CompiledRecipeDocument,
 		if scoped == nil {
 			return nil, fmt.Errorf("construct Recipe document for %q", recipe.Name)
 		}
-		document, err := config.MarshalManagedRecipeDocument(
+		document, err := config.MarshalRoutingRecipeDocument(
 			config.CanonicalRoutingFromRouterConfig(scoped),
 		)
 		if err != nil {
@@ -233,7 +245,7 @@ func validate(_ js.Value, args []js.Value) interface{} {
 
 // decompile implements signalDecompile(yamlSource: string) → string (JSON).
 // Converts the provider-neutral Recipe document owned by the browser Builder
-// back to DSL. Full standalone manifests require the application composition
+// back to DSL. Full Router bootstrap documents require the application composition
 // root to inject a Provider Integration compiler and are intentionally not
 // parsed inside the browser runtime.
 func decompile(_ js.Value, args []js.Value) interface{} {

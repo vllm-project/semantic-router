@@ -37,33 +37,38 @@ def _user_config(document: dict) -> UserConfig:
     return UserConfig.model_validate(document)
 
 
-def _recipe(name, document):
+def _recipe(name, routing):
     return {
         "name": name,
-        "document": document,
+        "routing": routing,
     }
 
 
 def _entrypoint(name, recipe, assignments=None):
     return {
-        "name": name,
+        "model_names": [name],
         "recipe": recipe,
         "assignments": assignments or {},
     }
 
 
-def _model(name="model-a", *, loras=None):
+def _provider_model(name="model-a"):
     return {
         "name": name,
-        "card": {"loras": loras or []},
-        "connections": [
+        "provider_model_id": name,
+        "backend_refs": [
             {
                 "provider": "openai-compatible",
-                "endpoint": "http://model:8000/v1",
-                "model": name,
-                "weight": "1",
+                "base_url": "http://model:8000/v1",
             }
         ],
+    }
+
+
+def _model_card(name="model-a", *, loras=None):
+    return {
+        "name": name,
+        "loras": [{"name": lora} for lora in (loras or [])],
     }
 
 
@@ -135,7 +140,7 @@ def test_classifier_signal_rejects_whitespace_name():
 def test_user_config_allows_recipe_local_classifier_names():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe(
                     "default",
@@ -171,14 +176,14 @@ def test_user_config_allows_recipe_local_classifier_names():
             ],
         }
     )
-    assert config.recipes[1].document.signals.classifiers[0].name == "risk"
+    assert config.recipes[1].routing.signals.classifiers[0].name == "risk"
 
 
 def test_user_config_rejects_case_colliding_classifier_names_within_recipe():
     with pytest.raises(ValidationError):
         _user_config(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "recipes": [
                     _recipe(
                         "default",
@@ -278,7 +283,7 @@ def test_prompt_decision_rejects_duplicate_base_models():
 def test_user_config_accepts_recipe_entrypoints():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "entrypoints": [_entrypoint("vllm-sr/privacy", "privacy")],
             "recipes": [
                 _recipe(
@@ -299,13 +304,13 @@ def test_user_config_accepts_recipe_entrypoints():
         }
     )
     assert config.entrypoints[0].recipe == "privacy"
-    assert config.recipes[0].document.signals.metadata[0].name == "consent-denied"
+    assert config.recipes[0].routing.signals.metadata[0].name == "consent-denied"
 
 
 def test_user_config_rejects_unknown_recipe_entrypoint():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "entrypoints": [_entrypoint("vllm-sr/missing", "missing")],
         }
     )
@@ -317,7 +322,7 @@ def test_prompt_recipe_rejects_physical_model_selection():
     with pytest.raises(ValidationError, match="Entrypoint assignments"):
         _user_config(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "recipes": [
                     _recipe(
                         "prompt-recipe",
@@ -347,11 +352,11 @@ def test_prompt_recipe_rejects_physical_model_selection():
 def test_prompt_recipe_uses_entrypoint_assignments():
     config = _user_config(
         {
-            "version": "v0.4",
-            "models": [
-                _model("model-a"),
-                _model("model-b"),
-            ],
+            "version": "v0.3",
+            "providers": {
+                "models": [_provider_model("model-a"), _provider_model("model-b")]
+            },
+            "routing": {"modelCards": [_model_card("model-a"), _model_card("model-b")]},
             "recipes": [
                 _recipe(
                     "prompt-recipe",
@@ -400,7 +405,7 @@ def test_prompt_recipe_uses_entrypoint_assignments():
 def test_general_validators_cover_recipe_decisions():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe(
                     "invalid-recipe",
@@ -432,11 +437,11 @@ def test_general_validators_cover_recipe_decisions():
     errors = validate_user_config(config)
     fields = {error.field for error in errors}
     assert (
-        "recipes.invalid-recipe.document.decisions.invalid-route.algorithm.hybrid"
+        "recipes.invalid-recipe.routing.decisions.invalid-route.algorithm.hybrid"
         in fields
     )
     assert (
-        "recipes.invalid-recipe.document.decisions.invalid-route.rules.conditions"
+        "recipes.invalid-recipe.routing.decisions.invalid-route.rules.conditions"
         in fields
     )
 
@@ -445,7 +450,7 @@ def test_user_config_rejects_recipe_owned_model_cards():
     with pytest.raises(ValidationError):
         _user_config(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "recipes": [
                     _recipe(
                         "with-models",
@@ -459,7 +464,7 @@ def test_user_config_rejects_recipe_owned_model_cards():
 def test_user_config_allows_recipe_local_decision_names():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe(
                     "default",
@@ -490,13 +495,13 @@ def test_user_config_allows_recipe_local_decision_names():
             ],
         }
     )
-    assert config.recipes[1].document.decisions[0].name == "shared-name"
+    assert config.recipes[1].routing.decisions[0].name == "shared-name"
 
 
 def test_user_config_accepts_recipes_only_default_profile():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe(
                     "default",
@@ -527,20 +532,20 @@ def test_user_config_allows_identical_signal_redeclaration():
     }
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe("default", {"signals": {"metadata": [metadata]}}),
                 _recipe("other", {"signals": {"metadata": [metadata]}}),
             ],
         }
     )
-    assert config.recipes[1].document.signals.metadata[0].name == "canary"
+    assert config.recipes[1].routing.signals.metadata[0].name == "canary"
 
 
 def test_user_config_allows_conflicting_names_across_isolated_recipes():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe(
                     "default",
@@ -573,7 +578,7 @@ def test_user_config_allows_conflicting_names_across_isolated_recipes():
             ],
         }
     )
-    predicate = config.recipes[1].document.signals.metadata[0].predicate
+    predicate = config.recipes[1].routing.signals.metadata[0].predicate
     assert predicate.equals == "beta"
 
 
@@ -586,14 +591,14 @@ def test_user_config_allows_recipe_local_projection_names():
     }
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 _recipe("default", {"projections": {"partitions": [partition]}}),
                 _recipe("other", {"projections": {"partitions": [partition]}}),
             ],
         }
     )
-    assert config.recipes[1].document.projections.partitions[0].name == "difficulty"
+    assert config.recipes[1].routing.projections.partitions[0].name == "difficulty"
 
 
 @pytest.mark.parametrize(
@@ -603,8 +608,9 @@ def test_user_config_allows_recipe_local_projection_names():
 def test_user_config_rejects_entrypoint_name_collisions(model_name):
     config = _user_config(
         {
-            "version": "v0.4",
-            "models": [_model(loras=["adapter-a"])],
+            "version": "v0.3",
+            "providers": {"models": [_provider_model()]},
+            "routing": {"modelCards": [_model_card(loras=["adapter-a"])]},
             "recipes": [_recipe("default", {})],
             "entrypoints": [_entrypoint(model_name, "default")],
         }
@@ -617,9 +623,10 @@ def test_user_config_rejects_entrypoint_name_collisions(model_name):
 def test_user_config_allows_explicit_virtual_entrypoint_names(model_name):
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [_recipe("default", {})],
             "entrypoints": [_entrypoint(model_name, "default")],
+            "global": {"router": {"auto_model_names": []}},
         }
     )
     assert not any(
@@ -630,18 +637,22 @@ def test_user_config_allows_explicit_virtual_entrypoint_names(model_name):
 def test_user_config_normalizes_entrypoint_names():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "entrypoints": [
                 {
-                    "name": "primary-route",
-                    "aliases": [" virtual-route ", "virtual-route", ""],
+                    "model_names": [
+                        " primary-route ",
+                        " virtual-route ",
+                        "virtual-route",
+                        "",
+                    ],
                     "recipe": "default",
                     "assignments": {},
                 }
             ],
         }
     )
-    assert config.entrypoints[0].aliases == ["virtual-route"]
+    assert config.entrypoints[0].model_names == ["primary-route", "virtual-route"]
     assert config.entrypoints[0].recipe == "default"
 
 
@@ -649,10 +660,10 @@ def test_user_config_rejects_empty_entrypoint_names():
     with pytest.raises(ValidationError):
         _user_config(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "entrypoints": [
                     {
-                        "name": " ",
+                        "model_names": [" "],
                         "recipe": "default",
                         "assignments": {},
                     }

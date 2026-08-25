@@ -39,6 +39,7 @@ func assertReferenceConfigServiceGlobalCoverage(t testingT, services map[string]
 	assertMapCoversStructFields(t, mustMapAt(t, services, "agent"), reflect.TypeOf(AgentServiceConfig{}), "global.services.agent")
 	assertReferenceConfigObservabilityCoverage(t, mustMapAt(t, services, "observability"))
 	assertReferenceConfigManagementAPICoverage(t, mustMapAt(t, services, "management_api"))
+	assertMapCoversStructFields(t, mustMapAt(t, services, "routing_security"), reflect.TypeOf(RoutingSecurityConfig{}), "global.services.routing_security")
 	assertReferenceConfigRouterReplayCoverage(t, mustMapAt(t, services, "router_replay"))
 }
 
@@ -144,7 +145,7 @@ func assertReferenceConfigRouterReplayCoverage(t testingT, routerReplay map[stri
 }
 
 func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]interface{}) {
-	assertMapCoversStructFields(t, stores, reflect.TypeOf(CanonicalStoreGlobal{}), "global.stores", "access", "access_runtime")
+	assertMapCoversStructFields(t, stores, reflect.TypeOf(CanonicalStoreGlobal{}), "global.stores", "management", "runtime")
 	assertReferenceConfigSemanticCacheCoverage(t, mustMapAt(t, stores, "response_cache"))
 	assertReferenceConfigMemoryCoverage(t, mustMapAt(t, stores, "memory"))
 	assertReferenceConfigVectorStoreCoverage(t, mustMapAt(t, stores, "vector_store"))

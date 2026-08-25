@@ -62,7 +62,7 @@ func main() {
 func runCompile() {
 	fs := flag.NewFlagSet("compile", flag.ExitOnError)
 	output := fs.String("o", "", "Output file path (default: stdout)")
-	base := fs.String("base", "", "Complete v0.4 YAML manifest containing exactly one Recipe whose document will be replaced")
+	base := fs.String("base", "", "Complete v0.3 YAML manifest containing exactly one Recipe whose routing section will be replaced")
 	if err := fs.Parse(os.Args[1:]); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %s\n", err)
 		os.Exit(1)

@@ -22,11 +22,12 @@ type Service struct {
 	ttlDuration time.Duration
 	now         func() time.Time
 
-	invitationMailer      InvitationMailer
-	invitationBaseURL     string
-	invitationIssuerURL   string
-	invitationAuthority   InvitationAuthority
-	firstAdminProvisioner FirstAdminProvisioner
+	invitationMailer        InvitationMailer
+	invitationBaseURL       string
+	invitationIssuerURL     string
+	invitationAuthority     InvitationAuthority
+	firstAdminProvisioner   FirstAdminProvisioner
+	dashboardSessionRetirer DashboardSessionRetirer
 
 	// allowOpenBootstrap gates the public web-form bootstrap endpoint (off by default).
 	allowOpenBootstrap bool
@@ -36,6 +37,22 @@ type Service struct {
 	// guard), so a process-level mutex is sufficient; a multi-writer deployment would
 	// need a transactional guard in the store instead.
 	bootstrapMu sync.Mutex
+}
+
+// DashboardSessionRetirer terminates the Router Management session derived
+// from one local Dashboard browser session. The auth package owns only the
+// local cookie/session; the configured identity authority owns this lifecycle.
+type DashboardSessionRetirer interface {
+	RetireDashboardSession(context.Context, string) error
+}
+
+// ConfigureDashboardSessionRetirer couples logout to the Router session that
+// was minted from the same issuer session ID. It does not grant Management or
+// inference authority to the local auth store.
+func (s *Service) ConfigureDashboardSessionRetirer(retirer DashboardSessionRetirer) {
+	if s != nil {
+		s.dashboardSessionRetirer = retirer
+	}
 }
 
 // ErrBootstrapClosed is returned by BootstrapRegister when an admin already exists.
@@ -310,7 +327,12 @@ func (s *Service) RevokeToken(ctx context.Context, raw string) error {
 	if err != nil {
 		return nil
 	}
-	return s.store.RevokeSession(ctx, claims.ID)
+	var routerErr error
+	if s.dashboardSessionRetirer != nil && strings.TrimSpace(claims.ID) != "" {
+		routerErr = s.dashboardSessionRetirer.RetireDashboardSession(ctx, claims.ID)
+	}
+	localErr := s.store.RevokeSession(ctx, claims.ID)
+	return errors.Join(routerErr, localErr)
 }
 
 func (s *Service) GetByID(ctx context.Context, id string) (*User, error) {
@@ -353,8 +375,8 @@ func (s *Service) CanBootstrap(ctx context.Context) (bool, error) {
 }
 
 // ConfigureFirstAdminProvisioner binds first Dashboard registration to the
-// Router-owned Management authority. A nil provisioner retains the standalone
-// Dashboard-only bootstrap used outside managed mode.
+// Router-owned Management authority. A nil provisioner retains the local
+// Dashboard bootstrap used when Management identity is not configured.
 func (s *Service) ConfigureFirstAdminProvisioner(provisioner FirstAdminProvisioner) {
 	s.firstAdminProvisioner = provisioner
 }

@@ -218,6 +218,13 @@ func (e *RedisEngine) ReadAttemptEvidence(
 	if err != nil {
 		return ReadAttemptEvidenceResult{}, mapScriptError(err)
 	}
+	return parseAttemptEvidenceResult(request, value)
+}
+
+func parseAttemptEvidenceResult(
+	request ReadAttemptEvidenceRequest,
+	value any,
+) (ReadAttemptEvidenceResult, error) {
 	values, ok := value.([]any)
 	if !ok || len(values) < 4 {
 		return ReadAttemptEvidenceResult{}, fmt.Errorf(
@@ -253,6 +260,15 @@ func (e *RedisEngine) ReadAttemptEvidence(
 	if header[3] != "1" || len(values) < 14 {
 		return ReadAttemptEvidenceResult{}, fmt.Errorf("%w: invalid attempt evidence presence", ErrRuntimeCorrupt)
 	}
+	return parsePresentAttemptEvidence(request, values, revision, serverTime)
+}
+
+func parsePresentAttemptEvidence(
+	request ReadAttemptEvidenceRequest,
+	values []any,
+	revision uint64,
+	serverTime time.Time,
+) (ReadAttemptEvidenceResult, error) {
 	base, err := scriptStrings(values[:14], 14)
 	if err != nil {
 		return ReadAttemptEvidenceResult{}, err

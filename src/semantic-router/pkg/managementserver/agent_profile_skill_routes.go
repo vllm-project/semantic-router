@@ -99,7 +99,7 @@ func (routes *AgentRoutes) createProfile(response http.ResponseWriter, request *
 	setIdempotencyReplayHeader(response, result.Replayed)
 	response.Header().Set("Location", agentProfilesPath+"/"+result.ResourceID)
 	writeProviderJSON(response, http.StatusCreated, managementapi.NewResourceMutationReceipt(
-		"agent_profile", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+		"agent_profile", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 	), requestID)
 }
 
@@ -161,7 +161,7 @@ func (routes *AgentRoutes) profile(response http.ResponseWriter, request *http.R
 		}
 		setAgentETag(response, profile.Revision)
 		writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-			"agent_profile", profile.ID, uint64(profile.Revision), nil,
+			"agent_profile", profile.ID, publicRevision(profile.Revision), nil,
 		), requestID)
 	case http.MethodDelete:
 		revision, ok := requireAgentRevision(response, request, requestID)
@@ -260,7 +260,7 @@ func (routes *AgentRoutes) skills(response http.ResponseWriter, request *http.Re
 		setIdempotencyReplayHeader(response, result.Replayed)
 		response.Header().Set("Location", agentSkillsPath+"/"+result.ResourceID)
 		writeProviderJSON(response, http.StatusCreated, managementapi.NewResourceMutationReceipt(
-			"agent_skill", result.ResourceID, uint64(result.ResourceRevision), &result.Replayed,
+			"agent_skill", result.ResourceID, publicRevision(result.ResourceRevision), &result.Replayed,
 		), requestID)
 	default:
 		writeProviderError(response, http.StatusNotFound, "not_found", "Resource not found.", requestID)
@@ -313,7 +313,7 @@ func (routes *AgentRoutes) skill(response http.ResponseWriter, request *http.Req
 		}
 		setAgentETag(response, skill.Revision)
 		writeProviderJSON(response, http.StatusOK, managementapi.NewResourceMutationReceipt(
-			"agent_skill", skill.ID, uint64(skill.Revision), nil,
+			"agent_skill", skill.ID, publicRevision(skill.Revision), nil,
 		), requestID)
 	case http.MethodDelete:
 		revision, ok := requireAgentRevision(response, request, requestID)

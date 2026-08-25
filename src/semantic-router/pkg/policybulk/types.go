@@ -224,12 +224,28 @@ type RepositoryPage struct {
 // Repository is a typed durable queue.  It accepts only policy binding items;
 // it is not an arbitrary task transport.
 type Repository interface {
+	QueueLifecycle
+	OperationReader
+	OperationMutationRepository
+	QueueWorkerRepository
+}
+
+type QueueLifecycle interface {
 	Ready(context.Context, *managementcommand.Codec) error
 	EnqueueAccess(context.Context, managementcommand.Command, Operation, OperationContext, []AccessBindingItem) (EnqueueResult, error)
 	EnqueueRate(context.Context, managementcommand.Command, Operation, OperationContext, []RateBindingItem) (EnqueueResult, error)
+}
+
+type OperationReader interface {
 	Get(context.Context, string, string) (Operation, error)
 	List(context.Context, OperationQuery) (RepositoryPage, error)
+}
+
+type OperationMutationRepository interface {
 	Cancel(context.Context, managementcommand.Command, CancelRequest) (CancelResult, error)
+}
+
+type QueueWorkerRepository interface {
 	Claim(context.Context, string, time.Time, time.Duration, int) (ItemClaim, bool, error)
 	Complete(context.Context, ItemClaim, ItemResult, time.Time) (Operation, error)
 	Fail(context.Context, ItemClaim, ItemFailure, bool, time.Time, time.Time, int) (Operation, error)

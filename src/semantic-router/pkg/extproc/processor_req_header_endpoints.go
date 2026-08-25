@@ -15,7 +15,7 @@ func (r *OpenAIRouter) handleModelsRequestHeaders(
 	path string,
 	ctx *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if method != "GET" || !strings.HasPrefix(path, "/v1/models") {
+	if method != "GET" || normalizeRequestPath(path) != "/v1/models" {
 		return nil, nil
 	}
 

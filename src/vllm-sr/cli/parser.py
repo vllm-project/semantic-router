@@ -5,7 +5,13 @@ from pathlib import Path
 from typing import Dict, Any
 from pydantic import ValidationError
 
-from cli.config_contract import iter_named_signal_entries, iter_routing_profiles
+from cli.config_contract import (
+    LEGACY_PROVIDER_DEFAULT_KEYS,
+    LEGACY_PROVIDER_MODEL_SURFACE_KEYS,
+    LEGACY_SIGNAL_KEY_TO_CANONICAL,
+    iter_named_signal_entries,
+    iter_routing_profiles,
+)
 from cli.models import RecipeDistribution, RouterLearningConfig, UserConfig
 from cli.utils import get_logger
 
@@ -21,30 +27,39 @@ class ConfigParseError(Exception):
 def _removed_config_fields(data: Dict[str, Any]) -> list[str]:
     fields: list[str] = []
 
+    for field_name in ("signals", "decisions", *LEGACY_SIGNAL_KEY_TO_CANONICAL):
+        if field_name in data:
+            fields.append(field_name)
+
+    routing = data.get("routing")
+    if isinstance(routing, dict) and "models" in routing:
+        fields.append("routing.models")
+
+    providers = data.get("providers")
+    if isinstance(providers, dict):
+        for field_name in (
+            "model_targets",
+            "backends",
+            "auth_profiles",
+            *LEGACY_PROVIDER_DEFAULT_KEYS,
+        ):
+            if field_name in providers:
+                fields.append(f"providers.{field_name}")
+
+        models = providers.get("models")
+        if isinstance(models, list):
+            for index, model in enumerate(models):
+                if not isinstance(model, dict):
+                    continue
+                if "access" in model:
+                    fields.append(f"providers.models[{index}].access")
+                for field_name in LEGACY_PROVIDER_MODEL_SURFACE_KEYS:
+                    if field_name in model:
+                        fields.append(f"providers.models[{index}].{field_name}")
+
     global_config = data.get("global")
     if isinstance(global_config, dict) and "modules" in global_config:
         fields.append("global.modules")
-    if isinstance(global_config, dict):
-        router = global_config.get("router")
-        if isinstance(router, dict):
-            for field_name in (
-                "auto_model_name",
-                "auto_model_names",
-                "include_config_models_in_list",
-                "strategy",
-                "model_selection",
-            ):
-                if field_name in router:
-                    fields.append(f"global.router.{field_name}")
-        integrations = global_config.get("integrations")
-        looper = integrations.get("looper") if isinstance(integrations, dict) else None
-        if isinstance(looper, dict):
-            for family_name in ("remom", "fusion", "flow"):
-                family = looper.get(family_name)
-                if isinstance(family, dict) and "model_names" in family:
-                    fields.append(
-                        f"global.integrations.looper.{family_name}.model_names"
-                    )
 
     return fields
 
@@ -82,12 +97,14 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 }:
                     fields.append(f"global.router.model_selection.method={method}")
 
-    for recipe_index, recipe in enumerate(data.get("recipes") or []):
-        document = recipe.get("document") if isinstance(recipe, dict) else None
-        if isinstance(document, dict):
-            decisions = document.get("decisions")
-        else:
-            decisions = None
+    raw_profiles: list[tuple[str, Any]] = [("routing", data.get("routing"))]
+    raw_profiles.extend(
+        (f"recipes[{index}].routing", recipe.get("routing"))
+        for index, recipe in enumerate(data.get("recipes") or [])
+        if isinstance(recipe, dict)
+    )
+    for profile_path, routing in raw_profiles:
+        decisions = routing.get("decisions") if isinstance(routing, dict) else None
         if isinstance(decisions, list):
             for index, decision in enumerate(decisions):
                 if not isinstance(decision, dict):
@@ -98,7 +115,7 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 algorithm_type = str(algorithm.get("type", "")).strip().lower()
                 if algorithm_type == "session_aware":
                     fields.append(
-                        f"recipes[{recipe_index}].document.decisions[{index}].algorithm.type=session_aware"
+                        f"{profile_path}.decisions[{index}].algorithm.type=session_aware"
                     )
                 if algorithm_type in {
                     "elo",
@@ -108,11 +125,11 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                     "personalization",
                 }:
                     fields.append(
-                        f"recipes[{recipe_index}].document.decisions[{index}].algorithm.type={algorithm_type}"
+                        f"{profile_path}.decisions[{index}].algorithm.type={algorithm_type}"
                     )
                 if "session_aware" in algorithm:
                     fields.append(
-                        f"recipes[{recipe_index}].document.decisions[{index}].algorithm.session_aware"
+                        f"{profile_path}.decisions[{index}].algorithm.session_aware"
                     )
                 for field_name in (
                     "elo",
@@ -123,7 +140,7 @@ def _removed_router_learning_fields(data: Dict[str, Any]) -> list[str]:
                 ):
                     if field_name in algorithm:
                         fields.append(
-                            f"recipes[{recipe_index}].document.decisions[{index}].algorithm.{field_name}"
+                            f"{profile_path}.decisions[{index}].algorithm.{field_name}"
                         )
 
     return fields
@@ -290,9 +307,14 @@ def _invalid_router_learning_values(data: Dict[str, Any]) -> list[str]:
 
 def _invalid_decision_adaptation_values(data: Dict[str, Any]) -> list[str]:
     errors: list[str] = []
-    for recipe_index, recipe in enumerate(data.get("recipes") or []):
-        document = recipe.get("document") if isinstance(recipe, dict) else None
-        decisions = document.get("decisions") if isinstance(document, dict) else None
+    raw_profiles: list[tuple[str, Any]] = [("routing", data.get("routing"))]
+    raw_profiles.extend(
+        (f"recipes[{index}].routing", recipe.get("routing"))
+        for index, recipe in enumerate(data.get("recipes") or [])
+        if isinstance(recipe, dict)
+    )
+    for profile_path, routing in raw_profiles:
+        decisions = routing.get("decisions") if isinstance(routing, dict) else None
         if not isinstance(decisions, list):
             continue
         for index, decision in enumerate(decisions):
@@ -312,7 +334,7 @@ def _invalid_decision_adaptation_values(data: Dict[str, Any]) -> list[str]:
                 if not component_mode:
                     continue
                 path = (
-                    f"recipes[{recipe_index}].document.decisions[{index}]"
+                    f"{profile_path}.decisions[{index}]"
                     f".adaptations.{component_name}.mode"
                 )
                 if decision_mode == "bypass" and component_mode != "bypass":
@@ -394,7 +416,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any]) -> None:
             f"{joined_fields}. Use `global.router.learning.adaptation` for online "
             "model-choice learning, `global.router.learning.protection` for "
             "session or conversation protection, and "
-            "`recipes[].document.decisions[].adaptations` "
+            "`recipes[].routing.decisions[].adaptations` "
             "only when a decision needs apply/observe/bypass control or a local "
             "adaptation candidate_set override."
         )
@@ -409,7 +431,7 @@ def _reject_invalid_config_surfaces(data: Dict[str, Any]) -> None:
             "`global.router.learning.adaptation`, "
             "`global.router.learning.protection`, and "
             "`global.router.learning.state_store`, plus "
-            "`recipes[].document.decisions[].adaptations`."
+            "`recipes[].routing.decisions[].adaptations`."
         )
 
     invalid_router_learning_values = _invalid_router_learning_values(data)
@@ -472,9 +494,13 @@ def _log_config_summary(config: ConfigArtifact) -> None:
     log.info(f"  Version: {config.version}")
     listeners = config.listeners if isinstance(config, UserConfig) else []
     entrypoints = config.entrypoints if isinstance(config, UserConfig) else []
-    models = config.models if isinstance(config, UserConfig) else []
+    models = config.providers.models if isinstance(config, UserConfig) else []
     log.info(f"  Listeners: {len(listeners)}")
-    decisions = sum(len(recipe.document.decisions) for recipe in config.recipes)
+    decisions = (
+        sum(len(routing.decisions) for _, routing in iter_routing_profiles(config))
+        if isinstance(config, UserConfig)
+        else sum(len(recipe.routing.decisions) for recipe in config.recipes)
+    )
     log.info(f"  Entrypoints: {len(entrypoints)}")
     log.info(f"  Recipes: {len(config.recipes)}")
     log.info(f"  Decisions: {decisions}")
@@ -482,7 +508,7 @@ def _log_config_summary(config: ConfigArtifact) -> None:
 
 
 def parse_user_config(config_path: str, *, log_summary: bool = True) -> UserConfig:
-    """Parse one complete v0.4 runtime manifest."""
+    """Parse one complete strict v0.3 runtime manifest."""
 
     data = _read_config_document(config_path)
 
@@ -502,8 +528,7 @@ def parse_config_artifact(
 
     Recipe distributions have exactly the public ``version`` and ``recipes``
     top-level fields. Any runtime-owned field makes the document a runtime
-    manifest, which remains subject to the complete standalone or managed
-    runtime contract.
+    manifest, which remains subject to the complete v0.3 runtime contract.
     """
 
     data = _read_config_document(config_path)
@@ -610,7 +635,7 @@ def validate_model_uniqueness(config: UserConfig) -> list:
     errors = []
     seen = set()
 
-    for model in config.models:
+    for model in config.providers.models:
         if model.name in seen:
             errors.append(f"Duplicate model name '{model.name}'")
         seen.add(model.name)

@@ -181,80 +181,141 @@ type RegistryManifest struct {
 	ExpiresAt time.Time      `json:"expiresAt"`
 }
 
-type Store interface {
+type ProfileReader interface {
 	ListProfiles(context.Context, string, ListQuery) (ListResult[Profile], error)
 	GetProfile(context.Context, string, string) (Profile, error)
 	GetProfileRevision(context.Context, string, string, int64) (Profile, error)
 	GetDefaultProfile(context.Context, string, SessionMode) (Profile, error)
+}
+
+type ProfileWriter interface {
 	CreateProfile(context.Context, string, string, ProfileInput, ResourceCommand) (ResourceMutationResult, error)
 	PatchProfile(context.Context, string, string, int64, ProfilePatch, MutationContext) (Profile, error)
 	DeleteProfile(context.Context, string, string, int64, MutationContext) (int64, error)
+}
 
+type SkillReader interface {
 	ListSkills(context.Context, string, ListQuery) (ListResult[Skill], error)
 	GetSkill(context.Context, string, string) (Skill, error)
 	GetSkillRevision(context.Context, string, string, int64) (Skill, error)
+}
+
+type SkillWriter interface {
 	CreateSkill(context.Context, string, string, SkillInput, ResourceCommand) (ResourceMutationResult, error)
 	PatchSkill(context.Context, string, string, int64, SkillPatch, MutationContext) (Skill, error)
 	DeleteSkill(context.Context, string, string, int64, MutationContext) (int64, error)
+}
 
+type ToolCredentialReader interface {
 	ListToolCredentials(context.Context, string, ListQuery) (ListResult[ToolCredential], error)
 	GetToolCredential(context.Context, string, string) (ToolCredential, error)
+	ResolveToolCredentialSecret(context.Context, string, string, string) (ToolCredentialSecret, error)
+}
+
+type ToolCredentialWriter interface {
 	CreateToolCredential(context.Context, string, string, string, EncryptedSecret, ResourceCommand) (ResourceMutationResult, error)
 	PatchToolCredential(context.Context, string, string, int64, ToolCredentialPatch, MutationContext) (ToolCredential, error)
 	RotateToolCredential(context.Context, string, string, int64, EncryptedSecret, time.Time, ResourceCommand) (ResourceMutationResult, error)
 	DeleteToolCredential(context.Context, string, string, int64, MutationContext) (int64, error)
-	ResolveToolCredentialSecret(context.Context, string, string, string) (ToolCredentialSecret, error)
+}
 
+type ToolSourceReader interface {
 	ListToolSources(context.Context, string, ListQuery) (ListResult[ToolSource], error)
 	GetToolSource(context.Context, string, string) (ToolSource, error)
 	GetToolSourceRevision(context.Context, string, string, int64) (ToolSource, error)
 	ListRegistryToolSources(context.Context, string) ([]ToolSource, error)
+}
+
+type ToolSourceWriter interface {
 	CreateToolSource(context.Context, string, string, ToolSourceInput, ResourceCommand) (ResourceMutationResult, error)
 	PatchToolSource(context.Context, string, string, int64, ToolSourcePatch, MutationContext) (ToolSource, error)
 	DeleteToolSource(context.Context, string, string, int64, MutationContext) (int64, error)
 	UpdateToolSourceDiscovery(context.Context, string, string, int64, []ToolDefinition, ResourceCommand) (ResourceMutationResult, error)
 	ApproveToolSourceDiscovery(context.Context, string, string, int64, string, ResourceCommand) (ResourceMutationResult, error)
+}
+
+type RegistryStore interface {
 	ReplayResourceCommand(context.Context, managementcommand.Command, string) (ResourceMutationResult, bool, error)
 	PutRegistryManifest(context.Context, string, RegistryManifest) error
 	GetRegistryManifest(context.Context, string, string) (RegistryManifest, error)
+}
 
+type SessionStore interface {
 	ListSessions(context.Context, string, ListQuery) (ListResult[Session], error)
 	GetSession(context.Context, string, string) (Session, error)
 	PatchSession(context.Context, string, string, int64, SessionPatch, MutationContext) (Session, error)
 	DeleteSession(context.Context, string, string, int64, MutationContext) (int64, error)
+}
 
+type TurnQueue interface {
 	CreateTurn(context.Context, CreateTurnRequest) (Turn, bool, error)
 	ListTurns(context.Context, string, string, ListQuery) (ListResult[Turn], error)
 	GetTurn(context.Context, string, string, string) (Turn, error)
 	ClaimNextTurn(context.Context, string, time.Time) (TurnLease, error)
 	RenewTurn(context.Context, TurnLease, time.Time) (TurnLease, error)
+}
+
+type TurnExecutorStore interface {
 	TransitionTurn(context.Context, TurnTransition) (Event, error)
 	RequestCancellation(context.Context, string, string, string, time.Time) (Turn, bool, error)
 	CancellationRequested(context.Context, TurnLease) (bool, error)
 	BeginModelStep(context.Context, ModelStep) (ModelStep, bool, error)
 	CommitModelStep(context.Context, ModelStepCommit) (ModelStepCommitResult, error)
+}
 
+type EventStore interface {
 	AppendEvent(context.Context, EventAppend) (Event, error)
 	ListEventsAfter(context.Context, string, string, int64, int) ([]Event, bool, error)
 	ListEventHistory(context.Context, string, string, EventHistoryQuery) ([]Event, bool, error)
 	OldestEventSequence(context.Context, string, string) (int64, error)
+}
 
+type InvocationStore interface {
 	BeginInvocation(context.Context, InvocationRecord) (InvocationRecord, bool, error)
 	FinishInvocation(context.Context, InvocationRecord) (Event, error)
 	GetInvocation(context.Context, string, string, string, string) (InvocationRecord, error)
+}
 
+type ArtifactStore interface {
 	PutArtifact(context.Context, string, Artifact, json.RawMessage) (Artifact, error)
 	GetArtifact(context.Context, string, string) (Artifact, error)
 	PutCheckpoint(context.Context, string, Checkpoint) (Checkpoint, error)
 	CommitCheckpoint(context.Context, TurnLease, Checkpoint) (Checkpoint, Event, error)
 	LatestCheckpoint(context.Context, string, string) (Checkpoint, error)
+}
 
+type PublicationStore interface {
 	CreatePublicationPlan(context.Context, string, PublicationPlan, MutationContext) (PublicationPlan, error)
 	GetPublicationPlan(context.Context, string, string) (PublicationPlan, error)
 	GetPublicationModelIDs(context.Context, string, string) ([]string, error)
 	ReservePublicationCommit(context.Context, string, string, string, int64, MutationContext) (PublicationCommitReservation, error)
 	FinalizePublicationCommit(context.Context, string, string, string, int64, time.Time) (PublicationCommitResult, error)
+}
+
+type PublicationFailureStore interface {
 	FailPublicationCommit(context.Context, string, string, string, time.Time) (PublicationCommitResult, error)
+}
+
+// Store composes narrow persistence capabilities while preserving one
+// transaction-capable repository contract for the application service.
+type Store interface {
+	ProfileReader
+	ProfileWriter
+	SkillReader
+	SkillWriter
+	ToolCredentialReader
+	ToolCredentialWriter
+	ToolSourceReader
+	ToolSourceWriter
+	RegistryStore
+	SessionStore
+	TurnQueue
+	TurnExecutorStore
+	EventStore
+	InvocationStore
+	ArtifactStore
+	PublicationStore
+	PublicationFailureStore
 
 	Ready(context.Context) error
 }
@@ -306,6 +367,7 @@ type SessionBootstrapRequest struct {
 	SessionID       string
 	NamespaceID     string
 	PrincipalID     string
+	KeyID           string
 	EffectiveTeamID string
 	Profile         Profile
 	Target          Target
@@ -322,6 +384,7 @@ type SessionBootstrapRequest struct {
 type SessionAuthorizationRequest struct {
 	NamespaceID     string
 	PrincipalID     string
+	KeyID           string
 	EffectiveTeamID string
 	Profile         Profile
 	Target          Target
@@ -332,6 +395,7 @@ type SessionAuthorizationRequest struct {
 type SessionAuthorization struct {
 	EffectiveUserID  string
 	EffectiveTeamID  string
+	KeyID            string
 	TargetKind       TargetKind
 	TargetResourceID string
 }
@@ -341,13 +405,21 @@ type SessionAuthorization struct {
 // credentials, target resolution, and the Agent session row. Bootstrap is one
 // PostgreSQL transaction: a client can never observe a delegation without its
 // session or bind a session to another subject's delegation.
-type SessionAuthority interface {
+type SessionAuthorizationAuthority interface {
 	Prepare(context.Context, SessionAuthorizationRequest) (SessionAuthorization, error)
 	Bootstrap(context.Context, SessionBootstrapRequest) (Session, bool, error)
 	Reauthorize(context.Context, Session, []string) error
+}
+
+type SessionDelegationAuthority interface {
 	RenewDelegation(context.Context, Session, time.Duration) error
 	ResolveInferenceCredential(context.Context, Session) ([]byte, error)
 	Close(context.Context, Session, int64, SessionPatch, MutationContext) (Session, error)
+}
+
+type SessionAuthority interface {
+	SessionAuthorizationAuthority
+	SessionDelegationAuthority
 }
 
 // TargetVisibility applies the same effective inference discovery policy used

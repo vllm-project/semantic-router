@@ -1,4 +1,4 @@
-"""Clean v0.4 Recipe-scoped ML selector contract tests."""
+"""Clean v0.3 Recipe-scoped ML selector contract tests."""
 
 import sys
 from pathlib import Path
@@ -10,7 +10,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from cli.models import RecipeDocument  # noqa: E402
+from cli.models import RecipeRouting  # noqa: E402
 
 
 def ml_decision(name: str, algorithm_type: str, *, models_path: str, family: dict):
@@ -29,7 +29,7 @@ def ml_decision(name: str, algorithm_type: str, *, models_path: str, family: dic
 
 
 def test_recipe_document_merges_non_conflicting_ml_families():
-    document = RecipeDocument(
+    document = RecipeRouting(
         decisions=[
             ml_decision("nearest", "knn", models_path="/models/a", family={"k": 5}),
             ml_decision(
@@ -47,7 +47,7 @@ def test_recipe_document_merges_non_conflicting_ml_families():
 
 def test_recipe_document_rejects_conflicting_shared_ml_settings():
     with pytest.raises(ValidationError, match=r"conflicting algorithm\.ml shared"):
-        RecipeDocument(
+        RecipeRouting(
             decisions=[
                 ml_decision(
                     "nearest",
@@ -67,7 +67,7 @@ def test_recipe_document_rejects_conflicting_shared_ml_settings():
 
 def test_recipe_document_rejects_conflicting_same_family_settings():
     with pytest.raises(ValidationError, match=r"conflicting algorithm\.ml\.knn"):
-        RecipeDocument(
+        RecipeRouting(
             decisions=[
                 ml_decision(
                     "nearest-a",
@@ -86,7 +86,7 @@ def test_recipe_document_rejects_conflicting_same_family_settings():
 
 
 def test_different_recipes_can_use_different_ml_settings():
-    fast = RecipeDocument(
+    fast = RecipeRouting(
         decisions=[
             ml_decision(
                 "choose",
@@ -96,7 +96,7 @@ def test_different_recipes_can_use_different_ml_settings():
             )
         ]
     )
-    deep = RecipeDocument(
+    deep = RecipeRouting(
         decisions=[
             ml_decision(
                 "choose",

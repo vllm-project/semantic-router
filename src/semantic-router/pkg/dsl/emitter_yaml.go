@@ -25,40 +25,40 @@ func EmitYAML(input string) ([]byte, []error) {
 }
 
 // EmitYAMLFromConfig emits the only YAML value owned by the DSL: one
-// model-free Recipe document. A complete standalone manifest is produced only
+// model-free Recipe document. A complete v0.3 manifest is produced only
 // by explicitly merging this value into one existing Recipe with --base.
 func EmitYAMLFromConfig(cfg *config.RouterConfig) ([]byte, error) {
 	return EmitRoutingYAMLFromConfig(cfg)
 }
 
-// MergeRoutingIntoBase replaces the document of the one Recipe in a complete
-// v0.4 manifest. Selecting among multiple Recipes is an explicit control-plane
-// operation and is therefore rejected by this narrow CLI helper.
+// MergeRoutingIntoBase replaces the routing profile of the one Recipe in a
+// complete v0.3 manifest. Selecting among multiple Recipes is an explicit
+// control-plane operation and is therefore rejected by this narrow CLI helper.
 func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, error) {
 	var base map[string]interface{}
 	if err := yaml.Unmarshal(baseYAML, &base); err != nil {
 		return nil, fmt.Errorf("failed to parse base YAML: %w", err)
 	}
 
-	canonicalDocument, err := canonicalRecipeDocument(cfg)
+	canonicalRouting, err := canonicalRecipeDocument(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("select Recipe document: %w", err)
+		return nil, fmt.Errorf("select Recipe routing: %w", err)
 	}
-	documentBytes, err := yaml.Marshal(canonicalDocument)
+	routingBytes, err := yaml.Marshal(canonicalRouting)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal Recipe document: %w", err)
+		return nil, fmt.Errorf("failed to marshal Recipe routing: %w", err)
 	}
-	var document interface{}
-	if err := yaml.Unmarshal(documentBytes, &document); err != nil {
-		return nil, fmt.Errorf("failed to re-parse Recipe document: %w", err)
+	var routing interface{}
+	if err := yaml.Unmarshal(routingBytes, &routing); err != nil {
+		return nil, fmt.Errorf("failed to re-parse Recipe routing: %w", err)
 	}
-	if err := replaceSingleRecipeDocument(base, document); err != nil {
+	if err := replaceSingleRecipeRouting(base, routing); err != nil {
 		return nil, err
 	}
 
 	doc := &yaml.Node{Kind: yaml.DocumentNode}
 	mapNode := &yaml.Node{Kind: yaml.MappingNode}
-	canonicalOrder := []string{"version", "listeners", "models", "recipes", "entrypoints", "global"}
+	canonicalOrder := []string{"version", "listeners", "providers", "routing", "recipes", "entrypoints", "global"}
 	added := make(map[string]bool)
 	for _, key := range canonicalOrder {
 		if value, ok := base[key]; ok {
@@ -80,7 +80,7 @@ func MergeRoutingIntoBase(cfg *config.RouterConfig, baseYAML []byte) ([]byte, er
 	return marshalYAMLIndent2(doc)
 }
 
-func replaceSingleRecipeDocument(base map[string]interface{}, document interface{}) error {
+func replaceSingleRecipeRouting(base map[string]interface{}, routing interface{}) error {
 	recipes, ok := base["recipes"].([]interface{})
 	if !ok || len(recipes) != 1 {
 		return fmt.Errorf("base manifest must contain exactly one Recipe")
@@ -89,8 +89,12 @@ func replaceSingleRecipeDocument(base map[string]interface{}, document interface
 	if !ok {
 		return fmt.Errorf("base manifest Recipe must be a mapping")
 	}
-	preserveBaseDecisionField(document, recipe["document"], "adaptations")
-	recipe["document"] = document
+	previous, exists := recipe["routing"]
+	if !exists {
+		return fmt.Errorf("base manifest Recipe must contain routing")
+	}
+	preserveBaseDecisionField(routing, previous, "adaptations")
+	recipe["routing"] = routing
 	return nil
 }
 

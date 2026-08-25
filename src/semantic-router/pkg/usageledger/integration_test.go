@@ -5,17 +5,12 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"net/url"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
-
-	controlpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/postgres"
 )
 
 func TestUsagePipelineWithPostgreSQLAndRedis(t *testing.T) {
@@ -42,7 +37,20 @@ func TestUsagePipelineWithPostgreSQLAndRedis(t *testing.T) {
 	if err := worker.Ensure(ctx); err != nil {
 		t.Fatal(err)
 	}
+	assertUsageInitialPersistence(t, ctx, db, client, prefix, partition, stream, worker)
+}
 
+func assertUsageInitialPersistence(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	prefix string,
+	partition string,
+	stream *RedisStream,
+	worker *Worker,
+) {
+	t.Helper()
 	minute := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	known := testTerminalEvent("integration-known", minute.Add(10*time.Second))
 	known.ReplayID = "replay-integration-known"
@@ -81,10 +89,25 @@ FROM inference_replays WHERE namespace_id=$1 AND replay_id=$2`,
 	assertLedgerCounts(t, ctx, db, 1, 1, 1)
 	if _, err := db.ExecContext(ctx, `UPDATE usage_dispatch_attempts
 SET admission_id = 'mismatched-admission'
-WHERE namespace_id = $1 AND admission_id = $2`, testNamespaceID, known.AdmissionID); err == nil {
+	WHERE namespace_id = $1 AND admission_id = $2`, testNamespaceID, known.AdmissionID); err == nil {
 		t.Fatal("attempt admission unexpectedly diverged from its parent dispatch")
 	}
+	assertUsageReplaySemantics(t, ctx, db, client, prefix, partition, stream, worker, minute, known)
+}
 
+func assertUsageReplaySemantics(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	prefix string,
+	partition string,
+	stream *RedisStream,
+	worker *Worker,
+	minute time.Time,
+	known TerminalEvent,
+) {
+	t.Helper()
 	// Simulate the exact process boundary where PostgreSQL committed but the
 	// Redis acknowledgement was lost. The pending item must replay through the
 	// settlement digest and be acknowledged without a second ledger write.
@@ -97,7 +120,7 @@ WHERE namespace_id = $1 AND admission_id = $2`, testNamespaceID, known.Admission
 	if testUsagePipelineWithPostgreSQLAndRedisErr != nil {
 		t.Fatal(testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
-	result, testUsagePipelineWithPostgreSQLAndRedisErr = failingWorker.ProcessOnce(ctx)
+	result, testUsagePipelineWithPostgreSQLAndRedisErr := failingWorker.ProcessOnce(ctx)
 	if !errors.Is(testUsagePipelineWithPostgreSQLAndRedisErr, errInjectedAckFailure) || result.Inserted != 1 {
 		t.Fatalf("commit-before-ack ProcessOnce() = (%+v, %v), want committed insert and lost ACK", result, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
@@ -143,7 +166,21 @@ WHERE namespace_id = $1 AND admission_id = $2`, testNamespaceID, known.Admission
 	assertLedgerCounts(t, ctx, db, 3, 3, 3)
 	assertCount(t, ctx, db, "unknown_usage_fences", 1)
 	assertCount(t, ctx, db, "unknown_usage_fence_bindings", 1)
+	assertUsageRollupSummaries(t, ctx, db, client, prefix, partition, stream, minute, known)
+}
 
+func assertUsageRollupSummaries(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	prefix string,
+	partition string,
+	stream *RedisStream,
+	minute time.Time,
+	known TerminalEvent,
+) {
+	t.Helper()
 	rollups := PostgresRollups{DB: db}
 	if err := rollups.Refresh1m(ctx, testNamespaceID, minute, minute.Add(time.Minute)); err != nil {
 		t.Fatalf("Refresh1m(): %v", err)
@@ -225,6 +262,22 @@ FROM usage_rollup_1m WHERE namespace_id = $1`, testNamespaceID).Scan(&viewRows, 
 	if testUsagePipelineWithPostgreSQLAndRedisErr != nil || dispatchSummary.Totals.IncompleteDispatches != "1" {
 		t.Fatalf("dispatch summary = (%+v, %v), want internal dispatch view", dispatchSummary, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
+	assertUsageBreakdownAndLogs(t, ctx, db, client, prefix, partition, stream, minute, known, queries)
+}
+
+func assertUsageBreakdownAndLogs(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	prefix string,
+	partition string,
+	stream *RedisStream,
+	minute time.Time,
+	known TerminalEvent,
+	queries PostgresQueries,
+) {
+	t.Helper()
 	breakdown, testUsagePipelineWithPostgreSQLAndRedisErr := queries.Breakdown(ctx, BreakdownQuery{
 		UsageQuery: UsageQuery{NamespaceID: testNamespaceID, Start: minute, End: minute.Add(time.Minute), Grain: GrainMinute, Visibility: QueryVisibility{All: true}},
 		Dimension:  BreakdownLogicalModel,
@@ -259,7 +312,20 @@ FROM usage_rollup_1m WHERE namespace_id = $1`, testNamespaceID).Scan(&viewRows, 
 		detail.Request.TTFTMilliseconds == nil || *detail.Request.TTFTMilliseconds != 80 {
 		t.Fatalf("request detail = (%+v, %v), want normalized dispatch and attempt", detail, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
+	assertUsageConsumerReclaim(t, ctx, db, client, prefix, partition, stream, minute)
+}
 
+func assertUsageConsumerReclaim(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	prefix string,
+	partition string,
+	stream *RedisStream,
+	minute time.Time,
+) {
+	t.Helper()
 	// Consumer-group reclaim proves crash recovery for a delivered but
 	// unacknowledged terminal event.
 	reclaimed := testTerminalEvent("integration-reclaimed", minute.Add(30*time.Second))
@@ -280,7 +346,7 @@ FROM usage_rollup_1m WHERE namespace_id = $1`, testNamespaceID).Scan(&viewRows, 
 	recoveryWorker, _ := NewWorker(recoveryStream, PostgresStore{DB: db}, WorkerOptions{
 		NamespaceID: testNamespaceID, BatchSize: 50, Block: time.Millisecond, ReclaimIdle: time.Millisecond,
 	})
-	result, testUsagePipelineWithPostgreSQLAndRedisErr = recoveryWorker.ProcessOnce(ctx)
+	result, testUsagePipelineWithPostgreSQLAndRedisErr := recoveryWorker.ProcessOnce(ctx)
 	if testUsagePipelineWithPostgreSQLAndRedisErr != nil || result.Inserted != 1 {
 		t.Fatalf("reclaim ProcessOnce() = (%+v, %v), want recovered insert", result, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
@@ -289,7 +355,18 @@ FROM usage_rollup_1m WHERE namespace_id = $1`, testNamespaceID).Scan(&viewRows, 
 		t.Fatalf("pending = (%+v, %v), want empty after reclaim", pending, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
 	assertLedgerCounts(t, ctx, db, 4, 4, 4)
+	assertUsageRollupRecovery(t, ctx, db, client, stream, minute)
+}
 
+func assertUsageRollupRecovery(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	stream *RedisStream,
+	minute time.Time,
+) {
+	t.Helper()
 	// Crash boundary after the immutable ledger commit but before rollup/XACK:
 	// replay must take the duplicate settlement path, finish every grain, and
 	// only then remove the pending entry.
@@ -307,7 +384,7 @@ FROM usage_rollup_1m WHERE namespace_id = $1`, testNamespaceID).Scan(&viewRows, 
 	if testUsagePipelineWithPostgreSQLAndRedisErr != nil {
 		t.Fatal(testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
-	result, testUsagePipelineWithPostgreSQLAndRedisErr = partialWorker.ProcessOnce(ctx)
+	result, testUsagePipelineWithPostgreSQLAndRedisErr := partialWorker.ProcessOnce(ctx)
 	if !errors.Is(testUsagePipelineWithPostgreSQLAndRedisErr, errInjectedRollupFailure) || result.Inserted != 1 {
 		t.Fatalf("commit-before-rollup ProcessOnce() = (%+v, %v)", result, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
@@ -317,7 +394,7 @@ FROM usage_rollup_1m WHERE namespace_id = $1`, testNamespaceID).Scan(&viewRows, 
 		t.Fatalf("commit-before-rollup replay = (%+v, %v)", result, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
 	assertLedgerCounts(t, ctx, db, 5, 5, 5)
-	pending, testUsagePipelineWithPostgreSQLAndRedisErr = client.XPending(ctx, stream.key, "usage-writers").Result()
+	pending, testUsagePipelineWithPostgreSQLAndRedisErr := client.XPending(ctx, stream.key, "usage-writers").Result()
 	if testUsagePipelineWithPostgreSQLAndRedisErr != nil || pending.Count != 0 {
 		t.Fatalf("pending after rollup recovery = (%+v, %v)", pending, testUsagePipelineWithPostgreSQLAndRedisErr)
 	}
@@ -380,7 +457,21 @@ VALUES ($1,'supervisor-one',$2,'USD','active')`, testNamespaceID, partitionOne);
 		}
 		return supervisor
 	}
+	assertSupervisorDiscovery(t, ctx, db, client, prefix, partitionOne, partitionTwo, namespaceTwo, newSupervisor)
+}
 
+func assertSupervisorDiscovery(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	prefix string,
+	partitionOne string,
+	partitionTwo string,
+	namespaceTwo string,
+	newSupervisor func(string) *Supervisor,
+) {
+	t.Helper()
 	supervisorA := newSupervisor("replica-a")
 	runA := make(chan error, 1)
 	go func() { runA <- supervisorA.Run(ctx) }()
@@ -434,7 +525,23 @@ VALUES ($1,'supervisor-two',$2,'USD','active')`, namespaceTwo, partitionTwo); er
 	secondNamespaceEvent.NamespaceID = namespaceTwo
 	addTerminalEvent(t, ctx, client, streamTwo.key, secondNamespaceEvent)
 	waitUsageCondition(t, ctx, func() bool { return namespaceEventCount(t, ctx, db, namespaceTwo) == 1 })
+	assertSupervisorConcurrency(t, ctx, db, client, namespaceTwo, minute, streamOne, streamTwo, supervisorA, runA, newSupervisor)
+}
 
+func assertSupervisorConcurrency(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	namespaceTwo string,
+	minute time.Time,
+	streamOne *RedisStream,
+	streamTwo *RedisStream,
+	supervisorA *Supervisor,
+	runA <-chan error,
+	newSupervisor func(string) *Supervisor,
+) {
+	t.Helper()
 	// Two live Router replicas use the same group and distinct consumers. Their
 	// concurrent ingestion and rollup passes must preserve exact cardinality.
 	peer := newSupervisor("replica-peer")
@@ -500,7 +607,20 @@ VALUES ($1,'supervisor-two',$2,'USD','active')`, namespaceTwo, partitionTwo); er
 	case <-time.After(time.Second):
 		t.Fatal("first supervisor did not stop")
 	}
+	assertSupervisorReclaim(t, ctx, db, client, namespaceTwo, minute, streamTwo, newSupervisor)
+}
 
+func assertSupervisorReclaim(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	client *redis.Client,
+	namespaceTwo string,
+	minute time.Time,
+	streamTwo *RedisStream,
+	newSupervisor func(string) *Supervisor,
+) {
+	t.Helper()
 	// Deliver an item to a consumer that then disappears. A new replica in the
 	// same group must XAUTOCLAIM it after the bounded idle period.
 	reclaimed := testTerminalEvent("supervisor-reclaimed", minute.Add(3*time.Minute))
@@ -597,213 +717,5 @@ VALUES ($1,'cross-minute','cross-minute-partition','USD','active')`, testNamespa
 	})
 	if err != nil || dispatchSummary.Totals.Requests != "1" || dispatchSummary.Totals.IncompleteDispatches != "1" {
 		t.Fatalf("dispatch summary = (%+v, %v), want the dispatch on its actual start bucket", dispatchSummary, err)
-	}
-}
-
-func waitUsageCondition(t *testing.T, ctx context.Context, condition func() bool) {
-	t.Helper()
-	ticker := time.NewTicker(10 * time.Millisecond)
-	defer ticker.Stop()
-	for {
-		if condition() {
-			return
-		}
-		select {
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
-		case <-ticker.C:
-		}
-	}
-}
-
-func namespaceEventCount(t *testing.T, ctx context.Context, db *sql.DB, namespaceID string) int {
-	t.Helper()
-	var count int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM usage_events WHERE namespace_id = $1`, namespaceID).Scan(&count); err != nil {
-		t.Fatal(err)
-	}
-	return count
-}
-
-func namespaceRollupRequests(t *testing.T, ctx context.Context, db *sql.DB, table, namespaceID string) int {
-	t.Helper()
-	var requests int
-	statement := "SELECT COALESCE(sum(requests),0)::int FROM " + pq.QuoteIdentifier(table) +
-		" WHERE namespace_id = $1 AND view = 'request'"
-	if err := db.QueryRowContext(ctx, statement, namespaceID).Scan(&requests); err != nil {
-		t.Fatal(err)
-	}
-	return requests
-}
-
-var errInjectedAckFailure = errors.New("injected acknowledgement failure")
-
-var errInjectedRollupFailure = errors.New("injected rollup failure")
-
-type failAckOnceStream struct {
-	Stream
-	failed bool
-}
-
-func (s *failAckOnceStream) Ack(ctx context.Context, ids []string) error {
-	if !s.failed {
-		s.failed = true
-		return errInjectedAckFailure
-	}
-	return s.Stream.Ack(ctx, ids)
-}
-
-type failCommitHookOnce struct {
-	delegate CommittedBatchHook
-	failed   bool
-}
-
-func (hook *failCommitHookOnce) AfterCommit(ctx context.Context, events []TerminalEvent) error {
-	if !hook.failed {
-		hook.failed = true
-		return errInjectedRollupFailure
-	}
-	return hook.delegate.AfterCommit(ctx, events)
-}
-
-func integrationStores(t *testing.T) (*sql.DB, *redis.Client) {
-	t.Helper()
-	databaseURL := os.Getenv("VLLM_SR_USAGE_LEDGER_TEST_DATABASE_URL")
-	redisURL := os.Getenv("VLLM_SR_USAGE_LEDGER_TEST_REDIS_URL")
-	if databaseURL == "" || redisURL == "" {
-		t.Skip("usage ledger PostgreSQL and Redis integration stores are not configured")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
-	defer cancel()
-	admin, integrationStoresErr := sql.Open("postgres", databaseURL)
-	if integrationStoresErr != nil {
-		t.Fatal(integrationStoresErr)
-	}
-	t.Cleanup(func() { _ = admin.Close() })
-	if err := admin.PingContext(ctx); err != nil {
-		t.Fatal(err)
-	}
-	schema := "vsr_usageledger_" + strings.ReplaceAll(uuid.NewString(), "-", "")
-	if _, err := admin.ExecContext(ctx, "CREATE SCHEMA "+pq.QuoteIdentifier(schema)); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		cleanup, stop := context.WithTimeout(context.Background(), 15*time.Second)
-		defer stop()
-		_, _ = admin.ExecContext(cleanup, "DROP SCHEMA "+pq.QuoteIdentifier(schema)+" CASCADE")
-	})
-	scopedURL, integrationStoresErr := databaseURLWithSearchPath(databaseURL, schema)
-	if integrationStoresErr != nil {
-		t.Fatal(integrationStoresErr)
-	}
-	db, integrationStoresErr := sql.Open("postgres", scopedURL)
-	if integrationStoresErr != nil {
-		t.Fatal(integrationStoresErr)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if err := (controlpostgres.Migrator{DB: db}).Apply(ctx); err != nil {
-		t.Fatalf("apply control-plane migrations: %v", err)
-	}
-	options, integrationStoresErr := redis.ParseURL(redisURL)
-	if integrationStoresErr != nil {
-		t.Fatal(integrationStoresErr)
-	}
-	client := redis.NewClient(options)
-	t.Cleanup(func() { _ = client.Close() })
-	if err := client.Ping(ctx).Err(); err != nil {
-		t.Fatal(err)
-	}
-	return db, client
-}
-
-func seedNamespaceAndFencePolicy(t *testing.T, ctx context.Context, db *sql.DB) {
-	t.Helper()
-	statements := []struct {
-		query string
-		args  []any
-	}{
-		{`INSERT INTO access_namespaces(id,name,quota_partition_id,billing_currency,status)
-VALUES ($1,'integration','partition-integration','USD','active')`, []any{testNamespaceID}},
-		{`INSERT INTO access_subjects(namespace_id,id,kind) VALUES
-($1,$2,'team'),($1,$3,'user'),($1,$4,'api_key')`, []any{testNamespaceID, testTeamID, testUserID, testKeyID}},
-		{`INSERT INTO access_teams(id,namespace_id,name,status) VALUES ($1,$2,'integration-team','active')`, []any{testTeamID, testNamespaceID}},
-		{`INSERT INTO access_users(id,namespace_id,email,display_name,status)
-VALUES ($1,$2,'usage@example.invalid','Usage User','active')`, []any{testUserID, testNamespaceID}},
-		{`INSERT INTO access_team_memberships(namespace_id,team_id,user_id,role,status)
-VALUES ($1,$2,$3,'member','active')`, []any{testNamespaceID, testTeamID, testUserID}},
-		{`INSERT INTO access_api_keys(id,namespace_id,name,owner_user_id,context_team_id,status)
-VALUES ($1,$2,'usage-key',$3,$4,'active')`, []any{testKeyID, testNamespaceID, testUserID, testTeamID}},
-		{`INSERT INTO rate_limit_policies(id,namespace_id,name,status)
-VALUES ('dddddddd-dddd-4ddd-8ddd-dddddddddddd',$1,'integration-budget','active')`, []any{testNamespaceID}},
-		{`INSERT INTO rate_limit_rules(
-  id,policy_id,metric,algorithm,limit_value,window_seconds,accounting,enforcement,ordinal
-) VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-  'total_tokens','sliding_log',1000,60,'response_actual','enforce',0)`, nil},
-		{`INSERT INTO rate_limit_bindings(
-  id,namespace_id,policy_id,subject_id,binding_mode,quota_partition_id,status
-) VALUES ('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',$1,'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-  $2,'allocation','partition-integration','active')`, []any{testNamespaceID, testTeamID}},
-	}
-	for _, statement := range statements {
-		if _, err := db.ExecContext(ctx, statement.query, statement.args...); err != nil {
-			t.Fatalf("seed integration schema: %v", err)
-		}
-	}
-}
-
-func addTerminalEvent(t *testing.T, ctx context.Context, client *redis.Client, key string, event TerminalEvent) {
-	t.Helper()
-	payload, err := EncodeTerminalEvent(event)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := client.XAdd(ctx, &redis.XAddArgs{Stream: key, Values: streamValues(event, payload)}).Err(); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func assertLedgerCounts(t *testing.T, ctx context.Context, db *sql.DB, events, dispatches, attempts int) {
-	t.Helper()
-	assertCount(t, ctx, db, "usage_settlements", events)
-	assertCount(t, ctx, db, "usage_events", events)
-	assertCount(t, ctx, db, "usage_dispatches", dispatches)
-	assertCount(t, ctx, db, "usage_dispatch_attempts", attempts)
-}
-
-func assertCount(t *testing.T, ctx context.Context, db *sql.DB, table string, want int) {
-	t.Helper()
-	var got int
-	if err := db.QueryRowContext(ctx, "SELECT count(*) FROM "+pq.QuoteIdentifier(table)).Scan(&got); err != nil {
-		t.Fatal(err)
-	}
-	if got != want {
-		t.Fatalf("%s count = %d, want %d", table, got, want)
-	}
-}
-
-func databaseURLWithSearchPath(databaseURL, schema string) (string, error) {
-	if !strings.Contains(databaseURL, "://") {
-		return databaseURL + " search_path=" + schema, nil
-	}
-	parsed, err := url.Parse(databaseURL)
-	if err != nil {
-		return "", err
-	}
-	query := parsed.Query()
-	query.Set("search_path", schema)
-	parsed.RawQuery = query.Encode()
-	return parsed.String(), nil
-}
-
-func deleteRedisPrefix(client *redis.Client, prefix string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	iterator := client.Scan(ctx, 0, prefix+":*", 100).Iterator()
-	keys := make([]string, 0)
-	for iterator.Next(ctx) {
-		keys = append(keys, iterator.Val())
-	}
-	if len(keys) != 0 {
-		_ = client.Del(ctx, keys...).Err()
 	}
 }

@@ -140,7 +140,7 @@ global:
 A per-decision override belongs in the plugin configuration:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: cached-route
       plugins:
@@ -194,7 +194,7 @@ detector is producing low-confidence false positives, evaluate a higher
 threshold:
 
 ```yaml
-document:
+routing:
   signals:
     pii:
       - name: pii-policy
@@ -222,7 +222,7 @@ decision.
 To reduce false positives, evaluate a higher threshold on the affected signal:
 
 ```yaml
-document:
+routing:
   signals:
     jailbreak:
       - name: jailbreak-standard
@@ -294,13 +294,19 @@ invalid request: provider origin is invalid
 means a backend reference cannot be resolved:
 
 ```yaml
-models:
-  - name: local-model
-    card: {}
-    connections:
-      - provider: vllm
-        endpoint: http://10.0.0.1:8000/v1
-        model: local-model
+providers:
+  models:
+    - name: local-model
+      provider_model_id: local-model
+      backend_refs:
+        - provider: vllm
+          endpoint: http://10.0.0.1:8000/v1
+      control:
+        retry: {count: 2, on: [unavailable, timeout]}
+        timeout: {request: 60s, stream: 10m}
+routing:
+  modelCards:
+    - name: local-model
 ```
 
 Use an HTTPS `endpoint` when the provider is remote, and use a hostname

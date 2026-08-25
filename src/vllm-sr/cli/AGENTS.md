@@ -21,6 +21,7 @@
 - Do not encode the same canonical field inventory or signal/plugin type list independently across `models.py`, `config_import.py`, and `validator.py` when one shared inventory or helper can own it.
 - When adding new config-contract surface area, prefer dedicated schema-family or validation helpers instead of growing the all-in-one `models.py` / `validator.py` hotspots.
 - Keep external imports explicit and source-specific; do not make `config_import.py` a second general-purpose config runtime.
-- Keep the v0.3 reader inside the offline `vllm-sr config migrate` boundary.
-  Runtime commands (`serve`, `config`, `validate`, and stack orchestration) must
-  not import converter modules, accept v0.3, or add a dual-read fallback.
+- Keep previous-release v0.3 rewriting inside the offline
+  `vllm-sr config migrate` boundary. Runtime commands (`serve`, `config`,
+  `validate`, and stack orchestration) accept only the strict current v0.3
+  schema and must not import converter modules or add a dual-read fallback.

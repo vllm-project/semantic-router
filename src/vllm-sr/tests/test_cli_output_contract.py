@@ -20,29 +20,35 @@ main = importlib.import_module("cli.main").main
 
 
 _VALID_CONFIG = {
-    "version": "v0.4",
+    "version": "v0.3",
     "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-    "models": [
-        {
-            "name": "test-model",
-            "card": {
+    "providers": {
+        "models": [
+            {
+                "name": "test-model",
+                "provider_model_id": "test-model",
+                "backend_refs": [
+                    {
+                        "provider": "openai-compatible",
+                        "base_url": "http://host.docker.internal:8000/v1",
+                    }
+                ],
+            }
+        ]
+    },
+    "routing": {
+        "modelCards": [
+            {
+                "name": "test-model",
                 "description": "Model used by CLI output contract tests.",
                 "capabilities": ["chat"],
-            },
-            "connections": [
-                {
-                    "provider": "openai-compatible",
-                    "endpoint": "http://host.docker.internal:8000/v1",
-                    "model": "test-model",
-                    "weight": "1",
-                }
-            ],
-        }
-    ],
+            }
+        ]
+    },
     "recipes": [
         {
             "name": "default",
-            "document": {
+            "routing": {
                 "decisions": [
                     {
                         "name": "default-route",
@@ -56,7 +62,7 @@ _VALID_CONFIG = {
     ],
     "entrypoints": [
         {
-            "name": "vllm-sr/auto",
+            "model_names": ["vllm-sr/example"],
             "recipe": "default",
             "assignments": {"default-route": {"models": [{"model": "test-model"}]}},
         }

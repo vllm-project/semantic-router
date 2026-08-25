@@ -7,6 +7,7 @@ import argparse
 import os
 import stat
 from collections.abc import Iterator
+from contextlib import suppress
 
 DIRECTORY_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
 PATH_FLAGS = os.O_PATH | os.O_CLOEXEC | os.O_NOFOLLOW
@@ -129,10 +130,8 @@ def stage_private_file(source: str, destination: str, uid: int, gid: int) -> Non
             raise OSError("Dashboard secret destination filename is empty")
         destination_directory = open_directory(parent_path)
         try:
-            try:
+            with suppress(FileNotFoundError):
                 os.unlink(name, dir_fd=destination_directory)
-            except FileNotFoundError:
-                pass
             destination_descriptor = os.open(
                 name,
                 os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
@@ -175,7 +174,7 @@ def prepare_shared_tree(
 ) -> None:
     root = open_directory(path)
     try:
-        for relative_dir, directories, files, directory_fd in _walk_directory(root):
+        for _relative_dir, directories, files, directory_fd in _walk_directory(root):
             directory_info = os.fstat(directory_fd)
             os.fchown(directory_fd, -1, gid)
             os.fchmod(

@@ -2,6 +2,7 @@ package managementapi
 
 import (
 	"encoding/json"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -17,6 +18,7 @@ func TestRoutingOperationContractsMatchHTTPMutationSemantics(t *testing.T) {
 		body        bool
 		responseRef string
 	}{
+		{MethodPOST, BasePath + "/routing/imports", IdempotencyRequired, RevisionCAS, AsyncOperation, true, "RoutingManifestImportResult"},
 		{MethodPOST, BasePath + "/routing/models", IdempotencyRequired, RevisionReturns, AsyncSynchronous, true, "MutationReceipt"},
 		{MethodPOST, BasePath + "/routing/models:bulk-import", IdempotencyRequired, RevisionNone, AsyncOperation, true, "MutationReceipt"},
 		{MethodDELETE, BasePath + "/routing/models/{modelId}", IdempotencyNone, RevisionCAS, AsyncSynchronous, false, ""},
@@ -59,6 +61,19 @@ func TestRoutingOperationContractsMatchHTTPMutationSemantics(t *testing.T) {
 	}
 }
 
+func TestRoutingManifestOpenAPIDocumentsDryRunAndYAMLExport(t *testing.T) {
+	document := GenerateOpenAPI()
+	importOperation := document.Paths[BasePath+"/routing/imports"]["post"]
+	if got := importOperation.Responses["200"].Content[JSONMediaType].Schema.Ref; got != "#/components/schemas/RoutingManifestImportResult" {
+		t.Fatalf("dry-run response = %q", got)
+	}
+	exportOperation := document.Paths[BasePath+"/routing/exports/current"]["get"]
+	media, found := exportOperation.Responses["200"].Content[YAMLMediaType]
+	if !found || media.Schema.Type != "string" || len(exportOperation.Responses["200"].Content) != 1 {
+		t.Fatalf("export response content = %#v", exportOperation.Responses["200"].Content)
+	}
+}
+
 func TestRoutingOpenAPISafeViewsOmitControlPlaneBindings(t *testing.T) {
 	document := GenerateOpenAPI()
 	model := document.Components.Schemas["RoutingModelView"]
@@ -83,7 +98,7 @@ func TestRoutingOpenAPISafeViewsOmitControlPlaneBindings(t *testing.T) {
 		}
 	}
 	for _, field := range []string{
-		"status", "revision", "modelRevision", "catalogRevision", "execution", "pricing",
+		"status", "revision", "modelRevision", "catalogRevision", "control", "execution", "pricing",
 		"backends", "createdAt", "updatedAt",
 	} {
 		if _, exposed := modelCardView.Properties[field]; exposed {
@@ -127,9 +142,44 @@ func TestRoutingModelPatchIsSparseAndDoesNotRequireBackendRoundTrip(t *testing.T
 	if len(patch.Required) != 0 {
 		t.Fatalf("Model PATCH unexpectedly requires fields: %#v", patch.Required)
 	}
-	for _, field := range []string{"name", "execution", "pricing", "backends"} {
+	for _, field := range []string{"name", "control", "pricing", "backends"} {
 		if _, exists := patch.Properties[field]; !exists {
 			t.Fatalf("Model PATCH omitted %q", field)
+		}
+	}
+}
+
+func TestRoutingModelControlOpenAPIConstraints(t *testing.T) {
+	document := GenerateOpenAPI()
+	retry := document.Components.Schemas["RoutingModelRetryControl"]
+	retryOn := retry.Properties["on"]
+	if retryOn.Items == nil ||
+		!slices.Equal(retryOn.Items.Enum, routingModelRetryEvidence) ||
+		retryOn.MaxItems == nil || *retryOn.MaxItems != int64(len(routingModelRetryEvidence)) ||
+		!retryOn.UniqueItems {
+		t.Fatalf("RoutingModelRetryControl.on = %#v", retryOn)
+	}
+
+	timeout := document.Components.Schemas["RoutingModelTimeoutControl"]
+	for _, field := range []string{"request", "stream"} {
+		schema := timeout.Properties[field]
+		if schema.Pattern != routingModelDurationPattern ||
+			!strings.Contains(schema.Description, "between 1s and 24h") {
+			t.Fatalf("RoutingModelTimeoutControl.%s = %#v", field, schema)
+		}
+		pattern, err := regexp.Compile(schema.Pattern)
+		if err != nil {
+			t.Fatalf("RoutingModelTimeoutControl.%s pattern: %v", field, err)
+		}
+		for _, value := range []string{"1s", "+1.5s", "1h30m", "1000ms", ".5m"} {
+			if !pattern.MatchString(value) {
+				t.Errorf("RoutingModelTimeoutControl.%s rejected duration syntax %q", field, value)
+			}
+		}
+		for _, value := range []string{"", "30", "1d", "-1s", " 1s", "1 s"} {
+			if pattern.MatchString(value) {
+				t.Errorf("RoutingModelTimeoutControl.%s accepted invalid duration syntax %q", field, value)
+			}
 		}
 	}
 }
@@ -203,5 +253,21 @@ func TestRoutingOpenAPIExposesTypedImmutableSnapshots(t *testing.T) {
 		if _, exists := member.Properties[field]; !exists || !slices.Contains(member.Required, field) {
 			t.Fatalf("RoutingSnapshotMember omitted required %s", field)
 		}
+	}
+	model := document.Components.Schemas["RoutingSnapshotModel"]
+	if _, exists := model.Properties["execution"]; exists {
+		t.Fatal("RoutingSnapshotModel exposes internal execution storage")
+	}
+	if _, exists := document.Components.Schemas["RoutingSnapshotExecution"]; exists {
+		t.Fatal("OpenAPI retains a duplicate public execution schema")
+	}
+	if control := model.Properties["control"]; control.Ref != "#/components/schemas/RoutingModelControl" ||
+		!slices.Contains(model.Required, "control") {
+		t.Fatalf("RoutingSnapshotModel control = %#v, required = %#v", control, model.Required)
+	}
+	control := document.Components.Schemas["RoutingModelControl"]
+	if control.Properties["retry"].Ref != "#/components/schemas/RoutingModelRetryControl" ||
+		control.Properties["timeout"].Ref != "#/components/schemas/RoutingModelTimeoutControl" {
+		t.Fatalf("nested Model control schema = %#v", control)
 	}
 }

@@ -21,6 +21,8 @@ describe('dashboard product dialog system', () => {
     expect(styles).toContain('border: 2px solid rgba(255, 255, 255, 0.72) !important;')
     expect(styles).toContain('backdrop-filter: blur(28px) saturate(140%);')
     expect(styles).toContain(':has(> :where(')
+    expect(styles).toContain('max-height: calc(100dvh - 0.75rem);')
+    expect(styles).toContain('font-size: 1rem !important;')
   })
 
   it('keeps generic edit and detail experiences centered and branded', () => {
@@ -47,5 +49,17 @@ describe('dashboard product dialog system', () => {
 
     expect(dialogSources.length).toBeGreaterThan(20)
     dialogSources.forEach((source) => expect(source).toContain('aria-modal="true"'))
+  })
+
+  it('uses product dialogs and the resilient clipboard path instead of browser-native UI', () => {
+    const sources = collectComponentSources(new URL('./', import.meta.url)).join('\n')
+    const clipboard = readSource('./utils/clipboard.ts')
+
+    expect(sources).not.toContain('window.confirm(')
+    expect(sources).not.toContain('window.alert(')
+    expect(sources).not.toContain('window.prompt(')
+    expect(sources).not.toContain('navigator.clipboard.writeText(')
+    expect(clipboard).toContain('navigator.clipboard?.writeText')
+    expect(clipboard).toContain("document.execCommand('copy')")
   })
 })

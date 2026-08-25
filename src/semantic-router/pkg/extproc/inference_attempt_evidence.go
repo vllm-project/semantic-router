@@ -83,6 +83,16 @@ func reconcileDispatchAttemptEvidence(
 	}
 
 	terminal := evidence.Attempts[len(evidence.Attempts)-1]
+	terminalState, terminalReason := reconcileTerminalAttempt(dispatch, terminal)
+	if terminalState == usageledger.UsageUnknown {
+		markDispatchUsageUnknown(dispatch, terminalReason)
+	}
+	applyAttemptTimeline(dispatch, evidence, terminalState, terminalReason)
+}
+
+func reconcileTerminalAttempt(
+	dispatch *inferenceDispatch, terminal quotaruntime.AttemptEvidence,
+) (usageledger.UsageState, string) {
 	terminalState := usageledger.UsageUnknown
 	var terminalReason string
 	switch terminal.State {
@@ -111,10 +121,15 @@ func reconcileDispatchAttemptEvidence(
 	default:
 		terminalReason = "attempt_evidence_invalid"
 	}
-	if terminalState == usageledger.UsageUnknown {
-		markDispatchUsageUnknown(dispatch, terminalReason)
-	}
+	return terminalState, terminalReason
+}
 
+func applyAttemptTimeline(
+	dispatch *inferenceDispatch,
+	evidence quotaruntime.DispatchAttemptEvidence,
+	terminalState usageledger.UsageState,
+	terminalReason string,
+) {
 	completedAt := dispatch.completedAt.UTC()
 	for _, attempt := range evidence.Attempts {
 		if attempt.CompletedAt.After(completedAt) {

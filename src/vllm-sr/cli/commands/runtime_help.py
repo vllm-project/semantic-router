@@ -3,8 +3,8 @@
 SERVE_HELP = """
 Start vLLM Semantic Router.
 
-Serve reads ./config.yaml, accepts another immutable manifest with --config, or
-creates a secure local managed config when the default path is absent.
+Serve reads ./config.yaml, accepts another canonical v0.3 config with --config,
+or creates a secure local Management workspace when the default path is absent.
 Semantic Router starts Router, Envoy, the Dashboard, PostgreSQL, and Valkey;
 it does not download or launch physical LLM engines. Connect provider endpoints,
 create Recipes, and publish Mixture-of-Model entrypoints in the Dashboard.
@@ -23,11 +23,11 @@ Examples:
 \b
   # Start from the current workspace
   vllm-sr serve
-  # Start from an explicit standalone or managed bootstrap manifest
+  # Start from an explicit canonical v0.3 config
   vllm-sr serve --config /path/to/config.yaml
   # Deploy the current workspace config to Kubernetes
   vllm-sr serve --target k8s --namespace my-ns
-  # Infrastructure and runtime-mode overrides
+  # Infrastructure and runtime overrides
   vllm-sr serve --image-pull-policy always
   vllm-sr serve --readonly
   vllm-sr serve --minimal

@@ -3,10 +3,11 @@ package accesscontrol
 type BuiltInRoleName string
 
 const (
-	BuiltInRoleClusterAdmin       BuiltInRoleName = "cluster_admin"
-	BuiltInRolePlatformAdmin      BuiltInRoleName = "platform_admin"
-	BuiltInRoleOperator           BuiltInRoleName = "operator"
-	BuiltInRoleAccessAdmin        BuiltInRoleName = "access_admin"
+	BuiltInRoleClusterAdmin  BuiltInRoleName = "cluster_admin"
+	BuiltInRolePlatformAdmin BuiltInRoleName = "platform_admin"
+	BuiltInRoleOperator      BuiltInRoleName = "operator"
+	BuiltInRoleAccessAdmin   BuiltInRoleName = "access_admin"
+	// #nosec G101 -- this is an authorization role identifier, not a credential value.
 	BuiltInRoleCredentialRevealer BuiltInRoleName = "credential_revealer"
 	BuiltInRoleAnalyst            BuiltInRoleName = "analyst"
 	BuiltInRoleViewer             BuiltInRoleName = "viewer"

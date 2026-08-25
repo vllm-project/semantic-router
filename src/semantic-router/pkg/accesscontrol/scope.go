@@ -22,7 +22,8 @@ func (k ScopeKind) Valid() bool {
 type ScopeResourceType string
 
 const (
-	ScopeResourceAPIKey                    ScopeResourceType = "api_key"
+	ScopeResourceAPIKey ScopeResourceType = "api_key"
+	// #nosec G101 -- this is a resource-type identifier, not a credential value.
 	ScopeResourceAPIKeyCredential          ScopeResourceType = "api_key_credential"
 	ScopeResourceDelegatedInferenceSession ScopeResourceType = "delegated_inference_session"
 	ScopeResourceMembership                ScopeResourceType = "membership"
@@ -46,12 +47,13 @@ const (
 	ScopeResourceLog                       ScopeResourceType = "log"
 	ScopeResourceAgentProfile              ScopeResourceType = "agent_profile"
 	ScopeResourceAgentSkill                ScopeResourceType = "agent_skill"
-	ScopeResourceAgentToolCredential       ScopeResourceType = "agent_tool_credential"
-	ScopeResourceAgentToolSource           ScopeResourceType = "agent_tool_source"
-	ScopeResourceAgentSession              ScopeResourceType = "agent_session"
-	ScopeResourceAgentTurn                 ScopeResourceType = "agent_turn"
-	ScopeResourceAgentArtifact             ScopeResourceType = "agent_artifact"
-	ScopeResourcePublicationPlan           ScopeResourceType = "publication_plan"
+	// #nosec G101 -- this is a resource-type identifier, not a credential value.
+	ScopeResourceAgentToolCredential ScopeResourceType = "agent_tool_credential"
+	ScopeResourceAgentToolSource     ScopeResourceType = "agent_tool_source"
+	ScopeResourceAgentSession        ScopeResourceType = "agent_session"
+	ScopeResourceAgentTurn           ScopeResourceType = "agent_turn"
+	ScopeResourceAgentArtifact       ScopeResourceType = "agent_artifact"
+	ScopeResourcePublicationPlan     ScopeResourceType = "publication_plan"
 )
 
 func (t ScopeResourceType) Valid() bool {

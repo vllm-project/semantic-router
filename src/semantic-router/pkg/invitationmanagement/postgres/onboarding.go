@@ -45,43 +45,70 @@ func acceptInTransaction(ctx context.Context, tx *sql.Tx, mutation invitationman
 	if acceptInTransactionErr != nil {
 		return invitationmanagement.AcceptanceEnvelope{}, acceptInTransactionErr
 	}
-	if len(mutation.TokenHMAC) != 32 || len(locked.tokenHMAC) != 32 ||
-		subtle.ConstantTimeCompare(mutation.TokenHMAC, locked.tokenHMAC) != 1 ||
-		mutation.PepperVersion != locked.pepperVersion || !acceptanceIdentityMatches(locked.invitation.Expected, mutation.Identity) {
+	if !validAcceptanceProof(locked, mutation) {
 		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrIdentityMismatch
 	}
 	switch locked.invitation.Status {
 	case invitationmanagement.StatusAccepted:
-		principalID, err := findPrincipal(ctx, tx, mutation.Identity.Issuer, mutation.Identity.Subject)
-		if err != nil || principalID != locked.invitation.AcceptedPrincipalID ||
-			locked.authSourceKind != mutation.AuthenticationSourceKind ||
-			locked.authSourceID != mutation.AuthenticationSourceID || locked.evidenceKind != mutation.EvidenceKind {
-			return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrIdentityMismatch
-		}
-		if !now.Before(locked.resultExpiresAt) || locked.erasedAt.Valid || len(locked.response.Ciphertext) == 0 {
-			if err := eraseAcceptanceResult(ctx, tx, mutation.InvitationID, now); err != nil {
-				return invitationmanagement.AcceptanceEnvelope{}, err
-			}
-			return invitationmanagement.AcceptanceEnvelope{}, commitThen(invitationmanagement.ErrSecretExpired)
-		}
-		if hooks.replay == nil || locked.invitation.AcceptedManagementSessionID == "" {
-			return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrUnavailable
-		}
-		if err := hooks.replay(ctx, tx, locked.invitation.AcceptedManagementSessionID, principalID, now); err != nil {
-			return invitationmanagement.AcceptanceEnvelope{}, err
-		}
-		return invitationmanagement.AcceptanceEnvelope{
-			Invitation: locked.invitation,
-			Envelope:   locked.response, ExpiresAt: locked.resultExpiresAt, Replayed: true,
-		}, nil
+		return replayAcceptedInvitation(ctx, tx, mutation, locked, hooks, now)
 	case invitationmanagement.StatusRevoked:
 		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrConflict
 	case invitationmanagement.StatusExpired:
 		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrExpired
 	case invitationmanagement.StatusPending:
+		return acceptPendingInvitation(ctx, tx, mutation, locked, hooks, now)
 	default:
 		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrUnavailable
 	}
+}
+
+func validAcceptanceProof(locked lockedInvitation, mutation invitationmanagement.AcceptMutation) bool {
+	return len(mutation.TokenHMAC) == 32 && len(locked.tokenHMAC) == 32 &&
+		subtle.ConstantTimeCompare(mutation.TokenHMAC, locked.tokenHMAC) == 1 &&
+		mutation.PepperVersion == locked.pepperVersion &&
+		acceptanceIdentityMatches(locked.invitation.Expected, mutation.Identity)
+}
+
+func replayAcceptedInvitation(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation invitationmanagement.AcceptMutation,
+	locked lockedInvitation,
+	hooks acceptanceSessionHooks,
+	now time.Time,
+) (invitationmanagement.AcceptanceEnvelope, error) {
+	principalID, err := findPrincipal(ctx, tx, mutation.Identity.Issuer, mutation.Identity.Subject)
+	if err != nil || principalID != locked.invitation.AcceptedPrincipalID ||
+		locked.authSourceKind != mutation.AuthenticationSourceKind ||
+		locked.authSourceID != mutation.AuthenticationSourceID || locked.evidenceKind != mutation.EvidenceKind {
+		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrIdentityMismatch
+	}
+	if !now.Before(locked.resultExpiresAt) || locked.erasedAt.Valid || len(locked.response.Ciphertext) == 0 {
+		if err := eraseAcceptanceResult(ctx, tx, mutation.InvitationID, now); err != nil {
+			return invitationmanagement.AcceptanceEnvelope{}, err
+		}
+		return invitationmanagement.AcceptanceEnvelope{}, commitThen(invitationmanagement.ErrSecretExpired)
+	}
+	if hooks.replay == nil || locked.invitation.AcceptedManagementSessionID == "" {
+		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrUnavailable
+	}
+	if err := hooks.replay(ctx, tx, locked.invitation.AcceptedManagementSessionID, principalID, now); err != nil {
+		return invitationmanagement.AcceptanceEnvelope{}, err
+	}
+	return invitationmanagement.AcceptanceEnvelope{
+		Invitation: locked.invitation,
+		Envelope:   locked.response, ExpiresAt: locked.resultExpiresAt, Replayed: true,
+	}, nil
+}
+
+func acceptPendingInvitation(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation invitationmanagement.AcceptMutation,
+	locked lockedInvitation,
+	hooks acceptanceSessionHooks,
+	now time.Time,
+) (invitationmanagement.AcceptanceEnvelope, error) {
 	if !now.Before(locked.invitation.ExpiresAt) {
 		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrExpired
 	}
@@ -112,17 +139,42 @@ func acceptInTransaction(ctx context.Context, tx *sql.Tx, mutation invitationman
 	if acceptInTransactionErr != nil {
 		return invitationmanagement.AcceptanceEnvelope{}, acceptInTransactionErr
 	}
-	result := invitationmanagement.AcceptanceResult{
-		InvitationID: locked.invitation.ID,
-		PrincipalID:  principalID, UserID: mutation.UserID,
-	}
-	if locked.invitation.Snapshot.Team != nil {
-		result.TeamID = locked.invitation.Snapshot.Team.TeamID
-	}
+	result := acceptanceResult(locked.invitation, principalID, mutation.UserID)
 	envelope, resultExpiresAt, acceptInTransactionErr := mutation.SealResult(result)
 	if acceptInTransactionErr != nil || !resultExpiresAt.After(now) {
 		return invitationmanagement.AcceptanceEnvelope{}, invitationmanagement.ErrUnavailable
 	}
+	return completePendingInvitationAcceptance(
+		ctx, tx, mutation, locked, actor, principalID, sessionID, envelope, resultExpiresAt, now,
+	)
+}
+
+func acceptanceResult(
+	invitation invitationmanagement.Invitation,
+	principalID string,
+	userID string,
+) invitationmanagement.AcceptanceResult {
+	result := invitationmanagement.AcceptanceResult{
+		InvitationID: invitation.ID, PrincipalID: principalID, UserID: userID,
+	}
+	if invitation.Snapshot.Team != nil {
+		result.TeamID = invitation.Snapshot.Team.TeamID
+	}
+	return result
+}
+
+func completePendingInvitationAcceptance(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation invitationmanagement.AcceptMutation,
+	locked lockedInvitation,
+	actor invitationmanagement.Actor,
+	principalID string,
+	sessionID string,
+	envelope accesscredential.Envelope,
+	resultExpiresAt time.Time,
+	now time.Time,
+) (invitationmanagement.AcceptanceEnvelope, error) {
 	updated, acceptInTransactionErr := scanInvitation(tx.QueryRowContext(ctx, `UPDATE management_invitations
 SET status='accepted',accepted_principal_id=$2,accepted_user_id=$3,
     accepted_management_session_id=$4,
@@ -303,6 +355,11 @@ type materialization struct {
 }
 
 func materializeOnboarding(ctx context.Context, tx *sql.Tx, value materialization) error {
+	teamInheritance := value.Snapshot.Team != nil
+	if (teamInheritance && (value.AccessBindingID != "" || value.RateLimitBindingID != "")) ||
+		(!teamInheritance && (value.AccessBindingID == "" || value.RateLimitBindingID == "")) {
+		return invitationmanagement.ErrInvalidRequest
+	}
 	var conflicts bool
 	if err := tx.QueryRowContext(ctx, `SELECT
   EXISTS(SELECT 1 FROM management_principal_user_links WHERE principal_id=$1 AND namespace_id=$2)
@@ -350,23 +407,25 @@ VALUES ($1,$2,$3,$4,'active',1,$5,$5)`, value.NamespaceID, value.Snapshot.Team.T
 			return mapWriteError(err, "create onboarding Team membership")
 		}
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO access_policy_bindings
-  (id,namespace_id,policy_id,subject_id,status,revision,created_at,updated_at)
-VALUES ($1,$2,$3,$4,'active',1,$5,$5)`, value.AccessBindingID, value.NamespaceID,
-		value.Snapshot.AccessPolicyID, value.UserID, value.Now); err != nil {
-		return mapWriteError(err, "create onboarding AccessPolicy binding")
-	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO rate_limit_bindings
-  (id,namespace_id,policy_id,subject_id,binding_mode,quota_partition_id,status,revision,created_at,updated_at)
-SELECT $1,$2,$3,$4,'allocation',quota_partition_id,'active',1,$5,$5
-FROM access_namespaces WHERE id=$2 AND status='active'`, value.RateLimitBindingID,
-		value.NamespaceID, value.Snapshot.RateLimitPolicyID, value.UserID, value.Now)
-	if err != nil {
-		return mapWriteError(err, "create onboarding RateLimitPolicy binding")
-	}
-	rows, err := result.RowsAffected()
-	if err != nil || rows != 1 {
-		return invitationmanagement.ErrDefaultsChanged
+	if !teamInheritance {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO access_policy_bindings
+	  (id,namespace_id,policy_id,subject_id,status,revision,created_at,updated_at)
+	VALUES ($1,$2,$3,$4,'active',1,$5,$5)`, value.AccessBindingID, value.NamespaceID,
+			value.Snapshot.AccessPolicyID, value.UserID, value.Now); err != nil {
+			return mapWriteError(err, "create onboarding AccessPolicy binding")
+		}
+		result, err := tx.ExecContext(ctx, `INSERT INTO rate_limit_bindings
+	  (id,namespace_id,policy_id,subject_id,binding_mode,quota_partition_id,status,revision,created_at,updated_at)
+	SELECT $1,$2,$3,$4,'allocation',quota_partition_id,'active',1,$5,$5
+	FROM access_namespaces WHERE id=$2 AND status='active'`, value.RateLimitBindingID,
+			value.NamespaceID, value.Snapshot.RateLimitPolicyID, value.UserID, value.Now)
+		if err != nil {
+			return mapWriteError(err, "create onboarding RateLimitPolicy binding")
+		}
+		rows, err := result.RowsAffected()
+		if err != nil || rows != 1 {
+			return invitationmanagement.ErrDefaultsChanged
+		}
 	}
 	if value.Snapshot.AutomaticFirstKey {
 		if value.FirstKey == nil {

@@ -41,7 +41,7 @@ final say on whether learning may apply, observe, or bypass.
 Use `bypass` for hard boundaries:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: local_privacy_policy
       description: Keep privacy-sensitive traffic on the local model.

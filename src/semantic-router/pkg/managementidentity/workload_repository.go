@@ -40,26 +40,44 @@ type WorkloadRepositoryPage[T any] struct {
 	HasMore bool
 }
 
-type WorkloadIdentityRepository interface {
+type WorkloadRepositoryLifecycle interface {
 	ReadyWorkloadIdentity(context.Context, *managementcommand.Codec, bool) error
 	ReplaySecret(context.Context, managementcommand.Command) (StoredWorkloadSecret, bool, error)
+}
 
+type ServiceAccountReadRepository interface {
 	GetServiceAccount(context.Context, string) (ServiceAccount, error)
 	ListServiceAccounts(context.Context, ServiceAccountQuery) (WorkloadRepositoryPage[ServiceAccount], error)
 	ListServiceCredentials(context.Context, ServiceCredentialQuery) (WorkloadRepositoryPage[ServiceCredential], error)
 	GetServiceCredential(context.Context, string, string) (ServiceCredential, error)
+}
+
+type ServiceAccountMutationRepository interface {
 	CreateServiceAccount(context.Context, ServiceAccountCreateMutation) (WorkloadMutationResult, error)
 	PatchServiceAccount(context.Context, ServiceAccount, uint64, MutationActor) (WorkloadMutationResult, error)
 	DeleteServiceAccount(context.Context, string, uint64, MutationActor) (WorkloadMutationResult, error)
 	RotateServiceCredential(context.Context, ServiceCredentialRotateMutation) (WorkloadMutationResult, error)
 	RevokeServiceCredential(context.Context, string, string, uint64, MutationActor) (WorkloadMutationResult, error)
+}
 
+type MTLSMappingReadRepository interface {
 	GetMTLSMapping(context.Context, string) (MTLSIdentityMapping, error)
 	ListMTLSMappings(context.Context, MTLSMappingQuery) (WorkloadRepositoryPage[MTLSIdentityMapping], error)
+	ResolveMTLSIdentity(context.Context, string, string, time.Time) (VerifiedMTLSMapping, error)
+}
+
+type MTLSMappingMutationRepository interface {
 	CreateMTLSMapping(context.Context, MTLSMappingCreateMutation) (WorkloadMutationResult, error)
 	PatchMTLSMapping(context.Context, MTLSIdentityMapping, uint64, MutationActor) (WorkloadMutationResult, error)
 	DeleteMTLSMapping(context.Context, string, uint64, MutationActor) (WorkloadMutationResult, error)
-	ResolveMTLSIdentity(context.Context, string, string, time.Time) (VerifiedMTLSMapping, error)
+}
+
+type WorkloadIdentityRepository interface {
+	WorkloadRepositoryLifecycle
+	ServiceAccountReadRepository
+	ServiceAccountMutationRepository
+	MTLSMappingReadRepository
+	MTLSMappingMutationRepository
 }
 
 type VerifiedMTLSMapping struct {

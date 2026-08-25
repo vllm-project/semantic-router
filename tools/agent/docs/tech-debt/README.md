@@ -63,7 +63,7 @@ Every entry uses these sections:
 
 ### PL-0038: Router-Native Access Control
 
-- [TD047: Router-native access control cutover](td-047-access-control-control-plane-gap.md)
+- [TD047: Router-native access control completion](td-047-access-control-control-plane-gap.md)
 
 If a gap becomes release-critical, move ownership to the active release plan
 and update both indexes in the same change.

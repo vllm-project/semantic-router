@@ -18,6 +18,7 @@ const serviceAccountColumns = `account.id::text,account.principal_id::text,princ
        account.owner_scope,account.namespace_id::text,account.status,account.revision,
        account.created_at,account.updated_at`
 
+// #nosec G101 -- this is a metadata column list and contains no service credential value.
 const serviceCredentialColumns = `credential.id::text,credential.service_account_id::text,
        credential.public_id,credential.workload_class,credential.source_assured_at,
        credential.status,credential.not_before,credential.expires_at,

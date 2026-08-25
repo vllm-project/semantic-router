@@ -140,8 +140,8 @@ func (store *RedisResponseTerminalStore) Finalize(
 	if err != nil {
 		return err
 	}
-	if err := validateResponseTerminalRecord(reference, attempt, terminal); err != nil {
-		return err
+	if validationErr := validateResponseTerminalRecord(reference, attempt, terminal); validationErr != nil {
+		return validationErr
 	}
 	record := ResponseTerminalRecord{
 		Reference: reference, Attempt: attempt, Terminal: cloneResponseTerminal(terminal),

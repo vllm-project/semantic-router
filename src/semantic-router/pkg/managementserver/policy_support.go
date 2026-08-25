@@ -242,5 +242,6 @@ func policyBindingTargets(namespaceID, policyID string, subject policymanagement
 		}, map[string]bool{
 			"user_owner": subject.Type == accesscontrol.SubjectKindUser,
 			"team_owner": subject.Type == accesscontrol.SubjectKindTeam,
+			"key_owner":  subject.Type == accesscontrol.SubjectKindAPIKey,
 		}, valid
 }

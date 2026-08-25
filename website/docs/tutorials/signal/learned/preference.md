@@ -36,7 +36,7 @@ Use `preference` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     preferences:
       - name: terse_answers

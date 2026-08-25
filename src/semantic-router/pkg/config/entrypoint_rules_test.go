@@ -8,51 +8,50 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
-const entrypointRulesYAML = `
-version: v0.4
-models:
-  - name: model-a
-    card: {}
-    connections:
-      - {provider: private-test, endpoint: http://model-a.example, model: model-a}
-  - name: model-b
-    card: {}
-    connections:
-      - {provider: private-test, endpoint: http://model-b.example, model: model-b}
-  - name: model-c
-    card:
+const strictV03AuthoringYAML = `
+version: v0.3
+providers:
+  defaults:
+    reasoning_families:
+      model-c: {type: reasoning_effort, parameter: reasoning_effort}
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      backend_refs:
+        - {provider: private-test, endpoint: http://model-a.example}
+    - name: model-b
+      provider_model_id: model-b
+      backend_refs:
+        - {provider: private-test, endpoint: http://model-b.example}
+    - name: model-c
+      provider_model_id: model-c
+      reasoning_family: model-c
+      backend_refs:
+        - {provider: private-test, endpoint: http://model-c.example}
+routing:
+  modelCards:
+    - {name: model-a}
+    - {name: model-b}
+    - name: model-c
       reasoning: {type: reasoning_effort, efforts: [high]}
-    connections:
-      - {provider: private-test, endpoint: http://model-c.example, model: model-c}
 recipes:
   - name: orchestration
-    document:
+    routing:
       decisions:
         - name: choose
           rules: {}
         - name: finish
           rules: {}
 entrypoints:
-  - name: vllm-sr/edge
-    aliases: [vllm-sr/edge-alias]
-    rules:
-      - name: premium
-        matches:
-          - claim: {name: routing_tier, exact: premium}
-        recipe: orchestration
-        assignments:
-          choose:
-            models:
-              - model: model-c
-                weight: "2"
-                reasoning: {enabled: true, effort: high}
-          finish: {models: [{model: model-b}]}
-      - name: default
-        matches: []
-        recipe: orchestration
-        assignments:
-          choose: {models: [{model: model-b}]}
-          finish: {models: [{model: model-a}]}
+  - model_names: [vllm-sr/edge, vllm-sr/edge-alias]
+    recipe: orchestration
+    assignments:
+      choose:
+        models:
+          - model: model-c
+            weight: "2"
+            reasoning: {enabled: true, effort: high}
+      finish: {models: [{model: model-a}]}
 global:
   services:
     backend_egress: {policy_file: /app/config/backend-egress-policy.yaml}
@@ -60,48 +59,41 @@ global:
     looper: {endpoint: "http://localhost:8899/v1/chat/completions"}
 `
 
-func TestEntrypointRulesCompileStablePinnedViews(t *testing.T) {
-	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML))
+func TestEntrypointAssignmentsCompileStablePinnedView(t *testing.T) {
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strictV03AuthoringYAML))
 	if err != nil {
-		t.Fatalf("parse v0.4 entrypoint: %v", err)
+		t.Fatalf("parse v0.3 entrypoint: %v", err)
 	}
-	if len(cfg.Entrypoints) != 1 || len(cfg.Entrypoints[0].Rules) != 2 {
+	if len(cfg.Entrypoints) != 1 || len(cfg.Entrypoints[0].Rules) != 1 {
 		t.Fatalf("unexpected normalized entrypoint: %+v", cfg.Entrypoints)
 	}
-	defaultRecipe, ok := cfg.RecipeForRequestModel("vllm-sr/edge")
+	recipe, ok := cfg.RecipeForRequestModel("vllm-sr/edge")
 	if !ok {
-		t.Fatal("request-model-only resolution must select the unconditional rule")
+		t.Fatal("request-facing model did not resolve its Recipe")
 	}
-	assertDecisionModels(t, defaultRecipe.Profile.Decisions[0], "model-b")
-	assertDecisionModels(t, defaultRecipe.Profile.Decisions[1], "model-a")
+	assertDecisionModels(t, recipe.Profile.Decisions[0], "model-c")
+	assertDecisionModels(t, recipe.Profile.Decisions[1], "model-a")
 
-	var premium *RoutingRecipe
-	var premiumRule *EntrypointRule
-	for index := range cfg.Entrypoints[0].Rules {
-		if cfg.Entrypoints[0].Rules[index].Name == "premium" {
-			premiumRule = &cfg.Entrypoints[0].Rules[index]
-			premium = premiumRule.derivedRecipe
-			break
-		}
-	}
-	if premium == nil || premium == defaultRecipe {
-		t.Fatal("each rule must receive an independent immutable derived view")
-	}
-	assertDecisionModels(t, premium.Profile.Decisions[0], "model-c")
-	ref := premium.Profile.Decisions[0].ModelRefs[0]
+	ref := recipe.Profile.Decisions[0].ModelRefs[0]
 	if ref.UseReasoning == nil || !*ref.UseReasoning || ref.ReasoningEffort != "high" || ref.Weight != 2 {
 		t.Fatalf("assignment controls were not compiled: %+v", ref)
 	}
-	decisionID := premium.Profile.Decisions[0].ID
-	assignment := premiumRule.Action.Assignments[decisionID].Models[0]
+	model := cfg.ModelConfig["model-c"]
+	if model.Reasoning.Type != ReasoningFamilyTypeReasoningEffort ||
+		!reflect.DeepEqual(model.Reasoning.Efforts, []string{"high"}) {
+		t.Fatalf("Model reasoning support was not compiled: %+v", model.Reasoning)
+	}
+	rule := &cfg.Entrypoints[0].Rules[0]
+	decisionID := recipe.Profile.Decisions[0].ID
+	assignment := rule.Action.Assignments[decisionID].Models[0]
 	if assignment.ModelRevision != initialRoutingResourceRevision ||
-		premiumRule.Action.RecipeRevision != initialRoutingResourceRevision {
-		t.Fatalf("action did not pin exact revisions: %+v", premiumRule.Action)
+		rule.Action.RecipeRevision != initialRoutingResourceRevision {
+		t.Fatalf("action did not pin exact revisions: %+v", rule.Action)
 	}
 }
 
-func TestEntrypointRulesCanonicalRoundTrip(t *testing.T) {
-	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML))
+func TestEntrypointAssignmentsCanonicalRoundTrip(t *testing.T) {
+	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strictV03AuthoringYAML))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,27 +111,27 @@ func TestEntrypointRulesCanonicalRoundTrip(t *testing.T) {
 		t.Fatalf("reparse export: %v\n%s", err, exported)
 	}
 	if !reflect.DeepEqual(canonicalEntrypointsFromRouterConfig(cfg), canonicalEntrypointsFromRouterConfig(reparsed)) {
-		t.Fatal("v0.4 Entrypoint rules changed across canonical round trip")
+		t.Fatal("v0.3 Entrypoint assignments changed across canonical round trip")
 	}
 }
 
-func TestEntrypointRulesFailClosed(t *testing.T) {
+func TestEntrypointAssignmentsFailClosed(t *testing.T) {
 	tests := []struct {
 		name    string
 		replace string
 		with    string
 		want    string
 	}{
-		{"old version", "version: v0.4", "version: v0.3", "version must be v0.4"},
+		{"unsupported version", "version: v0.3", "version: v0.4", "version must be v0.3"},
 		{"unknown recipe", "recipe: orchestration", "recipe: missing", "unknown Recipe"},
-		{"unknown decision", "finish: {models: [{model: model-b}]}", "missing: {models: [{model: model-b}]}", "unknown Decision name"},
-		{"missing decision", "          finish: {models: [{model: model-b}]}\n", "", "must assign every decision"},
-		{"unknown model", "              - model: model-c", "              - model: missing", "unknown Model"},
-		{"duplicate model target", "finish: {models: [{model: model-b}]}", "finish: {models: [{model: model-b}, {model: model-b}]}", "repeats the same model, LoRA, and reasoning target"},
+		{"unknown decision", "finish: {models: [{model: model-a}]}", "missing: {models: [{model: model-a}]}", "unknown Decision name"},
+		{"missing decision", "      finish: {models: [{model: model-a}]}\n", "", "must assign every decision"},
+		{"unknown model", "          - model: model-c", "          - model: missing", "unknown Model"},
+		{"duplicate model target", "finish: {models: [{model: model-a}]}", "finish: {models: [{model: model-a}, {model: model-a}]}", "repeats the same model, LoRA, and reasoning target"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strings.Replace(entrypointRulesYAML, test.replace, test.with, 1)))
+			_, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strings.Replace(strictV03AuthoringYAML, test.replace, test.with, 1)))
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("error = %v, want %q", err, test.want)
 			}

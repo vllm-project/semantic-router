@@ -113,7 +113,7 @@ decisions:
 
 func TestParseRoutingYAMLBytesRejectsRemovedStructureNormalizeBy(t *testing.T) {
 	yamlContent := []byte(`
-document:
+routing:
   signals:
     structure:
       - name: constraint_dense

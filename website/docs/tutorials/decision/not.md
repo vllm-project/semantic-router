@@ -29,7 +29,7 @@ Use `NOT` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   decisions:
     - name: safe_only_route
       description: Match only when the known prompt-injection signal is absent.

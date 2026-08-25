@@ -111,7 +111,7 @@ inserts or searches to fail.
 Enable the route plugin on decisions that may read or populate the cache:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: general-chat
       description: General requests that may use response cache.

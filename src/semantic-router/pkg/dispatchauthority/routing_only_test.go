@@ -2,6 +2,7 @@ package dispatchauthority
 
 import (
 	"context"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -276,18 +277,28 @@ func routingOnlySnapshot(t *testing.T) *routingsnapshot.Snapshot {
 }
 
 func routingOnlyPublication(snapshot *routingsnapshot.Snapshot) accesspublisher.RuntimePublicationIdentity {
+	if snapshot.Revision <= 0 {
+		panic("routing-only fixture requires a positive revision")
+	}
+	// #nosec G115 -- the fixture revision is checked positive above.
+	desiredRevision := uint64(snapshot.Revision)
 	return accesspublisher.RuntimePublicationIdentity{
 		PublicationID: "publication-1", NamespaceID: snapshot.NamespaceID,
-		QuotaPartition: "partition-1", DesiredRevision: uint64(snapshot.Revision), RuntimeEpoch: 2,
+		QuotaPartition: "partition-1", DesiredRevision: desiredRevision, RuntimeEpoch: 2,
 		PublicationDigest: strings.Repeat("1", 64), ManifestDigest: strings.Repeat("2", 64),
 		RoutingDigest: snapshot.Digest, State: accesspublisher.PublicationStateActive,
 	}
 }
 
 func routingOnlyGeneration(publication accesspublisher.RuntimePublicationIdentity) routingcontext.Generation {
+	if publication.DesiredRevision > math.MaxInt64 {
+		panic("routing-only fixture revision exceeds int64")
+	}
+	// #nosec G115 -- the fixture revision is bounded to MaxInt64 above.
+	snapshotRevision := int64(publication.DesiredRevision)
 	return routingcontext.Generation{
 		NamespaceID: publication.NamespaceID, QuotaPartition: publication.QuotaPartition,
 		PublicationID: publication.PublicationID, RuntimeEpoch: publication.RuntimeEpoch,
-		SnapshotRevision: int64(publication.DesiredRevision), RoutingDigest: publication.RoutingDigest,
+		SnapshotRevision: snapshotRevision, RoutingDigest: publication.RoutingDigest,
 	}
 }

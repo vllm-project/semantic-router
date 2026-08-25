@@ -36,6 +36,31 @@ type routingServiceStub struct {
 	createCalls           int
 	deleteCalls           int
 	modelPatch            routingmanagement.ModelPatch
+	manifestCredentials   []string
+	manifestRequest       routingmanagement.ManifestImportRequest
+	manifestMutation      routingmanagement.MutationContext
+	manifestResult        routingmanagement.ManifestImportResult
+}
+
+func (stub *routingServiceStub) ManifestCredentialIDs([]byte) ([]string, error) {
+	return append([]string(nil), stub.manifestCredentials...), nil
+}
+
+func (stub *routingServiceStub) ImportManifest(
+	_ context.Context, _ string, request routingmanagement.ManifestImportRequest, mutation routingmanagement.MutationContext,
+) (routingmanagement.ManifestImportResult, error) {
+	stub.manifestRequest = request
+	stub.manifestMutation = mutation
+	if stub.manifestResult.Receipt.OperationID == "" {
+		stub.manifestResult.Receipt = routingmanagement.RevisionReceipt{
+			OperationID: "44444444-4444-4444-8444-444444444444", DesiredRevision: 8,
+		}
+	}
+	return stub.manifestResult, nil
+}
+
+func (stub *routingServiceStub) ExportCurrentManifest(context.Context, string) ([]byte, int64, error) {
+	return []byte("version: v0.3\n"), 7, nil
 }
 
 func (stub *routingServiceStub) ListModels(_ context.Context, _ string, request routingmanagement.PageRequest) (routingmanagement.Page[routingmanagement.Model], error) {
@@ -147,6 +172,7 @@ func (stub *routingServiceStub) GetSnapshot(_ context.Context, _ string, revisio
 
 type routingCommandResultsStub struct {
 	stored  managementcommand.StoredResult
+	diff    routingmanagement.ManifestDiff
 	found   bool
 	err     error
 	command managementcommand.Command
@@ -156,6 +182,11 @@ func (stub *routingCommandResultsStub) Lookup(_ context.Context, command managem
 	stub.command = command
 	return stub.stored, stub.found, stub.err
 }
+
+func (stub *routingCommandResultsStub) LookupManifestDiff(context.Context, string, string) (routingmanagement.ManifestDiff, error) {
+	return stub.diff, stub.err
+}
+
 func (*routingCommandResultsStub) Ready(context.Context, *managementcommand.Codec) error { return nil }
 
 type routingAuthorizerStub struct {
@@ -169,6 +200,54 @@ func (stub *routingAuthorizerStub) Authorize(_ context.Context, request Authoriz
 		return stub.authorize(request)
 	}
 	return AuthorizationDecision{AuthorityDigest: testAuthority}, nil
+}
+
+func TestRoutingManifestDryRunAuthorizesCredentialsAndReturnsTypedDiff(t *testing.T) {
+	credentialID := "11111111-1111-4111-8111-111111111111"
+	service := &routingServiceStub{
+		manifestCredentials: []string{credentialID},
+		manifestResult: routingmanagement.ManifestImportResult{Diff: routingmanagement.ManifestDiff{
+			Models: routingmanagement.ManifestResourceDiff{Create: []string{"mdl_new"}},
+		}},
+	}
+	authorizer := &routingAuthorizerStub{}
+	routes := newTestRoutingRoutes(t, service, &routingCommandResultsStub{}, authorizer)
+	response := serveRoutingRequest(t, routes, http.MethodPost, routingImportsPath,
+		strings.NewReader(`{"manifest":"version: v0.3\n","dryRun":true}`), map[string]string{
+			managementapi.HeaderIfMatch:        `"routing:7"`,
+			managementapi.HeaderIdempotencyKey: "routing-import-preview",
+		})
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if service.manifestRequest.ExpectedRevision != 7 || !service.manifestRequest.DryRun ||
+		service.manifestMutation.Command != nil {
+		t.Fatalf("manifest request = %#v, mutation = %#v", service.manifestRequest, service.manifestMutation)
+	}
+	if !strings.Contains(response.Body.String(), `"create":["mdl_new"]`) ||
+		!strings.Contains(response.Body.String(), `"entrypoints":{"create":[],"update":[],"disable":[]}`) {
+		t.Fatalf("typed diff = %s", response.Body.String())
+	}
+	if len(authorizer.requests) != 1 ||
+		!authorizer.requests[0].Conditions["provider_credential_referenced"] ||
+		len(authorizer.requests[0].Targets["credential"]) != 1 ||
+		string(authorizer.requests[0].Targets["credential"][0].Scope.ResourceID) != credentialID {
+		t.Fatalf("authorization request = %#v", authorizer.requests)
+	}
+}
+
+func TestRoutingManifestExportReturnsPortableYAMLAndRevision(t *testing.T) {
+	routes := newTestRoutingRoutes(t, &routingServiceStub{}, &routingCommandResultsStub{}, &routingAuthorizerStub{})
+	response := serveRoutingRequest(t, routes, http.MethodGet, routingCurrentExportPath, nil, nil)
+	if response.Code != http.StatusOK || response.Body.String() != "version: v0.3\n" {
+		t.Fatalf("status = %d, body = %q", response.Code, response.Body.String())
+	}
+	if got := response.Header().Get("Content-Type"); got != managementapi.YAMLMediaType+"; charset=utf-8" {
+		t.Fatalf("Content-Type = %q", got)
+	}
+	if got := response.Header().Get(managementapi.HeaderETag); got != `"routing:7"` {
+		t.Fatalf("ETag = %q", got)
+	}
 }
 
 func TestRoutingEntrypointListPushesExactScopeBeforePagination(t *testing.T) {
@@ -296,7 +375,13 @@ func TestRoutingSnapshotDetailReturnsImmutableMembersAndExport(t *testing.T) {
 		}},
 		Export: routingsnapshot.Snapshot{Bundle: routingsnapshot.Bundle{
 			NamespaceID: testNamespaceID, Revision: 7,
-			Models: []routingsnapshot.Model{{ID: "model_one", Revision: 4}},
+			Models: []routingsnapshot.Model{{
+				ID: "model_one", Revision: 4,
+				Execution: routingsnapshot.ModelExecution{
+					MaxRetries: 2, RetryOn: []string{"unavailable", "timeout"},
+					RequestTimeout: "30s", StreamTimeout: "2m",
+				},
+			}},
 		}, Digest: strings.Repeat("b", 64)},
 	}}
 	routes := newTestRoutingRoutes(t, service, &routingCommandResultsStub{}, &routingAuthorizerStub{})
@@ -311,10 +396,14 @@ func TestRoutingSnapshotDetailReturnsImmutableMembersAndExport(t *testing.T) {
 	for _, required := range []string{
 		`"metadata"`, `"members"`, `"resourceId":"model_one"`,
 		`"resourceRevision":4`, `"export"`, `"revision":7`,
+		`"control":{"retry":{"count":2,"on":["unavailable","timeout"]},"timeout":{"request":"30s","stream":"2m"}}`,
 	} {
 		if !strings.Contains(response.Body.String(), required) {
 			t.Fatalf("snapshot detail omitted %s: %s", required, response.Body.String())
 		}
+	}
+	if strings.Contains(response.Body.String(), `"execution"`) {
+		t.Fatalf("snapshot detail exposed internal execution storage: %s", response.Body.String())
 	}
 }
 
@@ -360,7 +449,7 @@ func TestRoutingModelCardListUsesSemanticProjection(t *testing.T) {
 		}
 	}
 	for _, forbidden := range []string{
-		"status", "revision", "catalogRevision", "execution", "backends", "private-provider", "private/model",
+		"status", "revision", "catalogRevision", "control", "execution", "backends", "private-provider", "private/model",
 	} {
 		if strings.Contains(wire, forbidden) {
 			t.Errorf("Model Card page leaked %q: %s", forbidden, wire)
@@ -441,7 +530,7 @@ func TestRoutingModelPatchDoesNotRequireBackendOrCredentialRoundTrip(t *testing.
 	routes := newTestRoutingRoutes(t, service, &routingCommandResultsStub{}, authorizer)
 
 	response := serveRoutingRequest(t, routes, http.MethodPatch, routingModelsPath+"/model_one",
-		strings.NewReader(`{"execution":{"maxRetries":4,"requestTimeout":"45s","streamTimeout":"5m"},"pricing":{"inputCostPerMillionTokens":"0.25","outputCostPerMillionTokens":"1.5","cacheReadCostPerMillionTokens":null,"cacheWriteCostPerMillionTokens":null}}`),
+		strings.NewReader(`{"control":{"retry":{"count":4,"on":["unavailable"]},"timeout":{"request":"45s","stream":"5m"}},"pricing":{"inputCostPerMillionTokens":"0.25","outputCostPerMillionTokens":"1.5","cacheReadCostPerMillionTokens":null,"cacheWriteCostPerMillionTokens":null}}`),
 		map[string]string{managementapi.HeaderIfMatch: `"mdl:1"`})
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())

@@ -18,12 +18,13 @@ func (outcomeProjectionRuntimeStub) Read(context.Context, string) (outcomefeedba
 }
 
 func TestRuntimeDependenciesEnforceStrictAccessMode(t *testing.T) {
-	managed := &config.RouterConfig{
-		ControlPlane: config.ControlPlaneConfig{Mode: config.ControlPlaneModeManaged},
-		Access:       config.AccessServiceConfig{Enabled: true},
+	durableConfig := &config.RouterConfig{
+		Access:             config.AccessServiceConfig{Enabled: true},
+		AccessStore:        &config.AccessStoreConfig{},
+		AccessRuntimeStore: &config.AccessRuntimeStoreConfig{},
 	}
-	if err := (RuntimeDependencies{}).validate(managed); err == nil || !strings.Contains(err.Error(), "required") {
-		t.Fatalf("managed missing runtime error = %v", err)
+	if err := (RuntimeDependencies{}).validate(durableConfig); err == nil || !strings.Contains(err.Error(), "required") {
+		t.Fatalf("durableConfig missing runtime error = %v", err)
 	}
 	if err := (RuntimeDependencies{
 		InferenceAccess:      &fakeInferenceAccess{},
@@ -32,8 +33,8 @@ func TestRuntimeDependenciesEnforceStrictAccessMode(t *testing.T) {
 		OutcomeProjection:    outcomeProjectionRuntimeStub{},
 		ResponseTerminals:    backendinvoker.NewLocalResponseTerminalStore(),
 		ProtocolCodecs:       protocolcodec.NewBuiltinRegistry(),
-	}).validate(managed); err != nil {
-		t.Fatalf("managed injected runtime error = %v", err)
+	}).validate(durableConfig); err != nil {
+		t.Fatalf("durableConfig injected runtime error = %v", err)
 	}
 	if err := (RuntimeDependencies{
 		InferenceAccess:      &fakeInferenceAccess{},
@@ -41,8 +42,8 @@ func TestRuntimeDependenciesEnforceStrictAccessMode(t *testing.T) {
 		OutcomeProjection:    outcomeProjectionRuntimeStub{},
 		ResponseTerminals:    backendinvoker.NewLocalResponseTerminalStore(),
 		ProtocolCodecs:       protocolcodec.NewBuiltinRegistry(),
-	}).validate(managed); err == nil || !strings.Contains(err.Error(), "outcome feedback") {
-		t.Fatalf("managed missing outcome feedback error = %v", err)
+	}).validate(durableConfig); err == nil || !strings.Contains(err.Error(), "outcome feedback") {
+		t.Fatalf("durableConfig missing outcome feedback error = %v", err)
 	}
 	if err := (RuntimeDependencies{
 		InferenceAccess:      &fakeInferenceAccess{},
@@ -50,36 +51,34 @@ func TestRuntimeDependenciesEnforceStrictAccessMode(t *testing.T) {
 		OutcomeFeedback:      &outcomeRuntimeStub{},
 		ResponseTerminals:    backendinvoker.NewLocalResponseTerminalStore(),
 		ProtocolCodecs:       protocolcodec.NewBuiltinRegistry(),
-	}).validate(managed); err == nil || !strings.Contains(err.Error(), "outcome learning projection") {
-		t.Fatalf("managed missing outcome projection error = %v", err)
+	}).validate(durableConfig); err == nil || !strings.Contains(err.Error(), "outcome learning projection") {
+		t.Fatalf("durableConfig missing outcome projection error = %v", err)
 	}
 
-	standalone := &config.RouterConfig{
-		ControlPlane: config.ControlPlaneConfig{Mode: config.ControlPlaneModeStandalone},
-	}
-	if err := (RuntimeDependencies{}).validate(standalone); err == nil ||
+	fileConfig := &config.RouterConfig{}
+	if err := (RuntimeDependencies{}).validate(fileConfig); err == nil ||
 		!strings.Contains(err.Error(), "backend dispatch") {
-		t.Fatalf("standalone missing dispatch runtime error = %v", err)
+		t.Fatalf("fileConfig missing dispatch runtime error = %v", err)
 	}
-	standaloneDependencies := RuntimeDependencies{
+	fileDependencies := RuntimeDependencies{
 		DispatchCapabilities: dispatchCapabilityRuntimeStub{metered: false},
 		ResponseTerminals:    backendinvoker.NewLocalResponseTerminalStore(),
 		ProtocolCodecs:       protocolcodec.NewBuiltinRegistry(),
 	}
-	if err := standaloneDependencies.validate(standalone); err != nil {
-		t.Fatalf("standalone dispatch dependencies error = %v", err)
+	if err := fileDependencies.validate(fileConfig); err != nil {
+		t.Fatalf("fileConfig dispatch dependencies error = %v", err)
 	}
-	standaloneDependencies.InferenceAccess = &fakeInferenceAccess{}
-	if err := standaloneDependencies.validate(standalone); err == nil ||
+	fileDependencies.InferenceAccess = &fakeInferenceAccess{}
+	if err := fileDependencies.validate(fileConfig); err == nil ||
 		!strings.Contains(err.Error(), "disabled") {
-		t.Fatalf("standalone injected runtime error = %v", err)
+		t.Fatalf("fileConfig injected runtime error = %v", err)
 	}
 	if err := (RuntimeDependencies{
 		DispatchCapabilities: dispatchCapabilityRuntimeStub{metered: true},
 		ResponseTerminals:    backendinvoker.NewLocalResponseTerminalStore(),
 		ProtocolCodecs:       protocolcodec.NewBuiltinRegistry(),
-	}).validate(standalone); err == nil ||
-		!strings.Contains(err.Error(), "mode") {
-		t.Fatalf("standalone metered dispatch runtime error = %v", err)
+	}).validate(fileConfig); err == nil ||
+		!strings.Contains(err.Error(), "native access") {
+		t.Fatalf("fileConfig metered dispatch runtime error = %v", err)
 	}
 }

@@ -7,6 +7,14 @@ import (
 
 func TestAPIKeyCreateOpenAPIExposesAtomicPolicyOverrides(t *testing.T) {
 	document := GenerateOpenAPI()
+	inlinePolicy, found := document.Components.Schemas["APIKeyInlineRateLimitPolicy"]
+	if !found {
+		t.Fatal("APIKeyInlineRateLimitPolicy schema is missing")
+	}
+	description := inlinePolicy.Properties["description"]
+	if description.MaxLength == nil || *description.MaxLength != 1000 {
+		t.Fatalf("inline rate-limit policy description schema = %#v", description)
+	}
 	request, found := document.Components.Schemas["APIKeyCreateRequest"]
 	if !found {
 		t.Fatal("APIKeyCreateRequest schema is missing")

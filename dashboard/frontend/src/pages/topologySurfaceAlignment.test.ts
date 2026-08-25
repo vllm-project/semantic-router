@@ -3,7 +3,7 @@ import { ALGORITHM_ICONS, PLUGIN_ICONS, SIGNAL_TYPES } from './topology/constant
 import { parseConfigToTopology } from './topology/utils/topologyParser'
 import type { ManagedTopologyConfig } from './topology/types'
 
-describe('topology v0.4 surface alignment', () => {
+describe('topology v0.3 surface alignment', () => {
   it('extracts signals, algorithms, and plugins from a Recipe document', () => {
     const config: ManagedTopologyConfig = {
       models: [{ name: 'fast', card: {} }],
@@ -53,7 +53,7 @@ describe('topology v0.4 surface alignment', () => {
     expect(topology.decisions[0].plugins?.[0].type).toBe('tool_selection')
   })
 
-  it('declares display metadata for v0.4 topology surfaces', () => {
+  it('declares display metadata for v0.3 topology surfaces', () => {
     expect(SIGNAL_TYPES).toEqual(expect.arrayContaining(['conversation', 'event']))
     expect(ALGORITHM_ICONS).toMatchObject({
       fusion: 'FU',

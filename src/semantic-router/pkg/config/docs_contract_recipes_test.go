@@ -19,8 +19,8 @@ var entrypointsRecipesRequiredDocs = []docNeedles{
 		needles: []string{
 			"`entrypoints[].recipe`",
 			"`assignments`",
-			"`entrypoints[].aliases`",
-			"`recipes[].document`",
+			"`entrypoints[].model_names`",
+			"`recipes[].routing`",
 		},
 	},
 	{
@@ -29,7 +29,7 @@ var entrypointsRecipesRequiredDocs = []docNeedles{
 			"`entrypoints`",
 			"`recipes`",
 			"aliases",
-			"connections:",
+			"backend_refs:",
 			"`/v1/models`",
 			"There is no implicit default Recipe or automatic alias",
 		},

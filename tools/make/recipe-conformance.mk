@@ -7,6 +7,7 @@ RECIPE_CONFORMANCE_REPORT_DIR ?= $(CURDIR)/.agent-harness/recipe-conformance
 RECIPE_CONFORMANCE_SHARDS ?= 3
 RECIPE_CONFORMANCE_RECIPE ?=
 RECIPE_CONFORMANCE_ROUTER_URL ?= http://127.0.0.1:8080
+RECIPE_CONFORMANCE_ENTRYPOINTS ?=
 RECIPE_CONFORMANCE_RECIPES ?=
 
 ##@ Recipe Conformance
@@ -51,7 +52,8 @@ recipe-conformance-eval: ## Evaluate one active recipe router (set RECIPE_CONFOR
 		--output-dir "$(RECIPE_CONFORMANCE_REPORT_DIR)" \
 		eval \
 		--recipe "$(RECIPE_CONFORMANCE_RECIPE)" \
-		--router-url "$(RECIPE_CONFORMANCE_ROUTER_URL)"
+		--router-url "$(RECIPE_CONFORMANCE_ROUTER_URL)" \
+		$(foreach binding,$(RECIPE_CONFORMANCE_ENTRYPOINTS),--entrypoint "$(binding)")
 
 recipe-conformance-live-cpu: ## Build once and run live CPU probes (set RECIPE_CONFORMANCE_RECIPES)
 	@$(LOG_TARGET)

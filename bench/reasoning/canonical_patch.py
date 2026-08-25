@@ -11,25 +11,35 @@ MODERATE_OVERHEAD_THRESHOLD = 20.0
 GOOD_OVERHEAD_THRESHOLD = 30.0
 
 REASONING_FAMILY_PATCHES: dict[str, dict[str, str]] = {
-    "qwen3": {"type": "chat_template_kwargs"},
-    "deepseek": {"type": "chat_template_kwargs"},
-    "gpt-oss": {"type": "reasoning_effort"},
+    "qwen3": {"type": "chat_template_kwargs", "parameter": "enable_thinking"},
+    "deepseek": {
+        "type": "chat_template_kwargs",
+        "parameter": "enable_thinking",
+    },
+    "gpt-oss": {"type": "reasoning_effort", "parameter": "reasoning_effort"},
 }
 
 
 def build_vsr_canonical_patch(
     model_name: str, reasoning_family: str | None
 ) -> tuple[dict[str, Any], str | None]:
-    """Build a readable v0.4 Model-card update for reasoning behavior."""
-    card_patch: dict[str, Any] = {}
-    patch: dict[str, Any] = {"models": [{"name": model_name, "card": card_patch}]}
+    """Build a readable v0.3 Provider-Model update for reasoning behavior."""
+    model_patch: dict[str, Any] = {"name": model_name}
+    family_patch: dict[str, Any] = {}
+    patch: dict[str, Any] = {
+        "providers": {
+            "defaults": {"reasoning_families": family_patch},
+            "models": [model_patch],
+        }
+    }
 
     if reasoning_family in REASONING_FAMILY_PATCHES:
-        card_patch["reasoning"] = REASONING_FAMILY_PATCHES[reasoning_family]
+        family_patch[reasoning_family] = REASONING_FAMILY_PATCHES[reasoning_family]
+        model_patch["reasoning_family"] = reasoning_family
         return patch, None
 
     manual_follow_up = (
-        "Choose the Model card reasoning type before applying this update. "
+        "Choose the reasoning family type before applying this update. "
         "Supported evaluated families: qwen3, deepseek, gpt-oss."
     )
     return patch, manual_follow_up
@@ -89,8 +99,9 @@ def generate_vsr_canonical_patch(
             accuracy_improvement, token_overhead, latency_overhead
         ),
         "merge_instructions": (
-            "Apply the generated card fields to the matching item in models. "
-            "Keep its existing connections, runtime, and pricing unchanged."
+            "Merge the family under providers.defaults.reasoning_families and "
+            "set reasoning_family on the matching providers.models item. Keep "
+            "its backend_refs, control, and pricing unchanged."
         ),
         "suggested_vsr_patch": suggested_patch,
     }

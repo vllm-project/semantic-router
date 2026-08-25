@@ -10,12 +10,9 @@ func init() {
 	})
 }
 
-func observabilitySchemas() map[string]JSONSchema {
-	stringSchema := JSONSchema{Type: "string"}
-	timestamp := JSONSchema{Type: "string", Format: "date-time"}
-	whole := JSONSchema{Type: "string", Pattern: wholeQuantityPattern.String()}
-	costs := arraySchema(refSchema("CostSummary"))
-	timing := objectSchema([]string{
+var (
+	costs  = arraySchema(refSchema("CostSummary"))
+	timing = objectSchema([]string{
 		"sampleCount", "totalMilliseconds", "averageMilliseconds", "p50Milliseconds",
 		"p95Milliseconds", "p99Milliseconds", "percentilesAreEstimated",
 	}, map[string]JSONSchema{
@@ -26,7 +23,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"p99Milliseconds":         {Type: "integer", Format: "int64"},
 		"percentilesAreEstimated": {Type: "boolean"},
 	})
-	usageTotals := objectSchema([]string{
+	usageTotals = objectSchema([]string{
 		"requests", "successfulRequests", "inputTokens", "outputTokens", "totalTokens",
 		"incompleteDispatches", "completeness", "costs", "latency", "ttft",
 	}, map[string]JSONSchema{
@@ -35,7 +32,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"completeness": {Type: "string", Enum: []string{"complete", "partial", "unknown"}},
 		"costs":        costs, "latency": refSchema("TimingSummary"), "ttft": refSchema("TimingSummary"),
 	})
-	requestLog := objectSchema([]string{
+	requestLog = objectSchema([]string{
 		"admissionId", "eventId", "occurredAt", "completedAt", "protocol", "path",
 		"statusCode", "usageState", "inputTokens", "outputTokens", "latencyMilliseconds",
 		"stream", "toolCall", "costs",
@@ -52,7 +49,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"entrypointId": stringSchema, "recipeId": stringSchema,
 		"metadata": {Type: "object", AdditionalProperties: boolPointer(true)}, "costs": costs,
 	})
-	auditEvent := objectSchema([]string{
+	auditEvent = objectSchema([]string{
 		"id", "namespaceId", "chainSequence", "actorChain", "action", "resourceType",
 		"requestId", "outcome", "reason", "details", "eventHash", "createdAt",
 	}, map[string]JSONSchema{
@@ -68,7 +65,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"details":        {Type: "object", AdditionalProperties: boolPointer(true)},
 		"previousHash":   stringSchema, "eventHash": stringSchema, "createdAt": timestamp,
 	})
-	publicationReadiness := objectSchema([]string{
+	publicationReadiness = objectSchema([]string{
 		"ready", "reason", "runtimeEpoch", "desiredRevision", "appliedRevision", "projectorLag",
 	}, map[string]JSONSchema{
 		"ready": {Type: "boolean"}, "reason": stringSchema,
@@ -78,7 +75,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"accessGate":      stringSchema, "routingGate": stringSchema,
 		"projectorLag": {Type: "integer", Format: "int64"},
 	})
-	publicationDiagnostics := objectSchema([]string{
+	publicationDiagnostics = objectSchema([]string{
 		"namespaceId", "quotaPartition", "asOf", "readiness", "openPublications",
 		"activeReplicas", "recordedRequiredReplicas", "barrierAcknowledgementsRequired", "barrierAcknowledgements",
 		"routingAcknowledgements", "missingBarrierAcks", "missingRoutingAcks",
@@ -95,7 +92,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"missingBarrierAcks":              arraySchema(stringSchema),
 		"missingRoutingAcks":              arraySchema(stringSchema),
 	})
-	quotaDiagnostics := objectSchema([]string{
+	quotaDiagnostics = objectSchema([]string{
 		"partition", "asOf", "usageStreamBacklog", "pendingAdmissions",
 		"expiredPendingAdmissions", "recoveryState",
 	}, map[string]JSONSchema{
@@ -106,10 +103,10 @@ func observabilitySchemas() map[string]JSONSchema {
 		"oldestPendingDeadline":    timestamp,
 		"recoveryState":            {Type: "string", Enum: []string{"ready", "reconciliation_required"}},
 	})
-	storeStatus := objectSchema([]string{"status"}, map[string]JSONSchema{
+	storeStatus = objectSchema([]string{"status"}, map[string]JSONSchema{
 		"status": {Type: "string", Enum: []string{"ready", "unavailable"}},
 	})
-	usageStorageStatus := objectSchema([]string{
+	usageStorageStatus = objectSchema([]string{
 		"status", "activeMonths", "retiredMonths", "dirtyMinuteBuckets",
 		"dirtyHourBuckets", "dirtyDayBuckets", "dirtyCountsCapped",
 	}, map[string]JSONSchema{
@@ -123,7 +120,7 @@ func observabilitySchemas() map[string]JSONSchema {
 		"oldestActiveMonth":  timestamp,
 		"createdThrough":     timestamp,
 	})
-	namespaceDiagnostics := objectSchema([]string{
+	namespaceDiagnostics = objectSchema([]string{
 		"namespaceId", "quotaPartition", "publication", "quota",
 		"usageStreamBacklogLimit", "admissionBlockedByUsageBacklog",
 	}, map[string]JSONSchema{
@@ -133,88 +130,93 @@ func observabilitySchemas() map[string]JSONSchema {
 		"usageStreamBacklogLimit":        {Type: "integer", Format: "int64"},
 		"admissionBlockedByUsageBacklog": {Type: "boolean"},
 	})
-	return map[string]JSONSchema{
-		"TimingSummary": timing,
-		"UsageTotals":   usageTotals,
-		"UsageSummary": objectSchema([]string{"totals", "grain", "final"}, map[string]JSONSchema{
-			"totals": refSchema("UsageTotals"), "grain": observabilityGrainSchema(),
-			"asOf": timestamp, "ledgerWatermark": timestamp,
-			"ingestionLag": {Type: "integer", Format: "int64", Description: "Observed ingestion lag in nanoseconds."},
-			"final":        {Type: "boolean"},
-		}),
-		"UsageSeriesPoint": objectSchema([]string{"bucketStart", "totals"}, map[string]JSONSchema{
-			"bucketStart": timestamp, "totals": refSchema("UsageTotals"),
-		}),
-		"UsageSeries": objectSchema([]string{"points", "grain", "final"}, map[string]JSONSchema{
-			"points": arraySchema(refSchema("UsageSeriesPoint")), "grain": observabilityGrainSchema(),
-			"asOf": timestamp, "ledgerWatermark": timestamp,
-			"ingestionLag": {Type: "integer", Format: "int64", Description: "Observed ingestion lag in nanoseconds."},
-			"final":        {Type: "boolean"},
-		}),
-		"UsageBreakdownRow": objectSchema([]string{"value", "totals"}, map[string]JSONSchema{
-			"value": stringSchema, "totals": refSchema("UsageTotals"),
-		}),
-		"UsageBreakdown": objectSchema([]string{"dimension", "rows", "grain", "final"}, map[string]JSONSchema{
-			"dimension": observabilityBreakdownSchema(), "rows": arraySchema(refSchema("UsageBreakdownRow")),
-			"grain": observabilityGrainSchema(), "asOf": timestamp, "ledgerWatermark": timestamp,
-			"ingestionLag": {Type: "integer", Format: "int64", Description: "Observed ingestion lag in nanoseconds."},
-			"final":        {Type: "boolean"},
-		}),
-		"RequestLog": requestLog,
-		"RequestLogPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
-			"data": arraySchema(refSchema("RequestLog")), "page": refSchema("PageInfo"),
-		}),
-		"RequestDispatchAttempt": objectSchema([]string{"attemptId", "ordinal", "state", "startedAt", "completedAt"}, map[string]JSONSchema{
-			"attemptId": stringSchema, "ordinal": {Type: "integer", Format: "int32"},
-			"backendId": stringSchema, "providerId": stringSchema, "state": stringSchema,
-			"statusCode": {Type: "integer", Format: "int32"}, "errorCode": stringSchema,
-			"startedAt": timestamp, "completedAt": timestamp,
-		}),
-		"RequestDispatch": objectSchema([]string{
-			"dispatchId", "ordinal", "dispatchType", "inputTokens", "cacheReadTokens",
-			"cacheWriteTokens", "outputTokens", "usageState", "cost", "evidenceDigest",
-			"startedAt", "completedAt", "attempts",
-		}, map[string]JSONSchema{
-			"dispatchId": stringSchema, "parentDispatchId": stringSchema,
-			"ordinal": {Type: "integer", Format: "int32"}, "dispatchType": stringSchema,
-			"modelId": stringSchema, "modelRevision": {Type: "integer", Format: "int64"},
-			"backendId": stringSchema, "providerId": stringSchema, "providerModelId": stringSchema,
-			"pricingRevision": {Type: "integer", Format: "int64"},
-			"inputTokens":     whole, "cacheReadTokens": whole, "cacheWriteTokens": whole,
-			"outputTokens": whole, "usageState": stringSchema, "cost": refSchema("CostSummary"),
-			"evidenceDigest": stringSchema, "startedAt": timestamp, "completedAt": timestamp,
-			"attempts": arraySchema(refSchema("RequestDispatchAttempt")),
-		}),
-		"RequestLogDetailData": objectSchema([]string{"request", "routing", "quotaReceipts"}, map[string]JSONSchema{
-			"request":       refSchema("RequestLog"),
-			"routing":       {Type: "object", AdditionalProperties: boolPointer(true)},
-			"quotaReceipts": arraySchema(JSONSchema{Type: "object", AdditionalProperties: boolPointer(true)}),
-			"dispatches":    arraySchema(refSchema("RequestDispatch")),
-		}),
-		"RequestLogDetail": objectSchema([]string{"data"}, map[string]JSONSchema{
-			"data": refSchema("RequestLogDetailData"),
-		}),
-		"AuditEvent": auditEvent,
-		"AuditEventPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
-			"data": arraySchema(refSchema("AuditEvent")), "page": refSchema("PageInfo"),
-		}),
-		"PublicationReadiness":           publicationReadiness,
-		"PublicationRuntimeDiagnostics":  publicationDiagnostics,
-		"QuotaRuntimeDiagnostics":        quotaDiagnostics,
-		"RuntimeStoreStatus":             storeStatus,
-		"UsageStorageRuntimeDiagnostics": usageStorageStatus,
-		"NamespaceRuntimeDiagnostics":    namespaceDiagnostics,
-		"RuntimeDiagnostics": objectSchema([]string{
-			"status", "asOf", "postgresql", "valkey", "usageStorage", "registeredNamespaces",
-		}, map[string]JSONSchema{
-			"status": {Type: "string", Enum: []string{"ready", "degraded"}},
-			"asOf":   timestamp, "postgresql": refSchema("RuntimeStoreStatus"),
-			"valkey":               refSchema("RuntimeStoreStatus"),
-			"usageStorage":         refSchema("UsageStorageRuntimeDiagnostics"),
-			"registeredNamespaces": {Type: "integer", Format: "int64"},
-			"namespace":            refSchema("NamespaceRuntimeDiagnostics"),
-		}),
-	}
+)
+
+var observabilitySchemaCatalog = map[string]JSONSchema{
+	"TimingSummary": timing,
+	"UsageTotals":   usageTotals,
+	"UsageSummary": objectSchema([]string{"totals", "grain", "final"}, map[string]JSONSchema{
+		"totals": refSchema("UsageTotals"), "grain": observabilityGrainSchema(),
+		"asOf": timestamp, "ledgerWatermark": timestamp,
+		"ingestionLag": {Type: "integer", Format: "int64", Description: "Observed ingestion lag in nanoseconds."},
+		"final":        {Type: "boolean"},
+	}),
+	"UsageSeriesPoint": objectSchema([]string{"bucketStart", "totals"}, map[string]JSONSchema{
+		"bucketStart": timestamp, "totals": refSchema("UsageTotals"),
+	}),
+	"UsageSeries": objectSchema([]string{"points", "grain", "final"}, map[string]JSONSchema{
+		"points": arraySchema(refSchema("UsageSeriesPoint")), "grain": observabilityGrainSchema(),
+		"asOf": timestamp, "ledgerWatermark": timestamp,
+		"ingestionLag": {Type: "integer", Format: "int64", Description: "Observed ingestion lag in nanoseconds."},
+		"final":        {Type: "boolean"},
+	}),
+	"UsageBreakdownRow": objectSchema([]string{"value", "totals"}, map[string]JSONSchema{
+		"value": stringSchema, "totals": refSchema("UsageTotals"),
+	}),
+	"UsageBreakdown": objectSchema([]string{"dimension", "rows", "grain", "final"}, map[string]JSONSchema{
+		"dimension": observabilityBreakdownSchema(), "rows": arraySchema(refSchema("UsageBreakdownRow")),
+		"grain": observabilityGrainSchema(), "asOf": timestamp, "ledgerWatermark": timestamp,
+		"ingestionLag": {Type: "integer", Format: "int64", Description: "Observed ingestion lag in nanoseconds."},
+		"final":        {Type: "boolean"},
+	}),
+	"RequestLog": requestLog,
+	"RequestLogPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
+		"data": arraySchema(refSchema("RequestLog")), "page": refSchema("PageInfo"),
+	}),
+	"RequestDispatchAttempt": objectSchema([]string{"attemptId", "ordinal", "state", "startedAt", "completedAt"}, map[string]JSONSchema{
+		"attemptId": stringSchema, "ordinal": {Type: "integer", Format: "int32"},
+		"backendId": stringSchema, "providerId": stringSchema, "state": stringSchema,
+		"statusCode": {Type: "integer", Format: "int32"}, "errorCode": stringSchema,
+		"startedAt": timestamp, "completedAt": timestamp,
+	}),
+	"RequestDispatch": objectSchema([]string{
+		"dispatchId", "ordinal", "dispatchType", "inputTokens", "cacheReadTokens",
+		"cacheWriteTokens", "outputTokens", "usageState", "cost", "evidenceDigest",
+		"startedAt", "completedAt", "attempts",
+	}, map[string]JSONSchema{
+		"dispatchId": stringSchema, "parentDispatchId": stringSchema,
+		"ordinal": {Type: "integer", Format: "int32"}, "dispatchType": stringSchema,
+		"modelId": stringSchema, "modelRevision": {Type: "integer", Format: "int64"},
+		"backendId": stringSchema, "providerId": stringSchema, "providerModelId": stringSchema,
+		"pricingRevision": {Type: "integer", Format: "int64"},
+		"inputTokens":     whole, "cacheReadTokens": whole, "cacheWriteTokens": whole,
+		"outputTokens": whole, "usageState": stringSchema, "cost": refSchema("CostSummary"),
+		"evidenceDigest": stringSchema, "startedAt": timestamp, "completedAt": timestamp,
+		"attempts": arraySchema(refSchema("RequestDispatchAttempt")),
+	}),
+	"RequestLogDetailData": objectSchema([]string{"request", "routing", "quotaReceipts"}, map[string]JSONSchema{
+		"request":       refSchema("RequestLog"),
+		"routing":       {Type: "object", AdditionalProperties: boolPointer(true)},
+		"quotaReceipts": arraySchema(JSONSchema{Type: "object", AdditionalProperties: boolPointer(true)}),
+		"dispatches":    arraySchema(refSchema("RequestDispatch")),
+	}),
+	"RequestLogDetail": objectSchema([]string{"data"}, map[string]JSONSchema{
+		"data": refSchema("RequestLogDetailData"),
+	}),
+	"AuditEvent": auditEvent,
+	"AuditEventPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
+		"data": arraySchema(refSchema("AuditEvent")), "page": refSchema("PageInfo"),
+	}),
+	"PublicationReadiness":           publicationReadiness,
+	"PublicationRuntimeDiagnostics":  publicationDiagnostics,
+	"QuotaRuntimeDiagnostics":        quotaDiagnostics,
+	"RuntimeStoreStatus":             storeStatus,
+	"UsageStorageRuntimeDiagnostics": usageStorageStatus,
+	"NamespaceRuntimeDiagnostics":    namespaceDiagnostics,
+	"RuntimeDiagnostics": objectSchema([]string{
+		"status", "asOf", "postgresql", "valkey", "usageStorage", "registeredNamespaces",
+	}, map[string]JSONSchema{
+		"status": {Type: "string", Enum: []string{"ready", "degraded"}},
+		"asOf":   timestamp, "postgresql": refSchema("RuntimeStoreStatus"),
+		"valkey":               refSchema("RuntimeStoreStatus"),
+		"usageStorage":         refSchema("UsageStorageRuntimeDiagnostics"),
+		"registeredNamespaces": {Type: "integer", Format: "int64"},
+		"namespace":            refSchema("NamespaceRuntimeDiagnostics"),
+	}),
+}
+
+func observabilitySchemas() map[string]JSONSchema {
+	return cloneSchemas(observabilitySchemaCatalog)
 }
 
 func observabilityResponseSchema(contract OperationContract) (JSONSchema, bool) {

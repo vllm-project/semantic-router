@@ -60,7 +60,7 @@ Current methods are:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     embeddings:
       - name: technical-support

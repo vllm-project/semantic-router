@@ -147,15 +147,15 @@ access:applied-revision:<namespace-id>
 ```
 
 A 2-4 KiB compiled policy keeps 10,000 keys in tens of MiB before store overhead; the
-hot path never joins PostgreSQL. v0.4 reads Valkey for every credential verification
+hot path never joins PostgreSQL. Access runtime reads Valkey for every credential verification
 and has no positive local authorization cache. A later revisioned L1 cache may use at
 most one second TTL plus invalidation and must retain deny-barrier checks.
 
-Every managed Router process renews a Redis-time fleet lease before it can report
+Every Router process using durable routing state renews a Redis-time fleet lease before it can report
 ready or serve a routing generation. Publication snapshots the live fleet into the
 namespace-local rollout proof, then waits for each member to discover the namespace,
 validate and warm the candidate, acquire its namespace lease, and acknowledge the
-exact publication digest. An empty fleet never makes a managed publication ready.
+exact publication digest. An empty fleet never makes a publication ready.
 The activation transaction rechecks the namespace-local live set and acknowledgements,
 closing the join race without a cross-slot transaction. A process that joins after
 activation remains unready for that namespace until it has loaded the active generation.

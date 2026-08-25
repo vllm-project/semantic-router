@@ -134,7 +134,11 @@ func assignTemporaryRuleOrdinals(
 	candidate := int64(math.MaxInt32)
 	for _, rule := range existing {
 		for candidate >= 0 {
-			if _, occupied := excluded[uint32(candidate)]; !occupied {
+			ordinal, conversionErr := nonNegativeUint32(candidate, "temporary rate-limit ordinal")
+			if conversionErr != nil {
+				return conversionErr
+			}
+			if _, occupied := excluded[ordinal]; !occupied {
 				break
 			}
 			candidate--

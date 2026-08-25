@@ -233,8 +233,7 @@ export interface CompileResult {
   yaml: string
   crd?: string
   recipeDocuments?: Array<{
-    id: string
-    name: string
+    name?: string
     description?: string
     document: Record<string, unknown>
   }>

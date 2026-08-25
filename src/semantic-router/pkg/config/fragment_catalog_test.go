@@ -87,9 +87,12 @@ func TestConfigFragmentsAreValidYAML(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		var doc interface{}
+		var doc map[string]interface{}
 		if err := yaml.Unmarshal(data, &doc); err != nil {
 			t.Fatalf("failed to parse YAML fragment %s: %v", path, err)
+		}
+		if _, retired := doc["document"]; retired {
+			t.Fatalf("fragment %s uses retired top-level document; use routing", path)
 		}
 		return nil
 	})

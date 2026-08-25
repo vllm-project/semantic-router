@@ -1,8 +1,12 @@
-{{- if .Values.networkPolicy.enabled }}
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
-{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
-{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- $durableRouting := eq (include "semantic-router.hasManagementStore" .) "true" -}}
+{{- $networkPolicyEnabled := $durableRouting -}}
+{{- if ne .Values.networkPolicy.enabled nil -}}
+{{- $networkPolicyEnabled = .Values.networkPolicy.enabled -}}
+{{- end -}}
+{{- if $networkPolicyEnabled }}
+{{- $managementAPIEnabled := eq (include "semantic-router.managementAPIEnabled" .) "true" -}}
 {{- $services := (get $global "services") | default (dict) -}}
 {{- $managementAPI := (get $services "management_api") | default (dict) -}}
 {{- $managementPort := (get $managementAPI "port") | default .Values.service.management.port -}}
@@ -31,8 +35,8 @@ spec:
     - protocol: TCP
       port: {{ .Values.service.grpc.targetPort }}
   {{- end }}
-  {{- if $managedMode }}
-  {{- if or .Values.dashboard.enabled .Values.networkPolicy.ingress.managementPeers }}
+  {{- if $durableRouting }}
+  {{- if and $managementAPIEnabled (or .Values.dashboard.enabled .Values.networkPolicy.ingress.managementPeers) }}
   - from:
     {{- if .Values.dashboard.enabled }}
     - podSelector:
@@ -47,13 +51,17 @@ spec:
     - protocol: TCP
       port: {{ $managementPort }}
   {{- end }}
-  {{- if .Values.networkPolicy.ingress.backendDispatchPeers }}
   - from:
-      {{- toYaml .Values.networkPolicy.ingress.backendDispatchPeers | nindent 6 }}
+    - podSelector:
+        matchLabels:
+          {{- include "semantic-router.selectorLabels" . | nindent 10 }}
+          app.kubernetes.io/component: router
+    {{- with .Values.networkPolicy.ingress.backendDispatchPeers }}
+      {{- toYaml . | nindent 4 }}
+    {{- end }}
     ports:
     - protocol: TCP
       port: {{ $backendDispatchPort }}
-  {{- end }}
   {{- else }}
   {{- if .Values.networkPolicy.ingress.managementPeers }}
   - from:

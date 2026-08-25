@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-from cli.storage_secrets import POSTGRES_PASSWORD_ENV, REDIS_PASSWORD_ENV
 from cli.commands.runtime_management_credentials import (
     management_credential_env_names,
 )
@@ -14,6 +13,7 @@ from cli.commands.runtime_support import (
     config_env_references,
     sensitive_env_names,
 )
+from cli.storage_secrets import POSTGRES_PASSWORD_ENV, REDIS_PASSWORD_ENV
 
 
 def test_runtime_support_import_does_not_load_optional_cli_dependencies():
@@ -267,25 +267,17 @@ def test_config_env_references_reads_named_credentials_and_store_refs(tmp_path):
     assert config_env_references(tmp_path / "missing.yaml") == set()
 
 
-def test_config_env_references_reads_managed_bootstrap_env_fields(tmp_path):
+def test_config_env_references_reads_durable_bootstrap_env_fields(tmp_path):
     config = tmp_path / "config.yaml"
     config.write_text(
         yaml.safe_dump(
             {
                 "global": {
-                    "control_plane": {
-                        "provider_catalog": {"replica_id_env": "ROUTER_REPLICA_ID"}
-                    },
                     "stores": {
-                        "access": {"postgres": {"dsn_env": "ROUTER_POSTGRES_DSN"}}
+                        "management": {"postgres": {"dsn_env": "ROUTER_POSTGRES_DSN"}}
                     },
                     "services": {
-                        "management_api": {
-                            "auth": {
-                                "control_plane_hmac_keyring_env": "ROUTER_CONTROL_HMAC",
-                                "response_kek_keyring_env": "",
-                            }
-                        }
+                        "routing_security": {"hmac_keyring_env": "ROUTER_CONTROL_HMAC"},
                     },
                 }
             }
@@ -295,16 +287,14 @@ def test_config_env_references_reads_managed_bootstrap_env_fields(tmp_path):
     assert config_env_references(config) == {
         "ROUTER_CONTROL_HMAC",
         "ROUTER_POSTGRES_DSN",
-        "ROUTER_REPLICA_ID",
     }
     assert {
         "ROUTER_CONTROL_HMAC",
         "ROUTER_POSTGRES_DSN",
-        "ROUTER_REPLICA_ID",
     } <= sensitive_env_names(config)
 
 
-def test_append_passthrough_env_vars_masks_managed_bootstrap_env_fields(
+def test_append_passthrough_env_vars_masks_durable_bootstrap_env_fields(
     monkeypatch, tmp_path, caplog
 ):
     config = tmp_path / "config.yaml"
@@ -313,11 +303,7 @@ def test_append_passthrough_env_vars_masks_managed_bootstrap_env_fields(
             {
                 "global": {
                     "services": {
-                        "management_api": {
-                            "auth": {
-                                "control_plane_hmac_keyring_env": "ROUTER_CONTROL_HMAC"
-                            }
-                        }
+                        "routing_security": {"hmac_keyring_env": "ROUTER_CONTROL_HMAC"}
                     }
                 }
             }
@@ -340,22 +326,29 @@ def test_config_env_references_excludes_process_identity_vars(tmp_path):
     config.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
-                "models": [
-                    {
-                        "name": "mistral",
-                        "card": {
-                            "description": "Installed under ${HOME}, resolved via ${PATH}."
-                        },
-                        "connections": [
-                            {
-                                "provider": "mistral",
-                                "model": "mistral-large",
-                                "credential": "mistral",
-                            }
-                        ],
-                    }
-                ],
+                "version": "v0.3",
+                "providers": {
+                    "models": [
+                        {
+                            "name": "mistral",
+                            "provider_model_id": "mistral-large",
+                            "backend_refs": [
+                                {
+                                    "provider": "mistral",
+                                    "base_url": "https://api.mistral.ai/v1",
+                                }
+                            ],
+                        }
+                    ]
+                },
+                "routing": {
+                    "modelCards": [
+                        {
+                            "name": "mistral",
+                            "description": "Installed under ${HOME}, resolved via ${PATH}.",
+                        }
+                    ]
+                },
                 "global": {
                     "services": {
                         "backend_credentials": {

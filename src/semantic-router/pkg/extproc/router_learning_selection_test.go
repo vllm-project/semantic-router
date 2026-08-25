@@ -713,68 +713,6 @@ func TestRouterLearningAdaptationUsesDecisionCandidateSetOverride(t *testing.T) 
 	assertModelRefs(t, learningCtx.CandidateModels, []string{"cheap", "frontier"})
 }
 
-func newRouterLearningEntrypointFixture(
-	t *testing.T,
-	cfg config.RouterConfig,
-	assignments map[string][]string,
-) (*OpenAIRouter, *config.RoutingRecipe) {
-	t.Helper()
-	if len(cfg.Recipes) != 1 {
-		t.Fatalf("router learning fixture requires exactly one Recipe, got %d", len(cfg.Recipes))
-	}
-	recipe := &cfg.Recipes[0]
-	recipe.ID = "recipe-router-learning"
-	recipe.Revision = 1
-	recipe.Name = "router-learning"
-
-	actionAssignments := make(map[string]config.RoutingAssignmentSet, len(assignments))
-	for decisionID, modelNames := range assignments {
-		models := make([]config.RoutingModelAssignment, 0, len(modelNames))
-		for _, modelName := range modelNames {
-			params, ok := cfg.ModelConfig[modelName]
-			if !ok {
-				t.Fatalf("router learning fixture references unknown model %q", modelName)
-			}
-			if params.ResourceID == "" {
-				params.ResourceID = "model-" + modelName
-				params.ResourceRevision = 1
-				cfg.ModelConfig[modelName] = params
-			}
-			models = append(models, config.RoutingModelAssignment{
-				ModelID:       params.ResourceID,
-				ModelRevision: params.ResourceRevision,
-				ModelName:     modelName,
-				Weight:        "1",
-			})
-		}
-		actionAssignments[decisionID] = config.RoutingAssignmentSet{Models: models}
-	}
-	cfg.Entrypoints = []config.EntrypointMapping{{
-		ID:         "entrypoint-router-learning",
-		Revision:   1,
-		Name:       "router-learning",
-		ModelNames: []string{"router/learning"},
-		Rules: []config.EntrypointRule{{
-			ID:   "rule-router-learning",
-			Name: "router-learning",
-			Action: config.EntrypointRuleAction{
-				RecipeID:       recipe.ID,
-				RecipeRevision: recipe.Revision,
-				Recipe:         recipe.Name,
-				Assignments:    actionAssignments,
-			},
-		}},
-	}}
-	if err := cfg.PrepareEntrypointRecipes(); err != nil {
-		t.Fatalf("prepare router learning Entrypoint: %v", err)
-	}
-	compiled, ok := cfg.RecipeForRequestModel("router/learning")
-	if !ok {
-		t.Fatal("resolve router learning Entrypoint")
-	}
-	return &OpenAIRouter{Config: &cfg}, compiled
-}
-
 func TestRouterLearningProtectionConfigPreservesExplicitZeroValues(t *testing.T) {
 	cfg := protectionSelectionConfig(config.RouterLearningProtectionConfig{
 		Tuning: config.RouterLearningProtectionTuning{

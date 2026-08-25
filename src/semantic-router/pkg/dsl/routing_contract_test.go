@@ -125,24 +125,24 @@ ROUTE math_route {
 	}
 
 	yamlText := string(yamlBytes)
-	if !strings.Contains(yamlText, "document:") {
-		t.Fatalf("expected Recipe document fragment, got:\n%s", yamlText)
+	if !strings.Contains(yamlText, "routing:") {
+		t.Fatalf("expected routing fragment, got:\n%s", yamlText)
 	}
 	if strings.Contains(yamlText, "providers:") || strings.Contains(yamlText, "global:") {
 		t.Fatalf("routing fragment leaked static config:\n%s", yamlText)
 	}
 
 	var doc struct {
-		Document config.CanonicalRouting `yaml:"document"`
+		Routing config.CanonicalRouting `yaml:"routing"`
 	}
 	if err := yaml.Unmarshal(yamlBytes, &doc); err != nil {
 		t.Fatalf("unmarshal routing fragment: %v", err)
 	}
-	if len(doc.Document.Decisions) != 1 {
-		t.Fatalf("expected one Recipe decision, got %d", len(doc.Document.Decisions))
+	if len(doc.Routing.Decisions) != 1 {
+		t.Fatalf("expected one Recipe decision, got %d", len(doc.Routing.Decisions))
 	}
-	if len(doc.Document.Decisions[0].ModelRefs) != 0 {
-		t.Fatalf("Recipe document leaked physical Model refs: %#v", doc.Document.Decisions[0].ModelRefs)
+	if len(doc.Routing.Decisions[0].ModelRefs) != 0 {
+		t.Fatalf("Recipe routing leaked physical Model refs: %#v", doc.Routing.Decisions[0].ModelRefs)
 	}
 }
 

@@ -57,10 +57,11 @@ Dashboard's ML data directory.
 
 :::caution Current configuration export
 
-The generated `ml-model-selection-values.yaml` is an authoring fragment, not a
-standalone Router manifest. Move selector settings into a Recipe document,
-create the Models separately, and assign their readable names through an
-Entrypoint. Then run `vllm-sr validate --config ...` before deployment.
+The generated `ml-model-selection-values.yaml` is a routing fragment, not a
+complete v0.3 Router manifest. Place selector settings in a Recipe's `routing`
+value, create the Provider Models and routing Model cards separately, and
+assign their readable names through an Entrypoint. Then run
+`vllm-sr validate --config ...` before deployment.
 
 :::
 
@@ -93,7 +94,8 @@ metric is suitable for every domain.
 ### 3. Describe the candidate endpoints
 
 Keep credentials in environment variables. Do not write literal API keys into
-the YAML file.
+the YAML file. This benchmark input is not the Router's `providers.models`
+contract; it only names endpoints the training script should evaluate.
 
 ```yaml
 models:
@@ -145,7 +147,7 @@ signals used by the decision. Each ML Decision owns its `algorithm.ml` block.
 ```yaml
 recipes:
   - name: ml-selection
-    document:
+    routing:
       decisions:
         - name: math
           description: Route math requests with the trained KNN selector.
@@ -165,7 +167,7 @@ recipes:
                 pretrained_path: /models/selection/knn_model.json
 
 entrypoints:
-  - name: ml-router
+  - model_names: [ml-router]
     recipe: ml-selection
     assignments:
       math:

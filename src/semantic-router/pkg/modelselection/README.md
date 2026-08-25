@@ -35,28 +35,42 @@ That Decision owns the complete `algorithm.ml` selector contract.
 Replace the endpoints and artifact path before using it:
 
 ```yaml
-version: v0.4
+version: v0.3
 
 listeners:
   - name: http-8899
     address: 0.0.0.0
     port: 8899
 
-models:
-  - name: small-model
-    connections:
-      - provider: vllm
-        endpoint: http://small-model:8000/v1
-        model: small-model
-  - name: large-model
-    connections:
-      - provider: vllm
-        endpoint: http://large-model:8000/v1
-        model: large-model
+providers:
+  models:
+    - name: small-model
+      provider_model_id: small-model
+      backend_refs:
+        - provider: vllm
+          endpoint: http://small-model:8000/v1
+      control:
+        retry: {count: 2, on: [unavailable, timeout]}
+        timeout: {request: 60s, stream: 10m}
+    - name: large-model
+      provider_model_id: large-model
+      backend_refs:
+        - provider: vllm
+          endpoint: http://large-model:8000/v1
+      control:
+        retry: {count: 2, on: [unavailable, timeout]}
+        timeout: {request: 60s, stream: 10m}
+
+routing:
+  modelCards:
+    - name: small-model
+      capabilities: [chat]
+    - name: large-model
+      capabilities: [chat]
 
 recipes:
   - name: learned-selection
-    document:
+    routing:
       decisions:
         - name: learned-route
           description: Select a candidate with the trained KNN policy.
@@ -72,7 +86,7 @@ recipes:
                 pretrained_path: /models/selection/knn_model.json
 
 entrypoints:
-  - name: vllm-sr/learned-selection
+  - model_names: [vllm-sr/learned-selection]
     recipe: learned-selection
     assignments:
       learned-route:

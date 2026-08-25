@@ -34,6 +34,17 @@ const models = ['model_fast', 'model_frontier'].map((id) => ({
   updatedAt: now,
 }))
 
+const modelCards = models.map((model) => ({
+  id: model.id,
+  name: model.name,
+  card: {
+    aliases: model.aliases,
+    capabilities: model.capabilities,
+    loras: model.loras,
+    tags: [],
+  },
+}))
+
 const recipe = {
   id: 'recipe_balanced',
   name: 'balanced',
@@ -129,9 +140,9 @@ async function mockRouting(
   })
   const writes: Array<{ url: string; body: unknown }> = []
   const reads: string[] = []
-  await page.route('**/api/router/management/v1/routing/models?*', (route) => {
+  await page.route('**/api/router/management/v1/routing/model-cards?*', (route) => {
     reads.push(route.request().url())
-    return fulfill(route, { data: models, page: { hasMore: false, pageSize: 100 } })
+    return fulfill(route, { data: modelCards, page: { hasMore: false, pageSize: 100 } })
   })
   await page.route('**/api/router/management/v1/routing/recipes?*', (route) => {
     reads.push(route.request().url())
@@ -193,6 +204,86 @@ test('routing reader sees authorized topology without Dashboard config access', 
   expect(writes).toHaveLength(0)
 })
 
+test('key-scoped consumer sees only the owned read-only Models and topology projection', async ({
+  page,
+}) => {
+  const keyId = '10000000-0000-4000-8000-000000000003'
+  await mockAuthenticatedAppShell(page, {
+    user: {
+      id: 'consumer-user',
+      email: 'consumer@example.com',
+      name: 'Consumer',
+      role: 'read',
+      permissions: [],
+    },
+    managementPermissions: [
+      'access_policy.read',
+      'agent.read',
+      'agent.use',
+      'delegation.use',
+      'key.read',
+      'routing_context.read',
+    ],
+  })
+  const globalReads: string[] = []
+  await page.route('**/api/router/management/v1/routing/**', async (route) => {
+    globalReads.push(route.request().url())
+    await fulfill(route, { error: { code: 'forbidden', message: 'Forbidden' } }, 403)
+  })
+  await page.route('**/api/router/management/v1/api-keys/*/routing-catalog', async (route) => {
+    await fulfill(route, {
+      keyId,
+      policyRevision: 1,
+      policyDigest: 'a'.repeat(64),
+      routingRevision: 2,
+      routingDigest: 'b'.repeat(64),
+      models: models.map((model) => ({
+        id: model.id,
+        revision: model.revision,
+        name: model.name,
+        aliases: model.aliases,
+        capabilities: model.capabilities,
+        loras: model.loras,
+        tags: [],
+        pricing: model.pricing,
+      })),
+      recipes: [
+        {
+          id: recipe.id,
+          revision: recipe.revision,
+          name: recipe.name,
+          description: recipe.description,
+          decisions: recipe.decisions,
+        },
+      ],
+      entrypoints: [
+        {
+          id: topology.id,
+          revision: topology.revision,
+          name: topology.name,
+          aliases: topology.aliases,
+          rules: topology.rules,
+        },
+      ],
+    })
+  })
+
+  await page.goto('/config/entrypoints-recipes')
+  await page.getByRole('tab', { name: 'Models' }).click()
+  await expect(page.getByText('2 models', { exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Create model' })).toHaveCount(0)
+  await page.getByRole('button', { name: 'Open balanced' }).click()
+  const detail = page.getByRole('dialog', { name: 'Topology for vllm-sr/balanced' })
+  await expect(detail.getByText('local/fast', { exact: true }).first()).toBeVisible()
+  await expect(detail.getByRole('button', { name: 'Edit' })).toHaveCount(0)
+  await page.keyboard.press('Escape')
+
+  await page.goto('/topology')
+  await expect(page.getByText('Routing Topology', { exact: true })).toBeVisible()
+  await expect(page.getByRole('textbox', { name: /Test query/i })).toHaveCount(0)
+  expect(globalReads).toHaveLength(0)
+})
+
 test('direct routing route denies a user without routing.read', async ({ page }) => {
   const { reads, writes } = await mockRouting(page, [])
   await page.goto('/config/entrypoints-recipes')
@@ -227,11 +318,7 @@ test('a broken Management identity is surfaced instead of showing empty routing'
 })
 
 test('routing manager creates a complete per-decision assignment', async ({ page }) => {
-  const { writes } = await mockRouting(
-    page,
-    ['routing.read', 'routing.manage'],
-    'admin',
-  )
+  const { writes } = await mockRouting(page, ['routing.read', 'routing.manage'], 'admin')
   await page.goto('/config/entrypoints-recipes')
   await page.getByRole('tab', { name: 'Models' }).click()
   await page.getByRole('button', { name: 'Create model' }).click()

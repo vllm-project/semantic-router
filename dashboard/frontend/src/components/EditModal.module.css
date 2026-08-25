@@ -369,12 +369,16 @@
 
 @media (max-width: 768px) {
   .overlay {
-    backdrop-filter: none;
+    align-items: center;
+    padding: 0.5rem;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
   .modal {
     width: 100%;
     max-height: calc(100dvh - 1rem);
+    border-radius: var(--radius-lg);
   }
 
   .header {

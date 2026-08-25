@@ -9,40 +9,45 @@ if str(CLI_ROOT) not in sys.path:
     sys.path.insert(0, str(CLI_ROOT))
 
 from cli.config_generator import generate_envoy_config_from_user_config  # noqa: E402
-from cli.managed_envoy_contract import INTERNAL_REQUEST_HEADERS  # noqa: E402
+from cli.envoy_dispatch_contract import INTERNAL_REQUEST_HEADERS  # noqa: E402
 from cli.parser import parse_user_config  # noqa: E402
 
 
-def _standalone_config(*, dispatch_address="127.0.0.1", dispatch_port=8187):
+def _file_config(*, dispatch_address="127.0.0.1", dispatch_port=8187):
     return f"""
-version: v0.4
+version: v0.3
 listeners:
   - name: public
     address: 0.0.0.0
     port: 8899
-models:
-  - name: private/model
-    card:
-      description: Private model used by the standalone dispatch test.
+providers:
+  models:
+    - name: private/model
+      provider_model_id: upstream-secret-model
+      backend_refs:
+        - name: primary
+          provider: openai-compatible
+          base_url: https://secret-model-origin.example/v1
+          api_key_env: PRIVATE_PROVIDER_TOKEN
+      control:
+        retry:
+          count: 3
+          'on': [unavailable]
+        timeout:
+          request: 45s
+          stream: 10m
+routing:
+  modelCards:
+    - name: private/model
+      description: Private model used by the file-config dispatch test.
       capabilities: [chat]
-    runtime:
-      max_retries: 3
-      request_timeout: 45s
-      stream_timeout: 10m
-    connections:
-      - provider: openai-compatible
-        endpoint: https://secret-model-origin.example/v1
-        model: upstream-secret-model
-        credential: private-token
-        weight: "1"
 recipes:
   - name: balance
-    document:
+    routing:
       decisions:
         - name: Default
 entrypoints:
-  - name: vllm-sr/blend
-    aliases: [blend]
+  - model_names: [vllm-sr/blend, blend]
     recipe: balance
     assignments:
       Default:
@@ -50,8 +55,6 @@ entrypoints:
           - model: private/model
             weight: "1"
 global:
-  control_plane:
-    mode: standalone
   services:
     backend_dispatch:
       bind_address: {dispatch_address}
@@ -79,7 +82,7 @@ def _render(
     config_path = tmp_path / "config.yaml"
     output_path = tmp_path / "envoy.yaml"
     config_path.write_text(
-        _standalone_config(dispatch_address=dispatch_address), encoding="utf-8"
+        _file_config(dispatch_address=dispatch_address), encoding="utf-8"
     )
     monkeypatch.setenv("ENVOY_EXTPROC_ADDRESS", extproc)
     if dispatch_upstream is None:
@@ -104,7 +107,9 @@ def _connection_manager(rendered):
     return listener["filter_chains"][0]["filters"][0]["typed_config"]
 
 
-def test_standalone_envoy_has_only_stable_router_owned_upstreams(tmp_path, monkeypatch):
+def test_file_config_envoy_has_only_stable_router_owned_upstreams(
+    tmp_path, monkeypatch
+):
     rendered, output_path = _render(tmp_path, monkeypatch)
 
     assert {
@@ -135,7 +140,7 @@ def test_standalone_envoy_has_only_stable_router_owned_upstreams(tmp_path, monke
         assert private_value not in rendered_text
 
 
-def test_standalone_envoy_uses_static_clusters_for_ip_endpoints(tmp_path, monkeypatch):
+def test_file_config_envoy_uses_static_clusters_for_ip_endpoints(tmp_path, monkeypatch):
     rendered, _ = _render(tmp_path, monkeypatch)
     assert _cluster(rendered, "extproc_service")["type"] == "STATIC"
     dispatch = _cluster(rendered, "backend_dispatch_cluster")
@@ -150,7 +155,7 @@ def test_standalone_envoy_uses_static_clusters_for_ip_endpoints(tmp_path, monkey
     assert "hostname" not in endpoint
 
 
-def test_standalone_envoy_uses_logical_dns_for_named_services(tmp_path, monkeypatch):
+def test_file_config_envoy_uses_logical_dns_for_named_services(tmp_path, monkeypatch):
     rendered, _ = _render(
         tmp_path,
         monkeypatch,
@@ -184,7 +189,7 @@ def test_public_internal_headers_are_removed_before_extproc(tmp_path, monkeypatc
 
 
 def test_multiple_public_listeners_share_one_dispatch_cluster(tmp_path, monkeypatch):
-    config = yaml.safe_load(_standalone_config())
+    config = yaml.safe_load(_file_config())
     config["listeners"].append(
         {"name": "secondary", "address": "127.0.0.1", "port": 8900}
     )

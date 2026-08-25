@@ -31,7 +31,7 @@ func TestExpandEnvString(t *testing.T) {
 
 func TestParseYAMLBytesExpandsEnvironmentVariablesInRouterReplayPostgres(t *testing.T) {
 	t.Setenv("POSTGRES_PASSWORD", "super_sensitive_string")
-	document := strings.Replace(entrypointRulesYAML,
+	document := strings.Replace(strictV03AuthoringYAML,
 		"  services:\n    backend_egress:",
 		`  services:
     router_replay:
@@ -54,13 +54,10 @@ func TestParseYAMLBytesExpandsEnvironmentVariablesInRouterReplayPostgres(t *test
 	}
 }
 
-func TestParseYAMLBytesKeepsNamedBackendCredentialReference(t *testing.T) {
-	document := strings.Replace(entrypointRulesYAML,
-		"  services:\n    backend_egress:",
-		"  services:\n    backend_credentials:\n      primary:\n        credential_adapter_id: bearer\n        secret_env: OPENAI_API_KEY\n    backend_egress:", 1)
-	document = strings.Replace(document,
-		"{provider: private-test, endpoint: http://model-a.example, model: model-a}",
-		"{provider: private-test, endpoint: http://model-a.example, model: model-a, credential: primary}", 1)
+func TestParseYAMLBytesCompilesBackendAPIKeyEnvironmentReference(t *testing.T) {
+	document := strings.Replace(strictV03AuthoringYAML,
+		"        - {provider: private-test, endpoint: http://model-a.example}\n",
+		"        - {provider: private-test, endpoint: http://model-a.example, api_key_env: OPENAI_API_KEY}\n", 1)
 	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)
@@ -73,8 +70,12 @@ func TestParseYAMLBytesKeepsNamedBackendCredentialReference(t *testing.T) {
 			}
 		}
 	}
-	if credential != "primary" {
-		t.Fatalf("backend credential reference was not compiled: %+v", cfg.RoutingSnapshot)
+	if credential == "" {
+		t.Fatalf("backend credential identity was not compiled: %+v", cfg.RoutingSnapshot)
+	}
+	compiled := cfg.BackendCredentials.File[credential]
+	if compiled.SecretEnv != "OPENAI_API_KEY" || compiled.SecretValue != "" {
+		t.Fatalf("backend credential source was not preserved: %+v", compiled)
 	}
 }
 

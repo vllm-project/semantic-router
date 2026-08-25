@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
@@ -354,7 +355,9 @@ ORDER BY provenance.namespace_id,provenance.source_recipe_id`, distribution.ID, 
 
 func builtInRecipeLockKey(namespaceID, distributionID, version string) int64 {
 	digest := sha256.Sum256([]byte(namespaceID + "\x00" + distributionID + "\x00" + version))
-	return int64(binary.BigEndian.Uint64(digest[:8]))
+	unsigned := binary.BigEndian.Uint64(digest[:8]) & uint64(math.MaxInt64)
+	// #nosec G115 -- masking the sign bit bounds the advisory-lock key to MaxInt64.
+	return int64(unsigned)
 }
 
 func decodedDigest(value string) ([]byte, error) {

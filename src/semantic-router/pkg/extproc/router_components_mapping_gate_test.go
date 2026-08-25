@@ -123,7 +123,7 @@ func newCoreSignalMappingGateConfig(t *testing.T) *config.RouterConfig {
 	return cfg
 }
 
-func TestCreateRouterClassifierAllowsEmptyManagedSnapshot(t *testing.T) {
+func TestCreateRouterClassifierAllowsEmptyDurableRoutingSnapshot(t *testing.T) {
 	classifiers, defaultClassifier, service, err := createRouterClassifier(
 		&config.RouterConfig{},
 		&classifierMappings{},

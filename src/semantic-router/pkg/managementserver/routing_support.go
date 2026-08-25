@@ -20,7 +20,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
 )
 
-var routingETagPattern = regexp.MustCompile(`^"(mdl|rcp|ep):([1-9][0-9]*)"$`)
+var routingETagPattern = regexp.MustCompile(`^"(mdl|rcp|ep|routing):([0-9]+)"$`)
 
 func decodeRoutingBody(response http.ResponseWriter, request *http.Request, requestID string, target any) bool {
 	if request.ContentLength > maximumRoutingBodyBytes {
@@ -119,7 +119,7 @@ func requireRoutingRevision(
 		return 0, false
 	}
 	revision, err := strconv.ParseInt(match[2], 10, 64)
-	if err != nil || revision <= 0 {
+	if err != nil || revision < 0 || (revision == 0 && kind != "routing") {
 		writeProviderError(response, http.StatusBadRequest, "invalid_precondition", "If-Match is invalid.", requestID)
 		return 0, false
 	}
@@ -192,7 +192,7 @@ func routingResourceReplay(
 		return routingmanagement.RevisionReceipt{}, managementcommand.ErrConflict
 	}
 	return routingmanagement.RevisionReceipt{
-		ResourceRevision: int64(stored.Resource.ResourceRevision), Replayed: true,
+		ResourceRevision: safeRevision(stored.Resource.ResourceRevision), Replayed: true,
 	}, nil
 }
 
@@ -205,7 +205,7 @@ func routingOperationReplay(
 	}
 	receipt := routingmanagement.RevisionReceipt{OperationID: stored.Operation.OperationID, Replayed: true}
 	if stored.Operation.DesiredRevision != nil {
-		receipt.DesiredRevision = int64(*stored.Operation.DesiredRevision)
+		receipt.DesiredRevision = safeRevision(*stored.Operation.DesiredRevision)
 	}
 	return receipt, nil
 }
@@ -225,6 +225,8 @@ func writeRoutingDomainError(response http.ResponseWriter, err error, requestID 
 	switch {
 	case errors.Is(err, managementcommand.ErrConflict):
 		writeProviderError(response, http.StatusConflict, "idempotency_conflict", "Idempotency-Key was already used for a different request.", requestID)
+	case errors.Is(err, routingmanagement.ErrManifest):
+		writeProviderError(response, http.StatusBadRequest, "invalid_manifest", "Routing manifest is invalid.", requestID)
 	case errors.Is(err, routingmanagement.ErrInvalid):
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Routing request is invalid.", requestID)
 	case errors.Is(err, routingmanagement.ErrNotFound):
@@ -263,7 +265,7 @@ func writeRoutingResourceReceipt(
 		setIdempotencyReplayHeader(response, receipt.Replayed)
 	}
 	writeProviderJSON(response, status, managementapi.NewResourceMutationReceipt(
-		kind, id, uint64(receipt.ResourceRevision), replayed,
+		kind, id, publicRevision(receipt.ResourceRevision), replayed,
 	), requestID)
 }
 
@@ -275,7 +277,7 @@ func writeRoutingOperationReceipt(
 ) {
 	var desired *uint64
 	if includeDesired {
-		value := uint64(receipt.DesiredRevision)
+		value := publicRevision(receipt.DesiredRevision)
 		desired = &value
 	}
 	replayed := receipt.Replayed

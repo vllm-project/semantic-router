@@ -72,9 +72,18 @@ type ProjectionReader interface {
 // finalization are atomic mutations; attempt evidence is an admission-bound,
 // read-only snapshot used to authorize the final compare-and-set.
 type AtomicEngine interface {
+	AtomicAdmissionEngine
+	AtomicSettlementEngine
+}
+
+type AtomicAdmissionEngine interface {
 	CheckAccess(context.Context, quotaruntime.AccessCheckRequest) (quotaruntime.AccessCheckResult, error)
 	Admit(context.Context, quotaruntime.AdmissionRequest) (quotaruntime.AdmissionResult, error)
+	Heartbeat(context.Context, quotaruntime.AdmissionHeartbeatRequest) (quotaruntime.AdmissionHeartbeatResult, error)
 	JournalDispatch(context.Context, quotaruntime.DispatchJournalRequest) (quotaruntime.MutationResult, error)
+}
+
+type AtomicSettlementEngine interface {
 	ReadAttemptEvidence(context.Context, quotaruntime.ReadAttemptEvidenceRequest) (quotaruntime.ReadAttemptEvidenceResult, error)
 	Finalize(context.Context, quotaruntime.FinalizationRequest) (quotaruntime.FinalizationResult, error)
 }

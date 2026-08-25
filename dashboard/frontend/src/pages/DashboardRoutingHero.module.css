@@ -58,6 +58,7 @@
 .eyebrowRow {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.65rem;
 }
 
@@ -155,6 +156,10 @@
   gap: 0.55rem;
 }
 
+.metricStripCompact {
+  grid-template-columns: minmax(0, 240px);
+}
+
 .metricStrip > button {
   display: flex;
   min-width: 0;
@@ -193,6 +198,12 @@
 }
 
 @media (max-width: 760px) {
+  .hero {
+    gap: 1rem;
+    padding: 1rem;
+    border-radius: 14px;
+  }
+
   .banner {
     align-items: flex-start;
     flex-direction: column;
@@ -213,5 +224,25 @@
 
   .metricStrip > button:nth-child(2) {
     border-right: 1px solid rgba(255, 255, 255, 0.085);
+  }
+}
+
+@media (max-width: 420px) {
+  .metricStrip {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .banner h1 {
+    font-size: 1.95rem;
+    line-height: 1.04;
+  }
+
+  .banner p {
+    font-size: 0.84rem;
+  }
+
+  .metricStrip > button {
+    min-height: 62px;
+    padding-inline: 0.75rem;
   }
 }

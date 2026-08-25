@@ -91,7 +91,7 @@ Most decisions do not need local configuration. Use `bypass` for hard policy
 boundaries:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: local_privacy_policy
       description: Keep privacy-sensitive traffic on the local model.

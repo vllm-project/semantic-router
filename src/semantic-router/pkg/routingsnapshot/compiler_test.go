@@ -65,8 +65,9 @@ func TestCompileIsDeterministicAndResolvesTrustedClaims(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first.Digest != second.Digest {
-		t.Fatalf("digest mismatch: %s != %s", first.Digest, second.Digest)
+	if first.Digest != second.Digest || first.SemanticDigest != second.SemanticDigest {
+		t.Fatalf("digest mismatch: (%s, %s) != (%s, %s)",
+			first.Digest, first.SemanticDigest, second.Digest, second.SemanticDigest)
 	}
 
 	resolution, err := first.Resolve(ResolveInput{
@@ -78,6 +79,25 @@ func TestCompileIsDeterministicAndResolvesTrustedClaims(t *testing.T) {
 	}
 	if resolution.Outcome != ResolveMatched || resolution.Rule == nil || resolution.Rule.ID != "rule-premium" {
 		t.Fatalf("unexpected resolution: %#v", resolution)
+	}
+}
+
+func TestSemanticDigestExcludesOnlyAggregatePublicationRevision(t *testing.T) {
+	first, err := Compile(validBundle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	changed := validBundle()
+	changed.Revision++
+	second, err := Compile(changed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.Digest == second.Digest {
+		t.Fatal("aggregate publication revision did not change the exact snapshot digest")
+	}
+	if first.SemanticDigest != second.SemanticDigest {
+		t.Fatal("aggregate publication revision changed executable routing semantics")
 	}
 }
 
@@ -94,6 +114,9 @@ func TestEntrypointRevisionParticipatesInDigest(t *testing.T) {
 	}
 	if first.Digest == second.Digest {
 		t.Fatal("entrypoint revision did not change the canonical digest")
+	}
+	if first.SemanticDigest == second.SemanticDigest {
+		t.Fatal("entrypoint revision did not change executable routing semantics")
 	}
 }
 

@@ -101,9 +101,7 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
         makefile = (
             run_agent_precommit_lint.REPO_ROOT / "tools/make/agent.mk"
         ).read_text(encoding="utf-8")
-        recipe = makefile.split("agent-lint:", 1)[1].split(
-            "\nagent-fast-gate:", 1
-        )[0]
+        recipe = makefile.split("agent-lint:", 1)[1].split("\nagent-fast-gate:", 1)[0]
 
         self.assertIn('CHANGED_FILES_FILE="$$(mktemp)"', recipe)
         self.assertNotIn("CSV_FILES", recipe)

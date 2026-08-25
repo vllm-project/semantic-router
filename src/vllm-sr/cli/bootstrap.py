@@ -1,4 +1,4 @@
-"""Secure, idempotent bootstrap for the local managed Router stack."""
+"""Secure, idempotent bootstrap for the local Router Management stack."""
 
 from __future__ import annotations
 
@@ -30,11 +30,15 @@ _SECRET_FILE_MODE = 0o600
 _SECRET_DIRECTORY_MODE = 0o700
 _ED25519_PRIVATE_DER_PREFIX = bytes.fromhex("302e020100300506032b657004220420")
 _ED25519_PUBLIC_DER_PREFIX = bytes.fromhex("302a300506032b6570032100")
+_ED25519_PUBLIC_KEY_LENGTH = 32
+_ED25519_PUBLIC_DER_LENGTH = (
+    len(_ED25519_PUBLIC_DER_PREFIX) + _ED25519_PUBLIC_KEY_LENGTH
+)
 
 
 @dataclass(frozen=True)
 class BootstrapResult:
-    """Result of ensuring one local managed workspace."""
+    """Result of ensuring one local Management workspace."""
 
     config_path: Path
     output_dir: Path
@@ -79,7 +83,10 @@ def _signing_keyring() -> bytes:
         ["pkey", "-inform", "DER", "-pubout", "-outform", "DER"],
         input_bytes=_ED25519_PRIVATE_DER_PREFIX + seed,
     )
-    if not public_der.startswith(_ED25519_PUBLIC_DER_PREFIX) or len(public_der) != 44:
+    if (
+        not public_der.startswith(_ED25519_PUBLIC_DER_PREFIX)
+        or len(public_der) != _ED25519_PUBLIC_DER_LENGTH
+    ):
         raise RuntimeError("OpenSSL returned invalid Ed25519 public material")
     public = public_der[len(_ED25519_PUBLIC_DER_PREFIX) :]
     return (
@@ -253,7 +260,9 @@ def local_dashboard_environment(
     }
 
 
-def _build_managed_config(secret_dir: Path, stack_layout: RuntimeStackLayout) -> dict:
+def _build_management_config(
+    secret_dir: Path, stack_layout: RuntimeStackLayout
+) -> dict:
     paths = {
         "api": secret_dir / "api-key-hmac.json",
         "delegation": secret_dir / "delegation-hmac.json",
@@ -263,14 +272,14 @@ def _build_managed_config(secret_dir: Path, stack_layout: RuntimeStackLayout) ->
         "management": secret_dir / "management-signing.json",
         "service": secret_dir / "service-account-hmac.json",
         "invitation": secret_dir / "invitation-hmac.json",
-        "control": secret_dir / "control-plane-hmac.json",
+        "routing": secret_dir / "routing-hmac.json",
         "response": secret_dir / "response-kek.json",
         "bootstrap": secret_dir / LOCAL_BOOTSTRAP_DIR_NAME / LOCAL_BOOTSTRAP_TOKEN_NAME,
         "certificate": secret_dir / "management-tls-cert.pem",
         "private_key": secret_dir / "management-tls-key.pem",
     }
     return {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [
             {
                 "name": f"http-{DEFAULT_LISTENER_PORT}",
@@ -279,28 +288,16 @@ def _build_managed_config(secret_dir: Path, stack_layout: RuntimeStackLayout) ->
                 "timeout": "300s",
             }
         ],
+        "providers": {"defaults": {}, "models": []},
+        "routing": {"modelCards": []},
+        "recipes": [],
+        "entrypoints": [],
         "global": {
-            "control_plane": {
-                "mode": "managed",
-                "provider_catalog": {
-                    "replica_id_env": LOCAL_REPLICA_ID_ENV,
-                    "rollout_groups": [
-                        {"plane": "control", "id": "management"},
-                        {"plane": "data", "id": "router"},
-                    ],
-                    "required_rollout_groups": [
-                        {"plane": "control", "id": "management"},
-                        {"plane": "data", "id": "router"},
-                    ],
-                },
-            },
             "stores": {
-                "access": {
-                    "type": "postgres",
+                "management": {
                     "postgres": {"dsn_env": LOCAL_POSTGRES_DSN_ENV},
                 },
-                "access_runtime": {
-                    "type": "redis",
+                "runtime": {
                     "redis": {"url_env": LOCAL_VALKEY_URL_ENV},
                 },
             },
@@ -330,7 +327,9 @@ def _build_managed_config(secret_dir: Path, stack_layout: RuntimeStackLayout) ->
                 "backend_egress": {
                     "policy_file": "/app/config/backend-egress-policy.yaml"
                 },
+                "routing_security": {"hmac_keyring_file": str(paths["routing"])},
                 "management_api": {
+                    "enabled": True,
                     "bind_address": "0.0.0.0",
                     "port": 8080,
                     "remote_exposure": False,
@@ -343,7 +342,6 @@ def _build_managed_config(secret_dir: Path, stack_layout: RuntimeStackLayout) ->
                         "token_signing_keyring_file": str(paths["management"]),
                         "service_account_hmac_keyring_file": str(paths["service"]),
                         "invitation_hmac_keyring_file": str(paths["invitation"]),
-                        "control_plane_hmac_keyring_file": str(paths["control"]),
                         "response_kek_keyring_file": str(paths["response"]),
                         "bootstrap": {
                             "token_file": str(paths["bootstrap"]),
@@ -362,7 +360,7 @@ def ensure_bootstrap_workspace(
     state_root_dir: str | Path | None = None,
     stack_layout: RuntimeStackLayout | None = None,
 ) -> BootstrapResult:
-    """Create the canonical local managed bootstrap once, preserving existing config."""
+    """Create the canonical local Management bootstrap once."""
 
     path = Path(config_path).expanduser().absolute()
     stack_layout = stack_layout or resolve_runtime_stack()
@@ -388,8 +386,34 @@ def ensure_bootstrap_workspace(
     _ensure_private_directory(secret_dir)
     bootstrap_token_dir = local_bootstrap_token_directory(state_root, stack_layout)
     _ensure_private_directory(bootstrap_token_dir)
+    created_secrets = _ensure_workspace_secrets(
+        secret_dir,
+        bootstrap_token_dir,
+        stack_layout,
+    )
+    payload = yaml.safe_dump(
+        _build_management_config(secret_dir, stack_layout), sort_keys=False
+    ).encode("utf-8")
+    created_config = _ensure_secret(path, lambda: payload)
 
-    created_secrets = False
+    return BootstrapResult(
+        config_path=path,
+        output_dir=output_dir,
+        secret_dir=secret_dir,
+        created_config=created_config,
+        created_output_dir=created_output_dir,
+        created_secrets=created_secrets,
+    )
+
+
+def _ensure_workspace_secrets(
+    secret_dir: Path,
+    bootstrap_token_dir: Path,
+    stack_layout: RuntimeStackLayout,
+) -> bool:
+    """Create the key material owned by one local runtime stack."""
+
+    created = False
     for name in (
         "api-key-hmac.json",
         "delegation-hmac.json",
@@ -397,22 +421,18 @@ def ensure_bootstrap_workspace(
         "provider-kek.json",
         "service-account-hmac.json",
         "invitation-hmac.json",
-        "control-plane-hmac.json",
+        "routing-hmac.json",
         "response-kek.json",
     ):
-        created_secrets = (
-            _ensure_secret(secret_dir / name, _symmetric_keyring) or created_secrets
-        )
+        created = _ensure_secret(secret_dir / name, _symmetric_keyring) or created
     for name in ("tenant-signing.json", "management-signing.json"):
-        created_secrets = (
-            _ensure_secret(secret_dir / name, _signing_keyring) or created_secrets
-        )
-    created_secrets = (
+        created = _ensure_secret(secret_dir / name, _signing_keyring) or created
+    created = (
         _ensure_secret(
             bootstrap_token_dir / LOCAL_BOOTSTRAP_TOKEN_NAME,
             lambda: (secrets.token_urlsafe(48) + "\n").encode("utf-8"),
         )
-        or created_secrets
+        or created
     )
     management_certificate, _management_key, management_tls_created = (
         _ensure_tls_server(
@@ -426,49 +446,35 @@ def ensure_bootstrap_workspace(
         name="dashboard-issuer",
         hostname=stack_layout.dashboard_container_name,
     )
-    created_secrets = management_tls_created or dashboard_tls_created or created_secrets
-    created_secrets = (
+    created = management_tls_created or dashboard_tls_created or created
+    created = (
         _ensure_secret(
             secret_dir / "local-tls-trust-bundle.pem",
             lambda: (
                 management_certificate.read_bytes() + dashboard_certificate.read_bytes()
             ),
         )
-        or created_secrets
+        or created
     )
-    created_secrets = (
+    created = (
         _ensure_secret(
             secret_dir / "dashboard-issuer-signing-key.pem",
             lambda: _run_openssl(["genpkey", "-algorithm", "ED25519"]),
         )
-        or created_secrets
+        or created
     )
-    created_secrets = (
+    created = (
         _ensure_secret(
             secret_dir / "dashboard-issuer-id",
             lambda: (str(uuid.uuid4()) + "\n").encode("utf-8"),
         )
-        or created_secrets
+        or created
     )
-    created_secrets = (
+    created = (
         _ensure_secret(
             secret_dir / "dashboard-jwt-secret",
             lambda: (secrets.token_urlsafe(48) + "\n").encode("utf-8"),
         )
-        or created_secrets
+        or created
     )
-    created_config = False
-    if not path.exists():
-        payload = yaml.safe_dump(
-            _build_managed_config(secret_dir, stack_layout), sort_keys=False
-        ).encode("utf-8")
-        created_config = _ensure_secret(path, lambda: payload)
-
-    return BootstrapResult(
-        config_path=path,
-        output_dir=output_dir,
-        secret_dir=secret_dir,
-        created_config=created_config,
-        created_output_dir=created_output_dir,
-        created_secrets=created_secrets,
-    )
+    return created

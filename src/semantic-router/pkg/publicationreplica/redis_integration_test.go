@@ -3,6 +3,7 @@ package publicationreplica
 import (
 	"context"
 	"encoding/json"
+	"math"
 	"os"
 	"strconv"
 	"sync"
@@ -72,6 +73,16 @@ func TestRedisManagersCoordinateTwoReplicasAcrossPublicationKinds(t *testing.T) 
 	waitForBothCurrent(t, managerA, managerB, second)
 
 	third := integrationPublication(t, 3, true)
+	if second.Routing.Snapshot.Digest == third.Routing.Snapshot.Digest ||
+		second.Routing.Snapshot.SemanticDigest != third.Routing.Snapshot.SemanticDigest {
+		t.Fatalf(
+			"access-only publication identity = second (%s, %s), third (%s, %s)",
+			second.Routing.Snapshot.Digest,
+			second.Routing.Snapshot.SemanticDigest,
+			third.Routing.Snapshot.Digest,
+			third.Routing.Snapshot.SemanticDigest,
+		)
+	}
 	thirdPlan := stageIntegrationPublication(t, ctx, store, third)
 	if !thirdPlan.Restrictive() {
 		t.Fatal("explicit restrictive publication was not classified as restrictive")
@@ -191,6 +202,7 @@ func activateIntegrationPublication(
 
 func integrationPublication(t *testing.T, revision uint64, restrictive bool) accesspublisher.Publication {
 	t.Helper()
+	signedRevision := integrationSignedRevision(t, revision)
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	namespace := accesscontrol.Namespace{
 		ID: "namespace-integration", Name: "Integration", QuotaPartitionID: "partition-integration",
@@ -199,7 +211,7 @@ func integrationPublication(t *testing.T, revision uint64, restrictive bool) acc
 	}
 	inputPrice, outputPrice := "0.10", "0.20"
 	bundle := routingsnapshot.Bundle{
-		NamespaceID: string(namespace.ID), Revision: int64(revision), Currency: "USD",
+		NamespaceID: string(namespace.ID), Revision: signedRevision, Currency: "USD",
 		Models: []routingsnapshot.Model{{
 			ID: "model-a", Revision: 1,
 			CatalogRevision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -227,7 +239,7 @@ func integrationPublication(t *testing.T, revision uint64, restrictive bool) acc
 		}},
 	}
 	state := accesspublisher.DesiredState{
-		Namespace: namespace, Revision: revision, RevisionTime: now.Add(time.Duration(revision) * time.Millisecond),
+		Namespace: namespace, Revision: revision, RevisionTime: now.Add(time.Duration(signedRevision) * time.Millisecond),
 		Routing: bundle,
 	}
 	if restrictive {
@@ -242,6 +254,7 @@ func integrationPublication(t *testing.T, revision uint64, restrictive bool) acc
 
 func emptyIntegrationPublication(t *testing.T, revision uint64) accesspublisher.Publication {
 	t.Helper()
+	signedRevision := integrationSignedRevision(t, revision)
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	namespace := accesscontrol.Namespace{
 		ID: "namespace-integration", Name: "Integration", QuotaPartitionID: "partition-integration",
@@ -249,9 +262,9 @@ func emptyIntegrationPublication(t *testing.T, revision uint64) accesspublisher.
 		Revision: accesscontrol.Revision(revision), RuntimeEpoch: 17, CreatedAt: now, UpdatedAt: now,
 	}
 	publication, err := accesspublisher.Compile(accesspublisher.DesiredState{
-		Namespace: namespace, Revision: revision, RevisionTime: now.Add(time.Duration(revision) * time.Millisecond),
+		Namespace: namespace, Revision: revision, RevisionTime: now.Add(time.Duration(signedRevision) * time.Millisecond),
 		Routing: routingsnapshot.Bundle{
-			NamespaceID: string(namespace.ID), Revision: int64(revision), Currency: namespace.BillingCurrency,
+			NamespaceID: string(namespace.ID), Revision: signedRevision, Currency: namespace.BillingCurrency,
 		},
 	})
 	if err != nil {
@@ -266,6 +279,15 @@ func emptyIntegrationPublication(t *testing.T, revision uint64) accesspublisher.
 		)
 	}
 	return publication
+}
+
+func integrationSignedRevision(t *testing.T, revision uint64) int64 {
+	t.Helper()
+	if revision == 0 || revision > math.MaxInt64 {
+		t.Fatalf("integration revision %d is outside the signed snapshot range", revision)
+	}
+	// #nosec G115 -- the fixture revision is bounded to MaxInt64 above.
+	return int64(revision)
 }
 
 func deleteIntegrationPrefix(ctx context.Context, client *redis.Client, pattern string) {

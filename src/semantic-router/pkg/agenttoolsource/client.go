@@ -17,6 +17,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentmanagement"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendegress"
+	routermcp "github.com/vllm-project/semantic-router/src/semantic-router/pkg/mcp"
 )
 
 const (
@@ -227,7 +228,9 @@ func (factory *ClientFactory) open(
 	}
 	initialize := mcp.InitializeRequest{}
 	initialize.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
-	initialize.Params.ClientInfo = mcp.Implementation{Name: "vllm-semantic-router", Version: "v0.4"}
+	initialize.Params.ClientInfo = mcp.Implementation{
+		Name: "vllm-semantic-router", Version: routermcp.MCPClientVersion,
+	}
 	if _, err := client.Initialize(ctx, initialize); err != nil {
 		closeClient()
 		return nil, PinnedCredential{}, nil, err

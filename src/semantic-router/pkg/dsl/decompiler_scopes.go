@@ -32,7 +32,7 @@ func DecompileConfig(cfg *config.RouterConfig) (string, error) {
 		sb.WriteString(d.sb.String())
 	}
 	if len(cfg.Entrypoints) > 0 {
-		writeEntrypoints(&sb, config.CanonicalConfigFromRouterConfig(cfg).Entrypoints)
+		writeEntrypoints(&sb, config.AuthoringEntrypointsFromRouterConfig(cfg))
 	}
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
@@ -54,16 +54,19 @@ func writeEntrypoints(sb *strings.Builder, entrypoints []config.AuthoringEntrypo
 	sb.WriteString("# ENTRYPOINTS\n")
 	sb.WriteString("# =============================================================================\n\n")
 	for _, entrypoint := range entrypoints {
+		if entrypoint.Name == "" {
+			continue
+		}
 		sb.WriteString("ENTRYPOINT {\n")
 		fmt.Fprintf(sb, "  name: %q\n", entrypoint.Name)
 		if len(entrypoint.Aliases) > 0 {
 			fmt.Fprintf(sb, "  aliases: %s\n", formatStringArray(entrypoint.Aliases))
 		}
-		if len(entrypoint.Rules) == 0 {
+		if len(entrypoint.Rules) > 0 {
+			writeEntrypointRules(sb, entrypoint.Rules)
+		} else {
 			fmt.Fprintf(sb, "  recipe: %q\n", entrypoint.Recipe)
 			writeEntrypointAssignments(sb, "  ", entrypoint.Assignments)
-		} else {
-			writeEntrypointRules(sb, entrypoint.Rules)
 		}
 		sb.WriteString("}\n\n")
 	}
@@ -75,20 +78,47 @@ func writeEntrypointRules(sb *strings.Builder, rules []config.AuthoringEntrypoin
 		sb.WriteString("    {\n")
 		fmt.Fprintf(sb, "      name: %q\n", rule.Name)
 		if len(rule.Matches) > 0 {
-			sb.WriteString("      matches: [")
-			for index, match := range rule.Matches {
-				if index > 0 {
-					sb.WriteString(", ")
-				}
-				sb.WriteString(formatEntrypointMatch(match))
-			}
-			sb.WriteString("]\n")
+			fmt.Fprintf(sb, "      matches: %s\n", formatEntrypointMatches(rule.Matches))
 		}
 		fmt.Fprintf(sb, "      recipe: %q\n", rule.Recipe)
 		writeEntrypointAssignments(sb, "      ", rule.Assignments)
 		sb.WriteString("    },\n")
 	}
 	sb.WriteString("  ]\n")
+}
+
+func formatEntrypointMatches(matches []config.AuthoringEntrypointMatch) string {
+	formatted := make([]string, 0, len(matches))
+	for _, match := range matches {
+		switch {
+		case match.Claim != nil:
+			formatted = append(formatted, fmt.Sprintf(
+				"{ claim: { name: %q, exact: %s } }",
+				match.Claim.Name,
+				formatEntrypointMatchValue(match.Claim.Exact),
+			))
+		case match.Path != nil && match.Path.Exact != "":
+			formatted = append(formatted, fmt.Sprintf("{ path: { exact: %q } }", match.Path.Exact))
+		case match.Path != nil:
+			formatted = append(formatted, fmt.Sprintf("{ path: { prefix: %q } }", match.Path.Prefix))
+		}
+	}
+	return "[" + strings.Join(formatted, ", ") + "]"
+}
+
+func formatEntrypointMatchValue(value interface{}) string {
+	switch typed := value.(type) {
+	case string:
+		return fmt.Sprintf("%q", typed)
+	case bool:
+		return fmt.Sprintf("%t", typed)
+	case int:
+		return fmt.Sprintf("%d", typed)
+	case int64:
+		return fmt.Sprintf("%d", typed)
+	default:
+		return fmt.Sprintf("%q", fmt.Sprint(typed))
+	}
 }
 
 func writeEntrypointAssignments(sb *strings.Builder, indent string, assignments map[string]config.AuthoringAssignmentSet) {
@@ -114,29 +144,6 @@ func writeEntrypointAssignments(sb *strings.Builder, indent string, assignments 
 		sb.WriteString(" },\n")
 	}
 	fmt.Fprintf(sb, "%s]\n", indent)
-}
-
-func formatEntrypointMatch(match config.AuthoringEntrypointMatch) string {
-	if match.Claim != nil {
-		return fmt.Sprintf("{ claim: { name: %q, exact: %s } }", match.Claim.Name, formatEntrypointClaimValue(match.Claim.Exact))
-	}
-	if match.Path != nil && match.Path.Exact != "" {
-		return fmt.Sprintf("{ path: { exact: %q } }", match.Path.Exact)
-	}
-	return fmt.Sprintf("{ path: { prefix: %q } }", match.Path.Prefix)
-}
-
-func formatEntrypointClaimValue(value interface{}) string {
-	switch typed := value.(type) {
-	case bool:
-		return fmt.Sprintf("%t", typed)
-	case int:
-		return fmt.Sprintf("%d", typed)
-	case int64:
-		return fmt.Sprintf("%d", typed)
-	default:
-		return fmt.Sprintf("%q", fmt.Sprint(typed))
-	}
 }
 
 func formatEntrypointAssignment(assignment config.AuthoringModelAssignment) string {
@@ -222,8 +229,7 @@ func appendConfigScopesToAST(prog *Program, cfg *config.RouterConfig) {
 	if prog == nil || cfg == nil {
 		return
 	}
-	canonical := config.CanonicalConfigFromRouterConfig(cfg)
-	for _, entrypoint := range canonical.Entrypoints {
+	for _, entrypoint := range config.AuthoringEntrypointsFromRouterConfig(cfg) {
 		prog.Entrypoints = append(prog.Entrypoints, authoringEntrypointToDecl(entrypoint))
 	}
 	for i := range cfg.Recipes {
@@ -240,44 +246,46 @@ func appendConfigScopesToAST(prog *Program, cfg *config.RouterConfig) {
 }
 
 func authoringEntrypointToDecl(input config.AuthoringEntrypoint) *EntrypointDecl {
-	return &EntrypointDecl{
+	decl := &EntrypointDecl{
 		Name: input.Name, Aliases: append([]string(nil), input.Aliases...),
 		Recipe: input.Recipe, Assignments: authoringAssignmentsToDecl(input.Assignments),
-		Rules: authoringEntrypointRulesToDecl(input.Rules),
 	}
-}
-
-func authoringEntrypointRulesToDecl(input []config.AuthoringEntrypointRule) []*EntrypointRuleDecl {
-	output := make([]*EntrypointRuleDecl, 0, len(input))
-	for _, rule := range input {
-		decl := &EntrypointRuleDecl{
+	for _, rule := range input.Rules {
+		converted := &EntrypointRuleDecl{
 			Name: rule.Name, Recipe: rule.Recipe,
 			Assignments: authoringAssignmentsToDecl(rule.Assignments),
 		}
 		for _, match := range rule.Matches {
-			converted := &EntrypointMatchDecl{}
-			if match.Claim != nil {
-				var exact Value
-				switch value := match.Claim.Exact.(type) {
-				case bool:
-					exact = BoolValue{V: value}
-				case int:
-					exact = IntValue{V: value}
-				case int64:
-					exact = IntValue{V: int(value)}
-				default:
-					exact = StringValue{V: fmt.Sprint(value)}
-				}
-				converted.Claim = &EntrypointClaimMatchDecl{Name: match.Claim.Name, Exact: exact}
-			}
-			if match.Path != nil {
-				converted.Path = &EntrypointPathMatchDecl{Exact: match.Path.Exact, Prefix: match.Path.Prefix}
-			}
-			decl.Matches = append(decl.Matches, converted)
+			converted.Matches = append(converted.Matches, authoringMatchToDecl(match))
 		}
-		output = append(output, decl)
+		decl.Rules = append(decl.Rules, converted)
 	}
-	return output
+	return decl
+}
+
+func authoringMatchToDecl(input config.AuthoringEntrypointMatch) *EntrypointMatchDecl {
+	if input.Claim != nil {
+		var exact Value
+		switch value := input.Claim.Exact.(type) {
+		case string:
+			exact = StringValue{V: value}
+		case bool:
+			exact = BoolValue{V: value}
+		case int:
+			exact = IntValue{V: value}
+		case int64:
+			exact = IntValue{V: int(value)}
+		}
+		return &EntrypointMatchDecl{Claim: &EntrypointClaimMatchDecl{
+			Name: input.Claim.Name, Exact: exact,
+		}}
+	}
+	if input.Path == nil {
+		return &EntrypointMatchDecl{}
+	}
+	return &EntrypointMatchDecl{Path: &EntrypointPathMatchDecl{
+		Exact: input.Path.Exact, Prefix: input.Path.Prefix,
+	}}
 }
 
 func authoringAssignmentsToDecl(input map[string]config.AuthoringAssignmentSet) map[string]*EntrypointAssignmentSetDecl {

@@ -38,11 +38,14 @@ export default tseslint.config(
     },
   },
   {
-    files: ['src/contexts/AuthContext.tsx'],
+    files: ['src/contexts/AuthContext.tsx', 'src/contexts/InferenceRoutingAccessContext.tsx'],
     rules: {
       'react-refresh/only-export-components': [
         'warn',
-        { allowConstantExport: true, allowExportNames: ['useAuth'] },
+        {
+          allowConstantExport: true,
+          allowExportNames: ['useAuth', 'useInferenceRoutingAccess'],
+        },
       ],
     },
   },

@@ -50,7 +50,7 @@ def _runtime_config(*, credential_env: str | None = None) -> dict:
             }
         }
     return {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
         "models": [],
         "recipes": [],
@@ -85,12 +85,7 @@ def test_runtime_cli_import_graph_excludes_offline_v03_converter():
 import sys
 import cli.main
 
-for module_name in (
-    "cli.config_upgrade_v03",
-    "cli.config_upgrade_v03_models",
-    "cli.config_upgrade_v03_routing",
-    "cli.config_upgrade_v03_support",
-):
+for module_name in ("cli.config_upgrade_v03",):
     if module_name in sys.modules:
         raise SystemExit(f"runtime imported offline converter module: {module_name}")
 """
@@ -286,7 +281,7 @@ def test_serve_rejects_a_missing_explicit_bootstrap_manifest():
 def test_serve_rejects_generated_private_state_as_config(tmp_path: Path):
     generated = tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     generated.parent.mkdir()
-    generated.write_text("version: v0.4\n", encoding="utf-8")
+    generated.write_text("version: v0.3\n", encoding="utf-8")
 
     result = CliRunner().invoke(main, ["serve", "--config", str(generated)])
 

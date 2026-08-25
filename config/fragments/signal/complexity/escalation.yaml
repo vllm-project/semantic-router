@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     complexity:
       - name: needs_reasoning

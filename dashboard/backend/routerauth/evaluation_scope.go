@@ -53,15 +53,15 @@ func (provider *managementSessionProvider) ResolveEvaluationScope(
 func (provider *managementSessionProvider) evaluationIdentity(
 	ctx context.Context,
 	principal dashboardauth.AuthContext,
-) (string, managementapi.Me, error) {
-	token, err := provider.ManagementAccessToken(ctx, principal)
+) (cachedManagementToken, managementapi.Me, error) {
+	credential, err := provider.managementCredential(ctx, principal)
 	if err != nil {
-		return "", managementapi.Me{}, errEvaluationScopeUnavailable
+		return cachedManagementToken{}, managementapi.Me{}, errEvaluationScopeUnavailable
 	}
 	var identity managementapi.Me
 	if err = provider.authorizedManagementRequest(
 		ctx,
-		token,
+		credential.accessToken,
 		"",
 		http.MethodGet,
 		managementBasePath+"/me",
@@ -70,7 +70,7 @@ func (provider *managementSessionProvider) evaluationIdentity(
 		[]int{http.StatusOK},
 		&identity,
 	); err != nil {
-		return "", managementapi.Me{}, errEvaluationScopeUnavailable
+		return cachedManagementToken{}, managementapi.Me{}, errEvaluationScopeUnavailable
 	}
-	return token, identity, nil
+	return credential, identity, nil
 }

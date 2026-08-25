@@ -12,7 +12,9 @@ import {
   canManageUsers,
   canRunEvaluation,
   canManageRouting,
+  canReadKeyScopedRouting,
   canReadRouting,
+  canReadRoutingCatalog,
   canSelfManageInferenceAccess,
   canViewUsers,
   canWriteConfig,
@@ -127,13 +129,33 @@ describe('config write access', () => {
     const consumer = {
       role: 'read',
       permissions: ['config.read', 'topology.read'],
-      managementPermissions: ['key.read', 'usage.read', 'delegation.use', 'routing.read'],
+      managementPermissions: [
+        'agent.read',
+        'agent.use',
+        'delegation.use',
+        'key.read',
+        'access_policy.read',
+        'routing_context.read',
+        'tool.invoke',
+        'tool.read',
+        'usage.read',
+      ],
     }
     expect(isModelConsumer(consumer)).toBe(true)
-    expect(canAccessDashboardPath(consumer, '/config/models')).toBe(true)
-    expect(canAccessDashboardPath(consumer, '/builder')).toBe(true)
+    expect(canReadRouting(consumer)).toBe(false)
+    expect(canReadKeyScopedRouting(consumer)).toBe(true)
+    expect(canReadRoutingCatalog(consumer)).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/config/entrypoints-recipes')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/topology')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/playground')).toBe(true)
+    expect(canAccessDashboardPath(consumer, '/config/models')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/signals')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/projections')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/decisions')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/builder')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/fleet-sim')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/config/global-config')).toBe(false)
+    expect(canAccessDashboardPath(consumer, '/config/agent')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/status')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/insights')).toBe(false)
     expect(canAccessDashboardPath(consumer, '/evaluation')).toBe(false)
@@ -229,6 +251,21 @@ describe('config write access', () => {
       canManageRouting({ role: 'read', managementPermissions: ['routing.read', 'routing.manage'] }),
     ).toBe(true)
     expect(canReadRouting({ role: 'admin', permissions: ['config.write'] })).toBe(false)
+    expect(
+      canReadKeyScopedRouting({
+        managementPermissions: [
+          'delegation.use',
+          'key.read',
+          'access_policy.read',
+          'routing_context.read',
+        ],
+      }),
+    ).toBe(true)
+    expect(
+      canReadKeyScopedRouting({
+        managementPermissions: ['delegation.use', 'key.read', 'access_policy.read'],
+      }),
+    ).toBe(false)
   })
 
   it('authorizes the complete routing workspace only from Router Management capabilities', () => {

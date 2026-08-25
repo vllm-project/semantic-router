@@ -417,7 +417,7 @@ func newDashboardManagedMaterial() (dashboardManagedMaterial, error) {
 	for _, environment := range []string{
 		"VLLM_SR_API_KEY_HMAC_KEYRING", "VLLM_SR_DELEGATION_HMAC_KEYRING",
 		"VLLM_SR_PROVIDER_KEK_KEYRING", "VLLM_SR_SERVICE_ACCOUNT_HMAC_KEYRING",
-		"VLLM_SR_INVITATION_HMAC_KEYRING", "VLLM_SR_CONTROL_PLANE_HMAC_KEYRING",
+		"VLLM_SR_INVITATION_HMAC_KEYRING", "VLLM_SR_ROUTING_HMAC_KEYRING",
 		"VLLM_SR_RESPONSE_KEK_KEYRING",
 	} {
 		value, keyErr := newSymmetricKeyring()

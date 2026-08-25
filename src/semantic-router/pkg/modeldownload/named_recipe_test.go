@@ -127,14 +127,18 @@ func TestBuildModelSpecsPreservesDefaultAPIOnlyModels(t *testing.T) {
 func TestBuildModelSpecsSkipsUnreachableNamedRecipeModels(t *testing.T) {
 	const unreachableModel = "models/unreachable-router"
 	const authoring = `
-version: v0.4
-models:
-  - name: backend
-    card: {}
-    connections: [{provider: vllm, endpoint: http://127.0.0.1:8000, model: backend}]
+version: v0.3
+providers:
+  models:
+    - name: backend
+      provider_model_id: backend
+      backend_refs: [{provider: vllm, endpoint: http://127.0.0.1:8000}]
+routing:
+  modelCards:
+    - name: backend
 recipes:
   - name: default
-    document:
+    routing:
       signals: {}
       decisions:
         - name: default-route
@@ -142,7 +146,7 @@ recipes:
             operator: AND
             conditions: []
   - name: unmapped
-    document:
+    routing:
       signals:
         classifiers:
           - name: reachability
@@ -159,11 +163,6 @@ recipes:
                 name: reachability
                 label: YES
                 predicate: {gte: 0.5}
-entrypoints:
-  - name: vllm-sr/default
-    recipe: default
-    assignments:
-      default-route: {models: [{model: backend}]}
 `
 	parse := func(suffix string) *config.RouterConfig {
 		t.Helper()
@@ -175,7 +174,13 @@ entrypoints:
 		cfg.MoMRegistry = map[string]string{unreachableModel: "test/unreachable-router"}
 		return cfg
 	}
-	cfg := parse("")
+	cfg := parse(`
+entrypoints:
+  - model_names: [vllm-sr/default]
+    recipe: default
+    assignments:
+      default-route: {models: [{model: backend}]}
+`)
 
 	specs, err := BuildModelSpecs(cfg)
 	if err != nil {
@@ -187,7 +192,7 @@ entrypoints:
 
 	cfg = parse(`
 entrypoints:
-  - name: vllm-sr/unmapped
+  - model_names: [vllm-sr/unmapped]
     recipe: unmapped
     assignments:
       unmapped-route: {models: [{model: backend}]}

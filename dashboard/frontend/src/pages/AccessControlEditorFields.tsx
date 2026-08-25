@@ -1,11 +1,17 @@
-import type { PropsWithChildren } from 'react'
 import type { AccessAPIKey, AccessTeam, TeamMembership } from '../utils/inferenceAccessApi'
 import { toLocalDateTime } from './AccessControlFormSupport'
 import AccessBudgetRuleEditor from './AccessBudgetRuleEditor'
 import AccessAsyncResourcePicker from './AccessAsyncResourcePicker'
-import ProductIcon from '../components/ProductIcon'
 import type { AccessEditor } from './AccessControlPageSupport'
 import type { AccessControlSelectorSources } from './accessControlSelectorSources'
+import {
+  Advanced,
+  Field,
+  OwnerChoice,
+  PickerField,
+  SelectionSection,
+  StatusField,
+} from './AccessControlEditorPrimitives'
 import styles from './AccessControlPage.module.css'
 
 type Props = {
@@ -144,6 +150,7 @@ function TeamFields({
           onBudget={(budgetId) => update({ budgetId })}
           required
           label="Team defaults"
+          compact
         />
       ) : null}
       <SelectionSection title="Members" detail={`${members.length} selected · optional`}>
@@ -154,6 +161,8 @@ function TeamFields({
           multiple
           placeholder="Search by name or email"
           emptyText="No users found"
+          compact
+          compactEmptyLabel="Add members"
           onChange={(selectedIds) => {
             const existing = new Map(members.map((member) => [member.userId, member]))
             update({
@@ -171,22 +180,30 @@ function TeamFields({
             const member = members.find((item) => item.userId === user.id)
             if (!member) return null
             return (
-              <label className={styles.asyncPickerMemberRole}>
+              <div className={styles.asyncPickerMemberRole}>
                 <span>
                   <strong>{user.name}</strong>
                   <small>{user.email}</small>
                 </span>
-                <select
+                <div
+                  className={styles.memberRoleChoices}
+                  role="radiogroup"
                   aria-label={`${user.name} Team role`}
-                  value={member.role}
-                  onChange={(event) =>
-                    setRole(user.id, event.target.value as TeamMembership['role'])
-                  }
                 >
-                  <option value="member">Member</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </label>
+                  {(['member', 'admin'] as const).map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      role="radio"
+                      aria-checked={member.role === role}
+                      className={member.role === role ? styles.memberRoleChoiceActive : ''}
+                      onClick={() => setRole(user.id, role)}
+                    >
+                      {role === 'member' ? 'Member' : 'Admin'}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )
           }}
         />
@@ -653,6 +670,7 @@ function PolicyFields({
   inheritBudgetLabel,
   showModels = true,
   showBudget = true,
+  compact = false,
 }: {
   accessGroupIds: string[]
   budgetId?: string
@@ -664,6 +682,7 @@ function PolicyFields({
   inheritBudgetLabel?: string
   showModels?: boolean
   showBudget?: boolean
+  compact?: boolean
 }) {
   return (
     <>
@@ -679,6 +698,8 @@ function PolicyFields({
             multiple
             placeholder="Search access group name"
             emptyText="No access groups found"
+            compact={compact}
+            compactEmptyLabel="Choose model access"
             onChange={onGroups}
           />
         </SelectionSection>
@@ -694,113 +715,12 @@ function PolicyFields({
             optionalDescription="Use the next policy in the ownership chain"
             placeholder="Search budget name"
             emptyText="No budgets found"
+            compact={compact}
+            compactEmptyLabel={required ? 'Choose quota' : 'Inherit quota'}
             onChange={(selectedIds) => onBudget(selectedIds[0])}
           />
         </PickerField>
       ) : null}
     </>
-  )
-}
-
-function Advanced({ children, label = 'Advanced' }: PropsWithChildren<{ label?: string }>) {
-  return (
-    <details className={styles.advancedSection}>
-      <summary>
-        <span>{label}</span>
-        <small>Optional settings</small>
-      </summary>
-      <div className={styles.advancedGrid}>{children}</div>
-    </details>
-  )
-}
-function Field({
-  label,
-  hint,
-  wide = false,
-  children,
-}: PropsWithChildren<{ label: string; hint?: string; wide?: boolean }>) {
-  return (
-    <label className={`${styles.formField} ${wide ? styles.formFieldWide : ''}`}>
-      <span>{label}</span>
-      {children}
-      {hint ? <small>{hint}</small> : null}
-    </label>
-  )
-}
-function PickerField({
-  label,
-  hint,
-  children,
-}: PropsWithChildren<{ label: string; hint?: string }>) {
-  return (
-    <div className={`${styles.formField} ${styles.formFieldWide}`}>
-      <span>{label}</span>
-      {children}
-      {hint ? <small>{hint}</small> : null}
-    </div>
-  )
-}
-function StatusField({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (value: 'active' | 'disabled') => void
-}) {
-  return (
-    <Field label="Status">
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value as 'active' | 'disabled')}
-      >
-        <option value="active">Active</option>
-        <option value="disabled">Disabled</option>
-      </select>
-    </Field>
-  )
-}
-function SelectionSection({
-  title,
-  detail,
-  children,
-}: PropsWithChildren<{ title: string; detail: string }>) {
-  return (
-    <fieldset className={styles.selectionSection}>
-      <legend>
-        <span>{title}</span>
-        <small>{detail}</small>
-      </legend>
-      <div className={styles.choiceGrid}>{children}</div>
-    </fieldset>
-  )
-}
-function OwnerChoice({
-  active,
-  disabled = false,
-  title,
-  detail,
-  onSelect,
-}: {
-  active: boolean
-  disabled?: boolean
-  title: string
-  detail: string
-  onSelect: () => void
-}) {
-  return (
-    <button
-      type="button"
-      className={`${styles.ownerChoice} ${active ? styles.ownerChoiceActive : ''}`}
-      role="radio"
-      aria-checked={active}
-      disabled={disabled}
-      onClick={onSelect}
-    >
-      <span>{title}</span>
-      <small>{detail}</small>
-      {active ? (
-        <ProductIcon className={styles.choiceCheck} name="check" aria-hidden="true" />
-      ) : null}
-    </button>
   )
 }

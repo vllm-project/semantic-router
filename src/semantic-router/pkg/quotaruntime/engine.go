@@ -22,10 +22,19 @@ var (
 // Engine is the store-independent runtime seam used by an inference data
 // plane. Implementations must make every method atomic within one Partition.
 type Engine interface {
+	AdmissionEngine
+	AttemptEvidenceEngine
+	SettlementEngine
+}
+
+type AdmissionEngine interface {
 	CheckAccess(context.Context, AccessCheckRequest) (AccessCheckResult, error)
 	Admit(context.Context, AdmissionRequest) (AdmissionResult, error)
+	Heartbeat(context.Context, AdmissionHeartbeatRequest) (AdmissionHeartbeatResult, error)
 	JournalDispatch(context.Context, DispatchJournalRequest) (MutationResult, error)
-	AttemptEvidenceEngine
+}
+
+type SettlementEngine interface {
 	Finalize(context.Context, FinalizationRequest) (FinalizationResult, error)
 	ReleaseConcurrency(context.Context, ConcurrencyReleaseRequest) (MutationResult, error)
 	ReadMeters(context.Context, MeterReadRequest) (MeterReadResult, error)
@@ -192,10 +201,34 @@ type AdmissionResult struct {
 	RetryAt        *time.Time
 	ResetAt        *time.Time
 	BlockingReason string
+	// PlanDigest binds follow-up heartbeats to the exact immutable admission
+	// preconditions, lease, and quota rule plan accepted by the atomic store.
+	PlanDigest string
 }
 
 func (r AdmissionResult) Allowed() bool {
 	return r.Disposition == AdmissionAllowed
+}
+
+// AdmissionHeartbeatRequest renews only the liveness lease of one already
+// admitted request. It cannot change quota rules, consume quota, or revive an
+// expired admission. Rules are included solely to identify and atomically
+// renew every concurrency counter owned by the admission.
+type AdmissionHeartbeatRequest struct {
+	Partition       string
+	AdmissionID     string
+	AdmissionDigest string
+	PlanDigest      string
+	LeaseDuration   time.Duration
+	Rules           []RuleBinding
+}
+
+type AdmissionHeartbeatResult struct {
+	ServerTime time.Time
+	Deadline   time.Time
+	// Stopped means the exact admission is already terminal. Callers must stop
+	// their heartbeat loop and may treat this response as idempotent success.
+	Stopped bool
 }
 
 // DispatchJournalRequest records one stable bounded backend dispatch before

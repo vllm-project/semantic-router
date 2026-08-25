@@ -1339,6 +1339,56 @@
   outline: none;
 }
 
+@media (max-width: 720px) {
+  .mainLayout {
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  .canvasWrapper {
+    min-height: 360px;
+  }
+
+  .zoomBar {
+    max-width: 100%;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+  }
+
+  .zoomHint {
+    display: none;
+  }
+
+  .toolbox,
+  .toolbox.toolboxCollapsed {
+    width: 100%;
+  }
+
+  .toolboxContent {
+    max-height: 230px;
+  }
+
+  .fullscreenOverlay {
+    padding: 0.5rem;
+  }
+
+  .fullscreenContainer {
+    border-radius: 10px;
+  }
+
+  .editOverlay {
+    align-items: center;
+    padding: 0.5rem;
+  }
+
+  .editDialog,
+  .addPickerDialog {
+    width: 100%;
+    max-height: calc(100dvh - 1rem);
+    border-radius: 14px;
+  }
+}
+
 .addPickerBody {
   padding: 0.5rem 0.75rem 0.75rem;
   display: flex;

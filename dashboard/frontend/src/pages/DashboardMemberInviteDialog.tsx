@@ -244,20 +244,33 @@ export default function DashboardMemberInviteDialog({
                     optionalDescription="Assign one later"
                     placeholder="Search Team name"
                     emptyText="No Teams found"
+                    compact
+                    compactEmptyLabel="Choose a Team"
                     onChange={(selectedIds) => setTeamId(selectedIds[0] || '')}
                   />
                 </div>
                 {teamId ? (
-                  <label className={styles.formField}>
+                  <div className={styles.formField}>
                     <span>Team role</span>
-                    <select
-                      value={teamRole}
-                      onChange={(event) => setTeamRole(event.target.value as 'member' | 'admin')}
+                    <div
+                      className={styles.teamRoleChoices}
+                      role="radiogroup"
+                      aria-label="Team role"
                     >
-                      <option value="member">Member</option>
-                      <option value="admin">Admin</option>
-                    </select>
-                  </label>
+                      {(['member', 'admin'] as const).map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          role="radio"
+                          aria-checked={teamRole === option}
+                          className={teamRole === option ? styles.teamRoleChoiceActive : ''}
+                          onClick={() => setTeamRole(option)}
+                        >
+                          {option === 'member' ? 'Member' : 'Admin'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 ) : null}
                 <label className={styles.toggleField}>
                   <input

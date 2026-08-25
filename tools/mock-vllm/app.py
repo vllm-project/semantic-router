@@ -344,6 +344,58 @@ def generate_responses_stream(
         "model": req.model,
         "status": "in_progress",
     }
+    yield responses_sse("response.created", {"response": in_progress})
+    yield responses_sse("response.in_progress", {"response": in_progress})
+    if tool_call is not None:
+        yield from _generate_responses_tool_stream(response, usage, tool_call)
+        return
+    yield from _generate_responses_text_stream(response, content, usage)
+
+
+def _generate_responses_tool_stream(response: dict, usage: dict, tool_call: dict):
+    item = {
+        "id": "fc_mock_123",
+        "type": "function_call",
+        "status": "in_progress",
+        "call_id": tool_call["id"],
+        "name": tool_call["name"],
+        "arguments": "",
+    }
+    yield responses_sse("response.output_item.added", {"output_index": 0, "item": item})
+    midpoint = len(tool_call["arguments"]) // 2
+    for arguments in (
+        tool_call["arguments"][:midpoint],
+        tool_call["arguments"][midpoint:],
+    ):
+        yield responses_sse(
+            "response.function_call_arguments.delta",
+            {"item_id": item["id"], "output_index": 0, "delta": arguments},
+        )
+    yield responses_sse(
+        "response.function_call_arguments.done",
+        {
+            "item_id": item["id"],
+            "output_index": 0,
+            "arguments": tool_call["arguments"],
+        },
+    )
+    yield responses_sse(
+        "response.output_item.done",
+        {
+            "output_index": 0,
+            "item": {
+                **item,
+                "status": "completed",
+                "arguments": tool_call["arguments"],
+            },
+        },
+    )
+    yield responses_sse(
+        "response.completed", {"response": {**response, "usage": usage}}
+    )
+
+
+def _generate_responses_text_stream(response: dict, content: str, usage: dict):
     item = {
         "id": "msg_mock_123",
         "type": "message",
@@ -352,56 +404,6 @@ def generate_responses_stream(
         "content": [],
     }
     content_part = {"type": "output_text", "text": "", "annotations": []}
-    yield responses_sse("response.created", {"response": in_progress})
-    yield responses_sse("response.in_progress", {"response": in_progress})
-    if tool_call is not None:
-        item = {
-            "id": "fc_mock_123",
-            "type": "function_call",
-            "status": "in_progress",
-            "call_id": tool_call["id"],
-            "name": tool_call["name"],
-            "arguments": "",
-        }
-        yield responses_sse(
-            "response.output_item.added", {"output_index": 0, "item": item}
-        )
-        midpoint = len(tool_call["arguments"]) // 2
-        for arguments in (
-            tool_call["arguments"][:midpoint],
-            tool_call["arguments"][midpoint:],
-        ):
-            yield responses_sse(
-                "response.function_call_arguments.delta",
-                {
-                    "item_id": item["id"],
-                    "output_index": 0,
-                    "delta": arguments,
-                },
-            )
-        yield responses_sse(
-            "response.function_call_arguments.done",
-            {
-                "item_id": item["id"],
-                "output_index": 0,
-                "arguments": tool_call["arguments"],
-            },
-        )
-        yield responses_sse(
-            "response.output_item.done",
-            {
-                "output_index": 0,
-                "item": {
-                    **item,
-                    "status": "completed",
-                    "arguments": tool_call["arguments"],
-                },
-            },
-        )
-        yield responses_sse(
-            "response.completed", {"response": {**response, "usage": usage}}
-        )
-        return
     yield responses_sse("response.output_item.added", {"output_index": 0, "item": item})
     yield responses_sse(
         "response.content_part.added",

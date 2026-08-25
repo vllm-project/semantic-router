@@ -96,6 +96,13 @@ func TestAgentOpenAPISchemasKeepDelegationAndSecretsPrivate(t *testing.T) {
 	if _, leaked := sessionInput.Properties["delegatedInferenceSessionId"]; leaked {
 		t.Fatal("Agent session input exposes delegated inference implementation state")
 	}
+	if _, found := sessionInput.Properties["keyId"]; !found || !slices.Contains(sessionInput.Required, "keyId") {
+		t.Fatal("Agent session input does not pin one eligible API key")
+	}
+	session := schemas["AgentSession"]
+	if _, found := session.Properties["keyId"]; !found || !slices.Contains(session.Required, "keyId") {
+		t.Fatal("Agent session output cannot restore its pinned API key")
+	}
 	credential := schemas["AgentToolCredential"]
 	for _, field := range []string{"secret", "ciphertext", "activeVersionId"} {
 		if _, leaked := credential.Properties[field]; leaked {

@@ -131,6 +131,7 @@ func (q QuotaInteger) Add(other QuotaInteger) (QuotaInteger, error) {
 	var carry uint64
 	for index := len(q.limbs) - 1; index >= 0; index-- {
 		total := uint64(q.limbs[index]) + uint64(other.limbs[index]) + carry
+		// #nosec G115 -- modulo QuotaIntegerLimbBase bounds the limb below 10,000,000.
 		result.limbs[index] = uint32(total % uint64(QuotaIntegerLimbBase))
 		carry = total / uint64(QuotaIntegerLimbBase)
 	}
@@ -166,6 +167,7 @@ func (q QuotaInteger) Mul(other QuotaInteger) (QuotaInteger, error) {
 	}
 	var result QuotaInteger
 	for position := range result.limbs {
+		// #nosec G115 -- normalization above bounds every retained product limb below the base.
 		result.limbs[position] = uint32(product[position+QuotaIntegerLimbCount])
 	}
 	return result, nil
@@ -188,6 +190,7 @@ func (q QuotaInteger) Sub(other QuotaInteger) (QuotaInteger, error) {
 		} else {
 			borrow = 0
 		}
+		// #nosec G115 -- subtraction with borrow leaves each limb in [0, QuotaIntegerLimbBase).
 		result.limbs[index] = uint32(difference)
 	}
 	return result, nil

@@ -329,8 +329,12 @@ WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL`, namespa
 			return modelsMutationResult{}, updateModelErr
 		}
 		if meta.Command != nil {
+			resourceRevision, revisionErr := publicRevision(expected+1, "updated Model revision")
+			if revisionErr != nil {
+				return modelsMutationResult{}, revisionErr
+			}
 			if err := commandpostgres.CompleteResource(ctx, tx, *meta.Command, managementcommand.ResourceResult{
-				ResourceType: "routing_model", ResourceID: id, ResourceRevision: uint64(expected + 1),
+				ResourceType: "routing_model", ResourceID: id, ResourceRevision: resourceRevision,
 				ResponseStatus: 200,
 			}); err != nil {
 				return modelsMutationResult{}, err
@@ -375,9 +379,13 @@ revision=revision+1,updated_at=clock_timestamp() WHERE namespace_id=$1 AND id=$2
 			return routingmanagement.RevisionReceipt{}, err
 		}
 		if meta.Command != nil {
+			resourceRevision, revisionErr := publicRevision(expected+1, "deleted Model revision")
+			if revisionErr != nil {
+				return routingmanagement.RevisionReceipt{}, revisionErr
+			}
 			if err := commandpostgres.CompleteResource(ctx, tx, *meta.Command, managementcommand.ResourceResult{
 				ResourceType: "routing_model", ResourceID: id,
-				ResourceRevision: uint64(expected + 1), ResponseStatus: 204,
+				ResourceRevision: resourceRevision, ResponseStatus: 204,
 			}); err != nil {
 				return routingmanagement.RevisionReceipt{}, err
 			}
@@ -396,10 +404,14 @@ func replayModel(
 	if err != nil {
 		return modelsMutationResult{}, managementcommand.ErrConflict
 	}
+	resourceRevision, revisionErr := postgresRevision(stored.Resource.ResourceRevision, "stored Model revision")
+	if revisionErr != nil {
+		return modelsMutationResult{}, managementcommand.ErrConflict
+	}
 	return modelsMutationResult{
 		models: []routingmanagement.Model{model},
 		receipt: routingmanagement.RevisionReceipt{
-			ResourceRevision: int64(stored.Resource.ResourceRevision),
+			ResourceRevision: resourceRevision,
 			Replayed:         true,
 		},
 	}, nil

@@ -178,32 +178,44 @@ func TestPolicyBulkPostgresListKeysetFiltersAndCancelCASReplay(t *testing.T) {
 		t.Fatalf("filter-mismatched cursor error = %v", err)
 	}
 
+	assertPolicyBulkCancelReplay(t, ctx, service, newest)
+}
+
+func assertPolicyBulkCancelReplay(
+	t *testing.T,
+	ctx context.Context,
+	service *policybulk.Service,
+	operation policybulk.Operation,
+) {
+	t.Helper()
 	stale := policybulk.CancelRequest{
-		NamespaceID: testNamespaceID, OperationID: newest.ID,
-		ExpectedVersion: newest.Version + 1, IdempotencyKey: "operation-cancel-stale", Actor: testActor("cancel-stale"),
+		NamespaceID: testNamespaceID, OperationID: operation.ID,
+		ExpectedVersion: operation.Version + 1,
+		IdempotencyKey:  "operation-cancel-stale", Actor: testActor("cancel-stale"),
 	}
 	if _, err := service.Cancel(ctx, stale); !errors.Is(err, policybulk.ErrRevisionConflict) {
 		t.Fatalf("stale cancel error = %v", err)
 	}
-	cancelRequest := policybulk.CancelRequest{
-		NamespaceID: testNamespaceID, OperationID: newest.ID,
-		ExpectedVersion: newest.Version, IdempotencyKey: "operation-cancel-replay", Actor: testActor("cancel-replay"),
+	request := policybulk.CancelRequest{
+		NamespaceID: testNamespaceID, OperationID: operation.ID,
+		ExpectedVersion: operation.Version,
+		IdempotencyKey:  "operation-cancel-replay", Actor: testActor("cancel-replay"),
 	}
-	cancelled, testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr := service.Cancel(ctx, cancelRequest)
-	if testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr != nil || cancelled.Replayed || cancelled.Operation.State != policybulk.OperationCancelled ||
-		cancelled.Operation.Version <= newest.Version {
-		t.Fatalf("cancel result = %#v, %v", cancelled, testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr)
+	cancelled, err := service.Cancel(ctx, request)
+	if err != nil || cancelled.Replayed || cancelled.Operation.State != policybulk.OperationCancelled ||
+		cancelled.Operation.Version <= operation.Version {
+		t.Fatalf("cancel result = %#v, %v", cancelled, err)
 	}
-	replayed, testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr := service.Cancel(ctx, cancelRequest)
-	if testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr != nil || !replayed.Replayed || replayed.Operation.Version != cancelled.Operation.Version {
-		t.Fatalf("cancel replay = %#v, %v", replayed, testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr)
+	replayed, err := service.Cancel(ctx, request)
+	if err != nil || !replayed.Replayed || replayed.Operation.Version != cancelled.Operation.Version {
+		t.Fatalf("cancel replay = %#v, %v", replayed, err)
 	}
-	cancelledPage, testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr := service.List(ctx, policybulk.ListRequest{
+	page, err := service.List(ctx, policybulk.ListRequest{
 		NamespaceID: testNamespaceID,
 		State:       policybulk.OperationCancelled, PageSize: 10, Visibility: testOperationVisibility(),
 	})
-	if testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr != nil || len(cancelledPage.Items) != 1 || cancelledPage.Items[0].ID != newest.ID {
-		t.Fatalf("cancelled operation filter = %#v, %v", cancelledPage, testPolicyBulkPostgresListKeysetFiltersAndCancelCASReplayErr)
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != operation.ID {
+		t.Fatalf("cancelled operation filter = %#v, %v", page, err)
 	}
 }
 

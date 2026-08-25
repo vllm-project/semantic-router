@@ -6,6 +6,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 )
 
 // RuntimeDependencies are process-owned resources borrowed by every immutable
@@ -23,6 +24,10 @@ func (dependencies RuntimeDependencies) validate(cfg *config.RouterConfig) error
 	if cfg == nil {
 		return errors.New("router configuration is required")
 	}
+	capabilities, err := runtimecapabilities.Derive(cfg)
+	if err != nil {
+		return err
+	}
 	if dependencies.DispatchCapabilities == nil {
 		return errors.New("backend dispatch capability runtime is required")
 	}
@@ -32,21 +37,18 @@ func (dependencies RuntimeDependencies) validate(cfg *config.RouterConfig) error
 	if dependencies.ProtocolCodecs == nil {
 		return errors.New("protocol codec registry is required")
 	}
-	if dependencies.DispatchCapabilities.Metered() != cfg.Access.Enabled {
-		return errors.New("backend dispatch authority mode does not match access configuration")
+	if dependencies.DispatchCapabilities.Metered() != capabilities.NativeAccess {
+		return errors.New("backend dispatch metering does not match the native access capability")
 	}
-	if cfg.Access.Enabled {
-		if cfg.ControlPlane.Mode != config.ControlPlaneModeManaged {
-			return errors.New("inference access requires managed control-plane mode")
-		}
+	if capabilities.NativeAccess {
 		if dependencies.InferenceAccess == nil {
-			return errors.New("managed inference access runtime is required")
+			return errors.New("native access runtime is required")
 		}
 		if dependencies.OutcomeFeedback == nil {
-			return errors.New("managed outcome feedback runtime is required")
+			return errors.New("durable outcome feedback runtime is required")
 		}
 		if dependencies.OutcomeProjection == nil {
-			return errors.New("managed outcome learning projection runtime is required")
+			return errors.New("durable outcome learning projection runtime is required")
 		}
 		return nil
 	}

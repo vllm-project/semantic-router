@@ -14,6 +14,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscredential"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessprojection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesspublisher"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
@@ -34,73 +35,12 @@ func TestRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPath(t *testing.T) {
 	prefix := "access-it:" + uuid.NewString()
 	t.Cleanup(func() { deletePrefix(context.Background(), client, prefix+":*") })
 
-	pepper := []byte("0123456789abcdef0123456789abcdef")
-	keyring := accesscredential.PepperKeyring{
-		ActiveVersion: "pepper-1", Keys: map[string][]byte{"pepper-1": pepper},
-	}
-	issued, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr := keyring.Issue(accesscredential.KindAPIKey, "publicid0001")
-	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil {
-		t.Fatal(testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
-	}
-	projection := testProjection(t)
-	keyspace, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr := quotaruntime.NewAccessProjectionKeyspaceWithPrefix(prefix, projection.QuotaPartition)
-	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil {
-		t.Fatal(testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
-	}
-	directory, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr := quotaruntime.CredentialDirectoryKeyWithPrefix(prefix, string(accesscredential.KindAPIKey), issued.Digest.PublicID)
-	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil {
-		t.Fatal(testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
-	}
-	document, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr := json.Marshal(projection)
-	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil {
-		t.Fatal(testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
-	}
-	now := time.Now().UTC()
-	publicationID := "publication-integration-1"
-	publicationDigest := strings.Repeat("a", 64)
-	manifestDigest := strings.Repeat("b", 64)
-	snapshotDigest := strings.Repeat("c", 64)
-	publicationKeys, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr := accesspublisher.NewKeyspace(prefix, projection.NamespaceID, projection.QuotaPartition)
-	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil {
-		t.Fatal(testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
-	}
-	pipeline := client.TxPipeline()
-	pipeline.HSet(ctx, directory, map[string]any{
-		"publication_id": publicationID, "state": "active", "revision": projection.Revision,
-		"partition": projection.QuotaPartition, "namespace_id": projection.NamespaceID,
-		"kind": string(accesscredential.KindAPIKey), "public_id": issued.Digest.PublicID,
-	})
-	pipeline.HSet(ctx, publicationKeys.AccessGate(), map[string]any{
-		"publication_id": publicationID, "revision": projection.Revision, "runtime_epoch": 1,
-		"publication_digest": publicationDigest, "manifest_digest": manifestDigest,
-	})
-	pipeline.HSet(ctx, publicationKeys.RoutingGate(), map[string]any{
-		"publication_id": publicationID, "revision": projection.Revision, "runtime_epoch": 1,
-		"publication_digest": publicationDigest, "snapshot_digest": snapshotDigest,
-		"snapshot_key": publicationKeys.RoutingSnapshot(projection.Revision),
-	})
-	pipeline.HSet(ctx, keyspace.Credential(string(accesscredential.KindAPIKey), issued.Digest.PublicID), map[string]any{
-		"publication_id": publicationID, "state": "active", "revision": projection.Revision,
-		"kind": string(accesscredential.KindAPIKey), "kid": issued.Digest.PublicID, "key_id": projection.KeyID,
-		"secret_hmac":    base64.RawURLEncoding.EncodeToString(issued.Digest.HMAC),
-		"pepper_version": issued.Digest.PepperVersion, "status": "active",
-		"not_before_ms": now.Add(-time.Minute).UnixMilli(),
-	})
-	pipeline.HSet(ctx, keyspace.LogicalKey(projection.KeyID), map[string]any{
-		"publication_id": publicationID, "state": "active", "revision": projection.Revision,
-		"status": string(projection.KeyStatus), "policy_epoch": projection.PolicyEpoch,
-		"delegation_epoch": projection.DelegationEpoch, "expires_at_ms": projection.KeyExpiresAt.UnixMilli(),
-	})
-	pipeline.HSet(ctx, keyspace.Active(projection.KeyID), map[string]any{
-		"publication_id": publicationID, "state": "active",
-		"revision": projection.Revision, "digest": projection.Digest,
-	})
-	pipeline.HSet(ctx, keyspace.Policy(projection.KeyID, "7"), map[string]any{
-		"publication_id": publicationID, "digest": projection.Digest, "document": string(document),
-	})
-	if _, err := pipeline.Exec(ctx); err != nil {
-		t.Fatalf("publish test projection: %v", err)
-	}
+	fixture := publishRuntimeProjection(t, ctx, client, prefix)
+	keyring := fixture.keyring
+	issued := fixture.issued
+	projection := fixture.projection
+	keyspace := fixture.keyspace
+	publicationKeys := fixture.publicationKeys
 
 	reader, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr := NewRedisProjectionReader(RedisProjectionReaderOptions{Client: client, KeyPrefix: prefix})
 	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil {
@@ -164,6 +104,112 @@ func TestRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPath(t *testing.T) {
 	})
 	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil || checked.Result.Disposition != quotaruntime.AdmissionUnavailable || checked.Result.Reason != "routing_publication_changed" {
 		t.Fatalf("switched routing publication check = %+v, %v", checked, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
+	}
+}
+
+type runtimeProjectionFixture struct {
+	keyring         accesscredential.PepperKeyring
+	issued          accesscredential.Issued
+	projection      accessprojection.Projection
+	keyspace        quotaruntime.AccessProjectionKeyspace
+	publicationKeys accesspublisher.Keyspace
+	publicationID   string
+}
+
+func publishRuntimeProjection(
+	t *testing.T,
+	ctx context.Context,
+	client *redis.Client,
+	prefix string,
+) runtimeProjectionFixture {
+	t.Helper()
+	pepper := []byte("0123456789abcdef0123456789abcdef")
+	fixture := runtimeProjectionFixture{
+		keyring: accesscredential.PepperKeyring{
+			ActiveVersion: "pepper-1", Keys: map[string][]byte{"pepper-1": pepper},
+		},
+		projection:    testProjection(t),
+		publicationID: "publication-integration-1",
+	}
+	var err error
+	fixture.issued, err = fixture.keyring.Issue(accesscredential.KindAPIKey, "publicid0001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.keyspace, err = quotaruntime.NewAccessProjectionKeyspaceWithPrefix(prefix, fixture.projection.QuotaPartition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := quotaruntime.CredentialDirectoryKeyWithPrefix(prefix, string(accesscredential.KindAPIKey), fixture.issued.Digest.PublicID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := json.Marshal(fixture.projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixture.publicationKeys, err = accesspublisher.NewKeyspace(prefix, fixture.projection.NamespaceID, fixture.projection.QuotaPartition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	publishRuntimeProjectionHashes(t, ctx, client, directory, document, fixture)
+	return fixture
+}
+
+func publishRuntimeProjectionHashes(
+	t *testing.T,
+	ctx context.Context,
+	client *redis.Client,
+	directory string,
+	document []byte,
+	fixture runtimeProjectionFixture,
+) {
+	t.Helper()
+	now := time.Now().UTC()
+	publicationDigest := strings.Repeat("a", 64)
+	manifestDigest := strings.Repeat("b", 64)
+	snapshotDigest := strings.Repeat("c", 64)
+	projection := fixture.projection
+	keyspace := fixture.keyspace
+	publicationKeys := fixture.publicationKeys
+	issued := fixture.issued
+	publicationID := fixture.publicationID
+	pipeline := client.TxPipeline()
+	pipeline.HSet(ctx, directory, map[string]any{
+		"publication_id": publicationID, "state": "active", "revision": projection.Revision,
+		"partition": projection.QuotaPartition, "namespace_id": projection.NamespaceID,
+		"kind": string(accesscredential.KindAPIKey), "public_id": issued.Digest.PublicID,
+	})
+	pipeline.HSet(ctx, publicationKeys.AccessGate(), map[string]any{
+		"publication_id": publicationID, "revision": projection.Revision, "runtime_epoch": 1,
+		"publication_digest": publicationDigest, "manifest_digest": manifestDigest,
+	})
+	pipeline.HSet(ctx, publicationKeys.RoutingGate(), map[string]any{
+		"publication_id": publicationID, "revision": projection.Revision, "runtime_epoch": 1,
+		"publication_digest": publicationDigest, "snapshot_digest": snapshotDigest,
+		"snapshot_key": publicationKeys.RoutingSnapshot(projection.Revision),
+	})
+	pipeline.HSet(ctx, keyspace.Credential(string(accesscredential.KindAPIKey), issued.Digest.PublicID), map[string]any{
+		"publication_id": publicationID, "state": "active", "revision": projection.Revision,
+		"kind": string(accesscredential.KindAPIKey), "kid": issued.Digest.PublicID, "key_id": projection.KeyID,
+		"secret_hmac":    base64.RawURLEncoding.EncodeToString(issued.Digest.HMAC),
+		"pepper_version": issued.Digest.PepperVersion, "status": "active",
+		"not_before_ms": now.Add(-time.Minute).UnixMilli(),
+	})
+	pipeline.HSet(ctx, keyspace.LogicalKey(projection.KeyID), map[string]any{
+		"publication_id": publicationID, "state": "active", "revision": projection.Revision,
+		"status": string(projection.KeyStatus), "policy_epoch": projection.PolicyEpoch,
+		"delegation_epoch": projection.DelegationEpoch, "expires_at_ms": projection.KeyExpiresAt.UnixMilli(),
+	})
+	pipeline.HSet(ctx, keyspace.Active(projection.KeyID), map[string]any{
+		"publication_id": publicationID, "state": "active",
+		"revision": projection.Revision, "digest": projection.Digest,
+	})
+	pipeline.HSet(ctx, keyspace.Policy(projection.KeyID, "7"), map[string]any{
+		"publication_id": publicationID, "digest": projection.Digest, "document": string(document),
+	})
+	if _, err := pipeline.Exec(ctx); err != nil {
+		t.Fatalf("publish test projection: %v", err)
 	}
 }
 

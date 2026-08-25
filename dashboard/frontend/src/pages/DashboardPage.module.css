@@ -271,6 +271,33 @@
   gap: 6px;
 }
 
+.modelList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  padding: 0.35rem var(--spacing-lg) 0.5rem;
+}
+
+.modelRow {
+  min-width: 0;
+  min-height: 38px;
+  padding: 0.45rem 0.6rem;
+}
+
+.modelRow:nth-child(n + 3) {
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.modelRow:nth-child(odd) {
+  border-right: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.modelList .moreServices {
+  grid-column: 1 / -1;
+  padding: 0.45rem 0 0.1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+}
+
 .serviceRow {
   display: flex;
   align-items: center;
@@ -527,7 +554,51 @@
 
 @media (max-width: 640px) {
   .page {
-    padding: var(--spacing-md);
+    gap: 1rem;
+    padding: 0.75rem;
+  }
+
+  .errorBanner {
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .cardHeader {
+    gap: 0.75rem;
+    padding: 0.8rem 0.9rem;
+  }
+
+  .cardHeader > div {
+    min-width: 0;
+  }
+
+  .cardSubtitle {
+    display: block;
+    margin-top: 0.15rem;
+  }
+
+  .modelList {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.3rem 0.45rem 0.45rem;
+  }
+
+  .modelRow,
+  .modelRow:nth-child(odd) {
+    min-height: 40px;
+    border-right: 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.055);
+  }
+
+  .modelRow:first-child {
+    border-top: 0;
+  }
+
+  .accessSnapshot {
+    gap: 0.5rem;
+  }
+
+  .accessSnapshot > div {
+    padding: 0.75rem;
   }
 
   .decisionTableHead,

@@ -33,7 +33,7 @@ def _split_runtime_topology(monkeypatch):
 
 _LISTENERS = [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}]
 _CONFIG_BODY = (
-    "version: v0.4\n"
+    "version: v0.3\n"
     "listeners:\n"
     "  - name: http-8899\n"
     "    address: 0.0.0.0\n"

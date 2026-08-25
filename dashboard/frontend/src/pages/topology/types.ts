@@ -405,7 +405,7 @@ export interface FilterState {
   searchQuery: string
 }
 
-// ============== Native v0.4 Topology Projection ==============
+// ============== Native v0.3 Topology Projection ==============
 interface NamedRecipeSignal {
   name: string
   description?: string

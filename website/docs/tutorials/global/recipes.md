@@ -24,19 +24,22 @@ Add recipes when consumers need different latency, quality, cost, privacy, or
 safety policies. They are also useful for staging a new policy beside the
 current one before moving clients to its entrypoint.
 
-Even a deployment with one policy represents it as an explicit Recipe and
-publishes it through an Entrypoint. There is no top-level default routing
-profile.
+Even a deployment with one policy publishes it through an explicit Entrypoint.
+A compact file may place that policy in the top-level `routing` profile and
+reference the generated `default` Recipe name; named Recipes are clearer when
+several policies coexist.
 
 ## Configuration
 
-Models stay at the top level. A Recipe is deliberately model-free; the
+Provider Models and routing Model cards stay outside Recipes. A Recipe is
+deliberately model-free; the
 Entrypoint supplies all decision assignments. The example assumes
-`local/private` and `hosted/general` are declared in top-level `models`:
+`local/private` and `hosted/general` are declared in `providers.models` and
+`routing.modelCards`:
 
 ```yaml
 entrypoints:
-  - name: vllm-sr/privacy-v1
+  - model_names: [vllm-sr/privacy-v1]
     recipe: privacy
     assignments:
       local-sensitive-route: {models: [{model: local/private}]}
@@ -45,7 +48,7 @@ entrypoints:
 recipes:
   - name: privacy
     description: Keep prompts containing sensitive identifiers on the local model.
-    document:
+    routing:
       strategy: priority
       signals:
         pii:
@@ -76,7 +79,7 @@ definition.
 
 | Recipe-local | Shared by the deployment |
 | --- | --- |
-| Signals and their thresholds | Top-level Models and provider connections |
+| Signals and their thresholds | Provider Models and backend references |
 | Projections and dependency graph | Model semantic metadata and capabilities |
 | Decisions, priorities, and routing strategy | Shared classifier and embedding assets |
 | Selection and looper policy | API, identity, observability, and transport settings |

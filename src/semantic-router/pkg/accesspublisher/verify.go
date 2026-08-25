@@ -55,7 +55,8 @@ func verifyRoutingDocument(document RoutingDocument) error {
 		return fmt.Errorf("%w: routing document digest verification failed", ErrStagedCorrupt)
 	}
 	compiled, err := routingsnapshot.Compile(document.Snapshot.Bundle)
-	if err != nil || document.Snapshot.Digest == "" || compiled.Digest != document.Snapshot.Digest {
+	if err != nil || document.Snapshot.Digest == "" || compiled.Digest != document.Snapshot.Digest ||
+		document.Snapshot.SemanticDigest == "" || compiled.SemanticDigest != document.Snapshot.SemanticDigest {
 		return fmt.Errorf("%w: routing snapshot bundle digest verification failed", ErrStagedCorrupt)
 	}
 	return nil

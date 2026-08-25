@@ -33,7 +33,7 @@ Use `reask` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     reasks:
       - name: likely_dissatisfied

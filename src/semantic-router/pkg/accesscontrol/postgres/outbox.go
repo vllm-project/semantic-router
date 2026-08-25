@@ -15,10 +15,12 @@ import (
 type outboxOperation string
 
 const (
-	outboxCreated           outboxOperation = "created"
-	outboxUpdated           outboxOperation = "updated"
-	outboxDeleted           outboxOperation = "deleted"
+	outboxCreated outboxOperation = "created"
+	outboxUpdated outboxOperation = "updated"
+	outboxDeleted outboxOperation = "deleted"
+	// #nosec G101 -- this is an outbox operation identifier, not a credential value.
 	outboxCredentialRotated outboxOperation = "credential_rotated"
+	// #nosec G101 -- this is an outbox operation identifier, not a credential value.
 	outboxCredentialRevoked outboxOperation = "credential_revoked"
 )
 
@@ -80,7 +82,11 @@ func appendMutationRecords(
 	if err := appendAuditEvent(ctx, tx, namespaceID, mutation, meta, desiredRevision); err != nil {
 		return MutationReceipt{}, err
 	}
-	return MutationReceipt{DesiredRevision: accesscontrol.Revision(desiredRevision)}, nil
+	desiredRevisionValue, err := scanRevision(desiredRevision)
+	if err != nil {
+		return MutationReceipt{}, err
+	}
+	return MutationReceipt{DesiredRevision: desiredRevisionValue}, nil
 }
 
 func validateOutboxMutation(

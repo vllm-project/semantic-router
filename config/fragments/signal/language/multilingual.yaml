@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     language:
       - name: zh

@@ -47,27 +47,30 @@ func TestResolveInitialRouterConfigWithEmptyRuntimeRegistryParsesFileBeforeGloba
 func writeRuntimeRegistryFileConfig(t *testing.T, path string) {
 	t.Helper()
 	content := []byte(`
-version: v0.4
+version: v0.3
 listeners:
   - name: http
     address: 0.0.0.0
     port: 8888
-models:
-  - name: file-model
-    card: {}
-    connections:
-      - provider: vllm
-        endpoint: http://127.0.0.1:8000
-        model: file-model
+providers:
+  models:
+    - name: file-model
+      provider_model_id: file-model
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000
+routing:
+  modelCards:
+    - name: file-model
 recipes:
   - name: default
-    document:
+    routing:
       decisions:
         - name: default-route
           priority: 1
           rules: {operator: AND, conditions: []}
 entrypoints:
-  - name: router/file
+  - model_names: [router/file]
     recipe: default
     assignments:
       default-route:

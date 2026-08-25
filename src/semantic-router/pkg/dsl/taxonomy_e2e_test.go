@@ -101,9 +101,9 @@ func TestEmitRoutingYAMLIncludesKnowledgeBaseSignalWithoutCatalog(t *testing.T) 
 		t.Fatalf("Recipe document leaked global KnowledgeBase catalog: %s", yamlBytes)
 	}
 
-	document := mustMap(t, raw["document"], "document")
-	signals := mustMap(t, document["signals"], "document.signals")
-	kbSignals := mustSlice(t, signals["kb"], "document.signals.kb")
+	routing := mustMap(t, raw["routing"], "routing")
+	signals := mustMap(t, routing["signals"], "routing.signals")
+	kbSignals := mustSlice(t, signals["kb"], "routing.signals.kb")
 	if len(kbSignals) != 1 {
 		t.Fatalf("expected 1 kb signal, got %d", len(kbSignals))
 	}

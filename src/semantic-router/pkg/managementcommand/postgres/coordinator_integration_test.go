@@ -17,7 +17,29 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/securitykeyring"
 )
 
+type coordinatorTestEnvironment struct {
+	ctx           context.Context
+	first, second *sql.DB
+}
+
+type lockOutcome struct {
+	result   managementcommand.StoredResult
+	replayed bool
+	err      error
+}
+
 func TestCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKey(t *testing.T) {
+	environment := newCoordinatorTestEnvironment(t)
+	environment.assertCrossReplicaReplay(t)
+	environment.assertIdempotencyConflict(t)
+	environment.assertRollbackDoesNotConsumeKey(t)
+	codec := environment.assertCrossVersionReplay(t)
+	environment.assertHMACVersionReadiness(t, codec)
+	environment.assertStoredDigestsHideInput(t)
+}
+
+func newCoordinatorTestEnvironment(t *testing.T) coordinatorTestEnvironment {
+	t.Helper()
 	dsn := os.Getenv("VLLM_SR_CONTROL_PLANE_TEST_DATABASE_URL")
 	if dsn == "" {
 		dsn = os.Getenv("VLLM_SR_ACCESS_CONTROL_TEST_DATABASE_URL")
@@ -26,7 +48,7 @@ func TestCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKey(t *testing.T)
 		t.Skip("PostgreSQL Management command test database is not configured")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	first, second := isolatedCommandDatabases(t, ctx, dsn)
 	if _, err := first.ExecContext(ctx, `CREATE TABLE management_idempotency (
   scope_kind TEXT NOT NULL CHECK (scope_kind IN ('cluster','namespace')),
@@ -42,10 +64,10 @@ func TestCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKey(t *testing.T)
   resource_revision BIGINT,
   desired_revision BIGINT,
   response_status INTEGER NOT NULL,
-	secret_response_ciphertext BYTEA,
-	secret_response_nonce BYTEA,
-	response_kek_version TEXT,
-	secret_response_expires_at TIMESTAMPTZ,
+  secret_response_ciphertext BYTEA,
+  secret_response_nonce BYTEA,
+  response_kek_version TEXT,
+  secret_response_expires_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
   CHECK ((scope_kind = 'cluster' AND namespace_id IS NULL) OR
@@ -61,191 +83,214 @@ CREATE UNIQUE INDEX management_idempotency_namespace_identity_uq
   WHERE scope_kind = 'namespace'`); err != nil {
 		t.Fatal(err)
 	}
+	return coordinatorTestEnvironment{ctx: ctx, first: first, second: second}
+}
 
+func (environment coordinatorTestEnvironment) assertCrossReplicaReplay(t *testing.T) {
+	t.Helper()
 	command, _ := testCommand(t, []byte(`{"secret":"never-persist"}`), "cross-replica-0123456789")
-	firstTx, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := first.BeginTx(ctx, nil)
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
+	firstTx, err := environment.first.BeginTx(environment.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, replayed, err := Lock(ctx, firstTx, command); err != nil || replayed {
-		t.Fatalf("first replica Lock() replayed=%t err=%v", replayed, err)
-	}
-
-	type outcome struct {
-		result   managementcommand.StoredResult
-		replayed bool
-		err      error
+	if _, replayed, lockErr := Lock(environment.ctx, firstTx, command); lockErr != nil || replayed {
+		t.Fatalf("first replica Lock() replayed=%t err=%v", replayed, lockErr)
 	}
 	started := make(chan struct{})
-	finished := make(chan outcome, 1)
-	go func() {
-		tx, beginErr := second.BeginTx(ctx, nil)
-		if beginErr != nil {
-			finished <- outcome{err: beginErr}
-			return
-		}
-		close(started)
-		result, replayed, lockErr := Lock(ctx, tx, command)
-		if lockErr == nil {
-			lockErr = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-		finished <- outcome{result: result, replayed: replayed, err: lockErr}
-	}()
+	finished := lockAndCommitAsync(environment.ctx, environment.second, command, started)
 	<-started
-	if err := CompleteResource(ctx, firstTx, command, managementcommand.ResourceResult{
+	if completeErr := CompleteResource(environment.ctx, firstTx, command, managementcommand.ResourceResult{
 		ResourceType: "provider_credential", ResourceID: testResourceID,
 		ResourceRevision: 1, ResponseStatus: 201,
-	}); err != nil {
+	}); completeErr != nil {
 		_ = firstTx.Rollback()
-		t.Fatal(err)
+		t.Fatal(completeErr)
 	}
-	if err := firstTx.Commit(); err != nil {
-		t.Fatal(err)
+	if commitErr := firstTx.Commit(); commitErr != nil {
+		t.Fatal(commitErr)
 	}
-	secondOutcome := <-finished
-	if secondOutcome.err != nil || !secondOutcome.replayed || secondOutcome.result.Resource == nil ||
-		secondOutcome.result.Resource.ResourceRevision != 1 {
-		t.Fatalf("second replica outcome = %#v", secondOutcome)
+	outcome := <-finished
+	if outcome.err != nil || !outcome.replayed || outcome.result.Resource == nil ||
+		outcome.result.Resource.ResourceRevision != 1 {
+		t.Fatalf("second replica outcome = %#v", outcome)
 	}
+}
 
-	codec, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := managementcommand.NewCodec(securitykeyring.Symmetric{
-		ActiveVersion: "command-v1", Keys: map[string][]byte{"command-v1": []byte(strings.Repeat("k", 32))},
+func lockAndCommitAsync(
+	ctx context.Context,
+	database *sql.DB,
+	command managementcommand.Command,
+	started chan<- struct{},
+) <-chan lockOutcome {
+	finished := make(chan lockOutcome, 1)
+	go func() {
+		transaction, err := database.BeginTx(ctx, nil)
+		if err != nil {
+			finished <- lockOutcome{err: err}
+			return
+		}
+		if started != nil {
+			close(started)
+		}
+		result, replayed, lockErr := Lock(ctx, transaction, command)
+		if lockErr == nil {
+			lockErr = transaction.Commit()
+		} else {
+			_ = transaction.Rollback()
+		}
+		finished <- lockOutcome{result: result, replayed: replayed, err: lockErr}
+	}()
+	return finished
+}
+
+func (environment coordinatorTestEnvironment) assertIdempotencyConflict(t *testing.T) {
+	t.Helper()
+	codec := newCoordinatorTestCodec(t, "command-v1", map[string][]byte{
+		"command-v1": []byte(strings.Repeat("k", 32)),
 	})
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
-	}
-	conflict, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := codec.Bind(
-		managementcommand.NamespaceCommandScope(testNamespaceID), testPrincipalID, command.Endpoint,
-		"cross-replica-0123456789", []byte(`{"secret":"different"}`),
-		time.Now().UTC(), time.Now().UTC().Add(time.Hour),
+	conflict, err := codec.Bind(
+		managementcommand.NamespaceCommandScope(testNamespaceID), testPrincipalID,
+		"/management/v1/provider-credentials", "cross-replica-0123456789",
+		[]byte(`{"secret":"different"}`), time.Now().UTC(), time.Now().UTC().Add(time.Hour),
 	)
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
-	}
-	conflictTx, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := second.BeginTx(ctx, nil)
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
-	}
-	if _, _, err := Lock(ctx, conflictTx, conflict); !errors.Is(err, managementcommand.ErrConflict) {
-		_ = conflictTx.Rollback()
-		t.Fatalf("conflicting command error = %v", err)
-	}
-	_ = conflictTx.Rollback()
-
-	rollbackCommand, _ := testCommand(t, []byte(`{"name":"rollback"}`), "rollback-key-0123456789")
-	rolledBack, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := first.BeginTx(ctx, nil)
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
-	}
-	if _, replayed, err := Lock(ctx, rolledBack, rollbackCommand); err != nil || replayed {
-		t.Fatalf("rollback winner Lock() replayed=%t err=%v", replayed, err)
-	}
-	if err := rolledBack.Rollback(); err != nil {
+	if err != nil {
 		t.Fatal(err)
 	}
-	retry, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := second.BeginTx(ctx, nil)
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
+	transaction, err := environment.second.BeginTx(environment.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, replayed, err := Lock(ctx, retry, rollbackCommand); err != nil || replayed {
+	if _, _, lockErr := Lock(environment.ctx, transaction, conflict); !errors.Is(lockErr, managementcommand.ErrConflict) {
+		_ = transaction.Rollback()
+		t.Fatalf("conflicting command error = %v", lockErr)
+	}
+	_ = transaction.Rollback()
+}
+
+func (environment coordinatorTestEnvironment) assertRollbackDoesNotConsumeKey(t *testing.T) {
+	t.Helper()
+	command, _ := testCommand(t, []byte(`{"name":"rollback"}`), "rollback-key-0123456789")
+	transaction, err := environment.first.BeginTx(environment.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, replayed, lockErr := Lock(environment.ctx, transaction, command); lockErr != nil || replayed {
+		t.Fatalf("rollback winner Lock() replayed=%t err=%v", replayed, lockErr)
+	}
+	if rollbackErr := transaction.Rollback(); rollbackErr != nil {
+		t.Fatal(rollbackErr)
+	}
+	retry, err := environment.second.BeginTx(environment.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, replayed, lockErr := Lock(environment.ctx, retry, command); lockErr != nil || replayed {
 		_ = retry.Rollback()
-		t.Fatalf("post-rollback Lock() replayed=%t err=%v", replayed, err)
+		t.Fatalf("post-rollback Lock() replayed=%t err=%v", replayed, lockErr)
 	}
 	_ = retry.Rollback()
+}
 
+func (environment coordinatorTestEnvironment) assertCrossVersionReplay(t *testing.T) *managementcommand.Codec {
+	t.Helper()
 	keys := map[string][]byte{
 		"command-v1": []byte(strings.Repeat("o", 32)),
 		"command-v2": []byte(strings.Repeat("n", 32)),
 	}
-	oldCodec, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := managementcommand.NewCodec(securitykeyring.Symmetric{ActiveVersion: "command-v1", Keys: keys})
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
-	}
-	newCodec, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := managementcommand.NewCodec(securitykeyring.Symmetric{ActiveVersion: "command-v2", Keys: keys})
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
-	}
-	rotationNow := time.Now().UTC()
-	bindRotated := func(codec *managementcommand.Codec) managementcommand.Command {
-		command, bindErr := codec.Bind(
-			managementcommand.NamespaceCommandScope(testNamespaceID), testPrincipalID, "/management/v1/provider-credentials",
-			"cross-version-0123456789", []byte(`{"name":"rotated"}`),
-			rotationNow, rotationNow.Add(time.Hour),
-		)
-		if bindErr != nil {
-			t.Fatal(bindErr)
-		}
-		return command
-	}
-	oldCommand, newCommand := bindRotated(oldCodec), bindRotated(newCodec)
+	oldCodec := newCoordinatorTestCodec(t, "command-v1", keys)
+	newCodec := newCoordinatorTestCodec(t, "command-v2", keys)
+	now := time.Now().UTC()
+	oldCommand := bindRotatedCommand(t, oldCodec, now)
+	newCommand := bindRotatedCommand(t, newCodec, now)
 	if oldCommand.AdvisoryLockKey() != newCommand.AdvisoryLockKey() {
 		t.Fatal("cross-version commands did not share a stable advisory identity")
 	}
-	oldTx, testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr := first.BeginTx(ctx, nil)
-	if testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr != nil {
-		t.Fatal(testCoordinatorSerializesReplicasAndRollbackDoesNotConsumeKeyErr)
+	transaction, err := environment.first.BeginTx(environment.ctx, nil)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, replayed, err := Lock(ctx, oldTx, oldCommand); err != nil || replayed {
-		t.Fatalf("old-version winner Lock() replayed=%t err=%v", replayed, err)
+	if _, replayed, lockErr := Lock(environment.ctx, transaction, oldCommand); lockErr != nil || replayed {
+		t.Fatalf("old-version winner Lock() replayed=%t err=%v", replayed, lockErr)
 	}
-	rotatedFinished := make(chan outcome, 1)
-	go func() {
-		tx, beginErr := second.BeginTx(ctx, nil)
-		if beginErr != nil {
-			rotatedFinished <- outcome{err: beginErr}
-			return
-		}
-		result, replayed, lockErr := Lock(ctx, tx, newCommand)
-		if lockErr == nil {
-			lockErr = tx.Commit()
-		} else {
-			_ = tx.Rollback()
-		}
-		rotatedFinished <- outcome{result: result, replayed: replayed, err: lockErr}
-	}()
-	if err := CompleteResource(ctx, oldTx, oldCommand, managementcommand.ResourceResult{
+	finished := lockAndCommitAsync(environment.ctx, environment.second, newCommand, nil)
+	if completeErr := CompleteResource(environment.ctx, transaction, oldCommand, managementcommand.ResourceResult{
 		ResourceType: "provider_credential", ResourceID: testResourceID,
 		ResourceRevision: 2, ResponseStatus: 201,
-	}); err != nil {
-		_ = oldTx.Rollback()
-		t.Fatal(err)
+	}); completeErr != nil {
+		_ = transaction.Rollback()
+		t.Fatal(completeErr)
 	}
-	if err := oldTx.Commit(); err != nil {
-		t.Fatal(err)
+	if commitErr := transaction.Commit(); commitErr != nil {
+		t.Fatal(commitErr)
 	}
-	rotatedOutcome := <-rotatedFinished
-	if rotatedOutcome.err != nil || !rotatedOutcome.replayed || rotatedOutcome.result.Resource == nil ||
-		rotatedOutcome.result.Resource.ResourceRevision != 2 {
-		t.Fatalf("cross-version outcome = %#v", rotatedOutcome)
+	outcome := <-finished
+	if outcome.err != nil || !outcome.replayed || outcome.result.Resource == nil ||
+		outcome.result.Resource.ResourceRevision != 2 {
+		t.Fatalf("cross-version outcome = %#v", outcome)
 	}
+	return newCodec
+}
 
-	if err := ValidateReferencedHMACVersions(ctx, first, newCodec); err != nil {
+func bindRotatedCommand(
+	t *testing.T,
+	codec *managementcommand.Codec,
+	now time.Time,
+) managementcommand.Command {
+	t.Helper()
+	command, err := codec.Bind(
+		managementcommand.NamespaceCommandScope(testNamespaceID), testPrincipalID,
+		"/management/v1/provider-credentials", "cross-version-0123456789",
+		[]byte(`{"name":"rotated"}`), now, now.Add(time.Hour),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return command
+}
+
+func newCoordinatorTestCodec(t *testing.T, activeVersion string, keys map[string][]byte) *managementcommand.Codec {
+	t.Helper()
+	codec, err := managementcommand.NewCodec(securitykeyring.Symmetric{
+		ActiveVersion: activeVersion,
+		Keys:          keys,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return codec
+}
+
+func (environment coordinatorTestEnvironment) assertHMACVersionReadiness(t *testing.T, codec *managementcommand.Codec) {
+	t.Helper()
+	if err := ValidateReferencedHMACVersions(environment.ctx, environment.first, codec); err != nil {
 		t.Fatalf("retained-version readiness = %v", err)
 	}
-	if _, err := first.ExecContext(ctx, `INSERT INTO management_idempotency
+	if _, err := environment.first.ExecContext(environment.ctx, `INSERT INTO management_idempotency
   (scope_kind, namespace_id, principal_id, endpoint, hmac_version, idempotency_key_digest,
    request_digest, resource_type, resource_id, resource_revision, response_status, expires_at)
 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-		string(managementcommand.ScopeNamespace), testNamespaceID, testPrincipalID, "/management/v1/missing-version", "retired-v0",
-		[]byte(strings.Repeat("d", 32)), []byte(strings.Repeat("r", 32)), "provider_credential",
-		testResourceID, 3, 201, time.Now().UTC().Add(time.Hour)); err != nil {
+		string(managementcommand.ScopeNamespace), testNamespaceID, testPrincipalID,
+		"/management/v1/missing-version", "retired-v0", []byte(strings.Repeat("d", 32)),
+		[]byte(strings.Repeat("r", 32)), "provider_credential", testResourceID, 3, 201,
+		time.Now().UTC().Add(time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateReferencedHMACVersions(ctx, first, newCodec); !errors.Is(err, managementcommand.ErrHMACVersionUnavailable) {
+	if err := ValidateReferencedHMACVersions(environment.ctx, environment.first, codec); !errors.Is(err, managementcommand.ErrHMACVersionUnavailable) {
 		t.Fatalf("missing-version readiness = %v", err)
 	}
-	if _, err := first.ExecContext(ctx, `UPDATE management_idempotency
+	if _, err := environment.first.ExecContext(environment.ctx, `UPDATE management_idempotency
 SET expires_at = clock_timestamp() - interval '1 second' WHERE hmac_version = 'retired-v0'`); err != nil {
 		t.Fatal(err)
 	}
-	if err := ValidateReferencedHMACVersions(ctx, first, newCodec); err != nil {
+	if err := ValidateReferencedHMACVersions(environment.ctx, environment.first, codec); err != nil {
 		t.Fatalf("post-retention readiness = %v", err)
 	}
+}
 
+func (environment coordinatorTestEnvironment) assertStoredDigestsHideInput(t *testing.T) {
+	t.Helper()
 	var keyDigest, requestDigest string
-	if err := first.QueryRowContext(ctx, `SELECT encode(idempotency_key_digest, 'hex'), encode(request_digest, 'hex')
+	if err := environment.first.QueryRowContext(environment.ctx, `SELECT encode(idempotency_key_digest, 'hex'), encode(request_digest, 'hex')
 FROM management_idempotency LIMIT 1`).Scan(&keyDigest, &requestDigest); err != nil {
 		t.Fatal(err)
 	}

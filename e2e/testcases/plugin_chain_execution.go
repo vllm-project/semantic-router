@@ -163,7 +163,7 @@ func testSinglePluginChain(ctx context.Context, testCase PluginChainCase, localP
 		return result
 	}
 	req.Header.Set("Content-Type", "application/json")
-	// v0.4 demotes the intermediate decision/signal headers behind x-vsr-debug
+	// The public contract keeps decision/signal headers behind x-vsr-debug
 	// (#2205); opt in so the routing assertions below can read them.
 	req.Header.Set("x-vsr-debug", "true")
 

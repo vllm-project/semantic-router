@@ -1,29 +1,34 @@
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: llama3-8b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
-      model: llama3-8b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
-  - name: phi4-mini
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://phi4-mini.default.svc.cluster.local:8000/v1
-      model: phi4-mini
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+  providers:
+    models:
+    - name: llama3-8b
+      provider_model_id: llama3-8b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://vllm-llama3-8b-instruct.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+    - name: phi4-mini
+      provider_model_id: phi4-mini
+      backend_refs:
+      - provider: vllm
+        endpoint: http://phi4-mini.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+  routing:
+    modelCards:
+    - name: llama3-8b
+    - name: phi4-mini
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals:
         domains:
         - name: business
@@ -154,8 +159,8 @@ config:
           - type: domain
             name: other
   entrypoints:
-  - name: vllm-sr/auto
-    aliases:
+  - model_names:
+    - vllm-sr/auto
     - auto
     recipe: default
     assignments:

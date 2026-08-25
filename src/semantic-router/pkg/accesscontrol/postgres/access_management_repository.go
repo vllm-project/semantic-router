@@ -497,12 +497,20 @@ func (s *Store) ResourceExists(
 	if validateUUID("namespace id", namespaceID) != nil || resource.Validate() != nil {
 		return false, accessmanagement.ErrInvalidRequest
 	}
-	table := "routing_models"
-	if resource.Type == accesscontrol.GrantResourceEntrypoint {
-		table = "routing_entrypoints"
+	const modelExistsQuery = `SELECT EXISTS(SELECT 1 FROM routing_models
+	WHERE namespace_id=$1 AND id=$2 AND status='active' AND deleted_at IS NULL)`
+	const entrypointExistsQuery = `SELECT EXISTS(SELECT 1 FROM routing_entrypoints
+	WHERE namespace_id=$1 AND id=$2 AND status='active' AND deleted_at IS NULL)`
+	var query string
+	switch resource.Type {
+	case accesscontrol.GrantResourceModel:
+		query = modelExistsQuery
+	case accesscontrol.GrantResourceEntrypoint:
+		query = entrypointExistsQuery
+	default:
+		return false, accessmanagement.ErrInvalidRequest
 	}
 	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ` + table + ` WHERE namespace_id=$1 AND id=$2 AND status='active' AND deleted_at IS NULL)`
 	if err := s.db.QueryRowContext(ctx, query, namespaceID, resource.ID).Scan(&exists); err != nil {
 		return false, fmt.Errorf("load access-check resource: %w", err)
 	}
@@ -575,15 +583,23 @@ func advanceRoutingContextSubject(
 	tx *sql.Tx,
 	request accessmanagement.UpdateRoutingContextRequest,
 ) (uint64, error) {
-	table := map[accesscontrol.SubjectKind]string{
-		accesscontrol.SubjectKindUser: "access_users", accesscontrol.SubjectKindTeam: "access_teams",
-		accesscontrol.SubjectKindAPIKey: "access_api_keys",
-	}[request.Subject.Kind]
-	if table == "" {
+	const advanceUserRevisionQuery = `UPDATE access_users SET revision=revision+1,updated_at=clock_timestamp()
+	WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL RETURNING revision`
+	const advanceTeamRevisionQuery = `UPDATE access_teams SET revision=revision+1,updated_at=clock_timestamp()
+	WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL RETURNING revision`
+	const advanceRoutingContextAPIKeyRevisionQuery = `UPDATE access_api_keys SET revision=revision+1,updated_at=clock_timestamp()
+	WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL RETURNING revision`
+	var query string
+	switch request.Subject.Kind {
+	case accesscontrol.SubjectKindUser:
+		query = advanceUserRevisionQuery
+	case accesscontrol.SubjectKindTeam:
+		query = advanceTeamRevisionQuery
+	case accesscontrol.SubjectKindAPIKey:
+		query = advanceRoutingContextAPIKeyRevisionQuery
+	default:
 		return 0, accessmanagement.ErrInvalidRequest
 	}
-	query := `UPDATE ` + table + ` SET revision=revision+1,updated_at=clock_timestamp()
-WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL RETURNING revision`
 	var revision int64
 	if err := tx.QueryRowContext(ctx, query, request.NamespaceID, request.Subject.ID, request.ExpectedRevision).Scan(&revision); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -594,7 +610,11 @@ WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND deleted_at IS NULL RETURNING
 	if revision <= 0 {
 		return 0, accessmanagement.ErrUnavailable
 	}
-	return uint64(revision), nil
+	revisionValue, err := positiveUint64(revision, "routing-context subject revision")
+	if err != nil {
+		return 0, accessmanagement.ErrUnavailable
+	}
+	return revisionValue, nil
 }
 
 func routingContextMutationMeta(

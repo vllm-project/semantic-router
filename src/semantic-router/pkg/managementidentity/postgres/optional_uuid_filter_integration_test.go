@@ -14,37 +14,37 @@ func TestOptionalUUIDFiltersSupportFirstPageAndKeysetPagination(t *testing.T) {
 	store := newPrincipalDirectoryStore(t, database)
 	ctx := context.Background()
 
-	principals, err := store.ListPrincipals(ctx, managementidentity.ListRequest{Limit: 1})
-	if err != nil || len(principals.Items) != 1 || principals.NextCursor == "" {
-		t.Fatalf("first principal page = %#v, %v", principals, err)
+	principals, principalsErr := store.ListPrincipals(ctx, managementidentity.ListRequest{Limit: 1})
+	if principalsErr != nil || len(principals.Items) != 1 || principals.NextCursor == "" {
+		t.Fatalf("first principal page = %#v, %v", principals, principalsErr)
 	}
-	nextPrincipals, err := store.ListPrincipals(ctx, managementidentity.ListRequest{
+	nextPrincipals, nextPrincipalsErr := store.ListPrincipals(ctx, managementidentity.ListRequest{
 		AfterID: principals.NextCursor,
 		Limit:   2,
 	})
-	if err != nil || len(nextPrincipals.Items) != 2 || nextPrincipals.NextCursor != "" {
-		t.Fatalf("next principal page = %#v, %v", nextPrincipals, err)
+	if nextPrincipalsErr != nil || len(nextPrincipals.Items) != 2 || nextPrincipals.NextCursor != "" {
+		t.Fatalf("next principal page = %#v, %v", nextPrincipals, nextPrincipalsErr)
 	}
 
-	roles, err := store.ListRoles(ctx, "", managementidentity.ListRequest{Limit: 1})
-	if err != nil || len(roles.Items) != 1 || roles.NextCursor == "" {
-		t.Fatalf("cluster role first page = %#v, %v", roles, err)
+	roles, rolesErr := store.ListRoles(ctx, "", managementidentity.ListRequest{Limit: 1})
+	if rolesErr != nil || len(roles.Items) != 1 || roles.NextCursor == "" {
+		t.Fatalf("cluster role first page = %#v, %v", roles, rolesErr)
 	}
-	nextRoles, err := store.ListRoles(ctx, "", managementidentity.ListRequest{
+	nextRoles, nextRolesErr := store.ListRoles(ctx, "", managementidentity.ListRequest{
 		AfterID: roles.NextCursor,
 		Limit:   200,
 	})
-	if err != nil || len(nextRoles.Items) == 0 {
-		t.Fatalf("cluster role next page = %#v, %v", nextRoles, err)
+	if nextRolesErr != nil || len(nextRoles.Items) == 0 {
+		t.Fatalf("cluster role next page = %#v, %v", nextRoles, nextRolesErr)
 	}
 
-	bindings, err := store.ListRoleBindings(ctx, "", managementidentity.ListRequest{Limit: 10})
-	if err != nil || len(bindings.Items) != 0 {
-		t.Fatalf("unfiltered role bindings = %#v, %v", bindings, err)
+	bindings, bindingsErr := store.ListRoleBindings(ctx, "", managementidentity.ListRequest{Limit: 10})
+	if bindingsErr != nil || len(bindings.Items) != 0 {
+		t.Fatalf("unfiltered role bindings = %#v, %v", bindings, bindingsErr)
 	}
-	issuers, err := store.ListTrustedIdentityIssuers(ctx, managementidentity.ListRequest{Limit: 10})
-	if err != nil || len(issuers.Items) != 0 {
-		t.Fatalf("trusted issuer first page = %#v, %v", issuers, err)
+	issuers, issuersErr := store.ListTrustedIdentityIssuers(ctx, managementidentity.ListRequest{Limit: 10})
+	if issuersErr != nil || len(issuers.Items) != 0 {
+		t.Fatalf("trusted issuer first page = %#v, %v", issuers, issuersErr)
 	}
 
 	if _, err := database.ExecContext(ctx, `INSERT INTO management_sessions

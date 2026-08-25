@@ -37,7 +37,7 @@ func routingModelInput(input managementapi.RoutingModelWrite) (routingmanagement
 		ParamSize: input.ParamSize, ContextWindowSize: input.ContextWindowSize, Description: input.Description,
 		Reasoning: routingReasoning(input.Reasoning), LoRAs: input.LoRAs,
 		QualityScore: input.QualityScore, Modality: input.Modality, Tags: input.Tags,
-		Execution: routingsnapshot.ModelExecution(input.Execution),
+		Execution: routingModelExecution(input.Control),
 		Pricing:   routingsnapshot.ModelPricing(input.Pricing), Backends: backends,
 	}, nil
 }
@@ -52,8 +52,8 @@ func routingModelPatch(input managementapi.RoutingModelPatch) (routingmanagement
 		value := routingReasoning(*input.Reasoning)
 		patch.Reasoning = &value
 	}
-	if input.Execution != nil {
-		value := routingsnapshot.ModelExecution(*input.Execution)
+	if input.Control != nil {
+		value := routingModelExecution(*input.Control)
 		patch.Execution = &value
 	}
 	if input.Pricing != nil {
@@ -91,7 +91,7 @@ func routingBulkImportInput(input managementapi.RoutingBulkImportRequest, namesp
 			ParamSize: selection.ParamSize, ContextWindowSize: selection.ContextWindowSize, Description: selection.Description,
 			Reasoning: routingReasoning(selection.Reasoning), LoRAs: selection.LoRAs,
 			QualityScore: selection.QualityScore, Modality: selection.Modality, Tags: selection.Tags,
-			Execution: routingsnapshot.ModelExecution(selection.Execution),
+			Execution: routingModelExecution(selection.Control),
 			Pricing:   routingsnapshot.ModelPricing(selection.Pricing),
 		}
 	}
@@ -193,8 +193,8 @@ func routingModelViewDTO(model routingmanagement.Model) managementapi.RoutingMod
 		Description: model.Current.Description,
 		Reasoning:   routingReasoningDTO(model.Current.Reasoning), LoRAs: append([]string(nil), model.Current.LoRAs...),
 		QualityScore: model.Current.QualityScore, Modality: model.Current.Modality,
-		Tags:      append([]string(nil), model.Current.Tags...),
-		Execution: managementapi.RoutingExecution(model.Current.Execution), Pricing: managementapi.RoutingPricing(model.Current.Pricing),
+		Tags:    append([]string(nil), model.Current.Tags...),
+		Control: routingModelControlDTO(model.Current.Execution), Pricing: managementapi.RoutingPricing(model.Current.Pricing),
 		Backends: backends, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt,
 	}
 }
@@ -291,41 +291,6 @@ func routingEntrypointPageDTO(page routingmanagement.Page[routingmanagement.Entr
 	}}
 }
 
-func routingSnapshotMetadataDTO(snapshot routingmanagement.SnapshotMetadata) managementapi.RoutingSnapshotMetadata {
-	return managementapi.RoutingSnapshotMetadata{
-		NamespaceID: snapshot.NamespaceID, RoutingRevision: snapshot.RoutingRevision,
-		ContentDigest: snapshot.ContentDigest, Status: string(snapshot.Status),
-		FailureReason: snapshot.FailureReason, MemberCount: snapshot.MemberCount,
-		CreatedAt: snapshot.CreatedAt, ActivatedAt: snapshot.ActivatedAt,
-	}
-}
-
-func routingSnapshotPageDTO(
-	page routingmanagement.Page[routingmanagement.SnapshotMetadata],
-	pageSize int,
-) managementapi.RoutingSnapshotPage {
-	items := make([]managementapi.RoutingSnapshotMetadata, len(page.Items))
-	for index := range page.Items {
-		items[index] = routingSnapshotMetadataDTO(page.Items[index])
-	}
-	return managementapi.RoutingSnapshotPage{Data: items, Page: managementapi.PageInfo{
-		NextCursor: page.NextCursor, HasMore: page.HasMore, PageSize: pageSize,
-	}}
-}
-
-func routingSnapshotRecordDTO(detail routingmanagement.SnapshotDetail) managementapi.RoutingSnapshotRecord {
-	members := make([]managementapi.RoutingSnapshotMember, len(detail.Members))
-	for index, member := range detail.Members {
-		members[index] = managementapi.RoutingSnapshotMember{
-			ResourceType: member.ResourceType, ResourceID: member.ResourceID,
-			ResourceRevision: member.ResourceRevision,
-		}
-	}
-	return managementapi.RoutingSnapshotRecord{
-		Metadata: routingSnapshotMetadataDTO(detail.Metadata), Members: members, Export: detail.Export,
-	}
-}
-
 func routingResolveResponseDTO(resolution routingsnapshot.Resolution) managementapi.RoutingResolveResponse {
 	response := managementapi.RoutingResolveResponse{Outcome: string(resolution.Outcome)}
 	if resolution.Entrypoint != nil {
@@ -357,6 +322,28 @@ func routingProbeResponseDTO(result routingmanagement.ProbeResult) managementapi
 
 func routingReasoningDTO(value routingsnapshot.ReasoningFamily) managementapi.RoutingReasoningFamily {
 	return managementapi.RoutingReasoningFamily{Type: value.Type, Efforts: append([]string(nil), value.Efforts...)}
+}
+
+func routingModelExecution(value managementapi.RoutingModelControl) routingsnapshot.ModelExecution {
+	return routingsnapshot.ModelExecution{
+		MaxRetries:     value.Retry.Count,
+		RetryOn:        append([]string(nil), value.Retry.On...),
+		RequestTimeout: value.Timeout.Request,
+		StreamTimeout:  value.Timeout.Stream,
+	}
+}
+
+func routingModelControlDTO(value routingsnapshot.ModelExecution) managementapi.RoutingModelControl {
+	return managementapi.RoutingModelControl{
+		Retry: managementapi.RoutingModelRetryControl{
+			Count: value.MaxRetries,
+			On:    append([]string(nil), value.RetryOn...),
+		},
+		Timeout: managementapi.RoutingModelTimeoutControl{
+			Request: value.RequestTimeout,
+			Stream:  value.StreamTimeout,
+		},
+	}
 }
 
 func routingDecisionsDTO(values []routingsnapshot.Decision) []managementapi.RoutingDecision {

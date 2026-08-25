@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"math"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentmanagement"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
@@ -12,8 +11,9 @@ import (
 )
 
 const (
-	agentProfileResourceType        = "agent_profile"
-	agentSkillResourceType          = "agent_skill"
+	agentProfileResourceType = "agent_profile"
+	agentSkillResourceType   = "agent_skill"
+	// #nosec G101 -- this is a resource-type identifier, not a credential value.
 	agentToolCredentialResourceType = "agent_tool_credential"
 	agentToolSourceResourceType     = "agent_tool_source"
 )
@@ -60,9 +60,13 @@ func completeResourceCommand(
 	if revision < 1 {
 		return agentmanagement.ResourceMutationResult{}, agentmanagement.ErrInvalid
 	}
+	revisionValue, err := resourceRevisionUint64(revision)
+	if err != nil {
+		return agentmanagement.ResourceMutationResult{}, err
+	}
 	if err := commandpostgres.CompleteResource(ctx, tx, mutation.Command, managementcommand.ResourceResult{
 		ResourceType: resourceType, ResourceID: resourceID,
-		ResourceRevision: uint64(revision), ResponseStatus: status,
+		ResourceRevision: revisionValue, ResponseStatus: status,
 	}); err != nil {
 		return agentmanagement.ResourceMutationResult{}, mapAgentCommandError(err)
 	}
@@ -75,13 +79,16 @@ func resourceCommandResult(
 	stored managementcommand.StoredResult, resourceType string, replayed bool,
 ) (agentmanagement.ResourceMutationResult, error) {
 	if stored.Resource == nil || stored.Operation != nil ||
-		stored.Resource.ResourceType != resourceType ||
-		stored.Resource.ResourceRevision == 0 || stored.Resource.ResourceRevision > math.MaxInt64 {
+		stored.Resource.ResourceType != resourceType {
 		return agentmanagement.ResourceMutationResult{}, agentmanagement.ErrConflict
+	}
+	revision, err := resourceRevisionInt64(stored.Resource.ResourceRevision)
+	if err != nil {
+		return agentmanagement.ResourceMutationResult{}, err
 	}
 	return agentmanagement.ResourceMutationResult{
 		ResourceID:       stored.Resource.ResourceID,
-		ResourceRevision: int64(stored.Resource.ResourceRevision), Replayed: replayed,
+		ResourceRevision: revision, Replayed: replayed,
 	}, nil
 }
 

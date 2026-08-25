@@ -19,7 +19,7 @@ def test_check_router_status_uses_compiled_management_tls_contract(monkeypatch):
     stack_layout = runtime_stack.resolve_runtime_stack()
     captured = []
     config = """
-version: v0.4
+version: v0.3
 global:
   services:
     management_api:

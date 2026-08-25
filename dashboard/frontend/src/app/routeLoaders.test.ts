@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  loadAccessControlPage,
   loadDashboardPage,
   loadOpenClawPage,
   preloadDashboardRoute,
@@ -25,6 +26,16 @@ describe('route preloading', () => {
     resetDashboardRouteLoader(loadOpenClawPage)
 
     expect(preloadDashboardRoute('/openclaw')).toBeDefined()
+  })
+
+  it('preloads Request Logs through the Access surface', () => {
+    resetDashboardRouteLoader(loadAccessControlPage)
+
+    const logs = preloadDashboardRoute('/logs')
+    const access = preloadDashboardRoute('/access/usage')
+
+    expect(logs).toBeDefined()
+    expect(logs).toBe(access)
   })
 
   it('allows a failed route boundary to retry through a fresh preload entry', () => {

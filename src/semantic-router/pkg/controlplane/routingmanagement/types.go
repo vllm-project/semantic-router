@@ -1,4 +1,4 @@
-// Package routingmanagement owns managed Model, Recipe, and Entrypoint
+// Package routingmanagement owns durable Model, Recipe, and Entrypoint
 // authoring. PostgreSQL is desired-state authority; only published, complete
 // Entrypoint dependency closures are compiled for the Router data plane.
 package routingmanagement
@@ -23,6 +23,7 @@ var (
 	ErrPublication      = errors.New("routing publication failed")
 	ErrClaim            = errors.New("model discovery claim is invalid")
 	ErrProbeUnavailable = errors.New("model probe is unavailable")
+	ErrManifest         = errors.New("routing manifest is invalid")
 )
 
 type Status string
@@ -47,6 +48,31 @@ type RevisionReceipt struct {
 	DesiredRevision  int64
 	OperationID      string
 	Replayed         bool
+}
+
+type ManifestResourceDiff struct {
+	// Values are stable, human-readable resource names. Compiler-owned IDs
+	// remain internal and therefore never vary between equivalent dry runs.
+	Create  []string `json:"create"`
+	Update  []string `json:"update"`
+	Disable []string `json:"disable"`
+}
+
+type ManifestDiff struct {
+	Models      ManifestResourceDiff `json:"models"`
+	Recipes     ManifestResourceDiff `json:"recipes"`
+	Entrypoints ManifestResourceDiff `json:"entrypoints"`
+}
+
+type ManifestImportRequest struct {
+	Document         []byte
+	DryRun           bool
+	ExpectedRevision int64
+}
+
+type ManifestImportResult struct {
+	Diff    ManifestDiff
+	Receipt RevisionReceipt
 }
 
 type PageRequest struct {

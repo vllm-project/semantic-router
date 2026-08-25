@@ -32,13 +32,15 @@ Use these blocks when:
 
 ### Routing configuration
 
-Standalone compiles one read-only manifest before readiness. Validate that file
-offline with `vllm-sr validate`; the standalone listener has no config mutation,
-Recipe authoring, knowledge-base authoring, backup, rollback, or runtime-sync API.
+Without `global.stores.management`, the Router compiles one read-only manifest
+before readiness. Validate that file offline with `vllm-sr validate`; the
+listener has no config mutation, Recipe authoring, knowledge-base authoring,
+backup, rollback, or runtime-sync API.
 
-Managed deployments create Models, Recipes, and Entrypoints through the Router's
-versioned `/management/v1` resources. This keeps PostgreSQL-backed desired state as
-the only mutable routing authority.
+With a Management store, clients create Models, Recipes, and Entrypoints through
+the Router's versioned `/management/v1` resources. The initial file seeds an
+empty store atomically, then PostgreSQL remains the only mutable routing
+authority.
 
 ### Billing currency
 
@@ -48,11 +50,11 @@ global:
     currency: USD
 ```
 
-Standalone manifests require this when any Model defines `models[].pricing`;
-otherwise the block is optional. It is the one ISO-4217 denomination used
-across Model fallback, multi-model execution, usage, and cost quotas. Managed
-deployments omit it because Namespace owns the currency and publishes it with
-every immutable routing snapshot.
+Every manifest requires this when a Provider Model defines
+`providers.models[].pricing`; otherwise the block is optional. It is the one
+ISO-4217 denomination used across Model fallback, multi-model execution, usage,
+and cost quotas. A Management-store bootstrap seeds its Namespace with this
+currency, and every immutable routing publication pins that value.
 
 ### API
 
@@ -82,8 +84,8 @@ The `store_backend` field controls where response and conversation history is pe
 
 | Backend | Durability | Use case |
 |---------|-----------|----------|
-| `memory` | Lost on router restart | Standalone default; no external dependency |
-| `redis` | Survives router restart, shared across replicas | Managed and multi-replica deployments |
+| `memory` | Lost on Router restart | Local, single-process use with no external dependency |
+| `redis` | Survives Router restart, shared across replicas | Durable or multi-replica deployments |
 
 ### Observability
 
@@ -124,10 +126,10 @@ Common Prometheus metric families:
 | Session | `llm_session_model_transitions_total`, `llm_session_turn_prompt_tokens`, `llm_session_turn_completion_tokens`, `llm_session_turn_cost` |
 | Translation and request-parameter policy | `llm_translation_lossy_total`, `sr_request_params_blocked_total`, `sr_request_params_unknown_field_stripped_total` |
 
-### Managed usage and request history
+### Usage and request history
 
-In a managed deployment, Router also exposes durable, tenant-scoped accounting from
-its Management API:
+When the Management, runtime, and access services are configured, Router exposes
+durable, tenant-scoped accounting from its Management API:
 
 ```text
 GET /management/v1/usage

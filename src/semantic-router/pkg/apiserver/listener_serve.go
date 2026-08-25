@@ -12,20 +12,16 @@ import (
 
 const managementShutdownTimeout = 10 * time.Second
 
-// serveManagementListener keeps bind, TLS selection, and shutdown ownership in
-// one narrow boundary. Managed mode always uses the prevalidated TLS context;
-// standalone retains its existing plaintext listener.
+// serveManagementListener keeps bind, transport selection, and shutdown
+// ownership in one narrow boundary. A prevalidated TLS context enables TLS;
+// otherwise the operational or file-authoritative listener stays plaintext.
 func serveManagementListener(
 	ctx context.Context,
 	server *http.Server,
-	managed bool,
 	onListening func(),
 ) error {
 	if server == nil {
 		return errors.New("management HTTP server is required")
-	}
-	if managed && server.TLSConfig == nil {
-		return errors.New("managed Management listener requires TLS")
 	}
 	listener, serveManagementListenerErr := net.Listen("tcp", server.Addr)
 	if serveManagementListenerErr != nil {
@@ -54,7 +50,7 @@ func serveManagementListener(
 		}
 	}()
 
-	if managed {
+	if server.TLSConfig != nil {
 		serveManagementListenerErr = server.ServeTLS(listener, "", "")
 	} else {
 		serveManagementListenerErr = server.Serve(listener)

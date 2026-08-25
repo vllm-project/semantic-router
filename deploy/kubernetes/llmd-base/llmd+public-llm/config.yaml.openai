@@ -1,54 +1,41 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: llama3-8b
-  card:
-    aliases: []
-    param_size: ''
-    context_window_size: 0
-    description: ''
-    capabilities: []
-    reasoning: {}
-    loras: []
-    quality_score: 0
-    modality: ''
-    tags: []
-  connections:
-  - provider: vllm
-    endpoint: http://llama-8b:80/v1
-    model: llama3-8b
-    weight: '1'
-  runtime:
-    max_retries: 0
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing: {}
-- name: gpt-4o-mini
-  card:
-    aliases: []
-    param_size: ''
-    context_window_size: 0
-    description: ''
-    capabilities: []
-    reasoning: {}
-    loras: []
-    quality_score: 0
-    modality: ''
-    tags: []
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.openai.com/v1
-    model: gpt-4o-mini
-    weight: '1'
-  runtime:
-    max_retries: 0
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing: {}
+providers:
+  models:
+  - name: llama3-8b
+    provider_model_id: llama3-8b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://llama-8b:80/v1
+      weight: 1
+    control:
+      retry:
+        count: 0
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing: {}
+  - name: gpt-4o-mini
+    provider_model_id: gpt-4o-mini
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.openai.com/v1
+      weight: 1
+    control:
+      retry:
+        count: 0
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing: {}
+routing:
+  modelCards:
+  - name: llama3-8b
+  - name: gpt-4o-mini
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: business
@@ -325,8 +312,8 @@ recipes:
             the importance of proper engineering practices and standards.
           mode: replace
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

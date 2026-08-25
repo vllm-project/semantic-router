@@ -49,9 +49,10 @@ flowchart LR
   Confirm --> Snapshot["Immutable Router snapshot"]
 ```
 
-The Agent worker is part of the managed Router control plane. Docker does not require
-an extra Agent container. Kubernetes may run workers in the Router Management
-deployment or in a separately scaled deployment using the same binary, queue, lease,
+The Agent worker is part of the Router control plane when Management services
+are enabled. Docker does not require an extra Agent container. Kubernetes may
+run workers in the Router Management deployment or in a separately scaled
+deployment using the same binary, queue, lease,
 and authorization contract. PostgreSQL owns the durable queue, lease, monotonic fence,
 event sequence, checkpoint, and cancellation flag. Valkey may accelerate wakeups,
 cancellation fan-out, and resumable streams, but never becomes a second lease authority.
@@ -63,7 +64,7 @@ token and cost quotas, request logs, actual usage settlement, and Team/User scop
 a direct API request. The Agent cannot invoke a hidden backend or use a Dashboard
 credential as an inference key.
 
-Managed bootstrap names that front door explicitly:
+Agent bootstrap names that front door explicitly:
 
 ```yaml
 global:
@@ -75,7 +76,7 @@ global:
 The value is operator-owned process configuration and must resolve to the ordinary
 public Envoy listener. It is not routing desired state, cannot be supplied by a Tool
 Source or Dashboard request, and is never inferred from a physical backend address.
-Missing or ambiguous endpoints fail managed startup validation.
+Missing or ambiguous endpoints fail Agent startup validation.
 
 ## Resources
 
@@ -154,12 +155,16 @@ transport for namespace-managed sources.
 
 ### Session, Turn, Event, and Artifact
 
-An `AgentSession` binds namespace, actor, effective subject, exact execution target,
-profile revision, mode, and current working Recipe/Entrypoint references. Session
-creation atomically creates its short-lived delegated inference identity from the
-authenticated subject and selected target. A client cannot supply, exchange, or read
-that credential. Closing the session revokes it. The session survives browser,
-Dashboard, and Router replica restarts.
+An `AgentSession` binds namespace, actor, effective subject, one selected eligible
+API key, exact execution target, profile revision, mode, and current working
+Recipe/Entrypoint references. `POST /agent-sessions` requires that key ID; the Router
+rechecks ownership, Team context, target discovery/invocation, and delegation
+authority in the same transaction that creates the short-lived delegated inference
+identity. The key therefore drives catalog visibility, inference authorization,
+quota, usage, and logs for the whole session. Every Session view returns the
+credential-free key ID so a resumed client presents the same effective catalog; it
+never returns the delegated credential. Closing the session revokes that credential.
+The session survives browser, Dashboard, and Router replica restarts.
 
 An `AgentTurn` is one user instruction and has `queued`, `running`, `waiting_approval`,
 `completed`, `failed`, or `cancelled` state. Only one worker lease generation may
@@ -375,7 +380,7 @@ follow. Internal protocol terminology is reserved for advanced details.
 - A tool timeout records a typed result and follows the profile's bounded retry rule;
   write tools are not retried without proven idempotency.
 - Worker loss resumes from the last committed event under a new fence.
-- Valkey notification loss falls back to PostgreSQL polling; managed inference still
+- Valkey notification loss falls back to PostgreSQL polling; delegated inference still
   fails closed when the shared access/quota runtime is unavailable.
 - Publication rollout failure leaves the prior snapshot active and the reviewed plan
   failed; it never reports the candidate as callable.

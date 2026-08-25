@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -29,7 +30,7 @@ func (r *OpenAIRouter) consumeBackendDispatchOutcome(
 	if duplicate {
 		return mutation, fmt.Errorf("dispatch outcome is duplicated")
 	}
-	expected := managedDispatchOutcomeExpected(ctx)
+	expected := dispatchOutcomeExpected(ctx)
 	if !present {
 		if expected {
 			return mutation, fmt.Errorf("dispatch outcome is missing")
@@ -41,7 +42,7 @@ func (r *OpenAIRouter) consumeBackendDispatchOutcome(
 	}
 	generation, ok := routingcontext.GenerationFrom(ctx.TraceContext)
 	if !ok {
-		return mutation, fmt.Errorf("managed routing generation is unavailable")
+		return mutation, fmt.Errorf("durable routing generation is unavailable")
 	}
 	outcome, err := r.DispatchCapabilities.VerifyDispatchOutcome(
 		ctx.TraceContext,
@@ -93,18 +94,18 @@ func takeDispatchOutcomeHeader(headerMap *core.HeaderMap) (string, bool, bool) {
 	return value, true, false
 }
 
-func managedDispatchOutcomeExpected(ctx *RequestContext) bool {
-	if ctx == nil || ctx.ManagedDispatch == nil {
+func dispatchOutcomeExpected(ctx *RequestContext) bool {
+	if ctx == nil || ctx.DispatchState == nil {
 		return false
 	}
-	ctx.ManagedDispatch.mu.Lock()
-	defer ctx.ManagedDispatch.mu.Unlock()
-	return ctx.ManagedDispatch.capabilityIssued && !ctx.ManagedDispatch.outcomeConsumed
+	ctx.DispatchState.mu.Lock()
+	defer ctx.DispatchState.mu.Unlock()
+	return ctx.DispatchState.capabilityIssued && !ctx.DispatchState.outcomeConsumed
 }
 
 func applyDispatchOutcome(ctx *RequestContext, outcome backendinvoker.DispatchOutcome) error {
-	if ctx == nil || ctx.ManagedDispatch == nil {
-		return fmt.Errorf("managed dispatch state is unavailable")
+	if ctx == nil || ctx.DispatchState == nil {
+		return fmt.Errorf("request dispatch state is unavailable")
 	}
 	var admissionID, admissionDigest string
 	if ctx.InferenceAccess != nil {
@@ -119,7 +120,7 @@ func applyDispatchOutcome(ctx *RequestContext, outcome backendinvoker.DispatchOu
 			return fmt.Errorf("dispatch outcome admission mismatch")
 		}
 	}
-	state := ctx.ManagedDispatch
+	state := ctx.DispatchState
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if !state.capabilityIssued || state.outcomeConsumed || state.requestDigest == "" ||
@@ -133,6 +134,24 @@ func applyDispatchOutcome(ctx *RequestContext, outcome backendinvoker.DispatchOu
 		state.outcomeConsumed = true
 		return nil
 	}
+	if err := validateDispatchOutcomeCandidates(state, outcome); err != nil {
+		return err
+	}
+	if err := applyDispatchOutcomeAttempts(state, outcome); err != nil {
+		return err
+	}
+	state.selectedDispatchID = outcome.SelectedDispatchID
+	state.outcomeConsumed = true
+	if outcome.SelectedDispatchID != "" {
+		selected := state.dispatches[len(outcome.Attempted)-1]
+		ctx.VSRSelectedModel = selected.model
+	}
+	return nil
+}
+
+func validateDispatchOutcomeCandidates(
+	state *requestDispatchState, outcome backendinvoker.DispatchOutcome,
+) error {
 	if state.primaryCandidateCount > len(state.dispatches) ||
 		len(outcome.Attempted) > state.primaryCandidateCount {
 		return fmt.Errorf("dispatch outcome candidate count mismatch")
@@ -156,7 +175,12 @@ func applyDispatchOutcome(ctx *RequestContext, outcome backendinvoker.DispatchOu
 			}
 		}
 	}
+	return nil
+}
 
+func applyDispatchOutcomeAttempts(
+	state *requestDispatchState, outcome backendinvoker.DispatchOutcome,
+) error {
 	completedAt := time.Now().UTC()
 	if len(outcome.Attempted) == 0 {
 		// The private handler failed before a physical attempt began. Preserve a
@@ -196,12 +220,6 @@ func applyDispatchOutcome(ctx *RequestContext, outcome backendinvoker.DispatchOu
 			return fmt.Errorf("dispatch outcome candidate %d has invalid evidence", index)
 		}
 	}
-	state.selectedDispatchID = outcome.SelectedDispatchID
-	state.outcomeConsumed = true
-	if outcome.SelectedDispatchID != "" {
-		selected := state.dispatches[len(outcome.Attempted)-1]
-		ctx.VSRSelectedModel = selected.model
-	}
 	return nil
 }
 
@@ -209,9 +227,14 @@ func sameDispatchOutcomeCandidate(
 	dispatch *inferenceDispatch,
 	candidate backendinvoker.DispatchOutcomeCandidate,
 ) bool {
+	if candidate.Ordinal < 0 || int64(candidate.Ordinal) > math.MaxUint32 {
+		return false
+	}
+	// #nosec G115 -- the candidate ordinal is bounded to MaxUint32 above.
+	ordinal := uint32(candidate.Ordinal)
 	return dispatch != nil && dispatch.planned &&
 		dispatch.dispatchType == candidate.DispatchType &&
-		dispatch.id == candidate.DispatchID && dispatch.ordinal == uint32(candidate.Ordinal) &&
+		dispatch.id == candidate.DispatchID && dispatch.ordinal == ordinal &&
 		dispatch.planDigest == candidate.DispatchPlanDigest &&
 		dispatch.modelID == candidate.ModelID && dispatch.modelRevision == candidate.ModelRevision &&
 		dispatch.priority == candidate.Priority
@@ -220,7 +243,7 @@ func sameDispatchOutcomeCandidate(
 // ensureSettlementDispatchLocked guarantees that terminal request settlement
 // contains at most the first planned Model when no signed attempt evidence is
 // available. Later planned candidates remain excluded.
-func ensureSettlementDispatchLocked(state *managedRequestDispatch, unknown bool) *inferenceDispatch {
+func ensureSettlementDispatchLocked(state *requestDispatchState, unknown bool) *inferenceDispatch {
 	for _, dispatch := range state.dispatches {
 		if dispatch != nil && dispatch.settlementEligible {
 			return dispatch

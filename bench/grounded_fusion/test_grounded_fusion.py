@@ -15,11 +15,12 @@ from bench.grounded_fusion.rubric_judge import RubricJudge
 FIXTURE = os.path.join(os.path.dirname(__file__), "testdata", "draco_fixture.json")
 
 
-def test_config_builder_emits_readable_v04_resources():
+def test_config_builder_emits_readable_v03_resources():
     config = build(
         {
-            "version": "v0.4",
-            "models": [],
+            "version": "v0.3",
+            "providers": {"models": []},
+            "routing": {"modelCards": []},
             "recipes": [],
             "entrypoints": [],
             "global": {
@@ -33,9 +34,11 @@ def test_config_builder_emits_readable_v04_resources():
     )
 
     assert all(
-        set(model) == {"name", "card", "connections"} for model in config["models"]
+        set(model) == {"name", "provider_model_id", "backend_refs"}
+        for model in config["providers"]["models"]
     )
-    assert config["recipes"][0]["document"]["decisions"][0].get("modelRefs") is None
+    assert all("backend_refs" not in card for card in config["routing"]["modelCards"])
+    assert config["recipes"][0]["routing"]["decisions"][0].get("modelRefs") is None
     assert config["entrypoints"][0]["recipe"] == "grounded-fusion-bench"
     assigned = config["entrypoints"][0]["assignments"]["grounded-fusion-bench"][
         "models"

@@ -96,33 +96,35 @@ func inTransaction[T any](ctx context.Context, store *Store, isolation sql.Isola
 		if err != nil {
 			return zero, fmt.Errorf("begin invitation transaction: %w", err)
 		}
-		value, err := operation(tx)
-		if err != nil {
-			var committed *commitError
-			if errors.As(err, &committed) {
-				if commitErr := tx.Commit(); commitErr != nil {
-					if retryableTransactionError(commitErr) && ctx.Err() == nil && attempt < 3 {
-						continue
-					}
-					return zero, fmt.Errorf("commit invitation transaction: %w", commitErr)
-				}
-				return zero, committed.err
-			}
-			_ = tx.Rollback()
-			if retryableTransactionError(err) && ctx.Err() == nil && attempt < 3 {
-				continue
-			}
-			return zero, err
+		value, operationErr := operation(tx)
+		transactionErr, retryable := finishInvitationTransaction(tx, operationErr)
+		if transactionErr == nil {
+			return value, nil
 		}
-		if err := tx.Commit(); err != nil {
-			if retryableTransactionError(err) && ctx.Err() == nil && attempt < 3 {
-				continue
-			}
-			return zero, fmt.Errorf("commit invitation transaction: %w", err)
+		if retryable && ctx.Err() == nil && attempt < 3 {
+			continue
 		}
-		return value, nil
+		return zero, transactionErr
 	}
 	return zero, invitationmanagement.ErrUnavailable
+}
+
+func finishInvitationTransaction(tx *sql.Tx, operationErr error) (error, bool) {
+	if operationErr == nil {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit invitation transaction: %w", err), retryableTransactionError(err)
+		}
+		return nil, false
+	}
+	var committed *commitError
+	if errors.As(operationErr, &committed) {
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit invitation transaction: %w", err), retryableTransactionError(err)
+		}
+		return committed.err, false
+	}
+	_ = tx.Rollback()
+	return operationErr, retryableTransactionError(operationErr)
 }
 
 type commitError struct{ err error }

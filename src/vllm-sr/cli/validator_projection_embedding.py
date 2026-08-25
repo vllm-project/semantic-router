@@ -106,7 +106,7 @@ def _register_projection_names(
         if name and name in declared_names[kind]:
             errors.append(
                 ValidationError(
-                    field=f"recipes.{profile_name}.document.projections.{kind}",
+                    field=f"recipes.{profile_name}.routing.projections.{kind}",
                     message=(
                         f'duplicate projection name "{name}" in recipe "{profile_name}"'
                     ),
@@ -121,7 +121,7 @@ def _register_projection_names(
             if output_name and output_name in output_names:
                 errors.append(
                     ValidationError(
-                        field=(f"recipes.{profile_name}.document.projections.mappings"),
+                        field=(f"recipes.{profile_name}.routing.projections.mappings"),
                         message=(
                             f'duplicate projection output "{output_name}" in recipe '
                             f'"{profile_name}"'
@@ -232,7 +232,7 @@ def validate_embedding_modality_compatibility(
     if not embeddings:
         return errors
 
-    # Resolve embedding model_type from the canonical v0.4 path
+    # Resolve embedding model_type from the canonical v0.3 path.
     # (global.model_catalog.embeddings.semantic.embedding_config.model_type).
     # Falls back to "" if the path is absent; the Go side defaults to "qwen3"
     # for an empty value, which keeps image/audio rules from being accepted

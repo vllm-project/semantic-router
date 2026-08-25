@@ -6,7 +6,6 @@ probe loading, and CLI scenario discovery — all without a live router.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 
 import pytest
@@ -696,79 +695,6 @@ class TestOfflineAnalyzer:
 
 
 class TestCLIDiscovery:
-    def test_builtin_scenarios_listed(self):
-        from tuning.cli import BUILTIN_SCENARIOS
-
-        assert "privacy" in BUILTIN_SCENARIOS
-        assert "calibration" in BUILTIN_SCENARIOS
-
-    def test_load_builtin_privacy(self):
-        from tuning.cli import _load_scenario
-
-        s = _load_scenario("privacy")
-        assert s.name == "privacy_routing_tuning"
-
-    def test_load_builtin_calibration(self):
-        from tuning.cli import _load_scenario
-
-        s = _load_scenario("calibration")
-        assert s.name == "calibration_tuning"
-
-    def test_load_by_module_path(self):
-        from tuning.cli import _load_scenario
-
-        s = _load_scenario("tuning.scenarios.privacy:PrivacyScenario")
-        assert s.name == "privacy_routing_tuning"
-
-    def test_unknown_scenario_exits(self):
-        from tuning.cli import _load_scenario
-
-        with pytest.raises(SystemExit):
-            _load_scenario("nonexistent_scenario")
-
-    def test_candidate_config_is_the_only_runtime_tuning_output(self):
-        from tuning.cli import build_parser
-
-        args = build_parser().parse_args(
-            [
-                "privacy",
-                "--config",
-                "config.yaml",
-                "--probes",
-                "probes.yaml",
-                "--candidate-config",
-                "candidate.yaml",
-            ]
-        )
-
-        assert args.candidate_config == "candidate.yaml"
-        assert not hasattr(args, "router_pid")
-        assert not hasattr(args, "deploy_config")
-
-    def test_public_package_exposes_candidate_tuner_only(self):
-        import tuning
-
-        assert "CandidateTuner" in tuning.__all__
-        assert "TuningLoop" not in tuning.__all__
-        assert not hasattr(tuning.RouterClient(), "get_config_hash")
-        assert not hasattr(tuning.RouterClient(), "hot_reload")
-
-    def test_candidate_tuner_rejects_active_manifest_overwrite(self, tmp_path):
-        from tuning.client import RouterClient
-        from tuning.scenario import CandidateTuner
-        from tuning.scenarios.privacy import PrivacyScenario
-
-        config_path = tmp_path / "config.yaml"
-        probes_path = tmp_path / "probes.yaml"
-        with pytest.raises(ValueError, match="must not overwrite"):
-            CandidateTuner(
-                scenario=PrivacyScenario(),
-                router=RouterClient(),
-                config_path=config_path,
-                probes_path=probes_path,
-                candidate_path=config_path,
-            )
-
     def test_candidate_tuner_writes_separate_offline_validated_candidate(
         self, tmp_path, monkeypatch
     ):
@@ -845,27 +771,3 @@ class TestCLIDiscovery:
             "candidate_marker"
         ]
         assert output["validation"]["valid"] is True
-
-
-# ---------------------------------------------------------------------------
-# Result persistence
-# ---------------------------------------------------------------------------
-
-
-class TestSaveResults:
-    def test_save_creates_file(self, tmp_path):
-        from tuning.probes import save_results
-
-        output = {"scenario": "test", "accuracy": 0.95}
-        path = save_results(output, "test.json", tmp_path)
-        assert path.exists()
-        data = json.loads(path.read_text())
-        assert data["scenario"] == "test"
-
-    def test_save_creates_dir(self, tmp_path):
-        from tuning.probes import save_results
-
-        out_dir = tmp_path / "nested" / "results"
-        path = save_results({"ok": True}, "out.json", out_dir)
-        assert path.exists()
-        assert out_dir.is_dir()

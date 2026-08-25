@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import LayoutMobileNavigation from './LayoutMobileNavigation'
-import { BUILD_MENU_CATEGORIES } from './LayoutNavSupport'
+import { BUILD_MENU_CATEGORIES, PRIMARY_NAV_LINKS } from './LayoutNavSupport'
 
 describe('LayoutMobileNavigation contract', () => {
   it('keeps the active child and its workflow parent visible in the mobile hierarchy', () => {
@@ -18,6 +18,7 @@ describe('LayoutMobileNavigation contract', () => {
           isConfigPage: true,
           openSection: 'build',
           pathname: '/config/models',
+          primaryLinks: PRIMARY_NAV_LINKS,
           sections: [{ key: 'build', label: 'Build', categories: BUILD_MENU_CATEGORIES }],
           onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
@@ -55,6 +56,7 @@ describe('LayoutMobileNavigation contract', () => {
           isConfigPage: false,
           openSection: null,
           pathname: '/dashboard',
+          primaryLinks: PRIMARY_NAV_LINKS,
           sections: [
             { key: 'build', label: 'Build', categories: [] },
             { key: 'operate', label: 'Operate', categories: BUILD_MENU_CATEGORIES },
@@ -68,5 +70,29 @@ describe('LayoutMobileNavigation contract', () => {
 
     expect(markup).not.toContain('>Build<')
     expect(markup).toContain('>Operate<')
+  })
+
+  it('renders only permission-filtered primary destinations', () => {
+    const primaryLinks = PRIMARY_NAV_LINKS.filter((link) => link.label !== 'Playground')
+    const markup = renderToStaticMarkup(
+      createElement(
+        MemoryRouter,
+        { initialEntries: ['/dashboard'] },
+        createElement(LayoutMobileNavigation, {
+          isConfigPage: false,
+          openSection: null,
+          pathname: '/dashboard',
+          primaryLinks,
+          sections: [],
+          onConfigSelect: vi.fn(),
+          onNavigate: vi.fn(),
+          onSectionToggle: vi.fn(),
+        }),
+      ),
+    )
+
+    expect(markup).toContain('>Dashboard<')
+    expect(markup).toContain('>Access<')
+    expect(markup).not.toContain('>Playground<')
   })
 })

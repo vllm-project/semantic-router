@@ -1,4 +1,4 @@
-# TD047: Router-Native Access Control Cutover
+# TD047: Router-Native Access Control Completion
 
 ## Status
 
@@ -18,16 +18,15 @@ Implementation must move to an active execution or release plan before graduatio
 ## Scope
 
 Inference authentication and authorization, API-key lifecycle, model visibility,
-global quota admission and settlement, management identity, usage ingestion,
-request-log retention, Dashboard integration, and removal of the old enforcement
-paths.
+global quota admission and settlement, Management identity, usage ingestion,
+request-log retention, Dashboard integration, deployment recovery, and scale gates.
 
 ## Summary
 
-The target is specified by
+The target contract is specified by
 [Router-Native Access Control and Quota Accounting](../../../../website/docs/proposals/router-native-access-control.md)
-and its normative appendices. The implementation must replace every old authority;
-it must not add a compatibility layer beside them.
+and its normative appendices. Runtime code has one authority for each state class and
+one publication path into the data plane.
 
 ## Evidence
 
@@ -40,8 +39,7 @@ it must not add a compatibility layer beside them.
   discovery, cross-replica quota enforcement, rotation, disablement, and actual
   usage settlement through public interfaces.
 - Docker, Helm, and operator contracts have focused tests. The debt remains open
-  until the complete release validation matrix and operator cutover record satisfy
-  every exit criterion below.
+  until the complete release validation matrix satisfies every exit criterion below.
 
 ## Why It Matters
 
@@ -60,9 +58,8 @@ AccessRuntime. Dashboard, CLI, and custom consoles use generated Management clie
 Playground uses a short-lived delegated credential and the public inference path.
 
 Routing persists only Model, Recipe, and Entrypoint. Entrypoint rule actions own
-decision assignments. Old Dashboard proxy/enforcement packages, static provider
-paths, model bindings, process-local counters, and header-selected identity are
-removed at an explicit operator cutover.
+decision assignments. Dashboard is an optional client, API-key identity comes only
+from Router verification, and globally enforced counters have one Valkey authority.
 
 ## Exit Criteria
 
@@ -77,9 +74,9 @@ removed at an explicit operator cutover.
   multi-dispatch execution across multiple Router replicas.
 - Dashboard contains no authoritative access store or public inference proxy and can
   be removed without changing data-plane behavior.
-- Model-binding, legacy access API, static enforcement, compatibility, and duplicate
-  configuration paths are absent from code, generated schemas, tests, and docs.
-- A non-secret operator cutover record proves resource counts, explicit mappings or
-  resets, effective-policy equivalence, credential verification, quota cutover,
-  usage totals, and secret redaction. The Router keeps no runtime compatibility
-  reader for historical Dashboard schemas.
+- Entrypoint assignments are the only persistent Model-to-Recipe association; code,
+  generated schemas, tests, and docs expose no duplicate configuration or
+  enforcement path.
+- A public-safe operator validation record proves resource counts, effective-policy
+  equivalence, credential verification, global quota behavior, usage totals, and
+  secret redaction. The serving runtime reads only the target contracts.

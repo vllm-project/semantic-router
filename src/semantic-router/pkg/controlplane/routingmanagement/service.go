@@ -22,6 +22,7 @@ type ServiceOptions struct {
 	Prober             Prober
 	CursorKeyring      securitykeyring.Symmetric
 	Now                func() time.Time
+	ManifestCodec      ManifestCodec
 }
 
 type Service struct {
@@ -32,6 +33,7 @@ type Service struct {
 	prober             Prober
 	cursors            routingCursorCodec
 	now                func() time.Time
+	manifests          ManifestCodec
 }
 
 func NewService(options ServiceOptions) (*Service, error) {
@@ -50,7 +52,57 @@ func NewService(options ServiceOptions) (*Service, error) {
 		store: options.Store, modelCompiler: options.ModelCompiler,
 		discoveryClaims: options.DiscoveryClaims, credentialVersions: options.CredentialVersions,
 		prober: options.Prober, cursors: cursors, now: now,
+		manifests: options.ManifestCodec,
 	}, nil
+}
+
+func (service *Service) ImportManifest(
+	ctx context.Context, namespaceID string, request ManifestImportRequest, mutation MutationContext,
+) (ManifestImportResult, error) {
+	if service == nil || service.manifests == nil || !canonicalUUIDText(namespaceID) ||
+		request.ExpectedRevision < 0 || len(request.Document) == 0 || len(request.Document) > 3<<20 {
+		return ManifestImportResult{}, ErrInvalid
+	}
+	snapshot, err := service.manifests.Decode(request.Document)
+	if err != nil || snapshot == nil {
+		return ManifestImportResult{}, fmt.Errorf("%w: %w", ErrManifest, err)
+	}
+	snapshot.NamespaceID = namespaceID
+	if request.DryRun {
+		diff, previewErr := service.store.PreviewManifest(ctx, namespaceID, request.ExpectedRevision, snapshot)
+		return ManifestImportResult{Diff: diff}, previewErr
+	}
+	diff, receipt, err := service.store.ImportManifest(ctx, namespaceID, request.ExpectedRevision, snapshot, mutation)
+	return ManifestImportResult{Diff: diff, Receipt: receipt}, err
+}
+
+// ManifestCredentialIDs returns the durable credential references required by
+// a manifest without compiling Provider integrations. The transport uses this
+// projection to authorize every referenced credential before import.
+func (service *Service) ManifestCredentialIDs(document []byte) ([]string, error) {
+	if service == nil || service.manifests == nil || len(document) == 0 || len(document) > 3<<20 {
+		return nil, ErrInvalid
+	}
+	ids, err := service.manifests.CredentialIDs(document)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrManifest, err)
+	}
+	return ids, nil
+}
+
+func (service *Service) ExportCurrentManifest(ctx context.Context, namespaceID string) ([]byte, int64, error) {
+	if service == nil || service.manifests == nil || !canonicalUUIDText(namespaceID) {
+		return nil, 0, ErrInvalid
+	}
+	snapshot, revision, err := service.store.CurrentManifest(ctx, namespaceID)
+	if err != nil {
+		return nil, 0, err
+	}
+	document, err := service.manifests.Encode(snapshot)
+	if err != nil {
+		return nil, 0, fmt.Errorf("%w: %w", ErrManifest, err)
+	}
+	return document, revision, nil
 }
 
 func (service *Service) Close() {

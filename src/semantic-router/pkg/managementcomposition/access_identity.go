@@ -9,8 +9,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/delegationmanagement"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/invitationmanagement"
 	invitationpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/invitationmanagement/postgres"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 )
 
 // accessIdentityComposition owns the credential and invitation services that
@@ -25,7 +25,7 @@ type accessIdentityComposition struct {
 }
 
 func composeAccessIdentity(
-	dependencies managedruntime.ManagementDependencies,
+	dependencies routingruntime.ManagementDependencies,
 	commands *managementcommand.Codec,
 	defaultRevealable bool,
 	keyPrefix string,
@@ -37,7 +37,7 @@ func composeAccessIdentity(
 	}
 	apiKeys, err := apikeymanagement.NewService(apikeymanagement.Options{
 		Repository: repository, Commands: commands,
-		CursorKeyring:     dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
+		CursorKeyring:     dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
 		APIKeyPeppers:     dependencies.Keyrings.APIKeyPeppers,
 		ResponseKEK:       dependencies.Keyrings.ResponseKEK,
 		RevealKEK:         dependencies.Keyrings.RevealKEK,
@@ -61,7 +61,7 @@ func composeAccessIdentity(
 	}
 	delegations, err := delegationmanagement.NewService(delegationmanagement.Options{
 		Repository: delegationRepository, Waiter: publicationWaiter, Commands: commands,
-		CursorKeyring:     dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
+		CursorKeyring:     dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
 		DelegationPeppers: dependencies.Keyrings.DelegationPeppers,
 		ResponseKEK:       dependencies.Keyrings.ResponseKEK, Audience: dependencies.DelegationAudience,
 		IdempotencyTTL: defaultIdempotencyTTL, SecretDeliveryTTL: defaultSecretDeliveryTTL, Now: now,
@@ -99,7 +99,7 @@ func composeAccessIdentity(
 	}
 	invitations, err := invitationmanagement.NewService(invitationmanagement.Options{
 		Repository: atomicStore, Commands: commands,
-		CursorKeyring:     dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
+		CursorKeyring:     dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
 		InvitationPeppers: dependencies.Keyrings.Invitations,
 		ResponseKEK:       dependencies.Keyrings.ResponseKEK,
 		FirstKeys:         firstKeys,

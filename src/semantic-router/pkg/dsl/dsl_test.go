@@ -17,7 +17,7 @@ func roundTripRecipeDocument(t *testing.T, cfg *config.RouterConfig) *config.Rou
 	if err != nil {
 		t.Fatalf("emit Recipe document: %v", err)
 	}
-	roundTripped, err := config.ParseRoutingYAMLBytes(payload)
+	roundTripped, err := parseRoutingFragmentYAML(payload)
 	if err != nil {
 		t.Fatalf("parse Recipe document: %v\nYAML:\n%s", err, payload)
 	}
@@ -701,8 +701,8 @@ ROUTE math_route {
 	}
 
 	yamlStr := string(yamlBytes)
-	if !strings.HasPrefix(yamlStr, "document:\n") {
-		t.Fatalf("YAML should contain one Recipe document:\n%s", yamlStr)
+	if !strings.HasPrefix(yamlStr, "routing:\n") {
+		t.Fatalf("YAML should contain one routing fragment:\n%s", yamlStr)
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML should contain category name")
@@ -879,8 +879,8 @@ func TestCompileFullExample(t *testing.T) {
 		t.Fatalf("YAML emit error: %v", err)
 	}
 	yamlStr := string(yamlBytes)
-	if !strings.HasPrefix(yamlStr, "document:\n") {
-		t.Fatalf("YAML missing Recipe document envelope:\n%s", yamlStr)
+	if !strings.HasPrefix(yamlStr, "routing:\n") {
+		t.Fatalf("YAML missing routing fragment envelope:\n%s", yamlStr)
 	}
 	if !strings.Contains(yamlStr, "name: math") {
 		t.Error("YAML missing math category")

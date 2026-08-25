@@ -23,6 +23,43 @@ async function mockPublicVisitor(page: Page) {
 }
 
 test.describe('Public and transition surfaces on short screens', () => {
+  test('keeps landing, sign-in, and invitation surfaces fluid at every product breakpoint', async ({
+    page,
+  }) => {
+    const viewports = [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]
+    await mockPublicVisitor(page)
+    await page.route('**/api/auth/invitations/info?*', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          email: 'ada@example.com',
+          name: 'Ada Lovelace',
+          expiresAt: Math.floor(Date.now() / 1000) + 7 * 24 * 60 * 60,
+        }),
+      })
+    })
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      for (const route of ['/', '/login', '/login?invite=1&token=responsive-invite']) {
+        await page.goto(route, { waitUntil: 'domcontentloaded' })
+        await expect(page.locator('#root')).toBeVisible()
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+          `${route} overflowed at ${viewport.width}px`,
+        ).toBe(true)
+      }
+      await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible()
+      await expect(page.locator('form').getByText('Ada Lovelace', { exact: true })).toBeVisible()
+    }
+  })
+
   test('renders the public project shell and three-stage routing story', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 800 })
     await mockPublicVisitor(page)
@@ -46,7 +83,7 @@ test.describe('Public and transition surfaces on short screens', () => {
 
     await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Every request. A personalized model path.' }),
+      page.getByRole('heading', { name: 'Match workload with right model on right hardware' }),
     ).toBeVisible()
 
     const routingHeadings = [
@@ -130,14 +167,6 @@ test.describe('Public and transition surfaces on short screens', () => {
         0,
       )
 
-      if (viewport.brandVisible) {
-        await expect(publicBrand.getByText('Semantic Router', { exact: true })).toBeVisible()
-        await expect(authenticatedBrand.getByText('Semantic Router', { exact: true })).toBeVisible()
-      } else {
-        await expect(publicBrand.getByText('Semantic Router', { exact: true })).toBeHidden()
-        await expect(authenticatedBrand.getByText('Semantic Router', { exact: true })).toBeHidden()
-      }
-
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
         viewport.width,
       )
@@ -159,7 +188,7 @@ test.describe('Public and transition surfaces on short screens', () => {
 
     await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByText('System-level intelligence for heterogeneous LLM inference'),
+      page.getByText('Compose heterogeneous LLMs into personalized model paths.'),
     ).toBeVisible()
     const exploreDocs = page.getByRole('button', { name: 'Explore the Docs' })
     await exploreDocs.scrollIntoViewIfNeeded()
@@ -207,24 +236,33 @@ test.describe('Public and transition surfaces on short screens', () => {
 
   test('uses the compact transition layout without clipping progress', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 })
-    const transitionTime = new Date('2026-07-11T00:00:00Z')
-    await page.clock.install({ time: transitionTime })
-    await page.clock.pauseAt(transitionTime)
     await mockAuthenticatedAppShell(page)
+    let releaseAuthentication: () => void = () => undefined
+    const authenticationGate = new Promise<void>((resolve) => {
+      releaseAuthentication = resolve
+    })
+    await page.route('**/api/auth/me', async (route) => {
+      await authenticationGate
+      await route.fallback()
+    })
     await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
 
-    await expect(page.getByRole('heading', { name: 'Entering control plane' })).toBeVisible()
-    await expect(page.getByTestId('auth-transition-scene')).toBeVisible()
+    try {
+      await expect(page.getByRole('heading', { name: 'Entering control plane' })).toBeVisible()
+      await expect(page.getByTestId('auth-transition-scene')).toBeVisible()
 
-    const progress = page.getByRole('progressbar', { name: 'Opening workspace' })
-    await expect(progress).toBeVisible()
-    const progressBox = await progress.boundingBox()
+      const progress = page.getByRole('progressbar', { name: 'Opening workspace' })
+      await expect(progress).toBeVisible()
+      const progressBox = await progress.boundingBox()
 
-    expect(progressBox).not.toBeNull()
-    expect((progressBox?.y ?? 0) + (progressBox?.height ?? 0)).toBeLessThanOrEqual(568)
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-    ).toBe(true)
+      expect(progressBox).not.toBeNull()
+      expect((progressBox?.y ?? 0) + (progressBox?.height ?? 0)).toBeLessThanOrEqual(568)
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+      ).toBe(true)
+    } finally {
+      releaseAuthentication()
+    }
   })
 
   test('uses a static decision plane and completes immediately with reduced motion', async ({

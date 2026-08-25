@@ -55,20 +55,17 @@ const BuilderGuideDrawer: React.FC<BuilderGuideDrawerProps> = ({
           <div className={styles.guideDrawerResizeLine} />
         </div>
         <div className={styles.guideDrawerHeader}>
-          <h2 id={titleId} className={styles.guideDrawerTitle}>
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M2 2h9a2 2 0 012 2v10l-3-2H2V2z" strokeLinejoin="round" />
-              <path d="M5 6h5M5 9h3" strokeLinecap="round" />
-            </svg>
-            DSL Language Guide
-          </h2>
+          <div className={styles.guideDrawerIdentity}>
+            <div className={styles.guideDrawerLogo} aria-hidden="true">
+              <img src="/vllm.png" alt="" />
+            </div>
+            <div>
+              <span className={styles.guideDrawerEyebrow}>Builder</span>
+              <h2 id={titleId} className={styles.guideDrawerTitle}>
+                DSL Language Guide
+              </h2>
+            </div>
+          </div>
           <button
             type="button"
             className={styles.guideDrawerClose}

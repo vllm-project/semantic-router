@@ -21,7 +21,7 @@ func (r *OpenAIRouter) handleAuthorizedModelsRequest(
 	ctx context.Context,
 	request *RequestContext,
 ) (*ext_proc.ProcessingResponse, error) {
-	if !r.managedInferenceAccessEnabled() {
+	if !r.nativeAccessEnabled() {
 		return r.handleModelsRequest("/v1/models")
 	}
 	if r.InferenceAccess == nil || request == nil || request.InferenceAccess == nil {

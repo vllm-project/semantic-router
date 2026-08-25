@@ -1,22 +1,26 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: Qwen/Qwen-Image
-  card:
+providers:
+  models:
+  - name: Qwen/Qwen-Image
+    provider_model_id: Qwen/Qwen-Image
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8001/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: Qwen/Qwen-Image
     capabilities:
     - image_generation
     - diffusion
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8001/v1
-    model: Qwen/Qwen-Image
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       modality:
       - name: DIFFUSION
@@ -44,8 +48,8 @@ recipes:
           default_height: 1024
           timeout_seconds: 120
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

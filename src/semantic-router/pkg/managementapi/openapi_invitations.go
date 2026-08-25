@@ -9,9 +9,9 @@ func init() {
 }
 
 func invitationSchemas() map[string]JSONSchema {
-	stringSchema := JSONSchema{Type: "string"}
+	textSchema := JSONSchema{Type: "string"}
 	uuidSchema := JSONSchema{Type: "string", Format: "uuid"}
-	timestampSchema := JSONSchema{Type: "string", Format: "date-time"}
+	dateTimeSchema := JSONSchema{Type: "string", Format: "date-time"}
 	digestSchema := JSONSchema{Type: "string", Pattern: `^[a-f0-9]{64}$`}
 	expectedIdentity := objectSchema([]string{"issuer"}, map[string]JSONSchema{
 		"issuer":  {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(512)},
@@ -24,7 +24,7 @@ func invitationSchemas() map[string]JSONSchema {
 	requestedGrant := objectSchema([]string{"roleId", "scopeKind"}, map[string]JSONSchema{
 		"roleId":            uuidSchema,
 		"scopeKind":         {Type: "string", Enum: []string{"namespace", "user"}},
-		"delegationCeiling": arraySchema(stringSchema),
+		"delegationCeiling": arraySchema(textSchema),
 	})
 	pinnedGrant := objectSchema([]string{
 		"roleId", "roleRevision", "rolePermissionsDigest", "scopeKind", "delegationCeiling",
@@ -33,31 +33,38 @@ func invitationSchemas() map[string]JSONSchema {
 		"roleId": uuidSchema, "roleRevision": {Type: "integer", Format: "int64"},
 		"rolePermissionsDigest": digestSchema,
 		"scopeKind":             {Type: "string", Enum: []string{"namespace", "user"}},
-		"delegationCeiling":     arraySchema(stringSchema),
+		"delegationCeiling":     arraySchema(textSchema),
 		"sourceBindingId":       uuidSchema, "sourceBindingRevision": {Type: "integer", Format: "int64"},
 		"sourceRoleId": uuidSchema, "sourcePermissionsDigest": digestSchema,
 	})
-	snapshot := objectSchema([]string{
+	defaultSnapshot := objectSchema([]string{
 		"roleGrants", "selfServicePolicyRevision", "accessPolicyId", "accessPolicyRevision",
 		"rateLimitPolicyId", "rateLimitPolicyRevision", "automaticFirstKey",
 	}, map[string]JSONSchema{
-		"roleGrants": arraySchema(pinnedGrant), "team": team,
-		"selfServicePolicyRevision": {Type: "integer", Format: "int64"},
-		"accessPolicyId":            uuidSchema, "accessPolicyRevision": {Type: "integer", Format: "int64"},
+		"roleGrants": arraySchema(pinnedGrant), "selfServicePolicyRevision": {Type: "integer", Format: "int64"},
+		"accessPolicyId": uuidSchema, "accessPolicyRevision": {Type: "integer", Format: "int64"},
 		"rateLimitPolicyId": uuidSchema, "rateLimitPolicyRevision": {Type: "integer", Format: "int64"},
 		"automaticFirstKey": {Type: "boolean"},
 	})
+	teamSnapshot := objectSchema([]string{
+		"roleGrants", "team", "selfServicePolicyRevision", "automaticFirstKey",
+	}, map[string]JSONSchema{
+		"roleGrants": arraySchema(pinnedGrant), "team": team,
+		"selfServicePolicyRevision": {Type: "integer", Format: "int64"},
+		"automaticFirstKey":         {Type: "boolean"},
+	})
+	snapshot := JSONSchema{OneOf: []JSONSchema{defaultSnapshot, teamSnapshot}}
 	invitation := objectSchema([]string{
 		"invitationId", "namespaceId", "createdByPrincipalId", "expectedIdentity", "displayName",
 		"onboarding", "expiresAt", "status", "revision", "createdAt", "updatedAt",
 	}, map[string]JSONSchema{
 		"invitationId": uuidSchema, "namespaceId": uuidSchema, "createdByPrincipalId": uuidSchema,
-		"expectedIdentity": expectedIdentity, "displayName": stringSchema, "onboarding": snapshot,
-		"expiresAt":           timestampSchema,
+		"expectedIdentity": expectedIdentity, "displayName": textSchema, "onboarding": snapshot,
+		"expiresAt":           dateTimeSchema,
 		"status":              {Type: "string", Enum: []string{"pending", "accepted", "expired", "revoked"}},
-		"acceptedPrincipalId": uuidSchema, "acceptedUserId": uuidSchema, "acceptedAt": timestampSchema,
+		"acceptedPrincipalId": uuidSchema, "acceptedUserId": uuidSchema, "acceptedAt": dateTimeSchema,
 		"acceptedManagementSessionId": uuidSchema,
-		"revision":                    {Type: "integer", Format: "int64"}, "createdAt": timestampSchema, "updatedAt": timestampSchema,
+		"revision":                    {Type: "integer", Format: "int64"}, "createdAt": dateTimeSchema, "updatedAt": dateTimeSchema,
 	})
 	return map[string]JSONSchema{
 		"InvitationExpectedIdentity":   expectedIdentity,
@@ -70,9 +77,9 @@ func invitationSchemas() map[string]JSONSchema {
 		}, map[string]JSONSchema{
 			"expectedIdentity": expectedIdentity,
 			"displayName":      {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(200)},
-			"roleGrants":       arraySchema(requestedGrant), "team": team, "expiresAt": timestampSchema,
+			"roleGrants":       arraySchema(requestedGrant), "team": team, "expiresAt": dateTimeSchema,
 		}),
-		"InvitationRotateTokenRequest": objectSchema(nil, map[string]JSONSchema{"expiresAt": timestampSchema}),
+		"InvitationRotateTokenRequest": objectSchema(nil, map[string]JSONSchema{"expiresAt": dateTimeSchema}),
 		"OnboardingCreateRequest": objectSchema([]string{
 			"principalId", "email", "displayName", "roleGrants", "createFirstKey",
 		}, map[string]JSONSchema{
@@ -88,13 +95,13 @@ func invitationSchemas() map[string]JSONSchema {
 		"InvitationIssuedSecret": objectSchema([]string{"data", "token", "deliveryExpiresAt"}, map[string]JSONSchema{
 			"data":              invitation,
 			"token":             {Type: "string", Format: "password", Description: "One-time invitation URL token."},
-			"deliveryExpiresAt": timestampSchema,
+			"deliveryExpiresAt": dateTimeSchema,
 		}),
 		"OnboardingResult": objectSchema([]string{"principalId", "userId", "deliveryExpiresAt"}, map[string]JSONSchema{
 			"invitationId": uuidSchema, "principalId": uuidSchema, "userId": uuidSchema, "teamId": uuidSchema,
 			"apiKeyId":          uuidSchema,
 			"apiKey":            {Type: "string", Format: "password", Description: "One-time first inference API key."},
-			"deliveryExpiresAt": timestampSchema,
+			"deliveryExpiresAt": dateTimeSchema,
 		}),
 	}
 }

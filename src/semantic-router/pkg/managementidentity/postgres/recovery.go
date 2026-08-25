@@ -162,32 +162,8 @@ func (service *RecoveryService) commitRecovery(
 	digests []bootstrapDigest,
 	now time.Time,
 ) (managementidentity.RecoveryResult, error) {
-	var principalStatus string
-	var principalRevision int64
-	if err := tx.QueryRowContext(ctx, `SELECT status,revision FROM management_principals
-WHERE id=$1 FOR UPDATE`, request.PrincipalID).Scan(&principalStatus, &principalRevision); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return managementidentity.RecoveryResult{}, managementidentity.ErrNotFound
-		}
+	if err := restoreRecoveryPrincipal(ctx, tx, request, now); err != nil {
 		return managementidentity.RecoveryResult{}, err
-	}
-	if principalStatus != string(accesscontrol.PrincipalStatusActive) {
-		if principalStatus != string(accesscontrol.PrincipalStatusDisabled) {
-			return managementidentity.RecoveryResult{}, managementidentity.ErrRecoveryUnavailable
-		}
-		if _, err := tx.ExecContext(ctx, `UPDATE management_principals
-SET status='active',revision=revision+1,updated_at=$2 WHERE id=$1`, request.PrincipalID, now); err != nil {
-			return managementidentity.RecoveryResult{}, mapWriteError("restore recovery principal", err)
-		}
-		before := uint64(principalRevision)
-		principalRevision++
-		if err := appendAudit(ctx, tx, auditMutation{
-			Action: "management.principal.recover", ResourceType: "management_principal", ResourceID: request.PrincipalID,
-			BeforeRevision: &before, AfterRevision: uint64(principalRevision), ExternalActor: true,
-			Actor: managementidentity.MutationActor{RequestID: request.RequestID, Reason: request.Reason},
-		}); err != nil {
-			return managementidentity.RecoveryResult{}, err
-		}
 	}
 
 	ceiling, _ := json.Marshal(accesscontrol.DelegablePermissions().Permissions())
@@ -246,16 +222,63 @@ WHERE singleton=TRUE`, now, service.tokenDigest[:], active.version, active.key[:
 	if count, err := updated.RowsAffected(); err != nil || count != 1 {
 		return managementidentity.RecoveryResult{}, managementidentity.ErrRecoveryUnavailable
 	}
-	if err := appendAudit(ctx, tx, auditMutation{
+	bindingRevisionValue, err := databaseRevisionUint64(bindingRevision, "recovery binding revision")
+	if err != nil {
+		return managementidentity.RecoveryResult{}, managementidentity.ErrRecoveryUnavailable
+	}
+	if auditErr := appendAudit(ctx, tx, auditMutation{
 		Action: "management.recovery", ResourceType: "management_role_binding", ResourceID: bindingID,
-		AfterRevision: uint64(bindingRevision), ExternalActor: true,
+		AfterRevision: bindingRevisionValue, ExternalActor: true,
 		Actor: managementidentity.MutationActor{RequestID: request.RequestID, Reason: request.Reason},
-	}); err != nil {
-		return managementidentity.RecoveryResult{}, err
+	}); auditErr != nil {
+		return managementidentity.RecoveryResult{}, auditErr
 	}
 	return managementidentity.RecoveryResult{
 		PrincipalID: request.PrincipalID, RoleBindingID: bindingID, ResponseStatus: 201,
 	}, nil
+}
+
+func restoreRecoveryPrincipal(
+	ctx context.Context,
+	tx *sql.Tx,
+	request managementidentity.RecoveryRequest,
+	now time.Time,
+) error {
+	var principalStatus string
+	var principalRevision int64
+	if err := tx.QueryRowContext(ctx, `SELECT status,revision FROM management_principals
+WHERE id=$1 FOR UPDATE`, request.PrincipalID).Scan(&principalStatus, &principalRevision); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return managementidentity.ErrNotFound
+		}
+		return err
+	}
+	if principalStatus != string(accesscontrol.PrincipalStatusActive) {
+		if principalStatus != string(accesscontrol.PrincipalStatusDisabled) {
+			return managementidentity.ErrRecoveryUnavailable
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE management_principals
+SET status='active',revision=revision+1,updated_at=$2 WHERE id=$1`, request.PrincipalID, now); err != nil {
+			return mapWriteError("restore recovery principal", err)
+		}
+		before, err := databaseRevisionUint64(principalRevision, "recovery principal revision")
+		if err != nil {
+			return managementidentity.ErrRecoveryUnavailable
+		}
+		principalRevision++
+		after, err := databaseRevisionUint64(principalRevision, "recovered principal revision")
+		if err != nil {
+			return managementidentity.ErrRecoveryUnavailable
+		}
+		if auditErr := appendAudit(ctx, tx, auditMutation{
+			Action: "management.principal.recover", ResourceType: "management_principal", ResourceID: request.PrincipalID,
+			BeforeRevision: &before, AfterRevision: after, ExternalActor: true,
+			Actor: managementidentity.MutationActor{RequestID: request.RequestID, Reason: request.Reason},
+		}); auditErr != nil {
+			return auditErr
+		}
+	}
+	return nil
 }
 
 func replayRecovery(

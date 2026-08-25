@@ -88,69 +88,8 @@ func TestCompileProjectsTenThousandIndependentAPIKeyPolicies(t *testing.T) {
 	state.Credentials = make([]CredentialCandidate, 0, keyCount)
 
 	for index := range keyCount {
-		suffix := fmt.Sprintf("%05d", index)
-		keyID := accesscontrol.APIKeyID("key-scale-" + suffix)
-		accessPolicyID := accesscontrol.AccessPolicyID("access-scale-" + suffix)
-		ratePolicyID := accesscontrol.RateLimitPolicyID("rate-scale-" + suffix)
-		accessBindingID := accesscontrol.PolicyBindingID("access-binding-scale-" + suffix)
-		rateBindingID := accesscontrol.PolicyBindingID("rate-binding-scale-" + suffix)
-		rateRuleID := accesscontrol.RateLimitRuleID("rate-rule-scale-" + suffix)
-
-		candidate := baseCandidate
-		candidate.Key.ID = keyID
-		candidate.Key.Name = "Scale key " + suffix
-		candidate.KeyAccessBindings = []accesscontrol.AccessPolicyBinding{{
-			ID: accessBindingID, NamespaceID: state.Namespace.ID, Subject: candidate.Key.SubjectRef(),
-			PolicyID: accessPolicyID, Status: accesscontrol.BindingStatusActive,
-			Revision: accesscontrol.Revision(state.Revision),
-		}}
-		candidate.UserAccessBindings = nil
-		candidate.TeamAccessBindings = nil
-		candidate.AccessPolicies = map[accesscontrol.AccessPolicyID]accesscontrol.AccessPolicy{
-			accessPolicyID: {
-				NamespaceID: state.Namespace.ID, ID: accessPolicyID, DisplayName: "Scale access " + suffix,
-				Status: accesscontrol.PolicyStatusActive, Revision: accesscontrol.Revision(state.Revision),
-				CreatedAt: fixtureTime, UpdatedAt: fixtureTime,
-				Grants: []accesscontrol.AccessPolicyGrant{{
-					PolicyID: accessPolicyID,
-					Resource: accesscontrol.GrantResource{
-						Type: accesscontrol.GrantResourceEntrypoint, ID: "ep-chat",
-					},
-					Permission: accesscontrol.GrantPermissionInvoke, Effect: accesscontrol.GrantEffectAllow,
-				}},
-			},
-		}
-		candidate.KeyRateBindings = []accesscontrol.RateLimitBinding{{
-			ID: rateBindingID, NamespaceID: state.Namespace.ID, Subject: candidate.Key.SubjectRef(),
-			PolicyID: ratePolicyID, Mode: accesscontrol.RateBindingAllocation,
-			QuotaPartitionID: state.Namespace.QuotaPartitionID, Status: accesscontrol.BindingStatusActive,
-			Revision: accesscontrol.Revision(state.Revision),
-		}}
-		candidate.UserRateBindings = nil
-		candidate.TeamRateBindings = nil
-		limit := accesscontrol.QuotaValue(fmt.Sprintf("%d", index+1))
-		candidate.RatePolicies = map[accesscontrol.RateLimitPolicyID]accesscontrol.RateLimitPolicy{
-			ratePolicyID: {
-				NamespaceID: state.Namespace.ID, ID: ratePolicyID, DisplayName: "Scale rate " + suffix,
-				Status: accesscontrol.PolicyStatusActive, Revision: accesscontrol.Revision(state.Revision),
-				CreatedAt: fixtureTime, UpdatedAt: fixtureTime,
-				Rules: []accesscontrol.RateLimitRule{{
-					ID: rateRuleID, PolicyID: ratePolicyID, Metric: accesscontrol.RateMetricRequests,
-					Algorithm: accesscontrol.RateAlgorithmSlidingLog, Limit: limit, Window: time.Minute,
-					Accounting: accesscontrol.RateAccountingRequest, Enforcement: accesscontrol.RateEnforcementEnforce,
-				}},
-			},
-		}
-		candidate.RoutingClaims = map[string]routingsnapshot.ClaimValue{
-			"scale-key": {Kind: "string", String: suffix},
-		}
+		candidate, credential := scalePolicyFixture(state, baseCandidate, baseCredential, index)
 		state.Keys = append(state.Keys, candidate)
-
-		credential := baseCredential
-		credential.ID = accesscontrol.CredentialVersionID("credential-scale-" + suffix)
-		credential.APIKeyID = keyID
-		credential.KID = "scale-kid-" + suffix
-		credential.SecretHMAC = []byte(fmt.Sprintf("%032d", index))
 		state.Credentials = append(state.Credentials, CredentialCandidate{
 			Kind: CredentialKindAPIKey, Credential: credential,
 		})
@@ -188,6 +127,68 @@ func TestCompileProjectsTenThousandIndependentAPIKeyPolicies(t *testing.T) {
 	if err := verifyPublication(publication); err != nil {
 		t.Fatalf("verifyPublication() 10,000-key publication: %v", err)
 	}
+}
+
+func scalePolicyFixture(
+	state DesiredState,
+	baseCandidate accessprojection.Candidate,
+	baseCredential accesscontrol.CredentialVersion,
+	index int,
+) (accessprojection.Candidate, accesscontrol.CredentialVersion) {
+	suffix := fmt.Sprintf("%05d", index)
+	keyID := accesscontrol.APIKeyID("key-scale-" + suffix)
+	accessPolicyID := accesscontrol.AccessPolicyID("access-scale-" + suffix)
+	ratePolicyID := accesscontrol.RateLimitPolicyID("rate-scale-" + suffix)
+	candidate := baseCandidate
+	candidate.Key.ID = keyID
+	candidate.Key.Name = "Scale key " + suffix
+	candidate.KeyAccessBindings = []accesscontrol.AccessPolicyBinding{{
+		ID: accesscontrol.PolicyBindingID("access-binding-scale-" + suffix), NamespaceID: state.Namespace.ID,
+		Subject: candidate.Key.SubjectRef(), PolicyID: accessPolicyID, Status: accesscontrol.BindingStatusActive,
+		Revision: accesscontrol.Revision(state.Revision),
+	}}
+	candidate.UserAccessBindings = nil
+	candidate.TeamAccessBindings = nil
+	candidate.AccessPolicies = map[accesscontrol.AccessPolicyID]accesscontrol.AccessPolicy{
+		accessPolicyID: {
+			NamespaceID: state.Namespace.ID, ID: accessPolicyID, DisplayName: "Scale access " + suffix,
+			Status: accesscontrol.PolicyStatusActive, Revision: accesscontrol.Revision(state.Revision),
+			CreatedAt: fixtureTime, UpdatedAt: fixtureTime,
+			Grants: []accesscontrol.AccessPolicyGrant{{
+				PolicyID:   accessPolicyID,
+				Resource:   accesscontrol.GrantResource{Type: accesscontrol.GrantResourceEntrypoint, ID: "ep-chat"},
+				Permission: accesscontrol.GrantPermissionInvoke, Effect: accesscontrol.GrantEffectAllow,
+			}},
+		},
+	}
+	candidate.KeyRateBindings = []accesscontrol.RateLimitBinding{{
+		ID: accesscontrol.PolicyBindingID("rate-binding-scale-" + suffix), NamespaceID: state.Namespace.ID,
+		Subject: candidate.Key.SubjectRef(), PolicyID: ratePolicyID, Mode: accesscontrol.RateBindingAllocation,
+		QuotaPartitionID: state.Namespace.QuotaPartitionID, Status: accesscontrol.BindingStatusActive,
+		Revision: accesscontrol.Revision(state.Revision),
+	}}
+	candidate.UserRateBindings = nil
+	candidate.TeamRateBindings = nil
+	candidate.RatePolicies = map[accesscontrol.RateLimitPolicyID]accesscontrol.RateLimitPolicy{
+		ratePolicyID: {
+			NamespaceID: state.Namespace.ID, ID: ratePolicyID, DisplayName: "Scale rate " + suffix,
+			Status: accesscontrol.PolicyStatusActive, Revision: accesscontrol.Revision(state.Revision),
+			CreatedAt: fixtureTime, UpdatedAt: fixtureTime,
+			Rules: []accesscontrol.RateLimitRule{{
+				ID: accesscontrol.RateLimitRuleID("rate-rule-scale-" + suffix), PolicyID: ratePolicyID,
+				Metric: accesscontrol.RateMetricRequests, Algorithm: accesscontrol.RateAlgorithmSlidingLog,
+				Limit: accesscontrol.QuotaValue(fmt.Sprintf("%d", index+1)), Window: time.Minute,
+				Accounting: accesscontrol.RateAccountingRequest, Enforcement: accesscontrol.RateEnforcementEnforce,
+			}},
+		},
+	}
+	candidate.RoutingClaims = map[string]routingsnapshot.ClaimValue{"scale-key": {Kind: "string", String: suffix}}
+	credential := baseCredential
+	credential.ID = accesscontrol.CredentialVersionID("credential-scale-" + suffix)
+	credential.APIKeyID = keyID
+	credential.KID = "scale-kid-" + suffix
+	credential.SecretHMAC = []byte(fmt.Sprintf("%032d", index))
+	return candidate, credential
 }
 
 func TestCompilePublishesOnlyEncryptedProviderCredentialMaterialDeterministically(t *testing.T) {

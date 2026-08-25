@@ -59,6 +59,8 @@ func (f *fakeReader) ReadPolicy(context.Context, CredentialLocation, ActivePolic
 
 type fakeEngine struct {
 	request             *quotaruntime.AdmissionRequest
+	heartbeatRequest    *quotaruntime.AdmissionHeartbeatRequest
+	heartbeatResult     quotaruntime.AdmissionHeartbeatResult
 	accessRequest       *quotaruntime.AccessCheckRequest
 	dispatchRequest     *quotaruntime.DispatchJournalRequest
 	evidenceRequests    []quotaruntime.ReadAttemptEvidenceRequest
@@ -84,6 +86,11 @@ func (f *fakeEngine) CheckAccess(_ context.Context, request quotaruntime.AccessC
 func (f *fakeEngine) Admit(_ context.Context, request quotaruntime.AdmissionRequest) (quotaruntime.AdmissionResult, error) {
 	f.request = &request
 	return f.result, f.err
+}
+
+func (f *fakeEngine) Heartbeat(_ context.Context, request quotaruntime.AdmissionHeartbeatRequest) (quotaruntime.AdmissionHeartbeatResult, error) {
+	f.heartbeatRequest = &request
+	return f.heartbeatResult, f.err
 }
 
 func (f *fakeEngine) JournalDispatch(_ context.Context, request quotaruntime.DispatchJournalRequest) (quotaruntime.MutationResult, error) {
@@ -449,6 +456,7 @@ func TestReadAttemptEvidencePinsOneStableAdmissionRevision(t *testing.T) {
 		t.Fatalf("ReadAttemptEvidence() = %+v, %v; requests=%d", snapshot, err, len(engine.evidenceRequests))
 	}
 	for index, request := range engine.evidenceRequests {
+		// #nosec G115 -- this fixture contains two evidence requests.
 		if request.AdmissionID != admission.Tenant.AdmissionID ||
 			request.AdmissionDigest != admission.RequestDigest || request.Ordinal != uint32(index) {
 			t.Fatalf("evidence request %d = %+v", index, request)
@@ -540,7 +548,9 @@ func testRuntime(t *testing.T) (*Runtime, accesscredential.Issued, *fakeReader, 
 		},
 		policy: projection,
 	}
-	engine := &fakeEngine{result: quotaruntime.AdmissionResult{Disposition: quotaruntime.AdmissionAllowed}}
+	engine := &fakeEngine{result: quotaruntime.AdmissionResult{
+		Disposition: quotaruntime.AdmissionAllowed, PlanDigest: strings.Repeat("f", 64),
+	}}
 	runtime, err := New(RuntimeOptions{
 		Reader: reader, Engine: engine, APIKeyPeppers: keyring, DelegationPeppers: keyring,
 		DelegationAudience: "vllm-sr-inference",

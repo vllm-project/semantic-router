@@ -3,7 +3,7 @@ package extproc
 import "strings"
 
 // headerValueCI is limited to protocol and routing headers. Identity helpers
-// below never call it: managed identity comes only from authenticated state.
+// below never call it: authenticated identity comes only from authenticated state.
 func headerValueCI(ctx *RequestContext, canonical string) string {
 	if ctx == nil || len(ctx.Headers) == 0 || canonical == "" {
 		return ""

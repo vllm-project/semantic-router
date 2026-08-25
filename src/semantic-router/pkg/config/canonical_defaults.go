@@ -4,7 +4,6 @@ package config
 // canonical config omits all or part of the global block.
 func DefaultCanonicalGlobal() CanonicalGlobal {
 	defaults := CanonicalGlobal{
-		ControlPlane: DefaultControlPlaneConfig(),
 		Router:       defaultCanonicalRouterGlobal(),
 		Services:     defaultCanonicalServiceGlobal(),
 		Stores:       defaultCanonicalStoreGlobal(),
@@ -16,7 +15,10 @@ func DefaultCanonicalGlobal() CanonicalGlobal {
 
 func defaultCanonicalRouterGlobal() CanonicalRouterGlobal {
 	return CanonicalRouterGlobal{
-		ClearRouteCache: true,
+		AutoModelName:             DefaultAutoModelName,
+		IncludeConfigModelsInList: false,
+		ClearRouteCache:           true,
+		ModelSelection:            defaultRuntimeModelSelection(),
 	}
 }
 
@@ -82,7 +84,7 @@ func defaultCanonicalServiceGlobal() CanonicalServiceGlobal {
 				},
 				Resource: TracingResourceConfig{
 					ServiceName:           "vllm-sr",
-					ServiceVersion:        "v0.4.0",
+					ServiceVersion:        "v0.3.0",
 					DeploymentEnvironment: "development",
 				},
 			},

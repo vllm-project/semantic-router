@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     embeddings:
       - name: technical_support

@@ -208,7 +208,8 @@ local concurrency_count = 0
 local enforce_binding_count = 0
 local enforce_bindings = {}
 redis.call("HSET", KEYS[2], "state", "admitted", "digest", admission_digest,
-  "plan_digest", plan_digest, "deadline", string.format("%.0f", deadline))
+  "plan_digest", plan_digest, "lease_ms", string.format("%.0f", lease_milliseconds),
+  "heartbeat_at", string.format("%.0f", now), "deadline", string.format("%.0f", deadline))
 
 for index = 1, rule_count do
   local key_offset = 4 + precondition_count + (index - 1) * 4

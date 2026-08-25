@@ -37,7 +37,11 @@ func (store *Store) CreateTurn(
 			if err != nil {
 				return result{}, err
 			}
-			turn.Revision = int64(stored.Resource.ResourceRevision)
+			storedRevision, revisionErr := resourceRevisionInt64(stored.Resource.ResourceRevision)
+			if revisionErr != nil {
+				return result{}, revisionErr
+			}
+			turn.Revision = storedRevision
 			return result{turn: turn, replayed: true}, nil
 		}
 		var sessionStatus agentmanagement.SessionStatus

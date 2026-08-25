@@ -23,6 +23,7 @@ type ExchangeChallengeStore interface {
 type SubjectTokenType string
 
 const (
+	// #nosec G101 -- these are public token-format identifiers, not credential material.
 	SubjectTokenOIDCIDToken     SubjectTokenType = "oidc_id_token"
 	SubjectTokenRouterAssertion SubjectTokenType = "router_local_assertion"
 )

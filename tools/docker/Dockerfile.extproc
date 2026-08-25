@@ -475,7 +475,7 @@ RUN cd src/semantic-router && \
 RUN cd src/semantic-router && \
     CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" \
     go build -buildvcs=false -ldflags="-w -s" \
-    -o ../../bin/access-migrate ./cmd/access-migrate
+    -o ../../bin/management-migrate ./cmd/management-migrate
 
 # ============================================================================
 # Final stage: runtime image (candle on all platforms, onnx + openvino on amd64 only)
@@ -496,7 +496,7 @@ WORKDIR /app
 
 # Copy generated router binaries (arm64 has router-candle only)
 COPY --from=go-builder /app/bin/ /app/
-COPY --from=go-builder /app/bin/access-migrate /usr/local/bin/access-migrate
+COPY --from=go-builder /app/bin/management-migrate /usr/local/bin/management-migrate
 
 # Copy all shared libraries (candle, onnx, onnxruntime, ml, nlp, openvino) from staged directory
 COPY --from=go-builder /app/lib/ /app/lib/

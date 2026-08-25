@@ -24,7 +24,7 @@ const (
 
 func TestAPIKeyRoutesDeliverCanonicalSecretAndAuthorizeOwner(t *testing.T) {
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
-	key := testManagedAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
+	key := testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
 	body := `{"data":{"keyId":"` + testAPIKeyID + `","name":"user@example.test","owner":{"type":"user","id":"` + testAPIKeyOwnerID + `"},"status":"active","revision":1,"createdAt":"2026-08-22T12:00:00Z","updatedAt":"2026-08-22T12:00:00Z"},"credential":{"credentialId":"` + testCredentialID + `","keyId":"` + testAPIKeyID + `","kid":"credential-kid","status":"active","revealable":true,"notBefore":"2026-08-22T12:00:00Z","createdAt":"2026-08-22T12:00:00Z"},"secret":"vsr_credential-kid_secret","deliveryExpiresAt":"2026-08-22T12:05:00Z"}`
 	service := &apiKeyServiceStub{get: key, create: apikeymanagement.SecretMutationResult{
 		Key: key, ResponseRevision: 1, CanonicalJSON: []byte(body), Replayed: true,
@@ -59,7 +59,7 @@ func TestAPIKeyRoutesDeliverCanonicalSecretAndAuthorizeOwner(t *testing.T) {
 
 func TestAPIKeyRoutesPushExactKeyScopeBeforePagination(t *testing.T) {
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
-	first := testManagedAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
+	first := testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
 	service := &apiKeyServiceStub{list: apikeymanagement.KeyPage{
 		Items: []accesscontrol.APIKey{first}, NextCursor: "opaque-next", HasMore: true, PageSize: 2,
 	}}
@@ -96,7 +96,7 @@ func TestAPIKeyRoutesPushExactKeyScopeBeforePagination(t *testing.T) {
 
 func TestAPIKeyCreateAuthorizesAndForwardsExplicitPolicyBindings(t *testing.T) {
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
-	key := testManagedAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
+	key := testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
 	service := &apiKeyServiceStub{create: apikeymanagement.SecretMutationResult{
 		Key: key, ResponseRevision: 1, CanonicalJSON: []byte(`{"data":{}}`),
 	}}
@@ -135,7 +135,7 @@ func TestAPIKeyCreateAuthorizesAndForwardsExplicitPolicyBindings(t *testing.T) {
 
 func TestAPIKeyActionsHidePreconditionStateFromOutOfScopeCaller(t *testing.T) {
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
-	service := &apiKeyServiceStub{get: testManagedAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)}
+	service := &apiKeyServiceStub{get: testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)}
 	routes := newTestAPIKeyRoutes(t, service, apiKeyAuthorizerFunc(func(context.Context, AuthorizationRequest) (AuthorizationDecision, error) {
 		return AuthorizationDecision{}, managementauthorization.ErrDenied
 	}))
@@ -173,7 +173,7 @@ func TestAPIKeyRoutesEnforceCASIdempotencyAndStrictBodies(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			service := &apiKeyServiceStub{get: testManagedAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)}
+			service := &apiKeyServiceStub{get: testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)}
 			routes := newTestAPIKeyRoutes(t, service, &authorizerStub{})
 			request := authorizedRequest(t, test.method, test.target, strings.NewReader(test.body))
 			if test.contentType != "" {
@@ -295,7 +295,7 @@ func newTestAPIKeyRoutes(t *testing.T, service APIKeyManagementService, authoriz
 	return routes
 }
 
-func testManagedAPIKey(keyID, ownerID string, now time.Time) accesscontrol.APIKey {
+func testManagementAPIKey(keyID, ownerID string, now time.Time) accesscontrol.APIKey {
 	return accesscontrol.APIKey{
 		NamespaceID: testNamespaceID, ID: accesscontrol.APIKeyID(keyID), Name: "user@example.test",
 		Owner: accesscontrol.SubjectRef{

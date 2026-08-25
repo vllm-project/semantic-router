@@ -104,7 +104,7 @@ func (r *OpenAIRouter) issueBackendDispatchCapability(
 	}
 	generation, ok := routingcontext.GenerationFrom(ctx.TraceContext)
 	if !ok {
-		return "", fmt.Errorf("managed routing generation is unavailable")
+		return "", fmt.Errorf("durable routing generation is unavailable")
 	}
 	candidates, fallback, admission, err := dispatchChainAuthorization(ctx, model)
 	if err != nil {
@@ -130,10 +130,10 @@ func dispatchChainAuthorization(
 	ctx *RequestContext,
 	model string,
 ) ([]dispatchauthority.CandidateIssue, backendinvoker.FallbackPolicy, *accessruntime.Admission, error) {
-	if ctx == nil || ctx.ManagedDispatch == nil {
+	if ctx == nil || ctx.DispatchState == nil {
 		return nil, backendinvoker.FallbackPolicy{}, nil, fmt.Errorf("dispatch chain is unavailable")
 	}
-	dispatchState := ctx.ManagedDispatch
+	dispatchState := ctx.DispatchState
 	dispatchState.mu.Lock()
 	if dispatchState.primaryDispatchID == "" || dispatchState.primaryCandidateCount < 1 ||
 		dispatchState.primaryCandidateCount > len(dispatchState.dispatches) {
@@ -226,13 +226,13 @@ func (r *OpenAIRouter) finalizeBackendDispatchResponse(
 	if err != nil {
 		return r.createInferenceAccessError(quotaruntime.AdmissionUnavailable, nil)
 	}
-	if ctx.ManagedDispatch != nil {
-		ctx.ManagedDispatch.mu.Lock()
-		ctx.ManagedDispatch.capabilityIssued = true
-		ctx.ManagedDispatch.requestDigest = backendinvoker.RequestDigest(
+	if ctx.DispatchState != nil {
+		ctx.DispatchState.mu.Lock()
+		ctx.DispatchState.capabilityIssued = true
+		ctx.DispatchState.requestDigest = backendinvoker.RequestDigest(
 			http.MethodPost, requestWirePath(ctx.SourceFormat), "", body,
 		)
-		ctx.ManagedDispatch.mu.Unlock()
+		ctx.DispatchState.mu.Unlock()
 	}
 	setHeaderValue(common.HeaderMutation, backendinvoker.DispatchCapabilityHeader, capability)
 	return response

@@ -75,7 +75,7 @@ def config_router(config_path: str) -> None:
 @click.option(
     "--output",
     "output_path",
-    help="Path for validated v0.4 YAML. Defaults to <source>.v0.4.yaml.",
+    help="Path for rewritten current v0.3 YAML. Defaults to <source>.migrated.yaml.",
 )
 @click.option(
     "--force",
@@ -88,7 +88,7 @@ def config_migrate(
     output_path: str | None,
     force: bool,
 ) -> None:
-    """Convert canonical v0.3 YAML to the strict v0.4 contract offline."""
+    """Rewrite previous-release v0.3 YAML to strict current v0.3 offline."""
 
     migrate_config_command(
         config_path=config_path,
@@ -129,7 +129,7 @@ def config_import(
     target_path: str,
     force: bool,
 ) -> None:
-    """Import a supported external config source into canonical v0.4 YAML."""
+    """Import a supported external config source into canonical v0.3 YAML."""
 
     import_config_from_source_command(
         from_type=from_type,

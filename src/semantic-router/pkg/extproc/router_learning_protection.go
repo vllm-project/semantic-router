@@ -406,8 +406,8 @@ func (r *OpenAIRouter) protectionIdentity(
 }
 
 // authenticatedLearningPartition prevents caller-selected session identifiers
-// from colliding across managed tenants. Standalone requests retain their
-// local session key; managed requests require the authenticated namespace and
+// from colliding across authenticated tenants. File-authority requests retain their
+// local session key; authenticated requests require the authenticated namespace and
 // API-key identity carried in TenantContext.
 func authenticatedLearningPartition(ctx *RequestContext) (string, bool) {
 	if ctx == nil || ctx.InferenceAccess == nil {

@@ -129,6 +129,7 @@ func (queries PostgresQueries) List(
 		where += fmt.Sprintf(" AND (created_at, id) < ($%d, $%d::uuid)", len(args)-1, len(args))
 	}
 	args = append(args, query.PageSize+1)
+	// #nosec G201 -- queryWhere emits only fixed column/cast clauses; every value remains a bind parameter.
 	statement := fmt.Sprintf(`SELECT id::text, namespace_id::text, desired_revision,
   chain_sequence, COALESCE(actor_principal_id::text,''), actor_chain, action,
   resource_type, COALESCE(resource_id,''), request_id, COALESCE(source_ip::text,''),

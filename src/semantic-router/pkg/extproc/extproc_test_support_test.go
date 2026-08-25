@@ -113,7 +113,7 @@ func bindAuthoritativeTestTerminal(
 	store := backendinvoker.NewLocalResponseTerminalStore()
 	router.ResponseTerminals = store
 	reference := testResponseTerminalReference(ctx.RequestID, dispatchID, ctx.RequestModel)
-	ctx.ManagedDispatch = &managedRequestDispatch{
+	ctx.DispatchState = &requestDispatchState{
 		requestID: ctx.RequestID, primaryDispatchID: dispatchID, selectedDispatchID: dispatchID,
 		dispatches: []*inferenceDispatch{{
 			id: dispatchID, terminalReference: reference,

@@ -101,15 +101,15 @@ func TestRedisResponseTerminalStoreRejectsMalformedAndUnavailableEvidence(t *tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := client.Set(context.Background(), keys.record, `{"schema":"unexpected"}`, time.Minute).Err(); err != nil {
-		t.Fatal(err)
+	if setErr := client.Set(context.Background(), keys.record, `{"schema":"unexpected"}`, time.Minute).Err(); setErr != nil {
+		t.Fatal(setErr)
 	}
-	if _, found, err := store.Take(context.Background(), reference); found ||
-		!errors.Is(err, ErrResponseTerminalUnavailable) {
-		t.Fatalf("malformed Take = (found %v, error %v)", found, err)
+	if _, found, takeErr := store.Take(context.Background(), reference); found ||
+		!errors.Is(takeErr, ErrResponseTerminalUnavailable) {
+		t.Fatalf("malformed Take = (found %v, error %v)", found, takeErr)
 	}
-	if _, found, err := store.Take(context.Background(), reference); err != nil || found {
-		t.Fatalf("malformed evidence was not consumed once = (found %v, error %v)", found, err)
+	if _, found, takeErr := store.Take(context.Background(), reference); takeErr != nil || found {
+		t.Fatalf("malformed evidence was not consumed once = (found %v, error %v)", found, takeErr)
 	}
 
 	unavailableClient := redis.NewClient(&redis.Options{

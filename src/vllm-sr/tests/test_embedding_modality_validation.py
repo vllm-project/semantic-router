@@ -13,7 +13,7 @@ from cli.validator import validate_embedding_modality_compatibility
 
 
 def _parse_config_from_yaml(config_yaml: str):
-    """Parse a v0.4 canonical config YAML string into a UserConfig."""
+    """Parse a v0.3 canonical config YAML string into a UserConfig."""
     data = yaml.safe_load(config_yaml)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.safe_dump(data, f, sort_keys=False)
@@ -29,34 +29,41 @@ def _base_config_with_embeddings(
     query_modality: str,
     model_type: str = "qwen3",
 ) -> str:
-    """Return a minimal v0.4 canonical config containing one embedding rule.
+    """Return a minimal v0.3 canonical config containing one embedding rule.
 
-    The embedding model_type is configured under the canonical v0.4 path
+    The embedding model_type is configured under the canonical v0.3 path
     (global.model_catalog.embeddings.semantic.embedding_config.model_type).
     """
     document = {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
-        "models": [
-            {
-                "name": "qwen3-8b",
-                "card": {
+        "providers": {
+            "models": [
+                {
+                    "name": "qwen3-8b",
+                    "provider_model_id": "qwen3-8b",
+                    "backend_refs": [
+                        {
+                            "provider": "openai-compatible",
+                            "base_url": "http://127.0.0.1:8000/v1",
+                        }
+                    ],
+                }
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {
+                    "name": "qwen3-8b",
                     "description": "Model used by embedding validation tests.",
                     "capabilities": ["chat"],
-                },
-                "connections": [
-                    {
-                        "provider": "openai-compatible",
-                        "endpoint": "http://127.0.0.1:8000/v1",
-                        "model": "qwen3-8b",
-                    }
-                ],
-            }
-        ],
+                }
+            ]
+        },
         "recipes": [
             {
                 "name": "default",
-                "document": {
+                "routing": {
                     "signals": {
                         "embeddings": [
                             {
@@ -83,8 +90,7 @@ def _base_config_with_embeddings(
         ],
         "entrypoints": [
             {
-                "name": "vllm-sr/default",
-                "aliases": ["default"],
+                "model_names": ["vllm-sr/default", "default"],
                 "recipe": "default",
                 "assignments": {"default-route": {"models": [{"model": "qwen3-8b"}]}},
             }
@@ -150,7 +156,7 @@ def test_audio_modality_rejected_with_planned_message():
 
 def test_no_embeddings_returns_no_errors():
     data = yaml.safe_load(_base_config_with_embeddings(query_modality="text"))
-    data["recipes"][0]["document"]["signals"] = {}
+    data["recipes"][0]["routing"]["signals"] = {}
     config = _parse_config_from_yaml(yaml.safe_dump(data, sort_keys=False))
     assert validate_embedding_modality_compatibility(config) == []
 
@@ -158,7 +164,7 @@ def test_no_embeddings_returns_no_errors():
 def test_omitted_query_modality_defaults_to_text():
     """A rule that doesn't set query_modality should be treated as text and pass."""
     data = yaml.safe_load(_base_config_with_embeddings(query_modality="text"))
-    rule = data["recipes"][0]["document"]["signals"]["embeddings"][0]
+    rule = data["recipes"][0]["routing"]["signals"]["embeddings"][0]
     rule["name"] = "implicit_text"
     rule.pop("query_modality")
     config = _parse_config_from_yaml(yaml.safe_dump(data, sort_keys=False))
@@ -172,7 +178,7 @@ def test_image_modality_when_model_type_path_is_absent():
     """If global.model_catalog.embeddings.semantic.embedding_config is missing,
     treat model_type as empty and reject image-modality rules accordingly."""
     data = yaml.safe_load(_base_config_with_embeddings(query_modality="image"))
-    data["recipes"][0]["document"]["signals"]["embeddings"][0][
+    data["recipes"][0]["routing"]["signals"]["embeddings"][0][
         "name"
     ] = "image_rule_no_model_type"
     data["global"].pop("model_catalog")

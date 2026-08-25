@@ -94,6 +94,7 @@ WHERE namespace_id=$1 AND admission_id=$2`, namespaceID, admissionID).
 	args := []any{namespaceID, eventPartitionDate, admissionID}
 	appendRawLogVisibility(&clauses, &args, visibility)
 	where := strings.Join(clauses, " AND ")
+	// #nosec G201 -- predicate clauses are assembled from fixed fields and parameter placeholders only.
 	statement := fmt.Sprintf(`SELECT admission_id, event_id::text, occurred_at, protocol, path,
   status_code, COALESCE(error_code,''), usage_state, input_tokens::text, output_tokens::text,
   latency_ms, ttft_ms, COALESCE(api_key_id::text,''), COALESCE(user_id::text,''), COALESCE(team_id::text,''),

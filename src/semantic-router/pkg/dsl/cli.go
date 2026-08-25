@@ -1,6 +1,7 @@
 package dsl
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -8,16 +9,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-// ConfigBytesParser is the application-owned standalone Config parser used by
+// ConfigBytesParser is the application-owned Config parser used by
 // decompile. pkg/dsl stays Provider-neutral; the command composition root
 // injects the Provider Integration compiler installed in that binary.
 type ConfigBytesParser func([]byte) (*config.RouterConfig, error)
 
-// CLICompile reads a DSL file, compiles it, and writes one model-free Recipe
-// document. There is deliberately no CRD or Helm translation here: those
-// deployment surfaces own their complete v0.4 resource contracts.
+// CLICompile reads a DSL file, compiles it, and writes one model-free routing
+// fragment. There is deliberately no CRD or Helm translation here: those
+// deployment surfaces own their complete runtime resource contracts.
 // basePath, when non-empty, points to a YAML file with infrastructure config
-// and exactly one Recipe whose document is replaced by the compiled value.
+// and exactly one Recipe whose routing profile is replaced by the compiled value.
 func CLICompile(inputPath, outputPath, basePath string) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -44,8 +45,8 @@ func CLICompile(inputPath, outputPath, basePath string) error {
 	return writeOutput(output, outputPath)
 }
 
-// emitMergedConfig reads a complete v0.4 base manifest and replaces its sole
-// Recipe document with the DSL-compiled document.
+// emitMergedConfig reads a complete base manifest and replaces its sole
+// Recipe routing profile with the DSL-compiled value.
 func emitMergedConfig(cfg *config.RouterConfig, basePath string) ([]byte, error) {
 	baseData, err := os.ReadFile(basePath)
 	if err != nil {
@@ -61,8 +62,8 @@ func CLIDecompile(inputPath, outputPath string) error {
 	return CLIDecompileWithParser(inputPath, outputPath, nil)
 }
 
-// CLIDecompileWithParser decompiles either a complete v0.4 manifest through
-// the injected application parser or a narrow model-free Recipe document.
+// CLIDecompileWithParser decompiles either a complete manifest through the
+// injected application parser or a narrow model-free Recipe authoring value.
 func CLIDecompileWithParser(inputPath, outputPath string, parseConfig ConfigBytesParser) error {
 	data, err := os.ReadFile(inputPath)
 	if err != nil {
@@ -76,27 +77,31 @@ func CLIDecompileWithParser(inputPath, outputPath string, parseConfig ConfigByte
 	return writeOutput([]byte(dslText), outputPath)
 }
 
-// DecompileYAML converts either a complete v0.4 manifest through an
-// application-provided parser or the provider-neutral Recipe document that
-// the DSL Builder owns. Callers without a Provider Integration compiler can
-// only decompile the narrow document form.
+// DecompileYAML converts either a complete manifest through an
+// application-provided parser or one of the provider-neutral Recipe values
+// owned by the DSL boundary: {routing: ...} or
+// {recipes: [{name, description, routing}]}. Callers without a Provider
+// Integration compiler can only decompile those narrow forms.
 func DecompileYAML(data []byte, parseConfig ConfigBytesParser) (string, error) {
 	var cfg *config.RouterConfig
 	var manifestErr error
-	var err error
 	if parseConfig != nil {
 		cfg, manifestErr = parseConfig(data)
+		if manifestErr != nil {
+			cfg = nil
+		}
 	}
 	if cfg == nil {
-		cfg, _ = parseRecipeBundleYAML(data)
-	}
-	if cfg == nil {
-		cfg, err = config.ParseRoutingYAMLBytes(data)
-		if err != nil {
+		var recipeErr error
+		cfg, recipeErr = parseRecipeAuthoringYAML(data)
+		if recipeErr != nil {
 			if manifestErr != nil {
-				return "", fmt.Errorf("failed to parse v0.4 manifest: %w", manifestErr)
+				return "", fmt.Errorf("failed to parse YAML: %w", errors.Join(
+					fmt.Errorf("manifest: %w", manifestErr),
+					fmt.Errorf("recipe authoring YAML: %w", recipeErr),
+				))
 			}
-			return "", fmt.Errorf("failed to parse Recipe document: %w", err)
+			return "", fmt.Errorf("failed to parse Recipe authoring YAML: %w", recipeErr)
 		}
 	}
 

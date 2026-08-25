@@ -14,6 +14,14 @@ func renderAgentClient(
 	document managementapi.OpenAPIDocument,
 	operations []managementapi.OperationContract,
 ) {
+	agentOperations := sortedAgentOperations(operations)
+	renderAgentOperationTypes(output, document, agentOperations)
+	renderAgentTypeSupport(output)
+	renderAgentClientInterface(output, document, agentOperations)
+	renderAgentClientFactory(output, document, agentOperations)
+}
+
+func sortedAgentOperations(operations []managementapi.OperationContract) []managementapi.OperationContract {
 	agentOperations := make([]managementapi.OperationContract, 0)
 	for _, operation := range operations {
 		if isAgentClientOperation(operation) {
@@ -23,9 +31,16 @@ func renderAgentClient(
 	sort.Slice(agentOperations, func(i, j int) bool {
 		return agentOperations[i].OperationID < agentOperations[j].OperationID
 	})
+	return agentOperations
+}
 
+func renderAgentOperationTypes(
+	output *strings.Builder,
+	document managementapi.OpenAPIDocument,
+	operations []managementapi.OperationContract,
+) {
 	output.WriteString("\nexport interface ManagementApiAgentOperationTypes {\n")
-	for _, operation := range agentOperations {
+	for _, operation := range operations {
 		openAPIOperation := document.Paths[operation.Path][strings.ToLower(string(operation.Method))]
 		fmt.Fprintf(output, "  %s: {\n", operation.OperationID)
 		fmt.Fprintf(output, "    body: %s\n", operationRequestType(openAPIOperation))
@@ -34,7 +49,9 @@ func renderAgentClient(
 		output.WriteString("  }\n")
 	}
 	output.WriteString("}\n\n")
+}
 
+func renderAgentTypeSupport(output *strings.Builder) {
 	output.WriteString("export type ManagementApiAgentOperationId = keyof ManagementApiAgentOperationTypes\n")
 	output.WriteString("export type ManagementApiAgentRequestBody<OperationId extends ManagementApiAgentOperationId> =\n")
 	output.WriteString("  ManagementApiAgentOperationTypes[OperationId]['body']\n")
@@ -77,9 +94,15 @@ func renderAgentClient(
 	output.WriteString("    options: ManagementApiAgentRequestOptions<OperationId>,\n")
 	output.WriteString("  ): Promise<ManagementApiClientResponse<unknown>>\n")
 	output.WriteString("}\n\n")
+}
 
+func renderAgentClientInterface(
+	output *strings.Builder,
+	document managementapi.OpenAPIDocument,
+	operations []managementapi.OperationContract,
+) {
 	output.WriteString("export interface ManagementApiAgentClient {\n")
-	for _, operation := range agentOperations {
+	for _, operation := range operations {
 		fmt.Fprintf(output, "  %s(\n", operation.OperationID)
 		if operationRequiresOptions(operation, document) {
 			fmt.Fprintf(output, "    options: ManagementApiAgentRequestOptions<%s>,\n", tsString(operation.OperationID))
@@ -93,12 +116,18 @@ func renderAgentClient(
 		)
 	}
 	output.WriteString("}\n\n")
+}
 
+func renderAgentClientFactory(
+	output *strings.Builder,
+	document managementapi.OpenAPIDocument,
+	operations []managementapi.OperationContract,
+) {
 	output.WriteString("export function createManagementApiAgentClient(\n")
 	output.WriteString("  transport: ManagementApiAgentTransport,\n")
 	output.WriteString("): ManagementApiAgentClient {\n")
 	output.WriteString("  return {\n")
-	for _, operation := range agentOperations {
+	for _, operation := range operations {
 		openAPIOperation := document.Paths[operation.Path][strings.ToLower(string(operation.Method))]
 		fmt.Fprintf(output, "    %s: async (options%s) => {\n", operation.OperationID, optionalDefault(operation, document))
 		fmt.Fprintf(output, "      const response = await transport.request(%s, options)\n", tsString(operation.OperationID))

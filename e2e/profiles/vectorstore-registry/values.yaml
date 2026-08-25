@@ -4,22 +4,26 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: openai/gpt-oss-20b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
-      model: openai/gpt-oss-20b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+  providers:
+    models:
+    - name: openai/gpt-oss-20b
+      provider_model_id: openai/gpt-oss-20b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+  routing:
+    modelCards:
+    - name: openai/gpt-oss-20b
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals: {}
       decisions:
       - name: default_decision
@@ -29,8 +33,8 @@ config:
           operator: AND
           conditions: []
   entrypoints:
-  - name: vllm-sr/auto
-    aliases:
+  - model_names:
+    - vllm-sr/auto
     - auto
     recipe: default
     assignments:

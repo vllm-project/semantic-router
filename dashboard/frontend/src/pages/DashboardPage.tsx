@@ -54,6 +54,8 @@ const DashboardPage: React.FC = () => {
 
   const canReadConfig = canAccessDashboardPath(user, '/config/models')
   const canReadAccess = canAccessDashboardPath(user, '/access/usage')
+  const canReadStatus = canAccessDashboardPath(user, '/status')
+  const canUsePlayground = canAccessDashboardPath(user, '/playground')
   const fetchAccess = useCallback(async () => {
     if (!canReadAccess) return
     setAccessOverview(await inferenceAccessApi.overview())
@@ -158,6 +160,9 @@ const DashboardPage: React.FC = () => {
         signalCount={signalStats.total}
         decisionCount={decisionCount}
         apiKeyCount={accessOverview?.activeKeys ?? null}
+        showRoutingMetrics={canReadConfig}
+        showAPIKeyMetric={canReadAccess}
+        showPlaygroundAction={canUsePlayground}
         overallStatus={status?.overall}
         refreshing={refreshing}
         lastUpdated={lastUpdated}
@@ -214,14 +219,16 @@ const DashboardPage: React.FC = () => {
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>System Health</h2>
-              <button
-                type="button"
-                className={styles.cardAction}
-                onClick={() => navigate('/status')}
-              >
-                Details
-                <ProductIcon name="chevron-right" aria-hidden="true" />
-              </button>
+              {canReadStatus ? (
+                <button
+                  type="button"
+                  className={styles.cardAction}
+                  onClick={() => navigate('/status')}
+                >
+                  Details
+                  <ProductIcon name="chevron-right" aria-hidden="true" />
+                </button>
+              ) : null}
             </div>
             <div className={styles.healthContent}>
               {status ? (
@@ -267,47 +274,49 @@ const DashboardPage: React.FC = () => {
             </div>
           </div>
 
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>Access</h2>
-              <button
-                type="button"
-                className={styles.cardAction}
-                onClick={() => navigate('/access/usage')}
-              >
-                Details
-                <ProductIcon name="chevron-right" aria-hidden="true" />
-              </button>
-            </div>
-            {accessOverview ? (
-              <div className={styles.accessSnapshot}>
-                {accessOverview.activeKeys !== null && (
-                  <div>
-                    <strong>{formatWholeCount(accessOverview.activeKeys)}</strong>
-                    <span>active keys</span>
-                  </div>
-                )}
-                <div>
-                  <strong>{accessOverview.requestsToday.toLocaleString('en-US')}</strong>
-                  <span>requests today</span>
-                </div>
-                <div>
-                  <strong>{accessOverview.tokensToday.toLocaleString('en-US')}</strong>
-                  <span>tokens today</span>
-                </div>
-                <div>
-                  <strong>
-                    {accessOverview.requestsToday
-                      ? `${Math.round((accessOverview.successfulToday / accessOverview.requestsToday) * 1000) / 10}%`
-                      : '—'}
-                  </strong>
-                  <span>success rate</span>
-                </div>
+          {canReadAccess ? (
+            <div className={styles.card}>
+              <div className={styles.cardHeader}>
+                <h2 className={styles.cardTitle}>Access</h2>
+                <button
+                  type="button"
+                  className={styles.cardAction}
+                  onClick={() => navigate('/access/usage')}
+                >
+                  Details
+                  <ProductIcon name="chevron-right" aria-hidden="true" />
+                </button>
               </div>
-            ) : (
-              <div className={styles.emptyState}>Access data is unavailable</div>
-            )}
-          </div>
+              {accessOverview ? (
+                <div className={styles.accessSnapshot}>
+                  {accessOverview.activeKeys !== null && (
+                    <div>
+                      <strong>{formatWholeCount(accessOverview.activeKeys)}</strong>
+                      <span>active keys</span>
+                    </div>
+                  )}
+                  <div>
+                    <strong>{accessOverview.requestsToday.toLocaleString('en-US')}</strong>
+                    <span>requests today</span>
+                  </div>
+                  <div>
+                    <strong>{accessOverview.tokensToday.toLocaleString('en-US')}</strong>
+                    <span>tokens today</span>
+                  </div>
+                  <div>
+                    <strong>
+                      {accessOverview.requestsToday
+                        ? `${Math.round((accessOverview.successfulToday / accessOverview.requestsToday) * 1000) / 10}%`
+                        : '—'}
+                    </strong>
+                    <span>success rate</span>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.emptyState}>Access data is unavailable</div>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -335,9 +344,9 @@ const DashboardPage: React.FC = () => {
             </button>
           </div>
           {config?.models.length ? (
-            <div className={styles.servicesList}>
+            <div className={`${styles.servicesList} ${styles.modelList}`}>
               {config.models.slice(0, 6).map((model) => (
-                <div key={model.id} className={styles.serviceRow}>
+                <div key={model.id} className={`${styles.serviceRow} ${styles.modelRow}`}>
                   <span className={`${styles.svcDot} ${styles.svcDotOk}`} />
                   <span className={styles.svcName}>{model.name}</span>
                   <span className={styles.svcStatus}>Configured</span>

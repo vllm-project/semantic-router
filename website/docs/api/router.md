@@ -49,25 +49,30 @@ usage, and optional router headers depend on the selected backend and recipe.
 See [VSR routing headers](../troubleshooting/vsr-headers) for the stable
 observability contract.
 
-The Router accepts concrete names from `models[]` and virtual names from an
-Entrypoint's `name` or `aliases`. A Model owns a readable card, execution and
-pricing policy, plus one or more provider connections. The connection's
-`model` value is sent to the upstream provider:
+The Router accepts concrete names from `providers.models[]` and virtual names
+from an Entrypoint's `model_names`. Physical connection and invocation policy
+stay under `providers`; semantic metadata stays in `routing.modelCards`. The
+`provider_model_id` is sent to the upstream provider:
 
 ```yaml
-models:
-  - name: local-small
-    card:
+providers:
+  models:
+    - name: local-small
+      provider_model_id: served-model
+      backend_refs:
+        - provider: vllm
+          base_url: http://model-server:8000/v1
+      control:
+        retry:
+          count: 1
+          on: [unavailable]
+      pricing:
+        input_cost_per_million_tokens: "0"
+        output_cost_per_million_tokens: "0"
+routing:
+  modelCards:
+    - name: local-small
       capabilities: [chat]
-    connections:
-      - provider: vllm
-        endpoint: http://model-server:8000/v1
-        model: served-model
-    runtime:
-      max_retries: 1
-    pricing:
-      input_cost_per_million_tokens: "0"
-      output_cost_per_million_tokens: "0"
 global:
   billing:
     currency: USD
@@ -75,8 +80,8 @@ global:
 
 Pricing is operator-supplied metadata, not a live quote. Keep it aligned with
 the provider contract when cost-aware selection or replay accounting uses it.
-All Model rates in one standalone manifest use `global.billing.currency`;
-managed deployments take that currency from their Namespace.
+All Model rates use `global.billing.currency`. When an empty Management store is
+initialized, the Namespace adopts that currency and becomes authoritative.
 
 ### Responses API
 
@@ -119,7 +124,7 @@ permitted loss produces bounded diagnostics without exposing request content.
 
 ## Submit outcome feedback
 
-Managed access exposes outcome feedback on the public inference listener. Use
+Router-native access exposes outcome feedback on the public inference listener. Use
 the same API key that made the inference request, or a delegated inference
 session derived from that key. The Router binds feedback to the durable replay
 and derives namespace, logical key, User, Team, and authentication source from

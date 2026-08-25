@@ -64,6 +64,48 @@ docs-fix-translation-status: ## Update unambiguous documentation translation out
 	exit_code=$$?; \
 	if [ $$exit_code -ne 0 ] && [ $$exit_code -ne 1 ]; then exit $$exit_code; fi
 
+##@ Helm Documentation
+
+HELM_DOCS_VERSION ?= v1.14.2
+HELM_DOCS_BIN ?= $(TOOLS_BIN_DIR)/helm-docs-$(HELM_DOCS_VERSION)
+HELM_DOCS_CHART ?= deploy/helm/semantic-router
+
+.PHONY: install-helm-docs
+install-helm-docs: ## Install the pinned Helm documentation generator
+	@$(LOG_TARGET)
+	@if [ ! -x "$(HELM_DOCS_BIN)" ]; then \
+		echo "Installing helm-docs..."; \
+		tmp_dir=$$(mktemp -d); \
+		trap 'rm -rf -- "$$tmp_dir"' EXIT; \
+		GOBIN="$$tmp_dir" go install github.com/norwoodj/helm-docs/cmd/helm-docs@$(HELM_DOCS_VERSION); \
+		mkdir -p "$(dir $(HELM_DOCS_BIN))"; \
+		install -m 0755 "$$tmp_dir/helm-docs" "$(HELM_DOCS_BIN)"; \
+	else \
+		echo "helm-docs $(HELM_DOCS_VERSION) is already installed at $(HELM_DOCS_BIN)"; \
+	fi
+
+.PHONY: docs-helm
+docs-helm: install-helm-docs ## Generate the Helm chart README from Chart.yaml and values.yaml
+	@$(LOG_TARGET)
+	@$(HELM_DOCS_BIN) \
+		--chart-search-root "$(HELM_DOCS_CHART)" \
+		--skip-version-footer
+
+.PHONY: docs-helm-check
+docs-helm-check: install-helm-docs ## Check that the generated Helm chart README is current
+	@$(LOG_TARGET)
+	@tmp_dir=$$(mktemp -d); \
+	trap 'rm -rf -- "$$tmp_dir"' EXIT; \
+	cp "$(HELM_DOCS_CHART)/Chart.yaml" "$$tmp_dir/Chart.yaml"; \
+	cp "$(HELM_DOCS_CHART)/values.yaml" "$$tmp_dir/values.yaml"; \
+	cp "$(HELM_DOCS_CHART)/README.md.gotmpl" "$$tmp_dir/README.md.gotmpl"; \
+	$(HELM_DOCS_BIN) --chart-search-root "$$tmp_dir" --skip-version-footer; \
+	if ! cmp -s "$(HELM_DOCS_CHART)/README.md" "$$tmp_dir/README.md"; then \
+		echo "Generated Helm README is out of date. Run make docs-helm."; \
+		diff -u "$(HELM_DOCS_CHART)/README.md" "$$tmp_dir/README.md" || true; \
+		exit 1; \
+	fi
+
 ##@ CRD Documentation
 
 CRD_REF_DOCS_VERSION ?= v0.3.0

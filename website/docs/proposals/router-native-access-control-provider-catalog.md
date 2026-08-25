@@ -175,11 +175,11 @@ Registry from:
 
 The executable application constructor is the only place that selects the shipped
 Integration set. It injects typed `Integration` and `BackendCompiler` values into
-managed process composition. The managed runtime derives installed wire formats,
+process composition. A runtime with a Management store derives installed wire formats,
 credential, and discovery capability IDs from its immutable registries, then
 constructs and validates the catalog before opening desired-state stores or serving
 Management traffic. Missing Integrations, compilers, or referenced adapters fail
-startup. The managed runtime contains no fallback Provider list and never loads a
+startup. The runtime contains no fallback Provider list and never loads a
 Provider product manifest. A different application can therefore compose another
 Integration set without editing Router orchestration or inference code.
 
@@ -189,7 +189,7 @@ computes a content-addressed catalog revision. Unknown capabilities and duplicat
 invalid identities fail process composition. No request, tenant, file watcher, or
 Dashboard action can mutate this registry.
 
-In managed mode the catalog coordinator:
+When a Management store is configured, the catalog coordinator:
 
 1. validates the application registry and its plane-specific capability digests;
 2. stores the immutable catalog value in `provider_catalog_revisions` in PostgreSQL;
@@ -198,7 +198,7 @@ In managed mode the catalog coordinator:
    credential compatibility; and
 4. advances the singleton active catalog pointer only after the declared gate passes.
 
-On a genuinely empty durable store, managed Router startup converges the unique
+On a genuinely empty durable store, Router startup converges the unique
 application-installed catalog without a separate bootstrap client. A replica uses the
 singleton generation as a compare-and-swap token, stages only that installed revision,
 ACKs only its declared rollout-group memberships, and activates only after the complete
@@ -318,21 +318,21 @@ reinterpret an already published snapshot; credential rotation for that pinned
 binding remains possible. Runtime dispatch continues through the pinned neutral codec,
 credential adapter, and compiled backend contract.
 
-## Standalone and managed deployments
+## File-backed and persistent deployments
 
-Managed mode builds the catalog from the application Integration Registry, persists
+With a Management store, Router builds the catalog from the application Integration Registry, persists
 the content-addressed snapshot, and exposes Provider Management APIs. Docker and
 Kubernetes use the same application composition and revision-acknowledgement
 protocol. Provider count is independent of the number of namespaces, Users, or API
 keys; no provider resource is mounted into either environment.
 
-Standalone authoring uses the same Integration Registry and backend compilers in the
+File-backed authoring uses the same Integration Registry and backend compilers in the
 CLI or compiler process. Its final local routing snapshot already contains one wire
 format, canonical origin, compiled non-secret connection, and a bootstrap
 credential reference. Provider catalog APIs, discovery Operations, PostgreSQL
 catalog tables, and dynamic activation are not started.
 
-Both modes derive catalog provenance identically from canonical Integration
+Both deployment shapes derive catalog provenance identically from canonical Integration
 Definitions and registry-owned revisions. The inference runtime never reopens
 provider configuration or selects behavior by Provider product.
 

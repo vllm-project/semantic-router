@@ -30,7 +30,7 @@ grant permissions, bypass guardrails, or establish user identity.
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     metadata:
       - name: consent-denied

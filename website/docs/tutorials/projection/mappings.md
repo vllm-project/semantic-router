@@ -44,7 +44,7 @@ The supported calibration method today is `sigmoid_distance`, which derives conf
 ## Configuration
 
 ```yaml
-document:
+routing:
   projections:
     mappings:
       - name: difficulty_band

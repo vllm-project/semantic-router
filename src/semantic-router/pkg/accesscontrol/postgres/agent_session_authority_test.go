@@ -45,7 +45,7 @@ func TestQueryAgentInferenceKeyUsesOneSQLSideAuthorizationQuery(t *testing.T) {
 		WithArgs(
 			string(testNamespaceID), string(testActorID), nil, true,
 			agentmanagement.TargetModel, string(testResourceID),
-			pq.Array([]string{"discover", "invoke"}),
+			pq.Array([]string{"discover", "invoke"}), string(testAPIKeyID),
 		).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "name", "owner_kind", "owner_id", "context_team_id", "expires_at",
@@ -56,6 +56,7 @@ func TestQueryAgentInferenceKeyUsesOneSQLSideAuthorizationQuery(t *testing.T) {
 		))
 	key, err := queryAgentInferenceKey(
 		context.Background(), tx, string(testNamespaceID), string(testActorID), nil, true,
+		string(testAPIKeyID),
 		resolvedAgentTarget{Kind: agentmanagement.TargetModel, ResourceID: string(testResourceID)},
 		permissions, false,
 	)
@@ -83,6 +84,7 @@ func TestQueryAgentInferenceKeyRejectsEmptyPermissionSetWithoutSQL(t *testing.T)
 	}
 	_, err = queryAgentInferenceKey(
 		context.Background(), tx, string(testNamespaceID), string(testActorID), nil, false,
+		nil,
 		resolvedAgentTarget{Kind: agentmanagement.TargetModel, ResourceID: string(testResourceID)},
 		nil, false,
 	)

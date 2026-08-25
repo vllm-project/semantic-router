@@ -5,13 +5,13 @@ import (
 	"testing"
 )
 
-func strictV04WithGlobal(fragment string) []byte {
-	return []byte(strings.Replace(entrypointRulesYAML, "global:\n", "global:\n"+fragment, 1))
+func strictV03WithGlobal(fragment string) []byte {
+	return []byte(strings.Replace(strictV03AuthoringYAML, "global:\n", "global:\n"+fragment, 1))
 }
 
 func TestParseYAMLBytesRejectsLegacyUserConfigLayout(t *testing.T) {
 	legacyYAML := []byte(`
-version: v0.4
+version: v0.3
 signals: {}
 decisions: []
 providers:
@@ -26,10 +26,7 @@ providers:
 	if err == nil {
 		t.Fatal("expected legacy user config layout to be rejected")
 	}
-	for _, fragment := range []string{
-		"current v0.4",
-		"unexpected top-level keys: decisions, providers, signals",
-	} {
+	for _, fragment := range []string{"providers.default_model", "providers.models[0].endpoints"} {
 		if !strings.Contains(err.Error(), fragment) {
 			t.Fatalf("expected error to mention %q, got: %s", fragment, err)
 		}
@@ -38,7 +35,7 @@ providers:
 
 func TestParseYAMLBytesRejectsTopLevelLegacyRuntimeLayout(t *testing.T) {
 	_, err := testAuthoringParser(t).ParseYAMLBytes([]byte(`
-version: v0.4
+version: v0.3
 default_model: qwen2.5:3b
 semantic_cache: {enabled: false}
 `))
@@ -46,7 +43,7 @@ semantic_cache: {enabled: false}
 		t.Fatal("expected top-level legacy runtime layout to be rejected")
 	}
 	for _, fragment := range []string{
-		"config file must use the current v0.4 version/listeners/models/recipes/entrypoints/global authoring schema",
+		"config file must use the current v0.3 version/listeners/providers/routing/recipes/entrypoints/global authoring schema",
 		"unexpected top-level keys: default_model, semantic_cache",
 	} {
 		if !strings.Contains(err.Error(), fragment) {
@@ -55,8 +52,16 @@ semantic_cache: {enabled: false}
 	}
 }
 
+func TestParseYAMLBytesRequiresExactV03Version(t *testing.T) {
+	document := strings.Replace(strictV03AuthoringYAML, "version: v0.3", "version: ' v0.3 '", 1)
+	_, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
+	if err == nil || !strings.Contains(err.Error(), "version must be v0.3") {
+		t.Fatalf("expected surrounding-whitespace version rejection, got: %v", err)
+	}
+}
+
 func TestParseYAMLBytesRejectsUnknownGlobalModulesField(t *testing.T) {
-	document := strictV04WithGlobal("  modules:\n    prompt_guard:\n      model_ref: prompt_guard\n")
+	document := strictV03WithGlobal("  modules:\n    prompt_guard:\n      model_ref: prompt_guard\n")
 	_, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err == nil || !strings.Contains(err.Error(), "field modules") {
 		t.Fatalf("expected global.modules rejection, got: %v", err)
@@ -64,7 +69,7 @@ func TestParseYAMLBytesRejectsUnknownGlobalModulesField(t *testing.T) {
 }
 
 func TestParseYAMLBytesRejectsUnknownEmbeddingCatalogField(t *testing.T) {
-	document := strictV04WithGlobal("  model_catalog:\n    embeddings:\n      bert:\n        model_id: old-bert\n")
+	document := strictV03WithGlobal("  model_catalog:\n    embeddings:\n      bert:\n        model_id: old-bert\n")
 	_, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err == nil || !strings.Contains(err.Error(), "field bert") {
 		t.Fatalf("expected deprecated embeddings.bert rejection, got: %v", err)
@@ -73,7 +78,7 @@ func TestParseYAMLBytesRejectsUnknownEmbeddingCatalogField(t *testing.T) {
 
 func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *testing.T) {
 	document := []byte(strings.Replace(
-		entrypointRulesYAML,
+		strictV03AuthoringYAML,
 		"          rules: {}",
 		"          rules: {}\n          modelSelectionAlgorithm: {enabled: true, method: router_dc}",
 		1,
@@ -85,7 +90,7 @@ func TestParseYAMLBytesRejectsDeprecatedDecisionModelSelectionAlgorithmField(t *
 }
 
 func TestParseYAMLBytesParsesNestedCanonicalGlobalModules(t *testing.T) {
-	document := strictV04WithGlobal(`  router:
+	document := strictV03WithGlobal(`  router:
     clear_route_cache: false
     streamed_body: {enabled: true, max_bytes: 4096, timeout_sec: 12}
   stores:
@@ -124,7 +129,7 @@ func TestParseYAMLBytesParsesNestedCanonicalGlobalModules(t *testing.T) {
 }
 
 func TestParseYAMLBytesPreservesGlobalServiceDefaultsForSparseOverrides(t *testing.T) {
-	document := strictV04WithGlobal(`  stores:
+	document := strictV03WithGlobal(`  stores:
     memory: {enabled: true, auto_store: true}
   model_catalog:
     embeddings:
@@ -146,7 +151,7 @@ func TestParseYAMLBytesPreservesGlobalServiceDefaultsForSparseOverrides(t *testi
 }
 
 func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *testing.T) {
-	document := strictV04WithGlobal(`  model_catalog:
+	document := strictV03WithGlobal(`  model_catalog:
     modules:
       classifier:
         domain: {threshold: 0.6, use_cpu: true, model_ref: domain_classifier}
@@ -172,13 +177,13 @@ func TestParseYAMLBytesPreservesDefaultSystemModelsForSparseModuleOverrides(t *t
 }
 
 func TestParseYAMLBytesPreservesNativeModelPricing(t *testing.T) {
-	document := strings.Replace(entrypointRulesYAML, "global:\n", "global:\n  billing:\n    currency: USD\n", 1)
-	document = strings.Replace(document, "  - name: model-a\n", `  - name: model-a
-    pricing:
-      input_cost_per_million_tokens: "0.24"
-      output_cost_per_million_tokens: "0.96"
-      cache_read_cost_per_million_tokens: "0.06"
-      cache_write_cost_per_million_tokens: "0.30"
+	document := strings.Replace(strictV03AuthoringYAML, "global:\n", "global:\n  billing:\n    currency: USD\n", 1)
+	document = strings.Replace(document, "    - name: model-a\n", `    - name: model-a
+      pricing:
+        input_cost_per_million_tokens: "0.24"
+        output_cost_per_million_tokens: "0.96"
+        cache_read_cost_per_million_tokens: "0.06"
+        cache_write_cost_per_million_tokens: "0.30"
 `, 1)
 	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
@@ -223,7 +228,7 @@ func TestGetModelPricingResolvesExternalModelID(t *testing.T) {
 }
 
 func TestParseYAMLBytesAllowsClearingRouterOwnedClassifierDefaults(t *testing.T) {
-	document := strictV04WithGlobal(`  model_catalog:
+	document := strictV03WithGlobal(`  model_catalog:
     modules:
       prompt_guard:
         enabled: false
@@ -250,8 +255,13 @@ func TestParseYAMLBytesAllowsClearingRouterOwnedClassifierDefaults(t *testing.T)
 }
 
 func TestParseYAMLBytesParsesCanonicalLoRACatalog(t *testing.T) {
-	document := strings.Replace(entrypointRulesYAML, "    card: {}\n", "    card: {loras: [sql-expert, code-review]}\n", 1)
-	document = strings.Replace(document, "          finish: {models: [{model: model-a}]}", "          finish: {models: [{model: model-a, lora: sql-expert}]}", 1)
+	document := strings.Replace(
+		strictV03AuthoringYAML,
+		"    - {name: model-a}\n",
+		"    - name: model-a\n      loras: [{name: sql-expert}, {name: code-review}]\n",
+		1,
+	)
+	document = strings.Replace(document, "      finish: {models: [{model: model-a}]}", "      finish: {models: [{model: model-a, lora: sql-expert}]}", 1)
 	cfg, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document))
 	if err != nil {
 		t.Fatalf("ParseYAMLBytes returned error: %v", err)

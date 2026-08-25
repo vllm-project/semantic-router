@@ -23,7 +23,7 @@ def write_local_looper_config(tmp_path: Path):
         config_path.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.4",
+                    "version": "v0.3",
                     "listeners": [
                         {
                             "name": "http-generic",
@@ -48,7 +48,7 @@ def test_resolve_effective_config_path_injects_local_service_runtime_defaults(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [
                     {
                         "name": "http-8899",
@@ -93,7 +93,7 @@ def test_resolve_effective_config_path_preserves_explicit_management_listener(
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [{"name": "public", "address": "0.0.0.0", "port": 8899}],
                 "global": {
                     "services": {
@@ -171,7 +171,7 @@ def test_target_neutral_config_skips_all_local_runtime_materialization(
     tmp_path: Path, monkeypatch
 ):
     source = {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http", "port": 8899}],
         "global": {
             "services": {},
@@ -208,7 +208,7 @@ def test_generated_runtime_config_references_credentials_instead_of_carrying_the
     config_path.write_text(
         yaml.safe_dump(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
                 "global": {
                     "services": {
@@ -246,7 +246,7 @@ def test_local_backend_defaults_skip_an_externally_hosted_endpoint():
     external_redis = "redis.external.example:6379"
     external_postgres = "postgres.external.example"
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "services": {
                 "response_api": {
@@ -276,7 +276,7 @@ def test_local_backend_defaults_skip_an_externally_hosted_endpoint():
 def test_vector_store_metadata_defaults_skip_an_externally_hosted_postgres():
     metadata = {"host": "postgres.external.example", "password": "operator-owned"}
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "stores": {
                 "response_cache": {"enabled": False},
@@ -304,7 +304,7 @@ def test_managed_metadata_postgres_credential_is_replaced_with_the_placeholder()
     """
 
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "stores": {
                 "response_cache": {"enabled": False},
@@ -326,7 +326,7 @@ def test_managed_metadata_postgres_credential_is_replaced_with_the_placeholder()
 def test_managed_credential_field_is_overwritten_and_reported(caplog):
     stale_password = "router-secret"
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "services": {
                 "response_api": {
@@ -355,7 +355,7 @@ def test_managed_credential_field_is_overwritten_and_reported(caplog):
 
 def test_managed_credential_placeholder_is_reapplied_without_a_warning(caplog):
     config = {
-        "version": "v0.4",
+        "version": "v0.3",
         "global": {
             "services": {
                 "response_api": {

@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     role_bindings:
       - name: admin

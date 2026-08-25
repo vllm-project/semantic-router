@@ -3,20 +3,25 @@
 # =============================================================================
 
 MODEL gemini31-worker {
-  capabilities: ["chat", "code", "long-context", "reasoning", "text"]
+  capabilities: ["chat", "code", "reasoning", "long-context", "text"]
 }
 
 MODEL gpt55-worker {
-  capabilities: ["chat", "code", "long-context", "reasoning", "text"]
+  capabilities: ["chat", "code", "reasoning", "long-context", "text"]
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL opus48-worker {
-  capabilities: ["chat", "code", "long-context", "reasoning", "text"]
+  capabilities: ["chat", "code", "reasoning", "long-context", "text"]
 }
 
 MODEL qwen-coordinator {
-  capabilities: ["chat", "code", "planning", "synthesis", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
+  capabilities: ["chat", "planning", "synthesis", "code", "text"]
+  reasoning: { type: "chat_template_kwargs" }
 }
 
 # =============================================================================
@@ -31,6 +36,7 @@ ENTRYPOINT {
     { decision: "accuracy_direct", models: [{ model: "gpt55-worker", weight: "1" }] },
     { decision: "accuracy_long_context_direct", models: [{ model: "gpt55-worker", weight: "1" }] },
     { decision: "accuracy_workflow", models: [{ model: "opus48-worker", weight: "1" }, { model: "gemini31-worker", weight: "1" }, { model: "gpt55-worker", weight: "1" }] },
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
   ]
 }
 
@@ -64,9 +70,20 @@ RECIPE default (description = "Default routing recipe.") {
     max_tokens: "1M"
   }
 
+  SIGNAL conversation accuracy_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+    PRIORITY 200
+    WHEN conversation("accuracy_has_images")
+    ALGORITHM static
+  }
 
   ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.") {
     PRIORITY 100

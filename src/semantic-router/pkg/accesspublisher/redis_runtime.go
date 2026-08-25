@@ -25,6 +25,28 @@ func (s *RedisStore) ValidateStaged(ctx context.Context, plan PublicationPlan) e
 		return fmt.Errorf("%w: %w", ErrStagedCorrupt, err)
 	}
 	keys, _ := NewKeyspace(s.keyPrefix, p.NamespaceID, p.QuotaPartition)
+	if err := s.validateStagedPublication(ctx, keys, p); err != nil {
+		return err
+	}
+	currentAccess, err := s.validateStagedAccess(ctx, keys, plan)
+	if err != nil {
+		return err
+	}
+	currentCredentials, err := s.validateStagedCredentials(ctx, keys, plan)
+	if err != nil {
+		return err
+	}
+	if err := s.validateStagedPointerInventory(ctx, keys, plan, currentAccess, currentCredentials); err != nil {
+		return err
+	}
+	_, validateStagedErr := markValidatedScript.Run(ctx, s.client, []string{keys.Publication(p.ID)}, p.Digest).Result()
+	if validateStagedErr != nil {
+		return classifyRedisPublicationError(validateStagedErr)
+	}
+	return nil
+}
+
+func (s *RedisStore) validateStagedPublication(ctx context.Context, keys Keyspace, p Publication) error {
 	manifestPayload, validateStagedErr := s.client.Get(ctx, keys.Manifest(p.ID)).Bytes()
 	if validateStagedErr != nil {
 		return stagedReadError("manifest", validateStagedErr)
@@ -60,33 +82,41 @@ func (s *RedisStore) ValidateStaged(ctx context.Context, plan PublicationPlan) e
 			return fmt.Errorf("%w: staged provider credential %s changed", ErrStagedCorrupt, document.Credential.ID)
 		}
 	}
+	return nil
+}
 
+func (s *RedisStore) validateStagedAccess(
+	ctx context.Context,
+	keys Keyspace,
+	plan PublicationPlan,
+) (map[string]struct{}, error) {
+	p := plan.Publication
 	currentAccess := make(map[string]struct{}, len(p.Access))
 	for _, document := range p.Access {
 		currentAccess[document.KeyID] = struct{}{}
 		values, err := s.client.HGetAll(ctx, keys.AccessDocument(document.KeyID, document.DesiredRevision)).Result()
 		if err != nil {
-			return stagedReadError("access document", err)
+			return nil, stagedReadError("access document", err)
 		}
 		if values["digest"] != document.Digest || values["publication_id"] != p.ID || values["document"] == "" {
-			return fmt.Errorf("%w: staged access document %s is incomplete", ErrStagedCorrupt, document.KeyID)
+			return nil, fmt.Errorf("%w: staged access document %s is incomplete", ErrStagedCorrupt, document.KeyID)
 		}
 		var projectionDocument json.RawMessage
 		if err := json.Unmarshal([]byte(values["document"]), &projectionDocument); err != nil {
-			return fmt.Errorf("%w: staged access document %s is invalid", ErrStagedCorrupt, document.KeyID)
+			return nil, fmt.Errorf("%w: staged access document %s is invalid", ErrStagedCorrupt, document.KeyID)
 		}
 		compiled, _ := json.Marshal(document.Projection)
 		if string(projectionDocument) != string(compiled) {
-			return fmt.Errorf("%w: staged access document %s changed", ErrStagedCorrupt, document.KeyID)
+			return nil, fmt.Errorf("%w: staged access document %s changed", ErrStagedCorrupt, document.KeyID)
 		}
 		if err := document.Projection.VerifyDigest(document.Digest); err != nil {
-			return fmt.Errorf("%w: staged access document %s failed digest verification", ErrStagedCorrupt, document.KeyID)
+			return nil, fmt.Errorf("%w: staged access document %s failed digest verification", ErrStagedCorrupt, document.KeyID)
 		}
 		if err := s.validatePointer(ctx, keys, keys.AccessPointer(document.KeyID), accessPointerFields(p, document)); err != nil {
-			return fmt.Errorf("access pointer %s: %w", document.KeyID, err)
+			return nil, fmt.Errorf("access pointer %s: %w", document.KeyID, err)
 		}
 		if err := s.validatePointer(ctx, keys, keys.LogicalKey(document.KeyID), logicalKeyFields(p, document)); err != nil {
-			return fmt.Errorf("logical key %s: %w", document.KeyID, err)
+			return nil, fmt.Errorf("logical key %s: %w", document.KeyID, err)
 		}
 	}
 	if plan.Previous != nil {
@@ -95,14 +125,22 @@ func (s *RedisStore) ValidateStaged(ctx context.Context, plan PublicationPlan) e
 				continue
 			}
 			if err := s.validatePointer(ctx, keys, keys.AccessPointer(keyID), tombstoneFields(p)); err != nil {
-				return fmt.Errorf("removed access pointer %s: %w", keyID, err)
+				return nil, fmt.Errorf("removed access pointer %s: %w", keyID, err)
 			}
 			if err := s.validatePointer(ctx, keys, keys.LogicalKey(keyID), tombstoneFields(p)); err != nil {
-				return fmt.Errorf("removed logical key %s: %w", keyID, err)
+				return nil, fmt.Errorf("removed logical key %s: %w", keyID, err)
 			}
 		}
 	}
+	return currentAccess, nil
+}
 
+func (s *RedisStore) validateStagedCredentials(
+	ctx context.Context,
+	keys Keyspace,
+	plan PublicationPlan,
+) (map[string]struct{}, error) {
+	p := plan.Publication
 	currentCredentials := make(map[string]struct{}, len(p.Credentials))
 	for _, document := range p.Credentials {
 		identity := credentialIdentity(document.Kind, document.PublicID)
@@ -110,22 +148,22 @@ func (s *RedisStore) ValidateStaged(ctx context.Context, plan PublicationPlan) e
 		payload, err := s.client.Get(ctx,
 			keys.CredentialDocument(document.Kind, document.PublicID, document.DesiredRevision)).Bytes()
 		if err != nil {
-			return stagedReadError("credential document", err)
+			return nil, stagedReadError("credential document", err)
 		}
 		var stored CredentialDocument
 		if err := decodeStrict(payload, &stored); err != nil || stored.Digest != document.Digest {
-			return fmt.Errorf("%w: staged credential document %s changed", ErrStagedCorrupt, identity)
+			return nil, fmt.Errorf("%w: staged credential document %s changed", ErrStagedCorrupt, identity)
 		}
 		if err := verifyCredentialDocument(stored); err != nil {
-			return err
+			return nil, err
 		}
 		if err := s.validatePointer(ctx, keys,
 			keys.CredentialPointer(document.Kind, document.PublicID), credentialPointerFields(p, document)); err != nil {
-			return fmt.Errorf("credential pointer %s: %w", identity, err)
+			return nil, fmt.Errorf("credential pointer %s: %w", identity, err)
 		}
 		directory, _ := keys.CredentialDirectory(document.Kind, document.PublicID)
 		if err := s.validatePointer(ctx, keys, directory, directoryFields(p, document)); err != nil {
-			return fmt.Errorf("credential directory %s: %w", identity, err)
+			return nil, fmt.Errorf("credential directory %s: %w", identity, err)
 		}
 	}
 	if plan.Previous != nil {
@@ -135,17 +173,27 @@ func (s *RedisStore) ValidateStaged(ctx context.Context, plan PublicationPlan) e
 			}
 			kind, publicID, ok := strings.Cut(identity, ":")
 			if !ok {
-				return fmt.Errorf("%w: invalid prior credential identity", ErrStagedCorrupt)
+				return nil, fmt.Errorf("%w: invalid prior credential identity", ErrStagedCorrupt)
 			}
 			if err := s.validatePointer(ctx, keys, keys.CredentialPointer(kind, publicID), tombstoneFields(p)); err != nil {
-				return fmt.Errorf("removed credential pointer %s: %w", identity, err)
+				return nil, fmt.Errorf("removed credential pointer %s: %w", identity, err)
 			}
 			directory, _ := keys.CredentialDirectory(kind, publicID)
 			if err := s.validatePointer(ctx, keys, directory, tombstoneFields(p)); err != nil {
-				return fmt.Errorf("removed credential directory %s: %w", identity, err)
+				return nil, fmt.Errorf("removed credential directory %s: %w", identity, err)
 			}
 		}
 	}
+	return currentCredentials, nil
+}
+
+func (s *RedisStore) validateStagedPointerInventory(
+	ctx context.Context,
+	keys Keyspace,
+	plan PublicationPlan,
+	currentAccess, currentCredentials map[string]struct{},
+) error {
+	p := plan.Publication
 	indexed, validateStagedErr := s.client.ZCard(ctx, keys.PublicationPointers(p.ID)).Result()
 	if validateStagedErr != nil {
 		return fmt.Errorf("read staged pointer inventory: %w", validateStagedErr)
@@ -165,10 +213,6 @@ func (s *RedisStore) ValidateStaged(ctx context.Context, plan PublicationPlan) e
 	}
 	if indexed != wantPointers {
 		return fmt.Errorf("%w: staged pointer inventory has %d entries, want %d", ErrStagedCorrupt, indexed, wantPointers)
-	}
-	_, validateStagedErr = markValidatedScript.Run(ctx, s.client, []string{keys.Publication(p.ID)}, p.Digest).Result()
-	if validateStagedErr != nil {
-		return classifyRedisPublicationError(validateStagedErr)
 	}
 	return nil
 }

@@ -16,7 +16,7 @@ func TestProjectionRejectsEnvelopeAndLabelledClassifierInputs(t *testing.T) {
 
 func TestParseRoutingYAMLBytesRejectsUnknownProjectionDecisionReference(t *testing.T) {
 	yaml := []byte(`
-document:
+routing:
   signals:
     keywords:
       - name: reasoning_markers
@@ -61,7 +61,7 @@ document:
 
 func TestParseRoutingYAMLBytesRejectsUnknownProjectionScoreInput(t *testing.T) {
 	yaml := []byte(`
-document:
+routing:
   signals:
     keywords:
       - name: reasoning_markers
@@ -298,7 +298,7 @@ func TestValidateProjectionInputProjectionRef_InvalidValueSource(t *testing.T) {
 
 func TestParseRoutingYAMLBytesAcceptsRawValueSource(t *testing.T) {
 	yaml := []byte(`
-document:
+routing:
   signals:
     structure:
       - name: many_questions
@@ -357,7 +357,7 @@ func TestIsProjectionInputTypeSupported_ConversationEventAndProjection(t *testin
 
 func TestParseRoutingYAMLBytesAcceptsEventProjectionScoreInput(t *testing.T) {
 	yaml := []byte(`
-document:
+routing:
   signals:
     events:
       - name: critical_payment_event
@@ -406,7 +406,7 @@ document:
 
 func TestParseRoutingYAMLBytesAcceptsProjectionToProjectionRef(t *testing.T) {
 	yaml := []byte(fmt.Sprintf(`
-document:
+routing:
   signals:
     keywords:
       - name: reasoning_markers
@@ -456,7 +456,7 @@ document:
 
 func TestParseRoutingYAMLBytesAcceptsConfidenceProjectionRef(t *testing.T) {
 	yaml := []byte(`
-document:
+routing:
   signals:
     keywords:
       - name: reasoning_markers
@@ -512,7 +512,7 @@ document:
 
 func TestParseRoutingYAMLBytesRejectsUndefinedConfidenceOutput(t *testing.T) {
 	yaml := []byte(`
-document:
+routing:
   signals:
     keywords:
       - name: reasoning_markers

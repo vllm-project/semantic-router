@@ -1,60 +1,71 @@
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8899
   address: 0.0.0.0
   port: 8899
   timeout: 1800s
-models:
-- name: opus48-worker
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      opus48-worker:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      gemini31-worker:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: opus48-worker
+    provider_model_id: anthropic/claude-opus-4.8
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '15'
+      output_cost_per_million_tokens: '75'
+      cache_read_cost_per_million_tokens: '0'
+      cache_write_cost_per_million_tokens: '15'
+    reasoning_family: opus48-worker
+  - name: gemini31-worker
+    provider_model_id: google/gemini-3.1-pro-preview
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '2'
+      output_cost_per_million_tokens: '12'
+      cache_read_cost_per_million_tokens: '0'
+      cache_write_cost_per_million_tokens: '2'
+    reasoning_family: gemini31-worker
+routing:
+  modelCards:
+  - name: opus48-worker
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: anthropic/claude-opus-4.8
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '15'
-    output_cost_per_million_tokens: '75'
-    cache_read_cost_per_million_tokens: '0'
-    cache_write_cost_per_million_tokens: '15'
-- name: gemini31-worker
-  card:
+  - name: gemini31-worker
     capabilities:
     - chat
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: google/gemini-3.1-pro-preview
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '2'
-    output_cost_per_million_tokens: '12'
-    cache_read_cost_per_million_tokens: '0'
-    cache_write_cost_per_million_tokens: '2'
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: hle_any
@@ -307,7 +318,8 @@ recipes:
 
             Confidence: {integer percentage between 0% and 100%}'
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     hle_high_risk_closed_remom:
@@ -355,10 +367,6 @@ global:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1800
   services:
-    backend_credentials:
-      openrouter_api_key:
-        credential_adapter_id: bearer
-        secret_env: OPENROUTER_API_KEY
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180

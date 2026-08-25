@@ -60,7 +60,7 @@ func TestEntrypointRulesRoundTripAcrossDSLRepresentations(t *testing.T) {
 		!strings.Contains(decompiled, `assignments:`) ||
 		!strings.Contains(decompiled, `fallback: { strategy: "priority", on: ["unavailable", "overloaded"] }`) ||
 		!strings.Contains(decompiled, `description: "Think step by step"`) {
-		t.Fatalf("decompiled DSL lost v0.4 rule fields:\n%s", decompiled)
+		t.Fatalf("decompiled DSL lost v0.3 rule fields:\n%s", decompiled)
 	}
 	recompiled, errs := Compile(decompiled)
 	if len(errs) > 0 {
@@ -78,11 +78,11 @@ func TestEntrypointRulesRoundTripAcrossDSLRepresentations(t *testing.T) {
 	if err := yaml.Unmarshal(yamlBytes, &document); err != nil {
 		t.Fatalf("unmarshal routing YAML: %v", err)
 	}
-	if len(document.Document.Decisions) != 1 || document.Document.Decisions[0].Name != "choose" || document.Document.Decisions[0].ID != "" {
-		t.Fatalf("emitted Recipe document must keep only human Decision identity: %+v", document.Document.Decisions)
+	if len(document.Routing.Decisions) != 1 || document.Routing.Decisions[0].Name != "choose" || document.Routing.Decisions[0].ID != "" {
+		t.Fatalf("emitted Recipe routing must keep only human Decision identity: %+v", document.Routing.Decisions)
 	}
-	if len(document.Document.Decisions[0].ModelRefs) != 0 {
-		t.Fatalf("emitted Recipe document leaked physical Model selection: %+v", document.Document.Decisions[0].ModelRefs)
+	if len(document.Routing.Decisions[0].ModelRefs) != 0 {
+		t.Fatalf("emitted Recipe routing leaked physical Model selection: %+v", document.Routing.Decisions[0].ModelRefs)
 	}
 
 	program, parseErrs := Parse(entrypointRulesDSL)
@@ -100,7 +100,7 @@ func TestEntrypointRulesRoundTripAcrossDSLRepresentations(t *testing.T) {
 		t.Fatalf("marshal AST JSON: %v", testEntrypointRulesRoundTripAcrossDSLRepresentationsErr)
 	}
 	if strings.Contains(string(encoded), `"modelBindings"`) || strings.Contains(string(encoded), `"modelId"`) || !strings.Contains(string(encoded), `"assignments"`) {
-		t.Fatalf("marshaled AST JSON does not use the v0.4 rule contract: %s", encoded)
+		t.Fatalf("marshaled AST JSON does not use the v0.3 rule contract: %s", encoded)
 	}
 }
 

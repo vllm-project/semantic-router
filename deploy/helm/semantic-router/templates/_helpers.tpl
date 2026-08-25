@@ -159,3 +159,40 @@ creates a new ConfigMap reference and therefore a normal Pod rollout.
 {{- $base := include "semantic-router.fullname" . | trunc 43 | trimSuffix "-" -}}
 {{- printf "%s-config-%s" $base (sha256sum $payload | trunc 12) -}}
 {{- end }}
+
+{{/*
+Return true when the Router manifest configures durable Management state.
+Capabilities come from typed service/store blocks; there is no deployment
+mode field.
+*/}}
+{{- define "semantic-router.hasManagementStore" -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $stores := (get $global "stores") | default (dict) -}}
+{{- $management := (get $stores "management") | default (dict) -}}
+{{- if hasKey $management "postgres" }}true{{ else }}false{{ end -}}
+{{- end }}
+
+{{- define "semantic-router.hasRuntimeStore" -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $stores := (get $global "stores") | default (dict) -}}
+{{- $runtime := (get $stores "runtime") | default (dict) -}}
+{{- if hasKey $runtime "redis" }}true{{ else }}false{{ end -}}
+{{- end }}
+
+{{- define "semantic-router.managementAPIEnabled" -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $management := (get $services "management_api") | default (dict) -}}
+{{- if ((get $management "enabled") | default false) }}true{{ else }}false{{ end -}}
+{{- end }}
+
+{{- define "semantic-router.accessEnabled" -}}
+{{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
+{{- $global := (get $config "global") | default (dict) -}}
+{{- $services := (get $global "services") | default (dict) -}}
+{{- $access := (get $services "access") | default (dict) -}}
+{{- if ((get $access "enabled") | default false) }}true{{ else }}false{{ end -}}
+{{- end }}

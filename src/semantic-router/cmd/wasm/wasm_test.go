@@ -42,6 +42,9 @@ func TestCompileValidDSL(t *testing.T) {
 	if cr.Error != "" {
 		t.Errorf("unexpected error: %s", cr.Error)
 	}
+	if len(cr.RecipeDocuments) != 1 || cr.RecipeDocuments[0].Name != "" {
+		t.Fatalf("anonymous routing projection = %+v, want one unnamed document", cr.RecipeDocuments)
+	}
 }
 
 func TestCompileReturnsModelFreeManagementRecipeDocument(t *testing.T) {
@@ -220,7 +223,7 @@ func TestValidateNoArgs(t *testing.T) {
 }
 
 func TestDecompileValidYAML(t *testing.T) {
-	yamlInput := js.ValueOf(`document:
+	yamlInput := js.ValueOf(`routing:
   signals:
     keywords:
       - name: s1
@@ -248,7 +251,7 @@ func TestDecompileValidYAML(t *testing.T) {
 		t.Errorf("unexpected error: %s", dr.Error)
 	}
 	if !strings.Contains(dr.DSL, "SIGNAL keyword s1") || !strings.Contains(dr.DSL, "ROUTE r1") {
-		t.Errorf("expected Recipe document in decompiled DSL, got:\n%s", dr.DSL)
+		t.Errorf("expected routing fragment in decompiled DSL, got:\n%s", dr.DSL)
 	}
 }
 

@@ -1,134 +1,154 @@
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8899
   address: 0.0.0.0
   port: 8899
   timeout: 1800s
-models:
-- name: glm52-planner
-  card:
+providers:
+  defaults:
+    reasoning_families:
+      glm52-planner:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      glm52-patcher-a:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      glm52-patcher-b:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      glm52-verifier:
+        type: reasoning_effort
+        parameter: reasoning_effort
+      glm52-finalizer:
+        type: reasoning_effort
+        parameter: reasoning_effort
+  models:
+  - name: glm52-planner
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-planner
+  - name: glm52-patcher-a
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-patcher-a
+  - name: glm52-patcher-b
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-patcher-b
+  - name: glm52-verifier
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-verifier
+  - name: glm52-finalizer
+    provider_model_id: z-ai/glm-5.2
+    backend_refs:
+    - provider: openrouter
+      api_key_env: OPENROUTER_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+    pricing:
+      input_cost_per_million_tokens: '0.95'
+      output_cost_per_million_tokens: '3'
+      cache_read_cost_per_million_tokens: '0.18'
+      cache_write_cost_per_million_tokens: '0.95'
+    reasoning_family: glm52-finalizer
+routing:
+  modelCards:
+  - name: glm52-planner
     capabilities:
     - chat
     - code
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
-- name: glm52-patcher-a
-  card:
+  - name: glm52-patcher-a
     capabilities:
     - chat
     - code
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
-- name: glm52-patcher-b
-  card:
+  - name: glm52-patcher-b
     capabilities:
     - chat
     - code
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
-- name: glm52-verifier
-  card:
+  - name: glm52-verifier
     capabilities:
     - chat
     - code
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
-- name: glm52-finalizer
-  card:
+  - name: glm52-finalizer
     capabilities:
     - chat
     - code
     - reasoning
     - long-context
     - text
-    reasoning:
-      type: reasoning_effort
-      efforts:
-      - high
-  connections:
-  - provider: openrouter
-    model: z-ai/glm-5.2
-    credential: openrouter_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-  pricing:
-    input_cost_per_million_tokens: '0.95'
-    output_cost_per_million_tokens: '3'
-    cache_read_cost_per_million_tokens: '0.18'
-    cache_write_cost_per_million_tokens: '0.95'
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: swe_agentic_any
@@ -413,7 +433,8 @@ recipes:
 
             `echo COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT && cat patch.txt`.'
 entrypoints:
-- name: vllm-sr/auto
+- model_names:
+  - vllm-sr/auto
   recipe: default
   assignments:
     swe_high_risk_static_flow:
@@ -491,10 +512,6 @@ global:
       endpoint: http://vllm-sr-envoy-container:8899/v1/chat/completions
       timeout_seconds: 1800
   services:
-    backend_credentials:
-      openrouter_api_key:
-        credential_adapter_id: bearer
-        secret_env: OPENROUTER_API_KEY
     backend_dispatch:
       bind_address: 0.0.0.0
       port: 8180

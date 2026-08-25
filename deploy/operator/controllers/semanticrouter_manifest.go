@@ -80,7 +80,7 @@ func (r *SemanticRouterReconciler) generateServices(
 			Protocol:   portProtocol(sr.Spec.Service.GRPC.Protocol),
 		},
 	}
-	if bootstrap.Mode == controlPlaneModeStandalone {
+	if !bootstrap.usesDurableState() {
 		publicPorts = append(publicPorts, corev1.ServicePort{
 			Name:       "api",
 			Port:       r.getInt32OrDefault(&sr.Spec.Service.API.Port, DefaultAPIPort),
@@ -104,7 +104,7 @@ func (r *SemanticRouterReconciler) generateServices(
 		serviceType,
 		publicPorts,
 	)}
-	if bootstrap.Mode == controlPlaneModeManaged {
+	if bootstrap.exposesManagementAPI() {
 		managementPort := sr.Spec.Service.Management.Port
 		if managementPort == 0 {
 			managementPort = DefaultManagementPort
@@ -114,11 +114,13 @@ func (r *SemanticRouterReconciler) generateServices(
 			TargetPort: intstr.FromInt(int(bootstrap.ManagementPort)), Protocol: corev1.ProtocolTCP,
 		}})
 		// The authenticated Management listener is the only path needed to
-		// complete a fresh managed bootstrap while inference readiness remains
+		// complete a fresh durable bootstrap while inference readiness remains
 		// false. Public inference and internal dispatch stay readiness-gated.
 		managementService.Spec.PublishNotReadyAddresses = true
+		services = append(services, managementService)
+	}
+	if bootstrap.usesBackendDispatch() {
 		services = append(services,
-			managementService,
 			newRouterService(sr, sr.Name+"-backend-dispatch", "backend-dispatch", corev1.ServiceTypeClusterIP, []corev1.ServicePort{{
 				Name: backendDispatchPortName, Port: bootstrap.BackendDispatchPort,
 				TargetPort: intstr.FromInt(int(bootstrap.BackendDispatchPort)), Protocol: corev1.ProtocolTCP,

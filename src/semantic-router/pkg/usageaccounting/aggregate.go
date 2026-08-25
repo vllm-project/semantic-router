@@ -164,54 +164,8 @@ func (a *Aggregator) Finalize() (Aggregate, error) {
 	for _, id := range ids {
 		dispatch := a.dispatches[id]
 		canonical = append(canonical, canonicalizeDispatch(dispatch))
-		if result.Currency == "" {
-			result.Currency = dispatch.Pricing.Currency
-		} else if result.Currency != dispatch.Pricing.Currency {
-			return Aggregate{}, fmt.Errorf("dispatch currencies do not match")
-		}
-		switch dispatch.State {
-		case EvidenceKnownZero:
-			result.KnownDispatches, _ = addSmall(result.KnownDispatches, 1)
-		case EvidenceUnknown:
-			result.IncompleteDispatches, _ = addSmall(result.IncompleteDispatches, 1)
-			markIncomplete(&result.Input, dispatch.Reason)
-			markIncomplete(&result.Output, dispatch.Reason)
-			markIncomplete(&result.Cost, dispatch.Reason)
-		case EvidenceKnownActual:
-			result.KnownDispatches, _ = addSmall(result.KnownDispatches, 1)
-			if dispatch.Usage.InputKnown {
-				var err error
-				result.Input.Value, err = result.Input.Value.Add(dispatch.Usage.InputTotal)
-				if err != nil {
-					return Aggregate{}, fmt.Errorf("input token total overflow: %w", err)
-				}
-			} else {
-				markIncomplete(&result.Input, "input_tokens_missing")
-			}
-			if dispatch.Usage.OutputKnown {
-				var err error
-				result.Output.Value, err = result.Output.Value.Add(dispatch.Usage.Output)
-				if err != nil {
-					return Aggregate{}, fmt.Errorf("output token total overflow: %w", err)
-				}
-			} else {
-				markIncomplete(&result.Output, "output_tokens_missing")
-			}
-			cost, err := CalculateCost(dispatch.Pricing, dispatch.Usage)
-			if err != nil {
-				return Aggregate{}, fmt.Errorf("dispatch %s cost: %w", dispatch.DispatchID, err)
-			}
-			if result.Currency != cost.Currency {
-				return Aggregate{}, fmt.Errorf("dispatch currencies do not match")
-			}
-			if cost.Completeness == CostUnknown {
-				markIncomplete(&result.Cost, cost.Reason)
-			} else {
-				result.Cost.Value, err = result.Cost.Value.Add(cost.Numerator)
-				if err != nil {
-					return Aggregate{}, fmt.Errorf("cost total overflow: %w", err)
-				}
-			}
+		if err := accumulateDispatch(&result, dispatch); err != nil {
+			return Aggregate{}, err
 		}
 	}
 	result.Total, finalizeErr = addMetrics(result.Input, result.Output)
@@ -228,6 +182,59 @@ func (a *Aggregator) Finalize() (Aggregate, error) {
 	digest := sha256.Sum256(payload)
 	result.Digest = hex.EncodeToString(digest[:])
 	return result, nil
+}
+
+func accumulateDispatch(result *Aggregate, dispatch DispatchUsage) error {
+	if result.Currency == "" {
+		result.Currency = dispatch.Pricing.Currency
+	} else if result.Currency != dispatch.Pricing.Currency {
+		return fmt.Errorf("dispatch currencies do not match")
+	}
+	switch dispatch.State {
+	case EvidenceKnownZero:
+		result.KnownDispatches, _ = addSmall(result.KnownDispatches, 1)
+	case EvidenceUnknown:
+		result.IncompleteDispatches, _ = addSmall(result.IncompleteDispatches, 1)
+		markIncomplete(&result.Input, dispatch.Reason)
+		markIncomplete(&result.Output, dispatch.Reason)
+		markIncomplete(&result.Cost, dispatch.Reason)
+	case EvidenceKnownActual:
+		result.KnownDispatches, _ = addSmall(result.KnownDispatches, 1)
+		if dispatch.Usage.InputKnown {
+			value, err := result.Input.Value.Add(dispatch.Usage.InputTotal)
+			if err != nil {
+				return fmt.Errorf("input token total overflow: %w", err)
+			}
+			result.Input.Value = value
+		} else {
+			markIncomplete(&result.Input, "input_tokens_missing")
+		}
+		if dispatch.Usage.OutputKnown {
+			value, err := result.Output.Value.Add(dispatch.Usage.Output)
+			if err != nil {
+				return fmt.Errorf("output token total overflow: %w", err)
+			}
+			result.Output.Value = value
+		} else {
+			markIncomplete(&result.Output, "output_tokens_missing")
+		}
+		cost, err := CalculateCost(dispatch.Pricing, dispatch.Usage)
+		if err != nil {
+			return fmt.Errorf("dispatch %s cost: %w", dispatch.DispatchID, err)
+		}
+		if result.Currency != cost.Currency {
+			return fmt.Errorf("dispatch currencies do not match")
+		}
+		if cost.Completeness == CostUnknown {
+			markIncomplete(&result.Cost, cost.Reason)
+		} else {
+			result.Cost.Value, err = result.Cost.Value.Add(cost.Numerator)
+			if err != nil {
+				return fmt.Errorf("cost total overflow: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 func (a Aggregate) Metric(metric quota.Metric) MetricValue {

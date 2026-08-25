@@ -102,9 +102,16 @@ func (reference ResponseTerminalReference) digest() (string, error) {
 	} {
 		writeTerminalDigestString(hash, value)
 	}
+	// #nosec G115 -- Validate requires every signed integral field to be non-negative.
+	routingRevision := uint64(reference.RoutingRevision)
+	// #nosec G115 -- Validate bounds Ordinal to uint32.
+	ordinal := uint64(reference.Ordinal)
+	// #nosec G115 -- Validate bounds Priority to 0..31.
+	priority := uint64(reference.Priority)
+	// #nosec G115 -- Validate requires ModelRevision to be positive.
+	modelRevision := uint64(reference.ModelRevision)
 	for _, value := range []uint64{
-		reference.RuntimeEpoch, uint64(reference.RoutingRevision), uint64(reference.Ordinal),
-		uint64(reference.Priority), uint64(reference.ModelRevision),
+		reference.RuntimeEpoch, routingRevision, ordinal, priority, modelRevision,
 	} {
 		var encoded [8]byte
 		binary.BigEndian.PutUint64(encoded[:], value)
@@ -139,14 +146,14 @@ type ResponseTerminalReader interface {
 }
 
 // ResponseTerminalStore is the complete finalizer/reader rendezvous contract.
-// Managed mode implements it with one shared Valkey store; standalone mode uses
-// the bounded process-local implementation below.
+// A configured runtime store implements it with shared Valkey state. A
+// file-authoritative process uses the bounded local implementation below.
 type ResponseTerminalStore interface {
 	ResponseFinalizer
 	ResponseTerminalReader
 }
 
-// LocalResponseTerminalStore is the bounded, expiring standalone rendezvous.
+// LocalResponseTerminalStore is the bounded, expiring local rendezvous.
 type LocalResponseTerminalStore struct {
 	mu       sync.Mutex
 	records  map[string]*terminalEntry

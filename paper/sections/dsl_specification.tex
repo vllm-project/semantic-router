@@ -193,14 +193,14 @@ The compilation pipeline (\Cref{fig:dsl_pipeline}) transforms DSL source through
 
   \end{tikzpicture}%
 }
-  \caption{The DSL compilation pipeline. Source text is lexed, parsed into a resolved AST, and compiled to the internal \texttt{RouterConfig}. The emitter produces one model-free Recipe document, which can optionally replace the sole Recipe document in a complete v0.4 base manifest. The decompiler reverses the pipeline for round-trip editing, while the validator operates directly on the AST.}
+  \caption{The DSL compilation pipeline. Source text is lexed, parsed into a resolved AST, and compiled to the internal \texttt{RouterConfig}. The emitter produces one model-free Recipe document, which can optionally replace the sole Recipe document in a complete v0.3 base manifest. The decompiler reverses the pipeline for round-trip editing, while the validator operates directly on the AST.}
   \label{fig:dsl_pipeline}
 \end{figure*}
 
 \subsection{Recipe Document Emission}
 \label{sec:dsl_emission}
 
-The DSL owns one narrow output contract: a model-free Recipe document containing signals, projections, decisions, and the routing strategy. Physical Models and their provider bindings remain control-plane resources, while Entrypoint assignments bind those Models to Recipe decisions. For standalone operation, the \texttt{--base} path replaces the document of exactly one Recipe in a complete v0.4 manifest; ambiguous multi-Recipe bases are rejected. Kubernetes and Helm artifacts are produced by their respective deployment controllers from the complete v0.4 resource model rather than by lossy DSL-specific emitters.
+The DSL owns one narrow output contract: a model-free Recipe document containing signals, projections, decisions, and the routing strategy. Physical Models and their provider bindings remain control-plane resources, while Entrypoint assignments bind those Models to Recipe decisions. For complete-manifest compilation, the \texttt{--base} path replaces the document of exactly one Recipe in a complete v0.3 manifest; ambiguous multi-Recipe bases are rejected. Kubernetes and Helm artifacts are produced by their respective deployment controllers from the complete v0.3 resource model rather than by lossy DSL-specific emitters.
 
 \subsection{Decompilation and Round-Trip Editing}
 \label{sec:dsl_decompile}

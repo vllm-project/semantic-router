@@ -120,6 +120,8 @@ html {
   overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable both-edges;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -143,10 +145,20 @@ body {
 }
 
 #root {
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
+  min-height: 100dvh;
   height: 100%;
   display: flex;
   flex-direction: column;
+}
+
+img,
+svg,
+video,
+canvas {
+  max-width: 100%;
 }
 
 code,
@@ -337,6 +349,19 @@ body.playground-fullscreen main {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 640px) {
+  html {
+    scrollbar-gutter: auto;
+  }
+
+  /* Prevent iOS from zooming into dense dashboard forms. */
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
   }
 }
 

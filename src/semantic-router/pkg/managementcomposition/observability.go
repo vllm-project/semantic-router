@@ -10,9 +10,9 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/auditlog"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementserver"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/securitykeyring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/subjectmanagement"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
@@ -29,7 +29,7 @@ type observabilityComposition struct {
 }
 
 func composeObservability(
-	dependencies managedruntime.ManagementDependencies,
+	dependencies routingruntime.ManagementDependencies,
 	authorization managementauthorization.Runtime,
 	namespaces managementserver.NamespaceResolver,
 	sessions managementserver.SessionAuthenticator,
@@ -42,7 +42,7 @@ func composeObservability(
 		authorizer == nil || subjects == nil || apiKeys == nil {
 		return nil, errors.New("management observability dependencies are incomplete")
 	}
-	root := dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric()
+	root := dependencies.Keyrings.Routing.ManagementCursor.Symmetric()
 	defer zeroSymmetricKeyring(&root)
 	logKey, err := deriveObservabilityCursorKey(root, "request-log")
 	if err != nil {

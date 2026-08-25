@@ -1,4 +1,4 @@
-// Package modelprobe verifies one managed Model through the same stable wire
+// Package modelprobe verifies one dynamically authored Model through the same stable wire
 // adapters, credential resolver, and egress transport used by inference. It
 // contains no Provider-product branches.
 package modelprobe
@@ -60,7 +60,7 @@ func (adapter managementCredentialAdapter) ResolvePinned(
 	return adapter.resolver.ResolvePinned(ctx, credentialID, versionID, providerID, origin)
 }
 
-// Prober owns no transport or credential lifecycle. Managed process
+// Prober owns no transport or credential lifecycle. Management process
 // composition lends those resources and closes them after Management stops.
 type Prober struct {
 	invoker *backendinvoker.Invoker

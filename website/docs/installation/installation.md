@@ -77,10 +77,11 @@ and local runtime state:
 vllm-sr serve
 ```
 
-On the first run, `serve` creates private local trust material, starts the
-managed Router, Dashboard, PostgreSQL, and Valkey, and makes the Management API
-available in the same launch. Open [http://localhost:8700](http://localhost:8700),
-then:
+On the first run, `serve` creates private local trust material and starts the
+services selected by `config.yaml`. The ordinary Dashboard profile includes
+the Management and runtime stores so you can complete setup in one place. A
+file-only configuration can omit both stores when you want only Router and
+Envoy. Open [http://localhost:8700](http://localhost:8700), then:
 
 1. add one or more model endpoints;
 2. choose a routing preset or a single-model baseline;
@@ -116,9 +117,9 @@ curl http://localhost:8899/v1/chat/completions \
   }'
 ```
 
-Use the entrypoint name shown in the Dashboard. Missing credentials are denied when
-managed access is enabled, and model discovery returns only resources visible to
-that key.
+Use the entrypoint name shown in the Dashboard. When Router-native access is
+enabled, missing credentials are denied and model discovery returns only the
+resources visible to that key.
 
 ## Operate the stack
 
@@ -144,9 +145,10 @@ vllm-sr validate --config config.yaml
 vllm-sr serve
 ```
 
-The local command reads `config.yaml` as deployment bootstrap. In managed mode,
-dynamic Models, Recipes, Entrypoints, credentials, and policies are created
-through the Router Management API after startup.
+The local command reads `config.yaml` as deployment bootstrap. If
+`global.stores.management.postgres` is configured, an empty store is seeded
+from that file and subsequent Models, Recipes, Entrypoints, credentials, and
+policies change through the Router Management API.
 
 ## Next
 

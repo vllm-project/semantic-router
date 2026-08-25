@@ -21,6 +21,7 @@ func listDirtyRollupBuckets(
 	if !validDirtyRollupTable(table) {
 		return nil, false, fmt.Errorf("unsupported dirty usage rollup table %q", table)
 	}
+	// #nosec G201 -- validDirtyRollupTable restricts table to the fixed dirty-rollup catalog.
 	statement := fmt.Sprintf(`SELECT bucket_start, max(ledger_watermark)
 FROM %s
 WHERE namespace_id=$1
@@ -74,6 +75,7 @@ func advanceDirtyRollups(
 		return fmt.Errorf("invalid usage rollup queue transition")
 	}
 	if targetQueue != "" {
+		// #nosec G201 -- queues and parentUnit are checked against closed catalogs above.
 		statement := fmt.Sprintf(`INSERT INTO %s(
   namespace_id,event_partition_date,bucket_start,ledger_watermark
 )
@@ -94,6 +96,7 @@ SET ledger_watermark=GREATEST(%s.ledger_watermark,EXCLUDED.ledger_watermark)`,
 	// transaction that replaces the target rollup. A concurrent upsert either
 	// remains outside this snapshot or forces a serialization retry, so no
 	// committed ledger watermark can be cleared before it is projected.
+	// #nosec G201 -- sourceQueue is checked against the fixed dirty-rollup catalog above.
 	statement := fmt.Sprintf(`DELETE FROM %s
 WHERE namespace_id=$1 AND bucket_start >= $2 AND bucket_start < $3`, sourceQueue)
 	if _, err := tx.ExecContext(ctx, statement, namespaceID, start, end); err != nil {

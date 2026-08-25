@@ -42,8 +42,15 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 	case reflect.Struct:
 		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
+			fieldType := t.Field(i)
+			// Provision only human configuration. Compiled snapshots and
+			// source-preservation caches deliberately use yaml:"-" and may
+			// contain every declared Recipe, including unreachable ones.
+			if !isProvisioningConfigField(fieldType) {
+				continue
+			}
 			field := v.Field(i)
-			recordModelPath(t.Field(i).Name, field, paths, seen)
+			recordModelPath(fieldType.Name, field, paths, seen)
 			extractFromValue(field, paths, seen)
 		}
 
@@ -57,6 +64,13 @@ func extractFromValue(v reflect.Value, paths *[]string, seen map[string]bool) {
 			extractFromValue(v.MapIndex(key), paths, seen)
 		}
 	}
+}
+
+func isProvisioningConfigField(field reflect.StructField) bool {
+	// Unexported fields are source-preservation caches, never independent
+	// provisioning authority. Some exported algorithm variants use yaml:"-"
+	// with custom codecs and still own real local model paths.
+	return field.PkgPath == ""
 }
 
 func recordModelPath(fieldName string, field reflect.Value, paths *[]string, seen map[string]bool) {
@@ -151,6 +165,7 @@ func extractProvisioningModelPaths(cfg *config.RouterConfig) []string {
 	// exact effective Recipe views reachable by Entrypoints. This prevents a
 	// bound Entrypoint from provisioning stale targets from its reusable base.
 	shared := *cfg
+	shared.RoutingSnapshot = nil
 	shared.Recipes = nil
 	shared.Entrypoints = nil
 	shared.Signals = config.Signals{}
@@ -223,6 +238,9 @@ func collectRequiredFilesByModel(v reflect.Value, requiredFilesByModel map[strin
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
 			fieldType := t.Field(i)
+			if !isProvisioningConfigField(fieldType) {
+				continue
+			}
 			fieldName := fieldType.Name
 
 			if strings.HasSuffix(fieldName, "MappingPath") && field.Kind() == reflect.String {

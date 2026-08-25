@@ -9,7 +9,9 @@ description: Connect inference backends, compose Recipes, and publish stable Mix
 
 Semantic Router gives applications stable model names while operators retain
 control over the configured Models and routing policy behind them. The CLI starts
-the deployment. The Dashboard and Router Management API own the serving graph.
+the deployment. A file-only deployment reads one immutable manifest; a durable
+deployment owns its serving graph through the Router Management API. The Dashboard
+is an optional client of that API.
 
 ## What Problem Does It Solve?
 
@@ -51,10 +53,9 @@ vllm-sr serve
 vllm-sr serve --config /path/to/config.yaml
 ```
 
-If `config.yaml` is absent, local Docker startup creates a secure managed
-bootstrap, starts PostgreSQL and Valkey, and brings up Router and Dashboard in
-the same run. `--config` selects another immutable v0.4 deployment bootstrap;
-it does not activate a Model or Recipe.
+If `config.yaml` is absent, local Docker startup uses the workspace's default
+bootstrap and starts the dependencies declared there. `--config` selects another
+immutable v0.3 deployment bootstrap; it does not activate a Model or Recipe.
 
 `serve` does not select a model product or change a Recipe. Those are durable
 control-plane operations and remain consistent across Router replicas.
@@ -76,13 +77,14 @@ Open **Build → Recipes**. A built-in Recipe supplies a complete routing shape;
 a custom Recipe can reuse Signals, Projections, Decisions, Algorithms, and
 Plugins created for that Recipe.
 
-Managed Router replicas install the release's built-in Recipes automatically.
-They appear in the ordinary Recipe list and are read-only. Copy the document to
-a custom Recipe when you need to change its policy; a Router upgrade installs
-a new version beside the old one and never silently moves an Entrypoint.
+Router replicas backed by a Management store install the release's built-in
+Recipes automatically. They appear in the ordinary Recipe list and are
+read-only. Copy a Recipe when you need to change its policy; a Router upgrade
+installs a new version beside the old one and never silently moves an
+Entrypoint.
 
 A draft remains control-plane state until it has a complete path from an
-entrypoint rule through a decision to at least one Model assignment. Publishing
+Entrypoint through a Decision to at least one Model assignment. Publishing
 an incomplete graph is rejected instead of producing a partial Router config.
 
 ## 3. Create a Mixture of Models

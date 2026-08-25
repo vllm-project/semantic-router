@@ -22,6 +22,10 @@ describe('Recipe Builder boundary', () => {
 
     expect(projection).toContain('result.recipeDocuments')
     expect(projection).toContain('documents.length !== 1')
+    expect(projection).toContain('routing,')
+    expect(projection).not.toContain("version: 'v0.4'")
+    expect(projection).not.toContain('id: target.id')
+    expect(projection).not.toContain('revision: target.recipeRevision')
     expect(page).not.toMatch(/canWriteConfig|canDeployConfig|loadFromRouter|requestDeploy/)
     expect(`${page}\n${store}`).not.toMatch(
       /\/api\/router\/config\/(?:yaml|deploy|preview|rollback|versions)/,

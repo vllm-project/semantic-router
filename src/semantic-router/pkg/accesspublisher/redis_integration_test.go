@@ -196,35 +196,7 @@ func TestRedisPublicationStagesAcknowledgesAndActivatesAtomically(t *testing.T) 
 		t.Fatal(testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr)
 	}
 
-	first := mustPublication(t, 1, "100")
-	firstPlan, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr := store.Prepare(ctx, first)
-	if testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr != nil {
-		t.Fatal(testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr)
-	}
-	if err := store.Stage(ctx, firstPlan); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ValidateStaged(ctx, firstPlan); err != nil {
-		t.Fatal(err)
-	}
-	keys, _ := NewKeyspace(prefix, first.NamespaceID, first.QuotaPartition)
-	if gate := client.HGet(ctx, keys.AccessGate(), "publication_id").Val(); gate != "" {
-		t.Fatalf("staged expansion became visible before activation: %q", gate)
-	}
-	if err := store.Activate(ctx, firstPlan); err != nil {
-		t.Fatal(err)
-	}
-	compactAll(t, ctx, store, firstPlan, 2)
-	if err := store.MarkApplied(ctx, firstPlan); err != nil {
-		t.Fatal(err)
-	}
-	if err := store.ClearAppliedBarriers(ctx, firstPlan); err != nil {
-		t.Fatal(err)
-	}
-	readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr := store.Readiness(ctx, first.NamespaceID, first.QuotaPartition)
-	if testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr != nil || !readiness.Ready {
-		t.Fatalf("first readiness = %+v, %v", readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr)
-	}
+	first, keys := publishInitialRedisPlan(t, ctx, store, client, prefix)
 
 	if _, err := store.RegisterReplica(ctx, first.NamespaceID, first.QuotaPartition, ReplicaRegistration{
 		ReplicaID: "router-a", RuntimeEpoch: first.RuntimeEpoch,
@@ -297,19 +269,64 @@ func TestRedisPublicationStagesAcknowledgesAndActivatesAtomically(t *testing.T) 
 	if client.Exists(ctx, denyKey).Val() != 0 {
 		t.Fatal("restriction barrier remained after the applied watermark")
 	}
-	readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr = store.Readiness(ctx, second.NamespaceID, second.QuotaPartition)
+	readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr := store.Readiness(ctx, second.NamespaceID, second.QuotaPartition)
 	if testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr != nil || !readiness.Ready || readiness.AppliedRevision != 2 {
 		t.Fatalf("second readiness = %+v, %v", readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr)
 	}
-	restrictiveDiagnostics, err := store.Diagnostics(ctx, second.NamespaceID, second.QuotaPartition)
+	assertRestrictiveDiagnostics(t, ctx, store, second)
+}
+
+func assertRestrictiveDiagnostics(t *testing.T, ctx context.Context, store *RedisStore, publication Publication) {
+	t.Helper()
+	diagnostics, err := store.Diagnostics(ctx, publication.NamespaceID, publication.QuotaPartition)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !restrictiveDiagnostics.BarrierAcknowledgementsRequired ||
-		!equalReplicaIDs(restrictiveDiagnostics.BarrierAcknowledgements, []string{"router-a"}) ||
-		len(restrictiveDiagnostics.MissingBarrierAcks) != 0 {
-		t.Fatalf("restrictive publication barrier diagnostics = %+v", restrictiveDiagnostics)
+	if !diagnostics.BarrierAcknowledgementsRequired ||
+		!equalReplicaIDs(diagnostics.BarrierAcknowledgements, []string{"router-a"}) ||
+		len(diagnostics.MissingBarrierAcks) != 0 {
+		t.Fatalf("restrictive publication barrier diagnostics = %+v", diagnostics)
 	}
+}
+
+func publishInitialRedisPlan(
+	t *testing.T,
+	ctx context.Context,
+	store *RedisStore,
+	client *redis.Client,
+	prefix string,
+) (Publication, Keyspace) {
+	t.Helper()
+	publication := mustPublication(t, 1, "100")
+	plan, prepareErr := store.Prepare(ctx, publication)
+	if prepareErr != nil {
+		t.Fatal(prepareErr)
+	}
+	if err := store.Stage(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ValidateStaged(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	keys, _ := NewKeyspace(prefix, publication.NamespaceID, publication.QuotaPartition)
+	if gate := client.HGet(ctx, keys.AccessGate(), "publication_id").Val(); gate != "" {
+		t.Fatalf("staged expansion became visible before activation: %q", gate)
+	}
+	if err := store.Activate(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	compactAll(t, ctx, store, plan, 2)
+	if err := store.MarkApplied(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ClearAppliedBarriers(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	readiness, readinessErr := store.Readiness(ctx, publication.NamespaceID, publication.QuotaPartition)
+	if readinessErr != nil || !readiness.Ready {
+		t.Fatalf("first readiness = %+v, %v", readiness, readinessErr)
+	}
+	return publication, keys
 }
 
 func TestRedisActivationClosesReplicaJoinRaceAndExpiresLeases(t *testing.T) {
@@ -358,13 +375,13 @@ func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t 
 	store.requireFleetReplicas = true
 	state := validDesiredState(1, "100")
 	state.BarrierHints = []Barrier{{Kind: "api_key", ResourceID: "key-publisher", Reason: "first namespace proof"}}
-	publication, err := Compile(state)
-	if err != nil {
-		t.Fatal(err)
+	publication, compileErr := Compile(state)
+	if compileErr != nil {
+		t.Fatal(compileErr)
 	}
-	plan, err := store.Prepare(ctx, publication)
-	if err != nil {
-		t.Fatal(err)
+	plan, prepareErr := store.Prepare(ctx, publication)
+	if prepareErr != nil {
+		t.Fatal(prepareErr)
 	}
 	if !plan.Restrictive() {
 		t.Fatal("first namespace publication is not restrictive")
@@ -375,9 +392,9 @@ func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t 
 	if err := store.Stage(ctx, plan); !errors.Is(err, ErrAcknowledgements) {
 		t.Fatalf("Stage() without fleet replicas = %v", err)
 	}
-	keys, err := NewKeyspace(prefix, publication.NamespaceID, publication.QuotaPartition)
-	if err != nil {
-		t.Fatal(err)
+	keys, keyspaceErr := NewKeyspace(prefix, publication.NamespaceID, publication.QuotaPartition)
+	if keyspaceErr != nil {
+		t.Fatal(keyspaceErr)
 	}
 	if stored := client.Exists(ctx, keys.Manifest(publication.ID), keys.RoutingSnapshot(publication.DesiredRevision)).Val(); stored != 0 {
 		t.Fatalf("Stage() wrote %d immutable documents before fleet membership was available", stored)
@@ -411,9 +428,9 @@ func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t 
 	); err != nil {
 		t.Fatal(err)
 	}
-	status, err := store.RoutingAcknowledgements(ctx, plan)
-	if err != nil || status.Complete() || !equalReplicaIDs(status.Missing, []string{"router-b"}) {
-		t.Fatalf("single-replica acknowledgement status = %+v, %v", status, err)
+	status, statusErr := store.RoutingAcknowledgements(ctx, plan)
+	if statusErr != nil || status.Complete() || !equalReplicaIDs(status.Missing, []string{"router-b"}) {
+		t.Fatalf("single-replica acknowledgement status = %+v, %v", status, statusErr)
 	}
 	if err := store.Activate(ctx, plan); !errors.Is(err, ErrAcknowledgements) {
 		t.Fatalf("Activate() without both fleet acknowledgements = %v", err)
@@ -433,16 +450,16 @@ func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t 
 	); err != nil {
 		t.Fatal(err)
 	}
-	status, err = store.RoutingAcknowledgements(ctx, plan)
-	if err != nil || !status.Complete() || !equalReplicaIDs(status.Required, []string{"router-a", "router-b"}) {
-		t.Fatalf("two-replica acknowledgement status = %+v, %v", status, err)
+	status, statusErr = store.RoutingAcknowledgements(ctx, plan)
+	if statusErr != nil || !status.Complete() || !equalReplicaIDs(status.Required, []string{"router-a", "router-b"}) {
+		t.Fatalf("two-replica acknowledgement status = %+v, %v", status, statusErr)
 	}
 	if err := store.Activate(ctx, plan); err != nil {
 		t.Fatal(err)
 	}
-	diagnostics, err := store.Diagnostics(ctx, publication.NamespaceID, publication.QuotaPartition)
-	if err != nil {
-		t.Fatal(err)
+	diagnostics, diagnosticsErr := store.Diagnostics(ctx, publication.NamespaceID, publication.QuotaPartition)
+	if diagnosticsErr != nil {
+		t.Fatal(diagnosticsErr)
 	}
 	if !equalReplicaIDs(diagnostics.ActiveReplicas, []string{"router-a", "router-b"}) ||
 		!equalReplicaIDs(diagnostics.RecordedRequiredReplicas, diagnostics.ActiveReplicas) ||
@@ -454,9 +471,9 @@ func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t 
 
 func TestRedisFleetLeaseExpiryAndRenewal(t *testing.T) {
 	store, client, prefix, ctx := redisIntegrationStore(t)
-	firstExpiry, err := store.RegisterFleetReplica(ctx, "router-a")
-	if err != nil {
-		t.Fatal(err)
+	firstExpiry, registrationErr := store.RegisterFleetReplica(ctx, "router-a")
+	if registrationErr != nil {
+		t.Fatal(registrationErr)
 	}
 	if _, err := store.RegisterFleetReplica(ctx, "router-b"); err != nil {
 		t.Fatal(err)
@@ -471,9 +488,9 @@ func TestRedisFleetLeaseExpiryAndRenewal(t *testing.T) {
 	if replicas, err := store.liveFleetReplicas(ctx); err != nil || !equalReplicaIDs(replicas, []string{"router-a"}) {
 		t.Fatalf("fleet after expiry = %v, %v", replicas, err)
 	}
-	renewedExpiry, err := store.RegisterFleetReplica(ctx, "router-b")
-	if err != nil {
-		t.Fatal(err)
+	renewedExpiry, renewalErr := store.RegisterFleetReplica(ctx, "router-b")
+	if renewalErr != nil {
+		t.Fatal(renewalErr)
 	}
 	if !renewedExpiry.After(time.Now()) || !firstExpiry.After(time.Now()) {
 		t.Fatalf("fleet lease expiries are not in the future: first=%s renewed=%s", firstExpiry, renewedExpiry)

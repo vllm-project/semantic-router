@@ -1,52 +1,67 @@
-version: v0.4
+# Advanced YAML sample for vLLM Semantic Router.
+# Most users should run `vllm-sr serve` and finish setup in the Dashboard.
+# Use this template when you want to author the same v0.3 contract directly.
+
+version: v0.3
+
 listeners:
-- name: http-8899
-  address: 0.0.0.0
-  port: 8899
-  timeout: 300s
-models:
-- name: replace-with-your-model
-  card:
-    description: Your connected model.
-    capabilities:
-    - chat
-  connections:
-  - provider: openai-compatible
-    endpoint: http://host.docker.internal:8000/v1
-    model: replace-with-your-model
-  runtime:
-    max_retries: 0
-    request_timeout: 300s
-    stream_timeout: 300s
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 300s
+
+# Connection and invocation controls stay with the physical Provider Model.
+providers:
+  defaults:
+    default_model: local/fast
+  models:
+    - name: local/fast
+      provider_model_id: replace-with-your-model
+      backend_refs:
+        - name: primary
+          endpoint: host.docker.internal:8000
+          protocol: http
+          weight: 100
+      control:
+        retry:
+          count: 2
+          'on': [unavailable, overloaded, timeout]
+        timeout:
+          request: 60s
+          stream: 10m
+      pricing:
+        input_cost_per_million_tokens: "0.10"
+        output_cost_per_million_tokens: "0.30"
+        cache_read_cost_per_million_tokens: "0.02"
+        cache_write_cost_per_million_tokens: "0.12"
+
+# Recipes and DSL use connection-free Model metadata.
+routing:
+  modelCards:
+    - name: local/fast
+      description: Fast general-purpose model
+      capabilities: [chat]
+
 recipes:
-- name: default
-  description: Route every request to the configured assignment.
-  document:
-    signals: {}
-    projections: {}
-    decisions:
-    - name: default-route
-      description: Match every request.
-      priority: 100
-      rules:
-        operator: AND
-        conditions: []
+  - name: default
+    description: Route every request to the configured assignment.
+    routing:
+      decisions:
+        - name: Default
+          description: Match every request.
+          priority: 100
+          rules:
+            operator: AND
+            conditions: []
+
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
-  - auto
-  recipe: default
-  assignments:
-    default-route:
-      models:
-      - model: replace-with-your-model
+  - model_names: [vllm-sr/example, example]
+    recipe: default
+    assignments:
+      Default:
+        models:
+          - model: local/fast
+
 global:
-  services:
-    backend_dispatch:
-      bind_address: 0.0.0.0
-      port: 8180
-      audience: vllm-sr.backend-dispatch
-      capability_ttl: 30s
-      max_request_body_bytes: 67108864
-    backend_egress:
-      policy_file: /app/config/backend-egress-policy.yaml
+  billing:
+    currency: USD

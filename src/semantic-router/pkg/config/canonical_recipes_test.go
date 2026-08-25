@@ -9,25 +9,26 @@ import (
 )
 
 const recipeTestBaseYAML = `
-version: v0.4
-models:
-  - name: model-a
-    card:
+version: v0.3
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      backend_refs:
+        - {provider: private-test, endpoint: http://127.0.0.1:8000}
+    - name: model-b
+      provider_model_id: model-b
+      backend_refs:
+        - {provider: private-test, endpoint: http://127.0.0.1:8001}
+routing:
+  modelCards:
+    - name: model-a
       description: default tier
-      loras: [general-expert]
-    connections:
-      - provider: private-test
-        endpoint: http://127.0.0.1:8000
-        model: model-a
-  - name: model-b
-    card: {description: privacy tier}
-    connections:
-      - provider: private-test
-        endpoint: http://127.0.0.1:8001
-        model: model-b
+      loras: [{name: general-expert}]
+    - {name: model-b, description: privacy tier}
 recipes:
   - name: default
-    document:
+    routing:
       signals:
         keywords:
           - name: urgent_keywords
@@ -40,8 +41,7 @@ recipes:
             conditions:
               - {type: keyword, name: urgent_keywords}
 entrypoints:
-  - name: vllm-sr/default
-    aliases: [vllm-sr/default-alias]
+  - model_names: [vllm-sr/default, vllm-sr/default-alias]
     recipe: default
     assignments:
       default_route:
@@ -52,19 +52,24 @@ global:
 `
 
 const recipeTestPrivacyYAML = `
-version: v0.4
-models:
-  - name: model-a
-    card: {description: default tier}
-    connections:
-      - {provider: private-test, endpoint: http://127.0.0.1:8000, model: model-a}
-  - name: model-b
-    card: {description: privacy tier}
-    connections:
-      - {provider: private-test, endpoint: http://127.0.0.1:8001, model: model-b}
+version: v0.3
+providers:
+  models:
+    - name: model-a
+      provider_model_id: model-a
+      backend_refs:
+        - {provider: private-test, endpoint: http://127.0.0.1:8000}
+    - name: model-b
+      provider_model_id: model-b
+      backend_refs:
+        - {provider: private-test, endpoint: http://127.0.0.1:8001}
+routing:
+  modelCards:
+    - {name: model-a, description: default tier}
+    - {name: model-b, description: privacy tier}
 recipes:
   - name: default
-    document:
+    routing:
       signals:
         keywords:
           - {name: urgent_keywords, operator: OR, keywords: [urgent]}
@@ -75,7 +80,7 @@ recipes:
             conditions: [{type: keyword, name: urgent_keywords}]
   - name: privacy
     description: privacy profile
-    document:
+    routing:
       signals:
         keywords:
           - {name: pii_keywords, operator: OR, keywords: [ssn]}
@@ -85,13 +90,12 @@ recipes:
             operator: AND
             conditions: [{type: keyword, name: pii_keywords}]
 entrypoints:
-  - name: vllm-sr/default
-    aliases: [vllm-sr/default-alias]
+  - model_names: [vllm-sr/default, vllm-sr/default-alias]
     recipe: default
     assignments:
       default_route:
         models: [{model: model-a}]
-  - name: vllm-sr/privacy
+  - model_names: [vllm-sr/privacy]
     recipe: privacy
     assignments:
       privacy_route:
@@ -129,8 +133,8 @@ func TestCanonicalExportDoesNotInventSourceModelsWithoutSnapshot(t *testing.T) {
 	cfg := DefaultGlobalConfig()
 	cfg.ModelConfig = map[string]ModelParams{"orphan": {Description: "runtime-only"}}
 	canonical := CanonicalConfigFromRouterConfig(&cfg)
-	if len(canonical.Models) != 0 {
-		t.Fatalf("canonical export invented incomplete source Models: %+v", canonical.Models)
+	if len(canonical.Providers.Models) != 0 {
+		t.Fatalf("canonical export invented incomplete source Models: %+v", canonical.Providers.Models)
 	}
 }
 
@@ -158,27 +162,28 @@ func TestCanonicalExportEmitsHumanRecipesAndEntrypoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	canonical := CanonicalConfigFromRouterConfig(cfg)
-	if len(canonical.Models) != 2 || len(canonical.Recipes) != 2 || len(canonical.Entrypoints) != 2 {
+	if len(canonical.Providers.Models) != 2 || len(canonical.Recipes) != 2 || len(canonical.Entrypoints) != 2 {
 		t.Fatalf("canonical export = %+v", canonical)
 	}
 	for _, recipe := range canonical.Recipes {
-		for _, decision := range recipe.Document.Decisions {
+		for _, decision := range recipe.Routing.Decisions {
 			if decision.ID != "" || len(decision.ModelRefs) != 0 {
 				t.Fatalf("Recipe export contains compiled state: %+v", decision)
 			}
 		}
 	}
 	routingExport, err := yaml.Marshal(struct {
-		Models      []AuthoringModel      `yaml:"models"`
-		Recipes     []AuthoringRecipe     `yaml:"recipes"`
-		Entrypoints []AuthoringEntrypoint `yaml:"entrypoints"`
-	}{canonical.Models, canonical.Recipes, canonical.Entrypoints})
+		Providers   CanonicalProviders    `yaml:"providers"`
+		Routing     CanonicalRouting      `yaml:"routing"`
+		Recipes     []CanonicalRecipe     `yaml:"recipes"`
+		Entrypoints []CanonicalEntrypoint `yaml:"entrypoints"`
+	}{canonical.Providers, canonical.Routing, canonical.Recipes, canonical.Entrypoints})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, forbidden := range []string{"provider_catalog_revision:", "backends:", "model_id:", "recipe_id:", "revision:"} {
-		if strings.Contains(string(routingExport), forbidden) {
-			t.Fatalf("human routing export contains %q:\n%s", forbidden, routingExport)
+	for _, forbidden := range []string{"provider_catalog_revision", "backends", "model_id", "recipe_id", "revision"} {
+		if yamlDocumentContainsMappingKey(t, routingExport, forbidden) {
+			t.Fatalf("human routing export contains key %q:\n%s", forbidden, routingExport)
 		}
 	}
 	exported, err := yaml.Marshal(canonical)
@@ -194,6 +199,33 @@ func TestCanonicalExportEmitsHumanRecipesAndEntrypoints(t *testing.T) {
 	}
 }
 
+func yamlDocumentContainsMappingKey(t *testing.T, document []byte, key string) bool {
+	t.Helper()
+	var value interface{}
+	if err := yaml.Unmarshal(document, &value); err != nil {
+		t.Fatalf("decode YAML for exact-key assertion: %v", err)
+	}
+	return yamlValueContainsMappingKey(value, key)
+}
+
+func yamlValueContainsMappingKey(value interface{}, key string) bool {
+	switch typed := value.(type) {
+	case map[interface{}]interface{}:
+		for candidate, child := range typed {
+			if candidate == key || yamlValueContainsMappingKey(child, key) {
+				return true
+			}
+		}
+	case []interface{}:
+		for _, child := range typed {
+			if yamlValueContainsMappingKey(child, key) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func TestCanonicalRecipeValidationErrors(t *testing.T) {
 	tests := []struct {
 		name, needle, replacement, want string
@@ -201,7 +233,7 @@ func TestCanonicalRecipeValidationErrors(t *testing.T) {
 		{"duplicate Recipe", "  - name: privacy\n", "  - name: default\n", "duplicate recipe name"},
 		{"unknown Recipe", "    recipe: privacy\n", "    recipe: missing\n", "unknown Recipe"},
 		{"unknown Model", "        models: [{model: model-b}]", "        models: [{model: missing}]", "unknown Model"},
-		{"duplicate alias", "  - name: vllm-sr/privacy\n", "  - name: vllm-sr/privacy\n    aliases: [vllm-sr/default-alias]\n", "already mapped by another entrypoint"},
+		{"duplicate alias", "  - model_names: [vllm-sr/privacy]\n", "  - model_names: [vllm-sr/privacy, vllm-sr/default-alias]\n", "already mapped by another entrypoint"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

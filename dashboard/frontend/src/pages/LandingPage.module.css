@@ -1,6 +1,7 @@
 .container {
   position: relative;
   min-height: 100vh;
+  min-height: 100dvh;
   overflow-x: hidden;
   background: var(--surface-canvas);
 }
@@ -292,8 +293,13 @@
 
   .title {
     margin-top: 1.35rem;
-    font-size: clamp(2.85rem, 15vw, 4.25rem);
+    font-size: clamp(2.4rem, 12vw, 4.25rem);
     line-height: 0.95;
+  }
+
+  .title > span:last-child {
+    font-size: 0.78em;
+    white-space: nowrap;
   }
 
   .subtitle {
@@ -318,6 +324,16 @@
   .routingStep {
     padding-right: 1.1rem;
     padding-left: 1.1rem;
+  }
+}
+
+@media (max-width: 340px) {
+  .mainContent {
+    padding-inline: 0.75rem;
+  }
+
+  .title {
+    font-size: 2.2rem;
   }
 }
 

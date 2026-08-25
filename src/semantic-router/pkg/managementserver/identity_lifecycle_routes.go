@@ -24,20 +24,40 @@ const (
 	backchannelLogoutPath     = managementapi.BasePath + "/auth/backchannel-logout"
 )
 
-type IdentityLifecycleService interface {
+type IdentitySelfService interface {
 	Ready(context.Context) error
 	Me(context.Context, managementauth.AuthenticatedSession) (managementidentity.SelfView, error)
 	ListManagementSessions(context.Context, string, managementidentity.ListRequest) (managementidentity.ManagementSessionPage, error)
 	RevokeSelfManagementSession(context.Context, string, string, managementidentity.MutationActor) (managementauth.SessionMutation, error)
+}
+
+type IdentitySessionAdministration interface {
 	RevokeManagementSession(context.Context, managementidentity.SessionRevocationCommand) (managementauth.SessionMutation, managementidentity.MutationResult, error)
 	RevokePrincipalManagementSessions(context.Context, managementidentity.PrincipalSessionRevocationCommand) (managementidentity.PrincipalSessionRevocation, error)
+}
+
+type TrustedIssuerReadService interface {
 	GetTrustedIdentityIssuer(context.Context, string) (managementidentity.TrustedIdentityIssuer, error)
 	ListTrustedIdentityIssuers(context.Context, managementidentity.ListRequest) (managementidentity.TrustedIdentityIssuerPage, error)
+}
+
+type TrustedIssuerMutationService interface {
 	CreateTrustedIdentityIssuer(context.Context, managementidentity.CreateTrustedIdentityIssuer) (managementidentity.IssuerMutation, error)
 	UpdateTrustedIdentityIssuer(context.Context, managementidentity.UpdateTrustedIdentityIssuer) (managementidentity.IssuerMutation, error)
 	DeleteTrustedIdentityIssuer(context.Context, string, uint64, managementidentity.MutationActor) (managementidentity.IssuerMutation, error)
 	RefreshTrustedIdentityIssuer(context.Context, managementidentity.RefreshTrustedIdentityIssuer) (managementidentity.IssuerMutation, error)
+}
+
+type BackchannelLogoutService interface {
 	BackchannelLogout(context.Context, string, string, string, time.Time) (managementidentity.BackchannelLogoutResult, error)
+}
+
+type IdentityLifecycleService interface {
+	IdentitySelfService
+	IdentitySessionAdministration
+	TrustedIssuerReadService
+	TrustedIssuerMutationService
+	BackchannelLogoutService
 }
 
 type IdentityLifecycleRoutesOptions struct {

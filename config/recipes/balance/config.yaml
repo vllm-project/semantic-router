@@ -1,73 +1,98 @@
-version: v0.4
+version: v0.3
 listeners:
 - address: 0.0.0.0
   name: http-8899
   port: 8899
   timeout: 1200s
-models:
-- name: anthropic/claude-opus-4.6
-  card:
+providers:
+  defaults:
+    default_model: anthropic/claude-opus-4.6
+    reasoning_families:
+      qwen/qwen3.5-rocm:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: anthropic/claude-opus-4.6
+    provider_model_id: anthropic/claude-opus-4.6
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '1.8'
+      output_cost_per_million_tokens: '7.2'
+      cache_read_cost_per_million_tokens: '0.45'
+  - name: google/gemini-2.5-flash-lite
+    provider_model_id: google/gemini-2.5-flash-lite
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '0.01'
+      output_cost_per_million_tokens: '0.04'
+      cache_read_cost_per_million_tokens: '0.002'
+  - name: google/gemini-3.1-pro
+    provider_model_id: google/gemini-3.1-pro
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '0.48'
+      output_cost_per_million_tokens: '1.92'
+      cache_read_cost_per_million_tokens: '0.12'
+  - name: openai/gpt5.4
+    provider_model_id: openai/gpt5.4
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '1.2'
+      output_cost_per_million_tokens: '4.8'
+      cache_read_cost_per_million_tokens: '0.3'
+  - name: qwen/qwen3.5-rocm
+    provider_model_id: qwen/qwen3.5-rocm
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    reasoning_family: qwen/qwen3.5-rocm
+  - name: local/omni
+    provider_model_id: local/omni
+    backend_refs:
+    - endpoint: http://vllm-omni:8000/v1
+      provider: vllm
+    api_format: openai
+routing:
+  modelCards:
+  - name: anthropic/claude-opus-4.6
     capabilities:
     - legal_analysis
     - policy_review
     - high_risk_review
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: anthropic/claude-opus-4.6
-  pricing:
-    input_cost_per_million_tokens: '1.8'
-    output_cost_per_million_tokens: '7.2'
-    cache_read_cost_per_million_tokens: '0.45'
-- name: google/gemini-2.5-flash-lite
-  card:
+  - name: google/gemini-2.5-flash-lite
     capabilities:
     - verified_explanation
     - source_backed_correction
     - nuanced_explanation
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: google/gemini-2.5-flash-lite
-  pricing:
-    input_cost_per_million_tokens: '0.01'
-    output_cost_per_million_tokens: '0.04'
-    cache_read_cost_per_million_tokens: '0.002'
-- name: google/gemini-3.1-pro
-  card:
+  - name: google/gemini-3.1-pro
     capabilities:
     - architecture
     - stem_analysis
     - long_context
     - general_reasoning
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: google/gemini-3.1-pro
-  pricing:
-    input_cost_per_million_tokens: '0.48'
-    output_cost_per_million_tokens: '1.92'
-    cache_read_cost_per_million_tokens: '0.12'
-- name: openai/gpt5.4
-  card:
+  - name: openai/gpt5.4
     capabilities:
     - reasoning
     - proofs
     - formal_derivation
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: openai/gpt5.4
-  pricing:
-    input_cost_per_million_tokens: '1.2'
-    output_cost_per_million_tokens: '4.8'
-    cache_read_cost_per_million_tokens: '0.3'
-- name: qwen/qwen3.5-rocm
-  card:
+  - name: qwen/qwen3.5-rocm
     capabilities:
     - fast_qa
     - self_hosted
@@ -77,21 +102,23 @@ models:
     - text
     reasoning:
       type: chat_template_kwargs
-      efforts:
-      - medium
-      - low
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: qwen/qwen3.5-rocm
+      efforts: [medium]
+  - name: local/omni
+    capabilities:
+    - chat
+    - image_understanding
+    - multimodal
+    - omni
+    - text
+    - vision
+    modality: omni
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       complexity:
-      - description: General difficulty boundary for simple answers versus synthesis-heavy
-          reasoning.
+      - description: General difficulty boundary for simple answers versus synthesis-heavy reasoning.
         easy:
           candidates:
           - brief definition
@@ -99,7 +126,7 @@ recipes:
           - simple explanation
           - short direct answer
           - rewrite this sentence
-          - "\u7B80\u5355\u89E3\u91CA\u4E00\u4E0B"
+          - 简单解释一下
         hard:
           candidates:
           - compare several approaches and justify the trade-offs
@@ -107,7 +134,7 @@ recipes:
           - synthesize constraints into a plan
           - root-cause analysis for a complex failure
           - derive the answer from first principles
-          - "\u4E25\u683C\u8BBA\u8BC1\u5E76\u6BD4\u8F83\u53D6\u820D"
+          - 严格论证并比较取舍
         name: general_reasoning
         threshold: 0.14
       - composer:
@@ -115,8 +142,7 @@ recipes:
           - name: computer science
             type: domain
           operator: AND
-        description: Coding and software-engineering difficulty for cheap code help
-          versus hard systems work.
+        description: Coding and software-engineering difficulty for cheap code help versus hard systems work.
         easy:
           candidates:
           - explain what this function does
@@ -138,8 +164,7 @@ recipes:
           - name: math
             type: domain
           operator: AND
-        description: Math difficulty for simple calculations versus formal proofs
-          and derivations.
+        description: Math difficulty for simple calculations versus formal proofs and derivations.
         easy:
           candidates:
           - what is 2 plus 2
@@ -161,8 +186,7 @@ recipes:
           - name: law
             type: domain
           operator: AND
-        description: Legal risk boundary for informational law questions versus premium-risk
-          analysis.
+        description: Legal risk boundary for informational law questions versus premium-risk analysis.
         easy:
           candidates:
           - what does NDA mean
@@ -220,8 +244,7 @@ recipes:
           - name: psychology
             type: domain
           operator: OR
-        description: Evidence-heavy research boundary for source-backed synthesis
-          versus lighter overview tasks.
+        description: Evidence-heavy research boundary for source-backed synthesis versus lighter overview tasks.
         easy:
           candidates:
           - give a quick overview of the topic
@@ -291,13 +314,13 @@ recipes:
         threshold: 0.72
       - aggregation_method: max
         candidates:
-        - "\u4F60\u662F\u8C01\uFF1F"
-        - "CPU \u662F\u4EC0\u4E48\u610F\u601D\uFF1F"
-        - "\u6CD5\u56FD\u7684\u9996\u90FD\u662F\u54EA\u91CC\uFF1F"
-        - "\u4EC0\u4E48\u662F API\uFF1F\u8BF7\u7B80\u5355\u89E3\u91CA\u3002"
-        - "\u6C34\u7684\u6CB8\u70B9\u662F\u591A\u5C11\uFF1F"
-        - "\u4E00\u5E74\u6709\u51E0\u4E2A\u6708\uFF1F"
-        - "\u592A\u9633\u7CFB\u6700\u5927\u7684\u884C\u661F\u662F\u4EC0\u4E48\uFF1F"
+        - 你是谁？
+        - CPU 是什么意思？
+        - 法国的首都是哪里？
+        - 什么是 API？请简单解释。
+        - 水的沸点是多少？
+        - 一年有几个月？
+        - 太阳系最大的行星是什么？
         name: fast_qa_zh
         threshold: 0.72
       - aggregation_method: max
@@ -306,8 +329,7 @@ recipes:
         - Write a short poem about late-night coding.
         - Rewrite this paragraph to sound more cinematic.
         - Create three slogan options for a climate startup.
-        - "\u5E2E\u6211\u60F3\u4E00\u4E2A\u66F4\u6709\u753B\u9762\u611F\u7684\u54C1\
-          \u724C\u6545\u4E8B\u3002"
+        - 帮我想一个更有画面感的品牌故事。
         name: creative_tasks
         threshold: 0.74
       - aggregation_method: max
@@ -326,8 +348,7 @@ recipes:
         - Compare the causes of the Roman Empire's decline with later empires.
         - Explain how industrialization changed political power in Europe.
         - Analyze the historical consequences of the Treaty of Versailles.
-        - "\u603B\u7ED3\u660E\u6CBB\u7EF4\u65B0\u5BF9\u65E5\u672C\u56FD\u5BB6\u80FD\
-          \u529B\u7684\u957F\u671F\u5F71\u54CD\u3002"
+        - 总结明治维新对日本国家能力的长期影响。
         name: history_explainer
         threshold: 0.75
       - aggregation_method: max
@@ -337,19 +358,15 @@ recipes:
         - Explain cognitive biases that affect negotiation outcomes.
         - Compare attachment styles and how they affect adult relationships.
         - Analyze burnout patterns in high-pressure knowledge work.
-        - "\u5E2E\u6211\u89E3\u91CA\u62D6\u5EF6\u80CC\u540E\u7684\u5E38\u89C1\u5FC3\
-          \u7406\u673A\u5236\u3002"
+        - 帮我解释拖延背后的常见心理机制。
         name: psychology_support
         threshold: 0.75
       - aggregation_method: max
         candidates:
-        - Explain common causes of chest pain and when someone should seek urgent
-          care.
+        - Explain common causes of chest pain and when someone should seek urgent care.
         - Compare evidence-backed treatment options for type 2 diabetes management.
         - Summarize safe, clinically grounded steps for lowering high blood pressure.
-        - "\u89E3\u91CA\u5E38\u89C1\u547C\u5438\u9053\u611F\u67D3\u75C7\u72B6\u7684\
-          \u533A\u522B\uFF0C\u4EE5\u53CA\u4F55\u65F6\u5E94\u5C3D\u5FEB\u5C31\u533B\
-          \u3002"
+        - 解释常见呼吸道感染症状的区别，以及何时应尽快就医。
         name: health_guidance
         threshold: 0.77
       - aggregation_method: max
@@ -366,16 +383,13 @@ recipes:
         - Explain the trade-offs between battery chemistries for grid storage.
         - Analyze a protein-folding pipeline and its computational bottlenecks.
         - Design an anomaly-detection method for sensor networks.
-        - In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle
-          poisoning as causes of qubit decoherence, then propose experiments to isolate
-          the dominant mechanism.
+        - In quantum-computing terms, compare dielectric loss, flux noise, and quasiparticle poisoning as causes of qubit decoherence, then propose experiments to isolate the dominant mechanism.
         name: complex_stem
         threshold: 0.77
       - aggregation_method: max
         candidates:
         - Design a distributed rate limiter and explain failure modes.
-        - Design a multi-region feature-flag service with storage boundaries, cache
-          strategy, and consistency trade-offs.
+        - Design a multi-region feature-flag service with storage boundaries, cache strategy, and consistency trade-offs.
         - Plan a migration from a monolith to event-driven microservices.
         - Propose a consistency strategy for a global payments platform.
         - Design a multi-tenant observability architecture with low latency.
@@ -384,13 +398,11 @@ recipes:
       - aggregation_method: max
         candidates:
         - Create a migration plan with rollback, validation, and checkpoints.
-        - Plan a zero-downtime migration with checkpoints, owners, rollback steps,
-          and validation after each phase.
+        - Plan a zero-downtime migration with checkpoints, owners, rollback steps, and validation after each phase.
         - Troubleshoot the production issue and iterate until it is fixed.
         - Break this system redesign into phases, owners, and verification steps.
         - Design an execution workflow with concrete milestones and guardrails.
-        - "\u7ED9\u6211\u4E00\u4E2A\u5206\u9636\u6BB5\u5B9E\u65BD\u65B9\u6848\uFF0C\
-          \u5E76\u5305\u542B\u6821\u9A8C\u4E0E\u56DE\u6EDA\u6B65\u9AA4\u3002"
+        - 给我一个分阶段实施方案，并包含校验与回滚步骤。
         name: agentic_workflows
         threshold: 0.78
       - aggregation_method: max
@@ -399,8 +411,7 @@ recipes:
         - Write a source-backed memo that synthesizes multiple references.
         - Survey the literature and recommend a position with supporting evidence.
         - Compare conflicting historical or policy interpretations with references.
-        - "\u8BF7\u7EFC\u5408\u591A\u4EFD\u8D44\u6599\u5E76\u7ED9\u51FA\u5E26\u4F9D\
-          \u636E\u7684\u5206\u6790\u7ED3\u8BBA\u3002"
+        - 请综合多份资料并给出带依据的分析结论。
         name: research_synthesis
         threshold: 0.77
       - aggregation_method: max
@@ -408,10 +419,8 @@ recipes:
         - Explain this in plain language for a general audience.
         - Give me a practical answer without assuming special expertise.
         - Help me understand the basics before we go deeper.
-        - "\u7528\u901A\u4FD7\u7684\u8BDD\u89E3\u91CA\u6E05\u695A\u8FD9\u4E2A\u95EE\
-          \u9898\u3002"
-        - "\u5148\u7ED9\u6211\u4E00\u4E2A\u9002\u5408\u666E\u901A\u7528\u6237\u7684\
-          \u76F4\u63A5\u56DE\u7B54\u3002"
+        - 用通俗的话解释清楚这个问题。
+        - 先给我一个适合普通用户的直接回答。
         name: general_chat_fallback
         threshold: 0.72
       - aggregation_method: max
@@ -424,31 +433,23 @@ recipes:
         threshold: 0.78
       - aggregation_method: max
         candidates:
-        - "\u8BF7\u4ECE\u591A\u4E2A\u89D2\u5EA6\u4E25\u683C\u5206\u6790\u5E76\u7ED9\
-          \u51FA\u7ED3\u8BBA\u3002"
-        - "\u8BF7\u9010\u6B65\u63A8\u7406\uFF0C\u6BD4\u8F83\u51E0\u79CD\u65B9\u6848\
-          \u7684\u53D6\u820D\u3002"
-        - "\u8BF7\u4ECE\u7B2C\u4E00\u6027\u539F\u7406\u51FA\u53D1\u5EFA\u7ACB\u5B8C\
-          \u6574\u8BBA\u8BC1\u3002"
-        - "\u8BF7\u7EFC\u5408\u591A\u4E2A\u7EA6\u675F\u7ED9\u51FA\u7CFB\u7EDF\u6027\
-          \u5EFA\u8BAE\u3002"
+        - 请从多个角度严格分析并给出结论。
+        - 请逐步推理，比较几种方案的取舍。
+        - 请从第一性原理出发建立完整论证。
+        - 请综合多个约束给出系统性建议。
         name: reasoning_general_zh
         threshold: 0.78
       - aggregation_method: max
         candidates:
-        - Analyze indemnity, limitation of liability, and governing-law risks in this
-          contract.
-        - Assess the legal risk in this agreement by analyzing indemnification, limitation
-          of liability, and compliance duties.
+        - Analyze indemnity, limitation of liability, and governing-law risks in this contract.
+        - Assess the legal risk in this agreement by analyzing indemnification, limitation of liability, and compliance duties.
         - Draft a legal-risk memo for a cross-border data transfer policy.
         - Compare regulatory exposure under two compliance strategies.
-        - "\u8BC4\u4F30\u8BE5\u5408\u540C\u6761\u6B3E\u4E2D\u7684\u8D23\u4EFB\u5206\
-          \u914D\u3001\u8D54\u507F\u548C\u5408\u89C4\u98CE\u9669\u3002"
+        - 评估该合同条款中的责任分配、赔偿和合规风险。
         name: premium_legal_analysis
         threshold: 0.8
       fact_check:
-      - description: Narrow factual-verification route for requests that explicitly
-          ask for evidence or source checking.
+      - description: Narrow factual-verification route for requests that explicitly ask for evidence or source checking.
         name: needs_fact_check
       keywords:
       - case_sensitive: false
@@ -468,11 +469,11 @@ recipes:
         - fix your answer
         - you got this wrong
         - you got this wrong earlier
-        - "\u9519\u4E86"
-        - "\u4E0D\u5BF9"
-        - "\u56DE\u7B54\u9519\u4E86"
-        - "\u91CD\u65B0\u56DE\u7B54"
-        - "\u518D\u7B54\u4E00\u6B21"
+        - 错了
+        - 不对
+        - 回答错了
+        - 重新回答
+        - 再答一次
         name: correction_feedback_markers
         operator: OR
       - case_sensitive: false
@@ -485,11 +486,11 @@ recipes:
         - restate it more simply
         - walk me through that again
         - use one simple example
-        - "\u8BB2\u6E05\u695A\u4E00\u70B9"
-        - "\u8BF4\u5F97\u66F4\u6E05\u695A"
-        - "\u7B80\u5355\u4E00\u70B9"
-        - "\u4E3E\u4E2A\u4F8B\u5B50"
-        - "\u89E3\u91CA\u5F97\u66F4\u660E\u767D"
+        - 讲清楚一点
+        - 说得更清楚
+        - 简单一点
+        - 举个例子
+        - 解释得更明白
         name: clarification_feedback_markers
         operator: OR
       - case_sensitive: false
@@ -515,15 +516,15 @@ recipes:
         - is this true
         - fact check this
         - verify with evidence
-        - "\u6838\u5B9E\u4E00\u4E0B"
-        - "\u7ED9\u51FA\u5904"
-        - "\u8BF7\u7ED9\u51FA\u5904"
-        - "\u8FD9\u662F\u771F\u7684\u5417"
-        - "\u8BF7\u6838\u9A8C"
-        - "\u8BF7\u7ED9\u6765\u6E90"
-        - "\u8BF7\u6838\u5B9E\u5E76\u7ED9\u51FA\u5904"
-        - "\u8BF7\u6838\u5B9E\u5E76\u7ED9\u6765\u6E90"
-        - "\u8BF7\u6838\u9A8C\u5E76\u7ED9\u6765\u6E90"
+        - 核实一下
+        - 给出处
+        - 请给出处
+        - 这是真的吗
+        - 请核验
+        - 请给来源
+        - 请核实并给出处
+        - 请核实并给来源
+        - 请核验并给来源
         name: verification_markers
         operator: OR
       - case_sensitive: false
@@ -543,11 +544,11 @@ recipes:
         - reputable historical sources
         - medical sources
         - verify with a source whether
-        - "\u8BF7\u6838\u5B9E\u5E76\u7ED9\u6765\u6E90"
-        - "\u8BF7\u6838\u5B9E\u5E76\u7ED9\u51FA\u5904"
-        - "\u5F15\u7528\u8D44\u6599"
-        - "\u6839\u636E\u6587\u732E"
-        - "\u53C2\u8003\u6CD5\u89C4"
+        - 请核实并给来源
+        - 请核实并给出处
+        - 引用资料
+        - 根据文献
+        - 参考法规
         name: reference_heavy_markers
         operator: OR
       - case_sensitive: false
@@ -560,10 +561,10 @@ recipes:
         - indemnity
         - jurisdiction
         - lawsuit
-        - "\u5408\u540C\u6761\u6B3E"
-        - "\u5408\u89C4\u5206\u6790"
-        - "\u6CD5\u5F8B\u98CE\u9669"
-        - "\u8D23\u4EFB\u8BA4\u5B9A"
+        - 合同条款
+        - 合规分析
+        - 法律风险
+        - 责任认定
         name: legal_risk_markers
         operator: OR
       - case_sensitive: false
@@ -576,10 +577,10 @@ recipes:
         - tl;dr
         - briefly explain
         - concise answer
-        - "\u7B80\u77ED\u56DE\u7B54"
-        - "\u7B80\u5355\u89E3\u91CA"
-        - "\u7528\u4E00\u53E5\u8BDD"
-        - "\u76F4\u63A5\u56DE\u7B54"
+        - 简短回答
+        - 简单解释
+        - 用一句话
+        - 直接回答
         name: simple_request_markers
         operator: OR
       - case_sensitive: false
@@ -595,10 +596,10 @@ recipes:
         - campaign idea
         - make it more vivid
         - rewrite creatively
-        - "\u60F3\u70B9\u5B50"
-        - "\u5934\u8111\u98CE\u66B4"
-        - "\u5199\u4E00\u4E2A\u6545\u4E8B"
-        - "\u5199\u4E00\u9996\u8BD7"
+        - 想点子
+        - 头脑风暴
+        - 写一个故事
+        - 写一首诗
         name: creative_request_markers
         operator: OR
       - case_sensitive: false
@@ -619,10 +620,10 @@ recipes:
         - verification gates
         - validation steps
         - validation after each phase
-        - "\u5206\u6B65\u9AA4"
-        - "\u5B9E\u65BD\u8BA1\u5212"
-        - "\u8DEF\u7EBF\u56FE"
-        - "\u68C0\u67E5\u6E05\u5355"
+        - 分步骤
+        - 实施计划
+        - 路线图
+        - 检查清单
         name: multi_step_markers
         operator: OR
       - case_sensitive: false
@@ -638,10 +639,10 @@ recipes:
         - define rollback criteria
         - include verification gates
         - phase the rollout
-        - "\u5236\u5B9A\u8FC1\u79FB\u8BA1\u5212"
-        - "\u6392\u67E5\u8FD9\u4E2A\u95EE\u9898"
-        - "\u5B9E\u65BD\u8FD9\u4E2A\u65B9\u6848"
-        - "\u81EA\u52A8\u5316\u8FD9\u4E2A\u6D41\u7A0B"
+        - 制定迁移计划
+        - 排查这个问题
+        - 实施这个方案
+        - 自动化这个流程
         name: agentic_request_markers
         operator: OR
       - case_sensitive: false
@@ -677,12 +678,12 @@ recipes:
         - deploy the stack
         - configure the service
         - write the implementation
-        - "\u6784\u5EFA\u8FD9\u4E2A\u7CFB\u7EDF"
-        - "\u521B\u5EFA\u8FD9\u4E2A\u670D\u52A1"
-        - "\u5B9E\u73B0\u8FD9\u4E2A\u65B9\u6848"
-        - "\u8BBE\u8BA1\u8FD9\u4E2A\u6D41\u7A0B"
-        - "\u642D\u5EFA\u8FD9\u4E2A\u7BA1\u9053"
-        - "\u90E8\u7F72\u8FD9\u4E2A\u7CFB\u7EDF"
+        - 构建这个系统
+        - 创建这个服务
+        - 实现这个方案
+        - 设计这个流程
+        - 搭建这个管道
+        - 部署这个系统
         name: implementation_markers
         operator: OR
       - case_sensitive: false
@@ -717,10 +718,10 @@ recipes:
         - monarchy
         - republic
         - historical collapse
-        - "\u5386\u53F2"
-        - "\u738B\u671D"
-        - "\u5E1D\u56FD"
-        - "\u9769\u547D"
+        - 历史
+        - 王朝
+        - 帝国
+        - 革命
         name: history_topic_markers
         operator: OR
       - case_sensitive: false
@@ -732,11 +733,11 @@ recipes:
         - summarize the research
         - source-backed analysis
         - policy memo
-        - "\u6587\u732E\u7EFC\u8FF0"
-        - "\u5BF9\u6BD4\u8BC1\u636E"
-        - "\u7EFC\u5408\u8D44\u6599"
-        - "\u603B\u7ED3\u7814\u7A76\u73B0\u72B6"
-        - "\u57FA\u4E8E\u6765\u6E90\u5206\u6790"
+        - 文献综述
+        - 对比证据
+        - 综合资料
+        - 总结研究现状
+        - 基于来源分析
         name: research_request_markers
         operator: OR
       - case_sensitive: false
@@ -755,12 +756,12 @@ recipes:
         - deductive
         - inductive
         - abductive
-        - "\u9010\u6B65\u63A8\u7406"
-        - "\u4E25\u683C\u8BC1\u660E"
-        - "\u8BC1\u660E"
-        - "\u63A8\u5BFC\u516C\u5F0F"
-        - "\u6743\u8861\u5229\u5F0A"
-        - "\u6DF1\u5165\u5206\u6790"
+        - 逐步推理
+        - 严格证明
+        - 证明
+        - 推导公式
+        - 权衡利弊
+        - 深入分析
         name: reasoning_request_markers
         operator: OR
       - case_sensitive: false
@@ -771,12 +772,12 @@ recipes:
         - right now
         - immediately
         - as soon as possible
-        - "\u9A6C\u4E0A"
-        - "\u7ACB\u523B"
-        - "\u7ACB\u5373"
-        - "\u5C3D\u5FEB"
-        - "\u8D76\u7D27"
-        - "\u73B0\u5728\u5C31"
+        - 马上
+        - 立刻
+        - 立即
+        - 尽快
+        - 赶紧
+        - 现在就
         name: urgency_markers
         operator: OR
       language:
@@ -785,8 +786,7 @@ recipes:
       - description: Chinese language queries
         name: zh
       reasks:
-      - description: Current user turn closely repeats the immediately previous user
-          turn.
+      - description: Current user turn closely repeats the immediately previous user turn.
         lookback_turns: 1
         name: likely_dissatisfied
         threshold: 0.8
@@ -800,10 +800,10 @@ recipes:
             - - first
               - next
               - finally
-            - - "\u5148"
-              - "\u518D"
-            - - "\u9996\u5148"
-              - "\u7136\u540E"
+            - - 先
+              - 再
+            - - 首先
+              - 然后
             type: sequence
           type: sequence
         name: ordered_workflow
@@ -823,10 +823,10 @@ recipes:
             - - first
               - next
               - finally
-            - - "\u9996\u5148"
-              - "\u7136\u540E"
-            - - "\u5148"
-              - "\u518D"
+            - - 首先
+              - 然后
+            - - 先
+              - 再
             type: sequence
           type: sequence
         name: first_then_flow
@@ -839,16 +839,15 @@ recipes:
             - at least
             - within
             - no more than
-            - "\u4E0D\u8D85\u8FC7"
-            - "\u81F3\u5C11"
-            - "\u6700\u591A"
+            - 不超过
+            - 至少
+            - 最多
             type: keyword_set
           type: density
         name: constraint_dense
         predicate:
           gt: 0.08
-      - description: Output-format directives are dense relative to multilingual text
-          units.
+      - description: Output-format directives are dense relative to multilingual text units.
         feature:
           source:
             keywords:
@@ -856,19 +855,18 @@ recipes:
             - bullet
             - json
             - markdown
-            - "\u8868\u683C"
-            - "\u5217\u8868"
+            - 表格
+            - 列表
             - JSON
             type: keyword_set
           type: density
         name: format_directive_dense
         predicate:
           gt: 0.08
-      - description: Prompts with very low question density relative to multilingual
-          text units.
+      - description: Prompts with very low question density relative to multilingual text units.
         feature:
           source:
-            pattern: "[?\uFF1F]"
+            pattern: '[?？]'
             type: regex
           type: density
         name: low_question_density
@@ -877,7 +875,7 @@ recipes:
       - description: Repeated exclamation marks that usually indicate elevated urgency.
         feature:
           source:
-            pattern: "[!\uFF01]"
+            pattern: '[!！]'
             type: regex
           type: count
         name: exclamation_emphasis
@@ -888,6 +886,13 @@ recipes:
         name: wrong_answer
       - description: Explicit request to restate the answer more clearly.
         name: need_clarification
+      conversation:
+      - name: balance_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
     projections:
       mappings:
       - calibration:
@@ -1291,6 +1296,16 @@ recipes:
         method: weighted_sum
         name: urgency_pressure
     decisions:
+    - description: Understand image-bearing requests with the dedicated visual-language model.
+      name: omni
+      priority: 300
+      rules:
+        conditions:
+        - name: balance_has_images
+          type: conversation
+        operator: OR
+      algorithm:
+        type: static
     - description: Premium-only route for high-value legal and compliance analysis.
       name: premium_legal
       plugins:
@@ -1369,8 +1384,7 @@ recipes:
           operator: NOT
         operator: AND
       tier: 2
-    - description: Deep philosophy and first-principles reasoning outside the narrow
-        formal-math overlay.
+    - description: Deep philosophy and first-principles reasoning outside the narrow formal-math overlay.
       name: reasoning_deep
       plugins:
       - configuration:
@@ -1471,8 +1485,7 @@ recipes:
           operator: NOT
         operator: AND
       tier: 3
-    - description: High-structure execution plans, systems design, and specialist
-        STEM synthesis.
+    - description: High-structure execution plans, systems design, and specialist STEM synthesis.
       name: complex_specialist
       plugins:
       - configuration:
@@ -1682,8 +1695,7 @@ recipes:
           operator: NOT
         operator: AND
       tier: 7
-    - description: Evidence-sensitive business, economics, history, and psychology
-        explanation.
+    - description: Evidence-sensitive business, economics, history, and psychology explanation.
       name: verified_explainer
       plugins:
       - configuration:
@@ -1746,8 +1758,7 @@ recipes:
           operator: NOT
         operator: AND
       tier: 8
-    - description: Cheap clarification lane for explicit restatements and single-turn
-        re-asks.
+    - description: Cheap clarification lane for explicit restatements and single-turn re-asks.
       name: feedback_need_clarification
       plugins:
       - configuration:
@@ -1780,8 +1791,7 @@ recipes:
           operator: NOT
         operator: AND
       tier: 9
-    - description: Low-cost business, history, and psychology explanation when verification
-        pressure is absent.
+    - description: Low-cost business, history, and psychology explanation when verification pressure is absent.
       name: medium_explainer
       plugins:
       - configuration:
@@ -1913,8 +1923,7 @@ recipes:
           operator: NOT
         operator: AND
       tier: 11
-    - description: Short English or Chinese factual questions, including explicit
-        verification asks, that should stay on the cheap lane.
+    - description: Short English or Chinese factual questions, including explicit verification asks, that should stay on the cheap lane.
       name: fast_qa
       plugins:
       - configuration:
@@ -2114,8 +2123,7 @@ recipes:
           operator: AND
         operator: OR
       tier: 13
-    - description: Absolute final fallback that guarantees a routing decision when
-        no earlier balance lane matches.
+    - description: Absolute final fallback that guarantees a routing decision when no earlier balance lane matches.
       name: casual_chat
       plugins:
       - configuration:
@@ -2127,11 +2135,11 @@ recipes:
         type: router_replay
       priority: 10
       rules:
+        conditions: []
         operator: AND
       tier: 14
 entrypoints:
-- name: vllm-sr/auto
-  recipe: default
+- recipe: default
   assignments:
     premium_legal:
       models:
@@ -2223,6 +2231,12 @@ entrypoints:
         weight: '1'
       - model: google/gemini-2.5-flash-lite
         weight: '1'
+    omni:
+      models:
+      - model: local/omni
+        weight: '1'
+  model_names:
+  - vllm-sr/auto
 global:
   billing:
     currency: USD

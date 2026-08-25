@@ -34,7 +34,7 @@ Use `authz` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     role_bindings:
       - name: admin
@@ -58,7 +58,8 @@ Use `role_bindings` when the signal should fire from authenticated identity and 
 Identity comes only from the Router-authenticated `TenantContext`; the signal
 does not authenticate a request or grant model access. `User` and `Team`
 subjects match their corresponding IDs. `Group` subjects match compiled string
-claim values or the names of true boolean claims. Standalone routing has no
-trusted identity source, so a Recipe that requires these bindings fails closed.
+claim values or the names of true boolean claims. Without Router-native access
+and an authenticated `TenantContext`, a Recipe that requires these bindings
+fails closed.
 See a complete example:
 [`config/fragments/signal/authz/rbac.yaml`](https://github.com/vllm-project/semantic-router/blob/main/config/fragments/signal/authz/rbac.yaml).

@@ -336,98 +336,33 @@ func (service *Service) prepareAcceptance(ctx context.Context, request AcceptReq
 		return AcceptMutation{}, ErrUnavailable
 	}
 	now := service.timeNow()
-	request.Identity.Issuer = strings.TrimSpace(request.Identity.Issuer)
-	request.Identity.Subject = strings.TrimSpace(request.Identity.Subject)
-	request.Identity.VerifiedEmail = accesscontrol.NormalizeEmail(request.Identity.VerifiedEmail)
-	request.Identity.DisplayName = strings.TrimSpace(request.Identity.DisplayName)
-	if validateAcceptanceIdentity(request.Identity) != nil || validateText(request.RequestID, 256) != nil ||
-		validateText(request.AuthenticationSourceKind, 64) != nil ||
-		validateText(request.AuthenticationSourceID, 512) != nil ||
-		(request.EvidenceKind != "human" && request.EvidenceKind != "workload") {
-		return AcceptMutation{}, ErrInvalidRequest
+	request = normalizeAcceptRequest(request)
+	if err := validateAcceptRequest(request); err != nil {
+		return AcceptMutation{}, err
 	}
-	invitationID, prepareAcceptanceErr := tokenInvitationID(request.Token)
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, ErrIdentityMismatch
+	invitation, digest, pepperVersion, err := service.authorizeInvitationAcceptance(ctx, request, now)
+	if err != nil {
+		return AcceptMutation{}, err
 	}
-	invitation, digest, pepperVersion, prepareAcceptanceErr := service.repository.GetByID(ctx, invitationID)
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, concealInvitationError(prepareAcceptanceErr)
+	ids, err := service.allocateOnboardingIDs(invitation.Snapshot)
+	if err != nil {
+		return AcceptMutation{}, err
 	}
-	if err := service.tokens.Verify(request.Token, digest, pepperVersion); err != nil {
-		return AcceptMutation{}, mapTokenError(err)
+	firstKey, err := service.prepareAutomaticFirstKey(invitation, ids.userID, now)
+	if err != nil {
+		return AcceptMutation{}, err
 	}
-	if !identityMatches(invitation.Expected, request.Identity) {
-		return AcceptMutation{}, ErrIdentityMismatch
-	}
-	if invitation.Status == StatusPending && !now.Before(invitation.ExpiresAt) {
-		return AcceptMutation{}, ErrExpired
-	}
-	userID, prepareAcceptanceErr := service.nextID()
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, prepareAcceptanceErr
-	}
-	principalID, prepareAcceptanceErr := service.nextID()
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, prepareAcceptanceErr
-	}
-	roleBindingIDs, prepareAcceptanceErr := service.nextIDs(len(invitation.Snapshot.RoleGrants))
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, prepareAcceptanceErr
-	}
-	accessBindingID, prepareAcceptanceErr := service.nextID()
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, prepareAcceptanceErr
-	}
-	rateBindingID, prepareAcceptanceErr := service.nextID()
-	if prepareAcceptanceErr != nil {
-		return AcceptMutation{}, prepareAcceptanceErr
-	}
-	var firstKey *PreparedFirstKey
-	if invitation.Snapshot.AutomaticFirstKey {
-		if service.firstKeys == nil {
-			return AcceptMutation{}, ErrUnavailable
-		}
-		teamID := ""
-		if invitation.Snapshot.Team != nil {
-			teamID = invitation.Snapshot.Team.TeamID
-		}
-		prepared, err := service.firstKeys.PrepareFirstKey(FirstKeyRequest{
-			NamespaceID: invitation.NamespaceID, UserID: userID, ContextTeamID: teamID,
-			Name: invitation.DisplayName, Now: now,
-		})
-		if err != nil {
-			return AcceptMutation{}, err
-		}
-		firstKey = &prepared
-	}
-	seal := func(result AcceptanceResult) (accesscredential.Envelope, time.Time, error) {
-		deliveryExpiresAt := now.Add(service.secretDeliveryTTL)
-		result.DeliveryExpiresAt = deliveryExpiresAt
-		if firstKey != nil {
-			result.APIKeyID, result.APIKey = string(firstKey.Key.ID), string(firstKey.Plaintext)
-		}
-		body, err := json.Marshal(result)
-		if err != nil {
-			return accesscredential.Envelope{}, time.Time{}, ErrUnavailable
-		}
-		envelope, err := service.responseKEK.Seal(body,
-			acceptanceAAD(invitation.ID, userID, invitation.Revision+1))
-		if err != nil {
-			return accesscredential.Envelope{}, time.Time{}, ErrUnavailable
-		}
-		return envelope, deliveryExpiresAt, nil
-	}
+	seal := service.acceptanceSealer(invitation, ids.userID, firstKey, now)
 	return AcceptMutation{
 		InvitationID: invitation.ID, TokenHMAC: append([]byte(nil), digest...), PepperVersion: pepperVersion,
-		Identity: request.Identity, PrincipalID: principalID, UserID: userID,
-		RoleBindingIDs: roleBindingIDs, AccessBindingID: accessBindingID,
-		RateLimitBindingID: rateBindingID,
+		Identity: request.Identity, PrincipalID: ids.principalID, UserID: ids.userID,
+		RoleBindingIDs: ids.roleBindingIDs, AccessBindingID: ids.accessBindingID,
+		RateLimitBindingID: ids.rateBindingID,
 		FirstKey:           firstKey, SealResult: seal,
 		AuthenticationSourceKind: request.AuthenticationSourceKind,
 		AuthenticationSourceID:   request.AuthenticationSourceID, EvidenceKind: request.EvidenceKind,
 		Actor: Actor{
-			PrincipalID: principalID, ActorChain: []string{principalID}, RequestID: request.RequestID,
+			PrincipalID: ids.principalID, ActorChain: []string{ids.principalID}, RequestID: request.RequestID,
 			SourceIP: request.SourceIP, Reason: "Accept invitation.",
 		},
 	}, nil
@@ -446,15 +381,7 @@ func (service *Service) Onboard(ctx context.Context, request PrivilegedOnboardin
 		validateTeam(request.Team) != nil {
 		return PrivilegedOnboardingResult{}, ErrInvalidRequest
 	}
-	command, onboardErr := service.bindCommand(request.NamespaceID, request.Actor.PrincipalID,
-		"/management/v1/onboarding", request.IdempotencyKey, struct {
-			PrincipalID    string               `json:"principalId"`
-			Email          string               `json:"email"`
-			DisplayName    string               `json:"displayName"`
-			RoleGrants     []RequestedRoleGrant `json:"roleGrants"`
-			Team           *TeamAssignment      `json:"team,omitempty"`
-			CreateFirstKey bool                 `json:"createFirstKey"`
-		}{request.PrincipalID, request.Email, request.DisplayName, request.RoleGrants, request.Team, request.CreateFirstKey}, now)
+	command, onboardErr := service.bindOnboardingCommand(request, now)
 	if onboardErr != nil {
 		return PrivilegedOnboardingResult{}, onboardErr
 	}
@@ -464,72 +391,27 @@ func (service *Service) Onboard(ctx context.Context, request PrivilegedOnboardin
 		}
 		return service.replayOnboarding(command, stored, now)
 	}
-	var snapshot OnboardingSnapshot
-	if request.PreparedSnapshot == nil {
-		var err error
-		snapshot, err = service.repository.ResolveSnapshot(ctx, request.NamespaceID, request.Actor.PrincipalID, request.RoleGrants, request.Team)
-		if err != nil {
-			return PrivilegedOnboardingResult{}, err
-		}
-	} else {
-		snapshot = cloneSnapshot(*request.PreparedSnapshot)
-		if !snapshotMatchesRequest(snapshot, request.RoleGrants, request.Team) {
-			return PrivilegedOnboardingResult{}, ErrInvalidRequest
-		}
+	snapshot, onboardErr := service.resolveOnboardingSnapshot(ctx, request)
+	if onboardErr != nil {
+		return PrivilegedOnboardingResult{}, onboardErr
 	}
 	snapshot.AutomaticFirstKey = request.CreateFirstKey
-	userID, onboardErr := service.nextID()
+	ids, onboardErr := service.allocateOnboardingMaterializationIDs(snapshot)
 	if onboardErr != nil {
 		return PrivilegedOnboardingResult{}, onboardErr
 	}
-	roleBindingIDs, onboardErr := service.nextIDs(len(snapshot.RoleGrants))
+	firstKey, onboardErr := service.prepareOnboardingFirstKey(request, ids.userID, now)
 	if onboardErr != nil {
 		return PrivilegedOnboardingResult{}, onboardErr
 	}
-	accessBindingID, onboardErr := service.nextID()
-	if onboardErr != nil {
-		return PrivilegedOnboardingResult{}, onboardErr
-	}
-	rateBindingID, onboardErr := service.nextID()
-	if onboardErr != nil {
-		return PrivilegedOnboardingResult{}, onboardErr
-	}
-	var firstKey *PreparedFirstKey
-	if request.CreateFirstKey {
-		if service.firstKeys == nil {
-			return PrivilegedOnboardingResult{}, ErrUnavailable
-		}
-		teamID := ""
-		if request.Team != nil {
-			teamID = request.Team.TeamID
-		}
-		value, err := service.firstKeys.PrepareFirstKey(FirstKeyRequest{
-			NamespaceID: request.NamespaceID,
-			UserID:      userID, ContextTeamID: teamID, Name: request.DisplayName, Now: now,
-		})
-		if err != nil {
-			return PrivilegedOnboardingResult{}, err
-		}
-		firstKey = &value
+	if firstKey != nil {
 		defer zero(firstKey.Plaintext)
 	}
-	seal := func(result AcceptanceResult) (accesscredential.Envelope, time.Time, error) {
-		expiresAt := now.Add(service.secretDeliveryTTL)
-		result.DeliveryExpiresAt = expiresAt
-		if firstKey != nil {
-			result.APIKeyID, result.APIKey = string(firstKey.Key.ID), string(firstKey.Plaintext)
-		}
-		body, err := json.Marshal(result)
-		if err != nil {
-			return accesscredential.Envelope{}, time.Time{}, ErrUnavailable
-		}
-		envelope, err := service.responseKEK.Seal(body, onboardingAAD(request.NamespaceID, userID, 1))
-		return envelope, expiresAt, err
-	}
+	seal := service.onboardingSealer(request.NamespaceID, ids.userID, firstKey, now)
 	envelope, onboardErr := service.repository.Onboard(ctx, PrivilegedOnboardingMutation{
-		NamespaceID: request.NamespaceID, PrincipalID: request.PrincipalID, UserID: userID,
+		NamespaceID: request.NamespaceID, PrincipalID: request.PrincipalID, UserID: ids.userID,
 		Email: request.Email, DisplayName: request.DisplayName, Snapshot: snapshot,
-		RoleBindingIDs: roleBindingIDs, AccessBindingID: accessBindingID, RateLimitBindingID: rateBindingID,
+		RoleBindingIDs: ids.roleBindingIDs, AccessBindingID: ids.accessBindingID, RateLimitBindingID: ids.rateBindingID,
 		FirstKey: firstKey, Command: command, SealResult: seal, Actor: request.Actor,
 	})
 	if onboardErr != nil {
@@ -759,9 +641,15 @@ func snapshotMatchesRequest(snapshot OnboardingSnapshot, grants []RequestedRoleG
 			return false
 		}
 	}
-	return snapshot.SelfServicePolicyRevision > 0 && canonicalUUID(snapshot.AccessPolicyID) &&
-		snapshot.AccessPolicyRevision > 0 && canonicalUUID(snapshot.RateLimitPolicyID) &&
-		snapshot.RateLimitPolicyRevision > 0
+	if snapshot.SelfServicePolicyRevision == 0 {
+		return false
+	}
+	if snapshot.Team != nil {
+		return snapshot.AccessPolicyID == "" && snapshot.AccessPolicyRevision == 0 &&
+			snapshot.RateLimitPolicyID == "" && snapshot.RateLimitPolicyRevision == 0
+	}
+	return canonicalUUID(snapshot.AccessPolicyID) && snapshot.AccessPolicyRevision > 0 &&
+		canonicalUUID(snapshot.RateLimitPolicyID) && snapshot.RateLimitPolicyRevision > 0
 }
 
 func cloneSnapshot(snapshot OnboardingSnapshot) OnboardingSnapshot {

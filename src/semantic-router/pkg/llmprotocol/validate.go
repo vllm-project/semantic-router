@@ -16,30 +16,60 @@ import (
 )
 
 func ValidateRequest(request Request, limits Limits) error {
+	blocks, err := validateRequestEnvelope(request, limits)
+	if err != nil {
+		return err
+	}
+	if messageErr := validateRequestMessages(request, limits, &blocks); messageErr != nil {
+		return messageErr
+	}
+	if instructionErr := validateRequestInstructions(request.Instructions, limits, &blocks); instructionErr != nil {
+		return instructionErr
+	}
+	if limits.ContentBlocks > 0 && blocks > limits.ContentBlocks {
+		return NewError(ErrorInvalidRequest, "content_limit", "content block limit exceeded", nil)
+	}
+	namedTools, schemaBytes, err := validateRequestTools(request.Tools, limits)
+	if err != nil {
+		return err
+	}
+	if err := validateToolChoice(request.ToolChoice, namedTools, len(request.Tools)); err != nil {
+		return err
+	}
+	if err := validateOutputFormat(request.OutputFormat, schemaBytes, limits); err != nil {
+		return err
+	}
+	if err := validateSampling(request.Sampling, limits); err != nil {
+		return err
+	}
+	return validateReasoning(request, limits)
+}
+
+func validateRequestEnvelope(request Request, limits Limits) (int, error) {
 	if strings.TrimSpace(request.Model) == "" {
-		return NewError(ErrorInvalidRequest, "model_required", "model is required", nil)
+		return 0, NewError(ErrorInvalidRequest, "model_required", "model is required", nil)
 	}
 	if exceeds(request.Model, limits.ModelBytes) {
-		return NewError(ErrorInvalidRequest, "model_limit", "model exceeds the configured limit", nil)
+		return 0, NewError(ErrorInvalidRequest, "model_limit", "model exceeds the configured limit", nil)
 	}
 	if request.Generation == 0 {
-		return NewError(ErrorInternal, "generation_required", "semantic generation is required", nil)
+		return 0, NewError(ErrorInternal, "generation_required", "semantic generation is required", nil)
 	}
 	if limits.Messages > 0 && len(request.Messages) > limits.Messages {
-		return NewError(ErrorInvalidRequest, "messages_limit", "message limit exceeded", nil)
+		return 0, NewError(ErrorInvalidRequest, "messages_limit", "message limit exceeded", nil)
 	}
 	if limits.Instructions > 0 && len(request.Instructions) > limits.Instructions {
-		return NewError(ErrorInvalidRequest, "instructions_limit", "instruction limit exceeded", nil)
+		return 0, NewError(ErrorInvalidRequest, "instructions_limit", "instruction limit exceeded", nil)
 	}
 	if limits.Tools > 0 && len(request.Tools) > limits.Tools {
-		return NewError(ErrorInvalidRequest, "tools_limit", "tool limit exceeded", nil)
+		return 0, NewError(ErrorInvalidRequest, "tools_limit", "tool limit exceeded", nil)
 	}
 	if request.CandidateCount != nil {
 		if *request.CandidateCount <= 0 {
-			return NewError(ErrorInvalidRequest, "invalid_candidate_count", "candidate count must be positive", nil)
+			return 0, NewError(ErrorInvalidRequest, "invalid_candidate_count", "candidate count must be positive", nil)
 		}
 		if limits.Candidates > 0 && *request.CandidateCount > int64(limits.Candidates) {
-			return NewError(ErrorInvalidRequest, "candidate_count_limit", "candidate count exceeds the configured limit", nil)
+			return 0, NewError(ErrorInvalidRequest, "candidate_count_limit", "candidate count exceeds the configured limit", nil)
 		}
 	}
 	blocks := 0
@@ -48,19 +78,22 @@ func ValidateRequest(request Request, limits Limits) error {
 	}
 	metadataBytes := 0
 	if limits.MetadataEntries > 0 && len(request.Metadata) > limits.MetadataEntries {
-		return NewError(ErrorInvalidRequest, "metadata_entries_limit", "metadata entry limit exceeded", nil)
+		return 0, NewError(ErrorInvalidRequest, "metadata_entries_limit", "metadata entry limit exceeded", nil)
 	}
 	for key, value := range request.Metadata {
 		if limits.MetadataKeyBytes > 0 && len(key) > limits.MetadataKeyBytes ||
 			limits.MetadataValueBytes > 0 && len(value) > limits.MetadataValueBytes {
-			return NewError(ErrorInvalidRequest, "metadata_field_limit", "metadata key or value limit exceeded", nil)
+			return 0, NewError(ErrorInvalidRequest, "metadata_field_limit", "metadata key or value limit exceeded", nil)
 		}
 		metadataBytes += len(key) + len(value)
 	}
 	if limits.MetadataBytes > 0 && metadataBytes > limits.MetadataBytes {
-		return NewError(ErrorInvalidRequest, "metadata_limit", "metadata limit exceeded", nil)
+		return 0, NewError(ErrorInvalidRequest, "metadata_limit", "metadata limit exceeded", nil)
 	}
-	namedTools := make(map[string]struct{}, len(request.Tools))
+	return blocks, nil
+}
+
+func validateRequestMessages(request Request, limits Limits, blocks *int) error {
 	toolCalls := make(map[string]struct{})
 	toolResults := make(map[string]struct{})
 	for _, message := range request.Messages {
@@ -71,7 +104,7 @@ func ValidateRequest(request Request, limits Limits) error {
 			message.Role != RoleAssistant && message.Role != RoleTool {
 			return NewError(ErrorInvalidRequest, "invalid_role", "message role is invalid", nil)
 		}
-		blocks += len(message.Content)
+		*blocks += len(message.Content)
 		if len(message.Content) == 0 {
 			return NewError(ErrorInvalidRequest, "empty_message", "messages must contain at least one content block", nil)
 		}
@@ -82,7 +115,7 @@ func ValidateRequest(request Request, limits Limits) error {
 			if err := validateRoleContent(message.Role, content); err != nil {
 				return err
 			}
-			if err := validateContent(content, &blocks, limits, 0); err != nil {
+			if err := validateContent(content, blocks, limits, 0); err != nil {
 				return err
 			}
 			if err := recordToolLink(content, toolCalls, toolResults, request.PreviousResponseID != ""); err != nil {
@@ -90,7 +123,11 @@ func ValidateRequest(request Request, limits Limits) error {
 			}
 		}
 	}
-	for _, instruction := range request.Instructions {
+	return nil
+}
+
+func validateRequestInstructions(instructions []InstructionBlock, limits Limits, blocks *int) error {
+	for _, instruction := range instructions {
 		if instruction.Role != RoleSystem && instruction.Role != RoleDeveloper {
 			return NewError(ErrorInvalidRequest, "invalid_instruction_role", "instruction role must be system or developer", nil)
 		}
@@ -101,86 +138,89 @@ func ValidateRequest(request Request, limits Limits) error {
 			if content.Kind == ContentToolCall || content.Kind == ContentToolResult {
 				return NewError(ErrorInvalidRequest, "invalid_instruction_content", "instructions cannot contain tool control blocks", nil)
 			}
-			if err := validateContent(content, &blocks, limits, 0); err != nil {
+			if err := validateContent(content, blocks, limits, 0); err != nil {
 				return err
 			}
 		}
 	}
-	if limits.ContentBlocks > 0 && blocks > limits.ContentBlocks {
-		return NewError(ErrorInvalidRequest, "content_limit", "content block limit exceeded", nil)
-	}
+	return nil
+}
+
+func validateRequestTools(tools []Tool, limits Limits) (map[string]struct{}, int, error) {
+	namedTools := make(map[string]struct{}, len(tools))
 	schemaBytes := 0
-	for _, tool := range request.Tools {
+	for _, tool := range tools {
 		if strings.TrimSpace(tool.Name) == "" || len(tool.InputSchema) == 0 || !json.Valid(tool.InputSchema) {
-			return NewError(ErrorInvalidRequest, "invalid_tool", "tool name and JSON Schema are required", nil)
+			return nil, 0, NewError(ErrorInvalidRequest, "invalid_tool", "tool name and JSON Schema are required", nil)
 		}
 		if exceeds(tool.Name, limits.ToolNameBytes) || exceeds(tool.Description, limits.ToolDescriptionBytes) {
-			return NewError(ErrorInvalidRequest, "tool_text_limit", "tool name or description exceeds the configured limit", nil)
+			return nil, 0, NewError(ErrorInvalidRequest, "tool_text_limit", "tool name or description exceeds the configured limit", nil)
 		}
 		if limits.SchemaBytes > 0 && len(tool.InputSchema) > limits.SchemaBytes {
-			return NewError(ErrorInvalidRequest, "schema_limit", "tool schema limit exceeded", nil)
+			return nil, 0, NewError(ErrorInvalidRequest, "schema_limit", "tool schema limit exceeded", nil)
 		}
 		schemaBytes += len(tool.InputSchema)
 		if limits.SchemaBytes > 0 && schemaBytes > limits.SchemaBytes {
-			return NewError(ErrorInvalidRequest, "schema_limit", "total schema limit exceeded", nil)
+			return nil, 0, NewError(ErrorInvalidRequest, "schema_limit", "total schema limit exceeded", nil)
 		}
 		if err := validateSchemaObject(tool.InputSchema, "tool schema"); err != nil {
-			return err
+			return nil, 0, err
 		}
 		if _, duplicate := namedTools[tool.Name]; duplicate {
-			return NewError(ErrorInvalidRequest, "duplicate_tool", "tool names must be unique", nil)
+			return nil, 0, NewError(ErrorInvalidRequest, "duplicate_tool", "tool names must be unique", nil)
 		}
 		namedTools[tool.Name] = struct{}{}
 	}
-	switch request.ToolChoice.Mode {
+	return namedTools, schemaBytes, nil
+}
+
+func validateToolChoice(choice ToolChoice, namedTools map[string]struct{}, toolCount int) error {
+	switch choice.Mode {
 	case "", ToolChoiceAuto, ToolChoiceNone, ToolChoiceRequired, ToolChoiceNamed:
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "tool choice is invalid", nil)
 	}
-	if request.ToolChoice.Mode == ToolChoiceNamed && strings.TrimSpace(request.ToolChoice.Name) == "" {
+	if choice.Mode == ToolChoiceNamed && strings.TrimSpace(choice.Name) == "" {
 		return NewError(ErrorInvalidRequest, "tool_choice_name_required", "named tool choice requires a name", nil)
 	}
-	if request.ToolChoice.Mode == ToolChoiceNamed {
-		if _, found := namedTools[request.ToolChoice.Name]; !found {
+	if choice.Mode == ToolChoiceNamed {
+		if _, found := namedTools[choice.Name]; !found {
 			return NewError(ErrorInvalidRequest, "unknown_tool_choice", "named tool choice does not reference a declared tool", nil)
 		}
 	}
-	if (request.ToolChoice.Mode == ToolChoiceRequired || request.ToolChoice.Mode == ToolChoiceNamed) && len(request.Tools) == 0 {
+	if (choice.Mode == ToolChoiceRequired || choice.Mode == ToolChoiceNamed) && toolCount == 0 {
 		return NewError(ErrorInvalidRequest, "tools_required", "tool choice requires at least one declared tool", nil)
 	}
-	if request.ToolChoice.Mode != ToolChoiceNamed && request.ToolChoice.Name != "" {
+	if choice.Mode != ToolChoiceNamed && choice.Name != "" {
 		return NewError(ErrorInvalidRequest, "invalid_tool_choice", "only named tool choice may contain a name", nil)
 	}
-	switch request.OutputFormat.Kind {
+	return nil
+}
+
+func validateOutputFormat(format OutputFormat, schemaBytes int, limits Limits) error {
+	switch format.Kind {
 	case "", OutputText, OutputJSONObject, OutputJSONSchema:
 	default:
 		return NewError(ErrorInvalidRequest, "invalid_output_format", "output format is invalid", nil)
 	}
-	if request.OutputFormat.Kind == OutputJSONSchema {
-		if len(request.OutputFormat.Schema) == 0 || !json.Valid(request.OutputFormat.Schema) {
+	if format.Kind == OutputJSONSchema {
+		if len(format.Schema) == 0 || !json.Valid(format.Schema) {
 			return NewError(ErrorInvalidRequest, "invalid_output_schema", "output JSON Schema is invalid", nil)
 		}
-		if limits.SchemaBytes > 0 && len(request.OutputFormat.Schema) > limits.SchemaBytes {
+		if limits.SchemaBytes > 0 && len(format.Schema) > limits.SchemaBytes {
 			return NewError(ErrorInvalidRequest, "schema_limit", "output schema limit exceeded", nil)
 		}
-		if limits.SchemaBytes > 0 && schemaBytes+len(request.OutputFormat.Schema) > limits.SchemaBytes {
+		if limits.SchemaBytes > 0 && schemaBytes+len(format.Schema) > limits.SchemaBytes {
 			return NewError(ErrorInvalidRequest, "schema_limit", "total schema limit exceeded", nil)
 		}
-		if err := validateSchemaObject(request.OutputFormat.Schema, "output schema"); err != nil {
+		if err := validateSchemaObject(format.Schema, "output schema"); err != nil {
 			return err
 		}
-		if strings.TrimSpace(request.OutputFormat.Name) == "" {
+		if strings.TrimSpace(format.Name) == "" {
 			return NewError(ErrorInvalidRequest, "output_schema_name_required", "output JSON Schema requires a name", nil)
 		}
-	} else if len(request.OutputFormat.Schema) > 0 || request.OutputFormat.Name != "" ||
-		request.OutputFormat.Description != "" || request.OutputFormat.Strict != nil {
+	} else if len(format.Schema) > 0 || format.Name != "" || format.Description != "" || format.Strict != nil {
 		return NewError(ErrorInvalidRequest, "invalid_output_format", "output format contains fields from another format kind", nil)
-	}
-	if err := validateSampling(request.Sampling, limits); err != nil {
-		return err
-	}
-	if err := validateReasoning(request, limits); err != nil {
-		return err
 	}
 	return nil
 }

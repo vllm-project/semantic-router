@@ -195,7 +195,8 @@ func (authority *RoutingOnlyAuthority) validateGenerationLocked(
 	current, ok := authority.publications.CurrentRoutingPublication(authority.namespaceID)
 	if !ok || !current.Activated() || current.NamespaceID != generation.NamespaceID ||
 		current.QuotaPartition != generation.QuotaPartition || current.PublicationID != generation.PublicationID ||
-		current.RuntimeEpoch != generation.RuntimeEpoch || int64(current.DesiredRevision) != generation.SnapshotRevision ||
+		current.RuntimeEpoch != generation.RuntimeEpoch ||
+		!routingRevisionMatches(current.DesiredRevision, generation.SnapshotRevision) ||
 		current.RoutingDigest != generation.RoutingDigest {
 		return fmt.Errorf("routing-only generation is not the active publication")
 	}
@@ -217,6 +218,14 @@ func (authority *RoutingOnlyAuthority) validateGenerationLocked(
 		}
 	}
 	return nil
+}
+
+func routingRevisionMatches(desired uint64, snapshot int64) bool {
+	if snapshot <= 0 {
+		return false
+	}
+	// #nosec G115 -- a positive int64 is fully representable by uint64.
+	return desired == uint64(snapshot)
 }
 
 func (authority *RoutingOnlyAuthority) Close() error {

@@ -21,31 +21,35 @@ trim it for a deployment instead of treating every optional service as required.
 A router config uses these top-level sections:
 
 ```yaml
-version: v0.4
+version: v0.3
 listeners: []
-models: []
+providers:
+  models: []
+routing:
+  modelCards: []
 recipes: []
 entrypoints: []
 global: {}
 ```
 
-- `listeners` exposes inference and management endpoints.
-- `models` contains each logical Model as a readable `name`, semantic `card`,
-  one or more provider `connections`, and optional `runtime` and `pricing`.
-  Each connection may select a catalog interface such as `chat`, `responses`,
-  or `messages`; omitting `interface` selects that Provider's declared default.
-- `recipes` contains reusable, model-free routing documents. Each document owns
+- `listeners` exposes Router ingress endpoints.
+- `providers.models` contains physical Model bindings. Each readable Model name
+  owns one or more `backend_refs`, structured invocation `control`, and optional
+  token `pricing`.
+- `routing.modelCards` contains connection-free semantic metadata joined to a
+  provider Model by name. Top-level signals, projections, and decisions define
+  the default routing profile when a deployment needs one.
+- `recipes` contains reusable, model-free routing profiles. Each `routing` value owns
   signals, projections, decisions, strategy, algorithms, and route plugins.
-- `entrypoints` defines callable virtual models. The common form references one
-  Recipe by name and assigns an ordered Model list to every Decision name;
-  conditional rules use the same readable references. There is no detached
-  pool or binding resource. Each effective rule runs in its own routing-state
-  scope while sharing Models and router-wide services. See
+- `entrypoints` defines callable virtual Models through `model_names`. Each entry
+  references one Recipe and assigns an ordered Model list to every Decision.
+  There is no detached pool or binding resource. Each entry runs in its own
+  routing-state scope while sharing Models and router-wide services. See
   [`tutorials/global/entrypoints-and-recipes.md`](../website/docs/tutorials/global/entrypoints-and-recipes.md).
 - `global` owns cross-cutting billing, router settings, services, stores,
-  integrations, and router-managed model assets. Standalone configs require
+  integrations, and router-managed model assets. File-authored configs require
   `global.billing.currency` when any Model has pricing; otherwise the block is
-  optional. Managed deployments take the immutable currency from their
+  optional. A Management-store bootstrap pins that immutable currency on its
   Namespace.
 
 Validate a file before serving it:
@@ -55,10 +59,11 @@ vllm-sr validate --config config.yaml
 vllm-sr serve
 ```
 
-`serve` starts the infrastructure and reads `config.yaml` only as deployment
-bootstrap. Models, Recipes, decision assignments, and Entrypoints are created
-through the Router Management API or the Dashboard; they are not selected by a
-CLI operand.
+`serve` starts the infrastructure from `config.yaml`; no Model or Recipe is
+selected by a CLI operand. Without a Management store, that validated file is
+the active routing authority. With a Management store, it seeds an empty store
+once, and subsequent Model, Recipe, assignment, and Entrypoint changes use the
+Router Management API or the Dashboard.
 
 ## Choose the right asset
 
@@ -103,28 +108,26 @@ runtime dependency; they do not define routing behavior by themselves.
 
 ## Important boundaries
 
-- Standalone model backends use `credential_ref` to select a named
-  `global.services.backend_credentials` entry backed by exactly one
-  `secret_file` or `secret_env`. Literal backend keys and caller-supplied
-  authorization headers are rejected. Managed mode uses published
-  ProviderCredential resources instead of YAML secret references.
-- Managed mode requires Router-terminated Management TLS. Configure exactly one
+- File-authored backend references should use `api_key_env` instead of committing
+  a literal `api_key`. A durable control plane stores Provider credentials as
+  managed resources and publishes only resolved runtime capabilities.
+- The Management API requires Router-terminated TLS. Configure exactly one
   file or environment source for both the server certificate and private key;
   a client CA source enables required, verified mTLS.
-- Managed mode requires `global.services.agent.public_inference_endpoint` to
+- The Agent service requires `global.services.agent.public_inference_endpoint` to
   name the ordinary public Router `/v1/chat/completions` endpoint. It must not
   point to the Dashboard or a physical model backend. Agent calls use delegated
   API keys so they pass through the same access, quota, logging, and usage path
   as every other inference request.
-- Managed usage storage uses fixed UTC-month partitions. Under
+- Durable usage storage uses fixed UTC-month partitions. Under
   `global.services.access.usage_storage`, `create_ahead_months` and
   `maintenance_interval` tune bounded lifecycle work; `raw_retention` is empty
   by default and must be set explicitly before any raw month can be retired.
   Settlement tombstones and audit history are retained indefinitely.
-- `models[]` is the only runtime Model definition. A backend contains compiled
-  adapter fields; provider product metadata and authoring forms remain in the
-  control plane.
-- `recipes[].document.projections` derives named routing outputs from signals. Decisions
+- `providers.models[]` is the public physical Model definition;
+  `routing.modelCards[]` carries only connection-free semantics. Generated IDs,
+  revisions, and compiled adapter fields remain internal.
+- `recipes[].routing.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
   runtime.

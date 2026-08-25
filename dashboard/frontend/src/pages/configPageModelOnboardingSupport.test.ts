@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { ProviderCatalogItem } from '../utils/providerCatalogApi'
 import {
-  buildModelExecutionOverrides,
+  buildModelControlOverrides,
   buildModelPricingOverrides,
   buildRoutingBulkImportRequest,
   initialProviderConnectionFields,
@@ -66,14 +66,18 @@ describe('model onboarding form contract', () => {
     ).toEqual({ region: 'global', replicas: 3, private: true })
   })
 
-  it('validates execution durations and preserves decimal pricing strings', () => {
+  it('validates model control and preserves decimal pricing strings', () => {
     expect(
-      buildModelExecutionOverrides({
+      buildModelControlOverrides({
         maxRetries: '2',
+        retryOn: ['unavailable', 'timeout'],
         requestTimeout: '30s',
         streamTimeout: '5m',
       }),
-    ).toEqual({ maxRetries: 2, requestTimeout: '30s', streamTimeout: '5m' })
+    ).toEqual({
+      retry: { count: 2, on: ['unavailable', 'timeout'] },
+      timeout: { request: '30s', stream: '5m' },
+    })
     expect(
       buildModelPricingOverrides({
         inputCost: '0.25',
@@ -87,26 +91,37 @@ describe('model onboarding form contract', () => {
       cacheWriteCostPerMillionTokens: '0.30',
     })
     expect(() =>
-      buildModelExecutionOverrides({
+      buildModelControlOverrides({
         maxRetries: '2',
+        retryOn: [],
         requestTimeout: '30 seconds',
         streamTimeout: '',
       }),
     ).toThrow('Request timeout')
     expect(() =>
-      buildModelExecutionOverrides({
+      buildModelControlOverrides({
         maxRetries: '6',
+        retryOn: [],
         requestTimeout: '',
         streamTimeout: '',
       }),
     ).toThrow('0 to 5')
     expect(() =>
-      buildModelExecutionOverrides({
+      buildModelControlOverrides({
         maxRetries: '',
+        retryOn: [],
         requestTimeout: '500ms',
         streamTimeout: '',
       }),
     ).toThrow('1s to 24h')
+    expect(() =>
+      buildModelPricingOverrides({
+        inputCost: '1000000.000000001',
+        outputCost: '',
+        cacheReadCost: '',
+        cacheWriteCost: '',
+      }),
+    ).toThrow('0 to 1,000,000')
   })
 
   it('builds the canonical bulk-import command in signed discovery order', () => {
@@ -135,7 +150,10 @@ describe('model onboarding form contract', () => {
         ],
         selectedCatalogItemIds: new Set(['catalog-a', 'catalog-b']),
         namePrefix: 'team',
-        execution: { maxRetries: 2, streamTimeout: '5m' },
+        control: {
+          retry: { count: 2, on: ['unavailable'] },
+          timeout: { stream: '5m' },
+        },
         pricing: {
           inputCostPerMillionTokens: '0.25',
           outputCostPerMillionTokens: '1.00',
@@ -156,7 +174,10 @@ describe('model onboarding form contract', () => {
           aliases: [],
           capabilities: ['tools'],
           loras: [],
-          execution: { maxRetries: 2, requestTimeout: '300s', streamTimeout: '5m' },
+          control: {
+            retry: { count: 2, on: ['unavailable'] },
+            timeout: { request: '300s', stream: '5m' },
+          },
           pricing: {
             inputCostPerMillionTokens: '0.25',
             outputCostPerMillionTokens: '1.00',
@@ -170,7 +191,10 @@ describe('model onboarding form contract', () => {
           aliases: [],
           capabilities: ['text'],
           loras: [],
-          execution: { maxRetries: 2, requestTimeout: '300s', streamTimeout: '5m' },
+          control: {
+            retry: { count: 2, on: ['unavailable'] },
+            timeout: { request: '300s', stream: '5m' },
+          },
           pricing: {
             inputCostPerMillionTokens: '0.25',
             outputCostPerMillionTokens: '1.00',

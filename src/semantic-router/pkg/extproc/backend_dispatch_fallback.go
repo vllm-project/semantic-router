@@ -74,7 +74,7 @@ func (r *OpenAIRouter) primaryDispatchCandidates(
 }
 
 // assignmentRuleForRequest returns the already-authorized rule when access is
-// enabled. Routing-only managed deployments resolve the same public
+// enabled. Durable routing without native access resolve the same public
 // entrypoint contract with no identity claims; this keeps fallback a Router
 // capability rather than a Dashboard or access-service dependency.
 func (r *OpenAIRouter) assignmentRuleForRequest(request *RequestContext) *config.EntrypointRule {

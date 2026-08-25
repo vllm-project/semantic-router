@@ -74,23 +74,29 @@ Disable the local domain classifier when MCP should be the domain source, then
 configure the MCP module:
 
 ```yaml
-version: v0.4
-models:
-  - name: local/gpt-oss-20b
-    card:
+version: v0.3
+providers:
+  models:
+    - name: local/gpt-oss-20b
+      provider_model_id: openai/gpt-oss-20b
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000/v1
+      control:
+        retry: {count: 2, on: [unavailable, timeout]}
+        timeout: {request: 60s, stream: 10m}
+routing:
+  modelCards:
+    - name: local/gpt-oss-20b
       capabilities: [chat]
-    connections:
-      - provider: vllm
-        endpoint: http://127.0.0.1:8000/v1
-        model: openai/gpt-oss-20b
 recipes:
   - name: mcp-domain
-    document:
+    routing:
       decisions:
         - name: route
           rules: {}
 entrypoints:
-  - name: vllm-sr/mcp-domain
+  - model_names: [vllm-sr/mcp-domain]
     recipe: mcp-domain
     assignments:
       route:

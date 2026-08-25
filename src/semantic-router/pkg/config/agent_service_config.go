@@ -12,16 +12,16 @@ type AgentServiceConfig struct {
 	PublicInferenceEndpoint string `yaml:"public_inference_endpoint,omitempty"`
 }
 
-func validateAgentService(mode string, service AgentServiceConfig) error {
+func validateAgentService(nativeAccess bool, service AgentServiceConfig) error {
 	endpoint := service.PublicInferenceEndpoint
-	if mode == ControlPlaneModeStandalone {
+	if !nativeAccess {
 		if endpoint != "" {
-			return fmt.Errorf("global.services.agent is managed-only")
+			return fmt.Errorf("global.services.agent requires global.services.access.enabled")
 		}
 		return nil
 	}
 	if endpoint == "" {
-		return fmt.Errorf("managed mode requires global.services.agent.public_inference_endpoint")
+		return fmt.Errorf("global.services.access.enabled requires global.services.agent.public_inference_endpoint")
 	}
 	if endpoint != strings.TrimSpace(endpoint) {
 		return fmt.Errorf("global.services.agent.public_inference_endpoint must not contain surrounding whitespace")

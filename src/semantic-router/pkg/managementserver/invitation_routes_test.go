@@ -18,8 +18,6 @@ const (
 	invitationTestID      = "99999999-9999-4999-8999-999999999999"
 	invitationTeamID      = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 	invitationRoleID      = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
-	invitationAccessID    = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
-	invitationRateID      = "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
 	invitationPrincipalID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
 )
 
@@ -63,12 +61,11 @@ func TestInvitationCreateAuthorizesTeamAndDeliversCanonicalToken(t *testing.T) {
 	}
 }
 
-func TestOnboardingUsesOnePinnedSnapshotForAuthorizationAndWrite(t *testing.T) {
+func TestTeamOnboardingUsesInheritedPoliciesForAuthorizationAndWrite(t *testing.T) {
 	snapshot := invitationmanagement.OnboardingSnapshot{
 		RoleGrants:                []invitationmanagement.RoleGrant{{RoleID: invitationRoleID, ScopeKind: "user"}},
 		Team:                      &invitationmanagement.TeamAssignment{TeamID: invitationTeamID, Role: accesscontrol.TeamRoleMember},
-		SelfServicePolicyRevision: 7, AccessPolicyID: invitationAccessID, AccessPolicyRevision: 4,
-		RateLimitPolicyID: invitationRateID, RateLimitPolicyRevision: 5, AutomaticFirstKey: true,
+		SelfServicePolicyRevision: 7, AutomaticFirstKey: true,
 	}
 	canonical := `{"principalId":"` + invitationPrincipalID + `","userId":"` + subjectUserOne + `","deliveryExpiresAt":"2026-08-22T12:05:00Z"}`
 	service := &invitationServiceStub{
@@ -95,15 +92,14 @@ func TestOnboardingUsesOnePinnedSnapshotForAuthorizationAndWrite(t *testing.T) {
 		t.Fatalf("onboarding status=%d headers=%#v body=%s", response.Code, response.Header(), response.Body.String())
 	}
 	accessTargets, rateTargets := authorized.Targets["access_policy"], authorized.Targets["rate_policy"]
-	if len(accessTargets) != 1 || len(rateTargets) != 1 ||
-		string(accessTargets[0].Scope.ResourceID) != invitationAccessID ||
-		string(rateTargets[0].Scope.ResourceID) != invitationRateID ||
+	if len(accessTargets) != 0 || len(rateTargets) != 0 ||
+		authorized.Conditions["access_binding_requested"] || authorized.Conditions["rate_binding_requested"] ||
 		!authorized.Conditions["first_key_requested"] || !authorized.Conditions["team_membership_requested"] {
 		t.Fatalf("onboarding authorization = conditions %#v targets %#v", authorized.Conditions, authorized.Targets)
 	}
 	if service.lastOnboard.PreparedSnapshot == nil ||
-		service.lastOnboard.PreparedSnapshot.AccessPolicyID != invitationAccessID ||
-		service.lastOnboard.PreparedSnapshot.RateLimitPolicyID != invitationRateID {
+		service.lastOnboard.PreparedSnapshot.Team == nil ||
+		service.lastOnboard.PreparedSnapshot.Team.TeamID != invitationTeamID {
 		t.Fatalf("onboarding did not reuse prepared snapshot: %#v", service.lastOnboard)
 	}
 }
@@ -192,8 +188,7 @@ func testInvitation(now time.Time) invitationmanagement.Invitation {
 		Snapshot: invitationmanagement.OnboardingSnapshot{
 			RoleGrants:                []invitationmanagement.RoleGrant{{RoleID: invitationRoleID, ScopeKind: "user"}},
 			Team:                      &invitationmanagement.TeamAssignment{TeamID: invitationTeamID, Role: accesscontrol.TeamRoleMember},
-			SelfServicePolicyRevision: 1, AccessPolicyID: invitationAccessID, AccessPolicyRevision: 1,
-			RateLimitPolicyID: invitationRateID, RateLimitPolicyRevision: 1, AutomaticFirstKey: true,
+			SelfServicePolicyRevision: 1, AutomaticFirstKey: true,
 		},
 		ExpiresAt: now.Add(time.Hour), Status: invitationmanagement.StatusPending, Revision: 1,
 		CreatedAt: now, UpdatedAt: now,

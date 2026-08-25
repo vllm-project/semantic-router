@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: Understand the canonical v0.4 YAML document and where Models, Recipes, Entrypoints, services, and secrets belong.
+description: Understand the canonical v0.3 YAML document and where Models, Recipes, Entrypoints, services, and secrets belong.
 ---
 
 # Configuration
@@ -11,25 +11,29 @@ Helm, and Operator. The top-level structure is:
 ```yaml
 version:
 listeners:
-models:
+providers:
+routing:
 recipes:
 entrypoints:
 global:
 ```
 
-Every runnable standalone manifest uses top-level `models`, `recipes`, and
-`entrypoints`. Add `global` only for shared services, stores, integrations, or
-runtime behavior that differs from the built-in defaults.
+Every runnable manifest keeps physical Model connections under `providers`,
+connection-free Model metadata under `routing.modelCards`, reusable routing logic
+under `recipes`, and public virtual Model names under `entrypoints`. Add `global`
+only for shared services, stores, integrations, or runtime behavior that differs
+from the built-in defaults.
 
 ## What belongs where
 
 | Section | Owns |
 | --- | --- |
-| `version` | Canonical schema version. Use `v0.4`. |
+| `version` | Canonical schema version. Use `v0.3`. |
 | `listeners` | Public Router listeners and timeouts. |
-| `models` | Logical Models with a readable card, provider connections, execution policy, and pricing. |
-| `recipes` | Model-free routing documents containing signals, projections, decisions, strategy, algorithms, and route plugins. |
-| `entrypoints` | Public virtual model aliases, rule matches, Recipe references, and complete decision-to-Model assignments. |
+| `providers.models` | Physical Model connections, invocation control, reasoning family, and pricing. |
+| `routing.modelCards` | Connection-free Model descriptions and capabilities used while designing Recipes. |
+| `recipes[].routing` | Model-free routing documents containing signals, projections, decisions, strategy, algorithms, and route plugins. |
+| `entrypoints` | Public virtual Model names, Recipe references, and complete Decision-to-Model assignments. |
 | `global` | Shared billing, Router services, stores, integrations, observability, learning, and router-owned model assets. |
 
 Keep these boundaries clear:
@@ -41,7 +45,7 @@ Keep these boundaries clear:
 - plugins add behavior at route-specific hook points; and
 - Entrypoints bind each Recipe decision to one or more Models.
 
-Model rates belong in each `models[].pricing` block. Their common denomination
+Model rates belong in each `providers.models[].pricing` block. Their common denomination
 belongs in one place:
 
 ```yaml
@@ -50,42 +54,86 @@ global:
     currency: USD
 ```
 
-This block is optional when no Model is priced. A priced standalone manifest
-must set one uppercase ISO-4217 currency so fallback, multi-model execution,
-usage, and cost quotas share an unambiguous unit. Managed deployments omit it;
-the Namespace is the only currency authority.
+This block is optional when no Model is priced. A priced manifest must set one
+uppercase ISO-4217 currency so fallback, multi-model execution, usage, and cost
+quotas share an unambiguous unit. When a Management store initializes an empty
+Namespace, this value becomes its immutable billing currency.
 
-In standalone mode, a backend can select an operator-owned secret by name:
+Each physical Model can keep invocation behavior together under `control`:
 
 ```yaml
-global:
-  services:
-    backend_credentials:
-      private_provider:
-        credential_adapter_id: bearer
-        secret_env: MODEL_API_KEY
-models:
-  - name: remote/model
-    card:
+providers:
+  models:
+    - name: remote/frontier
+      control:
+        retry:
+          count: 2
+          on: [unavailable, timeout]
+        timeout:
+          request: 60s
+          stream: 10m
+```
+
+`retry.count` is the number of additional attempts after the initial call and
+must be between 0 and 5. `retry.on` accepts Router evidence classes
+`unavailable`, `overloaded`, and `timeout`; when a positive count omits the list,
+the default is `[unavailable]`. A retry starts only when the Router has proved
+that the failed attempt produced no client-visible output. Request and stream
+timeouts bound the whole physical dispatch, including its retries.
+
+When one Model has multiple `backend_refs`, each backend's existing `weight`
+is the physical traffic-distribution input. The public `control` block does not
+expose load-balancing, health-check, or outlier-ejection fields until the Router
+can enforce those policies end to end.
+
+Reasoning assignments use the same connection/metadata boundary. A physical Model
+selects its wire adapter with `providers.models[].reasoning_family`; the matching
+`routing.modelCards[]` entry declares supported values with
+`reasoning: {type: reasoning_effort, efforts: [medium, high]}`. The types must agree,
+and an Entrypoint cannot request an undeclared effort.
+
+Pricing uses quoted decimal strings so accounting never passes through binary
+floating point:
+
+```yaml
+pricing:
+  input_cost_per_million_tokens: "0.10"
+  output_cost_per_million_tokens: "0.40"
+  cache_read_cost_per_million_tokens: "0.02"
+  cache_write_cost_per_million_tokens: "0.12"
+```
+
+A file-backed Model accepts the existing `api_key` or `api_key_env` credential
+source on each backend reference. Configure exactly one. Prefer `api_key_env` for
+shared or committed manifests:
+
+```yaml
+providers:
+  models:
+    - name: remote/model
+      provider_model_id: provider/model
+      api_format: openai
+      backend_refs:
+        - provider: openai-compatible
+          base_url: https://models.example.com/v1
+          api_key_env: MODEL_API_KEY
+routing:
+  modelCards:
+    - name: remote/model
       description: General-purpose remote model.
       capabilities: [chat, tools]
-    connections:
-      - provider: private
-        interface: chat
-        endpoint: https://models.example.com
-        model: provider/model
-        credential: private_provider
 ```
 
 The control plane resolves the provider integration, compiles the connection,
-and pins the resulting immutable routing snapshot. The Router injects the named
-credential only after it selects that connection. Literal credentials do not
-belong in authoring YAML. Managed mode uses versioned ProviderCredential
-resources published through the Management API instead.
+and pins the resulting immutable routing snapshot. The Router injects the selected
+credential only after it selects that backend. A literal `api_key` remains valid for
+existing file-based workflows, but it makes every copy or export of that authoring
+file secret-bearing. Dynamic Model resources use versioned
+ProviderCredential resources published through the Management API instead.
 
-`connections[].interface` selects one Provider-owned API style. Use the
-catalog's readable interface ID, such as `chat`, `responses`, or `messages`.
-It is optional only when the Provider declares exactly one default interface.
+The selected Provider Integration owns its default origin, API style, discovery,
+path, safe headers, and credential adapter. Private and compatible providers accept
+an explicit base URL; fixed public APIs need only a credential and provider model.
 
 The [Routing Pipeline](../overview/signal-driven-decisions) explains the design.
 Capability pages under **Capabilities** document each signal, projection,
@@ -177,7 +225,7 @@ build regenerates this block and fails if the checked-in catalog has drifted.
 ## Minimal example
 
 ```yaml
-version: v0.4
+version: v0.3
 
 listeners:
   - name: http-8899
@@ -185,23 +233,34 @@ listeners:
     port: 8899
     timeout: 300s
 
-models:
-  - name: local/general
-    card:
+providers:
+  models:
+    - name: local/general
+      provider_model_id: my-served-model
+      backend_refs:
+        - provider: vllm
+          base_url: http://host.docker.internal:8000/v1
+      control:
+        retry:
+          count: 1
+          on: [unavailable]
+        timeout:
+          request: 60s
+          stream: 10m
+      pricing:
+        input_cost_per_million_tokens: "0.10"
+        output_cost_per_million_tokens: "0.40"
+
+routing:
+  modelCards:
+    - name: local/general
       description: General chat model.
-      capabilities: [chat]
+      capabilities: [chat, tools]
       modality: text
-    connections:
-      - provider: vllm
-        interface: chat
-        endpoint: http://host.docker.internal:8000/v1
-        model: my-served-model
-    runtime:
-      max_retries: 1
 
 recipes:
   - name: explain
-    document:
+    routing:
       strategy: priority
       signals:
         keywords:
@@ -217,14 +276,15 @@ recipes:
             conditions: [{type: keyword, name: needs_explanation}]
 
 entrypoints:
-  - name: vllm-sr/explain
-    aliases: [explain]
+  - model_names: [vllm-sr/explain, explain]
     recipe: explain
     assignments:
       explanatory_answer:
         models: [{model: local/general}]
 
 global:
+  billing:
+    currency: USD
   services:
     observability:
       metrics:
@@ -248,20 +308,22 @@ Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
 settings before the Router starts. The ordinary local command reads
 `config.yaml` from the current workspace; `--config` selects another immutable
-v0.4 bootstrap manifest. It is not a Model, Recipe, or routing-policy operand.
+v0.3 bootstrap manifest. It is not a Model, Recipe, or routing-policy operand.
 
 ## Environment references and secrets
 
-Keep credential values outside the YAML file. Reference an environment variable
-from a named standalone credential:
+Prefer keeping credential values outside the YAML file. Reference an environment
+variable from the physical backend that needs it:
 
 ```yaml
-global:
-  services:
-    backend_credentials:
-      private_provider:
-        credential_adapter_id: bearer
-        secret_env: MODEL_API_KEY
+providers:
+  models:
+    - name: remote/general
+      provider_model_id: provider/general
+      backend_refs:
+        - provider: openai-compatible
+          base_url: https://models.example.com/v1
+          api_key_env: MODEL_API_KEY
 ```
 
 Supported string substitutions are:
@@ -276,19 +338,26 @@ config. Kubernetes deployments place sensitive environment values in Secrets
 rather than ConfigMaps or Helm values. See
 [Security Hardening](security-hardening).
 
-## Secure the managed listener
+The existing literal `backend_refs[].api_key` input remains accepted for file-backed
+deployments. It is mutually exclusive with `api_key_env`; protect the manifest as a
+credential whenever the literal form is used.
 
-Managed control-plane mode requires Router-terminated TLS. Reference PEM
-material through absolute secret-file paths or through environment-variable
-names; do not place certificate or private-key literals in Router YAML.
+## Secure the Management listener
+
+A remotely exposed Management API requires Router-terminated TLS. Reference PEM
+material through absolute secret-file paths or environment-variable names; do
+not place certificate or private-key literals in Router YAML.
 
 ```yaml
-version: v0.4
+version: v0.3
 global:
-  control_plane:
-    mode: managed
+  stores:
+    management:
+      postgres:
+        dsn_env: VLLM_SR_POSTGRES_DSN
   services:
     management_api:
+      enabled: true
       bind_address: 0.0.0.0
       port: 8080
       tls:
@@ -305,9 +374,9 @@ Each TLS value accepts exactly one `_file` or `_env` reference. An environment
 source contains the PEM payload, not another file path. At startup the Router
 parses the certificate chain, verifies that the private key matches, requires a
 DNS or IP subject alternative name, and enforces a validity margin. Missing or
-invalid material prevents the listener from binding. Managed connections use
-TLS 1.3 or newer; plaintext connections are rejected. Standalone mode keeps its
-existing local plaintext listener behavior.
+invalid material prevents the listener from binding. Remote Management connections use
+TLS 1.3 or newer; plaintext connections are rejected. A loopback-only listener
+may use the documented local development policy.
 
 Mount private-key files with owner-only permissions (`0400` or `0600`); a
 group- or world-readable key fails startup. Rotate mounted
@@ -316,9 +385,17 @@ listener context on a bounded interval. A failed replacement retains the last
 valid context but makes readiness fail until valid material is installed;
 replicas also leave readiness before the active certificate expires.
 
+### Dynamic access resources
+
+YAML configures only the Management and access services, their stores, and their
+secret references. Users, Teams, inference API keys, grants, rate-limit policies,
+bindings, counters, usage, and audit are versioned Management API resources in
+PostgreSQL and the runtime store; none of those resources is accepted in Router
+YAML.
+
 ### Bind Agent calls to the public inference front door
 
-Managed Router replicas run Agent workers without another Agent container. Give
+Router replicas run Agent workers without another Agent container. Give
 them a stable address for the deployment's ordinary public inference listener:
 
 ```yaml
@@ -337,8 +414,8 @@ and actual usage settlement.
 
 ### Usage storage lifecycle
 
-Managed access uses fixed UTC-month PostgreSQL partitions for request, dispatch,
-and attempt facts. The safe default retains raw usage indefinitely:
+Router-native access uses fixed UTC-month PostgreSQL partitions for request,
+dispatch, and attempt facts. The safe default retains raw usage indefinitely:
 
 ```yaml
 global:
@@ -358,20 +435,20 @@ usage reconciliation. See
 [API Keys, Access, and Usage](../tutorials/global/access-and-usage#operate-usage-storage)
 for the lifecycle and preview-schema migration procedure.
 
-### Provider integrations in managed mode
+### Provider integrations
 
-Managed mode does not load provider definitions from Router YAML, ConfigMaps,
-custom resources, or the Dashboard. The control-plane application composes an
-immutable Provider Integration Registry, and the Management API exposes its safe
-catalog to every client. A Model create or import request selects a Provider and
-submits only schema-approved connection values; the control plane compiles them into
-the provider-neutral backend stored in the Model revision.
+Provider definitions are control-plane integrations, not inference-time product
+branches. The application composes an immutable Integration Registry, and the
+Management API exposes its safe catalog to clients. A Model create or import
+request selects a Provider and submits only schema-approved connection values; the
+control plane compiles them into the provider-neutral backend stored in the Model
+revision.
 
 The data plane receives only immutable compiled snapshots with canonical
 origins, non-secret connection values, ProviderCredential references, and
 stable protocol adapters. Product names, logos, forms, discovery rules, and
-compiler plugins stay in the control plane. Standalone loading runs the same
-compiler over the readable source manifest. See the
+compiler plugins stay in the control plane. File loading runs the same compiler
+over the readable source manifest. See the
 [Provider catalog proposal](../proposals/router-native-access-control-provider-catalog)
 for the extension and rollout contract.
 
@@ -383,17 +460,16 @@ its signal, projection, decision, algorithm, plugin, cache, replay, learning,
 and routing state. Providers, stores, and router-owned classifier assets may be
 shared without allowing policy state to cross recipe boundaries.
 
-In the common schema, `entrypoints[].aliases` lists additional public names,
-`entrypoints[].recipe` selects a Recipe by name, and `recipes[].document`
-contains that Recipe's policy. Conditional `rules` are available when path or
-claim matching is required. The compiler resolves readable names to immutable
-snapshot identities; generated identities never appear in authoring YAML.
+In the common schema, `entrypoints[].model_names` lists public names,
+`entrypoints[].recipe` selects a Recipe by name, and `recipes[].routing` contains
+that Recipe's policy. The compiler resolves readable names to immutable snapshot
+identities; generated identities never appear in authoring YAML.
 
 Each Entrypoint assigns Models to every Decision name without copying the Recipe:
 
 ```yaml
 entrypoints:
-  - name: company/assistant
+  - model_names: [company/assistant, assistant]
     recipe: assistant
     assignments:
       quick:
@@ -406,10 +482,10 @@ entrypoints:
 ```
 
 `assignments` is keyed by Decision name. Each value is an assignment set
-with a non-empty `models` list. `priority`, `weight`, `lora_name`, and typed
+with a non-empty `models` list. `priority`, `weight`, `lora`, and typed
 `reasoning` controls are optional assignment values. A single-dispatch decision
 can also define a closed priority `fallback` policy. URLs, credentials,
-execution settings, and pricing stay on the Model.
+invocation control, and pricing stay on the Model.
 
 Validation rejects an unknown Recipe or Model name, missing decision assignment,
 unknown Decision name, invalid LoRA/reasoning control, ambiguous rule, or
@@ -449,7 +525,7 @@ owns which part of the document and how to avoid competing sources of truth.
 - [Providers and routing tutorials](../tutorials/global/overview) describe
   shared runtime configuration.
 - [Upgrade and rollback](upgrade-rollback) explains the strict offline conversion
-  from a retained v0.3 manifest to the current v0.4 contract.
+  of fields removed or renamed by the current v0.3 contract.
 
 Avoid copying the exhaustive example as an application config. Start with the
 smallest document that describes the deployment, then add only the capabilities

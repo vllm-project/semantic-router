@@ -1,67 +1,80 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: gpt-4o
-  card: {}
-  connections:
-  - provider: openai
-    model: gpt-4o
-    credential: openai_api_key
-  - provider: openai-compatible
-    endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o/v1
-    model: gpt-4o
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: gpt-4o-mini
-  card: {}
-  connections:
-  - provider: openai
-    model: gpt-4o-mini
-    credential: openai_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: claude-sonnet-4-20250514
-  card: {}
-  connections:
-  - provider: anthropic
-    model: claude-sonnet-4-20250514
-    credential: anthropic_api_key
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: MiniMax-M3
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.minimax.io/v1
-    model: MiniMax-M3
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: MiniMax-M2.7
-  card: {}
-  connections:
-  - provider: openai-compatible
-    endpoint: https://api.minimax.io/v1
-    model: MiniMax-M2.7
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: Qwen/Qwen2.5-14B-Instruct
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8000/v1
-    model: Qwen/Qwen2.5-14B-Instruct
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: gpt-4o
+    provider_model_id: gpt-4o
+    backend_refs:
+    - provider: openai
+      api_key_env: OPENAI_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    - provider: openai-compatible
+      endpoint: https://my-resource.openai.azure.com/openai/deployments/gpt-4o/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: gpt-4o-mini
+    provider_model_id: gpt-4o-mini
+    backend_refs:
+    - provider: openai
+      api_key_env: OPENAI_API_KEY
+      auth_header: Authorization
+      auth_prefix: Bearer
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: claude-sonnet-4-20250514
+    provider_model_id: claude-sonnet-4-20250514
+    backend_refs:
+    - provider: anthropic
+      api_key_env: ANTHROPIC_API_KEY
+      auth_header: x-api-key
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: MiniMax-M3
+    provider_model_id: MiniMax-M3
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.minimax.io/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: MiniMax-M2.7
+    provider_model_id: MiniMax-M2.7
+    backend_refs:
+    - provider: openai-compatible
+      endpoint: https://api.minimax.io/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: Qwen/Qwen2.5-14B-Instruct
+    provider_model_id: Qwen/Qwen2.5-14B-Instruct
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: gpt-4o
+  - name: gpt-4o-mini
+  - name: claude-sonnet-4-20250514
+  - name: MiniMax-M3
+  - name: MiniMax-M2.7
+  - name: Qwen/Qwen2.5-14B-Instruct
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -105,8 +118,8 @@ recipes:
         - type: keyword
           name: general_keywords
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:
@@ -144,10 +157,3 @@ global:
       max_request_body_bytes: 67108864
     backend_egress:
       policy_file: /app/config/backend-egress-policy.yaml
-    backend_credentials:
-      openai_api_key:
-        credential_adapter_id: bearer
-        secret_env: OPENAI_API_KEY
-      anthropic_api_key:
-        credential_adapter_id: x-api-key
-        secret_env: ANTHROPIC_API_KEY

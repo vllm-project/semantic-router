@@ -5,41 +5,50 @@ from pydantic import ValidationError
 
 def human_config() -> dict:
     return {
-        "version": "v0.4",
-        "models": [
-            {
-                "name": "local/primary",
-                "card": {
+        "version": "v0.3",
+        "providers": {
+            "defaults": {"default_model": "local/primary"},
+            "models": [
+                {
+                    "name": "local/primary",
+                    "provider_model_id": "upstream-primary",
+                    "backend_refs": [
+                        {
+                            "name": "primary",
+                            "provider": "vllm",
+                            "endpoint": "model.example:8000",
+                            "protocol": "http",
+                        }
+                    ],
+                    "control": {
+                        "retry": {
+                            "count": 2,
+                            "on": ["unavailable", "timeout"],
+                        },
+                        "timeout": {"request": "30s", "stream": "2m"},
+                    },
+                    "pricing": {
+                        "input_cost_per_million_tokens": "0.5",
+                        "output_cost_per_million_tokens": "1",
+                        "cache_read_cost_per_million_tokens": "0.1",
+                        "cache_write_cost_per_million_tokens": "0.7",
+                    },
+                }
+            ],
+        },
+        "routing": {
+            "modelCards": [
+                {
+                    "name": "local/primary",
                     "description": "Primary local model",
                     "capabilities": ["chat", "tools"],
-                    "reasoning": {
-                        "type": "reasoning_effort",
-                        "efforts": ["medium", "high"],
-                    },
-                },
-                "connections": [
-                    {
-                        "provider": "vllm",
-                        "interface": "chat",
-                        "endpoint": "http://model.example/v1",
-                        "model": "upstream-primary",
-                    }
-                ],
-                "runtime": {
-                    "max_retries": 2,
-                    "request_timeout": "30s",
-                    "stream_timeout": "2m",
-                },
-                "pricing": {
-                    "input_cost_per_million_tokens": "0.5",
-                    "output_cost_per_million_tokens": "1",
-                },
-            }
-        ],
+                }
+            ]
+        },
         "recipes": [
             {
                 "name": "balance",
-                "document": {
+                "routing": {
                     "decisions": [
                         {
                             "name": "simple",
@@ -51,115 +60,91 @@ def human_config() -> dict:
         ],
         "entrypoints": [
             {
-                "name": "vllm-sr/auto",
-                "aliases": ["auto"],
+                "model_names": ["vllm-sr/balance", "balance"],
                 "recipe": "balance",
                 "assignments": {"simple": {"models": [{"model": "local/primary"}]}},
             }
         ],
-        "global": {
-            "billing": {"currency": "USD"},
-            "services": {
-                "backend_egress": {
-                    "policy_file": "/app/config/backend-egress-policy.yaml"
-                }
-            },
-        },
+        "global": {"billing": {"currency": "USD"}},
     }
 
 
-def test_human_v04_contract_contains_no_compiler_owned_state() -> None:
+def test_current_v03_contract_keeps_connections_and_metadata_separate() -> None:
     config = UserConfig.model_validate(human_config())
     dumped = config.model_dump(mode="json", by_alias=True, exclude_none=True)
 
-    model = dumped["models"][0]
-    assert set(model) == {"name", "card", "connections", "runtime", "pricing"}
-    assert model["connections"] == [
-        {
-            "provider": "vllm",
-            "interface": "chat",
-            "endpoint": "http://model.example/v1",
-            "model": "upstream-primary",
-            "weight": "1",
-        }
-    ]
-    assert dumped["recipes"][0]["document"]["decisions"][0]["name"] == "simple"
-    assert (
-        dumped["entrypoints"][0]["assignments"]["simple"]["models"][0]["model"]
-        == "local/primary"
-    )
-    forbidden = {
-        "id",
-        "revision",
-        "provider_catalog_revision",
-        "backends",
-        "model_id",
-        "recipe_id",
-    }
-    assert not forbidden.intersection(str(dumped).replace("'", '"').split('"'))
-
-
-def test_recipe_decision_schema_is_model_independent() -> None:
-    schema = UserConfig.model_json_schema()
-    definitions = schema["$defs"]
-    properties = definitions["RecipeDecision"]["properties"]
-
-    assert "id" not in properties
-    assert "modelRefs" not in properties
-    assert set(definitions["Model"]["properties"]) == {
+    provider_model = dumped["providers"]["models"][0]
+    assert set(provider_model) == {
         "name",
-        "card",
-        "connections",
-        "runtime",
+        "provider_model_id",
+        "backend_refs",
+        "control",
         "pricing",
     }
-    assert "interface" in definitions["ModelConnection"]["properties"]
-    assert "interface_" not in definitions["ModelConnection"]["properties"]
-    assert set(definitions["Entrypoint"]["properties"]) == {
+    assert dumped["routing"]["modelCards"][0]["name"] == "local/primary"
+    assert dumped["recipes"][0]["routing"]["decisions"][0]["name"] == "simple"
+    assert dumped["entrypoints"][0]["model_names"] == [
+        "vllm-sr/balance",
+        "balance",
+    ]
+
+
+def test_current_v03_schema_exposes_only_additive_model_control() -> None:
+    definitions = UserConfig.model_json_schema()["$defs"]
+
+    assert set(definitions["Model"]["properties"]) == {
         "name",
-        "aliases",
+        "reasoning_family",
+        "provider_model_id",
+        "backend_refs",
+        "control",
+        "pricing",
+        "api_format",
+        "external_model_ids",
+    }
+    assert set(definitions["ModelControl"]["properties"]) == {
+        "retry",
+        "timeout",
+    }
+    assert set(definitions["Entrypoint"]["properties"]) == {
+        "model_names",
         "recipe",
         "assignments",
-        "rules",
     }
 
 
 @pytest.mark.parametrize(
-    ("section", "field", "value"),
+    ("path", "field", "value"),
     [
-        ("model", "id", "mdl_primary"),
-        ("model", "provider_catalog_revision", "sha256:" + "a" * 64),
-        ("model", "backends", []),
-        ("recipe", "id", "rcp_balance"),
-        ("decision", "id", "dec_simple"),
-        ("entrypoint", "id", "ep_auto"),
+        (("providers", "models", 0), "id", "mdl_primary"),
+        (("providers", "models", 0), "reliability", {"retry_count": 2}),
+        (("providers", "models", 0), "runtime", {"max_retries": 2}),
+        (("recipes", 0), "document", {}),
+        (("entrypoints", 0), "name", "vllm-sr/balance"),
     ],
 )
-def test_human_v04_contract_rejects_compiler_owned_fields(
-    section: str, field: str, value: object
+def test_current_v03_rejects_middle_state_fields(
+    path: tuple[object, ...], field: str, value: object
 ) -> None:
     payload = human_config()
-    targets = {
-        "model": payload["models"][0],
-        "recipe": payload["recipes"][0],
-        "decision": payload["recipes"][0]["document"]["decisions"][0],
-        "entrypoint": payload["entrypoints"][0],
-    }
-    targets[section][field] = value
+    target: object = payload
+    for part in path:
+        target = target[part]
+    target[field] = value
 
     with pytest.raises(ValidationError, match=field):
         UserConfig.model_validate(payload)
 
 
-def test_human_v04_contract_rejects_root_billing_currency() -> None:
+def test_current_v03_requires_quoted_decimal_prices() -> None:
     payload = human_config()
-    payload["billing_currency"] = "USD"
+    payload["providers"]["models"][0]["pricing"]["input_cost_per_million_tokens"] = 0.5
 
-    with pytest.raises(ValidationError, match="billing_currency"):
+    with pytest.raises(ValidationError, match="string"):
         UserConfig.model_validate(payload)
 
 
-def test_human_v04_contract_requires_one_global_currency_for_priced_models() -> None:
+def test_current_v03_requires_one_global_currency_for_priced_models() -> None:
     payload = human_config()
     del payload["global"]["billing"]
 
@@ -167,47 +152,23 @@ def test_human_v04_contract_requires_one_global_currency_for_priced_models() -> 
         UserConfig.model_validate(payload)
 
 
-def test_human_v04_contract_rejects_empty_billing_block() -> None:
+def test_current_v03_retry_defaults_to_unavailable() -> None:
     payload = human_config()
-    payload["global"]["billing"] = {}
+    payload["providers"]["models"][0]["control"]["retry"] = {"count": 1}
 
-    with pytest.raises(
-        ValidationError,
-        match=r"global\.billing\.currency is required when global\.billing is configured",
-    ):
+    parsed = UserConfig.model_validate(payload)
+
+    assert parsed.providers.models[0].control.retry.on == ["unavailable"]
+
+
+def test_current_v03_rejects_public_mode_and_static_access_policy() -> None:
+    payload = human_config()
+    payload["global"]["control_plane"] = {"mode": "legacy"}
+
+    with pytest.raises(ValidationError, match=r"global\.control_plane"):
         UserConfig.model_validate(payload)
 
-
-def test_human_v04_contract_rejects_managed_bootstrap_currency() -> None:
     payload = human_config()
-    payload["models"] = []
-    payload["recipes"] = []
-    payload["entrypoints"] = []
-    payload["global"]["control_plane"] = {"mode": "managed"}
-
-    with pytest.raises(
-        ValidationError, match="managed mode takes currency from Namespace"
-    ):
+    payload["global"]["ratelimit"] = {"rpm": 10}
+    with pytest.raises(ValidationError, match="static inference access policy"):
         UserConfig.model_validate(payload)
-
-
-def test_conditional_entrypoint_keeps_recipe_and_assignments_inside_each_rule() -> None:
-    payload = human_config()
-    payload["entrypoints"] = [
-        {
-            "name": "vllm-sr/conditional",
-            "rules": [
-                {
-                    "name": "premium",
-                    "matches": [{"claim": {"name": "tier", "exact": "premium"}}],
-                    "recipe": "balance",
-                    "assignments": {"simple": {"models": [{"model": "local/primary"}]}},
-                }
-            ],
-        }
-    ]
-
-    config = UserConfig.model_validate(payload)
-
-    assert config.entrypoints[0].rules[0].recipe == "balance"
-    assert config.entrypoints[0].recipe is None

@@ -44,6 +44,11 @@ type UsageBreakdown struct {
 	Final           bool               `json:"final"`
 }
 
+type rawBreakdownTotals struct {
+	requests, successful, input, output, incomplete string
+	timings                                         timingPair
+}
+
 func (q PostgresQueries) Breakdown(ctx context.Context, query BreakdownQuery) (UsageBreakdown, error) {
 	if q.DB == nil {
 		return UsageBreakdown{}, fmt.Errorf("usage query database is required")
@@ -75,84 +80,15 @@ func (q PostgresQueries) Breakdown(ctx context.Context, query BreakdownQuery) (U
   sum(ttft_count)::text, sum(ttft_sum_ms)::text
 FROM %s WHERE %s
 GROUP BY 1 ORDER BY sum(input_tokens + output_tokens) DESC, 1 LIMIT $%d`, expression, table, where, len(args))
-	rows, breakdownErr := q.DB.QueryContext(ctx, statement, args...)
+	result, rawByValue, breakdownErr := q.loadBreakdownRows(ctx, query.Dimension, grain, statement, args)
 	if breakdownErr != nil {
-		return UsageBreakdown{}, fmt.Errorf("query usage breakdown: %w", breakdownErr)
+		return UsageBreakdown{}, breakdownErr
 	}
-	result := UsageBreakdown{Dimension: query.Dimension, Grain: grain, Rows: make([]BreakdownRow, 0)}
-	type rawTotals struct {
-		requests, successful, input, output, incomplete string
-		timings                                         timingPair
-	}
-	rawByValue := make(map[string]rawTotals)
-	for rows.Next() {
-		var row BreakdownRow
-		var raw rawTotals
-		var latencyCount, latencySum, ttftCount, ttftSum string
-		if err := rows.Scan(&row.Value, &raw.requests, &raw.successful, &raw.input,
-			&raw.output, &raw.incomplete, &latencyCount, &latencySum, &ttftCount, &ttftSum); err != nil {
-			return UsageBreakdown{}, fmt.Errorf("scan usage breakdown: %w", err)
-		}
-		raw.timings.Latency, breakdownErr = parseTimingAggregate(latencyCount, latencySum)
-		if breakdownErr != nil {
-			return UsageBreakdown{}, breakdownErr
-		}
-		raw.timings.TTFT, breakdownErr = parseTimingAggregate(ttftCount, ttftSum)
-		if breakdownErr != nil {
-			return UsageBreakdown{}, breakdownErr
-		}
-		rawByValue[row.Value] = raw
-		result.Rows = append(result.Rows, row)
-	}
-	if err := rows.Err(); err != nil {
-		rows.Close()
-		return UsageBreakdown{}, err
-	}
-	if err := rows.Close(); err != nil {
-		return UsageBreakdown{}, fmt.Errorf("close usage breakdown rows: %w", err)
-	}
-	groupedCosts := make(map[string][]CostAggregate)
-	groupedTimings := make(map[string]timingPair)
-	if len(result.Rows) != 0 {
-		selectedClauses := make([]string, 0, len(result.Rows))
-		costArgs := append([]any(nil), args[:len(args)-1]...)
-		for _, row := range result.Rows {
-			costArgs = append(costArgs, row.Value)
-			selectedClauses = append(selectedClauses, fmt.Sprintf("$%d", len(costArgs)))
-		}
-		costWhere := where + " AND " + expression + " IN (" + strings.Join(selectedClauses, ",") + ")"
-		costStatement := fmt.Sprintf(`SELECT %s, c->>'currency',
-  sum((c->>'knownNumerator')::numeric)::text,
-  sum((c->>'knownDispatches')::numeric)::text,
-  sum((c->>'incompleteDispatches')::numeric)::text
-FROM %s r CROSS JOIN LATERAL jsonb_array_elements(r.costs) c
-WHERE %s GROUP BY 1,2`, expression, table, costWhere)
-		costRows, breakdownErr2 := q.DB.QueryContext(ctx, costStatement, costArgs...)
-		if breakdownErr2 != nil {
-			return UsageBreakdown{}, fmt.Errorf("query usage breakdown costs: %w", breakdownErr2)
-		}
-		for costRows.Next() {
-			var value, currency, numerator, known, incomplete string
-			if err := costRows.Scan(&value, &currency, &numerator, &known, &incomplete); err != nil {
-				return UsageBreakdown{}, err
-			}
-			cost, err := parseCostAggregate(currency, numerator, known, incomplete)
-			if err != nil {
-				return UsageBreakdown{}, err
-			}
-			groupedCosts[value] = append(groupedCosts[value], cost)
-		}
-		if err := costRows.Err(); err != nil {
-			costRows.Close()
-			return UsageBreakdown{}, err
-		}
-		if err := costRows.Close(); err != nil {
-			return UsageBreakdown{}, fmt.Errorf("close usage breakdown costs: %w", err)
-		}
-		groupedTimings, breakdownErr2 = q.timingHistogramsByValue(ctx, table, costWhere, costArgs, expression)
-		if breakdownErr2 != nil {
-			return UsageBreakdown{}, breakdownErr2
-		}
+	groupedCosts, groupedTimings, breakdownErr := q.loadBreakdownDetails(
+		ctx, table, where, expression, args[:len(args)-1], result.Rows,
+	)
+	if breakdownErr != nil {
+		return UsageBreakdown{}, breakdownErr
 	}
 	for position := range result.Rows {
 		value := result.Rows[position].Value
@@ -169,12 +105,111 @@ WHERE %s GROUP BY 1,2`, expression, table, costWhere)
 			return UsageBreakdown{}, breakdownErr
 		}
 	}
+	if err := q.setBreakdownFreshness(ctx, &result, table, where, args[:len(args)-1]); err != nil {
+		return UsageBreakdown{}, err
+	}
+	return result, nil
+}
+
+func (q PostgresQueries) loadBreakdownRows(
+	ctx context.Context,
+	dimension BreakdownDimension,
+	grain Grain,
+	statement string,
+	args []any,
+) (UsageBreakdown, map[string]rawBreakdownTotals, error) {
+	rows, err := q.DB.QueryContext(ctx, statement, args...)
+	if err != nil {
+		return UsageBreakdown{}, nil, fmt.Errorf("query usage breakdown: %w", err)
+	}
+	defer rows.Close()
+	result := UsageBreakdown{Dimension: dimension, Grain: grain, Rows: make([]BreakdownRow, 0)}
+	rawByValue := make(map[string]rawBreakdownTotals)
+	for rows.Next() {
+		var row BreakdownRow
+		var raw rawBreakdownTotals
+		var latencyCount, latencySum, ttftCount, ttftSum string
+		if scanErr := rows.Scan(&row.Value, &raw.requests, &raw.successful, &raw.input,
+			&raw.output, &raw.incomplete, &latencyCount, &latencySum, &ttftCount, &ttftSum); scanErr != nil {
+			return UsageBreakdown{}, nil, fmt.Errorf("scan usage breakdown: %w", scanErr)
+		}
+		raw.timings.Latency, err = parseTimingAggregate(latencyCount, latencySum)
+		if err != nil {
+			return UsageBreakdown{}, nil, err
+		}
+		raw.timings.TTFT, err = parseTimingAggregate(ttftCount, ttftSum)
+		if err != nil {
+			return UsageBreakdown{}, nil, err
+		}
+		rawByValue[row.Value] = raw
+		result.Rows = append(result.Rows, row)
+	}
+	if err := rows.Err(); err != nil {
+		return UsageBreakdown{}, nil, err
+	}
+	return result, rawByValue, nil
+}
+
+func (q PostgresQueries) loadBreakdownDetails(
+	ctx context.Context,
+	table, where, expression string,
+	baseArgs []any,
+	rows []BreakdownRow,
+) (map[string][]CostAggregate, map[string]timingPair, error) {
+	groupedCosts := make(map[string][]CostAggregate)
+	groupedTimings := make(map[string]timingPair)
+	if len(rows) == 0 {
+		return groupedCosts, groupedTimings, nil
+	}
+	selectedClauses := make([]string, 0, len(rows))
+	costArgs := append([]any(nil), baseArgs...)
+	for _, row := range rows {
+		costArgs = append(costArgs, row.Value)
+		selectedClauses = append(selectedClauses, fmt.Sprintf("$%d", len(costArgs)))
+	}
+	costWhere := where + " AND " + expression + " IN (" + strings.Join(selectedClauses, ",") + ")"
+	// #nosec G201 -- table, predicate, and dimension expression come from the closed rollup/dimension catalogs.
+	costStatement := fmt.Sprintf(`SELECT %s, c->>'currency',
+  sum((c->>'knownNumerator')::numeric)::text,
+  sum((c->>'knownDispatches')::numeric)::text,
+  sum((c->>'incompleteDispatches')::numeric)::text
+FROM %s r CROSS JOIN LATERAL jsonb_array_elements(r.costs) c
+WHERE %s GROUP BY 1,2`, expression, table, costWhere)
+	costRows, err := q.DB.QueryContext(ctx, costStatement, costArgs...)
+	if err != nil {
+		return nil, nil, fmt.Errorf("query usage breakdown costs: %w", err)
+	}
+	defer costRows.Close()
+	for costRows.Next() {
+		var value, currency, numerator, known, incomplete string
+		if scanErr := costRows.Scan(&value, &currency, &numerator, &known, &incomplete); scanErr != nil {
+			return nil, nil, scanErr
+		}
+		cost, costErr := parseCostAggregate(currency, numerator, known, incomplete)
+		if costErr != nil {
+			return nil, nil, costErr
+		}
+		groupedCosts[value] = append(groupedCosts[value], cost)
+	}
+	if rowsErr := costRows.Err(); rowsErr != nil {
+		return nil, nil, rowsErr
+	}
+	groupedTimings, err = q.timingHistogramsByValue(ctx, table, costWhere, costArgs, expression)
+	return groupedCosts, groupedTimings, err
+}
+
+func (q PostgresQueries) setBreakdownFreshness(
+	ctx context.Context,
+	result *UsageBreakdown,
+	table, where string,
+	args []any,
+) error {
 	var watermark sql.NullTime
 	var asOf time.Time
 	if err := q.DB.QueryRowContext(ctx, fmt.Sprintf(
 		"SELECT max(ledger_watermark), clock_timestamp() FROM %s WHERE %s", table, where,
-	), args[:len(args)-1]...).Scan(&watermark, &asOf); err != nil {
-		return UsageBreakdown{}, fmt.Errorf("query usage breakdown freshness: %w", err)
+	), args...).Scan(&watermark, &asOf); err != nil {
+		return fmt.Errorf("query usage breakdown freshness: %w", err)
 	}
 	result.AsOf = &asOf
 	if watermark.Valid {
@@ -187,7 +222,7 @@ WHERE %s GROUP BY 1,2`, expression, table, costWhere)
 	}
 	// A producer event-time watermark is required before a result can be final.
 	result.Final = false
-	return result, nil
+	return nil
 }
 
 func breakdownKey(dimension BreakdownDimension) (string, bool, bool) {

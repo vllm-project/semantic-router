@@ -1,18 +1,26 @@
 # Router management API
 
-The router listener has two explicit modes. Standalone mode provides health,
-classification, storage, cache, compression, and replay operations over one
-immutable routing manifest. Managed mode is the durable control plane and exposes only
-`/health`, `/ready`, `/openapi.json`, and Router-native resources under
-`/management/v1`; it never mounts the standalone utility or data routes.
+The Router has one management listener. Its routes are derived from configured
+capabilities; there is no public deployment-mode switch.
+
+- Without `global.stores.management`, the Router compiles one read-only manifest
+  and exposes the enabled health, classification, storage, cache, compression,
+  replay, and utility routes.
+- With a Management store and `global.services.management_api.enabled: true`,
+  the listener exposes `/health`, `/ready`, `/openapi.json`, and Router-native
+  resources under `/management/v1`. Utility and data routes are not mounted on
+  that durable control-plane listener.
+- With a Management store and the Management API disabled, only operational
+  probes are mounted.
+
 The listener uses port `8080` by default and the local stack binds it to
 `127.0.0.1`.
 
-Managed mode terminates TLS in the Router and requires a certificate and
-private-key secret reference before the listener socket is opened. It accepts
-TLS 1.3 or newer. Configuring a client CA bundle additionally requires and
-verifies a client certificate on every connection. Managed mode never falls
-back to plaintext, including when another proxy or service mesh is present.
+An enabled durable Management API terminates TLS in the Router and requires a
+certificate and private-key secret reference before the listener socket opens.
+It accepts TLS 1.3 or newer. Configuring a client CA bundle additionally
+requires and verifies a client certificate on every connection. The listener
+never falls back to plaintext, including behind a proxy or service mesh.
 
 For model traffic, use the configured Envoy listener described in
 [Router API](./router).
@@ -25,14 +33,14 @@ fields:
 
 | Path | Purpose |
 | --- | --- |
-| `GET /api/v1` | Standalone endpoint discovery |
-| `GET /openapi.json` | OpenAPI document for the active listener mode |
-| `GET /docs` | Standalone interactive Swagger UI |
+| `GET /api/v1` | File-authoritative utility endpoint discovery |
+| `GET /openapi.json` | OpenAPI document for the active capability set |
+| `GET /docs` | File-authoritative interactive Swagger UI |
 
 This page groups the API by user task. The live OpenAPI document is the
 field-level source of truth for the version you are running.
 
-Managed releases also publish a checked, versioned
+Releases also publish a checked, versioned
 [Management API contract](./management) for client generation and independent
 console development.
 
@@ -41,7 +49,7 @@ curl -sS http://localhost:8080/health
 curl -sS http://localhost:8080/openapi.json
 ```
 
-For a managed listener, trust the deployment CA and use HTTPS:
+For an enabled durable Management API, trust the deployment CA and use HTTPS:
 
 ```bash
 curl --cacert /run/secrets/management-ca.pem \
@@ -70,12 +78,13 @@ when bearer authentication is enabled. Configuration and replay responses can
 also redact sensitive fields unless the principal has the corresponding detail
 permission.
 
-Managed mode instead requires `auth.mode: router` and rejects static `tokens`
-and `roles`. Each `/management/v1` registrar authenticates Router-issued
+When a Management store and Management API are enabled, `auth.mode: router` is
+required and static `tokens` and `roles` are rejected. Each `/management/v1`
+registrar authenticates Router-issued
 Management sessions and authorizes against the current durable bindings.
 Bootstrap and service-account authentication remain available without a human
 issuer. Until an OIDC or Router-local subject-assertion verifier is installed,
-human token exchange is explicitly denied; it does not fall back to standalone
+human token exchange is explicitly denied; it does not fall back to static
 bearer tokens.
 
 TLS protects the listener transport; Router-issued sessions and durable
@@ -142,14 +151,16 @@ Secrets in classifier information are redacted unless the caller has
 
 ## Configure routing
 
-Standalone loads and compiles one read-only manifest before readiness. It has
-no HTTP config, Recipe, knowledge-base authoring, backup, rollback, or runtime-sync
-routes. Validate a standalone manifest offline with `vllm-sr validate`, then replace
-the deployment input and restart the Router.
+A config without `global.stores.management` loads and compiles one read-only
+manifest before readiness. It has no HTTP config, Recipe, knowledge-base
+authoring, backup, rollback, or runtime-sync routes. Validate the manifest
+offline with `vllm-sr validate`, then replace the deployment input and restart
+the Router.
 
-Managed deployments author Models, Recipes, and Entrypoints through the versioned
-[`/management/v1`](../proposals/router-native-access-control-management-api) API.
-That desired state is persisted and published by the Router control plane; the
+When a Management store is configured, clients author Models, Recipes, and
+Entrypoints through the versioned
+[`/management/v1`](../proposals/router-native-access-control-management-api)
+API. Desired state is persisted and published by the Router control plane; the
 Dashboard is only one client of the same contract.
 
 ## Manage stored data

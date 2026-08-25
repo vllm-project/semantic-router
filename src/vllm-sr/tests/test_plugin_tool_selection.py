@@ -5,37 +5,43 @@ import tempfile
 
 import pytest
 import yaml
-from pydantic import ValidationError as PydanticValidationError
-
 from cli.models import ToolSelectionPluginConfig
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
+from pydantic import ValidationError as PydanticValidationError
 
 
 def _write_config(plugins: list[dict]) -> str:
     data = {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http-8888", "address": "0.0.0.0", "port": 8888}],
-        "models": [
-            {
-                "name": "test_model",
-                "card": {
+        "providers": {
+            "models": [
+                {
+                    "name": "test_model",
+                    "provider_model_id": "test_model",
+                    "backend_refs": [
+                        {
+                            "provider": "vllm",
+                            "base_url": "http://localhost:8000/v1",
+                        }
+                    ],
+                }
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {
+                    "name": "test_model",
                     "description": "Test model",
                     "capabilities": ["chat"],
-                },
-                "connections": [
-                    {
-                        "provider": "vllm",
-                        "endpoint": "http://localhost:8000/v1",
-                        "model": "test_model",
-                    }
-                ],
-            }
-        ],
+                }
+            ]
+        },
         "recipes": [
             {
                 "name": "test_recipe",
-                "document": {
+                "routing": {
                     "signals": {
                         "keywords": [
                             {
@@ -65,7 +71,7 @@ def _write_config(plugins: list[dict]) -> str:
         ],
         "entrypoints": [
             {
-                "name": "test_entrypoint",
+                "model_names": ["test_entrypoint"],
                 "recipe": "test_recipe",
                 "assignments": {"test_decision": {"models": [{"model": "test_model"}]}},
             }
@@ -111,7 +117,7 @@ class TestToolSelectionPluginConfig:
 
         try:
             config = parse_user_config(temp_path)
-            plugin = config.recipes[0].document.decisions[0].plugins[0]
+            plugin = config.recipes[0].routing.decisions[0].plugins[0]
             assert plugin.type.value == "tool_selection"
             assert plugin.configuration["mode"] == "filter"
             assert plugin.configuration["relevance_threshold"] == 0.4
@@ -141,7 +147,7 @@ class TestToolSelectionPluginConfig:
 
         try:
             config = parse_user_config(temp_path)
-            plugin = config.recipes[0].document.decisions[0].plugins[0]
+            plugin = config.recipes[0].routing.decisions[0].plugins[0]
             assert plugin.type.value == "tool_selection"
             assert plugin.configuration["mode"] == "add"
             assert plugin.configuration["tools_db_path"] == "config/tools_db.json"
@@ -209,7 +215,7 @@ class TestMultiplePlugins:
 
         try:
             config = parse_user_config(temp_path)
-            plugins = config.recipes[0].document.decisions[0].plugins
+            plugins = config.recipes[0].routing.decisions[0].plugins
             assert len(plugins) == 3
 
             plugin_types = [p.type.value for p in plugins]
@@ -267,7 +273,7 @@ class TestMultiplePlugins:
 
         try:
             config = parse_user_config(temp_path)
-            plugins = config.recipes[0].document.decisions[0].plugins
+            plugins = config.recipes[0].routing.decisions[0].plugins
             assert len(plugins) == 4
 
             plugin_types = [p.type.value for p in plugins]

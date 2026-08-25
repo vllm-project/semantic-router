@@ -46,8 +46,8 @@ func normalizeBackendConnection(connection *BackendConnection) error {
 }
 
 // ValidateBackendHeaders applies the same non-secret, runtime-safe header
-// contract used by immutable managed snapshots. Standalone authoring compiles
-// connections through this boundary before headers enter dispatch state.
+// contract used by immutable published snapshots. File-authored configurations
+// compile connections through this boundary before headers enter dispatch state.
 func ValidateBackendHeaders(headers map[string]string) error {
 	_, err := canonicalizeBackendHeaders(headers)
 	return err

@@ -329,7 +329,7 @@ const (
 	VSRFusionDepth = "x-vsr-fusion-depth"
 
 	// The remaining headers pin an authenticated internal subrequest to the
-	// exact managed Router generation that created it. They are honored only
+	// exact Router generation that created it. They are honored only
 	// together with VSRInternalAuth and are removed before upstream dispatch.
 	VSRRoutingNamespace        = "x-vsr-routing-namespace"
 	VSRRoutingQuotaPartition   = "x-vsr-routing-quota-partition"

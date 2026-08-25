@@ -22,21 +22,23 @@ from click.testing import CliRunner  # noqa: E402
 def _config_with_backend_credential(
     definition: dict[str, object],
 ) -> dict[str, object]:
+    backend_ref: dict[str, object] = {"provider": "openai-compatible"}
+    if "api_key" in definition:
+        backend_ref["api_key"] = definition["api_key"]
+    if "secret_env" in definition:
+        backend_ref["api_key_env"] = definition["secret_env"]
     return {
-        "version": "v0.4",
-        "models": [
-            {
-                "name": "demo-model",
-                "card": {},
-                "connections": [
-                    {
-                        "provider": "openai-compatible",
-                        "model": "demo-model",
-                        "credential": "private-provider",
-                    }
-                ],
-            }
-        ],
+        "version": "v0.3",
+        "providers": {
+            "models": [
+                {
+                    "name": "demo-model",
+                    "provider_model_id": "demo-model",
+                    "backend_refs": [backend_ref],
+                }
+            ]
+        },
+        "routing": {"modelCards": [{"name": "demo-model"}]},
         "recipes": [],
         "entrypoints": [],
         "global": {
@@ -44,7 +46,6 @@ def _config_with_backend_credential(
                 "backend_egress": {
                     "policy_file": "/app/config/backend-egress-policy.yaml"
                 },
-                "backend_credentials": {"private-provider": definition},
             }
         },
     }
@@ -113,10 +114,7 @@ class TestK8sBackend:
 
         with pytest.raises(
             ValueError,
-            match=(
-                r"config\.global\.services\.backend_credentials\."
-                r"private-provider\.api_key"
-            ),
+            match=(r"config\.providers\.models\[0\]\.backend_refs\[0\]\.api_key"),
         ):
             backend.deploy(config_file=str(config))
 
@@ -130,7 +128,7 @@ class TestK8sBackend:
         config.write_text(
             yaml.safe_dump(
                 {
-                    "version": "v0.4",
+                    "version": "v0.3",
                     "global": {
                         "services": {
                             "management_api": {
@@ -496,7 +494,7 @@ class TestCLITargetRouting:
         built = []
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.4\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -552,7 +550,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         config_path.write_text(
-            "version: v0.4\nlisteners:\n  - name: http\n    port: 8899\n",
+            "version: v0.3\nlisteners:\n  - name: http\n    port: 8899\n",
             encoding="utf-8",
         )
 
@@ -595,7 +593,7 @@ class TestCLITargetRouting:
             config_path.write_text(
                 yaml.safe_dump(
                     {
-                        "version": "v0.4",
+                        "version": "v0.3",
                         "setup": {"mode": True, "state": "bootstrap"},
                     }
                 ),
@@ -626,7 +624,7 @@ class TestCLITargetRouting:
         captured = {}
         config_path = tmp_path / "config.yaml"
         source = {
-            "version": "v0.4",
+            "version": "v0.3",
             "listeners": [{"name": "http", "port": 8899}],
             "global": {
                 "services": {},
@@ -668,13 +666,14 @@ class TestCLITargetRouting:
         monkeypatch.delenv("VLLM_SR_AMD_FORCE_GPU", raising=False)
         monkeypatch.delenv("VLLM_SR_AMD_PRESERVE_CPU", raising=False)
         source = {
-            "version": "v0.4",
+            "version": "v0.3",
             "listeners": [{"name": "http", "port": 8899}],
-            "models": [],
+            "providers": {"models": []},
+            "routing": {"modelCards": []},
             "recipes": [
                 {
                     "name": "test-recipe",
-                    "document": {
+                    "routing": {
                         "decisions": [
                             {
                                 "name": "route",
@@ -725,7 +724,7 @@ class TestCLITargetRouting:
         for component in (
             "recipes",
             0,
-            "document",
+            "routing",
             "decisions",
             0,
             "algorithm",

@@ -1,19 +1,23 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: openai/gpt-oss-120b
-  card: {}
-  connections:
-  - provider: vllm
-    endpoint: http://0.0.0.0:8000/v1
-    model: openai/gpt-oss-120b
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
+providers:
+  models:
+  - name: openai/gpt-oss-120b
+    provider_model_id: openai/gpt-oss-120b
+    backend_refs:
+    - provider: vllm
+      endpoint: http://0.0.0.0:8000/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: openai/gpt-oss-120b
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       domains:
       - name: other
@@ -30,8 +34,8 @@ recipes:
         - type: domain
           name: other
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

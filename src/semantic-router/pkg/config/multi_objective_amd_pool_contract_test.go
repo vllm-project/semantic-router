@@ -18,6 +18,7 @@ func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
 		"local/qwen3.6-35b-flash":          {"http://vllm-qwen36-flash:8000/v1"},
 		"local/gemma4-26b-balanced":        {"http://vllm-gemma4-balanced:8000/v1"},
 		"local/deepseek-v4-flash-analyst":  {"http://vllm-deepseek-v4:8000/v1"},
+		"local/omni":                       {"http://vllm-omni:8000/v1"},
 	}
 
 	var recipe CanonicalConfig
@@ -25,21 +26,21 @@ func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
 		t.Fatalf("failed to decode %s: %v", asset, err)
 	}
 
-	if len(recipe.Models) != len(expectedEndpoints) {
-		t.Fatalf("expected %d logical model lanes, got %d", len(expectedEndpoints), len(recipe.Models))
+	if len(recipe.Providers.Models) != len(expectedEndpoints) {
+		t.Fatalf("expected %d logical model lanes, got %d", len(expectedEndpoints), len(recipe.Providers.Models))
 	}
 
-	physicalEndpoints := make([]string, 0, len(recipe.Models))
-	for _, model := range recipe.Models {
+	physicalEndpoints := make([]string, 0, len(recipe.Providers.Models))
+	for _, model := range recipe.Providers.Models {
 		expectedEndpoint, ok := expectedEndpoints[model.Name]
 		if !ok {
 			t.Fatalf("unexpected multi-objective model lane %q", model.Name)
 		}
-		if len(model.Connections) != len(expectedEndpoint) {
-			t.Fatalf("model lane %q connection count = %d, want %d", model.Name, len(model.Connections), len(expectedEndpoint))
+		if len(model.BackendRefs) != len(expectedEndpoint) {
+			t.Fatalf("model lane %q backend count = %d, want %d", model.Name, len(model.BackendRefs), len(expectedEndpoint))
 		}
-		actualEndpoints := make([]string, 0, len(model.Connections))
-		for _, connection := range model.Connections {
+		actualEndpoints := make([]string, 0, len(model.BackendRefs))
+		for _, connection := range model.BackendRefs {
 			if connection.Provider != "vllm" {
 				t.Fatalf("model lane %q has unexpected Provider Integration %q", model.Name, connection.Provider)
 			}
@@ -55,8 +56,8 @@ func TestMultiObjectiveRecipePreservesAMDEightGPUPool(t *testing.T) {
 
 	slices.Sort(physicalEndpoints)
 	physicalEndpoints = slices.Compact(physicalEndpoints)
-	if len(physicalEndpoints) != 7 {
-		t.Fatalf("expected seven serving endpoints across GPUs 0-6, got %v", physicalEndpoints)
+	if len(physicalEndpoints) != 8 {
+		t.Fatalf("expected eight serving endpoints, got %v", physicalEndpoints)
 	}
 	if got := recipe.Global.Integrations.Looper.Endpoint; got != "http://vllm-sr-envoy-container:8899/v1/chat/completions" {
 		t.Fatalf("Looper endpoint must re-enter Envoy for cross-backend orchestration, got %q", got)

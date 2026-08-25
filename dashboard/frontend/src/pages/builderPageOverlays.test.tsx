@@ -40,7 +40,7 @@ describe('builder overlay accessibility contracts', () => {
     expect(markup).toContain('aria-label="Close import dialog"')
   })
 
-  it('renders the DSL guide as a labelled modal drawer', () => {
+  it('renders the DSL guide as a labelled product dialog', () => {
     const markup = renderToStaticMarkup(
       createElement(BuilderGuideDrawer, {
         open: true,
@@ -56,5 +56,6 @@ describe('builder overlay accessibility contracts', () => {
     expect(markup).toContain('aria-modal="true"')
     expect(markup).toMatch(/aria-labelledby="[^"]+"/)
     expect(markup).toContain('aria-label="Close DSL language guide"')
+    expect(markup).toContain('src="/vllm.png"')
   })
 })

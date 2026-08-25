@@ -343,8 +343,8 @@ type MemoryQdrantConfig struct {
 }
 
 // ResponseAPIConfig controls response and conversation history storage.
-// StoreBackend defaults to "memory" so standalone startup has no external
-// storage dependency. Managed and multi-replica deployments should configure
+// StoreBackend defaults to "memory" so file-backed startup has no external
+// storage dependency. Durable and multi-replica deployments should configure
 // Redis explicitly when history must be durable and shared.
 type ResponseAPIConfig struct {
 	Enabled      bool                   `yaml:"enabled"`

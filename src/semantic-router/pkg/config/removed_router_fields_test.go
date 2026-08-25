@@ -7,13 +7,13 @@ import (
 
 func TestParseYAMLBytesRejectsRemovedSkipProcessing(t *testing.T) {
 	manifest := strings.Replace(
-		entrypointRulesYAML,
+		strictV03AuthoringYAML,
 		"  services:\n",
 		"  router:\n    skip_processing: {enabled: true}\n  services:\n",
 		1,
 	)
 	_, err := ParseYAMLBytes([]byte(manifest))
-	if err == nil || !strings.Contains(err.Error(), "global.router.skip_processing has been removed") {
+	if err == nil || !strings.Contains(err.Error(), "cannot bypass Router access enforcement") {
 		t.Fatalf("ParseYAMLBytes() error = %v", err)
 	}
 }
@@ -34,7 +34,7 @@ func TestParseYAMLBytesRejectsRemovedConfigurationAuthorities(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			manifest := strings.Replace(entrypointRulesYAML, "global:\n", "global:\n"+test.fragment, 1)
+			manifest := strings.Replace(strictV03AuthoringYAML, "global:\n", "global:\n"+test.fragment, 1)
 			if _, err := ParseYAMLBytes([]byte(manifest)); err == nil {
 				t.Fatalf("ParseYAMLBytes() accepted removed configuration authority:\n%s", test.fragment)
 			}

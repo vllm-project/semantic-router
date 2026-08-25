@@ -71,6 +71,7 @@ func compileRateLimitRules(
 			}
 			rules[index].ID = newRuleID()
 		}
+		// #nosec G115 -- compileRateLimitRules rejects more than maximumRules (128).
 		rules[index].Ordinal = uint32(index)
 	}
 	if validateRules(policyID, rules) != nil {

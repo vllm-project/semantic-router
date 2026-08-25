@@ -35,7 +35,7 @@ func TestLooperDispatchCompletionConsumesNeutralTerminal(t *testing.T) {
 	reference.DispatchType = "looper"
 	request := &RequestContext{
 		RequestID: requestID,
-		ManagedDispatch: &managedRequestDispatch{
+		DispatchState: &requestDispatchState{
 			requestID: requestID,
 			dispatches: []*inferenceDispatch{{
 				id: dispatchID, settlementEligible: true, terminalReference: reference,
@@ -61,7 +61,7 @@ func TestLooperDispatchCompletionConsumesNeutralTerminal(t *testing.T) {
 		DispatchID: dispatchID, HTTPStarted: true,
 	})
 
-	dispatch := request.ManagedDispatch.dispatches[0]
+	dispatch := request.DispatchState.dispatches[0]
 	if dispatch.state != usageaccounting.EvidenceKnownActual ||
 		dispatch.usage.InputTotal.String() != "11" || dispatch.usage.Output.String() != "7" {
 		t.Fatalf("dispatch evidence = state %q usage %+v", dispatch.state, dispatch.usage)
@@ -74,7 +74,7 @@ func TestLooperDispatchCompletionConsumesNeutralTerminal(t *testing.T) {
 func TestLooperDispatchCompletionFencesMissingTerminal(t *testing.T) {
 	request := &RequestContext{
 		RequestID: "request-1",
-		ManagedDispatch: &managedRequestDispatch{
+		DispatchState: &requestDispatchState{
 			requestID: "request-1",
 			dispatches: []*inferenceDispatch{{
 				id: "dispatch-1", settlementEligible: true,
@@ -94,7 +94,7 @@ func TestLooperDispatchCompletionFencesMissingTerminal(t *testing.T) {
 		DispatchID: "dispatch-1", HTTPStarted: true,
 	})
 
-	dispatch := request.ManagedDispatch.dispatches[0]
+	dispatch := request.DispatchState.dispatches[0]
 	if dispatch.state != usageaccounting.EvidenceUnknown || dispatch.reason != "response_terminal_missing" {
 		t.Fatalf("dispatch evidence = state %q reason %q", dispatch.state, dispatch.reason)
 	}
@@ -103,7 +103,7 @@ func TestLooperDispatchCompletionFencesMissingTerminal(t *testing.T) {
 func TestLooperDispatchCompletionBeforeHTTPIsKnownZero(t *testing.T) {
 	request := &RequestContext{
 		RequestID: "request-1",
-		ManagedDispatch: &managedRequestDispatch{
+		DispatchState: &requestDispatchState{
 			requestID: "request-1",
 			dispatches: []*inferenceDispatch{{
 				id: "dispatch-1", settlementEligible: true,
@@ -113,7 +113,7 @@ func TestLooperDispatchCompletionBeforeHTTPIsKnownZero(t *testing.T) {
 	observer := &inferenceDispatchObserver{router: &OpenAIRouter{}, request: request}
 	observer.Completed(context.Background(), looper.DispatchCompletion{DispatchID: "dispatch-1"})
 
-	if state := request.ManagedDispatch.dispatches[0].state; state != usageaccounting.EvidenceKnownZero {
+	if state := request.DispatchState.dispatches[0].state; state != usageaccounting.EvidenceKnownZero {
 		t.Fatalf("dispatch evidence = %q, want known_zero", state)
 	}
 }

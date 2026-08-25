@@ -136,12 +136,7 @@ func TestSelectModelForEvalDoesNotClaimBaseSelectorIsFinalWhenLearningCanChangeI
 	}
 }
 
-func TestSelectModelForEvalUsesEntrypointRuntimeScope(t *testing.T) {
-	const recipeName config.RecipeName = "shared"
-	const (
-		recipeID   = "recipe-shared"
-		decisionID = "decision-choose"
-	)
+func evalRuntimeScopeConfig(recipeName config.RecipeName, recipeID, decisionID string) *config.RouterConfig {
 	model := func(id string) config.ModelParams {
 		return config.ModelParams{ResourceID: id, ResourceRevision: 1}
 	}
@@ -150,7 +145,21 @@ func TestSelectModelForEvalUsesEntrypointRuntimeScope(t *testing.T) {
 			ModelID: id, ModelRevision: 1, ModelName: name, Weight: "1",
 		}
 	}
-	configForTest := &config.RouterConfig{
+	entrypoint := func(id, alias string, models []config.RoutingModelAssignment) config.EntrypointMapping {
+		return config.EntrypointMapping{
+			ID: id, Revision: 1, Name: alias, ModelNames: []string{"router/" + alias},
+			Rules: []config.EntrypointRule{{
+				ID: "rule-" + alias, Name: "default",
+				Action: config.EntrypointRuleAction{
+					RecipeID: recipeID, RecipeRevision: 1, Recipe: recipeName,
+					Assignments: map[string]config.RoutingAssignmentSet{
+						decisionID: {Models: models},
+					},
+				},
+			}},
+		}
+	}
+	return &config.RouterConfig{
 		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
 			"base-first": model("model-base-first"), "base-second": model("model-base-second"),
 			"edge-first": model("model-edge-first"), "edge-second": model("model-edge-second"),
@@ -159,45 +168,31 @@ func TestSelectModelForEvalUsesEntrypointRuntimeScope(t *testing.T) {
 		Recipes: []config.RoutingRecipe{{
 			ID: recipeID, Revision: 1, Name: recipeName,
 			Profile: config.RoutingProfile{Decisions: []config.Decision{{
-				ID:        decisionID,
-				Name:      "choose",
+				ID: decisionID, Name: "choose",
 				ModelRefs: []config.ModelRef{{Model: "base-first"}, {Model: "base-second"}},
 				Algorithm: &config.AlgorithmConfig{Type: string(selection.MethodLatencyAware)},
 			}}},
 		}},
 		Entrypoints: []config.EntrypointMapping{
-			{
-				ID: "entrypoint-edge", Revision: 1, Name: "edge", ModelNames: []string{"router/edge"},
-				Rules: []config.EntrypointRule{{
-					ID: "rule-edge", Name: "default",
-					Action: config.EntrypointRuleAction{
-						RecipeID: recipeID, RecipeRevision: 1, Recipe: recipeName,
-						Assignments: map[string]config.RoutingAssignmentSet{
-							decisionID: {Models: []config.RoutingModelAssignment{
-								assignment("model-edge-first", "edge-first"),
-								assignment("model-edge-second", "edge-second"),
-							}},
-						},
-					},
-				}},
-			},
-			{
-				ID: "entrypoint-local", Revision: 1, Name: "local", ModelNames: []string{"router/local"},
-				Rules: []config.EntrypointRule{{
-					ID: "rule-local", Name: "default",
-					Action: config.EntrypointRuleAction{
-						RecipeID: recipeID, RecipeRevision: 1, Recipe: recipeName,
-						Assignments: map[string]config.RoutingAssignmentSet{
-							decisionID: {Models: []config.RoutingModelAssignment{
-								assignment("model-local-first", "local-first"),
-								assignment("model-local-second", "local-second"),
-							}},
-						},
-					},
-				}},
-			},
+			entrypoint("entrypoint-edge", "edge", []config.RoutingModelAssignment{
+				assignment("model-edge-first", "edge-first"),
+				assignment("model-edge-second", "edge-second"),
+			}),
+			entrypoint("entrypoint-local", "local", []config.RoutingModelAssignment{
+				assignment("model-local-first", "local-first"),
+				assignment("model-local-second", "local-second"),
+			}),
 		},
 	}
+}
+
+func TestSelectModelForEvalUsesEntrypointRuntimeScope(t *testing.T) {
+	const recipeName config.RecipeName = "shared"
+	const (
+		recipeID   = "recipe-shared"
+		decisionID = "decision-choose"
+	)
+	configForTest := evalRuntimeScopeConfig(recipeName, recipeID, decisionID)
 	if err := configForTest.PrepareEntrypointRecipes(); err != nil {
 		t.Fatalf("PrepareEntrypointRecipes() error = %v", err)
 	}

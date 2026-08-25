@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     keywords:
       - name: code_keywords

@@ -7,7 +7,7 @@ import (
 )
 
 // productionProviderIntegrations is the Router application's Provider
-// extension boundary. Managed runtime receives typed integrations and
+// extension boundary. Durable routing runtime receives typed integrations and
 // compilers; it does not select product metadata itself.
 func productionProviderIntegrations() (
 	[]providercatalog.Integration,

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// canonicalRecipeFixture builds the smallest complete standalone v0.4
+// canonicalRecipeFixture builds the smallest complete public v0.3
 // document around one Recipe document. Tests pass only the Recipe-owned
 // routing value and sparse global override they need to exercise.
 func canonicalRecipeFixture(documentYAML, globalYAML string) []byte {
@@ -23,24 +23,27 @@ func canonicalRecipeFixture(documentYAML, globalYAML string) []byte {
 		global = "\nglobal:\n" + indent(globalYAML, "  ")
 	}
 	return []byte(fmt.Sprintf(`
-version: v0.4
+version: v0.3
 listeners:
   - name: http
     address: 0.0.0.0
     port: 8899
-models:
-  - name: cheap
-    card: {}
-    connections:
-      - provider: private-test
-        endpoint: http://127.0.0.1:8000
-        model: cheap
+providers:
+  models:
+    - name: cheap
+      provider_model_id: cheap
+      backend_refs:
+        - provider: private-test
+          endpoint: http://127.0.0.1:8000
+routing:
+  modelCards:
+    - name: cheap
 recipes:
   - name: default
-    document:
+    routing:
 %s
 entrypoints:
-  - name: vllm-sr/test
+  - model_names: [vllm-sr/test]
     recipe: default
     assignments:
       route:
@@ -337,7 +340,7 @@ learning:
 	if err == nil {
 		t.Fatal("expected unknown decision adaptation to be rejected")
 	}
-	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.session_aware") {
+	if !strings.Contains(err.Error(), "recipes[0].routing.decisions[0].adaptations.session_aware") {
 		t.Fatalf("expected unknown adaptation path in error, got %v", err)
 	}
 }
@@ -354,7 +357,7 @@ learning:
 	if err == nil {
 		t.Fatal("expected removed decision coordination block to be rejected")
 	}
-	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.coordination") {
+	if !strings.Contains(err.Error(), "recipes[0].routing.decisions[0].adaptations.coordination") {
 		t.Fatalf("expected coordination path in error, got %v", err)
 	}
 }
@@ -410,7 +413,7 @@ learning:
 	if err == nil {
 		t.Fatal("expected removed decision protection weight to be rejected")
 	}
-	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.protection.weight") {
+	if !strings.Contains(err.Error(), "recipes[0].routing.decisions[0].adaptations.protection.weight") {
 		t.Fatalf("expected protection weight path in error, got %v", err)
 	}
 }
@@ -428,7 +431,7 @@ learning:
 	if err == nil {
 		t.Fatal("expected protection candidate_set to be rejected")
 	}
-	if !strings.Contains(err.Error(), "recipes[0].document.decisions[0].adaptations.protection.candidate_set") {
+	if !strings.Contains(err.Error(), "recipes[0].routing.decisions[0].adaptations.protection.candidate_set") {
 		t.Fatalf("expected protection candidate_set path in error, got %v", err)
 	}
 }

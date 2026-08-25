@@ -1,12 +1,73 @@
-version: v0.4
+version: v0.3
 listeners:
 - name: http-8899
   address: 0.0.0.0
   port: 8899
   timeout: 1200s
-models:
-- name: qwen/qwen3.6-rocm
-  card:
+providers:
+  defaults:
+    default_model: qwen/qwen3.6-rocm
+    reasoning_families:
+      qwen/qwen3.6-rocm:
+        type: chat_template_kwargs
+        parameter: enable_thinking
+  models:
+  - name: qwen/qwen3.6-rocm
+    provider_model_id: qwen/qwen3.6-rocm
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    reasoning_family: qwen/qwen3.6-rocm
+  - name: google/gemini-2.5-flash-lite
+    provider_model_id: google/gemini-2.5-flash-lite
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '0.01'
+      output_cost_per_million_tokens: '0.04'
+      cache_read_cost_per_million_tokens: '0.002'
+  - name: google/gemini-3.1-pro
+    provider_model_id: google/gemini-3.1-pro
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '0.48'
+      output_cost_per_million_tokens: '1.92'
+      cache_read_cost_per_million_tokens: '0.12'
+  - name: openai/gpt5.4
+    provider_model_id: openai/gpt5.4
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '1.2'
+      output_cost_per_million_tokens: '4.8'
+      cache_read_cost_per_million_tokens: '0.3'
+  - name: anthropic/claude-opus-4.6
+    provider_model_id: anthropic/claude-opus-4.6
+    backend_refs:
+    - endpoint: http://vllm:8000/v1
+      provider: vllm
+    api_format: openai
+    pricing:
+      input_cost_per_million_tokens: '1.8'
+      output_cost_per_million_tokens: '7.2'
+      cache_read_cost_per_million_tokens: '0.45'
+  - name: local/omni
+    provider_model_id: local/omni
+    backend_refs:
+    - endpoint: http://vllm-omni:8000/v1
+      provider: vllm
+    api_format: openai
+routing:
+  modelCards:
+  - name: qwen/qwen3.6-rocm
     capabilities:
     - chat
     - privacy_locality
@@ -14,32 +75,14 @@ models:
     - simple_qa
     - tool_use
     - text
-    reasoning:
-      type: chat_template_kwargs
-      efforts:
-      - medium
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: qwen/qwen3.6-rocm
-- name: google/gemini-2.5-flash-lite
-  card:
+  - name: google/gemini-2.5-flash-lite
     capabilities:
     - chat
     - low_cost
     - explanation
     - coding
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: google/gemini-2.5-flash-lite
-  pricing:
-    input_cost_per_million_tokens: '0.01'
-    output_cost_per_million_tokens: '0.04'
-    cache_read_cost_per_million_tokens: '0.002'
-- name: google/gemini-3.1-pro
-  card:
+  - name: google/gemini-3.1-pro
     capabilities:
     - chat
     - reasoning
@@ -47,52 +90,41 @@ models:
     - research
     - code
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: google/gemini-3.1-pro
-  pricing:
-    input_cost_per_million_tokens: '0.48'
-    output_cost_per_million_tokens: '1.92'
-    cache_read_cost_per_million_tokens: '0.12'
-- name: openai/gpt5.4
-  card:
+  - name: openai/gpt5.4
     capabilities:
     - chat
     - frontier_reasoning
     - planning
     - synthesis
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: openai/gpt5.4
-  pricing:
-    input_cost_per_million_tokens: '1.2'
-    output_cost_per_million_tokens: '4.8'
-    cache_read_cost_per_million_tokens: '0.3'
-- name: anthropic/claude-opus-4.6
-  card:
+  - name: anthropic/claude-opus-4.6
     capabilities:
     - chat
     - legal_analysis
     - health_guidance
     - high_stakes
     - text
-  connections:
-  - provider: vllm
-    endpoint: http://vllm:8000/v1
-    model: anthropic/claude-opus-4.6
-  pricing:
-    input_cost_per_million_tokens: '1.8'
-    output_cost_per_million_tokens: '7.2'
-    cache_read_cost_per_million_tokens: '0.45'
+  - name: local/omni
+    capabilities:
+    - chat
+    - image_understanding
+    - multimodal
+    - omni
+    - text
+    - vision
+    modality: omni
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       conversation:
+      - name: agent_has_images
+        description: Request contains at least one image content part.
+        feature:
+          type: exists
+          source:
+            type: image_content
       - name: multi_turn_user
         feature:
           type: count
@@ -148,9 +180,9 @@ recipes:
         - \boverride (the )?policy\b
         - \breveal (the )?(hidden instructions|system prompt)\b
         - \bforget (all )?(of )?your rules\b
-        - "\u5FFD\u7565(\u6240\u6709)?\u4E4B\u524D\u7684\u6307\u4EE4"
-        - "\u7ED5\u8FC7(\u6240\u6709)?\u5B89\u5168(\u9650\u5236|\u89C4\u5219)"
-        - "(\u6CC4\u9732|\u900F\u9732)\u7CFB\u7EDF\u63D0\u793A\u8BCD"
+        - 忽略(所有)?之前的指令
+        - 绕过(所有)?安全(限制|规则)
+        - (泄露|透露)系统提示词
       - name: secret_markers
         operator: OR
         method: regex
@@ -170,11 +202,11 @@ recipes:
         - \bsigning[_ -]?secret\b
         - \bbearer\s+[A-Za-z0-9._~+/-]+=*\b
         - \bsk-[A-Za-z0-9_-]{8,}\b
-        - "\u5BC6\u94A5"
-        - "\u51ED\u636E"
-        - "\u8BBF\u95EE\u4EE4\u724C"
-        - "\u79C1\u94A5"
-        - "\u5BC6\u7801"
+        - 密钥
+        - 凭据
+        - 访问令牌
+        - 私钥
+        - 密码
       - name: personal_data_markers
         operator: OR
         method: regex
@@ -204,13 +236,13 @@ recipes:
         - payroll record
         - hr spreadsheet
         - crm export
-        - "\u5BA2\u6237\u6570\u636E"
-        - "\u5458\u5DE5\u6570\u636E"
-        - "\u8EAB\u4EFD\u8BC1\u53F7"
-        - "\u624B\u673A\u53F7"
-        - "\u62A4\u7167\u53F7"
-        - "\u94F6\u884C\u5361\u53F7"
-        - "\u5BB6\u5EAD\u4F4F\u5740"
+        - 客户数据
+        - 员工数据
+        - 身份证号
+        - 手机号
+        - 护照号
+        - 银行卡号
+        - 家庭住址
       - name: private_code_markers
         operator: OR
         method: regex
@@ -226,11 +258,11 @@ recipes:
         - \bconfidential code\b
         - \binternal monorepo\b
         - \bproprietary source\b
-        - "\u79C1\u6709\u4ED3\u5E93"
-        - "\u5185\u90E8\u4ED3\u5E93"
-        - "\u516C\u53F8\u4EE3\u7801"
-        - "\u79C1\u6709\u4EE3\u7801"
-        - "\u4FDD\u5BC6\u4EE3\u7801"
+        - 私有仓库
+        - 内部仓库
+        - 公司代码
+        - 私有代码
+        - 保密代码
       - name: internal_doc_markers
         operator: OR
         method: regex
@@ -250,13 +282,13 @@ recipes:
         - \binternal board deck\b
         - \binternal-only document\b
         - \bemployee handbook\b
-        - "\u5185\u90E8\u6587\u6863"
-        - "\u5185\u90E8\u8BBE\u8BA1\u6587\u6863"
-        - "\u5185\u90E8\u5907\u5FD8\u5F55"
-        - "\u4FDD\u5BC6\u5907\u5FD8\u5F55"
-        - "\u5185\u90E8\u8FD0\u884C\u624B\u518C"
-        - "\u5185\u90E8\u4E8B\u6545\u590D\u76D8"
-        - "\u4EC5\u5185\u90E8\u6D41\u8F6C"
+        - 内部文档
+        - 内部设计文档
+        - 内部备忘录
+        - 保密备忘录
+        - 内部运行手册
+        - 内部事故复盘
+        - 仅内部流转
       - name: local_only_markers
         operator: OR
         method: regex
@@ -276,8 +308,8 @@ recipes:
         - \brun locally\b
         - \bstay on the local model\b
         - \bprivate infrastructure\b
-        - "\u4EC5\u672C\u5730\u5904\u7406"
-        - "\u4E0D\u8981\u53D1\u9001\u5230\u4E91\u7AEF"
+        - 仅本地处理
+        - 不要发送到云端
       - name: simple_request_markers
         operator: OR
         method: regex
@@ -291,8 +323,8 @@ recipes:
         - \bwhat is\b
         - \bwho is\b
         - \bdefine\b
-        - "\u7B80\u5355\u89E3\u91CA"
-        - "\u7B80\u77ED\u56DE\u7B54"
+        - 简单解释
+        - 简短回答
       - name: agentic_request_markers
         operator: OR
         method: regex
@@ -310,8 +342,8 @@ recipes:
         - \brollback (plan|criteria)\b
         - \bvalidation loop\b
         - \bmulti-step workflow\b
-        - "\u5206\u9636\u6BB5\u5B9E\u65BD"
-        - "\u56DE\u6EDA\u6B65\u9AA4"
+        - 分阶段实施
+        - 回滚步骤
       - name: code_request_markers
         operator: OR
         method: regex
@@ -391,7 +423,7 @@ recipes:
         - Briefly explain what an API is.
         - What does CPU stand for?
         - Give me a quick summary of this paragraph.
-        - "\u7528\u4E00\u53E5\u8BDD\u89E3\u91CA\u8FD9\u4E2A\u6982\u5FF5\u3002"
+        - 用一句话解释这个概念。
       - name: coding_workflows
         aggregation_method: max
         threshold: 0.75
@@ -415,22 +447,19 @@ recipes:
         - Troubleshoot the production issue and iterate until it is fixed.
         - Break this project into tasks, dependencies, and acceptance checks.
         - Design an execution workflow with milestones, owners, and guardrails.
-        - "\u7ED9\u6211\u4E00\u4E2A\u5206\u9636\u6BB5\u5B9E\u65BD\u65B9\u6848\uFF0C\
-          \u5E76\u5305\u542B\u6821\u9A8C\u4E0E\u56DE\u6EDA\u6B65\u9AA4\u3002"
+        - 给我一个分阶段实施方案，并包含校验与回滚步骤。
       - name: legal_analysis
         aggregation_method: max
         threshold: 0.78
         candidates:
-        - Analyze indemnity, limitation of liability, and governing-law risks in this
-          contract.
+        - Analyze indemnity, limitation of liability, and governing-law risks in this contract.
         - Draft a legal-risk memo for a cross-border data transfer policy.
         - Compare regulatory exposure under two compliance strategies.
       - name: health_guidance
         aggregation_method: max
         threshold: 0.77
         candidates:
-        - Explain common causes of chest pain and when someone should seek urgent
-          care.
+        - Explain common causes of chest pain and when someone should seek urgent care.
         - Compare evidence-backed treatment options for type 2 diabetes management.
         - Summarize safe, clinically grounded steps for lowering high blood pressure.
       - name: research_synthesis
@@ -455,22 +484,16 @@ recipes:
         - Debug proprietary backend code from our internal monorepo.
         - Refactor a confidential microservice from our company codebase.
         - Analyze an internal SDK source file and explain the risks.
-        - "\u5E2E\u6211\u5206\u6790\u516C\u53F8\u79C1\u6709\u4ED3\u5E93\u91CC\u7684\
-          \u6E90\u4EE3\u7801\u3002"
+        - 帮我分析公司私有仓库里的源代码。
       - name: pii_request
         aggregation_method: max
         threshold: 0.82
         candidates:
-        - Review an HR spreadsheet containing employee phone numbers, home addresses,
-          and government identifiers.
-        - Analyze a CRM export with names, phone numbers, street addresses, and account
-          numbers.
-        - Process payroll records that include passport numbers, bank accounts, and
-          home addresses.
+        - Review an HR spreadsheet containing employee phone numbers, home addresses, and government identifiers.
+        - Analyze a CRM export with names, phone numbers, street addresses, and account numbers.
+        - Process payroll records that include passport numbers, bank accounts, and home addresses.
         - Summarize a file containing employee personal identifiers and contact details.
-        - "\u5E2E\u6211\u5904\u7406\u5305\u542B\u624B\u673A\u53F7\u3001\u5BB6\u5EAD\
-          \u4F4F\u5740\u548C\u8EAB\u4EFD\u8BC1\u53F7\u7684\u5458\u5DE5\u4FE1\u606F\
-          \u3002"
+        - 帮我处理包含手机号、家庭住址和身份证号的员工信息。
       - name: internal_document_request
         aggregation_method: max
         threshold: 0.86
@@ -479,8 +502,7 @@ recipes:
         - Extract action items from a confidential board memo.
         - Analyze a private incident postmortem for follow-up actions.
         - Summarize this internal runbook and identify owners.
-        - "\u5E2E\u6211\u603B\u7ED3\u8FD9\u4EFD\u5185\u90E8\u8BBE\u8BA1\u6587\u6863\
-          \u5E76\u63D0\u70BC\u98CE\u9669\u3002"
+        - 帮我总结这份内部设计文档并提炼风险。
       context:
       - name: short_context
         min_tokens: '0'
@@ -506,8 +528,8 @@ recipes:
             - - plan
               - execute
               - verify
-            - - "\u5148"
-              - "\u518D"
+            - - 先
+              - 再
       - name: numbered_steps
         feature:
           type: exists
@@ -527,8 +549,8 @@ recipes:
             - no more than
             - must
             - should
-            - "\u4E0D\u8D85\u8FC7"
-            - "\u81F3\u5C11"
+            - 不超过
+            - 至少
         predicate:
           gt: 0.08
       complexity:
@@ -807,8 +829,7 @@ recipes:
           gte: 0.3
     decisions:
     - name: local_security_containment
-      description: Keep prompt-injection or jailbreak-like prompts on the local AMD
-        model.
+      description: Keep prompt-injection or jailbreak-like prompts on the local AMD model.
       priority: 340
       tier: 1
       rules:
@@ -827,9 +848,28 @@ recipes:
           capture_response_body: true
           max_body_bytes: 2048
           max_tool_trace_steps: 100
+    - name: omni
+      description: Understand image-bearing requests locally without bypassing security containment.
+      priority: 330
+      tier: 1
+      rules:
+        operator: OR
+        conditions:
+        - type: conversation
+          name: agent_has_images
+      algorithm:
+        type: static
+      plugins:
+      - type: router_replay
+        configuration:
+          enabled: true
+          max_records: 10000
+          capture_request_body: true
+          capture_response_body: true
+          max_body_bytes: 2048
+          max_tool_trace_steps: 100
     - name: local_privacy_policy
-      description: Route private code, internal documents, credentials, and PII-like
-        requests to the local AMD model.
+      description: Route private code, internal documents, credentials, and PII-like requests to the local AMD model.
       priority: 320
       tier: 1
       rules:
@@ -853,8 +893,7 @@ recipes:
           max_body_bytes: 2048
           max_tool_trace_steps: 100
     - name: simple_math_fast_path
-      description: Keep simple math and short factual STEM questions on the simple
-        local alias.
+      description: Keep simple math and short factual STEM questions on the simple local alias.
       priority: 300
       tier: 2
       rules:
@@ -882,8 +921,7 @@ recipes:
           max_body_bytes: 2048
           max_tool_trace_steps: 100
     - name: domain_legal_health
-      description: Non-private legal, compliance, and health requests route to the
-        high-care domain alias.
+      description: Non-private legal, compliance, and health requests route to the high-care domain alias.
       priority: 260
       tier: 3
       rules:
@@ -914,8 +952,7 @@ recipes:
           max_records: 10000
           max_body_bytes: 4096
     - name: domain_code_complex
-      description: Non-private complex coding, architecture, and software-system requests
-        route to stronger technical aliases.
+      description: Non-private complex coding, architecture, and software-system requests route to stronger technical aliases.
       priority: 255
       tier: 3
       rules:
@@ -974,8 +1011,7 @@ recipes:
           max_records: 10000
           max_body_bytes: 4096
     - name: domain_code
-      description: Non-private medium coding, repository, and software-system requests
-        route to the code-capable domain alias.
+      description: Non-private medium coding, repository, and software-system requests route to the code-capable domain alias.
       priority: 250
       tier: 3
       rules:
@@ -1022,8 +1058,7 @@ recipes:
           max_records: 10000
           max_body_bytes: 4096
     - name: domain_stem_research
-      description: Non-private math, science, research, and evidence-heavy requests
-        route to the STEM/research alias.
+      description: Non-private math, science, research, and evidence-heavy requests route to the STEM/research alias.
       priority: 240
       tier: 3
       rules:
@@ -1062,8 +1097,7 @@ recipes:
           max_records: 10000
           max_body_bytes: 4096
     - name: domain_business
-      description: Non-private business and product-analysis requests route to the
-        medium domain alias.
+      description: Non-private business and product-analysis requests route to the medium domain alias.
       priority: 230
       tier: 3
       rules:
@@ -1098,8 +1132,7 @@ recipes:
           max_records: 10000
           max_body_bytes: 4096
     - name: complex_general
-      description: Non-private complex or reasoning-heavy work routes to stronger
-        aliases.
+      description: Non-private complex or reasoning-heavy work routes to stronger aliases.
       priority: 190
       tier: 4
       rules:
@@ -1146,8 +1179,7 @@ recipes:
           max_records: 10000
           max_body_bytes: 4096
     - name: medium_general
-      description: Non-private medium-difficulty explanations and follow-ups route
-        to the medium alias.
+      description: Non-private medium-difficulty explanations and follow-ups route to the medium alias.
       priority: 150
       tier: 5
       rules:
@@ -1163,12 +1195,8 @@ recipes:
       description: Simple or otherwise unmatched traffic uses the local fallback.
       priority: 80
       tier: 6
-      rules:
-        operator: AND
-        conditions: []
 entrypoints:
-- name: vllm-sr/auto
-  recipe: default
+- recipe: default
   assignments:
     local_security_containment:
       models:
@@ -1222,6 +1250,12 @@ entrypoints:
       models:
       - model: qwen/qwen3.6-rocm
         weight: '1'
+    omni:
+      models:
+      - model: local/omni
+        weight: '1'
+  model_names:
+  - vllm-sr/auto
 global:
   billing:
     currency: USD

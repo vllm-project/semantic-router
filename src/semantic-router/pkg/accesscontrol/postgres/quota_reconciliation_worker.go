@@ -474,10 +474,14 @@ func appendReconciliationPlanAudit(
 WHERE namespace_id=$1 AND id=$2`, plan.NamespaceID, plan.FenceID).Scan(&revision); err != nil {
 		return err
 	}
+	revisionValue, err := positiveUint64(revision, "unknown-usage fence revision")
+	if err != nil {
+		return err
+	}
 	return appendQuotaReconciliationAudit(ctx, tx, quotareconciliation.ReconcileRequest{
 		NamespaceID: plan.NamespaceID, FenceID: plan.FenceID, Strategy: plan.Strategy,
 		Reason: plan.Reason, Actor: plan.Actor,
-	}, plan.FenceID, uint64(revision), action, reason, map[string]string{
+	}, plan.FenceID, revisionValue, action, reason, map[string]string{
 		"strategy": string(plan.Strategy), "reconciliation_id": plan.ReconciliationID,
 	})
 }

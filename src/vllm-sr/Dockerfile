@@ -253,7 +253,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # as the Router. Router startup never runs migrations implicitly.
 RUN CGO_ENABLED=0 GOOS=linux GOARCH="$TARGETARCH" \
     go build -buildvcs=false -ldflags="-w -s" \
-    -o access-migrate ./cmd/access-migrate
+    -o management-migrate ./cmd/management-migrate
 
 # Stage 3: Final router runtime image
 FROM ${IMAGE_REGISTRY}library/debian:bookworm-slim
@@ -283,7 +283,7 @@ RUN python3 -m venv "${VIRTUAL_ENV}" && \
       'pyyaml>=6.0.2'
 
 COPY --from=go-builder /build/router /usr/local/bin/router
-COPY --from=go-builder /build/access-migrate /usr/local/bin/access-migrate
+COPY --from=go-builder /build/management-migrate /usr/local/bin/management-migrate
 COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
 COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/

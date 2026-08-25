@@ -30,55 +30,69 @@ import (
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
-func TestValidateBootstrapManifestModeBoundary(t *testing.T) {
+func TestValidateBootstrapManifestCapabilityBoundary(t *testing.T) {
 	tests := []struct {
 		name    string
 		yaml    string
 		wantErr string
 	}{
 		{
-			name: "standalone may carry routing resources",
-			yaml: "version: v0.4\nmodels: []\nrecipes: []\nentrypoints: []\nglobal:\n  control_plane:\n    mode: standalone\n",
+			name: "file routing needs no stores",
+			yaml: "version: v0.3\nproviders: {}\nrouting: {}\nrecipes: []\nentrypoints: []\n",
 		},
 		{
-			name: "managed bootstrap is infrastructure only",
-			yaml: "version: v0.4\nglobal:\n  control_plane:\n    mode: managed\n  stores:\n    access:\n      postgres:\n        dsn_env: TEST_DATABASE_URL\n",
+			name: "durable routing may include a seed",
+			yaml: "version: v0.3\nproviders: {}\nrouting: {}\nrecipes: []\nentrypoints: []\nglobal:\n  stores:\n    management:\n      postgres:\n        dsn_env: TEST_DATABASE_URL\n  services:\n    management_api:\n      enabled: false\n      port: 9080\n",
 		},
 		{
-			name:    "managed rejects routing resources",
-			yaml:    "version: v0.4\nmodels: []\nglobal:\n  control_plane:\n    mode: managed\n  stores:\n    access:\n      postgres:\n        dsn_env: TEST_DATABASE_URL\n",
-			wantErr: "must not declare top-level models",
+			name:    "management store requires one DSN source",
+			yaml:    "version: v0.3\nglobal:\n  stores:\n    management:\n      postgres: {}\n",
+			wantErr: "requires exactly one dsn_env or dsn_file",
 		},
 		{
-			name:    "managed requires one migration DSN source",
-			yaml:    "version: v0.4\nglobal:\n  control_plane:\n    mode: managed\n",
-			wantErr: "requires exactly one",
+			name:    "runtime store requires Management store",
+			yaml:    "version: v0.3\nglobal:\n  stores:\n    runtime:\n      redis:\n        url_env: TEST_REDIS_URL\n",
+			wantErr: "runtime requires global.stores.management",
 		},
 		{
-			name:    "requires v0.4",
-			yaml:    "version: v0.3\nglobal:\n  control_plane:\n    mode: standalone\n",
-			wantErr: "version must be v0.4",
+			name:    "Management API requires Management store",
+			yaml:    "version: v0.3\nglobal:\n  services:\n    management_api:\n      enabled: true\n",
+			wantErr: "management_api.enabled requires global.stores.management",
+		},
+		{
+			name:    "access requires both stores",
+			yaml:    "version: v0.3\nglobal:\n  stores:\n    management:\n      postgres:\n        dsn_env: TEST_DATABASE_URL\n  services:\n    access:\n      enabled: true\n",
+			wantErr: "access.enabled requires management and runtime stores",
+		},
+		{
+			name:    "requires v0.3",
+			yaml:    "version: v0.4\n",
+			wantErr: "version must be v0.3",
 		},
 		{
 			name:    "rejects multiple documents",
-			yaml:    "version: v0.4\nglobal:\n  control_plane:\n    mode: standalone\n---\nversion: v0.4\n",
+			yaml:    "version: v0.3\n---\nversion: v0.3\n",
 			wantErr: "exactly one YAML document",
 		},
 		{
 			name:    "rejects ambiguous duplicate keys",
-			yaml:    "version: v0.4\nglobal:\n  control_plane:\n    mode: standalone\n  control_plane:\n    mode: managed\n",
-			wantErr: "duplicate key \"control_plane\"",
+			yaml:    "version: v0.3\nglobal:\n  stores: {}\n  stores: {}\n",
+			wantErr: "duplicate key \"stores\"",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := validateBootstrapManifest([]byte(test.yaml))
+			contract, err := validateBootstrapManifest([]byte(test.yaml))
 			if test.wantErr == "" && err != nil {
 				t.Fatalf("validateBootstrapManifest() error = %v", err)
 			}
 			if test.wantErr != "" && (err == nil || !strings.Contains(err.Error(), test.wantErr)) {
 				t.Fatalf("validateBootstrapManifest() error = %v, want substring %q", err, test.wantErr)
+			}
+			if test.name == "durable routing may include a seed" &&
+				(contract.ManagementPort != 9080 || contract.ManagementAPIEnabled) {
+				t.Fatalf("store-only listener contract = %+v", contract)
 			}
 		})
 	}
@@ -97,7 +111,7 @@ func TestValidateBootstrapConfigMapRequiresImmutableSelectedKey(t *testing.T) {
 		ObjectMeta: metav1.ObjectMeta{Name: "router-bootstrap-v1", Namespace: "default"},
 		Immutable:  &immutable,
 		Data: map[string]string{
-			"router.yaml": "version: v0.4\nglobal:\n  control_plane:\n    mode: managed\n  stores:\n    access:\n      postgres:\n        dsn_env: TEST_DATABASE_URL\n",
+			"router.yaml": "version: v0.3\nglobal:\n  stores:\n    management:\n      postgres:\n        dsn_env: TEST_DATABASE_URL\n",
 		},
 	}
 	router := &vllmv1alpha1.SemanticRouter{
@@ -147,7 +161,7 @@ func TestGenerateVolumesMountsOnlySelectedBootstrapKey(t *testing.T) {
 	}
 
 	container := reconciler.buildSemanticRouterContainer(router, bootstrapDeploymentContract{
-		Mode: controlPlaneModeManaged, ManagementPort: 9443, BackendDispatchPort: 8181,
+		ManagementStore: true, ManagementAPIEnabled: true, ManagementPort: 9443, BackendDispatchPort: 8181,
 	})
 	ownedEnvironment := map[string]string{}
 	for _, variable := range container.Env {

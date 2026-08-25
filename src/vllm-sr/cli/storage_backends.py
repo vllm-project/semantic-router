@@ -57,7 +57,7 @@ def detect_required_backends(
 ) -> set[str]:
     """Read store_backend values from the config and return backends that need provisioning.
 
-    Reads from the canonical v0.4 path: global.services.<key>.store_backend and
+    Reads from the canonical v0.3 path: global.services.<key>.store_backend and
     falls back to router-owned canonical defaults for local serve workflows.
     Returns only backends the CLI knows how to provision (redis, postgres).
     """

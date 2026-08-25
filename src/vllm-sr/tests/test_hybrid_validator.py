@@ -9,28 +9,35 @@ from cli.validator import validate_user_config
 
 def _parse_config(hybrid: dict):
     data = {
-        "version": "v0.4",
+        "version": "v0.3",
         "listeners": [{"name": "http-8888", "address": "0.0.0.0", "port": 8888}],
-        "models": [
-            {
-                "name": "test_model",
-                "card": {
+        "providers": {
+            "models": [
+                {
+                    "name": "test_model",
+                    "provider_model_id": "test_model",
+                    "backend_refs": [
+                        {
+                            "provider": "vllm",
+                            "base_url": "http://localhost:8000/v1",
+                        }
+                    ],
+                }
+            ]
+        },
+        "routing": {
+            "modelCards": [
+                {
+                    "name": "test_model",
                     "description": "Test model",
                     "capabilities": ["chat"],
-                },
-                "connections": [
-                    {
-                        "provider": "vllm",
-                        "endpoint": "http://localhost:8000/v1",
-                        "model": "test_model",
-                    }
-                ],
-            }
-        ],
+                }
+            ]
+        },
         "recipes": [
             {
                 "name": "test_recipe",
-                "document": {
+                "routing": {
                     "signals": {
                         "domains": [
                             {"name": "general", "description": "General domain"}
@@ -53,7 +60,7 @@ def _parse_config(hybrid: dict):
         ],
         "entrypoints": [
             {
-                "name": "test_entrypoint",
+                "model_names": ["test_entrypoint"],
                 "recipe": "test_recipe",
                 "assignments": {"hybrid_route": {"models": [{"model": "test_model"}]}},
             }

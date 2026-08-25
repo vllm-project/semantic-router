@@ -36,7 +36,7 @@ func TestValidateMLSelectionAlgorithmConfigRequiresMatchingFamily(t *testing.T) 
 	}
 }
 
-func TestParseV04MLSelectionLivesOnRecipeDecision(t *testing.T) {
+func TestParseV03MLSelectionLivesOnRecipeDecision(t *testing.T) {
 	document := strings.Replace(
 		humanAuthoringFixture,
 		"          rules: {operator: AND, conditions: []}",

@@ -19,12 +19,13 @@ import ConfigPageModelDiscoveryResults from './ConfigPageModelDiscoveryResults'
 import ConfigPageModelProviderPicker from './ConfigPageModelProviderPicker'
 import ConfigPageProviderConnectionField from './ConfigPageProviderConnectionField'
 import {
-  buildModelExecutionOverrides,
+  buildModelControlOverrides,
   buildModelPricingOverrides,
   buildRoutingBulkImportRequest,
   initialProviderConnectionFields,
   initialProviderFieldValue,
   validatedProviderConnectionFields,
+  type ControlFormValues,
   type EditableConnectionValue,
 } from './configPageModelOnboardingSupport'
 import ModelProviderLogo from './ModelProviderLogo'
@@ -78,6 +79,7 @@ export default function ConfigPageAddModelsDialog({
   const [saving, setSaving] = useState(false)
   const [namePrefix, setNamePrefix] = useState('')
   const [maxRetries, setMaxRetries] = useState('')
+  const [retryOn, setRetryOn] = useState<ControlFormValues['retryOn']>([])
   const [requestTimeout, setRequestTimeout] = useState('')
   const [streamTimeout, setStreamTimeout] = useState('')
   const [inputCost, setInputCost] = useState('')
@@ -309,7 +311,12 @@ export default function ConfigPageAddModelsDialog({
     try {
       if (!provider) throw new Error('Choose a provider.')
       const typedFields = validatedProviderConnectionFields(provider, connectionFields)
-      const execution = buildModelExecutionOverrides({ maxRetries, requestTimeout, streamTimeout })
+      const control = buildModelControlOverrides({
+        maxRetries,
+        retryOn,
+        requestTimeout,
+        streamTimeout,
+      })
       const pricing = buildModelPricingOverrides({
         inputCost,
         outputCost,
@@ -330,7 +337,7 @@ export default function ConfigPageAddModelsDialog({
           models,
           selectedCatalogItemIds: selected,
           namePrefix,
-          execution,
+          control,
           pricing,
         }),
       )
@@ -527,11 +534,12 @@ export default function ConfigPageAddModelsDialog({
               }}
               namePrefix={namePrefix}
               onNamePrefix={setNamePrefix}
-              execution={{ maxRetries, requestTimeout, streamTimeout }}
-              onExecution={(field, value) => {
-                if (field === 'maxRetries') setMaxRetries(value)
-                if (field === 'requestTimeout') setRequestTimeout(value)
-                if (field === 'streamTimeout') setStreamTimeout(value)
+              control={{ maxRetries, retryOn, requestTimeout, streamTimeout }}
+              onControl={(next) => {
+                setMaxRetries(next.maxRetries)
+                setRetryOn(next.retryOn)
+                setRequestTimeout(next.requestTimeout)
+                setStreamTimeout(next.streamTimeout)
               }}
               pricing={{ inputCost, outputCost, cacheReadCost, cacheWriteCost }}
               onPricing={(field, value) => {

@@ -36,9 +36,12 @@ type Store interface {
 	GetPublicationPlan(context.Context, string, string) (agentmanagement.PublicationPlan, error)
 }
 
-type RoutingService interface {
+type RoutingModelService interface {
 	GetModel(context.Context, string, string) (routingmanagement.Model, error)
 	ProbeModel(context.Context, string, string, time.Duration) (routingmanagement.ProbeResult, error)
+}
+
+type RoutingRecipeService interface {
 	GetRecipe(context.Context, string, string) (routingmanagement.Recipe, error)
 	CreateRecipe(
 		context.Context, string, routingmanagement.RecipeInput,
@@ -48,6 +51,9 @@ type RoutingService interface {
 		context.Context, string, string, int64, routingmanagement.RecipeInput,
 		routingmanagement.MutationContext,
 	) (routingmanagement.Recipe, routingmanagement.RevisionReceipt, error)
+}
+
+type RoutingEntrypointService interface {
 	GetEntrypoint(context.Context, string, string) (routingmanagement.Entrypoint, error)
 	CreateEntrypoint(
 		context.Context, string, routingmanagement.EntrypointInput, routingmanagement.MutationContext,
@@ -56,6 +62,12 @@ type RoutingService interface {
 		context.Context, string, string, int64, routingmanagement.EntrypointInput,
 		routingmanagement.MutationContext,
 	) (routingmanagement.Entrypoint, routingmanagement.RevisionReceipt, error)
+}
+
+type RoutingService interface {
+	RoutingModelService
+	RoutingRecipeService
+	RoutingEntrypointService
 }
 
 type Options struct {

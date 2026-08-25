@@ -14,13 +14,17 @@ func TestMoMRecipeDistributionContract(t *testing.T) {
 	if err := yaml.UnmarshalStrict(mustReadRepoFile(t, momAsset), &distribution); err != nil {
 		t.Fatalf("parse built-in Recipe distribution: %v", err)
 	}
-	if distribution.Version != "v0.4" {
-		t.Fatalf("distribution version = %q, want v0.4", distribution.Version)
+	if distribution.Version != "v0.3" {
+		t.Fatalf("distribution version = %q, want v0.3", distribution.Version)
 	}
-	if len(distribution.Models) != 0 || len(distribution.Entrypoints) != 0 || distribution.Global != nil {
+	if len(distribution.Providers.Models) != 0 || len(distribution.Entrypoints) != 0 || distribution.Global != nil {
 		t.Fatalf("built-in distribution must own Recipes only: %+v", distribution)
 	}
-	if err := validateAuthoringRecipes(distribution.Recipes); err != nil {
+	authoring, _, err := publicRecipesToAuthoring(&distribution)
+	if err != nil {
+		t.Fatalf("compile built-in Recipes: %v", err)
+	}
+	if err := validateAuthoringRecipes(authoring); err != nil {
 		t.Fatalf("validate built-in Recipes: %v", err)
 	}
 
@@ -29,7 +33,7 @@ func TestMoMRecipeDistributionContract(t *testing.T) {
 	decisionCount := 0
 	for _, recipe := range distribution.Recipes {
 		gotNames = append(gotNames, recipe.Name)
-		decisionCount += len(recipe.Document.Decisions)
+		decisionCount += len(recipe.Routing.Decisions)
 		assertBuiltInOmniDecision(t, recipe)
 		assertBuiltInNoSystemPrompt(t, recipe)
 	}
@@ -45,7 +49,7 @@ func TestMoMRecipeDistributionContract(t *testing.T) {
 	assertBuiltInOrchestrationBudgets(t, accuracy)
 }
 
-func assertBuiltInOmniDecision(t *testing.T, recipe AuthoringRecipe) {
+func assertBuiltInOmniDecision(t *testing.T, recipe CanonicalRecipe) {
 	t.Helper()
 	decision := builtInDecision(t, recipe, "omni")
 	if !momRuleReferences(decision.Rules, SignalTypeConversation, recipe.Name+"_has_images") {
@@ -56,16 +60,16 @@ func assertBuiltInOmniDecision(t *testing.T, recipe AuthoringRecipe) {
 	}
 }
 
-func assertBuiltInNoSystemPrompt(t *testing.T, recipe AuthoringRecipe) {
+func assertBuiltInNoSystemPrompt(t *testing.T, recipe CanonicalRecipe) {
 	t.Helper()
-	for _, decision := range recipe.Document.Decisions {
+	for _, decision := range recipe.Routing.Decisions {
 		if decision.HasPlugin(DecisionPluginSystemPrompt) {
 			t.Fatalf("built-in decision %q must not inject a system prompt", decision.Name)
 		}
 	}
 }
 
-func assertBuiltInOrchestrationBudgets(t *testing.T, recipe AuthoringRecipe) {
+func assertBuiltInOrchestrationBudgets(t *testing.T, recipe CanonicalRecipe) {
 	t.Helper()
 	workflow := builtInDecision(t, recipe, "orchestrate")
 	if workflow.Algorithm == nil || workflow.Algorithm.Workflows == nil ||
@@ -80,7 +84,7 @@ func assertBuiltInOrchestrationBudgets(t *testing.T, recipe AuthoringRecipe) {
 	}
 }
 
-func builtInRecipe(t *testing.T, recipes []AuthoringRecipe, name string) AuthoringRecipe {
+func builtInRecipe(t *testing.T, recipes []CanonicalRecipe, name string) CanonicalRecipe {
 	t.Helper()
 	for _, recipe := range recipes {
 		if recipe.Name == name {
@@ -88,12 +92,12 @@ func builtInRecipe(t *testing.T, recipes []AuthoringRecipe, name string) Authori
 		}
 	}
 	t.Fatalf("missing built-in Recipe %q", name)
-	return AuthoringRecipe{}
+	return CanonicalRecipe{}
 }
 
-func builtInDecision(t *testing.T, recipe AuthoringRecipe, name string) Decision {
+func builtInDecision(t *testing.T, recipe CanonicalRecipe, name string) Decision {
 	t.Helper()
-	for _, decision := range recipe.Document.Decisions {
+	for _, decision := range recipe.Routing.Decisions {
 		if decision.Name == name {
 			return decision
 		}

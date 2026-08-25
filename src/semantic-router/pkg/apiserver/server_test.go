@@ -9,7 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
 
-func TestStandaloneListenerHasNoRoutingConfigMutationAuthority(t *testing.T) {
+func TestFileListenerHasNoRoutingConfigMutationAuthority(t *testing.T) {
 	apiServer := &ClassificationAPIServer{
 		classificationSvc: services.NewPlaceholderClassificationService(),
 		config:            &config.RouterConfig{},

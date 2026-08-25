@@ -1,8 +1,10 @@
 import { useRef, useState, type KeyboardEvent } from 'react'
 
 import ProductIcon from '../components/ProductIcon'
+import InferenceKeySelector from '../components/InferenceKeySelector'
 import { useAuth } from '../contexts/AuthContext'
-import { canManageRouting, canReadRouting } from '../utils/accessControl'
+import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
+import { canManageRouting, canReadRoutingCatalog } from '../utils/accessControl'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageMoMRoutingPanel from './ConfigPageMoMRoutingPanel'
 import styles from './ConfigPageMoMWorkspace.module.css'
@@ -16,9 +18,10 @@ const VIEWS: Array<{ id: MixtureWorkspaceView; label: string }> = [
 
 export default function ConfigPageEntrypointsRecipesSection() {
   const { user, refreshSession } = useAuth()
+  const { usesKeyScopedCatalog } = useInferenceRoutingAccess()
   const [activeView, setActiveView] = useState<MixtureWorkspaceView>('recipes')
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
-  const canRead = canReadRouting(user)
+  const canRead = canReadRoutingCatalog(user)
   const canManage = canManageRouting(user)
   const identityError = user?.managementIdentityError
 
@@ -39,26 +42,29 @@ export default function ConfigPageEntrypointsRecipesSection() {
       title="Mixture-of-Models"
       description="Design a recipe. Publish one model."
     >
-      <div className={styles.tabs} role="tablist" aria-label="Mixture-of-Models">
-        {VIEWS.map((view, index) => (
-          <button
-            key={view.id}
-            ref={(element) => {
-              tabRefs.current[index] = element
-            }}
-            id={`mom-tab-${view.id}`}
-            type="button"
-            role="tab"
-            aria-selected={activeView === view.id}
-            aria-controls="mom-active-panel"
-            tabIndex={activeView === view.id ? 0 : -1}
-            className={`${styles.tab} ${activeView === view.id ? styles.activeTab : ''}`}
-            onClick={() => setActiveView(view.id)}
-            onKeyDown={(event) => handleTabKeyDown(event, index)}
-          >
-            {view.label}
-          </button>
-        ))}
+      <div className={styles.workspaceToolbar}>
+        <div className={styles.tabs} role="tablist" aria-label="Mixture-of-Models">
+          {VIEWS.map((view, index) => (
+            <button
+              key={view.id}
+              ref={(element) => {
+                tabRefs.current[index] = element
+              }}
+              id={`mom-tab-${view.id}`}
+              type="button"
+              role="tab"
+              aria-selected={activeView === view.id}
+              aria-controls="mom-active-panel"
+              tabIndex={activeView === view.id ? 0 : -1}
+              className={`${styles.tab} ${activeView === view.id ? styles.activeTab : ''}`}
+              onClick={() => setActiveView(view.id)}
+              onKeyDown={(event) => handleTabKeyDown(event, index)}
+            >
+              {view.label}
+            </button>
+          ))}
+        </div>
+        {usesKeyScopedCatalog ? <InferenceKeySelector label="View as" /> : null}
       </div>
       <div
         id="mom-active-panel"

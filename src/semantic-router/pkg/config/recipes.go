@@ -69,7 +69,7 @@ func (r *RoutingRecipe) RuntimeScope() RecipeName {
 	return r.Name
 }
 
-// EntrypointMapping is the runtime form of one v0.4 callable virtual Model.
+// EntrypointMapping is the compiled form of one callable virtual Model.
 // Each rule owns a complete action; no detached model-binding state exists.
 type EntrypointMapping struct {
 	ID         string

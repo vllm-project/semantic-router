@@ -19,7 +19,7 @@ type RecipeClassifiers struct {
 }
 
 // BuildRecipeClassifiers compiles one classifier per explicit Recipe without
-// performing runtime initialization. An empty managed snapshot produces an
+// performing runtime initialization. An empty persisted snapshot produces an
 // empty set; it never creates a classifier from root-level scoped fields.
 func BuildRecipeClassifiers(
 	cfg *config.RouterConfig,

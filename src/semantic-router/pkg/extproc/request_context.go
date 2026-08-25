@@ -70,9 +70,9 @@ type RequestContext struct {
 	// OutcomeFeedback is populated only for the authenticated public outcome
 	// endpoint. It never carries raw credentials or caller-supplied identity.
 	OutcomeFeedback *outcomeFeedbackRequestState
-	// ManagedDispatch tracks physical attempts for both metered and explicitly
-	// public managed requests. It contains no credential or policy document.
-	ManagedDispatch *managedRequestDispatch
+	// DispatchState tracks physical attempts for both metered and explicitly
+	// public authenticated requests. It contains no credential or policy document.
+	DispatchState *requestDispatchState
 
 	// Streaming detection
 	ExpectStreamingResponse bool // set from request Accept header or stream parameter

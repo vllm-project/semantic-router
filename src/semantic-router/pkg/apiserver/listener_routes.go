@@ -5,21 +5,29 @@ package apiserver
 import (
 	"net/http"
 
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementapi"
 )
 
-// setupListenerRoutes keeps the standalone utility listener and the managed
-// control-plane listener disjoint. Managed mode mounts only the versioned
-// Management API and operational probes.
+// setupListenerRoutes keeps the file-authoritative utility surface, durable
+// operational probes, and the explicitly enabled Management API disjoint.
 func (s *ClassificationAPIServer) setupListenerRoutes() *http.ServeMux {
-	if s.controlPlaneMode() == config.ControlPlaneModeManaged {
-		return s.setupManagedListenerRoutes()
+	if s != nil && s.capabilities.ManagementAPI {
+		return s.setupManagementListenerRoutes()
 	}
-	return s.setupStandaloneListenerRoutes()
+	if s != nil && s.capabilities.DurableRouting {
+		return s.setupOperationalListenerRoutes()
+	}
+	return s.setupFileListenerRoutes()
 }
 
-func (s *ClassificationAPIServer) setupStandaloneListenerRoutes() *http.ServeMux {
+func (s *ClassificationAPIServer) setupOperationalListenerRoutes() *http.ServeMux {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", s.handleHealth)
+	mux.HandleFunc("GET /ready", s.handleReady)
+	return mux
+}
+
+func (s *ClassificationAPIServer) setupFileListenerRoutes() *http.ServeMux {
 	mux := http.NewServeMux()
 	for _, route := range apiRoutes() {
 		mux.HandleFunc(route.pattern(), route.bind(s))
@@ -27,9 +35,9 @@ func (s *ClassificationAPIServer) setupStandaloneListenerRoutes() *http.ServeMux
 	return mux
 }
 
-func (s *ClassificationAPIServer) setupManagedListenerRoutes() *http.ServeMux {
-	if s == nil || s.managedAPI == nil {
-		panic("managed listener requires a Router-native Management API")
+func (s *ClassificationAPIServer) setupManagementListenerRoutes() *http.ServeMux {
+	if s == nil || s.managementAPI == nil {
+		panic("Management listener requires a Router-native Management API")
 	}
 	mux := http.NewServeMux()
 	// These operational probes are deliberately independent from the legacy
@@ -39,22 +47,11 @@ func (s *ClassificationAPIServer) setupManagedListenerRoutes() *http.ServeMux {
 	mux.HandleFunc("GET /ready", s.handleReady)
 	mux.HandleFunc("GET /openapi.json", handleManagementOpenAPI)
 	managementMux := http.NewServeMux()
-	s.managedAPI.Register(managementMux)
-	// A registrar cannot widen the managed listener: only the versioned
+	s.managementAPI.Register(managementMux)
+	// A registrar cannot widen the Management listener: only the versioned
 	// Management prefix is delegated to domain applications.
 	mux.Handle("/management/v1/", managementMux)
 	return mux
-}
-
-func (s *ClassificationAPIServer) controlPlaneMode() string {
-	if s == nil {
-		return config.ControlPlaneModeStandalone
-	}
-	cfg := s.currentConfig()
-	if cfg == nil || cfg.ControlPlane.Mode == "" {
-		return config.ControlPlaneModeStandalone
-	}
-	return cfg.ControlPlane.Mode
 }
 
 func handleManagementOpenAPI(response http.ResponseWriter, _ *http.Request) {

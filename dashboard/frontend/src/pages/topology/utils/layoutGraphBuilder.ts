@@ -9,6 +9,7 @@ import {
   groupProjectionInputsBySignalType,
 } from './layoutProjectionSupport'
 import {
+  appendDynamicSignalGroups,
   createFlowEdge,
   DecisionDensityMode,
   DENSITY_VISIBLE_DECISION_LIMIT,
@@ -96,70 +97,14 @@ export function buildLayoutGraph(
     )
   })
 
-  if (testResult?.matchedSignals?.length) {
-    const existingGroupTypes = new Set(activeSignalTypes)
-    const dynamicSignalsByType = new Map<SignalType, { name: string; confidence?: number }[]>()
-
-    testResult.matchedSignals.forEach((signal) => {
-      if (!existingGroupTypes.has(signal.type)) {
-        if (!dynamicSignalsByType.has(signal.type)) {
-          dynamicSignalsByType.set(signal.type, [])
-        }
-        dynamicSignalsByType.get(signal.type)!.push({
-          name: signal.name,
-          confidence: signal.score,
-        })
-      }
-    })
-
-    dynamicSignalsByType.forEach((signals, signalType) => {
-      const signalGroupId = `signal-group-${signalType}`
-      const syntheticSignals = signals.map((signal) => ({
-        type: signalType,
-        name: signal.name,
-        description: `Detected by ML model (confidence: ${signal.confidence ? (signal.confidence * 100).toFixed(0) + '%' : 'N/A'})`,
-        latency: SIGNAL_LATENCY[signalType] || '~100ms',
-        config: {},
-        isDynamic: true,
-      }))
-
-      const nodeHeight = getSignalGroupHeight(syntheticSignals, false)
-      nodeDimensions.set(signalGroupId, { width: 160, height: nodeHeight })
-
-      nodes.push({
-        id: signalGroupId,
-        type: 'signalGroupNode',
-        position: { x: 0, y: 0 },
-        data: {
-          signalType,
-          signals: syntheticSignals,
-          collapsed: false,
-          isHighlighted: true,
-          isDynamic: true,
-        },
-      })
-
-      edges.push(
-        createFlowEdge({
-          id: `e-${lastSourceId}-${signalGroupId}`,
-          source: lastSourceId,
-          target: signalGroupId,
-          animated: true,
-          style: {
-            stroke: EDGE_COLORS.normal,
-            strokeWidth: 2,
-            strokeDasharray: '5, 5',
-          },
-          markerEnd: {
-            type: MarkerType.ArrowClosed,
-            color: EDGE_COLORS.normal,
-          },
-        }),
-      )
-
-      activeSignalTypes.push(signalType)
-    })
-  }
+  appendDynamicSignalGroups({
+    testResult,
+    activeSignalTypes,
+    nodes,
+    edges,
+    nodeDimensions,
+    sourceId: lastSourceId,
+  })
 
   const projectionGroups = buildProjectionGroups(signalGroups.projection)
   const projectionNodeIds = projectionGroups.map((group) => group.nodeId)
@@ -669,14 +614,14 @@ export function buildLayoutGraph(
       return
     }
 
-    const standaloneModelId = `model-${model.name.replace(/[^a-zA-Z0-9]/g, '-')}`
-    if (nodes.some((node) => node.id === standaloneModelId)) {
+    const singleModelId = `model-${model.name.replace(/[^a-zA-Z0-9]/g, '-')}`
+    if (nodes.some((node) => node.id === singleModelId)) {
       return
     }
 
-    nodeDimensions.set(standaloneModelId, { width: MODEL_NODE_WIDTH, height: 80 })
+    nodeDimensions.set(singleModelId, { width: MODEL_NODE_WIDTH, height: 80 })
     nodes.push({
-      id: standaloneModelId,
+      id: singleModelId,
       type: 'modelNode',
       position: { x: 0, y: 0 },
       data: {
@@ -687,7 +632,7 @@ export function buildLayoutGraph(
         decisionName: 'Not referenced',
         usageLabel: 'Not referenced by any decision',
         fromDecisions: [],
-        isHighlighted: isHighlighted(standaloneModelId),
+        isHighlighted: isHighlighted(singleModelId),
         modes: [],
         hasMultipleModes: false,
       },

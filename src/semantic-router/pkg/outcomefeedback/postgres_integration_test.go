@@ -52,6 +52,24 @@ func TestPostgresOutcomeOwnershipIdempotencyAndProjectionRebuild(t *testing.T) {
 		TargetRevision: &revision, Verdict: VerdictGoodFit,
 	}
 
+	assertConcurrentOutcomeReplay(t, ctx, replicaA, replicaB, caller, request)
+	assertOutcomeCount(t, ctx, database, "inference_outcomes", 1)
+	assertOutcomeCount(t, ctx, database, "inference_outcome_idempotency", 1)
+	changed := assertOutcomeOwnershipBoundaries(t, ctx, replicaA, replicaB, caller, request)
+	assertOutcomeRollbackRetry(t, ctx, database, replicaA, replicaB, caller, changed)
+	assertOutcomeCount(t, ctx, database, "inference_outcomes", 2)
+	assertOutcomeCount(t, ctx, database, "inference_outcome_idempotency", 2)
+	assertOutcomeProjectionRebuild(t, ctx, database, replicaA)
+}
+
+func assertConcurrentOutcomeReplay(
+	t *testing.T,
+	ctx context.Context,
+	replicaA, replicaB *PostgresRepository,
+	caller Caller,
+	request Request,
+) {
+	t.Helper()
 	const replicas = 12
 	receipts := make([]Receipt, replicas)
 	errorsSeen := make([]error, replicas)
@@ -86,72 +104,96 @@ func TestPostgresOutcomeOwnershipIdempotencyAndProjectionRebuild(t *testing.T) {
 	if created != 1 {
 		t.Fatalf("new receipts = %d, want exactly one", created)
 	}
-	assertOutcomeCount(t, ctx, database, "inference_outcomes", 1)
-	assertOutcomeCount(t, ctx, database, "inference_outcome_idempotency", 1)
+}
 
+func assertOutcomeOwnershipBoundaries(
+	t *testing.T,
+	ctx context.Context,
+	replicaA, replicaB *PostgresRepository,
+	caller Caller,
+	request Request,
+) Request {
+	t.Helper()
 	changed := request
 	changed.Verdict = VerdictFailed
 	if _, err := replicaB.Record(ctx, caller, "concurrent-outcome", changed); !errors.Is(err, ErrIdempotencyConflict) {
 		t.Fatalf("changed idempotent request error = %v, want ErrIdempotencyConflict", err)
 	}
-
 	otherCaller := caller
 	otherCaller.APIKeyID = outcomeOtherKey
 	otherCaller.UserID = outcomeOtherUser
-	for name, test := range map[string]struct {
+	wrongRevision := int64(10)
+	tests := map[string]struct {
 		caller  Caller
 		request Request
 	}{
-		"unknown replay": {caller: caller, request: func() Request { value := request; value.ReplayID = "replay-missing"; return value }()},
+		"unknown replay": {caller: caller, request: request},
 		"other key":      {caller: otherCaller, request: request},
-		"other model": {caller: caller, request: func() Request {
-			value := request
-			value.TargetRef = "model/not-served"
-			return value
-		}()},
-		"other revision": {caller: caller, request: func() Request {
-			value := request
-			wrong := int64(10)
-			value.TargetRevision = &wrong
-			return value
-		}()},
-	} {
+		"other model":    {caller: caller, request: request},
+		"other revision": {caller: caller, request: request},
+	}
+	value := tests["unknown replay"]
+	value.request.ReplayID = "replay-missing"
+	tests["unknown replay"] = value
+	value = tests["other model"]
+	value.request.TargetRef = "model/not-served"
+	tests["other model"] = value
+	value = tests["other revision"]
+	value.request.TargetRevision = &wrongRevision
+	tests["other revision"] = value
+	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			if _, err := replicaA.Record(ctx, test.caller, "not-found-"+strings.ReplaceAll(name, " ", "-"), test.request); !errors.Is(err, ErrNotFound) {
+			_, err := replicaA.Record(ctx, test.caller, "not-found-"+strings.ReplaceAll(name, " ", "-"), test.request)
+			if !errors.Is(err, ErrNotFound) {
 				t.Fatalf("Record() error = %v, want nondisclosing ErrNotFound", err)
 			}
 		})
 	}
+	return changed
+}
 
-	// A process can disappear after claiming the idempotency row but before the
-	// transaction commits. A failed transaction must leave no poisoned claim.
+func assertOutcomeRollbackRetry(
+	t *testing.T,
+	ctx context.Context,
+	database *sql.DB,
+	replicaA, replicaB *PostgresRepository,
+	caller Caller,
+	request Request,
+) {
+	t.Helper()
 	if _, err := database.ExecContext(ctx, `CREATE FUNCTION reject_outcome_once() RETURNS trigger AS $$
 BEGIN RAISE EXCEPTION 'injected outcome failure'; END; $$ LANGUAGE plpgsql;
 CREATE TRIGGER reject_outcome_once BEFORE INSERT ON inference_outcomes
 FOR EACH ROW EXECUTE FUNCTION reject_outcome_once()`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := replicaA.Record(ctx, caller, "retry-after-rollback", changed); !errors.Is(err, ErrUnavailable) {
+	if _, err := replicaA.Record(ctx, caller, "retry-after-rollback", request); !errors.Is(err, ErrUnavailable) {
 		t.Fatalf("injected failure error = %v, want ErrUnavailable", err)
 	}
 	if _, err := database.ExecContext(ctx, `DROP TRIGGER reject_outcome_once ON inference_outcomes;
 DROP FUNCTION reject_outcome_once()`); err != nil {
 		t.Fatal(err)
 	}
-	retried, testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr := replicaB.Record(ctx, caller, "retry-after-rollback", changed)
-	if testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr != nil || retried.Duplicate || retried.ProjectionRevision != 2 {
-		t.Fatalf("retry after rollback = (%+v, %v), want new revision 2", retried, testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr)
+	retried, err := replicaB.Record(ctx, caller, "retry-after-rollback", request)
+	if err != nil || retried.Duplicate || retried.ProjectionRevision != 2 {
+		t.Fatalf("retry after rollback = (%+v, %v), want new revision 2", retried, err)
 	}
-	assertOutcomeCount(t, ctx, database, "inference_outcomes", 2)
-	assertOutcomeCount(t, ctx, database, "inference_outcome_idempotency", 2)
+}
 
+func assertOutcomeProjectionRebuild(
+	t *testing.T,
+	ctx context.Context,
+	database *sql.DB,
+	repository *PostgresRepository,
+) {
+	t.Helper()
 	firstPublisher := &projectionPublisherCapture{}
-	firstProjector, testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr := NewProjector(ProjectorOptions{Repository: replicaA, Publisher: firstPublisher})
-	if testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr != nil {
-		t.Fatal(testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr)
+	firstProjector, err := NewProjector(ProjectorOptions{Repository: repository, Publisher: firstPublisher})
+	if err != nil {
+		t.Fatal(err)
 	}
-	if processed, err := firstProjector.ProcessOnce(ctx); err != nil || processed != 1 {
-		t.Fatalf("ProcessOnce() = (%d, %v), want one namespace", processed, err)
+	if processed, processErr := firstProjector.ProcessOnce(ctx); processErr != nil || processed != 1 {
+		t.Fatalf("ProcessOnce() = (%d, %v), want one namespace", processed, processErr)
 	}
 	if len(firstPublisher.projections) != 1 || firstPublisher.projections[0].Revision != 2 ||
 		len(firstPublisher.projections[0].Entries) != 1 ||
@@ -159,22 +201,22 @@ DROP FUNCTION reject_outcome_once()`); err != nil {
 		firstPublisher.projections[0].Entries[0].FailedCount != 1 {
 		t.Fatalf("first projection = %+v", firstPublisher.projections)
 	}
-
-	// A fresh repository/projector pair reconstructs the same revision entirely
-	// from immutable PostgreSQL outcomes after a simulated process restart.
-	restartedRepository, testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr := NewPostgresRepository(database)
-	if testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr != nil {
-		t.Fatal(testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr)
+	restartedRepository, err := NewPostgresRepository(database)
+	if err != nil {
+		t.Fatal(err)
 	}
 	restartedPublisher := &projectionPublisherCapture{}
-	restartedProjector, testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr := NewProjector(ProjectorOptions{Repository: restartedRepository, Publisher: restartedPublisher})
-	if testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr != nil {
-		t.Fatal(testPostgresOutcomeOwnershipIdempotencyAndProjectionRebuildErr)
+	restartedProjector, err := NewProjector(ProjectorOptions{
+		Repository: restartedRepository, Publisher: restartedPublisher,
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := restartedProjector.Rebuild(ctx, outcomeTestNamespace); err != nil {
 		t.Fatal(err)
 	}
-	if len(restartedPublisher.payloads) != 1 || string(restartedPublisher.payloads[0]) != string(firstPublisher.payloads[0]) ||
+	if len(restartedPublisher.payloads) != 1 ||
+		string(restartedPublisher.payloads[0]) != string(firstPublisher.payloads[0]) ||
 		restartedPublisher.digests[0] != firstPublisher.digests[0] {
 		t.Fatalf("restart rebuild differs: first=%q restarted=%q", firstPublisher.payloads, restartedPublisher.payloads)
 	}

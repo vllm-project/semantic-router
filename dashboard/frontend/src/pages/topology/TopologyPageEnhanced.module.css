@@ -3,7 +3,7 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 72px);
+  height: calc(100dvh - 72px);
   width: 100%;
   background: #09090b;
   overflow: hidden;

@@ -19,7 +19,7 @@ const testDelegatedSessionID = "99999999-9999-4999-8999-999999999999"
 func TestDelegationCreateUsesNamespaceKeyAndIdempotencyContracts(t *testing.T) {
 	canonical := `{"resourceId":"` + testDelegatedSessionID + `","kind":"delegated_inference_credential","secret":"vsd_secret"}`
 	service := &delegationServiceStub{
-		key:    testManagedAPIKey(testAPIKeyID, testAPIKeyOwnerID, time.Now().UTC()),
+		key:    testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, time.Now().UTC()),
 		secret: delegationmanagement.SecretResult{Session: delegationmanagement.Session{ID: testDelegatedSessionID}, CanonicalJSON: []byte(canonical)},
 	}
 	routes := newTestDelegationRoutes(t, service)

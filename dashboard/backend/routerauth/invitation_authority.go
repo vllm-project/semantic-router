@@ -174,13 +174,9 @@ func invitedDashboardRole(
 				return "", dashboardauth.ErrInvitationAuthorityUnavailable
 			}
 		}
-		roleIDs := make([]string, 0, len(scope.RoleBindings))
-		for _, binding := range scope.RoleBindings {
-			if binding.Scope.Kind == "namespace" && binding.Scope.NamespaceID == namespaceID && binding.Status == "active" {
-				roleIDs = append(roleIDs, binding.RoleID)
-			}
-		}
-		return dashboardauth.DashboardRoleFromManagementRoleIDs(roleIDs)
+		return dashboardauth.DashboardRoleFromManagementBindings(
+			scope.RoleBindings, namespaceID, onboarding.UserID,
+		)
 	}
 	return "", dashboardauth.ErrInvitationAuthorityUnavailable
 }

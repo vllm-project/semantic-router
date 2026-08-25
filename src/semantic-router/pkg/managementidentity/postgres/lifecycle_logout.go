@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementidentity"
 )
 
@@ -15,14 +16,10 @@ func (store *Store) ApplyBackchannelLogout(
 	ctx context.Context,
 	request managementidentity.BackchannelLogout,
 ) (managementidentity.BackchannelLogoutResult, error) {
-	identity := request.Identity
-	if !canonicalUUID(identity.IssuerID) || identity.TokenID == "" ||
-		(identity.Subject == "" && identity.IssuerSessionID == "") ||
-		identity.IssuedAt.IsZero() || identity.ExpiresAt.IsZero() ||
-		!identity.ExpiresAt.After(identity.IssuedAt) || request.RequestID == "" {
-		return managementidentity.BackchannelLogoutResult{}, managementidentity.ErrInvalidLifecycleRequest
+	identity, tokenDigest, err := validatedBackchannelLogout(request)
+	if err != nil {
+		return managementidentity.BackchannelLogoutResult{}, err
 	}
-	tokenDigest := sha256.Sum256([]byte("vllm-sr/backchannel-logout/v1\x00" + identity.IssuerID + "\x00" + identity.TokenID))
 	return inTransaction(ctx, store, sql.LevelSerializable, func(tx *sql.Tx) (managementidentity.BackchannelLogoutResult, error) {
 		var issuer, status string
 		var revision uint64
@@ -69,15 +66,12 @@ WHERE issuer_id=$1 AND token_id_digest=$2 FOR UPDATE`, identity.IssuerID, tokenD
 			}
 		}
 
-		selector, args := backchannelLogoutSelector(identity.IssuerID, issuer, identity.IssuerSessionID, identity.Subject)
+		plan := backchannelLogoutPlanFor(identity.IssuerID, issuer, identity.IssuerSessionID, identity.Subject)
 		if !replayed {
-			if _, err := tx.ExecContext(ctx, `UPDATE management_sessions SET status='expired'
-WHERE `+selector+` AND status='active' AND expires_at<=clock_timestamp()`, args...); err != nil {
+			if _, err := tx.ExecContext(ctx, plan.expireQuery, plan.arguments...); err != nil {
 				return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("expire Management sessions for back-channel logout: %w", err)
 			}
-			if _, err := tx.ExecContext(ctx, `UPDATE management_sessions
-SET status='revoked',revoked_at=COALESCE(revoked_at,clock_timestamp())
-WHERE `+selector+` AND status='active'`, args...); err != nil {
+			if _, err := tx.ExecContext(ctx, plan.revokeQuery, plan.arguments...); err != nil {
 				return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("apply Management back-channel logout: %w", err)
 			}
 			if err := appendAudit(ctx, tx, auditMutation{
@@ -91,9 +85,7 @@ WHERE `+selector+` AND status='active'`, args...); err != nil {
 				return managementidentity.BackchannelLogoutResult{}, err
 			}
 		}
-		rows, applyBackchannelLogoutErr := tx.QueryContext(ctx, `SELECT id::text FROM management_sessions
-WHERE `+selector+` AND status='revoked' AND expires_at>clock_timestamp()
-ORDER BY id`, args...)
+		rows, applyBackchannelLogoutErr := tx.QueryContext(ctx, plan.listQuery, plan.arguments...)
 		if applyBackchannelLogoutErr != nil {
 			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("list back-channel revoked Management sessions: %w", applyBackchannelLogoutErr)
 		}
@@ -116,12 +108,63 @@ ORDER BY id`, args...)
 	})
 }
 
-func backchannelLogoutSelector(issuerID, issuer, issuerSessionID, subject string) (string, []any) {
-	if issuerSessionID != "" {
-		return `auth_source_kind='issuer' AND auth_source_id=$1 AND issuer_session_id=$2`,
-			[]any{issuerID, issuerSessionID}
+func validatedBackchannelLogout(request managementidentity.BackchannelLogout) (managementauth.BackchannelLogoutIdentity, [sha256.Size]byte, error) {
+	identity := request.Identity
+	if !canonicalUUID(identity.IssuerID) || identity.TokenID == "" ||
+		(identity.Subject == "" && identity.IssuerSessionID == "") ||
+		identity.IssuedAt.IsZero() || identity.ExpiresAt.IsZero() ||
+		!identity.ExpiresAt.After(identity.IssuedAt) || request.RequestID == "" {
+		return managementauth.BackchannelLogoutIdentity{}, [sha256.Size]byte{}, managementidentity.ErrInvalidLifecycleRequest
 	}
-	return `auth_source_kind='issuer' AND auth_source_id=$1 AND principal_id IN
-  (SELECT id FROM management_principals WHERE issuer=$2 AND subject=$3)`,
-		[]any{issuerID, issuer, subject}
+	digest := sha256.Sum256([]byte("vllm-sr/backchannel-logout/v1\x00" + identity.IssuerID + "\x00" + identity.TokenID))
+	return identity, digest, nil
+}
+
+const backchannelLogoutSIDSelector = `auth_source_kind='issuer' AND auth_source_id=$1 AND issuer_session_id=$2`
+
+const backchannelLogoutSubjectSelector = `auth_source_kind='issuer' AND auth_source_id=$1 AND principal_id IN
+  (SELECT id FROM management_principals WHERE issuer=$2 AND subject=$3)`
+
+const expireBackchannelLogoutBySIDQuery = `UPDATE management_sessions SET status='expired'
+WHERE ` + backchannelLogoutSIDSelector + ` AND status='active' AND expires_at<=clock_timestamp()`
+
+const expireBackchannelLogoutBySubjectQuery = `UPDATE management_sessions SET status='expired'
+WHERE ` + backchannelLogoutSubjectSelector + ` AND status='active' AND expires_at<=clock_timestamp()`
+
+const revokeBackchannelLogoutBySIDQuery = `UPDATE management_sessions
+SET status='revoked',revoked_at=COALESCE(revoked_at,clock_timestamp())
+WHERE ` + backchannelLogoutSIDSelector + ` AND status='active'`
+
+const revokeBackchannelLogoutBySubjectQuery = `UPDATE management_sessions
+SET status='revoked',revoked_at=COALESCE(revoked_at,clock_timestamp())
+WHERE ` + backchannelLogoutSubjectSelector + ` AND status='active'`
+
+const listBackchannelLogoutBySIDQuery = `SELECT id::text FROM management_sessions
+WHERE ` + backchannelLogoutSIDSelector + ` AND status='revoked' AND expires_at>clock_timestamp()
+ORDER BY id`
+
+const listBackchannelLogoutBySubjectQuery = `SELECT id::text FROM management_sessions
+WHERE ` + backchannelLogoutSubjectSelector + ` AND status='revoked' AND expires_at>clock_timestamp()
+ORDER BY id`
+
+type backchannelLogoutPlan struct {
+	expireQuery string
+	revokeQuery string
+	listQuery   string
+	arguments   []any
+}
+
+func backchannelLogoutPlanFor(issuerID, issuer, issuerSessionID, subject string) backchannelLogoutPlan {
+	if issuerSessionID != "" {
+		return backchannelLogoutPlan{
+			expireQuery: expireBackchannelLogoutBySIDQuery,
+			revokeQuery: revokeBackchannelLogoutBySIDQuery, listQuery: listBackchannelLogoutBySIDQuery,
+			arguments: []any{issuerID, issuerSessionID},
+		}
+	}
+	return backchannelLogoutPlan{
+		expireQuery: expireBackchannelLogoutBySubjectQuery,
+		revokeQuery: revokeBackchannelLogoutBySubjectQuery, listQuery: listBackchannelLogoutBySubjectQuery,
+		arguments: []any{issuerID, issuer, subject},
+	}
 }

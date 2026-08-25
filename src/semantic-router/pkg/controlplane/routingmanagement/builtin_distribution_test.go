@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-func TestCanonicalBuiltInRecipeDistributionParsesAsManagedRecipes(t *testing.T) {
+func TestCanonicalBuiltInRecipeDistributionParsesAsRoutingRecipes(t *testing.T) {
 	_, source, _, ok := runtime.Caller(0)
 	if !ok {
 		t.Fatal("resolve test source")
@@ -73,11 +73,11 @@ func TestBuiltInRecipeVersionCreatesSiblingIdentity(t *testing.T) {
 
 func TestBuiltInRecipeDistributionRejectsNonRecipeAuthority(t *testing.T) {
 	metadata := []byte("schema_version: vllm-sr/recipe-metadata/v1\nid: test-recipes\nname: Test Recipes\nversion: 1.0.0\n")
-	recipe := "recipes:\n  - name: Simple\n    document:\n      decisions:\n        - name: direct\n          rules: {}\n"
+	recipe := "recipes:\n  - name: Simple\n    routing:\n      decisions:\n        - name: direct\n          rules: {}\n"
 	tests := map[string]string{
 		"listener":   "listeners:\n  - name: public\n    address: 0.0.0.0\n    port: 8899\n",
-		"model":      "models:\n  - name: physical\n    card: {}\n    connections: []\n",
-		"entrypoint": "entrypoints:\n  - name: public\n    recipe: Simple\n    assignments: {}\n",
+		"model":      "providers:\n  models:\n    - name: physical\n      backend_refs: []\n",
+		"entrypoint": "entrypoints:\n  - model_names: [public]\n    recipe: Simple\n    assignments: {}\n",
 		"global":     "global: {}\n",
 		"billing":    "billing_currency: USD\n",
 	}
@@ -85,7 +85,7 @@ func TestBuiltInRecipeDistributionRejectsNonRecipeAuthority(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			_, err := ParseBuiltInRecipeDistribution(
 				metadata,
-				[]byte("version: v0.4\n"+authority+recipe),
+				[]byte("version: v0.3\n"+authority+recipe),
 			)
 			if !errors.Is(err, ErrInvalid) {
 				t.Fatalf("error = %v, want ErrInvalid", err)
@@ -147,10 +147,10 @@ func TestBuiltInRecipeInstallerReconcilesRestartAndFutureNamespace(t *testing.T)
 func testBuiltInDistribution(t *testing.T, version, decisionName string) BuiltInRecipeDistribution {
 	t.Helper()
 	metadata := []byte("schema_version: vllm-sr/recipe-metadata/v1\nid: test-recipes\nname: Test Recipes\nversion: " + version + "\n")
-	config := []byte("version: v0.4\nrecipes:\n" +
+	config := []byte("version: v0.3\nrecipes:\n" +
 		"  - name: Simple\n" +
 		"    description: A reusable test Recipe.\n" +
-		"    document:\n" +
+		"    routing:\n" +
 		"      decisions:\n" +
 		"        - name: " + decisionName + "\n" +
 		"          rules: {}\n")

@@ -7,11 +7,11 @@ status: Proposal
 
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
-This appendix is normative for [Router-Native Access Control and Quota Accounting](./router-native-access-control) resources and runtime. The parent owns boundaries, request semantics, deployment, migration, and acceptance criteria.
+This appendix is normative for [Router-Native Access Control and Quota Accounting](./router-native-access-control) resources and runtime. The parent owns boundaries, request semantics, deployment, contract versioning, and acceptance criteria.
 The [Management API appendix](./router-native-access-control-management-api) owns management identity, endpoints, and responses. The [Management authorization appendix](./router-native-access-control-authorization) owns permissions, roles, and scopes.
 Provider Integration, compiler, and adapter semantics live in
 [Provider catalog](./router-native-access-control-provider-catalog);
-execution/pricing semantics live in
+invocation-control and pricing semantics live in
 [Model runtime](./router-native-access-control-model-runtime); applied counters and
 reconciliation live in [quota runtime](./router-native-access-control-quota-runtime).
 
@@ -80,7 +80,7 @@ Rate-limit bindings have one of two modes:
 - `hard_cap`: enforce every applicable Key, User, and Team cap in addition to the
   selected allocation.
 
-Each namespace has one immutable canonical `quota_partition_id` in v0.4. Every binding
+Each namespace has one immutable canonical `quota_partition_id`. Every binding
 in the namespace copies and database-validates that value, so every allocation and
 hard cap touched by one admission is co-located with its pending lease, settlement
 marker, fence, and usage stream. A subject has at most one active `allocation`
@@ -115,7 +115,7 @@ normative.
 | `access_policies`, `access_policy_grants` | Reusable explicit model visibility and invocation rights. |
 | `routing_claim_schemas`, `routing_subject_claims` | Namespace allowlist/type contract and Router-owned Key/User/Team routing-context values. |
 | `rate_limit_policies`, `rate_limit_rules` | Reusable ordered quota definitions. |
-| `routing_models`, `routing_model_revisions`, `routing_model_backends` | Logical Model UIDs, immutable execution/pricing revisions, provider/backend references, and lifecycle. |
+| `routing_models`, `routing_model_revisions`, `routing_model_backends` | Logical Model UIDs, immutable invocation-control/pricing revisions, provider/backend references, and lifecycle. |
 | `routing_recipes`, `routing_recipe_revisions`, `routing_recipe_decisions` | Draft/published model-free Recipe documents plus separately compiled stable Decision identities. |
 | `routing_entrypoints`, `routing_entrypoint_rules`, `routing_decision_assignments`, `routing_assignment_models` | Callable aliases, trusted matchers, Recipe references, per-decision fallback policy, and priority-ordered Model references. |
 | `routing_snapshots`, `routing_snapshot_members` | Content-addressed, immutable compiled routing state and activation revisions. |
@@ -156,9 +156,9 @@ normative.
 | Routing claim schema/value | Namespace schema revision with at most 16 namespaced string, boolean, or bounded-integer definitions; typed subject FK/value, revision, and unique `(subject_id, claim_name)`. |
 | RateLimitPolicy | Namespace, immutable ID, mutable display name, status, revision. |
 | RateLimitRule | Parent policy FK, immutable rule ID, metric, algorithm-specific parameters, accounting, enforcement, ordinal. |
-| Model/backend | Namespace, immutable Model UID, mutable unique name/aliases, capability metadata, status/current immutable revision; the revision embeds execution and four-rate pricing values. Each ordered endpoint pins provider attribution, exactly one stable wire format, canonical origin, provider model ID, compiled non-secret connection values, weight, and optional ProviderCredential UID. |
+| Model/backend | Namespace, immutable Model UID, mutable unique name/aliases, capability metadata, status/current immutable revision; the revision embeds invocation control and four-rate pricing values. Each ordered endpoint pins provider attribution, exactly one stable wire format, canonical origin, provider model ID, compiled non-secret connection values, weight, and optional ProviderCredential UID. |
 | Recipe/revision | Namespace, immutable Recipe UID, mutable name, lifecycle/revision; immutable validated document revision with signals, projections, readable Decision names, algorithms, and plugins. Stable Decision UIDs are compiler-owned metadata and never appear in the source document. |
-| Entrypoint/rule | Namespace, immutable Entrypoint/rule UIDs, mutable names/aliases, lifecycle/revision, trusted matchers, exact Recipe revision, and complete decision assignments. Each decision assignment stores an optional typed priority-fallback policy. Its ordered Model references store required Model UID, priority 0-31, optional positive canonical-decimal weight, Model-declared LoRA name, and typed reasoning controls; endpoint, pricing, execution, and credential data are forbidden here. |
+| Entrypoint/rule | Namespace, immutable Entrypoint/rule UIDs, mutable names/aliases, lifecycle/revision, trusted matchers, exact Recipe revision, and complete decision assignments. Each decision assignment stores an optional typed priority-fallback policy. Its ordered Model references store required Model UID, priority 0-31, optional positive canonical-decimal weight, Model-declared LoRA name, and typed reasoning controls; endpoint, pricing, invocation control, and credential data are forbidden here. |
 | Routing snapshot | Namespace routing revision, content digest, compiled blob/object reference, staged/active/failed status, replica acknowledgement set, timestamps. |
 | Access binding | Composite policy and typed-subject FKs in one namespace, status, revision. |
 | Rate binding | Composite policy and typed-subject FKs, allocation or hard-cap mode, quota partition, status, revision. |
@@ -167,7 +167,7 @@ normative.
 | Role binding | Principal and role FKs, discriminated cluster, namespace, Team, User, or resource scope with namespace, typed resource kind/ID, separate delegation-ceiling permission set, status, revision. |
 | Principal/User link | Principal plus namespace maps to at most one User in that namespace; several login identities may explicitly link to one User. |
 | Management session | Principal, issuer session, token ID, audience, auth-source kind and stable issuer/service-credential/mTLS mapping ID, typed human or workload assurance evidence, source-assured/auth times, expiry, status, revocation time. |
-| Management invitation | Expected identity, namespace, role/scope grants, optional registered TeamRole, expiry, token HMAC, one-use status, and immutable default-policy IDs/revisions resolved from self-service policy. |
+| Management invitation | Expected identity, namespace, role/scope grants, optional registered TeamRole, expiry, token HMAC, and one-use status. Team onboarding pins membership but leaves User policy layers empty so Team changes continue to apply; no-Team onboarding pins immutable default-policy IDs/revisions resolved from self-service policy. |
 | mTLS identity mapping | Global immutable ID, exact normalized SPIFFE ID, SAN URI, SAN DNS, or subject-DN digest matcher, ManagementPrincipal FK, workload-assurance class and assured-at time, status, revision; uniqueness prevents ambiguous matches. |
 | Service account/credential | ManagementPrincipal subtype with reserved issuer, immutable cluster or namespace owner scope, public credential ID, HMAC/pepper, workload-assurance class and assured-at time, lifecycle, expiry, and no inference authority. Namespace-owned principals cannot bind elsewhere. |
 | Delegated inference session | Management session, principal, namespace, logical key and delegation epoch, User/Team context, token HMAC/pepper, audience, expiry, revocation; no reveal. |
@@ -545,7 +545,7 @@ resources.
 
 ## Routing desired-state and snapshot contract
 
-In managed mode, Model, Recipe, and Entrypoint Management mutations commit to
+With a Management store, Model, Recipe, and Entrypoint mutations commit to
 PostgreSQL with ETag, revision, audit, and outbox. Draft resources remain
 control-plane only. Entrypoint publication resolves mutable names to immutable UIDs,
 validates every matcher, Recipe decision, Model assignment, backend,
@@ -593,14 +593,14 @@ expansion requiring read on every dependency. Snapshot member views and export r
 namespace-wide `routing.read`. Unauthorized topology is omitted, never partly leaked
 through list, detail, resolve, Operation, audit, or error serialization.
 
-YAML and built-in Recipe catalogs are import manifests in managed mode. Import calls
+After initialization, YAML and built-in Recipe catalogs are explicit import manifests. Import calls
 the same Management resources and does not mount a second live configuration source.
 Export may render a portable manifest, but re-import creates an ordinary revision
 rather than replacing PostgreSQL out of band.
 
 The release image carries exactly one built-in Recipe distribution sourced from
-`config/recipes/built-in/latest/mom-v1/{metadata.yaml,config.yaml}`. At managed
-startup, Router validates those bytes with the normal managed Recipe validator,
+`config/recipes/built-in/latest/mom-v1/{metadata.yaml,config.yaml}`. With a
+Management store, Router validates those bytes with the normal Recipe validator,
 removes physical Model assignments, and installs each member through the same
 PostgreSQL mutation, audit, and publication boundaries as user-authored Recipes.
 Installation is Namespace-scoped and content-addressed. Deterministic Recipe IDs
@@ -622,13 +622,14 @@ resources through Recipe GET APIs and own no catalog mirror.
 Docker images place those two canonical files under the image's configured asset
 base. Kubernetes and Helm inherit the files from the Router image and must not put
 them in ConfigMaps, CRDs, or Dashboard images. The explicit schema migration runs
-before Router startup; installation itself is a normal managed mutation and does
+before Router startup; installation itself is a normal Management mutation and does
 not run migrations or create another runtime authority.
 
-Standalone mode uses that same manifest schema, UID rules, validator, and snapshot
-compiler but activates the result only in local memory at startup. It has no routing
-CRUD, drafts, API-key access, outbox, or shared publication. Managed and standalone
-authorities cannot be enabled together.
+A file-only deployment uses that same manifest schema, UID rules, validator, and
+snapshot compiler but activates the result only in local memory at startup. It has no
+routing CRUD, drafts, API-key access, outbox, or shared publication. Configuring a
+Management store initializes only an empty store from the file and never creates two
+simultaneous authorities.
 
 ## API-key credential contract
 
@@ -717,7 +718,7 @@ cannot provide logout notification.
 
 ### Provider credentials
 
-In managed mode, ProviderCredential is a separate backend-secret resource. A create
+With a Management store, ProviderCredential is a separate backend-secret resource. A create
 or rotate request supplies secret material over the private Management transport.
 PostgreSQL and Valkey store only envelope-encrypted versions under a
 provider-specific KEK keyring; a Router replica decrypts the selected active version
@@ -763,16 +764,16 @@ backend-invoker-only and plaintext is zeroed after use. Management discovery and
 connection probes use an explicit Management resolver and may read PostgreSQL; that
 resolver is never composed into inference.
 
-Standalone Models instead reference a bootstrap name whose secret comes from an
+File-backed Models instead reference a bootstrap name whose secret comes from an
 environment/file/Secret reference outside the manifest. Startup compiles it into the
-same in-process backend-credential interface. Standalone never persists, reveals, or
-dynamically rotates that value, and managed resources can never reference the static
-bootstrap namespace.
+same in-process backend-credential interface. File-backed routing never persists,
+reveals, or dynamically rotates that value, and dynamic resources can never reference
+the static bootstrap namespace.
 
 ## Model visibility and invocation contract
 
-Model grants reference immutable resource UIDs introduced by the v0.4 Model and
-Entrypoint schema. Display names and request aliases are mutable attributes, not
+Model grants reference immutable resource UIDs generated when the Model or Entrypoint
+is persisted. Display names and request aliases are mutable attributes, not
 authorization identity. YAML import persists or deterministically assigns the UID
 before publication. Friendly selectors or labels may be used while authoring, but
 publication resolves them to explicit UIDs. Runtime globs, SQL joins, and name-prefix
@@ -783,7 +784,7 @@ Entrypoints are the normal client-visible resources. Direct Models are hidden an
 denied by default; a suitable administrator key may receive explicit `model`
 `discover` and `invoke` grants for diagnostics.
 
-When managed access is enabled, one access evaluator and one Entrypoint resolver form
+When native access is enabled, one access evaluator and one Entrypoint resolver form
 the model boundary:
 
 - `GET /v1/models` requires a valid inference credential and returns only resources
@@ -801,20 +802,20 @@ the model boundary:
 - an unauthorized and a nonexistent requested model both return
   `404 model_not_found` to avoid inventory disclosure.
 
-With managed access enabled, an unauthenticated `/v1/models` request returns `401`;
+With native access enabled, an unauthenticated `/v1/models` request returns `401`;
 it never lists the Router's inventory. An authenticated caller with no visible
 resources receives `200` with an empty data array. Caller-filtered discovery
 responses are private and not shared cacheable. A claimed Entrypoint with no matching
 rule never falls through to a concrete Model or default Recipe.
 
-When access is disabled, in either standalone or managed routing-only mode, the
+When access is disabled, the
 public catalog lists only published Entrypoint aliases from the active snapshot;
 direct Models remain hidden unless routing configuration explicitly publishes them.
 Discovery and invocation use the same Entrypoint resolver, but no inference
-credential, AccessPolicy, or quota policy is evaluated. Standalone obtains that
-snapshot from its local manifest. Managed routing-only obtains it from the managed
-routing publication path. Management inventory remains a separate endpoint with a
-ManagementRole check in managed modes.
+credential, AccessPolicy, or quota policy is evaluated. A file-only deployment obtains
+that snapshot from its local manifest; a deployment with a Management store obtains
+it from the routing publication path. Management inventory remains a separate endpoint
+with a ManagementRole check when the Management API is enabled.
 
 Model or Entrypoint deletion is rejected while a published grant references it unless
 the same transaction replaces those grants and schedules affected-key projection.

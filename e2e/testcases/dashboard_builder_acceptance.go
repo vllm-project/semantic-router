@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vllm-project/semantic-router/e2e/pkg/fixtures"
-	stackgateway "github.com/vllm-project/semantic-router/e2e/pkg/stacks/gateway"
 	pkgtestcases "github.com/vllm-project/semantic-router/e2e/pkg/testcases"
 	"k8s.io/client-go/kubernetes"
 )
@@ -101,165 +99,12 @@ func testDashboardBuilderPublication(
 		fmt.Println("[Test] Testing the complete Router-native Builder publication flow")
 	}
 
-	dashboardPort, stopDashboard, err := setupServiceConnection(ctx, client, opts)
+	scenario, closeScenario, err := newDashboardBuilderScenario(ctx, client, opts, targetModel)
 	if err != nil {
 		return err
 	}
-	defer stopDashboard()
-	dashboardURL := fmt.Sprintf("http://localhost:%s", dashboardPort)
-	dashboardClient := &http.Client{Timeout: 45 * time.Second}
-	token, err := dashboardAuthToken(ctx, dashboardClient, dashboardURL, opts.Verbose)
-	if err != nil {
-		return fmt.Errorf("authenticate Builder acceptance principal: %w", err)
-	}
-	namespaceID, userID, err := dashboardAgentIdentity(
-		ctx, dashboardClient, dashboardURL, token, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	if err := enableDashboardAgentDelegation(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, opts.Verbose,
-	); err != nil {
-		return err
-	}
-
-	gatewayOptions := opts
-	gatewayOptions.ServiceConfig = stackgateway.DefaultServiceConfig()
-	gatewaySession, err := fixtures.OpenServiceSession(ctx, client, gatewayOptions)
-	if err != nil {
-		return fmt.Errorf("open public Router gateway: %w", err)
-	}
-	defer gatewaySession.Close()
-	gatewayClient := gatewaySession.HTTPClient(dashboardBuilderDataPlaneTimeout)
-
-	seed := strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
-	publicName := "builder-e2e-" + seed
-	sessionID, turnID, err := startDashboardBuilderTurn(
-		ctx, dashboardClient, dashboardURL, token, namespaceID,
-		targetModel, publicName, seed, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	approval, err := waitForDashboardBuilderReview(
-		ctx, dashboardClient, dashboardURL, token, namespaceID,
-		sessionID, turnID, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	events, err := dashboardBuilderEventHistory(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, sessionID, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	modelIDs, err := assertDashboardBuilderReview(events, turnID, publicName, targetModel, approval)
-	if err != nil {
-		return err
-	}
-	status, err := dashboardBuilderTurnStatus(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, sessionID, turnID, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	if status != "waiting_approval" {
-		return fmt.Errorf("Builder turn status before human confirmation = %q, want waiting_approval", status)
-	}
-
-	apiKey, keyID, err := createDashboardBuilderAccess(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, userID,
-		approval.Summary.EntrypointID, modelIDs, seed, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	if err := waitForDashboardBuilderCredential(
-		ctx, gatewayClient, gatewaySession.BaseURL(), apiKey, publicName,
-	); err != nil {
-		return err
-	}
-
-	// Chat text is never publication approval. Prove that the immutable plan
-	// digest is required and that a rejected confirmation leaves the draft
-	// undiscoverable before submitting the exact review the human saw.
-	wrongDigest, err := corruptDashboardBuilderDigest(approval.PlanDigest)
-	if err != nil {
-		return err
-	}
-	if err := commitDashboardBuilderPlan(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, approval,
-		wrongDigest, "dashboard-builder-rejected-"+seed,
-		http.StatusPreconditionFailed, opts.Verbose,
-	); err != nil {
-		return fmt.Errorf("verify immutable human confirmation: %w", err)
-	}
-	if err := assertDashboardBuilderUndiscoverable(
-		ctx, gatewayClient, gatewaySession.BaseURL(), apiKey, publicName,
-	); err != nil {
-		return err
-	}
-	status, err = dashboardBuilderTurnStatus(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, sessionID, turnID, opts.Verbose,
-	)
-	if err != nil {
-		return err
-	}
-	if status != "waiting_approval" {
-		return fmt.Errorf("Builder turn status after rejected confirmation = %q, want waiting_approval", status)
-	}
-	if err := commitDashboardBuilderPlan(
-		ctx, dashboardClient, dashboardURL, token, namespaceID, approval,
-		approval.PlanDigest, "dashboard-builder-approved-"+seed,
-		http.StatusAccepted, opts.Verbose,
-	); err != nil {
-		return fmt.Errorf("commit confirmed Builder publication: %w", err)
-	}
-	if err := waitForDashboardAgentTarget(
-		ctx, dashboardClient, dashboardURL, token, namespaceID,
-		approval.Summary.EntrypointID, opts.Verbose,
-	); err != nil {
-		return err
-	}
-	if err := waitForDashboardBuilderCompletion(
-		ctx, dashboardClient, dashboardURL, token, namespaceID,
-		sessionID, turnID, approval.PlanID, opts.Verbose,
-	); err != nil {
-		return err
-	}
-	if err := waitForDashboardBuilderDiscovery(
-		ctx, gatewayClient, gatewaySession.BaseURL(), apiKey, publicName,
-	); err != nil {
-		return err
-	}
-	if err := invokeDashboardBuilderModel(
-		ctx, gatewayClient, gatewaySession.BaseURL(), apiKey, publicName, false,
-	); err != nil {
-		return err
-	}
-	if err := invokeDashboardBuilderModel(
-		ctx, gatewayClient, gatewaySession.BaseURL(), apiKey, publicName, true,
-	); err != nil {
-		return err
-	}
-
-	if opts.SetDetails != nil {
-		opts.SetDetails(map[string]interface{}{
-			"agent_session_id":         sessionID,
-			"agent_turn_id":            turnID,
-			"recipe_id":                approval.Summary.RecipeID,
-			"entrypoint_id":            approval.Summary.EntrypointID,
-			"public_model":             publicName,
-			"api_key_id":               keyID,
-			"assigned_model_count":     len(modelIDs),
-			"human_confirmation":       true,
-			"non_stream_invoke_passed": true,
-			"stream_invoke_passed":     true,
-		})
-	}
-	return nil
+	defer closeScenario()
+	return scenario.run()
 }
 
 func startDashboardBuilderTurn(
@@ -338,48 +183,75 @@ func waitForDashboardBuilderReview(
 		if err != nil {
 			lastPhase = err.Error()
 		} else {
-			for _, event := range page.Data {
-				if event.TurnID != turnID {
-					continue
-				}
-				lastPhase = event.Type
-				switch event.Type {
-				case "approval_request":
-					var approval dashboardBuilderApproval
-					if err := json.Unmarshal(event.Payload, &approval); err != nil {
-						return dashboardBuilderApproval{}, fmt.Errorf("decode Builder publication review: %w", err)
-					}
-					return approval, nil
-				case "terminal":
-					var terminal struct {
-						Status string `json:"status"`
-						Error  *struct {
-							Code    string `json:"code"`
-							Message string `json:"message"`
-						} `json:"error"`
-					}
-					if err := json.Unmarshal(event.Payload, &terminal); err != nil {
-						return dashboardBuilderApproval{}, fmt.Errorf("decode Builder terminal event: %w", err)
-					}
-					return dashboardBuilderApproval{}, fmt.Errorf(
-						"Builder turn terminated before publication review (status=%q error=%v)",
-						terminal.Status, terminal.Error,
-					)
-				}
+			approval, phase, ready, inspectErr := inspectDashboardBuilderReviewEvents(page.Data, turnID)
+			if phase != "" {
+				lastPhase = phase
+			}
+			if inspectErr != nil {
+				return dashboardBuilderApproval{}, inspectErr
+			}
+			if ready {
+				return approval, nil
 			}
 		}
-		timer := time.NewTimer(2 * time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return dashboardBuilderApproval{}, ctx.Err()
-		case <-timer.C:
+		if err := waitDashboardBuilderPoll(ctx, 2*time.Second); err != nil {
+			return dashboardBuilderApproval{}, err
 		}
 	}
 	return dashboardBuilderApproval{}, fmt.Errorf(
 		"Builder did not prepare a publication review within %s (last phase: %s)",
 		dashboardBuilderTurnTimeout, lastPhase,
 	)
+}
+
+func inspectDashboardBuilderReviewEvents(
+	events []dashboardBuilderEvent,
+	turnID string,
+) (dashboardBuilderApproval, string, bool, error) {
+	lastPhase := ""
+	for _, event := range events {
+		if event.TurnID != turnID {
+			continue
+		}
+		lastPhase = event.Type
+		switch event.Type {
+		case "approval_request":
+			var approval dashboardBuilderApproval
+			if err := json.Unmarshal(event.Payload, &approval); err != nil {
+				return dashboardBuilderApproval{}, lastPhase, false,
+					fmt.Errorf("decode Builder publication review: %w", err)
+			}
+			return approval, lastPhase, true, nil
+		case "terminal":
+			var terminal struct {
+				Status string `json:"status"`
+				Error  *struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(event.Payload, &terminal); err != nil {
+				return dashboardBuilderApproval{}, lastPhase, false,
+					fmt.Errorf("decode Builder terminal event: %w", err)
+			}
+			return dashboardBuilderApproval{}, lastPhase, false, fmt.Errorf(
+				"Builder turn terminated before publication review (status=%q error=%v)",
+				terminal.Status, terminal.Error,
+			)
+		}
+	}
+	return dashboardBuilderApproval{}, lastPhase, false, nil
+}
+
+func waitDashboardBuilderPoll(ctx context.Context, interval time.Duration) error {
+	timer := time.NewTimer(interval)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 func dashboardBuilderEventHistory(
@@ -442,199 +314,6 @@ func dashboardBuilderEventsPage(
 		return dashboardBuilderEventPage{}, fmt.Errorf("read Builder event history: %w", err)
 	}
 	return page, nil
-}
-
-func assertDashboardBuilderReview(
-	events []dashboardBuilderEvent,
-	turnID string,
-	publicName string,
-	targetModel string,
-	approval dashboardBuilderApproval,
-) ([]string, error) {
-	if approval.PlanID == "" || approval.PlanDigest == "" || approval.PlanRevision < 1 ||
-		approval.PlanETag == "" || !time.Now().UTC().Before(approval.ExpiresAt.UTC()) {
-		return nil, fmt.Errorf("Builder publication review omitted immutable confirmation metadata")
-	}
-	if approval.Summary.RecipeID == "" || approval.Summary.RecipeName == "" ||
-		approval.Summary.EntrypointID == "" || approval.Summary.EntrypointName != publicName {
-		return nil, fmt.Errorf("Builder publication review does not describe the requested Recipe and Entrypoint")
-	}
-
-	completed := make(map[string]int, len(dashboardBuilderRequiredTools))
-	validationPassed := false
-	probePassed := false
-	evaluationPassed := false
-	targetModelIDs := make(map[string]struct{})
-	createInvocations := make(map[string]string)
-	createdRecipeIDs := make(map[string]struct{})
-	createdEntrypointIDs := make(map[string]struct{})
-	for _, event := range events {
-		if event.TurnID != turnID {
-			continue
-		}
-		if event.Type == "tool_request" {
-			var request struct {
-				InvocationID string          `json:"invocationId"`
-				ToolName     string          `json:"toolName"`
-				Arguments    json.RawMessage `json:"arguments"`
-			}
-			if err := json.Unmarshal(event.Payload, &request); err != nil {
-				return nil, fmt.Errorf("decode Builder tool request: %w", err)
-			}
-			if request.ToolName == "router.recipe.prepare" || request.ToolName == "router.entrypoint.prepare" {
-				var arguments struct {
-					ExpectedRevision int64 `json:"expectedRevision"`
-				}
-				if err := json.Unmarshal(request.Arguments, &arguments); err != nil {
-					return nil, fmt.Errorf("decode Builder draft request: %w", err)
-				}
-				if arguments.ExpectedRevision == 0 {
-					createInvocations[request.InvocationID] = request.ToolName
-				}
-			}
-			continue
-		}
-		if event.Type != "tool_result" {
-			continue
-		}
-		var result struct {
-			InvocationID string          `json:"invocationId"`
-			ToolName     string          `json:"toolName"`
-			Status       string          `json:"status"`
-			Result       json.RawMessage `json:"result"`
-			Error        *struct {
-				Code    string `json:"code"`
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(event.Payload, &result); err != nil {
-			return nil, fmt.Errorf("decode Builder tool result: %w", err)
-		}
-		if result.Status != "completed" || result.Error != nil {
-			return nil, fmt.Errorf(
-				"Builder tool %q did not complete cleanly (status=%q error=%v)",
-				result.ToolName, result.Status, result.Error,
-			)
-		}
-		completed[result.ToolName]++
-		switch result.ToolName {
-		case "router.recipe.prepare":
-			var value struct {
-				RecipeID string `json:"recipeId"`
-			}
-			if err := json.Unmarshal(result.Result, &value); err != nil {
-				return nil, fmt.Errorf("decode prepared Recipe: %w", err)
-			}
-			if createInvocations[result.InvocationID] == result.ToolName && value.RecipeID != "" {
-				createdRecipeIDs[value.RecipeID] = struct{}{}
-			}
-		case "router.entrypoint.prepare":
-			var value struct {
-				EntrypointID string `json:"entrypointId"`
-			}
-			if err := json.Unmarshal(result.Result, &value); err != nil {
-				return nil, fmt.Errorf("decode prepared Entrypoint: %w", err)
-			}
-			if createInvocations[result.InvocationID] == result.ToolName && value.EntrypointID != "" {
-				createdEntrypointIDs[value.EntrypointID] = struct{}{}
-			}
-		case "router.models.list":
-			var value struct {
-				Data []struct {
-					ID     string `json:"id"`
-					Name   string `json:"name"`
-					Status string `json:"status"`
-					Card   struct {
-						Aliases []string `json:"aliases"`
-					} `json:"card"`
-				} `json:"data"`
-			}
-			if err := json.Unmarshal(result.Result, &value); err != nil {
-				return nil, fmt.Errorf("decode connected Model discovery: %w", err)
-			}
-			for _, model := range value.Data {
-				if model.Status == "active" && (model.ID == targetModel || model.Name == targetModel ||
-					dashboardBuilderContains(model.Card.Aliases, targetModel)) {
-					targetModelIDs[model.ID] = struct{}{}
-				}
-			}
-		case "router.recipe.validate":
-			var value struct {
-				Valid bool `json:"valid"`
-			}
-			if err := json.Unmarshal(result.Result, &value); err != nil {
-				return nil, fmt.Errorf("decode Recipe validation evidence: %w", err)
-			}
-			validationPassed = validationPassed || value.Valid
-		case "router.recipe.probe":
-			var value struct {
-				Passed bool `json:"passed"`
-			}
-			if err := json.Unmarshal(result.Result, &value); err != nil {
-				return nil, fmt.Errorf("decode Recipe probe evidence: %w", err)
-			}
-			probePassed = probePassed || value.Passed
-		case "router.recipe.evaluate":
-			var value struct {
-				Passed bool `json:"passed"`
-			}
-			if err := json.Unmarshal(result.Result, &value); err != nil {
-				return nil, fmt.Errorf("decode Recipe evaluation evidence: %w", err)
-			}
-			evaluationPassed = evaluationPassed || value.Passed
-		}
-	}
-	for _, toolName := range dashboardBuilderRequiredTools {
-		if completed[toolName] == 0 {
-			return nil, fmt.Errorf("Builder publication review is missing completed tool %q", toolName)
-		}
-	}
-	if !validationPassed || !probePassed || !evaluationPassed {
-		return nil, fmt.Errorf(
-			"Builder evidence did not pass (validation=%t probe=%t evaluation=%t)",
-			validationPassed, probePassed, evaluationPassed,
-		)
-	}
-	if _, created := createdRecipeIDs[approval.Summary.RecipeID]; !created {
-		return nil, fmt.Errorf("Builder publication review did not use the Recipe created in this turn")
-	}
-	if _, created := createdEntrypointIDs[approval.Summary.EntrypointID]; !created {
-		return nil, fmt.Errorf("Builder publication review did not use the Entrypoint created in this turn")
-	}
-	var gates []struct {
-		Name   string `json:"name"`
-		Passed bool   `json:"passed"`
-	}
-	if err := json.Unmarshal(approval.Summary.GateResults, &gates); err != nil {
-		return nil, fmt.Errorf("decode Builder publication gate results: %w", err)
-	}
-	if len(gates) == 0 {
-		return nil, fmt.Errorf("Builder publication review omitted gate results")
-	}
-	for _, gate := range gates {
-		if gate.Name == "" || !gate.Passed {
-			return nil, fmt.Errorf("Builder publication gate did not pass: %+v", gate)
-		}
-	}
-	modelIDs, err := dashboardBuilderAssignmentModelIDs(approval.Summary.Assignments)
-	if err != nil {
-		return nil, err
-	}
-	if len(modelIDs) == 0 {
-		return nil, fmt.Errorf("Builder publication review has no assigned Models")
-	}
-	if len(targetModelIDs) == 0 {
-		return nil, fmt.Errorf("Builder did not discover the real session target %q", targetModel)
-	}
-	for _, modelID := range modelIDs {
-		if _, expected := targetModelIDs[modelID]; !expected {
-			return nil, fmt.Errorf(
-				"Builder assigned Model %q instead of the real session target %q",
-				modelID, targetModel,
-			)
-		}
-	}
-	return modelIDs, nil
 }
 
 func dashboardBuilderAssignmentModelIDs(raw json.RawMessage) ([]string, error) {
@@ -864,30 +543,9 @@ func waitForDashboardBuilderCompletion(
 			ctx, client, baseURL, token, namespaceID, sessionID, verbose,
 		)
 		if err == nil {
-			approvalCommitted := false
-			terminalCompleted := false
-			for _, event := range events {
-				if event.TurnID != turnID {
-					continue
-				}
-				switch event.Type {
-				case "approval_result":
-					var result struct {
-						PlanID string `json:"planId"`
-						Status string `json:"status"`
-					}
-					if json.Unmarshal(event.Payload, &result) == nil {
-						approvalCommitted = result.PlanID == planID && result.Status == "committed"
-					}
-				case "terminal":
-					var terminal struct {
-						Status string `json:"status"`
-					}
-					if json.Unmarshal(event.Payload, &terminal) == nil {
-						terminalCompleted = terminal.Status == "completed"
-					}
-				}
-			}
+			approvalCommitted, terminalCompleted := dashboardBuilderCompletionEvents(
+				events, turnID, planID,
+			)
 			if approvalCommitted && terminalCompleted {
 				status, statusErr := dashboardBuilderTurnStatus(
 					ctx, client, baseURL, token, namespaceID, sessionID, turnID, verbose,
@@ -897,15 +555,43 @@ func waitForDashboardBuilderCompletion(
 				}
 			}
 		}
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+		if err := waitDashboardBuilderPoll(ctx, time.Second); err != nil {
+			return err
 		}
 	}
 	return fmt.Errorf("Builder confirmation did not produce committed approval and completed turn events")
+}
+
+func dashboardBuilderCompletionEvents(
+	events []dashboardBuilderEvent,
+	turnID string,
+	planID string,
+) (bool, bool) {
+	approvalCommitted := false
+	terminalCompleted := false
+	for _, event := range events {
+		if event.TurnID != turnID {
+			continue
+		}
+		switch event.Type {
+		case "approval_result":
+			var result struct {
+				PlanID string `json:"planId"`
+				Status string `json:"status"`
+			}
+			if json.Unmarshal(event.Payload, &result) == nil {
+				approvalCommitted = result.PlanID == planID && result.Status == "committed"
+			}
+		case "terminal":
+			var terminal struct {
+				Status string `json:"status"`
+			}
+			if json.Unmarshal(event.Payload, &terminal) == nil {
+				terminalCompleted = terminal.Status == "completed"
+			}
+		}
+	}
+	return approvalCommitted, terminalCompleted
 }
 
 func waitForDashboardBuilderDiscovery(

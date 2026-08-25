@@ -7,7 +7,7 @@ import (
 )
 
 func TestParseYAMLBytesRecordsExactDocumentHash(t *testing.T) {
-	document := []byte(entrypointRulesYAML)
+	document := []byte(strictV03AuthoringYAML)
 	cfg, err := testAuthoringParser(t).ParseYAMLBytes(document)
 	if err != nil {
 		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes() error = %v", err)
@@ -21,11 +21,11 @@ func TestParseYAMLBytesRecordsExactDocumentHash(t *testing.T) {
 }
 
 func TestParseYAMLBytesDocumentHashTracksFormattingChanges(t *testing.T) {
-	first, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML))
+	first, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strictV03AuthoringYAML))
 	if err != nil {
 		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes(first) error = %v", err)
 	}
-	second, err := testAuthoringParser(t).ParseYAMLBytes([]byte(entrypointRulesYAML + "\n"))
+	second, err := testAuthoringParser(t).ParseYAMLBytes([]byte(strictV03AuthoringYAML + "\n"))
 	if err != nil {
 		t.Fatalf("testAuthoringParser(t).ParseYAMLBytes(second) error = %v", err)
 	}

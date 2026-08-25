@@ -56,14 +56,14 @@ request_headers_to_remove:
 ```
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
-public inference endpoints. The Router authenticates managed inference
+public inference endpoints. The Router authenticates inference
 credentials and constructs its process-local `TenantContext`; no upstream
 component should supply identity headers.
 
 ## Configure access and quotas
 
 Use the Management API to bind AccessPolicies and RateLimitPolicies to API
-keys, Users, or Teams. Managed replicas consume immutable policy projections
+keys, Users, or Teams. Router replicas consume immutable policy projections
 and share atomic quota state through the configured access runtime. Keep the
 Management listener private and grant mutation permissions only to operators.
 
@@ -72,24 +72,21 @@ contracts.
 
 ## Keep credentials out of configuration
 
-Standalone backends reference a named secret source; they never contain the
-secret itself:
+File-authored backends reference an environment variable; they do not need the
+secret value in YAML:
 
 ```yaml
-global:
-  services:
-    backend_credentials:
-      private_provider:
-        credential_adapter_id: bearer
-        secret_env: MODEL_API_KEY
-models:
-  - name: remote/model
-    card: {}
-    connections:
-      - provider: openai-compatible
-        endpoint: https://models.example.com/v1
-        model: provider/model
-        credential: private_provider
+providers:
+  models:
+    - name: remote/model
+      provider_model_id: provider/model
+      backend_refs:
+        - provider: openai-compatible
+          endpoint: https://models.example.com/v1
+          api_key_env: MODEL_API_KEY
+routing:
+  modelCards:
+    - name: remote/model
 ```
 
 Do not commit literal API keys, passwords, authorization headers, credential

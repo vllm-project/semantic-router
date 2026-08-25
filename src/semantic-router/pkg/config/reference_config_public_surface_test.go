@@ -2,8 +2,6 @@ package config
 
 import (
 	"reflect"
-
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelauthoring"
 )
 
 func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface{}) {
@@ -14,30 +12,47 @@ func assertReferenceConfigTopLevelCoverage(t testingT, root map[string]interface
 }
 
 func assertReferenceConfigProviderCoverage(t testingT, root map[string]interface{}) {
-	models := mustSliceAt(t, root, "models")
-	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(AuthoringModel{}), "models")
+	providers := mustMapAt(t, root, "providers")
+	assertMapCoversStructFields(t, providers, reflect.TypeOf(CanonicalProviders{}), "providers")
+	assertMapCoversStructFields(
+		t, mustMapAt(t, providers, "defaults"), reflect.TypeOf(CanonicalProviderDefaults{}), "providers.defaults",
+	)
+	models := mustSliceAt(t, providers, "models")
+	assertSliceUnionCoversStructFields(t, models, reflect.TypeOf(CanonicalProviderModel{}), "providers.models")
 	assertSliceUnionCoversStructFields(
 		t,
-		collectNestedSliceItems(t, models, "connections", "models"),
-		reflect.TypeOf(modelauthoring.Connection{}),
-		"models[].connections",
+		collectNestedSliceItems(t, models, "backend_refs", "providers.models"),
+		reflect.TypeOf(CanonicalBackendRef{}),
+		"providers.models[].backend_refs",
+		"api_version", "api_key",
 	)
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "card", "models"), reflect.TypeOf(AuthoringModelCard{}), "models[].card")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "runtime", "models"), reflect.TypeOf(ModelExecutionSettings{}), "models[].runtime")
-	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "pricing", "models"), reflect.TypeOf(ModelRuntimePricing{}), "models[].pricing")
+	controls := collectChildMapsFromSlice(t, models, "control", "providers.models")
+	assertSliceUnionCoversStructFields(t, controls, reflect.TypeOf(ModelControl{}), "providers.models[].control")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, controls, "retry", "providers.models[].control"), reflect.TypeOf(ModelRetry{}), "providers.models[].control.retry")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, controls, "timeout", "providers.models[].control"), reflect.TypeOf(ModelTimeout{}), "providers.models[].control.timeout")
+	assertSliceUnionCoversStructFields(t, collectChildMapsFromSlice(t, models, "pricing", "providers.models"), reflect.TypeOf(ModelRuntimePricing{}), "providers.models[].pricing")
+	routing := mustMapAt(t, root, "routing")
+	modelCards := mustSliceAt(t, routing, "modelCards")
+	assertSliceUnionCoversStructFields(t, modelCards, reflect.TypeOf(RoutingModel{}), "routing.modelCards")
+	assertSliceUnionCoversStructFields(
+		t,
+		collectChildMapsFromSlice(t, modelCards, "reasoning", "routing.modelCards"),
+		reflect.TypeOf(ModelReasoning{}),
+		"routing.modelCards[].reasoning",
+	)
 }
 
 func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}) {
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, root, "entrypoints"),
-		reflect.TypeOf(AuthoringEntrypoint{}),
+		reflect.TypeOf(CanonicalEntrypoint{}),
 		"entrypoints",
 	)
 	assertSliceUnionCoversStructFields(
 		t,
 		mustSliceAt(t, root, "recipes"),
-		reflect.TypeOf(AuthoringRecipe{}),
+		reflect.TypeOf(CanonicalRecipe{}),
 		"recipes",
 	)
 }
@@ -45,7 +60,7 @@ func assertReferenceConfigRecipeCoverage(t testingT, root map[string]interface{}
 func assertReferenceConfigRoutingCoverage(t testingT, root map[string]interface{}) {
 	routing := referenceDefaultRecipeDocument(t, root)
 
-	assertMapCoversStructFields(t, routing, reflect.TypeOf(CanonicalRouting{}), "recipes[default].document")
+	assertMapCoversStructFields(t, routing, reflect.TypeOf(CanonicalRouting{}), "recipes[default].routing", "modelCards")
 	assertReferenceConfigSignalCoverage(t, mustMapAt(t, routing, "signals"))
 	assertReferenceConfigProjectionCoverage(t, mustMapAt(t, routing, "projections"))
 	assertReferenceConfigDecisionCoverage(t, mustSliceAt(t, routing, "decisions"))
@@ -55,10 +70,10 @@ func referenceDefaultRecipeDocument(t testingT, root map[string]interface{}) map
 	for _, value := range mustSliceAt(t, root, "recipes") {
 		recipe := mustMapValue(t, value, "recipes")
 		if recipe["name"] == string(DefaultRecipeName) {
-			return mustMapValue(t, recipe["document"], "recipes[default].document")
+			return mustMapValue(t, recipe["routing"], "recipes[default].routing")
 		}
 	}
-	t.Fatalf("reference config has no default Recipe document")
+	t.Fatalf("reference config has no default Recipe routing")
 	return nil
 }
 
@@ -246,10 +261,10 @@ func assertReferenceConfigDecisionCoverage(t testingT, decisions []interface{}) 
 func assertReferenceConfigGlobalCoverage(t testingT, root map[string]interface{}) {
 	global := mustMapAt(t, root, "global")
 
-	// config/config.yaml is the exhaustive standalone v0.4 reference. Managed
-	// bootstrap inputs are exercised separately because they require external
-	// stores, secrets, and provider packs.
-	assertMapCoversStructFields(t, global, reflect.TypeOf(CanonicalGlobal{}), "global", "control_plane")
+	// config/config.yaml is the exhaustive public v0.3 file-authoring reference.
+	// Durable Management inputs are exercised separately because they require
+	// external stores and secrets.
+	assertMapCoversStructFields(t, global, reflect.TypeOf(CanonicalGlobal{}), "global")
 	assertMapCoversStructFields(t, mustMapAt(t, global, "billing"), reflect.TypeOf(CanonicalBillingGlobal{}), "global.billing")
 	assertReferenceConfigRouterGlobalCoverage(t, mustMapAt(t, global, "router"))
 	assertReferenceConfigServiceGlobalCoverage(t, mustMapAt(t, global, "services"))

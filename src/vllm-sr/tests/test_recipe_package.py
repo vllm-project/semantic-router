@@ -16,11 +16,10 @@ from cli.recipe_package import (
 )
 from click.testing import CliRunner
 
-
-_RECIPE_CONFIG = """version: v0.4
+_RECIPE_CONFIG = """version: v0.3
 recipes:
   - name: test-recipe
-    document:
+    routing:
       decisions:
         - name: default
           rules:
@@ -37,7 +36,7 @@ def _write_config_document(recipe: Path, document: dict) -> None:
 
 def _recipe_with_plugin_configuration(configuration: dict) -> dict:
     document = yaml.safe_load(_RECIPE_CONFIG)
-    document["recipes"][0]["document"]["decisions"][0]["plugins"] = [
+    document["recipes"][0]["routing"]["decisions"][0]["plugins"] = [
         {"type": "request_params", "configuration": configuration}
     ]
     return document
@@ -126,7 +125,7 @@ def test_recipe_digest_cross_language_golden():
     }
 
     assert recipe_digest(files) == (
-        "sha256:53cc6ed9fa3018b6cdec963c70c34dfb535eb69f81fb950ae502447f3f3c3cb0"
+        "sha256:3d046b59e08b0adbafc6802d679d36425a7eb9205cf2b0b7afe1791aebbeb4a3"
     )
 
 
@@ -249,21 +248,30 @@ def test_pack_rejects_literal_credential_in_current_model_shape(tmp_path: Path):
     _write_config_document(
         recipe,
         {
-            "version": "v0.4",
-            "models": [
-                {
-                    "name": "private/model",
-                    "card": {"capabilities": ["chat"]},
-                    "connections": [
-                        {
-                            "provider": "openai-compatible",
-                            "endpoint": "https://models.example.test/v1",
-                            "model": "private/model",
-                            "api_key": secret_value,
-                        }
-                    ],
-                }
-            ],
+            "version": "v0.3",
+            "providers": {
+                "models": [
+                    {
+                        "name": "private/model",
+                        "provider_model_id": "private/model",
+                        "backend_refs": [
+                            {
+                                "provider": "openai-compatible",
+                                "base_url": "https://models.example.test/v1",
+                                "api_key": secret_value,
+                            }
+                        ],
+                    }
+                ]
+            },
+            "routing": {
+                "modelCards": [
+                    {
+                        "name": "private/model",
+                        "capabilities": ["chat"],
+                    }
+                ]
+            },
         },
     )
 
@@ -272,7 +280,7 @@ def test_pack_rejects_literal_credential_in_current_model_shape(tmp_path: Path):
     )
 
     assert result.exit_code != 0
-    assert "models[0].connections[0].api_key" in result.output
+    assert "providers.models[0].backend_refs[0].api_key" in result.output
     assert secret_value not in result.output
     assert not (tmp_path / "out" / "test-recipe-1.2.3.vllm-sr-recipe.zip").exists()
 
@@ -314,7 +322,7 @@ def test_pack_literal_credential_detector_matches_runtime_fields(
 
     assert result.exit_code != 0
     assert (
-        "recipes[0].document.decisions[0].plugins[0].configuration." + expected_suffix
+        "recipes[0].routing.decisions[0].plugins[0].configuration." + expected_suffix
     ) in result.output
     assert secret_value not in result.output
 
@@ -337,20 +345,21 @@ def test_pack_rejects_embedded_url_credential_without_exposing_it(
     _write_config_document(
         recipe,
         {
-            "version": "v0.4",
-            "models": [
-                {
-                    "name": "private/model",
-                    "card": {"capabilities": ["chat"]},
-                    "connections": [
-                        {
-                            "provider": "openai-compatible",
-                            field: url_template.format(secret=secret_value),
-                            "model": "private/model",
-                        }
-                    ],
-                }
-            ],
+            "version": "v0.3",
+            "providers": {
+                "models": [
+                    {
+                        "name": "private/model",
+                        "provider_model_id": "private/model",
+                        "backend_refs": [
+                            {
+                                "provider": "openai-compatible",
+                                field: url_template.format(secret=secret_value),
+                            }
+                        ],
+                    }
+                ]
+            },
         },
     )
 
@@ -359,7 +368,7 @@ def test_pack_rejects_embedded_url_credential_without_exposing_it(
     )
 
     assert result.exit_code != 0
-    assert f"models[0].connections[0].{field}" in result.output
+    assert f"providers.models[0].backend_refs[0].{field}" in result.output
     assert secret_value not in result.output
 
 
@@ -446,10 +455,12 @@ def test_pack_rejects_literal_env_fallback_and_pure_reference(tmp_path: Path):
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("models", []),
-        ("models", [{"name": "runtime-model"}]),
+        ("providers", {}),
+        ("providers", {"models": [{"name": "runtime-model"}]}),
+        ("routing", {}),
+        ("routing", {"modelCards": [{"name": "runtime-model"}]}),
         ("entrypoints", []),
-        ("entrypoints", [{"name": "runtime-entrypoint"}]),
+        ("entrypoints", [{"model_names": ["runtime-entrypoint"]}]),
         ("global", {}),
         ("global", {"services": {}}),
         ("listeners", []),
@@ -476,11 +487,11 @@ def test_pack_rejects_runtime_owned_top_level_fields(
 @pytest.mark.parametrize(
     ("field", "value", "expected"),
     [
-        ("version", "v0.3", "v0.4"),
+        ("version", "v0.2", "v0.3"),
         ("recipes", [], "at least 1 item"),
     ],
 )
-def test_pack_requires_complete_v04_recipe_distribution(
+def test_pack_requires_complete_v03_recipe_distribution(
     tmp_path: Path, field: str, value: object, expected: str
 ):
     recipe = tmp_path / "recipe"
@@ -501,12 +512,12 @@ def test_pack_requires_complete_v04_recipe_distribution(
 @pytest.mark.parametrize(
     "config",
     [
-        "version: v0.4\nsecret: &private-value sensitive\ncopy: *private-value\n",
-        "version: v0.4\ndefaults: &private-map {token: sensitive}\nrequest:\n  <<: *private-map\n",
-        "version: v0.4\nrequest:\n  <<: {token: sensitive}\n",
-        "version: v0.4\nprovider:\n  base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==\n",
-        "version: v0.4\nrequest:\n  headers:\n    !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive\n",
-        "version: v0.4\nvalue: !!str sensitive\n",
+        "version: v0.3\nsecret: &private-value sensitive\ncopy: *private-value\n",
+        "version: v0.3\ndefaults: &private-map {token: sensitive}\nrequest:\n  <<: *private-map\n",
+        "version: v0.3\nrequest:\n  <<: {token: sensitive}\n",
+        "version: v0.3\nprovider:\n  base_url: !!binary aHR0cHM6Ly91c2VyOnNlbnNpdGl2ZUBleGFtcGxlLmNvbS92MQ==\n",
+        "version: v0.3\nrequest:\n  headers:\n    !!binary QXV0aG9yaXphdGlvbg==: Bearer sensitive\n",
+        "version: v0.3\nvalue: !!str sensitive\n",
     ],
 )
 def test_pack_rejects_yaml_indirection_without_exposing_values(

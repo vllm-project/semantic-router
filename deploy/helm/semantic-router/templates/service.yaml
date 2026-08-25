@@ -1,7 +1,7 @@
 {{- $config := include "semantic-router.effectiveConfig" . | fromYaml -}}
 {{- $global := (get $config "global") | default (dict) -}}
-{{- $controlPlane := (get $global "control_plane") | default (dict) -}}
-{{- $managedMode := eq ((get $controlPlane "mode") | default "standalone") "managed" -}}
+{{- $durableRouting := eq (include "semantic-router.hasManagementStore" .) "true" -}}
+{{- $managementAPIEnabled := eq (include "semantic-router.managementAPIEnabled" .) "true" -}}
 {{- $services := (get $global "services") | default (dict) -}}
 {{- $managementAPI := (get $services "management_api") | default (dict) -}}
 {{- $managementPort := (get $managementAPI "port") | default .Values.service.management.port -}}
@@ -21,7 +21,7 @@ spec:
     targetPort: {{ .Values.service.grpc.targetPort }}
     protocol: {{ .Values.service.grpc.protocol }}
     name: grpc
-  {{- if not $managedMode }}
+  {{- if not $durableRouting }}
   - port: {{ .Values.service.api.port }}
     targetPort: {{ .Values.service.api.targetPort }}
     protocol: {{ .Values.service.api.protocol }}
@@ -31,7 +31,7 @@ spec:
     {{- include "semantic-router.selectorLabels" . | nindent 4 }}
     app.kubernetes.io/component: router
 ---
-{{- if $managedMode }}
+{{- if $managementAPIEnabled }}
 apiVersion: v1
 kind: Service
 metadata:
@@ -56,7 +56,7 @@ spec:
     app.kubernetes.io/component: router
 ---
 {{- end }}
-{{- if $managedMode }}
+{{- if $durableRouting }}
 apiVersion: v1
 kind: Service
 metadata:

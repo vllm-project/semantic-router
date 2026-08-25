@@ -59,15 +59,15 @@ autoscaling:
   maxReplicas: 10
   targetCPUUtilizationPercentage: 80
 podDisruptionBudget:
-  enabled: false
+  enabled: null
   minAvailable: 1
 topologySpread:
-  enabled: false
+  enabled: null
   maxSkew: 1
   topologyKey: kubernetes.io/hostname
   whenUnsatisfiable: ScheduleAnyway
 networkPolicy:
-  enabled: false
+  enabled: null
   ingress:
     extProcPeers: []
     managementPeers: []
@@ -122,7 +122,7 @@ persistence:
   annotations: {}
   existingClaim: ''
 config:
-  version: v0.4
+  version: v0.3
   listeners:
   - name: grpc-50051
     address: 0.0.0.0
@@ -132,43 +132,48 @@ config:
     address: 0.0.0.0
     port: 8080
     timeout: 300s
-  models:
-  - name: replace-with-your-model
-    connections:
-    - provider: vllm
-      endpoint: http://replace-with-your-vllm-service:8000/v1
-      model: replace-with-your-model
+  providers:
+    models:
+    - name: replace-with-your-model
+      provider_model_id: replace-with-your-model
+      backend_refs:
+      - provider: vllm
+        endpoint: http://replace-with-your-vllm-service:8000/v1
+      api_format: openai
+      control:
+        retry:
+          count: 2
+          'on': [unavailable, timeout]
+        timeout:
+          request: 60s
+          stream: 10m
+  routing:
+    modelCards:
+    - name: replace-with-your-model
+      description: Replace this example with a connected model.
+      capabilities: [chat]
+      modality: text
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
-      signals:
-        domains:
-        - name: general
-          description: Catch-all domain
-          mmlu_categories:
-          - other
+    routing:
       decisions:
       - name: default-route
-        description: Default route for every request while you wire real backends.
-        priority: 100
-        rules: {}
+        description: Route every request to the connected model.
+        rules:
+          operator: AND
+          conditions: []
   entrypoints:
-  - name: vllm-sr/auto
-    aliases: [auto]
-    rules:
-    - name: default
-      matches: []
-      recipe: default
-      assignments:
-        default-route:
-          models:
-          - model: replace-with-your-model
+  - model_names: [vllm-sr/auto, auto]
+    recipe: default
+    assignments:
+      default-route:
+        models:
+        - model: replace-with-your-model
   global:
-    control_plane:
-      mode: standalone
     services:
       management_api:
+        enabled: false
         bind_address: 0.0.0.0
         port: 8080
         remote_exposure: false

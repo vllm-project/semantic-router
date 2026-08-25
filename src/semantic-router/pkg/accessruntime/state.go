@@ -2,6 +2,7 @@ package accessruntime
 
 import (
 	"errors"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessprojection"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
@@ -34,6 +35,8 @@ type admissionState struct {
 	rules         []quotaruntime.RuleBinding
 	target        Target
 	requestDigest string
+	planDigest    string
+	leaseDuration time.Duration
 }
 
 type preparedDispatchState struct {

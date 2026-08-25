@@ -11,8 +11,6 @@ import json
 import os
 import subprocess
 import sys
-import threading
-from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock
@@ -42,6 +40,7 @@ from cli.commands.recipe_learning_metrics import record_switched
 from click.testing import CliRunner
 
 CLI_ROOT = Path(__file__).resolve().parents[1]
+pytest_plugins = ("eval_test_server",)
 
 
 def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -56,61 +55,6 @@ def _run_cli_subprocess(tmp_path: Path, *args: str) -> subprocess.CompletedProce
         capture_output=True,
         text=True,
     )
-
-
-# Fixture: real in-process HTTP server
-
-
-def _make_handler(status: int, body: Any, content_type: str = "application/json"):
-    """Return a BaseHTTPRequestHandler subclass that always responds with the
-    given status code and JSON-encoded body."""
-    if isinstance(body, bytes):
-        body_bytes = body
-    elif isinstance(body, str):
-        body_bytes = body.encode()
-    else:
-        body_bytes = json.dumps(body).encode()
-
-    class _Handler(BaseHTTPRequestHandler):
-        def do_POST(self):
-            # Drain request body so the client doesn't get a broken-pipe error.
-            length = int(self.headers.get("Content-Length", 0))
-            self.rfile.read(length)
-            self.send_response(status)
-            self.send_header("Content-Type", content_type)
-            self.send_header("Content-Length", str(len(body_bytes)))
-            self.end_headers()
-            self.wfile.write(body_bytes)
-
-        def log_message(self, fmt, *args):  # silence server logs in test output
-            pass
-
-    return _Handler
-
-
-@pytest.fixture()
-def router_server(request):
-    """Start a real HTTP server in a background thread.
-
-    Usage:
-        @pytest.mark.parametrize("router_server", [...], indirect=True)
-        def test_foo(router_server):
-            url = router_server   # http://localhost:<port>
-
-    The indirect parameter is a dict: {"status": int, "body": any}.
-    """
-    params = request.param  # {"status": ..., "body": ...}
-    handler = _make_handler(
-        params["status"],
-        params["body"],
-        params.get("content_type", "application/json"),
-    )
-    server = HTTPServer(("127.0.0.1", 0), handler)  # port=0 → OS picks a free port
-    port = server.server_address[1]
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{port}"
-    server.shutdown()
 
 
 # Unit tests: endpoint normalisation + request shape
@@ -344,8 +288,8 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     None
 ):
     recipe = {
-        "version": "v0.4",
-        "document": {
+        "version": "v0.3",
+        "routing": {
             "decisions": [
                 {
                     "name": "simple_general",
@@ -368,7 +312,7 @@ def test_recipe_learning_artifact_contains_metrics_patch_candidates_and_seed_pac
     assert artifact["recipe_patch"]["suggestions"][0]["finding_id"].startswith("rlf_")
     assert artifact["candidate_recipes"]
     assert artifact["candidate_recipes"][0]["recipe"] is not None
-    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["document"][
+    candidate_decision = artifact["candidate_recipes"][0]["recipe"]["routing"][
         "decisions"
     ][0]
     assert candidate_decision["adaptations"]["adaptation"]["candidate_set"] == "tier"
@@ -427,8 +371,8 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         )
     }
     recipe = {
-        "version": "v0.4",
-        "document": {
+        "version": "v0.3",
+        "routing": {
             "decisions": [
                 {"name": "simple_general", "priority": 50},
                 {"name": "domain_math", "priority": 40},
@@ -458,11 +402,11 @@ def test_recipe_learning_detects_route_model_and_protection_gaps() -> None:
         if candidate.get("recipe") is not None
     ]
     assert any(
-        recipe["document"]["decisions"][0].get("priority") == 40
+        recipe["routing"]["decisions"][0].get("priority") == 40
         for recipe in materialized
     )
     assert any(
-        recipe["document"]["decisions"][0]
+        recipe["routing"]["decisions"][0]
         .get("adaptations", {})
         .get("protection", {})
         .get("mode")
@@ -490,13 +434,15 @@ def test_recipe_learning_command_reads_file_and_writes_artifacts(
     )
     recipe_path.write_text(
         """
-version: v0.4
-document:
-  decisions:
-    - name: simple_general
-      adaptations:
-        protection:
-          stability_weight: 1.0
+version: v0.3
+recipes:
+  - name: tuned
+    routing:
+      decisions:
+        - name: simple_general
+          adaptations:
+            protection:
+              stability_weight: 1.0
 """.strip(),
         encoding="utf-8",
     )

@@ -129,25 +129,35 @@ func assertModelSafeSchema(t *testing.T, kind ComponentKind, name string, raw js
 func collectSchemaNames(value any, properties map[string]struct{}, meta map[string][]string) {
 	switch typed := value.(type) {
 	case map[string]any:
-		for key, nested := range typed {
-			if key == "properties" {
-				if fields, ok := nested.(map[string]any); ok {
-					for field := range fields {
-						properties[field] = struct{}{}
-					}
-				}
-			}
-			if len(key) > 0 && key[0] == '$' {
-				text, _ := nested.(string)
-				meta[key] = append(meta[key], text)
-			}
-			collectSchemaNames(nested, properties, meta)
-		}
+		collectSchemaObject(typed, properties, meta)
 	case []any:
 		for _, nested := range typed {
 			collectSchemaNames(nested, properties, meta)
 		}
 	}
+}
+
+func collectSchemaObject(value map[string]any, properties map[string]struct{}, meta map[string][]string) {
+	for key, nested := range value {
+		if fields, ok := schemaProperties(key, nested); ok {
+			for field := range fields {
+				properties[field] = struct{}{}
+			}
+		}
+		if len(key) > 0 && key[0] == '$' {
+			text, _ := nested.(string)
+			meta[key] = append(meta[key], text)
+		}
+		collectSchemaNames(nested, properties, meta)
+	}
+}
+
+func schemaProperties(key string, value any) (map[string]any, bool) {
+	if key != "properties" {
+		return nil, false
+	}
+	fields, ok := value.(map[string]any)
+	return fields, ok
 }
 
 func assertEmptyJSONArray(t *testing.T, value any) {

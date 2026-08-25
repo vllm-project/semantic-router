@@ -3,44 +3,46 @@
 # =============================================================================
 
 MODEL local/deepseek-v4-flash-analyst {
-  aliases: ["deepseek-ai/DeepSeek-V4-Flash-0731"]
-  capabilities: ["independent_analysis", "long_context", "reasoning_diversity", "text", "tool_use"]
+  capabilities: ["independent_analysis", "long_context", "tool_use", "reasoning_diversity", "text"]
 }
 
 MODEL local/gemma4-26b-balanced {
-  capabilities: ["long_context", "multilingual", "reasoning", "structured_output", "text"]
+  capabilities: ["reasoning", "multilingual", "structured_output", "long_context", "text"]
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL local/qwen3.5-122b-frontier {
-  aliases: ["qwen/qwen3.5-rocm"]
-  capabilities: ["deep_synthesis", "high_risk_review", "legal_analysis", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["high", "low", "medium"] }
+  capabilities: ["legal_analysis", "high_risk_review", "deep_synthesis", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["medium", "high"] }
 }
 
 MODEL local/qwen3.5-9b-economy {
-  capabilities: ["explanation", "fast_qa", "general_chat", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["low", "medium"] }
+  capabilities: ["fast_qa", "explanation", "general_chat", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
 }
 
 MODEL local/qwen3.5-9b-economy-replica {
-  aliases: ["local/qwen3.5-9b-economy"]
-  capabilities: ["explanation", "fast_qa", "general_chat", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["low", "medium"] }
+  capabilities: ["fast_qa", "explanation", "general_chat", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
 }
 
 MODEL local/qwen3.5-9b-private {
-  capabilities: ["general_chat", "privacy_locality", "sensitive_data", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["low"] }
+  capabilities: ["privacy_locality", "sensitive_data", "general_chat", "text"]
+  reasoning: { type: "chat_template_kwargs" }
 }
 
 MODEL local/qwen3.6-27b-coder {
-  capabilities: ["coding", "reasoning", "structured_output", "text", "tool_use"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["high", "low"] }
+  capabilities: ["reasoning", "coding", "structured_output", "tool_use", "text"]
+  reasoning: { type: "chat_template_kwargs", efforts: ["high"] }
 }
 
 MODEL local/qwen3.6-35b-flash {
-  capabilities: ["coding", "fast_qa", "reasoning", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["low"] }
+  capabilities: ["fast_qa", "coding", "reasoning", "text"]
+  reasoning: { type: "chat_template_kwargs" }
 }
 
 # =============================================================================
@@ -51,6 +53,7 @@ ENTRYPOINT {
   name: "vllm-sr/mom-v1-vault"
   recipe: "privacy-first"
   assignments: [
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "unified_privacy_local_default", models: [{ model: "local/qwen3.5-9b-private", weight: "1" }] },
     { decision: "unified_privacy_security_containment", models: [{ model: "local/qwen3.5-9b-private", weight: "1" }] },
     { decision: "unified_privacy_sensitive_route", models: [{ model: "local/qwen3.5-9b-private", weight: "1" }] },
@@ -61,6 +64,7 @@ ENTRYPOINT {
   name: "vllm-sr/mom-v1-ultra"
   recipe: "accuracy-first"
   assignments: [
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "unified_frontier_direct", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
     { decision: "unified_frontier_fusion", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/deepseek-v4-flash-analyst", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
     { decision: "unified_frontier_remom", models: [{ model: "local/qwen3.6-27b-coder", weight: "1", reasoning: { enabled: true, effort: "high" } }, { model: "local/deepseek-v4-flash-analyst", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1", reasoning: { enabled: true, effort: "high" } }] },
@@ -74,6 +78,7 @@ ENTRYPOINT {
   name: "vllm-sr/mom-v1-lite"
   recipe: "cost-first"
   assignments: [
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "unified_cost_first_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.5-9b-economy-replica", weight: "1" }] },
     { decision: "unified_cost_local_reasoning", models: [{ model: "local/qwen3.5-9b-economy", weight: "1", reasoning: { enabled: true, effort: "medium" } }, { model: "local/qwen3.5-9b-economy-replica", weight: "1", reasoning: { enabled: true, effort: "medium" } }] },
   ]
@@ -83,6 +88,7 @@ ENTRYPOINT {
   name: "vllm-sr/mom-v1-flash"
   recipe: "speed-first"
   assignments: [
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "unified_speed_first_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.5-9b-economy-replica", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }] },
     { decision: "unified_speed_heavy_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.5-9b-economy-replica", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }] },
   ]
@@ -92,6 +98,7 @@ ENTRYPOINT {
   name: "vllm-sr/mom-v1-blend"
   recipe: "balanced"
   assignments: [
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
     { decision: "unified_balance_deliberate_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
     { decision: "unified_balance_recovery", models: [{ model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
     { decision: "unified_balance_route", models: [{ model: "local/qwen3.5-9b-economy", weight: "1" }, { model: "local/qwen3.6-27b-coder", weight: "1" }, { model: "local/qwen3.6-35b-flash", weight: "1" }, { model: "local/gemma4-26b-balanced", weight: "1" }, { model: "local/qwen3.5-122b-frontier", weight: "1" }] },
@@ -208,6 +215,11 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
     predicate: { gte: 2 }
   }
 
+  SIGNAL conversation unified_balance_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL complexity unified_balance_difficulty {
     threshold: 0.08
     description: "Semantic boundary between direct requests and synthesis-heavy work."
@@ -231,7 +243,13 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
   # ROUTES
   # =============================================================================
 
-  ROUTE unified_balance_recovery (description = "Recover from explicit dissatisfaction with a stronger reasoning pool and corrective prompt.") {
+  ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+    PRIORITY 400
+    WHEN conversation("unified_balance_has_images")
+    ALGORITHM static
+  }
+
+  ROUTE unified_balance_recovery (description = "Recover from explicit dissatisfaction with a stronger reasoning pool.") {
     PRIORITY 300
     TIER 1
     WHEN (user_feedback("wrong_answer") OR keyword("unified_balance_correction_markers") OR reask("unified_balance_reask"))
@@ -239,11 +257,6 @@ RECIPE balanced (description = "Mixture-of-Models · Balanced — adaptive quali
       latency_percentile: 95
       on_no_candidates: "first"
       weights: { cost: 0.1, latency: 0.1, load: 0.15, quality: 0.65 }
-    }
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "Rebuild the answer from first principles, correct the earlier miss directly, and make the improvement explicit."
-      mode: "insert"
     }
   }
 
@@ -304,6 +317,11 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
     feature: { source: { sequences: [["first", "then"], ["first", "next", "finally"], ["首先", "然后"], ["先", "再"]], type: "sequence" }, type: "sequence" }
   }
 
+  SIGNAL conversation unified_speed_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   PROJECTION score unified_speed_work_score {
     method: "weighted_sum"
     inputs: [{ type: "keyword", weight: 0.6, name: "unified_speed_heavy_markers", value_source: "confidence" }, { type: "context", weight: 0.35, name: "unified_speed_long_context" }, { type: "structure", weight: 0.25, name: "unified_speed_ordered_workflow" }]
@@ -318,6 +336,12 @@ RECIPE speed-first (description = "Prefer the lowest observed latency while pres
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Keep visual requests on the dedicated low-latency visual-language model.") {
+    PRIORITY 300
+    WHEN conversation("unified_speed_has_images")
+    ALGORITHM static
+  }
 
   ROUTE unified_speed_heavy_route (description = "Use live TTFT and TPOT percentiles across efficient models for heavier requests.") {
     PRIORITY 200
@@ -464,6 +488,11 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
     feature: { source: { type: "active_tool_loop" }, type: "exists" }
   }
 
+  SIGNAL conversation unified_frontier_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL complexity unified_frontier_complexity {
     threshold: 0.15
     description: "Semantic boundary for tasks that merit multi-round reasoning."
@@ -510,6 +539,12 @@ RECIPE accuracy-first (description = "Escalate from a frontier direct answer to 
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Understand image-bearing requests directly before text-only orchestration.") {
+    PRIORITY 500
+    WHEN conversation("unified_frontier_has_images")
+    ALGORITHM static
+  }
 
   ROUTE unified_frontier_workflow (description = "Use Router Flow for explicit investigate-plan-execute tasks with separable roles.") {
     PRIORITY 400
@@ -631,6 +666,11 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     method: "regex"
   }
 
+  SIGNAL conversation unified_privacy_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL jailbreak unified_privacy_jailbreak_strict {
     method: "classifier"
     threshold: 0.45
@@ -674,6 +714,17 @@ RECIPE privacy-first (description = "Keep every request local, using recipe-scop
     PRIORITY 300
     TIER 1
     WHEN (jailbreak("unified_privacy_jailbreak_strict") OR keyword("unified_privacy_attack_markers"))
+    ALGORITHM static
+    PLUGIN tools {
+      enabled: true
+      mode: "none"
+    }
+  }
+
+  ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.") {
+    PRIORITY 250
+    TIER 2
+    WHEN conversation("unified_privacy_has_images")
     ALGORITHM static
     PLUGIN tools {
       enabled: true
@@ -733,6 +784,11 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
     feature: { source: { sequences: [["first", "then"], ["first", "next", "finally"], ["首先", "然后"], ["先", "再"]], type: "sequence" }, type: "sequence" }
   }
 
+  SIGNAL conversation unified_cost_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   PROJECTION score unified_cost_compute_score {
     method: "weighted_sum"
     inputs: [{ type: "keyword", weight: 0.6, name: "unified_cost_reasoning_markers", value_source: "confidence" }, { type: "context", weight: 0.35, name: "unified_cost_long_context" }, { type: "structure", weight: 0.3, name: "unified_cost_ordered_workflow" }]
@@ -747,6 +803,12 @@ RECIPE cost-first (description = "Keep every request local and spend additional 
   # =============================================================================
   # ROUTES
   # =============================================================================
+
+  ROUTE omni (description = "Keep visual requests on the dedicated local visual-language model.") {
+    PRIORITY 300
+    WHEN conversation("unified_cost_has_images")
+    ALGORITHM static
+  }
 
   ROUTE unified_cost_local_reasoning (description = "Enable bounded reasoning on the self-hosted model for genuinely demanding requests.") {
     PRIORITY 200

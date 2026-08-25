@@ -21,38 +21,54 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageaccounting"
 )
 
-const inferenceAdmissionLease = 15 * time.Minute
+const (
+	inferenceAdmissionMinimumLease  = 15 * time.Minute
+	inferenceAdmissionLeaseHeadroom = time.Minute
+)
 
 const inferenceSettlementTimeout = 10 * time.Second
 
 // InferenceAccessRuntime is the process-owned Router-native access seam. A
-// managed composition injects one instance into every router generation.
-type InferenceAccessRuntime interface {
+// durable composition injects one instance into every router generation.
+type InferenceIdentityRuntime interface {
 	Authenticate(context.Context, accessruntime.AuthenticationRequest) (accessruntime.Authentication, error)
 	Authorize(context.Context, accessruntime.AuthorizationRequest) (accessruntime.Authorization, error)
 	Discover(context.Context, accessruntime.DiscoveryRequest) (accessruntime.Discovery, error)
 	DiscoverCatalog(context.Context, accessruntime.CatalogDiscoveryRequest) (accessruntime.CatalogDiscovery, error)
+}
+
+type InferenceQuotaRuntime interface {
 	Admit(context.Context, accessruntime.AdmissionRequest) (accessruntime.Admission, error)
+	Heartbeat(context.Context, accessruntime.Admission) (quotaruntime.AdmissionHeartbeatResult, error)
 	JournalDispatch(context.Context, accessruntime.DispatchJournalRequest) (quotaruntime.MutationResult, error)
 	ReadAttemptEvidence(context.Context, accessruntime.AttemptEvidenceRequest) (accessruntime.AttemptEvidenceSnapshot, error)
 	Settle(context.Context, accessruntime.SettlementRequest) (quotaruntime.FinalizationResult, error)
 }
 
+type InferenceAccessRuntime interface {
+	InferenceIdentityRuntime
+	InferenceQuotaRuntime
+}
+
 type inferenceRequestAccess struct {
-	mu              sync.Mutex
-	session         accessruntime.Session
-	target          accessruntime.Target
-	tenant          accessruntime.TenantContext
-	source          accessruntime.AuthenticationSource
-	admission       *accessruntime.Admission
-	entrypoint      *config.EntrypointMapping
-	rule            *config.EntrypointRule
-	settlementModel string
-	finalized       bool
-	settlement      *inferenceSettlementPlan
-	settlementRun   *inferenceSettlementRun
+	mu                  sync.Mutex
+	session             accessruntime.Session
+	target              accessruntime.Target
+	tenant              accessruntime.TenantContext
+	source              accessruntime.AuthenticationSource
+	admission           *accessruntime.Admission
+	entrypoint          *config.EntrypointMapping
+	rule                *config.EntrypointRule
+	settlementModel     string
+	finalized           bool
+	settlement          *inferenceSettlementPlan
+	settlementRun       *inferenceSettlementRun
+	heartbeatCancel     context.CancelFunc
+	heartbeatDone       chan struct{}
+	cacheHitServedUsage *usageaccounting.ActualUsage
 }
 
 type inferenceSettlementRun struct {
@@ -61,21 +77,21 @@ type inferenceSettlementRun struct {
 	waiters int
 }
 
-func (r *OpenAIRouter) managedInferenceAccessEnabled() bool {
+func (r *OpenAIRouter) nativeAccessEnabled() bool {
 	return r != nil && r.Config != nil && r.Config.Access.Enabled
 }
 
 // bindInferenceAuthentication loads the process-local opaque access session
-// selected before a managed Router generation was acquired. The raw bearer is
+// selected before a durable Router generation was acquired. The raw bearer is
 // consumed by RouterService and never enters RequestContext.
 func (r *OpenAIRouter) bindInferenceAuthentication(ctx *RequestContext) *ext_proc.ProcessingResponse {
 	if ctx == nil {
 		return r.createErrorResponse(http.StatusInternalServerError, "request context unavailable")
 	}
-	if ctx.ManagedDispatch == nil {
-		ctx.ManagedDispatch = &managedRequestDispatch{requestID: ctx.RequestID}
+	if ctx.DispatchState == nil {
+		ctx.DispatchState = &requestDispatchState{requestID: ctx.RequestID}
 	}
-	if ctx.LooperRequest || !r.managedInferenceAccessEnabled() {
+	if ctx.LooperRequest || !r.nativeAccessEnabled() {
 		return nil
 	}
 	removeHeaderValueCI(ctx, "authorization")
@@ -96,7 +112,7 @@ func (r *OpenAIRouter) authorizeInferenceTarget(
 	request *RequestContext,
 	model string,
 ) *ext_proc.ProcessingResponse {
-	if !r.managedInferenceAccessEnabled() || request.LooperRequest {
+	if !r.nativeAccessEnabled() || request.LooperRequest {
 		return nil
 	}
 	if r.InferenceAccess == nil {
@@ -167,7 +183,7 @@ func (r *OpenAIRouter) admitInferenceRequest(
 	request *RequestContext,
 	selectedModel string,
 ) *ext_proc.ProcessingResponse {
-	if !r.managedInferenceAccessEnabled() || request.LooperRequest {
+	if !r.nativeAccessEnabled() || request.LooperRequest {
 		return nil
 	}
 	state := request.InferenceAccess
@@ -187,12 +203,13 @@ func (r *OpenAIRouter) admitInferenceRequest(
 	}
 
 	digest := inferenceRequestDigest(request, state.target)
+	lease := r.inferenceAdmissionLease(candidates)
 	admission, err := r.InferenceAccess.Admit(ctx, accessruntime.AdmissionRequest{
 		Session:       state.session,
 		Target:        state.target,
 		AdmissionID:   uuid.NewString(),
 		RequestDigest: digest,
-		LeaseDuration: inferenceAdmissionLease,
+		LeaseDuration: lease,
 	})
 	if err != nil || !admission.Result.Allowed() {
 		return r.createInferenceAccessError(admission.Result.Disposition, admission.Result.RetryAt)
@@ -209,7 +226,39 @@ func (r *OpenAIRouter) admitInferenceRequest(
 	state.tenant = admission.Tenant
 	state.settlementModel = settlementModel
 	state.mu.Unlock()
+	r.startInferenceAdmissionHeartbeat(request, admission)
 	return nil
+}
+
+// inferenceAdmissionLease keeps the immutable deadline of every dispatch in
+// the admitted Recipe inside the renewable admission lease. Recipe algorithms
+// can issue a non-streaming internal call while serving a streaming response,
+// so both configured timeout variants are considered for every pinned model.
+func (r *OpenAIRouter) inferenceAdmissionLease(candidates []string) time.Duration {
+	lease := inferenceAdmissionMinimumLease
+	if r == nil || r.Config == nil {
+		return lease
+	}
+	for _, model := range candidates {
+		params, exists := r.Config.ModelConfig[model]
+		if !exists {
+			continue
+		}
+		for _, configured := range []string{
+			params.Execution.RequestTimeout,
+			params.Execution.StreamTimeout,
+		} {
+			timeout, err := time.ParseDuration(configured)
+			if err != nil || timeout <= 0 {
+				continue
+			}
+			candidateLease := timeout + inferenceAdmissionLeaseHeadroom
+			if candidateLease > lease {
+				lease = candidateLease
+			}
+		}
+	}
+	return lease
 }
 
 func (r *OpenAIRouter) inferenceCandidateModels(request *RequestContext, selected string) []string {

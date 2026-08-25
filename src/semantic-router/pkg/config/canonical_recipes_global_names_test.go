@@ -70,7 +70,12 @@ func TestDuplicateDecisionNameAcrossRecipesIsIsolated(t *testing.T) {
 }
 
 func TestEntrypointNameCollisionsRejected(t *testing.T) {
-	document := strings.Replace(recipeTestPrivacyYAML, "  - name: vllm-sr/privacy\n", "  - name: model-a\n", 1)
+	document := strings.Replace(
+		recipeTestPrivacyYAML,
+		"  - model_names: [vllm-sr/privacy]\n",
+		"  - model_names: [model-a]\n",
+		1,
+	)
 	_, err := parseRecipeFixtureYAML(t, []byte(document))
 	if err == nil || !strings.Contains(err.Error(), "already a configured model") {
 		t.Fatalf("error = %v", err)
@@ -79,9 +84,14 @@ func TestEntrypointNameCollisionsRejected(t *testing.T) {
 
 func TestEntrypointNameCollidingWithLoRARejected(t *testing.T) {
 	document := strings.Replace(recipeTestPrivacyYAML,
-		"card: {description: default tier}",
-		"card: {description: default tier, loras: [general-expert]}", 1)
-	document = strings.Replace(document, "  - name: vllm-sr/privacy\n", "  - name: general-expert\n", 1)
+		"    - {name: model-a, description: default tier}\n",
+		"    - name: model-a\n      description: default tier\n      loras: [{name: general-expert}]\n", 1)
+	document = strings.Replace(
+		document,
+		"  - model_names: [vllm-sr/privacy]\n",
+		"  - model_names: [general-expert]\n",
+		1,
+	)
 	_, err := parseRecipeFixtureYAML(t, []byte(document))
 	if err == nil || !strings.Contains(err.Error(), "already a configured LoRA adapter") {
 		t.Fatalf("error = %v", err)

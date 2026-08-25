@@ -9,10 +9,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 )
 
-// AuthoringCompiler compiles the concise standalone Model connection through
-// the same immutable Provider Integration registry used by the managed control
-// plane. Credential is a bootstrap reference name; secret material is never
-// loaded during compilation.
+// AuthoringCompiler compiles a concise file-authored Model connection through
+// the same immutable Provider Integration registry used by dynamic authoring.
+// Credential is a reference name; secret material is never loaded during
+// compilation.
 type AuthoringCompiler struct {
 	Registry *Registry
 }
@@ -53,7 +53,7 @@ func (compiler AuthoringCompiler) CompileConnection(
 	if err := validateAuthoringCredential(provider, connection.Credential); err != nil {
 		return modelauthoring.CompileResult{}, err
 	}
-	fields, compileConnectionErr := normalizeConnectionFields(provider.ConnectionFields, nil)
+	fields, compileConnectionErr := normalizeConnectionFields(provider.ConnectionFields, connection.ConnectionFields)
 	if compileConnectionErr != nil {
 		return modelauthoring.CompileResult{}, compileConnectionErr
 	}
@@ -69,7 +69,7 @@ func (compiler AuthoringCompiler) CompileConnection(
 	if compileConnectionErr != nil {
 		return modelauthoring.CompileResult{}, fmt.Errorf("compile Provider connection: %w", compileConnectionErr)
 	}
-	compiledConnection, compileConnectionErr = routingsnapshot.CanonicalizeBackendConnection(compiledConnection)
+	compiledConnection, compileConnectionErr = applyTransportOverrides(compiledConnection, connection.Transport)
 	if compileConnectionErr != nil {
 		return modelauthoring.CompileResult{}, fmt.Errorf("provider compiler emitted an invalid connection: %w", compileConnectionErr)
 	}
@@ -86,6 +86,34 @@ func (compiler AuthoringCompiler) CompileConnection(
 			Connection: compiledConnection, Weight: weight,
 		},
 	}, nil
+}
+
+func applyTransportOverrides(
+	compiled routingsnapshot.BackendConnection,
+	overrides modelauthoring.TransportOverrides,
+) (routingsnapshot.BackendConnection, error) {
+	base, err := routingsnapshot.CanonicalizeBackendConnection(compiled)
+	if err != nil {
+		return routingsnapshot.BackendConnection{}, err
+	}
+	if overrides.Path != "" {
+		base.Path = overrides.Path
+	}
+	override, err := routingsnapshot.CanonicalizeBackendConnection(routingsnapshot.BackendConnection{
+		Path: base.Path, Headers: overrides.Headers,
+	})
+	if err != nil {
+		return routingsnapshot.BackendConnection{}, fmt.Errorf("transport override: %w", err)
+	}
+	if len(override.Headers) > 0 {
+		if base.Headers == nil {
+			base.Headers = make(map[string]string, len(override.Headers))
+		}
+		for name, value := range override.Headers {
+			base.Headers[name] = value
+		}
+	}
+	return routingsnapshot.CanonicalizeBackendConnection(base)
 }
 
 func validateAuthoringCredential(provider Definition, credential string) error {

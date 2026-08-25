@@ -257,6 +257,37 @@ func testTerminalEvent(admission string, occurred time.Time) TerminalEvent {
 	}
 }
 
+func TestTerminalEventAllowsFenceForUnknownServedUsageWithKnownBackendUsage(t *testing.T) {
+	event := testTerminalEvent("served-usage-fence", time.Date(2026, 8, 22, 12, 0, 10, 0, time.UTC))
+	event.Served = ServedUsage{InputTokens: "0", OutputTokens: "0"}
+	event.Fence = &UnknownFence{
+		FenceID: "00000000-0000-4000-8000-000000000301",
+		Reason:  "served_total_tokens_missing",
+		Bindings: []FenceBinding{{
+			BindingID: "00000000-0000-4000-8000-000000000302",
+			RuleID:    "00000000-0000-4000-8000-000000000303",
+		}},
+	}
+	if _, err := event.Validate(); err != nil {
+		t.Fatalf("known backend usage with an unknown served-usage fence was rejected: %v", err)
+	}
+}
+
+func TestTerminalEventRejectsFenceWhenAllAccountingIsComplete(t *testing.T) {
+	event := testTerminalEvent("complete-usage-fence", time.Date(2026, 8, 22, 12, 0, 10, 0, time.UTC))
+	event.Fence = &UnknownFence{
+		FenceID: "00000000-0000-4000-8000-000000000311",
+		Reason:  "authoritative_usage_missing",
+		Bindings: []FenceBinding{{
+			BindingID: "00000000-0000-4000-8000-000000000312",
+			RuleID:    "00000000-0000-4000-8000-000000000313",
+		}},
+	}
+	if _, err := event.Validate(); err == nil {
+		t.Fatal("complete accounting accepted an unknown-usage fence")
+	}
+}
+
 func streamValues(event TerminalEvent, payload string) map[string]string {
 	return map[string]string{
 		"admission_id": event.AdmissionID, "admission_digest": digestHex("admission-" + event.AdmissionID),

@@ -5,32 +5,32 @@ import (
 	"testing"
 )
 
-func TestValidateAgentServiceModeContract(t *testing.T) {
+func TestValidateAgentServiceAccessContract(t *testing.T) {
 	tests := []struct {
 		name     string
-		mode     string
+		access   bool
 		endpoint string
 		wantErr  string
 	}{
-		{name: "standalone omits Agent inference", mode: ControlPlaneModeStandalone},
+		{name: "access disabled omits Agent inference"},
 		{
-			name: "standalone rejects managed endpoint", mode: ControlPlaneModeStandalone,
-			endpoint: "http://public-inference.internal/v1/chat/completions", wantErr: "managed-only",
+			name:     "access disabled rejects Agent endpoint",
+			endpoint: "http://public-inference.internal/v1/chat/completions", wantErr: "access.enabled",
 		},
-		{name: "managed requires endpoint", mode: ControlPlaneModeManaged, wantErr: "requires"},
+		{name: "access enabled requires endpoint", access: true, wantErr: "requires"},
 		{
-			name: "managed accepts HTTP", mode: ControlPlaneModeManaged,
+			name: "access enabled accepts HTTP", access: true,
 			endpoint: "http://public-inference.internal/v1/chat/completions",
 		},
 		{
-			name: "managed accepts HTTPS", mode: ControlPlaneModeManaged,
+			name: "access enabled accepts HTTPS", access: true,
 			endpoint: "https://api.example.test/v1/chat/completions",
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			err := validateAgentService(test.mode, AgentServiceConfig{PublicInferenceEndpoint: test.endpoint})
+			err := validateAgentService(test.access, AgentServiceConfig{PublicInferenceEndpoint: test.endpoint})
 			if test.wantErr == "" {
 				if err != nil {
 					t.Fatalf("validateAgentService() error = %v", err)
@@ -61,7 +61,7 @@ func TestValidateAgentServiceRejectsAmbiguousPublicEndpoints(t *testing.T) {
 	} {
 		t.Run(endpoint, func(t *testing.T) {
 			if err := validateAgentService(
-				ControlPlaneModeManaged,
+				true,
 				AgentServiceConfig{PublicInferenceEndpoint: endpoint},
 			); err == nil {
 				t.Fatalf("validateAgentService(%q) should fail", endpoint)

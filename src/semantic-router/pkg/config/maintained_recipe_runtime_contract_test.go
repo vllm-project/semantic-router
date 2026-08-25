@@ -19,18 +19,17 @@ func TestMaintainedRecipeExternalAliasesDoNotUseQwenReasoningFamily(t *testing.T
 	} {
 		t.Run(recipe, func(t *testing.T) {
 			canonical := readCanonicalRecipeConfig(t, recipe)
-			for _, model := range canonical.Models {
-				for _, connection := range model.Connections {
-					if !isExternalProviderModelID(connection.Model) {
-						continue
-					}
-					if model.Card.Reasoning.Type == ReasoningFamilyTypeChatTemplateKwargs {
-						t.Fatalf(
-							"external model %q (%s) must not receive Qwen reasoning parameters",
-							model.Name,
-							connection.Model,
-						)
-					}
+			for _, model := range canonical.Providers.Models {
+				if !isExternalProviderModelID(model.ProviderModelID) {
+					continue
+				}
+				family := canonical.Providers.Defaults.ReasoningFamilies[model.ReasoningFamily]
+				if family.Type == ReasoningFamilyTypeChatTemplateKwargs {
+					t.Fatalf(
+						"external model %q (%s) must not receive Qwen reasoning parameters",
+						model.Name,
+						model.ProviderModelID,
+					)
 				}
 			}
 		})
@@ -126,16 +125,16 @@ func TestAccuracyRecipeUsesCurrentOpenRouterWorkerIDs(t *testing.T) {
 		"gemini31-worker": "google/gemini-3.1-pro-preview",
 		"gpt55-worker":    "openai/gpt-5.5",
 	}
-	for _, model := range canonical.Models {
+	for _, model := range canonical.Providers.Models {
 		expected, ok := want[model.Name]
 		if !ok {
 			continue
 		}
-		if len(model.Connections) != 1 || model.Connections[0].Model != expected {
+		if len(model.BackendRefs) != 1 || model.ProviderModelID != expected {
 			t.Fatalf(
-				"accuracy worker %q connections = %+v, want provider model %q",
+				"accuracy worker %q backend refs = %+v, want provider model %q",
 				model.Name,
-				model.Connections,
+				model.BackendRefs,
 				expected,
 			)
 		}

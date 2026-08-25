@@ -153,49 +153,72 @@ func (provider *Provider) resolveEntrypointInput(
 	recipes := make(map[string]struct{})
 	models := make(map[string]struct{})
 	for _, rule := range input.Rules {
-		if rule.RecipeID == "" || len(rule.Assignments) == 0 {
-			return routingmanagement.EntrypointInput{}, nil, nil, agentmanagement.ErrInvalid
+		convertedRule, recipeID, err := provider.resolveEntrypointRule(ctx, invocation.NamespaceID, rule, models)
+		if err != nil {
+			return routingmanagement.EntrypointInput{}, nil, nil, err
 		}
-		recipe, err := provider.routing.GetRecipe(ctx, invocation.NamespaceID, rule.RecipeID)
-		if err != nil || recipe.Status == routingmanagement.StatusDisabled ||
-			recipe.Status == routingmanagement.StatusDeleted {
-			if err != nil {
-				return routingmanagement.EntrypointInput{}, nil, nil, mapRoutingError(err)
-			}
-			return routingmanagement.EntrypointInput{}, nil, nil, agentmanagement.ErrNotFound
-		}
-		recipes[recipe.ID] = struct{}{}
-		convertedRule := routingmanagement.EntrypointRuleInput{
-			ID: rule.ID, Name: rule.Name,
-			Matchers:    append([]routingsnapshot.Matcher(nil), rule.Matchers...),
-			RecipeID:    recipe.ID,
-			Assignments: make(map[string]routingmanagement.AssignmentSetInput, len(rule.Assignments)),
-		}
-		for decisionID, set := range rule.Assignments {
-			if decisionID == "" || len(set.Models) == 0 {
-				return routingmanagement.EntrypointInput{}, nil, nil, agentmanagement.ErrInvalid
-			}
-			convertedSet := routingmanagement.AssignmentSetInput{Fallback: set.Fallback}
-			for _, assignment := range set.Models {
-				model, err := provider.routing.GetModel(ctx, invocation.NamespaceID, assignment.ModelID)
-				if err != nil || model.Status == routingmanagement.StatusDisabled ||
-					model.Status == routingmanagement.StatusDeleted {
-					if err != nil {
-						return routingmanagement.EntrypointInput{}, nil, nil, mapRoutingError(err)
-					}
-					return routingmanagement.EntrypointInput{}, nil, nil, agentmanagement.ErrNotFound
-				}
-				models[model.ID] = struct{}{}
-				convertedSet.Models = append(convertedSet.Models, routingmanagement.AssignmentInput{
-					ModelID: model.ID, Priority: assignment.Priority, Weight: assignment.Weight,
-					LoRAName: assignment.LoRAName, Reasoning: assignment.Reasoning,
-				})
-			}
-			convertedRule.Assignments[decisionID] = convertedSet
-		}
+		recipes[recipeID] = struct{}{}
 		result.Rules = append(result.Rules, convertedRule)
 	}
 	return result, sortedKeys(recipes), sortedKeys(models), nil
+}
+
+func (provider *Provider) resolveEntrypointRule(
+	ctx context.Context,
+	namespaceID string,
+	rule entrypointRuleInput,
+	models map[string]struct{},
+) (routingmanagement.EntrypointRuleInput, string, error) {
+	if rule.RecipeID == "" || len(rule.Assignments) == 0 {
+		return routingmanagement.EntrypointRuleInput{}, "", agentmanagement.ErrInvalid
+	}
+	recipe, err := provider.routing.GetRecipe(ctx, namespaceID, rule.RecipeID)
+	if err != nil {
+		return routingmanagement.EntrypointRuleInput{}, "", mapRoutingError(err)
+	}
+	if recipe.Status == routingmanagement.StatusDisabled || recipe.Status == routingmanagement.StatusDeleted {
+		return routingmanagement.EntrypointRuleInput{}, "", agentmanagement.ErrNotFound
+	}
+	converted := routingmanagement.EntrypointRuleInput{
+		ID: rule.ID, Name: rule.Name, Matchers: append([]routingsnapshot.Matcher(nil), rule.Matchers...),
+		RecipeID: recipe.ID, Assignments: make(map[string]routingmanagement.AssignmentSetInput, len(rule.Assignments)),
+	}
+	for decisionID, set := range rule.Assignments {
+		convertedSet, err := provider.resolveAssignmentSet(ctx, namespaceID, decisionID, set, models)
+		if err != nil {
+			return routingmanagement.EntrypointRuleInput{}, "", err
+		}
+		converted.Assignments[decisionID] = convertedSet
+	}
+	return converted, recipe.ID, nil
+}
+
+func (provider *Provider) resolveAssignmentSet(
+	ctx context.Context,
+	namespaceID string,
+	decisionID string,
+	set assignmentSetInput,
+	models map[string]struct{},
+) (routingmanagement.AssignmentSetInput, error) {
+	if decisionID == "" || len(set.Models) == 0 {
+		return routingmanagement.AssignmentSetInput{}, agentmanagement.ErrInvalid
+	}
+	converted := routingmanagement.AssignmentSetInput{Fallback: set.Fallback}
+	for _, assignment := range set.Models {
+		model, err := provider.routing.GetModel(ctx, namespaceID, assignment.ModelID)
+		if err != nil {
+			return routingmanagement.AssignmentSetInput{}, mapRoutingError(err)
+		}
+		if model.Status == routingmanagement.StatusDisabled || model.Status == routingmanagement.StatusDeleted {
+			return routingmanagement.AssignmentSetInput{}, agentmanagement.ErrNotFound
+		}
+		models[model.ID] = struct{}{}
+		converted.Models = append(converted.Models, routingmanagement.AssignmentInput{
+			ModelID: model.ID, Priority: assignment.Priority, Weight: assignment.Weight,
+			LoRAName: assignment.LoRAName, Reasoning: assignment.Reasoning,
+		})
+	}
+	return converted, nil
 }
 
 func sortedKeys(values map[string]struct{}) []string {

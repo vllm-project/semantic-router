@@ -95,11 +95,11 @@ def test_prompt_candidates_reject_effective_lora_identity_collision():
 def test_classifier_contract_rejects_multiple_local_rules():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 {
                     "name": "default",
-                    "document": {
+                    "routing": {
                         "signals": {
                             "classifiers": [
                                 {
@@ -136,15 +136,15 @@ def test_classifier_contract_allows_one_local_rule_per_recipe():
     }
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 {
                     "name": "private",
-                    "document": {"signals": {"classifiers": [rule]}},
+                    "routing": {"signals": {"classifiers": [rule]}},
                 },
                 {
                     "name": "public",
-                    "document": {"signals": {"classifiers": [rule]}},
+                    "routing": {"signals": {"classifiers": [rule]}},
                 },
             ],
         }
@@ -166,17 +166,17 @@ def test_classifier_contract_rejects_incompatible_recipe_local_models():
 
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 {
                     "name": "private",
-                    "document": {
+                    "routing": {
                         "signals": {"classifiers": [rule("models/private-risk")]}
                     },
                 },
                 {
                     "name": "public",
-                    "document": {
+                    "routing": {
                         "signals": {"classifiers": [rule("models/public-risk")]}
                     },
                 },
@@ -209,11 +209,11 @@ def test_llm_classifier_requires_classification_external_model(
 ):
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 {
                     "name": "default",
-                    "document": {
+                    "routing": {
                         "signals": {
                             "classifiers": [
                                 {
@@ -237,11 +237,11 @@ def test_llm_classifier_requires_classification_external_model(
 def test_classifier_decision_rejects_unknown_label_and_local_threshold():
     config = _user_config(
         {
-            "version": "v0.4",
+            "version": "v0.3",
             "recipes": [
                 {
                     "name": "default",
-                    "document": {
+                    "routing": {
                         "signals": {
                             "classifiers": [
                                 {
@@ -279,11 +279,11 @@ def test_classifier_names_and_labels_reject_reserved_delimiters():
     with pytest.raises(PydanticValidationError):
         _user_config(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "recipes": [
                     {
                         "name": "default",
-                        "document": {
+                        "routing": {
                             "signals": {
                                 "classifiers": [
                                     {
@@ -302,11 +302,11 @@ def test_classifier_names_and_labels_reject_reserved_delimiters():
     with pytest.raises(PydanticValidationError):
         _user_config(
             {
-                "version": "v0.4",
+                "version": "v0.3",
                 "recipes": [
                     {
                         "name": "default",
-                        "document": {
+                        "routing": {
                             "signals": {
                                 "classifiers": [
                                     {

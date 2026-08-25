@@ -152,84 +152,11 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	semanticrouter *vllmv1alpha1.SemanticRouter,
 	logger logr.Logger,
 ) (ctrl.Result, error) {
-	bootstrap, err := r.validateBootstrapConfigMap(ctx, semanticrouter)
-	if err != nil {
-		logger.Error(err, "Bootstrap ConfigMap validation failed")
-		semanticrouter.Status.BootstrapRevision = ""
-		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-			Type:               typeBootstrapReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             "ValidationFailed",
-			Message:            err.Error(),
-			ObservedGeneration: semanticrouter.Generation,
-		})
-		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-			Type:               typeMigrationReady,
-			Status:             metav1.ConditionFalse,
-			Reason:             "BootstrapInvalid",
-			Message:            "Migration requirements cannot be resolved until the bootstrap is valid",
-			ObservedGeneration: semanticrouter.Generation,
-		})
-		return ctrl.Result{}, err
-	}
-	semanticrouter.Status.ControlPlaneMode = bootstrap.Mode
-	semanticrouter.Status.BootstrapRevision = bootstrap.Revision
-	semanticrouter.Status.PublicService = semanticrouter.Name
-	if bootstrap.Mode == controlPlaneModeManaged {
-		semanticrouter.Status.ManagementService = semanticrouter.Name + "-management"
-	} else {
-		semanticrouter.Status.ManagementService = ""
-	}
-	meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-		Type: typeBootstrapReady, Status: metav1.ConditionTrue, Reason: "Validated",
-		Message: "The immutable Router bootstrap is valid", ObservedGeneration: semanticrouter.Generation,
-	})
-
-	if err := r.reconcileServiceAccount(ctx, semanticrouter); err != nil {
-		logger.Error(err, "Failed to reconcile ServiceAccount")
-		return ctrl.Result{}, err
-	}
-
-	if err := r.reconcilePVC(ctx, semanticrouter); err != nil {
-		logger.Error(err, "Failed to reconcile PersistentVolumeClaim")
-		return ctrl.Result{}, err
-	}
-
-	if bootstrap.Mode == controlPlaneModeManaged {
-		migration, err := r.reconcileMigrationJob(ctx, semanticrouter, bootstrap)
-		semanticrouter.Status.Migration = migration
-		if err != nil {
-			meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-				Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: "Failed",
-				Message: err.Error(), ObservedGeneration: semanticrouter.Generation,
-			})
-			return ctrl.Result{}, err
-		}
-		if migration.State != migrationStateSucceeded {
-			semanticrouter.Status.Phase = "Migrating"
-			meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-				Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: migration.State,
-				Message: "Waiting for the managed schema migration Job", ObservedGeneration: semanticrouter.Generation,
-			})
-			meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-				Type: typeAvailableSemanticRouter, Status: metav1.ConditionFalse, Reason: "MigrationPending",
-				Message: "Router rollout is gated on schema migration", ObservedGeneration: semanticrouter.Generation,
-			})
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		}
-		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-			Type: typeMigrationReady, Status: metav1.ConditionTrue, Reason: "Succeeded",
-			Message: "The managed schema is current", ObservedGeneration: semanticrouter.Generation,
-		})
-	} else {
-		if err := r.deleteStaleMigrationJobs(ctx, semanticrouter, ""); err != nil {
-			return ctrl.Result{}, err
-		}
-		semanticrouter.Status.Migration = nil
-		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
-			Type: typeMigrationReady, Status: metav1.ConditionTrue, Reason: "NotRequired",
-			Message: "Standalone mode does not use managed schema migration", ObservedGeneration: semanticrouter.Generation,
-		})
+	bootstrap, prerequisiteResult, pending, err := r.reconcileBootstrapPrerequisites(
+		ctx, semanticrouter, logger,
+	)
+	if err != nil || pending {
+		return prerequisiteResult, err
 	}
 
 	gatewayMode, err := resolveGatewayMode(ctx, r.Client, semanticrouter)
@@ -255,7 +182,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		return ctrl.Result{}, err
 	}
 
-	if err := r.reconcilePodDisruptionBudget(ctx, semanticrouter, bootstrap.Mode); err != nil {
+	if err := r.reconcilePodDisruptionBudget(ctx, semanticrouter, bootstrap.enablesAvailabilityDefaults()); err != nil {
 		logger.Error(err, "Failed to reconcile PodDisruptionBudget")
 		return ctrl.Result{}, err
 	}
@@ -286,7 +213,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		semanticrouter,
 		isOpenShift,
 		gatewayMode,
-		bootstrap.Mode,
+		bootstrap.usesDurableState(),
 	); err != nil {
 		logger.Error(err, "Route reconciliation failed")
 		return ctrl.Result{}, err
@@ -295,4 +222,104 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	semanticrouter.Status.Phase = "Progressing"
 	meta.RemoveStatusCondition(&semanticrouter.Status.Conditions, typeDegradedSemanticRouter)
 	return ctrl.Result{}, nil
+}
+
+func (r *SemanticRouterReconciler) reconcileBootstrapPrerequisites(
+	ctx context.Context,
+	semanticrouter *vllmv1alpha1.SemanticRouter,
+	logger logr.Logger,
+) (bootstrapDeploymentContract, ctrl.Result, bool, error) {
+	bootstrap, err := r.validateBootstrapForReconcile(ctx, semanticrouter, logger)
+	if err != nil {
+		return bootstrapDeploymentContract{}, ctrl.Result{}, false, err
+	}
+	if err := r.reconcileServiceAccount(ctx, semanticrouter); err != nil {
+		logger.Error(err, "Failed to reconcile ServiceAccount")
+		return bootstrap, ctrl.Result{}, false, err
+	}
+	if err := r.reconcilePVC(ctx, semanticrouter); err != nil {
+		logger.Error(err, "Failed to reconcile PersistentVolumeClaim")
+		return bootstrap, ctrl.Result{}, false, err
+	}
+	result, pending, err := r.reconcileMigrationPrerequisite(
+		ctx, semanticrouter, bootstrap,
+	)
+	return bootstrap, result, pending, err
+}
+
+func (r *SemanticRouterReconciler) validateBootstrapForReconcile(
+	ctx context.Context,
+	semanticrouter *vllmv1alpha1.SemanticRouter,
+	logger logr.Logger,
+) (bootstrapDeploymentContract, error) {
+	bootstrap, err := r.validateBootstrapConfigMap(ctx, semanticrouter)
+	if err != nil {
+		logger.Error(err, "Bootstrap ConfigMap validation failed")
+		semanticrouter.Status.BootstrapRevision = ""
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeBootstrapReady, Status: metav1.ConditionFalse, Reason: "ValidationFailed",
+			Message: err.Error(), ObservedGeneration: semanticrouter.Generation,
+		})
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: "BootstrapInvalid",
+			Message:            "Migration requirements cannot be resolved until the bootstrap is valid",
+			ObservedGeneration: semanticrouter.Generation,
+		})
+		return bootstrapDeploymentContract{}, err
+	}
+	semanticrouter.Status.BootstrapRevision = bootstrap.Revision
+	semanticrouter.Status.PublicService = semanticrouter.Name
+	semanticrouter.Status.ManagementService = ""
+	if bootstrap.exposesManagementAPI() {
+		semanticrouter.Status.ManagementService = semanticrouter.Name + "-management"
+	}
+	meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+		Type: typeBootstrapReady, Status: metav1.ConditionTrue, Reason: "Validated",
+		Message: "The immutable Router bootstrap is valid", ObservedGeneration: semanticrouter.Generation,
+	})
+	return bootstrap, nil
+}
+
+func (r *SemanticRouterReconciler) reconcileMigrationPrerequisite(
+	ctx context.Context,
+	semanticrouter *vllmv1alpha1.SemanticRouter,
+	bootstrap bootstrapDeploymentContract,
+) (ctrl.Result, bool, error) {
+	if !bootstrap.usesDurableState() {
+		if err := r.deleteStaleMigrationJobs(ctx, semanticrouter, ""); err != nil {
+			return ctrl.Result{}, false, err
+		}
+		semanticrouter.Status.Migration = nil
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeMigrationReady, Status: metav1.ConditionTrue, Reason: "NotRequired",
+			Message: "No Management store is configured", ObservedGeneration: semanticrouter.Generation,
+		})
+		return ctrl.Result{}, false, nil
+	}
+	migration, err := r.reconcileMigrationJob(ctx, semanticrouter, bootstrap)
+	semanticrouter.Status.Migration = migration
+	if err != nil {
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: "Failed",
+			Message: err.Error(), ObservedGeneration: semanticrouter.Generation,
+		})
+		return ctrl.Result{}, false, err
+	}
+	if migration.State != migrationStateSucceeded {
+		semanticrouter.Status.Phase = "Migrating"
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeMigrationReady, Status: metav1.ConditionFalse, Reason: migration.State,
+			Message: "Waiting for the Management schema migration Job", ObservedGeneration: semanticrouter.Generation,
+		})
+		meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+			Type: typeAvailableSemanticRouter, Status: metav1.ConditionFalse, Reason: "MigrationPending",
+			Message: "Router rollout is gated on schema migration", ObservedGeneration: semanticrouter.Generation,
+		})
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, true, nil
+	}
+	meta.SetStatusCondition(&semanticrouter.Status.Conditions, metav1.Condition{
+		Type: typeMigrationReady, Status: metav1.ConditionTrue, Reason: "Succeeded",
+		Message: "The Management schema is current", ObservedGeneration: semanticrouter.Generation,
+	})
+	return ctrl.Result{}, false, nil
 }

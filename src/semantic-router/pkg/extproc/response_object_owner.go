@@ -6,13 +6,13 @@ import (
 )
 
 // responseObjectOwner derives the retention owner only from trusted
-// process-local request state. Managed access and access-disabled public
+// process-local request state. Native access and access-disabled public
 // routing are intentionally separate ownership modes.
 func (r *OpenAIRouter) responseObjectOwner(ctx *RequestContext) (responseapi.ResponseOwner, bool) {
 	if r == nil || ctx == nil {
 		return responseapi.ResponseOwner{}, false
 	}
-	if r.managedInferenceAccessEnabled() {
+	if r.nativeAccessEnabled() {
 		if ctx.InferenceAccess == nil {
 			return responseapi.ResponseOwner{}, false
 		}

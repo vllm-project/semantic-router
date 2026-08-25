@@ -13,18 +13,26 @@ import (
 
 var formatPattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,127}$`)
 
-type Codec interface {
+type CodecMetadata interface {
 	Format() llmprotocol.WireFormat
 	Capabilities() llmprotocol.CapabilitySet
 	// Stateless is an explicit construction contract: one registered Codec may
 	// be called concurrently, while all request state belongs to returned stream
 	// decoders and encoders.
 	Stateless() bool
+}
+
+type BufferedCodec interface {
 	DecodeRequest([]byte, llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error)
 	EncodeRequest(llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error)
 	DecodeResponse([]byte, llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error)
 	EncodeResponse(llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error)
 	EncodeError(*llmprotocol.ProtocolError) []byte
+}
+
+type Codec interface {
+	CodecMetadata
+	BufferedCodec
 }
 
 type StreamCodec interface {

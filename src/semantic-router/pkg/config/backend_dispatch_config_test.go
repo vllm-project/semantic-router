@@ -14,7 +14,7 @@ func TestBackendDispatchDefaultsAreValid(t *testing.T) {
 
 func TestBootstrapRejectsMissingBackendEgressEvenWhenDispatchIsOmitted(t *testing.T) {
 	config := RouterConfig{}
-	if err := config.ValidateControlPlaneBootstrap(); err == nil {
+	if err := config.ValidateRuntimeBootstrap(); err == nil {
 		t.Fatal("bootstrap accepted a manifest without backend egress policy")
 	}
 }

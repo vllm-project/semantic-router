@@ -24,23 +24,25 @@ from cli.deployment_backend import DEFAULT_TARGET, resolve_target  # noqa: E402
 from cli.runtime_lifecycle_lock import RuntimeLifecycleLockError  # noqa: E402
 
 
-def _standalone_model_config(
-    connection_overrides: dict[str, object] | None = None,
+def _file_model_config(
+    backend_overrides: dict[str, object] | None = None,
 ) -> dict[str, object]:
-    connection: dict[str, object] = {
+    backend_ref: dict[str, object] = {
         "provider": "openai-compatible",
-        "model": "demo-model",
     }
-    connection.update(connection_overrides or {})
+    backend_ref.update(backend_overrides or {})
     return {
-        "version": "v0.4",
-        "models": [
-            {
-                "name": "demo-model",
-                "card": {},
-                "connections": [connection],
-            }
-        ],
+        "version": "v0.3",
+        "providers": {
+            "models": [
+                {
+                    "name": "demo-model",
+                    "provider_model_id": "demo-model",
+                    "backend_refs": [backend_ref],
+                }
+            ]
+        },
+        "routing": {"modelCards": [{"name": "demo-model"}]},
         "recipes": [],
         "entrypoints": [],
         "global": {
@@ -53,16 +55,8 @@ def _standalone_model_config(
     }
 
 
-def _standalone_credential_config(definition: dict[str, object]) -> dict[str, object]:
-    config = _standalone_model_config({"credential": "private-provider"})
-    global_config = config["global"]
-    assert isinstance(global_config, dict)
-    services = global_config["services"]
-    assert isinstance(services, dict)
-    services["backend_credentials"] = {
-        "private-provider": definition,
-    }
-    return config
+def _file_credential_config(definition: dict[str, object]) -> dict[str, object]:
+    return _file_model_config({"api_key_env": definition.get("secret_env")})
 
 
 # ---------------------------------------------------------------------------
@@ -316,25 +310,29 @@ class TestConfigTranslator:
 
     def test_config_sections_pass_through(self, tmp_path):
         source = {
-            "version": "v0.4",
+            "version": "v0.3",
             "listeners": [{"name": "http", "address": "0.0.0.0", "port": 8899}],
-            "models": [
-                {
-                    "name": "provider-model",
-                    "card": {"capabilities": ["chat"]},
-                    "connections": [
-                        {
-                            "provider": "openai-compatible",
-                            "endpoint": "https://models.example.test/v1",
-                            "model": "provider-model",
-                        }
-                    ],
-                }
-            ],
+            "providers": {
+                "models": [
+                    {
+                        "name": "provider-model",
+                        "provider_model_id": "provider-model",
+                        "backend_refs": [
+                            {
+                                "provider": "openai-compatible",
+                                "base_url": "https://models.example.test/v1",
+                            }
+                        ],
+                    }
+                ]
+            },
+            "routing": {
+                "modelCards": [{"name": "provider-model", "capabilities": ["chat"]}]
+            },
             "recipes": [
                 {
                     "name": "custom-recipe",
-                    "document": {
+                    "routing": {
                         "decisions": [
                             {
                                 "name": "default",
@@ -347,7 +345,7 @@ class TestConfigTranslator:
             ],
             "entrypoints": [
                 {
-                    "name": "custom-model",
+                    "model_names": ["custom-model"],
                     "recipe": "custom-recipe",
                     "assignments": {
                         "default": {"models": [{"model": "provider-model"}]}
@@ -422,21 +420,21 @@ class TestConfigTranslator:
         )
         config = tmp_path / "config.yaml"
         config.write_text(
-            yaml.safe_dump(_standalone_model_config(connection)),
+            yaml.safe_dump(_file_model_config(connection)),
             encoding="utf-8",
         )
 
         with pytest.raises(ValueError, match="Kubernetes Router credential") as exc:
             translate_config_to_helm_values(str(config))
 
-        assert f"models[0].connections[0].{expected_path}" in str(exc.value)
+        assert f"providers.models[0].backend_refs[0].{expected_path}" in str(exc.value)
         assert canary not in str(exc.value)
 
     def test_named_environment_backed_router_credentials_are_allowed(self, tmp_path):
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                _standalone_credential_config(
+                _file_credential_config(
                     {
                         "credential_adapter_id": "bearer",
                         "secret_env": "MODEL_API_KEY",
@@ -449,13 +447,8 @@ class TestConfigTranslator:
         values = translate_config_to_helm_values(str(config))
 
         override = values["configOverride"]
-        assert override["models"][0]["connections"][0]["credential"] == (
-            "private-provider"
-        )
         assert (
-            override["global"]["services"]["backend_credentials"]["private-provider"][
-                "secret_env"
-            ]
+            override["providers"]["models"][0]["backend_refs"][0]["api_key_env"]
             == "MODEL_API_KEY"
         )
 
@@ -477,7 +470,7 @@ class TestConfigTranslator:
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                _standalone_credential_config(
+                _file_credential_config(
                     {
                         "credential_adapter_id": "bearer",
                         "secret_env": environment_name,
@@ -490,9 +483,7 @@ class TestConfigTranslator:
         with pytest.raises(ValueError, match="uppercase, non-reserved") as exc:
             translate_config_to_helm_values(str(config))
 
-        assert "global.services.backend_credentials.private-provider.secret_env" in str(
-            exc.value
-        )
+        assert "providers.models[0].backend_refs[0].api_key_env" in str(exc.value)
         assert "lowercase_name" not in str(exc.value)
 
     @pytest.mark.parametrize(
@@ -510,7 +501,7 @@ class TestConfigTranslator:
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(
-                _standalone_credential_config(
+                _file_credential_config(
                     {
                         "credential_adapter_id": "bearer",
                         "secret_env": credential,
@@ -522,10 +513,7 @@ class TestConfigTranslator:
 
         with pytest.raises(
             ValueError,
-            match=(
-                r"config\.global\.services\.backend_credentials\."
-                r"private-provider\.secret_env"
-            ),
+            match=(r"config\.providers\.models\[0\]\.backend_refs\[0\]\.api_key_env"),
         ) as exc:
             translate_config_to_helm_values(str(config))
 
@@ -577,7 +565,7 @@ class TestConfigTranslator:
         assert "HF_ENDPOINT" in names, "Non-sensitive var should be in plain env"
 
     def test_config_named_backend_secret_excluded_from_plain_env(self, tmp_path):
-        """A standalone named credential must never be copied into plain values."""
+        """A file-authored credential must never be copied into plain values."""
         config = tmp_path / "config.yaml"
         config.write_text(
             yaml.safe_dump(

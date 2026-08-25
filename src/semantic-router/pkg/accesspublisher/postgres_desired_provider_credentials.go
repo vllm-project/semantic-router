@@ -90,35 +90,51 @@ ORDER BY id`, namespace.ID, pq.Array(references))
 		}
 	}
 
-	versionRows, queryContextErr := tx.QueryContext(ctx, `SELECT
-  id, namespace_id, provider_credential_id, secret_ciphertext, ciphertext_nonce,
-  kek_version, status, not_before, expires_at, revoked_at, created_at
-FROM provider_credential_versions
-WHERE namespace_id = $1 AND provider_credential_id = ANY($2::uuid[])
-  AND (status = 'active' OR (status = 'retiring' AND expires_at > CURRENT_TIMESTAMP))
-ORDER BY provider_credential_id, status, id`, namespace.ID, pq.Array(references))
-	if queryContextErr != nil {
-		return nil, fmt.Errorf("list referenced provider credential versions: %w", queryContextErr)
+	if err := loadProviderCredentialVersions(ctx, tx, namespace.ID, references, byID); err != nil {
+		return nil, err
 	}
-	defer func() {
-		returnErr = errors.Join(returnErr, versionRows.Close())
-	}()
-	for versionRows.Next() {
+
+	result := make([]ProviderCredentialCandidate, 0, len(references))
+	for _, credentialID := range references {
+		result = append(result, *byID[credentialID])
+	}
+	return result, nil
+}
+
+func loadProviderCredentialVersions(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID accesscontrol.NamespaceID,
+	references []string,
+	byID map[string]*ProviderCredentialCandidate,
+) (returnErr error) {
+	rows, err := tx.QueryContext(ctx, `SELECT
+	  id, namespace_id, provider_credential_id, secret_ciphertext, ciphertext_nonce,
+	  kek_version, status, not_before, expires_at, revoked_at, created_at
+	FROM provider_credential_versions
+	WHERE namespace_id = $1 AND provider_credential_id = ANY($2::uuid[])
+	  AND (status = 'active' OR (status = 'retiring' AND expires_at > CURRENT_TIMESTAMP))
+	ORDER BY provider_credential_id, status, id`, namespaceID, pq.Array(references))
+	if err != nil {
+		return fmt.Errorf("list referenced provider credential versions: %w", err)
+	}
+	defer func() { returnErr = errors.Join(returnErr, rows.Close()) }()
+	for rows.Next() {
 		var version providercredential.Version
 		var expiresAt, revokedAt sql.NullTime
-		if err := versionRows.Scan(
+		if err := rows.Scan(
 			&version.ID, &version.NamespaceID, &version.CredentialID,
 			&version.Envelope.Ciphertext, &version.Envelope.Nonce, &version.Envelope.KeyVersion,
 			&version.Status, &version.NotBefore, &expiresAt, &revokedAt, &version.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan referenced provider credential version: %w", err)
+			return fmt.Errorf("scan referenced provider credential version: %w", err)
 		}
 		candidate := byID[version.CredentialID]
 		if candidate == nil {
-			return nil, fmt.Errorf("provider credential version references an unpublished credential")
+			return fmt.Errorf("provider credential version references an unpublished credential")
 		}
 		if len(candidate.Versions) == maximumPublishedProviderCredentialVersions {
-			return nil, fmt.Errorf(
+			return fmt.Errorf(
 				"provider credential %s has more than %d publishable versions",
 				version.CredentialID, maximumPublishedProviderCredentialVersions,
 			)
@@ -135,13 +151,8 @@ ORDER BY provider_credential_id, status, id`, namespace.ID, pq.Array(references)
 		}
 		candidate.Versions = append(candidate.Versions, version)
 	}
-	if err := versionRows.Err(); err != nil {
-		return nil, fmt.Errorf("read referenced provider credential versions: %w", err)
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read referenced provider credential versions: %w", err)
 	}
-
-	result := make([]ProviderCredentialCandidate, 0, len(references))
-	for _, credentialID := range references {
-		result = append(result, *byID[credentialID])
-	}
-	return result, nil
+	return nil
 }

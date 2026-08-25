@@ -34,10 +34,10 @@ referenced ConfigMap must be immutable, so configuration changes are explicit
 releases:
 
 1. copy the current manifest into a newly named ConfigMap;
-2. validate the v0.4 manifest before applying it;
+2. validate the v0.3 manifest before applying it;
 3. create the new immutable ConfigMap;
 4. update `spec.bootstrap.configMapRef.name` or `.key`;
-5. in managed mode, wait for the content-addressed migration Job and
+5. when a Management store is configured, wait for the content-addressed migration Job and
    `MigrationReady=True`;
 6. wait for the Deployment rollout and Router readiness; and
 7. send real requests through each important Entrypoint.
@@ -46,10 +46,10 @@ Keep the old immutable ConfigMap until rollback is no longer needed. Rolling
 back means restoring the previous reference. The Router and Operator do not
 reload a changed file in place.
 
-In managed mode this bootstrap contains infrastructure only. Use the Router
-Management API for Model, Recipe, Entrypoint, identity, key, policy, and quota
-changes. Those resources publish immutable generations without changing the
-Pod bootstrap reference.
+With a Management store, the bootstrap may seed Models, Recipes, and
+Entrypoints once. Use the Router Management API for later routing changes and
+for identity, key, policy, and quota resources. Those changes publish immutable
+generations without changing the Pod bootstrap reference.
 
 ## Scale and availability
 
@@ -64,13 +64,14 @@ spec:
     targetCPUUtilizationPercentage: 70
 ```
 
-Managed replicas share PostgreSQL desired state and ledger data plus Valkey
-projections and counters. Do not scale managed mode without both stores being
-healthy and reachable from every replica.
+Replicas with durable management share PostgreSQL desired state and ledger
+data. Router-native access additionally shares Valkey projections and counters.
+Do not scale either capability unless its configured stores are healthy and
+reachable from every replica.
 
-Managed mode creates a PodDisruptionBudget and topology-spread constraint by
-default. Tune or disable them explicitly when the availability target requires
-different behavior:
+A Management store enables a PodDisruptionBudget and topology-spread constraint
+by default. Tune or disable them explicitly when the availability target
+requires different behavior:
 
 ```yaml
 spec:
@@ -89,9 +90,9 @@ multiple replicas or failure-domain placement.
 
 ## Listener isolation
 
-The inference Service follows `spec.service.type`. Managed Management,
+The inference Service follows `spec.service.type`. Management,
 backend-dispatch, and metrics Services remain private `ClusterIP` Services.
-Managed mode also creates an ingress NetworkPolicy by default.
+A Management store also enables an ingress NetworkPolicy by default.
 
 Peer lists are listener-specific and fail closed. An empty `managementPeers`
 list keeps the Management listener unreachable through the Pod network. The
@@ -124,9 +125,9 @@ kubectl get semanticrouter <name> -o \
 kubectl get configmap <bootstrap-name> -o yaml
 ```
 
-Managed bootstrap rejects top-level `models`, `recipes`, and `entrypoints`.
-Standalone bootstrap may contain them. Full manifest errors appear in Router
-startup logs after the Operator's deployment-boundary checks pass.
+The Operator accepts the same v0.3 routing seed in file-only and durable
+deployments. Full manifest errors appear in Router startup logs after the
+Operator's lightweight deployment-boundary checks pass.
 
 ### Pod did not roll after a change
 
@@ -140,7 +141,7 @@ kubectl get deployment <name> -o \
 kubectl rollout status deployment/<name>
 ```
 
-### Managed Router is not ready
+### Durable Router is not ready
 
 Inspect the explicit migration gate first:
 
@@ -151,11 +152,11 @@ kubectl logs job/<migration-job-name>
 ```
 
 Then check PostgreSQL, Valkey, referenced Secrets, schema migration completion,
-Management listener TLS, provider-catalog rollout groups, and backend egress
+Management listener TLS, publication acknowledgements, and backend egress
 policy. On a fresh installation, also confirm that an authorized Management client
 completed bootstrap and published the first coupled routing and policy revision. The
 private Management Service remains reachable for this step while `/ready` is false;
-the inference Service does not. Managed startup fails closed when shared authority is
+the inference Service does not. Durable startup fails closed when shared authority is
 unavailable.
 
 ### Gateway mode has no route

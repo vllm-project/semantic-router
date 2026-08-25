@@ -31,33 +31,43 @@ func (store *Store) ResolveSnapshot(ctx context.Context, namespaceID, actorID st
 
 func resolveSnapshot(ctx context.Context, tx *sql.Tx, namespaceID, actorID string, requested []invitationmanagement.RequestedRoleGrant, team *invitationmanagement.TeamAssignment, userID string) (invitationmanagement.OnboardingSnapshot, error) {
 	var snapshot invitationmanagement.OnboardingSnapshot
-	resolveSnapshotErr := tx.QueryRowContext(ctx, `SELECT sp.revision, sp.automatic_first_key,
-       ap.id::text, ap.revision, rp.id::text, rp.revision
-FROM self_service_policies sp
-JOIN access_policies ap ON ap.id=sp.default_access_policy_id
-  AND ap.namespace_id=sp.namespace_id AND ap.status='active'
-JOIN rate_limit_policies rp ON rp.id=sp.default_rate_limit_policy_id
-  AND rp.namespace_id=sp.namespace_id AND rp.status='active'
-WHERE sp.namespace_id=$1
-FOR SHARE OF sp,ap,rp`, namespaceID).Scan(
-		&snapshot.SelfServicePolicyRevision, &snapshot.AutomaticFirstKey,
-		&snapshot.AccessPolicyID, &snapshot.AccessPolicyRevision,
-		&snapshot.RateLimitPolicyID, &snapshot.RateLimitPolicyRevision,
-	)
+	resolveSnapshotErr := tx.QueryRowContext(ctx, `SELECT revision, automatic_first_key
+	FROM self_service_policies WHERE namespace_id=$1 FOR SHARE`, namespaceID).Scan(
+		&snapshot.SelfServicePolicyRevision, &snapshot.AutomaticFirstKey)
 	if errors.Is(resolveSnapshotErr, sql.ErrNoRows) {
 		return invitationmanagement.OnboardingSnapshot{}, invitationmanagement.ErrDefaultsChanged
 	}
 	if resolveSnapshotErr != nil {
 		return invitationmanagement.OnboardingSnapshot{}, fmt.Errorf("resolve invitation defaults: %w", resolveSnapshotErr)
 	}
-	if team != nil {
+	if team == nil {
+		resolveSnapshotErr = tx.QueryRowContext(ctx, `SELECT ap.id::text, ap.revision, rp.id::text, rp.revision
+	FROM self_service_policies sp
+	JOIN access_policies ap ON ap.id=sp.default_access_policy_id
+	  AND ap.namespace_id=sp.namespace_id AND ap.status='active'
+	JOIN rate_limit_policies rp ON rp.id=sp.default_rate_limit_policy_id
+	  AND rp.namespace_id=sp.namespace_id AND rp.status='active'
+	WHERE sp.namespace_id=$1 FOR SHARE OF ap,rp`, namespaceID).Scan(
+			&snapshot.AccessPolicyID, &snapshot.AccessPolicyRevision,
+			&snapshot.RateLimitPolicyID, &snapshot.RateLimitPolicyRevision)
+		if errors.Is(resolveSnapshotErr, sql.ErrNoRows) {
+			return invitationmanagement.OnboardingSnapshot{}, invitationmanagement.ErrDefaultsChanged
+		}
+		if resolveSnapshotErr != nil {
+			return invitationmanagement.OnboardingSnapshot{}, fmt.Errorf("resolve invitation defaults: %w", resolveSnapshotErr)
+		}
+	} else {
 		var active bool
 		if err := tx.QueryRowContext(ctx, `SELECT status='active' AND deleted_at IS NULL
-FROM access_teams WHERE namespace_id=$1 AND id=$2 FOR SHARE`, namespaceID, team.TeamID).Scan(&active); err != nil || !active {
+	FROM access_teams WHERE namespace_id=$1 AND id=$2 FOR SHARE`,
+			namespaceID, team.TeamID).Scan(&active); err != nil || !active {
 			if errors.Is(err, sql.ErrNoRows) || err == nil {
 				return invitationmanagement.OnboardingSnapshot{}, invitationmanagement.ErrConflict
 			}
 			return invitationmanagement.OnboardingSnapshot{}, fmt.Errorf("resolve invitation Team: %w", err)
+		}
+		if err := lockTeamPolicyInheritance(ctx, tx, namespaceID, team.TeamID); err != nil {
+			return invitationmanagement.OnboardingSnapshot{}, err
 		}
 		value := *team
 		snapshot.Team = &value
@@ -100,6 +110,34 @@ FROM access_teams WHERE namespace_id=$1 AND id=$2 FOR SHARE`, namespaceID, team.
 		}
 	}
 	return snapshot, nil
+}
+
+func lockTeamPolicyInheritance(ctx context.Context, tx *sql.Tx, namespaceID, teamID string) error {
+	var bindingID string
+	accessErr := tx.QueryRowContext(ctx, `SELECT b.id::text
+	FROM access_policy_bindings b
+	JOIN access_policies p ON p.namespace_id=b.namespace_id AND p.id=b.policy_id
+	WHERE b.namespace_id=$1 AND b.subject_id=$2 AND b.status='active' AND p.status='active'
+	ORDER BY b.id LIMIT 1 FOR SHARE OF b,p`, namespaceID, teamID).Scan(&bindingID)
+	if errors.Is(accessErr, sql.ErrNoRows) {
+		return invitationmanagement.ErrConflict
+	}
+	if accessErr != nil {
+		return fmt.Errorf("resolve invitation Team AccessPolicy: %w", accessErr)
+	}
+	rateErr := tx.QueryRowContext(ctx, `SELECT b.id::text
+	FROM rate_limit_bindings b
+	JOIN rate_limit_policies p ON p.namespace_id=b.namespace_id AND p.id=b.policy_id
+	WHERE b.namespace_id=$1 AND b.subject_id=$2 AND b.binding_mode='allocation'
+	  AND b.status='active' AND p.status='active'
+	ORDER BY b.id LIMIT 1 FOR SHARE OF b,p`, namespaceID, teamID).Scan(&bindingID)
+	if errors.Is(rateErr, sql.ErrNoRows) {
+		return invitationmanagement.ErrConflict
+	}
+	if rateErr != nil {
+		return fmt.Errorf("resolve invitation Team RateLimitPolicy: %w", rateErr)
+	}
+	return nil
 }
 
 func verifySnapshot(ctx context.Context, tx *sql.Tx, namespaceID, actorID, userID string, expected invitationmanagement.OnboardingSnapshot) error {

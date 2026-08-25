@@ -22,6 +22,15 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/securitykeyring"
 )
 
+const (
+	policyTestNamespaceID = "11111111-1111-4111-8111-111111111111"
+	policyTestPrincipalID = "22222222-2222-4222-8222-222222222222"
+	policyTestUserID      = "33333333-3333-4333-8333-333333333333"
+	policyTestSecondUser  = "44444444-4444-4444-8444-444444444444"
+	policyTestAPIKeyID    = "55555555-5555-4555-8555-555555555555"
+	policyTestModelID     = "model_test"
+)
+
 func TestPolicyManagementPostgresEndToEnd(t *testing.T) {
 	dsn := os.Getenv("VLLM_SR_CONTROL_PLANE_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -37,15 +46,8 @@ func TestPolicyManagementPostgresEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const (
-		namespaceID = "11111111-1111-4111-8111-111111111111"
-		principalID = "22222222-2222-4222-8222-222222222222"
-		userID      = "33333333-3333-4333-8333-333333333333"
-		secondUser  = "44444444-4444-4444-8444-444444444444"
-		apiKeyID    = "55555555-5555-4555-8555-555555555555"
-		modelID     = "model_test"
-	)
-	seedPolicyManagement(t, ctx, db, namespaceID, principalID, userID, secondUser, apiKeyID, modelID)
+	seedPolicyManagement(t, ctx, db, policyTestNamespaceID, policyTestPrincipalID,
+		policyTestUserID, policyTestSecondUser, policyTestAPIKeyID, policyTestModelID)
 
 	store, testPolicyManagementPostgresEndToEndErr := New(db)
 	if testPolicyManagementPostgresEndToEndErr != nil {
@@ -75,251 +77,280 @@ func TestPolicyManagementPostgresEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	actor := policymanagement.Actor{
-		PrincipalID: principalID, ActorChain: []string{principalID},
+		PrincipalID: policyTestPrincipalID, ActorChain: []string{policyTestPrincipalID},
 		RequestID: "policy-integration", SourceIP: netip.MustParseAddr("192.0.2.10"),
 	}
 
-	accessResult, testPolicyManagementPostgresEndToEndErr := service.CreateAccessPolicy(ctx, policymanagement.CreateAccessPolicyRequest{
-		NamespaceID: namespaceID, Name: "Developers", Description: "Model access",
+	accessResult, secondAccess, exactAccessScope := assertAccessPolicyLifecycle(t, ctx, service, actor)
+	allResults := accesscontrol.ResultScope{NamespaceID: policyTestNamespaceID, All: true}
+
+	assertAccessPolicyBinding(t, ctx, service, actor, allResults, exactAccessScope, accessResult.ID)
+
+	firstRate := createRatePolicy(t, ctx, service, policyTestNamespaceID, "Developer budget",
+		"rate-policy-create-0001", "12", actor)
+	secondRate := createRatePolicy(t, ctx, service, policyTestNamespaceID, "Admin budget",
+		"rate-policy-create-0002", "120", actor)
+	assertRatePolicyLifecycle(t, ctx, service, actor, allResults, firstRate.ID, secondRate.ID)
+
+	inline := assertInlineRatePolicyLifecycle(t, ctx, db, service, actor)
+
+	assertUsageFenceProtection(t, ctx, db, service, policyTestNamespaceID, policyTestPrincipalID, inline, actor)
+	assertConcurrentAllocation(t, ctx, service, policyTestNamespaceID, policyTestSecondUser, firstRate.ID, secondRate.ID, actor)
+	assertAPIKeyInlineTransactionSeam(t, ctx, db, policyTestNamespaceID, policyTestPrincipalID, policyTestSecondUser, actor)
+	assertPolicyAccounting(t, ctx, db, service, actor, secondAccess.ID)
+}
+
+func assertAccessPolicyLifecycle(
+	t *testing.T,
+	ctx context.Context,
+	service *policymanagement.Service,
+	actor policymanagement.Actor,
+) (policymanagement.MutationResult, policymanagement.MutationResult, accesscontrol.ResultScope) {
+	t.Helper()
+	request := policymanagement.CreateAccessPolicyRequest{
+		NamespaceID: policyTestNamespaceID, Name: "Developers", Description: "Model access",
 		Status: accesscontrol.PolicyStatusActive,
 		Grants: []policymanagement.AccessGrant{{
-			ResourceType: accesscontrol.GrantResourceModel,
-			ResourceID:   modelID, Permission: accesscontrol.GrantPermissionInvoke,
-			Effect: accesscontrol.GrantEffectAllow,
+			ResourceType: accesscontrol.GrantResourceModel, ResourceID: policyTestModelID,
+			Permission: accesscontrol.GrantPermissionInvoke, Effect: accesscontrol.GrantEffectAllow,
 		}},
 		IdempotencyKey: "access-policy-create-0001", Actor: actor,
-	})
-	if testPolicyManagementPostgresEndToEndErr != nil || accessResult.Replayed || accessResult.Revision != 1 {
-		t.Fatalf("create AccessPolicy = %#v, %v", accessResult, testPolicyManagementPostgresEndToEndErr)
 	}
-	replayedAccess, testPolicyManagementPostgresEndToEndErr := service.CreateAccessPolicy(ctx, policymanagement.CreateAccessPolicyRequest{
-		NamespaceID: namespaceID, Name: "Developers", Description: "Model access",
-		Status: accesscontrol.PolicyStatusActive,
-		Grants: []policymanagement.AccessGrant{{
-			ResourceType: accesscontrol.GrantResourceModel,
-			ResourceID:   modelID, Permission: accesscontrol.GrantPermissionInvoke,
-			Effect: accesscontrol.GrantEffectAllow,
-		}},
-		IdempotencyKey: "access-policy-create-0001", Actor: actor,
-	})
-	if testPolicyManagementPostgresEndToEndErr != nil || !replayedAccess.Replayed || replayedAccess.ID != accessResult.ID {
-		t.Fatalf("replay AccessPolicy = %#v, %v", replayedAccess, testPolicyManagementPostgresEndToEndErr)
+	created, createErr := service.CreateAccessPolicy(ctx, request)
+	if createErr != nil || created.Replayed || created.Revision != 1 {
+		t.Fatalf("create AccessPolicy = %#v, %v", created, createErr)
 	}
-	if _, err := service.CreateAccessPolicy(ctx, policymanagement.CreateAccessPolicyRequest{
-		NamespaceID: namespaceID, Name: "Different", Status: accesscontrol.PolicyStatusActive,
-		IdempotencyKey: "access-policy-create-0001", Actor: actor,
-	}); !errors.Is(err, managementcommand.ErrConflict) {
+	replayed, replayErr := service.CreateAccessPolicy(ctx, request)
+	if replayErr != nil || !replayed.Replayed || replayed.ID != created.ID {
+		t.Fatalf("replay AccessPolicy = %#v, %v", replayed, replayErr)
+	}
+	request.Name, request.Description, request.Grants = "Different", "", nil
+	if _, err := service.CreateAccessPolicy(ctx, request); !errors.Is(err, managementcommand.ErrConflict) {
 		t.Fatalf("conflicting AccessPolicy replay error = %v", err)
 	}
-	if _, err := service.CreateAccessPolicy(ctx, policymanagement.CreateAccessPolicyRequest{
-		NamespaceID: namespaceID, Name: "Broken grant", Status: accesscontrol.PolicyStatusActive,
+	missing := policymanagement.CreateAccessPolicyRequest{
+		NamespaceID: policyTestNamespaceID, Name: "Broken grant", Status: accesscontrol.PolicyStatusActive,
 		Grants: []policymanagement.AccessGrant{{
-			ResourceType: accesscontrol.GrantResourceModel,
-			ResourceID:   "missing_model", Permission: accesscontrol.GrantPermissionDiscover,
-			Effect: accesscontrol.GrantEffectAllow,
+			ResourceType: accesscontrol.GrantResourceModel, ResourceID: "missing_model",
+			Permission: accesscontrol.GrantPermissionDiscover, Effect: accesscontrol.GrantEffectAllow,
 		}},
 		IdempotencyKey: "access-policy-create-0002", Actor: actor,
-	}); !errors.Is(err, policymanagement.ErrNotFound) {
+	}
+	if _, err := service.CreateAccessPolicy(ctx, missing); !errors.Is(err, policymanagement.ErrNotFound) {
 		t.Fatalf("missing grant resource error = %v", err)
 	}
-	secondAccess, testPolicyManagementPostgresEndToEndErr := service.CreateAccessPolicy(ctx, policymanagement.CreateAccessPolicyRequest{
-		NamespaceID: namespaceID, Name: "Observers", Status: accesscontrol.PolicyStatusActive,
+	second, err := service.CreateAccessPolicy(ctx, policymanagement.CreateAccessPolicyRequest{
+		NamespaceID: policyTestNamespaceID, Name: "Observers", Status: accesscontrol.PolicyStatusActive,
 		IdempotencyKey: "access-policy-create-0003", Actor: actor,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil {
-		t.Fatal(testPolicyManagementPostgresEndToEndErr)
+	if err != nil {
+		t.Fatal(err)
 	}
-	allResults := accesscontrol.ResultScope{NamespaceID: namespaceID, All: true}
-	firstPage, testPolicyManagementPostgresEndToEndErr := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
-		NamespaceID: namespaceID, Status: accesscontrol.PolicyStatusActive, PageSize: 1, Scope: allResults,
+	all := accesscontrol.ResultScope{NamespaceID: policyTestNamespaceID, All: true}
+	firstPage, err := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
+		NamespaceID: policyTestNamespaceID, Status: accesscontrol.PolicyStatusActive, PageSize: 1, Scope: all,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(firstPage.Items) != 1 || !firstPage.HasMore || firstPage.NextCursor == "" {
-		t.Fatalf("first policy page = %#v, %v", firstPage, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || len(firstPage.Items) != 1 || !firstPage.HasMore || firstPage.NextCursor == "" {
+		t.Fatalf("first policy page = %#v, %v", firstPage, err)
 	}
-	secondPage, testPolicyManagementPostgresEndToEndErr := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
-		NamespaceID: namespaceID, Status: accesscontrol.PolicyStatusActive,
-		PageSize: 1, Cursor: firstPage.NextCursor, Scope: allResults,
+	secondPage, err := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
+		NamespaceID: policyTestNamespaceID, Status: accesscontrol.PolicyStatusActive,
+		PageSize: 1, Cursor: firstPage.NextCursor, Scope: all,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(secondPage.Items) != 1 || secondPage.Items[0].ID == firstPage.Items[0].ID {
-		t.Fatalf("second policy page = %#v, %v", secondPage, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || len(secondPage.Items) != 1 || secondPage.Items[0].ID == firstPage.Items[0].ID {
+		t.Fatalf("second policy page = %#v, %v", secondPage, err)
 	}
-	searchedAccess, testPolicyManagementPostgresEndToEndErr := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
-		NamespaceID: namespaceID, Status: accesscontrol.PolicyStatusActive,
-		Search: "DEVEL", PageSize: 1, Scope: allResults,
+	searched, err := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
+		NamespaceID: policyTestNamespaceID, Status: accesscontrol.PolicyStatusActive,
+		Search: "DEVEL", PageSize: 1, Scope: all,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(searchedAccess.Items) != 1 || searchedAccess.Items[0].ID != accessResult.ID || searchedAccess.HasMore {
-		t.Fatalf("searched AccessPolicy page = %#v, %v", searchedAccess, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || len(searched.Items) != 1 || searched.Items[0].ID != created.ID || searched.HasMore {
+		t.Fatalf("searched AccessPolicy page = %#v, %v", searched, err)
 	}
-	exactAccessScope := accesscontrol.ResultScope{
-		NamespaceID: namespaceID,
+	exact := accesscontrol.ResultScope{
+		NamespaceID: policyTestNamespaceID,
 		ResourceIDs: map[accesscontrol.ScopeResourceType][]accesscontrol.ResourceID{
-			accesscontrol.ScopeResourceAccessPolicy: {accesscontrol.ResourceID(accessResult.ID)},
+			accesscontrol.ScopeResourceAccessPolicy: {accesscontrol.ResourceID(created.ID)},
 		},
 	}
-	narrowPolicies, testPolicyManagementPostgresEndToEndErr := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
-		NamespaceID: namespaceID, Status: accesscontrol.PolicyStatusActive, PageSize: 10, Scope: exactAccessScope,
+	narrow, err := service.ListAccessPolicies(ctx, policymanagement.ListPoliciesRequest{
+		NamespaceID: policyTestNamespaceID, Status: accesscontrol.PolicyStatusActive,
+		PageSize: 10, Scope: exact,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(narrowPolicies.Items) != 1 || narrowPolicies.Items[0].ID != accessResult.ID || narrowPolicies.HasMore {
-		t.Fatalf("exact AccessPolicy scope page = %#v, %v", narrowPolicies, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || len(narrow.Items) != 1 || narrow.Items[0].ID != created.ID || narrow.HasMore {
+		t.Fatalf("exact AccessPolicy scope page = %#v, %v", narrow, err)
 	}
+	return created, second, exact
+}
 
-	accessBinding, testPolicyManagementPostgresEndToEndErr := service.CreateAccessBinding(ctx, policymanagement.CreateAccessBindingRequest{
-		NamespaceID: namespaceID, PolicyID: accessResult.ID,
-		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindUser, ID: userID},
+func assertAccessPolicyBinding(
+	t *testing.T,
+	ctx context.Context,
+	service *policymanagement.Service,
+	actor policymanagement.Actor,
+	all, exact accesscontrol.ResultScope,
+	policyID string,
+) {
+	t.Helper()
+	binding, err := service.CreateAccessBinding(ctx, policymanagement.CreateAccessBindingRequest{
+		NamespaceID: policyTestNamespaceID, PolicyID: policyID,
+		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindUser, ID: policyTestUserID},
 		IdempotencyKey: "access-binding-create-0001", Actor: actor,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || accessBinding.Revision != 1 {
-		t.Fatalf("create AccessPolicy binding = %#v, %v", accessBinding, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || binding.Revision != 1 {
+		t.Fatalf("create AccessPolicy binding = %#v, %v", binding, err)
 	}
-	accessBindingPage, testPolicyManagementPostgresEndToEndErr := service.ListAccessBindings(ctx, policymanagement.ListBindingsRequest{
-		NamespaceID: namespaceID, PageSize: 1, Scope: allResults,
+	page, err := service.ListAccessBindings(ctx, policymanagement.ListBindingsRequest{
+		NamespaceID: policyTestNamespaceID, PageSize: 1, Scope: all,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(accessBindingPage.Items) != 1 || accessBindingPage.Items[0].ID != accessBinding.ID {
-		t.Fatalf("AccessPolicy binding page = %#v, %v", accessBindingPage, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != binding.ID {
+		t.Fatalf("AccessPolicy binding page = %#v, %v", page, err)
 	}
-	narrowBindings, testPolicyManagementPostgresEndToEndErr := service.ListAccessBindings(ctx, policymanagement.ListBindingsRequest{
-		NamespaceID: namespaceID, PageSize: 10, Scope: exactAccessScope,
+	narrow, err := service.ListAccessBindings(ctx, policymanagement.ListBindingsRequest{
+		NamespaceID: policyTestNamespaceID, PageSize: 10, Scope: exact,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(narrowBindings.Items) != 1 || narrowBindings.Items[0].ID != accessBinding.ID || narrowBindings.HasMore {
-		t.Fatalf("associated-policy binding scope page = %#v, %v", narrowBindings, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || len(narrow.Items) != 1 || narrow.Items[0].ID != binding.ID || narrow.HasMore {
+		t.Fatalf("associated-policy binding scope page = %#v, %v", narrow, err)
 	}
 	if _, err := service.DeleteAccessPolicy(ctx, policymanagement.DeletePolicyRequest{
-		NamespaceID: namespaceID, PolicyID: accessResult.ID, ExpectedRevision: 1, Actor: actor,
+		NamespaceID: policyTestNamespaceID, PolicyID: policyID, ExpectedRevision: 1, Actor: actor,
 	}); !errors.Is(err, policymanagement.ErrResourceInUse) {
 		t.Fatalf("delete bound AccessPolicy error = %v", err)
 	}
+}
 
-	firstRate := createRatePolicy(t, ctx, service, namespaceID, "Developer budget",
-		"rate-policy-create-0001", "12", actor)
-	secondRate := createRatePolicy(t, ctx, service, namespaceID, "Admin budget",
-		"rate-policy-create-0002", "120", actor)
-	rateBinding, testPolicyManagementPostgresEndToEndErr := service.CreateRateBinding(ctx, policymanagement.CreateRateBindingRequest{
-		NamespaceID: namespaceID, PolicyID: firstRate.ID,
-		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindUser, ID: userID},
+func assertRatePolicyLifecycle(
+	t *testing.T,
+	ctx context.Context,
+	service *policymanagement.Service,
+	actor policymanagement.Actor,
+	scope accesscontrol.ResultScope,
+	firstPolicyID, secondPolicyID string,
+) {
+	t.Helper()
+	binding, bindingErr := service.CreateRateBinding(ctx, policymanagement.CreateRateBindingRequest{
+		NamespaceID: policyTestNamespaceID, PolicyID: firstPolicyID,
+		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindUser, ID: policyTestUserID},
 		Mode:           accesscontrol.RateBindingAllocation,
 		IdempotencyKey: "rate-binding-create-0001", Actor: actor,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || rateBinding.Revision != 1 {
-		t.Fatalf("create RateLimit binding = %#v, %v", rateBinding, testPolicyManagementPostgresEndToEndErr)
+	if bindingErr != nil || binding.Revision != 1 {
+		t.Fatalf("create RateLimit binding = %#v, %v", binding, bindingErr)
 	}
-	rateBindingPage, testPolicyManagementPostgresEndToEndErr := service.ListRateBindings(ctx, policymanagement.ListBindingsRequest{
-		NamespaceID: namespaceID, PageSize: 1, Scope: allResults,
+	page, pageErr := service.ListRateBindings(ctx, policymanagement.ListBindingsRequest{
+		NamespaceID: policyTestNamespaceID, PageSize: 1, Scope: scope,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || len(rateBindingPage.Items) != 1 || rateBindingPage.Items[0].ID != rateBinding.ID {
-		t.Fatalf("RateLimit binding page = %#v, %v", rateBindingPage, testPolicyManagementPostgresEndToEndErr)
+	if pageErr != nil || len(page.Items) != 1 || page.Items[0].ID != binding.ID {
+		t.Fatalf("RateLimit binding page = %#v, %v", page, pageErr)
 	}
 	if _, err := service.CreateRateBinding(ctx, policymanagement.CreateRateBindingRequest{
-		NamespaceID: namespaceID, PolicyID: secondRate.ID,
-		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindUser, ID: userID},
+		NamespaceID: policyTestNamespaceID, PolicyID: secondPolicyID,
+		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindUser, ID: policyTestUserID},
 		Mode:           accesscontrol.RateBindingAllocation,
 		IdempotencyKey: "rate-binding-create-0002", Actor: actor,
 	}); !errors.Is(err, policymanagement.ErrAllocationConflict) {
 		t.Fatalf("second allocation error = %v", err)
 	}
-
-	currentRate, testPolicyManagementPostgresEndToEndErr := service.GetRateLimitPolicy(ctx, namespaceID, firstRate.ID)
-	if testPolicyManagementPostgresEndToEndErr != nil {
-		t.Fatal(testPolicyManagementPostgresEndToEndErr)
+	current, err := service.GetRateLimitPolicy(ctx, policyTestNamespaceID, firstPolicyID)
+	if err != nil {
+		t.Fatal(err)
 	}
-	retainedRuleID := currentRate.Rules[0].ID
-	limitOnly := append([]policymanagement.RateLimitRule(nil), currentRate.Rules...)
+	retainedRuleID := current.Rules[0].ID
+	limitOnly := append([]policymanagement.RateLimitRule(nil), current.Rules...)
 	limitOnly[0].Limit = "20"
-	updatedRate, testPolicyManagementPostgresEndToEndErr := service.UpdateRateLimitPolicy(ctx, policymanagement.UpdateRateLimitPolicyRequest{
-		NamespaceID: namespaceID, PolicyID: firstRate.ID, ExpectedRevision: 1,
+	updated, err := service.UpdateRateLimitPolicy(ctx, policymanagement.UpdateRateLimitPolicyRequest{
+		NamespaceID: policyTestNamespaceID, PolicyID: firstPolicyID, ExpectedRevision: 1,
 		Rules: &limitOnly, Actor: actor,
 	})
-	if testPolicyManagementPostgresEndToEndErr != nil || updatedRate.Revision != 2 {
-		t.Fatalf("limit-only update = %#v, %v", updatedRate, testPolicyManagementPostgresEndToEndErr)
+	if err != nil || updated.Revision != 2 {
+		t.Fatalf("limit-only update = %#v, %v", updated, err)
 	}
-	storedRate, testPolicyManagementPostgresEndToEndErr := service.GetRateLimitPolicy(ctx, namespaceID, firstRate.ID)
-	if testPolicyManagementPostgresEndToEndErr != nil || storedRate.Rules[0].ID != retainedRuleID || storedRate.Rules[0].Limit != "20" {
-		t.Fatalf("retained rate rule = %#v, %v", storedRate.Rules, testPolicyManagementPostgresEndToEndErr)
+	stored, err := service.GetRateLimitPolicy(ctx, policyTestNamespaceID, firstPolicyID)
+	if err != nil || stored.Rules[0].ID != retainedRuleID || stored.Rules[0].Limit != "20" {
+		t.Fatalf("retained rate rule = %#v, %v", stored.Rules, err)
 	}
-	semanticChange := append([]policymanagement.RateLimitRule(nil), storedRate.Rules...)
+	semanticChange := append([]policymanagement.RateLimitRule(nil), stored.Rules...)
 	semanticChange[0].Window = policymanagement.ISODuration(2 * time.Minute)
 	if _, err := service.UpdateRateLimitPolicy(ctx, policymanagement.UpdateRateLimitPolicyRequest{
-		NamespaceID: namespaceID, PolicyID: firstRate.ID, ExpectedRevision: 2,
+		NamespaceID: policyTestNamespaceID, PolicyID: firstPolicyID, ExpectedRevision: 2,
 		Rules: &semanticChange, Actor: actor,
 	}); !errors.Is(err, policymanagement.ErrCounterSemantics) {
 		t.Fatalf("same-ID semantic update error = %v", err)
 	}
 	staleName := "Stale"
 	if _, err := service.UpdateRateLimitPolicy(ctx, policymanagement.UpdateRateLimitPolicyRequest{
-		NamespaceID: namespaceID, PolicyID: firstRate.ID, ExpectedRevision: 1,
+		NamespaceID: policyTestNamespaceID, PolicyID: firstPolicyID, ExpectedRevision: 1,
 		Name: &staleName, Actor: actor,
 	}); !errors.Is(err, policymanagement.ErrRevisionConflict) {
 		t.Fatalf("stale RateLimitPolicy CAS error = %v", err)
 	}
+}
 
-	inline, testPolicyManagementPostgresEndToEndErr := service.CreateInlineRateBinding(ctx, policymanagement.CreateInlineRateBindingRequest{
-		NamespaceID: namespaceID, Name: "Key override", Description: "Private allocation",
+func assertInlineRatePolicyLifecycle(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	service *policymanagement.Service,
+	actor policymanagement.Actor,
+) policymanagement.InlineRateBindingResult {
+	t.Helper()
+	request := policymanagement.CreateInlineRateBindingRequest{
+		NamespaceID: policyTestNamespaceID, Name: "Key override", Description: "Private allocation",
 		Rules: []policymanagement.RateLimitRule{{
-			Metric:    accesscontrol.RateMetricTotalTokens,
-			Algorithm: accesscontrol.RateAlgorithmCalendarWindow, Limit: "500000",
-			CalendarPeriod: accesscontrol.CalendarPeriodDay, Timezone: "UTC",
-			Accounting:  accesscontrol.RateAccountingResponseActual,
-			Enforcement: accesscontrol.RateEnforcementEnforce,
+			Metric: accesscontrol.RateMetricTotalTokens, Algorithm: accesscontrol.RateAlgorithmCalendarWindow,
+			Limit: "500000", CalendarPeriod: accesscontrol.CalendarPeriodDay, Timezone: "UTC",
+			Accounting: accesscontrol.RateAccountingResponseActual, Enforcement: accesscontrol.RateEnforcementEnforce,
 		}},
-		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindAPIKey, ID: apiKeyID},
+		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindAPIKey, ID: policyTestAPIKeyID},
 		Mode:           accesscontrol.RateBindingAllocation,
 		IdempotencyKey: "inline-rate-binding-0001", Actor: actor,
-	})
-	if testPolicyManagementPostgresEndToEndErr != nil || !inline.Created || inline.Replayed || inline.Policy.ID != inline.Binding.PolicyID ||
+	}
+	inline, err := service.CreateInlineRateBinding(ctx, request)
+	if err != nil || !inline.Created || inline.Replayed || inline.Policy.ID != inline.Binding.PolicyID ||
 		inline.Binding.QuotaPartitionID != "policy-test-partition" {
-		t.Fatalf("inline policy/binding = %#v, %v", inline, testPolicyManagementPostgresEndToEndErr)
+		t.Fatalf("inline policy/binding = %#v, %v", inline, err)
 	}
-	replayedInline, testPolicyManagementPostgresEndToEndErr := service.CreateInlineRateBinding(ctx, policymanagement.CreateInlineRateBindingRequest{
-		NamespaceID: namespaceID, Name: "Key override", Description: "Private allocation",
-		Rules: []policymanagement.RateLimitRule{{
-			Metric:    accesscontrol.RateMetricTotalTokens,
-			Algorithm: accesscontrol.RateAlgorithmCalendarWindow, Limit: "500000",
-			CalendarPeriod: accesscontrol.CalendarPeriodDay, Timezone: "UTC",
-			Accounting:  accesscontrol.RateAccountingResponseActual,
-			Enforcement: accesscontrol.RateEnforcementEnforce,
-		}},
-		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindAPIKey, ID: apiKeyID},
-		Mode:           accesscontrol.RateBindingAllocation,
-		IdempotencyKey: "inline-rate-binding-0001", Actor: actor,
-	})
-	if testPolicyManagementPostgresEndToEndErr != nil || !replayedInline.Replayed || !replayedInline.Created ||
-		replayedInline.Policy.ID != inline.Policy.ID || replayedInline.Binding.ID != inline.Binding.ID {
-		t.Fatalf("replay inline policy/binding = %#v, %v", replayedInline, testPolicyManagementPostgresEndToEndErr)
+	replayed, err := service.CreateInlineRateBinding(ctx, request)
+	if err != nil || !replayed.Replayed || !replayed.Created ||
+		replayed.Policy.ID != inline.Policy.ID || replayed.Binding.ID != inline.Binding.ID {
+		t.Fatalf("replay inline policy/binding = %#v, %v", replayed, err)
 	}
-	var inlineOutbox, inlineRevisions int
+	var outbox, revisions int
 	if err := db.QueryRowContext(ctx, `SELECT count(*), count(DISTINCT desired_revision)
 FROM policy_outbox WHERE aggregate_id IN ($1,$2)`, inline.Policy.ID, inline.Binding.ID).
-		Scan(&inlineOutbox, &inlineRevisions); err != nil || inlineOutbox != 2 || inlineRevisions != 1 {
-		t.Fatalf("inline outbox/revisions = %d/%d, %v", inlineOutbox, inlineRevisions, err)
+		Scan(&outbox, &revisions); err != nil || outbox != 2 || revisions != 1 {
+		t.Fatalf("inline outbox/revisions = %d/%d, %v", outbox, revisions, err)
 	}
 	var policiesBefore, policiesAfter int
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM rate_limit_policies`).Scan(&policiesBefore); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := service.CreateInlineRateBinding(ctx, policymanagement.CreateInlineRateBindingRequest{
-		NamespaceID: namespaceID, Name: "Conflicting override",
-		Rules: []policymanagement.RateLimitRule{{
-			Metric:    accesscontrol.RateMetricRequests,
-			Algorithm: accesscontrol.RateAlgorithmSlidingLog, Limit: "1",
-			Window:      policymanagement.ISODuration(time.Minute),
-			Accounting:  accesscontrol.RateAccountingRequest,
-			Enforcement: accesscontrol.RateEnforcementEnforce,
-		}},
-		Subject:        policymanagement.Subject{Type: accesscontrol.SubjectKindAPIKey, ID: apiKeyID},
-		Mode:           accesscontrol.RateBindingAllocation,
-		IdempotencyKey: "inline-rate-binding-0002", Actor: actor,
-	}); !errors.Is(err, policymanagement.ErrAllocationConflict) {
+	request.Name, request.Description, request.IdempotencyKey = "Conflicting override", "", "inline-rate-binding-0002"
+	request.Rules = []policymanagement.RateLimitRule{{
+		Metric: accesscontrol.RateMetricRequests, Algorithm: accesscontrol.RateAlgorithmSlidingLog,
+		Limit: "1", Window: policymanagement.ISODuration(time.Minute),
+		Accounting: accesscontrol.RateAccountingRequest, Enforcement: accesscontrol.RateEnforcementEnforce,
+	}}
+	if _, err := service.CreateInlineRateBinding(ctx, request); !errors.Is(err, policymanagement.ErrAllocationConflict) {
 		t.Fatalf("conflicting inline allocation error = %v", err)
 	}
 	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM rate_limit_policies`).Scan(&policiesAfter); err != nil || policiesAfter != policiesBefore {
 		t.Fatalf("rolled-back inline policy count = %d -> %d, %v", policiesBefore, policiesAfter, err)
 	}
+	return inline
+}
 
-	assertUsageFenceProtection(t, ctx, db, service, namespaceID, principalID, inline, actor)
-	assertConcurrentAllocation(t, ctx, service, namespaceID, secondUser, firstRate.ID, secondRate.ID, actor)
-	assertAPIKeyInlineTransactionSeam(t, ctx, db, namespaceID, principalID, secondUser, actor)
-
+func assertPolicyAccounting(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	service *policymanagement.Service,
+	actor policymanagement.Actor,
+	policyID string,
+) {
+	t.Helper()
 	if _, err := service.DeleteAccessPolicy(ctx, policymanagement.DeletePolicyRequest{
-		NamespaceID: namespaceID, PolicyID: secondAccess.ID, ExpectedRevision: 1, Actor: actor,
+		NamespaceID: policyTestNamespaceID, PolicyID: policyID, ExpectedRevision: 1, Actor: actor,
 	}); err != nil {
 		t.Fatalf("delete unbound AccessPolicy: %v", err)
 	}
@@ -526,7 +557,7 @@ VALUES ($1,$2,'api_key',$3)`, namespaceID, keyID, now); err != nil {
 VALUES ($1,$2,'transactional-key',$3,'active',1,$4,$4)`, keyID, namespaceID, ownerUserID, now); err != nil {
 		t.Fatal(err)
 	}
-	materialized, assertAPIKeyInlineTransactionSeamErr := materializeManagedAPIKeyRateLimitOverride(ctx, tx, managedRateLimitOverride{
+	materialized, assertAPIKeyInlineTransactionSeamErr := materializeManagementAPIKeyRateLimitOverride(ctx, tx, managedRateLimitOverride{
 		InlinePolicy: &policy,
 		Binding: policymanagement.RateLimitBinding{
 			ID: bindingID, NamespaceID: namespaceID,

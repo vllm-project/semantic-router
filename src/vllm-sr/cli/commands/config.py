@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import tempfile
+from importlib import import_module
 from pathlib import Path
 
 from cli.config_generator import generate_envoy_config_from_user_config
@@ -35,9 +36,9 @@ def config_command(config_type: str, config_path: str = "config.yaml"):
     # Check if config file exists
     if not Path(config_path).exists():
         log.error(f"Config file not found: {config_path}")
-        log.error("Run 'vllm-sr serve' to create a local managed config")
+        log.error("Run 'vllm-sr serve' to create a local Management workspace")
         log.error(
-            "Or write a canonical v0.4 config.yaml using the docs examples if you want to hand-author it directly"
+            "Or write a canonical v0.3 config.yaml using the documentation examples"
         )
         sys.exit(1)
 
@@ -90,7 +91,7 @@ def import_config_from_source_command(
     target_path: str = "config.yaml",
     force: bool = False,
 ):
-    """Import a supported external config source into canonical v0.4 YAML."""
+    """Import a supported external config source into canonical v0.3 YAML."""
 
     return run_import_config_command(
         from_type=from_type,
@@ -105,16 +106,14 @@ def migrate_config_command(
     output_path: str | None = None,
     force: bool = False,
 ):
-    """Upgrade one canonical v0.3 file into a validated v0.4 file offline."""
+    """Rewrite one previous-release v0.3 file into strict current v0.3."""
 
-    # The v0.3 reader is an offline conversion boundary. Keep it out of every
-    # runtime command's import graph so serve/validate cannot become a dual
-    # version reader accidentally.
-    from cli.config_upgrade_v03 import (
-        migrate_config_command as run_migrate_config_command,
-    )
+    # The previous-release decoder is an offline conversion boundary. Keep it
+    # out of every runtime command's import graph so serve/validate remain one
+    # strict current-v0.3 reader.
+    migration_module = import_module("cli.config_migrate_command")
 
-    return run_migrate_config_command(
+    return migration_module.migrate_config_command(
         config_path=config_path,
         output_path=output_path,
         force=force,

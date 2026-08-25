@@ -3,11 +3,16 @@
 # =============================================================================
 
 MODEL cloud/frontier-reasoning {
-  capabilities: ["architecture_review", "deep_synthesis", "frontier_reasoning", "long_context", "text"]
+  capabilities: ["frontier_reasoning", "deep_synthesis", "architecture_review", "long_context", "text"]
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL local/private-qwen {
-  capabilities: ["code", "internal_docs", "privacy_locality", "security_containment", "self_hosted", "text"]
+  capabilities: ["self_hosted", "privacy_locality", "security_containment", "code", "internal_docs", "text"]
   reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
 }
 
@@ -23,6 +28,7 @@ ENTRYPOINT {
     { decision: "local_privacy_policy", models: [{ model: "local/private-qwen", weight: "1", reasoning: { enabled: true, effort: "medium" } }] },
     { decision: "local_security_containment", models: [{ model: "local/private-qwen", weight: "1" }] },
     { decision: "local_standard", models: [{ model: "local/private-qwen", weight: "1", reasoning: { enabled: true, effort: "medium" } }] },
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
   ]
 }
 
@@ -141,6 +147,11 @@ RECIPE default (description = "Default routing recipe.") {
     feature: { source: { pattern: "(?i)(<system>|<assistant>|begin system prompt|```system|###\\s*system)", type: "regex" }, type: "exists" }
   }
 
+  SIGNAL conversation privacy_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   SIGNAL complexity frontier_reasoning {
     threshold: 0.12
     description: "General reasoning boundary between local handling and frontier-cloud escalation."
@@ -239,6 +250,23 @@ RECIPE default (description = "Default routing recipe.") {
     PLUGIN tools {
       enabled: true
       mode: "none"
+    }
+    PLUGIN router_replay {
+      enabled: true
+      max_records: 50000
+      max_body_bytes: 2048
+    }
+  }
+
+  ROUTE omni (description = "Understand private image-bearing requests on the local visual-language model.") {
+    PRIORITY 275
+    TIER 2
+    WHEN conversation("privacy_has_images")
+    ALGORITHM static
+    PLUGIN tools {
+      enabled: true
+      mode: "filtered"
+      allow_tools: ["local_search", "local_read"]
     }
     PLUGIN router_replay {
       enabled: true

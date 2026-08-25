@@ -1,6 +1,7 @@
 """Management-listener contract for the local split container stack."""
 
 from cli.consts import DEFAULT_METRICS_PORT, DEFAULT_ROUTER_PORT
+from cli.control_plane_deployment import runtime_capabilities
 from cli.parser import parse_user_config
 from cli.runtime_stack import RuntimeStackLayout
 
@@ -8,15 +9,15 @@ _MAX_PORT = 65_535
 _ROUTER_SERVICE_PORTS = frozenset({DEFAULT_ROUTER_PORT, DEFAULT_METRICS_PORT})
 
 
-def _managed_management_listener(
+def _management_listener(
     config_path: str, stack_layout: RuntimeStackLayout
 ) -> dict[str, int | str]:
     """Resolve the management listener contract for the split Docker stack."""
 
-    management, control_plane_mode = _management_listener_config(config_path)
+    management, router_auth_required = _management_listener_config(config_path)
     bind_address, port = _management_endpoint(management)
     tls_enabled, certificate_file = _management_tls(management)
-    _validate_management_access(management, control_plane_mode)
+    _validate_management_access(management, router_auth_required)
     _validate_management_endpoint(bind_address, port)
     host_port = port + stack_layout.port_offset
     if host_port > _MAX_PORT:
@@ -35,24 +36,19 @@ def _management_api_config(config_path: str) -> dict | None:
     return management
 
 
-def _management_listener_config(config_path: str) -> tuple[dict | None, str]:
+def _management_listener_config(config_path: str) -> tuple[dict | None, bool]:
     config = parse_user_config(config_path)
     global_config = config.global_ or {}
-    control_plane = global_config.get("control_plane") or {}
-    if not isinstance(control_plane, dict):
-        raise ValueError("global.control_plane must be a mapping")
-    control_plane_mode = str(control_plane.get("mode") or "standalone").strip()
-    if control_plane_mode not in {"standalone", "managed"}:
-        raise ValueError("control-plane mode must be standalone or managed")
+    management_api_enabled = runtime_capabilities(config).management_api
     services = global_config.get("services")
     if services is None:
-        return None, control_plane_mode
+        return None, management_api_enabled
     elif not isinstance(services, dict):
         raise ValueError("global.services must be a mapping")
     management = services.get("management_api")
     if management is not None and not isinstance(management, dict):
         raise ValueError("global.services.management_api must be a mapping")
-    return management, control_plane_mode
+    return management, management_api_enabled
 
 
 def _management_endpoint(management: dict | None) -> tuple[str, int]:
@@ -82,7 +78,7 @@ def _management_tls(management: dict | None) -> tuple[bool, str]:
 
 
 def _validate_management_access(
-    management: dict | None, control_plane_mode: str
+    management: dict | None, router_auth_required: bool
 ) -> None:
     management_config = management or {}
     remote_exposure = management_config.get("remote_exposure", False)
@@ -98,19 +94,17 @@ def _validate_management_access(
     roles = auth.get("roles", {})
     if not isinstance(roles, dict):
         raise ValueError("management API auth roles must be a mapping")
-    if control_plane_mode == "managed":
+    if router_auth_required:
         if auth_mode != "router":
-            raise ValueError(
-                "managed control-plane mode requires management API auth mode router"
-            )
+            raise ValueError("an enabled Management API requires auth mode router")
         if tokens or roles:
             raise ValueError(
-                "managed control-plane mode does not accept management API auth tokens or roles"
+                "Router-authenticated Management does not accept static auth tokens or roles"
             )
         return
     if auth_mode not in {"disabled", "bearer"}:
         raise ValueError(
-            "standalone management API auth mode must be disabled or bearer"
+            "file-backed management API auth mode must be disabled or bearer"
         )
     if remote_exposure and (auth_mode != "bearer" or not tokens):
         raise ValueError("management API remote exposure requires bearer auth tokens")

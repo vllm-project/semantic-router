@@ -9,7 +9,6 @@ export type ShellRoutePage =
   | 'fleet-sim-workloads'
   | 'insights'
   | 'insights-record'
-  | 'logs'
   | 'monitoring'
   | 'openclaw'
   | 'playground'

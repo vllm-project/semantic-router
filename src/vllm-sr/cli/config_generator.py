@@ -7,7 +7,7 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 from cli.consts import DEFAULT_LISTENER_PORT
-from cli.managed_envoy_contract import (
+from cli.envoy_dispatch_contract import (
     INTERNAL_REQUEST_HEADERS,
     resolve_backend_dispatch_endpoint,
 )

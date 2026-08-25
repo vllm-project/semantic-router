@@ -21,10 +21,11 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 )
 
-// PodDisruptionBudgetSpec defines the managed Router disruption guard.
+// PodDisruptionBudgetSpec defines the Router disruption guard.
 type PodDisruptionBudgetSpec struct {
-	// Enabled overrides the mode-aware default. Managed mode defaults to true;
-	// standalone mode defaults to false.
+	// Enabled overrides the capability-derived default. Deployments with a
+	// durable Management store default to true; file-only deployments default
+	// to false.
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 
@@ -37,8 +38,9 @@ type PodDisruptionBudgetSpec struct {
 
 // TopologySpreadSpec defines one portable Router topology constraint.
 type TopologySpreadSpec struct {
-	// Enabled overrides the mode-aware default. Managed mode defaults to true;
-	// standalone mode defaults to false.
+	// Enabled overrides the capability-derived default. Deployments with a
+	// durable Management store default to true; file-only deployments default
+	// to false.
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 
@@ -64,8 +66,9 @@ type TopologySpreadSpec struct {
 // NetworkPolicySpec defines listener-specific ingress peers. Omitted peer
 // families stay denied when the policy is enabled.
 type NetworkPolicySpec struct {
-	// Enabled overrides the mode-aware default. Managed mode defaults to true;
-	// standalone mode defaults to false.
+	// Enabled overrides the capability-derived default. Deployments with a
+	// durable Management store default to true; file-only deployments default
+	// to false.
 	// +optional
 	Enabled *bool `json:"enabled,omitempty"`
 
@@ -82,7 +85,7 @@ type NetworkPolicySpec struct {
 	MetricsPeers []networkingv1.NetworkPolicyPeer `json:"metricsPeers,omitempty"`
 }
 
-// MigrationStatus reports the explicit managed schema Job state.
+// MigrationStatus reports the explicit Management schema Job state.
 type MigrationStatus struct {
 	// JobName is the content-addressed migration Job for this bootstrap and
 	// Router image.

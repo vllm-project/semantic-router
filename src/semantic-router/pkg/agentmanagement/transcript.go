@@ -36,10 +36,22 @@ func NormalizeEventAppend(request EventAppend) (EventAppend, error) {
 		return EventAppend{}, fmt.Errorf("%w: Agent event fence is invalid", ErrInvalid)
 	}
 
-	var payload any
-	switch request.Type {
+	payload, err := normalizeEventPayload(request.Type, request.Payload)
+	if err != nil {
+		return EventAppend{}, err
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil || len(encoded) > maximumEventPayloadBytes {
+		return EventAppend{}, fmt.Errorf("%w: Agent event cannot be encoded safely", ErrInvalid)
+	}
+	request.Payload = encoded
+	return request, nil
+}
+
+func normalizeEventPayload(eventType EventType, raw json.RawMessage) (any, error) {
+	switch eventType {
 	case EventUserInput:
-		value, err := decodeTranscript[UserInputEvent](request.Payload)
+		value, err := decodeTranscript[UserInputEvent](raw)
 		if err != nil {
 			return EventAppend{}, fmt.Errorf("%w: Agent user input event is invalid", ErrInvalid)
 		}
@@ -48,17 +60,17 @@ func NormalizeEventAppend(request EventAppend) (EventAppend, error) {
 			return EventAppend{}, fmt.Errorf("%w: Agent user input event is invalid", ErrInvalid)
 		}
 		value.Content = normalized.Content
-		payload = value
+		return value, nil
 	case EventAssistantDelta:
-		value, err := decodeTranscript[AssistantDeltaEvent](request.Payload)
+		value, err := decodeTranscript[AssistantDeltaEvent](raw)
 		if err != nil || uuid.Validate(value.ModelStepID) != nil || value.ChunkIndex < 0 ||
 			validateAssistantDelta(value.Delta) != nil {
 			return EventAppend{}, fmt.Errorf("%w: Agent assistant delta is invalid", ErrInvalid)
 		}
 		value.Delta.Text = sanitizeTranscriptText(value.Delta.Text, maximumEventTextBytes)
-		payload = value
+		return value, nil
 	case EventToolRequest:
-		value, err := decodeTranscript[ToolRequestEvent](request.Payload)
+		value, err := decodeTranscript[ToolRequestEvent](raw)
 		if err != nil || uuid.Validate(value.InvocationID) != nil || !canonicalToolName(value.ToolName) ||
 			(value.Class != ToolRead && value.Class != ToolWrite && value.Class != ToolExecute) {
 			return EventAppend{}, fmt.Errorf("%w: Agent tool request event is invalid", ErrInvalid)
@@ -67,9 +79,9 @@ func NormalizeEventAppend(request EventAppend) (EventAppend, error) {
 		if err != nil {
 			return EventAppend{}, err
 		}
-		payload = value
+		return value, nil
 	case EventToolResult:
-		value, err := decodeTranscript[ToolResultEvent](request.Payload)
+		value, err := decodeTranscript[ToolResultEvent](raw)
 		if err != nil || validateToolResultEvent(value) != nil {
 			return EventAppend{}, fmt.Errorf("%w: Agent tool result event is invalid", ErrInvalid)
 		}
@@ -80,22 +92,22 @@ func NormalizeEventAppend(request EventAppend) (EventAppend, error) {
 			}
 		}
 		value.Error = sanitizeFailure(value.Error)
-		payload = value
+		return value, nil
 	case EventProgress:
-		value, err := decodeTranscript[ProgressEvent](request.Payload)
+		value, err := decodeTranscript[ProgressEvent](raw)
 		if err != nil || !validTranscriptLabel(value.Phase, 64) || strings.TrimSpace(value.Message) == "" {
 			return EventAppend{}, fmt.Errorf("%w: Agent progress event is invalid", ErrInvalid)
 		}
 		value.Message = sanitizeTranscriptText(value.Message, 1024)
-		payload = value
+		return value, nil
 	case EventContextCheckpoint:
-		value, err := decodeTranscript[ContextCheckpointEvent](request.Payload)
+		value, err := decodeTranscript[ContextCheckpointEvent](raw)
 		if err != nil || uuid.Validate(value.CheckpointID) != nil || value.ThroughSequence < 1 {
 			return EventAppend{}, fmt.Errorf("%w: Agent checkpoint event is invalid", ErrInvalid)
 		}
-		payload = value
+		return value, nil
 	case EventApprovalRequest:
-		value, err := decodeTranscript[ApprovalRequestEvent](request.Payload)
+		value, err := decodeTranscript[ApprovalRequestEvent](raw)
 		if err != nil || uuid.Validate(value.PlanID) != nil || !validSHA256Digest(value.PlanDigest) ||
 			value.PlanRevision < 1 || strings.TrimSpace(value.PlanETag) == "" || value.ExpiresAt.IsZero() {
 			return EventAppend{}, fmt.Errorf("%w: Agent approval request event is invalid", ErrInvalid)
@@ -109,39 +121,32 @@ func NormalizeEventAppend(request EventAppend) (EventAppend, error) {
 		if value.Summary.GateResults, err = sanitizeOptionalTranscriptValue(value.Summary.GateResults); err != nil {
 			return EventAppend{}, err
 		}
-		payload = value
+		return value, nil
 	case EventApprovalResult:
-		value, err := decodeTranscript[ApprovalResultEvent](request.Payload)
+		value, err := decodeTranscript[ApprovalResultEvent](raw)
 		if err != nil || uuid.Validate(value.PlanID) != nil ||
 			(value.Status != "committed" && value.Status != "rejected" && value.Status != "expired" && value.Status != "failed") ||
 			(value.OperationID != "" && uuid.Validate(value.OperationID) != nil) {
 			return EventAppend{}, fmt.Errorf("%w: Agent approval result event is invalid", ErrInvalid)
 		}
-		payload = value
+		return value, nil
 	case EventCancellation:
-		value, err := decodeTranscript[CancellationEvent](request.Payload)
+		value, err := decodeTranscript[CancellationEvent](raw)
 		if err != nil || value.RequestedAt.IsZero() {
 			return EventAppend{}, fmt.Errorf("%w: Agent cancellation event is invalid", ErrInvalid)
 		}
-		payload = value
+		return value, nil
 	case EventTerminal:
-		value, err := decodeTranscript[TerminalEvent](request.Payload)
+		value, err := decodeTranscript[TerminalEvent](raw)
 		if err != nil || (value.Status != TurnCompleted && value.Status != TurnFailed && value.Status != TurnCancelled) ||
 			(value.Status == TurnFailed) != (value.Error != nil) {
 			return EventAppend{}, fmt.Errorf("%w: Agent terminal event is invalid", ErrInvalid)
 		}
 		value.Error = sanitizeFailure(value.Error)
-		payload = value
+		return value, nil
 	default:
-		return EventAppend{}, fmt.Errorf("%w: Agent event type is invalid", ErrInvalid)
+		return nil, fmt.Errorf("%w: Agent event type is invalid", ErrInvalid)
 	}
-
-	encoded, err := json.Marshal(payload)
-	if err != nil || len(encoded) > maximumEventPayloadBytes {
-		return EventAppend{}, fmt.Errorf("%w: Agent event cannot be encoded safely", ErrInvalid)
-	}
-	request.Payload = encoded
-	return request, nil
 }
 
 func decodeTranscript[T any](raw []byte) (T, error) {

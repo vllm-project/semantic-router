@@ -53,13 +53,9 @@ func (provider *Provider) preparePublication(
 	invocation agentmanagement.ToolInvocationContext,
 	raw json.RawMessage,
 ) (agentmanagement.ToolResult, error) {
-	var input publishPrepareInput
-	if err := json.Unmarshal(raw, &input); err != nil || input.RecipeID == "" ||
-		input.EntrypointID == "" || input.RecipeContentRevision < 1 ||
-		input.RecipeResourceRevision < 1 || input.EntrypointContentRevision < 1 ||
-		input.EntrypointResourceRevision < 1 || uuid.Validate(input.ProbeArtifactID) != nil ||
-		uuid.Validate(input.EvaluationArtifactID) != nil {
-		return agentmanagement.ToolResult{}, agentmanagement.ErrInvalid
+	input, err := decodePublishPrepareInput(raw)
+	if err != nil {
+		return agentmanagement.ToolResult{}, err
 	}
 	path, preparePublicationErr := provider.resolveWorkflowPath(ctx, invocation, input.RecipeID, input.EntrypointID)
 	if preparePublicationErr != nil {
@@ -71,16 +67,7 @@ func (provider *Provider) preparePublication(
 		path.entrypoint.Revision != input.EntrypointResourceRevision {
 		return agentmanagement.ToolResult{}, agentmanagement.ErrConflict
 	}
-	if err := provider.authorizeResources(
-		ctx, invocation, accesscontrol.PermissionRoutingManage,
-		accesscontrol.ScopeResourceRecipe, path.recipe.ID,
-	); err != nil {
-		return agentmanagement.ToolResult{}, err
-	}
-	if err := provider.authorizeResources(
-		ctx, invocation, accesscontrol.PermissionRoutingManage,
-		accesscontrol.ScopeResourceEntrypoint, path.entrypoint.ID,
-	); err != nil {
+	if err := provider.authorizePublicationPath(ctx, invocation, path); err != nil {
 		return agentmanagement.ToolResult{}, err
 	}
 	probe, evaluation, preparePublicationErr := provider.loadPublicationEvidence(ctx, invocation, input)
@@ -156,6 +143,33 @@ func (provider *Provider) preparePublication(
 		return agentmanagement.ToolResult{}, agentmanagement.ErrInvalid
 	}
 	return agentmanagement.ToolResult{Value: value}, nil
+}
+
+func decodePublishPrepareInput(raw json.RawMessage) (publishPrepareInput, error) {
+	var input publishPrepareInput
+	if err := json.Unmarshal(raw, &input); err != nil || input.RecipeID == "" ||
+		input.EntrypointID == "" || input.RecipeContentRevision < 1 ||
+		input.RecipeResourceRevision < 1 || input.EntrypointContentRevision < 1 ||
+		input.EntrypointResourceRevision < 1 || uuid.Validate(input.ProbeArtifactID) != nil ||
+		uuid.Validate(input.EvaluationArtifactID) != nil {
+		return publishPrepareInput{}, agentmanagement.ErrInvalid
+	}
+	return input, nil
+}
+
+func (provider *Provider) authorizePublicationPath(
+	ctx context.Context, invocation agentmanagement.ToolInvocationContext, path workflowPath,
+) error {
+	if err := provider.authorizeResources(
+		ctx, invocation, accesscontrol.PermissionRoutingManage,
+		accesscontrol.ScopeResourceRecipe, path.recipe.ID,
+	); err != nil {
+		return err
+	}
+	return provider.authorizeResources(
+		ctx, invocation, accesscontrol.PermissionRoutingManage,
+		accesscontrol.ScopeResourceEntrypoint, path.entrypoint.ID,
+	)
 }
 
 func (provider *Provider) loadPublicationEvidence(

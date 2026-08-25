@@ -69,10 +69,22 @@ type RoutingResolvedRecipe struct {
 	Document  json.RawMessage   `json:"document"`
 }
 
-type RoutingExecution struct {
-	MaxRetries     int    `json:"maxRetries"`
-	RequestTimeout string `json:"requestTimeout"`
-	StreamTimeout  string `json:"streamTimeout"`
+type RoutingModelRetryControl struct {
+	Count int      `json:"count"`
+	On    []string `json:"on,omitempty"`
+}
+
+type RoutingModelTimeoutControl struct {
+	Request string `json:"request"`
+	Stream  string `json:"stream"`
+}
+
+// RoutingModelControl is the Management API form of providers.models[].control.
+// The immutable routing snapshot keeps a flattened execution value internally;
+// that transport detail is not a second public authoring contract.
+type RoutingModelControl struct {
+	Retry   RoutingModelRetryControl   `json:"retry"`
+	Timeout RoutingModelTimeoutControl `json:"timeout"`
 }
 
 type RoutingPricing struct {
@@ -105,13 +117,13 @@ type RoutingModelWrite struct {
 	QualityScore      float64                    `json:"qualityScore,omitempty"`
 	Modality          string                     `json:"modality,omitempty"`
 	Tags              []string                   `json:"tags,omitempty"`
-	Execution         RoutingExecution           `json:"execution"`
+	Control           RoutingModelControl        `json:"control"`
 	Pricing           RoutingPricing             `json:"pricing"`
 	Backends          []RoutingModelBackendInput `json:"backends"`
 }
 
 // RoutingModelPatch changes only the fields present in the request. In
-// particular, callers can tune execution or pricing without reading or
+// particular, callers can tune control or pricing without reading or
 // resubmitting credential-bearing backend configuration.
 type RoutingModelPatch struct {
 	Name              *string                     `json:"name,omitempty"`
@@ -125,7 +137,7 @@ type RoutingModelPatch struct {
 	QualityScore      *float64                    `json:"qualityScore,omitempty"`
 	Modality          *string                     `json:"modality,omitempty"`
 	Tags              *[]string                   `json:"tags,omitempty"`
-	Execution         *RoutingExecution           `json:"execution,omitempty"`
+	Control           *RoutingModelControl        `json:"control,omitempty"`
 	Pricing           *RoutingPricing             `json:"pricing,omitempty"`
 	Backends          *[]RoutingModelBackendInput `json:"backends,omitempty"`
 }
@@ -154,7 +166,7 @@ type RoutingModelView struct {
 	QualityScore      float64                   `json:"qualityScore,omitempty"`
 	Modality          string                    `json:"modality,omitempty"`
 	Tags              []string                  `json:"tags"`
-	Execution         RoutingExecution          `json:"execution"`
+	Control           RoutingModelControl       `json:"control"`
 	Pricing           RoutingPricing            `json:"pricing"`
 	Backends          []RoutingModelBackendView `json:"backends"`
 	CreatedAt         time.Time                 `json:"createdAt"`
@@ -205,7 +217,7 @@ type RoutingBulkModelSelection struct {
 	QualityScore      float64                `json:"qualityScore,omitempty"`
 	Modality          string                 `json:"modality,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
-	Execution         RoutingExecution       `json:"execution"`
+	Control           RoutingModelControl    `json:"control"`
 	Pricing           RoutingPricing         `json:"pricing"`
 }
 
@@ -331,4 +343,28 @@ type RoutingProbeResponse struct {
 	Reachable           bool      `json:"reachable"`
 	LatencyMilliseconds int64     `json:"latencyMilliseconds"`
 	CheckedAt           time.Time `json:"checkedAt"`
+}
+
+type RoutingManifestImportRequest struct {
+	Manifest string `json:"manifest"`
+	DryRun   bool   `json:"dryRun,omitempty"`
+}
+
+type RoutingManifestResourceDiff struct {
+	Create  []string `json:"create"`
+	Update  []string `json:"update"`
+	Disable []string `json:"disable"`
+}
+
+type RoutingManifestDiff struct {
+	Models      RoutingManifestResourceDiff `json:"models"`
+	Recipes     RoutingManifestResourceDiff `json:"recipes"`
+	Entrypoints RoutingManifestResourceDiff `json:"entrypoints"`
+}
+
+type RoutingManifestImportResult struct {
+	Diff            RoutingManifestDiff `json:"diff"`
+	OperationID     string              `json:"operationId,omitempty"`
+	DesiredRevision *uint64             `json:"desiredRevision,omitempty"`
+	Replayed        bool                `json:"replayed"`
 }

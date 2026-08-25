@@ -53,10 +53,17 @@ describe('ML setup structured fields', () => {
 
   it('keeps ML list fields connected to structured controls', () => {
     const source = readFileSync(new URL('./MLSetupPage.tsx', import.meta.url), 'utf8')
+    const styles = readFileSync(
+      new URL('../components/StructuredFieldEditors.module.css', import.meta.url),
+      'utf8',
+    )
     expect(source).toContain('<StringListEditor')
     expect(source).toContain('<ObjectListEditor')
     expect(source).toContain('getDecisionEntriesError(wizard.decisions)')
     expect(source).toContain('getMlpHiddenLayersError(wizard.mlpHiddenSizes)')
     expect(source).not.toContain('comma-separated')
+    expect(styles).toMatch(
+      /@media \(max-width: 680px\)[\s\S]*\.stringRow,[\s\S]*\.objectGrid\s*{[^}]*grid-template-columns: 1fr;/,
+    )
   })
 })

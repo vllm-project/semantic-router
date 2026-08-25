@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"strconv"
 	"strings"
 	"time"
@@ -82,10 +83,11 @@ func (r *RedisProjectionReader) LocateCredential(
 	}
 	if accessGate.PublicationID != location.PublicationID || routingGate.PublicationID != location.PublicationID ||
 		accessGate.RuntimeEpoch != routingGate.RuntimeEpoch || accessGate.Revision != routingGate.Revision ||
-		routingGate.SnapshotDigest == "" {
+		routingGate.SnapshotDigest == "" || routingGate.Revision > math.MaxInt64 {
 		return CredentialLocation{}, fmt.Errorf("%w: credential directory and publication gates disagree", ErrRuntimeCorrupt)
 	}
 	location.RuntimeEpoch = routingGate.RuntimeEpoch
+	// #nosec G115 -- the PostgreSQL BIGINT bound is checked above.
 	location.RoutingRevision = int64(routingGate.Revision)
 	location.RoutingSnapshotHash = routingGate.SnapshotDigest
 	return location, nil
@@ -259,13 +261,15 @@ func (r *RedisProjectionReader) ReadAppliedPolicy(
 	}
 	if accessGate.PublicationID == "" || accessGate.PublicationID != routingGate.PublicationID ||
 		accessGate.RuntimeEpoch != routingGate.RuntimeEpoch || accessGate.Revision != routingGate.Revision ||
-		routingGate.SnapshotDigest == "" {
+		routingGate.SnapshotDigest == "" || routingGate.Revision > math.MaxInt64 {
 		return AppliedPolicy{}, fmt.Errorf("%w: publication gates disagree", ErrRuntimeCorrupt)
 	}
+	// #nosec G115 -- the PostgreSQL BIGINT bound is checked above.
+	routingRevision := int64(routingGate.Revision)
 	location := CredentialLocation{
 		NamespaceID: namespaceID, QuotaPartition: partition,
 		PublicationID: accessGate.PublicationID, RuntimeEpoch: accessGate.RuntimeEpoch,
-		RoutingRevision: int64(routingGate.Revision), RoutingSnapshotHash: routingGate.SnapshotDigest,
+		RoutingRevision: routingRevision, RoutingSnapshotHash: routingGate.SnapshotDigest,
 	}
 	active, err := r.ReadActivePolicy(ctx, location, keyID)
 	if err != nil {

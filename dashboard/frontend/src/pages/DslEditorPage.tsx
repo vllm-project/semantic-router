@@ -10,6 +10,7 @@ import {
 } from '@/lib/dslLanguage'
 import { DslImportModal } from './DslImportModal'
 import { DslEditorStatusBar } from './DslEditorStatusBar'
+import { copyText } from '@/utils/clipboard'
 import styles from './DslEditorPage.module.css'
 
 type OutputTab = 'yaml' | 'crd'
@@ -200,37 +201,9 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({
 
   const handleCopyOutput = useCallback(async () => {
     const text = outputTab === 'yaml' ? yamlOutput : crdOutput
-    if (!text) return
-    try {
-      // Try Clipboard API first
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text)
-      } else {
-        // Fallback for non-secure contexts (http://localhost etc.)
-        const textarea = document.createElement('textarea')
-        textarea.value = text
-        textarea.style.position = 'fixed'
-        textarea.style.opacity = '0'
-        document.body.appendChild(textarea)
-        textarea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textarea)
-      }
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Last-resort fallback
-      const textarea = document.createElement('textarea')
-      textarea.value = text
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      document.body.appendChild(textarea)
-      textarea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textarea)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    }
+    if (!(await copyText(text))) return
+    setCopied(true)
+    window.setTimeout(() => setCopied(false), 2000)
   }, [outputTab, yamlOutput, crdOutput])
 
   const handleGoToLine = useCallback((line: number, column: number) => {
@@ -626,9 +599,11 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({
               >
                 {(outputTab === 'yaml' ? yamlOutput : crdOutput) && (
                   <button
+                    type="button"
                     className={styles.toolbarBtn}
                     onClick={handleCopyOutput}
                     title="Copy to clipboard"
+                    aria-live="polite"
                   >
                     {copied ? (
                       <svg

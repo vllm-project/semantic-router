@@ -383,7 +383,7 @@ class PromptSelectionConfig(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # The selector uses the Entrypoint-assigned candidate set in v0.4.
+    # The selector uses the Entrypoint-assigned candidate set in current v0.3.
     model: str | None = None
     instructions: str
     timeout_seconds: int | None = Field(default=None, ge=0)

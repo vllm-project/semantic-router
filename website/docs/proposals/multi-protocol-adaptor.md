@@ -272,17 +272,21 @@ secrets, tool arguments, or provider error echoes.
 
 ## Configuration and API surface
 
-Human-authored Model YAML names only a Provider and connection values:
+Human-authored Model YAML keeps the provider binding separate from the
+connection-free routing card:
 
 ```yaml
-models:
-  - name: remote/reasoning
-    card:
+providers:
+  models:
+    - name: remote/reasoning
+      provider_model_id: reasoning-model
+      backend_refs:
+        - provider: hosted-anthropic
+          api_key_env: HOSTED_ANTHROPIC_API_KEY
+routing:
+  modelCards:
+    - name: remote/reasoning
       capabilities: [chat, tools, reasoning]
-    connections:
-      - provider: hosted-anthropic
-        model: reasoning-model
-        credential: hosted-anthropic-main
 ```
 
 The control-plane Integration compiler resolves `provider` into a compiled backend

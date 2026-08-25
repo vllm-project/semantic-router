@@ -354,7 +354,7 @@ export function DataTable<T>({
                                 aria-label={`View ${key}`}
                               >
                                 <ProductIcon name="info" aria-hidden="true" />
-                                View
+                                <span className={styles.actionLabel}>View</span>
                               </button>
                             ) : null}
                             {effectiveOnEdit ? (
@@ -365,7 +365,7 @@ export function DataTable<T>({
                                 aria-label={`Edit ${key}`}
                               >
                                 <ProductIcon name="edit" aria-hidden="true" />
-                                Edit
+                                <span className={styles.actionLabel}>Edit</span>
                               </button>
                             ) : null}
                             {effectiveOnDelete ? (
@@ -376,7 +376,7 @@ export function DataTable<T>({
                                 aria-label={`Delete ${key}`}
                               >
                                 <ProductIcon name="trash" aria-hidden="true" />
-                                Delete
+                                <span className={styles.actionLabel}>Delete</span>
                               </button>
                             ) : null}
                           </div>

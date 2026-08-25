@@ -26,8 +26,8 @@ var (
 const ConfigBaseDirEnv = "VLLM_SR_CONFIG_BASE_DIR"
 
 // Parser owns the application-provided Provider Integration compiler used at
-// the human-authoring boundary. A nil compiler remains valid for managed
-// bootstrap documents, but standalone Models fail closed.
+// the human-authoring boundary. A nil compiler remains valid for internal
+// publication bootstrap documents, but file-authored Models fail closed.
 type Parser struct {
 	connectionCompiler modelauthoring.ConnectionCompiler
 }
@@ -177,10 +177,10 @@ func (parser *Parser) parseYAMLBytesWithOptions(
 
 func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 	validators := []func(map[string]interface{}) error{
-		validateV04DocumentBoundary,
+		validateV03DocumentBoundary,
 		validateCanonicalAuthoringFields,
 		rejectUnsupportedTopLevelFields,
-		rejectControlPlaneSecretLiterals,
+		rejectBootstrapSecretLiterals,
 		validateBootstrapFieldNames,
 		rejectRemovedStructureFields,
 		rejectRemovedTaxonomyLegacyFields,
@@ -200,15 +200,15 @@ func validateAndNormalizeRawConfig(raw map[string]interface{}) error {
 func rejectRemovedRouterFields(raw map[string]interface{}) error {
 	router := nestedMapAt(nestedStringMap(raw["global"]), "router")
 	if _, exists := router["skip_processing"]; exists {
-		return fmt.Errorf("global.router.skip_processing has been removed")
+		return fmt.Errorf("global.router.skip_processing has been removed because inference paths cannot bypass Router access enforcement")
 	}
 	return nil
 }
 
-func validateV04DocumentBoundary(raw map[string]interface{}) error {
+func validateV03DocumentBoundary(raw map[string]interface{}) error {
 	version, ok := raw["version"].(string)
-	if !ok || strings.TrimSpace(version) != "v0.4" {
-		return fmt.Errorf("version must be v0.4 and use the current models/recipes/entrypoints authoring schema")
+	if !ok || version != "v0.3" {
+		return fmt.Errorf("version must be v0.3 and use the current providers/routing/recipes/entrypoints authoring schema")
 	}
 	return nil
 }
@@ -287,7 +287,7 @@ func rejectRemovedDecisionToolFields(raw map[string]interface{}) error {
 	}
 
 	return fmt.Errorf(
-		"removed config fields are no longer supported: %s; use recipes[].document.decisions[].plugins[type=tools].configuration",
+		"removed config fields are no longer supported: %s; use recipes[].routing.decisions[].plugins[type=tools].configuration",
 		strings.Join(removed, ", "),
 	)
 }
@@ -312,7 +312,7 @@ func rejectRemovedDecisionLearningFields(prefix string, index int, algorithm map
 	}
 	if _, ok := algorithm["session_aware"]; ok {
 		return fmt.Errorf(
-			"%s.decisions[%d].algorithm.session_aware is no longer supported; remove algorithm.session_aware and configure global.router.learning.protection plus recipes[].document.decisions[].adaptations when this decision needs apply/observe/bypass control",
+			"%s.decisions[%d].algorithm.session_aware is no longer supported; remove algorithm.session_aware and configure global.router.learning.protection plus recipes[].routing.decisions[].adaptations when this decision needs apply/observe/bypass control",
 			prefix,
 			index,
 		)
@@ -550,7 +550,7 @@ func canonicalConfigRequiredError(raw map[string]interface{}) error {
 		detail = fmt.Sprintf("unexpected top-level keys: %s", strings.Join(unsupported, ", "))
 	}
 	return fmt.Errorf(
-		"config file must use the current v0.4 version/listeners/models/recipes/entrypoints/global authoring schema; %s",
+		"config file must use the current v0.3 version/listeners/providers/routing/recipes/entrypoints/global authoring schema; %s",
 		detail,
 	)
 }
@@ -572,7 +572,7 @@ func finalizeParsedConfig(cfg *RouterConfig) error {
 		})
 		return err
 	}
-	if err := cfg.ValidateControlPlaneBootstrap(); err != nil {
+	if err := cfg.ValidateRuntimeBootstrap(); err != nil {
 		logging.ComponentDebugEvent("config", "config_bootstrap_validation_failed", map[string]interface{}{
 			"error": err.Error(),
 		})
@@ -614,19 +614,19 @@ type rawRoutingDocument struct {
 }
 
 // rawRoutingDocuments is the single path-aware traversal for routing authoring
-// values. It covers native v0.4 Recipe documents and standalone Recipe
+// values. It covers the top-level v0.3 routing profile and reusable Recipe
 // fragments. Unsupported top-level layouts are rejected before this traversal.
 func rawRoutingDocuments(raw map[string]interface{}) []rawRoutingDocument {
 	documents := make([]rawRoutingDocument, 0, 2)
-	if document, ok := raw["document"]; ok {
-		documents = append(documents, rawRoutingDocument{prefix: "document", document: nestedStringMap(document)})
+	if routing, ok := raw["routing"]; ok {
+		documents = append(documents, rawRoutingDocument{prefix: "routing", document: nestedStringMap(routing)})
 	}
 	if recipes, ok := raw["recipes"].([]interface{}); ok {
 		for index, rawRecipe := range recipes {
 			recipe := nestedStringMap(rawRecipe)
 			documents = append(documents, rawRoutingDocument{
-				prefix:   fmt.Sprintf("recipes[%d].document", index),
-				document: nestedStringMap(recipe["document"]),
+				prefix:   fmt.Sprintf("recipes[%d].routing", index),
+				document: nestedStringMap(recipe["routing"]),
 			})
 		}
 	}
@@ -637,7 +637,8 @@ func unsupportedTopLevelConfigFields(raw map[string]interface{}) []string {
 	allowed := map[string]bool{
 		"version":     true,
 		"listeners":   true,
-		"models":      true,
+		"providers":   true,
+		"routing":     true,
 		"recipes":     true,
 		"entrypoints": true,
 		"global":      true,

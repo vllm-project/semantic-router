@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendegress"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth/issuerverifier"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 )
 
 type assertionVerifierComposition struct {
@@ -15,7 +15,7 @@ type assertionVerifierComposition struct {
 }
 
 func composeAssertionVerifier(
-	dependencies managedruntime.ManagementDependencies,
+	dependencies routingruntime.ManagementDependencies,
 ) (*assertionVerifierComposition, error) {
 	repository, err := issuerverifier.NewPostgresRepository(dependencies.Database)
 	if err != nil {

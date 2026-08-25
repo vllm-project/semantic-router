@@ -7,7 +7,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 )
 
-// Runtime is the mode-exact process authority borrowed by every immutable
+// Runtime is the composition-exact process authority borrowed by every immutable
 // Router generation. Exactly one named authority exists for its lifetime.
 type Runtime struct {
 	metered     *MeteredAuthority
@@ -99,7 +99,7 @@ func (runtime *Runtime) VerifyGrant(
 	if runtime.routingOnly != nil && runtime.metered == nil {
 		return runtime.routingOnly.VerifyGrant(ctx, token, expected)
 	}
-	return VerifiedGrant{}, fmt.Errorf("dispatch authority mode is invalid")
+	return VerifiedGrant{}, fmt.Errorf("dispatch authority composition is invalid")
 }
 
 func (runtime *Runtime) IssueFromGrant(
@@ -116,7 +116,7 @@ func (runtime *Runtime) IssueFromGrant(
 	if runtime.routingOnly != nil && runtime.metered == nil {
 		return runtime.routingOnly.IssueFromGrant(ctx, verified, request)
 	}
-	return "", fmt.Errorf("dispatch authority mode is invalid")
+	return "", fmt.Errorf("dispatch authority composition is invalid")
 }
 
 func (runtime *Runtime) VerifyDispatchOutcome(
@@ -149,7 +149,7 @@ func (runtime *Runtime) VerifyDispatchOutcome(
 			outcome, err = authority.issuer.VerifyOutcome(token)
 		}
 	default:
-		return backendinvoker.DispatchOutcome{}, fmt.Errorf("dispatch authority mode is invalid")
+		return backendinvoker.DispatchOutcome{}, fmt.Errorf("dispatch authority composition is invalid")
 	}
 	if err != nil {
 		return backendinvoker.DispatchOutcome{}, err
@@ -176,7 +176,7 @@ func (runtime *Runtime) AttachRoutingSnapshots(source backendinvoker.RoutingSnap
 	if runtime.routingOnly != nil && runtime.metered == nil {
 		return runtime.routingOnly.AttachRoutingSnapshots(source)
 	}
-	return fmt.Errorf("dispatch authority mode is invalid")
+	return fmt.Errorf("dispatch authority composition is invalid")
 }
 
 func (runtime *Runtime) Close() error {

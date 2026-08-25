@@ -51,6 +51,7 @@ func BuiltinIntegrations() []Integration {
 	result := make([]Integration, len(specs))
 	for index := range specs {
 		spec := specs[index]
+		// #nosec G115 -- specs is a fixed, compile-time provider catalog with far fewer than uint32 entries.
 		spec.Order = uint32(index + 1)
 		result[index] = IntegrationFunc(spec.definition)
 	}

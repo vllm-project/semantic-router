@@ -42,7 +42,7 @@ func reconcileRoute(
 	sr *vllmv1alpha1.SemanticRouter,
 	isOpenShift bool,
 	gatewayMode string,
-	controlPlaneMode string,
+	durableRouting bool,
 ) error {
 	logger := log.FromContext(ctx)
 
@@ -61,8 +61,8 @@ func reconcileRoute(
 		logger.Info("Route creation requested but not on OpenShift platform")
 		return nil
 	}
-	if gatewayMode != gatewayModeSidecar && controlPlaneMode == controlPlaneModeManaged {
-		return fmt.Errorf("managed OpenShift Route requires the inference-only Envoy sidecar")
+	if gatewayMode != gatewayModeSidecar && durableRouting {
+		return fmt.Errorf("an OpenShift Route with durable routing requires the inference Envoy sidecar")
 	}
 
 	// Create or update Route

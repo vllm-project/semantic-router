@@ -1,4 +1,4 @@
-"""Target-neutral deployment contract for Router control-plane modes.
+"""Target-neutral deployment contract for optional Router capabilities.
 
 This module owns only deployment topology.  Dynamic Models, Recipes,
 Entrypoints, identities, keys, policies, and counters remain Router Management
@@ -7,9 +7,9 @@ resources and never become container or Kubernetes configuration.
 
 from __future__ import annotations
 
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass
-import os
 from pathlib import Path
 from typing import Literal
 from urllib.parse import quote
@@ -26,17 +26,15 @@ from cli.storage_secrets import (
     StorageSecrets,
 )
 
-STANDALONE_MODE = "standalone"
-MANAGED_MODE = "managed"
-
-_MANAGED_SECRET_FILE_PATHS = (
-    ("global", "stores", "access", "postgres", "dsn_file"),
-    ("global", "stores", "access_runtime", "redis", "url_file"),
+_CONTROL_PLANE_SECRET_FILE_PATHS = (
+    ("global", "stores", "management", "postgres", "dsn_file"),
+    ("global", "stores", "runtime", "redis", "url_file"),
     ("global", "services", "access", "credentials", "api_key_hmac_keyring_file"),
     ("global", "services", "access", "credentials", "delegation_hmac_keyring_file"),
     ("global", "services", "access", "credentials", "reveal", "kek_keyring_file"),
     ("global", "services", "access", "tenant_context", "signing_key_file"),
     ("global", "services", "backend_credentials", "provider_kek_keyring_file"),
+    ("global", "services", "routing_security", "hmac_keyring_file"),
     ("global", "services", "management_api", "tls", "certificate_file"),
     ("global", "services", "management_api", "tls", "private_key_file"),
     ("global", "services", "management_api", "tls", "client_ca_bundle_file"),
@@ -49,7 +47,6 @@ _MANAGED_SECRET_FILE_PATHS = (
         "service_account_hmac_keyring_file",
     ),
     ("global", "services", "management_api", "auth", "invitation_hmac_keyring_file"),
-    ("global", "services", "management_api", "auth", "control_plane_hmac_keyring_file"),
     ("global", "services", "management_api", "auth", "response_kek_keyring_file"),
     ("global", "services", "management_api", "auth", "bootstrap", "token_file"),
     ("global", "services", "management_api", "auth", "recovery", "token_file"),
@@ -65,11 +62,22 @@ class StoreSecretReference:
 
 
 @dataclass(frozen=True)
-class ManagedStoreReferences:
-    """Authoritative and runtime-store references required by managed mode."""
+class ControlPlaneStoreReferences:
+    """Configured durable-authority and distributed-runtime store references."""
 
-    postgres: StoreSecretReference
-    valkey: StoreSecretReference
+    postgres: StoreSecretReference | None
+    valkey: StoreSecretReference | None
+
+
+@dataclass(frozen=True)
+class RuntimeCapabilities:
+    """Capabilities derived from typed services and stores, never a public mode."""
+
+    file_routing: bool
+    durable_management: bool
+    management_api: bool
+    distributed_state: bool
+    native_access: bool
 
 
 @dataclass(frozen=True)
@@ -99,13 +107,8 @@ class LocalControlPlanePlan:
         return frozenset(backends)
 
 
-def control_plane_mode(config: object) -> str:
-    """Return the explicit Router authority mode.
-
-    ``config`` may be the raw YAML mapping used by deployment tooling or the
-    typed ``UserConfig`` used by Envoy generation.  Missing mode selects only
-    the Router's canonical standalone default; no aliases are accepted.
-    """
+def runtime_capabilities(config: object) -> RuntimeCapabilities:
+    """Derive deployment behavior from configured components."""
 
     if isinstance(config, Mapping):
         global_config = config.get("global") or {}
@@ -113,47 +116,74 @@ def control_plane_mode(config: object) -> str:
         global_config = getattr(config, "global_", None) or {}
     if not isinstance(global_config, Mapping):
         raise ValueError("global must be a mapping")
-    control_plane = global_config.get("control_plane") or {}
-    if not isinstance(control_plane, Mapping):
-        raise ValueError("global.control_plane must be a mapping")
-    mode = control_plane.get("mode", STANDALONE_MODE)
-    if not isinstance(mode, str) or mode not in {STANDALONE_MODE, MANAGED_MODE}:
-        raise ValueError("global.control_plane.mode must be standalone or managed")
-    return str(mode)
-
-
-def managed_store_references(config: Mapping[str, object]) -> ManagedStoreReferences:
-    """Read the two mandatory managed-store references without resolving them."""
-
-    if control_plane_mode(config) != MANAGED_MODE:
-        raise ValueError("managed stores are available only in managed mode")
-    global_config = _mapping(config.get("global"), "global")
-    stores = _mapping(global_config.get("stores"), "global.stores")
-
-    access = _mapping(stores.get("access"), "global.stores.access")
-    if access.get("type") != "postgres":
-        raise ValueError("managed mode requires global.stores.access.type=postgres")
-    postgres = _mapping(access.get("postgres"), "global.stores.access.postgres")
-
-    runtime = _mapping(stores.get("access_runtime"), "global.stores.access_runtime")
-    if runtime.get("type") != "redis":
+    stores = global_config.get("stores") or {}
+    services = global_config.get("services") or {}
+    if not isinstance(stores, Mapping):
+        raise ValueError("global.stores must be a mapping")
+    if not isinstance(services, Mapping):
+        raise ValueError("global.services must be a mapping")
+    durable_management = stores.get("management") is not None
+    distributed_state = stores.get("runtime") is not None
+    management = services.get("management_api") or {}
+    access = services.get("access") or {}
+    if not isinstance(management, Mapping):
+        raise ValueError("global.services.management_api must be a mapping")
+    if not isinstance(access, Mapping):
+        raise ValueError("global.services.access must be a mapping")
+    management_api = management.get("enabled") is True
+    native_access = access.get("enabled") is True
+    if management_api and not durable_management:
         raise ValueError(
-            "managed mode requires global.stores.access_runtime.type=redis"
+            "global.services.management_api.enabled requires global.stores.management"
         )
-    redis = _mapping(runtime.get("redis"), "global.stores.access_runtime.redis")
-    return ManagedStoreReferences(
-        postgres=_one_secret_reference(
+    if distributed_state and not durable_management:
+        raise ValueError("global.stores.runtime requires global.stores.management")
+    if native_access and not (durable_management and distributed_state):
+        raise ValueError(
+            "global.services.access.enabled requires management and runtime stores"
+        )
+    return RuntimeCapabilities(
+        file_routing=not durable_management,
+        durable_management=durable_management,
+        management_api=management_api,
+        distributed_state=distributed_state,
+        native_access=native_access,
+    )
+
+
+def control_plane_store_references(
+    config: Mapping[str, object],
+) -> ControlPlaneStoreReferences:
+    """Read configured store references without resolving secret values."""
+
+    capabilities = runtime_capabilities(config)
+    global_config = _mapping(config.get("global") or {}, "global")
+    stores = _mapping(global_config.get("stores") or {}, "global.stores")
+    postgres_reference = None
+    valkey_reference = None
+    if capabilities.durable_management:
+        management = _mapping(stores.get("management"), "global.stores.management")
+        postgres = _mapping(
+            management.get("postgres"), "global.stores.management.postgres"
+        )
+        postgres_reference = _one_secret_reference(
             postgres,
             env_field="dsn_env",
             file_field="dsn_file",
-            path="global.stores.access.postgres",
-        ),
-        valkey=_one_secret_reference(
+            path="global.stores.management.postgres",
+        )
+    if capabilities.distributed_state:
+        runtime = _mapping(stores.get("runtime"), "global.stores.runtime")
+        redis = _mapping(runtime.get("redis"), "global.stores.runtime.redis")
+        valkey_reference = _one_secret_reference(
             redis,
             env_field="url_env",
             file_field="url_file",
-            path="global.stores.access_runtime.redis",
-        ),
+            path="global.stores.runtime.redis",
+        )
+    return ControlPlaneStoreReferences(
+        postgres=postgres_reference,
+        valkey=valkey_reference,
     )
 
 
@@ -170,18 +200,22 @@ def plan_local_control_plane(
     local sidecar.
     """
 
-    mode = control_plane_mode(config)
+    capabilities = runtime_capabilities(config)
     postgres_dsn_env = None
     valkey_url_env = None
     replica_binding = None
-    if mode == MANAGED_MODE:
-        references = managed_store_references(config)
+    if capabilities.durable_management:
+        references = control_plane_store_references(config)
+        if references.postgres is None:
+            raise ValueError("management store reference is unavailable")
         if references.postgres.kind == "env" and not _environment_value(
             references.postgres.value, env_vars
         ):
             postgres_dsn_env = references.postgres.value
-        if references.valkey.kind == "env" and not _environment_value(
-            references.valkey.value, env_vars
+        if (
+            references.valkey is not None
+            and references.valkey.kind == "env"
+            and not _environment_value(references.valkey.value, env_vars)
         ):
             valkey_url_env = references.valkey.value
         if not _environment_value(LOCAL_REPLICA_ID_ENV, env_vars):
@@ -303,22 +337,23 @@ def _one_secret_reference(
     return StoreSecretReference("file", file_name)
 
 
-def local_managed_secret_mounts(
+def local_control_plane_secret_mounts(
     config: Mapping[str, object],
 ) -> tuple[str, ...]:
-    """Return exact read-only mounts for local managed file references."""
+    """Return exact read-only mounts for configured control-plane references."""
 
-    if control_plane_mode(config) != MANAGED_MODE:
+    capabilities = runtime_capabilities(config)
+    if not capabilities.durable_management:
         return ()
-    references = managed_store_references(config)
+    references = control_plane_store_references(config)
     paths = {
         reference.value
         for reference in (references.postgres, references.valkey)
-        if reference.kind == "file"
+        if reference is not None and reference.kind == "file"
     }
     paths.update(
         value
-        for path in _MANAGED_SECRET_FILE_PATHS
+        for path in _CONTROL_PLANE_SECRET_FILE_PATHS
         if (value := _string_at_path(config, path))
     )
     backend_credentials = _mapping_at_path(
@@ -333,19 +368,19 @@ def local_managed_secret_mounts(
             and (value := entry.get("secret_file"))
             and isinstance(value, str)
         )
-    bootstrap_token = _managed_bootstrap_token_file(config)
+    bootstrap_token = _bootstrap_token_file(config)
     mounts: set[str] = set()
     for path in paths:
         if path == bootstrap_token:
             token_directory = Path(path).parent
             if not token_directory.is_dir():
                 raise ValueError(
-                    f"managed bootstrap token directory does not exist: {token_directory}"
+                    f"bootstrap token directory does not exist: {token_directory}"
                 )
             mounts.add(f"{token_directory}:{token_directory}:ro")
             continue
         if not Path(path).is_file():
-            raise ValueError(f"managed secret file does not exist: {path}")
+            raise ValueError(f"control-plane secret file does not exist: {path}")
         mounts.add(f"{path}:{path}:ro")
     return tuple(sorted(mounts))
 
@@ -370,7 +405,7 @@ def _string_at_path(config: Mapping[str, object], path: tuple[str, ...]) -> str:
     return node if isinstance(node, str) and node else ""
 
 
-def _managed_bootstrap_token_file(config: Mapping[str, object]) -> str:
+def _bootstrap_token_file(config: Mapping[str, object]) -> str:
     node: object = config.get("global")
     for key in ("services", "management_api", "auth", "bootstrap"):
         if not isinstance(node, Mapping):

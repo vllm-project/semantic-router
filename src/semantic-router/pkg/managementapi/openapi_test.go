@@ -52,6 +52,9 @@ func TestGenerateOpenAPI31IsDeterministicAndRegistryDriven(t *testing.T) {
 			continue
 		}
 		wantMedia := []string{JSONMediaType}
+		if contract.Method == MethodGET && contract.Path == BasePath+"/routing/exports/current" {
+			wantMedia = []string{YAMLMediaType}
+		}
 		if contract.Method == MethodGET && contract.Path == BasePath+"/agent-sessions/{session}/events" {
 			wantMedia = append(wantMedia, EventStreamMediaType)
 		}

@@ -17,7 +17,7 @@ const (
 	defaultUsageMaintenance      = "5m"
 )
 
-// AccessStoreConfig configures the authoritative managed control-plane store.
+// AccessStoreConfig configures the authoritative durable Management store.
 // Credentials are references only; literal DSNs are deliberately not part of
 // the public type.
 type AccessStoreConfig struct {
@@ -177,13 +177,13 @@ func validateAccessStore(store *AccessStoreConfig) error {
 		return nil
 	}
 	if store.Type != AccessStoreTypePostgres {
-		return fmt.Errorf("global.stores.access.type must be postgres")
+		return fmt.Errorf("global.stores.management must configure postgres")
 	}
-	if err := validateSecretSource("global.stores.access.postgres.dsn", store.Postgres.DSNFile, store.Postgres.DSNEnv, true); err != nil {
+	if err := validateSecretSource("global.stores.management.postgres.dsn", store.Postgres.DSNFile, store.Postgres.DSNEnv, true); err != nil {
 		return err
 	}
 	if store.Postgres.MaxConnections < 1 || store.Postgres.MaxConnections > 1000 {
-		return fmt.Errorf("global.stores.access.postgres.max_connections must be between 1 and 1000")
+		return fmt.Errorf("global.stores.management.postgres.max_connections must be between 1 and 1000")
 	}
 	return nil
 }
@@ -193,14 +193,14 @@ func validateAccessRuntimeStore(store *AccessRuntimeStoreConfig) error {
 		return nil
 	}
 	if store.Type != AccessRuntimeStoreTypeRedis {
-		return fmt.Errorf("global.stores.access_runtime.type must be redis")
+		return fmt.Errorf("global.stores.runtime must configure redis")
 	}
-	if err := validateSecretSource("global.stores.access_runtime.redis.url", store.Redis.URLFile, store.Redis.URLEnv, true); err != nil {
+	if err := validateSecretSource("global.stores.runtime.redis.url", store.Redis.URLFile, store.Redis.URLEnv, true); err != nil {
 		return err
 	}
 	prefix := strings.TrimSpace(store.Redis.KeyPrefix)
 	if prefix == "" || prefix != store.Redis.KeyPrefix || strings.ContainsAny(prefix, "\r\n\t ") {
-		return fmt.Errorf("global.stores.access_runtime.redis.key_prefix must be a non-empty whitespace-free prefix")
+		return fmt.Errorf("global.stores.runtime.redis.key_prefix must be a non-empty whitespace-free prefix")
 	}
 	return nil
 }
@@ -287,20 +287,4 @@ func validateAccessService(access AccessServiceConfig) error {
 		}
 	}
 	return nil
-}
-
-func cloneAccessStoreConfig(source *AccessStoreConfig) *AccessStoreConfig {
-	if source == nil {
-		return nil
-	}
-	cloned := *source
-	return &cloned
-}
-
-func cloneAccessRuntimeStoreConfig(source *AccessRuntimeStoreConfig) *AccessRuntimeStoreConfig {
-	if source == nil {
-		return nil
-	}
-	cloned := *source
-	return &cloned
 }

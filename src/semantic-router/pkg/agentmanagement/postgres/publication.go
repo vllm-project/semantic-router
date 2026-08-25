@@ -201,97 +201,116 @@ func (store *Store) FinalizePublicationCommit(
 		return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrInvalid
 	}
 	return inTransaction(ctx, store, func(tx *sql.Tx) (agentmanagement.PublicationCommitResult, error) {
-		var sessionID, turnID string
-		if err := tx.QueryRowContext(ctx, `SELECT session_id::text,turn_id::text
+		return finalizePublicationCommitTx(ctx, tx, namespaceID, planID, operationID, desiredRevision, committedAt)
+	})
+}
+
+func finalizePublicationCommitTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	namespaceID string,
+	planID string,
+	operationID string,
+	desiredRevision int64,
+	committedAt time.Time,
+) (agentmanagement.PublicationCommitResult, error) {
+	var sessionID, turnID string
+	if err := tx.QueryRowContext(ctx, `SELECT session_id::text,turn_id::text
 FROM agent_publication_plans WHERE namespace_id=$1 AND id=$2`, namespaceID, planID).Scan(
-			&sessionID, &turnID,
-		); err != nil {
-			return agentmanagement.PublicationCommitResult{}, mapNotFound(err)
-		}
-		var turnStatus string
-		var cancelled bool
-		if err := tx.QueryRowContext(ctx, `SELECT status,cancel_requested_at IS NOT NULL
+		&sessionID, &turnID,
+	); err != nil {
+		return agentmanagement.PublicationCommitResult{}, mapNotFound(err)
+	}
+	var turnStatus string
+	var cancelled bool
+	if err := tx.QueryRowContext(ctx, `SELECT status,cancel_requested_at IS NOT NULL
 FROM agent_turns WHERE namespace_id=$1 AND session_id=$2 AND id=$3 FOR UPDATE`,
-			namespaceID, sessionID, turnID).Scan(&turnStatus, &cancelled); err != nil {
-			return agentmanagement.PublicationCommitResult{}, mapNotFound(err)
-		}
-		plan, finalizePublicationCommitErr := scanPublicationPlan(tx.QueryRowContext(ctx, publicationPlanSelect+`
- WHERE namespace_id=$1 AND id=$2 FOR UPDATE`, namespaceID, planID))
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, finalizePublicationCommitErr
-		}
-		if plan.Status == agentmanagement.PublicationCommitted {
-			if plan.OperationID != operationID {
-				return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrConflict
-			}
-			return agentmanagement.PublicationCommitResult{
-				Plan: plan, DesiredRevision: desiredRevision, Replayed: true,
-			}, nil
-		}
-		if plan.Status != agentmanagement.PublicationPublishing ||
-			turnStatus != string(agentmanagement.TurnWaitingApproval) || cancelled {
-			return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrApproval
-		}
-		var storedDesired sql.NullInt64
-		if err := tx.QueryRowContext(ctx, `SELECT desired_revision FROM management_operations
-WHERE namespace_id=$1 AND id=$2`, namespaceID, operationID).Scan(&storedDesired); err != nil {
-			return agentmanagement.PublicationCommitResult{}, mapNotFound(err)
-		}
-		if !storedDesired.Valid || storedDesired.Int64 != desiredRevision {
+		namespaceID, sessionID, turnID).Scan(&turnStatus, &cancelled); err != nil {
+		return agentmanagement.PublicationCommitResult{}, mapNotFound(err)
+	}
+	plan, planErr := scanPublicationPlan(tx.QueryRowContext(ctx, publicationPlanSelect+`
+	 WHERE namespace_id=$1 AND id=$2 FOR UPDATE`, namespaceID, planID))
+	if planErr != nil {
+		return agentmanagement.PublicationCommitResult{}, planErr
+	}
+	if plan.Status == agentmanagement.PublicationCommitted {
+		if plan.OperationID != operationID {
 			return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrConflict
 		}
-		approvalPayload, finalizePublicationCommitErr := json.Marshal(agentmanagement.ApprovalResultEvent{
-			PlanID: planID, Status: "committed", OperationID: operationID,
-		})
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrInvalid
-		}
-		approvalEvent, finalizePublicationCommitErr := appendEventTx(ctx, tx, agentmanagement.EventAppend{
-			NamespaceID: namespaceID, SessionID: sessionID, TurnID: turnID,
-			Origin: "control", Type: agentmanagement.EventApprovalResult, Payload: approvalPayload,
-		})
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, finalizePublicationCommitErr
-		}
-		terminalPayload, finalizePublicationCommitErr := json.Marshal(agentmanagement.TerminalEvent{Status: agentmanagement.TurnCompleted})
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrInvalid
-		}
-		terminalEvent, finalizePublicationCommitErr := appendEventTx(ctx, tx, agentmanagement.EventAppend{
-			NamespaceID: namespaceID, SessionID: sessionID, TurnID: turnID,
-			Origin: "control", Type: agentmanagement.EventTerminal, Payload: terminalPayload,
-		})
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, finalizePublicationCommitErr
-		}
-		turnResult, finalizePublicationCommitErr := tx.ExecContext(ctx, `UPDATE agent_turns
+		return agentmanagement.PublicationCommitResult{
+			Plan: plan, DesiredRevision: desiredRevision, Replayed: true,
+		}, nil
+	}
+	if plan.Status != agentmanagement.PublicationPublishing ||
+		turnStatus != string(agentmanagement.TurnWaitingApproval) || cancelled {
+		return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrApproval
+	}
+	var storedDesired sql.NullInt64
+	if err := tx.QueryRowContext(ctx, `SELECT desired_revision FROM management_operations
+WHERE namespace_id=$1 AND id=$2`, namespaceID, operationID).Scan(&storedDesired); err != nil {
+		return agentmanagement.PublicationCommitResult{}, mapNotFound(err)
+	}
+	if !storedDesired.Valid || storedDesired.Int64 != desiredRevision {
+		return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrConflict
+	}
+	approvalEvent, terminalEvent, eventErr := appendPublicationCommitEvents(ctx, tx, namespaceID, sessionID, turnID, planID, operationID)
+	if eventErr != nil {
+		return agentmanagement.PublicationCommitResult{}, eventErr
+	}
+	turnResult, turnWriteErr := tx.ExecContext(ctx, `UPDATE agent_turns
 SET status='completed',completed_at=$4,revision=revision+1,updated_at=clock_timestamp()
 WHERE namespace_id=$1 AND session_id=$2 AND id=$3 AND status='waiting_approval'
   AND cancel_requested_at IS NULL`, namespaceID, sessionID, turnID, committedAt.UTC())
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, classifyWriteError(finalizePublicationCommitErr)
-		}
-		if err := requireOneRow(turnResult); err != nil {
-			return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrApproval
-		}
-		planResult, finalizePublicationCommitErr := tx.ExecContext(ctx, `UPDATE agent_publication_plans
+	if turnWriteErr != nil {
+		return agentmanagement.PublicationCommitResult{}, classifyWriteError(turnWriteErr)
+	}
+	if err := requireOneRow(turnResult); err != nil {
+		return agentmanagement.PublicationCommitResult{}, agentmanagement.ErrApproval
+	}
+	planResult, planWriteErr := tx.ExecContext(ctx, `UPDATE agent_publication_plans
 SET status='committed',committed_operation_id=$3,committed_at=$4,
     revision=revision+1,updated_at=clock_timestamp()
 WHERE namespace_id=$1 AND id=$2 AND status='publishing'`,
-			namespaceID, planID, operationID, committedAt.UTC())
-		if finalizePublicationCommitErr != nil {
-			return agentmanagement.PublicationCommitResult{}, classifyWriteError(finalizePublicationCommitErr)
-		}
-		if err := requireOneRow(planResult); err != nil {
-			return agentmanagement.PublicationCommitResult{}, err
-		}
-		plan, finalizePublicationCommitErr = scanPublicationPlan(tx.QueryRowContext(ctx, publicationPlanSelect+`
- WHERE namespace_id=$1 AND id=$2`, namespaceID, planID))
-		return agentmanagement.PublicationCommitResult{
-			Plan: plan, DesiredRevision: desiredRevision,
-			ApprovalEvent: approvalEvent, TerminalEvent: terminalEvent,
-		}, finalizePublicationCommitErr
+		namespaceID, planID, operationID, committedAt.UTC())
+	if planWriteErr != nil {
+		return agentmanagement.PublicationCommitResult{}, classifyWriteError(planWriteErr)
+	}
+	if err := requireOneRow(planResult); err != nil {
+		return agentmanagement.PublicationCommitResult{}, err
+	}
+	plan, loadErr := scanPublicationPlan(tx.QueryRowContext(ctx, publicationPlanSelect+`
+	 WHERE namespace_id=$1 AND id=$2`, namespaceID, planID))
+	return agentmanagement.PublicationCommitResult{
+		Plan: plan, DesiredRevision: desiredRevision,
+		ApprovalEvent: approvalEvent, TerminalEvent: terminalEvent,
+	}, loadErr
+}
+
+func appendPublicationCommitEvents(
+	ctx context.Context, tx *sql.Tx, namespaceID, sessionID, turnID, planID, operationID string,
+) (agentmanagement.Event, agentmanagement.Event, error) {
+	approvalPayload, err := json.Marshal(agentmanagement.ApprovalResultEvent{
+		PlanID: planID, Status: "committed", OperationID: operationID,
 	})
+	if err != nil {
+		return agentmanagement.Event{}, agentmanagement.Event{}, agentmanagement.ErrInvalid
+	}
+	approvalEvent, err := appendEventTx(ctx, tx, agentmanagement.EventAppend{
+		NamespaceID: namespaceID, SessionID: sessionID, TurnID: turnID,
+		Origin: "control", Type: agentmanagement.EventApprovalResult, Payload: approvalPayload,
+	})
+	if err != nil {
+		return agentmanagement.Event{}, agentmanagement.Event{}, err
+	}
+	terminalPayload, err := json.Marshal(agentmanagement.TerminalEvent{Status: agentmanagement.TurnCompleted})
+	if err != nil {
+		return agentmanagement.Event{}, agentmanagement.Event{}, agentmanagement.ErrInvalid
+	}
+	terminalEvent, err := appendEventTx(ctx, tx, agentmanagement.EventAppend{
+		NamespaceID: namespaceID, SessionID: sessionID, TurnID: turnID,
+		Origin: "control", Type: agentmanagement.EventTerminal, Payload: terminalPayload,
+	})
+	return approvalEvent, terminalEvent, err
 }
 
 func (store *Store) FailPublicationCommit(

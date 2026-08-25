@@ -107,6 +107,7 @@ func (r *Runtime) ReadAttemptEvidence(
 			return AttemptEvidenceSnapshot{}, fmt.Errorf("dispatch %q is duplicated", dispatch.DispatchID)
 		}
 		seen[dispatch.DispatchID] = struct{}{}
+		// #nosec G115 -- request.Dispatches is bounded to 4096 entries above.
 		if dispatch.Ordinal != uint32(index) || !validRuntimeDigest(dispatch.DispatchPlanDigest) ||
 			strings.TrimSpace(dispatch.ModelID) == "" || strings.TrimSpace(dispatch.ModelID) != dispatch.ModelID ||
 			strings.ContainsRune(dispatch.ModelID, '\x00') || len(dispatch.ModelID) > 256 ||
@@ -136,12 +137,14 @@ func (r *Runtime) ReadAttemptEvidence(
 			DispatchID: dispatch.DispatchID, Present: result.Present, Evidence: result.Evidence,
 		})
 	}
+	// #nosec G115 -- observations has the same bounded cardinality as request.Dispatches.
+	dispatchCount := uint32(len(observations))
 	return AttemptEvidenceSnapshot{
 		Dispatches: observations,
 		state: &attemptEvidenceSnapshotState{
 			owner: r.identity, admissionID: state.tenant.AdmissionID,
 			admissionDigest: state.requestDigest, revision: revision,
-			dispatchCount: uint32(len(observations)),
+			dispatchCount: dispatchCount,
 		},
 	}, nil
 }

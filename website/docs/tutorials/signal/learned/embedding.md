@@ -35,7 +35,7 @@ Use `embedding` when:
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     embeddings:
       - name: technical_support
@@ -139,7 +139,7 @@ global:
         embedding_config:
           model_type: multimodal
 
-document:
+routing:
   signals:
     embeddings:
       # query_modality defaults to text.
@@ -167,7 +167,7 @@ document:
 A decision can then route on the new signal the same way it routes on any other:
 
 ```yaml
-document:
+routing:
   decisions:
     - name: route_medical_imagery_on_prem
       description: Keep medical imagery on the in-cluster vision model.

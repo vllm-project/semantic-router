@@ -34,11 +34,27 @@ type Handler struct {
 	Now            func() time.Time
 }
 
+type preparedDispatchRequest struct {
+	capability DispatchCapability
+	plans      PlanChain
+	now        time.Time
+}
+
 func (h *Handler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	if h == nil || h.Plans == nil || h.Invoker == nil || h.Observer == nil {
 		http.Error(w, "backend invoker is unavailable", http.StatusServiceUnavailable)
 		return
 	}
+	prepared, ok := h.prepareDispatchRequest(w, request)
+	if !ok {
+		return
+	}
+	h.invokePreparedRequest(w, request, prepared)
+}
+
+func (h *Handler) prepareDispatchRequest(
+	w http.ResponseWriter, request *http.Request,
+) (preparedDispatchRequest, bool) {
 	now := time.Now
 	if h.Now != nil {
 		now = h.Now
@@ -46,7 +62,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	capability, serveHTTPErr := h.Keyring.Verify(strings.TrimSpace(request.Header.Get(DispatchCapabilityHeader)), h.Audience, now().UTC())
 	if serveHTTPErr != nil {
 		http.Error(w, "invalid dispatch capability", http.StatusUnauthorized)
-		return
+		return preparedDispatchRequest{}, false
 	}
 	request.Header.Del(DispatchCapabilityHeader)
 	limit := h.MaxRequestBody
@@ -57,30 +73,30 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 	if serveHTTPErr != nil || int64(len(body)) > limit {
 		h.writeWireError(w, capability.WireFormat, http.StatusRequestEntityTooLarge,
 			llmprotocol.ErrorInvalidRequest, "request_too_large", "request body is too large", serveHTTPErr)
-		return
+		return preparedDispatchRequest{}, false
 	}
 	if request.Method != capability.Method || request.URL.Path != capability.Path ||
 		request.URL.RawQuery != capability.Query {
 		h.writeWireError(w, capability.WireFormat, http.StatusUnauthorized,
 			llmprotocol.ErrorAuthentication, "dispatch_mismatch", "dispatch request could not be authenticated", nil)
-		return
+		return preparedDispatchRequest{}, false
 	}
 	digest := RequestDigest(request.Method, request.URL.Path, request.URL.RawQuery, body)
 	if len(digest) != len(capability.RequestDigest) || subtle.ConstantTimeCompare([]byte(digest), []byte(capability.RequestDigest)) != 1 {
 		h.writeWireError(w, capability.WireFormat, http.StatusUnauthorized,
 			llmprotocol.ErrorAuthentication, "dispatch_mismatch", "dispatch request could not be authenticated", nil)
-		return
+		return preparedDispatchRequest{}, false
 	}
 	plans, serveHTTPErr := h.Plans.ResolvePlans(request.Context(), capability)
 	if serveHTTPErr != nil {
 		h.writeWireError(w, capability.WireFormat, http.StatusNotFound,
 			llmprotocol.ErrorNotFound, "dispatch_target_unavailable", "dispatch target is unavailable", serveHTTPErr)
-		return
+		return preparedDispatchRequest{}, false
 	}
 	if err := bindCapabilityToPlans(&plans, capability); err != nil {
 		h.writeWireError(w, capability.WireFormat, http.StatusUnauthorized,
 			llmprotocol.ErrorAuthentication, "dispatch_target_mismatch", "dispatch target could not be authenticated", err)
-		return
+		return preparedDispatchRequest{}, false
 	}
 	streaming := requestUsesStreaming(body)
 	for index := range plans.Candidates {
@@ -94,11 +110,16 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		plan.Streaming = streaming
 		plan.SourceFormat = capability.WireFormat
 	}
+	return preparedDispatchRequest{capability: capability, plans: plans, now: now().UTC()}, true
+}
 
-	result, serveHTTPErr := h.Invoker.InvokeChain(request.Context(), plans)
+func (h *Handler) invokePreparedRequest(
+	w http.ResponseWriter, request *http.Request, prepared preparedDispatchRequest,
+) {
+	result, serveHTTPErr := h.Invoker.InvokeChain(request.Context(), prepared.plans)
 	if serveHTTPErr != nil {
-		if outcomeErr := setDispatchOutcome(w.Header(), h.Keyring, capability, result, now().UTC()); outcomeErr != nil {
-			h.writeWireError(w, capability.WireFormat, http.StatusServiceUnavailable,
+		if outcomeErr := setDispatchOutcome(w.Header(), h.Keyring, prepared.capability, result, prepared.now); outcomeErr != nil {
+			h.writeWireError(w, prepared.capability.WireFormat, http.StatusServiceUnavailable,
 				llmprotocol.ErrorInternal, "dispatch_outcome_unavailable", "dispatch outcome is unavailable", outcomeErr)
 			return
 		}
@@ -107,30 +128,30 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 			status = http.StatusServiceUnavailable
 		}
 		protocolError := failedResponseTerminal(serveHTTPErr).Error
-		h.writeProtocolError(w, capability.WireFormat, status, protocolError)
+		h.writeProtocolError(w, prepared.capability.WireFormat, status, protocolError)
 		return
 	}
 	if result.Response == nil || result.Response.Body == nil || result.Selected == nil {
-		h.writeWireError(w, capability.WireFormat, http.StatusBadGateway,
+		h.writeWireError(w, prepared.capability.WireFormat, http.StatusBadGateway,
 			llmprotocol.ErrorUpstreamUnavailable, "empty_upstream_response", "the selected model returned no response", nil)
 		return
 	}
 	observed, serveHTTPErr := h.Observer.Observe(request.Context(), *result.Selected, result.Attempt, result.Response)
 	if serveHTTPErr != nil {
 		_ = result.Response.Body.Close()
-		if outcomeErr := setDispatchOutcome(w.Header(), h.Keyring, capability, result, now().UTC()); outcomeErr != nil {
-			h.writeWireError(w, capability.WireFormat, http.StatusServiceUnavailable,
+		if outcomeErr := setDispatchOutcome(w.Header(), h.Keyring, prepared.capability, result, prepared.now); outcomeErr != nil {
+			h.writeWireError(w, prepared.capability.WireFormat, http.StatusServiceUnavailable,
 				llmprotocol.ErrorInternal, "dispatch_outcome_unavailable", "dispatch outcome is unavailable", outcomeErr)
 			return
 		}
-		h.writeWireError(w, capability.WireFormat, http.StatusServiceUnavailable,
+		h.writeWireError(w, prepared.capability.WireFormat, http.StatusServiceUnavailable,
 			llmprotocol.ErrorInternal, "response_accounting_unavailable", "response accounting is unavailable", serveHTTPErr)
 		return
 	}
 	defer observed.Close()
 	copyResponseHeaders(w.Header(), result.Response.Header)
-	if err := setDispatchOutcome(w.Header(), h.Keyring, capability, result, now().UTC()); err != nil {
-		h.writeWireError(w, capability.WireFormat, http.StatusServiceUnavailable,
+	if err := setDispatchOutcome(w.Header(), h.Keyring, prepared.capability, result, prepared.now); err != nil {
+		h.writeWireError(w, prepared.capability.WireFormat, http.StatusServiceUnavailable,
 			llmprotocol.ErrorInternal, "dispatch_outcome_unavailable", "dispatch outcome is unavailable", err)
 		return
 	}

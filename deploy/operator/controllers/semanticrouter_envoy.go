@@ -30,7 +30,7 @@ import (
 	vllmv1alpha1 "github.com/vllm-project/semantic-router/operator/api/v1alpha1"
 )
 
-const standaloneEnvoyConfigYAML = `static_resources:
+const sidecarEnvoyConfigYAML = `static_resources:
   listeners:
   - name: listener_0
     address:
@@ -185,7 +185,7 @@ admin:
 `
 
 func (r *SemanticRouterReconciler) generateEnvoyConfig() string {
-	return standaloneEnvoyConfigYAML
+	return sidecarEnvoyConfigYAML
 }
 
 func (r *SemanticRouterReconciler) reconcileEnvoyConfig(ctx context.Context, sr *vllmv1alpha1.SemanticRouter, gatewayMode string) error {

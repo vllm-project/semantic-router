@@ -12,6 +12,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modeldownload"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -29,6 +30,10 @@ func main() {
 	cfg := loadRuntimeConfigOrFatal(opts.configPath, configParser)
 	config.Replace(cfg)
 	runtimeRegistry := routerruntime.NewRegistry(cfg)
+	capabilities, err := runtimecapabilities.Derive(cfg)
+	if err != nil {
+		logging.Fatalf("Failed to derive runtime capabilities: %v", err)
+	}
 
 	startupWriter := newStartupWriter(cfg, opts.configPath)
 	resolvedOpts, err := resolveRuntimeManagementOptions(opts, cfg)
@@ -36,8 +41,8 @@ func main() {
 		failStartup(startupWriter, "Failed to resolve management API: %v", err)
 	}
 	opts = resolvedOpts
-	if cfg.ControlPlane.Mode == config.ControlPlaneModeManaged && !opts.enableAPI {
-		failStartup(startupWriter, "Managed mode requires the Management API listener")
+	if capabilities.ManagementAPI && !opts.enableAPI {
+		failStartup(startupWriter, "Management API is enabled but its listener was disabled")
 	}
 	if opts.downloadOnly {
 		ensureModelsDownloadedOrFatal(cfg, startupWriter)
@@ -47,13 +52,13 @@ func main() {
 	processRuntime, err := composeProcessRuntime(processContext, cfg)
 	if err != nil {
 		cancelProcess()
-		failStartup(startupWriter, "Failed to compose managed runtime: %v", err)
+		failStartup(startupWriter, "Failed to compose process runtime: %v", err)
 	}
 
 	// Start the API server early so /startup-status is available during
 	// model downloads and initialization.
 	apiLifecycle, err := startAPIServerIfEnabled(
-		processContext, opts, runtimeRegistry, processRuntime.ManagedAPI(),
+		processContext, opts, runtimeRegistry, processRuntime.ManagementAPI(),
 	)
 	if err != nil {
 		cancelProcess()
@@ -70,7 +75,7 @@ func main() {
 			})
 		}
 		if err := processRuntime.Close(); err != nil {
-			logging.ComponentWarnEvent("router", "managed_runtime_shutdown_failed", map[string]interface{}{
+			logging.ComponentWarnEvent("router", "runtime_shutdown_failed", map[string]interface{}{
 				"error": err.Error(),
 			})
 		}
@@ -90,14 +95,14 @@ func main() {
 		failStartup(startupWriter, "Failed to start process runtime: %v", err)
 	}
 	server := newExtProcServerOrFatal(opts, startupWriter, runtimeRegistry, extproc.ServerDependencies{
-		ManagedRequests:      processRuntime.ManagedRequests(),
-		StandaloneRequests:   processRuntime.StandaloneRequests(),
-		DispatchCapabilities: processRuntime.DispatchCapabilities(),
-		OutcomeFeedback:      processRuntime.OutcomeFeedback(),
-		OutcomeProjection:    processRuntime.OutcomeProjection(),
-		ResponseTerminals:    processRuntime.ResponseTerminals(),
-		ProtocolCodecs:       processRuntime.ProtocolCodecs(),
-		ParseConfig:          configParser.Parse,
+		DurableRoutingRequests: processRuntime.DurableRoutingRequests(),
+		FileRequests:           processRuntime.FileRequests(),
+		DispatchCapabilities:   processRuntime.DispatchCapabilities(),
+		OutcomeFeedback:        processRuntime.OutcomeFeedback(),
+		OutcomeProjection:      processRuntime.OutcomeProjection(),
+		ResponseTerminals:      processRuntime.ResponseTerminals(),
+		ProtocolCodecs:         processRuntime.ProtocolCodecs(),
+		ParseConfig:            configParser.Parse,
 	})
 
 	warmupRouterRuntime(server, embeddingRuntime)

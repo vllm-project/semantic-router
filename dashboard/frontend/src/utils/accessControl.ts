@@ -32,21 +32,46 @@ export function canReadRouting(user?: PermissionUser | null): boolean {
   return managementHas(user, 'routing.read')
 }
 
+/**
+ * Read-only consumers do not receive namespace-wide routing.read. They may
+ * inspect only the credential-free routing projection attached to one of
+ * their own API keys.
+ */
+export function canReadKeyScopedRouting(user?: PermissionUser | null): boolean {
+  return (
+    managementHas(user, 'delegation.use') &&
+    managementHas(user, 'key.read') &&
+    managementHas(user, 'access_policy.read') &&
+    managementHas(user, 'routing_context.read')
+  )
+}
+
+export function canUseDelegatedInference(user?: PermissionUser | null): boolean {
+  return managementHas(user, 'delegation.use')
+}
+
+export function canReadRoutingCatalog(user?: PermissionUser | null): boolean {
+  return canReadRouting(user) || canReadKeyScopedRouting(user)
+}
+
 export function canManageRouting(user?: PermissionUser | null): boolean {
   return canReadRouting(user) && managementHas(user, 'routing.manage')
 }
 
-function isRoutingWorkspacePath(pathname: string): boolean {
+function isGlobalRoutingWorkspacePath(pathname: string): boolean {
   return [
     '/builder',
     '/config/models',
     '/config/signals',
     '/config/projections',
     '/config/decisions',
-    '/config/entrypoints-recipes',
-    '/config/entrypoints',
-    '/config/recipes',
   ].some((path) => pathname === path || pathname.startsWith(`${path}/`))
+}
+
+function isRoutingCatalogPath(pathname: string): boolean {
+  return ['/config/entrypoints-recipes', '/config/entrypoints', '/config/recipes'].some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  )
 }
 
 function hasPermission(user: PermissionUser | null | undefined, permission: string): boolean {
@@ -131,15 +156,23 @@ export function canAccessDashboardPath(
   }
 
   if (normalizedPath.startsWith('/config/agent')) {
-    return canReadAgent(user) || canReadAgentTools(user)
+    // A Consumer can use the Agent-backed Playground without receiving the
+    // workspace-wide Agent and Tool inventory surface. Keep that management
+    // surface reserved for non-consumer Dashboard roles.
+    return !isModelConsumer(user) && (canReadAgent(user) || canReadAgentTools(user))
   }
 
-  if (isRoutingWorkspacePath(normalizedPath)) {
+  if (isGlobalRoutingWorkspacePath(normalizedPath)) {
     return canReadRouting(user)
+  }
+
+  if (isRoutingCatalogPath(normalizedPath)) {
+    return canReadRoutingCatalog(user)
   }
 
   if (isModelConsumer(user)) {
     if (
+      normalizedPath.startsWith('/config') ||
       normalizedPath.startsWith('/fleet-sim') ||
       normalizedPath.startsWith('/ml-setup') ||
       normalizedPath.startsWith('/status') ||
@@ -158,15 +191,6 @@ export function canAccessDashboardPath(
       normalizedPath.startsWith('/access/audit-logs')
     ) {
       return false
-    }
-    if (normalizedPath.startsWith('/config/')) {
-      return [
-        '/config/models',
-        '/config/signals',
-        '/config/projections',
-        '/config/decisions',
-        '/config/entrypoints-recipes',
-      ].some((path) => normalizedPath === path || normalizedPath.startsWith(`${path}/`))
     }
   }
 
@@ -191,7 +215,7 @@ export function canAccessDashboardPath(
   }
   if (normalizedPath.startsWith('/ml-setup')) return canAccessMLSetup(user)
   if (normalizedPath.startsWith('/topology')) {
-    return canReadRouting(user)
+    return canReadRoutingCatalog(user)
   }
   if (normalizedPath.startsWith('/status')) {
     return (

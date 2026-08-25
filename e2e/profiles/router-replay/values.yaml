@@ -4,22 +4,26 @@ image:
   tag: latest
   pullPolicy: Never
 config:
-  version: v0.4
+  version: v0.3
   listeners: []
-  models:
-  - name: openai/gpt-oss-20b
-    card: {}
-    connections:
-    - provider: vllm
-      endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
-      model: openai/gpt-oss-20b
-    runtime:
-      request_timeout: 300s
-      stream_timeout: 300s
+  providers:
+    models:
+    - name: openai/gpt-oss-20b
+      provider_model_id: openai/gpt-oss-20b
+      backend_refs:
+      - provider: vllm
+        endpoint: http://mock-vllm.default.svc.cluster.local:8000/v1
+      control:
+        timeout:
+          request: 300s
+          stream: 300s
+  routing:
+    modelCards:
+    - name: openai/gpt-oss-20b
   recipes:
   - name: default
     description: Default routing recipe.
-    document:
+    routing:
       signals: {}
       decisions:
       - name: default_decision
@@ -37,7 +41,7 @@ config:
             capture_response_body: true
             max_body_bytes: 65536
   - name: replay-first
-    document:
+    routing:
       signals: {}
       decisions:
       - name: shared_replay_decision
@@ -55,7 +59,7 @@ config:
             max_body_bytes: 65536
       strategy: priority
   - name: replay-second
-    document:
+    routing:
       signals: {}
       decisions:
       - name: shared_replay_decision
@@ -73,14 +77,16 @@ config:
             max_body_bytes: 65536
       strategy: priority
   entrypoints:
-  - name: vllm-sr/replay-first
+  - model_names:
+    - vllm-sr/replay-first
     recipe: replay-first
     assignments:
       shared_replay_decision:
         models:
         - model: openai/gpt-oss-20b
           weight: '1'
-  - name: vllm-sr/replay-second
+  - model_names:
+    - vllm-sr/replay-second
     recipe: replay-second
     assignments:
       shared_replay_decision:

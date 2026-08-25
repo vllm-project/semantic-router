@@ -41,7 +41,7 @@ func TestBackendDispatchOutcomeSelectsOnlyAuthenticatedAttemptedPrefix(t *testin
 		t.Fatalf("private outcome survived response headers: %+v", headers)
 	}
 
-	state := ctx.ManagedDispatch
+	state := ctx.DispatchState
 	state.mu.Lock()
 	defer state.mu.Unlock()
 	if !state.outcomeConsumed || state.selectedDispatchID != "dispatch-1" ||
@@ -88,9 +88,9 @@ func TestBackendDispatchOutcomeRejectsMismatchedAttemptEvidence(t *testing.T) {
 			if err := applyDispatchOutcome(ctx, outcome); err == nil {
 				t.Fatal("mismatched dispatch outcome was accepted")
 			}
-			ctx.ManagedDispatch.mu.Lock()
-			consumed := ctx.ManagedDispatch.outcomeConsumed
-			ctx.ManagedDispatch.mu.Unlock()
+			ctx.DispatchState.mu.Lock()
+			consumed := ctx.DispatchState.outcomeConsumed
+			ctx.DispatchState.mu.Unlock()
 			if consumed {
 				t.Fatal("rejected outcome changed request settlement state")
 			}
@@ -123,7 +123,7 @@ func TestBackendDispatchOutcomeIsRequiredExactlyOnce(t *testing.T) {
 	}
 }
 
-func TestRoutingOnlyManagedRequestUsesPublishedFallbackAssignment(t *testing.T) {
+func TestRoutingOnlyDurableRoutingRequestUsesPublishedFallbackAssignment(t *testing.T) {
 	decisionID := "decision"
 	rule := config.EntrypointRule{
 		ID: "rule", Name: "default",
@@ -190,8 +190,10 @@ func dispatchOutcomeTestContext(t *testing.T) *RequestContext {
 	admissionDigest := strings.Repeat("b", 64)
 	dispatches := make([]*inferenceDispatch, 0, 3)
 	for index, digestCharacter := range []string{"d", "e", "f"} {
+		// #nosec G115 -- this fixture has exactly three dispatches.
+		ordinal := uint32(index)
 		dispatches = append(dispatches, &inferenceDispatch{
-			id: "dispatch-" + string(rune('0'+index)), ordinal: uint32(index),
+			id: "dispatch-" + string(rune('0'+index)), ordinal: ordinal,
 			model: "model-" + string(rune('0'+index)), modelID: "model-id-" + string(rune('0'+index)),
 			modelRevision: int64(index + 1), priority: index,
 			planDigest: strings.Repeat(digestCharacter, 64), planned: true,
@@ -204,7 +206,7 @@ func dispatchOutcomeTestContext(t *testing.T) *RequestContext {
 			Tenant:        accessruntime.TenantContext{AdmissionID: "admission"},
 			RequestDigest: admissionDigest,
 		}},
-		ManagedDispatch: &managedRequestDispatch{
+		DispatchState: &requestDispatchState{
 			requestID: "request", dispatches: dispatches, primaryDispatchID: "dispatch-0",
 			primaryCandidateCount: len(dispatches), capabilityIssued: true,
 			requestDigest: requestDigest,
@@ -213,15 +215,15 @@ func dispatchOutcomeTestContext(t *testing.T) *RequestContext {
 }
 
 func dispatchOutcomeForTest(ctx *RequestContext, attempted int) backendinvoker.DispatchOutcome {
-	ctx.ManagedDispatch.mu.Lock()
-	defer ctx.ManagedDispatch.mu.Unlock()
+	ctx.DispatchState.mu.Lock()
+	defer ctx.DispatchState.mu.Unlock()
 	result := backendinvoker.DispatchOutcome{
 		AdmissionID:     ctx.InferenceAccess.admission.Tenant.AdmissionID,
 		AdmissionDigest: ctx.InferenceAccess.admission.RequestDigest,
-		RequestID:       ctx.RequestID, RequestDigest: ctx.ManagedDispatch.requestDigest,
+		RequestID:       ctx.RequestID, RequestDigest: ctx.DispatchState.requestDigest,
 		Attempted: make([]backendinvoker.DispatchOutcomeCandidate, 0, attempted),
 	}
-	for _, dispatch := range ctx.ManagedDispatch.dispatches[:attempted] {
+	for _, dispatch := range ctx.DispatchState.dispatches[:attempted] {
 		result.Attempted = append(result.Attempted, backendinvoker.DispatchOutcomeCandidate{
 			DispatchID: dispatch.id, DispatchType: dispatch.dispatchType,
 			Ordinal: int(dispatch.ordinal), DispatchPlanDigest: dispatch.planDigest,

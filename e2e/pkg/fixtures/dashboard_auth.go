@@ -31,8 +31,8 @@ type dashboardIdentity struct {
 }
 
 // EnsureDashboardAdmin completes the idempotent first-install Dashboard flow
-// and returns the authenticated session. In managed mode this is also the
-// control-plane action that creates the first Router publication.
+// and returns the authenticated session. With durable routing this is also the
+// Management action that creates the first Router publication.
 func EnsureDashboardAdmin(
 	ctx context.Context,
 	client *http.Client,

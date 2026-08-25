@@ -131,23 +131,23 @@ the tensor engines and GPU schedulers it integrates with.
 > **Mission:** Execute every live routing decision through a fast, reliable,
 > and portable request path.
 
-![Standalone HTTP and Envoy gateway entry modes converge on one shared routing core, backend dispatch path, and response stream](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/data-plane-networking.svg)
+![Direct HTTP and Envoy gateway entry paths converge on one shared routing core, backend dispatch path, and response stream](/img/blog/vllm/2026-08-24-workgroups-invitation/workgroups/data-plane-networking.svg)
 
 ### Why this matters
 
 A good decision is useless if the request path is slow, fragile, or behaves
 differently in each deployment. vLLM-SR needs one routing behavior whether it
-runs as a standalone OpenAI-compatible service or integrates with Envoy and an
+runs through its direct OpenAI-compatible HTTP path or integrates with Envoy and an
 existing gateway environment.
 
 ### Scope
 
 - Process requests and responses, including streaming, dispatch, retries,
   fallback, errors, telemetry, and immediate responses.
-- Provide a standalone mode for Docker and Kubernetes without making Envoy a
+- Provide direct HTTP serving for Docker and Kubernetes without making Envoy a
   mandatory dependency.
 - Keep Envoy ExtProc and qualified gateway integrations first-class and
-  behaviorally consistent with standalone mode.
+  behaviorally consistent with the direct path.
 - Define engine-neutral backend connectivity and cooperate with serving and
   load-balancing layers on inference-aware endpoint selection.
 - Optimize latency, throughput, resource efficiency, streaming behavior, and
@@ -161,7 +161,7 @@ how a Router Model is trained, or which MoM recipe is best.
 
 ### Epic directions
 
-- [Support standalone and gateway-integrated data plane modes](https://github.com/vllm-project/semantic-router/issues/1138)
+- [Support direct HTTP and gateway-integrated data paths](https://github.com/vllm-project/semantic-router/issues/1138)
 - [Connect semantic routing to inference-aware backend selection](https://github.com/vllm-project/semantic-router/issues/2332)
 - [Optimize data-plane performance, streaming, and failure recovery](https://github.com/vllm-project/semantic-router/issues/2992)
 

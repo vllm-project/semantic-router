@@ -19,6 +19,7 @@ func (r *OpenAIRouter) reportCacheHitTelemetry(
 	}
 	semanticResponse, err := r.decodeClientResponse(cachedBody, ctx)
 	if err != nil {
+		recordCacheHitSettlementUsage(ctx, invalidResponseTerminalUsage("cache_usage_decode_failed"))
 		logging.ComponentWarnEvent("extproc", "cache_hit_response_decode_failed", map[string]interface{}{
 			"request_id": ctx.RequestID,
 			"format":     ctx.SourceFormat,
@@ -27,6 +28,7 @@ func (r *OpenAIRouter) reportCacheHitTelemetry(
 		return
 	}
 	usage := responseUsageFromSemanticUsage(semanticResponse.Usage)
+	recordCacheHitSettlementUsage(ctx, usage)
 	totalTokens := responseUsageTotal(usage)
 	if totalTokens > 0 {
 		recordSessionTurn(ctx, usage, sessiontelemetry.TurnPricing{})

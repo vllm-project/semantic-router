@@ -11,6 +11,7 @@ import (
 )
 
 const (
+	// #nosec G101 -- this is a database column list and contains no API-key value.
 	apiKeyColumns = `id, namespace_id, name, owner_user_id, owner_team_id,
        context_team_id, status, expires_at, policy_epoch, delegation_epoch,
        revision, last_used_at, created_at, updated_at, deleted_at`

@@ -224,20 +224,25 @@ A JSON chat completion response means Ollama is wired correctly.
 If you prefer to edit YAML directly instead of the dashboard, add a model entry like this:
 
 ```yaml
-version: v0.4
-models:
-  - name: llama3.2:3b
-    card:
+version: v0.3
+providers:
+  models:
+    - name: llama3.2:3b
+      provider_model_id: llama3.2:3b
+      backend_refs:
+        - provider: ollama
+          endpoint: http://host.docker.internal:11434/v1
+      control:
+        retry:
+          count: 1
+          on: [unavailable]
+routing:
+  modelCards:
+    - name: llama3.2:3b
       capabilities: [chat]
-    connections:
-      - provider: openai-compatible
-        endpoint: http://host.docker.internal:11434/v1
-        model: llama3.2:3b
-    runtime:
-      max_retries: 1
 recipes:
   - name: default
-    document:
+    routing:
       decisions:
         - name: default-route
           description: Route every request.
@@ -246,7 +251,7 @@ recipes:
             operator: AND
             conditions: []
 entrypoints:
-  - name: ollama
+  - model_names: [ollama]
     recipe: default
     assignments:
       default-route:

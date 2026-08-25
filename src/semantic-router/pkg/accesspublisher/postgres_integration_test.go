@@ -236,10 +236,36 @@ func insertCompleteDesiredState(t testing.TB, ctx context.Context, db *sql.DB) (
 	ids["rule"] = "rule_chat"
 	partition := "partition-" + uuid.NewString()
 	now := fixtureTime
-	statements := []struct {
-		query string
-		args  []any
-	}{
+	statements := completeDesiredStateStatements(ids, partition, now)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	for index, statement := range statements {
+		if _, err := tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
+			t.Fatalf("insert complete desired state statement %d: %v", index, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	return ids["namespace"], partition, ids["key"], ids["entrypoint"]
+}
+
+type desiredStateStatement struct {
+	query string
+	args  []any
+}
+
+func completeDesiredStateStatements(ids map[string]string, partition string, now time.Time) []desiredStateStatement {
+	statements := completeAccessStateStatements(ids, partition, now)
+	statements = append(statements, completeProviderStateStatements(ids, now)...)
+	return append(statements, completeRoutingStateStatements(ids, now)...)
+}
+
+func completeAccessStateStatements(ids map[string]string, partition string, now time.Time) []desiredStateStatement {
+	return []desiredStateStatement{
 		{`INSERT INTO access_namespaces
   (id, name, quota_partition_id, billing_currency, status, revision, runtime_epoch, created_at, updated_at)
 VALUES ($1, $2, $3, 'USD', 'active', 1, 11, $4, $4)`, []any{ids["namespace"], "namespace-" + ids["namespace"], partition, now}},
@@ -275,6 +301,11 @@ VALUES ($1, $2, $3, $4, 'active', 1, $5, $5)`, []any{ids["access_binding"], ids[
 		{`INSERT INTO rate_limit_bindings
   (id, namespace_id, policy_id, subject_id, binding_mode, quota_partition_id, status, revision, created_at, updated_at)
 VALUES ($1, $2, $3, $4, 'allocation', $5, 'active', 1, $6, $6)`, []any{ids["rate_binding"], ids["namespace"], ids["rate_policy"], ids["team"], partition, now}},
+	}
+}
+
+func completeProviderStateStatements(ids map[string]string, now time.Time) []desiredStateStatement {
+	return []desiredStateStatement{
 		{`INSERT INTO provider_catalog_revisions
   (revision, snapshot_bytes, snapshot_digest, integration_references, catalog, required_wire_formats,
    required_credential_adapters, required_discovery_adapters)
@@ -303,12 +334,17 @@ VALUES ($1, $2, $3, $4, $5, 'provider-kek-v1', 'active', $6, $6)`,
 		{
 			`INSERT INTO provider_credentials
   (id, namespace_id, name, provider_id, credential_mode, credential_adapter_id,
-   provider_catalog_revision, normalized_origin, status, revision, created_at, updated_at)
+   provider_catalog_revision, normalized_origin, status, revision, created_at, updated_at, deleted_at)
 VALUES ($1, $2, 'Unreferenced provider credential', 'openai-compatible', 'required', 'bearer',
   'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-  'https://unused.example/v1', 'disabled', 1, $3, $3)`,
+  'https://unused.example/v1', 'deleted', 1, $3, $3, $3)`,
 			[]any{ids["unreferenced_provider_credential"], ids["namespace"], now},
 		},
+	}
+}
+
+func completeRoutingStateStatements(ids map[string]string, now time.Time) []desiredStateStatement {
+	return []desiredStateStatement{
 		{`INSERT INTO routing_models
   (id, namespace_id, name, aliases, status, current_revision, revision, created_at, updated_at)
 VALUES ($1, $2, 'local/chat', '["local/chat"]'::jsonb, 'active', 1, 1, $3, $3)`, []any{ids["model"], ids["namespace"], now}},
@@ -353,20 +389,6 @@ VALUES ($1, 1, $2, $3, 0, $4, 1, 0, 1)`, []any{ids["entrypoint"], ids["rule"], i
 		{`INSERT INTO policy_revisions(namespace_id, revision, runtime_epoch, reason, created_at)
 VALUES ($1, 1, 11, 'complete desired state', $2)`, []any{ids["namespace"], now}},
 	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	for index, statement := range statements {
-		if _, err := tx.ExecContext(ctx, statement.query, statement.args...); err != nil {
-			t.Fatalf("insert complete desired state statement %d: %v", index, err)
-		}
-	}
-	if err := tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
-	return ids["namespace"], partition, ids["key"], ids["entrypoint"]
 }
 
 type sqlExecutor interface {

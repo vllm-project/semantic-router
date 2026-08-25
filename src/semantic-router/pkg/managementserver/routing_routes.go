@@ -17,11 +17,13 @@ import (
 )
 
 const (
-	routingModelsPath      = managementapi.BasePath + "/routing/models"
-	routingModelCardsPath  = managementapi.BasePath + "/routing/model-cards"
-	routingRecipesPath     = managementapi.BasePath + "/routing/recipes"
-	routingEntrypointsPath = managementapi.BasePath + "/routing/entrypoints"
-	routingSnapshotsPath   = managementapi.BasePath + "/namespaces/{namespaceId}/routing/snapshots"
+	routingModelsPath        = managementapi.BasePath + "/routing/models"
+	routingModelCardsPath    = managementapi.BasePath + "/routing/model-cards"
+	routingRecipesPath       = managementapi.BasePath + "/routing/recipes"
+	routingEntrypointsPath   = managementapi.BasePath + "/routing/entrypoints"
+	routingSnapshotsPath     = managementapi.BasePath + "/namespaces/{namespaceId}/routing/snapshots"
+	routingImportsPath       = managementapi.BasePath + "/routing/imports"
+	routingCurrentExportPath = managementapi.BasePath + "/routing/exports/current"
 
 	maximumRoutingBodyBytes  = 3 << 20
 	maximumRoutingQueryBytes = 16 << 10
@@ -76,6 +78,7 @@ func (routes *RoutingRoutes) Register(mux *http.ServeMux) {
 	}
 	for _, pattern := range []string{
 		"GET " + routingModelCardsPath,
+		"POST " + routingImportsPath, "GET " + routingCurrentExportPath,
 		"GET " + routingModelsPath, "POST " + routingModelsPath,
 		"POST " + routingModelsPath + ":bulk-import",
 		"GET " + routingModelsPath + "/", "PATCH " + routingModelsPath + "/",
@@ -108,6 +111,10 @@ func (routes *RoutingRoutes) ServeHTTP(response http.ResponseWriter, request *ht
 		return
 	}
 	switch {
+	case request.Method == http.MethodPost && request.URL.Path == routingImportsPath:
+		routes.importManifest(response, request, requestID)
+	case request.Method == http.MethodGet && request.URL.Path == routingCurrentExportPath:
+		routes.exportCurrentManifest(response, request, requestID)
 	case request.Method == http.MethodGet && request.URL.Path == routingModelCardsPath:
 		routes.listModelCards(response, request, requestID)
 	case request.Method == http.MethodGet && request.URL.Path == routingModelsPath:
@@ -210,6 +217,8 @@ type routingHTTPContract struct {
 
 func routingHTTPContracts() []routingHTTPContract {
 	return []routingHTTPContract{
+		{managementapi.MethodPOST, routingImportsPath},
+		{managementapi.MethodGET, routingCurrentExportPath},
 		{managementapi.MethodGET, routingModelCardsPath},
 		{managementapi.MethodGET, routingModelsPath},
 		{managementapi.MethodPOST, routingModelsPath},

@@ -4,13 +4,14 @@ import pytest
 from cli.container_management_listener import _validate_management_access
 
 
-def test_managed_listener_requires_router_native_auth() -> None:
+def test_enabled_management_listener_requires_router_native_auth() -> None:
     _validate_management_access(
-        {"remote_exposure": True, "auth": {"mode": "router"}}, "managed"
+        {"remote_exposure": True, "auth": {"mode": "router"}},
+        True,
     )
 
-    with pytest.raises(ValueError, match="requires management API auth mode router"):
-        _validate_management_access({"auth": {"mode": "disabled"}}, "managed")
+    with pytest.raises(ValueError, match="requires auth mode router"):
+        _validate_management_access({"auth": {"mode": "disabled"}}, True)
 
 
 @pytest.mark.parametrize(
@@ -20,11 +21,11 @@ def test_managed_listener_requires_router_native_auth() -> None:
         {"mode": "router", "roles": {"admin": ["*"]}},
     ],
 )
-def test_managed_listener_rejects_static_authority(auth: dict) -> None:
-    with pytest.raises(ValueError, match="does not accept.*tokens or roles"):
-        _validate_management_access({"auth": auth}, "managed")
+def test_router_authenticated_listener_rejects_static_authority(auth: dict) -> None:
+    with pytest.raises(ValueError, match=r"does not accept.*tokens or roles"):
+        _validate_management_access({"auth": auth}, True)
 
 
-def test_standalone_listener_rejects_router_native_auth() -> None:
-    with pytest.raises(ValueError, match="standalone management API auth mode"):
-        _validate_management_access({"auth": {"mode": "router"}}, "standalone")
+def test_file_backed_listener_rejects_router_native_auth() -> None:
+    with pytest.raises(ValueError, match="file-backed management API auth mode"):
+        _validate_management_access({"auth": {"mode": "router"}}, False)

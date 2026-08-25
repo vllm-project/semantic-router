@@ -16,12 +16,16 @@ import (
 )
 
 type PostgresStoreOptions struct {
-	Projector string
+	Projector       string
+	NotificationDSN string
+	ReplicaLease    time.Duration
 }
 
 type PostgresStore struct {
-	db        *sql.DB
-	projector string
+	db           *sql.DB
+	projector    string
+	replicaLease time.Duration
+	listener     *pq.Listener
 }
 
 func NewPostgresStore(db *sql.DB, options PostgresStoreOptions) (*PostgresStore, error) {
@@ -31,7 +35,28 @@ func NewPostgresStore(db *sql.DB, options PostgresStoreOptions) (*PostgresStore,
 	if err := validateWorker(options.Projector); err != nil {
 		return nil, fmt.Errorf("projector: %w", err)
 	}
-	return &PostgresStore{db: db, projector: options.Projector}, nil
+	lease := options.ReplicaLease
+	if lease == 0 {
+		lease = defaultReplicaLease
+	}
+	if lease < time.Second || lease > 5*time.Minute {
+		return nil, fmt.Errorf("replica lease must be between one second and five minutes")
+	}
+	store := &PostgresStore{db: db, projector: options.Projector, replicaLease: lease}
+	if strings.TrimSpace(options.NotificationDSN) != "" {
+		listener := pq.NewListener(
+			options.NotificationDSN,
+			100*time.Millisecond,
+			5*time.Second,
+			func(pq.ListenerEventType, error) {},
+		)
+		if err := listener.Listen(postgresPublicationChannel); err != nil {
+			_ = listener.Close()
+			return nil, fmt.Errorf("listen for PostgreSQL routing publications: %w", err)
+		}
+		store.listener = listener
+	}
+	return store, nil
 }
 
 func (s *PostgresStore) ClaimLatest(ctx context.Context, workerID string, lease time.Duration) (OutboxBatch, error) {
@@ -138,6 +163,10 @@ func (s *PostgresStore) RecordStaged(ctx context.Context, batch OutboxBatch, pub
 	if err := validateBatchPublication(batch, publication); err != nil {
 		return err
 	}
+	desiredRevision, err := postgresBigint(batch.DesiredRevision, "desired revision")
+	if err != nil {
+		return err
+	}
 	payload, err := json.Marshal(publication.Routing.Snapshot)
 	if err != nil {
 		return fmt.Errorf("encode routing snapshot: %w", err)
@@ -158,7 +187,7 @@ VALUES ($1, $2, $3, $4, 'staged')
 ON CONFLICT (namespace_id, routing_revision) DO UPDATE
 SET compiled_blob = CASE WHEN routing_snapshots.content_digest = EXCLUDED.content_digest
                          THEN routing_snapshots.compiled_blob ELSE routing_snapshots.compiled_blob END
-RETURNING content_digest, compiled_blob`, batch.NamespaceID, int64(batch.DesiredRevision), digest, payload).Scan(
+	RETURNING content_digest, compiled_blob`, batch.NamespaceID, desiredRevision, digest, payload).Scan(
 		&storedDigest, &storedPayload,
 	)
 	if err != nil {
@@ -202,13 +231,17 @@ func insertRoutingMember(
 	kind, resourceID string,
 	revision int64,
 ) error {
+	desiredRevision, err := postgresBigint(publication.DesiredRevision, "desired revision")
+	if err != nil {
+		return err
+	}
 	var storedRevision int64
-	err := tx.QueryRowContext(ctx, `INSERT INTO routing_snapshot_members
+	err = tx.QueryRowContext(ctx, `INSERT INTO routing_snapshot_members
   (namespace_id, routing_revision, resource_type, resource_id, resource_revision)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (namespace_id, routing_revision, resource_type, resource_id) DO UPDATE
 SET resource_revision = routing_snapshot_members.resource_revision
-RETURNING resource_revision`, publication.NamespaceID, int64(publication.DesiredRevision), kind, resourceID, revision).Scan(
+	RETURNING resource_revision`, publication.NamespaceID, desiredRevision, kind, resourceID, revision).Scan(
 		&storedRevision,
 	)
 	if err != nil {
@@ -242,6 +275,14 @@ func (s *PostgresStore) Fail(ctx context.Context, batch OutboxBatch, cause error
 	if err := batch.Validate(); err != nil {
 		return err
 	}
+	desiredRevision, failErr := postgresBigint(batch.DesiredRevision, "desired revision")
+	if failErr != nil {
+		return failErr
+	}
+	runtimeEpoch, failErr := postgresBigint(batch.RuntimeEpoch, "runtime epoch")
+	if failErr != nil {
+		return failErr
+	}
 	tx, failErr := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if failErr != nil {
 		return fmt.Errorf("begin outbox failure: %w", failErr)
@@ -263,7 +304,7 @@ VALUES ($1, $2, $3, 0, $4, $5)
 ON CONFLICT (projector, namespace_id) DO UPDATE
 SET desired_revision = GREATEST(projector_watermarks.desired_revision, EXCLUDED.desired_revision),
     last_error = EXCLUDED.last_error, updated_at = clock_timestamp()`,
-		s.projector, batch.NamespaceID, int64(batch.DesiredRevision), int64(batch.RuntimeEpoch), code)
+		s.projector, batch.NamespaceID, desiredRevision, runtimeEpoch, code)
 	if failErr != nil {
 		return fmt.Errorf("record projector failure: %w", failErr)
 	}
@@ -272,7 +313,7 @@ SET state='failed', item_errors=jsonb_build_array(jsonb_build_object(
       'code','publication_failed','reason','Routing publication failed.')),
     updated_at=clock_timestamp()
 WHERE namespace_id=$1 AND desired_revision=$2 AND state IN ('pending','running')`,
-		batch.NamespaceID, int64(batch.DesiredRevision)); err != nil {
+		batch.NamespaceID, desiredRevision); err != nil {
 		return fmt.Errorf("fail publication operations: %w", err)
 	}
 	return tx.Commit()
@@ -294,33 +335,12 @@ func (s *PostgresStore) WithRevisionFence(
 		return fmt.Errorf("begin publication revision fence: %w", withRevisionFenceErr)
 	}
 	defer func() { _ = tx.Rollback() }()
-	var epoch int64
-	var partition string
-	if err := tx.QueryRowContext(ctx, `SELECT runtime_epoch, quota_partition_id
-FROM access_namespaces WHERE id = $1 FOR UPDATE`, batch.NamespaceID).Scan(&epoch, &partition); err != nil {
-		return fmt.Errorf("lock publication revision fence: %w", err)
+	epoch, latest, withRevisionFenceErr := verifyRevisionFence(ctx, tx, batch)
+	if withRevisionFenceErr != nil {
+		return withRevisionFenceErr
 	}
-	if uint64(epoch) != batch.RuntimeEpoch || partition != batch.QuotaPartition {
-		return ErrEpochMismatch
-	}
-	var latest int64
-	if err := tx.QueryRowContext(ctx,
-		`SELECT COALESCE(MAX(revision), 0) FROM policy_revisions WHERE namespace_id = $1`, batch.NamespaceID,
-	).Scan(&latest); err != nil {
-		return fmt.Errorf("verify publication desired revision: %w", err)
-	}
-	if latest != int64(batch.DesiredRevision) {
-		return ErrSuperseded
-	}
-	var owned int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM policy_outbox
-WHERE id = ANY($1) AND state = 'processing' AND locked_by = $2`, pq.Array(batch.RowIDs), batch.WorkerID).Scan(&owned); err != nil {
-		return fmt.Errorf("verify publication claim ownership: %w", err)
-	}
-	if owned != len(batch.RowIDs) {
-		return ErrConflict
-	}
-	if err := activate(ctx); err != nil {
+	fenced := context.WithValue(ctx, postgresRevisionFenceKey{}, tx)
+	if err := activate(fenced); err != nil {
 		return err
 	}
 	if _, err := tx.ExecContext(ctx, `UPDATE routing_snapshots SET status = 'retired'
@@ -377,6 +397,44 @@ WHERE namespace_id=$1 AND desired_revision <= $2 AND state IN ('pending','runnin
 		return fmt.Errorf("commit publication revision fence: %w", err)
 	}
 	return nil
+}
+
+func verifyRevisionFence(ctx context.Context, tx *sql.Tx, batch OutboxBatch) (int64, int64, error) {
+	runtimeEpoch, err := postgresBigint(batch.RuntimeEpoch, "runtime epoch")
+	if err != nil {
+		return 0, 0, err
+	}
+	desiredRevision, err := postgresBigint(batch.DesiredRevision, "desired revision")
+	if err != nil {
+		return 0, 0, err
+	}
+	var epoch int64
+	var partition string
+	if err := tx.QueryRowContext(ctx, `SELECT runtime_epoch, quota_partition_id
+	FROM access_namespaces WHERE id = $1 FOR UPDATE`, batch.NamespaceID).Scan(&epoch, &partition); err != nil {
+		return 0, 0, fmt.Errorf("lock publication revision fence: %w", err)
+	}
+	if epoch != runtimeEpoch || partition != batch.QuotaPartition {
+		return 0, 0, ErrEpochMismatch
+	}
+	var latest int64
+	if err := tx.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(revision), 0) FROM policy_revisions WHERE namespace_id = $1`, batch.NamespaceID,
+	).Scan(&latest); err != nil {
+		return 0, 0, fmt.Errorf("verify publication desired revision: %w", err)
+	}
+	if latest != desiredRevision {
+		return 0, 0, ErrSuperseded
+	}
+	var owned int
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM policy_outbox
+	WHERE id = ANY($1) AND state = 'processing' AND locked_by = $2`, pq.Array(batch.RowIDs), batch.WorkerID).Scan(&owned); err != nil {
+		return 0, 0, fmt.Errorf("verify publication claim ownership: %w", err)
+	}
+	if owned != len(batch.RowIDs) {
+		return 0, 0, ErrConflict
+	}
+	return epoch, latest, nil
 }
 
 func (s *PostgresStore) Applied(ctx context.Context, namespaceID string) (AppliedState, error) {

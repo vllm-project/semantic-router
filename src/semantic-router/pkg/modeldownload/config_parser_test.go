@@ -523,27 +523,31 @@ func TestBuildModelSpecsIncludesCoreClassifierUsedViaProjection(t *testing.T) {
 
 func TestBuildModelSpecsIncludesRouterOwnedDefaultsForScratchCanonicalConfig(t *testing.T) {
 	cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes([]byte(`
-version: v0.4
+version: v0.3
 listeners:
   - name: http-8888
     address: 0.0.0.0
     port: 8888
-models:
-  - name: openai/gpt-oss-120b
-    card: {modality: text}
-    connections:
-      - provider: vllm
-        endpoint: http://127.0.0.1:8000
-        model: openai/gpt-oss-120b
+providers:
+  models:
+    - name: openai/gpt-oss-120b
+      provider_model_id: openai/gpt-oss-120b
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000
+routing:
+  modelCards:
+    - name: openai/gpt-oss-120b
+      modality: text
 recipes:
   - name: default
-    document:
+    routing:
       decisions:
         - name: default-route
           priority: 100
           rules: {operator: AND, conditions: []}
 entrypoints:
-  - name: vllm-sr/default
+  - model_names: [vllm-sr/default]
     recipe: default
     assignments:
       default-route:
@@ -565,27 +569,31 @@ entrypoints:
 
 func TestBuildModelSpecsIncludesRouterOwnedDefaultsForSparseAMDGlobalOverride(t *testing.T) {
 	cfg, err := modelDownloadAuthoringParser(t).ParseYAMLBytes([]byte(`
-version: v0.4
+version: v0.3
 listeners:
   - name: http-8888
     address: 0.0.0.0
     port: 8888
-models:
-  - name: openai/gpt-oss-120b
-    card: {modality: text}
-    connections:
-      - provider: vllm
-        endpoint: http://127.0.0.1:8000
-        model: openai/gpt-oss-120b
+providers:
+  models:
+    - name: openai/gpt-oss-120b
+      provider_model_id: openai/gpt-oss-120b
+      backend_refs:
+        - provider: vllm
+          endpoint: http://127.0.0.1:8000
+routing:
+  modelCards:
+    - name: openai/gpt-oss-120b
+      modality: text
 recipes:
   - name: default
-    document:
+    routing:
       decisions:
         - name: default-route
           priority: 100
           rules: {operator: AND, conditions: []}
 entrypoints:
-  - name: vllm-sr/default
+  - model_names: [vllm-sr/default]
     recipe: default
     assignments:
       default-route:
@@ -775,20 +783,5 @@ func TestBuildModelSpecsSkipsRouterOwnedDefaultsForMemoryE2EConfigs(t *testing.T
 				t.Fatalf("BuildModelSpecs() returned %d specs, want 0: %#v", len(specs), specs)
 			}
 		})
-	}
-}
-
-func assertContainsAllModelSpecs(t *testing.T, specs []ModelSpec, wantPaths ...string) {
-	t.Helper()
-
-	gotPaths := make([]string, 0, len(specs))
-	for _, spec := range specs {
-		gotPaths = append(gotPaths, spec.LocalPath)
-	}
-
-	for _, want := range wantPaths {
-		if !slices.Contains(gotPaths, want) {
-			t.Fatalf("BuildModelSpecs() missing %q; got %v", want, gotPaths)
-		}
 	}
 }

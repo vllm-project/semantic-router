@@ -159,6 +159,18 @@ _Appears in:_
 | `secretName` _string_ |  |  | Optional: \{\} <br /> |
 | `hosts` _string array_ |  |  | Optional: \{\} <br /> |
 
+#### ManagementServiceSpec
+
+ManagementServiceSpec defines the private Management Service port.
+
+_Appears in:_
+
+- [ServiceSpec](#servicespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `port` _integer_ | Port is the private ClusterIP Service port. | 8080 | Maximum: 65535 <br />Minimum: 1 <br />Optional: \{\} <br /> |
+
 #### MetricsPortSpec
 
 MetricsPortSpec extends PortSpec with enable flag
@@ -173,6 +185,35 @@ _Appears in:_
 | `targetPort` _integer_ | TargetPort is the container port |  | Maximum: 65535 <br />Minimum: 1 <br />Optional: \{\} <br /> |
 | `protocol` _[Protocol](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#protocol-v1-core)_ | Protocol is the port protocol | TCP | Optional: \{\} <br /> |
 | `enabled` _boolean_ | Enabled indicates if metrics should be exposed | true | Optional: \{\} <br /> |
+
+#### MigrationStatus
+
+MigrationStatus reports the explicit Management schema Job state.
+
+_Appears in:_
+
+- [SemanticRouterStatus](#semanticrouterstatus)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `jobName` _string_ | JobName is the content-addressed migration Job for this bootstrap and<br />Router image. |  |  |
+| `state` _string_ | State is Pending, Running, Succeeded, or Failed. |  | Enum: [Pending Running Succeeded Failed] <br /> |
+
+#### NetworkPolicySpec
+
+NetworkPolicySpec defines listener-specific ingress peers. Omitted peer
+families stay denied when the policy is enabled.
+
+_Appears in:_
+
+- [SemanticRouterSpec](#semanticrouterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled overrides the capability-derived default. Deployments with a<br />durable Management store default to true; file-only deployments default<br />to false. |  | Optional: \{\} <br /> |
+| `inferencePeers` _[NetworkPolicyPeer](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#networkpolicypeer-v1-networking) array_ | InferencePeers may reach the public ExtProc and sidecar inference ports. |  | Optional: \{\} <br /> |
+| `managementPeers` _[NetworkPolicyPeer](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#networkpolicypeer-v1-networking) array_ | ManagementPeers may reach only the private Management listener. |  | Optional: \{\} <br /> |
+| `metricsPeers` _[NetworkPolicyPeer](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#networkpolicypeer-v1-networking) array_ | MetricsPeers may scrape only the metrics listener. |  | Optional: \{\} <br /> |
 
 #### OpenShiftFeaturesStatus
 
@@ -215,6 +256,19 @@ _Appears in:_
 | `size` _string_ | Size is the storage size | 10Gi | Optional: \{\} <br /> |
 | `existingClaim` _string_ | ExistingClaim is an existing PVC to use |  | Optional: \{\} <br /> |
 | `annotations` _object (keys:string, values:string)_ | Annotations for the PVC |  | Optional: \{\} <br /> |
+
+#### PodDisruptionBudgetSpec
+
+PodDisruptionBudgetSpec defines the Router disruption guard.
+
+_Appears in:_
+
+- [SemanticRouterSpec](#semanticrouterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled overrides the capability-derived default. Deployments with a<br />durable Management store default to true; file-only deployments default<br />to false. |  | Optional: \{\} <br /> |
+| `minAvailable` _integer_ | MinAvailable is the minimum number of Router Pods kept available. | 1 | Minimum: 0 <br />Optional: \{\} <br /> |
 
 #### PortSpec
 
@@ -318,7 +372,7 @@ _Appears in:_
 | `service` _[ServiceSpec](#servicespec)_ | Service configuration |  | Optional: \{\} <br /> |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#resourcerequirements-v1-core)_ | Resource requirements |  | Optional: \{\} <br /> |
 | `persistence` _[PersistenceSpec](#persistencespec)_ | Persistence configuration |  | Optional: \{\} <br /> |
-| `bootstrap` _[BootstrapSpec](#bootstrapspec)_ | Bootstrap selects the immutable v0.4 Router manifest mounted into every<br />replica. The Operator never authors or mutates Router configuration. |  |  |
+| `bootstrap` _[BootstrapSpec](#bootstrapspec)_ | Bootstrap selects the immutable v0.3 Router manifest mounted into every<br />replica. The Operator never authors or mutates Router configuration. |  |  |
 | `autoscaling` _[AutoscalingSpec](#autoscalingspec)_ | Autoscaling configuration |  | Optional: \{\} <br /> |
 | `startupProbe` _[ProbeSpec](#probespec)_ | Probes configuration |  | Optional: \{\} <br /> |
 | `livenessProbe` _[ProbeSpec](#probespec)_ |  |  | Optional: \{\} <br /> |
@@ -330,10 +384,16 @@ _Appears in:_
 | `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#toleration-v1-core) array_ | Tolerations |  | Optional: \{\} <br /> |
 | `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#affinity-v1-core)_ | Affinity |  | Optional: \{\} <br /> |
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#envvar-v1-core) array_ | Environment variables |  | Optional: \{\} <br /> |
+| `envFrom` _[EnvFromSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#envfromsource-v1-core) array_ | EnvFrom adds environment sources to the Router and Management schema<br />migration containers. |  | Optional: \{\} <br /> |
+| `volumes` _[Volume](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#volume-v1-core) array_ | Volumes adds Secret, ConfigMap, CSI, or other deployment-owned volumes.<br />Router configuration itself must continue to use bootstrap.configMapRef. |  | Optional: \{\} <br /> |
+| `volumeMounts` _[VolumeMount](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#volumemount-v1-core) array_ | VolumeMounts mounts deployment-owned volumes into the Router and Management<br />schema migration containers. |  | Optional: \{\} <br /> |
 | `args` _string array_ | Container arguments |  | Optional: \{\} <br /> |
 | `gateway` _[GatewaySpec](#gatewayspec)_ | Gateway integration for reusing existing gateways |  | Optional: \{\} <br /> |
 | `openshift` _[OpenShiftSpec](#openshiftspec)_ | OpenShift-specific features |  | Optional: \{\} <br /> |
 | `ingress` _[IngressSpec](#ingressspec)_ | Ingress configuration |  | Optional: \{\} <br /> |
+| `podDisruptionBudget` _[PodDisruptionBudgetSpec](#poddisruptionbudgetspec)_ | PodDisruptionBudget protects Router availability during voluntary<br />disruptions. It defaults on when a Management store is configured. |  | Optional: \{\} <br /> |
+| `topologySpread` _[TopologySpreadSpec](#topologyspreadspec)_ | TopologySpread distributes Router replicas across failure domains. It<br />defaults on when a Management store is configured. |  | Optional: \{\} <br /> |
+| `networkPolicy` _[NetworkPolicySpec](#networkpolicyspec)_ | NetworkPolicy isolates inference, Management, internal dispatch, and<br />metrics listeners. It defaults on when a Management store is configured. |  | Optional: \{\} <br /> |
 
 #### SemanticRouterStatus
 
@@ -350,7 +410,11 @@ _Appears in:_
 | `replicas` _integer_ | Replicas is the current number of replicas |  | Optional: \{\} <br /> |
 | `readyReplicas` _integer_ | ReadyReplicas is the number of ready replicas |  | Optional: \{\} <br /> |
 | `phase` _string_ | Phase represents the current phase of the SemanticRouter |  | Optional: \{\} <br /> |
-| `gatewayMode` _string_ | GatewayMode indicates deployment mode: standalone or gateway-integration |  | Optional: \{\} <br /> |
+| `gatewayMode` _string_ | GatewayMode indicates inference gateway topology: sidecar or external. |  | Enum: [sidecar external] <br />Optional: \{\} <br /> |
+| `bootstrapRevision` _string_ | BootstrapRevision is the content digest of the selected immutable<br />bootstrap manifest observed by the controller. |  | Optional: \{\} <br /> |
+| `publicService` _string_ | PublicService is the inference-only Service name. |  | Optional: \{\} <br /> |
+| `managementService` _string_ | ManagementService is the private Management API Service name. |  | Optional: \{\} <br /> |
+| `migration` _[MigrationStatus](#migrationstatus)_ | Migration reports the Management schema gate when a durable store is configured. |  | Optional: \{\} <br /> |
 | `openshiftFeatures` _[OpenShiftFeaturesStatus](#openshiftfeaturesstatus)_ | OpenShiftFeatures tracks OpenShift-specific feature status |  | Optional: \{\} <br /> |
 
 #### ServiceAccountSpec
@@ -380,4 +444,20 @@ _Appears in:_
 | `type` _[ServiceType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#servicetype-v1-core)_ | Type is the service type | ClusterIP | Enum: [ClusterIP NodePort LoadBalancer] <br />Optional: \{\} <br /> |
 | `grpc` _[PortSpec](#portspec)_ | GRPC port configuration |  | Optional: \{\} <br /> |
 | `api` _[PortSpec](#portspec)_ | API port configuration |  | Optional: \{\} <br /> |
+| `management` _[ManagementServiceSpec](#managementservicespec)_ | Management configures the private Management API Service port. The target<br />port remains owned by global.services.management_api in the bootstrap. |  | Optional: \{\} <br /> |
 | `metrics` _[MetricsPortSpec](#metricsportspec)_ | Metrics port configuration |  | Optional: \{\} <br /> |
+
+#### TopologySpreadSpec
+
+TopologySpreadSpec defines one portable Router topology constraint.
+
+_Appears in:_
+
+- [SemanticRouterSpec](#semanticrouterspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enabled` _boolean_ | Enabled overrides the capability-derived default. Deployments with a<br />durable Management store default to true; file-only deployments default<br />to false. |  | Optional: \{\} <br /> |
+| `maxSkew` _integer_ | MaxSkew is the maximum permitted imbalance between topology domains. | 1 | Minimum: 1 <br />Optional: \{\} <br /> |
+| `topologyKey` _string_ | TopologyKey selects the node label that defines a failure domain. | kubernetes.io/hostname | MinLength: 1 <br />Optional: \{\} <br /> |
+| `whenUnsatisfiable` _[UnsatisfiableConstraintAction](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.34/#unsatisfiableconstraintaction-v1-core)_ | WhenUnsatisfiable controls scheduling when the constraint cannot be met. | ScheduleAnyway | Enum: [DoNotSchedule ScheduleAnyway] <br />Optional: \{\} <br /> |

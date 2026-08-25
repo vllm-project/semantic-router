@@ -53,7 +53,10 @@ func testPlan() Plan {
 		DispatchID: "dsp", DispatchType: "primary", Ordinal: 0,
 		DispatchPlanDigest: strings.Repeat("a", 64), ModelID: "mdl", ModelRevision: 1,
 		Method: http.MethodPost, Path: "/v1/chat/completions", Headers: http.Header{"Authorization": {"Bearer caller"}}, Body: body,
-		Execution:     Execution{MaxRetries: 1, RequestTimeout: time.Minute, StreamTimeout: time.Minute},
+		Execution: Execution{
+			MaxRetries: 1, RetryOn: []FallbackTrigger{FallbackUnavailable},
+			RequestTimeout: time.Minute, StreamTimeout: time.Minute,
+		},
 		RequestDigest: RequestDigest(http.MethodPost, "/v1/chat/completions", "", body),
 		Backends: []Backend{{
 			ID: "be", Origin: "https://models.example", ProviderID: "openai",
@@ -119,6 +122,26 @@ func TestInvokerRetriesOnlyKnownZeroTransportFailure(t *testing.T) {
 	}
 	if journal.attempts[0].State != AttemptKnownZero || journal.attempts[1].State != AttemptResponseStarted {
 		t.Fatalf("unexpected evidence: %#v", journal.attempts)
+	}
+}
+
+func TestInvokerDoesNotRetryKnownZeroFailureForDisabledTrigger(t *testing.T) {
+	journal := &journalStub{}
+	calls := 0
+	plan := testPlan()
+	plan.Execution.RetryOn = []FallbackTrigger{FallbackTimeout}
+	invoker := &Invoker{Journal: journal, Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+		calls++
+		return nil, NewKnownZeroTransportFailure(FallbackUnavailable, errors.New("dial failed"))
+	})}
+
+	result, err := invoker.Invoke(context.Background(), plan)
+	if err == nil {
+		t.Fatal("Invoke() unexpectedly retried a disabled failure trigger")
+	}
+	if calls != 1 || len(journal.attempts) != 1 || len(result.Outcomes) != 1 ||
+		result.Outcomes[0].State != AttemptKnownZero {
+		t.Fatalf("calls=%d attempts=%+v outcomes=%+v", calls, journal.attempts, result.Outcomes)
 	}
 }
 
@@ -284,6 +307,7 @@ func TestInvokerExhaustsSameModelRetriesBeforeFallbackAndReportsOnlyAttempts(t *
 	journal := &journalStub{}
 	chain := fallbackTestChain(3)
 	chain.Candidates[0].Execution.MaxRetries = 1
+	chain.Candidates[0].Execution.RetryOn = []FallbackTrigger{FallbackUnavailable}
 	chain.Fallback.On = []FallbackTrigger{FallbackUnavailable}
 	calls := make([]string, 0, 3)
 	invoker := &Invoker{Journal: journal, Transport: transportFunc(func(request *http.Request) (*http.Response, error) {
@@ -483,6 +507,7 @@ func TestInvokerPinsCredentialsOnlyForAttemptedCandidate(t *testing.T) {
 func fallbackTestChain(count int) PlanChain {
 	base := testPlan()
 	base.Execution.MaxRetries = 0
+	base.Execution.RetryOn = nil
 	chain := PlanChain{Candidates: make([]Plan, 0, count)}
 	for index := 0; index < count; index++ {
 		plan := base

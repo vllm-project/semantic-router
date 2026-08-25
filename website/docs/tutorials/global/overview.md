@@ -3,7 +3,7 @@
 ## Overview
 
 `global:` contains Router-wide settings and shared infrastructure. It is the
-counterpart to each route-local `recipes[].document`: define a service or store
+counterpart to each route-local `recipes[].routing`: define a service or store
 once under `global:`, then opt individual routes into it with signals,
 algorithms, or plugins.
 
@@ -22,7 +22,7 @@ connections and makes the data and trust boundaries visible.
 ## When to Use
 
 Use `global:` for behavior or infrastructure shared by several Recipes. Keep
-route matching, algorithms, and plugins in each Recipe document; keep candidate
+route matching, algorithms, and plugins in each Recipe routing profile; keep candidate
 Models in Entrypoint assignments. Global settings are shared across Recipes,
 while signals, projections, decisions, algorithms, and plugins remain
 Recipe-scoped.

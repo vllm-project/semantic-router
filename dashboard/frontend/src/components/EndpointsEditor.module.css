@@ -154,3 +154,27 @@
   color: var(--color-text-secondary);
   font-size: 0.875rem;
 }
+
+@media (max-width: 560px) {
+  .itemHeader {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+
+  .itemActions {
+    width: 100%;
+  }
+
+  .btnEdit,
+  .btnDelete {
+    min-height: 40px;
+    flex: 1 1 0;
+  }
+
+  .itemDetails {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+}

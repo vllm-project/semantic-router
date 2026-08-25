@@ -57,7 +57,6 @@ func assertMultiObjectiveScopedDSL(t *testing.T, source string) {
 		t.Fatalf("decompiled recipes = %d, want 5", got)
 	}
 	for _, expected := range []string{
-		`mode: "insert"`,
 		`mode: "dynamic"`,
 		`template: "micro_agent"`,
 	} {
@@ -81,8 +80,8 @@ func assertMultiObjectiveRoutingScopesEqual(
 		t.Fatalf("entrypoints changed after YAML -> DSL -> config round trip:\n%s", cmp.Diff(originalEntrypoints, recompiledEntrypoints))
 	}
 	recipeDiff := cmp.Diff(
-		original.Recipes,
-		recompiled.Recipes,
+		normalizeDSLRuleOperatorsInRecipes(original.Recipes),
+		normalizeDSLRuleOperatorsInRecipes(recompiled.Recipes),
 		cmpopts.IgnoreUnexported(config.RoutingRecipe{}),
 		cmp.Comparer(func(left, right config.StructuredPayload) bool {
 			var leftValue, rightValue interface{}
@@ -103,6 +102,60 @@ func assertMultiObjectiveRoutingScopesEqual(
 			recipeDiff,
 		)
 	}
+}
+
+// DSL intentionally has one spelling for a one-child predicate and for an
+// unconditional route. YAML may spell the same boolean values as unary OR or
+// an omitted operator. Normalize only those semantically identical roots so
+// round-trip tests continue to detect every meaningful routing change.
+func normalizeDSLRuleOperatorsInRouting(input config.CanonicalRouting) config.CanonicalRouting {
+	output := input
+	output.Decisions = normalizeDSLRuleOperatorsInDecisions(input.Decisions)
+	return output
+}
+
+func normalizeDSLRuleOperatorsInRecipes(input []config.RoutingRecipe) []config.RoutingRecipe {
+	output := append([]config.RoutingRecipe(nil), input...)
+	for index := range output {
+		output[index].Profile = input[index].Profile
+		output[index].Profile.Decisions = normalizeDSLRuleOperatorsInDecisions(input[index].Profile.Decisions)
+	}
+	return output
+}
+
+func normalizeDSLRuleOperatorsInDecisions(input []config.Decision) []config.Decision {
+	output := append([]config.Decision(nil), input...)
+	for index := range output {
+		output[index].Rules = normalizeDSLRuleOperator(input[index].Rules)
+	}
+	return output
+}
+
+func normalizeDSLRuleOperator(input config.RuleNode) config.RuleNode {
+	output := input
+	output.Conditions = make([]config.RuleNode, len(input.Conditions))
+	for index, condition := range input.Conditions {
+		output.Conditions[index] = normalizeDSLRuleOperator(condition)
+	}
+	if output.IsLeaf() {
+		return output
+	}
+	operator := strings.ToUpper(strings.TrimSpace(output.Operator))
+	switch len(output.Conditions) {
+	case 0:
+		if operator == "" || operator == "AND" {
+			output.Operator = "AND"
+		}
+	case 1:
+		if operator == "" || operator == "AND" || operator == "OR" {
+			output.Operator = "AND"
+		}
+	default:
+		if operator == "" || operator == "OR" {
+			output.Operator = "OR"
+		}
+	}
+	return output
 }
 
 // EntrypointMapping also carries a prepared, runtime-only derived recipe view.

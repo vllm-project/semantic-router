@@ -17,7 +17,7 @@ import (
 )
 
 // responseWarningsHeader is the consolidated response-quality warnings header
-// (v0.4). It carries the "hallucination" code when the detector flags the
+// contract. It carries the "hallucination" code when the detector flags the
 // response. Kept as a literal to match the e2e convention of not importing the
 // router module for header names.
 const responseWarningsHeader = "x-vsr-response-warnings"

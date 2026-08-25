@@ -57,10 +57,14 @@ func (err *InvitationAuthorityError) Error() string {
 }
 
 func invitationRoleGrants(role string) ([]managementapi.InvitationRoleGrantRequest, error) {
+	if role == RoleRead {
+		return []managementapi.InvitationRoleGrantRequest{{
+			RoleID: routerConsumerRoleID, ScopeKind: "user",
+		}}, nil
+	}
 	roleID := map[string]string{
 		RoleAdmin: routerPlatformAdminRoleID,
 		RoleWrite: routerOperatorRoleID,
-		RoleRead:  routerViewerRoleID,
 	}[role]
 	if roleID == "" {
 		return nil, errors.New("invalid Dashboard role")
@@ -73,10 +77,16 @@ func invitationRoleGrants(role string) ([]managementapi.InvitationRoleGrantReque
 
 func dashboardRoleFromGrants(grants []managementapi.InvitationRoleGrant) (string, error) {
 	roleIDs := make([]string, 0, len(grants))
+	hasUserConsumer := false
 	for _, grant := range grants {
 		if grant.ScopeKind == "namespace" {
 			roleIDs = append(roleIDs, grant.RoleID)
+		} else if grant.ScopeKind == "user" && grant.RoleID == routerConsumerRoleID {
+			hasUserConsumer = true
 		}
+	}
+	if len(roleIDs) == 0 && hasUserConsumer {
+		return RoleRead, nil
 	}
 	return DashboardRoleFromManagementRoleIDs(roleIDs)
 }
@@ -94,4 +104,31 @@ func DashboardRoleFromManagementRoleIDs(roleIDs []string) (string, error) {
 		return "", ErrInvitationAuthorityUnavailable
 	}
 	return roles[selected], nil
+}
+
+// DashboardRoleFromManagementBindings derives the local presentation role
+// from Router-owned grants. A user-scoped consumer is the complete read-only
+// role; broader Dashboard roles must be granted at Namespace scope.
+func DashboardRoleFromManagementBindings(
+	bindings []managementapi.ManagementRoleBinding,
+	namespaceID string,
+	userID string,
+) (string, error) {
+	roleIDs := make([]string, 0, len(bindings))
+	hasUserConsumer := false
+	for _, binding := range bindings {
+		if binding.Status != "active" || binding.Scope.NamespaceID != namespaceID {
+			continue
+		}
+		switch {
+		case binding.Scope.Kind == "namespace":
+			roleIDs = append(roleIDs, binding.RoleID)
+		case binding.Scope.Kind == "user" && binding.Scope.UserID == userID && binding.RoleID == routerConsumerRoleID:
+			hasUserConsumer = true
+		}
+	}
+	if len(roleIDs) == 0 && hasUserConsumer {
+		return RoleRead, nil
+	}
+	return DashboardRoleFromManagementRoleIDs(roleIDs)
 }

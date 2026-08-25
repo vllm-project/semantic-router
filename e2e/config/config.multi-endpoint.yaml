@@ -1,42 +1,43 @@
-version: v0.4
+version: v0.3
 listeners: []
-models:
-- name: qwen14b-dev
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+providers:
+  models:
+  - name: qwen14b-dev
+    provider_model_id: qwen14b-dev
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8100/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+  - name: qwen14b-prod
+    provider_model_id: qwen14b-prod
+    backend_refs:
+    - provider: vllm
+      endpoint: http://127.0.0.1:8200/v1
+    control:
+      timeout:
+        request: 300s
+        stream: 300s
+routing:
+  modelCards:
+  - name: qwen14b-dev
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8100/v1
-    model: qwen14b-dev
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
-- name: qwen14b-prod
-  card:
-    aliases:
-    - Qwen/Qwen2.5-14B-Instruct
+  - name: qwen14b-prod
     capabilities:
     - chat
     - code
     - reasoning
     - math
-  connections:
-  - provider: vllm
-    endpoint: http://127.0.0.1:8200/v1
-    model: qwen14b-prod
-  runtime:
-    request_timeout: 300s
-    stream_timeout: 300s
 recipes:
 - name: default
   description: Default routing recipe.
-  document:
+  routing:
     signals:
       keywords:
       - name: code_keywords
@@ -103,8 +104,8 @@ recipes:
             by the user. If a user shares personal data, remind them to avoid sharing
             sensitive details.
 entrypoints:
-- name: vllm-sr/auto
-  aliases:
+- model_names:
+  - vllm-sr/auto
   - auto
   recipe: default
   assignments:

@@ -9,6 +9,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math"
 	"regexp"
 	"slices"
 	"strings"
@@ -186,7 +187,9 @@ func (command Command) CandidateDigests() []VersionedDigest {
 // Idempotency-Key and command scope. It serializes replicas across HMAC key
 // rotations and must never be stored or logged.
 func (command Command) AdvisoryLockKey() int64 {
-	return int64(binary.BigEndian.Uint64(command.lockDigest[:8]))
+	unsigned := binary.BigEndian.Uint64(command.lockDigest[:8]) & uint64(math.MaxInt64)
+	// #nosec G115 -- masking the sign bit bounds the advisory-lock key to MaxInt64.
+	return int64(unsigned)
 }
 
 func (result ResourceResult) Validate() error {

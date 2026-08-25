@@ -12,56 +12,68 @@ import (
 
 var backendCredentialAdapterPattern = regexp.MustCompile(`^[a-z][a-z0-9._-]{0,127}$`)
 
-// BackendCredentialsConfig separates managed provider-credential encryption
-// from standalone secret references. Standalone credential names are inlined
-// so provider bindings can reference a concise stable name.
+// BackendCredentialsConfig separates provider-credential encryption from
+// file-authored secret references. File credential names are inlined so a
+// provider binding can reference a concise stable name.
 type BackendCredentialsConfig struct {
 	ProviderKEKKeyringFile string                             `yaml:"provider_kek_keyring_file,omitempty"`
 	ProviderKEKKeyringEnv  string                             `yaml:"provider_kek_keyring_env,omitempty"`
-	Standalone             map[string]BackendCredentialConfig `yaml:",inline"`
+	File                   map[string]BackendCredentialConfig `yaml:",inline"`
 }
 
 type BackendCredentialConfig struct {
 	CredentialAdapterID string `yaml:"credential_adapter_id"`
 	SecretFile          string `yaml:"secret_file,omitempty"`
 	SecretEnv           string `yaml:"secret_env,omitempty"`
+	// SecretValue exists only while compiling a public backend_refs[].api_key.
+	// It is never serialized or returned through a configuration API.
+	SecretValue string `yaml:"-" json:"-"`
 }
+
+func (c BackendCredentialConfig) String() string {
+	return fmt.Sprintf(
+		"BackendCredentialConfig{CredentialAdapterID:%q, SecretFile:%q, SecretEnv:%q, SecretValue:<redacted>}",
+		c.CredentialAdapterID, c.SecretFile, c.SecretEnv,
+	)
+}
+
+func (c BackendCredentialConfig) GoString() string { return c.String() }
 
 type BackendEgressConfig struct {
 	PolicyFile string `yaml:"policy_file,omitempty"`
 }
 
-func validateBackendBootstrap(mode string, credentials BackendCredentialsConfig, egress BackendEgressConfig) error {
+func validateBackendBootstrap(
+	durableCredentialAuthority bool,
+	credentials BackendCredentialsConfig,
+	egress BackendEgressConfig,
+) error {
 	providerKEKConfigured := credentials.ProviderKEKKeyringFile != "" || credentials.ProviderKEKKeyringEnv != ""
 	if err := validateSecretSource(
 		"global.services.backend_credentials.provider_kek_keyring",
 		credentials.ProviderKEKKeyringFile,
 		credentials.ProviderKEKKeyringEnv,
-		mode == ControlPlaneModeManaged,
+		durableCredentialAuthority,
 	); err != nil {
 		return err
 	}
-	if mode == ControlPlaneModeStandalone && providerKEKConfigured {
-		return fmt.Errorf("global.services.backend_credentials.provider_kek_keyring is managed-only")
+	if !durableCredentialAuthority && providerKEKConfigured {
+		return fmt.Errorf(
+			"global.services.backend_credentials.provider_kek_keyring requires global.stores.management.postgres",
+		)
 	}
-	if mode == ControlPlaneModeManaged && len(credentials.Standalone) > 0 {
-		return fmt.Errorf("managed mode rejects standalone backend credential definitions")
-	}
-	names := make([]string, 0, len(credentials.Standalone))
-	for name := range credentials.Standalone {
+	names := make([]string, 0, len(credentials.File))
+	for name := range credentials.File {
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		credential := credentials.Standalone[name]
+		credential := credentials.File[name]
 		if strings.TrimSpace(name) == "" || name != strings.TrimSpace(name) {
 			return fmt.Errorf("global.services.backend_credentials contains an invalid empty credential name")
 		}
-		if err := validateSecretSource(
-			"global.services.backend_credentials."+name+".secret",
-			credential.SecretFile,
-			credential.SecretEnv,
-			true,
+		if err := validateBackendCredentialSource(
+			"global.services.backend_credentials."+name+".secret", credential,
 		); err != nil {
 			return err
 		}
@@ -77,25 +89,23 @@ func validateBackendBootstrap(mode string, credentials BackendCredentialsConfig,
 		return fmt.Errorf("global.services.backend_egress.policy_file must be an absolute path")
 	}
 	if policyFile == "" {
-		return fmt.Errorf("%s mode requires global.services.backend_egress.policy_file", mode)
+		return fmt.Errorf("global.services.backend_egress.policy_file is required")
 	}
 	return nil
 }
 
 func validateBackendCredentialRefs(
-	mode string,
+	durableCredentialAuthority bool,
 	credentials BackendCredentialsConfig,
 	snapshot *routingsnapshot.Snapshot,
 ) error {
 	if snapshot == nil {
 		return nil
 	}
-	// Managed snapshots already contain opaque provider credential IDs issued
-	// by the control plane. They are resolved by the managed credential
-	// registry at dispatch time and must never be interpreted as standalone
-	// bootstrap names here. Managed bootstrap cannot inline routing resources,
-	// so there is no second path for a standalone credential_ref to enter.
-	if mode == ControlPlaneModeManaged {
+	// Durable publications already contain opaque provider credential IDs.
+	// They are resolved by the durable credential registry at dispatch time and
+	// must not be interpreted as file-authored bootstrap names here.
+	if durableCredentialAuthority {
 		return nil
 	}
 	for _, model := range snapshot.Models {
@@ -107,7 +117,7 @@ func validateBackendCredentialRefs(
 			if ref == "" {
 				continue
 			}
-			if _, ok := credentials.Standalone[ref]; !ok {
+			if _, ok := credentials.File[ref]; !ok {
 				return fmt.Errorf("backend %q references undefined global.services.backend_credentials.%s", backend.ID, ref)
 			}
 		}
@@ -117,11 +127,35 @@ func validateBackendCredentialRefs(
 
 func cloneBackendCredentialsConfig(source BackendCredentialsConfig) BackendCredentialsConfig {
 	cloned := source
-	if source.Standalone != nil {
-		cloned.Standalone = make(map[string]BackendCredentialConfig, len(source.Standalone))
-		for name, credential := range source.Standalone {
-			cloned.Standalone[name] = credential
+	if source.File != nil {
+		cloned.File = make(map[string]BackendCredentialConfig, len(source.File))
+		for name, credential := range source.File {
+			cloned.File[name] = credential
 		}
 	}
 	return cloned
+}
+
+func validateBackendCredentialSource(path string, credential BackendCredentialConfig) error {
+	configured := 0
+	if credential.SecretFile != "" {
+		configured++
+	}
+	if credential.SecretEnv != "" {
+		configured++
+	}
+	if credential.SecretValue != "" {
+		configured++
+	}
+	if configured != 1 {
+		return fmt.Errorf("%s must configure exactly one secret source", path)
+	}
+	if credential.SecretValue != "" {
+		if strings.TrimSpace(credential.SecretValue) != credential.SecretValue ||
+			strings.ContainsAny(credential.SecretValue, "\r\n\x00") {
+			return fmt.Errorf("%s literal value must not contain surrounding whitespace or control characters", path)
+		}
+		return nil
+	}
+	return validateSecretSource(path, credential.SecretFile, credential.SecretEnv, true)
 }

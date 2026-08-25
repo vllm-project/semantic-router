@@ -18,6 +18,7 @@ type accessReadServiceStub struct {
 	inspection  accessmanagement.AuthorizationContext
 	checkResult accessmanagement.AccessCheckResult
 	context     accessmanagement.RoutingContext
+	catalog     accessmanagement.RoutingCatalog
 	check       accessmanagement.AccessCheckRequest
 	update      accessmanagement.UpdateRoutingContextRequest
 	inspectCall int
@@ -37,6 +38,10 @@ func (stub *accessReadServiceStub) GetEffectivePolicy(context.Context, string, a
 
 func (stub *accessReadServiceStub) GetQuota(context.Context, string, accessmanagement.Subject) (accessmanagement.EffectiveQuota, error) {
 	return accessmanagement.EffectiveQuota{}, nil
+}
+
+func (stub *accessReadServiceStub) GetRoutingCatalog(context.Context, string, accessmanagement.Subject) (accessmanagement.RoutingCatalog, error) {
+	return stub.catalog, nil
 }
 
 func (stub *accessReadServiceStub) GetRoutingContext(context.Context, string, accessmanagement.Subject) (accessmanagement.RoutingContext, error) {
@@ -135,6 +140,47 @@ func TestRoutingContextPutForwardsCASAndReturnsFreshETag(t *testing.T) {
 	}
 	if service.update.ExpectedRevision != 11 || service.update.Values["segment"].String != "research" || service.update.Actor.PrincipalID == "" {
 		t.Fatalf("update request=%#v", service.update)
+	}
+}
+
+func TestKeyScopedRoutingCatalogUsesKeyAuthorizationWithoutGlobalRoutingPermission(t *testing.T) {
+	subject := accessmanagement.Subject{
+		Kind: accesscontrol.SubjectKindAPIKey,
+		ID:   "44444444-4444-4444-8444-444444444444",
+	}
+	service := &accessReadServiceStub{
+		inspection: accessmanagement.AuthorizationContext{
+			Subject: subject,
+			Ancestors: []accessmanagement.Subject{{
+				Kind: accesscontrol.SubjectKindUser,
+				ID:   "55555555-5555-4555-8555-555555555555",
+			}},
+		},
+		catalog: accessmanagement.RoutingCatalog{
+			Subject: subject, PolicyRevision: 7, PolicyDigest: strings.Repeat("d", 64),
+			RoutingRevision: 9, RoutingDigest: strings.Repeat("e", 64),
+			Models: []accessmanagement.RoutingCatalogModel{{ID: "model-visible", Revision: 1, Name: "Visible"}},
+		},
+	}
+	var authorization AuthorizationRequest
+	routes := newTestAccessReadRoutes(t, service, AuthorizerFunc(func(_ context.Context, request AuthorizationRequest) (AuthorizationDecision, error) {
+		authorization = request
+		return AuthorizationDecision{}, nil
+	}))
+	mux := http.NewServeMux()
+	routes.Register(mux)
+	request := authorizedRequest(t, http.MethodGet,
+		managementapi.BasePath+"/api-keys/44444444-4444-4444-8444-444444444444/routing-catalog", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"model-visible"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if authorization.Operation.Permission.Canonical() !=
+		"(key.read@key AND access_policy.read@key AND routing_context.read@key)" ||
+		len(authorization.Targets["key"]) != 1 ||
+		authorization.Targets["key"][0].Scope.ResourceID != accesscontrol.ResourceID(subject.ID) {
+		t.Fatalf("routing catalog authorization = %#v", authorization)
 	}
 }
 

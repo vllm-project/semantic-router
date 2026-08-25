@@ -60,7 +60,7 @@
 {{- $_ := set $global "services" $services -}}
 {{- $_ := set $config "global" $global -}}
 {{- if not (get $config "version") -}}
-{{- $_ := set $config "version" "v0.4" -}}
+{{- $_ := set $config "version" "v0.3" -}}
 {{- end -}}
 apiVersion: v1
 kind: ConfigMap

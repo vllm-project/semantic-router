@@ -8,21 +8,22 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 )
 
 type backgroundWorkerFunc func(context.Context) error
 
 func (function backgroundWorkerFunc) Run(ctx context.Context) error { return function(ctx) }
 
-func TestNewFactoryRequiresManagedRouterAuthentication(t *testing.T) {
+func TestNewFactoryRequiresDurableRoutingAuthentication(t *testing.T) {
 	for _, test := range []struct {
 		name   string
 		mutate func(*config.RouterConfig)
 	}{
-		{name: "standalone", mutate: func(cfg *config.RouterConfig) {
-			cfg.ControlPlane.Mode = config.ControlPlaneModeStandalone
+		{name: "file authority", mutate: func(cfg *config.RouterConfig) {
+			cfg.AccessStore = nil
+			cfg.AccessRuntimeStore = nil
 		}},
 		{name: "legacy bearer", mutate: func(cfg *config.RouterConfig) {
 			cfg.ManagementAPI.Auth.Mode = config.ManagementAuthModeBearer
@@ -66,14 +67,14 @@ func TestNewFactoryCapturesCredentialRevealPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !factory.defaultRevealable {
-		t.Fatal("managed API-key reveal policy was not captured from Router configuration")
+		t.Fatal("Management API-key reveal policy was not captured from Router configuration")
 	}
 
 	// Factory construction must own a value copy. Later caller mutations cannot
 	// silently change the Management API's credential-retention policy.
 	cfg.Access.Credentials.Reveal.Enabled = false
 	if !factory.defaultRevealable {
-		t.Fatal("managed API-key reveal policy changed after factory construction")
+		t.Fatal("Management API-key reveal policy changed after factory construction")
 	}
 }
 
@@ -119,7 +120,7 @@ func TestFactoryBuildRejectsIncompleteProcessDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = factory.Build(context.Background(), managedruntime.ManagementDependencies{})
+	_, err = factory.Build(context.Background(), routingruntime.ManagementDependencies{})
 	if err == nil || !strings.Contains(err.Error(), "dependencies are incomplete") {
 		t.Fatalf("Build() error = %v", err)
 	}
@@ -148,7 +149,8 @@ func TestApplicationRunTreatsUnexpectedCleanWorkerExitAsFailure(t *testing.T) {
 
 func managedFactoryConfig() config.RouterConfig {
 	cfg := config.DefaultGlobalConfig()
-	cfg.ControlPlane.Mode = config.ControlPlaneModeManaged
+	cfg.Access.Enabled = true
+	cfg.AccessStore = &config.AccessStoreConfig{Type: config.AccessStoreTypePostgres}
 	cfg.Agent.PublicInferenceEndpoint = "http://public-inference.internal/v1/chat/completions"
 	cfg.ManagementAPI.Auth.Mode = config.ManagementAuthModeRouter
 	cfg.ManagementAPI.Auth.Roles = nil

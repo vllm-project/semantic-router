@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -29,6 +30,9 @@ type fakeInferenceAccess struct {
 	catalogCalls    int
 	catalog         accessruntime.CatalogDiscovery
 	admissions      []accessruntime.AdmissionRequest
+	heartbeatMu     sync.Mutex
+	heartbeats      []accessruntime.Admission
+	heartbeat       func(accessruntime.Admission) (quotaruntime.AdmissionHeartbeatResult, error)
 	journal         []accessruntime.DispatchJournalRequest
 	evidenceReads   []accessruntime.AttemptEvidenceRequest
 	readEvidence    func(accessruntime.AttemptEvidenceRequest) (accessruntime.AttemptEvidenceSnapshot, error)
@@ -74,6 +78,22 @@ func (f *fakeInferenceAccess) Admit(_ context.Context, request accessruntime.Adm
 		Tenant: inferenceTestTenant(request.AdmissionID), Target: request.Target,
 		RequestDigest: request.RequestDigest, PreparedAt: time.Now().UTC(),
 	}, nil
+}
+
+func (f *fakeInferenceAccess) Heartbeat(_ context.Context, admission accessruntime.Admission) (quotaruntime.AdmissionHeartbeatResult, error) {
+	f.heartbeatMu.Lock()
+	f.heartbeats = append(f.heartbeats, admission)
+	f.heartbeatMu.Unlock()
+	if f.heartbeat != nil {
+		return f.heartbeat(admission)
+	}
+	return quotaruntime.AdmissionHeartbeatResult{}, nil
+}
+
+func (f *fakeInferenceAccess) heartbeatCount() int {
+	f.heartbeatMu.Lock()
+	defer f.heartbeatMu.Unlock()
+	return len(f.heartbeats)
 }
 
 func (f *fakeInferenceAccess) JournalDispatch(_ context.Context, request accessruntime.DispatchJournalRequest) (quotaruntime.MutationResult, error) {
@@ -135,7 +155,7 @@ func inferenceTestTenant(admissionID string) accessruntime.TenantContext {
 	}
 }
 
-func TestManagedInferenceSessionFailsClosedAndNeverRetainsCredential(t *testing.T) {
+func TestNativeAccessInferenceSessionFailsClosedAndNeverRetainsCredential(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{Access: config.AccessServiceConfig{Enabled: true}}}
 	missing := &RequestContext{Headers: map[string]string{":path": "/v1/chat/completions"}}
 	if status := inferenceAccessDisposition(router.bindInferenceAuthentication(missing)); status != 401 {
@@ -155,11 +175,11 @@ func TestManagedInferenceSessionFailsClosedAndNeverRetainsCredential(t *testing.
 	}
 	mutation := buildIdentityEncodingRequestMutation(true)
 	if !slices.Contains(mutation.RemoveHeaders, "authorization") {
-		t.Fatalf("managed upstream mutation does not remove authorization: %v", mutation.RemoveHeaders)
+		t.Fatalf("authenticated upstream mutation does not remove authorization: %v", mutation.RemoveHeaders)
 	}
 }
 
-func TestManagedModelsRejectsAnonymousRequestsBeforeCatalogDiscovery(t *testing.T) {
+func TestNativeAccessModelsRejectsAnonymousRequestsBeforeCatalogDiscovery(t *testing.T) {
 	fake := &fakeInferenceAccess{}
 	router := &OpenAIRouter{
 		Config:          &config.RouterConfig{Access: config.AccessServiceConfig{Enabled: true}},
@@ -172,24 +192,24 @@ func TestManagedModelsRejectsAnonymousRequestsBeforeCatalogDiscovery(t *testing.
 		t.Fatalf("handleRequestHeaders() error = %v", err)
 	}
 	if status := inferenceAccessDisposition(response); status != 401 {
-		t.Fatalf("anonymous managed models status = %d, want 401", status)
+		t.Fatalf("anonymous native-access compositionls status = %d, want 401", status)
 	}
 	if fake.catalogCalls != 0 {
-		t.Fatalf("anonymous managed models catalog calls = %d, want 0", fake.catalogCalls)
+		t.Fatalf("anonymous native-access compositionls catalog calls = %d, want 0", fake.catalogCalls)
 	}
 }
 
-func TestStandaloneModeDoesNotInterpretCallerAuthorization(t *testing.T) {
+func TestFileAuthorityDoesNotInterpretCallerAuthorization(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	ctx := &RequestContext{Headers: map[string]string{"Authorization": "Bearer provider-owned-key"}}
 	if response := router.bindInferenceAuthentication(ctx); response != nil {
-		t.Fatalf("standalone authorization was interpreted: %+v", response)
+		t.Fatalf("file-authority authorization was interpreted: %+v", response)
 	}
 	if got := headerValueCI(ctx, "authorization"); got != "Bearer provider-owned-key" {
-		t.Fatalf("standalone authorization = %q", got)
+		t.Fatalf("file-authority authorization = %q", got)
 	}
 	if slices.Contains(buildIdentityEncodingRequestMutation(false).RemoveHeaders, "authorization") {
-		t.Fatal("standalone mutation removes caller authorization")
+		t.Fatal("file-authority mutation removes caller authorization")
 	}
 }
 
@@ -214,7 +234,7 @@ func TestEntrypointGrantAuthorizesPublishedInternalModels(t *testing.T) {
 		RequestModel: "virtual/premium", InferenceAccess: &inferenceRequestAccess{
 			tenant: tenant,
 		},
-		ManagedDispatch: &managedRequestDispatch{requestID: "entrypoint-test"},
+		DispatchState: &requestDispatchState{requestID: "entrypoint-test"},
 	}
 	if response := router.authorizeInferenceTarget(context.Background(), ctx, ctx.RequestModel); response != nil {
 		t.Fatalf("entrypoint authorization failed: status=%d", inferenceAccessDisposition(response))
@@ -280,7 +300,7 @@ func TestDirectModelDenialIsNondisclosing(t *testing.T) {
 	}
 }
 
-func TestManagedModelsUsesOneCatalogSnapshotAndRoutingClaims(t *testing.T) {
+func TestNativeAccessModelsUsesOneCatalogSnapshotAndRoutingClaims(t *testing.T) {
 	cfg := inferenceTestConfig(t)
 	tenant := inferenceTestTenant("")
 	tenant.RoutingClaims = map[string]routingsnapshot.ClaimValue{
@@ -398,9 +418,9 @@ func TestSettlementUsesAuthoritativeRetryEvidenceWithoutDoubleCounting(t *testin
 		t.Fatal(err)
 	}
 	applyPrimaryDispatchOutcome(t, ctx, backendinvoker.AttemptResponseStarted)
-	ctx.ManagedDispatch.mu.Lock()
-	dispatchID := ctx.ManagedDispatch.primaryDispatchID
-	ctx.ManagedDispatch.mu.Unlock()
+	ctx.DispatchState.mu.Lock()
+	dispatchID := ctx.DispatchState.primaryDispatchID
+	ctx.DispatchState.mu.Unlock()
 	markInferenceDispatchAttemptEvidenceRequired(ctx, dispatchID)
 	usage := responseUsageMetrics{
 		promptTokens: 7, promptTokensReported: true,
@@ -432,9 +452,9 @@ func TestSettlementFailsClosedWhenRequiredAttemptEvidenceIsMissing(t *testing.T)
 		t.Fatal(err)
 	}
 	applyPrimaryDispatchOutcome(t, ctx, backendinvoker.AttemptResponseStarted)
-	ctx.ManagedDispatch.mu.Lock()
-	dispatchID := ctx.ManagedDispatch.primaryDispatchID
-	ctx.ManagedDispatch.mu.Unlock()
+	ctx.DispatchState.mu.Lock()
+	dispatchID := ctx.DispatchState.primaryDispatchID
+	ctx.DispatchState.mu.Unlock()
 	markInferenceDispatchAttemptEvidenceRequired(ctx, dispatchID)
 	usage := responseUsageMetrics{
 		promptTokens: 7, promptTokensReported: true,
@@ -554,7 +574,7 @@ func TestDisconnectSettlesUnknownAndDoesNotRetryFinalization(t *testing.T) {
 func applyPrimaryDispatchOutcome(t *testing.T, ctx *RequestContext, state backendinvoker.AttemptState) {
 	t.Helper()
 	markPrimaryCapabilityIssued(ctx)
-	dispatchState := ctx.ManagedDispatch
+	dispatchState := ctx.DispatchState
 	dispatchState.mu.Lock()
 	dispatch := dispatchState.dispatches[0]
 	requestDigest := dispatchState.requestDigest
@@ -584,10 +604,10 @@ func applyPrimaryDispatchOutcome(t *testing.T, ctx *RequestContext, state backen
 }
 
 func markPrimaryCapabilityIssued(ctx *RequestContext) {
-	ctx.ManagedDispatch.mu.Lock()
-	ctx.ManagedDispatch.capabilityIssued = true
-	ctx.ManagedDispatch.requestDigest = strings.Repeat("a", 64)
-	ctx.ManagedDispatch.mu.Unlock()
+	ctx.DispatchState.mu.Lock()
+	ctx.DispatchState.capabilityIssued = true
+	ctx.DispatchState.requestDigest = strings.Repeat("a", 64)
+	ctx.DispatchState.mu.Unlock()
 }
 
 func admittedInferenceTestContext(model string) *RequestContext {
@@ -597,7 +617,7 @@ func admittedInferenceTestContext(model string) *RequestContext {
 		Headers:      map[string]string{":path": "/v1/chat/completions"},
 		RequestID:    admissionID,
 		RequestModel: model, StartTime: time.Now().UTC(), TraceContext: inferenceTestTraceContext(tenant),
-		ManagedDispatch: &managedRequestDispatch{requestID: admissionID},
+		DispatchState: &requestDispatchState{requestID: admissionID},
 		InferenceAccess: &inferenceRequestAccess{
 			target: accessruntime.Target{
 				ResourceType: accesscontrol.GrantResourceModel,
@@ -640,7 +660,7 @@ func inferenceTestConfig(t *testing.T) *config.RouterConfig {
 	)
 	one := "1"
 	cfg := &config.RouterConfig{
-		ControlPlane:  config.ControlPlaneConfig{Mode: config.ControlPlaneModeManaged},
+		AccessStore:   &config.AccessStoreConfig{Type: config.AccessStoreTypePostgres},
 		Access:        config.AccessServiceConfig{Enabled: true},
 		RouterOptions: config.RouterOptions{IncludeConfigModelsInList: true},
 		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{

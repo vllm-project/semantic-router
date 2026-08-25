@@ -101,6 +101,16 @@ func TestUnknownUsageReconciliationPostgresLifecycle(t *testing.T) {
 		t.Fatalf("Complete() = %#v, %v", completed, testUnknownUsageReconciliationPostgresLifecycleErr)
 	}
 
+	assertReconciliationDurableState(t, ctx, db, namespaceID, admissionID, fenceID)
+}
+
+func assertReconciliationDurableState(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	namespaceID, admissionID, fenceID string,
+) {
+	t.Helper()
 	var settlementState, fenceState string
 	var correctionEvents, auditEvents int
 	if err := db.QueryRowContext(ctx, `SELECT
@@ -108,7 +118,8 @@ func TestUnknownUsageReconciliationPostgresLifecycle(t *testing.T) {
 	  (SELECT state FROM unknown_usage_fences WHERE namespace_id=$1 AND id=$3::uuid),
 	  (SELECT count(*) FROM usage_events WHERE namespace_id=$1 AND reconciliation_id IS NOT NULL),
 	  (SELECT count(*) FROM access_audit_events WHERE namespace_id=$1 AND resource_id=$3::text)`,
-		namespaceID, admissionID, fenceID).Scan(&settlementState, &fenceState, &correctionEvents, &auditEvents); err != nil {
+		namespaceID, admissionID, fenceID,
+	).Scan(&settlementState, &fenceState, &correctionEvents, &auditEvents); err != nil {
 		t.Fatal(err)
 	}
 	if settlementState != "settled" || fenceState != "resolved" || correctionEvents != 1 || auditEvents < 3 {

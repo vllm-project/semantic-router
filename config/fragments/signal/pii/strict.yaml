@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     pii:
       - name: restricted_pii

@@ -213,40 +213,32 @@ func assertDecisionRuleCompositionInReferenceConfig(t testingT, decisions []inte
 }
 
 func assertReferenceLoRACatalogCoverage(t testingT, root map[string]interface{}) {
-	models := mustSliceAt(t, root, "models")
-	cards := collectChildMapsFromSlice(t, models, "card", "models")
-	if len(collectNestedSliceItems(t, cards, "loras", "models[].card")) == 0 {
-		t.Fatalf("config/config.yaml must declare at least one models[].card.loras entry")
+	routing := mustMapAt(t, root, "routing")
+	cards := make([]map[string]interface{}, 0)
+	for _, rawCard := range mustSliceAt(t, routing, "modelCards") {
+		cards = append(cards, mustMapValue(t, rawCard, "routing.modelCards"))
+	}
+	if len(collectNestedSliceItems(t, cards, "loras", "routing.modelCards")) == 0 {
+		t.Fatalf("config/config.yaml must declare at least one routing.modelCards[].loras entry")
 	}
 
 	for _, rawEntrypoint := range mustSliceAt(t, root, "entrypoints") {
 		entrypoint := mustMapValue(t, rawEntrypoint, "entrypoints")
-		assignmentMaps := []map[string]interface{}{}
-		if rawAssignments, ok := entrypoint["assignments"].(map[string]interface{}); ok {
-			assignmentMaps = append(assignmentMaps, rawAssignments)
+		assignments, ok := entrypoint["assignments"].(map[string]interface{})
+		if !ok {
+			continue
 		}
-		for _, rawRule := range sliceAt(entrypoint, "rules") {
-			rule := mustMapValue(t, rawRule, "entrypoints[].rules")
-			assignmentMaps = append(assignmentMaps, mustMapAt(t, rule, "assignments"))
-		}
-		for _, assignments := range assignmentMaps {
-			for _, rawSet := range assignments {
-				set := mustMapValue(t, rawSet, "entrypoints[].assignments")
-				for _, rawModel := range mustSliceAt(t, set, "models") {
-					assignment := mustMapValue(t, rawModel, "entrypoints[].assignments[].models")
-					if _, ok := assignment["lora"]; ok {
-						return
-					}
+		for _, rawSet := range assignments {
+			set := mustMapValue(t, rawSet, "entrypoints[].assignments")
+			for _, rawModel := range mustSliceAt(t, set, "models") {
+				assignment := mustMapValue(t, rawModel, "entrypoints[].assignments[].models")
+				if _, ok := assignment["lora"]; ok {
+					return
 				}
 			}
 		}
 	}
 	t.Fatalf("config/config.yaml must exercise entrypoints[].assignments[].models[].lora")
-}
-
-func sliceAt(value map[string]interface{}, key string) []interface{} {
-	items, _ := value[key].([]interface{})
-	return items
 }
 
 func referenceAlgorithmsByType(t testingT, decisions []interface{}) map[string]map[string]interface{} {

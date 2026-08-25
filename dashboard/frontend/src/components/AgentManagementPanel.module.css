@@ -378,7 +378,7 @@
 
 .dialog {
   width: min(760px, 100%);
-  max-height: min(860px, calc(100vh - 44px));
+  max-height: min(860px, calc(100dvh - 44px));
   overflow: auto;
   border: 2px solid rgba(255, 255, 255, 0.72);
   border-radius: 18px;
@@ -1122,7 +1122,7 @@
     padding: 10px;
   }
   .dialog {
-    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
     border-width: 1px;
   }
   .dialogHeader {

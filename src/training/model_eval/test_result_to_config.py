@@ -23,7 +23,7 @@ def test_parse_args_defaults_to_eval_config(monkeypatch):
     assert args.provider == "openai-compatible"
 
 
-def test_generate_config_yaml_emits_human_v04_layout():
+def test_generate_config_yaml_emits_human_v03_layout():
     category_accuracies = {
         "math": {
             "qwen3-8b": 0.82,
@@ -46,41 +46,42 @@ def test_generate_config_yaml_emits_human_v04_layout():
     assert set(config) == {
         "version",
         "listeners",
-        "models",
+        "providers",
+        "routing",
         "recipes",
         "entrypoints",
         "global",
     }
-    assert config["version"] == "v0.4"
+    assert config["version"] == "v0.3"
     assert config["listeners"] == []
 
-    generated_models = {model["name"]: model for model in config["models"]}
+    generated_models = {model["name"]: model for model in config["providers"]["models"]}
     assert set(generated_models) == {"phi4", "qwen3-8b"}
-    assert generated_models["phi4"]["connections"] == [
+    assert generated_models["phi4"]["provider_model_id"] == "phi4"
+    assert generated_models["phi4"]["backend_refs"] == [
         {
             "provider": "openai-compatible",
             "endpoint": "http://127.0.0.1:9000/v1",
-            "model": "phi4",
         }
     ]
-    assert (
-        generated_models["phi4"]["card"]["quality_score"] == EXPECTED_PHI4_QUALITY_SCORE
-    )
-    assert (
-        generated_models["qwen3-8b"]["card"]["quality_score"]
-        == EXPECTED_QWEN3_QUALITY_SCORE
-    )
+    assert generated_models["phi4"]["control"] == {
+        "retry": {"count": 2, "on": ["unavailable", "timeout"]},
+        "timeout": {"request": "60s", "stream": "10m"},
+    }
+    model_cards = {model["name"]: model for model in config["routing"]["modelCards"]}
+    assert model_cards["phi4"]["quality_score"] == EXPECTED_PHI4_QUALITY_SCORE
+    assert model_cards["qwen3-8b"]["quality_score"] == EXPECTED_QWEN3_QUALITY_SCORE
 
     domains = {
         domain["name"]: domain
-        for domain in config["recipes"][0]["document"]["signals"]["domains"]
+        for domain in config["recipes"][0]["routing"]["signals"]["domains"]
     }
     assert domains["math"]["mmlu_categories"] == ["math"]
     assert domains["law"]["mmlu_categories"] == ["law"]
 
     decisions = {
         decision["name"]: decision
-        for decision in config["recipes"][0]["document"]["decisions"]
+        for decision in config["recipes"][0]["routing"]["decisions"]
     }
     assert set(decisions) == {"default", "law", "math"}
     assignments = config["entrypoints"][0]["assignments"]
@@ -88,8 +89,7 @@ def test_generate_config_yaml_emits_human_v04_layout():
     assert assignments["law"] == {"models": [{"model": "phi4"}]}
     assert assignments["default"] == {"models": [{"model": "phi4"}]}
     assert config["entrypoints"][0] == {
-        "name": "vllm-sr/eval",
-        "aliases": ["eval"],
+        "model_names": ["vllm-sr/eval", "eval"],
         "recipe": "mmlu-evaluation",
         "assignments": assignments,
     }

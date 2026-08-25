@@ -83,7 +83,7 @@ func validDesiredState(revision uint64, requestLimit string) DesiredState {
 	}
 	inputPrice, outputPrice := "0.25", "1.00"
 	routing := routingsnapshot.Bundle{
-		NamespaceID: string(namespace.ID), Revision: int64(revision), Currency: "USD",
+		NamespaceID: string(namespace.ID), Revision: fixturePostgresBigint(revision), Currency: "USD",
 		Models: []routingsnapshot.Model{{
 			ID: "model-chat", Revision: 1,
 			CatalogRevision: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -116,7 +116,7 @@ func validDesiredState(revision uint64, requestLimit string) DesiredState {
 		Status: accesscontrol.CredentialStatusActive, NotBefore: fixtureTime, CreatedAt: fixtureTime,
 	}
 	return DesiredState{
-		Namespace: namespace, Revision: revision, RevisionTime: fixtureTime.Add(time.Duration(revision) * time.Millisecond),
+		Namespace: namespace, Revision: revision, RevisionTime: fixtureTime.Add(fixtureMillisecondOffset(revision)),
 		Keys:        []accessprojection.Candidate{candidate},
 		Credentials: []CredentialCandidate{{Kind: CredentialKindAPIKey, Credential: credential}}, Routing: routing,
 	}
@@ -139,7 +139,7 @@ func desiredStateWithProviderCredential(t testing.TB, revision uint64) (DesiredS
 	state.Keys = nil
 	state.Credentials = nil
 	state.Routing.NamespaceID = providerFixtureNamespaceID
-	state.Routing.Revision = int64(revision)
+	state.Routing.Revision = fixturePostgresBigint(revision)
 	backend := &state.Routing.Models[0].Backends[0]
 	backend.ProviderID = "openai"
 	backend.Origin = "https://api.example.com/v1"

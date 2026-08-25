@@ -38,52 +38,74 @@ func TestRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicas(t *testing.T
 	prefix := "outcome-it:" + strings.ReplaceAll(uuid.NewString(), "-", "")
 	t.Cleanup(func() { deleteOutcomeRedisPrefix(replicaA, prefix) })
 
-	limiterA, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := NewRedisAbuseLimiter(RedisAbuseLimiterOptions{
+	caller := assertRedisAbuseLimitAcrossReplicas(t, ctx, replicaA, replicaB, prefix)
+	assertRedisProjectionAcrossReplicas(t, ctx, options, replicaA, replicaB, prefix, caller)
+}
+
+func assertRedisAbuseLimitAcrossReplicas(
+	t *testing.T,
+	ctx context.Context,
+	replicaA, replicaB *redis.Client,
+	prefix string,
+) Caller {
+	t.Helper()
+	limiterA, err := NewRedisAbuseLimiter(RedisAbuseLimiterOptions{
 		Client: replicaA, KeyPrefix: prefix, Limit: 2, Window: time.Minute,
 	})
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	if err != nil {
+		t.Fatal(err)
 	}
-	limiterB, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := NewRedisAbuseLimiter(RedisAbuseLimiterOptions{
+	limiterB, err := NewRedisAbuseLimiter(RedisAbuseLimiterOptions{
 		Client: replicaB, KeyPrefix: prefix, Limit: 2, Window: time.Minute,
 	})
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	if err != nil {
+		t.Fatal(err)
 	}
 	caller := validCaller()
 	quotaSentinel := prefix + ":quota:sentinel"
-	if err := replicaA.Set(ctx, quotaSentinel, "unchanged", 0).Err(); err != nil {
-		t.Fatal(err)
+	if setErr := replicaA.Set(ctx, quotaSentinel, "unchanged", 0).Err(); setErr != nil {
+		t.Fatal(setErr)
 	}
-	first, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := limiterA.Allow(ctx, caller)
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil || !first.Allowed {
-		t.Fatalf("first Allow() = (%+v, %v)", first, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	first, err := limiterA.Allow(ctx, caller)
+	if err != nil || !first.Allowed {
+		t.Fatalf("first Allow() = (%+v, %v)", first, err)
 	}
-	second, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := limiterB.Allow(ctx, caller)
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil || !second.Allowed {
-		t.Fatalf("second Allow() = (%+v, %v)", second, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	second, err := limiterB.Allow(ctx, caller)
+	if err != nil || !second.Allowed {
+		t.Fatalf("second Allow() = (%+v, %v)", second, err)
 	}
-	denied, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := limiterA.Allow(ctx, caller)
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil || denied.Allowed || denied.RetryAfter <= 0 {
-		t.Fatalf("global denied Allow() = (%+v, %v)", denied, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	denied, err := limiterA.Allow(ctx, caller)
+	if err != nil || denied.Allowed || denied.RetryAfter <= 0 {
+		t.Fatalf("global denied Allow() = (%+v, %v)", denied, err)
 	}
 	otherKey := caller
 	otherKey.APIKeyID = "00000000-0000-4000-8000-000000000099"
-	independent, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := limiterB.Allow(ctx, otherKey)
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil || !independent.Allowed {
-		t.Fatalf("independent key Allow() = (%+v, %v)", independent, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	independent, err := limiterB.Allow(ctx, otherKey)
+	if err != nil || !independent.Allowed {
+		t.Fatalf("independent key Allow() = (%+v, %v)", independent, err)
 	}
 	if value, err := replicaB.Get(ctx, quotaSentinel).Result(); err != nil || value != "unchanged" {
 		t.Fatalf("inference quota sentinel = (%q, %v), want unchanged", value, err)
 	}
+	return caller
+}
 
-	storeA, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := NewRedisProjectionStore(RedisProjectionStoreOptions{Client: replicaA, KeyPrefix: prefix})
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+func assertRedisProjectionAcrossReplicas(
+	t *testing.T,
+	ctx context.Context,
+	options *redis.Options,
+	replicaA, replicaB *redis.Client,
+	prefix string,
+	caller Caller,
+) {
+	t.Helper()
+	storeA, err := NewRedisProjectionStore(RedisProjectionStoreOptions{Client: replicaA, KeyPrefix: prefix})
+	if err != nil {
+		t.Fatal(err)
 	}
-	storeB, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := NewRedisProjectionStore(RedisProjectionStoreOptions{Client: replicaB, KeyPrefix: prefix})
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	storeB, err := NewRedisProjectionStore(RedisProjectionStoreOptions{Client: replicaB, KeyPrefix: prefix})
+	if err != nil {
+		t.Fatal(err)
 	}
 	projection := Projection{
 		Schema: ProjectionSchema, NamespaceID: caller.NamespaceID, Revision: 1,
@@ -94,58 +116,58 @@ func TestRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicas(t *testing.T
 			GoodFitCount: 1,
 		}},
 	}
-	payload, digest, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := projection.Canonical()
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
-	}
-	if err := storeA.Publish(ctx, projection, payload, digest); err != nil {
+	payload, digest, err := projection.Canonical()
+	if err != nil {
 		t.Fatal(err)
 	}
-	read, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := storeB.Read(ctx, caller.NamespaceID)
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil || read.Revision != 1 || len(read.Entries) != 1 || read.Entries[0].GoodFitCount != 1 {
-		t.Fatalf("cross-replica Read() = (%+v, %v)", read, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	if publishErr := storeA.Publish(ctx, projection, payload, digest); publishErr != nil {
+		t.Fatal(publishErr)
 	}
-	if err := storeB.Publish(ctx, projection, payload, digest); err != nil {
-		t.Fatalf("idempotent projection publish: %v", err)
+	read, err := storeB.Read(ctx, caller.NamespaceID)
+	if err != nil || read.Revision != 1 || len(read.Entries) != 1 || read.Entries[0].GoodFitCount != 1 {
+		t.Fatalf("cross-replica Read() = (%+v, %v)", read, err)
+	}
+	if publishErr := storeB.Publish(ctx, projection, payload, digest); publishErr != nil {
+		t.Fatalf("idempotent projection publish: %v", publishErr)
 	}
 
 	conflicting := projection
 	conflicting.Entries = append([]ProjectionEntry(nil), projection.Entries...)
 	conflicting.Entries[0].FailedCount = 1
-	conflictingPayload, conflictingDigest, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := conflicting.Canonical()
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	conflictingPayload, conflictingDigest, err := conflicting.Canonical()
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := storeB.Publish(ctx, conflicting, conflictingPayload, conflictingDigest); !errors.Is(err, ErrUnavailable) {
-		t.Fatalf("conflicting projection error = %v, want ErrUnavailable", err)
+	if publishErr := storeB.Publish(ctx, conflicting, conflictingPayload, conflictingDigest); !errors.Is(publishErr, ErrUnavailable) {
+		t.Fatalf("conflicting projection error = %v, want ErrUnavailable", publishErr)
 	}
 
 	newer := projection
 	newer.Revision = 2
 	newer.Entries = append([]ProjectionEntry(nil), projection.Entries...)
 	newer.Entries[0].GoodFitCount = 2
-	newerPayload, newerDigest, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := newer.Canonical()
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
-	}
-	if err := storeB.Publish(ctx, newer, newerPayload, newerDigest); err != nil {
+	newerPayload, newerDigest, err := newer.Canonical()
+	if err != nil {
 		t.Fatal(err)
 	}
-	if err := storeA.Publish(ctx, projection, payload, digest); err != nil {
-		t.Fatalf("stale publish should be an idempotent no-op: %v", err)
+	if publishErr := storeB.Publish(ctx, newer, newerPayload, newerDigest); publishErr != nil {
+		t.Fatal(publishErr)
+	}
+	if publishErr := storeA.Publish(ctx, projection, payload, digest); publishErr != nil {
+		t.Fatalf("stale publish should be an idempotent no-op: %v", publishErr)
 	}
 
 	// A fresh client after simulated process restart observes the latest global
 	// revision; no process-local projection is needed for recovery.
 	restartedClient := redis.NewClient(options)
 	t.Cleanup(func() { _ = restartedClient.Close() })
-	restartedStore, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := NewRedisProjectionStore(RedisProjectionStoreOptions{Client: restartedClient, KeyPrefix: prefix})
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil {
-		t.Fatal(testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	restartedStore, err := NewRedisProjectionStore(RedisProjectionStoreOptions{Client: restartedClient, KeyPrefix: prefix})
+	if err != nil {
+		t.Fatal(err)
 	}
-	restarted, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr := restartedStore.Read(ctx, caller.NamespaceID)
-	if testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr != nil || restarted.Revision != 2 || restarted.Entries[0].GoodFitCount != 2 {
-		t.Fatalf("restart Read() = (%+v, %v)", restarted, testRedisOutcomeAbuseLimitAndProjectionAreGlobalAcrossReplicasErr)
+	restarted, err := restartedStore.Read(ctx, caller.NamespaceID)
+	if err != nil || restarted.Revision != 2 || restarted.Entries[0].GoodFitCount != 2 {
+		t.Fatalf("restart Read() = (%+v, %v)", restarted, err)
 	}
 }
 

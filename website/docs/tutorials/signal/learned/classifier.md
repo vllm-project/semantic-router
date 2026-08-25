@@ -30,7 +30,7 @@ preference signals for response-style routing.
 ## Configuration
 
 ```yaml
-document:
+routing:
   signals:
     classifiers:
       - name: phishing

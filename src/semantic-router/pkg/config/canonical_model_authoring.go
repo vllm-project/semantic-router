@@ -2,9 +2,12 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelauthoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
@@ -16,7 +19,7 @@ func compileAuthoringModels(
 	compiler modelauthoring.ConnectionCompiler,
 ) ([]routingsnapshot.Model, map[string]routingsnapshot.Model, error) {
 	if len(models) != 0 && compiler == nil {
-		return nil, nil, fmt.Errorf("standalone Model connections require an injected Provider Integration compiler")
+		return nil, nil, fmt.Errorf("file-authored Model connections require an injected Provider Integration compiler")
 	}
 	compiled := make([]routingsnapshot.Model, 0, len(models))
 	byName := make(map[string]routingsnapshot.Model, len(models))
@@ -27,7 +30,10 @@ func compileAuthoringModels(
 		seenBackendIDs := make(map[string]struct{}, len(source.Connections))
 		catalogRevision := ""
 		for connectionIndex, connection := range source.Connections {
-			backendID := authoringBackendID(source.Name, connection)
+			backendID, backendIDErr := authoringBackendID(source.Name, connection)
+			if backendIDErr != nil {
+				return nil, nil, fmt.Errorf("models[%s].connections[%d]: %w", source.Name, connectionIndex, backendIDErr)
+			}
 			if _, duplicate := seenBackendIDs[backendID]; duplicate {
 				return nil, nil, fmt.Errorf("models[%s].connections[%d] duplicates another connection", source.Name, connectionIndex)
 			}
@@ -54,8 +60,9 @@ func compileAuthoringModels(
 			LoRAs: append([]string(nil), card.LoRAs...), QualityScore: card.QualityScore,
 			Modality: card.Modality, Tags: append([]string(nil), card.Tags...),
 			Execution: routingsnapshot.ModelExecution{
-				MaxRetries: source.Execution.MaxRetries, RequestTimeout: source.Execution.RequestTimeout,
-				StreamTimeout: source.Execution.StreamTimeout,
+				MaxRetries: source.Execution.MaxRetries, RetryOn: append([]string(nil), source.Execution.RetryOn...),
+				RequestTimeout: source.Execution.RequestTimeout,
+				StreamTimeout:  source.Execution.StreamTimeout,
 			},
 			Pricing: routingsnapshot.ModelPricing{
 				InputCostPerMillionTokens:      cloneStringPointer(source.RuntimePricing.InputCostPerMillionTokens),
@@ -71,11 +78,26 @@ func compileAuthoringModels(
 	return compiled, byName, nil
 }
 
-func authoringBackendID(modelName string, connection modelauthoring.Connection) string {
-	return stableRoutingResourceID(
-		"be", modelName, connection.Provider, connection.Interface, connection.Endpoint,
-		connection.Model, connection.Credential,
-	)
+func authoringBackendID(modelName string, connection modelauthoring.Connection) (string, error) {
+	identity, err := json.Marshal(struct {
+		Name             string
+		Provider         string
+		Interface        string
+		Endpoint         string
+		Model            string
+		Credential       string
+		ConnectionFields map[string]any
+		Transport        modelauthoring.TransportOverrides
+	}{
+		Name: connection.Name, Provider: connection.Provider, Interface: connection.Interface,
+		Endpoint: connection.Endpoint, Model: connection.Model, Credential: connection.Credential,
+		ConnectionFields: connection.ConnectionFields, Transport: connection.Transport,
+	})
+	if err != nil {
+		return "", fmt.Errorf("connection identity is not serializable: %w", err)
+	}
+	namespaced := append([]byte("vllm-sr/model-backend/v1\x00"+modelName+"\x00"), identity...)
+	return uuid.NewSHA1(uuid.NameSpaceOID, namespaced).String(), nil
 }
 
 func normalizedAuthoringModelCard(card AuthoringModelCard) AuthoringModelCard {

@@ -60,6 +60,7 @@ func compilePolicy(
 	for _, host := range hosts {
 		rulePorts := make([]uint16, len(ports))
 		for index, port := range ports {
+			// #nosec G115 -- canonicalPorts rejects values outside 1..65535.
 			rulePorts[index] = uint16(port)
 		}
 		rules = append(rules, backendegress.HostConfig{

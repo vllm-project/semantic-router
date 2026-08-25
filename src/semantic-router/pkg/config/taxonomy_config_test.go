@@ -269,7 +269,7 @@ decisions:
 	if err == nil {
 		t.Fatal("expected legacy category_kb signal to be rejected")
 	}
-	if !strings.Contains(err.Error(), "recipes[0].document.signals.category_kb is no longer supported") {
+	if !strings.Contains(err.Error(), "recipes[0].routing.signals.category_kb is no longer supported") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }

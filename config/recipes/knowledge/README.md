@@ -13,6 +13,7 @@ designed to work with an organization's own benchmarks and feedback.
 | --- | --- | --- |
 | Local | `local/small-7b` | Lower-cost default for domains with little measured uplift. |
 | Frontier | `cloud/frontier-72b` | Escalation lane for domains with meaningful measured uplift. |
+| Visual | `local/omni` | Dedicated image-understanding lane. |
 
 Clients use `vllm-sr/auto`. Both aliases are examples and should be rebound to
 the models represented by the deployment's own evidence.
@@ -25,6 +26,7 @@ Use this recipe when:
 - a small model handles many domains well enough;
 - frontier capacity should be reserved for domains with measurable benefit; or
 - operators need an explainable knowledge label behind each escalation.
+- image-bearing questions require a model with explicit visual capability.
 
 It is not suitable when the knowledge base is stale, unrelated to production
 traffic, or too small to support the routing decision.
@@ -33,6 +35,7 @@ traffic, or too small to support the routing decision.
 
 | Evidence | Route | Behavior |
 | --- | --- | --- |
+| Image content | `omni` | Send the request to the visual-language alias. |
 | High-uplift knowledge label | `escalate_72b` | Send the request to the frontier alias. |
 | Lower-uplift or unmatched label | `keep_7b` | Keep the request on the local alias. |
 | Known semantic boundary ambiguity | Deterministic guard | Correct a small set of terms that otherwise map to a neighboring label. |
@@ -42,7 +45,7 @@ knowledge-base score.
 
 ## Requirements
 
-- Reachable OpenAI-compatible endpoints for the local and frontier aliases.
+- Reachable OpenAI-compatible endpoints for the local, frontier, and visual aliases.
 - The versioned `mmlu_kb` asset referenced by [`config.yaml`](config.yaml).
 - Production benchmark or feedback data before using the policy for a
   materially different workload.

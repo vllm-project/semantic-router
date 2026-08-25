@@ -17,20 +17,57 @@ func (e *RedisEngine) Finalize(
 	ctx context.Context,
 	request FinalizationRequest,
 ) (FinalizationResult, error) {
-	if err := validateEnvelope(request.Partition, request.AdmissionID, request.AdmissionDigest); err != nil {
+	actual, concurrency, err := e.validateFinalizationRequest(request)
+	if err != nil {
 		return FinalizationResult{}, err
+	}
+	keys, args, err := e.buildFinalizationScriptInput(request, actual, concurrency)
+	if err != nil {
+		return FinalizationResult{}, err
+	}
+	value, finalizeErr := finalizeScript.Run(ctx, e.client, keys, args...).Result()
+	if finalizeErr != nil {
+		return FinalizationResult{}, mapScriptError(finalizeErr)
+	}
+	fields, finalizeErr := scriptStrings(value, 5)
+	if finalizeErr != nil {
+		return FinalizationResult{}, finalizeErr
+	}
+	if fields[0] != "finalized" {
+		return FinalizationResult{}, fmt.Errorf(
+			"%w: unexpected finalization state %q",
+			ErrRuntimeCorrupt,
+			fields[0],
+		)
+	}
+	serverTime, finalizeErr := parseMilliseconds(fields[2])
+	if finalizeErr != nil {
+		return FinalizationResult{}, finalizeErr
+	}
+	return FinalizationResult{
+		MutationResult: MutationResult{Idempotent: fields[1] == "1", ServerTime: serverTime},
+		EvidenceState:  fields[3],
+		StreamID:       fields[4],
+	}, nil
+}
+
+func (e *RedisEngine) validateFinalizationRequest(
+	request FinalizationRequest,
+) ([]compiledRule, []compiledRule, error) {
+	if err := validateEnvelope(request.Partition, request.AdmissionID, request.AdmissionDigest); err != nil {
+		return nil, nil, err
 	}
 	if err := validateDigest("finalization digest", request.FinalizationDigest); err != nil {
-		return FinalizationResult{}, err
+		return nil, nil, err
 	}
 	if request.DispatchCount == 0 {
-		return FinalizationResult{}, fmt.Errorf("%w: finalization requires at least one dispatch", ErrInvalidRequest)
+		return nil, nil, fmt.Errorf("%w: finalization requires at least one dispatch", ErrInvalidRequest)
 	}
 	if request.EvidenceRevision > maximumEvidenceRevision {
-		return FinalizationResult{}, fmt.Errorf("%w: attempt evidence revision is outside the supported range", ErrInvalidRequest)
+		return nil, nil, fmt.Errorf("%w: attempt evidence revision is outside the supported range", ErrInvalidRequest)
 	}
 	if request.Event == "" || len(request.Event) > maxUsageEventBytes || strings.ContainsRune(request.Event, '\x00') {
-		return FinalizationResult{}, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"%w: usage event must be non-empty, NUL-free, and at most %d bytes",
 			ErrInvalidRequest,
 			maxUsageEventBytes,
@@ -38,12 +75,12 @@ func (e *RedisEngine) Finalize(
 	}
 	rules, finalizeErr := compileRulesWithPrefix(e.keyPrefix, request.Partition, request.Rules)
 	if finalizeErr != nil {
-		return FinalizationResult{}, finalizeErr
+		return nil, nil, finalizeErr
 	}
 	actual := filterRules(rules, func(rule compiledRule) bool { return rule.binding.isResponseActual() })
 	concurrency := filterRules(rules, func(rule compiledRule) bool { return rule.binding.isConcurrency() })
 	if len(request.Evidence) != len(actual) {
-		return FinalizationResult{}, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"%w: evidence must classify every response_actual rule",
 			ErrInvalidRequest,
 		)
@@ -53,7 +90,7 @@ func (e *RedisEngine) Finalize(
 	for _, rule := range actual {
 		evidence, exists := request.Evidence[rule.identity]
 		if !exists {
-			return FinalizationResult{}, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"%w: missing evidence for %s",
 				ErrInvalidRequest,
 				rule.identity.String(),
@@ -62,7 +99,7 @@ func (e *RedisEngine) Finalize(
 		switch evidence.State {
 		case ActualEvidenceKnown:
 			if evidence.Reason != "" {
-				return FinalizationResult{}, fmt.Errorf(
+				return nil, nil, fmt.Errorf(
 					"%w: known evidence cannot carry an unknown reason",
 					ErrInvalidRequest,
 				)
@@ -70,22 +107,22 @@ func (e *RedisEngine) Finalize(
 		case ActualEvidenceUnknown:
 			unknownCount++
 			if !evidence.Amount.IsZero() {
-				return FinalizationResult{}, fmt.Errorf(
+				return nil, nil, fmt.Errorf(
 					"%w: unknown evidence cannot carry an amount",
 					ErrInvalidRequest,
 				)
 			}
 			if err := validateOpaque("unknown evidence reason", evidence.Reason); err != nil {
-				return FinalizationResult{}, err
+				return nil, nil, err
 			}
 			if len(evidence.Reason) > 128 {
-				return FinalizationResult{}, fmt.Errorf(
+				return nil, nil, fmt.Errorf(
 					"%w: unknown evidence reason is too long",
 					ErrInvalidRequest,
 				)
 			}
 		default:
-			return FinalizationResult{}, fmt.Errorf(
+			return nil, nil, fmt.Errorf(
 				"%w: invalid actual evidence state %q",
 				ErrInvalidRequest,
 				evidence.State,
@@ -94,20 +131,26 @@ func (e *RedisEngine) Finalize(
 	}
 	for identity := range request.Evidence {
 		if err := identity.Validate(); err != nil {
-			return FinalizationResult{}, fmt.Errorf("%w: evidence counter: %w", ErrInvalidRequest, err)
+			return nil, nil, fmt.Errorf("%w: evidence counter: %w", ErrInvalidRequest, err)
 		}
 	}
 	if unknownCount > 0 {
 		if err := validateOpaque("fence ID", request.FenceID); err != nil {
-			return FinalizationResult{}, err
+			return nil, nil, err
 		}
 	} else if request.FenceID != "" {
-		return FinalizationResult{}, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"%w: fence ID is valid only when some usage is unknown",
 			ErrInvalidRequest,
 		)
 	}
+	return actual, concurrency, nil
+}
 
+func (e *RedisEngine) buildFinalizationScriptInput(
+	request FinalizationRequest,
+	actual, concurrency []compiledRule,
+) ([]string, []any, error) {
 	partition, _ := newPartitionKeysWithPrefix(e.keyPrefix, request.Partition)
 	fenceMarkerKey := partition.terminal(request.AdmissionID)
 	if request.FenceID != "" {
@@ -171,33 +214,9 @@ func (e *RedisEngine) Finalize(
 	// it in the same atomic operation as counter settlement and XADD.
 	keys = append(keys, partition.attempts(request.AdmissionID))
 	if err := validateRuntimeKeys(keys, partition.tag, e.keyPrefix); err != nil {
-		return FinalizationResult{}, err
+		return nil, nil, err
 	}
-
-	value, finalizeErr := finalizeScript.Run(ctx, e.client, keys, args...).Result()
-	if finalizeErr != nil {
-		return FinalizationResult{}, mapScriptError(finalizeErr)
-	}
-	fields, finalizeErr := scriptStrings(value, 5)
-	if finalizeErr != nil {
-		return FinalizationResult{}, finalizeErr
-	}
-	if fields[0] != "finalized" {
-		return FinalizationResult{}, fmt.Errorf(
-			"%w: unexpected finalization state %q",
-			ErrRuntimeCorrupt,
-			fields[0],
-		)
-	}
-	serverTime, finalizeErr := parseMilliseconds(fields[2])
-	if finalizeErr != nil {
-		return FinalizationResult{}, finalizeErr
-	}
-	return FinalizationResult{
-		MutationResult: MutationResult{Idempotent: fields[1] == "1", ServerTime: serverTime},
-		EvidenceState:  fields[3],
-		StreamID:       fields[4],
-	}, nil
+	return keys, args, nil
 }
 
 func unknownEnforceFenceKeys(

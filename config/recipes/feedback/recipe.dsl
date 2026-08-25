@@ -6,13 +6,18 @@ MODEL google/gemini-3.1-pro {
   capabilities: ["answer_repair", "debugging", "reasoning", "text"]
 }
 
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
+}
+
 MODEL openai/gpt5.4 {
-  capabilities: ["evidence_synthesis", "high_stakes", "text", "verified_reasoning"]
+  capabilities: ["verified_reasoning", "evidence_synthesis", "high_stakes", "text"]
 }
 
 MODEL qwen/qwen3.5-rocm {
   capabilities: ["cheap_followup", "concise_rewrite", "general_chat", "text"]
-  reasoning: { type: "chat_template_kwargs", efforts: ["medium"] }
+  reasoning: { type: "chat_template_kwargs" }
 }
 
 # =============================================================================
@@ -30,6 +35,7 @@ ENTRYPOINT {
     { decision: "feedback_persistent_code_recovery", models: [{ model: "openai/gpt5.4", weight: "1" }] },
     { decision: "feedback_persistent_recovery", models: [{ model: "openai/gpt5.4", weight: "1" }] },
     { decision: "feedback_verified_recovery", models: [{ model: "openai/gpt5.4", weight: "1" }] },
+    { decision: "omni", models: [{ model: "local/omni", weight: "1" }] },
   ]
 }
 
@@ -117,6 +123,11 @@ RECIPE default (description = "Default routing recipe.") {
     max_tokens: "256K"
   }
 
+  SIGNAL conversation feedback_has_images {
+    description: "Request contains at least one image content part."
+    feature: { source: { type: "image_content" }, type: "exists" }
+  }
+
   PROJECTION score feedback_recovery_pressure {
     method: "weighted_sum"
     inputs: [{ type: "user_feedback", weight: 0.36, name: "wrong_answer" }, { type: "reask", weight: 0.24, name: "likely_dissatisfied", value_source: "confidence" }, { type: "reask", weight: 0.46, name: "persistently_dissatisfied", value_source: "confidence" }, { type: "keyword", weight: 0.18, name: "frustration_feedback_markers", value_source: "confidence" }, { type: "keyword", weight: 0.3, name: "code_error_markers", value_source: "confidence" }, { type: "fact_check", weight: 0.18, name: "needs_fact_check" }, { type: "domain", weight: 0.16, name: "health" }, { type: "domain", weight: 0.16, name: "law" }, { type: "context", weight: 0.06, name: "long_context" }]
@@ -145,20 +156,19 @@ RECIPE default (description = "Default routing recipe.") {
 
   PLUGIN header_mutation header_mutation {}
 
-  PLUGIN system_prompt system_prompt {}
-
   # =============================================================================
   # ROUTES
   # =============================================================================
 
+  ROUTE omni (description = "Understand image-bearing follow-ups with the dedicated visual-language model.") {
+    PRIORITY 260
+    WHEN conversation("feedback_has_images")
+    ALGORITHM static
+  }
+
   ROUTE feedback_verified_recovery (description = "Premium recovery lane for explicit or persistent dissatisfaction on evidence-sensitive follow-ups.") {
     PRIORITY 240
     WHEN (projection("feedback_verified_escalate") OR reask("persistently_dissatisfied") OR user_feedback("wrong_answer") OR keyword("frustration_feedback_markers")) AND (projection("feedback_needs_evidence") OR keyword("verification_markers") OR fact_check("needs_fact_check")) AND NOT (keyword("code_error_markers") OR domain("computer science"))
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "You are handling a dissatisfied follow-up on a high-stakes or verification-sensitive question. Briefly acknowledge the miss, correct the answer directly, state uncertainty when needed, and cite evidence when the user asks for verification."
-      mode: "insert"
-    }
     PLUGIN header_mutation {
       add: [{ name: "X-Feedback-Lane", value: "verified-recovery" }]
       update: [{ name: "X-Route-Source", value: "feedback-recipe" }]
@@ -168,11 +178,6 @@ RECIPE default (description = "Default routing recipe.") {
   ROUTE feedback_persistent_code_recovery (description = "Premium code-repair lane for repeated same-question retries that already failed on a cheaper recovery pass.") {
     PRIORITY 230
     WHEN (keyword("code_error_markers") OR domain("computer science")) AND reask("persistently_dissatisfied")
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "The user has repeated the same failing coding question multiple times. Rebuild the diagnosis from first principles, identify the faulty assumption in the earlier answer, and return a corrected implementation plus a concrete validation step."
-      mode: "insert"
-    }
     PLUGIN header_mutation {
       add: [{ name: "X-Feedback-Lane", value: "persistent-code-recovery" }]
       update: [{ name: "X-Route-Source", value: "feedback-recipe" }]
@@ -182,11 +187,6 @@ RECIPE default (description = "Default routing recipe.") {
   ROUTE feedback_code_recovery (description = "Repair lane for code follow-ups that include execution failures or repeated dissatisfaction.") {
     PRIORITY 220
     WHEN (keyword("code_error_markers") OR domain("computer science")) AND (user_feedback("wrong_answer") OR reask("likely_dissatisfied") OR projection("feedback_retry") OR projection("feedback_escalate") OR keyword("frustration_feedback_markers")) AND NOT reask("persistently_dissatisfied")
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "The previous answer likely failed in execution. Diagnose the failing assumption, explain the bug briefly, and return corrected code plus the smallest useful validation step."
-      mode: "insert"
-    }
     PLUGIN header_mutation {
       add: [{ name: "X-Feedback-Lane", value: "code-recovery" }]
       update: [{ name: "X-Route-Source", value: "feedback-recipe" }]
@@ -196,11 +196,6 @@ RECIPE default (description = "Default routing recipe.") {
   ROUTE feedback_persistent_recovery (description = "Premium general recovery lane for repeated same-question retries that have already failed on a cheaper recovery pass.") {
     PRIORITY 210
     WHEN reask("persistently_dissatisfied") AND NOT (projection("feedback_needs_evidence") OR keyword("verification_markers") OR fact_check("needs_fact_check") OR keyword("code_error_markers") OR domain("computer science"))
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "The user has re-asked essentially the same question multiple times. Treat this as a hard recovery task: do not paraphrase the old answer, rebuild the answer from first principles, and make the improvement obvious."
-      mode: "insert"
-    }
     PLUGIN header_mutation {
       add: [{ name: "X-Feedback-Lane", value: "persistent-recovery" }]
       update: [{ name: "X-Route-Source", value: "feedback-recipe" }]
@@ -210,11 +205,6 @@ RECIPE default (description = "Default routing recipe.") {
   ROUTE feedback_general_recovery (description = "General recovery lane for repeated dissatisfaction that is neither verification-heavy nor code-specific.") {
     PRIORITY 200
     WHEN (projection("feedback_retry") OR projection("feedback_escalate") OR reask("likely_dissatisfied") OR keyword("frustration_feedback_markers")) AND NOT (reask("persistently_dissatisfied") OR projection("feedback_needs_evidence") OR keyword("verification_markers") OR fact_check("needs_fact_check") OR keyword("code_error_markers") OR domain("computer science"))
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "The user is likely dissatisfied with the previous answer. Do not repeat the earlier wording. Answer the same question again with a cleaner structure, tighter reasoning, and one concrete improvement over the last reply."
-      mode: "insert"
-    }
     PLUGIN header_mutation {
       add: [{ name: "X-Feedback-Lane", value: "general-recovery" }]
       update: [{ name: "X-Route-Source", value: "feedback-recipe" }]
@@ -224,11 +214,6 @@ RECIPE default (description = "Default routing recipe.") {
   ROUTE feedback_need_clarification (description = "Keep explicit clarification follow-ups on the cheap lane unless dissatisfaction has clearly escalated.") {
     PRIORITY 180
     WHEN (user_feedback("need_clarification") OR keyword("clarification_feedback_markers")) AND (context("short_context") OR context("medium_context")) AND NOT (reask("persistently_dissatisfied") OR projection("feedback_verified_escalate") OR user_feedback("wrong_answer") OR keyword("verification_markers") OR keyword("code_error_markers"))
-    PLUGIN system_prompt {
-      enabled: true
-      system_prompt: "The user wants a clearer restatement, not a brand-new policy. Rewrite the answer simply, keep it concise, and give one small example when it helps."
-      mode: "insert"
-    }
     PLUGIN response_cache {
       enabled: true
       semantic: { similarity_threshold: 0.86 }

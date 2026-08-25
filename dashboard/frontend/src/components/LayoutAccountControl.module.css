@@ -113,13 +113,7 @@
 }
 
 .dialog::before {
-  position: absolute;
-  top: 0;
-  right: 1.25rem;
-  width: 2.5rem;
-  height: 2px;
-  background: var(--brand-amd);
-  content: '';
+  display: none;
 }
 
 .dialogHeader {
@@ -340,21 +334,27 @@
   }
 }
 
-@media (max-width: 520px) {
+@media (max-width: 1023px) {
   .overlay {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
     background: rgba(0, 0, 0, 0.48);
+    backdrop-filter: blur(18px);
   }
 
   .dialog,
   .dialogHeader,
   .dialogRail {
+    position: relative;
     top: auto;
-    right: 0.5rem;
-    bottom: 0.5rem;
-    left: 0.5rem;
-    width: auto;
+    right: auto;
+    bottom: auto;
+    left: auto;
+    width: min(390px, 100%);
     max-height: calc(100dvh - 1rem);
-    transform-origin: bottom center;
+    transform-origin: center;
   }
 }
 

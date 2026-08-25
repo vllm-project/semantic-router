@@ -31,7 +31,7 @@ func (r *OpenAIRouter) handleRequestBody(
 	ctx *RequestContext,
 ) (response *ext_proc.ProcessingResponse, err error) {
 	defer func() {
-		if !r.managedInferenceAccessEnabled() || ctx == nil || ctx.InferenceAccess == nil {
+		if !r.nativeAccessEnabled() || ctx == nil || ctx.InferenceAccess == nil {
 			return
 		}
 		if err != nil {

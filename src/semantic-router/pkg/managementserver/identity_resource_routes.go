@@ -29,32 +29,68 @@ const (
 	identityCommandTTL = 24 * time.Hour
 )
 
-type IdentityResourceService interface {
+type IdentityResourceLifecycle interface {
 	Ready(context.Context) error
+}
+
+type PrincipalResourceService interface {
 	GetPrincipal(context.Context, string) (managementidentity.Principal, error)
 	ListPrincipals(context.Context, managementidentity.ListRequest) (managementidentity.PrincipalPage, error)
 	CreatePrincipal(context.Context, managementidentity.CreatePrincipal) (managementidentity.MutationResult, error)
 	UpdatePrincipal(context.Context, managementidentity.UpdatePrincipal) (managementidentity.MutationResult, error)
 	DeletePrincipal(context.Context, string, uint64, managementidentity.MutationActor) (managementidentity.MutationResult, error)
+}
+
+type RoleResourceService interface {
 	GetRole(context.Context, string) (managementidentity.Role, error)
 	ListRoles(context.Context, string, managementidentity.ListRequest) (managementidentity.RolePage, error)
 	CreateRole(context.Context, managementidentity.CreateRole) (managementidentity.MutationResult, error)
 	UpdateRole(context.Context, managementidentity.UpdateRole) (managementidentity.MutationResult, error)
 	DeleteRole(context.Context, string, uint64, managementidentity.MutationActor) (managementidentity.MutationResult, error)
+}
+
+type RoleBindingResourceService interface {
 	GetRoleBinding(context.Context, string) (managementidentity.RoleBinding, error)
 	ListRoleBindings(context.Context, string, managementidentity.ListRequest) (managementidentity.RoleBindingPage, error)
 	CreateRoleBinding(context.Context, managementidentity.CreateRoleBinding) (managementidentity.MutationResult, error)
 	UpdateRoleBinding(context.Context, managementidentity.UpdateRoleBinding) (managementidentity.MutationResult, error)
 	DeleteRoleBinding(context.Context, string, uint64, managementidentity.MutationActor) (managementidentity.MutationResult, error)
+}
+
+type PrincipalDirectoryService interface {
 	GetPrincipalUserLink(context.Context, string, string) (managementidentity.PrincipalUserLink, error)
 	GetPrincipalDirectoryEntry(context.Context, string, string) (managementidentity.PrincipalDirectoryEntry, error)
 	ListPrincipalDirectory(context.Context, managementidentity.PrincipalDirectoryRequest) (managementidentity.PrincipalDirectoryPage, error)
 	ListPrincipalUserLinks(context.Context, managementidentity.PrincipalUserLinkListRequest) (managementidentity.PrincipalUserLinkPage, error)
 	ListPrincipalLinks(context.Context, string, managementidentity.ListRequest) (managementidentity.PrincipalUserLinkPage, error)
+}
+
+type PrincipalLinkMutationService interface {
 	PutPrincipalUserLink(context.Context, managementidentity.LinkMutation) (managementidentity.MutationResult, error)
 	DeletePrincipalUserLink(context.Context, managementidentity.LinkMutation) (managementidentity.MutationResult, error)
+}
+
+type ManagementSessionPolicyService interface {
 	LoadSessionPolicy(context.Context) (managementauth.SessionPolicy, error)
 	UpdateSessionPolicy(context.Context, managementauth.SessionPolicy, uint64, managementidentity.MutationActor) (managementidentity.MutationResult, error)
+}
+
+type IdentityCoreResourceService interface {
+	PrincipalResourceService
+	RoleResourceService
+	RoleBindingResourceService
+}
+
+type IdentityDirectoryResourceService interface {
+	PrincipalDirectoryService
+	PrincipalLinkMutationService
+	ManagementSessionPolicyService
+}
+
+type IdentityResourceService interface {
+	IdentityResourceLifecycle
+	IdentityCoreResourceService
+	IdentityDirectoryResourceService
 }
 
 type IdentityResourceRoutesOptions struct {
@@ -723,45 +759,6 @@ func scopeFromDTO(value managementapi.ManagementScope) (accesscontrol.Scope, err
 	default:
 		return accesscontrol.Scope{}, errors.New("invalid scope")
 	}
-}
-
-func policyDTO(policy managementauth.SessionPolicy) managementapi.ManagementSessionPolicy {
-	requirements := map[string][]managementapi.AuthenticationRequirement{}
-	for action, requirement := range policy.ActionRequirements {
-		values := make([]managementapi.AuthenticationRequirement, len(requirement.AnyOf))
-		for i, branch := range requirement.AnyOf {
-			value := managementapi.AuthenticationRequirement{Kind: string(branch.Kind)}
-			if branch.Human != nil {
-				value.Human = &managementapi.HumanRequirement{MinimumAAL: branch.Human.MinimumAAL, AcceptedAMR: branch.Human.AcceptedAMR, MaxAuthenticationAgeSeconds: branch.Human.MaxAuthenticationAgeSeconds}
-			}
-			if branch.Workload != nil {
-				value.Workload = &managementapi.WorkloadRequirement{MinimumWorkloadClass: branch.Workload.MinimumWorkloadClass, MaxSourceAgeSeconds: branch.Workload.MaxSourceAgeSeconds}
-			}
-			values[i] = value
-		}
-		requirements[action] = values
-	}
-	return managementapi.ManagementSessionPolicy{AccessTokenTTLSeconds: int64(policy.AccessTokenTTL / time.Second), SessionTTLSeconds: int64(policy.SessionTTL / time.Second), MaxActiveSessions: policy.MaxActiveSessions, ActionRequirements: requirements, SeedVersion: policy.SeedVersion, Revision: policy.Revision, UpdatedAt: policy.UpdatedAt}
-}
-
-func policyFromDTO(body managementapi.ManagementSessionPolicyPatchRequest, revision uint64, now time.Time) (managementauth.SessionPolicy, error) {
-	requirements := map[string]managementauth.ActionRequirement{}
-	for action, values := range body.ActionRequirements {
-		target := managementauth.ActionRequirement{AnyOf: make([]managementauth.AuthenticationRequirement, len(values))}
-		for i, value := range values {
-			branch := managementauth.AuthenticationRequirement{Kind: managementauth.AuthenticationRequirementKind(value.Kind)}
-			if value.Human != nil {
-				branch.Human = &managementauth.HumanRequirement{MinimumAAL: value.Human.MinimumAAL, AcceptedAMR: value.Human.AcceptedAMR, MaxAuthenticationAgeSeconds: value.Human.MaxAuthenticationAgeSeconds}
-			}
-			if value.Workload != nil {
-				branch.Workload = &managementauth.WorkloadRequirement{MinimumWorkloadClass: value.Workload.MinimumWorkloadClass, MaxSourceAgeSeconds: value.Workload.MaxSourceAgeSeconds}
-			}
-			target.AnyOf[i] = branch
-		}
-		requirements[action] = target
-	}
-	policy := managementauth.SessionPolicy{AccessTokenTTL: time.Duration(body.AccessTokenTTLSeconds) * time.Second, SessionTTL: time.Duration(body.SessionTTLSeconds) * time.Second, MaxActiveSessions: body.MaxActiveSessions, ActionRequirements: requirements, SeedVersion: managementauth.SupportedSessionPolicySeedVersion, Revision: revision, UpdatedAt: now}
-	return policy, policy.Validate()
 }
 
 var _ RouteRegistrar = (*IdentityResourceRoutes)(nil)

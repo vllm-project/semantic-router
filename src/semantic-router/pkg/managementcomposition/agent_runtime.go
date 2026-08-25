@@ -16,13 +16,13 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentworkflow"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendegress"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement"
-	routingmanaged "github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement/managed"
+	routingapplication "github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement/application"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/delegationmanagement"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managedruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization"
 	authorizationpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauthorization/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementserver"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 )
 
 const (
@@ -61,14 +61,14 @@ func (composition *agentRuntimeComposition) Close() error {
 // Envoy so access, quota, usage, and logs cannot be bypassed.
 func composeAgentRuntime(
 	ctx context.Context,
-	dependencies managedruntime.ManagementDependencies,
+	dependencies routingruntime.ManagementDependencies,
 	commandCodec *managementcommand.Codec,
 	authorityStore *authorizationpostgres.Store,
 	authorization managementauthorization.Runtime,
 	namespaces managementserver.NamespaceResolver,
 	sessions managementserver.SessionAuthenticator,
 	authorizer managementserver.Authorizer,
-	routing *routingmanaged.Application,
+	routing *routingapplication.Application,
 	distribution routingmanagement.BuiltInRecipeDistribution,
 	publicInferenceEndpoint string,
 	keyPrefix string,
@@ -80,157 +80,215 @@ func composeAgentRuntime(
 		dependencies.ProtocolCodecs == nil || publicInferenceEndpoint == "" || keyPrefix == "" {
 		return nil, errors.New("agent production composition dependencies are incomplete")
 	}
-	store, composeAgentRuntimeErr := agentpostgres.New(dependencies.Database, commandCodec)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent PostgreSQL store: %w", composeAgentRuntimeErr)
+	builder := &agentRuntimeBuilder{
+		dependencies: dependencies, commandCodec: commandCodec, authorityStore: authorityStore,
+		authorization: authorization, namespaces: namespaces, sessions: sessions,
+		authorizer: authorizer, routing: routing, distribution: distribution,
+		publicInferenceEndpoint: publicInferenceEndpoint, keyPrefix: keyPrefix, now: now,
+		composition: &agentRuntimeComposition{},
 	}
-	secrets, composeAgentRuntimeErr := agentruntime.NewSecretCodec(
-		dependencies.Keyrings.ControlPlane.AgentSecret.Symmetric(),
-	)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent secret codec: %w", composeAgentRuntimeErr)
-	}
-	composition := &agentRuntimeComposition{secrets: secrets}
 	defer func() {
 		if resultErr != nil {
-			_ = composition.Close()
+			_ = builder.composition.Close()
 		}
 	}()
-
-	vault, composeAgentRuntimeErr := agentruntime.NewCredentialVault(store, secrets, now)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Tool credential vault: %w", composeAgentRuntimeErr)
+	if err := builder.composeToolsAndAuthority(); err != nil {
+		return nil, err
 	}
-	remoteTools, composeAgentRuntimeErr := agenttoolsource.NewClientFactory(agenttoolsource.ClientFactoryOptions{
-		OperatorGuard: backendegress.Guard{Policy: dependencies.EgressPolicy},
+	if err := builder.composeManagement(ctx); err != nil {
+		return nil, err
+	}
+	if err := builder.composeExecutionAndRoutes(); err != nil {
+		return nil, err
+	}
+	return builder.composition, nil
+}
+
+type agentRuntimeBuilder struct {
+	dependencies            routingruntime.ManagementDependencies
+	commandCodec            *managementcommand.Codec
+	authorityStore          *authorizationpostgres.Store
+	authorization           managementauthorization.Runtime
+	namespaces              managementserver.NamespaceResolver
+	sessions                managementserver.SessionAuthenticator
+	authorizer              managementserver.Authorizer
+	routing                 *routingapplication.Application
+	distribution            routingmanagement.BuiltInRecipeDistribution
+	publicInferenceEndpoint string
+	keyPrefix               string
+	now                     func() time.Time
+	composition             *agentRuntimeComposition
+	store                   *agentpostgres.Store
+	remoteTools             *agenttoolsource.ClientFactory
+	sessionAuthority        *accesspostgres.AgentSessionAuthority
+	registries              *agentruntime.RegistryArchive
+	defaults                *agentpostgres.DefaultReconciler
+}
+
+func (builder *agentRuntimeBuilder) composeToolsAndAuthority() error {
+	var err error
+	builder.store, err = agentpostgres.New(builder.dependencies.Database, builder.commandCodec)
+	if err != nil {
+		return fmt.Errorf("compose Agent PostgreSQL store: %w", err)
+	}
+	builder.composition.secrets, err = agentruntime.NewSecretCodec(
+		builder.dependencies.Keyrings.Routing.AgentSecret.Symmetric(),
+	)
+	if err != nil {
+		return fmt.Errorf("compose Agent secret codec: %w", err)
+	}
+	vault, err := agentruntime.NewCredentialVault(builder.store, builder.composition.secrets, builder.now)
+	if err != nil {
+		return fmt.Errorf("compose Agent Tool credential vault: %w", err)
+	}
+	builder.remoteTools, err = agenttoolsource.NewClientFactory(agenttoolsource.ClientFactoryOptions{
+		OperatorGuard: backendegress.Guard{Policy: builder.dependencies.EgressPolicy},
 		Credentials:   vault,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent remote Tool Source client: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent remote Tool Source client: %w", err)
 	}
-	catalog, composeAgentRuntimeErr := agentnative.NewConfigCatalog()
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent component catalog: %w", composeAgentRuntimeErr)
+	catalog, err := agentnative.NewConfigCatalog()
+	if err != nil {
+		return fmt.Errorf("compose Agent component catalog: %w", err)
 	}
-	examples, composeAgentRuntimeErr := agentnative.NewDistributionExamples(distribution)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Recipe examples: %w", composeAgentRuntimeErr)
+	examples, err := agentnative.NewDistributionExamples(builder.distribution)
+	if err != nil {
+		return fmt.Errorf("compose Agent Recipe examples: %w", err)
 	}
-	nativeTools, composeAgentRuntimeErr := agentnative.New(agentnative.Options{
-		Store: store, Routing: routing.Service, Scopes: authorization,
+	nativeTools, err := agentnative.New(agentnative.Options{
+		Store: builder.store, Routing: builder.routing.Service, Scopes: builder.authorization,
 		Catalog: catalog, Examples: examples,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Router-native Agent read tools: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Router-native Agent read tools: %w", err)
 	}
-	workflowTools, composeAgentRuntimeErr := agentworkflow.New(agentworkflow.Options{
-		Store: store, Routing: routing.Service, Authorization: authorization,
-		Commands: commandCodec, Now: now,
+	workflowTools, err := agentworkflow.New(agentworkflow.Options{
+		Store: builder.store, Routing: builder.routing.Service, Authorization: builder.authorization,
+		Commands: builder.commandCodec, Now: builder.now,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Router-native Agent workflow tools: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Router-native Agent workflow tools: %w", err)
 	}
-	allNativeTools, composeAgentRuntimeErr := agentruntime.NewCompositeNativeToolProvider(
+	allNativeTools, err := agentruntime.NewCompositeNativeToolProvider(
 		[]agentruntime.NativeToolProvider{nativeTools, workflowTools},
 		agentmanagement.BuiltinBuilderToolNames(),
 	)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose complete Router-native Agent Tool set: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose complete Router-native Agent Tool set: %w", err)
 	}
-	waiter, composeAgentRuntimeErr := delegationmanagement.NewRedisPublicationWaiter(dependencies.Redis, keyPrefix)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent delegated inference publication waiter: %w", composeAgentRuntimeErr)
+	return builder.composeAuthorityAndRegistry(allNativeTools)
+}
+
+func (builder *agentRuntimeBuilder) composeAuthorityAndRegistry(
+	nativeTools *agentruntime.CompositeNativeToolProvider,
+) error {
+	waiter, err := delegationmanagement.NewRedisPublicationWaiter(
+		builder.dependencies.Redis, builder.keyPrefix,
+	)
+	if err != nil {
+		return fmt.Errorf("compose Agent delegated inference publication waiter: %w", err)
 	}
-	sessionAuthority, composeAgentRuntimeErr := accesspostgres.NewAgentSessionAuthority(
+	builder.sessionAuthority, err = accesspostgres.NewAgentSessionAuthority(
 		accesspostgres.AgentSessionAuthorityOptions{
-			Store: dependencies.AccessStore, Management: authorityStore,
-			Peppers: dependencies.Keyrings.DelegationPeppers, Secrets: secrets,
-			Waiter: waiter, Audience: dependencies.DelegationAudience, Now: now,
+			Store: builder.dependencies.AccessStore, Management: builder.authorityStore,
+			Peppers: builder.dependencies.Keyrings.DelegationPeppers,
+			Secrets: builder.composition.secrets, Waiter: waiter,
+			Audience: builder.dependencies.DelegationAudience, Now: builder.now,
 		},
 	)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent session authority: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent session authority: %w", err)
 	}
-	toolAuthorizer, composeAgentRuntimeErr := agentruntime.NewLiveToolAuthorizer(agentruntime.LiveToolAuthorizerOptions{
-		Store: store, Sessions: sessionAuthority, Authority: authorityStore,
+	toolAuthorizer, err := agentruntime.NewLiveToolAuthorizer(agentruntime.LiveToolAuthorizerOptions{
+		Store: builder.store, Sessions: builder.sessionAuthority, Authority: builder.authorityStore,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Tool authorization: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent Tool authorization: %w", err)
 	}
-	assembler, composeAgentRuntimeErr := agentruntime.NewRegistryAssembler(agentruntime.RegistryAssemblerOptions{
-		Store: store, Native: allNativeTools, Remote: remoteTools,
+	assembler, err := agentruntime.NewRegistryAssembler(agentruntime.RegistryAssemblerOptions{
+		Store: builder.store, Native: nativeTools, Remote: builder.remoteTools,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Tool Registry assembler: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent Tool Registry assembler: %w", err)
 	}
-	registries, composeAgentRuntimeErr := agentruntime.NewRegistryArchive(agentruntime.RegistryArchiveOptions{
-		Store: store, Assembler: assembler, Authorizer: toolAuthorizer,
-		Retention: agentRegistryRetention, Now: now,
+	builder.registries, err = agentruntime.NewRegistryArchive(agentruntime.RegistryArchiveOptions{
+		Store: builder.store, Assembler: assembler, Authorizer: toolAuthorizer,
+		Retention: agentRegistryRetention, Now: builder.now,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Tool Registry archive: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent Tool Registry archive: %w", err)
 	}
-	definitions, composeAgentRuntimeErr := agentmanagement.NewRegistryDefinitionValidator(store)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent definition validator: %w", composeAgentRuntimeErr)
+	return nil
+}
+
+func (builder *agentRuntimeBuilder) composeManagement(ctx context.Context) error {
+	definitions, err := agentmanagement.NewRegistryDefinitionValidator(builder.store)
+	if err != nil {
+		return fmt.Errorf("compose Agent definition validator: %w", err)
 	}
-	service, composeAgentRuntimeErr := agentmanagement.NewService(agentmanagement.ServiceOptions{
-		Store: store, SessionAuthority: sessionAuthority, TargetVisibility: sessionAuthority,
-		Definitions: definitions, SourcePolicies: agenttoolsource.PolicyCompiler{},
-		ToolSources: remoteTools, Registries: registries, SecretCodec: secrets,
-		CommandCodec:  commandCodec,
-		CursorKeyring: dependencies.Keyrings.ControlPlane.ManagementCursor.Symmetric(),
-		SessionTTL:    agentSessionTTL, Now: now,
+	service, err := agentmanagement.NewService(agentmanagement.ServiceOptions{
+		Store: builder.store, SessionAuthority: builder.sessionAuthority,
+		TargetVisibility: builder.sessionAuthority, Definitions: definitions,
+		SourcePolicies: agenttoolsource.PolicyCompiler{}, ToolSources: builder.remoteTools,
+		Registries: builder.registries, SecretCodec: builder.composition.secrets,
+		CommandCodec:  builder.commandCodec,
+		CursorKeyring: builder.dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
+		SessionTTL:    agentSessionTTL, Now: builder.now,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Management service: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent Management service: %w", err)
 	}
-	composition.service = service
-	defaults, composeAgentRuntimeErr := agentpostgres.NewDefaultReconciler(store, 0, now)
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent defaults: %w", composeAgentRuntimeErr)
+	builder.composition.service = service
+	builder.defaults, err = agentpostgres.NewDefaultReconciler(builder.store, 0, builder.now)
+	if err != nil {
+		return fmt.Errorf("compose Agent defaults: %w", err)
 	}
-	// Defaults are a listener startup gate, not eventual client-side setup.
-	if err := defaults.Reconcile(ctx); err != nil {
-		return nil, fmt.Errorf("install default Agent Profiles and Skills: %w", err)
+	if err := builder.defaults.Reconcile(ctx); err != nil {
+		return fmt.Errorf("install default Agent Profiles and Skills: %w", err)
 	}
-	inference, composeAgentRuntimeErr := agentruntime.NewHTTPPublicInferenceClient(agentruntime.HTTPPublicInferenceOptions{
-		Endpoint: publicInferenceEndpoint, Codecs: dependencies.ProtocolCodecs,
+	return nil
+}
+
+func (builder *agentRuntimeBuilder) composeExecutionAndRoutes() error {
+	inference, err := agentruntime.NewHTTPPublicInferenceClient(agentruntime.HTTPPublicInferenceOptions{
+		Endpoint: builder.publicInferenceEndpoint, Codecs: builder.dependencies.ProtocolCodecs,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent public inference client: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent public inference client: %w", err)
 	}
-	liveEvents, composeAgentRuntimeErr := agentruntime.NewRedisLiveEventBroker(agentruntime.RedisLiveEventBrokerOptions{
-		Client: dependencies.Redis, KeyPrefix: keyPrefix,
+	liveEvents, err := agentruntime.NewRedisLiveEventBroker(agentruntime.RedisLiveEventBrokerOptions{
+		Client: builder.dependencies.Redis, KeyPrefix: builder.keyPrefix,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent live event broker: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent live event broker: %w", err)
 	}
-	composition.liveEvents = liveEvents
-	worker, composeAgentRuntimeErr := agentruntime.NewWorker(agentruntime.WorkerOptions{
-		Store: store, Authority: sessionAuthority, Registries: registries,
-		Inference: inference, LiveEvents: liveEvents, WorkerID: dependencies.ReplicaID,
-		Concurrency: agentWorkerConcurrency, Now: now,
+	builder.composition.liveEvents = liveEvents
+	worker, err := agentruntime.NewWorker(agentruntime.WorkerOptions{
+		Store: builder.store, Authority: builder.sessionAuthority, Registries: builder.registries,
+		Inference: inference, LiveEvents: liveEvents, WorkerID: builder.dependencies.ReplicaID,
+		Concurrency: agentWorkerConcurrency, Now: builder.now,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent turn worker: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent turn worker: %w", err)
 	}
-	publications, composeAgentRuntimeErr := agentpublication.New(agentpublication.Options{
-		Store: store, Publisher: routing.Service, Commands: commandCodec, Now: now,
+	publications, err := agentpublication.New(agentpublication.Options{
+		Store: builder.store, Publisher: builder.routing.Service,
+		Commands: builder.commandCodec, Now: builder.now,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent publication committer: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent publication committer: %w", err)
 	}
-	routes, composeAgentRuntimeErr := managementserver.NewAgentRoutes(managementserver.AgentRoutesOptions{
-		Service: service, Defaults: defaults, Publications: publications,
-		LiveEvents: liveEvents,
-		Namespaces: namespaces, Sessions: sessions, Authorization: authorizer,
-		Scopes: authorization, Now: now,
+	routes, err := managementserver.NewAgentRoutes(managementserver.AgentRoutesOptions{
+		Service: builder.composition.service, Defaults: builder.defaults,
+		Publications: publications, LiveEvents: liveEvents,
+		Namespaces: builder.namespaces, Sessions: builder.sessions,
+		Authorization: builder.authorizer, Scopes: builder.authorization, Now: builder.now,
 	})
-	if composeAgentRuntimeErr != nil {
-		return nil, fmt.Errorf("compose Agent Management routes: %w", composeAgentRuntimeErr)
+	if err != nil {
+		return fmt.Errorf("compose Agent Management routes: %w", err)
 	}
-	composition.routes = routes
-	composition.workers = []backgroundWorker{defaults, worker}
-	return composition, nil
+	builder.composition.routes = routes
+	builder.composition.workers = []backgroundWorker{builder.defaults, worker}
+	return nil
 }

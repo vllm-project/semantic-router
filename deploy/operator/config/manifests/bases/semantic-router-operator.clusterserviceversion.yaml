@@ -65,7 +65,7 @@ spec:
       - description: Persistence configuration
         displayName: Persistence
         path: persistence
-      - description: Immutable v0.4 Router bootstrap reference
+      - description: Immutable v0.3 Router bootstrap reference
         displayName: Bootstrap
         path: bootstrap
       statusDescriptors:
@@ -84,30 +84,27 @@ spec:
         path: phase
         x-descriptors:
         - urn:alm:descriptor:io.kubernetes.phase
-      - description: Validated Router control-plane mode
-        displayName: Control Plane Mode
-        path: controlPlaneMode
       - description: Observed immutable bootstrap digest
         displayName: Bootstrap Revision
         path: bootstrapRevision
-      - description: Managed schema migration state
+      - description: Management schema migration state
         displayName: Migration
         path: migration.state
       version: v1alpha1
   description: |
     ## About the Semantic Router Operator
 
-    The Operator deploys vLLM Semantic Router from one immutable v0.4
+    The Operator deploys vLLM Semantic Router from one immutable v0.3
     bootstrap ConfigMap. It never synthesizes Models, Recipes, Entrypoints,
     credentials, access policy, or quota policy.
 
-    Standalone mode deploys a stateless Router from the selected manifest.
-    Managed mode runs an explicit schema migration Job before rolling the
-    Router Deployment, exposes inference and Management through separate
-    Services, and creates mode-aware disruption, topology, and network
-    isolation resources.
+    Without a Management store, the file is the routing authority. With a
+    Management store, the Operator runs an explicit schema migration Job
+    before rolling the Router Deployment, exposes configured listeners through
+    separate Services, and creates capability-aware disruption, topology, and
+    network isolation resources.
 
-    Dynamic managed resources are created through the Router Management API;
+    Dynamic resources are created through the Router Management API;
     they do not enter the SemanticRouter custom resource or trigger Pod
     rollouts.
 

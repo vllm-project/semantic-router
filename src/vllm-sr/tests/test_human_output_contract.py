@@ -19,6 +19,7 @@ REPO_ROOT = PROJECT_ROOT.parents[1]
 def _run_cli(*args: str, cwd: Path = REPO_ROOT) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["PYTHONPATH"] = str(PROJECT_ROOT)
+    environment["PYDANTIC_DISABLE_PLUGINS"] = "__all__"
     return subprocess.run(
         [sys.executable, "-m", "cli.main", *args],
         cwd=cwd,

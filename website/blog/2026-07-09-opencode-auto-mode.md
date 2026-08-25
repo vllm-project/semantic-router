@@ -62,9 +62,9 @@ Decisions can also be gated by **signal rules** — classifiers for intent, PII,
 
 ## The Design: One Virtual Model Called MoM
 
-> This article preserves its original v0.3 configuration examples. In v0.4,
-> Recipes define routing behavior, while Entrypoints expose request-facing names
-> and assign Models to each decision.
+> This article preserves its original configuration examples as a historical
+> walkthrough. In the current v0.3 contract, Recipes define routing behavior,
+> while Entrypoints expose request-facing names and assign Models to each Decision.
 
 The Semantic Router's core abstraction is a **decision**: a named bundle of candidate models, a selection algorithm, and a *virtual model name* the client calls. A typical Auto-mode setup exposes `MoM` — Mixture of Models:
 

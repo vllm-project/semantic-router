@@ -1000,8 +1000,14 @@
     flex-direction: column;
   }
 
-  .portfolioActions input {
+  .portfolioActions {
     width: 100%;
+  }
+
+  .portfolioActions input {
+    width: auto;
+    min-width: 0;
+    flex: 1;
   }
 
   .portfolioItemMain:not(.staticPortfolioItemMain) {

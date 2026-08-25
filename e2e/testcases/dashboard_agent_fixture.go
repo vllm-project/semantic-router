@@ -33,22 +33,72 @@ func ensureDashboardAgentFixture(
 	if err := enableDashboardAgentDelegation(ctx, client, baseURL, token, namespaceID, verbose); err != nil {
 		return "", "", err
 	}
+	fixture := newDashboardAgentFixtureClient(ctx, client, baseURL, token, namespaceID, userID, verbose)
+	if err := fixture.createModel(); err != nil {
+		return "", "", err
+	}
+	decisionID, err := fixture.createRecipe()
+	if err != nil {
+		return "", "", err
+	}
+	if err := fixture.createAndPublishEntrypoint(decisionID); err != nil {
+		return "", "", err
+	}
+	policyID, err := fixture.createAccessPolicy()
+	if err != nil {
+		return "", "", err
+	}
+	if err := fixture.issueAPIKey(policyID); err != nil {
+		return "", "", err
+	}
+	if err := waitForDashboardAgentTarget(
+		ctx, client, baseURL, token, namespaceID, fixture.entrypointID, verbose,
+	); err != nil {
+		return "", "", err
+	}
+	return "entrypoint", fixture.publicID, nil
+}
 
+type dashboardAgentFixtureClient struct {
+	ctx          context.Context
+	client       *http.Client
+	baseURL      string
+	token        string
+	namespaceID  string
+	userID       string
+	verbose      bool
+	suffix       string
+	modelID      string
+	recipeID     string
+	entrypointID string
+	publicID     string
+}
+
+func newDashboardAgentFixtureClient(
+	ctx context.Context,
+	client *http.Client,
+	baseURL, token, namespaceID, userID string,
+	verbose bool,
+) dashboardAgentFixtureClient {
 	suffix := strconv.FormatInt(time.Now().UTC().UnixNano(), 10)
-	modelID := "dashboard_e2e_model_" + suffix
-	recipeID := "dashboard_e2e_recipe_" + suffix
-	entrypointID := "dashboard_e2e_entrypoint_" + suffix
-	publicID := "dashboard-e2e-" + suffix
+	return dashboardAgentFixtureClient{
+		ctx: ctx, client: client, baseURL: baseURL, token: token,
+		namespaceID: namespaceID, userID: userID, verbose: verbose, suffix: suffix,
+		modelID: "dashboard_e2e_model_" + suffix, recipeID: "dashboard_e2e_recipe_" + suffix,
+		entrypointID: "dashboard_e2e_entrypoint_" + suffix, publicID: "dashboard-e2e-" + suffix,
+	}
+}
 
-	modelReceipt, err := dashboardManagementMutation(
-		ctx, client, baseURL, token, namespaceID, http.MethodPost,
-		"/routing/models", "dashboard-e2e-model-"+suffix,
+func (fixture dashboardAgentFixtureClient) createModel() error {
+	receipt, err := dashboardManagementMutation(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token, fixture.namespaceID, http.MethodPost,
+		"/routing/models", "dashboard-e2e-model-"+fixture.suffix,
 		map[string]interface{}{
-			"id": modelID, "name": publicID + "-model",
-			"aliases":      []string{publicID + "-model"},
-			"capabilities": []string{"streaming", "text", "tools"},
-			"execution": map[string]interface{}{
-				"maxRetries": 1, "requestTimeout": "30s", "streamTimeout": "2m",
+			"id": fixture.modelID, "name": fixture.publicID + "-model",
+			"aliases": []string{fixture.publicID + "-model"}, "capabilities": []string{"streaming", "text", "tools"},
+			"control": map[string]interface{}{
+				"retry":   map[string]interface{}{"count": 1, "on": []string{"unavailable"}},
+				"timeout": map[string]interface{}{"request": "30s", "stream": "2m"},
 			},
 			"pricing": map[string]interface{}{
 				"inputCostPerMillionTokens": nil, "outputCostPerMillionTokens": nil,
@@ -58,108 +108,105 @@ func ensureDashboardAgentFixture(
 				"providerId": "vllm", "providerModelId": dashboardFixtureBackendModel,
 				"baseUrl": dashboardFixtureBackendOrigin, "weight": "1",
 			}},
-		},
-		verbose,
+		}, fixture.verbose,
 	)
-	if err != nil || modelReceipt.Resource == nil || modelReceipt.Resource.ID != modelID {
-		return "", "", fmt.Errorf("create Agent E2E Model: %w", fixtureReceiptError(err, modelReceipt.Resource))
+	if err != nil || receipt.Resource == nil || receipt.Resource.ID != fixture.modelID {
+		return fmt.Errorf("create Agent E2E Model: %w", fixtureReceiptError(err, receipt.Resource))
 	}
+	return nil
+}
 
-	recipeReceipt, err := dashboardManagementMutation(
-		ctx, client, baseURL, token, namespaceID, http.MethodPost,
-		"/routing/recipes", "dashboard-e2e-recipe-"+suffix,
+func (fixture dashboardAgentFixtureClient) createRecipe() (string, error) {
+	receipt, err := dashboardManagementMutation(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token, fixture.namespaceID, http.MethodPost,
+		"/routing/recipes", "dashboard-e2e-recipe-"+fixture.suffix,
 		map[string]interface{}{
-			"id": recipeID, "name": "Dashboard E2E Recipe",
+			"id": fixture.recipeID, "name": "Dashboard E2E Recipe",
 			"description": "Deterministic Agent continuity fixture.",
 			"document": map[string]interface{}{
 				"signals": map[string]interface{}{}, "projections": map[string]interface{}{},
 				"decisions": []map[string]interface{}{{"name": "Default", "rules": map[string]interface{}{}}},
 			},
-		},
-		verbose,
+		}, fixture.verbose,
 	)
-	if err != nil || recipeReceipt.Resource == nil || recipeReceipt.Resource.ID != recipeID {
-		return "", "", fmt.Errorf("create Agent E2E Recipe: %w", fixtureReceiptError(err, recipeReceipt.Resource))
+	if err != nil || receipt.Resource == nil || receipt.Resource.ID != fixture.recipeID {
+		return "", fmt.Errorf("create Agent E2E Recipe: %w", fixtureReceiptError(err, receipt.Resource))
 	}
-	decisionID, err := dashboardFixtureDecisionID(
-		ctx, client, baseURL, token, namespaceID, recipeID, verbose,
+	return dashboardFixtureDecisionID(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token,
+		fixture.namespaceID, fixture.recipeID, fixture.verbose,
+	)
+}
+
+func (fixture dashboardAgentFixtureClient) createAndPublishEntrypoint(decisionID string) error {
+	receipt, err := dashboardManagementMutation(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token, fixture.namespaceID, http.MethodPost,
+		"/routing/entrypoints", "dashboard-e2e-entrypoint-"+fixture.suffix,
+		map[string]interface{}{
+			"id": fixture.entrypointID, "name": fixture.publicID, "aliases": []string{fixture.publicID},
+			"rules": []map[string]interface{}{{
+				"id": "dashboard_e2e_rule_" + fixture.suffix, "name": "Default", "recipeId": fixture.recipeID,
+				"assignments": map[string]interface{}{decisionID: map[string]interface{}{
+					"models": []map[string]interface{}{{"modelId": fixture.modelID, "priority": 0, "weight": "1"}},
+				}},
+			}},
+		}, fixture.verbose,
+	)
+	if err != nil || receipt.Resource == nil || receipt.Resource.ID != fixture.entrypointID {
+		return fmt.Errorf("create Agent E2E Entrypoint: %w", fixtureReceiptError(err, receipt.Resource))
+	}
+	_, err = dashboardManagementJSONWithHeaders(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token, fixture.namespaceID, http.MethodPost,
+		"/routing/entrypoints/"+fixture.entrypointID+":publish", "dashboard-e2e-publish-"+fixture.suffix,
+		nil, http.StatusAccepted, nil, http.Header{"If-Match": []string{`"ep:1"`}}, fixture.verbose,
 	)
 	if err != nil {
-		return "", "", err
+		return fmt.Errorf("publish Agent E2E Entrypoint: %w", err)
 	}
+	return nil
+}
 
-	entrypointReceipt, err := dashboardManagementMutation(
-		ctx, client, baseURL, token, namespaceID, http.MethodPost,
-		"/routing/entrypoints", "dashboard-e2e-entrypoint-"+suffix,
-		map[string]interface{}{
-			"id": entrypointID, "name": publicID, "aliases": []string{publicID},
-			"rules": []map[string]interface{}{{
-				"id": "dashboard_e2e_rule_" + suffix, "name": "Default", "recipeId": recipeID,
-				"assignments": map[string]interface{}{
-					decisionID: map[string]interface{}{
-						"models": []map[string]interface{}{{"modelId": modelID, "priority": 0, "weight": "1"}},
-					},
-				},
-			}},
-		},
-		verbose,
-	)
-	if err != nil || entrypointReceipt.Resource == nil || entrypointReceipt.Resource.ID != entrypointID {
-		return "", "", fmt.Errorf("create Agent E2E Entrypoint: %w", fixtureReceiptError(err, entrypointReceipt.Resource))
-	}
-	if _, err := dashboardManagementJSONWithHeaders(
-		ctx, client, baseURL, token, namespaceID, http.MethodPost,
-		"/routing/entrypoints/"+entrypointID+":publish", "dashboard-e2e-publish-"+suffix,
-		nil, http.StatusAccepted, nil,
-		http.Header{"If-Match": []string{`"ep:1"`}}, verbose,
-	); err != nil {
-		return "", "", fmt.Errorf("publish Agent E2E Entrypoint: %w", err)
-	}
-
-	policyReceipt, err := dashboardManagementMutation(
-		ctx, client, baseURL, token, namespaceID, http.MethodPost,
-		"/access-policies", "dashboard-e2e-access-policy-"+suffix,
+func (fixture dashboardAgentFixtureClient) createAccessPolicy() (string, error) {
+	receipt, err := dashboardManagementMutation(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token, fixture.namespaceID, http.MethodPost,
+		"/access-policies", "dashboard-e2e-access-policy-"+fixture.suffix,
 		map[string]interface{}{
 			"name": "Dashboard E2E Agent access", "status": "active",
 			"grants": []map[string]string{
-				{"resourceType": "entrypoint", "resourceId": entrypointID, "permission": "discover", "effect": "allow"},
-				{"resourceType": "entrypoint", "resourceId": entrypointID, "permission": "invoke", "effect": "allow"},
-				{"resourceType": "model", "resourceId": modelID, "permission": "discover", "effect": "allow"},
-				{"resourceType": "model", "resourceId": modelID, "permission": "invoke", "effect": "allow"},
+				{"resourceType": "entrypoint", "resourceId": fixture.entrypointID, "permission": "discover", "effect": "allow"},
+				{"resourceType": "entrypoint", "resourceId": fixture.entrypointID, "permission": "invoke", "effect": "allow"},
+				{"resourceType": "model", "resourceId": fixture.modelID, "permission": "discover", "effect": "allow"},
+				{"resourceType": "model", "resourceId": fixture.modelID, "permission": "invoke", "effect": "allow"},
 			},
-		},
-		verbose,
+		}, fixture.verbose,
 	)
-	if err != nil || policyReceipt.Resource == nil || policyReceipt.Resource.ID == "" {
-		return "", "", fmt.Errorf("create Agent E2E Access Policy: %w", fixtureReceiptError(err, policyReceipt.Resource))
+	if err != nil || receipt.Resource == nil || receipt.Resource.ID == "" {
+		return "", fmt.Errorf("create Agent E2E Access Policy: %w", fixtureReceiptError(err, receipt.Resource))
 	}
+	return receipt.Resource.ID, nil
+}
 
+func (fixture dashboardAgentFixtureClient) issueAPIKey(policyID string) error {
 	var issued struct {
 		Data struct {
 			KeyID string `json:"keyId"`
 		} `json:"data"`
 	}
-	if err := dashboardManagementJSON(
-		ctx, client, baseURL, token, namespaceID, http.MethodPost, "/api-keys",
-		"dashboard-e2e-api-key-"+suffix,
+	err := dashboardManagementJSON(
+		fixture.ctx, fixture.client, fixture.baseURL, fixture.token, fixture.namespaceID, http.MethodPost,
+		"/api-keys", "dashboard-e2e-api-key-"+fixture.suffix,
 		map[string]interface{}{
-			"name": "Dashboard E2E Agent", "owner": map[string]string{"type": "user", "id": userID},
-			"revealable": false, "accessPolicyIds": []string{policyReceipt.Resource.ID},
-		},
-		http.StatusCreated, &issued, verbose,
-	); err != nil {
-		return "", "", fmt.Errorf("create Agent E2E API key: %w", err)
+			"name": "Dashboard E2E Agent", "owner": map[string]string{"type": "user", "id": fixture.userID},
+			"revealable": false, "accessPolicyIds": []string{policyID},
+		}, http.StatusCreated, &issued, fixture.verbose,
+	)
+	if err != nil {
+		return fmt.Errorf("create Agent E2E API key: %w", err)
 	}
 	if issued.Data.KeyID == "" {
-		return "", "", fmt.Errorf("create Agent E2E API key returned no key identity")
+		return fmt.Errorf("create Agent E2E API key returned no key identity")
 	}
-
-	if err := waitForDashboardAgentTarget(
-		ctx, client, baseURL, token, namespaceID, entrypointID, verbose,
-	); err != nil {
-		return "", "", err
-	}
-	return "entrypoint", publicID, nil
+	return nil
 }
 
 func enableDashboardAgentDelegation(

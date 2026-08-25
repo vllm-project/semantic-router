@@ -10,7 +10,7 @@ import (
 const initialRoutingResourceRevision int64 = 1
 
 // stableRoutingResourceID deterministically assigns an immutable authoring ID
-// when a portable standalone manifest omits one. Managed imports persist this
+// when a portable file manifest omits one. Durable imports persist this
 // value before publication; the data plane never resolves mutable names.
 func stableRoutingResourceID(prefix string, parts ...string) string {
 	var payload []byte

@@ -1,4 +1,4 @@
-document:
+routing:
   signals:
     structure:
       - name: many_questions

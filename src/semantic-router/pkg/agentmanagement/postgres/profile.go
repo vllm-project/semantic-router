@@ -20,7 +20,7 @@ func (store *Store) ListProfiles(
 	ctx context.Context, namespaceID string, query agentmanagement.ListQuery,
 ) (_ agentmanagement.ListResult[agentmanagement.Profile], returnErr error) {
 	ids := scopedIDs(query.Scope, accesscontrol.ScopeResourceAgentProfile)
-	statement := fmt.Sprintf(profileSelect, "p.current_revision") + `
+	statement := profileCurrentSelect + `
  WHERE p.namespace_id=$1 AND p.status<>'deleted'
    AND ($2 OR p.id=ANY($3::uuid[]))
 	AND ($4='' OR lower(p.name) LIKE $4 ESCAPE '\' OR lower(p.description) LIKE $4 ESCAPE '\')
@@ -56,7 +56,7 @@ func (store *Store) ListProfiles(
 }
 
 func (store *Store) GetProfile(ctx context.Context, namespaceID, id string) (agentmanagement.Profile, error) {
-	statement := fmt.Sprintf(profileSelect, "p.current_revision") + `
+	statement := profileCurrentSelect + `
  WHERE p.namespace_id=$1 AND p.id=$2 AND p.status<>'deleted'`
 	return scanProfile(store.db.QueryRowContext(ctx, statement, namespaceID, id))
 }
@@ -64,7 +64,7 @@ func (store *Store) GetProfile(ctx context.Context, namespaceID, id string) (age
 func (store *Store) GetProfileRevision(
 	ctx context.Context, namespaceID, id string, revision int64,
 ) (agentmanagement.Profile, error) {
-	statement := fmt.Sprintf(profileSelect, "$3") + ` WHERE p.namespace_id=$1 AND p.id=$2`
+	statement := profileRevisionSelect + ` WHERE p.namespace_id=$1 AND p.id=$2`
 	return scanProfile(store.db.QueryRowContext(ctx, statement, namespaceID, id, revision))
 }
 
@@ -174,7 +174,7 @@ WHERE namespace_id=$1 AND id=$2 AND revision=$3 AND status<>'deleted'`,
 		if err := requireOneRow(result); err != nil {
 			return agentmanagement.Profile{}, err
 		}
-		statement := fmt.Sprintf(profileSelect, "p.current_revision") + ` WHERE p.namespace_id=$1 AND p.id=$2`
+		statement := profileCurrentSelect + ` WHERE p.namespace_id=$1 AND p.id=$2`
 		return scanProfile(tx.QueryRowContext(ctx, statement, namespaceID, id))
 	})
 }
@@ -238,7 +238,7 @@ WHERE namespace_id=$1 AND id=$2 AND status<>'deleted' FOR UPDATE`, namespaceID, 
 	if revision != expected {
 		return agentmanagement.Profile{}, agentmanagement.ErrConflict
 	}
-	statement := fmt.Sprintf(profileSelect, "p.current_revision") + ` WHERE p.namespace_id=$1 AND p.id=$2`
+	statement := profileCurrentSelect + ` WHERE p.namespace_id=$1 AND p.id=$2`
 	return scanProfile(tx.QueryRowContext(ctx, statement, namespaceID, id))
 }
 
@@ -338,20 +338,28 @@ type sqlQueryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
+const resolveModelTargetQuery = `SELECT id FROM routing_models
+WHERE namespace_id=$1 AND status='active' AND (id::text=$2 OR name=$2 OR aliases ? $2) LIMIT 2`
+
+const resolveEntrypointTargetQuery = `SELECT id FROM routing_entrypoints
+WHERE namespace_id=$1 AND status='active' AND published_revision IS NOT NULL
+  AND (id::text=$2 OR name=$2 OR aliases ? $2) LIMIT 2`
+
 func resolveTarget(
 	ctx context.Context, queryer sqlQueryer, namespaceID string, target *agentmanagement.Target,
 ) (_ any, _ any, returnErr error) {
 	if target == nil {
 		return nil, nil, nil
 	}
-	table, aliasColumn := "routing_models", "aliases"
-	status := "status='active'"
-	if target.Kind == agentmanagement.TargetEntrypoint {
-		table = "routing_entrypoints"
-		status = "status='active' AND published_revision IS NOT NULL"
+	var statement string
+	switch target.Kind {
+	case agentmanagement.TargetModel:
+		statement = resolveModelTargetQuery
+	case agentmanagement.TargetEntrypoint:
+		statement = resolveEntrypointTargetQuery
+	default:
+		return nil, nil, agentmanagement.ErrInvalid
 	}
-	statement := fmt.Sprintf(`SELECT id FROM %s
-WHERE namespace_id=$1 AND %s AND (id::text=$2 OR name=$2 OR %s ? $2) LIMIT 2`, table, status, aliasColumn)
 	rows, err := queryer.QueryContext(ctx, statement, namespaceID, target.ID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resolve Agent target: %w", err)

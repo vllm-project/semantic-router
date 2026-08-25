@@ -243,8 +243,24 @@ func mapWriteError(action string, err error) error {
 }
 
 func classifyRevision(ctx context.Context, tx *sql.Tx, table, id string) error {
+	const principalExistsQuery = `SELECT EXISTS(SELECT 1 FROM management_principals WHERE id=$1)`
+	const roleExistsQuery = `SELECT EXISTS(SELECT 1 FROM management_roles WHERE id=$1)`
+	const bindingExistsQuery = `SELECT EXISTS(SELECT 1 FROM management_role_bindings WHERE id=$1)`
+	const issuerExistsQuery = `SELECT EXISTS(SELECT 1 FROM trusted_identity_issuers WHERE id=$1)`
+	var query string
+	switch table {
+	case "management_principals":
+		query = principalExistsQuery
+	case "management_roles":
+		query = roleExistsQuery
+	case "management_role_bindings":
+		query = bindingExistsQuery
+	case "trusted_identity_issuers":
+		query = issuerExistsQuery
+	default:
+		return errors.New("unsupported Management identity resource type")
+	}
 	var exists bool
-	query := `SELECT EXISTS(SELECT 1 FROM ` + table + ` WHERE id=$1)` // table is a package constant selected by callers.
 	if err := tx.QueryRowContext(ctx, query, id).Scan(&exists); err != nil {
 		return fmt.Errorf("classify Management identity mutation: %w", err)
 	}
