@@ -52,6 +52,7 @@ NON_PR_E2E_RULES = {
 }
 HARNESS_EXEC_PATTERNS = (
     "tools/agent/*.yaml",
+    "tools/agent/requirements.txt",
     "tools/agent/scripts/**",
     "tools/ci/**",
     "tools/make/agent.mk",
@@ -251,10 +252,7 @@ def _detect_direct_domains(
     }
     domains["agent_exec"] = any_matches(
         changed,
-        "tools/agent/*.yaml",
-        "tools/agent/scripts/**",
-        "tools/ci/**",
-        "tools/make/agent.mk",
+        *HARNESS_EXEC_PATTERNS,
         ".github/actions/**",
         ".github/workflows/**",
         ".mergify.yml",

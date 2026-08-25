@@ -88,7 +88,7 @@ agent-node-bootstrap: $(AGENT_VENV_DEPS) ## Provide cached Node when the host ha
 
 agent-markdown-bootstrap: agent-node-bootstrap ## Install repo-local markdownlint when needed
 	@if [ ! -x "$(AGENT_MARKDOWNLINT)" ] || \
-		[ "$$($(AGENT_MARKDOWNLINT) --version 2>/dev/null)" != "$(AGENT_MARKDOWNLINT_VERSION)" ]; then \
+		[ "$$(PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" --version 2>/dev/null)" != "$(AGENT_MARKDOWNLINT_VERSION)" ]; then \
 		NODE_PATH="$$PATH"; \
 		if ! command -v npm >/dev/null 2>&1; then NODE_PATH="$(AGENT_NODEENV)/bin:$$NODE_PATH"; fi; \
 		echo "Installing repo-local markdownlint-cli v$(AGENT_MARKDOWNLINT_VERSION)..."; \

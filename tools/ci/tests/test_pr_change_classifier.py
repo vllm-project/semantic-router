@@ -244,6 +244,17 @@ class PRChangeClassifierTests(unittest.TestCase):
                 self.assertEqual(result.profiles, ())
                 self.assertEqual(result.pr_images, ())
 
+    def test_harness_executable_patterns_set_agent_exec(self) -> None:
+        for path in (
+            "tools/agent/requirements.txt",
+            "tools/make/linter.mk",
+            "tools/make/pre-commit.mk",
+            ".pre-commit-config.yaml",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertTrue(result.signals["agent_exec"])
+
     def test_ownership_metadata_paths_remain_lightweight(self) -> None:
         paths = (
             "OWNER",

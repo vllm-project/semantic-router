@@ -5,6 +5,10 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_MAKE = (REPO_ROOT / "tools/make/agent.mk").read_text(encoding="utf-8")
+LINTER_MAKE = (REPO_ROOT / "tools/make/linter.mk").read_text(encoding="utf-8")
+AGENT_REQUIREMENTS = (REPO_ROOT / "tools/agent/requirements.txt").read_text(
+    encoding="utf-8"
+)
 PRECOMMIT_CONFIG = yaml.safe_load(
     (REPO_ROOT / ".pre-commit-config.yaml").read_text(encoding="utf-8")
 )
@@ -50,16 +54,19 @@ class AgentMakeContractTests(unittest.TestCase):
         markdown_bootstrap = target_block("agent-markdown-bootstrap")
 
         self.assertIn("AGENT_MARKDOWNLINT_VERSION ?= 0.43.0", AGENT_MAKE)
-        self.assertIn("$(AGENT_MARKDOWNLINT) --version", markdown_bootstrap)
+        self.assertIn('"$(AGENT_MARKDOWNLINT)" --version', markdown_bootstrap)
         self.assertIn(
             "markdownlint-cli@$(AGENT_MARKDOWNLINT_VERSION)", markdown_bootstrap
         )
+        self.assertIn('PATH="$(AGENT_NODEENV)/bin:$$PATH"', markdown_bootstrap)
+        self.assertEqual(LINTER_MAKE.count('"$(AGENT_MARKDOWNLINT)" -c'), 2)
 
     def test_node_fallback_is_repo_local_and_versioned(self) -> None:
         node_bootstrap = target_block("agent-node-bootstrap")
 
         self.assertIn("AGENT_NODE_VERSION ?= 22.17.0", AGENT_MAKE)
         self.assertIn('-m nodeenv --node="$(AGENT_NODE_VERSION)"', node_bootstrap)
+        self.assertIn("nodeenv==1.10.0", AGENT_REQUIREMENTS)
 
     def test_composite_gates_reuse_the_prepared_python_environment(self) -> None:
         ci_gate = target_block("agent-ci-gate")
