@@ -82,9 +82,9 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "Wilson Wu",
     "login": "wilsonwu",
     "pullRequests": 43,
-    "reviews": 5,
+    "reviews": 6,
     "issues": 29,
-    "total": 77,
+    "total": 78,
     "status": "active"
   },
   {
