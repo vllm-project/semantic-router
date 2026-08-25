@@ -264,16 +264,17 @@ def validate_primary_skill(
     skill: dict, skill_lookup: dict[str, dict], skill_registry: dict, errors: list[str]
 ) -> None:
     skill_name = skill["name"]
+    is_fallback = skill_name == "project-change"
     priority = skill.get("priority")
     if not isinstance(priority, int):
         errors.append(f"Primary skill '{skill_name}' is missing integer priority")
-    if not skill.get("required_surfaces"):
+    if not skill.get("required_surfaces") and not is_fallback:
         errors.append(f"Primary skill '{skill_name}' has no required_surfaces")
     if not skill.get("stop_conditions"):
         errors.append(f"Primary skill '{skill_name}' has no stop_conditions")
     if not skill.get("acceptance_criteria"):
         errors.append(f"Primary skill '{skill_name}' has no acceptance_criteria")
-    if not skill.get("selector_paths") and skill_name != "cross-stack-bugfix":
+    if not skill.get("selector_paths") and not is_fallback:
         errors.append(f"Primary skill '{skill_name}' has no selector_paths")
     validate_surface_refs(skill_name, skill, skill_registry, errors)
 

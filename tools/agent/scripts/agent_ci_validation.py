@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""CI/workflow consistency validation for the shared agent harness."""
+"""CI and E2E registry consistency validation for the agent harness."""
 
 from __future__ import annotations
 
@@ -14,7 +14,6 @@ if str(TOOLS_CI_DIR) not in sys.path:
     sys.path.insert(0, str(TOOLS_CI_DIR))
 
 from test_domain_registry import (  # noqa: E402
-    local_full_ci_paths,
     profile_records,
     registry_schema_errors,
     suite_domains,
@@ -22,60 +21,23 @@ from test_domain_registry import (  # noqa: E402
 
 
 def validate_ci_changes_filters(
-    repo_manifest: dict, task_matrix: dict, e2e_map: dict, errors: list[str]
+    repo_manifest: dict,
+    task_matrix: dict,
+    test_domain_registry: dict,
+    errors: list[str],
 ) -> None:
-    validate_test_domain_registry(task_matrix, e2e_map, errors)
-    validate_e2e_profile_lists(repo_manifest, e2e_map, errors)
-    validate_e2e_inventory(e2e_map, errors)
-    validate_workflow_suite_rules(e2e_map, errors)
+    errors.extend(registry_schema_errors(test_domain_registry))
+    validate_registry_task_rules(task_matrix, test_domain_registry, errors)
+    validate_e2e_profile_lists(repo_manifest, test_domain_registry, errors)
+    validate_e2e_inventory(test_domain_registry, errors)
+    validate_workflow_suites(test_domain_registry, errors)
 
 
-def validate_test_domain_registry(
-    task_matrix: dict, e2e_map: dict, errors: list[str]
+def validate_registry_task_rules(
+    task_matrix: dict, test_domain_registry: dict, errors: list[str]
 ) -> None:
-    errors.extend(registry_schema_errors())
-    registry_profiles = profile_records()
-    registry_full = [
-        name for name, data in registry_profiles.items() if data.get("full_ci")
-    ]
-    registry_default = [
-        name for name, data in registry_profiles.items() if data.get("default_local")
-    ]
-    if registry_full != e2e_map.get("full_ci_profiles", []):
-        errors.append(
-            "test-domain registry full CI profiles do not match e2e-profile-map"
-        )
-    if registry_default != e2e_map.get("default_local_profiles", []):
-        errors.append(
-            "test-domain registry default local profiles do not match e2e-profile-map"
-        )
-    if tuple(e2e_map.get("full_ci_triggers", [])) != local_full_ci_paths():
-        errors.append(
-            "test-domain registry local full-CI paths do not match e2e-profile-map"
-        )
-    sections = {"pr": "profile_rules", "manual": "manual_profile_rules"}
-    for selection, section in sections.items():
-        expected = {
-            name: tuple(data.get("paths", []))
-            for name, data in registry_profiles.items()
-            if data.get("selection") == selection
-        }
-        actual = {
-            name: tuple(data.get("paths", []))
-            for name, data in e2e_map.get(section, {}).items()
-        }
-        if expected != actual:
-            errors.append(
-                "tools/agent/test-domain-registry.yaml profile paths do not "
-                f"match tools/agent/e2e-profile-map.yaml {section}"
-            )
-    validate_registry_workflow_suites(e2e_map, errors)
-    validate_registry_task_rules(task_matrix, errors)
-
-
-def validate_registry_task_rules(task_matrix: dict, errors: list[str]) -> None:
     rules = {rule["name"]: rule for rule in task_matrix.get("rules", [])}
-    for domain_name, domain in suite_domains().values():
+    for domain_name, domain in suite_domains(test_domain_registry).values():
         task_rule = domain.get("task_rule")
         if not task_rule:
             continue
@@ -92,99 +54,52 @@ def validate_registry_task_rules(task_matrix: dict, errors: list[str]) -> None:
             )
 
 
-def validate_registry_workflow_suites(e2e_map: dict, errors: list[str]) -> None:
-    registry_suites = suite_domains()
-    map_suites = e2e_map.get("workflow_suite_rules", {})
-    if set(registry_suites) != set(map_suites):
-        errors.append(
-            "test-domain registry workflow suites do not match "
-            "e2e-profile-map workflow_suite_rules"
-        )
-        return
-    for suite_name, (_, domain) in registry_suites.items():
-        mapped = map_suites[suite_name]
-        expected = {
-            "workflow": domain["workflow"],
-            "change_filter": domain["selector"],
-            "local_command": domain["local"]["feature"][0],
-            "paths": frozenset(domain.get("paths", [])),
-        }
-        actual = {
-            "workflow": mapped.get("workflow"),
-            "change_filter": mapped.get("change_filter"),
-            "local_command": mapped.get("local_command"),
-            "paths": frozenset(mapped.get("paths", [])),
-        }
-        if expected != actual:
-            errors.append(
-                f"test-domain registry suite {suite_name!r} does not match "
-                "e2e-profile-map workflow suite metadata"
-            )
-
-
 def validate_e2e_profile_lists(
-    repo_manifest: dict, e2e_map: dict, errors: list[str]
+    repo_manifest: dict, test_domain_registry: dict, errors: list[str]
 ) -> None:
-    standard_profiles = set(e2e_map.get("profile_rules", {}))
-    manual_profiles = set(e2e_map.get("manual_profile_rules", {}))
-    if standard_profiles & manual_profiles:
+    profiles = profile_records(test_domain_registry)
+    standard_profiles = {
+        name for name, data in profiles.items() if data.get("selection") == "pr"
+    }
+    full_ci_profiles = {name for name, data in profiles.items() if data.get("full_ci")}
+    default_local_profiles = {
+        name for name, data in profiles.items() if data.get("default_local")
+    }
+    manifest_e2e = repo_manifest.get("validation", {}).get("e2e", {})
+    manifest_full_ci = set(manifest_e2e.get("full_ci_profiles", []))
+    if manifest_full_ci != full_ci_profiles:
         errors.append(
-            "tools/agent/e2e-profile-map.yaml reuses profile names across profile_rules and manual_profile_rules"
+            "repo-manifest validation.e2e.full_ci_profiles does not match "
+            "tools/agent/test-domain-registry.yaml"
         )
+    if not full_ci_profiles.issubset(standard_profiles):
+        errors.append("full-CI E2E profiles must use selection: pr")
 
-    manifest_profiles = set(
-        repo_manifest.get("validation", {}).get("e2e", {}).get("full_ci_profiles", [])
-    )
-    map_profiles = set(e2e_map.get("full_ci_profiles", []))
-    if manifest_profiles != map_profiles:
-        errors.append(
-            "repo-manifest validation.e2e.full_ci_profiles does not match tools/agent/e2e-profile-map.yaml"
-        )
-    if not map_profiles.issubset(standard_profiles):
-        errors.append(
-            "tools/agent/e2e-profile-map.yaml full_ci_profiles must be a subset of profile_rules"
-        )
-
-    default_local_profile = (
-        repo_manifest.get("validation", {}).get("e2e", {}).get("default_local_profile")
-    )
-    default_local_profiles = set(e2e_map.get("default_local_profiles", []))
+    default_local_profile = manifest_e2e.get("default_local_profile")
     if default_local_profile not in default_local_profiles:
         errors.append(
-            "repo-manifest validation.e2e.default_local_profile is missing from tools/agent/e2e-profile-map.yaml default_local_profiles"
+            "repo-manifest validation.e2e.default_local_profile is not marked "
+            "default_local in tools/agent/test-domain-registry.yaml"
         )
     if not default_local_profiles.issubset(standard_profiles):
-        errors.append(
-            "tools/agent/e2e-profile-map.yaml default_local_profiles must be a subset of profile_rules"
-        )
-
-    for profile_name, data in combined_profile_rules(e2e_map).items():
-        for field in ("owner", "coverage_role", "selection_mode", "summary"):
-            if not data.get(field):
-                errors.append(
-                    f"tools/agent/e2e-profile-map.yaml profile '{profile_name}' is missing '{field}'"
-                )
+        errors.append("default-local E2E profiles must use selection: pr")
 
 
-def combined_profile_rules(e2e_map: dict) -> dict[str, dict]:
-    combined = dict(e2e_map.get("profile_rules", {}))
-    combined.update(e2e_map.get("manual_profile_rules", {}))
-    return combined
-
-
-def validate_e2e_inventory(e2e_map: dict, errors: list[str]) -> None:
-    mapped_profiles = set(combined_profile_rules(e2e_map))
+def validate_e2e_inventory(test_domain_registry: dict, errors: list[str]) -> None:
+    mapped_profiles = set(profile_records(test_domain_registry))
     runnable_profiles = parse_runnable_profiles(errors)
     readme_profiles = parse_readme_profiles(errors)
 
     if runnable_profiles is not None and runnable_profiles != mapped_profiles:
         errors.append(
-            "e2e/profiles/all/imports.go profile inventory does not match tools/agent/e2e-profile-map.yaml"
+            "e2e/profiles/all/imports.go profile inventory does not match "
+            "tools/agent/test-domain-registry.yaml"
             + format_inventory_diff(mapped_profiles, runnable_profiles)
         )
     if readme_profiles is not None and readme_profiles != mapped_profiles:
         errors.append(
-            "e2e/README.md supported profile inventory does not match tools/agent/e2e-profile-map.yaml"
+            "e2e/README.md supported profile inventory does not match "
+            "tools/agent/test-domain-registry.yaml"
             + format_inventory_diff(mapped_profiles, readme_profiles)
         )
 
@@ -211,7 +126,8 @@ def parse_readme_profiles(errors: list[str]) -> set[str] | None:
     )
     if match is None:
         errors.append(
-            "e2e/README.md is missing the Supported Profiles / Coverage Ownership Matrix sections"
+            "e2e/README.md is missing the Supported Profiles / Coverage Ownership "
+            "Matrix sections"
         )
         return None
     return set(
@@ -227,29 +143,19 @@ def format_inventory_diff(expected: set[str], actual: set[str]) -> str:
         parts.append(" missing: " + ", ".join(missing))
     if extra:
         parts.append(" extra: " + ", ".join(extra))
-    if not parts:
-        return ""
-    return " (" + ";".join(parts) + ")"
+    return " (" + ";".join(parts) + ")" if parts else ""
 
 
-def validate_workflow_suite_rules(e2e_map: dict, errors: list[str]) -> None:
-    for suite_name, data in e2e_map.get("workflow_suite_rules", {}).items():
-        for field in (
-            "owner",
-            "kind",
-            "summary",
-            "workflow",
-            "change_filter",
-            "local_command",
-        ):
-            if not data.get(field):
-                errors.append(
-                    f"tools/agent/e2e-profile-map.yaml workflow suite '{suite_name}' is missing '{field}'"
-                )
-        workflow_path = data.get("workflow")
-        if not workflow_path:
-            continue
-        validate_reusable_workflow(workflow_path, errors)
+def validate_workflow_suites(test_domain_registry: dict, errors: list[str]) -> None:
+    for suite_name, (_, domain) in suite_domains(test_domain_registry).items():
+        feature_commands = domain.get("local", {}).get("feature", [])
+        if len(feature_commands) != 1:
+            errors.append(
+                f"workflow suite {suite_name!r} must declare one local feature command"
+            )
+        workflow_path = domain.get("workflow")
+        if workflow_path:
+            validate_reusable_workflow(workflow_path, errors)
 
 
 def validate_reusable_workflow(workflow_path: str, errors: list[str]) -> bool:
