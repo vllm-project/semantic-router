@@ -16,10 +16,10 @@ export interface CommunityNavItem {
 export const COMMUNITY_NAV_ITEMS: CommunityNavItem[] = [
   { key: 'team', label: 'Open Source Team', to: '/community/team' },
   { key: 'steering-committee', label: 'Steering Committee', to: '/community/steering-committee' },
-  { key: 'governance', label: 'Governance', to: '/community/governance' },
   { key: 'work-groups', label: 'Working Groups', to: '/community/work-groups' },
-  { key: 'contributing', label: 'Contributing', to: '/community/contributing' },
   { key: 'leaderboard', label: 'Leaderboard', to: '/community/contributors' },
+  { key: 'governance', label: 'Governance', to: '/community/governance' },
+  { key: 'contributing', label: 'Contributing', to: '/community/contributing' },
   { key: 'code-of-conduct', label: 'Code of Conduct', to: '/community/code-of-conduct' },
 ]
 
