@@ -20,6 +20,8 @@ import React from 'react'
 import WebsiteMegaNav from '@site/src/components/site/WebsiteMegaNav'
 import styles from './styles.module.css'
 
+const CTA_CLASS_NAME = 'nav-dashboard-cta'
+
 function useNavbarItems(): NavbarItemConfig[] {
   return useThemeConfig().navbar.items as NavbarItemConfig[]
 }
@@ -77,6 +79,17 @@ export default function NavbarContent(): ReactNode {
   const [, rightItems] = splitNavbarItems(items)
   const searchBarItem = items.find(item => item.type === 'search')
 
+  /*
+   * The call to action is pulled out so it can sit at the far end, after the
+   * utility controls. Search used to render after it, which put the widest
+   * control on the outside edge and stranded the primary action mid-row.
+   *
+   * Reading order, left to right: brand, sections, search, utilities, theme,
+   * action.
+   */
+  const ctaItem = rightItems.find(item => item.className === CTA_CLASS_NAME)
+  const utilityItems = rightItems.filter(item => item !== ctaItem)
+
   return (
     <NavbarContentLayout
       left={(
@@ -88,15 +101,16 @@ export default function NavbarContent(): ReactNode {
       )}
       right={(
         <>
-          <NavbarItems items={rightItems} />
           {!searchBarItem && (
             <NavbarSearch>
               <SearchBar />
             </NavbarSearch>
           )}
+          <NavbarItems items={utilityItems} />
           <NavbarColorModeToggle
             className={clsx(styles.colorModeToggle, 'navbar-color-mode-toggle')}
           />
+          {ctaItem && <NavbarItem {...ctaItem} />}
         </>
       )}
     />

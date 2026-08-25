@@ -7,54 +7,42 @@
  * deliberately closer to a reference manual than a marketing page.
  */
 .site-root--docs {
-  --site-doc-canvas: 76.25rem;
-  --site-doc-sidebar-width: 15.125rem;
-  --site-doc-toc-width: 15.125rem;
-  --site-doc-column-gap: 1.5rem;
-  --site-doc-content-inset: 1.5rem;
-  --site-doc-rail-top: 3.375rem;
-  --site-doc-sidebar-top: 2.625rem;
-  --site-doc-body-size: 1rem;
-  --site-doc-nav-size: 0.875rem;
-  --site-doc-breadcrumb-gap: 0.9rem;
-  --site-doc-title-gap: 2.5rem;
-  --site-doc-page-gutter: max(1.5rem, calc((100% - var(--site-doc-canvas)) / 2));
+  /*
+   * Geometry comes from the shared tokens, so the docs canvas resolves to the
+   * same left and right edges as the navbar, blog, research and community.
+   *
+   * The canvas used to step up at 1600px and again at 2000px — including the
+   * body font size, 1rem → 1.1rem → 1.2rem. No other section did that, so
+   * moving from a doc page to a blog post visibly resized the site on a large
+   * monitor. Readability on wide screens is handled by --measure below
+   * instead, which caps the line length without touching the type scale.
+   */
+  --site-doc-canvas: var(--page-max);
+  --site-doc-sidebar-width: var(--rail);
+  --site-doc-toc-width: var(--toc);
+  /*
+   * The column gaps are what make a three-rail layout feel airy instead of
+   * like three panels pushed together, so they are far larger than the
+   * --space-6 both used to be: ~110px from the rail to the text and ~130px
+   * from the text to the table of contents at 1920px.
+   *
+   * Fluid rather than fixed, because at 1280px those numbers would leave the
+   * article under 400px wide. Each ramps linearly from the --space-6 floor at
+   * ~1220px to its cap at 1920px, then holds — the frame stops growing at
+   * --page-max, so the gaps stop with it.
+   */
+  --site-doc-content-inset: clamp(var(--space-6), calc(12.19vw - 124px), 6.875rem);
+  --site-doc-column-gap: clamp(var(--space-6), calc(14.06vw - 140px), 8.125rem);
+  --site-doc-rail-top: 2.5rem;
+  --site-doc-sidebar-top: 2rem;
+  --site-doc-body-size: var(--text-lg);
+  --site-doc-nav-size: var(--text-sm);
+  --site-doc-breadcrumb-gap: var(--space-3);
+  --site-doc-title-gap: var(--space-6);
+  --site-doc-page-gutter: max(var(--gutter), calc((100% - var(--site-doc-canvas)) / 2));
   --doc-sidebar-width: var(--site-doc-sidebar-width);
   --ifm-navbar-height: var(--site-header-height);
   background: var(--site-bg);
-}
-
-/* Match Material's readable wide-screen scale without changing site chrome. */
-@media (min-width: 1600px) {
-  .site-root--docs {
-    --site-doc-canvas: 83.875rem;
-    --site-doc-sidebar-width: 16.6375rem;
-    --site-doc-toc-width: 16.6375rem;
-    --site-doc-column-gap: 1.65rem;
-    --site-doc-content-inset: 1.65rem;
-    --site-doc-rail-top: 3.7125rem;
-    --site-doc-sidebar-top: 2.8875rem;
-    --site-doc-body-size: 1.1rem;
-    --site-doc-nav-size: 0.9625rem;
-    --site-doc-breadcrumb-gap: 1rem;
-    --site-doc-title-gap: 2.75rem;
-  }
-}
-
-@media (min-width: 2000px) {
-  .site-root--docs {
-    --site-doc-canvas: 91.5rem;
-    --site-doc-sidebar-width: 18.15rem;
-    --site-doc-toc-width: 18.15rem;
-    --site-doc-column-gap: 1.8rem;
-    --site-doc-content-inset: 1.8rem;
-    --site-doc-rail-top: 4.05rem;
-    --site-doc-sidebar-top: 3.15rem;
-    --site-doc-body-size: 1.2rem;
-    --site-doc-nav-size: 1.05rem;
-    --site-doc-breadcrumb-gap: 1.1rem;
-    --site-doc-title-gap: 3rem;
-  }
 }
 
 .site-root--docs .main-wrapper,
@@ -88,60 +76,84 @@
 .site-root--docs .theme-doc-sidebar-container .menu {
   border: 0;
   border-radius: 0;
+  padding: 0;
   background: transparent;
   box-shadow: none;
-  scrollbar-color: var(--site-border-strong) transparent;
-  scrollbar-width: thin;
-}
-
-.site-root--docs .theme-doc-sidebar-container .menu::-webkit-scrollbar {
-  width: 0.35rem;
-}
-
-.site-root--docs .theme-doc-sidebar-container .menu::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.site-root--docs .theme-doc-sidebar-container .menu::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: var(--site-border-strong);
 }
 
 .site-root--docs .theme-doc-sidebar-menu {
-  padding: var(--site-doc-sidebar-top) 1.15rem 3.5rem 0.1rem;
+  padding: var(--site-doc-sidebar-top) var(--space-5) 3.5rem 0;
 }
 
 .site-root--docs .theme-doc-sidebar-menu > .menu__list-item {
-  margin: 0.08rem 0;
+  margin: 0 0 var(--space-5);
 }
 
+/* A rule between groups, so the rail reads as sections rather than one list. */
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item + .menu__list-item {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--site-border);
+}
+
+/*
+ * Top-level categories read as section labels, not as links — the same move
+ * shadcn/ui and Vercel's docs make. It gives the rail a scannable structure
+ * instead of one flat list of same-weight items.
+ *
+ * Bold sentence case, not uppercase with wide tracking: at 12px, letterspaced
+ * caps are the slowest thing on the page to read, and these labels are the
+ * first thing a reader scans.
+ *
+ * Matched through `.menu__list-item-collapsible`, which only a category
+ * renders. A top-level entry that is a plain doc — `intro` is one — stays a
+ * normal row and keeps its hover and its active pill.
+ */
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible > .menu__link {
+  padding: 0.15rem var(--space-2) var(--space-2);
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.005em;
+  text-transform: none;
+}
+
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible:hover,
+.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible > .menu__link:hover {
+  background: transparent;
+}
+
+/*
+ * Nesting is expressed by indent alone. The indent guide lines that used to
+ * run down these lists competed with the active pill for the same 1px of
+ * horizontal space and made a two-level rail look like a file tree.
+ */
 .site-root--docs .theme-doc-sidebar-menu .menu__list .menu__list {
-  margin: 0.1rem 0 0.35rem 0.55rem;
-  padding-left: 0.65rem;
-  border-left: 1px solid var(--site-border);
+  margin: 0;
+  padding-left: var(--space-3);
+}
+
+.site-root--docs .theme-doc-sidebar-menu .menu__list .menu__list-item + .menu__list-item {
+  margin-top: 2px;
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__list-item-collapsible {
-  border-radius: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__link {
-  min-height: 1.75rem;
-  padding: 0.3rem 0.45rem;
-  border-radius: 0.2rem;
+  position: relative;
+  min-height: 2.1rem;
+  padding: 0.42rem var(--space-3);
+  border-radius: var(--radius-md);
   background: transparent;
-  color: var(--site-muted-bright);
+  color: var(--site-muted);
   font-size: var(--site-doc-nav-size);
-  font-weight: 400;
-  line-height: 1.35;
+  font-weight: var(--site-font-weight-normal);
+  line-height: 1.4;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
-}
-
-.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__link,
-.site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible > .menu__link {
-  font-weight: 600;
+    background-color var(--site-transition-fast),
+    color var(--site-transition-fast);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__link:hover {
@@ -154,14 +166,20 @@
   background: transparent;
   box-shadow: none;
   color: var(--site-text-strong);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-medium);
 }
 
+/*
+ * The current page is a filled pill — a tinted rounded rectangle with accent
+ * text, and nothing else. No accent bar and no rule: the fill already carries
+ * the state, and stacking three markers on one row read as a defect.
+ */
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page'],
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page']:hover {
-  background: transparent;
+  background: var(--site-accent-soft);
+  box-shadow: none;
   color: var(--site-accent-strong);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-medium);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret {
@@ -170,7 +188,7 @@
   width: 1.75rem;
   min-height: 1.75rem;
   padding: 0;
-  border-radius: 0.2rem;
+  border-radius: var(--radius-sm);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__caret:hover {
@@ -180,13 +198,13 @@
 .site-root--docs .theme-doc-sidebar-menu .menu__caret::before,
 .site-root--docs .theme-doc-sidebar-menu .menu__link--sublist-caret::after {
   flex: 0 0 1.25rem;
-  opacity: 0.58;
-  transform: scale(0.68) rotate(180deg);
+  opacity: 0.5;
+  transform: scale(0.62) rotate(180deg);
 }
 
 .site-root--docs .theme-doc-sidebar-menu .menu__list-item--collapsed .menu__caret::before,
 .site-root--docs .theme-doc-sidebar-menu .menu__list-item--collapsed .menu__link--sublist-caret::after {
-  transform: scale(0.68) rotate(90deg);
+  transform: scale(0.62) rotate(90deg);
 }
 
 .site-root--docs .theme-doc-sidebar-container button[class*='collapseSidebarButton'] {
@@ -217,12 +235,17 @@
   box-shadow: none;
 }
 
+/*
+ * Breadcrumbs read as the eyebrow over the H1, not as a navigation strip:
+ * same mono micro-type that `.site-eyebrow` gives the research and community
+ * page headers, held muted so the title stays the loudest thing in the column.
+ */
 .theme-doc-breadcrumbs {
   margin: 0 0 var(--site-doc-breadcrumb-gap);
 }
 
 .theme-doc-breadcrumbs .breadcrumbs {
-  gap: 0.1rem;
+  gap: 0;
 }
 
 .theme-doc-breadcrumbs .breadcrumbs__item {
@@ -231,13 +254,16 @@
 
 .theme-doc-breadcrumbs .breadcrumbs__link,
 .theme-doc-breadcrumbs .breadcrumbs__item--active .breadcrumbs__link {
-  padding: 0.1rem 0.2rem;
-  border-radius: 0.15rem;
+  padding: 0;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--site-muted);
-  font-size: var(--site-doc-nav-size);
-  font-weight: 400;
-  line-height: 1.35;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.14em;
+  line-height: 1.4;
+  text-transform: uppercase;
 }
 
 .theme-doc-breadcrumbs .breadcrumbs__link:hover {
@@ -249,10 +275,28 @@
   color: var(--site-muted-bright);
 }
 
+/*
+ * Infima draws the separator as a sized, filtered background image. A slash
+ * sits better with letterspaced mono and needs no asset — so the image, the
+ * fixed box it was given and the filter over it all have to come back off.
+ */
 .theme-doc-breadcrumbs .breadcrumbs__item:not(:last-child)::after {
-  margin: 0 0.12rem;
-  opacity: 0.45;
-  transform: scale(0.72);
+  content: '/';
+  width: auto;
+  height: auto;
+  margin: 0 var(--space-2) 0 calc(var(--space-2) - 0.14em);
+  background: none;
+  color: var(--site-muted);
+  filter: none;
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  opacity: 0.55;
+  transform: none;
+}
+
+/* The home crumb is an icon-only link; the eyebrow starts at the section. */
+.theme-doc-breadcrumbs .breadcrumbs__item:first-child:has(svg) {
+  display: none;
 }
 
 /* The version is already available in the global docs version control. */
@@ -264,7 +308,34 @@
   max-width: none;
   color: var(--site-muted-bright);
   font-size: var(--site-doc-body-size);
-  line-height: 1.6;
+  line-height: 1.7;
+}
+
+/*
+ * Fluid column, fixed measure.
+ *
+ * The article column grows with the viewport, but running text stops at
+ * --measure so a wide monitor does not produce 200-character lines. Anything
+ * that genuinely wants the width — code, tables, images, diagrams, admonitions
+ * — breaks back out below.
+ */
+.theme-doc-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6),
+.theme-doc-markdown > .theme-admonition,
+.theme-doc-markdown > header {
+  max-width: var(--measure);
+}
+
+.theme-doc-markdown > h2 > span,
+.theme-doc-markdown > h2 {
+  text-wrap: balance;
+}
+
+/* An admonition is running text and stays on the measure above; these are
+   the things that genuinely want the column. */
+.theme-doc-markdown > :is(pre, table, img, figure, .tabs-container, details),
+.theme-doc-markdown > div:has(> table),
+.theme-doc-markdown > div:has(> pre) {
+  max-width: none;
 }
 
 .theme-doc-markdown > header {
@@ -275,10 +346,10 @@
 .theme-doc-markdown > h1:first-child {
   margin: 0;
   color: var(--site-text-strong);
-  font-size: 2em;
-  font-weight: 300;
-  line-height: 1.3;
-  letter-spacing: -0.025em;
+  font-size: var(--text-3xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
   text-wrap: balance;
 }
 
@@ -306,35 +377,55 @@
   margin: 0.25rem 0;
 }
 
+/*
+ * No rules or borders on headings anywhere in the article.
+ *
+ * An H2 used to carry `border-top: 1px solid`. Space separates sections just
+ * as well and does not chop a scrolling page into boxes — so the margin above
+ * an H2 is now large and the margin below it small, which is what actually
+ * binds a heading to the text it introduces.
+ */
+.theme-doc-markdown h1,
 .theme-doc-markdown h2,
 .theme-doc-markdown h3,
 .theme-doc-markdown h4,
 .theme-doc-markdown h5,
 .theme-doc-markdown h6 {
+  /* Also the containing block for the anchor marker, which hangs outside. */
+  position: relative;
+  border: 0;
   color: var(--site-text-strong);
   text-wrap: balance;
 }
 
+/* ~56px above, ~17px below at the H2 size: enough to read as a section break
+   without leaving a hole, and still asymmetric so the heading binds to the
+   text under it rather than floating between two blocks. */
 .theme-doc-markdown h2 {
-  margin: 1.6em 0 0.64em;
-  font-size: 1.5625em;
-  font-weight: 300;
-  line-height: 1.4;
-  letter-spacing: -0.02em;
+  margin: 2em 0 0.6em;
+  padding-top: 0;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.theme-doc-markdown h2:first-child {
+  margin-top: 0;
 }
 
 .theme-doc-markdown h3 {
-  margin: 1.6em 0 0.8em;
-  font-size: 1.25em;
-  font-weight: 400;
-  line-height: 1.5;
-  letter-spacing: -0.012em;
+  margin: 1.7em 0 0.5em;
+  font-size: var(--text-xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.35;
+  letter-spacing: -0.018em;
 }
 
 .theme-doc-markdown h4 {
   margin: 1em 0;
   font-size: 1em;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
   line-height: 1.5;
   letter-spacing: -0.008em;
 }
@@ -343,14 +434,14 @@
 .theme-doc-markdown h6 {
   margin: 1.2rem 0 0.4rem;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.45;
   letter-spacing: 0;
 }
 
 .theme-doc-markdown a:not(.hash-link) {
   color: var(--site-accent-strong);
-  font-weight: 500;
+  font-weight: var(--site-font-weight-medium);
   text-decoration-color: transparent;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.16em;
@@ -364,8 +455,39 @@
   text-decoration-color: currentcolor;
 }
 
+/*
+ * The anchor marker hangs in the gutter to the LEFT of the heading, outside
+ * the text column, and only on hover. Inline after the text it moved the
+ * heading's right edge on hover and read as part of the title.
+ *
+ * Docusaurus already handles the opacity fade; only the position, the size
+ * and the colour are ours. `right: 100%` measures from the heading's own left
+ * edge, which is the left edge of the text column.
+ */
 .theme-doc-markdown .hash-link {
-  color: var(--site-accent);
+  color: var(--site-muted);
+  font-weight: var(--site-font-weight-normal);
+}
+
+.theme-doc-markdown .hash-link:hover {
+  color: var(--site-accent-strong);
+}
+
+@media (min-width: 997px) {
+  .theme-doc-markdown .hash-link {
+    position: absolute;
+    top: 0;
+    right: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.3em;
+    padding: 0;
+    border-radius: var(--radius-sm);
+    font-size: var(--text-base);
+    line-height: 1;
+  }
 }
 
 .theme-doc-markdown blockquote {
@@ -387,7 +509,7 @@
 .theme-doc-markdown :not(pre) > code {
   padding: 0.12em 0.3em;
   border: 1px solid var(--site-border);
-  border-radius: 0.22rem;
+  border-radius: var(--radius-sm);
   background: var(--site-code-bg);
   color: var(--site-text);
   font-size: 0.84em;
@@ -401,7 +523,7 @@
 .theme-doc-markdown pre,
 .theme-doc-markdown .theme-code-block {
   border-color: var(--site-border);
-  border-radius: 0.38rem;
+  border-radius: var(--radius-md);
   box-shadow: none;
 }
 
@@ -421,7 +543,7 @@
   border-collapse: separate;
   border: 1px solid var(--site-border);
   border-spacing: 0;
-  border-radius: 0.28rem;
+  border-radius: var(--radius-sm);
   font-size: 0.8em;
   line-height: 1.5;
 }
@@ -456,7 +578,7 @@
   margin: 1.05rem 0;
   border: 1px solid var(--site-admonition-border);
   border-left: 3px solid var(--ifm-alert-border-color);
-  border-radius: 0.38rem;
+  border-radius: var(--radius-md);
   background: var(--site-admonition-bg);
   box-shadow: none;
   font-size: 0.86rem;
@@ -471,7 +593,7 @@
   border-radius: 0;
   color: var(--site-muted-bright);
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .theme-doc-markdown .tabs__item--active {
@@ -481,7 +603,7 @@
 .theme-doc-markdown details {
   margin: 1rem 0;
   border: 1px solid var(--site-border);
-  border-radius: 0.38rem;
+  border-radius: var(--radius-md);
   background: var(--site-surface-soft);
 }
 
@@ -489,24 +611,60 @@
 .theme-doc-markdown [class*='zoomContainer'] {
   margin: 1.1rem 0;
   border: 1px solid var(--site-border);
-  border-radius: 0.38rem;
+  border-radius: var(--radius-md);
   background: var(--site-mermaid-bg);
 }
 
-/* Right table of contents ------------------------------------------ */
+/*
+ * Right table of contents -------------------------------------------
+ *
+ * Pinned below the navbar for the whole scroll of the article. `position` is
+ * declared here rather than left to the theme's own module class, which loses
+ * to nothing but is easy to lose track of — and the rail is useless the moment
+ * it scrolls away. It needs a column taller than itself to travel through;
+ * that is the `align-self` on `.col--3` further down.
+ */
 .theme-doc-toc-desktop {
+  position: sticky;
   top: calc(var(--site-header-height) + 1.25rem);
-  max-height: calc(100vh - var(--site-header-height) - 2.5rem);
+  max-height: calc(100vh - var(--site-header-height) - 3.5rem);
   overflow-y: auto;
   padding: 0;
   scrollbar-color: var(--site-border-strong) transparent;
   scrollbar-width: thin;
 }
 
+/*
+ * A titled rail, so the column reads as "where am I on this page".
+ *
+ * The list glyph is a background image rather than a second pseudo-element,
+ * because `::before` is already carrying the label. It is drawn per color
+ * mode below: a data URI cannot resolve `currentColor`.
+ */
+.theme-doc-toc-desktop::before {
+  content: 'On this page';
+  display: block;
+  margin-bottom: var(--space-3);
+  padding-left: calc(14px + var(--space-2));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23556070' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6 4h8M6 8h8M6 12h8M2.6 4h.01M2.6 8h.01M2.6 12h.01'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: left 0.05em;
+  background-size: 14px 14px;
+  color: var(--site-text-strong);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.06em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+html[data-theme='dark'] .theme-doc-toc-desktop::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23a1a1aa' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M6 4h8M6 8h8M6 12h8M2.6 4h.01M2.6 8h.01M2.6 12h.01'/%3E%3C/svg%3E");
+}
+
 .theme-doc-toc-desktop .table-of-contents {
-  padding: 0 0 0 0.8rem;
+  padding: 0;
   border: 0;
-  border-left: 1px solid var(--site-border);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -515,27 +673,39 @@
 }
 
 .theme-doc-toc-desktop .table-of-contents ul {
-  margin-top: 0.08rem;
-  padding-left: 0.65rem;
+  margin-top: 0;
+  padding-left: var(--space-3);
 }
 
 .theme-doc-toc-desktop .table-of-contents__link {
+  position: relative;
   display: block;
-  padding: 0.2rem 0;
+  padding: 0.35rem 0 0.35rem var(--space-3);
+  border-left: 1px solid var(--site-border);
   color: var(--site-muted);
   font-size: var(--site-doc-nav-size);
-  font-weight: 400;
-  line-height: 1.38;
-  transition: color 140ms ease;
+  font-weight: var(--site-font-weight-normal);
+  line-height: 1.4;
+  transition:
+    color var(--site-transition-fast),
+    border-color var(--site-transition-fast);
 }
 
 .theme-doc-toc-desktop .table-of-contents__link:hover {
-  color: var(--site-text);
+  border-left-color: var(--site-border-strong);
+  color: var(--site-text-strong);
 }
 
+/*
+ * The active entry thickens the hairline to 2px in the accent colour and
+ * takes accent text. The negative margin absorbs the extra pixel so the
+ * labels do not shift sideways as the reader scrolls.
+ */
 .theme-doc-toc-desktop .table-of-contents__link--active {
+  margin-left: -1px;
+  border-left: 2px solid var(--site-accent);
   color: var(--site-accent-strong);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-medium);
 }
 
 /* Footer navigation ------------------------------------------------ */
@@ -553,12 +723,18 @@
 }
 
 .site-docs-shell .pagination-nav__link {
-  min-height: 4.25rem;
-  padding: 0.65rem 0.75rem;
+  min-height: 4.5rem;
+  padding: var(--space-4);
   border-color: var(--site-border);
-  border-radius: 0.28rem;
-  background: transparent;
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
   box-shadow: none;
+}
+
+.site-docs-shell .pagination-nav__link:hover {
+  border-color: var(--site-hover-border);
+  background: var(--site-surface-alt);
+  transform: none;
 }
 
 .site-docs-shell .pagination-nav__link:hover {
@@ -569,7 +745,7 @@
 .site-docs-shell .pagination-nav__sublabel {
   color: var(--site-muted);
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -591,7 +767,19 @@
   outline-offset: 2px;
 }
 
-/* Centered three-rail canvas --------------------------------------- */
+/*
+ * Three-rail canvas -------------------------------------------------
+ *
+ * Left-flush and right-flush: the sidebar sits against the left gutter, the
+ * table of contents against the right one, and the article lands between
+ * them. The article column is deliberately NOT centred in the viewport — it
+ * starts where the rail leaves it, which is what keeps a docs page and a
+ * research page on the same left edge.
+ *
+ * The column itself is fluid (`minmax(0, 1fr)`); only the running text inside
+ * it stops at --measure, so tables, code blocks and figures keep the full
+ * width of the column.
+ */
 @media (min-width: 997px) {
   .site-root--docs .theme-doc-sidebar-container {
     margin-left: var(--site-doc-page-gutter);
@@ -624,13 +812,26 @@
     padding: 0;
   }
 
+  /*
+   * The row is `align-items: start`, which sizes every column to its own
+   * content. That left the TOC column exactly as tall as the list inside it,
+   * so the sticky rail had zero distance to travel and scrolled away with the
+   * article. Stretching this one column to the row's height is what pins it.
+   */
   .site-docs-shell > .row > .col.col--3 {
+    align-self: stretch;
     padding-top: var(--site-doc-rail-top);
   }
 }
 
-/* The desktop TOC is too costly once the article rail becomes narrow. */
-@media (max-width: 1180px) and (min-width: 997px) {
+/*
+ * The desktop TOC is too costly once the article column becomes narrow.
+ *
+ * An 18rem rail plus a 17rem TOC is 560px of chrome; below 1280px that leaves
+ * the article around 500px and the reading measure collapses. The collapsible
+ * mobile TOC takes over instead — the same information, none of the width.
+ */
+@media (max-width: 1279px) and (min-width: 997px) {
   .site-docs-shell > .row {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -643,21 +844,26 @@
     display: block;
     margin: 0 0 1.25rem;
     border: 1px solid var(--site-border);
-    border-radius: 0.28rem;
+    border-radius: var(--radius-sm);
     background: var(--site-surface-soft);
   }
 
   .site-root--docs .theme-doc-toc-mobile button {
     color: var(--site-text);
     font-size: 0.78rem;
-    font-weight: 600;
+    font-weight: var(--site-font-weight-semibold);
   }
 }
 
-/* Mobile docs keep the same hierarchy without carrying desktop rails. */
+/*
+ * Mobile docs keep the same hierarchy without carrying desktop rails.
+ *
+ * The gutter is left alone here: below --page-max the base value already
+ * reduces to --gutter, which is what the navbar and footer use, so the
+ * article stays on their left edge instead of an override of its own.
+ */
 @media (max-width: 996px) {
   .site-root--docs {
-    --site-doc-page-gutter: 1.25rem;
     --site-doc-rail-top: 2.5rem;
   }
 
@@ -678,20 +884,19 @@
   .theme-doc-toc-mobile {
     margin: 0 0 1.25rem;
     border: 1px solid var(--site-border);
-    border-radius: 0.28rem;
+    border-radius: var(--radius-sm);
     background: var(--site-surface-soft);
   }
 
   .theme-doc-toc-mobile button {
     color: var(--site-text);
     font-size: 0.78rem;
-    font-weight: 600;
+    font-weight: var(--site-font-weight-semibold);
   }
 }
 
 @media (max-width: 640px) {
   .site-root--docs {
-    --site-doc-page-gutter: 1rem;
     --site-doc-rail-top: 2.25rem;
   }
 
@@ -700,7 +905,7 @@
   }
 
   .theme-doc-markdown h2 {
-    margin-top: 1.5em;
+    margin-top: 1.6em;
   }
 
   .theme-doc-markdown table {

@@ -1,36 +1,53 @@
+/*
+ * Primary navigation.
+ *
+ * These links used to be hard-coded to dark-chrome literals (`#d4d4d8`, and
+ * `#fff` for the active item). Once the navbar started following the color
+ * mode, the active link rendered white on a white bar — so on every page in
+ * light mode the current section showed as a blue underline with no label.
+ * Everything here now resolves through `--site-*`.
+ */
 .root {
   display: flex;
   align-items: center;
   height: 100%;
-  gap: 0.15rem;
+  gap: 2px;
+  margin-left: var(--space-2);
 }
 
 .link {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  min-height: 2.3rem;
-  padding: 0.58rem 0.78rem;
+  min-height: 2rem;
+  padding: 0.4rem 0.7rem;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: #d4d4d8;
-  font-size: 0.73rem;
-  font-weight: 550;
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-medium);
   line-height: 1;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
   transition:
-    background 180ms ease,
-    color 180ms ease,
-    box-shadow 180ms ease;
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
 }
 
 .link:hover,
-.link:focus-visible,
-.linkActive {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
-  box-shadow: inset 0 -2px var(--site-accent);
+.link:focus-visible {
+  background: var(--site-menu-hover);
+  color: var(--site-text-strong);
+  text-decoration: none;
+}
+
+.linkActive,
+.linkActive:hover {
+  background: var(--site-surface-soft);
+  color: var(--site-text-strong);
+  font-weight: var(--site-font-weight-semibold);
   text-decoration: none;
 }
 
@@ -39,7 +56,24 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 1339px) {
+/* The landing page keeps dark chrome in both color modes. */
+:global(.site-root--home) .link {
+  color: #a1a1aa;
+}
+
+:global(.site-root--home) .link:hover,
+:global(.site-root--home) .link:focus-visible,
+:global(.site-root--home) .linkActive {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fafafa;
+}
+
+/*
+ * Collapses at 996px, matching Docusaurus's own breakpoint and the rest of the
+ * chrome in shell.css. It used to disappear at 1339px, which put every 1280px
+ * laptop behind the hamburger menu.
+ */
+@media (max-width: 996px) {
   .root {
     display: none;
   }

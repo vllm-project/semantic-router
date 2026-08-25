@@ -91,14 +91,16 @@
   --page-max: 1760px;
   --gutter: clamp(1rem, 5vw, 4.5rem);
   --measure: 72ch;
-  --rail: 20rem;
+  /* 20rem read as too much horizontal space against the widened column gaps —
+   * the rail is a list of short labels, not a column of prose. */
+  --rail: 18rem;
   --toc: 17rem;
 
-  /* Held at main's values so this phase moves no layout. Phase 2 repoints them
-   * to --page-max / --measure alongside the shells that expect those numbers. */
-  --site-grid-max: 1400px;
-  --site-content-max: 1200px;
-  --site-doc-max: 840px;
+  /* Legacy aliases, now repointed onto the geometry above so the community,
+   * research and testimonial shells land on the same edges as the docs frame.
+   * --site-content-max is gone: nothing in src/ consumed it. */
+  --site-grid-max: var(--page-max);
+  --site-doc-max: var(--measure);
   --site-header-height: 4.9rem;
 
   /* Type scale — eight steps, replacing 78 ad-hoc literals. */

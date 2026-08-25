@@ -35,7 +35,7 @@ body,
 .site-page--home .main-wrapper,
 html[data-page-key='home'],
 body[data-page-key='home'] {
-  background: #030303;
+  background: #09090b;
 }
 
 * {
@@ -50,6 +50,7 @@ a:hover {
   text-decoration: none;
 }
 
+/* Size, weight and tracking are owned by typography.css. */
 h1,
 h2,
 h3,
@@ -57,8 +58,6 @@ h4,
 h5,
 h6 {
   color: var(--site-text-strong);
-  font-weight: 400;
-  letter-spacing: -0.03em;
 }
 
 p,
@@ -74,7 +73,7 @@ kbd {
 
 pre {
   border: 1px solid var(--site-border);
-  border-radius: 1.1rem;
+  border-radius: var(--radius-lg);
   background: var(--site-code-bg);
 }
 
@@ -86,15 +85,25 @@ img {
   max-width: 100%;
 }
 
+/*
+ * The one page container. Width comes from --page-max and the side margin from
+ * --gutter, so the navbar, footer, docs, blog, research and community shells
+ * all resolve to the same left and right edges at every viewport.
+ *
+ * Padding rather than a narrowed width: it keeps the gutter out of the
+ * children's layout maths, so a full-bleed child can still opt out.
+ *
+ * --page-max is the width of the CONTENT, not of the box — so the gutters are
+ * added to the cap rather than eaten out of it. Capping at --page-max and then
+ * padding inwards would put this edge a full gutter inside the docs rail,
+ * which resolves its own margin as `max(--gutter, (100% - --page-max) / 2)`.
+ * Both forms reduce to the same number at every viewport; keep them that way.
+ */
 .site-shell-container {
-  width: min(100% - 2.5rem, var(--site-grid-max));
-  margin: 0 auto;
-}
-
-@media (max-width: 768px) {
-  .site-shell-container {
-    width: min(100% - 1.4rem, var(--site-grid-max));
-  }
+  width: 100%;
+  max-width: calc(var(--page-max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
 }
 
 @media (prefers-reduced-motion: reduce) {
