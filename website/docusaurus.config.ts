@@ -245,9 +245,8 @@ const config: Config = {
       // opts back into dark chrome in shell.css, where its palette is pinned.
       logo: {
         alt: 'vLLM Semantic Router Logo',
-        // Stays on the white mark until shell.css stops pinning .navbar dark;
-        // the dark-ink .light.png would be invisible on that bar.
-        src: 'img/vllm-sr-logo.white.png',
+        // Logo follows color mode; homepage keeps dark chrome via theme/Navbar/Logo swizzle.
+        src: 'img/vllm-sr-logo.light.png',
         srcDark: 'img/vllm-sr-logo.white.png',
       },
       items: [

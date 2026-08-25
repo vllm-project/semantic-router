@@ -1,32 +1,45 @@
+/* Docs landing hero: left-aligned lockup on same measure as prose. */
 .docs-intro-brand {
-  margin: 2.75rem auto 2.5rem;
-  text-align: center;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-4);
+  max-width: var(--measure);
+  margin: 0 0 var(--space-6);
+  padding: var(--space-5);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(110% 140% at 0% 0%, var(--site-accent-soft), transparent 60%),
+    var(--site-surface-alt);
+  text-align: left;
 }
 
+/* Sized by width to match artwork across both color modes. */
 .docs-intro-brand__logo {
   display: block;
-  width: min(60%, 42rem);
+  width: 9rem;
   height: auto;
-  aspect-ratio: 2202 / 720;
-  object-fit: contain;
-  margin: 0 auto 1.25rem;
+  margin: 0;
 }
 
 .docs-intro-brand__tagline {
   margin: 0;
-  color: var(--ifm-heading-color);
-  font-size: clamp(1rem, 0.94rem + 0.25vw, 1.125rem);
-  font-weight: 650;
+  color: var(--site-muted-bright);
+  font-size: var(--text-base);
+  font-weight: var(--site-font-weight-normal);
   letter-spacing: -0.01em;
+  text-wrap: pretty;
 }
 
 @media (max-width: 576px) {
   .docs-intro-brand {
-    margin-block: 2rem 2.25rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-3);
+    padding: var(--space-4);
   }
 
   .docs-intro-brand__logo {
-    width: min(88%, 42rem);
-    margin-bottom: 1rem;
+    width: 7.5rem;
   }
 }
