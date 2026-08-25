@@ -8,19 +8,8 @@ import React from 'react'
 
 /**
  * Navbar brand.
- *
- * Everywhere except the landing page this is the stock `Logo`, which swaps
- * `logo.src` / `logo.srcDark` with the reader's color mode.
- *
- * The landing page is the exception: it is a dark-committed design, so
- * shell.css keeps the chrome dark in *both* color modes. The stock component
- * cannot serve that, and not for a CSS reason — `ThemedComponent` renders only
- * the variant matching the current color mode into the DOM, so in light mode
- * the white mark does not exist to be revealed. Hiding the dark-ink one there
- * leaves the brand slot empty, which is what happened.
- *
- * So on the home route the white mark is rendered directly, independent of
- * color mode.
+ * Stock Logo swaps src/srcDark with color mode. Homepage is dark-committed,
+ * so white mark renders directly (ThemedComponent only renders current mode variant).
  */
 function isHomeRoute(pathname: string): boolean {
   const localeNeutralPath = pathname

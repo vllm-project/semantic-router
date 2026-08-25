@@ -79,14 +79,7 @@ export default function NavbarContent(): ReactNode {
   const [, rightItems] = splitNavbarItems(items)
   const searchBarItem = items.find(item => item.type === 'search')
 
-  /*
-   * The call to action is pulled out so it can sit at the far end, after the
-   * utility controls. Search used to render after it, which put the widest
-   * control on the outside edge and stranded the primary action mid-row.
-   *
-   * Reading order, left to right: brand, sections, search, utilities, theme,
-   * action.
-   */
+  /* CTA pulled to far end. Reading order: brand, sections, search, utilities, theme, action. */
   const ctaItem = rightItems.find(item => item.className === CTA_CLASS_NAME)
   const utilityItems = rightItems.filter(item => item !== ctaItem)
 

@@ -1,14 +1,4 @@
-/*
- * Site chrome — navbar, footer, dropdowns.
- *
- * The navbar and footer used to be hard-coded dark in both color modes, which
- * put two black bands around a white page in light mode. They now resolve
- * through the `--site-*` tokens like every other surface.
- *
- * The homepage is still a dark-committed design (pages/index.module.css pins
- * its own palette), so it opts back into dark chrome via `.site-root--home`,
- * which Root.tsx renders server-side.
- */
+/* Site chrome: navbar, footer, dropdowns. Resolves through --site-* tokens. */
 .navbar {
   position: fixed;
   top: 0;
@@ -28,8 +18,7 @@
   padding-top: var(--site-header-height);
 }
 
-/* Same box as `.site-shell-container` in base.css — see the note there on why
-   the gutters are added to --page-max rather than taken out of it. */
+/* Same box as .site-shell-container in base.css. */
 .navbar__inner {
   width: 100%;
   max-width: calc(var(--page-max) + var(--gutter) * 2);
@@ -47,13 +36,7 @@
   min-width: 0;
 }
 
-/*
- * Sized by width, not height — see the note in docs-intro.css. The light and
- * dark marks are the same lockup on canvases padded differently, so Infima's
- * `.navbar__logo img { height: 100% }` rendered the light one a quarter wider
- * than the dark one. Height follows each file's own ratio and the brand link
- * centres whatever it gets, so the bar's height never moves.
- */
+/* Sized by width to match artwork across color modes (see docs-intro.css). */
 .navbar__logo {
   width: clamp(7rem, 8vw, 8.25rem);
   height: auto;
@@ -113,10 +96,7 @@
     border-color var(--site-transition-fast);
 }
 
-/*
- * Sentence case at 14px, not 11.7px uppercase. Uppercase micro-type with wide
- * tracking is measurably slower to read and is what dated the header most.
- */
+/* Sentence case at 14px, not uppercase micro-type. */
 .navbar__item.navbar__link,
 .navbar__item.dropdown > .navbar__link {
   display: inline-flex;
@@ -163,7 +143,7 @@
   color: var(--site-text-strong);
 }
 
-/* Primary action: a solid button on the same 32px control height as the rest. */
+/* Primary action: solid button on same 32px control height. */
 .navbar__item.navbar__link.nav-dashboard-cta,
 .navbar__items--right > .navbar__item.navbar__link.nav-dashboard-cta {
   min-height: 2rem;
@@ -217,18 +197,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   background: var(--site-menu-hover);
 }
 
-/* ------------------------------------------------------------------ *
- * Search
- *
- * The field itself belongs to @easyops-cn/docusaurus-search-local and is
- * themed in search.css, which still paints it as dark navbar chrome. The bar
- * follows the color mode now, so the five values that file reads are
- * repointed here. search.css imports after this one, so each override carries
- * one extra level of specificity rather than relying on source order.
- *
- * search.css belongs to the search phase; when it is rewritten these
- * overrides should move into it and the `.site-root` prefixes come off.
- * ------------------------------------------------------------------ */
+/* Search: repoint dark navbar chrome values to color-mode tokens. */
 .site-root .navbar {
   --search-navbar-surface: var(--site-surface-alt);
   --search-navbar-surface-hover: var(--site-surface-raised);
@@ -237,12 +206,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   --search-navbar-muted: var(--site-muted);
 }
 
-/*
- * An input-shaped pill on the same 2rem control height as the nav links, with
- * the Ctrl K chip sitting inside the field. It used to be a 4px-cornered box
- * an eighth of a rem taller than everything beside it, labelled in the same
- * letterspaced caps the links have since dropped.
- */
+/* Input-shaped pill on 2rem control height, no letterspaced caps. */
 .site-root .navbar .navbar__search-input {
   height: 2rem;
   border-radius: var(--radius-md);
@@ -256,12 +220,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   text-transform: none;
 }
 
-/*
- * search.css hides everything but search and the theme toggle below 1339px,
- * which was correct while the whole bar collapsed there. The collapse is at
- * 996px now, so the desktop row has to survive down to it — and that file's
- * `:not()` chain needs out-specifying, not reordering.
- */
+/* Keep desktop row visible down to 996px collapse point. */
 @media (min-width: 997px) and (max-width: 1339px) {
   .site-root .navbar__inner .navbar__items--right > .navbar__item.navbar__link {
     display: inline-flex;
@@ -272,9 +231,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   }
 }
 
-/* ------------------------------------------------------------------ *
- * Color mode toggle — extreme right of the navbar.
- * ------------------------------------------------------------------ */
+/* Color mode toggle. */
 .navbar .navbar-color-mode-toggle,
 .navbar-sidebar__brand .navbar-color-mode-toggle {
   display: inline-flex;
@@ -328,18 +285,7 @@ html[data-route-kind="blog"] .nav-docs-only {
   }
 }
 
-/*
- * Toggle icon: sun or moon only, never the "system" glyph.
- *
- * theme-classic picks the icon off `html[data-theme-choice]`, which stays
- * `system` until the reader picks a mode — misleading on a two-state button
- * (see the swizzle in `theme/Navbar/ColorModeToggle`). Fall back to the
- * resolved `data-theme`; Docusaurus's pre-paint script sets both attributes,
- * so this settles with no flash.
- *
- * `[class*=]` because the class names are hashed CSS modules, same as the
- * search plugin selectors in search.css.
- */
+/* Toggle icon: sun or moon only, never "system" glyph. */
 html[data-theme-choice='system'] [class*='systemToggleIcon_'] {
   display: none;
 }
@@ -349,19 +295,11 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   display: initial;
 }
 
-/* ------------------------------------------------------------------ *
- * Homepage: dark-committed chrome
- *
- * pages/index.module.css pins a dark palette on the landing page, so the
- * chrome above it stays dark regardless of the reader's color mode. Scoped on
- * `.site-root--home`, which Root.tsx renders server-side — `data-route-kind`
- * is only set in an effect, so it is missing from the SSR'd HTML and the
- * chrome would flash light before settling.
- * ------------------------------------------------------------------ */
+/* Homepage: dark-committed chrome via .site-root--home (server-side). */
 .site-root--home .navbar {
   border-bottom-color: rgba(255, 255, 255, 0.1);
   background: rgba(5, 5, 5, 0.82);
-  /* Keeps the search field on the dark chrome set; see the Search block above. */
+  /* Keep search field on dark chrome. */
   --search-navbar-surface: #18181b;
   --search-navbar-surface-hover: #27272a;
   --search-navbar-border: #3f3f46;
@@ -373,13 +311,7 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   color: #fafafa;
 }
 
-/*
- * The homepage always shows the white mark, since its chrome stays dark in
- * both color modes. That swap cannot be done here: `ThemedComponent` renders
- * only the variant matching the current color mode, so in light mode there is
- * no white image in the DOM to reveal. It is handled in the
- * `theme/Navbar/Logo` swizzle instead.
- */
+/* Homepage white mark handled in theme/Navbar/Logo swizzle. */
 
 .site-root--home .navbar__link,
 .site-root--home .navbar__item.navbar__link,
@@ -406,15 +338,13 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   color: #fafafa;
 }
 
-/* The color mode toggle moves no pixels on a dark-committed page. */
+/* Hide color mode toggle on dark-committed page. */
 .site-root--home .navbar .navbar-color-mode-toggle,
 .site-root--home .navbar-sidebar__brand .navbar-color-mode-toggle {
   display: none;
 }
 
-/* ------------------------------------------------------------------ *
- * Footer
- * ------------------------------------------------------------------ */
+/* Footer. */
 .footer {
   border-top: 1px solid var(--site-border);
   padding: var(--space-10) 0 var(--space-6);
@@ -508,18 +438,7 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   color: var(--site-text);
 }
 
-/* ------------------------------------------------------------------ *
- * Collapsed navigation
- *
- * Collapses at 996px, matching Docusaurus's own breakpoint. It used to
- * collapse at 1339px, which put every 1280px laptop behind the hamburger.
- * The bar fits now because every control shrank to the same 2rem height and
- * the links dropped their uppercase tracking.
- *
- * The right-hand group is hidden here, but search.css re-shows the container
- * so search and the theme toggle stay in the bar; everything else moves into
- * the sidebar, which renders the navbar items straight from the config.
- * ------------------------------------------------------------------ */
+/* Collapsed navigation at 996px. Right group hidden; search.css re-shows container. */
 @media (max-width: 996px) {
   .navbar__inner {
     gap: 0.4rem;
@@ -688,7 +607,7 @@ html[data-theme-choice='system'][data-theme='dark'] [class*='darkToggleIcon_'] {
   }
 }
 
-/* The sidebar caret glyphs are dark PNGs; invert them on a dark ground only. */
+/* Invert sidebar caret glyphs on dark ground. */
 html[data-theme='dark'] .navbar-sidebar .menu__caret::before,
 html[data-theme='dark'] .navbar-sidebar .menu__link--sublist-caret::after {
   filter: brightness(0) invert(1);

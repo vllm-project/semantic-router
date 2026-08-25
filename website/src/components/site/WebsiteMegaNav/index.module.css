@@ -1,12 +1,4 @@
-/*
- * Primary navigation.
- *
- * These links used to be hard-coded to dark-chrome literals (`#d4d4d8`, and
- * `#fff` for the active item). Once the navbar started following the color
- * mode, the active link rendered white on a white bar — so on every page in
- * light mode the current section showed as a blue underline with no label.
- * Everything here now resolves through `--site-*`.
- */
+/* Primary navigation. Resolves through --site-* tokens instead of hard-coded dark-chrome literals. */
 .root {
   display: flex;
   align-items: center;
@@ -68,11 +60,7 @@
   color: #fafafa;
 }
 
-/*
- * Collapses at 996px, matching Docusaurus's own breakpoint and the rest of the
- * chrome in shell.css. It used to disappear at 1339px, which put every 1280px
- * laptop behind the hamburger menu.
- */
+/* Collapses at 996px to match Docusaurus breakpoint and shell.css. */
 @media (max-width: 996px) {
   .root {
     display: none;

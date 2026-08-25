@@ -1,11 +1,4 @@
-/*
- * The docs landing hero.
- *
- * This used to be a 42rem-wide centred logo with a bold tagline under it,
- * which pushed the actual introduction below the fold and made the entry point
- * to the documentation look like a splash screen. It is now a left-aligned
- * lockup on the same measure as the prose that follows it.
- */
+/* Docs landing hero: left-aligned lockup on same measure as prose. */
 .docs-intro-brand {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -22,16 +15,7 @@
   text-align: left;
 }
 
-/*
- * Sized by width, with the height left to the file's own ratio.
- *
- * The two marks are the same lockup on differently padded canvases —
- * 2202x720 with almost no vertical padding, 1508x620 with about 19% of it.
- * Pinning `aspect-ratio` to the light file's ratio and letterboxing the other
- * with `object-fit: contain` scaled the dark mark down by a fifth, so the logo
- * changed size with the color mode. Both files carry the artwork across the
- * full canvas width, so matching on width matches the artwork.
- */
+/* Sized by width to match artwork across both color modes. */
 .docs-intro-brand__logo {
   display: block;
   width: 9rem;

@@ -1,10 +1,4 @@
-/*
- * `color-scheme` is declared in tokens.css alongside each palette. Repeating it
- * here would be dead code: `:root` outranks a bare `html` selector.
- *
- * The color-mode cross-fade also belongs here, not on `body` — `body`'s
- * background is a gradient, and `background-color` cannot animate one.
- */
+/* color-scheme declared in tokens.css. Cross-fade here since body background is a gradient. */
 html {
   background: var(--site-bg);
   color: var(--site-text);
@@ -50,7 +44,7 @@ a:hover {
   text-decoration: none;
 }
 
-/* Size, weight and tracking are owned by typography.css. */
+/* Typography owned by typography.css. */
 h1,
 h2,
 h3,
@@ -85,20 +79,7 @@ img {
   max-width: 100%;
 }
 
-/*
- * The one page container. Width comes from --page-max and the side margin from
- * --gutter, so the navbar, footer, docs, blog, research and community shells
- * all resolve to the same left and right edges at every viewport.
- *
- * Padding rather than a narrowed width: it keeps the gutter out of the
- * children's layout maths, so a full-bleed child can still opt out.
- *
- * --page-max is the width of the CONTENT, not of the box — so the gutters are
- * added to the cap rather than eaten out of it. Capping at --page-max and then
- * padding inwards would put this edge a full gutter inside the docs rail,
- * which resolves its own margin as `max(--gutter, (100% - --page-max) / 2)`.
- * Both forms reduce to the same number at every viewport; keep them that way.
- */
+/* Shared page container: --page-max + gutters. Padding allows full-bleed children to opt out. */
 .site-shell-container {
   width: 100%;
   max-width: calc(var(--page-max) + var(--gutter) * 2);

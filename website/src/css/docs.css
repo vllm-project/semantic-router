@@ -1,36 +1,10 @@
-/*
- * Documentation reading layout
- *
- * Keep the documentation surface quiet and dense: one centered three-rail
- * canvas, a compact navigation rail, and a readable article measure. The
- * header remains shared with the rest of the site; everything below it is
- * deliberately closer to a reference manual than a marketing page.
- */
+/* Documentation reading layout: three-rail canvas, compact nav, readable measure. */
 .site-root--docs {
-  /*
-   * Geometry comes from the shared tokens, so the docs canvas resolves to the
-   * same left and right edges as the navbar, blog, research and community.
-   *
-   * The canvas used to step up at 1600px and again at 2000px — including the
-   * body font size, 1rem → 1.1rem → 1.2rem. No other section did that, so
-   * moving from a doc page to a blog post visibly resized the site on a large
-   * monitor. Readability on wide screens is handled by --measure below
-   * instead, which caps the line length without touching the type scale.
-   */
+  /* Geometry from shared tokens for consistent edges. No step-up at 1600/2000px to avoid resizing. */
   --site-doc-canvas: var(--page-max);
   --site-doc-sidebar-width: var(--rail);
   --site-doc-toc-width: var(--toc);
-  /*
-   * The column gaps are what make a three-rail layout feel airy instead of
-   * like three panels pushed together, so they are far larger than the
-   * --space-6 both used to be: ~110px from the rail to the text and ~130px
-   * from the text to the table of contents at 1920px.
-   *
-   * Fluid rather than fixed, because at 1280px those numbers would leave the
-   * article under 400px wide. Each ramps linearly from the --space-6 floor at
-   * ~1220px to its cap at 1920px, then holds — the frame stops growing at
-   * --page-max, so the gaps stop with it.
-   */
+  /* Fluid column gaps: ramp from --space-6 at ~1220px to cap at 1920px. */
   --site-doc-content-inset: clamp(var(--space-6), calc(12.19vw - 124px), 6.875rem);
   --site-doc-column-gap: clamp(var(--space-6), calc(14.06vw - 140px), 8.125rem);
   --site-doc-rail-top: 2.5rem;
@@ -89,25 +63,13 @@
   margin: 0 0 var(--space-5);
 }
 
-/* A rule between groups, so the rail reads as sections rather than one list. */
+/* Rule between groups for section separation. */
 .site-root--docs .theme-doc-sidebar-menu > .menu__list-item + .menu__list-item {
   padding-top: var(--space-5);
   border-top: 1px solid var(--site-border);
 }
 
-/*
- * Top-level categories read as section labels, not as links — the same move
- * shadcn/ui and Vercel's docs make. It gives the rail a scannable structure
- * instead of one flat list of same-weight items.
- *
- * Bold sentence case, not uppercase with wide tracking: at 12px, letterspaced
- * caps are the slowest thing on the page to read, and these labels are the
- * first thing a reader scans.
- *
- * Matched through `.menu__list-item-collapsible`, which only a category
- * renders. A top-level entry that is a plain doc — `intro` is one — stays a
- * normal row and keeps its hover and its active pill.
- */
+/* Top-level categories as section labels (bold sentence case, not uppercase). */
 .site-root--docs .theme-doc-sidebar-menu > .menu__list-item > .menu__list-item-collapsible > .menu__link {
   padding: 0.15rem var(--space-2) var(--space-2);
   color: var(--site-text-strong);
@@ -122,11 +84,7 @@
   background: transparent;
 }
 
-/*
- * Nesting is expressed by indent alone. The indent guide lines that used to
- * run down these lists competed with the active pill for the same 1px of
- * horizontal space and made a two-level rail look like a file tree.
- */
+/* Nesting by indent only; removed guide lines that competed with active pill. */
 .site-root--docs .theme-doc-sidebar-menu .menu__list .menu__list {
   margin: 0;
   padding-left: var(--space-3);
@@ -169,11 +127,7 @@
   font-weight: var(--site-font-weight-medium);
 }
 
-/*
- * The current page is a filled pill — a tinted rounded rectangle with accent
- * text, and nothing else. No accent bar and no rule: the fill already carries
- * the state, and stacking three markers on one row read as a defect.
- */
+/* Current page as filled pill with accent text. No accent bar or rule. */
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page'],
 .site-root--docs .theme-doc-sidebar-menu .menu__link--active[aria-current='page']:hover {
   background: var(--site-accent-soft);
@@ -235,11 +189,7 @@
   box-shadow: none;
 }
 
-/*
- * Breadcrumbs read as the eyebrow over the H1, not as a navigation strip:
- * same mono micro-type that `.site-eyebrow` gives the research and community
- * page headers, held muted so the title stays the loudest thing in the column.
- */
+/* Breadcrumbs as eyebrow over H1: mono micro-type, muted. */
 .theme-doc-breadcrumbs {
   margin: 0 0 var(--site-doc-breadcrumb-gap);
 }
@@ -275,11 +225,7 @@
   color: var(--site-muted-bright);
 }
 
-/*
- * Infima draws the separator as a sized, filtered background image. A slash
- * sits better with letterspaced mono and needs no asset — so the image, the
- * fixed box it was given and the filter over it all have to come back off.
- */
+/* Slash separator instead of Infima's background image. */
 .theme-doc-breadcrumbs .breadcrumbs__item:not(:last-child)::after {
   content: '/';
   width: auto;
@@ -294,12 +240,12 @@
   transform: none;
 }
 
-/* The home crumb is an icon-only link; the eyebrow starts at the section. */
+/* Hide home crumb; eyebrow starts at section. */
 .theme-doc-breadcrumbs .breadcrumbs__item:first-child:has(svg) {
   display: none;
 }
 
-/* The version is already available in the global docs version control. */
+/* Version in global docs version control. */
 .site-root--docs .theme-doc-version-badge {
   display: none;
 }
@@ -311,14 +257,7 @@
   line-height: 1.7;
 }
 
-/*
- * Fluid column, fixed measure.
- *
- * The article column grows with the viewport, but running text stops at
- * --measure so a wide monitor does not produce 200-character lines. Anything
- * that genuinely wants the width — code, tables, images, diagrams, admonitions
- * — breaks back out below.
- */
+/* Fluid column, fixed measure: running text stops at --measure, wide elements break out. */
 .theme-doc-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6),
 .theme-doc-markdown > .theme-admonition,
 .theme-doc-markdown > header {
@@ -330,8 +269,7 @@
   text-wrap: balance;
 }
 
-/* An admonition is running text and stays on the measure above; these are
-   the things that genuinely want the column. */
+/* Wide elements break out of measure. */
 .theme-doc-markdown > :is(pre, table, img, figure, .tabs-container, details),
 .theme-doc-markdown > div:has(> table),
 .theme-doc-markdown > div:has(> pre) {
@@ -377,14 +315,7 @@
   margin: 0.25rem 0;
 }
 
-/*
- * No rules or borders on headings anywhere in the article.
- *
- * An H2 used to carry `border-top: 1px solid`. Space separates sections just
- * as well and does not chop a scrolling page into boxes — so the margin above
- * an H2 is now large and the margin below it small, which is what actually
- * binds a heading to the text it introduces.
- */
+/* No rules/borders on headings. Space separates sections. */
 .theme-doc-markdown h1,
 .theme-doc-markdown h2,
 .theme-doc-markdown h3,
@@ -398,9 +329,7 @@
   text-wrap: balance;
 }
 
-/* ~56px above, ~17px below at the H2 size: enough to read as a section break
-   without leaving a hole, and still asymmetric so the heading binds to the
-   text under it rather than floating between two blocks. */
+/* H2 margin: large above, small below to bind to following text. */
 .theme-doc-markdown h2 {
   margin: 2em 0 0.6em;
   padding-top: 0;
@@ -455,15 +384,7 @@
   text-decoration-color: currentcolor;
 }
 
-/*
- * The anchor marker hangs in the gutter to the LEFT of the heading, outside
- * the text column, and only on hover. Inline after the text it moved the
- * heading's right edge on hover and read as part of the title.
- *
- * Docusaurus already handles the opacity fade; only the position, the size
- * and the colour are ours. `right: 100%` measures from the heading's own left
- * edge, which is the left edge of the text column.
- */
+/* Anchor marker in left gutter on hover, not inline after text. */
 .theme-doc-markdown .hash-link {
   color: var(--site-muted);
   font-weight: var(--site-font-weight-normal);
@@ -615,15 +536,7 @@
   background: var(--site-mermaid-bg);
 }
 
-/*
- * Right table of contents -------------------------------------------
- *
- * Pinned below the navbar for the whole scroll of the article. `position` is
- * declared here rather than left to the theme's own module class, which loses
- * to nothing but is easy to lose track of — and the rail is useless the moment
- * it scrolls away. It needs a column taller than itself to travel through;
- * that is the `align-self` on `.col--3` further down.
- */
+/* Right TOC: sticky below navbar. align-self on .col--3 gives it travel distance. */
 .theme-doc-toc-desktop {
   position: sticky;
   top: calc(var(--site-header-height) + 1.25rem);
@@ -634,13 +547,7 @@
   scrollbar-width: thin;
 }
 
-/*
- * A titled rail, so the column reads as "where am I on this page".
- *
- * The list glyph is a background image rather than a second pseudo-element,
- * because `::before` is already carrying the label. It is drawn per color
- * mode below: a data URI cannot resolve `currentColor`.
- */
+/* Titled rail with list glyph as background image (::before carries label). */
 .theme-doc-toc-desktop::before {
   content: 'On this page';
   display: block;
@@ -696,11 +603,7 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
   color: var(--site-text-strong);
 }
 
-/*
- * The active entry thickens the hairline to 2px in the accent colour and
- * takes accent text. The negative margin absorbs the extra pixel so the
- * labels do not shift sideways as the reader scrolls.
- */
+/* Active entry: 2px accent border, negative margin absorbs extra pixel. */
 .theme-doc-toc-desktop .table-of-contents__link--active {
   margin-left: -1px;
   border-left: 2px solid var(--site-accent);
@@ -767,19 +670,7 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
   outline-offset: 2px;
 }
 
-/*
- * Three-rail canvas -------------------------------------------------
- *
- * Left-flush and right-flush: the sidebar sits against the left gutter, the
- * table of contents against the right one, and the article lands between
- * them. The article column is deliberately NOT centred in the viewport — it
- * starts where the rail leaves it, which is what keeps a docs page and a
- * research page on the same left edge.
- *
- * The column itself is fluid (`minmax(0, 1fr)`); only the running text inside
- * it stops at --measure, so tables, code blocks and figures keep the full
- * width of the column.
- */
+/* Three-rail canvas: left-flush sidebar, right-flush TOC, article between. Fluid column. */
 @media (min-width: 997px) {
   .site-root--docs .theme-doc-sidebar-container {
     margin-left: var(--site-doc-page-gutter);
@@ -812,25 +703,14 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
     padding: 0;
   }
 
-  /*
-   * The row is `align-items: start`, which sizes every column to its own
-   * content. That left the TOC column exactly as tall as the list inside it,
-   * so the sticky rail had zero distance to travel and scrolled away with the
-   * article. Stretching this one column to the row's height is what pins it.
-   */
+  /* Stretch TOC column to row height for sticky positioning. */
   .site-docs-shell > .row > .col.col--3 {
     align-self: stretch;
     padding-top: var(--site-doc-rail-top);
   }
 }
 
-/*
- * The desktop TOC is too costly once the article column becomes narrow.
- *
- * An 18rem rail plus a 17rem TOC is 560px of chrome; below 1280px that leaves
- * the article around 500px and the reading measure collapses. The collapsible
- * mobile TOC takes over instead — the same information, none of the width.
- */
+/* Hide desktop TOC below 1280px; mobile TOC takes over. */
 @media (max-width: 1279px) and (min-width: 997px) {
   .site-docs-shell > .row {
     grid-template-columns: minmax(0, 1fr);
@@ -855,13 +735,7 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
   }
 }
 
-/*
- * Mobile docs keep the same hierarchy without carrying desktop rails.
- *
- * The gutter is left alone here: below --page-max the base value already
- * reduces to --gutter, which is what the navbar and footer use, so the
- * article stays on their left edge instead of an override of its own.
- */
+/* Mobile docs: same hierarchy, no desktop rails. Gutter matches navbar/footer. */
 @media (max-width: 996px) {
   .site-root--docs {
     --site-doc-rail-top: 2.5rem;
