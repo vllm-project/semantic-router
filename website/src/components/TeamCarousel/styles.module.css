@@ -40,17 +40,38 @@
 }
 
 .viewport {
+  container-type: inline-size;
+  overflow: hidden;
+  padding: 1.35rem 0;
+  mask-image: linear-gradient(90deg, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
+}
+
+.viewport:hover .track {
+  animation-play-state: paused;
+}
+
+.viewport:focus-within {
   overflow-x: auto;
-  padding: 1.35rem 1rem 1.55rem;
   scroll-padding-inline: 1.25rem;
   scroll-snap-type: x proximity;
   scrollbar-color: var(--site-border-strong) transparent;
   scrollbar-width: thin;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+.viewport:focus-within .track {
+  animation: none;
+  transform: translateX(0);
+  will-change: auto;
 }
 
 .track {
   display: flex;
   width: max-content;
+  animation: team-marquee 220s linear infinite alternate;
+  will-change: transform;
 }
 
 .sequence {
@@ -179,10 +200,21 @@
   font-size: 0.95rem;
 }
 
+@keyframes team-marquee {
+  to {
+    transform: translateX(calc(-100% + 100cqw));
+  }
+}
+
 @media (max-width: 996px) {
   .teamFooter {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .viewport {
+    mask-image: linear-gradient(90deg, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
+    -webkit-mask-image: linear-gradient(90deg, transparent, #000 1.25rem, #000 calc(100% - 1.25rem), transparent);
   }
 }
 
@@ -220,6 +252,23 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .viewport {
+    overflow-x: auto;
+    padding-bottom: 1.25rem;
+    scroll-padding-inline: 1rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-color: var(--site-border-strong) transparent;
+    scrollbar-width: thin;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .track {
+    animation: none;
+    transform: translateX(0);
+    will-change: auto;
+  }
+
   .memberCard {
     transition: none;
   }
