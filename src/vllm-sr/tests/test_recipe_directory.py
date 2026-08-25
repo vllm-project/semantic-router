@@ -1,3 +1,4 @@
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -24,11 +25,11 @@ def _write_managed_recipe(tmp_path):
 def _capture_run_commands(monkeypatch):
     captured = []
 
-    def fake_run(cmd, capture_output, text, check):
+    def fake_run(cmd, capture_output, text, check, env=None):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )

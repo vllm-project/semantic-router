@@ -1,150 +1,317 @@
 .main {
   display: grid;
-  gap: 2rem;
+  gap: 3rem;
 }
 
-.intro,
-.promotion,
-.getInvolved,
-.contact {
-  display: grid;
-  gap: 1rem;
-  padding: 1.35rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
-}
-
-.workingGroupsSection {
-  display: grid;
-  gap: 1rem;
-}
-
-.workGroupsGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 1rem;
-}
-
-.workGroupCard {
-  display: grid;
-  gap: 1rem;
-  padding: 1.3rem;
-  border: 1px solid var(--site-border);
-  background: var(--site-surface);
-  transition:
-    transform 180ms ease,
-    border-color 180ms ease,
-    background 180ms ease;
-}
-
-.workGroupCard:hover {
-  transform: translateY(-2px);
-  border-color: var(--site-border-strong);
-  background: var(--site-surface-alt);
-}
-
-.cardHeader {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  align-items: center;
-}
-
-.icon {
-  display: grid;
-  place-items: center;
-  width: 2.4rem;
-  height: 2.4rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.groupName {
-  margin: 0;
-  font-size: 1.15rem;
-}
-
-.label {
-  display: inline-flex;
-  align-items: center;
-  min-height: 1.9rem;
-  padding: 0.18rem 0.6rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  color: var(--site-muted-bright);
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.description {
-  margin: 0;
-  color: var(--site-muted-bright);
-  line-height: 1.65;
-}
-
-.skillsSection,
-.needsSection {
-  display: grid;
-  gap: 0.5rem;
-}
-
-.skillsSection h4,
-.needsSection h4 {
-  margin: 0;
-  font-size: 0.82rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+.proposal a,
+.charterLink {
   color: var(--site-text);
-}
-
-.skillsList,
-.needsList,
-.stepsList {
-  margin: 0;
-  padding-left: 1.2rem;
-  color: var(--site-muted-bright);
-}
-
-.stepsList li,
-.contact li,
-.skillsList li,
-.needsList li {
-  line-height: 1.65;
-}
-
-.getInvolved code {
-  padding: 0.12rem 0.32rem;
-  border-radius: 0.35rem;
-  background: var(--site-badge-bg);
-}
-
-.link {
-  color: var(--site-text);
+  font-size: 0.78rem;
   text-decoration: underline;
   text-underline-offset: 0.18em;
 }
 
-@media (max-width: 996px) {
-  .workGroupsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.groupsSection,
+.participation {
+  display: grid;
+  gap: 1.35rem;
+}
+
+.groupsHeader {
+  display: grid;
+  gap: 0.45rem;
+  padding-top: 0.2rem;
+}
+
+.groupsHeader h2 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+.groupsHeader p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.sectionHeading {
+  display: grid;
+  grid-template-columns: minmax(8rem, 0.25fr) minmax(0, 0.75fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.sectionHeading > span,
+.groupIdentity > span,
+.focus h4,
+.rosterGroup > span {
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.66rem;
+  font-weight: var(--site-font-weight-bold);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.sectionHeading p {
+  max-width: 42rem;
+  margin: 0.55rem 0 0;
+  color: var(--site-muted-bright);
+  font-size: 0.86rem;
+  line-height: 1.6;
+}
+
+.groupList {
+  border-top: 1px solid var(--site-border-strong);
+}
+
+.workGroup {
+  display: grid;
+  grid-template-columns: 3.25rem minmax(13rem, 0.72fr) minmax(22rem, 1.28fr);
+  gap: 1.5rem;
+  padding: 1.6rem 0;
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.groupLogo img {
+  display: block;
+  width: 2.7rem;
+  height: 2.7rem;
+  object-fit: contain;
+}
+
+.groupIdentity {
+  display: grid;
+  gap: 0.55rem;
+  align-content: start;
+  min-width: 0;
+}
+
+.groupIdentity h3 {
+  margin: 0;
+  color: var(--site-text);
+  font-size: 1.25rem;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.groupIdentity p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.groupIdentity code {
+  justify-self: start;
+  overflow-wrap: anywhere;
+  padding: 0.16rem 0.38rem;
+  background: var(--site-badge-bg);
+  color: var(--site-muted-bright);
+  font-size: 0.65rem;
+}
+
+.groupDetails {
+  display: grid;
+  gap: 1.05rem;
+  min-width: 0;
+}
+
+.focus {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.focus h4 {
+  margin: 0;
+}
+
+.focus ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--site-border);
+  list-style: none;
+}
+
+.focus li {
+  padding: 0.48rem 0;
+  border-bottom: 1px solid var(--site-border);
+  color: var(--site-text);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.groupFooter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  gap: 1rem;
+  align-items: end;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--site-border);
+}
+
+.roster {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.rosterGroup {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.rosterGroup strong {
+  color: var(--site-text);
+  font-size: 0.75rem;
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.charterLink {
+  white-space: nowrap;
+}
+
+.person {
+  display: inline-flex;
+  gap: 0.4rem;
+  align-items: center;
+  color: var(--site-text);
+}
+
+.person img {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.rules {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  border-top: 1px solid var(--site-border-strong);
+}
+
+.rules > div {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.9rem;
+  padding: 0.9rem 0;
+  border-bottom: 1px solid var(--site-border);
+}
+
+.rules > div:nth-child(odd) {
+  padding-right: 1.5rem;
+}
+
+.rules > div:nth-child(even) {
+  padding-left: 1.5rem;
+  border-left: 1px solid var(--site-border);
+}
+
+.rules dt {
+  color: var(--site-text);
+  font-size: 0.76rem;
+  font-weight: var(--site-font-weight-bold);
+}
+
+.rules dd {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.proposal {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 0;
+  border-top: 1px solid var(--site-border-strong);
+  border-bottom: 1px solid var(--site-border-strong);
+}
+
+.proposal p {
+  margin: 0;
+  color: var(--site-muted-bright);
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.proposal strong {
+  color: var(--site-text);
+}
+
+@media (max-width: 1000px) {
+  .workGroup {
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+  }
+
+  .groupDetails {
+    grid-column: 2;
   }
 }
 
-@media (max-width: 768px) {
-  .workGroupsGrid {
+@media (max-width: 700px) {
+  .main {
+    gap: 2.25rem;
+  }
+
+  .sectionHeading {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .workGroup {
+    grid-template-columns: 2.7rem minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .groupLogo img {
+    width: 2.35rem;
+    height: 2.35rem;
+  }
+
+  .groupDetails {
+    grid-column: 1 / -1;
+  }
+
+  .groupFooter {
     grid-template-columns: 1fr;
   }
 
-  .intro,
-  .promotion,
-  .getInvolved,
-  .contact,
-  .workGroupCard {
-    padding: 1.1rem;
+  .rules {
+    grid-template-columns: 1fr;
+  }
+
+  .rules > div:nth-child(odd),
+  .rules > div:nth-child(even) {
+    padding-right: 0;
+    padding-left: 0;
+    border-left: 0;
   }
 }

@@ -50,6 +50,18 @@ NON_PR_E2E_RULES = {
         "response-api-redis-cluster",
     )
 }
+HARNESS_EXEC_PATTERNS = (
+    "tools/agent/*.yaml",
+    "tools/agent/requirements.txt",
+    "tools/agent/scripts/**",
+    "tools/ci/**",
+    "tools/make/agent.mk",
+    "tools/make/linter.mk",
+    "tools/make/pre-commit.mk",
+    "tools/docker/Dockerfile.precommit",
+    ".pre-commit-config.yaml",
+    ".github/workflows/pre-commit.yml",
+)
 
 
 @dataclass(frozen=True)
@@ -93,8 +105,28 @@ def is_documentation_path(path: str) -> bool:
     return path.endswith((".md", ".mdx"))
 
 
-def non_documentation_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
-    return tuple(path for path in paths if not is_documentation_path(path))
+def is_repository_ownership_path(path: str) -> bool:
+    return path == ".github/CODEOWNERS" or Path(path).name == "OWNER"
+
+
+def product_paths(paths: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        path
+        for path in paths
+        if not is_documentation_path(path) and not is_repository_ownership_path(path)
+    )
+
+
+def is_harness_only_change(changed: tuple[str, ...]) -> bool:
+    has_executable_change = any_matches(changed, *HARNESS_EXEC_PATTERNS)
+    return has_executable_change and all(
+        any_matches((path,), *HARNESS_EXEC_PATTERNS)
+        or path.startswith("website/")
+        or is_documentation_path(path)
+        or is_agent_text(path)
+        or is_repository_ownership_path(path)
+        for path in changed
+    )
 
 
 def is_agent_text(path: str) -> bool:
@@ -136,8 +168,9 @@ def is_recipe_conformance_change(changed: tuple[str, ...]) -> bool:
 
 
 def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     domains = _detect_direct_domains(changed, product_changed, full=full)
+    harness_only = is_harness_only_change(changed) and not full
     domains["router_core"] = any_matches(
         product_changed,
         "src/semantic-router/**",
@@ -164,16 +197,20 @@ def detect_domains(changed: tuple[str, ...], *, full: bool) -> dict[str, bool]:
         "e2e/go.sum",
     )
     domains["ci_infrastructure"] = (
-        domains["ci"] or domains["agent_exec"]
-    ) and not domains["docs_only"]
-    domains["core_test"] = (
-        full
-        or domains["core"]
-        or domains["helm"]
-        or domains["common_e2e"]
-        or domains["classifier_contract"]
-        or domains["api_docs_generated"]
-        or (domains["make"] and not domains["docs_only"])
+        (domains["ci"] or domains["agent_exec"])
+        and not domains["docs_only"]
+        and not harness_only
+    )
+    domains["core_test"] = full or (
+        not harness_only
+        and (
+            domains["core"]
+            or domains["helm"]
+            or domains["common_e2e"]
+            or domains["classifier_contract"]
+            or domains["api_docs_generated"]
+            or (domains["make"] and not domains["docs_only"])
+        )
     )
     domains["security"] = full or not domains["docs_only"]
     return domains
@@ -194,6 +231,7 @@ def _detect_direct_domains(
             path.startswith("website/")
             or path.endswith((".md", ".mdx"))
             or is_agent_text(path)
+            or is_repository_ownership_path(path)
             for path in changed
         ),
         "ci": any_matches(
@@ -214,10 +252,7 @@ def _detect_direct_domains(
     }
     domains["agent_exec"] = any_matches(
         changed,
-        "tools/agent/*.yaml",
-        "tools/agent/scripts/**",
-        "tools/ci/**",
-        "tools/make/agent.mk",
+        *HARNESS_EXEC_PATTERNS,
         ".github/actions/**",
         ".github/workflows/**",
         ".mergify.yml",
@@ -264,7 +299,7 @@ def _detect_direct_domains(
 def select_profiles(
     changed: tuple[str, ...], domains: dict[str, bool], *, full: bool
 ) -> tuple[str, ...]:
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     profiles = [
         profile
         for profile, patterns in E2E_RULES.items()
@@ -335,7 +370,7 @@ def select_variant_images(
 def select_image_candidates(
     changed: tuple[str, ...], domains: dict[str, bool]
 ) -> tuple[list[str], list[str]]:
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     pr_images, publish_images = select_base_images(product_changed, domains)
     variant_pr, variant_publish = select_variant_images(product_changed)
     append_unique(pr_images, *variant_pr)
@@ -410,7 +445,7 @@ def build_output_signals(
             for profile in E2E_RULES
         }
     )
-    product_changed = non_documentation_paths(changed)
+    product_changed = product_paths(changed)
     signals.update(
         {
             f"e2e_{profile.replace('-', '_')}": any_matches(product_changed, *patterns)

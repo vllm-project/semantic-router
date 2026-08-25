@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import fnmatch
 import json
 import re
 import subprocess
@@ -40,6 +41,10 @@ GO_MODULE_CONFIG_OVERRIDES = {
 }
 RUFF_CONFIG = REPO_ROOT / "tools" / "linter" / "python" / ".ruff.toml"
 ABSOLUTE_MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\((/[^)]+)\)")
+REFERENCE_CONFIG_PATTERNS = (
+    "config/**",
+    "src/semantic-router/pkg/config/**",
+)
 
 
 def load_yaml(path: Path) -> dict:
@@ -55,7 +60,7 @@ def load_manifests() -> tuple[dict, dict, dict, dict, dict]:
     return (
         load_yaml(AGENT_DIR / "repo-manifest.yaml"),
         load_yaml(AGENT_DIR / "task-matrix.yaml"),
-        load_yaml(AGENT_DIR / "e2e-profile-map.yaml"),
+        load_yaml(AGENT_DIR / "test-domain-registry.yaml"),
         load_yaml(AGENT_DIR / "structure-rules.yaml"),
         load_yaml(AGENT_DIR / "skill-registry.yaml"),
     )
@@ -101,7 +106,7 @@ def append_missing_make_target(
 def collect_manifest_globs(
     repo_manifest: dict,
     task_matrix: dict,
-    e2e_map: dict,
+    test_domain_registry: dict,
     structure_rules: dict,
     skill_registry: dict,
 ) -> list[str]:
@@ -109,9 +114,9 @@ def collect_manifest_globs(
     for subsystem in repo_manifest["subsystems"]:
         manifest_globs.extend(subsystem["paths"])
 
-    manifest_globs.extend(e2e_map["full_ci_triggers"])
-    for data in e2e_map["profile_rules"].values():
-        manifest_globs.extend(data["paths"])
+    for section in ("domains", "profiles"):
+        for data in test_domain_registry[section].values():
+            manifest_globs.extend(data.get("paths", []))
 
     for rule in task_matrix["rules"]:
         manifest_globs.extend(rule["paths"])
@@ -174,7 +179,14 @@ def run_test_commands(commands: list[str], label: str) -> int:
     return 0
 
 
-def run_reference_config_lint() -> int:
+def run_reference_config_lint(changed_files: list[str]) -> int:
+    if not any(
+        fnmatch.fnmatch(path, pattern)
+        for path in changed_files
+        for pattern in REFERENCE_CONFIG_PATTERNS
+    ):
+        print("No reference config contract files changed.")
+        return 0
     module_root = REPO_ROOT / "src" / "semantic-router"
     command = [
         "go",

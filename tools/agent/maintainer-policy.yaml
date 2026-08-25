@@ -1,26 +1,41 @@
 version: 1
 
 default_output_dir: .agent-harness/maintainer
-default_issue_limit: 100
-default_pr_limit: 50
+default_issue_limit: 500
+default_pr_limit: 300
 
 labels:
   help_wanted: help wanted
+  good_first_issue: good first issue
   issue_defaults:
     feature: enhancement
     bug: bug
   lifecycle:
-    needs_triage: needs-triage
+    needs_acceptance: needs-acceptance
+    accepted: accepted
+    ready_for_dev: ready-for-dev
+    in_progress: in-progress
     needs_info: needs-info
     backlog: backlog
-    milestone_candidate: milestone-candidate
     release_blocker: release-blocker
+    close_candidate: close-candidate
     stale: stale
   pr_state:
-    needs_review: needs-review
-    needs_rebase: needs-rebase
-    blocked: blocked
-    close_candidate: close-candidate
+    needs_review: pr/needs-review
+    needs_author: pr/needs-author
+    needs_rebase: pr/needs-rebase
+    blocked: pr/blocked
+    merge_ready: pr/merge-ready
+    close_candidate: pr/close-candidate
+  workgroups:
+    - wg/mom-routing
+    - wg/router-models-inference-runtime
+    - wg/data-plane-networking
+    - wg/enterprise-environment
+    - wg/agentic-context
+    - wg/developer-experience-ecosystem
+    - wg/evaluation-quality
+  maintainer_owner: owner/maintainers
 
 release_tracks:
   contracts:
@@ -34,10 +49,10 @@ release_tracks:
     description: Native/runtime parity and performance validation.
   research-to-product:
     label: track/research-to-product
-    description: Research work that directly improves product behavior.
+    description: Research work graduating into supported open-source behavior.
   hardening:
     label: track/hardening
-    description: Dashboard, eval, RAG, memory, protocol, and product hardening.
+    description: Dashboard, eval, RAG, memory, protocol, and runtime hardening.
   security:
     label: track/security
     description: Security, RBAC, observability, and E2E closure.

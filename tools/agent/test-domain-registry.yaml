@@ -24,22 +24,6 @@ pr_job_order:
   - recipe-conformance
   - paper
 
-local_full_ci_paths:
-  - src/semantic-router/**
-  - src/vllm-sr/**
-  - src/vllm-sr/Dockerfile*
-  - tools/make/**
-  - tools/agent/*.yaml
-  - tools/agent/scripts/**
-  - tools/make/agent.mk
-  - .github/workflows/**
-  - e2e/pkg/**
-  - e2e/cmd/**
-  - e2e/testcases/**
-  - e2e/go.mod
-  - e2e/go.sum
-  - e2e/config/**
-
 domains:
   quality:
     owner: ci
@@ -231,7 +215,7 @@ domains:
       - src/semantic-router/pkg/classification/**
       - src/semantic-router/pkg/decision/**
       - src/semantic-router/pkg/dsl/**
-      - src/semantic-router/pkg/projection/**
+      - src/semantic-router/pkg/projectiontrace/**
       - src/semantic-router/pkg/services/classification*
       - src/semantic-router/pkg/apiserver/route_classify*
       - tools/agent/scripts/recipe_conformance*
@@ -514,3 +498,11 @@ profiles:
       - e2e/testcases/hallucination_detection*.go
       - deploy/kubernetes/hallucination/**
       - e2e/testcases/testdata/hallucination_detection_cases.json
+  jailbreak-onerror:
+    owner: e2e
+    coverage_role: prompt-guard-on-error
+    selection: manual
+    paths:
+      - e2e/profiles/jailbreak-onerror/**
+      - e2e/testcases/jailbreak_onerror_block.go
+      - deploy/kubernetes/jailbreak-onerror/**

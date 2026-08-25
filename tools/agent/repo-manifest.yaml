@@ -313,17 +313,12 @@ doc_governance:
     freshness: update when mandatory ONNX binding CI coverage changes
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
-- tools/agent/skills/cross-stack-bugfix/SKILL.md
-- tools/agent/skills/dashboard-platform-change/SKILL.md
-- tools/agent/skills/fleet-sim-change/SKILL.md
 - tools/agent/skills/harness-contract-change/SKILL.md
-- tools/agent/skills/k8s-platform-change/SKILL.md
 - tools/agent/skills/maintainer/issue-pr-management/SKILL.md
 - tools/agent/skills/maintainer/release-ops/SKILL.md
 - tools/agent/skills/maintainer/routing-calibration/SKILL.md
 - tools/agent/skills/plugin-end-to-end/SKILL.md
-- tools/agent/skills/router-service-platform-change/SKILL.md
+- tools/agent/skills/project-change/SKILL.md
 - tools/agent/skills/routing-policy-change/SKILL.md
 - tools/agent/skills/signal-end-to-end/SKILL.md
 - tools/agent/skills/startup-chain-change/SKILL.md
-- tools/agent/skills/training-stack-change/SKILL.md

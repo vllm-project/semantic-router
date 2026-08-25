@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 BootstrapResult = importlib.import_module("cli.bootstrap").BootstrapResult
 runtime_commands = importlib.import_module("cli.commands.runtime")
+serve_config = importlib.import_module("cli.commands.runtime_serve_config")
 main = importlib.import_module("cli.main").main
 recipe_package = importlib.import_module("cli.recipe_package")
 runtime_config_lock = importlib.import_module("cli.runtime_config_lock")
@@ -171,7 +172,7 @@ def test_k8s_serve_keeps_non_persistent_effective_config_flow(
         runtime_commands, "_build_backend", lambda *a, **kw: _StubBackend()
     )
     monkeypatch.setattr(
-        runtime_commands,
+        serve_config,
         "materialize_runtime_config",
         lambda *_a, **_kw: (_ for _ in ()).throw(
             AssertionError("Kubernetes must not materialize persistent local state")
@@ -330,7 +331,7 @@ def test_active_package_is_validated_before_source_materialization(
     ).encode()
     source = tmp_path / "config.yaml"
     source.write_bytes(initial)
-    active = runtime_commands.materialize_runtime_config(source, initial)
+    active = serve_config.materialize_runtime_config(source, initial)
     recipe_files = {
         "metadata.yaml": b"schema_version: vllm-sr/recipe-metadata/v1\nid: test\n",
         "config.yaml": initial,
@@ -379,7 +380,7 @@ def test_active_package_is_validated_before_source_materialization(
         runtime_commands, "_build_backend", lambda *a, **kw: _StubBackend()
     )
     monkeypatch.setattr(
-        runtime_commands,
+        serve_config,
         "build_effective_config_bytes",
         lambda *_args, **_kwargs: (_ for _ in ()).throw(
             AssertionError("active package must not rebuild from source")
@@ -509,7 +510,7 @@ def test_serve_restart_uses_completed_runtime_instead_of_readonly_setup_source(
         ),
         encoding="utf-8",
     )
-    active = runtime_commands.materialize_runtime_config(
+    active = serve_config.materialize_runtime_config(
         config_path, config_path.read_bytes()
     )
     completed = yaml.safe_dump(
@@ -610,7 +611,7 @@ def test_serve_recovers_pending_config_before_choosing_setup_mode(
         runtime_commands, "ensure_bootstrap_workspace", lambda _: bootstrap
     )
     monkeypatch.setattr(
-        runtime_commands,
+        serve_config,
         "recover_pending_recipe_activation_for_stack",
         recover_to_setup,
     )

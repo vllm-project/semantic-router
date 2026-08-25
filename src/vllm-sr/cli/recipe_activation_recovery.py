@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 import stat
 from collections.abc import Callable, Iterable
 from contextlib import suppress
@@ -18,12 +17,16 @@ from cli.commands.runtime_paths import (
 from cli.recipe_activation_recovery_io import (
     RecipeActivationRecoveryError,
     _digest_bytes,
-    _is_digest,
-    _is_rfc3339,
     _pending_journal_exists,
     _read_bounded_regular_file,
     _require_bounded_regular_file,
     _require_real_directory,
+)
+from cli.recipe_activation_transaction import (
+    MAX_ACTIVATION_TRANSACTION_BYTES,
+    _load_transaction,
+    _validate_active_pointer,
+    _validate_transaction_paths,
 )
 from cli.recipe_package import FILE_SIZE_LIMITS, RECIPE_FILES, recipe_digest
 from cli.recipe_topology_reconcile import (
@@ -42,46 +45,8 @@ from cli.utils import get_logger
 
 log = get_logger(__name__)
 
-ACTIVATION_TRANSACTION_SCHEMA = "vllm-sr/recipe-activation-transaction/v1"
-ACTIVE_POINTER_SCHEMA = "vllm-sr/recipe-active/v1"
-MAX_ACTIVATION_TRANSACTION_BYTES = 128 * 1024
 MAX_ACTIVE_POINTER_BYTES = 64 * 1024
 MAX_RUNTIME_CONFIG_BYTES = 16 * 1024 * 1024
-
-_TRANSACTION_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
-_RFC3339_PATTERN = re.compile(
-    r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$"
-)
-_TRANSACTION_FIELDS = frozenset(
-    {
-        "schema_version",
-        "state",
-        "operation",
-        "topology_mode",
-        "id",
-        "target_recipe_digest",
-        "previous_recipe_digest",
-        "previous_pointer",
-        "previous_config_digest",
-        "previous_config_backup",
-        "commit_config_digest",
-        "started_at",
-    }
-)
-_TRANSACTION_REQUIRED_FIELDS = _TRANSACTION_FIELDS - {
-    "previous_recipe_digest",
-    "previous_pointer",
-    "commit_config_digest",
-}
-_ACTIVE_POINTER_FIELDS = frozenset(
-    {
-        "schema_version",
-        "recipe_digest",
-        "config_digest",
-        "realized_config_digest",
-        "activated_at",
-    }
-)
 _KNOWN_INACTIVE_CONTAINER_STATES = frozenset(
     {"not found", "created", "exited", "paused", "dead"}
 )
@@ -130,6 +95,43 @@ def active_recipe_package_for_stack(
     _validate_active_recipe_object(store_dir, pointer)
     _validate_active_runtime_config(runtime_dir, stack_name, pointer)
     return True
+
+
+def active_recipe_package_config_path(
+    *, state_root_dir: str | Path, stack_name: str
+) -> Path | None:
+    """Return the authored ``config.yaml`` of a stack's active Recipe package.
+
+    The realized runtime config is not the same document: the CLI materializes
+    its own values into it, so it answers "what will Router load", not "what
+    did this package declare". Only the second question is meaningful when
+    deciding what an operator has to authorize.
+
+    Call this only after :func:`active_recipe_package_for_stack` has returned
+    ``True``; that function validates the pointer, the immutable object, and
+    the realized bytes. This one resolves the path those checks already
+    covered, and returns ``None`` when there is no active pointer to resolve.
+    """
+
+    runtime_dir = Path(state_root_dir).expanduser().absolute() / ".vllm-sr"
+    store_dir = runtime_dir / "recipe-store" / stack_name
+    try:
+        encoded = _read_bounded_regular_file(
+            store_dir / "active.json",
+            MAX_ACTIVE_POINTER_BYTES,
+            "active Recipe pointer",
+        )
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    try:
+        pointer = json.loads(encoded)
+    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise RecipeActivationRecoveryError(
+            "The active Recipe pointer is invalid."
+        ) from error
+    _validate_active_pointer(pointer)
+    digest_hex = str(pointer["recipe_digest"]).removeprefix("sha256:")
+    return store_dir / "objects" / "sha256" / digest_hex / "config.yaml"
 
 
 def _validate_active_recipe_object(store_dir: Path, pointer: dict[str, object]) -> None:
@@ -448,217 +450,6 @@ def _validate_runtime_target(
         )
     _require_real_directory(runtime_dir, "runtime state")
     _require_real_directory(store_dir.parent, "Recipe package store parent")
-
-
-def _load_transaction(journal_path: Path) -> dict[str, object]:
-    encoded = _read_bounded_regular_file(
-        journal_path, MAX_ACTIVATION_TRANSACTION_BYTES, "activation journal"
-    )
-    try:
-        transaction = json.loads(encoded)
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal is invalid."
-        ) from error
-    if not isinstance(transaction, dict):
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal is invalid."
-        )
-    _normalize_legacy_transaction(transaction)
-    _validate_transaction_fields(transaction)
-    _validate_transaction_previous_state(transaction)
-    return transaction
-
-
-def _normalize_legacy_transaction(transaction: dict[str, object]) -> None:
-    fields = frozenset(transaction)
-    legacy_required = _TRANSACTION_REQUIRED_FIELDS - {"operation", "topology_mode"}
-    legacy_allowed = _TRANSACTION_FIELDS - {
-        "operation",
-        "topology_mode",
-        "commit_config_digest",
-    }
-    if legacy_required <= fields <= legacy_allowed and transaction.get("state") in {
-        "pending",
-        "inconsistent",
-    }:
-        transaction["operation"] = "activate"
-        transaction["topology_mode"] = "none"
-
-
-def _validate_transaction_fields(transaction: dict[str, object]) -> None:
-    fields = frozenset(transaction)
-    if not _TRANSACTION_REQUIRED_FIELDS <= fields <= _TRANSACTION_FIELDS:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid field set."
-        )
-    if transaction.get("schema_version") != ACTIVATION_TRANSACTION_SCHEMA:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal uses an unsupported schema."
-        )
-    _validate_transaction_mode(transaction)
-    _validate_transaction_identity(transaction)
-    _validate_transaction_digests(transaction)
-    if not _is_rfc3339(transaction.get("started_at")):
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid timestamp."
-        )
-
-
-def _validate_transaction_mode(transaction: dict[str, object]) -> None:
-    if transaction.get("state") not in {
-        "pending",
-        "committing",
-        "finalizing",
-        "rollback_finalizing",
-        "inconsistent",
-    }:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid state."
-        )
-    if transaction.get("operation") not in {"activate", "deactivate"}:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid operation."
-        )
-    if transaction.get("topology_mode") not in {"none", "managed"}:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid topology mode."
-        )
-
-
-def _validate_transaction_identity(transaction: dict[str, object]) -> None:
-    transaction_id = transaction.get("id")
-    if not isinstance(transaction_id, str) or not _TRANSACTION_ID_PATTERN.fullmatch(
-        transaction_id
-    ):
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid identity."
-        )
-
-
-def _validate_transaction_digests(transaction: dict[str, object]) -> None:
-    for field in ("target_recipe_digest", "previous_config_digest"):
-        if not _is_digest(transaction.get(field)):
-            raise RecipeActivationRecoveryError(
-                "The pending Recipe activation journal has an invalid digest."
-            )
-    commit_digest = transaction.get("commit_config_digest", "")
-    if transaction.get("state") == "committing":
-        if not _is_digest(commit_digest):
-            raise RecipeActivationRecoveryError(
-                "The pending Recipe activation has an invalid commit digest."
-            )
-    elif transaction.get("state") == "finalizing":
-        if not _is_digest(commit_digest):
-            raise RecipeActivationRecoveryError(
-                "The finalizing Recipe activation has an invalid commit digest."
-            )
-    elif commit_digest:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation has an unexpected commit digest."
-        )
-
-
-def _validate_transaction_previous_state(transaction: dict[str, object]) -> None:
-    previous_digest = transaction.get("previous_recipe_digest", "")
-    if not isinstance(previous_digest, str) or (
-        previous_digest and not _is_digest(previous_digest)
-    ):
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation journal has an invalid previous digest."
-        )
-    pointer = transaction.get("previous_pointer")
-    if pointer is None:
-        if previous_digest:
-            raise RecipeActivationRecoveryError(
-                "The pending Recipe activation journal has inconsistent prior state."
-            )
-    else:
-        _validate_active_pointer(pointer)
-        if pointer["recipe_digest"] != previous_digest:
-            raise RecipeActivationRecoveryError(
-                "The pending Recipe activation journal has inconsistent prior state."
-            )
-
-
-def _validate_active_pointer(pointer: object) -> None:
-    if not isinstance(pointer, dict) or frozenset(pointer) != _ACTIVE_POINTER_FIELDS:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation contains an invalid prior pointer."
-        )
-    if pointer.get("schema_version") != ACTIVE_POINTER_SCHEMA:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation contains an invalid prior pointer."
-        )
-    for field in ("recipe_digest", "config_digest", "realized_config_digest"):
-        if not _is_digest(pointer.get(field)):
-            raise RecipeActivationRecoveryError(
-                "The pending Recipe activation contains an invalid prior pointer."
-            )
-    if not _is_rfc3339(pointer.get("activated_at")):
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation contains an invalid prior pointer."
-        )
-
-
-def _validate_transaction_paths(
-    store_dir: Path,
-    transaction_dir: Path,
-    backup_path: Path,
-    topology_path: Path,
-    transaction: dict[str, object],
-) -> None:
-    expected_relative = f"transactions/{transaction['id']}/previous-config.yaml"
-    if transaction.get("previous_config_backup") != expected_relative:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation has an invalid backup reference."
-        )
-    transactions_dir = store_dir / "transactions"
-    _require_real_directory(transactions_dir, "activation transaction store")
-    allowed = {backup_path, topology_path}
-    if transaction.get("state") in {"finalizing", "rollback_finalizing"}:
-        try:
-            transaction_info = transaction_dir.lstat()
-        except FileNotFoundError:
-            return
-        except OSError as error:
-            raise RecipeActivationRecoveryError(
-                "The activation transaction could not be inspected safely."
-            ) from error
-        if stat.S_ISLNK(transaction_info.st_mode) or not stat.S_ISDIR(
-            transaction_info.st_mode
-        ):
-            raise RecipeActivationRecoveryError(
-                "The activation transaction is not a real directory."
-            )
-        if not set(transaction_dir.iterdir()) <= allowed:
-            raise RecipeActivationRecoveryError(
-                "The finalizing Recipe activation has unexpected entries."
-            )
-        return
-    _require_real_directory(transaction_dir, "activation transaction")
-    entries = set(transaction_dir.iterdir())
-    if backup_path not in entries or not entries <= allowed:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation transaction has unexpected entries."
-        )
-    has_topology = topology_path in entries
-    topology_mode = transaction.get("topology_mode")
-    transaction_state = transaction.get("state")
-    # The topology writer durably creates topology.json before it upgrades the
-    # outer transaction journal to managed mode. A crash between those writes
-    # leaves a valid pending/inconsistent rollback state. The inverse cannot be
-    # produced safely: managed mode without its topology journal is incomplete.
-    missing_managed_topology = topology_mode == "managed" and not has_topology
-    unexpected_hot_switch_topology = (
-        has_topology
-        and topology_mode != "managed"
-        and transaction_state not in {"pending", "inconsistent"}
-    )
-    if missing_managed_topology or unexpected_hot_switch_topology:
-        raise RecipeActivationRecoveryError(
-            "The pending Recipe activation topology does not match its journal."
-        )
 
 
 def _finish_committing_transaction(
