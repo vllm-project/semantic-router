@@ -83,27 +83,16 @@
   --tech-primary-blue: var(--site-accent-strong);
   --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
-  /*
-   * Page geometry: --page-max for shell, --measure for readable text.
-   *
-   * 1536px is not a round number, it is the sum of what the docs page holds:
-   * rail 288 + rail-gap 110 + measure 736 + column-gap 130 + toc 272. At the
-   * earlier 1760px the frame was 224px wider than its own columns could
-   * fill, and that surplus had nowhere to go but a void past the TOC.
-   */
+  /* Page geometry. 1536 = rail 288 + rail-gap 110 + measure 736 +
+   * column-gap 130 + toc 272, so the docs row fills the frame exactly. */
   --page-max: 1536px;
   --gutter: clamp(1rem, 5vw, 4.5rem);
   --measure: 72ch;
   /* Rail width: 18rem (20rem too wide for label list). */
   --rail: 18rem;
   --toc: 17rem;
-  /*
-   * Rail to content. Shared so docs, research and community start their text
-   * on the same x. Caps at 1680px — where the gutter maxes out and the frame
-   * stops growing — so that from there up this gap plus --site-doc-column-gap
-   * sum to exactly the 240px the docs row has spare. Below 1680 the content
-   * track absorbs the difference instead, so no void opens at any width.
-   */
+  /* Rail to content, shared so every page starts its text on the same x.
+   * Caps at 1680px, where the frame stops growing. */
   --rail-gap: clamp(var(--space-6), calc(13.45vw - 115.9px), 6.875rem);
 
   /* Legacy aliases repointed to shared geometry. --site-content-max removed. */

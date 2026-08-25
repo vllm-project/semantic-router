@@ -42,10 +42,7 @@ function readingTimeLabel(readingTime: number | undefined): string | null {
   return `${Math.ceil(readingTime)} min read`
 }
 
-/**
- * Normalizes a post from `props.items` into a plain card shape shared by the
- * featured and grid cards.
- */
+/** Normalizes a post into the card shape shared by featured and grid cards. */
 function toEntry(item: Props['items'][number]): BlogSearchIndexEntry {
   const { frontMatter, metadata } = item.content
 

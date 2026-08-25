@@ -1,9 +1,5 @@
-/* ------------------------------------------------------------------ *
- * Blog palette
- *
- * Aliases through the shared ramp so light and dark stay in sync — no
- * colour is declared only inside a dark-mode block.
- * ------------------------------------------------------------------ */
+/* ---- Blog palette: aliases through the shared ramp, so no colour is
+ * declared only inside a dark-mode block ---- */
 html[data-route-kind='blog'],
 .blog-wrapper,
 .site-blog-layout {
@@ -19,16 +15,8 @@ html[data-route-kind='blog'],
   --blog-surface-cool: var(--site-surface-alt);
   --blog-surface-tint: var(--site-accent-soft);
   --blog-card-shadow: var(--site-shadow-soft);
-  /*
-   * One article width — prose, code, images and tables all share it, as on
-   * the reference. Media wider than the text reads as a second, competing
-   * left edge and is what made the running text look inset.
-   *
-   * In rem, not ch: a ch-based custom property resolves against the
-   * font-size of whatever consumes it, so prose (19px) and code blocks
-   * (monospace) would each get a different column off one token. 46rem is
-   * ~68 characters at 19px.
-   */
+  /* One width for prose, code, images and tables. In rem, not ch: ch resolves
+   * against the consumer's font-size, so prose and code would differ. */
   --blog-prose: 46rem;
 }
 
@@ -38,10 +26,7 @@ html[data-route-kind='blog'] body,
   background: var(--site-bg);
 }
 
-/*
- * Same box as Research / Community / .site-shell-container: gutters sit
- * outside --page-max so the outer edge lands on the navbar and footer.
- */
+/* Same box as .site-shell-container: gutters outside --page-max. */
 .site-blog-layout__inner {
   width: 100%;
   max-width: calc(var(--page-max) + var(--gutter) * 2);
@@ -58,10 +43,7 @@ html[data-route-kind='blog'] body,
   display: none;
 }
 
-/*
- * PageHeader keeps its shared border and padding — do not zero them out.
- * That border is what makes Research / Community / Blog read as one site.
- */
+/* PageHeader keeps its own border and padding — that rule is the shared one. */
 .site-blog-index__header {
   margin: 0;
 }
@@ -89,10 +71,7 @@ html[data-route-kind='blog'] body,
   min-width: 0;
 }
 
-/* ------------------------------------------------------------------ *
- * Cards — proportions from the previous listing that felt elegant:
- * taller media, object-fit contain, fixed 2-col grid, roomy featured.
- * ------------------------------------------------------------------ */
+/* ---- Cards ---- */
 .site-blog-card {
   overflow: hidden;
   border: 1px solid var(--blog-border);
@@ -330,11 +309,7 @@ html[data-route-kind='blog'] body,
   padding: 2rem;
 }
 
-/* ------------------------------------------------------------------ *
- * Listing rail — left, shared --rail width. Readable recent list (not a
- * cramped nav of muted pills). Group labels match Research sentence-case.
- * ------------------------------------------------------------------ */
-/* Group gap and rule match ResearchLayout: 24 + 1px + 24. */
+/* ---- Listing rail: left, shared --rail width, ResearchLayout metrics ---- */
 .site-blog-index__rail {
   position: sticky;
   top: calc(var(--site-header-height) + var(--space-5));
@@ -486,15 +461,9 @@ html[data-route-kind='blog'] body,
   text-transform: uppercase;
 }
 
-/* ------------------------------------------------------------------ *
- * Article — left contents rail, then one LEFT-FLUSH column.
- *
- * The column is the article width, not 1fr. Sized to 1fr it would span to
- * the frame's right edge and the prose inside it would need centring to
- * avoid a void — and centring is the misalignment this phase exists to
- * remove: it put the article's first character ~310px right of where docs,
- * research and community start theirs.
- * ------------------------------------------------------------------ */
+/* ---- Article: left contents rail, then one left-flush column ----
+ * The column is the article width, not 1fr: at 1fr the prose would need
+ * centring, which is the ~310px misalignment this phase removes. */
 .site-blog-layout--post .site-blog-layout__inner {
   position: relative;
   display: grid;
@@ -505,11 +474,7 @@ html[data-route-kind='blog'] body,
   padding: var(--space-8) var(--gutter) 5.5rem;
 }
 
-/*
- * Only when there is a rail to divide. A post with no headings gets no TOC
- * from BlogPostPage, and the divider would otherwise hang beside an empty
- * column. The article keeps its indent either way so it stays aligned.
- */
+/* Only when there is a rail to divide — a post with no headings gets no TOC. */
 .site-blog-layout--post .site-blog-layout__inner:has(.site-blog-layout__toc)::before {
   content: '';
   position: absolute;
@@ -539,11 +504,8 @@ html[data-route-kind='blog'] body,
   box-shadow: none;
 }
 
-/*
- * The section eyebrow, styled as PageHeader's so a post opens like every
- * other page. It stays a link back to the index; the arrow it used to carry
- * is what made it read as browser chrome instead of a category label.
- */
+/* Styled as PageHeader's eyebrow. Still a link back to the index; the arrow
+ * it carried made it read as browser chrome, not a category label. */
 .site-blog-post__breadcrumb {
   display: inline-block;
   margin-bottom: var(--space-2);
@@ -562,10 +524,8 @@ html[data-route-kind='blog'] body,
   text-underline-offset: 0.25em;
 }
 
-/*
- * Spans the column so its rule matches PageHeader's on every other page;
- * the text inside stays at the prose measure.
- */
+/* Spans the column so its rule matches PageHeader's; the text inside
+ * stays at the prose measure. */
 .site-blog-post__header {
   max-width: none;
   margin-bottom: var(--space-8);
@@ -585,7 +545,6 @@ html[data-route-kind='blog'] body,
   text-wrap: balance;
 }
 
-/* The header spans the column for its rule; the text in it keeps the measure. */
 .site-blog-post__meta,
 .site-blog-post__authors,
 .site-blog-post__tags {
@@ -676,22 +635,16 @@ html[data-route-kind='blog'] body,
   line-height: 1.75;
 }
 
-/*
- * Running text stops at the prose measure and is LEFT-flush, so its first
- * character sits on the same x as a docs paragraph. Never `margin-inline:
- * auto` here — that is the misalignment this phase removes.
- */
+/* Left-flush, so the first character sits on the same x as a docs paragraph.
+ * Never `margin-inline: auto` here. */
 .site-blog-post__content > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
 .site-blog-layout--post .markdown > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6) {
   max-width: var(--blog-prose);
   margin-inline: 0;
 }
 
-/*
- * Media fills the column — the same width as the prose, not wider. MDX wraps
- * images in <p>, so these need naming explicitly or the rule above would cap
- * an image's paragraph and leave it narrower than the code block beside it.
- */
+/* Media fills the column, same width as the prose. MDX wraps images in <p>,
+ * so those need naming explicitly or the rule above would catch them. */
 .site-blog-post__content > :is(pre, table, figure, .theme-code-block, .tabs-container, details),
 .site-blog-post__content > div:has(> table),
 .site-blog-post__content > div:has(> pre),
@@ -782,10 +735,7 @@ html[data-route-kind='blog'] body,
   font-size: 0.95rem;
 }
 
-/* ------------------------------------------------------------------ *
- * Contents rail — docs sidebar chrome (filled pill, sentence-case),
- * with LangChain-level breathing room and clear nested hierarchy.
- * ------------------------------------------------------------------ */
+/* ---- Contents rail: docs sidebar chrome, filled pill, sentence-case ---- */
 .site-blog-layout__toc {
   position: sticky;
   top: calc(var(--site-header-height) + var(--space-5));
@@ -796,15 +746,9 @@ html[data-route-kind='blog'] body,
   scrollbar-width: thin;
 }
 
-/*
- * Exactly one scroller. Docusaurus's TOC sets its own sticky + max-height +
- * overflow-y, and on docs that lands on the same element as the theme class,
- * so there is one. Here BlogLayout wraps it in this aside, which nested a
- * second scroll container inside the first and drew two scrollbars. The
- * aside is the one that scrolls; its offsets come from our own tokens,
- * whereas the inner element's are keyed to --ifm-navbar-height, which is
- * only redefined on docs pages.
- */
+/* Exactly one scroller. Docusaurus's TOC brings its own sticky + overflow-y;
+ * BlogLayout's aside wrapper nested a second one and drew two scrollbars.
+ * The aside wins because its offsets are ours, not --ifm-navbar-height. */
 .site-blog-layout__toc > [class*='tableOfContents'] {
   position: static;
   max-height: none;
@@ -842,10 +786,8 @@ html[data-route-kind='blog'] body,
   padding-left: var(--space-3);
 }
 
-/*
- * Docs sidebar metrics exactly: 12px pill inset + 12px padding puts item text
- * at 24px against the 8px label, and the pill is 2.1rem tall.
- */
+/* Docs sidebar metrics: 12px inset + 12px padding puts item text at 24px
+ * against the 8px label. */
 .site-blog-layout__toc .table-of-contents__link {
   display: flex;
   align-items: center;

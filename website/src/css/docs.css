@@ -9,12 +9,8 @@
   --site-doc-content-inset: var(--rail-gap);
   /* Caps at 1680px with --rail-gap; 110 + 130 = the row's 240px of slack. */
   --site-doc-column-gap: clamp(var(--space-6), calc(16.9vw - 153.9px), 8.125rem);
-  /*
-   * The content track, in rem. --measure is 72ch, but `ch` resolves against
-   * the element that consumes it: on the grid container that is the 16px
-   * root, not the 18px body text inside, which would size the column to 64
-   * characters of prose. 46rem is 72ch at --site-doc-body-size.
-   */
+  /* Not var(--measure): 72ch resolves against the grid container's 16px, not
+   * the 18px body text inside it. 46rem is 72ch at --site-doc-body-size. */
   --site-doc-measure: 46rem;
   --site-doc-rail-top: 2.5rem;
   --site-doc-sidebar-top: 2rem;
@@ -266,11 +262,8 @@
   line-height: 1.7;
 }
 
-/*
- * The measure lives on the grid track, not here. Capping running text a
- * second time only re-opens the gap between prose and the tables beside it
- * in the 997-1279px range, where the track is 1fr because the TOC is hidden.
- */
+/* No measure cap here — it is on the grid track. Capping twice re-opens the
+ * prose/table edge mismatch at 997-1279px, where the track is 1fr. */
 .theme-doc-markdown > h2 > span,
 .theme-doc-markdown > h2 {
   text-wrap: balance;
@@ -696,13 +689,8 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
     padding: 0 0 0 var(--site-doc-content-inset);
   }
 
-  /*
-   * The content track IS the measure, not 1fr. Sized to 1fr it took every
-   * pixel the rails left over while running text stopped at the measure, so
-   * prose and the tables beside it ended on two different right edges.
-   * The gap stays fixed: pushing the leftover width into it instead only
-   * moves the hole from the right margin to the middle of the page.
-   */
+  /* Track IS the measure: at 1fr it took the rails' leftover while prose
+   * stopped at the measure, so prose and tables ended on different edges. */
   .site-docs-shell > .row {
     display: grid;
     grid-template-columns: minmax(0, var(--site-doc-measure)) var(--site-doc-toc-width);
