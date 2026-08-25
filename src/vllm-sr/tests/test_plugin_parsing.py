@@ -636,6 +636,7 @@ providers:
         finally:
             os.unlink(temp_path)
 
+
 class TestToolSelectionAdvancedFiltering:
     """Test tool_selection plugin's advanced_filtering subtree.
 
