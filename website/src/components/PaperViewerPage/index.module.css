@@ -149,6 +149,12 @@
   width: 100%;
 }
 
+.pagePlaceholder {
+  background: var(--site-surface);
+  border: 1px solid var(--site-border);
+  border-radius: var(--radius-sm);
+}
+
 @media (max-width: 768px) {
   .page {
     padding-top: 1rem;

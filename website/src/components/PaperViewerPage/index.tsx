@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import Layout from '@theme/Layout'
 import Head from '@docusaurus/Head'
@@ -7,6 +7,9 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
 import { PageIntro, PillLink } from '@site/src/components/site/Chrome'
 import { SITE_SOCIAL_PREVIEW_IMAGE_PATH } from '@site/src/data/socialPreview'
 import styles from './index.module.css'
+// Type-only import: erased at compile time, so it can't break the
+// require()-based lazy-load of react-pdf's runtime used below for SSR safety.
+import type { PDFDocumentProxy } from 'pdfjs-dist'
 
 const MOBILE_BREAKPOINT = 768
 const MAX_SPREAD_VIEWPORT_WIDTH = 1400
@@ -18,6 +21,8 @@ const VIEWER_VERTICAL_PADDING = 40
 const MIN_SPREAD_PAGE_WIDTH = 620
 const SPREAD_FILL_THRESHOLD = 0.82
 const MAX_SINGLE_PAGE_WIDTH = 980
+const MOBILE_RENDER_ROOT_MARGIN = 600
+const MOBILE_INITIAL_PAGE = 1
 
 interface PaperViewerPageProps {
   heroDescription: string
@@ -61,6 +66,106 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
   const [isSpread, setIsSpread] = useState<boolean>(true)
   const [loading, setLoading] = useState<boolean>(true)
   const [error, setError] = useState<boolean>(false)
+
+  // Mobile continuous-scroll windowing: only pages near the viewport get a
+  // real react-pdf <Page>; the rest render a lightweight placeholder so we
+  // never mount every page's canvas/text/annotation layers at once.
+  const pageWrapperRefs = useRef<Map<number, HTMLDivElement>>(new Map())
+  const observerRef = useRef<IntersectionObserver | null>(null)
+  const pageRefCallbacks = useRef<Map<number, (el: HTMLDivElement | null) => void>>(new Map())
+  const [mountedPages, setMountedPages] = useState<Set<number>>(() => new Set([MOBILE_INITIAL_PAGE]))
+
+  // Placeholder sizing: real PDF pages are rarely ISO-paper (Math.SQRT2)
+  // proportioned, so a mismatched placeholder height causes visible scroll
+  // jumps as pages mount/unmount. documentAspectRatio is measured from page 1
+  // once the document loads; pageAspectRatios caches any page's real ratio
+  // once it has actually been rendered, to also cover mixed-orientation docs.
+  const [documentAspectRatio, setDocumentAspectRatio] = useState<number>(PDF_PAGE_RATIO)
+  const [pageAspectRatios, setPageAspectRatios] = useState<Map<number, number>>(new Map())
+
+  const getPlaceholderAspectRatio = (mobilePageNumber: number) =>
+    pageAspectRatios.get(mobilePageNumber) ?? documentAspectRatio
+
+  const handleMobilePageLoadSuccess = useCallback((mobilePageNumber: number, page: { originalHeight: number, originalWidth: number }) => {
+    if (page.originalWidth <= 0)
+      return
+
+    const ratio = page.originalHeight / page.originalWidth
+    setPageAspectRatios((prev) => {
+      if (prev.get(mobilePageNumber) === ratio)
+        return prev
+      const next = new Map(prev)
+      next.set(mobilePageNumber, ratio)
+      return next
+    })
+  }, [])
+
+  const getPageRefCallback = useCallback((mobilePageNumber: number) => {
+    let callback = pageRefCallbacks.current.get(mobilePageNumber)
+    if (!callback) {
+      callback = (el: HTMLDivElement | null) => {
+        const prevEl = pageWrapperRefs.current.get(mobilePageNumber)
+        if (prevEl && prevEl !== el)
+          observerRef.current?.unobserve(prevEl)
+
+        if (el) {
+          pageWrapperRefs.current.set(mobilePageNumber, el)
+          observerRef.current?.observe(el)
+        }
+        else {
+          pageWrapperRefs.current.delete(mobilePageNumber)
+        }
+      }
+      pageRefCallbacks.current.set(mobilePageNumber, callback)
+    }
+    return callback
+  }, [])
+
+  useEffect(() => {
+    if (!isMobile || numPages <= 0)
+      return undefined
+
+    setMountedPages(new Set([MOBILE_INITIAL_PAGE]))
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        setMountedPages((prev) => {
+          let changed = false
+          const next = new Set(prev)
+          for (const entry of entries) {
+            const observedPageNumber = Number((entry.target as HTMLElement).dataset.pageNumber)
+            if (!observedPageNumber)
+              continue
+
+            if (entry.isIntersecting) {
+              if (!next.has(observedPageNumber)) {
+                next.add(observedPageNumber)
+                changed = true
+              }
+            }
+            else if (next.delete(observedPageNumber)) {
+              changed = true
+            }
+          }
+          return changed ? next : prev
+        })
+      },
+      { root: null, rootMargin: `${MOBILE_RENDER_ROOT_MARGIN}px 0px`, threshold: 0 },
+    )
+    observerRef.current = observer
+
+    // Wrapper divs already attached their refs (registering themselves in
+    // pageWrapperRefs) during the commit that preceded this effect — before
+    // `observer` existed, so those ref callbacks couldn't call .observe().
+    // Explicitly observe them now instead of relying on some later re-render
+    // to re-invoke the ref callbacks.
+    pageWrapperRefs.current.forEach(el => observer.observe(el))
+
+    return () => {
+      observer.disconnect()
+      observerRef.current = null
+    }
+  }, [isMobile, numPages])
 
   useEffect(() => {
     const updateSize = () => {
@@ -111,9 +216,20 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
     })
   }, [isSpread, numPages])
 
-  const onDocumentLoadSuccess = useCallback(({ numPages }: { numPages: number }) => {
-    setNumPages(numPages)
+  const onDocumentLoadSuccess = useCallback((pdf: PDFDocumentProxy) => {
+    setNumPages(pdf.numPages)
     setLoading(false)
+    setPageAspectRatios(new Map())
+
+    pdf.getPage(1)
+      .then((page) => {
+        const viewport = page.getViewport({ scale: 1 })
+        if (viewport.width > 0)
+          setDocumentAspectRatio(viewport.height / viewport.width)
+      })
+      .catch(() => {
+        // Keep the PDF_PAGE_RATIO fallback if page 1's dimensions can't be read.
+      })
   }, [])
 
   const onDocumentLoadError = useCallback(() => {
@@ -197,16 +313,34 @@ function PaperViewerContent({ pdfUrl }: PaperViewerContentProps): JSX.Element {
                 {isMobile
                   ? (
                       <div className={styles.mobileStack}>
-                        {Array.from({ length: numPages }, (_, i) => (
-                          <div key={i + 1} className={styles.pageWrapper}>
-                            <Page
-                              pageNumber={i + 1}
-                              width={pageWidth}
-                              renderTextLayer={true}
-                              renderAnnotationLayer={true}
-                            />
-                          </div>
-                        ))}
+                        {Array.from({ length: numPages }, (_, i) => {
+                          const thisPageNumber = i + 1
+                          return (
+                            <div
+                              key={thisPageNumber}
+                              ref={getPageRefCallback(thisPageNumber)}
+                              data-page-number={thisPageNumber}
+                              className={styles.pageWrapper}
+                            >
+                              {mountedPages.has(thisPageNumber)
+                                ? (
+                                    <Page
+                                      pageNumber={thisPageNumber}
+                                      width={pageWidth}
+                                      renderTextLayer={true}
+                                      renderAnnotationLayer={true}
+                                      onLoadSuccess={page => handleMobilePageLoadSuccess(thisPageNumber, page)}
+                                    />
+                                  )
+                                : (
+                                    <div
+                                      className={styles.pagePlaceholder}
+                                      style={{ width: pageWidth, aspectRatio: `1 / ${getPlaceholderAspectRatio(thisPageNumber)}` }}
+                                    />
+                                  )}
+                            </div>
+                          )
+                        })}
                       </div>
                     )
                   : isSpread
