@@ -4,12 +4,14 @@ Split out of test_plugin_parsing.py, which reached the repository's 800-line
 per-file lint limit. Sibling of test_rag_external_api_hybrid_validator.py.
 """
 
-import pytest
+import os
 
+import pytest
+from cli.models import RAGPluginConfig
 from cli.parser import parse_user_config
 from cli.validator import validate_user_config
-
-from .test_plugin_parsing import _write_config
+from pydantic import ValidationError as PydanticValidationError
+from test_plugin_parsing import _write_config
 
 
 class TestExternalAPIRAGBackend:
