@@ -34,7 +34,6 @@ import {
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
   loadPluginOperationsPage,
-  loadSecurityPolicyPage,
   loadSetupWizardPage,
   loadStatusPage,
   loadTopologyPage,
@@ -73,7 +72,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   plugins: (
     <RecoverableLazyRoute loader={loadPluginOperationsPage} routeLabel="Plugin Operations" />
   ),
-  security: <RecoverableLazyRoute loader={loadSecurityPolicyPage} routeLabel="Security" />,
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
   tracing: <RecoverableLazyRoute loader={loadTracingPage} routeLabel="Tracing" />,

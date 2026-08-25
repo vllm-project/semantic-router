@@ -5,7 +5,6 @@ export interface PermissionUser {
 
 const WRITE_CAPABLE_ROLES = new Set(['admin', 'write'])
 const READ_CAPABLE_ROLES = new Set(['admin', 'write', 'read'])
-const ADMIN_ROLES = new Set(['admin'])
 const CONFIG_READ_PERMISSION = 'config.read'
 const CONFIG_DEPLOY_PERMISSION = 'config.deploy'
 const CONFIG_WRITE_PERMISSION = 'config.write'
@@ -19,7 +18,6 @@ const MCP_MANAGE_PERMISSION = 'mcp.manage'
 const OPENCLAW_READ_PERMISSION = 'openclaw.read'
 const OPENCLAW_MANAGE_PERMISSION = 'openclaw.manage'
 const REPLAY_READ_PERMISSION = 'replay.read'
-const SECURITY_MANAGE_PERMISSION = 'security.manage'
 const TOPOLOGY_READ_PERMISSION = 'topology.read'
 const USERS_VIEW_PERMISSION = 'users.view'
 const USERS_MANAGE_PERMISSION = 'users.manage'
@@ -76,10 +74,6 @@ export function canManageOpenClaw(user?: PermissionUser | null): boolean {
   return canAccessWithPermission(user, OPENCLAW_MANAGE_PERMISSION)
 }
 
-export function canManageSecurity(user?: PermissionUser | null): boolean {
-  return canAccessWithPermission(user, SECURITY_MANAGE_PERMISSION, ADMIN_ROLES)
-}
-
 export function canAccessDashboardPath(
   user: PermissionUser | null | undefined,
   pathname: string,
@@ -121,7 +115,6 @@ export function canAccessDashboardPath(
     normalizedPath.startsWith('/config') ||
     normalizedPath.startsWith('/knowledge-bases') ||
     normalizedPath.startsWith('/taxonomy') ||
-    normalizedPath.startsWith('/security') ||
     normalizedPath.startsWith('/fleet-sim')
   ) {
     return canAccessWithPermission(user, CONFIG_READ_PERMISSION, READ_CAPABLE_ROLES)

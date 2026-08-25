@@ -486,7 +486,7 @@ test.describe('Layout top navigation', () => {
     await expect(buildToggle).toHaveAttribute('aria-expanded', 'true')
     await expect(mobileNavigation.getByText('Routing', { exact: true })).toBeVisible()
     await expect(mobileNavigation.getByText('Knowledge', { exact: true })).toBeVisible()
-    await expect(mobileNavigation.getByText('Integrations & Policy', { exact: true })).toBeVisible()
+    await expect(mobileNavigation.getByText('Integrations', { exact: true })).toBeVisible()
     await expect(mobileNavigation.getByRole('link', { name: 'Config Builder' })).toBeVisible()
   })
 
@@ -564,7 +564,7 @@ test.describe('Layout top navigation', () => {
     )
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
     const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge/ })
-    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
+    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations/ })
     await expect(routingTab).toBeFocused()
     await expect(routingTab).toHaveAttribute('aria-selected', 'true')
     await expect(routingTab).toHaveAttribute(
@@ -585,7 +585,6 @@ test.describe('Layout top navigation', () => {
     await page.keyboard.press('End')
     await expect(integrationsTab).toBeFocused()
     await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'Security Policy' })).toBeVisible()
     await page.keyboard.press('Home')
     await expect(routingTab).toBeFocused()
     await page.keyboard.press('ArrowRight')
@@ -718,7 +717,7 @@ test.describe('Layout top navigation', () => {
     expect(firstTabBounds).not.toBeNull()
     expect(Math.abs(firstTabBounds!.y - initialBounds.y)).toBeLessThanOrEqual(2)
 
-    for (const category of [/Knowledge/, /Integrations & Policy/]) {
+    for (const category of [/Knowledge/, /Integrations/]) {
       await buildMenu.getByRole('tab', { name: category }).click()
       const nextBounds = await buildMenu.boundingBox()
       expect(nextBounds).not.toBeNull()
@@ -759,7 +758,6 @@ test.describe('Layout top navigation', () => {
           'openclaw.manage',
           'openclaw.read',
           'replay.read',
-          'security.manage',
           'tools.use',
           'topology.read',
           'users.manage',
@@ -838,7 +836,7 @@ test.describe('Layout top navigation', () => {
 
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
-    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
+    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations/ })
     await routingTab.focus()
     await page.keyboard.press('End')
 
@@ -964,7 +962,7 @@ test.describe('Layout top navigation', () => {
 
     await workflowGroup.getByRole('button', { name: 'Build' }).click()
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await buildMenu.getByRole('tab', { name: /Integrations & Policy/ }).click()
+    await buildMenu.getByRole('tab', { name: /Integrations/ }).click()
     await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
     await expect(buildMenu.getByRole('link', { name: 'ClawOS' })).toBeVisible()
 

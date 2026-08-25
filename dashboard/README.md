@@ -12,8 +12,8 @@ Use it to:
 - import and activate Recipe packages;
 - test routes in the Playground and inspect the selected path;
 - view topology, logs, evaluations, and monitoring tools;
-- manage security policies, ML selection workflows, MCP tools, and optional
-  OpenClaw workers when those features are enabled.
+- manage ML selection workflows, MCP tools, and optional OpenClaw workers when
+  those features are enabled.
 
 The Dashboard is a control plane, not an inference proxy. Applications should
 send inference requests to Envoy.
