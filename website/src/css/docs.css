@@ -7,7 +7,15 @@
   /* Rail to content is shared with research and community; the TOC gap is
    * ours alone, and ramps from --space-6 at ~1220px to its cap at 1920px. */
   --site-doc-content-inset: var(--rail-gap);
-  --site-doc-column-gap: clamp(var(--space-6), calc(14.06vw - 140px), 8.125rem);
+  /* Caps at 1680px with --rail-gap; 110 + 130 = the row's 240px of slack. */
+  --site-doc-column-gap: clamp(var(--space-6), calc(16.9vw - 153.9px), 8.125rem);
+  /*
+   * The content track, in rem. --measure is 72ch, but `ch` resolves against
+   * the element that consumes it: on the grid container that is the 16px
+   * root, not the 18px body text inside, which would size the column to 64
+   * characters of prose. 46rem is 72ch at --site-doc-body-size.
+   */
+  --site-doc-measure: 46rem;
   --site-doc-rail-top: 2.5rem;
   --site-doc-sidebar-top: 2rem;
   --site-doc-body-size: var(--text-lg);
@@ -258,19 +266,16 @@
   line-height: 1.7;
 }
 
-/* Fluid column, fixed measure: running text stops at --measure, wide elements break out. */
-.theme-doc-markdown > :is(p, ul, ol, blockquote, h1, h2, h3, h4, h5, h6),
-.theme-doc-markdown > .theme-admonition,
-.theme-doc-markdown > header {
-  max-width: var(--measure);
-}
-
+/*
+ * The measure lives on the grid track, not here. Capping running text a
+ * second time only re-opens the gap between prose and the tables beside it
+ * in the 997-1279px range, where the track is 1fr because the TOC is hidden.
+ */
 .theme-doc-markdown > h2 > span,
 .theme-doc-markdown > h2 {
   text-wrap: balance;
 }
 
-/* Wide elements break out of measure. */
 .theme-doc-markdown > :is(pre, table, img, figure, .tabs-container, details),
 .theme-doc-markdown > div:has(> table),
 .theme-doc-markdown > div:has(> pre) {
@@ -691,9 +696,16 @@ html[data-theme='dark'] .theme-doc-toc-desktop::before {
     padding: 0 0 0 var(--site-doc-content-inset);
   }
 
+  /*
+   * The content track IS the measure, not 1fr. Sized to 1fr it took every
+   * pixel the rails left over while running text stopped at the measure, so
+   * prose and the tables beside it ended on two different right edges.
+   * The gap stays fixed: pushing the leftover width into it instead only
+   * moves the hole from the right margin to the middle of the page.
+   */
   .site-docs-shell > .row {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--site-doc-toc-width);
+    grid-template-columns: minmax(0, var(--site-doc-measure)) var(--site-doc-toc-width);
     gap: var(--site-doc-column-gap);
     margin: 0;
   }

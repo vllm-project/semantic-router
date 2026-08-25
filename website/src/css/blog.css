@@ -1,38 +1,12 @@
 /* ------------------------------------------------------------------ *
  * Blog palette
  *
- * The blog runs a cooler, bluer neutral than the rest of the site, hence its
- * own thin token layer. Light values are literals; dark remaps onto `--site-*`.
- *
- * Two muted tiers only, mirroring `--site-muted` / `--site-muted-bright`.
- * Every literal clears WCAG AA (4.5:1) on the lightest surface it lands on —
- * add new ones the same way.
- *
- * `--blog-accent` resolves through `--site-accent-strong`, so it follows the
- * color mode by itself and needs no dark-block entry.
+ * Aliases through the shared ramp so light and dark stay in sync — no
+ * colour is declared only inside a dark-mode block.
  * ------------------------------------------------------------------ */
 html[data-route-kind='blog'],
 .blog-wrapper,
 .site-blog-layout {
-  --blog-ink: #070b16;
-  --blog-ink-soft: #101827;
-  --blog-ink-quote: #374760;
-  --blog-muted: #61728c;
-  --blog-muted-strong: #41546d;
-  --blog-border: #d7e0ec;
-  --blog-border-strong: #b7c8dd;
-  --blog-border-focus: #84bfff;
-  --blog-accent: var(--site-accent-strong);
-  --blog-surface-warm: #fbfaf7;
-  --blog-surface-cool: #f7f9fc;
-  --blog-surface-tint: #f7fbff;
-  --blog-card-shadow: 0 18px 38px rgba(30, 64, 105, 0.09);
-  --blog-focus-ring: 0 0 0 3px rgba(48, 162, 255, 0.12);
-}
-
-html[data-theme='dark'][data-route-kind='blog'],
-html[data-theme='dark'] .blog-wrapper,
-html[data-theme='dark'] .site-blog-layout {
   --blog-ink: var(--site-text-strong);
   --blog-ink-soft: var(--site-text);
   --blog-ink-quote: var(--site-muted-bright);
@@ -40,140 +14,89 @@ html[data-theme='dark'] .site-blog-layout {
   --blog-muted-strong: var(--site-muted-bright);
   --blog-border: var(--site-border);
   --blog-border-strong: var(--site-border-strong);
-  --blog-border-focus: var(--site-accent);
+  --blog-accent: var(--site-accent-strong);
   --blog-surface-warm: var(--site-surface-alt);
   --blog-surface-cool: var(--site-surface-alt);
   --blog-surface-tint: var(--site-accent-soft);
-  --blog-card-shadow: var(--site-shadow);
-  --blog-focus-ring: 0 0 0 3px rgba(48, 162, 255, 0.22);
+  --blog-card-shadow: var(--site-shadow-soft);
+  /*
+   * One article width — prose, code, images and tables all share it, as on
+   * the reference. Media wider than the text reads as a second, competing
+   * left edge and is what made the running text look inset.
+   *
+   * In rem, not ch: a ch-based custom property resolves against the
+   * font-size of whatever consumes it, so prose (19px) and code blocks
+   * (monospace) would each get a different column off one token. 46rem is
+   * ~68 characters at 19px.
+   */
+  --blog-prose: 46rem;
 }
 
 html[data-route-kind='blog'] body,
-.blog-wrapper {
-  background: var(--site-bg);
-}
-
+.blog-wrapper,
 .site-blog-layout {
   background: var(--site-bg);
 }
 
+/*
+ * Same box as Research / Community / .site-shell-container: gutters sit
+ * outside --page-max so the outer edge lands on the navbar and footer.
+ */
 .site-blog-layout__inner {
-  width: min(93.5rem, calc(72vw + 4.5rem), calc(100% - 1.35rem));
-  margin: 0 auto;
+  width: 100%;
+  max-width: calc(var(--page-max) + var(--gutter) * 2);
+  margin-inline: auto;
+  padding-inline: var(--gutter);
 }
 
-.site-blog-layout--listing {
-  padding: 4.25rem 0 5rem;
-}
-
+/* Match ResearchLayout .container vertical rhythm exactly. */
 .site-blog-layout--listing .site-blog-layout__inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  padding: var(--space-8) var(--gutter) var(--space-10);
 }
 
 .site-blog-layout--listing .site-blog-layout__sidebar {
   display: none;
 }
 
+/*
+ * PageHeader keeps its shared border and padding — do not zero them out.
+ * That border is what makes Research / Community / Blog read as one site.
+ */
 .site-blog-index__header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(24rem, 38rem);
-  grid-template-areas:
-    'title search'
-    'description description';
-  column-gap: 3rem;
-  row-gap: 0.8rem;
-  align-items: end;
-  margin-bottom: 2rem;
-}
-
-.site-blog-index__header h1 {
-  grid-area: title;
   margin: 0;
-  color: var(--site-text-strong);
-  font-size: clamp(2.5rem, 4vw, 3.25rem);
-  font-weight: 650;
-  line-height: 1;
-  letter-spacing: -0.045em;
-}
-
-.site-blog-index__header p {
-  grid-area: description;
-  max-width: none;
-  margin: 0;
-  color: var(--blog-muted);
-  font-size: clamp(0.7rem, 1.25vw, 1.15rem);
-  line-height: 1.45;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-}
-
-.site-blog-search {
-  grid-area: search;
-  position: relative;
-  display: flex;
-  align-items: center;
-  min-height: 3.25rem;
-  border: 1px solid var(--blog-border);
-  border-radius: 0.8rem;
-  background: var(--site-surface);
-  color: var(--blog-muted);
-  transition:
-    border-color 160ms ease,
-    box-shadow 160ms ease;
-}
-
-.site-blog-search:focus-within {
-  border-color: var(--blog-border-focus);
-  box-shadow: var(--blog-focus-ring);
-}
-
-.site-blog-search__icon {
-  position: absolute;
-  left: 1rem;
-  top: 50%;
-  font-size: 1.65rem;
-  line-height: 1;
-  transform: translateY(-53%) rotate(-18deg);
-  pointer-events: none;
-}
-
-.site-blog-search input {
-  width: 100%;
-  min-width: 0;
-  padding: 0.82rem 1rem 0.82rem 3rem;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--site-text);
-  font: inherit;
-  font-size: 1.05rem;
-}
-
-.site-blog-search input::placeholder {
-  color: var(--blog-muted);
-  opacity: 1;
-}
-
-.site-blog-search input::-webkit-search-cancel-button {
-  cursor: pointer;
 }
 
 .site-blog-index__columns {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 17rem;
-  gap: 3.4rem;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+  gap: var(--rail-gap);
   align-items: start;
+  padding-top: var(--space-6);
+}
+
+.site-blog-index__columns::before {
+  content: '';
+  position: absolute;
+  top: var(--space-6);
+  bottom: 0;
+  left: var(--rail);
+  width: 1px;
+  background: var(--site-border);
 }
 
 .site-blog-index__feed {
   min-width: 0;
 }
 
+/* ------------------------------------------------------------------ *
+ * Cards — proportions from the previous listing that felt elegant:
+ * taller media, object-fit contain, fixed 2-col grid, roomy featured.
+ * ------------------------------------------------------------------ */
 .site-blog-card {
   overflow: hidden;
   border: 1px solid var(--blog-border);
-  border-radius: 1.1rem;
+  border-radius: var(--radius-lg);
   background: var(--site-surface);
   transition:
     border-color 180ms ease,
@@ -182,7 +105,7 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-card:hover {
-  border-color: var(--blog-border-strong);
+  border-color: var(--site-hover-border);
   box-shadow: var(--blog-card-shadow);
   transform: translateY(-2px);
 }
@@ -201,6 +124,7 @@ html[data-route-kind='blog'] body,
   overflow: hidden;
   isolation: isolate;
   place-items: center;
+  background: var(--site-surface-alt);
 }
 
 .site-blog-card__image-backdrop {
@@ -229,30 +153,56 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-card__image-fallback {
+  position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: flex-end;
   height: 14.5rem;
-  padding: 2rem;
+  padding: var(--space-5);
   background:
-    linear-gradient(135deg, rgba(48, 162, 255, 0.08), transparent 55%),
-    var(--blog-surface-cool);
-  color: var(--blog-ink-soft);
+    radial-gradient(120% 120% at 12% 0%, var(--site-accent-soft), transparent 62%),
+    var(--site-surface-alt);
+  color: var(--site-text-strong);
+  overflow: hidden;
+}
+
+.site-blog-card__image-fallback::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(to right, var(--site-border) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--site-border) 1px, transparent 1px);
+  background-size: 2.25rem 2.25rem;
+  opacity: 0.5;
+  mask-image: linear-gradient(150deg, #000, transparent 72%);
+}
+
+.site-blog-card__image-fallback span,
+.site-blog-card__image-fallback strong {
+  position: relative;
 }
 
 .site-blog-card__image-fallback span {
-  color: var(--blog-accent);
-  font-size: 2.1rem;
-  font-weight: 700;
-  letter-spacing: -0.06em;
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 .site-blog-card__image-fallback strong {
-  font-size: 1.05rem;
-  font-weight: 550;
+  margin-top: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
 }
 
 .site-blog-card__body {
+  display: flex;
+  flex-direction: column;
   padding: 1.45rem 1.5rem 1.55rem;
 }
 
@@ -261,7 +211,7 @@ html[data-route-kind='blog'] body,
   margin-bottom: 0.5rem;
   color: var(--blog-accent);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -270,9 +220,15 @@ html[data-route-kind='blog'] body,
   margin: 0;
   color: var(--blog-ink);
   font-size: 1.28rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.25;
   letter-spacing: -0.025em;
+  text-wrap: balance;
+  transition: color var(--site-transition-fast);
+}
+
+.site-blog-card:hover .site-blog-card__title {
+  color: var(--site-accent-strong);
 }
 
 .site-blog-card__title a {
@@ -283,6 +239,7 @@ html[data-route-kind='blog'] body,
 .site-blog-card__meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.55rem;
   margin-top: 0.9rem;
   color: var(--blog-muted);
@@ -317,11 +274,11 @@ html[data-route-kind='blog'] body,
 .site-blog-card--featured .site-blog-card__image {
   max-height: 25rem;
   padding: 1.4rem;
+  object-fit: contain;
 }
 
 .site-blog-card--featured .site-blog-card__image-fallback {
   height: 100%;
-  max-height: 21.5rem;
 }
 
 .site-blog-card--featured .site-blog-card__body {
@@ -373,50 +330,66 @@ html[data-route-kind='blog'] body,
   padding: 2rem;
 }
 
+/* ------------------------------------------------------------------ *
+ * Listing rail — left, shared --rail width. Readable recent list (not a
+ * cramped nav of muted pills). Group labels match Research sentence-case.
+ * ------------------------------------------------------------------ */
+/* Group gap and rule match ResearchLayout: 24 + 1px + 24. */
 .site-blog-index__rail {
   position: sticky;
-  top: calc(var(--site-header-height) + 2rem);
+  top: calc(var(--site-header-height) + var(--space-5));
   display: grid;
-  gap: 2.8rem;
+  align-content: start;
+  gap: var(--space-5);
+  padding-right: var(--space-5);
 }
 
 .site-blog-index__rail h2 {
-  margin: 0 0 1.05rem;
-  color: var(--blog-muted);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  margin: 0;
+  padding: 0.15rem var(--space-2) var(--space-2);
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.005em;
+  text-transform: none;
 }
 
+.site-blog-index__rail section + section {
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--site-border);
+}
+
+/* Inset under the group label, as the nav items are on every other rail. */
 .site-blog-recent,
 .site-blog-tags ul {
   margin: 0;
-  padding: 0;
+  padding: 0 0 0 var(--space-3);
   list-style: none;
 }
 
 .site-blog-recent {
   display: grid;
-  gap: 1.2rem;
+  gap: 1.15rem;
 }
 
 .site-blog-recent li {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.3rem;
 }
 
 .site-blog-recent a {
   color: var(--blog-ink-soft);
-  font-size: 1rem;
-  font-weight: 500;
-  line-height: 1.28;
+  font-size: 0.98rem;
+  font-weight: var(--site-font-weight-medium);
+  line-height: 1.35;
   text-decoration: none;
+  transition: color var(--site-transition-fast);
 }
 
 .site-blog-recent a:hover,
 .site-blog-tags a:hover {
   color: var(--blog-accent);
+  text-decoration: none;
 }
 
 .site-blog-recent time {
@@ -426,13 +399,14 @@ html[data-route-kind='blog'] body,
 
 .site-blog-tags ul {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.75rem;
 }
 
 .site-blog-tags a {
-  color: var(--blog-muted);
-  font-size: 1rem;
+  color: var(--blog-muted-strong);
+  font-size: 0.95rem;
   text-decoration: none;
+  transition: color var(--site-transition-fast);
 }
 
 .site-blog-tags small {
@@ -444,14 +418,15 @@ html[data-route-kind='blog'] body,
   min-height: 24rem;
   padding: 4rem 2rem;
   border: 1px solid var(--blog-border);
-  border-radius: 1.1rem;
+  border-radius: var(--radius-lg);
+  background: var(--site-surface);
   text-align: center;
 }
 
 .site-blog-empty h2 {
   margin: 0;
   font-size: 1.8rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .site-blog-empty p {
@@ -483,11 +458,11 @@ html[data-route-kind='blog'] body,
   min-height: 2.6rem;
   padding: 0.55rem 0.9rem;
   border: 1px solid var(--blog-border);
-  border-radius: 0.75rem;
+  border-radius: var(--radius-lg);
   background: var(--site-surface);
   color: var(--blog-muted-strong);
   font-size: 0.88rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   text-decoration: none;
   transition:
     background 160ms ease,
@@ -506,23 +481,53 @@ html[data-route-kind='blog'] body,
 .site-blog-pagination__status {
   color: var(--blog-muted);
   font-size: 0.78rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
-.site-blog-layout--post {
-  padding: 4.25rem 0 5.5rem;
+/* ------------------------------------------------------------------ *
+ * Article — left contents rail, then one LEFT-FLUSH column.
+ *
+ * The column is the article width, not 1fr. Sized to 1fr it would span to
+ * the frame's right edge and the prose inside it would need centring to
+ * avoid a void — and centring is the misalignment this phase exists to
+ * remove: it put the article's first character ~310px right of where docs,
+ * research and community start theirs.
+ * ------------------------------------------------------------------ */
+.site-blog-layout--post .site-blog-layout__inner {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, var(--blog-prose));
+  justify-content: start;
+  gap: var(--rail-gap);
+  align-items: start;
+  padding: var(--space-8) var(--gutter) 5.5rem;
 }
 
-.site-blog-layout--post .site-blog-layout__inner {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(13rem, 17rem);
-  gap: clamp(3rem, 5vw, 5.5rem);
-  align-items: start;
+/*
+ * Only when there is a rail to divide. A post with no headings gets no TOC
+ * from BlogPostPage, and the divider would otherwise hang beside an empty
+ * column. The article keeps its indent either way so it stays aligned.
+ */
+.site-blog-layout--post .site-blog-layout__inner:has(.site-blog-layout__toc)::before {
+  content: '';
+  position: absolute;
+  top: var(--space-8);
+  bottom: 5.5rem;
+  left: calc(var(--gutter) + var(--rail));
+  width: 1px;
+  background: var(--site-border);
+}
+
+.site-blog-layout--post .site-blog-layout__toc {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 .site-blog-layout--post .site-blog-layout__main {
+  grid-column: 2;
+  grid-row: 1;
   min-width: 0;
 }
 
@@ -534,43 +539,74 @@ html[data-route-kind='blog'] body,
   box-shadow: none;
 }
 
+/*
+ * The section eyebrow, styled as PageHeader's so a post opens like every
+ * other page. It stays a link back to the index; the arrow it used to carry
+ * is what made it read as browser chrome instead of a category label.
+ */
 .site-blog-post__breadcrumb {
   display: inline-block;
-  margin-bottom: 2.5rem;
-  color: var(--blog-muted);
-  font-size: 0.98rem;
+  margin-bottom: var(--space-2);
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: 0.14em;
   text-decoration: none;
+  text-transform: uppercase;
 }
 
 .site-blog-post__breadcrumb:hover {
-  color: var(--blog-accent);
+  color: var(--site-accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 0.25em;
+}
+
+/*
+ * Spans the column so its rule matches PageHeader's on every other page;
+ * the text inside stays at the prose measure.
+ */
+.site-blog-post__header {
+  max-width: none;
+  margin-bottom: var(--space-8);
+  padding-top: var(--space-4);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--site-border);
 }
 
 .site-blog-post__header h1 {
-  max-width: 62rem;
+  max-width: var(--blog-prose);
   margin: 0;
   color: var(--blog-ink);
-  font-size: clamp(2.65rem, 4.6vw, 3.7rem);
-  font-weight: 680;
-  line-height: 1.08;
-  letter-spacing: -0.045em;
+  font-size: clamp(2.1rem, 3.6vw, 2.85rem);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
   text-wrap: balance;
+}
+
+/* The header spans the column for its rule; the text in it keeps the measure. */
+.site-blog-post__meta,
+.site-blog-post__authors,
+.site-blog-post__tags {
+  max-width: var(--blog-prose);
 }
 
 .site-blog-post__meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.2rem;
-  margin-top: 1.6rem;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
   color: var(--blog-muted);
-  font-size: 1rem;
+  font-size: var(--text-sm);
 }
 
 .site-blog-post__authors {
   display: flex;
   flex-wrap: wrap;
   gap: 1.1rem 2.2rem;
-  margin: 1.45rem 0 0;
+  margin: var(--space-5) 0 0;
   padding: 0;
   color: var(--blog-ink-soft);
   font-size: 1.02rem;
@@ -600,7 +636,7 @@ html[data-route-kind='blog'] body,
 .site-blog-post__author-details a,
 .site-blog-post__author-details span {
   color: var(--blog-ink-soft);
-  font-weight: 620;
+  font-weight: var(--site-font-weight-semibold);
   text-decoration: none;
 }
 
@@ -617,7 +653,7 @@ html[data-route-kind='blog'] body,
   display: flex;
   flex-wrap: wrap;
   gap: 0.85rem;
-  margin: 1.3rem 0 0;
+  margin: var(--space-5) 0 0;
   padding: 0;
   list-style: none;
 }
@@ -633,14 +669,45 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__content {
-  max-width: 64rem;
-  margin-top: 3.25rem;
+  max-width: none;
+  margin-top: 0;
   color: var(--blog-ink-soft);
-  font-size: 1.14rem;
-  line-height: 1.66;
+  font-size: 1.1875rem;
+  line-height: 1.75;
 }
 
-.site-blog-post__content > p:first-child {
+/*
+ * Running text stops at the prose measure and is LEFT-flush, so its first
+ * character sits on the same x as a docs paragraph. Never `margin-inline:
+ * auto` here — that is the misalignment this phase removes.
+ */
+.site-blog-post__content > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6),
+.site-blog-layout--post .markdown > :is(p, ul, ol, blockquote, h2, h3, h4, h5, h6) {
+  max-width: var(--blog-prose);
+  margin-inline: 0;
+}
+
+/*
+ * Media fills the column — the same width as the prose, not wider. MDX wraps
+ * images in <p>, so these need naming explicitly or the rule above would cap
+ * an image's paragraph and leave it narrower than the code block beside it.
+ */
+.site-blog-post__content > :is(pre, table, figure, .theme-code-block, .tabs-container, details),
+.site-blog-post__content > div:has(> table),
+.site-blog-post__content > div:has(> pre),
+.site-blog-post__content > p:has(> img),
+.site-blog-post__content > p:has(> a > img),
+.site-blog-layout--post .markdown > :is(pre, table, figure, .theme-code-block, .tabs-container, details),
+.site-blog-layout--post .markdown > div:has(> table),
+.site-blog-layout--post .markdown > div:has(> pre),
+.site-blog-layout--post .markdown > p:has(> img),
+.site-blog-layout--post .markdown > p:has(> a > img) {
+  max-width: none;
+  width: 100%;
+  margin-inline: 0;
+}
+
+.site-blog-post__content > p:first-of-type {
   font-size: 1.22rem;
 }
 
@@ -650,23 +717,37 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__content p {
-  margin: 1.35rem 0;
+  margin-block: 1.35rem;
 }
 
-.site-blog-post__content h2 {
-  margin: 3.6rem 0 1.15rem;
-  font-size: clamp(2rem, 3vw, 2.65rem);
-  font-weight: 650;
-  line-height: 1.12;
-  letter-spacing: -0.035em;
-}
-
-.site-blog-post__content h3 {
-  margin: 2.6rem 0 0.9rem;
-  font-size: 1.55rem;
-  font-weight: 650;
+.site-blog-post__content h2,
+.site-blog-layout--post .markdown > h2 {
+  margin: 3.25rem 0 0.85rem;
+  border-top: 0;
+  padding-top: 0;
+  font-size: clamp(1.55rem, 2.4vw, 1.85rem);
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.2;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.03em;
+}
+
+.site-blog-post__content h3,
+.site-blog-layout--post .markdown > h3 {
+  margin: 2.4rem 0 0.7rem;
+  border-top: 0;
+  padding-top: 0;
+  font-size: 1.35rem;
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.25;
+  letter-spacing: -0.02em;
+}
+
+.site-blog-post__content h4,
+.site-blog-post__content h5,
+.site-blog-post__content h6 {
+  margin: 2rem 0 0.55rem;
+  border-top: 0;
+  padding-top: 0;
 }
 
 .site-blog-post__content a {
@@ -680,7 +761,7 @@ html[data-route-kind='blog'] body,
 }
 
 .site-blog-post__content blockquote {
-  margin: 2rem 0;
+  margin-block: 2rem;
   padding: 0.3rem 0 0.3rem 1.25rem;
   border-left: 3px solid var(--blog-accent);
 }
@@ -691,113 +772,189 @@ html[data-route-kind='blog'] body,
 
 .site-blog-post__content img {
   display: block;
-  margin: 2.4rem auto;
-  border-radius: 0.8rem;
+  width: 100%;
+  height: auto;
+  margin-block: 0.35rem;
+  border-radius: var(--radius-lg);
 }
 
 .site-blog-post__content table {
   font-size: 0.95rem;
 }
 
+/* ------------------------------------------------------------------ *
+ * Contents rail — docs sidebar chrome (filled pill, sentence-case),
+ * with LangChain-level breathing room and clear nested hierarchy.
+ * ------------------------------------------------------------------ */
 .site-blog-layout__toc {
   position: sticky;
-  top: calc(var(--site-header-height) + 2rem);
+  top: calc(var(--site-header-height) + var(--space-5));
   max-height: calc(100vh - var(--site-header-height) - 4rem);
+  overflow-x: hidden;
   overflow-y: auto;
+  padding-right: var(--space-5);
+  scrollbar-width: thin;
+}
+
+/*
+ * Exactly one scroller. Docusaurus's TOC sets its own sticky + max-height +
+ * overflow-y, and on docs that lands on the same element as the theme class,
+ * so there is one. Here BlogLayout wraps it in this aside, which nested a
+ * second scroll container inside the first and drew two scrollbars. The
+ * aside is the one that scrolls; its offsets come from our own tokens,
+ * whereas the inner element's are keyed to --ifm-navbar-height, which is
+ * only redefined on docs pages.
+ */
+.site-blog-layout__toc > [class*='tableOfContents'] {
+  position: static;
+  max-height: none;
+  overflow: visible;
+}
+
+.site-blog-layout__toc::before {
+  content: 'On this page';
+  display: block;
+  padding: 0.15rem var(--space-2) var(--space-2);
+  color: var(--site-text-strong);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.005em;
+  text-transform: none;
+}
+
+.site-blog-layout__toc .table-of-contents,
+.site-blog-layout__toc .table-of-contents ul {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  list-style: none;
 }
 
 .site-blog-layout__toc .table-of-contents {
-  padding: 0;
-  border-left: 0;
+  display: grid;
+  gap: 2px;
 }
 
-.site-blog-layout__toc .table-of-contents ul {
-  padding-left: 1rem;
-  border-left: 1px solid var(--blog-border);
+/* Nesting by indent only — no guide lines. */
+.site-blog-layout__toc .table-of-contents .table-of-contents {
+  margin-top: 2px;
+  margin-bottom: 2px;
+  padding-left: var(--space-3);
 }
 
+/*
+ * Docs sidebar metrics exactly: 12px pill inset + 12px padding puts item text
+ * at 24px against the 8px label, and the pill is 2.1rem tall.
+ */
 .site-blog-layout__toc .table-of-contents__link {
-  display: block;
-  padding: 0.3rem 0;
-  color: var(--blog-muted);
-  font-size: 0.9rem;
-  line-height: 1.35;
+  display: flex;
+  align-items: center;
+  min-height: 2.1rem;
+  margin-left: var(--space-3);
+  padding: 0.42rem var(--space-3);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--site-muted);
+  font-size: var(--text-sm);
+  font-weight: var(--site-font-weight-normal);
+  line-height: 1.4;
+  text-decoration: none;
+  transition:
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
 }
 
-.site-blog-layout__toc .table-of-contents__link--active,
 .site-blog-layout__toc .table-of-contents__link:hover {
-  color: var(--blog-ink-soft);
-  font-weight: 600;
+  background: var(--site-surface-soft);
+  color: var(--site-text-strong);
+  text-decoration: none;
+}
+
+/* 0,3,0 beats Infima's .table-of-contents__link--active — no !important needed. */
+.site-blog-layout__toc .table-of-contents__link--active,
+.site-blog-layout__toc .table-of-contents__link--active:hover {
+  background: var(--site-accent-soft);
+  color: var(--site-accent-strong);
+  font-weight: var(--site-font-weight-medium);
+}
+
+.site-blog-layout__toc .table-of-contents__link:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
 }
 
 .site-blog-layout--post .pagination-nav {
   gap: 1rem;
-  margin-top: 4rem;
+  max-width: var(--blog-prose);
+  margin: 4rem 0 0;
 }
 
 @media (max-width: 1100px) {
-  .site-blog-index__header {
-    grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
-  }
-
-  .site-blog-index__columns {
-    grid-template-columns: minmax(0, 1fr) 15rem;
-    gap: 2rem;
-  }
-
   .site-blog-card--featured {
     grid-template-columns: minmax(17rem, 42%) minmax(0, 1fr);
   }
 }
 
 @media (max-width: 996px) {
-  .site-blog-layout--listing,
-  .site-blog-layout--post {
-    padding-top: 3rem;
+  .site-blog-layout--listing .site-blog-layout__inner,
+  .site-blog-layout--post .site-blog-layout__inner {
+    padding-top: var(--space-6);
   }
 
-  .site-blog-index__header,
   .site-blog-index__columns,
   .site-blog-layout--post .site-blog-layout__inner {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
   }
 
-  .site-blog-index__header {
-    grid-template-areas:
-      'title'
-      'description'
-      'search';
-    gap: 1.6rem;
+  /* Matches the :has() form above, which would otherwise out-specify this. */
+  .site-blog-index__columns::before,
+  .site-blog-layout--post .site-blog-layout__inner:has(.site-blog-layout__toc)::before {
+    display: none;
   }
 
-  .site-blog-index__columns {
-    gap: 3rem;
+  .site-blog-layout--post .site-blog-layout__toc,
+  .site-blog-layout--post .site-blog-layout__main {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .site-blog-index__rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-5);
+    order: 2;
+    padding-right: 0;
+  }
+
+  .site-blog-index__feed {
+    order: 1;
+  }
+
+  .site-blog-index__rail section + section {
+    padding-top: 0;
+    border-top: 0;
   }
 
   .site-blog-index__rail,
   .site-blog-layout__toc {
     position: static;
-  }
-
-  .site-blog-index__rail {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    padding-top: 2.5rem;
-    border-top: 1px solid var(--blog-border);
+    max-height: none;
+    overflow: visible;
   }
 
   .site-blog-layout__toc {
     display: none;
   }
+
+  .site-blog-card-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 @media (max-width: 720px) {
-  .site-blog-index__header p {
-    font-size: 0.9rem;
-    white-space: normal;
-  }
-
   .site-blog-card--featured,
-  .site-blog-card-grid,
   .site-blog-index__rail {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -817,7 +974,8 @@ html[data-route-kind='blog'] body,
 
   .site-blog-card--featured .site-blog-card__image {
     height: 100%;
-    padding: 1rem;
+    max-height: none;
+    padding: 0.75rem;
   }
 
   .site-blog-card--featured .site-blog-card__body {
@@ -864,16 +1022,11 @@ html[data-route-kind='blog'] body,
     grid-row: 2;
   }
 
-  .site-blog-post__breadcrumb {
-    margin-bottom: 1.7rem;
-  }
-
   .site-blog-post__header h1 {
-    font-size: clamp(2.2rem, 10vw, 3rem);
+    font-size: clamp(1.85rem, 9vw, 2.4rem);
   }
 
   .site-blog-post__content {
-    margin-top: 2.5rem;
-    font-size: 1.04rem;
+    font-size: 1.05rem;
   }
 }
