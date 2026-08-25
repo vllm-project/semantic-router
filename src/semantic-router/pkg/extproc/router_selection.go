@@ -335,14 +335,10 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 		return nil
 	}
 
-	embeddingDim := mlCfg.EmbeddingDim
-	if embeddingDim <= 0 && mlCfg.ModelType == config.EmbeddingModelTypeQwen3 {
-		embeddingDim = 1024
-	}
 	logging.ComponentEvent("extproc", "ml_model_selection_enabled", map[string]interface{}{
 		"models_path":       mlCfg.ModelsPath,
 		"model_type":        mlCfg.ModelType,
-		"embedding_dim":     embeddingDim,
+		"embedding_dim":     mlCfg.EmbeddingDim,
 		"knn_pretrained":    mlCfg.KNN.PretrainedPath != "",
 		"kmeans_pretrained": mlCfg.KMeans.PretrainedPath != "",
 		"svm_pretrained":    mlCfg.SVM.PretrainedPath != "",
@@ -351,7 +347,7 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 	return &selection.MLSelectorConfig{
 		ModelsPath:   mlCfg.ModelsPath,
 		ModelType:    mlCfg.ModelType,
-		EmbeddingDim: embeddingDim,
+		EmbeddingDim: mlCfg.EmbeddingDim,
 		KNN: &selection.KNNConfig{
 			K:              mlCfg.KNN.K,
 			PretrainedPath: mlCfg.KNN.PretrainedPath,

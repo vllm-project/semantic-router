@@ -133,7 +133,7 @@ func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
 	}
 
 	mlCfg := buildModelSelectionConfig(cfg).ML
-	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 || mlCfg.EmbeddingDim != 1024 {
-		t.Fatalf("ML selection embedding config = %s/%d, want Qwen3/1024", mlCfg.ModelType, mlCfg.EmbeddingDim)
+	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 || mlCfg.EmbeddingDim != 0 {
+		t.Fatalf("ML selection embedding config = %s/%d, want Qwen3/0 (model-native dimension)", mlCfg.ModelType, mlCfg.EmbeddingDim)
 	}
 }
