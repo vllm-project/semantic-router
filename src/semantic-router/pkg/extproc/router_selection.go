@@ -97,7 +97,7 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selec
 		case config.EmbeddingBackendOpenVINO:
 			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
 		default:
-			if embeddingConfig.ModelType == config.EmbeddingModelTypeQwen3 {
+			if candle_binding.SupportsBatchedEmbedding(embeddingConfig.ModelType) {
 				output, err := candle_binding.GetEmbeddingBatched(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
 				if err != nil {
 					return nil, err
