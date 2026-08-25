@@ -159,11 +159,10 @@
 }
 
 .groupFooter {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 1rem;
   align-items: end;
-  justify-content: space-between;
   padding-top: 0.9rem;
   border-top: 1px solid var(--site-border);
 }
@@ -188,6 +187,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.charterLink {
+  white-space: nowrap;
 }
 
 .person {
@@ -295,6 +298,10 @@
 
   .groupDetails {
     grid-column: 1 / -1;
+  }
+
+  .groupFooter {
+    grid-template-columns: 1fr;
   }
 
   .rules {
