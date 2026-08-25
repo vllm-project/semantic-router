@@ -9,7 +9,7 @@
 .chat {
   width: 100%;
   background: #0A0A0A;
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.4),
@@ -43,7 +43,7 @@
 
 .chatTitle {
   font-size: 0.8125rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   color: #737373;
   letter-spacing: 0.02em;
 }
@@ -173,12 +173,12 @@
 
 .chatBody::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.1);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
 }
 
 /* ── Responsive ── */
 @media (max-width: 996px) {
-  .chat { border-radius: 14px; }
+  .chat { border-radius: var(--radius-lg); }
   .chatBody { height: 360px; font-size: 0.75rem; padding: 1rem; }
   .chatHeader { padding: 0.75rem 1rem; }
   .chatButton { width: 11px; height: 11px; }
@@ -188,7 +188,7 @@
 }
 
 @media (max-width: 768px) {
-  .chat { border-radius: 12px; }
+  .chat { border-radius: var(--radius-lg); }
   .chatBody { height: 320px; font-size: 0.7rem; padding: 0.75rem; gap: 0.5rem; }
   .chatHeader { padding: 0.625rem 0.875rem; }
   .chatControls { left: 0.875rem; }

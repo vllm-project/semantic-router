@@ -5,7 +5,7 @@
   justify-content: center;
   padding: 2rem;
   background: rgba(255, 255, 255, 0.8);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   border: 1px solid rgba(88, 166, 255, 0.2);
   backdrop-filter: blur(10px);
   transition: all 0.3s ease;
@@ -44,7 +44,7 @@
 .coreLabel {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
   font-size: 8px;
-  font-weight: bold;
+  font-weight: var(--site-font-weight-bold);
   fill: #ffffff;
   text-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
 }
@@ -66,7 +66,7 @@
 .chipTitle {
   display: block;
   font-size: 1.2rem;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
   color: #1F2328;
   margin-bottom: 0.5rem;
   background: linear-gradient(45deg, #0969DA, #8250DF);
