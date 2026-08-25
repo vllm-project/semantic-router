@@ -201,8 +201,13 @@ function Roster({
         : (
             <div className={styles.people}>
               {people.map(person => (
-                <a key={person.profile} className={styles.person} href={person.profile}>
-                  <img src={person.avatar} alt="" />
+                <a
+                  key={person.profile}
+                  className={styles.person}
+                  href={person.profile}
+                  aria-label={`${person.name} on GitHub`}
+                >
+                  <img src={person.avatar} alt="" loading="lazy" />
                   <strong>{person.name}</strong>
                 </a>
               ))}
