@@ -256,12 +256,16 @@ def container_start_redis(
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.redis_container_name
-    network_name = network_name or stack_layout.network_name
+    # Storage defaults to the data network, never the application network:
+    # sidecars, the simulator, and user-selected OpenClaw workloads all join the
+    # latter, and reaching a storage port from one of them is the east-west half
+    # of the exposure that loopback-only publication closes from the host side.
+    network_name = network_name or stack_layout.data_network_name
 
     adopted_volume = None
     if reuse_existing and not recreate:
         reuse_result = _reuse_running_storage_container(
-            container_name, "Redis", network_name
+            container_name, "Redis", network_name, stack_layout.network_name
         )
         if reuse_result is not None:
             return reuse_result
@@ -329,12 +333,13 @@ def container_start_postgres(
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.postgres_container_name
-    network_name = network_name or stack_layout.network_name
+    # The data network, for the reason spelled out in `container_start_redis`.
+    network_name = network_name or stack_layout.data_network_name
 
     adopted_volume = None
     if reuse_existing and not recreate:
         reuse_result = _reuse_running_storage_container(
-            container_name, "Postgres", network_name
+            container_name, "Postgres", network_name, stack_layout.network_name
         )
         if reuse_result is not None:
             return reuse_result
@@ -400,11 +405,14 @@ def container_start_milvus(
     runtime = get_container_runtime()
     stack_layout = stack_layout or resolve_runtime_stack()
     container_name = stack_layout.milvus_container_name
-    network_name = network_name or stack_layout.network_name
+    # The data network, for the reason spelled out in `container_start_redis`.
+    # Milvus joins it even though it has no credentials of its own yet; those
+    # are separate work, and network reachability is what this closes.
+    network_name = network_name or stack_layout.data_network_name
 
     if reuse_existing:
         reuse_result = _reuse_running_storage_container(
-            container_name, "Milvus", network_name
+            container_name, "Milvus", network_name, stack_layout.network_name
         )
         if reuse_result is not None:
             return reuse_result
@@ -468,10 +476,52 @@ def container_network_disconnect(network_name, container_name):
     runtime = get_container_runtime()
     cmd = [runtime, "network", "disconnect", network_name, container_name]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=10
+        )
         return (0, result.stdout, result.stderr)
     except subprocess.CalledProcessError as exc:
         return (exc.returncode, exc.stdout, exc.stderr)
+
+
+# Substrings that mean "already detached", across runtimes and versions.
+# Short enough to survive wording drift -- Docker says "is not connected to
+# network X" on one code path and "is not connected to the network X" on
+# another, and Podman words the missing-network case differently again -- but
+# each one still names what it matches. A bare "not found" would also swallow
+# unrelated daemon errors, and this call is the one that has to fail loudly:
+# reporting a disconnect that never happened reports an isolation that is not
+# there. Verified wordings: Docker "... is not connected to network X" and
+# "network X not found"; Podman "unable to find network".
+DETACHED_NETWORK_MARKERS = (
+    "not connected",
+    "no such network",
+    "network not found",
+    "unable to find network",
+)
+
+
+def container_network_disconnect_if_attached(network_name, container_name):
+    """Disconnect a container from a network it may already have left.
+
+    A container that never joined *network_name*, or a network that no longer
+    exists, is already the intended end state, so both are reported as success
+    and quietly: they are the steady state once a stack has been migrated.
+    Every other failure is passed through unchanged, because this call is how a
+    stack provisioned before the storage network split gives up its reach into
+    the application network, and swallowing a real error there would report an
+    isolation that was never applied.
+    """
+    return_code, stdout, stderr = container_network_disconnect(
+        network_name, container_name
+    )
+    if return_code == 0:
+        return (0, stdout, stderr)
+    detail = (stderr or "").lower()
+    if any(marker in detail for marker in DETACHED_NETWORK_MARKERS):
+        log.debug(f"{container_name} is already detached from {network_name}")
+        return (0, stdout, stderr)
+    return (return_code, stdout, stderr)
 
 
 def container_network_connect(network_name, container_name):
@@ -479,7 +529,9 @@ def container_network_connect(network_name, container_name):
     runtime = get_container_runtime()
     cmd = [runtime, "network", "connect", network_name, container_name]
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, check=True, timeout=10
+        )
         return (0, result.stdout, result.stderr)
     except subprocess.CalledProcessError as exc:
         if "already" in (exc.stderr or "").lower():
@@ -516,9 +568,21 @@ def load_openclaw_registry(data_dir):
 
 
 def _reuse_running_storage_container(
-    container_name: str, label: str, network_name: str | None
+    container_name: str,
+    label: str,
+    data_network_name: str | None,
+    app_network_name: str | None,
 ) -> tuple[int, str, str] | None:
-    """Return a success/failure tuple when a running storage container is reused."""
+    """Return a success/failure tuple when a running storage container is reused.
+
+    Reuse is also the migration step. A stack provisioned before storage moved
+    off the application network still has its containers attached there, and
+    reuse is the only path they take on a later `serve` -- they are never
+    rebuilt, so nothing else would ever move them. Connecting the data network
+    without leaving the application network would keep every such stack
+    reachable from its own sidecars for good. Connect comes first so a failure
+    leaves the container on the network it already had rather than on none.
+    """
     status = container_status(container_name)
     if status == "running":
         safe, detail = _storage_ports_are_loopback_only(container_name)
@@ -533,9 +597,15 @@ def _reuse_running_storage_container(
                 ),
             )
         log.info(f"{label} container already running, reusing to preserve data")
-        if network_name:
+        if data_network_name:
             return_code, stdout, stderr = container_network_connect(
-                network_name, container_name
+                data_network_name, container_name
+            )
+            if return_code != 0:
+                return return_code, stdout, stderr
+        if app_network_name and app_network_name != data_network_name:
+            return_code, stdout, stderr = container_network_disconnect_if_attached(
+                app_network_name, container_name
             )
             if return_code != 0:
                 return return_code, stdout, stderr

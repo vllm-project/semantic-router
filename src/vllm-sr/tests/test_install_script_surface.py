@@ -39,20 +39,19 @@ def test_install_script_defaults_to_dev_channel() -> None:
 
     assert 'REQUESTED_CHANNEL="${VLLM_SR_INSTALL_CHANNEL:-dev}"' in content
     assert "--channel stable|dev" in content
-    assert (
-        '"$INSTALL_ROOT/venv/bin/python" -m pip install --disable-pip-version-check --upgrade --quiet --pre vllm-sr'
-        in content
-    )
+    assert "resolve_latest_dev_version" in content
+    assert '"vllm-sr==$dev_version"' in content
+    assert "resolves and pins the newest" in content
 
 
-def test_installation_doc_recommends_stable_and_explains_prerelease_resolution() -> (
-    None
-):
+def test_installation_doc_recommends_development_package() -> None:
     content = INSTALL_DOC_PATH.read_text(encoding="utf-8")
 
-    assert "bash -s -- --channel stable" in content
-    assert "pip install vllm-sr" in content
-    assert "does not guarantee that pip will prefer one" in content
+    assert "bash -s -- --channel dev" in content
+    assert (
+        'python -m pip install --upgrade "vllm-sr==${VLLM_SR_DEV_VERSION}"' in content
+    )
+    assert "newest published `.dev` package" in content
 
 
 def test_pypi_publish_workflow_does_not_push_back_to_main() -> None:
