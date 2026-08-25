@@ -77,7 +77,7 @@ func (r *SemanticRouterReconciler) reconcileMigrationJob(
 	for _, condition := range found.Status.Conditions {
 		if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
 			return &vllmv1alpha1.MigrationStatus{JobName: found.Name, State: migrationStateFailed},
-				fmt.Errorf("Management schema migration Job %s failed", found.Name)
+				fmt.Errorf("management schema migration Job %s failed", found.Name)
 		}
 		if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
 			if err := r.deleteStaleMigrationJobs(ctx, sr, found.Name); err != nil {

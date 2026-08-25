@@ -120,15 +120,15 @@ func assertRedisProjectionAcrossReplicas(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if publishErr := storeA.Publish(ctx, projection, payload, digest); publishErr != nil {
-		t.Fatal(publishErr)
+	if projectionPublishError := storeA.Publish(ctx, projection, payload, digest); projectionPublishError != nil {
+		t.Fatal(projectionPublishError)
 	}
 	read, err := storeB.Read(ctx, caller.NamespaceID)
 	if err != nil || read.Revision != 1 || len(read.Entries) != 1 || read.Entries[0].GoodFitCount != 1 {
 		t.Fatalf("cross-replica Read() = (%+v, %v)", read, err)
 	}
-	if publishErr := storeB.Publish(ctx, projection, payload, digest); publishErr != nil {
-		t.Fatalf("idempotent projection publish: %v", publishErr)
+	if projectionPublishError := storeB.Publish(ctx, projection, payload, digest); projectionPublishError != nil {
+		t.Fatalf("idempotent projection publish: %v", projectionPublishError)
 	}
 
 	conflicting := projection
@@ -138,8 +138,8 @@ func assertRedisProjectionAcrossReplicas(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if publishErr := storeB.Publish(ctx, conflicting, conflictingPayload, conflictingDigest); !errors.Is(publishErr, ErrUnavailable) {
-		t.Fatalf("conflicting projection error = %v, want ErrUnavailable", publishErr)
+	if projectionPublishError := storeB.Publish(ctx, conflicting, conflictingPayload, conflictingDigest); !errors.Is(projectionPublishError, ErrUnavailable) {
+		t.Fatalf("conflicting projection error = %v, want ErrUnavailable", projectionPublishError)
 	}
 
 	newer := projection
@@ -150,11 +150,11 @@ func assertRedisProjectionAcrossReplicas(
 	if err != nil {
 		t.Fatal(err)
 	}
-	if publishErr := storeB.Publish(ctx, newer, newerPayload, newerDigest); publishErr != nil {
-		t.Fatal(publishErr)
+	if projectionPublishError := storeB.Publish(ctx, newer, newerPayload, newerDigest); projectionPublishError != nil {
+		t.Fatal(projectionPublishError)
 	}
-	if publishErr := storeA.Publish(ctx, projection, payload, digest); publishErr != nil {
-		t.Fatalf("stale publish should be an idempotent no-op: %v", publishErr)
+	if projectionPublishError := storeA.Publish(ctx, projection, payload, digest); projectionPublishError != nil {
+		t.Fatalf("stale publish should be an idempotent no-op: %v", projectionPublishError)
 	}
 
 	// A fresh client after simulated process restart observes the latest global

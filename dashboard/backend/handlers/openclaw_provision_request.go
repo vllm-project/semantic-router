@@ -31,8 +31,8 @@ func (h *OpenClawHandler) handleProvision(w http.ResponseWriter, r *http.Request
 		http.Error(w, fmt.Sprintf(`{"error":"Invalid request: %v"}`, err), http.StatusBadRequest)
 		return
 	}
-	if failure := h.normalizeProvisionRequest(&req); failure != nil {
-		writeJSONError(w, failure.message, failure.status)
+	if requestFailure := h.normalizeProvisionRequest(&req); requestFailure != nil {
+		writeJSONError(w, requestFailure.message, requestFailure.status)
 		return
 	}
 	if asyncRequested {

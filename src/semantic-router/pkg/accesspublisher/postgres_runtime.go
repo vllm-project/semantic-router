@@ -563,9 +563,9 @@ func (s *PostgresStore) ReconcileApplied(ctx context.Context, applied AppliedSta
 		return ErrConflict
 	}
 	var activeID string
-	if headErr := s.db.QueryRowContext(ctx, `SELECT active_publication_id FROM routing_publication_heads
-	WHERE namespace_id=$1`, applied.NamespaceID).Scan(&activeID); headErr != nil {
-		return fmt.Errorf("read active PostgreSQL publication head: %w", headErr)
+	if headReadError := s.db.QueryRowContext(ctx, `SELECT active_publication_id FROM routing_publication_heads
+	WHERE namespace_id=$1`, applied.NamespaceID).Scan(&activeID); headReadError != nil {
+		return fmt.Errorf("read active PostgreSQL publication head: %w", headReadError)
 	}
 	if activeID != publicationID {
 		return ErrConflict

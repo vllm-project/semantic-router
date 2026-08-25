@@ -47,8 +47,8 @@ func (h *OpenClawHandler) provisionLocked(
 	if failure != nil {
 		return provisionOutcome{}, failure
 	}
-	if failure := h.selectProvisionPort(req, bridgeMode); failure != nil {
-		return provisionOutcome{}, failure
+	if portFailure := h.selectProvisionPort(req, bridgeMode); portFailure != nil {
+		return provisionOutcome{}, portFailure
 	}
 	workspace, failure := h.prepareProvisionWorkspace(*req)
 	if failure != nil {
