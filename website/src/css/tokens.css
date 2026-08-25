@@ -90,6 +90,9 @@
   /* Rail width: 18rem (20rem too wide for label list). */
   --rail: 18rem;
   --toc: 17rem;
+  /* Rail to content. Shared so docs, research and community start their text
+   * on the same x; ramps to its cap at 1920px, where the frame stops growing. */
+  --rail-gap: clamp(var(--space-6), calc(12.19vw - 124px), 6.875rem);
 
   /* Legacy aliases repointed to shared geometry. --site-content-max removed. */
   --site-grid-max: var(--page-max);

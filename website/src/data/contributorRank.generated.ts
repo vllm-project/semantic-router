@@ -954,7 +954,7 @@ export const contributorRankData = {
     "endDate": "2026-08-25",
     "description": "Current non-merge commit activity after v0.3.0.",
     "totalCommits": 356,
-    "totalReviews": 379,
+    "totalReviews": 380,
     "totalContributors": 55,
     "newContributors": 35,
     "entries": [
@@ -1012,7 +1012,7 @@ export const contributorRankData = {
         "avatarSeed": "wilsonwu",
         "key": "github:wilsonwu",
         "commits": 34,
-        "reviews": 4,
+        "reviews": 5,
         "share": 0.0955,
         "firstCommitDate": "2026-06-09",
         "latestCommitDate": "2026-08-19",
@@ -3526,7 +3526,7 @@ export const contributorRankData = {
     "startDate": null,
     "endDate": "2026-01-05",
     "description": "Initial non-merge commit activity through v0.1.0.",
-    "totalCommits": 705,
+    "totalCommits": 706,
     "totalReviews": 580,
     "totalContributors": 53,
     "newContributors": 51,
@@ -3541,7 +3541,7 @@ export const contributorRankData = {
         "key": "github:xunzhuo",
         "commits": 167,
         "reviews": 130,
-        "share": 0.2369,
+        "share": 0.2365,
         "firstCommitDate": "2025-06-16",
         "latestCommitDate": "2026-01-05",
         "isNewContributorSinceRelease": true
@@ -3556,7 +3556,7 @@ export const contributorRankData = {
         "key": "github:rootfs",
         "commits": 149,
         "reviews": 253,
-        "share": 0.2113,
+        "share": 0.211,
         "firstCommitDate": "2025-04-15",
         "latestCommitDate": "2025-12-16",
         "isNewContributorSinceRelease": true
@@ -3571,7 +3571,7 @@ export const contributorRankData = {
         "key": "github:yuluo-yx",
         "commits": 53,
         "reviews": 53,
-        "share": 0.0752,
+        "share": 0.0751,
         "firstCommitDate": "2025-09-06",
         "latestCommitDate": "2026-01-05",
         "isNewContributorSinceRelease": true
@@ -3586,7 +3586,7 @@ export const contributorRankData = {
         "key": "github:samzong",
         "commits": 42,
         "reviews": 22,
-        "share": 0.0596,
+        "share": 0.0595,
         "firstCommitDate": "2025-09-16",
         "latestCommitDate": "2026-01-04",
         "isNewContributorSinceRelease": true
@@ -3601,7 +3601,7 @@ export const contributorRankData = {
         "key": "github:yossiovadia",
         "commits": 41,
         "reviews": 3,
-        "share": 0.0582,
+        "share": 0.0581,
         "firstCommitDate": "2025-05-20",
         "latestCommitDate": "2025-12-12",
         "isNewContributorSinceRelease": true
@@ -3616,7 +3616,7 @@ export const contributorRankData = {
         "key": "github:jaredforreal",
         "commits": 31,
         "reviews": 41,
-        "share": 0.044,
+        "share": 0.0439,
         "firstCommitDate": "2025-09-15",
         "latestCommitDate": "2025-12-16",
         "isNewContributorSinceRelease": true
@@ -3646,7 +3646,7 @@ export const contributorRankData = {
         "key": "github:tao12345666333",
         "commits": 25,
         "reviews": 17,
-        "share": 0.0355,
+        "share": 0.0354,
         "firstCommitDate": "2025-09-01",
         "latestCommitDate": "2026-01-05",
         "isNewContributorSinceRelease": true
@@ -3659,9 +3659,9 @@ export const contributorRankData = {
         "avatarUrl": "https://avatars.githubusercontent.com/u/19606201?v=4",
         "avatarSeed": "onezero-y",
         "key": "github:onezero-y",
-        "commits": 17,
+        "commits": 18,
         "reviews": 8,
-        "share": 0.0241,
+        "share": 0.0255,
         "firstCommitDate": "2025-09-02",
         "latestCommitDate": "2025-11-08",
         "isNewContributorSinceRelease": true
@@ -3886,7 +3886,7 @@ export const contributorRankData = {
         "key": "github:nerdalert",
         "commits": 3,
         "reviews": 1,
-        "share": 0.0043,
+        "share": 0.0042,
         "firstCommitDate": "2026-01-04",
         "latestCommitDate": "2026-01-05",
         "isNewContributorSinceRelease": true
@@ -3901,7 +3901,7 @@ export const contributorRankData = {
         "key": "github:wilsonwu",
         "commits": 3,
         "reviews": 0,
-        "share": 0.0043,
+        "share": 0.0042,
         "firstCommitDate": "2025-12-09",
         "latestCommitDate": "2025-12-23",
         "isNewContributorSinceRelease": true
@@ -4335,8 +4335,8 @@ export const contributorRankData = {
     "startDate": null,
     "endDate": "2026-08-25",
     "description": "Full repository non-merge commit history.",
-    "totalCommits": 1715,
-    "totalReviews": 1467,
+    "totalCommits": 1716,
+    "totalReviews": 1468,
     "totalContributors": 162,
     "newContributors": 155,
     "entries": [
@@ -4350,7 +4350,7 @@ export const contributorRankData = {
         "key": "github:xunzhuo",
         "commits": 395,
         "reviews": 412,
-        "share": 0.2303,
+        "share": 0.2302,
         "firstCommitDate": "2025-06-16",
         "latestCommitDate": "2026-08-25",
         "isNewContributorSinceRelease": true
@@ -4365,7 +4365,7 @@ export const contributorRankData = {
         "key": "github:rootfs",
         "commits": 206,
         "reviews": 441,
-        "share": 0.1201,
+        "share": 0.12,
         "firstCommitDate": "2025-04-15",
         "latestCommitDate": "2026-06-07",
         "isNewContributorSinceRelease": true
@@ -4440,7 +4440,7 @@ export const contributorRankData = {
         "key": "github:wukuntai-0211",
         "commits": 50,
         "reviews": 25,
-        "share": 0.0292,
+        "share": 0.0291,
         "firstCommitDate": "2026-05-05",
         "latestCommitDate": "2026-08-18",
         "isNewContributorSinceRelease": true
@@ -4484,7 +4484,7 @@ export const contributorRankData = {
         "avatarSeed": "wilsonwu",
         "key": "github:wilsonwu",
         "commits": 42,
-        "reviews": 4,
+        "reviews": 5,
         "share": 0.0245,
         "firstCommitDate": "2025-12-09",
         "latestCommitDate": "2026-08-19",
@@ -4663,9 +4663,9 @@ export const contributorRankData = {
         "avatarUrl": "https://avatars.githubusercontent.com/u/19606201?v=4",
         "avatarSeed": "onezero-y",
         "key": "github:onezero-y",
-        "commits": 17,
+        "commits": 18,
         "reviews": 8,
-        "share": 0.0099,
+        "share": 0.0105,
         "firstCommitDate": "2025-09-02",
         "latestCommitDate": "2025-11-08",
         "isNewContributorSinceRelease": true

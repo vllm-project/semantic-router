@@ -4,8 +4,9 @@
   --site-doc-canvas: var(--page-max);
   --site-doc-sidebar-width: var(--rail);
   --site-doc-toc-width: var(--toc);
-  /* Fluid column gaps: ramp from --space-6 at ~1220px to cap at 1920px. */
-  --site-doc-content-inset: clamp(var(--space-6), calc(12.19vw - 124px), 6.875rem);
+  /* Rail to content is shared with research and community; the TOC gap is
+   * ours alone, and ramps from --space-6 at ~1220px to its cap at 1920px. */
+  --site-doc-content-inset: var(--rail-gap);
   --site-doc-column-gap: clamp(var(--space-6), calc(14.06vw - 140px), 8.125rem);
   --site-doc-rail-top: 2.5rem;
   --site-doc-sidebar-top: 2rem;
