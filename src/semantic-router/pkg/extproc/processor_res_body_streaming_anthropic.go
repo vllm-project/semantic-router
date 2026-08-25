@@ -45,9 +45,20 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		return buildResponseBodyContinueResponse(nil, nil)
 	}
 
-	chunkStr := string(transformed)
+        chunkStr := string(transformed)
 	ctx.HasStreamingChunks = true
 	r.parseStreamingChunk(chunkStr, ctx)
+
+	if isResponseAPIRequest(ctx) {
+		frames, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, transformed)
+		ctx.PendingSSEBytes = remainder
+
+		bodyMutation := r.buildResponseAPIStreamingBodyMutation(frames, ctx)
+		if strings.Contains(chunkStr, "data: [DONE]") || streamDone {
+			r.finalizeStreamingResponse(ctx)
+		}
+		return buildResponseBodyContinueResponse(bodyMutation, responseAPIStreamingHeaderMutation())
+	}
 
 	if strings.Contains(chunkStr, "data: [DONE]") || streamDone {
 		r.finalizeStreamingResponse(ctx)
