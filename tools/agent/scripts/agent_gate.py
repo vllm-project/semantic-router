@@ -268,7 +268,9 @@ def main() -> int:
         ),
         "run-rust-lint": lambda _args, files: run_rust_lint(files),
         "run-python-lint": lambda _args, files: run_python_lint(files),
-        "run-config-contract-lint": lambda _args, _files: run_reference_config_lint(),
+        "run-config-contract-lint": lambda _args, files: run_reference_config_lint(
+            files
+        ),
     }
     handler = handlers.get(args.command)
     if handler is None:

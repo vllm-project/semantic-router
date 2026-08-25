@@ -1,16 +1,18 @@
 ---
 name: maintainer-release-ops
 category: support
-description: Maintainer release and milestone operating workflow. Use when a maintainer wants to plan a release, create milestone issues, sync GitHub issue or PR state, generate a daily review brief, or manage stale PRs and backlog routing.
+description: Maintainer release and milestone operating workflow. Use when a maintainer wants to plan a release, assess milestone health, coordinate release blockers, or generate a release-focused review brief.
 ---
 
 # Maintainer Release Ops
 
 ## Trigger
 
-- Use when release planning needs GitHub milestone, issue, or PR management
-- Use when the maintainer asks for a daily board, stale PR review, backlog
-  grooming, or milestone health check
+- Use when release planning needs milestone structure, release issue creation,
+  or blocker coordination
+- Use when the maintainer asks for milestone health or a release-focused brief
+- Use `maintainer-issue-pr-management` for day-to-day intake, labels, titles,
+  acceptance, and stale-work triage
 
 ## Required Surfaces
 
@@ -30,7 +32,7 @@ description: Maintainer release and milestone operating workflow. Use when a mai
    latest snapshot.
 3. Run `release-report` when an active release plan exists, then compare plan
    tasks, milestone issues, and PR blockers before proposing work.
-4. Review issue and PR groups by milestone, lifecycle, and stale status.
+4. Review accepted milestone work and release blockers.
 5. Generate proposed actions only; do not mutate GitHub by default.
 6. Apply actions only after maintainer confirmation.
 

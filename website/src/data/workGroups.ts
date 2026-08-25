@@ -40,6 +40,11 @@ export const workGroups: WorkGroup[] = [
         avatar: '/img/team/haichen.jpeg',
         profile: 'https://github.com/haic0',
       },
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
     ],
   },
   {
@@ -70,6 +75,13 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/adaamko',
       },
     ],
+    members: [
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
+    ],
   },
   {
     id: 'data-plane-networking',
@@ -89,6 +101,13 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/drivebyer',
       },
     ],
+    members: [
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
+    ],
   },
   {
     id: 'enterprise-environment',
@@ -106,6 +125,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Aayush Saini',
         avatar: 'https://github.com/AayushSaini101.png',
         profile: 'https://github.com/AayushSaini101',
+      },
+      {
+        name: 'Akshay Viswanathan',
+        avatar: 'https://github.com/akshayv.png',
+        profile: 'https://github.com/akshayv',
       },
     ],
     members: [
@@ -199,6 +223,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Xunzhuo Liu',
         avatar: 'https://github.com/Xunzhuo.png',
         profile: 'https://github.com/Xunzhuo',
+      },
+      {
+        name: 'FAUST',
+        avatar: 'https://github.com/FAUST-BENCHOU.png',
+        profile: 'https://github.com/FAUST-BENCHOU',
       },
     ],
   },
