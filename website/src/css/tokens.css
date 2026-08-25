@@ -38,8 +38,7 @@
   --site-accent-violet: #a78bfa;
   --site-glow-blue-soft: rgba(48, 162, 255, 0.14);
   --site-glow-violet-soft: rgba(124, 58, 237, 0.16);
-  /* Neutral ladder: bg-alt < surface-alt < bg < surface < raised.
-   * bg and surface were both #ffffff, so cards had no surface to sit on. */
+  /* Neutral ladder: bg-alt < surface-alt < bg < surface < raised. */
   --site-bg: #f6f8fb;
   --site-bg-alt: #eef2f7;
   --site-surface: #fdfdfe;
@@ -49,8 +48,7 @@
   --site-surface-glass: rgba(255, 255, 255, 0.76);
   --site-text: #111111;
   --site-text-strong: #050505;
-  /* Split from one #677487 (4.75:1) that served both roles: --site-muted is
-   * secondary text, --site-interactive-rest is a control at rest at 7:1. */
+  /* Split secondary text (--site-muted) from control at rest (--site-interactive-rest). */
   --site-muted: #556070;
   --site-interactive-rest: #485261;
   --site-muted-bright: #384250;
@@ -62,8 +60,7 @@
   --site-shadow-soft: 0 14px 36px rgba(15, 23, 42, 0.06);
   --site-shadow: 0 22px 60px rgba(15, 23, 42, 0.07);
   --site-shadow-raised: 0 24px 56px rgba(15, 23, 42, 0.08);
-  /* White, with the border defining the surface. Was #f6f2ea, the one warm
-   * value here; the github Prism theme scores best on white anyway. */
+  /* White code bg; border defines surface. */
   --site-code-bg: #ffffff;
   --site-sidebar-bg: rgba(255, 253, 248, 0.9);
   --site-toc-bg: rgba(255, 253, 248, 0.92);
@@ -86,22 +83,23 @@
   --tech-primary-blue: var(--site-accent-strong);
   --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
-  /* Page geometry. --page-max and --measure are separate on purpose: the shell
-   * grows with the viewport while running text stays at a readable length. */
+  /* Page geometry: --page-max for shell, --measure for readable text. */
   --page-max: 1760px;
   --gutter: clamp(1rem, 5vw, 4.5rem);
   --measure: 72ch;
-  --rail: 20rem;
+  /* Rail width: 18rem (20rem too wide for label list). */
+  --rail: 18rem;
   --toc: 17rem;
+  /* Rail to content. Shared so docs, research and community start their text
+   * on the same x; ramps to its cap at 1920px, where the frame stops growing. */
+  --rail-gap: clamp(var(--space-6), calc(12.19vw - 124px), 6.875rem);
 
-  /* Held at main's values so this phase moves no layout. Phase 2 repoints them
-   * to --page-max / --measure alongside the shells that expect those numbers. */
-  --site-grid-max: 1400px;
-  --site-content-max: 1200px;
-  --site-doc-max: 840px;
+  /* Legacy aliases repointed to shared geometry. --site-content-max removed. */
+  --site-grid-max: var(--page-max);
+  --site-doc-max: var(--measure);
   --site-header-height: 4.9rem;
 
-  /* Type scale — eight steps, replacing 78 ad-hoc literals. */
+  /* Type scale: eight steps. */
   --text-xs: 0.75rem;
   --text-sm: 0.875rem;
   --text-base: 1rem;
@@ -111,13 +109,13 @@
   --text-3xl: 2.125rem;
   --text-4xl: clamp(2.5rem, 5vw, 3.5rem);
 
-  /* Shape — four steps, replacing 41 values. */
+  /* Shape: four steps. */
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 14px;
   --radius-full: 999px;
 
-  /* Space — one 4px ramp. */
+  /* Space: 4px ramp. */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -136,7 +134,7 @@
   --ifm-color-primary-lightest: #4a4a4a;
   --ifm-background-color: var(--site-bg);
   --ifm-background-surface-color: var(--site-surface);
-  /* Chrome follows the color mode; shell.css re-darkens it on the homepage. */
+  /* Chrome follows color mode; shell.css re-darkens on homepage. */
   --ifm-navbar-background-color: var(--site-surface-glass);
   --ifm-navbar-link-color: var(--site-interactive-rest);
   --ifm-navbar-link-hover-color: var(--site-text-strong);
@@ -163,8 +161,7 @@
   --ifm-toc-border-color: var(--site-border);
   --ifm-code-font-size: 0.95rem;
   --ifm-code-background: var(--site-code-bg);
-  /* Loaded in docusaurus.config.ts headTags. Previously downloaded but never
-   * named here, so every page rendered in Arial. */
+  /* Inter + JetBrains Mono from docusaurus.config.ts headTags. */
   --ifm-font-family-base: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --ifm-font-family-monospace: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', 'SF Mono', Consolas, 'Liberation Mono', Menlo, monospace;
   --ifm-heading-font-family: var(--ifm-font-family-base);
@@ -247,7 +244,7 @@ html[data-theme='light'],
 
 html[data-theme='dark'],
 [data-theme='dark'] {
-  /* Zinc-neutral dark palette (industry standard: Vercel / shadcn / Tailwind zinc). */
+  /* Zinc-neutral dark palette (Vercel/shadcn/Tailwind standard). */
   --site-bg: #09090b;
   --site-bg-alt: #0c0c0e;
   --site-surface: #18181b;
