@@ -20,7 +20,7 @@
   min-height: 2.8rem;
   padding: 0.75rem 1.4rem;
   border: 1px solid var(--site-border);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: var(--site-surface-glass);
   color: var(--site-text);
   text-decoration: none;
@@ -103,7 +103,7 @@
   margin: 0;
   font-size: clamp(2.25rem, 5.5vw, 3.75rem);
   line-height: 1.1;
-  font-weight: 400;
+  font-weight: var(--site-font-weight-normal);
   letter-spacing: -0.04em;
   text-wrap: pretty;
 }

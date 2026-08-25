@@ -7,7 +7,7 @@ from cli.consts import IMAGE_PULL_POLICY_NEVER
 from cli.container_cli import (
     container_logs,
     container_logs_output,
-    container_network_disconnect,
+    container_network_disconnect_if_attached,
     container_remove_container,
     container_remove_network,
     container_start_vllm_sr,
@@ -28,6 +28,7 @@ from cli.runtime_config_lock import RuntimeConfigLock
 from cli.runtime_lifecycle import (
     connect_runtime_container,
     ensure_clean_runtime_container,
+    ensure_data_network,
     ensure_shared_network,
     log_runtime_summary,
     log_startup_banner,
@@ -88,6 +89,9 @@ def _prepare_runtime_network(
     shared_network_name = stack_layout.network_name
     state_root_dir = resolve_state_root_dir(source_config_file, env_vars)
     ensure_shared_network(shared_network_name)
+    # The data network has to exist before any storage container is created on
+    # it, which is the very next step in the serve sequence.
+    ensure_data_network(stack_layout.data_network_name)
     ensure_runtime_images_for_pull_policy(
         image,
         router_image,
@@ -317,7 +321,7 @@ def _start_support_services(
     enable_observability,
 ):
     started_backends = provision_storage_backends(
-        user_config, shared_network_name, stack_layout, state_root_dir=state_root_dir
+        user_config, stack_layout, state_root_dir=state_root_dir
     )
     env_vars[MANAGED_STORAGE_BACKENDS_ENV] = ",".join(sorted(started_backends))
     observability_network_name = start_observability_stack(
@@ -385,8 +389,9 @@ def stop_vllm_sr():
 
     openclaw_data_dir = resolve_openclaw_data_dir(os.getcwd())
     network_name = stack_layout.network_name
+    stack_network_names = (network_name, stack_layout.data_network_name)
     failures = _disconnect_openclaw_registry_containers(
-        network_name,
+        stack_network_names,
         load_openclaw_registry(openclaw_data_dir),
     )
     for container_name in _runtime_container_names(stack_layout):
@@ -425,11 +430,12 @@ def stop_vllm_sr():
             stop_message=f"Stopping {container_name}...",
             stopped_message=f"{container_name} stopped",
             preserve_unadopted_data=container_name in credentialed_storage,
-            network_name=network_name,
+            network_names=stack_network_names,
         ):
             failures.append(container_name)
-    if not _remove_runtime_network(network_name):
-        failures.append(network_name)
+    for stack_network_name in stack_network_names:
+        if not _remove_runtime_network(stack_network_name):
+            failures.append(stack_network_name)
     if failures:
         raise RuntimeError("Failed to stop managed containers: " + ", ".join(failures))
     if containers_absent:
@@ -471,19 +477,30 @@ def _runtime_stack_status(stack_layout: RuntimeStackLayout) -> str:
 
 
 def _disconnect_openclaw_registry_containers(
-    network_name: str, openclaw_entries: list[dict[str, str]]
+    network_names: tuple[str, ...], openclaw_entries: list[dict[str, str]]
 ) -> list[str]:
     failures = []
     for entry in openclaw_entries:
         name = entry.get("name") or entry.get("containerName")
         if not name:
             continue
-        if not _disconnect_openclaw_container(network_name, name):
+        if not _disconnect_openclaw_container(network_names, name):
             failures.append(name)
     return failures
 
 
-def _disconnect_openclaw_container(network_name: str, container_name: str) -> bool:
+def _disconnect_openclaw_container(
+    network_names: tuple[str, ...], container_name: str
+) -> bool:
+    """Detach one OpenClaw workload from every network this stack owns.
+
+    A workload normally joins the application network only, but the network is
+    chosen by ``OPENCLAW_DEFAULT_NETWORK_MODE``, which the caller's environment
+    can set to anything -- including this stack's data network. Detaching from
+    both keeps `stop` able to remove both instead of failing on whichever one
+    still has a user.
+    """
+
     status = container_status(container_name)
     if status == "not found":
         return True
@@ -491,17 +508,18 @@ def _disconnect_openclaw_container(network_name: str, container_name: str) -> bo
         log.info(f"Stopping OpenClaw container: {container_name}")
         if not container_stop_container(container_name):
             return False
-    log.info(f"Disconnecting {container_name} from {network_name}")
-    return_code, _stdout, stderr = container_network_disconnect(
-        network_name, container_name
-    )
-    if return_code == 0:
-        return True
-    log.error(
-        f"Failed to disconnect {container_name} from {network_name}: "
-        f"{stderr.strip() or f'exit code {return_code}'}"
-    )
-    return False
+    for network_name in network_names:
+        log.info(f"Disconnecting {container_name} from {network_name}")
+        return_code, _stdout, stderr = container_network_disconnect_if_attached(
+            network_name, container_name
+        )
+        if return_code != 0:
+            log.error(
+                f"Failed to disconnect {container_name} from {network_name}: "
+                f"{stderr.strip() or f'exit code {return_code}'}"
+            )
+            return False
+    return True
 
 
 def _stop_managed_container(
@@ -511,7 +529,7 @@ def _stop_managed_container(
     stop_message: str | None = None,
     stopped_message: str | None = None,
     preserve_unadopted_data: bool = False,
-    network_name: str | None = None,
+    network_names: tuple[str, ...] = (),
 ) -> bool:
     if container_status == "not found":
         return True
@@ -527,13 +545,13 @@ def _stop_managed_container(
             "The next `vllm-sr serve` adopts the volume and takes the "
             "container over."
         )
-        # A kept container stays attached to the stack network, which Podman
+        # A kept container stays attached to a stack network, which Podman
         # counts as a user of that network and refuses to remove. Detaching it
         # costs nothing -- the next `serve` recreates it on the new network
         # anyway -- and follows what the OpenClaw teardown already does for the
         # containers it likewise stops without removing.
-        if network_name:
-            detach_preserved_storage_container(network_name, container_name)
+        if network_names:
+            detach_preserved_storage_container(network_names, container_name)
         return True
     if not container_remove_container(container_name):
         return False

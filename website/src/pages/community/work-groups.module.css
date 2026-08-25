@@ -26,8 +26,8 @@
 .groupsHeader h2 {
   margin: 0;
   color: var(--site-text);
-  font-size: clamp(1.7rem, 3vw, 2.35rem);
-  font-weight: 500;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
   letter-spacing: -0.03em;
   line-height: 1.05;
 }
@@ -53,7 +53,7 @@
   color: var(--site-accent-strong);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.66rem;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -61,8 +61,8 @@
 .sectionHeading h2 {
   margin: 0;
   color: var(--site-text);
-  font-size: clamp(1.7rem, 3vw, 2.35rem);
-  font-weight: 500;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -105,7 +105,7 @@
   margin: 0;
   color: var(--site-text);
   font-size: 1.25rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   letter-spacing: -0.02em;
   line-height: 1.2;
 }
@@ -159,11 +159,10 @@
 }
 
 .groupFooter {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   gap: 1rem;
   align-items: end;
-  justify-content: space-between;
   padding-top: 0.9rem;
   border-top: 1px solid var(--site-border);
 }
@@ -188,6 +187,10 @@
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
+}
+
+.charterLink {
+  white-space: nowrap;
 }
 
 .person {
@@ -231,7 +234,7 @@
 .rules dt {
   color: var(--site-text);
   font-size: 0.76rem;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .rules dd {
@@ -295,6 +298,10 @@
 
   .groupDetails {
     grid-column: 1 / -1;
+  }
+
+  .groupFooter {
+    grid-template-columns: 1fr;
   }
 
   .rules {

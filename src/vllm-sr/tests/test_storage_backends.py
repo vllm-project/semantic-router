@@ -42,13 +42,12 @@ def test_start_storage_backends_passes_state_root_to_milvus(monkeypatch, tmp_pat
     stack_layout = resolve_runtime_stack()
     started = start_storage_backends(
         {"milvus"},
-        "test-network",
         stack_layout,
         state_root_dir=str(tmp_path),
     )
 
     assert started == {"milvus"}
-    assert captured["network_name"] == "test-network"
+    assert captured["network_name"] == stack_layout.data_network_name
     assert captured["stack_layout"] is stack_layout
     assert captured["state_root_dir"] == str(tmp_path)
 
@@ -315,9 +314,12 @@ def test_running_storage_with_loopback_binding_remains_reusable(monkeypatch):
 
     assert code == 0
     assert stderr == ""
-    assert len(calls) == 2
+    assert len(calls) == 3
     assert calls[0][1] == "inspect"
     assert calls[1][1:3] == ["network", "connect"]
+    # Reuse is also the migration step for a stack that predates the data
+    # network, so the container leaves the application network here.
+    assert calls[2][1:3] == ["network", "disconnect"]
 
 
 def test_running_storage_with_host_network_is_not_reused(monkeypatch):
