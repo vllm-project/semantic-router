@@ -2,7 +2,7 @@
 
 from types import SimpleNamespace
 
-from cli import container_start
+from cli import container_start, container_start_runner
 
 CONFIG_BODY = (
     "version: v0.3\n"
@@ -24,7 +24,7 @@ def capture_run_commands(monkeypatch):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(container_start_runner.subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )

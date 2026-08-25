@@ -7,6 +7,7 @@ stack -- while the split-runtime tests next door are about how the three
 services address each other.
 """
 
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -33,7 +34,7 @@ def _capture_run_commands(monkeypatch):
         captured.append(cmd)
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     monkeypatch.setattr(
         container_start, "_render_split_envoy_config", lambda *args, **kwargs: None
     )

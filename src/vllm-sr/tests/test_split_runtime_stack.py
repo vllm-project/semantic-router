@@ -437,7 +437,7 @@ def test_container_start_vllm_sr_skips_dashboard_image_resolution_in_minimal_mod
         _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
 
 
-def test_container_start_vllm_sr_starts_every_runtime_role_immediately(
+def test_container_start_vllm_sr_connects_router_before_starting_it(
     tmp_path, monkeypatch
 ):
     config_path = tmp_path / "config.yaml"
@@ -469,9 +469,10 @@ def test_container_start_vllm_sr_starts_every_runtime_role_immediately(
     router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
-    assert router_cmd[1:3] == ["run", "-d"]
+    assert router_cmd[1] == "create"
     assert envoy_cmd[1:3] == ["run", "-d"]
     assert dashboard_cmd[1:3] == ["run", "-d"]
+    assert ["docker", "start", "vllm-sr-router-container"] in captured
 
 
 def test_start_vllm_sr_creates_and_connects_shared_network_without_observability(

@@ -211,7 +211,10 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.out == "Nothing to stop.\n"
     assert "Stopping vLLM Semantic Router" in captured.err
-    assert removed_networks == [stack_layout.network_name]
+    assert removed_networks == [
+        stack_layout.network_name,
+        stack_layout.data_network_name,
+    ]
 
 
 def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
@@ -505,11 +508,13 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
     )
     monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
     monkeypatch.setattr(
-        core, "container_network_disconnect", lambda _network, _name: (0, "", "")
+        core,
+        "container_network_disconnect_if_attached",
+        lambda _network, _name: (0, "", ""),
     )
     monkeypatch.setattr(
         storage_backends,
-        "container_network_disconnect",
+        "container_network_disconnect_if_attached",
         lambda _network, _name: (0, "", ""),
     )
 
@@ -543,7 +548,7 @@ def test_stop_keeps_a_storage_container_whose_data_volume_nobody_recorded(
     disconnected = []
     monkeypatch.setattr(
         storage_backends,
-        "container_network_disconnect",
+        "container_network_disconnect_if_attached",
         lambda network, name: disconnected.append((network, name)) or (0, "", ""),
     )
 
@@ -554,11 +559,15 @@ def test_stop_keeps_a_storage_container_whose_data_volume_nobody_recorded(
         stack_layout.postgres_container_name,
     ]
     assert removed == []
-    # A container kept on the stack network blocks removing that network under
-    # Podman, so a preserved container is detached from it.
+    # A container kept on a stack network blocks removing that network under
+    # Podman, so a preserved container is detached from both. A container old
+    # enough to be preserved sits on the application network, but `stop` cannot
+    # tell that from the container alone and both networks have to go.
     assert disconnected == [
         (stack_layout.network_name, stack_layout.redis_container_name),
+        (stack_layout.data_network_name, stack_layout.redis_container_name),
         (stack_layout.network_name, stack_layout.postgres_container_name),
+        (stack_layout.data_network_name, stack_layout.postgres_container_name),
     ]
     captured = capsys.readouterr()
     assert "stopped but kept" in captured.err

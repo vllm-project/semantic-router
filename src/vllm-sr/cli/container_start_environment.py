@@ -3,12 +3,6 @@
 import os
 from collections.abc import Mapping
 
-from cli.container_services import (
-    container_remove_container,
-    container_status,
-    container_stop_container,
-)
-
 
 def service_child_environment(
     service_name: str,
@@ -28,12 +22,3 @@ def service_child_environment(
     elif service_name == "dashboard":
         environment.update(dashboard_secret_values)
     return environment
-
-
-def cleanup_started_containers(container_names: list[str]) -> None:
-    """Remove only containers started by the current launch transaction."""
-
-    for container_name in reversed(container_names):
-        if container_status(container_name) == "running":
-            container_stop_container(container_name)
-        container_remove_container(container_name)

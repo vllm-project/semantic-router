@@ -143,7 +143,9 @@ def _rebuild_redis(
 
     conf_file = str(redis_conf_path(state_root_dir, stack_layout=stack_layout))
     return_code, _stdout, stderr = container_start_redis(
-        stack_layout.network_name,
+        # The rebuilt container belongs on the data network, the same one the
+        # container it replaces was served on.
+        stack_layout.data_network_name,
         stack_layout,
         recreate=True,
         redis_conf_file=conf_file,

@@ -38,11 +38,10 @@ def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
     monkeypatch.setattr(
         core,
         "provision_storage_backends",
-        lambda config, network_name, stack_layout, **_kwargs: (
+        lambda config, stack_layout, **_kwargs: (
             provisioned.update(
                 {
                     "config": config,
-                    "network_name": network_name,
                     "stack_layout": stack_layout,
                 }
             )
@@ -67,6 +66,9 @@ def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
     )
     monkeypatch.setattr(
         core, "container_start_vllm_sr", record("container_start_vllm_sr")
+    )
+    monkeypatch.setattr(
+        core, "run_management_migration", record("run_management_migration")
     )
     monkeypatch.setattr(
         runtime_lifecycle,
@@ -111,6 +113,10 @@ def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
     runtime_start = next(
         call for call in provisioned["calls"] if call[0] == "container_start_vllm_sr"
     )
+    migration = next(
+        call for call in provisioned["calls"] if call[0] == "run_management_migration"
+    )
     assert runtime_start[2]["env_vars"]["VLLM_SR_MANAGED_STORAGE_BACKENDS"] == (
         "milvus,postgres,redis"
     )
+    assert migration[2]["network_name"] == provisioned["stack_layout"].data_network_name

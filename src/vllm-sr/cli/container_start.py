@@ -1,7 +1,6 @@
 """Container startup orchestration for vLLM Semantic Router."""
 
 import os
-import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 
@@ -13,6 +12,7 @@ from cli.consts import (
     PLATFORM_AMD,
     PLATFORM_NVIDIA,
 )
+from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_runtime_env
 from cli.container_images import (
     _normalize_platform,
@@ -57,10 +57,7 @@ from cli.container_runtime_preparation import (
 from cli.container_runtime_preparation import (
     router_runtime_mount_specs as _router_runtime_mount_specs,
 )
-from cli.container_start_environment import (
-    cleanup_started_containers,
-    service_child_environment,
-)
+from cli.container_start_runner import run_container_specs
 from cli.control_plane_deployment import (
     runtime_capabilities,
 )
@@ -166,56 +163,12 @@ def container_start_vllm_sr(
         dashboard_runtime_env=dashboard_runtime_env,
     )
 
-    return _launch_container_specs(
-        runtime,
-        container_specs,
-        router_secret_values,
-        dashboard_secret_values,
-    )
-
-
-def _launch_container_specs(
-    runtime: str,
-    container_specs: list[tuple[str, str, list[str]]],
-    router_secret_values: Mapping[str, str],
-    dashboard_secret_values: Mapping[str, str],
-) -> tuple[int, str, str]:
-    """Start one prepared stack and roll back only containers started here."""
-
     log.info("Starting vLLM Semantic Router runtime with %s...", runtime)
-    started_containers = []
-    stdout_chunks = []
-    stderr_chunks = []
-
-    for service_name, container_name, cmd in container_specs:
-        log.info(f"Starting {service_name} container: {container_name}")
-        log.debug(f"Container command: {' '.join(cmd)}")
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True,
-                env=service_child_environment(
-                    service_name,
-                    router_secret_values,
-                    dashboard_secret_values,
-                ),
-            )
-        except subprocess.CalledProcessError as exc:
-            if exc.stdout:
-                stdout_chunks.append(exc.stdout)
-            stderr_chunks.append(exc.stderr)
-            cleanup_started_containers(started_containers)
-            return (exc.returncode, "\n".join(stdout_chunks), "\n".join(stderr_chunks))
-
-        started_containers.append(container_name)
-        if result.stdout:
-            stdout_chunks.append(result.stdout)
-        if result.stderr:
-            stderr_chunks.append(result.stderr)
-
-    return 0, "\n".join(stdout_chunks), "\n".join(stderr_chunks)
+    return run_container_specs(
+        container_specs,
+        router_secret_values=router_secret_values,
+        dashboard_secret_values=dashboard_secret_values,
+    )
 
 
 def _router_child_environment(
@@ -388,8 +341,19 @@ def _runtime_container_specs(
     )
 
     specs = [
-        ("router", stack_layout.router_container_name, router_cmd),
-        ("envoy", stack_layout.envoy_container_name, envoy_cmd),
+        (
+            "router",
+            stack_layout.router_container_name,
+            (
+                router_cmd,
+                *router_data_network_commands(
+                    runtime,
+                    stack_layout.router_container_name,
+                    stack_layout.data_network_name,
+                ),
+            ),
+        ),
+        ("envoy", stack_layout.envoy_container_name, (envoy_cmd,)),
     ]
 
     if minimal:
@@ -410,7 +374,7 @@ def _runtime_container_specs(
         dashboard_runtime_env=dashboard_runtime_env or {},
         management_listener=management_listener,
     )
-    specs.append(("dashboard", stack_layout.dashboard_container_name, dashboard_cmd))
+    specs.append(("dashboard", stack_layout.dashboard_container_name, (dashboard_cmd,)))
 
     return specs
 
@@ -474,7 +438,9 @@ def _build_router_runtime_command(
         command_args=service_args,
         enable_amd_gpu=normalized_platform == PLATFORM_AMD,
         enable_nvidia_gpu=normalized_platform == PLATFORM_NVIDIA,
-        start_immediately=True,
+        # Router must exist before its storage network can be attached. The
+        # ordered follow-up commands connect it before the process starts.
+        start_immediately=False,
         inherited_env_keys=inherited_sensitive_env | set(router_child_env_names),
         docker_healthcheck=router_healthcheck(
             int(management_listener["port"]),
