@@ -9,7 +9,7 @@
 
 .codeBlock {
   background: linear-gradient(135deg, #F6F8FA 0%, #FFFFFF 50%, #F0F3F6 100%);
-  border-radius: 16px;
+  border-radius: var(--radius-lg);
   box-shadow:
     0 20px 60px rgba(9, 105, 218, 0.15),
     0 8px 32px rgba(88, 166, 255, 0.1),
@@ -103,7 +103,7 @@
 .title {
   color: #1F2328;
   font-size: 0.9rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
@@ -143,100 +143,100 @@
 .vllmSemanticRouterColor {
   color: #0969DA;
   text-shadow: 0 0 10px rgba(9, 105, 218, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .autoColor {
   color: #D1242F;
   text-shadow: 0 0 10px rgba(209, 36, 47, 0.3);
-  font-weight: bold;
+  font-weight: var(--site-font-weight-bold);
   font-size: 1.1em;
 }
 
 .modernBertColor {
   color: #8250DF;
   text-shadow: 0 0 8px rgba(130, 80, 223, 0.3);
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .neuralRoutingColor {
   color: #1A7F37;
   text-shadow: 0 0 8px rgba(26, 127, 55, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .aiSelectionColor {
   color: #D1242F;
   text-shadow: 0 0 8px rgba(209, 36, 47, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .complexityColor {
   color: #0969DA;
   text-shadow: 0 0 8px rgba(9, 105, 218, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .claudeColor {
   color: #BF8700;
   text-shadow: 0 0 8px rgba(191, 135, 0, 0.3);
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .neuralConfidenceColor {
   color: #0969DA;
   text-shadow: 0 0 8px rgba(9, 105, 218, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .latencyColor {
   color: #BF8700;
   text-shadow: 0 0 8px rgba(191, 135, 0, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .reasoningColor {
   color: #8250DF;
   text-shadow: 0 0 8px rgba(130, 80, 223, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .booleanColor {
   color: #1A7F37;
   text-shadow: 0 0 8px rgba(26, 127, 55, 0.3);
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .highColor {
   color: #D1242F;
   text-shadow: 0 0 8px rgba(209, 36, 47, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .scienceColor {
   color: #0969DA;
   text-shadow: 0 0 8px rgba(9, 105, 218, 0.3);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
 }
 
 .confidenceValueColor {
   color: #1A7F37;
   text-shadow: 0 0 10px rgba(26, 127, 55, 0.4);
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   font-size: 1.1em;
 }
 
 .latencyValueColor {
   color: #BF8700;
   text-shadow: 0 0 10px rgba(191, 135, 0, 0.4);
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   font-size: 1.1em;
 }
 
 .cursor {
   color: #0969DA;
   animation: cursorBlink 1.2s infinite;
-  font-weight: bold;
+  font-weight: var(--site-font-weight-bold);
   text-shadow: 0 0 8px rgba(9, 105, 218, 0.6);
   font-size: 1.1em;
 }

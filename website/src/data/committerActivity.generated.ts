@@ -15,11 +15,11 @@ export interface CommitterActivityEntry {
 }
 
 export const committerActivityWindow = {
-  "generatedAt": "2026-08-24",
-  "cutoffDate": "2026-05-24",
+  "generatedAt": "2026-08-25",
+  "cutoffDate": "2026-05-25",
   "months": 3,
   "minimumCommentedIssueThreads": 2,
-  "activeCount": 10,
+  "activeCount": 11,
   "emeritusCount": 20
 }
 
@@ -29,8 +29,8 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "login": "FAUST-BENCHOU",
     "pullRequests": 19,
     "reviews": 73,
-    "issues": 27,
-    "total": 119,
+    "issues": 28,
+    "total": 120,
     "status": "active"
   },
   {
@@ -46,27 +46,36 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "yangw",
     "login": "drivebyer",
     "pullRequests": 22,
-    "reviews": 51,
-    "issues": 17,
-    "total": 90,
+    "reviews": 52,
+    "issues": 18,
+    "total": 92,
     "status": "active"
   },
   {
     "name": "Ramakrishnan Sathyavageeswaran",
     "login": "ramkrishs",
     "pullRequests": 1,
-    "reviews": 0,
+    "reviews": 4,
     "issues": 0,
-    "total": 1,
+    "total": 5,
     "status": "active"
   },
   {
-    "name": "siloteemu",
+    "name": "Teemu Kuusisto",
     "login": "siloteemu",
     "pullRequests": 11,
     "reviews": 1,
     "issues": 5,
     "total": 17,
+    "status": "active"
+  },
+  {
+    "name": "Akshay Viswanathan",
+    "login": "akshayv",
+    "pullRequests": 1,
+    "reviews": 0,
+    "issues": 2,
+    "total": 3,
     "status": "active"
   },
   {
@@ -81,10 +90,10 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Wilson Wu",
     "login": "wilsonwu",
-    "pullRequests": 40,
-    "reviews": 3,
-    "issues": 26,
-    "total": 69,
+    "pullRequests": 43,
+    "reviews": 6,
+    "issues": 29,
+    "total": 78,
     "status": "active"
   },
   {
