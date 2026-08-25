@@ -1700,10 +1700,10 @@
     "message": "Red Hat Data and AI SDE，GSoC 2025 参与者，AsyncAPI Steering Committee member。"
   },
   "team.members.siloteemu.role": {
-    "message": "开源贡献者"
+    "message": "SMTS，Silo AI"
   },
   "team.members.siloteemu.bio": {
-    "message": "GitHub 开源贡献者。"
+    "message": "vLLM Semantic Router 开源贡献者。"
   },
   "team.members.topNewContributor.role": {
     "message": "Release Window Committer"

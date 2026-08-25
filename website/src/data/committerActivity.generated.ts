@@ -19,7 +19,7 @@ export const committerActivityWindow = {
   "cutoffDate": "2026-05-25",
   "months": 3,
   "minimumCommentedIssueThreads": 2,
-  "activeCount": 10,
+  "activeCount": 11,
   "emeritusCount": 20
 }
 
@@ -61,12 +61,21 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "status": "active"
   },
   {
-    "name": "siloteemu",
+    "name": "Teemu Kuusisto",
     "login": "siloteemu",
     "pullRequests": 11,
     "reviews": 1,
     "issues": 5,
     "total": 17,
+    "status": "active"
+  },
+  {
+    "name": "Akshay Viswanathan",
+    "login": "akshayv",
+    "pullRequests": 1,
+    "reviews": 0,
+    "issues": 2,
+    "total": 3,
     "status": "active"
   },
   {

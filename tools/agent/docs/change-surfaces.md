@@ -22,14 +22,18 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `routing_policy`
 
-- Router-side policy after signal extraction, covering matched-decision logic plus downstream candidate-model selection.
-- Typical paths: `src/semantic-router/pkg/decision/**`, `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/selection/**`, `req_filter_looper*.go`
+- Router-side policy after signal extraction, covering matched-decision logic,
+  candidate-model selection, and multi-model execution.
+- Typical paths: `src/semantic-router/pkg/decision/**`,
+  `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/looper/**`,
+  `src/semantic-router/pkg/projectiontrace/**`
 - Task rules: `router-core`
 
 ## `algorithm_selection`
 
 - Per-decision candidate-model selection after a decision matches.
-- Typical paths: `src/semantic-router/pkg/modelselection/**`, `src/semantic-router/pkg/selection/**`, `req_filter_looper*.go`
+- Typical paths: `src/semantic-router/pkg/modelselection/**`,
+  `src/semantic-router/pkg/selection/**`, `src/semantic-router/pkg/looper/**`
 - Task rules: `router-core`
 
 ## `plugin_runtime`
@@ -40,8 +44,12 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 ## `router_service_platform`
 
-- Router-side service, API, storage, authz, memory, provider, and runtime support modules outside the config, decision, selection, and extproc plugin chains.
-- Typical paths: `src/semantic-router/pkg/apiserver/**`, `authz/**`, `memory/**`, `responseapi/**`, `responsestore/**`, `openai/**`, `anthropic/**`, `routerreplay/**`
+- Router-side service, API, storage, authz, context, telemetry, provider, and
+  runtime support modules outside the config, decision, selection, and extproc
+  plugin chains.
+- Typical paths: `src/semantic-router/pkg/apiserver/**`, `authz/**`,
+  `contextcompression/**`, `memory/**`, `modelruntime/**`, `routerruntime/**`,
+  `sessiontelemetry/**`, `responseapi/**`, `publicmodels/**`
 - Task rules: `router-core`
 
 ## `native_binding`
@@ -150,7 +158,8 @@ This document defines the project-level surfaces used by skills, reports, and va
 
 - Executable harness manifests, scripts, Make entrypoints, and validation logic that implement the shared contract.
 - Typical paths: `tools/agent/*.yaml`, `tools/agent/scripts/**`,
-  `tools/ci/**`, `tools/make/agent.mk`, `.github/workflows/**`,
+  `tools/ci/**`, `tools/make/agent.mk`, `tools/make/pre-commit.mk`,
+  `.pre-commit-config.yaml`, `.github/workflows/**`,
   `.mergify.yml`
 - Task rules: `agent_exec`
 
@@ -175,7 +184,8 @@ This document defines the project-level surfaces used by skills, reports, and va
 ## `local_e2e`
 
 - Affected local E2E profile selection and local profile execution.
-- Typical paths: `tools/agent/e2e-profile-map.yaml`, `e2e/profiles/**`, `e2e/config/**`, `deploy/kubernetes/**`
+- Typical paths: `tools/agent/test-domain-registry.yaml`, `e2e/profiles/**`,
+  `e2e/config/**`, `deploy/kubernetes/**`
 - Task rules: `e2e-framework`
 
 ## `cli_install`
