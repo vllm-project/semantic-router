@@ -9,7 +9,8 @@
   <a href="https://app.vllm-sr.ai/playground">Playground</a> |
   <a href="https://vllm-sr.ai/blog/">Blog</a> |
   <a href="https://vllm-sr.ai/publications/">Publications</a> |
-  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a>
+  <a href="https://huggingface.co/LLM-Semantic-Router">Hugging Face</a> |
+  <a href="https://vllm-dev.slack.com/archives/C09CTGF8KCN">Slack</a>
 </p>
 
 </div>
