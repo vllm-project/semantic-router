@@ -435,6 +435,17 @@ profiles:
       - src/semantic-router/pkg/classification/authz*.go
       - src/semantic-router/pkg/authz/**
       - dashboard/backend/handlers/security_policy*.go
+  forward-auth:
+    owner: e2e
+    coverage_role: forward-authorization-and-internal-leg-trust
+    selection: pr
+    paths:
+      - e2e/profiles/forward-auth/**
+      - e2e/testcases/forward_authorization.go
+      - src/semantic-router/pkg/extproc/processor_req_header_internal.go
+      - src/semantic-router/pkg/extproc/processor_req_body_routing.go
+      - src/semantic-router/pkg/extproc/req_filter_looper*.go
+      - src/semantic-router/pkg/internalauth/**
   streaming:
     owner: e2e
     coverage_role: streaming-request-and-cache

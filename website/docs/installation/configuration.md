@@ -187,6 +187,39 @@ Requests using an automatic model alias enter the default `routing` profile.
 A concrete provider model name is a direct pass-through request and bypasses
 recipe signals, decisions, route plugins, cache, learning, and session routing.
 
+## Forward the caller's Authorization header
+
+By default a backend authenticates with the static key from `api_key` or
+`api_key_env`, and the caller's inbound `Authorization` header is not forwarded.
+
+Set `forward_authorization_header: true` on a `providers.models[].backend_refs[]`
+entry to forward the caller's inbound `Authorization` value verbatim to that
+backend instead. `api_key` and `api_key_env` are then ignored for that backend,
+and a request that carries no `Authorization` header is rejected with `401`. The
+opt-in is per backend leg and applies to both the main routing path and looper
+re-dispatch, so per-caller virtual keys survive to gateways such as LiteLLM.
+
+```yaml
+providers:
+  models:
+    - name: local/general
+      backend_refs:
+        - name: primary
+          endpoint: host.docker.internal:8000
+          protocol: http
+          forward_authorization_header: true
+```
+
+Set `global.router.strip_inbound_authorization: true` to harden the default
+path: the Router then strips the caller's inbound `Authorization` before
+forwarding to a backend that neither injects a static key nor opts into
+`forward_authorization_header`, so a caller credential never reaches an upstream
+that was not meant to receive it. On the skip-processing passthrough it also
+strips the ext_authz-injected per-user provider keys; on the routing path those
+are always stripped regardless of the flag. Backends that inject a static key or
+forward the caller `Authorization` always emit a single `Authorization` header
+either way. The flag defaults to `false`.
+
 ## Validate and serve
 
 ```bash

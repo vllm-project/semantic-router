@@ -176,6 +176,7 @@ func TestHandleRequestHeadersSetsLooperAndStreamingFlags(t *testing.T) {
 					{Key: ":path", Value: "/v1/chat/completions"},
 					{Key: "accept", Value: "text/event-stream"},
 					{Key: headers.VSRLooperRequest, Value: "true"},
+					// A genuine internal leg carries the process-local credential.
 					{Key: headers.VSRInternalAuth, Value: internalauth.Token()},
 					{Key: "x-request-id", Value: "req-123"},
 				},

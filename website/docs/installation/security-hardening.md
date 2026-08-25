@@ -36,19 +36,35 @@ Review each boundary separately:
 
 ## Protect the public listener
 
-The maintained Envoy configuration removes internal control headers before a
-client request reaches the Router. Do the same when supplying a custom Envoy or
-gateway configuration. Internal examples include:
+The Router authenticates its internal looper leg with a process-local
+credential (`x-vsr-internal-auth`) and enforces that trust boundary in ExtProc:
+it honors the internal markers and the caller-identity carrier
+(`x-vsr-inbound-authorization`) only on an authenticated leg, strips the
+credential after validating it, and strips every reserved internal header — from
+the in-memory view and from the wire request forwarded upstream — on any
+unauthenticated request. This ExtProc enforcement is authoritative. The
+credential is per process, so the internal leg must loop back to the process
+that issued it, as in the default localhost sidecar topology.
+
+As defense-in-depth, the maintained Envoy configuration also removes those
+internal control headers before a client request reaches the Router. Do the same
+when supplying a custom Envoy or gateway configuration. Internal examples
+include:
 
 ```yaml
 request_headers_to_remove:
+  - x-vsr-internal-auth
   - x-vsr-looper-request
-  - x-vsr-looper-secret
   - x-vsr-looper-decision
   - x-vsr-looper-iteration
+  - x-vsr-fusion-depth
+  - x-vsr-selected-recipe
+  - x-vsr-inbound-authorization
   - x-authz-user-id
   - x-authz-user-groups
 ```
+
+This list must stay in sync with `headers.ReservedInternalHeaders`.
 
 Do not expose Router management, metrics, ExtProc, or backing-store ports as
 public inference endpoints. Terminate client authentication at a trusted

@@ -110,6 +110,21 @@ func (r *OpenAIRouter) handleLooperExecution(
 	if err != nil {
 		return r.createErrorResponse(500, "Looper construction failed: "+err.Error()), nil
 	}
+
+	// Preserve the caller's identity across internal looper re-dispatch: forward
+	// the original Authorization header so backends with
+	// forward_authorization_header receive the per-user credential rather than a
+	// static service key.
+	//
+	// The per-request Authorization requirement is enforced per-leg at the
+	// SELECTED backend — appendForwardedAuthorizationHeader 401s a forward-enabled
+	// backend reached without a caller credential — not decision-wide up front. A
+	// mixed decision with one static-key backend and one forward-auth backend must
+	// not be rejected before the selected backend is known, and the selected model
+	// (e.g. a fusion analysis model or workflow planner) may only be resolved at
+	// runtime anyway.
+	l.SetInboundAuthorization(lookupHeaderCaseInsensitive(reqCtx.Headers, forwardedAuthorizationHeaderName))
+
 	looperReq, errorResponse := r.buildLooperRequest(openAIRequest, decision, reqCtx)
 	if errorResponse != nil {
 		return errorResponse, nil

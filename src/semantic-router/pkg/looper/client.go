@@ -39,6 +39,12 @@ type Client struct {
 	decisionName     string // Decision name to pass in looper requests
 	fusionDepth      int    // Recursion guard for Fusion requests
 	maxResponseBytes int64  // Ceiling for a single upstream response body
+	// inboundAuthorization is the caller's original Authorization header value.
+	// When set, it is forwarded on internal looper requests so per-user identity
+	// survives the re-dispatch to backends that opt into
+	// forward_authorization_header. It rides a dedicated internal header, never
+	// Authorization, so the static access key is never mistaken for it.
+	inboundAuthorization string
 }
 
 // NewClient creates a new looper HTTP client
@@ -62,6 +68,13 @@ func (c *Client) SetDecisionName(name string) {
 // SetFusionDepth sets the Fusion recursion depth marker for internal requests.
 func (c *Client) SetFusionDepth(depth int) {
 	c.fusionDepth = depth
+}
+
+// SetInboundAuthorization records the caller's original Authorization header so
+// internal looper requests can forward it verbatim, preserving per-user identity
+// for backends that opt into forward_authorization_header.
+func (c *Client) SetInboundAuthorization(authorization string) {
+	c.inboundAuthorization = authorization
 }
 
 // resolveEndpoint returns the configured looper endpoint.

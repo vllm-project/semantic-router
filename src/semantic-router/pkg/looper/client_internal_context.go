@@ -18,6 +18,14 @@ func (c *Client) setInternalRequestHeaders(
 	iteration int,
 ) {
 	request.Header.Set(headers.VSRInternalAuth, internalauth.Token())
+	// Carry the caller's original Authorization on a dedicated internal header,
+	// never on Authorization, which may already hold the backend's static access
+	// key. On the authenticated internal leg extproc treats this as the sole
+	// source of caller identity for backends that opt into
+	// forward_authorization_header, and strips it before the upstream.
+	if c.inboundAuthorization != "" {
+		request.Header.Set(headers.VSRInboundAuthorization, c.inboundAuthorization)
+	}
 	request.Header.Set(headers.VSRLooperRequest, "true")
 	request.Header.Set(headers.VSRLooperIteration, fmt.Sprintf("%d", iteration))
 	if c.fusionDepth > 0 {
