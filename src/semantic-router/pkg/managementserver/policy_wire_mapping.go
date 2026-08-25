@@ -154,6 +154,7 @@ func newAccessPolicyBindingPage(value policymanagement.Page[policymanagement.Acc
 	}
 	return managementapi.AccessPolicyBindingPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }
 
@@ -174,6 +175,7 @@ func newRateLimitBindingPage(value policymanagement.Page[policymanagement.RateLi
 	}
 	return managementapi.RateLimitBindingPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }
 

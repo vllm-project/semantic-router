@@ -116,6 +116,7 @@ type Page[T any] struct {
 	NextCursor string
 	HasMore    bool
 	PageSize   int
+	TotalCount *uint64
 }
 
 type ListPoliciesRequest struct {
@@ -128,14 +129,15 @@ type ListPoliciesRequest struct {
 }
 
 type ListBindingsRequest struct {
-	NamespaceID string
-	PolicyID    string
-	Subject     *Subject
-	Status      accesscontrol.BindingStatus
-	Mode        accesscontrol.RateBindingMode
-	Cursor      string
-	PageSize    int
-	Scope       accesscontrol.ResultScope
+	NamespaceID  string
+	PolicyID     string
+	Subject      *Subject
+	Status       accesscontrol.BindingStatus
+	Mode         accesscontrol.RateBindingMode
+	Cursor       string
+	PageSize     int
+	IncludeTotal bool
+	Scope        accesscontrol.ResultScope
 }
 
 type CreateAccessPolicyRequest struct {

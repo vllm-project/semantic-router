@@ -16,16 +16,24 @@ type PublicationValidator func(*routingsnapshot.Snapshot) error
 type ManifestCodec interface {
 	Decode([]byte) (*routingsnapshot.Snapshot, error)
 	Encode(*routingsnapshot.Snapshot) ([]byte, error)
-	CredentialIDs([]byte) ([]string, error)
 }
 
 type Store interface {
 	NamespaceStore
+	ProviderCredentialReferenceStore
 	ModelStore
 	RecipeStore
 	EntrypointStore
 	PublicationStore
 	SnapshotStore
+}
+
+// ProviderCredentialReferenceStore is the Namespace-scoped name/identity
+// boundary used only by human-readable routing manifests. Runtime snapshots
+// and every mutation below this interface carry immutable credential UUIDs.
+type ProviderCredentialReferenceStore interface {
+	ProviderCredentialIDsByName(context.Context, string, []string) (map[string]string, error)
+	ProviderCredentialNamesByID(context.Context, string, []string) (map[string]string, error)
 }
 
 type NamespaceStore interface {

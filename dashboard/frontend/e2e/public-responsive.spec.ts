@@ -2,6 +2,25 @@ import { expect, test, type Page } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
 
+const productViewports = [
+  { name: 'compact phone', width: 320, height: 568 },
+  { name: 'phone', width: 390, height: 844 },
+  { name: 'tablet', width: 768, height: 1024 },
+  { name: 'desktop', width: 1440, height: 900 },
+] as const
+
+async function expectNoPublicOverflow(page: Page, surface: string) {
+  const dimensions = await page.evaluate(() => ({
+    body: document.body.scrollWidth,
+    document: document.documentElement.scrollWidth,
+    viewport: window.innerWidth,
+  }))
+  expect(dimensions.body, `${surface} body overflow`).toBeLessThanOrEqual(dimensions.viewport)
+  expect(dimensions.document, `${surface} document overflow`).toBeLessThanOrEqual(
+    dimensions.viewport,
+  )
+}
+
 async function mockPublicVisitor(page: Page) {
   await page.route('**/api/auth/me', async (route) => {
     await route.fulfill({ status: 401, body: 'Unauthorized' })
@@ -26,12 +45,6 @@ test.describe('Public and transition surfaces on short screens', () => {
   test('keeps landing, sign-in, and invitation surfaces fluid at every product breakpoint', async ({
     page,
   }) => {
-    const viewports = [
-      { width: 320, height: 568 },
-      { width: 390, height: 844 },
-      { width: 768, height: 1024 },
-      { width: 1440, height: 900 },
-    ]
     await mockPublicVisitor(page)
     await page.route('**/api/auth/invitations/info?*', async (route) => {
       await route.fulfill({
@@ -45,18 +58,48 @@ test.describe('Public and transition surfaces on short screens', () => {
       })
     })
 
-    for (const viewport of viewports) {
+    for (const viewport of productViewports) {
       await page.setViewportSize(viewport)
       for (const route of ['/', '/login', '/login?invite=1&token=responsive-invite']) {
         await page.goto(route, { waitUntil: 'domcontentloaded' })
         await expect(page.locator('#root')).toBeVisible()
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-          `${route} overflowed at ${viewport.width}px`,
-        ).toBe(true)
+        if (route === '/') {
+          await expect(
+            page.getByRole('heading', { name: 'Build your Mixture-of-Models.' }),
+          ).toBeVisible()
+        } else if (route.includes('invite=')) {
+          await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible()
+        } else {
+          await expect(page.getByRole('heading', { name: 'Sign in', exact: true })).toBeVisible()
+        }
+        await expectNoPublicOverflow(page, `${route} at ${viewport.name}`)
       }
       await expect(page.getByRole('heading', { name: 'Choose your password' })).toBeVisible()
       await expect(page.locator('form').getByText('Ada Lovelace', { exact: true })).toBeVisible()
+    }
+  })
+
+  test('keeps the authenticated handoff composed at every product breakpoint', async ({ page }) => {
+    await mockAuthenticatedAppShell(page)
+    let releaseAuthentication: () => void = () => undefined
+    const authenticationGate = new Promise<void>((resolve) => {
+      releaseAuthentication = resolve
+    })
+    await page.route('**/api/auth/me', async (route) => {
+      await authenticationGate
+      await route.fallback()
+    })
+
+    try {
+      for (const viewport of productViewports) {
+        await page.setViewportSize(viewport)
+        await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
+        await expect(page.getByRole('heading', { name: 'Entering control plane' })).toBeVisible()
+        await expect(page.getByRole('progressbar', { name: 'Opening workspace' })).toBeVisible()
+        await expectNoPublicOverflow(page, `authenticated handoff at ${viewport.name}`)
+      }
+    } finally {
+      releaseAuthentication()
     }
   })
 

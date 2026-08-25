@@ -18,7 +18,8 @@ describe('dashboard product dialog system', () => {
 
     expect(main).toContain("import './productDialog.css'")
     expect(styles).toContain("[role='dialog'], [role='alertdialog']")
-    expect(styles).toContain('border: 2px solid rgba(255, 255, 255, 0.72) !important;')
+    expect(styles).toContain('--product-dialog-border: rgba(255, 255, 255, 0.72);')
+    expect(styles).toContain('border: 2px solid var(--product-dialog-border) !important;')
     expect(styles).toContain('backdrop-filter: blur(28px) saturate(140%);')
     expect(styles).toContain(':has(> :where(')
     expect(styles).toContain('max-height: calc(100dvh - 0.75rem);')
@@ -37,8 +38,38 @@ describe('dashboard product dialog system', () => {
     expect(view).toContain('<ProductIcon name="edit" />')
     expect(editStyles).toContain('justify-content: center;')
     expect(viewStyles).toContain('justify-content: center;')
+    expect(editStyles).toContain('border: 2px solid var(--product-dialog-border);')
+    expect(viewStyles).toContain('border: 2px solid var(--product-dialog-border);')
     expect(editStyles).not.toContain('drawer-in')
     expect(viewStyles).not.toContain('drawer-in')
+    expect(viewStyles).not.toContain('drawerShell')
+  })
+
+  it('uses the same glass material for Builder and DSL import dialogs', () => {
+    const buildStyles = readSource('./pages/BuilderPage.module.css')
+    const dslStyles = readSource('./pages/DslEditorPage.module.css')
+
+    for (const styles of [buildStyles, dslStyles]) {
+      expect(styles).toContain('border: 2px solid var(--product-dialog-border);')
+      expect(styles).toContain('background: var(--product-dialog-surface);')
+      expect(styles).toContain('box-shadow: var(--product-dialog-shadow);')
+      expect(styles).toMatch(
+        /@media \(max-width: 640px\)[\s\S]*?\.modal\s*{[\s\S]*?width: 100%;[\s\S]*?max-height: calc\(100dvh - 0\.75rem\);/,
+      )
+    }
+  })
+
+  it('keeps core Build dialogs centered instead of turning them into mobile sheets', () => {
+    const addModelsStyles = readSource('./pages/ConfigPageAddModelsDialog.module.css')
+    const mixtureStyles = readSource('./pages/ConfigPageMixtureDialog.module.css')
+    const buildDialogStyles = [addModelsStyles, mixtureStyles]
+
+    buildDialogStyles.forEach((styles) => {
+      const mobileStyles = styles.slice(styles.lastIndexOf('@media (max-width:'))
+      expect(mobileStyles).toContain('.backdrop {\n    align-items: center;')
+      expect(mobileStyles).not.toContain('.backdrop {\n    align-items: end;')
+      expect(mobileStyles).toContain('border-radius: 14px;')
+    })
   })
 
   it('keeps every dashboard dialog in the shared modal contract', () => {

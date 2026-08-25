@@ -10,6 +10,10 @@ import { copyText } from '../utils/clipboard'
 import type { AccessPickerSource } from './AccessAsyncResourcePicker'
 import AccessAsyncResourcePicker from './AccessAsyncResourcePicker'
 import type { AccessTeam } from '../utils/inferenceAccessApi'
+import {
+  createDashboardMemberInvitationDraft,
+  type DashboardMemberInvitationDraft,
+} from './DashboardMemberInviteDialogSupport'
 import styles from './AccessControlPage.module.css'
 
 interface Props {
@@ -27,13 +31,8 @@ export default function DashboardMemberInviteDialog({
   onClose,
   onCreated,
 }: Props) {
-  const [email, setEmail] = useState('')
-  const [name, setName] = useState('')
-  const [role, setRole] = useState('read')
-  const [teamId, setTeamId] = useState('')
-  const [teamRole, setTeamRole] = useState<'member' | 'admin'>('member')
-  const [expiresInHours, setExpiresInHours] = useState(168)
-  const [sendEmail, setSendEmail] = useState(true)
+  const [draft, setDraft] = useState(createDashboardMemberInvitationDraft)
+  const { email, name, role, teamId, teamRole, expiresInHours, sendEmail } = draft
   const [result, setResult] = useState<DashboardMemberInvitation | null>(null)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -49,11 +48,15 @@ export default function DashboardMemberInviteDialog({
     setResult(null)
     setError('')
     setCopyStatus('idle')
-    setEmail('')
-    setName('')
-    setTeamId('')
-    setTeamRole('member')
+    setDraft(createDashboardMemberInvitationDraft())
   }, [isOpen])
+
+  function updateDraft<Key extends keyof DashboardMemberInvitationDraft>(
+    key: Key,
+    value: DashboardMemberInvitationDraft[Key],
+  ) {
+    setDraft((current) => ({ ...current, [key]: value }))
+  }
 
   const invitationURL = useMemo(() => (result ? absoluteInvitationURL(result) : ''), [result])
   if (!isOpen) return null
@@ -189,7 +192,7 @@ export default function DashboardMemberInviteDialog({
                   <span>Name</span>
                   <input
                     value={name}
-                    onChange={(event) => setName(event.target.value)}
+                    onChange={(event) => updateDraft('name', event.target.value)}
                     placeholder="Ada Lovelace"
                     required
                     data-dialog-initial-focus
@@ -200,14 +203,17 @@ export default function DashboardMemberInviteDialog({
                   <input
                     type="email"
                     value={email}
-                    onChange={(event) => setEmail(event.target.value)}
+                    onChange={(event) => updateDraft('email', event.target.value)}
                     placeholder="ada@company.com"
                     required
                   />
                 </label>
                 <label className={styles.formField}>
                   <span>Dashboard role</span>
-                  <select value={role} onChange={(event) => setRole(event.target.value)}>
+                  <select
+                    value={role}
+                    onChange={(event) => updateDraft('role', event.target.value)}
+                  >
                     {roleOptions.map((option) => (
                       <option key={option} value={option}>
                         {option === 'admin'
@@ -223,7 +229,9 @@ export default function DashboardMemberInviteDialog({
                   <span>Link expires</span>
                   <select
                     value={expiresInHours}
-                    onChange={(event) => setExpiresInHours(Number(event.target.value))}
+                    onChange={(event) =>
+                      updateDraft('expiresInHours', Number(event.target.value))
+                    }
                   >
                     <option value={24}>In 24 hours</option>
                     <option value={168}>In 7 days</option>
@@ -246,7 +254,7 @@ export default function DashboardMemberInviteDialog({
                     emptyText="No Teams found"
                     compact
                     compactEmptyLabel="Choose a Team"
-                    onChange={(selectedIds) => setTeamId(selectedIds[0] || '')}
+                    onChange={(selectedIds) => updateDraft('teamId', selectedIds[0] || '')}
                   />
                 </div>
                 {teamId ? (
@@ -264,7 +272,7 @@ export default function DashboardMemberInviteDialog({
                           role="radio"
                           aria-checked={teamRole === option}
                           className={teamRole === option ? styles.teamRoleChoiceActive : ''}
-                          onClick={() => setTeamRole(option)}
+                          onClick={() => updateDraft('teamRole', option)}
                         >
                           {option === 'member' ? 'Member' : 'Admin'}
                         </button>
@@ -276,7 +284,7 @@ export default function DashboardMemberInviteDialog({
                   <input
                     type="checkbox"
                     checked={sendEmail}
-                    onChange={(event) => setSendEmail(event.target.checked)}
+                    onChange={(event) => updateDraft('sendEmail', event.target.checked)}
                   />
                   <span>
                     <i />

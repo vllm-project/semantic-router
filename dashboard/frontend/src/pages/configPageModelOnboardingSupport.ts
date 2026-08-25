@@ -8,14 +8,24 @@ import type {
   FallbackTrigger,
   RoutingBulkImportRequest,
   RoutingModelControl,
+  RoutingModelControlWrite,
   RoutingPricing,
 } from '../utils/routingManagementApi'
 import { normalizedPrefix } from './configPageModelImportSupport'
 
 export type EditableConnectionValue = string | boolean
 
-const durationPattern = /^(?<amount>[1-9]\d*)(?<unit>ms|s|m|h)$/
-const durationUnitMilliseconds = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const
+const durationComponentPattern = /([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h)/gy
+const durationUnitMilliseconds = {
+  ns: 0.000_001,
+  us: 0.001,
+  'µs': 0.001,
+  'μs': 0.001,
+  ms: 1,
+  s: 1_000,
+  m: 60_000,
+  h: 3_600_000,
+} as const
 const minimumModelTimeoutMilliseconds = 1_000
 const maximumModelTimeoutMilliseconds = 24 * 60 * 60 * 1_000
 
@@ -71,14 +81,10 @@ export interface ControlFormValues {
 
 export const MODEL_RETRY_TRIGGERS: readonly FallbackTrigger[] = [
   'unavailable',
-  'overloaded',
   'timeout',
 ]
 
-export interface ModelControlOverrides {
-  retry?: Partial<RoutingModelControl['retry']>
-  timeout?: Partial<RoutingModelControl['timeout']>
-}
+export type ModelControlOverrides = RoutingModelControlWrite
 
 export function buildModelControlOverrides(
   values: ControlFormValues,
@@ -119,16 +125,23 @@ export function buildModelControlOverrides(
 }
 
 function validModelTimeout(value: string): boolean {
-  const match = durationPattern.exec(value)
-  if (!match?.groups) return false
-  const amount = Number(match.groups.amount)
-  const unit = match.groups.unit as keyof typeof durationUnitMilliseconds
-  if (!Number.isSafeInteger(amount)) return false
-  const multiplier = durationUnitMilliseconds[unit]
-  if (!multiplier) return false
-  const milliseconds = amount * multiplier
+  const source = value.startsWith('+') ? value.slice(1) : value
+  if (!source) return false
+  let cursor = 0
+  let milliseconds = 0
+  durationComponentPattern.lastIndex = 0
+  while (cursor < source.length) {
+    durationComponentPattern.lastIndex = cursor
+    const match = durationComponentPattern.exec(source)
+    if (!match || match.index !== cursor) return false
+    const amount = Number(match[1])
+    const unit = match[2] as keyof typeof durationUnitMilliseconds
+    if (!Number.isFinite(amount) || amount < 0) return false
+    milliseconds += amount * durationUnitMilliseconds[unit]
+    cursor = durationComponentPattern.lastIndex
+  }
   return (
-    Number.isSafeInteger(milliseconds) &&
+    Number.isFinite(milliseconds) &&
     milliseconds >= minimumModelTimeoutMilliseconds &&
     milliseconds <= maximumModelTimeoutMilliseconds
   )
@@ -191,18 +204,6 @@ interface BuildBulkImportRequestInput {
   pricing?: ModelPricingOverrides
 }
 
-const defaultControl: RoutingModelControl = {
-  retry: { count: 0, on: [] },
-  timeout: { request: '300s', stream: '300s' },
-}
-
-const defaultPricing: RoutingPricing = {
-  inputCostPerMillionTokens: null,
-  outputCostPerMillionTokens: null,
-  cacheReadCostPerMillionTokens: null,
-  cacheWriteCostPerMillionTokens: null,
-}
-
 /**
  * Builds the Router-owned bulk-import command from one signed discovery page.
  * Selection order intentionally follows the discovery result, because the
@@ -229,13 +230,10 @@ export function buildRoutingBulkImportRequest({
       catalogItemId: model.catalogItemId,
       name: `${prefix}${model.providerModelId}`,
       aliases: [],
-      capabilities: [...model.capabilities],
+      ...(model.capabilities?.length ? { capabilities: [...model.capabilities] } : {}),
       loras: [],
-      control: {
-        retry: { ...defaultControl.retry, ...control?.retry },
-        timeout: { ...defaultControl.timeout, ...control?.timeout },
-      },
-      pricing: { ...defaultPricing, ...pricing },
+      ...(control ? { control } : {}),
+      ...(pricing ? { pricing } : {}),
     }))
 
   if (selections.length === 0) throw new Error('Select at least one model.')

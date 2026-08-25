@@ -1,195 +1,205 @@
-/* ResultCard.module.css - Floating result card styles */
-
 .overlay {
   position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  background: transparent;
   z-index: 1000;
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  padding: 80px 20px 20px 20px;
-  pointer-events: none;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: var(--product-dialog-overlay);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .card {
-  background: rgba(20, 20, 20, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(51, 51, 51, 0.3);
-  border-radius: 12px;
-  width: 100%;
-  max-width: 320px;
-  max-height: calc(100dvh - 100px);
-  overflow-y: auto;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  animation: slideIn 0.3s ease;
-  pointer-events: auto;
-}
-
-@keyframes slideIn {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+  width: min(560px, 100%);
+  max-height: min(720px, calc(100dvh - 40px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  border-bottom: 1px solid rgba(51, 51, 51, 0.3);
   position: sticky;
+  z-index: 2;
   top: 0;
-  background: rgba(20, 20, 20, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  z-index: 1;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto 40px;
+  align-items: center;
+  gap: 11px;
+  min-height: 68px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(13, 14, 17, 0.74);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.headerIcon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.headerIcon svg {
+  width: 18px;
+  height: 18px;
 }
 
 .title {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary, #e8e8e8);
-  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 2px;
 }
 
-.title svg {
-  width: 14px;
-  height: 14px;
+.title small {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.61rem;
+  font-weight: 690;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.title strong {
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 1rem;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .latencyBadge {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-  border-radius: 4px;
+  padding: 4px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.62rem;
+  font-weight: 620;
   white-space: nowrap;
 }
 
 .closeBtn {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary, #888);
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
+  grid-column: 4;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.62);
+}
+
+.closeBtn:hover,
+.closeBtn:focus-visible {
+  border-color: rgba(255, 255, 255, 0.22);
+  outline: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
 }
 
 .closeBtn svg {
-  width: 15px;
-  height: 15px;
+  width: 16px;
+  height: 16px;
 }
 
-.closeBtn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary, #e8e8e8);
+.scrollBody {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .warningBanner {
   display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  background: rgba(255, 152, 0, 0.1);
-  border-bottom: 1px solid rgba(255, 152, 0, 0.3);
-  font-size: 11px;
-  color: #ff9800;
-  gap: 5px;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 14px 14px 0;
+  padding: 9px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.54);
+  font-size: 0.68rem;
+  line-height: 1.45;
 }
 
 .warningBanner svg {
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
+  margin-top: 1px;
 }
 
 .content {
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  gap: 14px;
+  padding: 14px;
 }
 
-/* Compact row for decision and model */
 .compactRow {
-  display: flex;
-  gap: 12px;
-  padding: 8px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 6px;
-  border: 1px solid rgba(51, 51, 51, 0.3);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px;
 }
 
 .compactItem {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
   min-width: 0;
+  display: grid;
+  gap: 5px;
+  padding: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .label {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-secondary, #888);
+  color: rgba(255, 255, 255, 0.36);
+  font-size: 0.59rem;
+  font-weight: 680;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .value {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary, #e8e8e8);
-  white-space: nowrap;
   overflow: hidden;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.77rem;
+  font-weight: 590;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .section {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  gap: 8px;
 }
 
 .sectionTitle {
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-secondary, #888);
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.66rem;
+  font-weight: 650;
 }
 
 .signalList {
-  display: flex;
-  flex-direction: column;
+  display: grid;
   gap: 8px;
 }
 
 .signalCard {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 8px 10px;
-  border: 1px solid rgba(51, 51, 51, 0.4);
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .signalCardHeader {
@@ -200,26 +210,33 @@
 }
 
 .signalTag {
+  min-width: 0;
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 5px;
+  overflow: hidden;
   padding: 4px 8px;
-  border-radius: 4px;
-  font-size: 10px;
-  color: white;
-  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.65rem;
+  font-weight: 610;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .signalTag svg {
-  width: 11px;
-  height: 11px;
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
 }
 
 .signalType {
-  font-size: 10px;
-  color: var(--text-secondary, #888);
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 0.57rem;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.5px;
 }
 
 .signalMeta {
@@ -229,51 +246,83 @@
 }
 
 .signalMetric {
-  font-size: 10px;
-  color: var(--text-primary, #e8e8e8);
-  padding: 2px 6px;
+  padding: 3px 7px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
-  background: rgba(143, 148, 156, 0.12);
-  border: 1px solid rgba(143, 148, 156, 0.24);
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.6rem;
 }
 
 .signalReason {
-  font-size: 10px;
-  line-height: 1.45;
-  color: var(--text-secondary, #a0aec0);
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.64rem;
+  line-height: 1.5;
 }
 
 .fallbackReason {
   display: flex;
   align-items: flex-start;
-  gap: 5px;
-  padding: 8px 10px;
-  background: rgba(255, 152, 0, 0.1);
-  border-radius: 6px;
-  font-size: 10px;
-  color: #ff9800;
-  border: 1px solid rgba(255, 152, 0, 0.2);
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.65rem;
+  line-height: 1.45;
 }
 
 .fallbackReason svg {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   flex: 0 0 auto;
   margin-top: 1px;
 }
 
-/* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 640px) {
   .overlay {
-    padding: 60px 10px 10px 10px;
+    padding: 6px;
   }
 
   .card {
-    max-width: 100%;
+    width: calc(100vw - 12px);
+    max-height: calc(100dvh - 12px);
+  }
+
+  .header {
+    grid-template-columns: 36px minmax(0, 1fr) auto 40px;
+    gap: 8px;
+    min-height: 62px;
+    padding: 9px 10px;
+  }
+
+  .headerIcon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .latencyBadge {
+    display: none;
+  }
+
+  .content {
+    padding: 10px;
+  }
+
+  .warningBanner {
+    margin: 10px 10px 0;
   }
 
   .compactRow {
-    flex-direction: column;
-    gap: 8px;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card,
+  .card * {
+    animation: none;
+    transition: none;
   }
 }

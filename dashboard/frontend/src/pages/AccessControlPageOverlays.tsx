@@ -33,6 +33,7 @@ interface AccessControlPageOverlaysProps {
   }
   permissions: {
     canManage: boolean
+    canRevealKeys: boolean
     canManageDashboardMembers: boolean
     selfService: boolean
     selfUserId: string
@@ -118,9 +119,8 @@ const AccessControlPageOverlays = ({
       users={catalog.users}
       teams={catalog.teams}
       keys={catalog.keys}
-      groups={catalog.groups}
-      budgets={catalog.budgets}
       canManage={permissions.canManage}
+      canRevealKeys={permissions.canRevealKeys}
       canManageDashboardMembers={permissions.canManageDashboardMembers}
       selfService={permissions.selfService}
       selfUserId={permissions.selfUserId}

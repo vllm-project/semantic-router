@@ -32,13 +32,20 @@ func routingModelInput(input managementapi.RoutingModelWrite) (routingmanagement
 			ConnectionFields: fields, Weight: backend.Weight,
 		}
 	}
+	execution := routingsnapshot.ModelExecution{}
+	if input.Control != nil {
+		execution = routingModelExecution(*input.Control)
+	}
+	pricing := routingsnapshot.ModelPricing{}
+	if input.Pricing != nil {
+		pricing = routingsnapshot.ModelPricing(*input.Pricing)
+	}
 	return routingmanagement.ModelInput{
 		ID: input.ID, Name: input.Name, Aliases: input.Aliases, Capabilities: input.Capabilities,
 		ParamSize: input.ParamSize, ContextWindowSize: input.ContextWindowSize, Description: input.Description,
 		Reasoning: routingReasoning(input.Reasoning), LoRAs: input.LoRAs,
 		QualityScore: input.QualityScore, Modality: input.Modality, Tags: input.Tags,
-		Execution: routingModelExecution(input.Control),
-		Pricing:   routingsnapshot.ModelPricing(input.Pricing), Backends: backends,
+		Execution: execution, Pricing: pricing, Backends: backends,
 	}, nil
 }
 
@@ -85,14 +92,21 @@ func routingBulkImportInput(input managementapi.RoutingBulkImportRequest, namesp
 	}
 	selections := make([]routingmanagement.BulkModelSelection, len(input.Selections))
 	for index, selection := range input.Selections {
+		execution := routingsnapshot.ModelExecution{}
+		if selection.Control != nil {
+			execution = routingModelExecution(*selection.Control)
+		}
+		pricing := routingsnapshot.ModelPricing{}
+		if selection.Pricing != nil {
+			pricing = routingsnapshot.ModelPricing(*selection.Pricing)
+		}
 		selections[index] = routingmanagement.BulkModelSelection{
 			CatalogItemID: selection.CatalogItemID, ID: selection.ID, Name: selection.Name,
 			Aliases: selection.Aliases, Capabilities: selection.Capabilities,
 			ParamSize: selection.ParamSize, ContextWindowSize: selection.ContextWindowSize, Description: selection.Description,
 			Reasoning: routingReasoning(selection.Reasoning), LoRAs: selection.LoRAs,
 			QualityScore: selection.QualityScore, Modality: selection.Modality, Tags: selection.Tags,
-			Execution: routingModelExecution(selection.Control),
-			Pricing:   routingsnapshot.ModelPricing(selection.Pricing),
+			Execution: execution, Pricing: pricing,
 		}
 	}
 	return routingmanagement.BulkImportRequest{

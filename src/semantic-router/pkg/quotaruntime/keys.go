@@ -256,6 +256,7 @@ func admissionPlanFingerprint(
 			string(precondition.Kind),
 			precondition.Field,
 			precondition.Expected,
+			precondition.PublicationID,
 			string(precondition.Failure),
 			precondition.Reason,
 		)

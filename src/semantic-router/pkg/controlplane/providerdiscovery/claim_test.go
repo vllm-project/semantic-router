@@ -64,6 +64,29 @@ func TestDiscoveryClaimBindsAuthorityAndExactReturnedItems(t *testing.T) {
 	}
 }
 
+func TestDiscoveryClaimPreservesOnlyModelSpecificCapabilities(t *testing.T) {
+	now := time.Date(2026, 8, 22, 10, 0, 0, 0, time.UTC)
+	codec, err := NewClaimCodec(ClaimKeyset{
+		ActiveKeyID: "active", Keys: map[string][]byte{"active": []byte(strings.Repeat("a", 32))},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	models, _, _, err := codec.Issue(testPlan(), testAuthorityDigest, testCredentialVerID, []AdapterModel{
+		{ProviderModelID: "unknown-model", DisplayName: "Unknown Model"},
+		{ProviderModelID: "described-model", DisplayName: "Described Model", Capabilities: []string{"image_input", "tools"}},
+	}, now, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if models[0].Capabilities != nil {
+		t.Fatalf("unknown model capabilities = %v, want unset", models[0].Capabilities)
+	}
+	if got := strings.Join(models[1].Capabilities, ","); got != "image_input,tools" {
+		t.Fatalf("model-specific capabilities = %q", got)
+	}
+}
+
 func TestDiscoveryClaimRejectsOldCredentialVersionAndExposesCanonicalFieldDigest(t *testing.T) {
 	now := time.Date(2026, 8, 22, 10, 0, 0, 0, time.UTC)
 	codec, err := NewClaimCodec(ClaimKeyset{

@@ -14,15 +14,14 @@ const componentSchemaPrefix = "#/components/schemas/"
 
 var typeScriptIdentifier = regexp.MustCompile(`^[A-Za-z_$][A-Za-z0-9_$]*$`)
 
-func renderAgentSchemaTypes(
+func renderManagementSchemaTypes(
 	output *strings.Builder,
 	document managementapi.OpenAPIDocument,
-	operations []managementapi.OperationContract,
 ) {
-	schemas := agentClientSchemas(document, operations)
+	schemas := document.Components.Schemas
 	names := sortedSchemaNames(schemas)
 
-	output.WriteString("\n\n// Agent resource types and validators generated from the canonical OpenAPI schemas.\n")
+	output.WriteString("\n\n// Resource types and validators generated from every canonical OpenAPI schema.\n")
 	for _, name := range names {
 		typeName := name
 		if name == "AgentEvent" {
@@ -47,12 +46,16 @@ func renderAgentSchemaTypes(
 	output.WriteString("\nexport type AgentPage<Resource> = { data: Array<Resource>; page: PageInfo }\n")
 	output.WriteString("export type AgentStreamEvent = AgentEvent | AgentLiveModelStepEvent\n\n")
 
-	output.WriteString("export interface ManagementApiAgentSchemas {\n")
+	output.WriteString("export interface ManagementApiSchemas {\n")
 	for _, name := range names {
-		fmt.Fprintf(output, "  %s: %s\n", name, name)
+		typeName := name
+		if name == "AgentEvent" {
+			typeName = "ManagementApiAgentEvent"
+		}
+		fmt.Fprintf(output, "  %s: %s\n", name, typeName)
 	}
 	output.WriteString("}\n\n")
-	output.WriteString("export type ManagementApiAgentSchemaName = keyof ManagementApiAgentSchemas\n\n")
+	output.WriteString("export type ManagementApiSchemaName = keyof ManagementApiSchemas\n\n")
 
 	encoded, err := json.Marshal(schemas)
 	if err != nil {
@@ -78,7 +81,7 @@ func renderAgentSchemaTypes(
 	output.WriteString("  oneOf?: Array<ManagementApiRuntimeSchema>\n")
 	output.WriteString("  additionalProperties?: boolean\n")
 	output.WriteString("}\n\n")
-	fmt.Fprintf(output, "const MANAGEMENT_API_AGENT_SCHEMAS = JSON.parse(\n  %s,\n) as Record<ManagementApiAgentSchemaName, ManagementApiRuntimeSchema>\n\n", tsString(string(encoded)))
+	fmt.Fprintf(output, "const MANAGEMENT_API_SCHEMAS = JSON.parse(\n  %s,\n) as Record<ManagementApiSchemaName, ManagementApiRuntimeSchema>\n\n", tsString(string(encoded)))
 	renderRuntimeSchemaValidator(output)
 }
 
@@ -129,73 +132,13 @@ func agentEventPayloadTypes() []agentEventPayloadType {
 		{EventType: "assistant_delta", SchemaName: "AgentAssistantDeltaEventPayload"},
 		{EventType: "tool_request", SchemaName: "AgentToolRequestEventPayload"},
 		{EventType: "tool_result", SchemaName: "AgentToolResultEventPayload"},
+		{EventType: "model_step_summary", SchemaName: "AgentModelStepSummaryEventPayload"},
 		{EventType: "progress", SchemaName: "AgentProgressEventPayload"},
 		{EventType: "context_checkpoint", SchemaName: "AgentContextCheckpointEventPayload"},
 		{EventType: "approval_request", SchemaName: "AgentApprovalRequestEventPayload"},
 		{EventType: "approval_result", SchemaName: "AgentApprovalResultEventPayload"},
 		{EventType: "cancellation", SchemaName: "AgentCancellationEventPayload"},
 		{EventType: "terminal", SchemaName: "AgentTerminalEventPayload"},
-	}
-}
-
-func agentClientSchemas(
-	document managementapi.OpenAPIDocument,
-	operations []managementapi.OperationContract,
-) map[string]managementapi.JSONSchema {
-	selected := make(map[string]managementapi.JSONSchema)
-	queue := make([]string, 0)
-	for name := range document.Components.Schemas {
-		if strings.HasPrefix(name, "Agent") {
-			queue = append(queue, name)
-		}
-	}
-	for _, operation := range operations {
-		if !isAgentClientOperation(operation) {
-			continue
-		}
-		openAPIOperation := document.Paths[operation.Path][strings.ToLower(string(operation.Method))]
-		if openAPIOperation.RequestBody != nil {
-			collectSchemaReferences(openAPIOperation.RequestBody.Content[managementapi.JSONMediaType].Schema, &queue)
-		}
-		if schema, found := successfulJSONResponseSchema(openAPIOperation); found {
-			collectSchemaReferences(schema, &queue)
-		}
-	}
-
-	for len(queue) > 0 {
-		name := queue[0]
-		queue = queue[1:]
-		if _, found := selected[name]; found {
-			continue
-		}
-		schema, found := document.Components.Schemas[name]
-		if !found {
-			panic(fmt.Sprintf("generated Agent client references unknown schema %q", name))
-		}
-		selected[name] = schema
-		collectSchemaReferences(schema, &queue)
-	}
-	return selected
-}
-
-func collectSchemaReferences(schema managementapi.JSONSchema, queue *[]string) {
-	if schema.Ref != "" {
-		if !strings.HasPrefix(schema.Ref, componentSchemaPrefix) {
-			panic(fmt.Sprintf("unsupported generated schema reference %q", schema.Ref))
-		}
-		*queue = append(*queue, strings.TrimPrefix(schema.Ref, componentSchemaPrefix))
-	}
-	for _, property := range schema.Properties {
-		collectSchemaReferences(property, queue)
-	}
-	for _, property := range schema.PatternProperties {
-		collectSchemaReferences(property, queue)
-	}
-	if schema.Items != nil {
-		collectSchemaReferences(*schema.Items, queue)
-	}
-	for _, branch := range schema.OneOf {
-		collectSchemaReferences(branch, queue)
 	}
 }
 
@@ -246,7 +189,7 @@ func renderTypeScriptSchema(schema managementapi.JSONSchema, indent string) stri
 	case "":
 		return "unknown"
 	default:
-		panic(fmt.Sprintf("unsupported JSON Schema type %q in generated Agent client", schema.Type))
+		panic(fmt.Sprintf("unsupported JSON Schema type %q in generated Management contract", schema.Type))
 	}
 }
 
@@ -307,8 +250,8 @@ func typeScriptPropertyName(name string) string {
 func renderRuntimeSchemaValidator(output *strings.Builder) {
 	output.WriteString(`function managementApiSchemaReference(schema: ManagementApiRuntimeSchema): ManagementApiRuntimeSchema {
   if (!schema.$ref) return schema
-  const name = schema.$ref.replace('#/components/schemas/', '') as ManagementApiAgentSchemaName
-  return MANAGEMENT_API_AGENT_SCHEMAS[name]
+  const name = schema.$ref.replace('#/components/schemas/', '') as ManagementApiSchemaName
+  return MANAGEMENT_API_SCHEMAS[name]
 }
 
 function managementApiStringMatchesFormat(value: string, format?: string): boolean {
@@ -378,14 +321,14 @@ function managementApiSchemaMatches(schema: ManagementApiRuntimeSchema, value: u
   return schema.type === undefined
 }
 
-export function assertManagementApiAgentSchema<SchemaName extends ManagementApiAgentSchemaName>(
+export function assertManagementApiSchema<SchemaName extends ManagementApiSchemaName>(
   schemaName: SchemaName,
   value: unknown,
-): ManagementApiAgentSchemas[SchemaName] {
-  if (!managementApiSchemaMatches(MANAGEMENT_API_AGENT_SCHEMAS[schemaName], value)) {
+): ManagementApiSchemas[SchemaName] {
+  if (!managementApiSchemaMatches(MANAGEMENT_API_SCHEMAS[schemaName], value)) {
     throw new Error('Router returned a response that does not match ' + schemaName + '.')
   }
-  return value as ManagementApiAgentSchemas[SchemaName]
+  return value as ManagementApiSchemas[SchemaName]
 }
 `)
 }

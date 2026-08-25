@@ -311,6 +311,7 @@ type EventType string
 const (
 	EventUserInput         EventType = "user_input"
 	EventAssistantDelta    EventType = "assistant_delta"
+	EventModelStepSummary  EventType = "model_step_summary"
 	EventToolRequest       EventType = "tool_request"
 	EventToolResult        EventType = "tool_result"
 	EventProgress          EventType = "progress"
@@ -356,6 +357,37 @@ type AssistantDeltaEvent struct {
 	ModelStepID string         `json:"modelStepId"`
 	ChunkIndex  int            `json:"chunkIndex"`
 	Delta       AssistantDelta `json:"delta"`
+}
+
+// ModelStepUsage is the authoritative token accounting returned by the
+// Router's public inference path for one model step. Optional breakdowns are
+// omitted when the upstream protocol did not provide authoritative evidence;
+// the Agent runtime never estimates them.
+type ModelStepUsage struct {
+	InputTokens           int64  `json:"inputTokens"`
+	OutputTokens          int64  `json:"outputTokens"`
+	TotalTokens           int64  `json:"totalTokens"`
+	InputUncachedTokens   *int64 `json:"inputUncachedTokens,omitempty"`
+	InputCacheReadTokens  *int64 `json:"inputCacheReadTokens,omitempty"`
+	InputCacheWriteTokens *int64 `json:"inputCacheWriteTokens,omitempty"`
+	OutputReasoningTokens *int64 `json:"outputReasoningTokens,omitempty"`
+	OutputOtherTokens     *int64 `json:"outputOtherTokens,omitempty"`
+}
+
+// ModelStepSummaryEvent is the closed, durable Router metadata surface for an
+// assistant response. It intentionally excludes arbitrary provider payloads,
+// hidden reasoning, credentials, request bodies, and inferred cost.
+type ModelStepSummaryEvent struct {
+	ModelStepID         string          `json:"modelStepId"`
+	RequestID           string          `json:"requestId"`
+	SelectedRecipe      string          `json:"selectedRecipe,omitempty"`
+	SelectedDecision    string          `json:"selectedDecision,omitempty"`
+	SelectedModel       string          `json:"selectedModel,omitempty"`
+	SelectedAlgorithm   string          `json:"selectedAlgorithm,omitempty"`
+	ResponsePath        string          `json:"responsePath,omitempty"`
+	LatencyMilliseconds int64           `json:"latencyMilliseconds"`
+	TTFTMilliseconds    *int64          `json:"ttftMilliseconds,omitempty"`
+	Usage               *ModelStepUsage `json:"usage,omitempty"`
 }
 
 // LiveModelStepPhase describes transient model output. Live events are never

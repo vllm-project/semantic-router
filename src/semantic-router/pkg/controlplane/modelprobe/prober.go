@@ -169,6 +169,7 @@ func probePlan(
 		Method: http.MethodPost, Path: publicProbePath, SourceFormat: llmprotocol.OpenAIChatV1, Headers: make(http.Header), Body: append([]byte(nil), body...),
 		Execution: backendinvoker.Execution{
 			MaxRetries:     request.Model.Execution.MaxRetries,
+			RetryOn:        probeRetryTriggers(request.Model.Execution.RetryOn),
 			RequestTimeout: request.Timeout,
 			StreamTimeout:  request.Timeout,
 		},
@@ -184,6 +185,14 @@ func probePlan(
 	}
 	plan.RequestDigest = backendinvoker.RequestDigest(plan.Method, plan.Path, plan.Query, plan.Body)
 	return plan
+}
+
+func probeRetryTriggers(source []string) []backendinvoker.FallbackTrigger {
+	result := make([]backendinvoker.FallbackTrigger, len(source))
+	for index, trigger := range source {
+		result[index] = backendinvoker.FallbackTrigger(trigger)
+	}
+	return result
 }
 
 func connectionHeaders(source map[string]string) http.Header {

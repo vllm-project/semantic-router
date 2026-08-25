@@ -224,10 +224,10 @@ func normalizeRetryTriggers(execution *ModelExecution) error {
 		execution.RetryOn = []string{"unavailable"}
 		return nil
 	}
-	if len(execution.RetryOn) > 3 {
-		return fmt.Errorf("execution.retryOn must contain at most 3 failure classes")
+	if len(execution.RetryOn) > 2 {
+		return fmt.Errorf("execution.retryOn must contain at most 2 failure classes")
 	}
-	order := map[string]int{"unavailable": 0, "overloaded": 1, "timeout": 2}
+	order := map[string]int{"unavailable": 0, "timeout": 1}
 	seen := make(map[string]struct{}, len(execution.RetryOn))
 	for _, trigger := range execution.RetryOn {
 		if _, ok := order[trigger]; !ok {
@@ -422,10 +422,10 @@ func normalizeFallbackPolicy(policy *FallbackPolicy, priorities map[int]struct{}
 			return fmt.Errorf("priority tiers must be contiguous from zero")
 		}
 	}
-	if len(policy.On) == 0 || len(policy.On) > 3 {
-		return fmt.Errorf("on must contain between 1 and 3 failure classes")
+	if len(policy.On) == 0 || len(policy.On) > 2 {
+		return fmt.Errorf("on must contain between 1 and 2 failure classes")
 	}
-	allowed := map[string]struct{}{"unavailable": {}, "overloaded": {}, "timeout": {}}
+	allowed := map[string]struct{}{"unavailable": {}, "timeout": {}}
 	seen := make(map[string]struct{}, len(policy.On))
 	for _, trigger := range policy.On {
 		if _, ok := allowed[trigger]; !ok {
@@ -436,7 +436,7 @@ func normalizeFallbackPolicy(policy *FallbackPolicy, priorities map[int]struct{}
 		}
 		seen[trigger] = struct{}{}
 	}
-	order := map[string]int{"unavailable": 0, "overloaded": 1, "timeout": 2}
+	order := map[string]int{"unavailable": 0, "timeout": 1}
 	sort.Slice(policy.On, func(i, j int) bool { return order[policy.On[i]] < order[policy.On[j]] })
 	return nil
 }

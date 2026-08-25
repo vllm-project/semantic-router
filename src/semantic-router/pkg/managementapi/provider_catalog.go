@@ -52,9 +52,11 @@ type ProviderFieldOption struct {
 }
 
 type ProviderInterface struct {
-	ID           string   `json:"id"`
-	Label        string   `json:"label"`
-	Default      bool     `json:"default"`
+	ID      string `json:"id"`
+	Label   string `json:"label"`
+	Default bool   `json:"default"`
+	// Capabilities are features carried by this transport interface, not
+	// model-specific capability claims.
 	Capabilities []string `json:"capabilities"`
 }
 
@@ -62,15 +64,17 @@ type ProviderInterface struct {
 // headers/paths and internal credential/discovery adapter IDs are deliberately
 // absent; clients receive the schema they need, not executor internals.
 type ProviderCatalogItem struct {
-	ProviderID         string                    `json:"providerId"`
-	Revision           string                    `json:"revision"`
-	Display            ProviderCatalogDisplay    `json:"display"`
-	Credential         ProviderCredentialPrompt  `json:"credential"`
-	Origin             ProviderOriginPrompt      `json:"origin"`
-	DiscoverySupported bool                      `json:"discoverySupported"`
-	Capabilities       []string                  `json:"capabilities"`
-	ConnectionFields   []ProviderConnectionField `json:"connectionFields"`
-	Interfaces         []ProviderInterface       `json:"interfaces"`
+	ProviderID         string                   `json:"providerId"`
+	Revision           string                   `json:"revision"`
+	Display            ProviderCatalogDisplay   `json:"display"`
+	Credential         ProviderCredentialPrompt `json:"credential"`
+	Origin             ProviderOriginPrompt     `json:"origin"`
+	DiscoverySupported bool                     `json:"discoverySupported"`
+	// Capabilities are Provider transport features used for catalog filtering.
+	// They are not inherited by discovered Models.
+	Capabilities     []string                  `json:"capabilities"`
+	ConnectionFields []ProviderConnectionField `json:"connectionFields"`
+	Interfaces       []ProviderInterface       `json:"interfaces"`
 }
 
 type ProviderCatalogPage struct {
@@ -95,10 +99,11 @@ type DiscoverModelsRequest struct {
 }
 
 type DiscoveredModel struct {
-	CatalogItemID   string   `json:"catalogItemId"`
-	ProviderModelID string   `json:"providerModelId"`
-	DisplayName     string   `json:"displayName"`
-	Capabilities    []string `json:"capabilities"`
+	CatalogItemID   string `json:"catalogItemId"`
+	ProviderModelID string `json:"providerModelId"`
+	DisplayName     string `json:"displayName"`
+	// Capabilities is present only when discovery has model-specific evidence.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 type DiscoverModelsPage struct {

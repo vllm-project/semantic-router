@@ -34,7 +34,7 @@ _OLD_RELIABILITY_FIELDS = frozenset(
         "health_check_timeout",
     }
 )
-_RETRY_EVIDENCE = frozenset({"unavailable", "overloaded", "timeout"})
+_RETRY_EVIDENCE = frozenset({"unavailable", "timeout"})
 _CURRENCY_CODE_LENGTH = 3
 _PLAINTEXT_SECRET_FIELDS = frozenset(
     {
@@ -489,7 +489,7 @@ def _rewrite_retry_on(
                 "invalid_retry_on",
                 path,
                 "retry_on must be a comma-separated string or list",
-                "use unavailable, overloaded, and/or timeout",
+                "use unavailable and/or timeout",
             )
         )
     mapped: list[str] = []
@@ -505,7 +505,16 @@ def _rewrite_retry_on(
         }:
             evidence = "unavailable"
         elif normalized in {"5xx", "retriable_status_codes", "resource_exhausted"}:
-            evidence = "overloaded"
+            issues.append(
+                MigrationIssue(
+                    "unsafe_retry_trigger",
+                    path,
+                    f"transport retry trigger {trigger!r} does not prove zero billable work",
+                    "remove it or choose unavailable/timeout only when the failure "
+                    "has explicit pre-inference evidence",
+                )
+            )
+            continue
         elif normalized in {"request_timeout", "stream_timeout"}:
             evidence = "timeout"
         else:
@@ -514,7 +523,7 @@ def _rewrite_retry_on(
                     "ambiguous_retry_trigger",
                     path,
                     f"cannot map transport retry trigger {trigger!r} to Router evidence",
-                    "choose unavailable, overloaded, and/or timeout explicitly",
+                    "choose unavailable and/or timeout explicitly",
                 )
             )
             continue

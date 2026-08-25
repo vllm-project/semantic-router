@@ -10,6 +10,7 @@ capture rather than the plain command capture the sibling module uses.
 from types import SimpleNamespace
 
 import pytest
+
 from cli import container_cli, container_start, storage_secrets
 from cli.runtime_stack import resolve_runtime_stack
 from cli.storage_secrets import (
@@ -42,9 +43,15 @@ def _minimal_stack_config(tmp_path):
         "    address: 0.0.0.0\n    port: 8899\n"
         "global:\n  services:\n    backend_egress:\n"
         "      policy_file: /app/config/backend-egress-policy.yaml\n"
-        "  runtime_refs:\n"
-        "    provider_env: PROVIDER_API_KEY\n"
-        "    management_env: MANAGEMENT_TOKEN\n"
+        "    backend_credentials:\n"
+        "      provider_kek_keyring_env: PROVIDER_KEK_KEYRING\n"
+        "    management_api:\n"
+        "      bind_address: 0.0.0.0\n"
+        "      auth:\n"
+        "        mode: bearer\n"
+        "        tokens:\n"
+        "          - env: MANAGEMENT_TOKEN\n"
+        "            role: admin\n"
     )
     return config_path
 
@@ -91,7 +98,7 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
         stack_layout=resolve_runtime_stack(),
         volumes=storage_secrets.StorageVolumes(postgres="pg-data", redis="redis-data"),
     )
-    provider_secret = "provider-secret-canary"
+    provider_kek_keyring = "provider-kek-canary"
     management_secret = "management-secret-canary"
     dashboard_secret = "dashboard-secret-canary"
     monkeypatch.setenv("DASHBOARD_JWT_SECRET", dashboard_secret)
@@ -100,7 +107,7 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
     rc, _, _ = container_cli.container_start_vllm_sr(
         str(config_path),
         {
-            "PROVIDER_API_KEY": provider_secret,
+            "PROVIDER_KEK_KEYRING": provider_kek_keyring,
             "MANAGEMENT_TOKEN": management_secret,
         },
         [{"name": "http-8899", "address": "0.0.0.0", "port": 8899}],
@@ -124,23 +131,23 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
 
     assert router_env[POSTGRES_PASSWORD_ENV] == secrets.postgres.password
     assert router_env[REDIS_PASSWORD_ENV] == secrets.redis.password
-    assert router_env["PROVIDER_API_KEY"] == provider_secret
+    assert router_env["PROVIDER_KEK_KEYRING"] == provider_kek_keyring
     assert router_env["MANAGEMENT_TOKEN"] == management_secret
     assert "DASHBOARD_JWT_SECRET" not in router_env
 
     assert "DASHBOARD_JWT_SECRET" in dashboard_cmd
     assert dashboard_env["DASHBOARD_JWT_SECRET"] == dashboard_secret
-    assert "PROVIDER_API_KEY" not in dashboard_cmd
+    assert "PROVIDER_KEK_KEYRING" not in dashboard_cmd
     assert "MANAGEMENT_TOKEN" not in dashboard_cmd
     assert POSTGRES_PASSWORD_ENV not in dashboard_cmd
     assert REDIS_PASSWORD_ENV not in dashboard_cmd
-    assert "PROVIDER_API_KEY" not in dashboard_env
+    assert "PROVIDER_KEK_KEYRING" not in dashboard_env
     assert "MANAGEMENT_TOKEN" not in dashboard_env
     assert POSTGRES_PASSWORD_ENV not in dashboard_env
     assert REDIS_PASSWORD_ENV not in dashboard_env
 
     for name in (
-        "PROVIDER_API_KEY",
+        "PROVIDER_KEK_KEYRING",
         "MANAGEMENT_TOKEN",
         "DASHBOARD_JWT_SECRET",
         *STORAGE_SECRET_ENV_NAMES,
@@ -150,7 +157,7 @@ def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(
     for cmd, _ in captured:
         assert secrets.postgres.password not in cmd
         assert secrets.redis.password not in cmd
-        assert provider_secret not in cmd
+        assert provider_kek_keyring not in cmd
         assert management_secret not in cmd
         assert dashboard_secret not in cmd
 

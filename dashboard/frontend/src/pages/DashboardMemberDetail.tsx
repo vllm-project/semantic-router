@@ -55,7 +55,7 @@ export function DashboardMemberDetail({
     >
       <aside
         ref={dialogRef}
-        className={styles.detailDrawer}
+        className={styles.detailDialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="member-detail-title"

@@ -327,6 +327,19 @@ func parseOptionalPageSize(raw string) (int, error) {
 	return value, nil
 }
 
+func parseOptionalBoolean(raw string) (bool, error) {
+	switch raw {
+	case "":
+		return false, nil
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("boolean value is invalid")
+	}
+}
+
 var errProviderBodyTooLarge = errors.New("provider Management request body is too large")
 
 func decodeStrictProviderJSON(response http.ResponseWriter, request *http.Request, target any) error {

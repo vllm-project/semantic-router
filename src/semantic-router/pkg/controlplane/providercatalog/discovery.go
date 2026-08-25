@@ -93,6 +93,8 @@ type CanonicalConnectionValue struct {
 
 // DiscoveryPlan is the validated hand-off to a privileged executor. It has no
 // credential material and contains only integration-selected adapter identifiers.
+// Provider transport capabilities intentionally do not cross this boundary;
+// model-specific capability evidence belongs to AdapterModel results.
 type DiscoveryPlan struct {
 	CatalogRevision     string
 	NamespaceID         string
@@ -104,7 +106,6 @@ type DiscoveryPlan struct {
 	NormalizedOrigin    string
 	Path                string
 	Headers             map[string]string
-	Capabilities        []string
 	ConnectionFields    map[string]CanonicalConnectionValue
 	Search              string
 	PageSize            int
@@ -181,9 +182,8 @@ func (service *Service) PrepareDiscovery(
 		CredentialMode:      provider.Credential.Mode,
 		CredentialAdapterID: provider.Credential.AdapterID, CredentialID: request.CredentialID,
 		NormalizedOrigin: origin, Path: provider.Discovery.Path, ConnectionFields: fields,
-		Headers:      cloneStringMap(provider.Discovery.Headers),
-		Capabilities: append([]string(nil), provider.Capabilities...),
-		Search:       request.Search, PageSize: pageSize, ProviderCursor: request.ProviderCursor,
+		Headers: cloneStringMap(provider.Discovery.Headers),
+		Search:  request.Search, PageSize: pageSize, ProviderCursor: request.ProviderCursor,
 	}
 	if err := validator.ValidateDiscovery(ctx, cloneDiscoveryPlan(plan)); err != nil {
 		return DiscoveryPlan{}, fmt.Errorf("%w: discovery adapter %q rejected the request: %w", ErrInvalidRequest, provider.Discovery.AdapterID, err)
@@ -194,7 +194,6 @@ func (service *Service) PrepareDiscovery(
 func cloneDiscoveryPlan(plan DiscoveryPlan) DiscoveryPlan {
 	cloned := plan
 	cloned.Headers = cloneStringMap(plan.Headers)
-	cloned.Capabilities = append([]string(nil), plan.Capabilities...)
 	cloned.ConnectionFields = make(map[string]CanonicalConnectionValue, len(plan.ConnectionFields))
 	for name, value := range plan.ConnectionFields {
 		cloned.ConnectionFields[name] = value

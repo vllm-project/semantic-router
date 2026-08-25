@@ -65,6 +65,7 @@ func (r *OpenAIRouter) buildTerminalUsageEvent(
 		AdmissionID:         tenant.AdmissionID,
 		FinalizationDigest:  pendingFinalizationDigest,
 		EvidenceState:       evidence,
+		ExternalRequestID:   terminalExternalRequestID(request.RequestID),
 		ReplayID:            request.RouterReplayID,
 		Protocol:            inferenceUsageProtocol(request),
 		Path:                normalizedInferencePath(request),
@@ -110,6 +111,15 @@ func (r *OpenAIRouter) buildTerminalUsageEvent(
 		return usageledger.TerminalEvent{}, fmt.Errorf("validate finalized terminal usage event: %w", err)
 	}
 	return event, nil
+}
+
+func terminalExternalRequestID(value string) string {
+	value = strings.TrimSpace(value)
+	parsed, err := uuid.Parse(value)
+	if err != nil || parsed.String() != strings.ToLower(value) {
+		return ""
+	}
+	return value
 }
 
 func terminalUsageDispatches(

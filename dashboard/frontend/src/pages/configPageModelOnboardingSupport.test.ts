@@ -79,6 +79,14 @@ describe('model onboarding form contract', () => {
       timeout: { request: '30s', stream: '5m' },
     })
     expect(
+      buildModelControlOverrides({
+        maxRetries: '',
+        retryOn: [],
+        requestTimeout: '1h30m',
+        streamTimeout: '+.5h',
+      }),
+    ).toEqual({ timeout: { request: '1h30m', stream: '+.5h' } })
+    expect(
       buildModelPricingOverrides({
         inputCost: '0.25',
         outputCost: '1.00',
@@ -145,7 +153,6 @@ describe('model onboarding form contract', () => {
             catalogItemId: 'catalog-a',
             providerModelId: 'vendor/model-a',
             displayName: 'Model A',
-            capabilities: ['text'],
           },
         ],
         selectedCatalogItemIds: new Set(['catalog-a', 'catalog-b']),
@@ -176,33 +183,49 @@ describe('model onboarding form contract', () => {
           loras: [],
           control: {
             retry: { count: 2, on: ['unavailable'] },
-            timeout: { request: '300s', stream: '5m' },
+            timeout: { stream: '5m' },
           },
           pricing: {
             inputCostPerMillionTokens: '0.25',
             outputCostPerMillionTokens: '1.00',
-            cacheReadCostPerMillionTokens: null,
-            cacheWriteCostPerMillionTokens: null,
           },
         },
         {
           catalogItemId: 'catalog-a',
           name: 'team/vendor/model-a',
           aliases: [],
-          capabilities: ['text'],
           loras: [],
           control: {
             retry: { count: 2, on: ['unavailable'] },
-            timeout: { request: '300s', stream: '5m' },
+            timeout: { stream: '5m' },
           },
           pricing: {
             inputCostPerMillionTokens: '0.25',
             outputCostPerMillionTokens: '1.00',
-            cacheReadCostPerMillionTokens: null,
-            cacheWriteCostPerMillionTokens: null,
           },
         },
       ],
     })
+  })
+
+  it('omits untouched advanced settings from bulk imports', () => {
+    const request = buildRoutingBulkImportRequest({
+      provider,
+      catalogRevision: `sha256:${'c'.repeat(64)}`,
+      discoveryClaim: 'signed-discovery-claim',
+      connectionFields: { region: 'global' },
+      models: [
+        {
+          catalogItemId: 'catalog-a',
+          providerModelId: 'vendor/model-a',
+          displayName: 'Model A',
+        },
+      ],
+      selectedCatalogItemIds: new Set(['catalog-a']),
+      namePrefix: '',
+    })
+
+    expect(request.selections[0]).not.toHaveProperty('control')
+    expect(request.selections[0]).not.toHaveProperty('pricing')
   })
 })

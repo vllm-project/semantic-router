@@ -35,7 +35,9 @@ type Adapter interface {
 type AdapterModel struct {
 	ProviderModelID string
 	DisplayName     string
-	Capabilities    []string
+	// Capabilities contains model-specific evidence decoded from the discovery
+	// response. Transport support declared by the Provider is not a fallback.
+	Capabilities []string
 }
 
 type AdapterPage struct {

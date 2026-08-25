@@ -2437,7 +2437,7 @@
   backdrop-filter: blur(18px);
   animation: detailFade 160ms ease-out;
 }
-.detailDrawer {
+.detailDialog {
   width: min(900px, 100%);
   max-height: calc(100dvh - 2.8rem);
   display: flex;
@@ -3016,12 +3016,6 @@
     opacity: 0;
   }
 }
-@keyframes detailSlide {
-  from {
-    transform: translateX(32px);
-    opacity: 0.8;
-  }
-}
 @keyframes detailLift {
   from {
     transform: translateY(18px) scale(0.985);
@@ -3254,7 +3248,7 @@
   .linkReveal > button:last-child {
     display: none;
   }
-  .detailDrawer {
+  .detailDialog {
     width: 100%;
     max-width: none;
     max-height: calc(100dvh - 1.2rem);

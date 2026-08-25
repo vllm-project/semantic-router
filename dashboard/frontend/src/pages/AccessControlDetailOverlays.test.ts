@@ -1,36 +1,31 @@
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
-import type { AccessAPIKey, AccessTeam } from '../utils/inferenceAccessApi'
-import { canManageSelfServiceKey } from './AccessControlDetailOverlaysSupport'
+const readSource = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8')
 
-const userKey = {
-  id: 'user-key',
-  ownerType: 'user',
-  ownerId: 'user-1',
-} as AccessAPIKey
+describe('access detail relationship authority', () => {
+  it('loads entity relationships independently from the current table page', () => {
+    const detail = readSource('./AccessEntityDetail.tsx')
+    const overlays = readSource('./AccessControlDetailOverlays.tsx')
 
-const teamKey = {
-  id: 'team-key',
-  ownerType: 'team',
-  ownerId: 'team-1',
-} as AccessAPIKey
-
-const team = {
-  id: 'team-1',
-  members: [
-    { teamId: 'team-1', userId: 'user-1', role: 'admin' },
-    { teamId: 'team-1', userId: 'user-2', role: 'member' },
-  ],
-} as AccessTeam
-
-describe('self-service API key actions', () => {
-  it('never turns delegated inference authority into personal-key mutation', () => {
-    expect(canManageSelfServiceKey(userKey.id, [userKey, teamKey], [team], 'user-1')).toBe(false)
+    expect(detail).toContain('inferenceAccessApi.userMemberships(id)')
+    expect(detail).toContain('inferenceAccessApi.teamMembers(id)')
+    expect(detail).toContain('inferenceAccessApi.ownedKeys(kind, id)')
+    expect(detail).toContain("loadMore('accessAssignments')")
+    expect(detail).not.toContain('users.find(')
+    expect(detail).not.toContain('teams.find(')
+    expect(overlays).not.toContain('canManageSelfServiceKey')
   })
 
-  it('limits Team-key actions to that Team admin', () => {
-    expect(canManageSelfServiceKey(teamKey.id, [userKey, teamKey], [team], 'user-1')).toBe(true)
-    expect(canManageSelfServiceKey(teamKey.id, [userKey, teamKey], [team], 'user-2')).toBe(false)
-    expect(canManageSelfServiceKey(teamKey.id, [userKey, teamKey], [team], 'user-3')).toBe(false)
+  it('resolves API key ownership and policies by canonical detail endpoints', () => {
+    const detail = readSource('./APIKeyDetail.tsx')
+
+    expect(detail).toContain('inferenceAccessApi.userSummary')
+    expect(detail).toContain('inferenceAccessApi.teamSummary')
+    expect(detail).toContain('inferenceAccessApi.groupSummary')
+    expect(detail).toContain('inferenceAccessApi.budgetSummary')
+    expect(detail).not.toContain('ownerLabel(')
+    expect(detail).not.toContain('users.find(')
+    expect(detail).not.toContain('teams.find(')
   })
 })

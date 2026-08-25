@@ -6,6 +6,7 @@ import { useDelegatedInferenceSession } from '../hooks/useDelegatedInferenceSess
 import { useAgentSessionRuntime } from '../hooks/useAgentSessionRuntime'
 import type { PlaygroundInvocation } from '../types/playgroundInvocation'
 import {
+  canAccessDashboardPath,
   canManageRouting,
   canPublishRouting,
   canReadAgent,
@@ -275,13 +276,27 @@ export default function AgentPlayground({
         onLoadMore={() => void runtime.loadMoreSessions()}
         onNewChat={() => startNew('chat')}
         onSearchChange={setSearch}
-        onSelect={(session) => runtime.selectSession(session.id)}
+        onSelect={(session) => {
+          runtime.selectSession(session.id)
+          if (window.matchMedia('(max-width: 959px)').matches) setSidebarOpen(false)
+        }}
         onToggle={() => setSidebarOpen((current) => !current)}
       />
 
       <div className={styles.workspace}>
         <header className={styles.topbar}>
           <div className={styles.topbarIdentity}>
+            <button
+              type="button"
+              className={`${styles.iconButton} ${styles.mobileSidebarButton}`}
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open conversations"
+              aria-controls="agent-conversation-navigation"
+              aria-expanded={sidebarOpen}
+              data-testid="agent-mobile-conversation-trigger"
+            >
+              <ProductIcon name="chevron-right" />
+            </button>
             <div className={styles.topbarMark}>
               <img src="/vllm.png" alt="" />
             </div>
@@ -324,6 +339,7 @@ export default function AgentPlayground({
           loading={runtime.loadingEvents}
           mode={activeMode}
           canLoadArtifactContent={canReadAgent(user)}
+          canReadRequestLogs={canAccessDashboardPath(user, '/logs')}
           onLoadEarlier={() => void runtime.loadMoreEvents()}
           onReview={() => setReviewOpen(true)}
         />

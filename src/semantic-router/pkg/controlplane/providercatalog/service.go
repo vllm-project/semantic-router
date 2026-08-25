@@ -42,10 +42,11 @@ type Service struct {
 }
 
 type ListRequest struct {
-	PageSize   int
-	Cursor     string
-	Search     string
-	Category   string
+	PageSize int
+	Cursor   string
+	Search   string
+	Category string
+	// Capability filters Provider transport support, not Model metadata.
 	Capability string
 }
 

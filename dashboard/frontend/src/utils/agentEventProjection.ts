@@ -2,6 +2,7 @@ import type {
   AgentApprovalRequestPayload,
   AgentEvent,
   AgentLiveModelStepEvent,
+  AgentModelStepSummaryEventPayload,
   AgentProgressPayload,
   AgentTerminalPayload,
   AgentToolRequestPayload,
@@ -17,6 +18,7 @@ export interface AgentTimelineMessage {
   text: string
   createdAt: string
   streaming: boolean
+  metadata?: AgentModelStepSummaryEventPayload
 }
 
 export interface AgentTimelineTool {
@@ -137,6 +139,26 @@ export function projectAgentTimeline(
         items.push(message)
       }
       message.text += delta.text
+      continue
+    }
+    if (event.type === 'model_step_summary') {
+      const payload = event.payload as AgentModelStepSummaryEventPayload
+      durableModelSteps.add(payload.modelStepId)
+      let message = assistantByStep.get(payload.modelStepId)
+      if (!message) {
+        message = {
+          kind: 'message',
+          id: `assistant-${payload.modelStepId}`,
+          turnId,
+          role: 'assistant',
+          text: '',
+          createdAt: event.createdAt,
+          streaming: false,
+        }
+        assistantByStep.set(payload.modelStepId, message)
+        items.push(message)
+      }
+      message.metadata = payload
       continue
     }
     if (event.type === 'tool_request') {

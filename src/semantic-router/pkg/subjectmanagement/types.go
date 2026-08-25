@@ -68,6 +68,7 @@ type UserMembership struct {
 type TeamMember struct {
 	Membership
 	DisplayName string
+	Email       string
 	UserStatus  accesscontrol.UserStatus
 }
 
@@ -85,6 +86,7 @@ type Page[T any] struct {
 	NextCursor string
 	HasMore    bool
 	PageSize   int
+	TotalCount *uint64
 }
 
 type ListRequest struct {
@@ -97,13 +99,14 @@ type ListRequest struct {
 }
 
 type MembershipListRequest struct {
-	NamespaceID string
-	UserID      string
-	TeamID      string
-	Status      accesscontrol.MembershipStatus
-	Cursor      string
-	PageSize    int
-	Scope       accesscontrol.ResultScope
+	NamespaceID  string
+	UserID       string
+	TeamID       string
+	Status       accesscontrol.MembershipStatus
+	Cursor       string
+	PageSize     int
+	IncludeTotal bool
+	Scope        accesscontrol.ResultScope
 }
 
 type CreateUserRequest struct {

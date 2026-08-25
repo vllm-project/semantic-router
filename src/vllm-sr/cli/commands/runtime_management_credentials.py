@@ -6,6 +6,8 @@ from pathlib import Path
 
 import yaml
 
+from cli.yaml_contract import load_yaml
+
 from cli.runtime_env_names import runtime_env_name_is_allowed
 
 
@@ -15,7 +17,7 @@ def management_credential_env_names(config_path: str | Path | None) -> set[str]:
     if config_path is None:
         return set()
     try:
-        document = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
+        document = load_yaml(Path(config_path).read_text(encoding="utf-8"))
     except (OSError, UnicodeError, yaml.YAMLError):
         return set()
     if not isinstance(document, dict):

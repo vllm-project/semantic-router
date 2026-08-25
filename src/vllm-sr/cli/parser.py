@@ -14,6 +14,7 @@ from cli.config_contract import (
 )
 from cli.models import RecipeDistribution, RouterLearningConfig, UserConfig
 from cli.utils import get_logger
+from cli.yaml_contract import load_yaml
 
 log = get_logger(__name__)
 
@@ -459,7 +460,7 @@ def _read_config_document(config_path: str) -> Dict[str, Any]:
 
     try:
         with open(config_file, "r") as f:
-            data = yaml.safe_load(f)
+            data = load_yaml(f)
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")
     except Exception as e:
@@ -564,7 +565,7 @@ def load_config_file(config_path: str) -> Dict[str, Any]:
 
     try:
         with open(config_file, "r") as f:
-            data = yaml.safe_load(f)
+            data = load_yaml(f)
         return data or {}
     except yaml.YAMLError as e:
         raise ConfigParseError(f"Invalid YAML syntax: {e}")

@@ -51,6 +51,20 @@ describe('access-control modal experience', () => {
     expect(styles).toContain('justify-content: center;')
   })
 
+  it('uses the centered detail dialog for every Access detail surface', () => {
+    const details = [
+      readSource('./APIKeyDetail.tsx'),
+      readSource('./DashboardMemberDetail.tsx'),
+      readSource('./RequestLogDetail.tsx'),
+    ].join('\n')
+    const styles = readSource('./AccessControlPage.module.css')
+
+    expect(details.match(/className=\{styles\.detailDialog\}/g)).toHaveLength(3)
+    expect(details).not.toContain('detailDrawer')
+    expect(styles).toContain('.detailDialog {')
+    expect(styles).not.toContain('.detailDrawer {')
+  })
+
   it('returns from entity editing to the same detail dialog', () => {
     const page = readSource('./AccessControlPage.tsx')
 

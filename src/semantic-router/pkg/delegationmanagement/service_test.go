@@ -82,12 +82,63 @@ func TestReplayRejectsDifferentManagementSession(t *testing.T) {
 	}
 }
 
+func TestEligibleKeySearchIsCanonicalAndCursorBound(t *testing.T) {
+	now := time.Date(2026, 8, 23, 8, 0, 0, 0, time.UTC)
+	repository := &delegationRepositoryStub{now: now, eligiblePage: Page[EligibleKey]{
+		Items: []EligibleKey{{KeyID: testDelegationKey, CreatedAt: now}}, HasMore: true,
+	}}
+	service := newDelegationTestService(t, repository, &delegationWaiterStub{}, now)
+	request := ListRequest{
+		NamespaceID: testDelegationNamespace, PrincipalID: testDelegationPrincipal,
+		ManagementSessionID: testManagementSession, Search: "  Developer  ", PageSize: 1,
+	}
+	first, err := service.ListEligibleKeys(context.Background(), request)
+	if err != nil || first.NextCursor == "" || repository.eligibleQuery.Search != "developer" ||
+		repository.eligibleCalls != 1 {
+		t.Fatalf("first eligible key page = %#v, query=%#v, calls=%d, error=%v",
+			first, repository.eligibleQuery, repository.eligibleCalls, err)
+	}
+	request.Cursor, request.Search = first.NextCursor, "other"
+	if _, err := service.ListEligibleKeys(context.Background(), request); !errors.Is(err, ErrInvalidRequest) ||
+		repository.eligibleCalls != 1 {
+		t.Fatalf("search-swapped cursor error=%v calls=%d", err, repository.eligibleCalls)
+	}
+}
+
+func TestGetEligibleKeyHidesNonOwnedAndCrossNamespaceKeys(t *testing.T) {
+	now := time.Date(2026, 8, 23, 8, 0, 0, 0, time.UTC)
+	repository := &delegationRepositoryStub{now: now}
+	service := newDelegationTestService(t, repository, &delegationWaiterStub{}, now)
+	request := EligibleKeyRequest{
+		NamespaceID: testDelegationNamespace, PrincipalID: testDelegationPrincipal,
+		ManagementSessionID: testManagementSession, KeyID: testDelegationKey,
+	}
+	key, err := service.GetEligibleKey(context.Background(), request)
+	if err != nil || key.KeyID != testDelegationKey {
+		t.Fatalf("eligible key=%#v error=%v", key, err)
+	}
+	repository.eligibleErr = ErrNotEligible
+	if _, err := service.GetEligibleKey(context.Background(), request); !errors.Is(err, ErrNotEligible) {
+		t.Fatalf("non-owned key error=%v", err)
+	}
+	repository.eligibleErr = nil
+	request.NamespaceID = testOtherSession
+	if _, err := service.GetEligibleKey(context.Background(), request); !errors.Is(err, ErrNotEligible) {
+		t.Fatalf("cross-namespace key error=%v", err)
+	}
+}
+
 type delegationRepositoryStub struct {
-	now     time.Time
-	created CreateMutation
-	session Session
-	stored  StoredSecret
-	replay  bool
+	now               time.Time
+	eligibleCalls     int
+	eligibleNamespace string
+	eligibleQuery     EligibleKeyQuery
+	eligiblePage      Page[EligibleKey]
+	eligibleErr       error
+	created           CreateMutation
+	session           Session
+	stored            StoredSecret
+	replay            bool
 }
 
 func (repository *delegationRepositoryStub) Ready(context.Context, *managementcommand.Codec) error {
@@ -103,11 +154,20 @@ func (repository *delegationRepositoryStub) ResolveSelf(context.Context, string,
 	}, nil
 }
 
-func (repository *delegationRepositoryStub) ListEligibleKeys(context.Context, EligibleKeyQuery) (Page[EligibleKey], error) {
-	return Page[EligibleKey]{}, nil
+func (repository *delegationRepositoryStub) ListEligibleKeys(_ context.Context, query EligibleKeyQuery) (Page[EligibleKey], error) {
+	repository.eligibleCalls++
+	repository.eligibleQuery = query
+	return repository.eligiblePage, repository.eligibleErr
 }
 
-func (repository *delegationRepositoryStub) GetEligibleKey(context.Context, string, string, string, string) (EligibleKey, error) {
+func (repository *delegationRepositoryStub) GetEligibleKey(_ context.Context, namespaceID, _ string, _ string, _ string) (EligibleKey, error) {
+	repository.eligibleNamespace = namespaceID
+	if repository.eligibleErr != nil {
+		return EligibleKey{}, repository.eligibleErr
+	}
+	if namespaceID != testDelegationNamespace {
+		return EligibleKey{}, ErrNotEligible
+	}
 	return EligibleKey{
 		KeyID: testDelegationKey, OwnerKind: accesscontrol.SubjectKindUser,
 		OwnerID: testDelegationUser, DelegationEpoch: 3, CreatedAt: repository.now,

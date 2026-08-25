@@ -12,6 +12,8 @@ import click
 import requests
 import yaml
 
+from cli.yaml_contract import load_yaml
+
 from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_recipe_learning_artifact
 from cli.commands.recipe_learning_artifacts import (
@@ -370,7 +372,7 @@ def recipe_learning(
 def load_recipe_file(recipe_file: Path | None) -> dict[str, Any] | None:
     if recipe_file is None:
         return None
-    payload = yaml.safe_load(recipe_file.read_text(encoding="utf-8"))
+    payload = load_yaml(recipe_file.read_text(encoding="utf-8"))
     if not isinstance(payload, dict):
         raise ValueError("--recipe-file must contain a YAML object")
     return payload

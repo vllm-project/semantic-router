@@ -10,6 +10,13 @@
 {{- if eq (empty $dsnEnv) (empty $dsnFile) -}}
 {{- fail "global.stores.management.postgres requires exactly one of dsn_env or dsn_file" -}}
 {{- end -}}
+{{- $migrationEnv := list -}}
+{{- $migrationProjection := dict "volumeMounts" (list) "volumes" (list) -}}
+{{- if $dsnEnv -}}
+{{- $migrationEnv = include "semantic-router.managementMigrationEnv" (list . $dsnEnv) | fromYamlArray -}}
+{{- else -}}
+{{- $migrationProjection = include "semantic-router.managementMigrationFileProjection" (list . $dsnFile) | fromYaml -}}
+{{- end -}}
 {{- $registry := trimSuffix "/" (default "" .Values.global.imageRegistry) -}}
 {{- $prefix := ternary "" (printf "%s/" $registry) (eq $registry "") -}}
 apiVersion: batch/v1
@@ -57,27 +64,15 @@ spec:
         {{- end }}
         - "--timeout"
         - "5m"
-        {{- if or .Values.env .Values.extraEnv }}
+        {{- if $migrationEnv }}
         env:
-        {{- with .Values.env }}
-          {{- toYaml . | nindent 10 }}
+          {{- toYaml $migrationEnv | nindent 10 }}
         {{- end }}
-        {{- with .Values.extraEnv }}
-          {{- toYaml . | nindent 10 }}
-        {{- end }}
-        {{- end }}
-        {{- with .Values.envFromSecrets }}
-        envFrom:
-          {{- range . }}
-          - secretRef:
-              name: {{ . }}
-          {{- end }}
-        {{- end }}
-        {{- with .Values.extraVolumeMounts }}
+        {{- with (get $migrationProjection "volumeMounts") }}
         volumeMounts:
           {{- toYaml . | nindent 10 }}
         {{- end }}
-      {{- with .Values.extraVolumes }}
+      {{- with (get $migrationProjection "volumes") }}
       volumes:
         {{- toYaml . | nindent 8 }}
       {{- end }}

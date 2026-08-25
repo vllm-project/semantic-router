@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -12,6 +13,66 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentmanagement"
 )
+
+func TestCanonicalModelStepOutputIncludesClosedSummary(t *testing.T) {
+	stepID := uuid.NewString()
+	summary, err := json.Marshal(agentmanagement.ModelStepSummaryEvent{
+		ModelStepID: stepID, RequestID: "request-1", ResponsePath: "upstream",
+		LatencyMilliseconds: 42,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := canonicalModelStepOutput("end_turn", stepID, []agentmanagement.EventAppend{{
+		Type: agentmanagement.EventModelStepSummary, Payload: summary,
+	}})
+	if err != nil {
+		t.Fatalf("canonicalModelStepOutput() error = %v", err)
+	}
+	if !json.Valid(encoded) {
+		t.Fatalf("canonical model-step output is not JSON: %q", encoded)
+	}
+}
+
+func TestCanonicalModelStepOutputRejectsNonModelStepEvent(t *testing.T) {
+	payload, err := json.Marshal(agentmanagement.ProgressEvent{Phase: "routing", Message: "working"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := canonicalModelStepOutput("end_turn", uuid.NewString(), []agentmanagement.EventAppend{{
+		Type: agentmanagement.EventProgress, Payload: payload,
+	}}); !errors.Is(err, agentmanagement.ErrInvalid) {
+		t.Fatalf("canonicalModelStepOutput() error = %v, want ErrInvalid", err)
+	}
+}
+
+func TestCanonicalModelStepOutputRequiresOneMatchingSummary(t *testing.T) {
+	stepID := uuid.NewString()
+	otherStepID := uuid.NewString()
+	summary := func(id string) agentmanagement.EventAppend {
+		payload, err := json.Marshal(agentmanagement.ModelStepSummaryEvent{
+			ModelStepID: id, RequestID: "request-1", LatencyMilliseconds: 1,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return agentmanagement.EventAppend{
+			Type: agentmanagement.EventModelStepSummary, Payload: payload,
+		}
+	}
+	for name, events := range map[string][]agentmanagement.EventAppend{
+		"missing":    nil,
+		"mismatched": {summary(otherStepID)},
+		"duplicate":  {summary(stepID), summary(stepID)},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := canonicalModelStepOutput("end_turn", stepID, events);
+				!errors.Is(err, agentmanagement.ErrInvalid) {
+				t.Fatalf("canonicalModelStepOutput() error = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}
 
 func TestBeginModelStepRejectsCancelledOrLostLeaseBeforeInferenceFence(t *testing.T) {
 	t.Parallel()

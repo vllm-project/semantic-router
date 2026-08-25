@@ -75,6 +75,8 @@ func identityResponseSchema(contract OperationContract) (JSONSchema, bool) {
 		return refSchema("TrustedIdentityIssuerDetail"), true
 	case "GET " + BasePath + "/self/inference-keys":
 		return refSchema("EligibleInferenceKeyPage"), true
+	case "GET " + BasePath + "/self/inference-keys/{keyId}":
+		return refSchema("EligibleInferenceKeyDetail"), true
 	case "GET " + BasePath + "/self/inference-sessions":
 		return refSchema("DelegatedInferenceSessionPage"), true
 	case "GET " + BasePath + "/api-keys/{keyId}/inference-sessions":
@@ -339,6 +341,7 @@ var identitySchemaCatalog = map[string]JSONSchema{
 	"TrustedIdentityIssuerRefreshRequest":    objectSchema([]string{"reason"}, map[string]JSONSchema{"reason": text}),
 	"EligibleInferenceKey":                   eligibleKey,
 	"EligibleInferenceKeyPage":               objectSchema([]string{"data", "page"}, map[string]JSONSchema{"data": arraySchema(eligibleKey), "page": pageInfo}),
+	"EligibleInferenceKeyDetail":             objectSchema([]string{"data"}, map[string]JSONSchema{"data": eligibleKey}),
 	"DelegatedInferenceSessionCreateRequest": objectSchema([]string{"keyId"}, map[string]JSONSchema{"keyId": uuid}),
 	"DelegatedInferenceSession":              delegatedSession,
 	"DelegatedInferenceSessionPage":          objectSchema([]string{"data", "page"}, map[string]JSONSchema{"data": arraySchema(delegatedSession), "page": pageInfo}),

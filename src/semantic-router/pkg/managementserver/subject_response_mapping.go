@@ -20,6 +20,7 @@ func newUserPage(value subjectmanagement.Page[subjectmanagement.User]) managemen
 	}
 	return managementapi.UserPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }
 
@@ -38,6 +39,7 @@ func newTeamPage(value subjectmanagement.Page[subjectmanagement.Team]) managemen
 	}
 	return managementapi.TeamPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }
 
@@ -60,6 +62,7 @@ func newUserMembershipPage(value subjectmanagement.Page[subjectmanagement.UserMe
 	}
 	return managementapi.UserMembershipPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }
 
@@ -69,10 +72,11 @@ func newTeamMemberPage(value subjectmanagement.Page[subjectmanagement.TeamMember
 		item := value.Items[index]
 		items[index] = managementapi.TeamMemberView{
 			MembershipView: newMembershipView(item.Membership),
-			DisplayName:    item.DisplayName, UserStatus: string(item.UserStatus),
+			DisplayName:    item.DisplayName, Email: item.Email, UserStatus: string(item.UserStatus),
 		}
 	}
 	return managementapi.TeamMemberPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }

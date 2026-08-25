@@ -110,6 +110,11 @@ describe('provider catalog management client', () => {
             displayName: 'Example 3',
             capabilities: ['tools'],
           },
+          {
+            catalogItemId: 'item-2',
+            providerModelId: 'example-unknown',
+            displayName: 'Example Unknown',
+          },
         ],
         page: { hasMore: false, pageSize: 50 },
         catalogRevision: revision,
@@ -119,14 +124,16 @@ describe('provider catalog management client', () => {
     )
     vi.stubGlobal('fetch', fetchMock)
 
-    await expect(
-      discoverProviderModels('example', {
-        credentialId: 'credential-1',
-        connectionFields: { region: 'global', private: false, replicas: 2 },
-        search: 'example',
-        pageSize: 50,
-      }),
-    ).resolves.toMatchObject({ data: [{ catalogItemId: 'item-1' }] })
+    const result = await discoverProviderModels('example', {
+      credentialId: 'credential-1',
+      connectionFields: { region: 'global', private: false, replicas: 2 },
+      search: 'example',
+      pageSize: 50,
+    })
+    expect(result).toMatchObject({
+      data: [{ catalogItemId: 'item-1' }, { catalogItemId: 'item-2' }],
+    })
+    expect(result.data[1]).not.toHaveProperty('capabilities')
 
     const request = fetchMock.mock.calls[0][1] as RequestInit
     expect(request.headers).toMatchObject({

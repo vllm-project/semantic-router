@@ -161,7 +161,40 @@ def test_current_v03_retry_defaults_to_unavailable() -> None:
     assert parsed.providers.models[0].control.retry.on == ["unavailable"]
 
 
-def test_current_v03_rejects_public_mode_and_static_access_policy() -> None:
+def test_current_v03_rejects_overloaded_without_known_zero_evidence() -> None:
+    payload = human_config()
+    payload["providers"]["models"][0]["control"]["retry"] = {
+        "count": 1,
+        "on": ["overloaded"],
+    }
+
+    with pytest.raises(ValidationError, match="overloaded"):
+        UserConfig.model_validate(payload)
+
+
+@pytest.mark.parametrize(
+    ("request_timeout", "stream_timeout"),
+    [
+        ("1h30m", "+.5h"),
+        ("1000000000ns", "1.h"),
+    ],
+)
+def test_current_v03_accepts_router_duration_syntax(
+    request_timeout: str, stream_timeout: str
+) -> None:
+    payload = human_config()
+    payload["providers"]["models"][0]["control"]["timeout"] = {
+        "request": request_timeout,
+        "stream": stream_timeout,
+    }
+
+    parsed = UserConfig.model_validate(payload)
+
+    assert parsed.providers.models[0].control.timeout.request == request_timeout
+    assert parsed.providers.models[0].control.timeout.stream == stream_timeout
+
+
+def test_current_v03_rejects_fields_outside_global_modules() -> None:
     payload = human_config()
     payload["global"]["control_plane"] = {"mode": "legacy"}
 
@@ -170,5 +203,5 @@ def test_current_v03_rejects_public_mode_and_static_access_policy() -> None:
 
     payload = human_config()
     payload["global"]["ratelimit"] = {"rpm": 10}
-    with pytest.raises(ValidationError, match="static inference access policy"):
+    with pytest.raises(ValidationError, match=r"global\.ratelimit"):
         UserConfig.model_validate(payload)

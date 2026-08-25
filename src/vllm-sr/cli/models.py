@@ -20,6 +20,7 @@ from pydantic import (
 )
 
 from .algorithms import AlgorithmConfig, ModelRef
+from .global_contract import validate_global_structure
 
 RoutingStrategy = Literal["priority", "confidence"]
 LOCAL_CLASSIFIER_LABEL_COUNT = 2
@@ -1550,7 +1551,9 @@ class Decision(_DecisionBase):
 
 _ADAPTER_ID_PATTERN = re.compile(r"^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$")
 _DECIMAL_PATTERN = re.compile(r"^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
-_DURATION_COMPONENT_PATTERN = re.compile(r"([0-9]+(?:\.[0-9]+)?)(ns|us|µs|ms|s|m|h)")
+_DURATION_COMPONENT_PATTERN = re.compile(
+    r"([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h)"
+)
 
 
 def _trimmed_identifier(value: str, label: str) -> str:
@@ -1593,19 +1596,21 @@ def _duration_seconds(value: str) -> Decimal:
         "ns": Decimal("0.000000001"),
         "us": Decimal("0.000001"),
         "µs": Decimal("0.000001"),
+        "μs": Decimal("0.000001"),
         "ms": Decimal("0.001"),
         "s": Decimal(1),
         "m": Decimal(60),
         "h": Decimal(3600),
     }
+    source = value[1:] if value.startswith("+") else value
     cursor = 0
     total = Decimal(0)
-    for match in _DURATION_COMPONENT_PATTERN.finditer(value):
+    for match in _DURATION_COMPONENT_PATTERN.finditer(source):
         if match.start() != cursor:
             raise ValueError("duration must use Go duration syntax")
         total += Decimal(match.group(1)) * units[match.group(2)]
         cursor = match.end()
-    if cursor != len(value) or cursor == 0:
+    if cursor != len(source) or cursor == 0:
         raise ValueError("duration must use Go duration syntax")
     return total
 
@@ -1627,9 +1632,9 @@ class ModelRetryControl(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     count: int = Field(default=0, ge=0, le=5)
-    on: List[Literal["unavailable", "overloaded", "timeout"]] = Field(
+    on: List[Literal["unavailable", "timeout"]] = Field(
         default_factory=list,
-        max_length=3,
+        max_length=2,
     )
 
     @field_validator("on")
@@ -1898,9 +1903,7 @@ class AssignmentFallback(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     strategy: Literal["priority"]
-    on: List[Literal["unavailable", "overloaded", "timeout"]] = Field(
-        min_length=1, max_length=3
-    )
+    on: List[Literal["unavailable", "timeout"]] = Field(min_length=1, max_length=2)
 
     @field_validator("on")
     @classmethod
@@ -2161,20 +2164,7 @@ class UserConfig(BaseModel):
             raise ValueError("entrypoint model_names must be unique")
 
         global_config = self.global_ or {}
-        if "control_plane" in global_config:
-            raise ValueError(
-                "global.control_plane is not part of the v0.3 contract; "
-                "configure services and stores directly"
-            )
-        removed_access_fields = sorted(
-            set(global_config) & {"authz", "ratelimit", "rate_limit", "rate_limits"}
-        )
-        if removed_access_fields:
-            raise ValueError(
-                "static inference access policy is not part of the current v0.3 "
-                "contract: "
-                + ", ".join(f"global.{name}" for name in removed_access_fields)
-            )
+        validate_global_structure(global_config)
         currency = _validate_global_billing(global_config)
 
         priced = any(

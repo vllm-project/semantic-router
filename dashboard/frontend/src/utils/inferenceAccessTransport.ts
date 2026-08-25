@@ -47,12 +47,18 @@ export function viewPage<T, U>(
     const needle = clientFilter.toLocaleLowerCase()
     items = items.filter((item) => JSON.stringify(item).toLocaleLowerCase().includes(needle))
   }
+  const exactTotal = page.page.totalCount
+    ? Number.parseInt(String(page.page.totalCount), 10)
+    : undefined
   return {
     items,
     limit: page.page.pageSize,
     hasMore: page.page.hasMore,
     nextCursor: page.page.nextCursor,
-    total: items.length + (page.page.hasMore ? 1 : 0),
+    total:
+      exactTotal !== undefined && Number.isSafeInteger(exactTotal) && exactTotal >= 0
+        ? exactTotal
+        : items.length + (page.page.hasMore ? 1 : 0),
   }
 }
 
@@ -62,6 +68,7 @@ export function listQuery(params: AccessListParams) {
     pageSize: params.limit,
     status: params.status,
     search: params.q?.trim() || undefined,
+    includeTotal: params.includeTotal ? 'true' : undefined,
   })
 }
 
@@ -91,6 +98,8 @@ export async function mutateAndRead<T>(
   headers: Record<string, string>,
 ): Promise<T> {
   const receipt = await request<MutationReceipt>(operationId, { pathParameters, body, headers })
-  if (!receipt.resource?.id) throw new Error('Router Management mutation returned no resource.')
+  if (!('resource' in receipt) || !receipt.resource.id) {
+    throw new Error('Router Management mutation returned no resource.')
+  }
   return detail(receipt.resource.id)
 }

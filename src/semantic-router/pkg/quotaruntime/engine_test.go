@@ -214,6 +214,47 @@ func TestAdmissionPreconditionValidation(t *testing.T) {
 	}
 }
 
+func TestPublishedAdmissionPreconditionValidation(t *testing.T) {
+	t.Parallel()
+
+	keyspace, err := NewAccessProjectionKeyspace("namespace-1")
+	if err != nil {
+		t.Fatalf("NewAccessProjectionKeyspace() error = %v", err)
+	}
+	valid := AdmissionPrecondition{
+		Key: keyspace.Active("key-1"), Kind: AdmissionCheckPublishedHashEqual,
+		Field: "revision", Expected: "7", PublicationID: "publication-7",
+		Failure: AdmissionUnavailable, Reason: "active_policy_changed",
+	}
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("published Validate() error = %v", err)
+	}
+	missingPublication := valid
+	missingPublication.PublicationID = ""
+	if err := missingPublication.Validate(); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("published precondition without publication error = %v, want %v", err, ErrInvalidRequest)
+	}
+	unpublished := valid
+	unpublished.Kind = AdmissionCheckHashEqual
+	if err := unpublished.Validate(); !errors.Is(err, ErrInvalidRequest) {
+		t.Fatalf("plain precondition with publication error = %v, want %v", err, ErrInvalidRequest)
+	}
+
+	for _, kind := range []AdmissionCheckKind{
+		AdmissionCheckPublishedNotBefore,
+		AdmissionCheckPublishedExpiresAfter,
+	} {
+		condition := AdmissionPrecondition{
+			Key: keyspace.Active("key-1"), Kind: kind, Field: "expires_at_ms",
+			PublicationID: "publication-7", Failure: AdmissionUnavailable,
+			Reason: "active_policy_changed",
+		}
+		if err := condition.Validate(); err != nil {
+			t.Fatalf("%s Validate() error = %v", kind, err)
+		}
+	}
+}
+
 func requestRule(
 	t *testing.T,
 	bindingID string,

@@ -3,6 +3,7 @@ package managementapi
 import (
 	"encoding/json"
 	"math"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -112,5 +113,13 @@ func TestProviderCatalogOpenAPIHasTypedReadAndDiscoveryContracts(t *testing.T) {
 	if item.Properties["interfaces"].Items == nil ||
 		item.Properties["interfaces"].Items.Ref != "#/components/schemas/ProviderInterface" {
 		t.Fatal("ProviderCatalogItem OpenAPI omitted safe Provider interfaces")
+	}
+	discovered := document.Components.Schemas["DiscoveredModel"]
+	if slices.Contains(discovered.Required, "capabilities") {
+		t.Fatal("DiscoveredModel requires capabilities even when discovery has no model-specific evidence")
+	}
+	if !strings.Contains(item.Properties["capabilities"].Description, "never inherited") ||
+		!strings.Contains(discovered.Properties["capabilities"].Description, "Model-specific") {
+		t.Fatal("Provider and discovered Model capability semantics are ambiguous in OpenAPI")
 	}
 }

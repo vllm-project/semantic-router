@@ -15,11 +15,13 @@ import {
   canReadKeyScopedRouting,
   canReadRouting,
   canReadRoutingCatalog,
+  canRevealInferenceKey,
   canSelfManageInferenceAccess,
   canViewUsers,
   canWriteConfig,
   canWriteEvaluation,
   isModelConsumer,
+  resolveAccessLandingPath,
 } from './accessControl'
 
 describe('config write access', () => {
@@ -195,14 +197,41 @@ describe('config write access', () => {
         permissions: ['config.read'],
         managementPermissions: ['delegation.use', 'key.manage', 'routing.read'],
       }),
-    ).toBe(false)
+    ).toBe(true)
     expect(
       isModelConsumer({
         role: 'read',
         permissions: ['config.read'],
         managementPermissions: ['delegation.use', 'membership.manage', 'routing.read'],
       }),
-    ).toBe(false)
+    ).toBe(true)
+  })
+
+  it('keeps scoped key and membership managers out of global workspace surfaces', () => {
+    for (const scopedPermission of ['key.manage', 'membership.manage']) {
+      const scopedManager = {
+        role: 'read',
+        permissions: ['config.read'],
+        managementPermissions: ['delegation.use', 'key.read', scopedPermission],
+      }
+
+      expect(isModelConsumer(scopedManager)).toBe(true)
+      expect(canAccessDashboardPath(scopedManager, '/config/agent')).toBe(false)
+      expect(canAccessDashboardPath(scopedManager, '/status')).toBe(false)
+    }
+  })
+
+  it('lands Access on the first surface granted to the current identity', () => {
+    expect(resolveAccessLandingPath({ managementPermissions: ['usage.read'] })).toBe(
+      '/access/usage',
+    )
+    expect(resolveAccessLandingPath({ managementPermissions: ['key.read', 'key.reveal'] })).toBe(
+      '/access/api-keys',
+    )
+    expect(resolveAccessLandingPath({ managementPermissions: ['team.read'] })).toBe(
+      '/access/teams',
+    )
+    expect(resolveAccessLandingPath({ managementPermissions: [] })).toBeNull()
   })
 
   it('keeps read-only Evaluation visible only with evaluation.read', () => {
@@ -245,6 +274,8 @@ describe('config write access', () => {
     expect(
       canSelfManageInferenceAccess({ managementPermissions: ['key.read', 'delegation.use'] }),
     ).toBe(false)
+    expect(canRevealInferenceKey({ managementPermissions: ['key.reveal'] })).toBe(true)
+    expect(canRevealInferenceKey({ managementPermissions: ['key.manage'] })).toBe(false)
     expect(canReadRouting({ role: 'read', managementPermissions: ['routing.read'] })).toBe(true)
     expect(canManageRouting({ role: 'admin', managementPermissions: ['routing.read'] })).toBe(false)
     expect(

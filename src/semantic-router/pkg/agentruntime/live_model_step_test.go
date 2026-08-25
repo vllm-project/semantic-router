@@ -59,8 +59,13 @@ func TestModelStepPublishesFirstDeltaBeforeTerminalWithoutDurableWrite(t *testin
 	}); err != nil {
 		t.Fatal(err)
 	}
+	if err := collector.observe(PublicInferenceObservation{
+		RequestID: "request-1", ResponsePath: "upstream", LatencyMilliseconds: 25,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	output, err := collector.finish()
-	if err != nil || len(output.Events) != 1 {
+	if err != nil || len(output.Events) != 2 {
 		t.Fatalf("finish() events = %d, error = %v", len(output.Events), err)
 	}
 	var durable agentmanagement.AssistantDeltaEvent
@@ -69,5 +74,62 @@ func TestModelStepPublishesFirstDeltaBeforeTerminalWithoutDurableWrite(t *testin
 	}
 	if durable.ModelStepID != stepID || durable.ChunkIndex != 0 || durable.Delta.Text != "first token" {
 		t.Fatalf("durable reconciliation event = %#v", durable)
+	}
+	var summary agentmanagement.ModelStepSummaryEvent
+	if err := json.Unmarshal(output.Events[1].Payload, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if output.Events[1].Type != agentmanagement.EventModelStepSummary ||
+		summary.ModelStepID != stepID || summary.RequestID != "request-1" {
+		t.Fatalf("durable model-step summary = %#v", summary)
+	}
+}
+
+func TestModelStepSummaryPersistsOnlyAuthoritativeUsage(t *testing.T) {
+	collector := newModelStepCollector(
+		context.Background(), &Worker{}, agentmanagement.TurnLease{Fence: 1}, nil,
+		agentmanagement.ToolPolicy{}, uuid.NewString(), 0,
+	)
+	input, output, total, cached := int64(8), int64(3), int64(11), int64(2)
+	if err := collector.consume(llmprotocol.Event{Type: llmprotocol.EventResponseStarted}); err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.consume(llmprotocol.Event{
+		Type: llmprotocol.EventUsageUpdated,
+		Usage: &llmprotocol.Usage{
+			State:          llmprotocol.UsageAvailable,
+			InputTotal:     llmprotocol.TokenCount{Value: &input, Provenance: llmprotocol.UsageAuthoritative},
+			OutputTotal:    llmprotocol.TokenCount{Value: &output, Provenance: llmprotocol.UsageAuthoritative},
+			Total:          llmprotocol.TokenCount{Value: &total, Provenance: llmprotocol.UsageAuthoritative},
+			InputCacheRead: llmprotocol.TokenCount{Value: &cached, Provenance: llmprotocol.UsageAuthoritative},
+			InputUncached:  llmprotocol.TokenCount{Value: &input, Provenance: llmprotocol.UsageEstimated},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.consume(llmprotocol.Event{
+		Type: llmprotocol.EventResponseCompleted, StopReason: llmprotocol.StopEndTurn,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := collector.observe(PublicInferenceObservation{
+		RequestID: "request-2", LatencyMilliseconds: 10,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := collector.finish()
+	if err != nil || len(result.Events) != 1 {
+		t.Fatalf("finish() events = %d, error = %v", len(result.Events), err)
+	}
+	var summary agentmanagement.ModelStepSummaryEvent
+	if err := json.Unmarshal(result.Events[0].Payload, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.Usage == nil || summary.Usage.TotalTokens != 11 ||
+		summary.Usage.InputCacheReadTokens == nil || *summary.Usage.InputCacheReadTokens != 2 {
+		t.Fatalf("authoritative usage summary = %#v", summary.Usage)
+	}
+	if summary.Usage.InputUncachedTokens != nil {
+		t.Fatalf("estimated input breakdown was persisted: %#v", summary.Usage)
 	}
 }

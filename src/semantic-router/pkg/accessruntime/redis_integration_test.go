@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -104,6 +105,188 @@ func TestRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPath(t *testing.T) {
 	})
 	if testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr != nil || checked.Result.Disposition != quotaruntime.AdmissionUnavailable || checked.Result.Reason != "routing_publication_changed" {
 		t.Fatalf("switched routing publication check = %+v, %v", checked, testRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPathErr)
+	}
+}
+
+func TestRedisRuntimeAuthenticatesAcrossActivationBeforePointerCompaction(t *testing.T) {
+	address := os.Getenv("ACCESSRUNTIME_TEST_REDIS_ADDR")
+	if address == "" {
+		t.Skip("ACCESSRUNTIME_TEST_REDIS_ADDR is not configured")
+	}
+	client := redis.NewClient(&redis.Options{Addr: address})
+	t.Cleanup(func() { _ = client.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		t.Fatalf("ping Redis: %v", err)
+	}
+	prefix := "access-compaction-it:" + uuid.NewString()
+	t.Cleanup(func() { deletePrefix(context.Background(), client, prefix+":*") })
+
+	fixture := publishRuntimeProjection(t, ctx, client, prefix)
+	next := testProjectionAtRevision(t, fixture.projection.Revision+1)
+	publicationID := "publication-integration-2"
+	stageActivatedProjection(t, ctx, client, fixture, next, publicationID)
+
+	reader, err := NewRedisProjectionReader(RedisProjectionReaderOptions{Client: client, KeyPrefix: prefix})
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine, err := quotaruntime.NewRedisEngine(client, quotaruntime.RedisEngineOptions{KeyPrefix: prefix})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runtime, err := New(RuntimeOptions{
+		Reader: reader, Engine: engine,
+		APIKeyPeppers: fixture.keyring, DelegationPeppers: fixture.keyring,
+		DelegationAudience: "vllm-sr-inference",
+		DelegationBarriers: &fakeDelegationBarriers{state: managementauth.DelegationBarrierState{Ready: true}},
+		KeyPrefix:          prefix,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	authentication, err := runtime.Authenticate(ctx, AuthenticationRequest{Credential: fixture.issued.Plaintext})
+	if err != nil || !authentication.Result.Allowed() || authentication.Tenant.PublicationID != publicationID ||
+		authentication.Tenant.PolicyRevision != next.Revision {
+		t.Fatalf("Authenticate() during pointer compaction = %+v, %v", authentication, err)
+	}
+	assertCompactionAdmission(t, ctx, runtime, authentication, "admission-before-compaction")
+
+	promoteActivatedProjection(t, ctx, client, fixture, publicationID)
+	assertCompactionAdmission(t, ctx, runtime, authentication, "admission-after-compaction")
+	compacted, err := runtime.Authenticate(ctx, AuthenticationRequest{Credential: fixture.issued.Plaintext})
+	if err != nil || !compacted.Result.Allowed() || compacted.Tenant.PublicationID != publicationID {
+		t.Fatalf("Authenticate() after pointer compaction = %+v, %v", compacted, err)
+	}
+}
+
+func assertCompactionAdmission(
+	t *testing.T,
+	ctx context.Context,
+	runtime *Runtime,
+	authentication Authentication,
+	admissionID string,
+) {
+	t.Helper()
+	target := Target{
+		ResourceType: accesscontrol.GrantResourceEntrypoint,
+		ResourceID:   "entry-chat", Permission: accesscontrol.GrantPermissionInvoke,
+	}
+	authorization, err := runtime.Authorize(ctx, AuthorizationRequest{Session: authentication.Session, Target: target})
+	if err != nil || !authorization.Result.Allowed() {
+		t.Fatalf("Authorize(%s) = %+v, %v", admissionID, authorization, err)
+	}
+	admission, err := runtime.Admit(ctx, AdmissionRequest{
+		Session: authentication.Session, Target: target, AdmissionID: admissionID,
+		RequestDigest: strings.Repeat("d", 64), LeaseDuration: time.Minute,
+	})
+	if err != nil || !admission.Result.Allowed() {
+		t.Fatalf("Admit(%s) = %+v, %v", admissionID, admission, err)
+	}
+}
+
+func stageActivatedProjection(
+	t *testing.T,
+	ctx context.Context,
+	client *redis.Client,
+	fixture runtimeProjectionFixture,
+	projection accessprojection.Projection,
+	publicationID string,
+) {
+	t.Helper()
+	directory, err := fixture.publicationKeys.CredentialDirectory(
+		string(accesscredential.KindAPIKey), fixture.issued.Digest.PublicID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	document, err := json.Marshal(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	credential := fixture.keyspace.Credential(string(accesscredential.KindAPIKey), fixture.issued.Digest.PublicID)
+	logical := fixture.keyspace.LogicalKey(projection.KeyID)
+	active := fixture.keyspace.Active(projection.KeyID)
+	now := time.Now().UTC()
+	pipeline := client.TxPipeline()
+	pipeline.HSet(ctx, directory, map[string]any{
+		"pending_publication_id": publicationID, "pending_state": "active",
+		"pending_revision": projection.Revision, "pending_partition": projection.QuotaPartition,
+		"pending_namespace_id": projection.NamespaceID, "pending_kind": string(accesscredential.KindAPIKey),
+		"pending_public_id": fixture.issued.Digest.PublicID,
+	})
+	pipeline.HSet(ctx, credential, map[string]any{
+		"pending_publication_id": publicationID, "pending_state": "active", "pending_revision": projection.Revision,
+		"pending_kind": string(accesscredential.KindAPIKey), "pending_kid": fixture.issued.Digest.PublicID,
+		"pending_key_id":         projection.KeyID,
+		"pending_secret_hmac":    base64.RawURLEncoding.EncodeToString(fixture.issued.Digest.HMAC),
+		"pending_pepper_version": fixture.issued.Digest.PepperVersion,
+		"pending_status":         string(accesscontrol.CredentialStatusActive),
+		"pending_not_before_ms":  now.Add(-time.Minute).UnixMilli(),
+	})
+	pipeline.HSet(ctx, logical, map[string]any{
+		"pending_publication_id": publicationID, "pending_state": "active", "pending_revision": projection.Revision,
+		"pending_status": string(projection.KeyStatus), "pending_policy_epoch": projection.PolicyEpoch,
+		"pending_delegation_epoch": projection.DelegationEpoch,
+		"pending_expires_at_ms":    projection.KeyExpiresAt.UnixMilli(),
+	})
+	pipeline.HSet(ctx, active, map[string]any{
+		"pending_publication_id": publicationID, "pending_state": "active",
+		"pending_revision": projection.Revision, "pending_digest": projection.Digest,
+	})
+	pipeline.HSet(ctx, fixture.keyspace.Policy(projection.KeyID, strconv.FormatUint(projection.Revision, 10)), map[string]any{
+		"publication_id": publicationID, "digest": projection.Digest, "document": string(document),
+	})
+	pipeline.HSet(ctx, fixture.publicationKeys.AccessGate(), map[string]any{
+		"publication_id": publicationID, "revision": projection.Revision, "runtime_epoch": 1,
+		"publication_digest": strings.Repeat("d", 64), "manifest_digest": strings.Repeat("e", 64),
+	})
+	pipeline.HSet(ctx, fixture.publicationKeys.RoutingGate(), map[string]any{
+		"publication_id": publicationID, "revision": projection.Revision, "runtime_epoch": 1,
+		"publication_digest": strings.Repeat("d", 64), "snapshot_digest": strings.Repeat("f", 64),
+		"snapshot_key": fixture.publicationKeys.RoutingSnapshot(projection.Revision),
+	})
+	if _, err := pipeline.Exec(ctx); err != nil {
+		t.Fatalf("stage activated projection: %v", err)
+	}
+}
+
+func promoteActivatedProjection(
+	t *testing.T,
+	ctx context.Context,
+	client *redis.Client,
+	fixture runtimeProjectionFixture,
+	publicationID string,
+) {
+	t.Helper()
+	directory, err := fixture.publicationKeys.CredentialDirectory(
+		string(accesscredential.KindAPIKey), fixture.issued.Digest.PublicID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{
+		directory,
+		fixture.keyspace.Credential(string(accesscredential.KindAPIKey), fixture.issued.Digest.PublicID),
+		fixture.keyspace.LogicalKey(fixture.projection.KeyID),
+		fixture.keyspace.Active(fixture.projection.KeyID),
+	} {
+		values, readErr := client.HGetAll(ctx, key).Result()
+		if readErr != nil {
+			t.Fatal(readErr)
+		}
+		selected, state, selectErr := accesspublisher.SelectPointer(values, publicationID)
+		if selectErr != nil || state != accesspublisher.PointerStateActive {
+			t.Fatalf("select pending pointer %s = %s, %v", key, state, selectErr)
+		}
+		if err := client.Del(ctx, key).Err(); err != nil {
+			t.Fatal(err)
+		}
+		if err := client.HSet(ctx, key, selected).Err(); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 

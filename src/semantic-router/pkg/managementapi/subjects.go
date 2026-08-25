@@ -88,6 +88,7 @@ type UserMembershipView struct {
 type TeamMemberView struct {
 	MembershipView
 	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
 	UserStatus  string `json:"userStatus"`
 }
 

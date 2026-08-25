@@ -194,3 +194,54 @@ all counters, pending work, fences, settlement, and stream keys; publication rej
 another partition. A future clustered runtime may map the partition to one hash tag.
 Resharding requires a separately specified drain/epoch transition. All Functions use
 Valkey server time for windows, leases, expiry, and reset values.
+
+## Reproducible capacity evidence
+
+The repository provides an opt-in capacity gate for the first production
+runtime. Run it against a dedicated or otherwise isolated Valkey/Redis endpoint:
+
+```bash
+docker run --rm --name vllm-sr-access-capacity-valkey \
+  -p 127.0.0.1:6379:6379 valkey/valkey:8-alpine \
+  --save "" --appendonly no
+
+# In another terminal:
+ACCESS_CAPACITY_REDIS_URL=redis://127.0.0.1:6379/0 \
+  make perf-access-capacity
+```
+
+The connection URL is read only from the environment and is never written to
+the report. The gate uses a unique key prefix by default, refuses an explicit
+prefix that already contains data, and removes its keys after the run. Set
+thresholds through the `ACCESS_CAPACITY_*` Make variables when a deployment has
+a reviewed service-level objective; the checked-in defaults are intentionally
+broad, stable capacity guardrails rather than a hardware leaderboard.
+Use a dedicated process when Redis operation counts are acceptance evidence:
+key-prefix isolation protects data and memory accounting, while Redis
+`commandstats` is process-wide.
+
+The gate compiles and publishes 10,000 independent API-key credentials, access
+policies, model-visibility grants, and quota bindings with the production
+publication implementation. Multiple independent production access-runtime
+instances then authenticate, authorize, admit, journal, and settle concurrent
+requests against one real quota store. A production usage-stream consumer group
+observes and acknowledges every settlement. Finally, one runtime client is lost,
+the same request is rerouted, a replacement joins, and the shared request limit is
+proved to remain exact.
+
+Each run writes machine-readable `report.json` and a concise `summary.md` under
+`.agent-harness/access-capacity/<run-id>/`. Both identify their failover scope as
+`router_replica` and report:
+
+- projection compile/publish duration, throughput, Redis operations, key count,
+  bytes per API key, and sampled policy-isolation violations;
+- authentication, admission, and settlement p50/p95/p99/max latency, event
+  throughput, Redis operations per event, and incremental bytes per event;
+- produced, observed, and acknowledged usage, consumer pending/lag, and usage
+  observation latency; and
+- failed-client rejection, reroute and replacement success, post-limit denial,
+  and global-counter consistency.
+
+This focused gate is not Router/Envoy HTTP end-to-end coverage and does not test
+Valkey server failover. Those remain separate deployment acceptance scenarios so
+test fixtures cannot be mistaken for data-plane or high-availability evidence.

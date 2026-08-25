@@ -71,8 +71,57 @@ func TestDelegationCreateRejectsUnknownBodyAndMissingIdempotency(t *testing.T) {
 	}
 }
 
+func TestSelfInferenceKeyListForwardsBoundedSearch(t *testing.T) {
+	service := &delegationServiceStub{eligible: delegationmanagement.EligibleKey{
+		KeyID: testAPIKeyID, Name: "Developer key", OwnerKind: accesscontrol.SubjectKindUser,
+		OwnerID: testAPIKeyOwnerID,
+	}}
+	routes := newTestDelegationRoutes(t, service)
+	request := authorizedRequest(t, http.MethodGet,
+		selfInferenceKeysPath+"?search=Developer&pageSize=7", nil)
+	request.Header.Set(managementapi.HeaderNamespaceID, testNamespaceID)
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || service.lastList.Search != "Developer" ||
+		service.lastList.PageSize != 7 || !strings.Contains(response.Body.String(), testAPIKeyID) {
+		t.Fatalf("status=%d request=%#v body=%s", response.Code, service.lastList, response.Body.String())
+	}
+}
+
+func TestSelfInferenceKeyDetailUsesScopedEligibility(t *testing.T) {
+	service := &delegationServiceStub{eligible: delegationmanagement.EligibleKey{
+		KeyID: testAPIKeyID, Name: "Developer key", OwnerKind: accesscontrol.SubjectKindUser,
+		OwnerID: testAPIKeyOwnerID,
+	}}
+	routes := newTestDelegationRoutes(t, service)
+	request := authorizedRequest(t, http.MethodGet, selfInferenceKeysPath+"/"+testAPIKeyID, nil)
+	request.SetPathValue("keyId", testAPIKeyID)
+	request.Header.Set(managementapi.HeaderNamespaceID, testNamespaceID)
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || service.lastGet.KeyID != testAPIKeyID ||
+		service.lastGet.PrincipalID != testPrincipalID ||
+		!strings.Contains(response.Body.String(), `"data"`) {
+		t.Fatalf("status=%d request=%#v body=%s", response.Code, service.lastGet, response.Body.String())
+	}
+
+	service.eligibleErr = delegationmanagement.ErrNotEligible
+	notOwned := authorizedRequest(t, http.MethodGet, selfInferenceKeysPath+"/"+testAPIKeyID, nil)
+	notOwned.SetPathValue("keyId", testAPIKeyID)
+	notOwned.Header.Set(managementapi.HeaderNamespaceID, testNamespaceID)
+	notOwnedResponse := httptest.NewRecorder()
+	routes.ServeHTTP(notOwnedResponse, notOwned)
+	if notOwnedResponse.Code != http.StatusNotFound {
+		t.Fatalf("non-eligible key status=%d body=%s", notOwnedResponse.Code, notOwnedResponse.Body.String())
+	}
+}
+
 type delegationServiceStub struct {
 	key         accesscontrol.APIKey
+	eligible    delegationmanagement.EligibleKey
+	eligibleErr error
+	lastList    delegationmanagement.ListRequest
+	lastGet     delegationmanagement.EligibleKeyRequest
 	secret      delegationmanagement.SecretResult
 	lastCreate  delegationmanagement.CreateRequest
 	createCalls int
@@ -91,8 +140,14 @@ func (*delegationServiceStub) GetSession(context.Context, string, string) (deleg
 	return delegationmanagement.Session{}, delegationmanagement.ErrNotFound
 }
 
-func (*delegationServiceStub) ListEligibleKeys(context.Context, delegationmanagement.ListRequest) (delegationmanagement.ResultPage[delegationmanagement.EligibleKey], error) {
-	return delegationmanagement.ResultPage[delegationmanagement.EligibleKey]{}, nil
+func (service *delegationServiceStub) ListEligibleKeys(_ context.Context, request delegationmanagement.ListRequest) (delegationmanagement.ResultPage[delegationmanagement.EligibleKey], error) {
+	service.lastList = request
+	return delegationmanagement.ResultPage[delegationmanagement.EligibleKey]{Items: []delegationmanagement.EligibleKey{service.eligible}}, service.eligibleErr
+}
+
+func (service *delegationServiceStub) GetEligibleKey(_ context.Context, request delegationmanagement.EligibleKeyRequest) (delegationmanagement.EligibleKey, error) {
+	service.lastGet = request
+	return service.eligible, service.eligibleErr
 }
 
 func (*delegationServiceStub) ListSessions(context.Context, delegationmanagement.ListRequest) (delegationmanagement.ResultPage[delegationmanagement.Session], error) {

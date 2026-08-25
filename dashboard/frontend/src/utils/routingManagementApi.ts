@@ -25,6 +25,7 @@ import type {
   RoutingModelWrite,
   RoutingMutationReceipt,
   RoutingPage,
+  RoutingPricing,
   RoutingProbeResponse,
   RoutingRecipe,
   RoutingRecipeProvenance,
@@ -40,6 +41,59 @@ const isFiniteInteger = (value: unknown): value is number =>
 
 const isStatus = (value: unknown): value is RoutingStatus =>
   value === 'draft' || value === 'active' || value === 'disabled'
+
+const modelPricePattern = /^(?:(?:0|[1-9]\d{0,5})(?:\.\d{1,9})?|1000000(?:\.0{1,9})?)$/
+const durationComponentPattern = /([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|ms|s|m|h)/gy
+const durationUnitMilliseconds = {
+  ns: 0.000_001,
+  us: 0.001,
+  'µs': 0.001,
+  'μs': 0.001,
+  ms: 1,
+  s: 1_000,
+  m: 60_000,
+  h: 3_600_000,
+} as const
+const digestPattern = /^sha256:[a-f0-9]{64}$/
+
+function isModelDuration(value: string): boolean {
+  const source = value.startsWith('+') ? value.slice(1) : value
+  if (!source) return false
+  let cursor = 0
+  let milliseconds = 0
+  durationComponentPattern.lastIndex = 0
+  while (cursor < source.length) {
+    durationComponentPattern.lastIndex = cursor
+    const match = durationComponentPattern.exec(source)
+    if (!match || match.index !== cursor) return false
+    const amount = Number(match[1])
+    const unit = match[2] as keyof typeof durationUnitMilliseconds
+    if (!Number.isFinite(amount) || amount < 0) return false
+    milliseconds += amount * durationUnitMilliseconds[unit]
+    cursor = durationComponentPattern.lastIndex
+  }
+  return Number.isFinite(milliseconds) && milliseconds >= 1_000 && milliseconds <= 86_400_000
+}
+
+function assertPricing(value: unknown): RoutingPricing {
+  const fields = [
+    'inputCostPerMillionTokens',
+    'outputCostPerMillionTokens',
+    'cacheReadCostPerMillionTokens',
+    'cacheWriteCostPerMillionTokens',
+  ] as const
+  if (
+    !isRecord(value) ||
+    !hasOnlyKeys(value, [...fields]) ||
+    fields.some((field) => {
+      const price = value[field]
+      return price !== null && (typeof price !== 'string' || !modelPricePattern.test(price))
+    })
+  ) {
+    throw new Error('Router returned invalid Model pricing.')
+  }
+  return value as unknown as RoutingPricing
+}
 
 function assertDecision(value: unknown): RoutingDecision {
   if (
@@ -87,7 +141,7 @@ function assertAssignmentSet(value: unknown): RoutingAssignmentSet {
       value.fallback.strategy !== 'priority' ||
       !Array.isArray(value.fallback.on) ||
       !value.fallback.on.every(
-        (trigger) => trigger === 'unavailable' || trigger === 'overloaded' || trigger === 'timeout',
+        (trigger) => trigger === 'unavailable' || trigger === 'timeout',
       )
     ) {
       throw new Error('Router returned an invalid fallback policy.')
@@ -108,13 +162,16 @@ function assertModelControl(value: unknown): RoutingModelControl {
     value.retry.count > 5 ||
     !Array.isArray(value.retry.on) ||
     !value.retry.on.every(
-      (trigger) => trigger === 'unavailable' || trigger === 'overloaded' || trigger === 'timeout',
+      (trigger) => trigger === 'unavailable' || trigger === 'timeout',
     ) ||
     new Set(value.retry.on).size !== value.retry.on.length ||
+    (value.retry.count === 0 ? value.retry.on.length !== 0 : value.retry.on.length === 0) ||
     !isRecord(value.timeout) ||
     !hasOnlyKeys(value.timeout, ['request', 'stream']) ||
     !isNonEmptyString(value.timeout.request) ||
-    !isNonEmptyString(value.timeout.stream)
+    !isModelDuration(value.timeout.request) ||
+    !isNonEmptyString(value.timeout.stream) ||
+    !isModelDuration(value.timeout.stream)
   ) {
     throw new Error('Router returned invalid Model control.')
   }
@@ -124,20 +181,92 @@ function assertModelControl(value: unknown): RoutingModelControl {
 function assertModel(value: unknown): RoutingModel {
   if (
     !isRecord(value) ||
+    !hasOnlyKeys(
+      value,
+      [
+        'id',
+        'name',
+        'status',
+        'revision',
+        'modelRevision',
+        'catalogRevision',
+        'aliases',
+        'capabilities',
+        'loras',
+        'tags',
+        'control',
+        'pricing',
+        'backends',
+        'createdAt',
+        'updatedAt',
+      ],
+      [
+        'paramSize',
+        'contextWindowSize',
+        'description',
+        'reasoning',
+        'qualityScore',
+        'modality',
+      ],
+    ) ||
     !isNonEmptyString(value.id) ||
     !isNonEmptyString(value.name) ||
     !isStatus(value.status) ||
     !isFiniteInteger(value.revision) ||
     !isFiniteInteger(value.modelRevision) ||
+    typeof value.catalogRevision !== 'string' ||
+    !digestPattern.test(value.catalogRevision) ||
     !isStringArray(value.aliases) ||
-    !Array.isArray(value.capabilities) ||
-    !Array.isArray(value.loras) ||
-    !isRecord(value.control) ||
-    !Array.isArray(value.backends)
+    !isStringArray(value.capabilities) ||
+    !isStringArray(value.loras) ||
+    !isStringArray(value.tags) ||
+    (value.paramSize !== undefined && typeof value.paramSize !== 'string') ||
+    (value.contextWindowSize !== undefined &&
+      (!isFiniteInteger(value.contextWindowSize) ||
+        value.contextWindowSize < 0 ||
+        value.contextWindowSize > 100_000_000)) ||
+    (value.description !== undefined && typeof value.description !== 'string') ||
+    (value.qualityScore !== undefined &&
+      (typeof value.qualityScore !== 'number' ||
+        !Number.isFinite(value.qualityScore) ||
+        value.qualityScore < 0 ||
+        value.qualityScore > 1)) ||
+    (value.modality !== undefined && typeof value.modality !== 'string') ||
+    !Array.isArray(value.backends) ||
+    !value.backends.every(
+      (backend) =>
+        isRecord(backend) &&
+        hasOnlyKeys(backend, [
+          'providerId',
+          'providerModelId',
+          'credentialConfigured',
+          'weight',
+        ]) &&
+        isNonEmptyString(backend.providerId) &&
+        isNonEmptyString(backend.providerModelId) &&
+        typeof backend.credentialConfigured === 'boolean' &&
+        isNonEmptyString(backend.weight),
+    ) ||
+    !isNonEmptyString(value.createdAt) ||
+    !isNonEmptyString(value.updatedAt)
   ) {
     throw new Error('Router returned an invalid Model.')
   }
-  return { ...(value as unknown as RoutingModel), control: assertModelControl(value.control) }
+  if (value.reasoning !== undefined) {
+    if (
+      !isRecord(value.reasoning) ||
+      !hasOnlyKeys(value.reasoning, [], ['type', 'efforts']) ||
+      (value.reasoning.type !== undefined && typeof value.reasoning.type !== 'string') ||
+      (value.reasoning.efforts !== undefined && !isStringArray(value.reasoning.efforts))
+    ) {
+      throw new Error('Router returned invalid Model reasoning family.')
+    }
+  }
+  return {
+    ...(value as unknown as RoutingModel),
+    control: assertModelControl(value.control),
+    pricing: assertPricing(value.pricing),
+  }
 }
 
 function assertModelCard(value: unknown): RoutingModelCardView {
@@ -480,6 +609,7 @@ const revisionHeaders = (kind: 'mdl' | 'rcp' | 'ep', revision: number) => ({
 })
 
 export const routingManagementApi = {
+  exportCurrentManifest: () => managementOperationRequest('getRoutingExportsCurrent'),
   listModels: () => listAll('getRoutingModels', assertModel),
   listModelCards: (signal?: AbortSignal) =>
     listAll('getRoutingModelCards', assertModelCard, signal),
@@ -610,7 +740,7 @@ export async function waitForRoutingMutation(
   receipt: RoutingMutationReceipt,
   options: { timeoutMilliseconds?: number; pollMilliseconds?: number } = {},
 ): Promise<void> {
-  if (!receipt.operation) return
+  if (!('operation' in receipt)) return
   const timeout = options.timeoutMilliseconds ?? 30_000
   const poll = options.pollMilliseconds ?? 250
   const deadline = Date.now() + timeout

@@ -11,17 +11,43 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
+	"github.com/google/uuid"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
+
+const maximumPublicInferenceMetadataBytes = 256
 
 // PublicInferenceClient deliberately accepts only a delegated public
 // credential. Implementations must enter through the ordinary inference API;
 // a worker may never dispatch directly to a backend or bypass access, quota,
 // usage, and request-log settlement.
 type PublicInferenceClient interface {
-	Generate(context.Context, []byte, llmprotocol.Request, func(llmprotocol.Event) error) error
+	Generate(
+		context.Context,
+		[]byte,
+		llmprotocol.Request,
+		func(llmprotocol.Event) error,
+	) (PublicInferenceObservation, error)
+}
+
+// PublicInferenceObservation contains only Router-owned metadata from the
+// public inference boundary. Token usage remains a semantic stream event so
+// the model-step collector can retain only authoritative accounting.
+type PublicInferenceObservation struct {
+	RequestID           string
+	SelectedRecipe      string
+	SelectedDecision    string
+	SelectedModel       string
+	SelectedAlgorithm   string
+	ResponsePath        string
+	LatencyMilliseconds int64
+	TTFTMilliseconds    *int64
 }
 
 type HTTPPublicInferenceOptions struct {
@@ -36,6 +62,7 @@ type HTTPPublicInferenceClient struct {
 	client   *http.Client
 	engine   *protocolcodec.Engine
 	timeout  time.Duration
+	now      func() time.Time
 }
 
 // NewHTTPPublicInferenceClient binds the Agent worker to the deployment's
@@ -72,6 +99,7 @@ func NewHTTPPublicInferenceClient(options HTTPPublicInferenceOptions) (*HTTPPubl
 		client:   &client,
 		engine:   engine,
 		timeout:  timeout,
+		now:      time.Now,
 	}, nil
 }
 
@@ -80,17 +108,23 @@ func (client *HTTPPublicInferenceClient) Generate(
 	credential []byte,
 	request llmprotocol.Request,
 	emit func(llmprotocol.Event) error,
-) error {
+) (PublicInferenceObservation, error) {
 	if client == nil || client.client == nil || client.engine == nil || len(credential) == 0 || emit == nil {
-		return errors.New("agent public inference client is unavailable")
+		return PublicInferenceObservation{}, errors.New("agent public inference client is unavailable")
+	}
+	now := client.now
+	if now == nil {
+		now = time.Now
 	}
 	callContext, cancel := context.WithTimeout(ctx, client.timeout)
 	defer cancel()
+	startedAt := now()
+	requestID := uuid.NewString()
 	request.Stream = true
 	request.Generation++
 	encoded, err := client.engine.EncodeRequest(llmprotocol.OpenAIChatV1, request, llmprotocol.Envelope{})
 	if err != nil {
-		return fmt.Errorf("encode Agent inference request: %w", err)
+		return PublicInferenceObservation{}, fmt.Errorf("encode Agent inference request: %w", err)
 	}
 	defer clear(encoded.Body)
 
@@ -98,27 +132,29 @@ func (client *HTTPPublicInferenceClient) Generate(
 		callContext, http.MethodPost, client.endpoint, bytes.NewReader(encoded.Body),
 	)
 	if err != nil {
-		return errors.New("create Agent public inference request")
+		return PublicInferenceObservation{}, errors.New("create Agent public inference request")
 	}
 	httpRequest.Header.Set("Authorization", "Bearer "+string(credential))
 	httpRequest.Header.Set("Content-Type", "application/json")
 	httpRequest.Header.Set("Accept", "text/event-stream")
 	httpRequest.Header.Set("Cache-Control", "no-store")
+	httpRequest.Header.Set(headers.RequestID, requestID)
 
 	response, err := client.client.Do(httpRequest)
 	if err != nil {
-		return fmt.Errorf("agent public inference request failed: %w", err)
+		return PublicInferenceObservation{}, fmt.Errorf("agent public inference request failed: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		_, _ = io.CopyN(io.Discard, response.Body, 64<<10)
-		return fmt.Errorf("agent public inference returned HTTP %d", response.StatusCode)
+		return PublicInferenceObservation{}, fmt.Errorf("agent public inference returned HTTP %d", response.StatusCode)
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "text/event-stream" {
 		_, _ = io.CopyN(io.Discard, response.Body, 64<<10)
-		return errors.New("agent public inference did not return a semantic event stream")
+		return PublicInferenceObservation{}, errors.New("agent public inference did not return a semantic event stream")
 	}
+	observation := publicInferenceObservationFromHeaders(response.Header, requestID)
 	stream, err := client.engine.NewStream(
 		llmprotocol.OpenAIChatV1,
 		llmprotocol.OpenAIChatV1,
@@ -128,7 +164,15 @@ func (client *HTTPPublicInferenceClient) Generate(
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("open Agent inference stream: %w", err)
+		return PublicInferenceObservation{}, fmt.Errorf("open Agent inference stream: %w", err)
+	}
+	var firstOutputAt *time.Time
+	emitObserved := func(event llmprotocol.Event) error {
+		if firstOutputAt == nil && publicInferenceOutputStarted(event) {
+			seenAt := now()
+			firstOutputAt = &seenAt
+		}
+		return emit(event)
 	}
 	buffer := make([]byte, 32<<10)
 	for {
@@ -136,32 +180,101 @@ func (client *HTTPPublicInferenceClient) Generate(
 		if count > 0 {
 			_, events, _, decodeErr := stream.Push(buffer[:count])
 			for _, event := range events {
-				if emitErr := emit(event); emitErr != nil {
-					return emitErr
+				if emitErr := emitObserved(event); emitErr != nil {
+					return PublicInferenceObservation{}, emitErr
 				}
 			}
 			if decodeErr != nil {
-				return fmt.Errorf("decode Agent inference stream: %w", decodeErr)
+				return PublicInferenceObservation{}, fmt.Errorf("decode Agent inference stream: %w", decodeErr)
 			}
 		}
 		if readErr != nil {
 			if !errors.Is(readErr, io.EOF) {
 				_, events, _, _ := stream.Finalize(readErr)
 				for _, event := range events {
-					_ = emit(event)
+					_ = emitObserved(event)
 				}
-				return fmt.Errorf("read Agent inference stream: %w", readErr)
+				return PublicInferenceObservation{}, fmt.Errorf("read Agent inference stream: %w", readErr)
 			}
 			break
 		}
 	}
 	_, events, _, err := stream.Finalize(nil)
 	for _, event := range events {
-		if emitErr := emit(event); emitErr != nil {
-			return emitErr
+		if emitErr := emitObserved(event); emitErr != nil {
+			return PublicInferenceObservation{}, emitErr
 		}
 	}
-	return err
+	if err != nil {
+		return PublicInferenceObservation{}, err
+	}
+	completedAt := now()
+	observation.LatencyMilliseconds = nonNegativeMilliseconds(completedAt.Sub(startedAt))
+	if firstOutputAt != nil {
+		ttft := nonNegativeMilliseconds(firstOutputAt.Sub(startedAt))
+		if ttft > observation.LatencyMilliseconds {
+			ttft = observation.LatencyMilliseconds
+		}
+		observation.TTFTMilliseconds = &ttft
+	}
+	return observation, nil
+}
+
+func publicInferenceObservationFromHeaders(
+	values http.Header, requestID string,
+) PublicInferenceObservation {
+	return PublicInferenceObservation{
+		RequestID:         requestID,
+		SelectedRecipe:    publicInferenceMetadataValue(values.Get(headers.VSRSelectedRecipe)),
+		SelectedDecision:  publicInferenceMetadataValue(values.Get(headers.VSRSelectedDecision)),
+		SelectedModel:     publicInferenceMetadataValue(values.Get(headers.VSRSelectedModel)),
+		SelectedAlgorithm: publicInferenceMetadataValue(values.Get(headers.VSRSelectedAlgorithm)),
+		ResponsePath:      publicInferenceResponsePath(values.Get(headers.VSRResponsePath)),
+	}
+}
+
+func publicInferenceMetadataValue(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" || len(value) > maximumPublicInferenceMetadataBytes || !utf8.ValidString(value) {
+		return ""
+	}
+	for _, character := range value {
+		if unicode.IsControl(character) || !unicode.IsGraphic(character) {
+			return ""
+		}
+	}
+	return value
+}
+
+func publicInferenceResponsePath(value string) string {
+	value = publicInferenceMetadataValue(value)
+	switch value {
+	case headers.ResponsePathUpstream, headers.ResponsePathCache, headers.ResponsePathFastResponse,
+		headers.ResponsePathLooper, headers.ResponsePathImageGeneration:
+		return value
+	default:
+		return ""
+	}
+}
+
+func publicInferenceOutputStarted(event llmprotocol.Event) bool {
+	switch event.Type {
+	case llmprotocol.EventOutputTextDelta, llmprotocol.EventReasoningDelta:
+		return event.Delta != ""
+	case llmprotocol.EventToolCallDelta:
+		return event.ToolCall != nil
+	case llmprotocol.EventOutputItemStarted:
+		return event.ToolCall != nil || event.Content != nil
+	default:
+		return false
+	}
+}
+
+func nonNegativeMilliseconds(value time.Duration) int64 {
+	if value <= 0 {
+		return 0
+	}
+	return value.Milliseconds()
 }
 
 func normalizePublicInferenceEndpoint(raw string) (string, error) {

@@ -3,7 +3,6 @@ package managementcomposition
 import (
 	"fmt"
 	"reflect"
-	"slices"
 	"strings"
 
 	"gopkg.in/yaml.v2"
@@ -14,7 +13,6 @@ import (
 )
 
 type v03RoutingManifestCodec struct {
-	parser   *config.Parser
 	compiler providercatalog.AuthoringCompiler
 }
 
@@ -23,7 +21,7 @@ func newV03RoutingManifestCodec(registry *providercatalog.Registry) (*v03Routing
 		return nil, fmt.Errorf("routing manifest Provider Integration registry is required")
 	}
 	compiler := providercatalog.AuthoringCompiler{Registry: registry}
-	return &v03RoutingManifestCodec{parser: config.NewParser(compiler), compiler: compiler}, nil
+	return &v03RoutingManifestCodec{compiler: compiler}, nil
 }
 
 func mustRoutingManifestCodec(registry *providercatalog.Registry) *v03RoutingManifestCodec {
@@ -35,45 +33,26 @@ func mustRoutingManifestCodec(registry *providercatalog.Registry) *v03RoutingMan
 }
 
 func (codec *v03RoutingManifestCodec) Decode(document []byte) (*routingsnapshot.Snapshot, error) {
-	if codec == nil || codec.parser == nil {
-		return nil, fmt.Errorf("routing manifest codec is unavailable")
-	}
-	if _, err := decodeRoutingManifestSource(document); err != nil {
-		return nil, err
-	}
-	parsed, err := codec.parser.ParseYAMLBytesWithoutEnvExpansion(document)
-	if err != nil {
-		return nil, err
-	}
-	if parsed.RoutingSnapshot == nil {
-		return nil, fmt.Errorf("v0.3 routing manifest has no complete routing closure")
-	}
-	return parsed.RoutingSnapshot, nil
-}
-
-func (codec *v03RoutingManifestCodec) CredentialIDs(document []byte) ([]string, error) {
-	if codec == nil {
+	if codec == nil || codec.compiler.Registry == nil {
 		return nil, fmt.Errorf("routing manifest codec is unavailable")
 	}
 	source, err := decodeRoutingManifestSource(document)
 	if err != nil {
 		return nil, err
 	}
-	var ids []string
-	for _, model := range source.Providers.Models {
-		for _, backend := range model.BackendRefs {
-			if backend.Credential != "" {
-				ids = append(ids, backend.Credential)
-			}
-		}
+	snapshot, err := config.CompileFileRoutingSnapshot(source, codec.compiler)
+	if err != nil {
+		return nil, err
 	}
-	slices.Sort(ids)
-	return slices.Compact(ids), nil
+	if snapshot == nil || len(snapshot.Models) == 0 || len(snapshot.Recipes) == 0 || len(snapshot.Entrypoints) == 0 {
+		return nil, fmt.Errorf("v0.3 routing manifest has no complete routing closure")
+	}
+	return snapshot, nil
 }
 
 func decodeRoutingManifestSource(document []byte) (config.CanonicalConfig, error) {
 	var source config.CanonicalConfig
-	if err := yaml.UnmarshalStrict(document, &source); err != nil {
+	if err := config.DecodeYAML12Strict(document, &source); err != nil {
 		return config.CanonicalConfig{}, fmt.Errorf("decode strict v0.3 routing manifest: %w", err)
 	}
 	if source.Version != "v0.3" || len(source.Listeners) != 0 || !routingOnlyGlobal(source.Global) {

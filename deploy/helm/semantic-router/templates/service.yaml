@@ -109,7 +109,9 @@ metadata:
     {{- include "semantic-router.labels" . | nindent 4 }}
     service: metrics
 spec:
-  type: {{ .Values.service.type }}
+  # Metrics remain private even when the public inference Service is a
+  # LoadBalancer or NodePort. Monitoring systems can select this ClusterIP.
+  type: ClusterIP
   ports:
   - port: {{ .Values.service.metrics.port }}
     targetPort: {{ .Values.service.metrics.targetPort }}

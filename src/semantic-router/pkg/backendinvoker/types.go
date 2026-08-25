@@ -37,7 +37,6 @@ type FallbackTrigger string
 
 const (
 	FallbackUnavailable FallbackTrigger = "unavailable"
-	FallbackOverloaded  FallbackTrigger = "overloaded"
 	FallbackTimeout     FallbackTrigger = "timeout"
 )
 

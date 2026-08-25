@@ -32,6 +32,13 @@ WHERE b.namespace_id=$1 AND ($2='' OR b.policy_id=NULLIF($2,'')::uuid)
   AND ($6 OR b.policy_id=ANY($7::uuid[]))
   AND ($8::timestamptz IS NULL OR b.created_at < $8 OR (b.created_at=$8 AND b.id > $9::uuid))
 ORDER BY b.created_at DESC, b.id ASC LIMIT $10`
+	countFilteredManagedAccessBindingsQuery = `SELECT count(*)
+FROM access_policy_bindings b
+JOIN access_subjects s ON s.namespace_id=b.namespace_id AND s.id=b.subject_id
+WHERE b.namespace_id=$1 AND ($2='' OR b.policy_id=NULLIF($2,'')::uuid)
+  AND ($3='' OR s.kind=$3) AND (NULLIF($4,'')::uuid IS NULL OR b.subject_id=NULLIF($4,'')::uuid)
+  AND ($5='' OR b.status=$5)
+  AND ($6 OR b.policy_id=ANY($7::uuid[]))`
 	lockManagedAccessBindingQuery   = getManagedAccessBindingQuery + ` FOR UPDATE OF b`
 	insertManagedAccessBindingQuery = `INSERT INTO access_policy_bindings
   (id,namespace_id,policy_id,subject_id,status,revision,created_at,updated_at)
@@ -56,6 +63,13 @@ WHERE b.namespace_id=$1 AND ($2='' OR b.policy_id=NULLIF($2,'')::uuid)
   AND ($7 OR b.policy_id=ANY($8::uuid[]))
   AND ($9::timestamptz IS NULL OR b.created_at < $9 OR (b.created_at=$9 AND b.id > $10::uuid))
 ORDER BY b.created_at DESC, b.id ASC LIMIT $11`
+	countFilteredManagedRateBindingsQuery = `SELECT count(*)
+FROM rate_limit_bindings b
+JOIN access_subjects s ON s.namespace_id=b.namespace_id AND s.id=b.subject_id
+WHERE b.namespace_id=$1 AND ($2='' OR b.policy_id=NULLIF($2,'')::uuid)
+  AND ($3='' OR s.kind=$3) AND (NULLIF($4,'')::uuid IS NULL OR b.subject_id=NULLIF($4,'')::uuid)
+  AND ($5='' OR b.status=$5) AND ($6='' OR b.binding_mode=$6)
+  AND ($7 OR b.policy_id=ANY($8::uuid[]))`
 	lockManagedRateBindingQuery   = getManagedRateBindingQuery + ` FOR UPDATE OF b`
 	insertManagedRateBindingQuery = `INSERT INTO rate_limit_bindings
   (id,namespace_id,policy_id,subject_id,binding_mode,quota_partition_id,
@@ -107,10 +121,14 @@ func (s *Store) ListManagedAccessBindings(
 		return policymanagement.RepositoryPage[policymanagement.AccessPolicyBinding]{}, policymanagement.ErrInvalidRequest
 	}
 	if !query.Scope.All && len(query.Scope.IDs(accesscontrol.ScopeResourceAccessPolicy)) == 0 {
-		return policymanagement.RepositoryPage[policymanagement.AccessPolicyBinding]{Items: []policymanagement.AccessPolicyBinding{}}, nil
+		return emptyManagedBindingPage[policymanagement.AccessPolicyBinding](query.IncludeTotal), nil
 	}
 	afterTime, afterID := managedPolicyCursorArgs(query.After)
 	subjectType, subjectID := managedSubjectArgs(query.Subject)
+	totalCount, err := s.countManagedAccessBindings(ctx, query, subjectType, subjectID)
+	if err != nil {
+		return policymanagement.RepositoryPage[policymanagement.AccessPolicyBinding]{}, err
+	}
 	rows, err := s.db.QueryContext(ctx, listManagedAccessBindingsQuery, query.NamespaceID,
 		query.PolicyID, subjectType, subjectID, query.Status, query.Scope.All,
 		pq.Array(query.Scope.IDs(accesscontrol.ScopeResourceAccessPolicy)),
@@ -130,7 +148,9 @@ func (s *Store) ListManagedAccessBindings(
 	if err := rows.Err(); err != nil {
 		return policymanagement.RepositoryPage[policymanagement.AccessPolicyBinding]{}, fmt.Errorf("read AccessPolicy binding page: %w", err)
 	}
-	return trimManagedPage(items, query.Limit), nil
+	page := trimManagedPage(items, query.Limit)
+	page.TotalCount = totalCount
+	return page, nil
 }
 
 func (s *Store) CreateManagedAccessBinding(
@@ -272,10 +292,14 @@ func (s *Store) ListManagedRateBindings(
 		return policymanagement.RepositoryPage[policymanagement.RateLimitBinding]{}, policymanagement.ErrInvalidRequest
 	}
 	if !query.Scope.All && len(query.Scope.IDs(accesscontrol.ScopeResourceRateLimitPolicy)) == 0 {
-		return policymanagement.RepositoryPage[policymanagement.RateLimitBinding]{Items: []policymanagement.RateLimitBinding{}}, nil
+		return emptyManagedBindingPage[policymanagement.RateLimitBinding](query.IncludeTotal), nil
 	}
 	afterTime, afterID := managedPolicyCursorArgs(query.After)
 	subjectType, subjectID := managedSubjectArgs(query.Subject)
+	totalCount, err := s.countManagedRateBindings(ctx, query, subjectType, subjectID)
+	if err != nil {
+		return policymanagement.RepositoryPage[policymanagement.RateLimitBinding]{}, err
+	}
 	rows, err := s.db.QueryContext(ctx, listManagedRateBindingsQuery, query.NamespaceID,
 		query.PolicyID, subjectType, subjectID, query.Status, query.Mode,
 		query.Scope.All,
@@ -296,7 +320,60 @@ func (s *Store) ListManagedRateBindings(
 	if err := rows.Err(); err != nil {
 		return policymanagement.RepositoryPage[policymanagement.RateLimitBinding]{}, fmt.Errorf("read RateLimit binding page: %w", err)
 	}
-	return trimManagedPage(items, query.Limit), nil
+	page := trimManagedPage(items, query.Limit)
+	page.TotalCount = totalCount
+	return page, nil
+}
+
+func emptyManagedBindingPage[T any](includeTotal bool) policymanagement.RepositoryPage[T] {
+	page := policymanagement.RepositoryPage[T]{Items: []T{}}
+	if includeTotal {
+		count := uint64(0)
+		page.TotalCount = &count
+	}
+	return page
+}
+
+func (s *Store) countManagedAccessBindings(
+	ctx context.Context,
+	query policymanagement.BindingQuery,
+	subjectType, subjectID any,
+) (*uint64, error) {
+	if !query.IncludeTotal {
+		return nil, nil
+	}
+	var count int64
+	if err := s.db.QueryRowContext(ctx, countFilteredManagedAccessBindingsQuery, query.NamespaceID,
+		query.PolicyID, subjectType, subjectID, query.Status, query.Scope.All,
+		pq.Array(query.Scope.IDs(accesscontrol.ScopeResourceAccessPolicy))).Scan(&count); err != nil {
+		return nil, fmt.Errorf("count AccessPolicy bindings: %w", err)
+	}
+	return managedBindingCount(count)
+}
+
+func (s *Store) countManagedRateBindings(
+	ctx context.Context,
+	query policymanagement.BindingQuery,
+	subjectType, subjectID any,
+) (*uint64, error) {
+	if !query.IncludeTotal {
+		return nil, nil
+	}
+	var count int64
+	if err := s.db.QueryRowContext(ctx, countFilteredManagedRateBindingsQuery, query.NamespaceID,
+		query.PolicyID, subjectType, subjectID, query.Status, query.Mode, query.Scope.All,
+		pq.Array(query.Scope.IDs(accesscontrol.ScopeResourceRateLimitPolicy))).Scan(&count); err != nil {
+		return nil, fmt.Errorf("count RateLimit bindings: %w", err)
+	}
+	return managedBindingCount(count)
+}
+
+func managedBindingCount(value int64) (*uint64, error) {
+	if value < 0 {
+		return nil, errors.New("policy binding count is negative")
+	}
+	count := uint64(value)
+	return &count, nil
 }
 
 func (s *Store) CreateManagedRateBinding(

@@ -14,6 +14,7 @@ type DelegationReadService interface {
 	GetKey(context.Context, string, string) (accesscontrol.APIKey, error)
 	GetSession(context.Context, string, string) (delegationmanagement.Session, error)
 	ListEligibleKeys(context.Context, delegationmanagement.ListRequest) (delegationmanagement.ResultPage[delegationmanagement.EligibleKey], error)
+	GetEligibleKey(context.Context, delegationmanagement.EligibleKeyRequest) (delegationmanagement.EligibleKey, error)
 }
 
 type DelegationMutationService interface {

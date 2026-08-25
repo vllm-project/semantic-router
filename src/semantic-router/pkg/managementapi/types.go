@@ -4,7 +4,6 @@ import "time"
 
 const (
 	APIVersion                = "v1"
-	ContractVersion           = "0.4"
 	BasePath                  = "/management/v1"
 	JSONMediaType             = "application/vnd.vllm-semantic-router.management.v1+json"
 	YAMLMediaType             = "application/yaml"
@@ -54,6 +53,10 @@ type PageInfo struct {
 	NextCursor string `json:"nextCursor,omitempty"`
 	HasMore    bool   `json:"hasMore"`
 	PageSize   int    `json:"pageSize"`
+	// TotalCount is returned only when the collection request opts into an
+	// authoritative count. Keeping it optional avoids an unconditional COUNT
+	// query on high-cardinality Management collections.
+	TotalCount *WholeQuantity `json:"totalCount,omitempty"`
 }
 
 type IdempotencyMetadata struct {

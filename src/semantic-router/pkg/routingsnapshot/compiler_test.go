@@ -289,10 +289,10 @@ func TestCompileRejectsInvalidPriorityFallback(t *testing.T) {
 			set.Fallback = &FallbackPolicy{Strategy: "priority", On: []string{"unavailable"}}
 			bundle.Entrypoints[0].Rules[0].Assignments["dec-simple"] = set
 		},
-		"unknown trigger": func(bundle *Bundle) {
+		"response-only overload trigger": func(bundle *Bundle) {
 			set := bundle.Entrypoints[0].Rules[0].Assignments["dec-simple"]
 			set.Models = append(set.Models, Assignment{ModelID: "mdl-frontier", ModelRevision: 2, Priority: 1, LoRAName: "code"})
-			set.Fallback = &FallbackPolicy{Strategy: "priority", On: []string{"server_error"}}
+			set.Fallback = &FallbackPolicy{Strategy: "priority", On: []string{"overloaded"}}
 			bundle.Entrypoints[0].Rules[0].Assignments["dec-simple"] = set
 		},
 		"multi dispatch": func(bundle *Bundle) {

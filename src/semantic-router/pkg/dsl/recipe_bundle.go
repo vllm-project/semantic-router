@@ -60,8 +60,8 @@ func parseRecipeAuthoringYAML(data []byte) (*config.RouterConfig, error) {
 }
 
 func recipeAuthoringFields(data []byte) ([]string, error) {
-	var raw map[string]interface{}
-	if err := yaml.Unmarshal(data, &raw); err != nil {
+	raw, err := config.ParseYAML12Mapping(data)
+	if err != nil {
 		return nil, fmt.Errorf("decode Recipe authoring YAML: %w", err)
 	}
 	fields := make([]string, 0, len(raw))
@@ -95,7 +95,7 @@ func parseRoutingFragmentYAML(data []byte) (*config.RouterConfig, error) {
 // shape can carry deployment or publication state.
 func parseRecipeBundleYAML(data []byte) (*config.RouterConfig, error) {
 	var source recipeBundle
-	if err := yaml.UnmarshalStrict(data, &source); err != nil {
+	if err := config.DecodeYAML12Strict(data, &source); err != nil {
 		return nil, fmt.Errorf("decode Recipe bundle: %w", err)
 	}
 	if source.Version != "" && source.Version != "v0.3" {

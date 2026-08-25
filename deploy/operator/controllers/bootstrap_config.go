@@ -96,91 +96,138 @@ func validateBootstrapManifest(data []byte) (bootstrapDeploymentContract, error)
 		return bootstrapDeploymentContract{}, err
 	}
 
-	global := mappingNode(root, "global")
 	digest := sha256.Sum256(data)
 	contract := bootstrapDeploymentContract{
 		Revision:            fmt.Sprintf("sha256:%x", digest),
 		ManagementPort:      DefaultAPIPort,
 		BackendDispatchPort: DefaultBackendDispatchPort,
 	}
+	global := mappingNode(root, "global")
+	if err := configureBootstrapStores(global, &contract); err != nil {
+		return bootstrapDeploymentContract{}, err
+	}
+	if err := configureBootstrapServices(global, &contract); err != nil {
+		return bootstrapDeploymentContract{}, err
+	}
+	return contract, nil
+}
+
+func configureBootstrapStores(global *yaml.Node, contract *bootstrapDeploymentContract) error {
 	stores := mappingNode(global, "stores")
 	managementStore := mappingNode(stores, "management")
 	runtimeStore := mappingNode(stores, "runtime")
 	contract.ManagementStore = managementStore != nil
 	contract.RuntimeStore = runtimeStore != nil
-	if contract.ManagementStore {
-		postgres := mappingNode(managementStore, "postgres")
-		if postgres == nil {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.management requires postgres")
-		}
-		contract.PostgresDSNEnv = strings.TrimSpace(mappingScalar(postgres, "dsn_env"))
-		contract.PostgresDSNFile = strings.TrimSpace(mappingScalar(postgres, "dsn_file"))
-		if (contract.PostgresDSNEnv == "") == (contract.PostgresDSNFile == "") {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.management.postgres requires exactly one dsn_env or dsn_file")
-		}
-		if contract.PostgresDSNFile != "" && !strings.HasPrefix(contract.PostgresDSNFile, "/") {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.management.postgres.dsn_file must be an absolute path")
-		}
+	if err := configureManagementStore(managementStore, contract); err != nil {
+		return err
 	}
-	if contract.RuntimeStore {
-		redis := mappingNode(runtimeStore, "redis")
-		if redis == nil {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime requires redis")
-		}
-		urlEnv := strings.TrimSpace(mappingScalar(redis, "url_env"))
-		urlFile := strings.TrimSpace(mappingScalar(redis, "url_file"))
-		if (urlEnv == "") == (urlFile == "") {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime.redis requires exactly one url_env or url_file")
-		}
-		if urlFile != "" && !strings.HasPrefix(urlFile, "/") {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime.redis.url_file must be an absolute path")
-		}
-		if !contract.ManagementStore {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.stores.runtime requires global.stores.management")
-		}
-	}
+	return validateRuntimeStore(runtimeStore, contract.ManagementStore)
+}
 
+func configureManagementStore(
+	managementStore *yaml.Node,
+	contract *bootstrapDeploymentContract,
+) error {
+	if managementStore == nil {
+		return nil
+	}
+	postgres := mappingNode(managementStore, "postgres")
+	if postgres == nil {
+		return fmt.Errorf("global.stores.management requires postgres")
+	}
+	contract.PostgresDSNEnv = strings.TrimSpace(mappingScalar(postgres, "dsn_env"))
+	contract.PostgresDSNFile = strings.TrimSpace(mappingScalar(postgres, "dsn_file"))
+	if (contract.PostgresDSNEnv == "") == (contract.PostgresDSNFile == "") {
+		return fmt.Errorf("global.stores.management.postgres requires exactly one dsn_env or dsn_file")
+	}
+	if contract.PostgresDSNFile != "" && !strings.HasPrefix(contract.PostgresDSNFile, "/") {
+		return fmt.Errorf("global.stores.management.postgres.dsn_file must be an absolute path")
+	}
+	return nil
+}
+
+func validateRuntimeStore(runtimeStore *yaml.Node, managementStoreConfigured bool) error {
+	if runtimeStore == nil {
+		return nil
+	}
+	redis := mappingNode(runtimeStore, "redis")
+	if redis == nil {
+		return fmt.Errorf("global.stores.runtime requires redis")
+	}
+	urlEnv := strings.TrimSpace(mappingScalar(redis, "url_env"))
+	urlFile := strings.TrimSpace(mappingScalar(redis, "url_file"))
+	if (urlEnv == "") == (urlFile == "") {
+		return fmt.Errorf("global.stores.runtime.redis requires exactly one url_env or url_file")
+	}
+	if urlFile != "" && !strings.HasPrefix(urlFile, "/") {
+		return fmt.Errorf("global.stores.runtime.redis.url_file must be an absolute path")
+	}
+	if !managementStoreConfigured {
+		return fmt.Errorf("global.stores.runtime requires global.stores.management")
+	}
+	return nil
+}
+
+func configureBootstrapServices(global *yaml.Node, contract *bootstrapDeploymentContract) error {
 	services := mappingNode(global, "services")
-	managementAPI := mappingNode(services, "management_api")
+	if err := configureManagementAPI(mappingNode(services, "management_api"), contract); err != nil {
+		return err
+	}
+	if err := configureAccessService(mappingNode(services, "access"), contract); err != nil {
+		return err
+	}
+	return configureBackendDispatchService(mappingNode(services, "backend_dispatch"), contract)
+}
+
+func configureManagementAPI(managementAPI *yaml.Node, contract *bootstrapDeploymentContract) error {
 	managementEnabled, err := mappingBool(managementAPI, "enabled", false)
 	if err != nil {
-		return bootstrapDeploymentContract{}, fmt.Errorf("global.services.management_api.enabled: %w", err)
+		return fmt.Errorf("global.services.management_api.enabled: %w", err)
 	}
 	contract.ManagementAPIEnabled = managementEnabled
-	if contract.ManagementAPIEnabled {
-		if !contract.ManagementStore {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.services.management_api.enabled requires global.stores.management")
-		}
+	if contract.ManagementAPIEnabled && !contract.ManagementStore {
+		return fmt.Errorf("global.services.management_api.enabled requires global.stores.management")
 	}
 	// The same HTTP listener serves operational probes even when versioned
 	// Management routes are disabled. Its port therefore comes from the
 	// listener configuration whenever durable routing owns that surface; TLS
 	// remains gated by ManagementAPIEnabled.
-	if contract.ManagementStore {
-		managementPort, err := mappingPort(managementAPI, "port", DefaultAPIPort)
-		if err != nil {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.services.management_api.port: %w", err)
-		}
-		contract.ManagementPort = managementPort
+	if !contract.ManagementStore {
+		return nil
 	}
-	access := mappingNode(services, "access")
+	managementPort, err := mappingPort(managementAPI, "port", DefaultAPIPort)
+	if err != nil {
+		return fmt.Errorf("global.services.management_api.port: %w", err)
+	}
+	contract.ManagementPort = managementPort
+	return nil
+}
+
+func configureAccessService(access *yaml.Node, contract *bootstrapDeploymentContract) error {
 	accessEnabled, err := mappingBool(access, "enabled", false)
 	if err != nil {
-		return bootstrapDeploymentContract{}, fmt.Errorf("global.services.access.enabled: %w", err)
+		return fmt.Errorf("global.services.access.enabled: %w", err)
 	}
 	contract.AccessEnabled = accessEnabled
 	if contract.AccessEnabled && (!contract.ManagementStore || !contract.RuntimeStore) {
-		return bootstrapDeploymentContract{}, fmt.Errorf("global.services.access.enabled requires management and runtime stores")
+		return fmt.Errorf("global.services.access.enabled requires management and runtime stores")
 	}
-	if contract.usesBackendDispatch() {
-		backendDispatch := mappingNode(services, "backend_dispatch")
-		backendDispatchPort, err := mappingPort(backendDispatch, "port", DefaultBackendDispatchPort)
-		if err != nil {
-			return bootstrapDeploymentContract{}, fmt.Errorf("global.services.backend_dispatch.port: %w", err)
-		}
-		contract.BackendDispatchPort = backendDispatchPort
+	return nil
+}
+
+func configureBackendDispatchService(
+	backendDispatch *yaml.Node,
+	contract *bootstrapDeploymentContract,
+) error {
+	if !contract.usesBackendDispatch() {
+		return nil
 	}
-	return contract, nil
+	backendDispatchPort, err := mappingPort(backendDispatch, "port", DefaultBackendDispatchPort)
+	if err != nil {
+		return fmt.Errorf("global.services.backend_dispatch.port: %w", err)
+	}
+	contract.BackendDispatchPort = backendDispatchPort
+	return nil
 }
 
 func decodeBootstrapManifestRoot(data []byte) (*yaml.Node, error) {

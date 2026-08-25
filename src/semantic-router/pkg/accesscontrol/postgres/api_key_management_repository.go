@@ -41,6 +41,16 @@ WHERE namespace_id = $1
   AND ($10::timestamptz IS NULL OR created_at < $10 OR (created_at = $10 AND id > $11::uuid))
 ORDER BY created_at DESC, id ASC
 LIMIT $12`
+	managementCountAPIKeysQuery = `SELECT count(*)
+FROM access_api_keys
+WHERE namespace_id = $1
+  AND ($2 = '' OR CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2)
+  AND ($3 = '' OR ($3 = 'user' AND owner_user_id = $4::uuid)
+                OR ($3 = 'team' AND owner_team_id = $4::uuid))
+  AND ($5 OR id = ANY($6::uuid[]) OR owner_user_id = ANY($7::uuid[])
+          OR owner_team_id = ANY($8::uuid[]))`
+	managementCountSearchedAPIKeysQuery = managementCountAPIKeysQuery + `
+  AND (lower(name) LIKE $9 ESCAPE E'\\' OR id::text LIKE $9 ESCAPE E'\\')`
 	managementListCredentialsQuery = `SELECT ` + credentialColumns + `
 FROM access_api_key_credentials
 WHERE namespace_id = $1 AND api_key_id = $2
@@ -172,7 +182,11 @@ func (adapter *apiKeyRepositoryAdapter) ListKeys(ctx context.Context, query apik
 	}
 	if !query.Scope.All && len(query.Scope.APIKeyIDs) == 0 &&
 		len(query.Scope.UserIDs) == 0 && len(query.Scope.TeamIDs) == 0 {
-		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{Items: []accesscontrol.APIKey{}}, nil
+		return emptyAPIKeyRepositoryPage(query.IncludeTotal), nil
+	}
+	totalCount, err := adapter.countKeys(ctx, query)
+	if err != nil {
+		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, err
 	}
 	var afterTime any
 	afterID := "00000000-0000-0000-0000-000000000000"
@@ -213,7 +227,49 @@ func (adapter *apiKeyRepositoryAdapter) ListKeys(ctx context.Context, query apik
 	if hasMore {
 		items = items[:query.Limit]
 	}
-	return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{Items: items, HasMore: hasMore}, nil
+	return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{
+		Items: items, HasMore: hasMore, TotalCount: totalCount,
+	}, nil
+}
+
+func emptyAPIKeyRepositoryPage(includeTotal bool) apikeymanagement.RepositoryPage[accesscontrol.APIKey] {
+	page := apikeymanagement.RepositoryPage[accesscontrol.APIKey]{Items: []accesscontrol.APIKey{}}
+	if includeTotal {
+		count := uint64(0)
+		page.TotalCount = &count
+	}
+	return page
+}
+
+func (adapter *apiKeyRepositoryAdapter) countKeys(
+	ctx context.Context,
+	query apikeymanagement.KeyQuery,
+) (*uint64, error) {
+	if !query.IncludeTotal {
+		return nil, nil
+	}
+	var ownerID any
+	if query.OwnerID != "" {
+		ownerID = query.OwnerID
+	}
+	arguments := []any{
+		query.NamespaceID, query.Status, query.OwnerKind, ownerID, query.Scope.All,
+		pq.Array(query.Scope.APIKeyIDs), pq.Array(query.Scope.UserIDs), pq.Array(query.Scope.TeamIDs),
+	}
+	statement := managementCountAPIKeysQuery
+	if query.Search != "" {
+		statement = managementCountSearchedAPIKeysQuery
+		arguments = append(arguments, managementsearch.PrefixPattern(query.Search))
+	}
+	var count int64
+	if err := adapter.store.db.QueryRowContext(ctx, statement, arguments...).Scan(&count); err != nil {
+		return nil, fmt.Errorf("count API keys: %w", err)
+	}
+	if count < 0 {
+		return nil, errors.New("API key count is negative")
+	}
+	result := uint64(count)
+	return &result, nil
 }
 
 func (adapter *apiKeyRepositoryAdapter) CreateKey(ctx context.Context, mutation apikeymanagement.CreateMutation) (apikeymanagement.MutationResult, error) {

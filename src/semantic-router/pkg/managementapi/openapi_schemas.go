@@ -23,6 +23,7 @@ var canonicalSchemaCatalog = map[string]JSONSchema{
 	"Page": objectSchema([]string{"data", "page"}, map[string]JSONSchema{"data": arraySchema(openObjectSchema), "page": refSchema("PageInfo")}),
 	"PageInfo": objectSchema([]string{"hasMore", "pageSize"}, map[string]JSONSchema{
 		"nextCursor": stringSchema, "hasMore": {Type: "boolean"}, "pageSize": boundedIntegerSchema(1, 200),
+		"totalCount": whole,
 	}),
 	"RevisionState": objectSchema([]string{"desiredRevision", "appliedRevision"}, map[string]JSONSchema{
 		"desiredRevision": {Type: "integer", Format: "int64"}, "stagedRevision": {Type: "integer", Format: "int64"},
@@ -103,7 +104,10 @@ var canonicalSchemaCatalog = map[string]JSONSchema{
 	}),
 	"ProviderInterface": objectSchema([]string{"id", "label", "default", "capabilities"}, map[string]JSONSchema{
 		"id": stringSchema, "label": stringSchema, "default": {Type: "boolean"},
-		"capabilities": arraySchema(stringSchema),
+		"capabilities": {
+			Type: "array", Items: schemaPointer(stringSchema),
+			Description: "Transport features carried by this interface; not Model capability metadata.",
+		},
 	}),
 	"ProviderCatalogItem": objectSchema([]string{
 		"providerId", "revision", "display", "credential",
@@ -112,7 +116,11 @@ var canonicalSchemaCatalog = map[string]JSONSchema{
 		"providerId": stringSchema, "revision": stringSchema,
 		"display":    refSchema("ProviderCatalogDisplay"),
 		"credential": refSchema("ProviderCredentialPrompt"), "origin": refSchema("ProviderOriginPrompt"),
-		"discoverySupported": {Type: "boolean"}, "capabilities": arraySchema(stringSchema),
+		"discoverySupported": {Type: "boolean"},
+		"capabilities": {
+			Type: "array", Items: schemaPointer(stringSchema),
+			Description: "Provider transport features used for catalog filtering; never inherited by Models.",
+		},
 		"connectionFields": arraySchema(refSchema("ProviderConnectionField")),
 		"interfaces":       arraySchema(refSchema("ProviderInterface")),
 	}),
@@ -128,9 +136,13 @@ var canonicalSchemaCatalog = map[string]JSONSchema{
 		"connectionFields": openObjectSchema, "search": stringSchema,
 		"pageSize": boundedIntegerSchema(1, 200), "cursor": stringSchema,
 	}),
-	"DiscoveredModel": objectSchema([]string{"catalogItemId", "providerModelId", "displayName", "capabilities"}, map[string]JSONSchema{
+	"DiscoveredModel": objectSchema([]string{"catalogItemId", "providerModelId", "displayName"}, map[string]JSONSchema{
 		"catalogItemId": stringSchema, "providerModelId": stringSchema,
-		"displayName": stringSchema, "capabilities": arraySchema(stringSchema),
+		"displayName": stringSchema,
+		"capabilities": {
+			Type: "array", Items: schemaPointer(stringSchema),
+			Description: "Model-specific capabilities present only when discovery provides authoritative evidence.",
+		},
 	}),
 	"DiscoverModelsPage": objectSchema([]string{"data", "page", "catalogRevision", "discoveryRevision", "expiresAt"}, map[string]JSONSchema{
 		"data": arraySchema(refSchema("DiscoveredModel")), "page": refSchema("PageInfo"),
@@ -220,10 +232,11 @@ var canonicalSchemaCatalog = map[string]JSONSchema{
 		"revision": {Type: "integer", Format: "int64"}, "createdAt": timestampSchema, "updatedAt": timestampSchema,
 		"teamName": stringSchema, "teamStatus": {Type: "string", Enum: []string{"active", "disabled"}},
 	}),
-	"TeamMember": objectSchema([]string{"teamId", "userId", "role", "status", "revision", "createdAt", "updatedAt", "displayName", "userStatus"}, map[string]JSONSchema{
+	"TeamMember": objectSchema([]string{"teamId", "userId", "role", "status", "revision", "createdAt", "updatedAt", "displayName", "email", "userStatus"}, map[string]JSONSchema{
 		"teamId": stringSchema, "userId": stringSchema, "role": stringSchema, "status": stringSchema,
 		"revision": {Type: "integer", Format: "int64"}, "createdAt": timestampSchema, "updatedAt": timestampSchema,
-		"displayName": stringSchema, "userStatus": {Type: "string", Enum: []string{"active", "disabled"}},
+		"displayName": stringSchema, "email": {Type: "string", Format: "email"},
+		"userStatus": {Type: "string", Enum: []string{"active", "disabled"}},
 	}),
 	"UserMembershipPage": objectSchema([]string{"data", "page"}, map[string]JSONSchema{
 		"data": arraySchema(refSchema("UserMembership")), "page": refSchema("PageInfo"),

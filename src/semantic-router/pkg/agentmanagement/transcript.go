@@ -7,6 +7,7 @@ import (
 	"io"
 	"sort"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -17,6 +18,9 @@ const (
 	maximumEventPayloadBytes     = 256 << 10
 	maximumInlineToolResultBytes = 64 << 10
 	maximumEventTextBytes        = 64 << 10
+	maximumModelStepLabelBytes   = 256
+	maximumModelStepDurationMS   = int64((24 * time.Hour) / time.Millisecond)
+	maximumModelStepTokens       = int64(1<<53 - 1)
 	minimumToolCredentialBytes   = 8
 )
 
@@ -68,6 +72,12 @@ func normalizeEventPayload(eventType EventType, raw json.RawMessage) (any, error
 			return EventAppend{}, fmt.Errorf("%w: Agent assistant delta is invalid", ErrInvalid)
 		}
 		value.Delta.Text = sanitizeTranscriptText(value.Delta.Text, maximumEventTextBytes)
+		return value, nil
+	case EventModelStepSummary:
+		value, err := decodeTranscript[ModelStepSummaryEvent](raw)
+		if err != nil || validateModelStepSummary(value) != nil {
+			return EventAppend{}, fmt.Errorf("%w: Agent model step summary is invalid", ErrInvalid)
+		}
 		return value, nil
 	case EventToolRequest:
 		value, err := decodeTranscript[ToolRequestEvent](raw)
@@ -171,6 +181,87 @@ func validateAssistantDelta(delta AssistantDelta) error {
 		return ErrInvalid
 	}
 	return nil
+}
+
+func validateModelStepSummary(value ModelStepSummaryEvent) error {
+	if uuid.Validate(value.ModelStepID) != nil ||
+		!validModelStepLabel(value.RequestID, true) ||
+		!validModelStepLabel(value.SelectedRecipe, false) ||
+		!validModelStepLabel(value.SelectedDecision, false) ||
+		!validModelStepLabel(value.SelectedModel, false) ||
+		!validModelStepLabel(value.SelectedAlgorithm, false) ||
+		(value.ResponsePath != "" && !validModelStepResponsePath(value.ResponsePath)) ||
+		value.LatencyMilliseconds < 0 || value.LatencyMilliseconds > maximumModelStepDurationMS ||
+		(value.TTFTMilliseconds != nil && (*value.TTFTMilliseconds < 0 ||
+			*value.TTFTMilliseconds > value.LatencyMilliseconds)) {
+		return ErrInvalid
+	}
+	if value.Usage != nil && validateModelStepUsage(*value.Usage) != nil {
+		return ErrInvalid
+	}
+	return nil
+}
+
+func validModelStepLabel(value string, required bool) bool {
+	if value == "" {
+		return !required
+	}
+	if !validTranscriptLabel(value, maximumModelStepLabelBytes) {
+		return false
+	}
+	for _, character := range value {
+		if unicode.IsControl(character) || !unicode.IsGraphic(character) {
+			return false
+		}
+	}
+	return true
+}
+
+func validModelStepResponsePath(value string) bool {
+	switch value {
+	case "upstream", "cache", "fast_response", "looper", "image_generation":
+		return true
+	default:
+		return false
+	}
+}
+
+func validateModelStepUsage(value ModelStepUsage) error {
+	if !validModelStepTokenCount(value.InputTokens) ||
+		!validModelStepTokenCount(value.OutputTokens) ||
+		!validModelStepTokenCount(value.TotalTokens) ||
+		value.InputTokens > maximumModelStepTokens-value.OutputTokens ||
+		value.TotalTokens != value.InputTokens+value.OutputTokens {
+		return ErrInvalid
+	}
+	for _, count := range []*int64{
+		value.InputUncachedTokens,
+		value.InputCacheReadTokens,
+		value.InputCacheWriteTokens,
+		value.OutputReasoningTokens,
+		value.OutputOtherTokens,
+	} {
+		if count != nil && !validModelStepTokenCount(*count) {
+			return ErrInvalid
+		}
+	}
+	for _, count := range []*int64{
+		value.InputUncachedTokens, value.InputCacheReadTokens, value.InputCacheWriteTokens,
+	} {
+		if count != nil && *count > value.InputTokens {
+			return ErrInvalid
+		}
+	}
+	for _, count := range []*int64{value.OutputReasoningTokens, value.OutputOtherTokens} {
+		if count != nil && *count > value.OutputTokens {
+			return ErrInvalid
+		}
+	}
+	return nil
+}
+
+func validModelStepTokenCount(value int64) bool {
+	return value >= 0 && value <= maximumModelStepTokens
 }
 
 func validateToolResultEvent(value ToolResultEvent) error {

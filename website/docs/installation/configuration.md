@@ -46,7 +46,7 @@ Keep these boundaries clear:
 - Entrypoints bind each Recipe decision to one or more Models.
 
 Model rates belong in each `providers.models[].pricing` block. Their common denomination
-belongs in one place:
+belongs in `global.billing.currency`:
 
 ```yaml
 global:
@@ -76,9 +76,10 @@ providers:
 
 `retry.count` is the number of additional attempts after the initial call and
 must be between 0 and 5. `retry.on` accepts Router evidence classes
-`unavailable`, `overloaded`, and `timeout`; when a positive count omits the list,
+`unavailable` and `timeout`; when a positive count omits the list,
 the default is `[unavailable]`. A retry starts only when the Router has proved
-that the failed attempt produced no client-visible output. Request and stream
+that no request or response bytes crossed the backend boundary. HTTP 429 and 503
+responses are terminal rather than assumed safe to repeat. Request and stream
 timeouts bound the whole physical dispatch, including its retries.
 
 When one Model has multiple `backend_refs`, each backend's existing `weight`

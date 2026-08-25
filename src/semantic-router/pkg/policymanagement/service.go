@@ -296,13 +296,13 @@ func (service *Service) ListAccessBindings(ctx context.Context, request ListBind
 		return Page[AccessPolicyBinding]{}, err
 	}
 	if policyResultScopeEmpty(request.Scope, accesscontrol.ScopeResourceAccessPolicy) {
-		return Page[AccessPolicyBinding]{Items: []AccessPolicyBinding{}, PageSize: pageSize}, nil
+		return emptyBindingPage[AccessPolicyBinding](pageSize, request.IncludeTotal), nil
 	}
 	page, err := service.repository.ListAccessBindings(ctx, query)
 	if err != nil {
 		return Page[AccessPolicyBinding]{}, err
 	}
-	return bindingPage(service.cursors, request, "access_policy_bindings", page.Items, page.HasMore, pageSize)
+	return bindingPage(service.cursors, request, "access_policy_bindings", page.Items, page.HasMore, pageSize, page.TotalCount)
 }
 
 func (service *Service) CreateAccessBinding(ctx context.Context, request CreateAccessBindingRequest) (MutationResult, error) {
@@ -367,13 +367,22 @@ func (service *Service) ListRateBindings(ctx context.Context, request ListBindin
 		return Page[RateLimitBinding]{}, err
 	}
 	if policyResultScopeEmpty(request.Scope, accesscontrol.ScopeResourceRateLimitPolicy) {
-		return Page[RateLimitBinding]{Items: []RateLimitBinding{}, PageSize: pageSize}, nil
+		return emptyBindingPage[RateLimitBinding](pageSize, request.IncludeTotal), nil
 	}
 	page, err := service.repository.ListRateBindings(ctx, query)
 	if err != nil {
 		return Page[RateLimitBinding]{}, err
 	}
-	return bindingPage(service.cursors, request, "rate_limit_bindings", page.Items, page.HasMore, pageSize)
+	return bindingPage(service.cursors, request, "rate_limit_bindings", page.Items, page.HasMore, pageSize, page.TotalCount)
+}
+
+func emptyBindingPage[T AccessPolicyBinding | RateLimitBinding](pageSize int, includeTotal bool) Page[T] {
+	page := Page[T]{Items: []T{}, PageSize: pageSize}
+	if includeTotal {
+		count := uint64(0)
+		page.TotalCount = &count
+	}
+	return page
 }
 
 func (service *Service) CreateRateBinding(ctx context.Context, request CreateRateBindingRequest) (MutationResult, error) {

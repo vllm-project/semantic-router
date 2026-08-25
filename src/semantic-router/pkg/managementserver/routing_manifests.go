@@ -26,17 +26,12 @@ func (routes *RoutingRoutes) importManifest(response http.ResponseWriter, reques
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Routing manifest is required.", requestID)
 		return
 	}
-	credentials, err := routes.service.ManifestCredentialIDs([]byte(body.Manifest))
+	prepared, err := routes.service.PrepareManifest(request.Context(), namespaceID, []byte(body.Manifest))
 	if err != nil {
 		writeRoutingDomainError(response, err, requestID, false)
 		return
 	}
-	for _, credentialID := range credentials {
-		if !canonicalUUID(credentialID) {
-			writeProviderError(response, http.StatusBadRequest, "invalid_request", "Routing manifest credential reference is invalid.", requestID)
-			return
-		}
-	}
+	credentials := prepared.CredentialIDs
 	targets := map[string][]accesscontrol.ScopedTarget{
 		"target": {routingNamespaceTarget(namespaceID)},
 	}
@@ -85,7 +80,7 @@ func (routes *RoutingRoutes) importManifest(response http.ResponseWriter, reques
 		boundCommand = &command
 	}
 	result, err := routes.service.ImportManifest(request.Context(), namespaceID, routingmanagement.ManifestImportRequest{
-		Document: []byte(body.Manifest), DryRun: body.DryRun, ExpectedRevision: revision,
+		Prepared: prepared, DryRun: body.DryRun, ExpectedRevision: revision,
 	}, routingMutationContext(session, requestID, "import routing manifest", boundCommand))
 	if err != nil {
 		writeRoutingDomainError(response, err, requestID, true)
@@ -105,8 +100,7 @@ func (routes *RoutingRoutes) exportCurrentManifest(response http.ResponseWriter,
 	_, err := routes.authorize(request.Context(), session, namespaceID,
 		routes.operation(managementapi.MethodGET, routingCurrentExportPath),
 		map[string][]accesscontrol.ScopedTarget{
-			"target":            {routingNamespaceTarget(namespaceID)},
-			"request_namespace": {routingNamespaceTarget(namespaceID)},
+			"target": {routingNamespaceTarget(namespaceID)},
 		}, nil)
 	if err != nil {
 		writeRoutingAuthorizationError(response, err, requestID, false)

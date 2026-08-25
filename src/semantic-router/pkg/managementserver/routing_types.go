@@ -68,7 +68,7 @@ type EntrypointManagementService interface {
 type RoutingManifestService interface {
 	ListSnapshots(context.Context, string, routingmanagement.SnapshotPageRequest) (routingmanagement.Page[routingmanagement.SnapshotMetadata], error)
 	GetSnapshot(context.Context, string, int64) (routingmanagement.SnapshotDetail, error)
-	ManifestCredentialIDs([]byte) ([]string, error)
+	PrepareManifest(context.Context, string, []byte) (routingmanagement.PreparedManifest, error)
 	ImportManifest(context.Context, string, routingmanagement.ManifestImportRequest, routingmanagement.MutationContext) (routingmanagement.ManifestImportResult, error)
 	ExportCurrentManifest(context.Context, string) ([]byte, int64, error)
 }

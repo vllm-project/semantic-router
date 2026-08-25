@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/delegationmanagement"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
 	commandpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand/postgres"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementsearch"
 )
 
 type delegationRepositoryAdapter struct{ store *Store }
@@ -95,6 +96,11 @@ WHERE k.namespace_id = $1 AND k.status = 'active' AND k.deleted_at IS NULL
        OR (k.owner_team_id IS NOT NULL AND p.allow_team_key_delegation
            AND t.status = 'active' AND m.status = 'active'))`
 
+const eligibleKeyList = eligibleKeySelect + `
+  AND ($3 = '' OR lower(k.name) LIKE $3 ESCAPE E'\\' OR k.id::text LIKE $3 ESCAPE E'\\')
+  AND ($4::timestamptz IS NULL OR k.created_at < $4 OR (k.created_at = $4 AND k.id > $5::uuid))
+ORDER BY k.created_at DESC, k.id ASC LIMIT $6`
+
 func (adapter *delegationRepositoryAdapter) ListEligibleKeys(
 	ctx context.Context, query delegationmanagement.EligibleKeyQuery,
 ) (delegationmanagement.Page[delegationmanagement.EligibleKey], error) {
@@ -103,9 +109,12 @@ func (adapter *delegationRepositoryAdapter) ListEligibleKeys(
 	if query.After != nil {
 		afterTime, afterID = query.After.CreatedAt, query.After.ID
 	}
-	rows, err := adapter.store.db.QueryContext(ctx, eligibleKeySelect+`
-  AND ($3::timestamptz IS NULL OR k.created_at < $3 OR (k.created_at = $3 AND k.id > $4::uuid))
-ORDER BY k.created_at DESC, k.id ASC LIMIT $5`, query.NamespaceID, query.PrincipalID, afterTime, afterID, query.Limit+1)
+	search := ""
+	if query.Search != "" {
+		search = managementsearch.PrefixPattern(query.Search)
+	}
+	rows, err := adapter.store.db.QueryContext(ctx, eligibleKeyList, query.NamespaceID, query.PrincipalID,
+		search, afterTime, afterID, query.Limit+1)
 	if err != nil {
 		return delegationmanagement.Page[delegationmanagement.EligibleKey]{}, fmt.Errorf("list eligible inference keys: %w", err)
 	}

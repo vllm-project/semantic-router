@@ -82,6 +82,10 @@ type EligibleInferenceKeyPage struct {
 	Page PageInfo               `json:"page"`
 }
 
+type EligibleInferenceKeyDetail struct {
+	Data EligibleInferenceKey `json:"data"`
+}
+
 type DelegatedInferenceSessionCreateRequest struct {
 	KeyID string `json:"keyId"`
 }

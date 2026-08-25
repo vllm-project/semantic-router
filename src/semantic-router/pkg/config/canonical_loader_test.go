@@ -63,7 +63,7 @@ func TestParseYAMLBytesRequiresExactV03Version(t *testing.T) {
 func TestParseYAMLBytesRejectsUnknownGlobalModulesField(t *testing.T) {
 	document := strictV03WithGlobal("  modules:\n    prompt_guard:\n      model_ref: prompt_guard\n")
 	_, err := testAuthoringParser(t).ParseYAMLBytes(document)
-	if err == nil || !strings.Contains(err.Error(), "field modules") {
+	if err == nil || !strings.Contains(err.Error(), "global") || !strings.Contains(err.Error(), "modules") {
 		t.Fatalf("expected global.modules rejection, got: %v", err)
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
@@ -57,6 +58,7 @@ func (routes *DelegationRoutes) Register(mux *http.ServeMux) {
 		panic("delegation Management routes and mux are required")
 	}
 	mux.Handle("GET "+selfInferenceKeysPath, routes)
+	mux.Handle("GET "+selfInferenceKeysPath+"/{keyId}", routes)
 	mux.Handle("GET "+selfInferenceSessionsPath, routes)
 	mux.Handle("POST "+selfInferenceSessionsPath, routes)
 	mux.Handle("DELETE "+selfInferenceSessionsPath+"/{sessionId}", routes)
@@ -77,6 +79,9 @@ func (routes *DelegationRoutes) ServeHTTP(response http.ResponseWriter, request 
 	switch {
 	case request.URL.Path == selfInferenceKeysPath && request.Method == http.MethodGet:
 		routes.listEligible(response, request, requestID)
+	case request.Method == http.MethodGet && request.PathValue("keyId") != "" &&
+		strings.HasPrefix(request.URL.Path, selfInferenceKeysPath+"/"):
+		routes.getEligible(response, request, requestID, request.PathValue("keyId"))
 	case request.URL.Path == selfInferenceSessionsPath && request.Method == http.MethodGet:
 		routes.listSelfSessions(response, request, requestID)
 	case request.URL.Path == selfInferenceSessionsPath && request.Method == http.MethodPost:
@@ -95,7 +100,7 @@ func (routes *DelegationRoutes) ServeHTTP(response http.ResponseWriter, request 
 }
 
 func (routes *DelegationRoutes) listEligible(response http.ResponseWriter, request *http.Request, requestID string) {
-	pageSize, cursor, ok := delegationPageRequest(response, request, requestID)
+	pageSize, cursor, search, ok := eligibleKeyPageRequest(response, request, requestID)
 	if !ok {
 		return
 	}
@@ -115,7 +120,7 @@ func (routes *DelegationRoutes) listEligible(response http.ResponseWriter, reque
 	}
 	page, err := routes.service.ListEligibleKeys(request.Context(), delegationmanagement.ListRequest{
 		NamespaceID: namespaceID, PrincipalID: session.Session.PrincipalID,
-		ManagementSessionID: session.Session.ID, Cursor: cursor, PageSize: pageSize,
+		ManagementSessionID: session.Session.ID, Search: search, Cursor: cursor, PageSize: pageSize,
 	})
 	if err != nil {
 		writeDelegationError(response, err, requestID)
@@ -123,16 +128,57 @@ func (routes *DelegationRoutes) listEligible(response http.ResponseWriter, reque
 	}
 	data := make([]managementapi.EligibleInferenceKey, len(page.Items))
 	for index, key := range page.Items {
-		data[index] = managementapi.EligibleInferenceKey{
-			KeyID: key.KeyID, Name: key.Name,
-			Owner:         managementapi.APIKeyOwner{Type: string(key.OwnerKind), ID: key.OwnerID},
-			ContextTeamID: key.ContextTeamID, ExpiresAt: key.ExpiresAt,
-		}
+		data[index] = eligibleInferenceKeyResponse(key)
 	}
 	writeProviderJSON(response, http.StatusOK, managementapi.EligibleInferenceKeyPage{
 		Data: data,
 		Page: managementapi.PageInfo{NextCursor: page.NextCursor, HasMore: page.HasMore, PageSize: page.PageSize},
 	}, requestID)
+}
+
+func (routes *DelegationRoutes) getEligible(
+	response http.ResponseWriter,
+	request *http.Request,
+	requestID, keyID string,
+) {
+	if request.URL.RawQuery != "" {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Eligible key detail does not accept query parameters.", requestID)
+		return
+	}
+	namespaceID, session, ok := routes.authenticate(response, request, requestID)
+	if !ok {
+		return
+	}
+	self, err := routes.service.ResolveSelf(request.Context(), namespaceID, session.Session.PrincipalID, session.Session.ID)
+	if err != nil {
+		writeDelegationError(response, err, requestID)
+		return
+	}
+	operation := routes.operation(managementapi.MethodGET, selfInferenceKeysPath+"/{keyId}")
+	if !routes.authorize(response, request, requestID, session, namespaceID, operation,
+		map[string][]accesscontrol.ScopedTarget{"user": {{Scope: accesscontrol.UserScope(
+			accesscontrol.NamespaceID(namespaceID), accesscontrol.UserID(self.UserID))}}}, nil, true) {
+		return
+	}
+	key, err := routes.service.GetEligibleKey(request.Context(), delegationmanagement.EligibleKeyRequest{
+		NamespaceID: namespaceID, PrincipalID: session.Session.PrincipalID,
+		ManagementSessionID: session.Session.ID, KeyID: keyID,
+	})
+	if err != nil {
+		writeDelegationError(response, err, requestID)
+		return
+	}
+	writeProviderJSON(response, http.StatusOK, managementapi.EligibleInferenceKeyDetail{
+		Data: eligibleInferenceKeyResponse(key),
+	}, requestID)
+}
+
+func eligibleInferenceKeyResponse(key delegationmanagement.EligibleKey) managementapi.EligibleInferenceKey {
+	return managementapi.EligibleInferenceKey{
+		KeyID: key.KeyID, Name: key.Name,
+		Owner:         managementapi.APIKeyOwner{Type: string(key.OwnerKind), ID: key.OwnerID},
+		ContextTeamID: key.ContextTeamID, ExpiresAt: key.ExpiresAt,
+	}
 }
 
 func (routes *DelegationRoutes) listSelfSessions(response http.ResponseWriter, request *http.Request, requestID string) {
@@ -445,6 +491,26 @@ func delegationPageRequest(response http.ResponseWriter, request *http.Request, 
 	return pageSize, query.Get("cursor"), true
 }
 
+func eligibleKeyPageRequest(
+	response http.ResponseWriter,
+	request *http.Request,
+	requestID string,
+) (int, string, string, bool) {
+	query, err := strictProviderQuery(request.URL.RawQuery, map[string]bool{
+		"cursor": true, "pageSize": true, "search": true,
+	})
+	if err != nil {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Eligible key query is invalid.", requestID)
+		return 0, "", "", false
+	}
+	pageSize, err := parseOptionalPageSize(query.Get("pageSize"))
+	if err != nil {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200.", requestID)
+		return 0, "", "", false
+	}
+	return pageSize, query.Get("cursor"), query.Get("search"), true
+}
+
 func writeDelegationError(response http.ResponseWriter, err error, requestID string) {
 	switch {
 	case errors.Is(err, delegationmanagement.ErrInvalidRequest):
@@ -472,6 +538,7 @@ type delegationHTTPContract struct {
 func delegationHTTPContracts() []delegationHTTPContract {
 	return []delegationHTTPContract{
 		{managementapi.MethodGET, selfInferenceKeysPath},
+		{managementapi.MethodGET, selfInferenceKeysPath + "/{keyId}"},
 		{managementapi.MethodGET, selfInferenceSessionsPath},
 		{managementapi.MethodPOST, selfInferenceSessionsPath},
 		{managementapi.MethodDELETE, selfInferenceSessionsPath + "/{sessionId}"},

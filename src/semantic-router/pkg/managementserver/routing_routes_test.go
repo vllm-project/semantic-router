@@ -42,8 +42,14 @@ type routingServiceStub struct {
 	manifestResult        routingmanagement.ManifestImportResult
 }
 
-func (stub *routingServiceStub) ManifestCredentialIDs([]byte) ([]string, error) {
-	return append([]string(nil), stub.manifestCredentials...), nil
+func (stub *routingServiceStub) PrepareManifest(
+	_ context.Context, namespaceID string, _ []byte,
+) (routingmanagement.PreparedManifest, error) {
+	return routingmanagement.PreparedManifest{
+		NamespaceID:   namespaceID,
+		Snapshot:      &routingsnapshot.Snapshot{},
+		CredentialIDs: append([]string(nil), stub.manifestCredentials...),
+	}, nil
 }
 
 func (stub *routingServiceStub) ImportManifest(
@@ -247,6 +253,32 @@ func TestRoutingManifestExportReturnsPortableYAMLAndRevision(t *testing.T) {
 	}
 	if got := response.Header().Get(managementapi.HeaderETag); got != `"routing:7"` {
 		t.Fatalf("ETag = %q", got)
+	}
+}
+
+func TestRoutingManifestExportUsesRuntimeOwnedNamespaceScopes(t *testing.T) {
+	runtime := &authorizationRuntimeStub{}
+	authorizer, err := NewRuntimeAuthorizer(runtime)
+	if err != nil {
+		t.Fatal(err)
+	}
+	routes := newTestRoutingRoutes(t, &routingServiceStub{}, &routingCommandResultsStub{}, authorizer)
+
+	response := serveRoutingRequest(t, routes, http.MethodGet, routingCurrentExportPath, nil, nil)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+
+	namespaceScope := accesscontrol.NamespaceScope(testNamespaceID)
+	for _, operand := range []string{"target", "request_namespace", "path_namespace"} {
+		targets := runtime.request.Targets[operand]
+		if len(targets) != 1 || targets[0].Scope != namespaceScope {
+			t.Fatalf("%s targets = %#v", operand, targets)
+		}
+	}
+	cluster := runtime.request.Targets["cluster"]
+	if len(cluster) != 1 || cluster[0].Scope != accesscontrol.ClusterScope() {
+		t.Fatalf("cluster targets = %#v", cluster)
 	}
 }
 

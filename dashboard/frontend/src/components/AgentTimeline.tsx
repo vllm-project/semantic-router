@@ -8,6 +8,7 @@ import type {
   AgentSessionMode,
 } from '../generated/managementApiContract'
 import AgentArtifactResult from './AgentArtifactResult'
+import AgentRouterMetadata from './AgentRouterMetadata'
 import MarkdownRenderer from './MarkdownRenderer'
 import ProductIcon from './ProductIcon'
 import styles from './AgentPlayground.module.css'
@@ -19,6 +20,7 @@ interface AgentTimelineProps {
   loading: boolean
   mode: AgentSessionMode
   canLoadArtifactContent: boolean
+  canReadRequestLogs: boolean
   onLoadEarlier: () => void
   onReview: (approval: AgentApprovalRequestPayload) => void
 }
@@ -95,6 +97,7 @@ export default function AgentTimeline({
   loading,
   mode,
   canLoadArtifactContent,
+  canReadRequestLogs,
   onLoadEarlier,
   onReview,
 }: AgentTimelineProps) {
@@ -162,9 +165,19 @@ export default function AgentTimeline({
                 data-testid={`agent-message-${item.role}`}
               >
                 <div className={styles.messageBody}>
-                  {item.role === 'assistant' ? <MarkdownRenderer content={item.text} /> : item.text}
+                  {item.role === 'assistant' && item.text ? (
+                    <MarkdownRenderer content={item.text} />
+                  ) : (
+                    item.text
+                  )}
                   {item.streaming ? (
                     <span className={styles.streamCursor} aria-label="Generating" />
+                  ) : null}
+                  {item.role === 'assistant' && item.metadata ? (
+                    <AgentRouterMetadata
+                      metadata={item.metadata}
+                      canReadRequestLogs={canReadRequestLogs}
+                    />
                   ) : null}
                 </div>
               </article>

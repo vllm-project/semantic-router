@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providercatalog"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/providerdiscovery"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementapi"
 )
 
@@ -64,6 +65,27 @@ func TestProviderCatalogReadContractsExposeRevisionWithoutExecutorInternals(t *t
 	page.Data[0].ConnectionFields[0].Options[0].Value = "mutated"
 	if definition.Capabilities[0] == "mutated" || definition.ConnectionFields[0].Options[0].Value == "mutated" {
 		t.Fatal("Management DTO retained mutable catalog storage")
+	}
+}
+
+func TestDiscoveredModelCapabilitiesRequireModelSpecificEvidence(t *testing.T) {
+	result := providerdiscovery.Result{Models: []providerdiscovery.Model{
+		{CatalogItemID: "item-unknown", ProviderModelID: "unknown", DisplayName: "Unknown"},
+		{
+			CatalogItemID: "item-described", ProviderModelID: "described", DisplayName: "Described",
+			Capabilities: []string{"image_input", "tools"},
+		},
+	}}
+	encoded, err := json.Marshal(discoveredModelsPageDTO(result, 50))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wire := string(encoded)
+	if strings.Contains(wire, `"providerModelId":"unknown","displayName":"Unknown","capabilities"`) {
+		t.Fatalf("unknown Model received a capability field: %s", wire)
+	}
+	if !strings.Contains(wire, `"providerModelId":"described","displayName":"Described","capabilities":["image_input","tools"]`) {
+		t.Fatalf("model-specific capabilities were not preserved: %s", wire)
 	}
 }
 

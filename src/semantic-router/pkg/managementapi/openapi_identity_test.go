@@ -119,6 +119,14 @@ func TestSelfDelegationOpenAPIUsesTypedNamespaceScopedContracts(t *testing.T) {
 	if keys.Responses["200"].Content[JSONMediaType].Schema.Ref != "#/components/schemas/EligibleInferenceKeyPage" {
 		t.Fatalf("self key response = %+v", keys.Responses["200"])
 	}
+	if !openAPIHasParameter(keys.Parameters, "search", "query") {
+		t.Fatalf("self key search parameter = %+v", keys.Parameters)
+	}
+	detail := document.Paths[BasePath+"/self/inference-keys/{keyId}"]["get"]
+	if detail.Responses["200"].Content[JSONMediaType].Schema.Ref != "#/components/schemas/EligibleInferenceKeyDetail" ||
+		!openAPIHasParameter(detail.Parameters, HeaderNamespaceID, "header") {
+		t.Fatalf("self key detail contract = %+v", detail)
+	}
 	create := document.Paths[BasePath+"/self/inference-sessions"]["post"]
 	if create.RequestBody == nil ||
 		create.RequestBody.Content[JSONMediaType].Schema.Ref != "#/components/schemas/DelegatedInferenceSessionCreateRequest" ||

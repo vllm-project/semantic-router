@@ -40,9 +40,9 @@ func (s *ClassificationAPIServer) setupManagementListenerRoutes() *http.ServeMux
 		panic("Management listener requires a Router-native Management API")
 	}
 	mux := http.NewServeMux()
-	// These operational probes are deliberately independent from the legacy
-	// static-token middleware. Domain registrars authenticate every Management
-	// operation using Router-issued sessions.
+	// Health, readiness, and the API description remain public listener
+	// metadata. Domain registrars authenticate every Management operation using
+	// Router-issued sessions.
 	mux.HandleFunc("GET /health", s.handleHealth)
 	mux.HandleFunc("GET /ready", s.handleReady)
 	mux.HandleFunc("GET /openapi.json", handleManagementOpenAPI)

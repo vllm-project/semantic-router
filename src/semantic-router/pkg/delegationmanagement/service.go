@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscredential"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementsearch"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/securitykeyring"
 )
 
@@ -131,14 +132,18 @@ func (service *Service) ListEligibleKeys(ctx context.Context, request ListReques
 	if _, err := service.repository.ResolveSelf(ctx, request.NamespaceID, request.PrincipalID, request.ManagementSessionID, false); err != nil {
 		return ResultPage[EligibleKey]{}, err
 	}
+	search, err := managementsearch.Normalize(request.Search)
+	if err != nil {
+		return ResultPage[EligibleKey]{}, ErrInvalidRequest
+	}
 	query := EligibleKeyQuery{
 		NamespaceID: request.NamespaceID, PrincipalID: request.PrincipalID,
-		ManagementSessionID: request.ManagementSessionID, Limit: pageLimit(request.PageSize),
+		ManagementSessionID: request.ManagementSessionID, Search: search, Limit: pageLimit(request.PageSize),
 	}
 	if request.Cursor != "" {
 		cursor, err := service.cursors.decode(request.Cursor)
 		if err != nil || cursor.Kind != "eligible_keys" || cursor.NamespaceID != request.NamespaceID ||
-			cursor.PrincipalID != request.PrincipalID || cursor.APIKeyID != "" {
+			cursor.PrincipalID != request.PrincipalID || cursor.APIKeyID != "" || cursor.Search != search {
 			return ResultPage[EligibleKey]{}, ErrInvalidRequest
 		}
 		query.After = &Cursor{CreatedAt: cursor.CreatedAt, ID: cursor.ID}
@@ -155,10 +160,23 @@ func (service *Service) ListEligibleKeys(ctx context.Context, request ListReques
 		last := page.Items[len(page.Items)-1]
 		result.NextCursor, err = service.cursors.encode(cursorPayload{
 			Kind: "eligible_keys", NamespaceID: request.NamespaceID,
-			PrincipalID: request.PrincipalID, CreatedAt: last.CreatedAt, ID: last.KeyID,
+			PrincipalID: request.PrincipalID, Search: search, CreatedAt: last.CreatedAt, ID: last.KeyID,
 		})
 	}
 	return result, err
+}
+
+func (service *Service) GetEligibleKey(ctx context.Context, request EligibleKeyRequest) (EligibleKey, error) {
+	if service == nil || !canonicalUUID(request.NamespaceID) || !canonicalUUID(request.PrincipalID) ||
+		!canonicalUUID(request.ManagementSessionID) || !canonicalUUID(request.KeyID) {
+		return EligibleKey{}, ErrInvalidRequest
+	}
+	if _, err := service.repository.ResolveSelf(ctx, request.NamespaceID, request.PrincipalID,
+		request.ManagementSessionID, false); err != nil {
+		return EligibleKey{}, err
+	}
+	return service.repository.GetEligibleKey(ctx, request.NamespaceID, request.PrincipalID,
+		request.ManagementSessionID, request.KeyID)
 }
 
 func (service *Service) ListSessions(ctx context.Context, request ListRequest) (ResultPage[Session], error) {

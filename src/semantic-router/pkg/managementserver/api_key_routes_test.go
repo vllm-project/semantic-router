@@ -59,9 +59,11 @@ func TestAPIKeyRoutesDeliverCanonicalSecretAndAuthorizeOwner(t *testing.T) {
 
 func TestAPIKeyRoutesPushExactKeyScopeBeforePagination(t *testing.T) {
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	totalCount := uint64(71)
 	first := testManagementAPIKey(testAPIKeyID, testAPIKeyOwnerID, now)
 	service := &apiKeyServiceStub{list: apikeymanagement.KeyPage{
-		Items: []accesscontrol.APIKey{first}, NextCursor: "opaque-next", HasMore: true, PageSize: 2,
+		Items: []accesscontrol.APIKey{first}, NextCursor: "opaque-next", HasMore: true,
+		PageSize: 2, TotalCount: &totalCount,
 	}}
 	authorizationCalls := 0
 	authorizer := apiKeyAuthorizerFunc(func(context.Context, AuthorizationRequest) (AuthorizationDecision, error) {
@@ -80,16 +82,18 @@ func TestAPIKeyRoutesPushExactKeyScopeBeforePagination(t *testing.T) {
 			APIKeyIDs:   []accesscontrol.APIKeyID{testAPIKeyID},
 		}, nil
 	})
-	request := authorizedRequest(t, http.MethodGet, apiKeysPath+"?pageSize=2&search=user%40example.test", nil)
+	request := authorizedRequest(t, http.MethodGet,
+		apiKeysPath+"?pageSize=2&search=user%40example.test&includeTotal=true", nil)
 	response := httptest.NewRecorder()
 	routes.ServeHTTP(response, request)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), testAPIKeyID) ||
-		strings.Contains(response.Body.String(), testAPIKeySecondID) || !strings.Contains(response.Body.String(), "opaque-next") {
+		strings.Contains(response.Body.String(), testAPIKeySecondID) || !strings.Contains(response.Body.String(), "opaque-next") ||
+		!strings.Contains(response.Body.String(), `"totalCount":"71"`) {
 		t.Fatalf("scoped list status=%d body=%s", response.Code, response.Body.String())
 	}
 	if authorizationCalls != 0 || service.lastList.Scope.All ||
 		len(service.lastList.Scope.APIKeyIDs) != 1 || service.lastList.Scope.APIKeyIDs[0] != testAPIKeyID ||
-		service.lastList.Search != "user@example.test" {
+		service.lastList.Search != "user@example.test" || !service.lastList.IncludeTotal {
 		t.Fatalf("list authorization calls=%d request=%#v", authorizationCalls, service.lastList)
 	}
 }

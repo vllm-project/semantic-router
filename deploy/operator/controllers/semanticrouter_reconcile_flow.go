@@ -202,19 +202,7 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 		return ctrl.Result{}, err
 	}
 
-	isOpenShift := false
-	if r.isOpenShift != nil {
-		isOpenShift = *r.isOpenShift
-	}
-	if err := reconcileRoute(
-		ctx,
-		r.Client,
-		r.Scheme,
-		semanticrouter,
-		isOpenShift,
-		gatewayMode,
-		bootstrap.usesDurableState(),
-	); err != nil {
+	if err := r.reconcilePlatformRoute(ctx, semanticrouter, gatewayMode, bootstrap); err != nil {
 		logger.Error(err, "Route reconciliation failed")
 		return ctrl.Result{}, err
 	}
@@ -222,6 +210,27 @@ func (r *SemanticRouterReconciler) reconcileOwnedResources(
 	semanticrouter.Status.Phase = "Progressing"
 	meta.RemoveStatusCondition(&semanticrouter.Status.Conditions, typeDegradedSemanticRouter)
 	return ctrl.Result{}, nil
+}
+
+func (r *SemanticRouterReconciler) reconcilePlatformRoute(
+	ctx context.Context,
+	semanticrouter *vllmv1alpha1.SemanticRouter,
+	gatewayMode string,
+	bootstrap bootstrapDeploymentContract,
+) error {
+	isOpenShift := false
+	if r.isOpenShift != nil {
+		isOpenShift = *r.isOpenShift
+	}
+	return reconcileRoute(
+		ctx,
+		r.Client,
+		r.Scheme,
+		semanticrouter,
+		isOpenShift,
+		gatewayMode,
+		bootstrap.usesDurableState(),
+	)
 }
 
 func (r *SemanticRouterReconciler) reconcileBootstrapPrerequisites(

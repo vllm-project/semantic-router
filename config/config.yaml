@@ -39,7 +39,7 @@ providers:
     control:
       retry:
         count: 2
-        'on':
+        on:
         - unavailable
       timeout:
         request: 180s

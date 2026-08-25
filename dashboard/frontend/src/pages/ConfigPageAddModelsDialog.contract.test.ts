@@ -59,8 +59,18 @@ describe('provider catalog model onboarding', () => {
     expect(advanced).toContain('type="checkbox"')
     expect(advanced).not.toContain('placeholder="unavailable"')
     expect(modelEditor).toMatch(
-      /name: 'retryOn',[\s\S]*?type: 'multiselect',[\s\S]*?options: \['unavailable', 'overloaded', 'timeout'\]/,
+      /name: 'retryOn',[\s\S]*?type: 'multiselect',[\s\S]*?options: \['unavailable', 'timeout'\]/,
     )
+    for (const field of [
+      'paramSize',
+      'contextWindowSize',
+      'description',
+      'qualityScore',
+      'modality',
+      'tags',
+    ]) {
+      expect(modelEditor).toContain(`name: '${field}'`)
+    }
     expect(styles).toMatch(
       /@media \(max-width: 760px\)[\s\S]*?\.retryChoices\s*{[\s\S]*?grid-template-columns: 1fr;/,
     )
@@ -87,7 +97,11 @@ describe('provider catalog model onboarding', () => {
     const styles = readSource('./ConfigPageAddModelsDialog.module.css')
 
     expect(styles).toContain('max-height: min(900px, calc(100dvh - 48px));')
-    expect(styles).toContain('max-height: calc(100dvh - 0.5rem);')
+    expect(styles).toContain('max-height: calc(100dvh - 0.75rem);')
     expect(styles).toContain('padding-bottom: max(14px, env(safe-area-inset-bottom));')
+    expect(styles).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.footer\s*{[\s\S]*?flex-direction: column;/,
+    )
+    expect(styles).toMatch(/\.footer > div > button\s*{[\s\S]*?min-width: 0;/)
   })
 })

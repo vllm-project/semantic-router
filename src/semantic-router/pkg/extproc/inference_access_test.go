@@ -380,6 +380,21 @@ func TestStreamingSettlementUsesNeutralAuthoritativeActualAndIsIdempotent(t *tes
 	if len(event.Dispatches) != 1 || event.Dispatches[0].UsageState != usageledger.UsageKnownActual {
 		t.Fatalf("explicit zero event = %+v", event.Dispatches)
 	}
+	if event.ExternalRequestID != ctx.RequestID {
+		t.Fatalf("external request ID = %q, want %q", event.ExternalRequestID, ctx.RequestID)
+	}
+}
+
+func TestTerminalExternalRequestIDRejectsUntrustedValues(t *testing.T) {
+	requestID := uuid.NewString()
+	if terminalExternalRequestID(requestID) != requestID {
+		t.Fatal("canonical request ID was discarded")
+	}
+	for _, value := range []string{"authorization: Bearer secret", " request-1 ", "request-1"} {
+		if terminalExternalRequestID(value) != "" {
+			t.Fatalf("unsafe external request ID %q was retained", value)
+		}
+	}
 }
 
 func TestSettlementUsesAuthoritativeRetryEvidenceWithoutDoubleCounting(t *testing.T) {

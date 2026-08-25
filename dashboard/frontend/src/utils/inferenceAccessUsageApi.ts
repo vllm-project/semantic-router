@@ -168,9 +168,11 @@ function mapRequestLog(item: ManagementRequestLog): AccessUsageEvent {
   const inputTokens = Number(item.inputTokens)
   const outputTokens = Number(item.outputTokens)
   const namespaceID = getManagementNamespace()
+  const externalRequestID = item.externalRequestId
   return {
     id: namespaceID ? `${namespaceID}:${item.admissionId}` : item.admissionId,
-    requestId: item.metadata?.externalRequestId || item.eventId,
+    requestId:
+      typeof externalRequestID === 'string' && externalRequestID ? externalRequestID : item.eventId,
     admissionId: item.admissionId,
     keyId: item.apiKeyId ?? '',
     userId: item.userId,
@@ -214,10 +216,12 @@ export async function overview(): Promise<AccessOverview> {
 }
 
 export async function requestLogs(filter: UsageFilter = {}): Promise<AccessPage<AccessUsageEvent>> {
+  const requestQuery = usageQuery(filter)
+  if (filter.q?.trim()) requestQuery.set('requestId', filter.q.trim())
   const page = await request<ManagementPage<ManagementRequestLog>>('getRequestLogs', {
-    query: usageQuery(filter),
+    query: requestQuery,
   })
-  return viewPage(page, mapRequestLog, filter.q)
+  return viewPage(page, mapRequestLog, filter.q?.trim())
 }
 
 export async function requestLog(id: string): Promise<AccessUsageEvent> {

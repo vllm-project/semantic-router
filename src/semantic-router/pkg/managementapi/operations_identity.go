@@ -117,6 +117,8 @@ func identityBootstrapOperations() []OperationContract {
 		operation(MethodPOST, BasePath+"/management-sessions/{sessionId}:revoke", "Identity", ScopeCluster, Require("principal.manage", "cluster"), noRevision()),
 		operation(MethodGET, BasePath+"/self/inference-keys", "Delegation", ScopeIntrinsicSelf,
 			RequireAll(Require("self.read", "intrinsic_self"), Require("delegation.use", "user")), paginated()),
+		operation(MethodGET, BasePath+"/self/inference-keys/{keyId}", "Delegation", ScopeIntrinsicSelf,
+			RequireAll(Require("self.read", "intrinsic_self"), Require("delegation.use", "user"))),
 		operation(MethodGET, BasePath+"/self/inference-sessions", "Delegation", ScopeIntrinsicSelf,
 			RequireAll(Require("self.read", "intrinsic_self"), Require("delegation.use", "user")), paginated()),
 		operation(MethodPOST, BasePath+"/self/inference-sessions", "Delegation", ScopeIntrinsicSelf,

@@ -139,7 +139,7 @@ func (service *Service) List(ctx context.Context, request ListKeysRequest) (KeyP
 	query := KeyQuery{
 		NamespaceID: request.NamespaceID, Status: request.Status,
 		OwnerKind: request.OwnerKind, OwnerID: request.OwnerID, Search: search,
-		Scope: request.Scope, Limit: pageSize,
+		Scope: request.Scope, Limit: pageSize, IncludeTotal: request.IncludeTotal,
 	}
 	if request.Cursor != "" {
 		cursor, err := service.cursors.decode(request.Cursor)
@@ -153,13 +153,20 @@ func (service *Service) List(ctx context.Context, request ListKeysRequest) (KeyP
 	}
 	if !request.Scope.All && len(request.Scope.APIKeyIDs) == 0 &&
 		len(request.Scope.UserIDs) == 0 && len(request.Scope.TeamIDs) == 0 {
-		return KeyPage{Items: []accesscontrol.APIKey{}, PageSize: pageSize}, nil
+		result := KeyPage{Items: []accesscontrol.APIKey{}, PageSize: pageSize}
+		if request.IncludeTotal {
+			count := uint64(0)
+			result.TotalCount = &count
+		}
+		return result, nil
 	}
 	page, listErr := service.repository.ListKeys(ctx, query)
 	if listErr != nil {
 		return KeyPage{}, listErr
 	}
-	result := KeyPage{Items: page.Items, HasMore: page.HasMore, PageSize: pageSize}
+	result := KeyPage{
+		Items: page.Items, HasMore: page.HasMore, PageSize: pageSize, TotalCount: page.TotalCount,
+	}
 	if page.HasMore {
 		if len(page.Items) == 0 {
 			return KeyPage{}, ErrUnavailable

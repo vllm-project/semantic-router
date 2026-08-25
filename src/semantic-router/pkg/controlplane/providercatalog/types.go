@@ -30,14 +30,17 @@ const (
 )
 
 type Definition struct {
-	ID               string            `json:"providerId"`
-	Revision         string            `json:"revision"`
-	Display          Display           `json:"display"`
-	Order            uint32            `json:"order"`
-	Interfaces       []Interface       `json:"interfaces"`
-	Credential       Credential        `json:"credential"`
-	Origin           Origin            `json:"origin"`
-	Discovery        *Discovery        `json:"discovery,omitempty"`
+	ID         string      `json:"providerId"`
+	Revision   string      `json:"revision"`
+	Display    Display     `json:"display"`
+	Order      uint32      `json:"order"`
+	Interfaces []Interface `json:"interfaces"`
+	Credential Credential  `json:"credential"`
+	Origin     Origin      `json:"origin"`
+	Discovery  *Discovery  `json:"discovery,omitempty"`
+	// Capabilities describes transport features supported by this Provider
+	// integration. It is catalog/filter metadata, never evidence that every
+	// model returned by discovery supports the same features.
 	Capabilities     []string          `json:"capabilities,omitempty"`
 	ConnectionFields []ConnectionField `json:"connectionFields,omitempty"`
 }
@@ -47,12 +50,14 @@ type Definition struct {
 // wire format and compiler details stay control-plane metadata and compile to
 // exactly one immutable backend.
 type Interface struct {
-	ID           string                 `json:"id"`
-	Label        string                 `json:"label"`
-	Default      bool                   `json:"default,omitempty"`
-	WireFormat   llmprotocol.WireFormat `json:"wireFormat"`
-	Compiler     Compiler               `json:"compiler"`
-	Capabilities []string               `json:"capabilities,omitempty"`
+	ID         string                 `json:"id"`
+	Label      string                 `json:"label"`
+	Default    bool                   `json:"default,omitempty"`
+	WireFormat llmprotocol.WireFormat `json:"wireFormat"`
+	Compiler   Compiler               `json:"compiler"`
+	// Capabilities describes features the selected wire interface can carry.
+	// Model capability metadata is discovered or authored independently.
+	Capabilities []string `json:"capabilities,omitempty"`
 }
 
 // Integration is the injection seam for built-in and application-provided

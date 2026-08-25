@@ -106,6 +106,7 @@ func (e *RedisEngine) CheckAccess(
 			string(precondition.Kind),
 			precondition.Field,
 			precondition.Expected,
+			precondition.PublicationID,
 			string(precondition.Failure),
 			precondition.Reason,
 		)
@@ -202,6 +203,7 @@ func (e *RedisEngine) buildAdmissionScriptInput(
 			string(precondition.Kind),
 			precondition.Field,
 			precondition.Expected,
+			precondition.PublicationID,
 			string(precondition.Failure),
 			precondition.Reason,
 		)
@@ -300,6 +302,7 @@ func preconditionSortValue(precondition AdmissionPrecondition) string {
 		string(precondition.Kind),
 		precondition.Field,
 		precondition.Expected,
+		precondition.PublicationID,
 		string(precondition.Failure),
 		precondition.Reason,
 	}, "\x00")

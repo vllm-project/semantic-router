@@ -11,6 +11,22 @@ export interface TeamMembership {
   userId: string
   role: 'admin' | 'member'
   revision?: number
+  teamName?: string
+  teamStatus?: AccessStatus
+  userName?: string
+  userEmail?: string
+  userStatus?: AccessStatus
+}
+
+export interface AccessAssignment {
+  id: string
+  policyId: string
+  subjectType: 'user' | 'team' | 'api_key'
+  subjectId: string
+  status: AccessStatus
+  mode?: 'allocation' | 'hard_cap'
+  revision?: number
+  createdAt?: string
 }
 
 export interface AccessUser {
@@ -250,6 +266,7 @@ export interface AccessListParams {
   limit?: number
   cursor?: string
   status?: string
+  includeTotal?: boolean
 }
 
 export interface UsageFilter extends AccessListParams {

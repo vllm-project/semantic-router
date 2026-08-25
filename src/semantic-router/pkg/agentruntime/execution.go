@@ -160,8 +160,14 @@ func (worker *Worker) runModelStep(
 			collector.publishLiveTerminal(agentmanagement.LiveModelStepDiscarded)
 		}
 	}()
-	if generateErr := worker.inference.Generate(ctx, prepared.credential, prepared.request, collector.consume); generateErr != nil {
+	observation, generateErr := worker.inference.Generate(
+		ctx, prepared.credential, prepared.request, collector.consume,
+	)
+	if generateErr != nil {
 		return generateErr
+	}
+	if observeErr := collector.observe(observation); observeErr != nil {
+		return observeErr
 	}
 	output, err := collector.finish()
 	if err != nil {

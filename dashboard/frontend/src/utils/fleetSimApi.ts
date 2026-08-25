@@ -189,8 +189,16 @@ async function fleetSimRequest<T>(path: string, init?: RequestInit): Promise<T> 
   return response.json() as Promise<T>
 }
 
+async function fleetSimListRequest<T>(path: string): Promise<T[]> {
+  const payload = await fleetSimRequest<unknown>(path)
+  if (!Array.isArray(payload)) {
+    throw new Error('Fleet simulator returned an invalid list response')
+  }
+  return payload as T[]
+}
+
 export function listWorkloads(): Promise<BuiltinWorkload[]> {
-  return fleetSimRequest('/api/workloads')
+  return fleetSimListRequest('/api/workloads')
 }
 
 export function getWorkloadStats(name: string): Promise<TraceStats> {
@@ -198,7 +206,7 @@ export function getWorkloadStats(name: string): Promise<TraceStats> {
 }
 
 export function listTraces(): Promise<TraceInfo[]> {
-  return fleetSimRequest('/api/traces')
+  return fleetSimListRequest('/api/traces')
 }
 
 export function getTraceSample(traceID: string, limit = 20): Promise<TraceSample> {
@@ -221,11 +229,11 @@ export async function deleteTrace(traceID: string): Promise<void> {
 }
 
 export function listGpuProfiles(): Promise<GpuProfile[]> {
-  return fleetSimRequest('/api/gpu-profiles')
+  return fleetSimListRequest('/api/gpu-profiles')
 }
 
 export function listFleets(): Promise<FleetConfig[]> {
-  return fleetSimRequest('/api/fleets')
+  return fleetSimListRequest('/api/fleets')
 }
 
 export function createFleet(body: {
@@ -248,7 +256,7 @@ export async function deleteFleet(fleetID: string): Promise<void> {
 }
 
 export function listJobs(): Promise<FleetSimJob[]> {
-  return fleetSimRequest('/api/jobs')
+  return fleetSimListRequest('/api/jobs')
 }
 
 export function getJob(jobID: string): Promise<FleetSimJob> {

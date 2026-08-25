@@ -29,22 +29,25 @@ import type {
   IssuedAPIKeySecret,
   ManagementAPIKey,
   ManagementAccessPolicy,
+  ManagementAccessPolicyBinding,
   ManagementCredential,
   ManagementEffectiveQuota,
   ManagementEffectivePolicy,
   ManagementMembership,
   ManagementPage,
-  ManagementPolicyBinding,
+  ManagementRateLimitBinding,
   ManagementRateLimitPolicy,
   ManagementTeam,
   ManagementUser,
   RateLimitRule,
+  RateLimitRuleWrite,
   ResourceDetail,
   SelfInferenceKey,
   SubjectType,
 } from './routerManagementTypes'
 import type {
   APIKeyQuotaSnapshot,
+  AccessAssignment,
   AccessAPIKey,
   AccessAuditEvent,
   AccessBudget,
@@ -65,7 +68,42 @@ import type {
 export type * from './inferenceAccessTypes'
 
 function mapMembership(item: ManagementMembership): TeamMembership {
-  return { teamId: item.teamId, userId: item.userId, role: item.role, revision: item.revision }
+  if (item.role !== 'admin' && item.role !== 'member') {
+    throw new Error('Router returned an unsupported team membership role.')
+  }
+  const relation = item as ManagementMembership & {
+    teamName?: string
+    teamStatus?: AccessStatus
+    displayName?: string
+    email?: string
+    userStatus?: AccessStatus
+  }
+  return {
+    teamId: item.teamId,
+    userId: item.userId,
+    role: item.role,
+    revision: item.revision,
+    teamName: relation.teamName,
+    teamStatus: relation.teamStatus,
+    userName: relation.displayName,
+    userEmail: relation.email,
+    userStatus: relation.userStatus,
+  }
+}
+
+function mapAccessAssignment(
+  item: ManagementAccessPolicyBinding | ManagementRateLimitBinding,
+): AccessAssignment {
+  return {
+    id: item.bindingId,
+    policyId: item.policyId,
+    subjectType: item.subject.type,
+    subjectId: item.subject.id,
+    status: item.status === 'active' ? 'active' : 'disabled',
+    mode: 'mode' in item ? item.mode : undefined,
+    revision: item.revision,
+    createdAt: item.createdAt,
+  }
 }
 
 function mapUser(
@@ -126,7 +164,7 @@ function mapKey(item: ManagementAPIKey, credential?: ManagementCredential): Acce
   }
 }
 
-function mapGroup(item: ManagementAccessPolicy): AccessGroup {
+function mapGroup(item: ManagementAccessPolicy, assignmentCount = 0): AccessGroup {
   return {
     id: item.policyId,
     name: item.name,
@@ -137,7 +175,7 @@ function mapGroup(item: ManagementAccessPolicy): AccessGroup {
         resourceType: grant.resourceType,
         resourceId: grant.resourceId,
       })),
-    assignmentCount: 0,
+    assignmentCount,
     revision: item.revision,
     status: item.status === 'active' ? 'active' : 'disabled',
     createdAt: item.createdAt,
@@ -145,14 +183,14 @@ function mapGroup(item: ManagementAccessPolicy): AccessGroup {
   }
 }
 
-function mapBudget(item: ManagementRateLimitPolicy): AccessBudget {
+function mapBudget(item: ManagementRateLimitPolicy, assignmentCount = 0): AccessBudget {
   return {
     id: item.policyId,
     name: item.name,
     description: item.description,
     rules: item.rules,
     enabled: item.status === 'active',
-    assignmentCount: 0,
+    assignmentCount,
     revision: item.revision,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
@@ -166,27 +204,46 @@ function accessGrants(resources: AccessResourceRef[]): AccessPolicyGrant[] {
   ])
 }
 
-function rateLimitRuleInput(rule: RateLimitRule): Omit<RateLimitRule, 'ordinal'> {
-  const input = { ...rule }
+function rateLimitRuleInput(rule: RateLimitRule): RateLimitRuleWrite {
+  const input: Partial<RateLimitRule> = { ...rule }
   delete input.ordinal
-  return input
+  delete input.ruleId
+  return input as RateLimitRuleWrite
+}
+
+async function allSubjectBindings<T>(
+  operationId: 'getAccessPolicyBindings' | 'getRateLimitBindings',
+  type: SubjectType,
+  id: string,
+): Promise<T[]> {
+  const items: T[] = []
+  let cursor: string | undefined
+  do {
+    const page = await request<ManagementPage<T>>(operationId, {
+      query: query({
+        subjectType: type,
+        subjectId: id,
+        status: 'active',
+        pageSize: 200,
+        cursor,
+      }),
+    })
+    items.push(...page.data)
+    cursor = page.page.hasMore ? page.page.nextCursor : undefined
+  } while (cursor)
+  return items
 }
 
 async function subjectBindings(type: SubjectType, id: string) {
-  const filters = query({ subjectType: type, subjectId: id, pageSize: 200, status: 'active' })
   const [access, rate] = await Promise.all([
-    request<ManagementPage<ManagementPolicyBinding>>('getAccessPolicyBindings', {
-      query: filters,
-    }),
-    request<ManagementPage<ManagementPolicyBinding>>('getRateLimitBindings', {
-      query: filters,
-    }),
+    allSubjectBindings<ManagementAccessPolicyBinding>('getAccessPolicyBindings', type, id),
+    allSubjectBindings<ManagementRateLimitBinding>('getRateLimitBindings', type, id),
   ])
   return {
-    accessGroupIds: access.data.map((binding) => binding.policyId),
-    budgetId: rate.data.find((binding) => binding.mode === 'allocation')?.policyId,
-    accessBindings: access.data,
-    rateBindings: rate.data,
+    accessGroupIds: access.map((binding) => binding.policyId),
+    budgetId: rate.find((binding) => binding.mode === 'allocation')?.policyId,
+    accessBindings: access,
+    rateBindings: rate,
   }
 }
 
@@ -376,6 +433,32 @@ function issuedKey(item: IssuedAPIKeySecret): CreatedAccessAPIKey {
   }
 }
 
+const relationshipParams = (params: AccessListParams = {}) => ({
+  ...params,
+  limit: Math.min(params.limit ?? 12, 200),
+  includeTotal: params.includeTotal ?? !params.cursor,
+})
+
+async function subjectAssignmentPage<
+  T extends ManagementAccessPolicyBinding | ManagementRateLimitBinding,
+>(
+  operationId: 'getAccessPolicyBindings' | 'getRateLimitBindings',
+  filter: { subjectType?: SubjectType; subjectId?: string; policyId?: string },
+  params: AccessListParams = {},
+) {
+  const normalized = relationshipParams(params)
+  const page = await request<ManagementPage<T>>(operationId, {
+    query: query({
+      ...filter,
+      cursor: normalized.cursor,
+      pageSize: normalized.limit,
+      status: normalized.status,
+      includeTotal: normalized.includeTotal ? 'true' : undefined,
+    }),
+  })
+  return viewPage(page, mapAccessAssignment)
+}
+
 export const inferenceAccessApi = {
   overview,
   users: async (params: AccessListParams = {}) => {
@@ -389,10 +472,25 @@ export const inferenceAccessApi = {
       request<ResourceDetail<ManagementUser>>('getUsersByUserId', {
         pathParameters: { userId: id },
       }),
-      allPages<ManagementMembership>('getUsersByUserIdMemberships', { userId: id }),
-      subjectBindings('user', id),
+      request<ManagementPage<ManagementMembership>>('getUsersByUserIdMemberships', {
+        pathParameters: { userId: id },
+        query: listQuery({ limit: 12, includeTotal: true }),
+      })
+        .then((page) => page.data)
+        .catch(() => []),
+      subjectBindings('user', id).catch(() => ({ accessGroupIds: [], budgetId: undefined })),
     ])
     return mapUser(detail.data, memberships, bindings.accessGroupIds, bindings.budgetId)
+  },
+  userMemberships: async (id: string, params: AccessListParams = {}) => {
+    const page = await request<ManagementPage<ManagementMembership>>(
+      'getUsersByUserIdMemberships',
+      {
+        pathParameters: { userId: id },
+        query: listQuery(relationshipParams(params)),
+      },
+    )
+    return viewPage(page, mapMembership)
   },
   userSummary: async (id: string) =>
     mapUser(
@@ -427,6 +525,28 @@ export const inferenceAccessApi = {
     return viewPage(page, (item) => mapTeam(item))
   },
   team: async (id: string) => {
+    const [detail, members, bindings] = await Promise.all([
+      request<ResourceDetail<ManagementTeam>>('getTeamsByTeamId', {
+        pathParameters: { teamId: id },
+      }),
+      request<ManagementPage<ManagementMembership>>('getTeamsByTeamIdMembers', {
+        pathParameters: { teamId: id },
+        query: listQuery({ limit: 12, includeTotal: true }),
+      })
+        .then((page) => page.data)
+        .catch(() => []),
+      subjectBindings('team', id).catch(() => ({ accessGroupIds: [], budgetId: undefined })),
+    ])
+    return mapTeam(detail.data, members, bindings.accessGroupIds, bindings.budgetId)
+  },
+  teamMembers: async (id: string, params: AccessListParams = {}) => {
+    const page = await request<ManagementPage<ManagementMembership>>('getTeamsByTeamIdMembers', {
+      pathParameters: { teamId: id },
+      query: listQuery(relationshipParams(params)),
+    })
+    return viewPage(page, mapMembership)
+  },
+  teamForEdit: async (id: string) => {
     const [detail, members, bindings] = await Promise.all([
       request<ResourceDetail<ManagementTeam>>('getTeamsByTeamId', {
         pathParameters: { teamId: id },
@@ -484,6 +604,20 @@ export const inferenceAccessApi = {
       query: listQuery(params),
     })
     return viewPage(page, (item) => mapKey(item))
+  },
+  ownedKeys: async (ownerType: 'user' | 'team', ownerId: string, params: AccessListParams = {}) => {
+    const normalized = relationshipParams(params)
+    const page = await request<ManagementPage<ManagementAPIKey>>('getApiKeys', {
+      query: query({
+        ownerType,
+        ownerId,
+        cursor: normalized.cursor,
+        pageSize: normalized.limit,
+        status: normalized.status,
+        includeTotal: normalized.includeTotal ? 'true' : undefined,
+      }),
+    })
+    return viewPage(page, mapKey)
   },
   key: keyDetail,
   keySummary: async (id: string) =>
@@ -582,7 +716,20 @@ export const inferenceAccessApi = {
     })
     return viewPage(page, mapGroup)
   },
-  group: async (id: string) =>
+  group: async (id: string) => {
+    const [detail, assignments] = await Promise.all([
+      request<ResourceDetail<ManagementAccessPolicy>>('getAccessPoliciesByPolicyId', {
+        pathParameters: { policyId: id },
+      }),
+      subjectAssignmentPage<ManagementAccessPolicyBinding>(
+        'getAccessPolicyBindings',
+        { policyId: id },
+        { limit: 1 },
+      ),
+    ])
+    return mapGroup(detail.data, assignments.total)
+  },
+  groupSummary: async (id: string) =>
     mapGroup(
       resource(
         await request<ResourceDetail<ManagementAccessPolicy>>('getAccessPoliciesByPolicyId', {
@@ -590,6 +737,11 @@ export const inferenceAccessApi = {
         }),
       ),
     ),
+  accessAssignments: (
+    filter: { subjectType?: SubjectType; subjectId?: string; policyId?: string },
+    params: AccessListParams = {},
+  ) =>
+    subjectAssignmentPage<ManagementAccessPolicyBinding>('getAccessPolicyBindings', filter, params),
   saveGroup: async (item: Partial<AccessGroup>) => {
     const body = {
       name: item.name,
@@ -629,7 +781,20 @@ export const inferenceAccessApi = {
     })
     return viewPage(page, mapBudget)
   },
-  budget: async (id: string) =>
+  budget: async (id: string) => {
+    const [detail, assignments] = await Promise.all([
+      request<ResourceDetail<ManagementRateLimitPolicy>>('getRateLimitPoliciesByPolicyId', {
+        pathParameters: { policyId: id },
+      }),
+      subjectAssignmentPage<ManagementRateLimitBinding>(
+        'getRateLimitBindings',
+        { policyId: id },
+        { limit: 1 },
+      ),
+    ])
+    return mapBudget(detail.data, assignments.total)
+  },
+  budgetSummary: async (id: string) =>
     mapBudget(
       resource(
         await request<ResourceDetail<ManagementRateLimitPolicy>>('getRateLimitPoliciesByPolicyId', {
@@ -637,6 +802,10 @@ export const inferenceAccessApi = {
         }),
       ),
     ),
+  budgetAssignments: (
+    filter: { subjectType?: SubjectType; subjectId?: string; policyId?: string },
+    params: AccessListParams = {},
+  ) => subjectAssignmentPage<ManagementRateLimitBinding>('getRateLimitBindings', filter, params),
   saveBudget: async (item: Partial<AccessBudget>) => {
     const body = {
       name: item.name,
@@ -722,9 +891,9 @@ export const inferenceAccessApi = {
     return team
   },
   saveSelfTeam: (item: Partial<AccessTeam> & { id: string }) => inferenceAccessApi.saveTeam(item),
-  selfKeys: async () => {
+  selfKeys: async (params: AccessListParams = {}) => {
     const page = await request<ManagementPage<SelfInferenceKey>>('getSelfInferenceKeys', {
-      query: new URLSearchParams({ pageSize: '200' }),
+      query: listQuery({ ...params, limit: Math.min(params.limit ?? 25, 200) }),
     })
     return viewPage(page, (item) => ({
       id: item.keyId,
@@ -738,7 +907,22 @@ export const inferenceAccessApi = {
       accessGroupIds: [],
     }))
   },
-  selfKey: keyDetail,
+  selfKey: async (id: string) => {
+    const detail = await request<ResourceDetail<SelfInferenceKey>>('getSelfInferenceKeysByKeyId', {
+      pathParameters: { keyId: id },
+    })
+    return {
+      id: detail.data.keyId,
+      name: detail.data.name,
+      prefix: '',
+      contextTeamId: detail.data.contextTeamId,
+      ownerType: detail.data.owner.type,
+      ownerId: detail.data.owner.id,
+      status: 'active' as const,
+      expiresAt: detail.data.expiresAt,
+      accessGroupIds: [],
+    }
+  },
   selfKeySecret: async (id: string) => inferenceAccessApi.keySecret(id),
   createSelfKey: (
     name: string,

@@ -83,7 +83,9 @@ const sidecarEnvoyConfigYAML = `static_resources:
                 response_body_mode: "BUFFERED"
                 request_trailer_mode: "SKIP"
                 response_trailer_mode: "SKIP"
-              failure_mode_allow: true
+              # ExtProc is the inference access and quota decision point.
+              # Never bypass it when the Router is unavailable.
+              failure_mode_allow: false
               message_timeout: 300s
 
           # Dynamic Forward Proxy filter

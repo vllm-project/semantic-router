@@ -3,8 +3,15 @@ import {
   MANAGEMENT_API_HEADERS,
   MANAGEMENT_API_MEDIA_TYPE,
   MANAGEMENT_API_OPERATIONS,
+  assertManagementApiSchema,
+  assertManagementApiOperationResponse,
+  createManagementApiClient,
   managementApiPath,
-  type ManagementApiAgentTransport,
+  type ManagementApiClientOperationId,
+  type ManagementApiClientResponse,
+  type ManagementApiRequestOptions as GeneratedManagementApiRequestOptions,
+  type ManagementApiResponse,
+  type ManagementApiTransport,
   type ManagementApiOperationId,
   type ManagementApiPathParameters,
 } from '../generated/managementApiContract'
@@ -80,13 +87,19 @@ export interface ManagementRequestOptions {
   namespace?: string | null
 }
 
-export type ManagementOperationRequestOptions<OperationId extends ManagementApiOperationId> =
-  ManagementRequestOptions &
+type GeneratedManagementQuery<OperationId extends ManagementApiClientOperationId> =
+  GeneratedManagementApiRequestOptions<OperationId> extends { query?: infer Query } ? Query : never
+
+export type ManagementOperationRequestOptions<OperationId extends ManagementApiClientOperationId> =
+  Omit<GeneratedManagementApiRequestOptions<OperationId>, 'query'> &
+    ([GeneratedManagementQuery<OperationId>] extends [never]
+      ? { query?: never }
+      : { query?: GeneratedManagementQuery<OperationId> | URLSearchParams }) &
     ([ManagementApiPathParameters<OperationId>] extends [never]
       ? { pathParameters?: never }
       : { pathParameters: ManagementApiPathParameters<OperationId> })
 
-type ManagementOperationRequestArguments<OperationId extends ManagementApiOperationId> = [
+type ManagementOperationRequestArguments<OperationId extends ManagementApiClientOperationId> = [
   ManagementApiPathParameters<OperationId>,
 ] extends [never]
   ? [options?: ManagementOperationRequestOptions<OperationId>]
@@ -111,6 +124,17 @@ function managementQueryString(query: ManagementRequestOptions['query']): string
   return parameters.toString()
 }
 
+function managementCustomHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+  const reserved = new Set([
+    'accept',
+    'content-type',
+    MANAGEMENT_API_HEADERS.namespace.toLocaleLowerCase(),
+  ])
+  return Object.fromEntries(
+    Object.entries(headers ?? {}).filter(([name]) => !reserved.has(name.toLocaleLowerCase())),
+  )
+}
+
 function managementError(
   payload: unknown,
   status: number,
@@ -132,50 +156,83 @@ function managementError(
   return new ManagementApiError(fallback, status, undefined, undefined, retryAfterMilliseconds)
 }
 
-export interface ManagementOperationResponse<T = unknown> {
-  data: T
-  etag?: string
-}
+export type ManagementOperationResponse<T = unknown> = ManagementApiClientResponse<T>
 
 async function managementRequestWithMetadata(
-  path: string,
-  method: (typeof MANAGEMENT_API_OPERATIONS)[ManagementApiOperationId]['method'],
-  options: ManagementRequestOptions,
+  operationId: ManagementApiClientOperationId,
+  options: ManagementRequestOptions & { pathParameters?: Record<string, string | number> },
 ): Promise<ManagementOperationResponse> {
+  const buildPath = managementApiPath as (
+    id: ManagementApiOperationId,
+    parameters?: Record<string, string | number>,
+  ) => string
+  const path = buildPath(operationId, options.pathParameters)
   if (!path.startsWith(`${MANAGEMENT_API_BASE_PATH}/`)) {
     throw new TypeError('Management API requests require a generated operation path.')
   }
+  const operation = MANAGEMENT_API_OPERATIONS[operationId]
+  const successMediaTypes = operation.successMediaTypes as readonly string[]
+  const acceptMediaType =
+    operation.responseMode === 'yaml'
+      ? (successMediaTypes[0] ?? MANAGEMENT_API_MEDIA_TYPE)
+      : MANAGEMENT_API_MEDIA_TYPE
   const namespace = options.namespace === undefined ? selectedNamespace : (options.namespace ?? '')
   const query = managementQueryString(options.query)
   const response = await fetch(`${DASHBOARD_ROUTER_PROXY_PATH}${path}${query ? `?${query}` : ''}`, {
-    method,
+    method: operation.method,
     cache: 'no-store',
     credentials: 'same-origin',
     headers: {
-      Accept: MANAGEMENT_API_MEDIA_TYPE,
+      ...managementCustomHeaders(options.headers),
+      Accept: acceptMediaType,
       ...(options.body === undefined ? {} : { 'Content-Type': MANAGEMENT_API_MEDIA_TYPE }),
       ...(namespace ? { [MANAGEMENT_API_HEADERS.namespace]: namespace } : {}),
-      ...options.headers,
     },
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
     signal: options.signal,
   })
-  const hasBody = response.status !== 204 && response.status !== 205
-  const payload: unknown = hasBody ? await response.json().catch(() => null) : null
+  const successResponses = operation.successResponses as Readonly<
+    Record<number, readonly string[] | undefined>
+  >
+  const responseContract = successResponses[response.status]
+  const hasBody = responseContract !== undefined && responseContract.length > 0
+  const responseMediaType = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim()
   if (!response.ok) {
+    const errorPayload: unknown =
+      responseMediaType === MANAGEMENT_API_MEDIA_TYPE
+        ? await response.json().catch(() => null)
+        : await response.text().catch(() => null)
     throw managementError(
-      payload,
+      errorPayload,
       response.status,
       `Request failed (HTTP ${response.status}).`,
       parseRetryAfter(response.headers.get('Retry-After')),
     )
   }
-  const responseMediaType = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim()
-  if (hasBody && responseMediaType !== MANAGEMENT_API_MEDIA_TYPE) {
+  if (hasBody && (!responseMediaType || !successMediaTypes.includes(responseMediaType))) {
     throw new ManagementApiError('Management API returned an unsupported media type.', 502)
   }
+  const payload: unknown = !hasBody
+    ? undefined
+    : operation.responseMode === 'yaml'
+      ? await response.text()
+      : await response.json().catch(() => null)
   const etag = response.headers.get(MANAGEMENT_API_HEADERS.etag)?.trim()
-  return { data: payload, ...(etag ? { etag } : {}) }
+  const requestId = response.headers.get(MANAGEMENT_API_HEADERS.requestId)?.trim()
+  const secretResultClaim = response.headers
+    .get(MANAGEMENT_API_HEADERS.secretResultClaim)
+    ?.trim()
+  const idempotencyReplayed =
+    response.headers.get(MANAGEMENT_API_HEADERS.idempotencyReplayed)?.trim().toLowerCase() === 'true'
+  return {
+    data: payload,
+    status: response.status,
+    ...(responseMediaType ? { mediaType: responseMediaType } : {}),
+    ...(etag ? { etag } : {}),
+    ...(requestId ? { requestId } : {}),
+    ...(secretResultClaim ? { secretResultClaim } : {}),
+    ...(idempotencyReplayed ? { idempotencyReplayed: true } : {}),
+  }
 }
 
 /**
@@ -186,7 +243,7 @@ async function managementRequestWithMetadata(
  * namespace/session transport policy in one place. It is used by resumable event
  * streams whose response cannot be decoded as one JSON document.
  */
-export async function managementOperationStream<OperationId extends ManagementApiOperationId>(
+export async function managementOperationStream<OperationId extends ManagementApiClientOperationId>(
   operationId: OperationId,
   ...args: ManagementOperationRequestArguments<OperationId>
 ): Promise<Response> {
@@ -199,8 +256,15 @@ export async function managementOperationStream<OperationId extends ManagementAp
   ) => string
   const path = buildPath(operationId, options.pathParameters)
   const contract = MANAGEMENT_API_OPERATIONS[operationId]
-  if (contract.method !== 'GET') {
-    throw new TypeError('Management event streams require a generated GET operation.')
+  const eventStreamMediaType = (contract.successMediaTypes as readonly string[]).find(
+    (mediaType) => mediaType === 'text/event-stream',
+  )
+  if (
+    contract.method !== 'GET' ||
+    contract.responseMode !== 'json_or_event_stream' ||
+    !eventStreamMediaType
+  ) {
+    throw new TypeError('Management event streams require a generated streaming operation.')
   }
 
   const namespace = options.namespace === undefined ? selectedNamespace : (options.namespace ?? '')
@@ -210,9 +274,9 @@ export async function managementOperationStream<OperationId extends ManagementAp
     cache: 'no-store',
     credentials: 'same-origin',
     headers: {
-      Accept: 'text/event-stream',
+      ...managementCustomHeaders(options.headers),
+      Accept: eventStreamMediaType,
       ...(namespace ? { [MANAGEMENT_API_HEADERS.namespace]: namespace } : {}),
-      ...options.headers,
     },
     signal: options.signal,
   })
@@ -226,7 +290,7 @@ export async function managementOperationStream<OperationId extends ManagementAp
     )
   }
   const responseMediaType = response.headers.get('Content-Type')?.split(';', 1)[0]?.trim()
-  if (responseMediaType !== 'text/event-stream') {
+  if (responseMediaType !== eventStreamMediaType) {
     throw new ManagementApiError('Management API returned an unsupported event stream.', 502)
   }
   if (!response.body) {
@@ -235,146 +299,73 @@ export async function managementOperationStream<OperationId extends ManagementAp
   return response
 }
 
-export async function managementOperationRequest<OperationId extends ManagementApiOperationId>(
+export async function managementOperationRequest<OperationId extends ManagementApiClientOperationId>(
   operationId: OperationId,
   ...args: ManagementOperationRequestArguments<OperationId>
-): Promise<unknown> {
+): Promise<ManagementApiResponse<OperationId>> {
   const options = (args[0] ?? {}) as ManagementRequestOptions & {
     pathParameters?: Record<string, string | number>
   }
-  const buildPath = managementApiPath as (
-    id: ManagementApiOperationId,
-    parameters?: Record<string, string | number>,
-  ) => string
-  const path = buildPath(operationId, options.pathParameters)
-  return (
-    await managementRequestWithMetadata(
-      path,
-      MANAGEMENT_API_OPERATIONS[operationId].method,
-      options,
-    )
-  ).data
+  const response = await managementRequestWithMetadata(operationId, options)
+  return validateManagementOperationResponse(
+    operationId,
+    response.data,
+    response.status,
+    response.mediaType,
+  )
 }
 
 /** Read an operation payload together with the Router's opaque revision token. */
 export async function managementOperationRequestWithMetadata<
-  OperationId extends ManagementApiOperationId,
+  OperationId extends ManagementApiClientOperationId,
 >(
   operationId: OperationId,
   ...args: ManagementOperationRequestArguments<OperationId>
-): Promise<ManagementOperationResponse> {
+): Promise<ManagementOperationResponse<ManagementApiResponse<OperationId>>> {
   const options = (args[0] ?? {}) as ManagementRequestOptions & {
     pathParameters?: Record<string, string | number>
   }
-  const buildPath = managementApiPath as (
-    id: ManagementApiOperationId,
-    parameters?: Record<string, string | number>,
-  ) => string
-  return managementRequestWithMetadata(
-    buildPath(operationId, options.pathParameters),
-    MANAGEMENT_API_OPERATIONS[operationId].method,
-    options,
-  )
+  const response = await managementRequestWithMetadata(operationId, options)
+  return {
+    ...response,
+    data: validateManagementOperationResponse(
+      operationId,
+      response.data,
+      response.status,
+      response.mediaType,
+    ),
+  }
 }
 
-/** Browser transport for the generated Agent client. */
-export const managementApiAgentTransport: ManagementApiAgentTransport = {
+/** Browser transport for the generated Management client. */
+export const managementApiTransport: ManagementApiTransport = {
   async request(operationId, options) {
     const requestOptions = options as ManagementRequestOptions & {
       pathParameters?: Record<string, string | number>
     }
-    const buildPath = managementApiPath as (
-      id: ManagementApiOperationId,
-      parameters?: Record<string, string | number>,
-    ) => string
-    return managementRequestWithMetadata(
-      buildPath(operationId, requestOptions.pathParameters),
-      MANAGEMENT_API_OPERATIONS[operationId].method,
-      requestOptions,
-    )
+    return managementRequestWithMetadata(operationId, requestOptions)
   },
 }
 
-const isFiniteNumber = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isFinite(value)
+export const managementApiClient = createManagementApiClient(managementApiTransport)
+
+function validateManagementOperationResponse<OperationId extends ManagementApiClientOperationId>(
+  operationId: OperationId,
+  value: unknown,
+  status: number,
+  mediaType?: string,
+): ManagementApiResponse<OperationId> {
+  try {
+    return assertManagementApiOperationResponse(operationId, value, status, mediaType)
+  } catch (cause) {
+    throw new ManagementApiError(
+      cause instanceof Error ? cause.message : 'Router returned an invalid Management response.',
+      502,
+    )
+  }
+}
 
 /** Validate the security-sensitive identity projection before it drives navigation or ownership. */
 export function assertManagementMe(value: unknown): ManagementMe {
-  if (!isRecord(value)) throw new Error('Router returned an invalid Management identity.')
-  const principal = value.principal
-  const session = value.session
-  if (
-    !isRecord(principal) ||
-    !isNonEmptyString(principal.principalId) ||
-    !isNonEmptyString(principal.displayName) ||
-    !isNonEmptyString(principal.kind) ||
-    !isNonEmptyString(principal.status) ||
-    !isRecord(session) ||
-    !isNonEmptyString(session.sessionId) ||
-    !isNonEmptyString(session.authenticatedAt) ||
-    !isNonEmptyString(session.expiresAt) ||
-    !isNonEmptyString(session.evidenceKind) ||
-    !isStringArray(value.clusterPermissions) ||
-    !Array.isArray(value.namespaces)
-  ) {
-    throw new Error('Router returned an invalid Management identity.')
-  }
-
-  for (const scope of value.namespaces) {
-    if (!isRecord(scope) || !isRecord(scope.namespace)) {
-      throw new Error('Router returned an invalid Management namespace scope.')
-    }
-    const namespace = scope.namespace
-    if (
-      !isNonEmptyString(namespace.namespaceId) ||
-      !isNonEmptyString(namespace.name) ||
-      !isNonEmptyString(namespace.status) ||
-      !isFiniteNumber(namespace.desiredRevision) ||
-      !isFiniteNumber(namespace.appliedRevision) ||
-      !isStringArray(scope.permissions) ||
-      !Array.isArray(scope.roleBindings) ||
-      !Array.isArray(scope.teams) ||
-      !isRecord(scope.selfServicePolicy)
-    ) {
-      throw new Error('Router returned an invalid Management namespace scope.')
-    }
-
-    if (scope.user !== undefined) {
-      const user = scope.user
-      if (
-        !isRecord(user) ||
-        !isNonEmptyString(user.userId) ||
-        !isNonEmptyString(user.email) ||
-        !isNonEmptyString(user.displayName) ||
-        !isNonEmptyString(user.status)
-      ) {
-        throw new Error('Router returned an invalid linked Management user.')
-      }
-    }
-
-    for (const team of scope.teams) {
-      if (
-        !isRecord(team) ||
-        !isNonEmptyString(team.teamId) ||
-        !isNonEmptyString(team.name) ||
-        (team.role !== 'admin' && team.role !== 'member') ||
-        !isNonEmptyString(team.status)
-      ) {
-        throw new Error('Router returned an invalid Management team membership.')
-      }
-    }
-
-    const policy = scope.selfServicePolicy
-    if (
-      !isFiniteNumber(policy.maxKeysPerUser) ||
-      !isFiniteNumber(policy.maxDelegatedSessions) ||
-      !isFiniteNumber(policy.delegatedSessionTtlSeconds) ||
-      typeof policy.allowTeamKeyDelegation !== 'boolean' ||
-      typeof policy.automaticFirstKey !== 'boolean' ||
-      !isFiniteNumber(policy.revision)
-    ) {
-      throw new Error('Router returned an invalid Management self-service policy.')
-    }
-  }
-  return value as unknown as ManagementMe
+  return assertManagementApiSchema('Me', value)
 }

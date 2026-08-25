@@ -142,7 +142,7 @@ func policyListQuery(response http.ResponseWriter, request *http.Request, reques
 func policyBindingListQuery(response http.ResponseWriter, request *http.Request, requestID string, rate bool) (policymanagement.ListBindingsRequest, bool) {
 	allowed := map[string]bool{
 		"cursor": true, "pageSize": true, "policyId": true,
-		"subjectType": true, "subjectId": true, "status": true,
+		"subjectType": true, "subjectId": true, "status": true, "includeTotal": true,
 	}
 	if rate {
 		allowed["mode"] = true
@@ -157,7 +157,8 @@ func policyBindingListQuery(response http.ResponseWriter, request *http.Request,
 	modeValid := !rate || map[string]bool{"": true, "allocation": true, "hard_cap": true}[query.Get("mode")]
 	subjectType, subjectID := query.Get("subjectType"), query.Get("subjectId")
 	pairedSubject := (subjectType == "") == (subjectID == "")
-	if err != nil || !statusValid || !modeValid || !pairedSubject ||
+	includeTotal, totalErr := parseOptionalBoolean(query.Get("includeTotal"))
+	if err != nil || totalErr != nil || !statusValid || !modeValid || !pairedSubject ||
 		(query.Get("policyId") != "" && !canonicalUUID(query.Get("policyId"))) {
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Policy binding list query is invalid.", requestID)
 		return policymanagement.ListBindingsRequest{}, false
@@ -165,7 +166,7 @@ func policyBindingListQuery(response http.ResponseWriter, request *http.Request,
 	result := policymanagement.ListBindingsRequest{
 		PolicyID: query.Get("policyId"),
 		Status:   accesscontrol.BindingStatus(query.Get("status")), Mode: accesscontrol.RateBindingMode(query.Get("mode")),
-		Cursor: query.Get("cursor"), PageSize: pageSize,
+		Cursor: query.Get("cursor"), PageSize: pageSize, IncludeTotal: includeTotal,
 	}
 	if subjectType != "" {
 		if !map[string]bool{"user": true, "team": true, "api_key": true}[subjectType] || !canonicalUUID(subjectID) {

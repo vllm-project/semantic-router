@@ -117,8 +117,8 @@ type RoutingModelWrite struct {
 	QualityScore      float64                    `json:"qualityScore,omitempty"`
 	Modality          string                     `json:"modality,omitempty"`
 	Tags              []string                   `json:"tags,omitempty"`
-	Control           RoutingModelControl        `json:"control"`
-	Pricing           RoutingPricing             `json:"pricing"`
+	Control           *RoutingModelControl       `json:"control,omitempty"`
+	Pricing           *RoutingPricing            `json:"pricing,omitempty"`
 	Backends          []RoutingModelBackendInput `json:"backends"`
 }
 
@@ -217,8 +217,8 @@ type RoutingBulkModelSelection struct {
 	QualityScore      float64                `json:"qualityScore,omitempty"`
 	Modality          string                 `json:"modality,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
-	Control           RoutingModelControl    `json:"control"`
-	Pricing           RoutingPricing         `json:"pricing"`
+	Control           *RoutingModelControl   `json:"control,omitempty"`
+	Pricing           *RoutingPricing        `json:"pricing,omitempty"`
 }
 
 type RoutingBulkImportRequest struct {

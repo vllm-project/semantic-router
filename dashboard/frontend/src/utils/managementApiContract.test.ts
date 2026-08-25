@@ -1,6 +1,16 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { assertManagementMe } from './managementApiContract'
+import {
+  assertManagementMe,
+  managementOperationRequest,
+  managementOperationStream,
+  setManagementNamespace,
+} from './managementApiContract'
+
+afterEach(() => {
+  setManagementNamespace(null)
+  vi.unstubAllGlobals()
+})
 
 const identity = {
   principal: { principalId: 'principal-1', displayName: 'Ada', kind: 'human', status: 'active' },
@@ -52,12 +62,112 @@ describe('Management identity contract', () => {
         ...identity,
         namespaces: [{ ...identity.namespaces[0], user: { id: 'dashboard-user-1' } }],
       }),
-    ).toThrow('invalid linked Management user')
+    ).toThrow('Me')
     expect(() =>
       assertManagementMe({
         ...identity,
         namespaces: [{ ...identity.namespaces[0], selfServicePolicy: undefined }],
       }),
-    ).toThrow('invalid Management namespace scope')
+    ).toThrow('Me')
+  })
+})
+
+describe('Management event stream transport', () => {
+  it('returns the SSE body without decoding or buffering it', async () => {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('event: progress\ndata: {}\n\n'))
+        controller.close()
+      },
+    })
+    const response = new Response(stream, {
+      status: 200,
+      headers: { 'Content-Type': 'text/event-stream' },
+    })
+    const json = vi.spyOn(response, 'json')
+    const fetchMock = vi.fn().mockResolvedValue(response)
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      managementOperationStream('getAgentSessionsBySessionEvents', {
+        pathParameters: { session: 'session-1' },
+        query: { afterSequence: 4 },
+      }),
+    ).resolves.toBe(response)
+    expect(json).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/router/management/v1/agent-sessions/session-1/events?afterSequence=4',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({ Accept: 'text/event-stream' }),
+      }),
+    )
+  })
+
+  it('rejects a non-stream operation before opening a transport', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(managementOperationStream('getUsers')).rejects.toThrow(
+      'generated streaming operation',
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('Management text transport', () => {
+  it('decodes the generated YAML export as text without attempting JSON', async () => {
+    const response = new Response('version: v0.3\n', {
+      status: 200,
+      headers: { 'Content-Type': 'application/yaml; charset=utf-8' },
+    })
+    const json = vi.spyOn(response, 'json')
+    const text = vi.spyOn(response, 'text')
+    const fetchMock = vi.fn().mockResolvedValue(response)
+    vi.stubGlobal('fetch', fetchMock)
+    setManagementNamespace('namespace-1')
+
+    await expect(
+      managementOperationRequest('getRoutingExportsCurrent', {
+        headers: {
+          Accept: 'application/json',
+          'VLLM-SR-Namespace': 'untrusted-namespace',
+        } as never,
+      }),
+    ).resolves.toBe('version: v0.3\n')
+    expect(json).not.toHaveBeenCalled()
+    expect(text).toHaveBeenCalledOnce()
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/router/management/v1/routing/exports/current',
+      expect.objectContaining({
+        method: 'GET',
+        headers: expect.objectContaining({
+          Accept: 'application/yaml',
+          'VLLM-SR-Namespace': 'namespace-1',
+        }),
+      }),
+    )
+  })
+})
+
+describe('Management empty response transport', () => {
+  it('rejects response media metadata on an OpenAPI-declared empty success', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(null, {
+          status: 204,
+          headers: {
+            'Content-Type': 'application/vnd.vllm-semantic-router.management.v1+json',
+          },
+        }),
+      ),
+    )
+
+    await expect(
+      managementOperationRequest('deleteAccessPoliciesByPolicyId', {
+        pathParameters: { policyId: '10000000-0000-4000-8000-000000000001' },
+        headers: { 'If-Match': '"access-policy:1"' },
+      }),
+    ).rejects.toMatchObject({ status: 502 })
   })
 })

@@ -19,6 +19,7 @@ import yaml
 from pydantic import ValidationError
 
 from cli.models import RecipeDistribution
+from cli.yaml_contract import YAML12SafeLoader, construct_unique_mapping, load_yaml
 
 RECIPE_FILES = (
     "metadata.yaml",
@@ -62,7 +63,7 @@ class RecipePackageError(ValueError):
     """Raised when a directory cannot be represented as a Recipe package."""
 
 
-class _UniqueKeyLoader(yaml.SafeLoader):
+class _RecipeYAMLLoader(YAML12SafeLoader):
     def compose_node(self, parent, index):
         if self.check_event(yaml.AliasEvent):
             raise RecipePackageError(
@@ -78,31 +79,20 @@ class _UniqueKeyLoader(yaml.SafeLoader):
         return super().compose_node(parent, index)
 
 
-def _construct_unique_mapping(
-    loader: _UniqueKeyLoader, node: yaml.nodes.MappingNode, deep: bool = False
+def _construct_recipe_mapping(
+    loader: _RecipeYAMLLoader, node: yaml.nodes.MappingNode, deep: bool = False
 ) -> dict[object, object]:
-    mapping: dict[object, object] = {}
-    for key_node, value_node in node.value:
+    for key_node, _ in node.value:
         if key_node.value == "<<" or key_node.tag == "tag:yaml.org,2002:merge":
             raise RecipePackageError(
                 "Managed Recipe YAML must not contain anchors, aliases, or merge keys; "
                 "explicit YAML tags are also forbidden"
             )
-        key = loader.construct_object(key_node, deep=deep)
-        try:
-            duplicate = key in mapping
-        except TypeError as error:
-            raise RecipePackageError(
-                "YAML mapping keys must be scalar values"
-            ) from error
-        if duplicate:
-            raise RecipePackageError(f"Duplicate YAML mapping key: {key}")
-        mapping[key] = loader.construct_object(value_node, deep=deep)
-    return mapping
+    return construct_unique_mapping(loader, node, deep=deep)
 
 
-_UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_unique_mapping
+_RecipeYAMLLoader.add_constructor(
+    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, _construct_recipe_mapping
 )
 
 
@@ -171,7 +161,7 @@ def _read_exact_recipe_files(recipe_dir: Path) -> dict[str, bytes]:
 
 def _load_yaml_mapping(data: bytes, filename: str) -> dict[str, object]:
     try:
-        document = yaml.load(data.decode("utf-8"), Loader=_UniqueKeyLoader)
+        document = yaml.load(data.decode("utf-8"), Loader=_RecipeYAMLLoader)
     except yaml.YAMLError as error:
         raise RecipePackageError(f"Invalid {filename} syntax") from error
     if not isinstance(document, dict) or not all(
@@ -502,7 +492,7 @@ def literal_credential_paths(
     """Return credential-like literal paths without exposing their values."""
 
     try:
-        document = yaml.safe_load(data.decode("utf-8"))
+        document = load_yaml(data.decode("utf-8"))
     except yaml.YAMLError:
         return ()
     found: set[str] = set()

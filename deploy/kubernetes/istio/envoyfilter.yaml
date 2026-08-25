@@ -21,14 +21,18 @@ spec:
         name: envoy.filters.http.ext_proc
         typed_config:
           '@type': type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
-          failure_mode_allow: true
+          # Authentication, authorization, and global quotas are Router-owned.
+          # ExtProc failure therefore fails closed.
+          failure_mode_allow: false
           allow_mode_override: true
           message_timeout: 300s
           processing_mode:
             request_header_mode: SEND
             response_header_mode: SEND
             request_body_mode: BUFFERED
-            response_body_mode: NONE
+            # Response bodies carry the backend-authoritative token usage used
+            # for settlement. Streaming responses override this to STREAMED.
+            response_body_mode: BUFFERED
             request_trailer_mode: SKIP
             response_trailer_mode: SKIP
           grpc_service:

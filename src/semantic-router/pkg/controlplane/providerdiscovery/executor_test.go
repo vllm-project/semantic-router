@@ -111,7 +111,7 @@ func TestExecutorDiscoversWithCompiledProviderPlanAndIssuesSelectionClaim(t *tes
 		transport.request.Header.Get("X-Provider-Version") != "1" {
 		t.Fatalf("outbound request = %+v", transport.request)
 	}
-	if len(result.Models[0].Capabilities) != 2 || result.Models[0].CatalogItemID == "" {
+	if result.Models[0].Capabilities != nil || result.Models[0].CatalogItemID == "" {
 		t.Fatalf("normalized model = %+v", result.Models[0])
 	}
 	selected, err := executor.Claims.VerifySelection(result.DiscoveryRevision, ClaimExpectation{
@@ -254,7 +254,6 @@ func testPlan() providercatalog.DiscoveryPlan {
 		CredentialMode:      providercatalog.CredentialRequired,
 		CredentialAdapterID: "bearer", CredentialID: testCredentialID,
 		NormalizedOrigin: "https://api.example.com/v1", Path: "/models",
-		Headers:      map[string]string{"X-Provider-Version": "1"},
-		Capabilities: []string{"streaming", "tools"}, PageSize: 1,
+		Headers: map[string]string{"X-Provider-Version": "1"}, PageSize: 1,
 	}
 }

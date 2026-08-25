@@ -69,11 +69,20 @@ func (repository *listScopeRepository) ListUserMemberships(
 	if repository.emptyMembership {
 		return RepositoryPage[UserMembership]{HasMore: true}, nil
 	}
+	var totalCount *uint64
+	if query.IncludeTotal {
+		count := uint64(2)
+		totalCount = &count
+	}
 	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	teamID, createdAt, hasMore := listScopeTeamOne, now, true
+	if query.After != nil {
+		teamID, createdAt, hasMore = listScopeTeamTwo, now.Add(-time.Second), false
+	}
 	return RepositoryPage[UserMembership]{Items: []UserMembership{{Membership: Membership{
-		NamespaceID: listScopeNamespace, UserID: query.UserID, TeamID: listScopeTeamOne,
-		CreatedAt: now, UpdatedAt: now,
-	}}}, HasMore: true}, nil
+		NamespaceID: listScopeNamespace, UserID: query.UserID, TeamID: teamID,
+		CreatedAt: createdAt, UpdatedAt: now,
+	}}}, HasMore: hasMore, TotalCount: totalCount}, nil
 }
 
 func TestListUsersBindsScopeBeforeStablePagination(t *testing.T) {
@@ -161,9 +170,11 @@ func TestListMembershipsBindsTeamScopeToCursor(t *testing.T) {
 		TeamIDs:     []accesscontrol.TeamID{listScopeTeamOne},
 	}
 	first, err := service.ListUserMemberships(context.Background(), MembershipListRequest{
-		NamespaceID: listScopeNamespace, UserID: listScopeUserOne, PageSize: 1, Scope: firstScope,
+		NamespaceID: listScopeNamespace, UserID: listScopeUserOne, PageSize: 1,
+		IncludeTotal: true, Scope: firstScope,
 	})
-	if err != nil || first.NextCursor == "" || !first.HasMore || repository.membershipCalls != 1 {
+	if err != nil || first.NextCursor == "" || !first.HasMore || repository.membershipCalls != 1 ||
+		first.TotalCount == nil || *first.TotalCount != 2 {
 		t.Fatalf("first membership page = %#v, calls = %d, error = %v", first, repository.membershipCalls, err)
 	}
 	if _, err := service.ListUserMemberships(context.Background(), MembershipListRequest{
@@ -174,6 +185,14 @@ func TestListMembershipsBindsTeamScopeToCursor(t *testing.T) {
 		}, Cursor: first.NextCursor,
 	}); !errors.Is(err, ErrInvalidRequest) || repository.membershipCalls != 1 {
 		t.Fatalf("membership scope-swap error = %v, calls = %d", err, repository.membershipCalls)
+	}
+	second, err := service.ListUserMemberships(context.Background(), MembershipListRequest{
+		NamespaceID: listScopeNamespace, UserID: listScopeUserOne, PageSize: 1,
+		IncludeTotal: true, Scope: firstScope, Cursor: first.NextCursor,
+	})
+	if err != nil || second.HasMore || len(second.Items) != 1 ||
+		second.Items[0].TeamID != listScopeTeamTwo || second.TotalCount == nil || *second.TotalCount != 2 {
+		t.Fatalf("second membership page = %#v, error = %v", second, err)
 	}
 }
 

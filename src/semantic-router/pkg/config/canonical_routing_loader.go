@@ -3,8 +3,6 @@ package config
 import (
 	"fmt"
 	"sort"
-
-	"gopkg.in/yaml.v2"
 )
 
 type routingFragment struct {
@@ -42,7 +40,7 @@ func ParseRoutingYAMLBytes(data []byte) (*RouterConfig, error) {
 	}
 
 	fragment := &routingFragment{}
-	if err := yaml.UnmarshalStrict(data, fragment); err != nil {
+	if err := DecodeYAML12Strict(data, fragment); err != nil {
 		return nil, fmt.Errorf("failed to parse routing fragment: %w", err)
 	}
 

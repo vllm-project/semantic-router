@@ -33,10 +33,16 @@ interface ConfigPageModelsSectionProps {
 interface ModelFormState {
   name: string
   aliases: string
+  paramSize: string
+  contextWindowSize: string
+  description: string
   capabilities: string
   reasoningType: string
   reasoningEfforts: string
   loras: string
+  qualityScore: string
+  modality: string
+  tags: string
   maxRetries: number
   retryOn: FallbackTrigger[]
   requestTimeout: string
@@ -64,6 +70,26 @@ const splitList = (value: string): string[] => [
 const nullableCost = (value: string): string | null => {
   const normalized = value.trim()
   return normalized || null
+}
+
+const optionalWholeNumber = (value: string, label: string, maximum: number): number => {
+  const normalized = value.trim()
+  if (!normalized) return 0
+  const parsed = Number(normalized)
+  if (!Number.isSafeInteger(parsed) || parsed < 0 || parsed > maximum) {
+    throw new Error(`${label} must be a whole number from 0 to ${maximum.toLocaleString()}.`)
+  }
+  return parsed
+}
+
+const optionalQualityScore = (value: string): number => {
+  const normalized = value.trim()
+  if (!normalized) return 0
+  const parsed = Number(normalized)
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    throw new Error('Quality score must be from 0 to 1.')
+  }
+  return parsed
 }
 
 const price = (value: string | null | undefined): string => value ?? '—'
@@ -155,10 +181,16 @@ export default function ConfigPageModelsSection({
     const form: ModelFormState = {
       name: model.name,
       aliases: model.aliases.join(', '),
+      paramSize: model.paramSize ?? '',
+      contextWindowSize: model.contextWindowSize ? String(model.contextWindowSize) : '',
+      description: model.description ?? '',
       capabilities: model.capabilities.join(', '),
       reasoningType: model.reasoning?.type ?? '',
       reasoningEfforts: model.reasoning?.efforts?.join(', ') ?? '',
       loras: model.loras.join(', '),
+      qualityScore: model.qualityScore ? String(model.qualityScore) : '',
+      modality: model.modality ?? '',
+      tags: model.tags.join(', '),
       maxRetries: model.control.retry.count,
       retryOn: [...model.control.retry.on],
       requestTimeout: model.control.timeout.request,
@@ -179,6 +211,19 @@ export default function ConfigPageModelsSection({
           type: 'textarea',
           description: 'Comma-separated names clients can recognize.',
         },
+        { name: 'description', label: 'Description', type: 'textarea' },
+        {
+          name: 'paramSize',
+          label: 'Parameter size',
+          type: 'text',
+          placeholder: '32B',
+        },
+        {
+          name: 'contextWindowSize',
+          label: 'Context window',
+          type: 'text',
+          placeholder: '131072',
+        },
         {
           name: 'capabilities',
           label: 'Capabilities',
@@ -193,12 +238,26 @@ export default function ConfigPageModelsSection({
           placeholder: 'low, medium, high',
         },
         { name: 'loras', label: 'LoRA adapters', type: 'textarea' },
+        {
+          name: 'qualityScore',
+          label: 'Quality score',
+          type: 'text',
+          placeholder: '0.90',
+          description: 'Optional value from 0 to 1.',
+        },
+        { name: 'modality', label: 'Modality', type: 'text', placeholder: 'text' },
+        {
+          name: 'tags',
+          label: 'Tags',
+          type: 'textarea',
+          description: 'Comma-separated labels.',
+        },
         { name: 'maxRetries', label: 'Max retries', type: 'number', min: 0, max: 5 },
         {
           name: 'retryOn',
           label: 'Retry on',
           type: 'multiselect',
-          options: ['unavailable', 'overloaded', 'timeout'],
+          options: ['unavailable', 'timeout'],
           description: 'Only retries attempts proven safe to repeat.',
         },
         {
@@ -253,6 +312,13 @@ export default function ConfigPageModelsSection({
         const patch: RoutingModelPatch = {
           name,
           aliases: splitList(next.aliases),
+          paramSize: next.paramSize.trim(),
+          contextWindowSize: optionalWholeNumber(
+            next.contextWindowSize,
+            'Context window',
+            100_000_000,
+          ),
+          description: next.description.trim(),
           capabilities: splitList(next.capabilities),
           reasoning: {
             ...(next.reasoningType.trim() ? { type: next.reasoningType.trim() } : {}),
@@ -261,6 +327,9 @@ export default function ConfigPageModelsSection({
               : {}),
           },
           loras: splitList(next.loras),
+          qualityScore: optionalQualityScore(next.qualityScore),
+          modality: next.modality.trim(),
+          tags: splitList(next.tags),
           control: {
             retry: {
               count: control.retry.count ?? 0,
@@ -294,6 +363,12 @@ export default function ConfigPageModelsSection({
           { label: 'Name', value: model.name },
           { label: 'Status', value: model.status === 'active' ? 'Live' : 'Draft' },
           { label: 'Aliases', value: model.aliases.join(', ') || '—', fullWidth: true },
+          { label: 'Description', value: model.description || '—', fullWidth: true },
+          { label: 'Parameter size', value: model.paramSize || '—' },
+          {
+            label: 'Context window',
+            value: model.contextWindowSize?.toLocaleString() || '—',
+          },
           {
             label: 'Capabilities',
             value: model.capabilities.join(', ') || '—',
@@ -301,6 +376,9 @@ export default function ConfigPageModelsSection({
           },
           { label: 'Reasoning family', value: model.reasoning?.type || '—' },
           { label: 'LoRA adapters', value: model.loras.join(', ') || '—' },
+          { label: 'Quality score', value: model.qualityScore ?? '—' },
+          { label: 'Modality', value: model.modality || '—' },
+          { label: 'Tags', value: model.tags.join(', ') || '—', fullWidth: true },
         ],
       },
       {

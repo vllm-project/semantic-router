@@ -68,44 +68,44 @@ func compilePreconditions(
 		hashEqual(publicationKeys.RoutingGate(), "runtime_epoch", strconv.FormatUint(active.RuntimeEpoch, 10), quotaruntime.AdmissionUnavailable, "runtime_epoch_changed"),
 		hashEqual(publicationKeys.RoutingGate(), "revision", strconv.FormatInt(active.RoutingRevision, 10), quotaruntime.AdmissionUnavailable, "routing_revision_changed"),
 		hashEqual(publicationKeys.RoutingGate(), "snapshot_digest", active.RoutingSnapshotHash, quotaruntime.AdmissionUnavailable, "routing_snapshot_changed"),
-		hashEqual(credentialKey, "publication_id", active.PublicationID, quotaruntime.AdmissionUnauthenticated, "credential_changed"),
-		hashEqual(credentialKey, "kind", string(kind), quotaruntime.AdmissionUnauthenticated, "credential_changed"),
-		hashEqual(credentialKey, "key_id", credential.KeyID, quotaruntime.AdmissionUnauthenticated, "credential_changed"),
-		hashEqual(credentialKey, "secret_hmac", base64.RawURLEncoding.EncodeToString(credential.SecretHMAC), quotaruntime.AdmissionUnauthenticated, "credential_changed"),
-		hashEqual(credentialKey, "pepper_version", credential.PepperVersion, quotaruntime.AdmissionUnavailable, "credential_pepper_changed"),
-		hashEqual(credentialKey, "status", credential.Status, quotaruntime.AdmissionUnauthenticated, "credential_inactive"),
-		{Key: credentialKey, Kind: quotaruntime.AdmissionCheckNotBefore, Field: "not_before_ms", Failure: quotaruntime.AdmissionUnauthenticated, Reason: "credential_not_yet_valid"},
-		hashEqual(logicalKey, "publication_id", active.PublicationID, quotaruntime.AdmissionUnauthenticated, "key_changed"),
-		hashEqual(logicalKey, "status", string(projection.KeyStatus), quotaruntime.AdmissionUnauthenticated, "key_inactive"),
-		hashEqual(logicalKey, "policy_epoch", strconv.FormatUint(projection.PolicyEpoch, 10), quotaruntime.AdmissionForbidden, "key_policy_changed"),
-		hashEqual(logicalKey, "delegation_epoch", strconv.FormatUint(projection.DelegationEpoch, 10), quotaruntime.AdmissionForbidden, "key_delegation_changed"),
-		hashEqual(activeKey, "publication_id", active.PublicationID, quotaruntime.AdmissionForbidden, "policy_changed"),
-		hashEqual(activeKey, "revision", strconv.FormatUint(active.Revision, 10), quotaruntime.AdmissionForbidden, "policy_changed"),
-		hashEqual(activeKey, "digest", active.Digest, quotaruntime.AdmissionForbidden, "policy_changed"),
+		publishedHashEqual(credentialKey, active.PublicationID, "state", "active", quotaruntime.AdmissionUnauthenticated, "credential_changed"),
+		publishedHashEqual(credentialKey, active.PublicationID, "kind", string(kind), quotaruntime.AdmissionUnauthenticated, "credential_changed"),
+		publishedHashEqual(credentialKey, active.PublicationID, "key_id", credential.KeyID, quotaruntime.AdmissionUnauthenticated, "credential_changed"),
+		publishedHashEqual(credentialKey, active.PublicationID, "secret_hmac", base64.RawURLEncoding.EncodeToString(credential.SecretHMAC), quotaruntime.AdmissionUnauthenticated, "credential_changed"),
+		publishedHashEqual(credentialKey, active.PublicationID, "pepper_version", credential.PepperVersion, quotaruntime.AdmissionUnavailable, "credential_pepper_changed"),
+		publishedHashEqual(credentialKey, active.PublicationID, "status", credential.Status, quotaruntime.AdmissionUnauthenticated, "credential_inactive"),
+		publishedTimeCheck(credentialKey, active.PublicationID, quotaruntime.AdmissionCheckPublishedNotBefore, "not_before_ms", quotaruntime.AdmissionUnauthenticated, "credential_not_yet_valid"),
+		publishedHashEqual(logicalKey, active.PublicationID, "state", "active", quotaruntime.AdmissionUnauthenticated, "key_changed"),
+		publishedHashEqual(logicalKey, active.PublicationID, "status", string(projection.KeyStatus), quotaruntime.AdmissionUnauthenticated, "key_inactive"),
+		publishedHashEqual(logicalKey, active.PublicationID, "policy_epoch", strconv.FormatUint(projection.PolicyEpoch, 10), quotaruntime.AdmissionForbidden, "key_policy_changed"),
+		publishedHashEqual(logicalKey, active.PublicationID, "delegation_epoch", strconv.FormatUint(projection.DelegationEpoch, 10), quotaruntime.AdmissionForbidden, "key_delegation_changed"),
+		publishedHashEqual(activeKey, active.PublicationID, "state", "active", quotaruntime.AdmissionForbidden, "policy_changed"),
+		publishedHashEqual(activeKey, active.PublicationID, "revision", strconv.FormatUint(active.Revision, 10), quotaruntime.AdmissionForbidden, "policy_changed"),
+		publishedHashEqual(activeKey, active.PublicationID, "digest", active.Digest, quotaruntime.AdmissionForbidden, "policy_changed"),
 		hashEqual(policyKey, "publication_id", active.PublicationID, quotaruntime.AdmissionUnavailable, "policy_projection_changed"),
 		hashEqual(policyKey, "digest", active.Digest, quotaruntime.AdmissionUnavailable, "policy_projection_changed"),
 	}
 	if kind == accesscredential.KindDelegation {
 		checks = append(checks,
-			hashEqual(credentialKey, "management_session_id", credential.ManagementSessionID, quotaruntime.AdmissionForbidden, "management_session_changed"),
-			hashEqual(credentialKey, "principal_id", credential.PrincipalID, quotaruntime.AdmissionForbidden, "management_principal_changed"),
-			hashEqual(credentialKey, "delegation_epoch", strconv.FormatUint(credential.DelegationEpoch, 10), quotaruntime.AdmissionForbidden, "key_delegation_changed"),
-			hashEqual(credentialKey, "user_id", credential.UserID, quotaruntime.AdmissionForbidden, "delegation_user_changed"),
-			hashEqual(credentialKey, "team_id", credential.TeamID, quotaruntime.AdmissionForbidden, "delegation_team_changed"),
-			hashEqual(credentialKey, "audience", credential.Audience, quotaruntime.AdmissionUnauthenticated, "delegation_audience_changed"),
+			publishedHashEqual(credentialKey, active.PublicationID, "management_session_id", credential.ManagementSessionID, quotaruntime.AdmissionForbidden, "management_session_changed"),
+			publishedHashEqual(credentialKey, active.PublicationID, "principal_id", credential.PrincipalID, quotaruntime.AdmissionForbidden, "management_principal_changed"),
+			publishedHashEqual(credentialKey, active.PublicationID, "delegation_epoch", strconv.FormatUint(credential.DelegationEpoch, 10), quotaruntime.AdmissionForbidden, "key_delegation_changed"),
+			publishedHashEqual(credentialKey, active.PublicationID, "user_id", credential.UserID, quotaruntime.AdmissionForbidden, "delegation_user_changed"),
+			publishedHashEqual(credentialKey, active.PublicationID, "team_id", credential.TeamID, quotaruntime.AdmissionForbidden, "delegation_team_changed"),
+			publishedHashEqual(credentialKey, active.PublicationID, "audience", credential.Audience, quotaruntime.AdmissionUnauthenticated, "delegation_audience_changed"),
 		)
 	}
 	if credential.ExpiresAt != nil {
-		checks = append(checks, quotaruntime.AdmissionPrecondition{
-			Key: credentialKey, Kind: quotaruntime.AdmissionCheckExpiresAfter, Field: "expires_at_ms",
-			Failure: quotaruntime.AdmissionUnauthenticated, Reason: "credential_expired",
-		})
+		checks = append(checks, publishedTimeCheck(
+			credentialKey, active.PublicationID, quotaruntime.AdmissionCheckPublishedExpiresAfter,
+			"expires_at_ms", quotaruntime.AdmissionUnauthenticated, "credential_expired",
+		))
 	}
 	if projection.KeyExpiresAt != nil {
-		checks = append(checks, quotaruntime.AdmissionPrecondition{
-			Key: logicalKey, Kind: quotaruntime.AdmissionCheckExpiresAfter, Field: "expires_at_ms",
-			Failure: quotaruntime.AdmissionUnauthenticated, Reason: "key_expired",
-		})
+		checks = append(checks, publishedTimeCheck(
+			logicalKey, active.PublicationID, quotaruntime.AdmissionCheckPublishedExpiresAfter,
+			"expires_at_ms", quotaruntime.AdmissionUnauthenticated, "key_expired",
+		))
 	}
 	for _, denied := range denyReferences(keys, kind, publicID, credential, projection) {
 		checks = append(checks, quotaruntime.AdmissionPrecondition{
@@ -152,6 +152,31 @@ func denyReferences(
 
 func hashEqual(key, field, expected string, failure quotaruntime.AdmissionDisposition, reason string) quotaruntime.AdmissionPrecondition {
 	return quotaruntime.AdmissionPrecondition{Key: key, Kind: quotaruntime.AdmissionCheckHashEqual, Field: field, Expected: expected, Failure: failure, Reason: reason}
+}
+
+func publishedHashEqual(
+	key, publicationID, field, expected string,
+	failure quotaruntime.AdmissionDisposition,
+	reason string,
+) quotaruntime.AdmissionPrecondition {
+	return quotaruntime.AdmissionPrecondition{
+		Key: key, Kind: quotaruntime.AdmissionCheckPublishedHashEqual,
+		Field: field, Expected: expected, PublicationID: publicationID,
+		Failure: failure, Reason: reason,
+	}
+}
+
+func publishedTimeCheck(
+	key, publicationID string,
+	kind quotaruntime.AdmissionCheckKind,
+	field string,
+	failure quotaruntime.AdmissionDisposition,
+	reason string,
+) quotaruntime.AdmissionPrecondition {
+	return quotaruntime.AdmissionPrecondition{
+		Key: key, Kind: kind, Field: field, PublicationID: publicationID,
+		Failure: failure, Reason: reason,
+	}
 }
 
 func tenantContext(

@@ -93,20 +93,17 @@ func validateBootstrapFieldNames(raw map[string]interface{}) error {
 	if len(global) == 0 {
 		return nil
 	}
-	if _, found := global["control_plane"]; found {
-		return fmt.Errorf("global.control_plane has been removed; runtime capabilities are derived from configured services and stores")
-	}
-	stores := nestedStringMap(global["stores"])
-	for _, removed := range []string{"access", "access_runtime"} {
-		if _, found := stores[removed]; found {
-			return fmt.Errorf("global.stores.%s has been removed; use global.stores.management.postgres and global.stores.runtime.redis", removed)
-		}
-	}
 	checks := []struct {
 		path    string
 		node    map[string]interface{}
 		allowed []string
 	}{
+		{"global", global, []string{"billing", "router", "services", "stores", "integrations", "model_catalog"}},
+		{"global.billing", nestedMapAt(global, "billing"), []string{"currency"}},
+		{"global.services", nestedMapAt(global, "services"), []string{"api", "response_api", "agent", "observability", "management_api", "access", "backend_credentials", "backend_egress", "backend_dispatch", "routing_security", "router_replay", "startup_status"}},
+		{"global.stores", nestedMapAt(global, "stores"), []string{"response_cache", "memory", "vector_store", "management", "runtime"}},
+		{"global.integrations", nestedMapAt(global, "integrations"), []string{"tools", "looper"}},
+		{"global.model_catalog", nestedMapAt(global, "model_catalog"), []string{"embeddings", "system", "external", "kbs", "modules"}},
 		{"global.stores.management", nestedMapAt(global, "stores", "management"), []string{"postgres"}},
 		{"global.stores.management.postgres", nestedMapAt(global, "stores", "management", "postgres"), []string{"dsn_file", "dsn_env", "max_connections"}},
 		{"global.stores.runtime", nestedMapAt(global, "stores", "runtime"), []string{"redis"}},

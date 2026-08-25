@@ -40,18 +40,20 @@ func (codec *LogCursorCodec) Close() {
 }
 
 type LogQuery struct {
-	NamespaceID string
-	Start       time.Time
-	End         time.Time
-	Filters     UsageFilters
-	Visibility  QueryVisibility
-	PageSize    int
-	Cursor      string
+	NamespaceID       string
+	ExternalRequestID string
+	Start             time.Time
+	End               time.Time
+	Filters           UsageFilters
+	Visibility        QueryVisibility
+	PageSize          int
+	Cursor            string
 }
 
 type RequestLog struct {
 	AdmissionID         string            `json:"admissionId"`
 	EventID             string            `json:"eventId"`
+	ExternalRequestID   string            `json:"externalRequestId,omitempty"`
 	OccurredAt          time.Time         `json:"occurredAt"`
 	CompletedAt         time.Time         `json:"completedAt"`
 	Protocol            string            `json:"protocol"`
@@ -100,6 +102,12 @@ func (q PostgresQueries) ListLogs(ctx context.Context, query LogQuery, codec *Lo
 	}
 	if query.Filters.LogicalModelID != "" || query.Filters.BackendID != "" || query.Filters.ProviderID != "" || query.Filters.DispatchType != "" {
 		return LogPage{}, invalidQueryf("raw request-log list does not accept internal dispatch filters")
+	}
+	if query.ExternalRequestID != "" {
+		if err := boundedIdentifier("external request ID", query.ExternalRequestID, 256); err != nil ||
+			looksSensitive(query.ExternalRequestID) {
+			return LogPage{}, invalidQueryf("external request ID is invalid")
+		}
 	}
 	if query.PageSize == 0 {
 		query.PageSize = 50
@@ -168,7 +176,7 @@ func rawLogPageQuery(query LogQuery, cursor *logCursor) (string, []any) {
 		where += fmt.Sprintf(" AND (occurred_at, event_id) < ($%d, $%d::uuid)", len(args)-1, len(args))
 	}
 	args = append(args, query.PageSize+1)
-	return fmt.Sprintf(`SELECT admission_id, event_id::text, occurred_at, protocol, path,
+	return fmt.Sprintf(`SELECT admission_id, event_id::text, COALESCE(external_request_id,''), occurred_at, protocol, path,
   status_code, COALESCE(error_code,''), usage_state, input_tokens::text, output_tokens::text,
   latency_ms, ttft_ms, COALESCE(api_key_id::text,''), COALESCE(user_id::text,''), COALESCE(team_id::text,''),
   COALESCE(entrypoint_id::text,''), COALESCE(recipe_id::text,''), costs, request_metadata
@@ -188,7 +196,7 @@ func scanRequestLog(row rowScanner) (RequestLog, error) {
 func scanRequestLogWithMetadata(row rowScanner) (RequestLog, safeEventMetadata, error) {
 	var item RequestLog
 	var costsJSON, metadataJSON []byte
-	if err := row.Scan(&item.AdmissionID, &item.EventID, &item.OccurredAt, &item.Protocol,
+	if err := row.Scan(&item.AdmissionID, &item.EventID, &item.ExternalRequestID, &item.OccurredAt, &item.Protocol,
 		&item.Path, &item.StatusCode, &item.ErrorCode, &item.UsageState, &item.InputTokens,
 		&item.OutputTokens, &item.LatencyMilliseconds, &item.TTFTMilliseconds, &item.APIKeyID, &item.UserID,
 		&item.TeamID, &item.EntrypointID, &item.RecipeID, &costsJSON, &metadataJSON); err != nil {
@@ -250,6 +258,10 @@ func rawLogWhere(query LogQuery) (string, []any) {
 		args = append(args, filter.value)
 		clauses = append(clauses, fmt.Sprintf("%s = $%d::%s", filter.column, len(args), filter.cast))
 	}
+	if query.ExternalRequestID != "" {
+		args = append(args, query.ExternalRequestID)
+		clauses = append(clauses, fmt.Sprintf("external_request_id = $%d", len(args)))
+	}
 	if query.Filters.StatusCode != 0 {
 		args = append(args, query.Filters.StatusCode)
 		clauses = append(clauses, fmt.Sprintf("status_code = $%d", len(args)))
@@ -282,11 +294,16 @@ func appendRawLogVisibility(clauses *[]string, args *[]any, visibility QueryVisi
 
 func logFilterDigest(query LogQuery) string {
 	payload, _ := json.Marshal(struct {
-		Start      int64           `json:"start"`
-		End        int64           `json:"end"`
-		Filters    UsageFilters    `json:"filters"`
-		Visibility QueryVisibility `json:"visibility"`
-	}{Start: query.Start.UnixNano(), End: query.End.UnixNano(), Filters: query.Filters, Visibility: query.Visibility})
+		Start             int64           `json:"start"`
+		End               int64           `json:"end"`
+		ExternalRequestID string          `json:"requestId,omitempty"`
+		Filters           UsageFilters    `json:"filters"`
+		Visibility        QueryVisibility `json:"visibility"`
+	}{
+		Start: query.Start.UnixNano(), End: query.End.UnixNano(),
+		ExternalRequestID: query.ExternalRequestID,
+		Filters:           query.Filters, Visibility: query.Visibility,
+	})
 	digest := sha256.Sum256(payload)
 	return hex.EncodeToString(digest[:])
 }

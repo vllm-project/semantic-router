@@ -3,7 +3,7 @@
   "jsonSchemaDialect": "https://json-schema.org/draft/2020-12/schema",
   "info": {
     "title": "vLLM Semantic Router Management API",
-    "version": "0.4"
+    "version": "v1"
   },
   "servers": [
     {
@@ -1251,6 +1251,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "description": "Include the permission-filtered total count for this collection.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -12440,6 +12449,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "description": "Include the permission-filtered total count for this collection.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -37294,6 +37312,15 @@
             }
           },
           {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "description": "Include the permission-filtered total count for this collection.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "mode",
             "in": "query",
             "required": false,
@@ -40173,6 +40200,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "requestId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 256
             }
           },
           {
@@ -47334,6 +47370,16 @@
               "minimum": 1,
               "maximum": 200
             }
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "required": false,
+            "description": "Case-insensitive literal prefix matched only against public resource identity fields.",
+            "schema": {
+              "type": "string",
+              "maxLength": 200
+            }
           }
         ],
         "responses": {
@@ -47518,6 +47564,231 @@
           "varyAuthorization": false
         },
         "x-router-pagination": "keyset",
+        "x-router-idempotency": "none",
+        "x-router-revision": "none"
+      }
+    },
+    "/management/v1/self/inference-keys/{keyId}": {
+      "get": {
+        "operationId": "getSelfInferenceKeysByKeyId",
+        "tags": [
+          "Delegation"
+        ],
+        "parameters": [
+          {
+            "name": "Accept",
+            "in": "header",
+            "required": true,
+            "description": "Required response media type. Generic JSON and wildcard negotiation are not supported.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "application/vnd.vllm-semantic-router.management.v1+json"
+              ]
+            }
+          },
+          {
+            "name": "VLLM-SR-Namespace",
+            "in": "header",
+            "required": true,
+            "description": "Canonical namespace UUID for namespace-owned Management resources.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
+            }
+          },
+          {
+            "name": "keyId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[^/?#]+$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EligibleInferenceKeyDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "412": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "428": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Canonical Management API error.",
+            "content": {
+              "application/vnd.vllm-semantic-router.management.v1+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "managementBearer": []
+          }
+        ],
+        "x-router-permission-expression": {
+          "operator": "all",
+          "operands": [
+            {
+              "operator": "permission",
+              "permission": "self.read",
+              "scope": "intrinsic_self"
+            },
+            {
+              "operator": "permission",
+              "permission": "delegation.use",
+              "scope": "user"
+            }
+          ]
+        },
+        "x-router-permission-canonical": "(self.read@intrinsic_self AND delegation.use@user)",
+        "x-router-scope": "intrinsic_self",
+        "x-router-async": "synchronous",
+        "x-router-secret": {
+          "input": "none",
+          "output": "none",
+          "noStore": false,
+          "varyAuthorization": false
+        },
+        "x-router-pagination": "none",
         "x-router-idempotency": "none",
         "x-router-revision": "none"
       }
@@ -52890,6 +53161,15 @@
             "required": false,
             "schema": {
               "type": "string"
+            }
+          },
+          {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "description": "Include the permission-filtered total count for this collection.",
+            "schema": {
+              "type": "boolean"
             }
           },
           {
@@ -59586,6 +59866,15 @@
             }
           },
           {
+            "name": "includeTotal",
+            "in": "query",
+            "required": false,
+            "description": "Include the permission-filtered total count for this collection.",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
             "name": "pageSize",
             "in": "query",
             "required": false,
@@ -64745,6 +65034,9 @@
             "$ref": "#/components/schemas/AgentAssistantDeltaEvent"
           },
           {
+            "$ref": "#/components/schemas/AgentModelStepSummaryEvent"
+          },
+          {
             "$ref": "#/components/schemas/AgentToolRequestEvent"
           },
           {
@@ -64831,6 +65123,9 @@
           },
           {
             "$ref": "#/components/schemas/AgentAssistantDeltaEventPayload"
+          },
+          {
+            "$ref": "#/components/schemas/AgentModelStepSummaryEventPayload"
           },
           {
             "$ref": "#/components/schemas/AgentToolRequestEventPayload"
@@ -65036,6 +65331,155 @@
             "additionalProperties": false
           }
         ]
+      },
+      "AgentModelStepSummaryEvent": {
+        "type": "object",
+        "required": [
+          "sessionId",
+          "sequence",
+          "type",
+          "payload",
+          "createdAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "payload": {
+            "$ref": "#/components/schemas/AgentModelStepSummaryEventPayload"
+          },
+          "sequence": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "turnId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "model_step_summary"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentModelStepSummaryEventPayload": {
+        "type": "object",
+        "required": [
+          "modelStepId",
+          "requestId",
+          "latencyMilliseconds"
+        ],
+        "properties": {
+          "latencyMilliseconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "modelStepId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256
+          },
+          "responsePath": {
+            "type": "string",
+            "enum": [
+              "upstream",
+              "cache",
+              "fast_response",
+              "looper",
+              "image_generation"
+            ]
+          },
+          "selectedAlgorithm": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "selectedDecision": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "selectedModel": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "selectedRecipe": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "ttftMilliseconds": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 86400000
+          },
+          "usage": {
+            "$ref": "#/components/schemas/AgentModelStepUsage"
+          }
+        },
+        "additionalProperties": false
+      },
+      "AgentModelStepUsage": {
+        "type": "object",
+        "required": [
+          "inputTokens",
+          "outputTokens",
+          "totalTokens"
+        ],
+        "properties": {
+          "inputCacheReadTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "inputCacheWriteTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "inputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "inputUncachedTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputOtherTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputReasoningTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "outputTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          },
+          "totalTokens": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 9007199254740991
+          }
+        },
+        "additionalProperties": false
       },
       "AgentProfile": {
         "type": "object",
@@ -67341,12 +67785,12 @@
         "required": [
           "catalogItemId",
           "providerModelId",
-          "displayName",
-          "capabilities"
+          "displayName"
         ],
         "properties": {
           "capabilities": {
             "type": "array",
+            "description": "Model-specific capabilities present only when discovery provides authoritative evidence.",
             "items": {
               "type": "string"
             }
@@ -67521,6 +67965,62 @@
                   "user",
                   "team"
                 ]
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        "additionalProperties": false
+      },
+      "EligibleInferenceKeyDetail": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "object",
+            "required": [
+              "keyId",
+              "name",
+              "owner"
+            ],
+            "properties": {
+              "contextTeamId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "expiresAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "keyId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "owner": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "id"
+                ],
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "user",
+                      "team"
+                    ]
+                  }
+                },
+                "additionalProperties": false
               }
             },
             "additionalProperties": false
@@ -73318,6 +73818,10 @@
             "type": "integer",
             "minimum": 1,
             "maximum": 200
+          },
+          "totalCount": {
+            "type": "string",
+            "pattern": "^(0|[1-9][0-9]*)$"
           }
         },
         "additionalProperties": false
@@ -73803,6 +74307,7 @@
         "properties": {
           "capabilities": {
             "type": "array",
+            "description": "Provider transport features used for catalog filtering; never inherited by Models.",
             "items": {
               "type": "string"
             }
@@ -74174,6 +74679,7 @@
         "properties": {
           "capabilities": {
             "type": "array",
+            "description": "Transport features carried by this interface; not Model capability metadata.",
             "items": {
               "type": "string"
             }
@@ -80105,6 +80611,10 @@
           "eventId": {
             "type": "string"
           },
+          "externalRequestId": {
+            "type": "string",
+            "maxLength": 256
+          },
           "inputTokens": {
             "type": "string",
             "pattern": "^(0|[1-9][0-9]*)$"
@@ -80491,7 +81001,9 @@
             "$ref": "#/components/schemas/RoutingPricing"
           },
           "qualityScore": {
-            "type": "number"
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           },
           "reasoning": {
             "$ref": "#/components/schemas/RoutingReasoningFamily"
@@ -81767,12 +82279,11 @@
               "type": "string",
               "enum": [
                 "unavailable",
-                "overloaded",
                 "timeout"
               ]
             },
             "minItems": 1,
-            "maxItems": 3
+            "maxItems": 2
           },
           "strategy": {
             "type": "string",
@@ -82013,7 +82524,9 @@
             "type": "string"
           },
           "qualityScore": {
-            "type": "number"
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           },
           "reasoning": {
             "$ref": "#/components/schemas/RoutingReasoningFamily"
@@ -82161,7 +82674,9 @@
             "$ref": "#/components/schemas/RoutingPricing"
           },
           "qualityScore": {
-            "type": "number"
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           },
           "reasoning": {
             "$ref": "#/components/schemas/RoutingReasoningFamily"
@@ -82189,11 +82704,10 @@
               "type": "string",
               "enum": [
                 "unavailable",
-                "overloaded",
                 "timeout"
               ]
             },
-            "maxItems": 3,
+            "maxItems": 2,
             "uniqueItems": true
           }
         },
@@ -82299,7 +82813,9 @@
             "$ref": "#/components/schemas/RoutingPricing"
           },
           "qualityScore": {
-            "type": "number"
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           },
           "reasoning": {
             "$ref": "#/components/schemas/RoutingReasoningFamily"
@@ -82388,7 +82904,9 @@
             "$ref": "#/components/schemas/RoutingPricing"
           },
           "qualityScore": {
-            "type": "number"
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
           },
           "reasoning": {
             "$ref": "#/components/schemas/RoutingReasoningFamily"
@@ -82409,7 +82927,8 @@
             "oneOf": [
               {
                 "type": "string",
-                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                "description": "Exact non-negative price per million tokens, with at most 9 fractional digits and a maximum of 1000000.",
+                "pattern": "^(?:(?:0|[1-9][0-9]{0,5})(?:\\.[0-9]{1,9})?|1000000(?:\\.0{1,9})?)$"
               },
               {
                 "type": "null"
@@ -82420,7 +82939,8 @@
             "oneOf": [
               {
                 "type": "string",
-                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                "description": "Exact non-negative price per million tokens, with at most 9 fractional digits and a maximum of 1000000.",
+                "pattern": "^(?:(?:0|[1-9][0-9]{0,5})(?:\\.[0-9]{1,9})?|1000000(?:\\.0{1,9})?)$"
               },
               {
                 "type": "null"
@@ -82431,7 +82951,8 @@
             "oneOf": [
               {
                 "type": "string",
-                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                "description": "Exact non-negative price per million tokens, with at most 9 fractional digits and a maximum of 1000000.",
+                "pattern": "^(?:(?:0|[1-9][0-9]{0,5})(?:\\.[0-9]{1,9})?|1000000(?:\\.0{1,9})?)$"
               },
               {
                 "type": "null"
@@ -82442,7 +82963,8 @@
             "oneOf": [
               {
                 "type": "string",
-                "pattern": "^(0|[1-9][0-9]*)(\\.[0-9]+)?$"
+                "description": "Exact non-negative price per million tokens, with at most 9 fractional digits and a maximum of 1000000.",
+                "pattern": "^(?:(?:0|[1-9][0-9]{0,5})(?:\\.[0-9]{1,9})?|1000000(?:\\.0{1,9})?)$"
               },
               {
                 "type": "null"
@@ -84301,6 +84823,7 @@
           "createdAt",
           "updatedAt",
           "displayName",
+          "email",
           "userStatus"
         ],
         "properties": {
@@ -84310,6 +84833,10 @@
           },
           "displayName": {
             "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
           },
           "revision": {
             "type": "integer",

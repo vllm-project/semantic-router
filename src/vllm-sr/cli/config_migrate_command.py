@@ -17,33 +17,7 @@ from cli.config_upgrade_v03 import (
     migrate_v03_config_data,
 )
 from cli.terminal import fields, heading, success
-
-
-class _UniqueKeyLoader(yaml.SafeLoader):
-    """Safe YAML loader that rejects ambiguous duplicate mapping keys."""
-
-
-def _construct_unique_mapping(
-    loader: _UniqueKeyLoader, node: yaml.MappingNode, deep: bool = False
-) -> dict[Any, Any]:
-    mapping: dict[Any, Any] = {}
-    for key_node, value_node in node.value:
-        key = loader.construct_object(key_node, deep=deep)
-        if key in mapping:
-            raise yaml.constructor.ConstructorError(
-                "while constructing a mapping",
-                node.start_mark,
-                f"found duplicate key {key!r}",
-                key_node.start_mark,
-            )
-        mapping[key] = loader.construct_object(value_node, deep=deep)
-    return mapping
-
-
-_UniqueKeyLoader.add_constructor(
-    yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,
-    _construct_unique_mapping,
-)
+from cli.yaml_contract import load_yaml
 
 
 def migrate_config_command(
@@ -106,7 +80,7 @@ def _load_source(path: Path) -> dict[str, Any]:
             ]
         )
     try:
-        value = yaml.load(path.read_text(encoding="utf-8"), Loader=_UniqueKeyLoader)
+        value = load_yaml(path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, yaml.YAMLError) as error:
         raise ConfigMigrationError(
             [

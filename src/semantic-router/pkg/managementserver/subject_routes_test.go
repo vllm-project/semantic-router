@@ -65,6 +65,23 @@ func TestSubjectRoutesPushAuthorizedScopeBeforePagination(t *testing.T) {
 	}
 }
 
+func TestSubjectRelationshipRouteForwardsExactTotalRequest(t *testing.T) {
+	totalCount := uint64(42)
+	service := &subjectServiceStub{membershipPage: subjectmanagement.Page[subjectmanagement.UserMembership]{
+		Items: []subjectmanagement.UserMembership{}, PageSize: 3, TotalCount: &totalCount,
+	}}
+	routes := newTestSubjectRoutes(t, service, &authorizerStub{})
+	request := authorizedRequest(t, http.MethodGet,
+		usersPath+"/"+subjectUserOne+"/memberships?pageSize=3&includeTotal=true", nil)
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !service.lastMembershipList.IncludeTotal ||
+		service.lastMembershipList.PageSize != 3 ||
+		!strings.Contains(response.Body.String(), `"totalCount":"42"`) {
+		t.Fatalf("status=%d request=%#v body=%s", response.Code, service.lastMembershipList, response.Body.String())
+	}
+}
+
 func TestSubjectRoutesTeamCreateAuthorizesExactDefaultPolicies(t *testing.T) {
 	defaults := subjectmanagement.TeamDefaults{
 		NamespaceID: testNamespaceID, SelfServiceRevision: 4,
@@ -226,6 +243,8 @@ type subjectServiceStub struct {
 	lastCreateTeam         subjectmanagement.CreateTeamRequest
 	lastDeleteMembership   subjectmanagement.DeleteMembershipRequest
 	lastUserList           subjectmanagement.ListRequest
+	membershipPage         subjectmanagement.Page[subjectmanagement.UserMembership]
+	lastMembershipList     subjectmanagement.MembershipListRequest
 	resolveDefaultsCalls   int
 }
 
@@ -277,8 +296,9 @@ func (service *subjectServiceStub) DeleteTeam(context.Context, subjectmanagement
 	return subjectmanagement.MutationResult{}, errors.New("unexpected DeleteTeam")
 }
 
-func (service *subjectServiceStub) ListUserMemberships(context.Context, subjectmanagement.MembershipListRequest) (subjectmanagement.Page[subjectmanagement.UserMembership], error) {
-	return subjectmanagement.Page[subjectmanagement.UserMembership]{}, nil
+func (service *subjectServiceStub) ListUserMemberships(_ context.Context, request subjectmanagement.MembershipListRequest) (subjectmanagement.Page[subjectmanagement.UserMembership], error) {
+	service.lastMembershipList = request
+	return service.membershipPage, nil
 }
 
 func (service *subjectServiceStub) ListTeamMembers(context.Context, subjectmanagement.MembershipListRequest) (subjectmanagement.Page[subjectmanagement.TeamMember], error) {

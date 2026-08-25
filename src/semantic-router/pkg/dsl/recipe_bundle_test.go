@@ -85,6 +85,22 @@ func TestDecompileYAMLRejectsUnknownRecipeBundleVersion(t *testing.T) {
 	}
 }
 
+func TestDecompileYAMLRecipeBundleRejectsDuplicateKeys(t *testing.T) {
+	source := []byte(`
+recipes:
+  - name: first
+    name: second
+    routing:
+      decisions:
+        - name: direct
+          rules: {}
+`)
+	_, err := DecompileYAML(source, nil)
+	if err == nil || !strings.Contains(err.Error(), "mapping key \"name\" already defined") {
+		t.Fatalf("DecompileYAML accepted a duplicate Recipe field: %v", err)
+	}
+}
+
 func TestRecipeBundleRejectsPublicationAndLegacyEnvelopeFields(t *testing.T) {
 	for _, field := range []string{"id", "revision", "document"} {
 		t.Run(field, func(t *testing.T) {

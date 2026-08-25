@@ -1496,7 +1496,7 @@ CREATE TABLE agent_events (
   origin TEXT NOT NULL CHECK (origin IN ('control','worker')),
   fence BIGINT CHECK (fence IS NULL OR fence > 0),
   event_type TEXT NOT NULL CHECK (event_type IN (
-    'user_input','assistant_delta','tool_request','tool_result','progress',
+    'user_input','assistant_delta','model_step_summary','tool_request','tool_result','progress',
     'context_checkpoint','approval_request','approval_result','cancellation','terminal'
   )),
   payload JSONB NOT NULL CHECK (jsonb_typeof(payload) = 'object'),
@@ -1507,7 +1507,7 @@ CREATE TABLE agent_events (
     REFERENCES agent_turns(namespace_id, session_id, id) ON DELETE RESTRICT,
   CHECK ((origin = 'worker') = (fence IS NOT NULL)),
   CHECK (origin <> 'worker' OR event_type IN (
-    'assistant_delta','tool_request','tool_result','progress',
+    'assistant_delta','model_step_summary','tool_request','tool_result','progress',
     'context_checkpoint','approval_request','terminal'
   )),
   CHECK (origin <> 'control' OR event_type IN (
@@ -2138,6 +2138,9 @@ CREATE INDEX management_operations_actor_idx ON management_operations(origin_pri
 CREATE INDEX management_operations_namespace_idx ON management_operations(namespace_id, created_at DESC, id);
 CREATE INDEX usage_events_time_idx ON usage_events(namespace_id, occurred_at DESC, event_id);
 CREATE INDEX usage_events_admission_idx ON usage_events(namespace_id, admission_id);
+CREATE INDEX usage_events_external_request_idx
+  ON usage_events(namespace_id, external_request_id, occurred_at DESC, event_id)
+  WHERE external_request_id IS NOT NULL;
 CREATE INDEX usage_events_api_key_idx ON usage_events(namespace_id, api_key_id, occurred_at DESC, event_id);
 CREATE INDEX usage_events_user_idx ON usage_events(namespace_id, user_id, occurred_at DESC, event_id);
 CREATE INDEX usage_events_team_idx ON usage_events(namespace_id, team_id, occurred_at DESC, event_id);

@@ -78,7 +78,7 @@ export function RequestLogDetail({
     >
       <aside
         ref={dialogRef}
-        className={styles.detailDrawer}
+        className={styles.detailDialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="log-detail-title"

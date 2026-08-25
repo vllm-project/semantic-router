@@ -144,6 +144,74 @@ func TestNormalizeEventAppendRejectsOpenOrUnboundedPayloads(t *testing.T) {
 	}
 }
 
+func TestNormalizeEventAppendAcceptsClosedModelStepSummary(t *testing.T) {
+	ttft := int64(84)
+	inputUncached := int64(90)
+	inputCacheRead := int64(30)
+	outputReasoning := int64(12)
+	outputOther := int64(36)
+	payload := mustJSON(t, ModelStepSummaryEvent{
+		ModelStepID:         "11111111-1111-4111-8111-111111111111",
+		RequestID:           "request-42",
+		SelectedRecipe:      "balance",
+		SelectedDecision:    "Complex",
+		SelectedModel:       "remote/frontier",
+		SelectedAlgorithm:   "static",
+		ResponsePath:        "upstream",
+		LatencyMilliseconds: 420,
+		TTFTMilliseconds:    &ttft,
+		Usage: &ModelStepUsage{
+			InputTokens: 120, OutputTokens: 48, TotalTokens: 168,
+			InputUncachedTokens: &inputUncached, InputCacheReadTokens: &inputCacheRead,
+			OutputReasoningTokens: &outputReasoning, OutputOtherTokens: &outputOther,
+		},
+	})
+	normalized, err := NormalizeEventAppend(EventAppend{
+		Origin: "worker", Fence: int64Pointer(1), Type: EventModelStepSummary, Payload: payload,
+	})
+	if err != nil {
+		t.Fatalf("NormalizeEventAppend() error = %v", err)
+	}
+	var summary ModelStepSummaryEvent
+	if err := json.Unmarshal(normalized.Payload, &summary); err != nil {
+		t.Fatal(err)
+	}
+	if summary.ModelStepID != "11111111-1111-4111-8111-111111111111" ||
+		summary.RequestID != "request-42" || summary.Usage == nil || summary.Usage.TotalTokens != 168 {
+		t.Fatalf("normalized model-step summary = %#v", summary)
+	}
+}
+
+func TestNormalizeEventAppendRejectsUnsafeModelStepSummary(t *testing.T) {
+	base := `{
+  "modelStepId":"11111111-1111-4111-8111-111111111111",
+  "requestId":"request-42",
+  "responsePath":"upstream",
+  "latencyMilliseconds":420
+}`
+	for name, payload := range map[string]json.RawMessage{
+		"unknown provider field": json.RawMessage(`{
+  "modelStepId":"11111111-1111-4111-8111-111111111111",
+  "requestId":"request-42",
+  "responsePath":"upstream",
+  "latencyMilliseconds":420,
+  "providerOpaque":{"secret":"must-not-persist"}
+}`),
+		"non-success response path": json.RawMessage(strings.Replace(base, `"upstream"`, `"error"`, 1)),
+		"ttft exceeds latency":      json.RawMessage(strings.Replace(base, `"latencyMilliseconds":420`, `"latencyMilliseconds":420,"ttftMilliseconds":421`, 1)),
+		"inconsistent usage total":  json.RawMessage(strings.Replace(base, `"latencyMilliseconds":420`, `"latencyMilliseconds":420,"usage":{"inputTokens":4,"outputTokens":5,"totalTokens":10}`, 1)),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := NormalizeEventAppend(EventAppend{
+				Origin: "worker", Fence: int64Pointer(1), Type: EventModelStepSummary, Payload: payload,
+			})
+			if !errors.Is(err, ErrInvalid) {
+				t.Fatalf("NormalizeEventAppend() error = %v, want ErrInvalid", err)
+			}
+		})
+	}
+}
+
 func TestNormalizeEventAppendRequiresExactlyOneTerminalOutcomeShape(t *testing.T) {
 	for _, status := range []TurnStatus{TurnCompleted, TurnCancelled} {
 		request := EventAppend{

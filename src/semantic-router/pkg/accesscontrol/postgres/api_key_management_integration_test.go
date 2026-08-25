@@ -104,10 +104,21 @@ VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rate
 	assertCreatedAPIKeyRows(t, ctx, db, namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy)
 	searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr := services[0].List(ctx, apikeymanagement.ListKeysRequest{
 		NamespaceID: namespaceID, Search: "ATOMIC DEV", PageSize: 1,
+		OwnerKind: accesscontrol.SubjectKindUser, OwnerID: ownerUserID, IncludeTotal: true,
 		Scope: accesscontrol.ResultScope{NamespaceID: namespaceID, All: true},
 	})
-	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil || len(searched.Items) != 1 || searched.Items[0].ID != result.Key.ID || searched.HasMore {
+	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil || len(searched.Items) != 1 ||
+		searched.Items[0].ID != result.Key.ID || searched.HasMore || searched.TotalCount == nil ||
+		*searched.TotalCount != 1 {
 		t.Fatalf("searched API-key page = %#v, %v", searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr)
+	}
+	hidden, err := services[0].List(ctx, apikeymanagement.ListKeysRequest{
+		NamespaceID: namespaceID, OwnerKind: accesscontrol.SubjectKindUser, OwnerID: ownerUserID,
+		PageSize: 1, IncludeTotal: true,
+		Scope: accesscontrol.ResultScope{NamespaceID: namespaceID, APIKeyIDs: []accesscontrol.APIKeyID{accessPolicy}},
+	})
+	if err != nil || len(hidden.Items) != 0 || hidden.TotalCount == nil || *hidden.TotalCount != 0 {
+		t.Fatalf("permission-filtered API-key page = %#v, %v", hidden, err)
 	}
 }
 

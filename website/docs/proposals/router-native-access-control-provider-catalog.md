@@ -111,6 +111,14 @@ not a Provider lookup table in the Dashboard. `source` is `lobe`, `asset`, or
 an absolute credential-free HTTPS URL. The Dashboard applies one pinned renderer
 and falls back to the monogram if an icon cannot load.
 
+Provider and interface `capabilities` describe what the installed transport and
+wire codec can carry. They support catalog filtering and interface selection; they
+are not Model metadata and are never copied onto every discovered Model. A discovery
+adapter may return model-specific capabilities when its upstream response provides
+authoritative evidence. Otherwise the field stays absent until an operator explicitly
+authors the Model metadata. Bulk import preserves that distinction instead of turning
+transport compatibility into a Model capability claim.
+
 The Definition has no secret-valued connection field. `credential` describes one
 secret prompt and creates or references a ProviderCredential. Connection fields are
 typed non-secret compiler inputs. They are consumed at the control-plane compiler
@@ -291,9 +299,10 @@ credential resolver, and egress transport as inference. The control plane sends 
 bounded, non-streaming, one-token neutral request and lets the selected codec produce
 the provider wire shape. OpenAI-compatible and Anthropic-style
 backends therefore share one probe path without Provider product branches. The
-probe honors the Model's saved retry policy and the operation timeout, reports only
-availability, latency, and check time, closes every response body, and never returns
-provider credentials or upstream response content.
+probe honors the Model's saved retry policy and caps its operation timeout at the
+smaller of the saved request timeout and five minutes. It reports only availability,
+latency, and check time, closes every response body, and never returns provider
+credentials or upstream response content.
 
 ## Versioned evolution
 

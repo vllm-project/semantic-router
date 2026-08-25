@@ -277,7 +277,8 @@ func (routes *ObservabilityRoutes) requestLogs(response http.ResponseWriter, req
 	}
 	_ = session
 	page, err := routes.queries.ListLogs(request.Context(), usageledger.LogQuery{
-		NamespaceID: namespaceID, Start: start, End: end, Filters: filters,
+		NamespaceID: namespaceID, ExternalRequestID: values.Get("requestId"),
+		Start: start, End: end, Filters: filters,
 		Visibility: visibility, PageSize: pageSize, Cursor: values.Get("cursor"),
 	}, routes.logCursors)
 	if err != nil {
@@ -498,6 +499,7 @@ func observabilityQueryKeys(logs, breakdown bool) map[string]bool {
 	if logs {
 		keys["cursor"] = true
 		keys["pageSize"] = true
+		keys["requestId"] = true
 	} else {
 		keys["grain"] = true
 	}

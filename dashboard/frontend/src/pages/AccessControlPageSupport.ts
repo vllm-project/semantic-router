@@ -13,6 +13,7 @@ import type { ProductIconName } from '../components/ProductIcon'
 import {
   canAccessDashboardPath,
   canManageUsers,
+  canRevealInferenceKey,
   canSelfManageInferenceAccess,
   canViewUsers,
   type PermissionUser,
@@ -196,6 +197,7 @@ export function resolveAccessControlPage(user: PermissionUser | null, pathname: 
     ),
     selfService,
     canManage,
+    canRevealKeys: canRevealInferenceKey(user),
     canReadDashboardMembers: canViewUsers(user),
     canManageDashboardMembers: canManageUsers(user),
     canReadUsers: hasManagementPermission(user, 'user.read'),

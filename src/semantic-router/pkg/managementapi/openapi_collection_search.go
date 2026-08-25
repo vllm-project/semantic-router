@@ -8,7 +8,8 @@ func collectionSearchParameters(contract OperationContract) []OpenAPIParameter {
 	}
 	switch contract.Path {
 	case BasePath + "/users", BasePath + "/teams", BasePath + "/api-keys",
-		BasePath + "/access-policies", BasePath + "/rate-limit-policies":
+		BasePath + "/access-policies", BasePath + "/rate-limit-policies",
+		BasePath + "/self/inference-keys":
 		return []OpenAPIParameter{{
 			Name: "search", In: "query",
 			Description: "Case-insensitive literal prefix matched only against public resource identity fields.",

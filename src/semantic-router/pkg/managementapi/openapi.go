@@ -124,7 +124,7 @@ func GenerateOpenAPI() OpenAPIDocument {
 		JSONSchemaDialect: openAPIJSONSchemaDialect,
 		Info: OpenAPIInfo{
 			Title:   "vLLM Semantic Router Management API",
-			Version: ContractVersion,
+			Version: APIVersion,
 		},
 		Servers: []OpenAPIServer{{
 			URL:         "https://{managementAddress}",
@@ -198,6 +198,13 @@ func operationParameters(contract OperationContract) []OpenAPIParameter {
 			OpenAPIParameter{Name: "cursor", In: "query", Required: false, Schema: JSONSchema{Type: "string"}},
 			OpenAPIParameter{Name: "pageSize", In: "query", Required: false, Schema: boundedIntegerSchema(1, 200)},
 		)
+		if supportsAuthoritativeTotal(contract.Path) {
+			parameters = append(parameters, OpenAPIParameter{
+				Name: "includeTotal", In: "query", Required: false,
+				Description: "Include the permission-filtered total count for this collection.",
+				Schema:      JSONSchema{Type: "boolean"},
+			})
+		}
 	}
 	if requiresExplicitNamespace(contract.Path) {
 		parameters = append(parameters, OpenAPIParameter{
@@ -240,6 +247,19 @@ func operationParameters(contract OperationContract) []OpenAPIParameter {
 		return parameters[i].In < parameters[j].In
 	})
 	return parameters
+}
+
+func supportsAuthoritativeTotal(path string) bool {
+	switch path {
+	case BasePath + "/users/{userId}/memberships",
+		BasePath + "/teams/{teamId}/members",
+		BasePath + "/api-keys",
+		BasePath + "/access-policy-bindings",
+		BasePath + "/rate-limit-bindings":
+		return true
+	default:
+		return false
+	}
 }
 
 func managementAcceptParameter(contract OperationContract) OpenAPIParameter {
@@ -296,6 +316,7 @@ func requiresExplicitNamespace(path string) bool {
 		return false
 	}
 	if path == BasePath+"/self/inference-keys" ||
+		strings.HasPrefix(path, BasePath+"/self/inference-keys/") ||
 		path == BasePath+"/self/inference-sessions" ||
 		strings.HasPrefix(path, BasePath+"/self/inference-sessions/") {
 		return true

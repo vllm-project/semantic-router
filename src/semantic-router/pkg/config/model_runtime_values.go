@@ -17,13 +17,11 @@ var (
 
 const (
 	ModelRetryUnavailable = "unavailable"
-	ModelRetryOverloaded  = "overloaded"
 	ModelRetryTimeout     = "timeout"
 )
 
 var modelRetryEvidenceOrder = []string{
 	ModelRetryUnavailable,
-	ModelRetryOverloaded,
 	ModelRetryTimeout,
 }
 
@@ -137,8 +135,8 @@ func normalizeModelRetry(modelName string, retry *ModelRetry) error {
 	for index, trigger := range retry.On {
 		if strings.TrimSpace(trigger) != trigger || !isModelRetryEvidence(trigger) {
 			return fmt.Errorf(
-				"%s.on[%d] must be one of %q, %q, or %q",
-				path, index, ModelRetryUnavailable, ModelRetryOverloaded, ModelRetryTimeout,
+				"%s.on[%d] must be one of %q or %q",
+				path, index, ModelRetryUnavailable, ModelRetryTimeout,
 			)
 		}
 		if _, duplicate := seen[trigger]; duplicate {

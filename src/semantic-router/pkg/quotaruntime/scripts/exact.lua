@@ -276,16 +276,33 @@ end
 local function quota_check_access(precondition_count, key_offset, argument_offset, now)
   for index = 1, precondition_count do
     local key = KEYS[key_offset + index]
-    local current_argument = argument_offset + (index - 1) * 5
+    local current_argument = argument_offset + (index - 1) * 6
     local kind = ARGV[current_argument + 1]
     local field = ARGV[current_argument + 2]
     local expected = ARGV[current_argument + 3]
-    local failure = ARGV[current_argument + 4]
-    local reason = ARGV[current_argument + 5]
+    local publication_id = ARGV[current_argument + 4]
+    local failure = ARGV[current_argument + 5]
+    local reason = ARGV[current_argument + 6]
     local passed = false
+
+    local function published_field()
+      local prefix = nil
+      if redis.call("HGET", key, "pending_publication_id") == publication_id then
+        prefix = "pending_"
+      elseif redis.call("HGET", key, "publication_id") == publication_id then
+        prefix = ""
+      end
+      if prefix == nil then
+        return false, false
+      end
+      return redis.call("HGET", key, prefix .. field), true
+    end
 
     if kind == "hash_equal" then
       passed = redis.call("HGET", key, field) == expected
+    elseif kind == "published_hash_equal" then
+      local raw, selected = published_field()
+      passed = selected and raw == expected
     elseif kind == "string_equal" then
       passed = redis.call("GET", key) == expected
     elseif kind == "key_absent" then
@@ -295,6 +312,15 @@ local function quota_check_access(precondition_count, key_offset, argument_offse
     elseif kind == "hash_not_before" then
       local raw = redis.call("HGET", key, field)
       if raw ~= false then
+        local timestamp = tonumber(raw)
+        if timestamp == nil then
+          return "unavailable", "invalid access time projection"
+        end
+        passed = timestamp <= now
+      end
+    elseif kind == "published_hash_not_before" then
+      local raw, selected = published_field()
+      if selected and raw ~= false then
         local timestamp = tonumber(raw)
         if timestamp == nil then
           return "unavailable", "invalid access time projection"
@@ -311,6 +337,19 @@ local function quota_check_access(precondition_count, key_offset, argument_offse
           return "unavailable", "invalid access time projection"
         end
         passed = timestamp > now
+      end
+    elseif kind == "published_hash_expires_after" then
+      local raw, selected = published_field()
+      if selected then
+        if raw == false or raw == "" then
+          passed = true
+        else
+          local timestamp = tonumber(raw)
+          if timestamp == nil then
+            return "unavailable", "invalid access time projection"
+          end
+          passed = timestamp > now
+        end
       end
     else
       return nil, "unsupported admission precondition"

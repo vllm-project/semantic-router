@@ -270,7 +270,7 @@ func (routes *SubjectRoutes) deleteUser(response http.ResponseWriter, request *h
 }
 
 func (routes *SubjectRoutes) listUserMemberships(response http.ResponseWriter, request *http.Request, requestID, userID string) {
-	query, pageSize, ok := subjectListQuery(response, request, requestID, map[string]bool{"": true, "active": true, "disabled": true})
+	query, pageSize, includeTotal, ok := subjectRelationshipListQuery(response, request, requestID, map[string]bool{"": true, "active": true, "disabled": true})
 	if !ok {
 		return
 	}
@@ -287,7 +287,7 @@ func (routes *SubjectRoutes) listUserMemberships(response http.ResponseWriter, r
 	}
 	page, err := routes.service.ListUserMemberships(request.Context(), subjectmanagement.MembershipListRequest{
 		NamespaceID: namespaceID, UserID: userID, Status: accesscontrol.MembershipStatus(query.Get("status")),
-		Cursor: query.Get("cursor"), PageSize: pageSize, Scope: teamScope,
+		Cursor: query.Get("cursor"), PageSize: pageSize, IncludeTotal: includeTotal, Scope: teamScope,
 	})
 	if err != nil {
 		writeSubjectError(response, err, requestID)
@@ -482,7 +482,7 @@ func (routes *SubjectRoutes) deleteTeam(response http.ResponseWriter, request *h
 }
 
 func (routes *SubjectRoutes) listTeamMembers(response http.ResponseWriter, request *http.Request, requestID, teamID string) {
-	query, pageSize, ok := subjectListQuery(response, request, requestID, map[string]bool{"": true, "active": true, "disabled": true})
+	query, pageSize, includeTotal, ok := subjectRelationshipListQuery(response, request, requestID, map[string]bool{"": true, "active": true, "disabled": true})
 	if !ok {
 		return
 	}
@@ -493,7 +493,7 @@ func (routes *SubjectRoutes) listTeamMembers(response http.ResponseWriter, reque
 	}
 	page, err := routes.service.ListTeamMembers(request.Context(), subjectmanagement.MembershipListRequest{
 		NamespaceID: namespaceID, TeamID: teamID, Status: accesscontrol.MembershipStatus(query.Get("status")),
-		Cursor: query.Get("cursor"), PageSize: pageSize,
+		Cursor: query.Get("cursor"), PageSize: pageSize, IncludeTotal: includeTotal,
 		Scope: managementauthorization.ResultScope{NamespaceID: accesscontrol.NamespaceID(namespaceID), All: true},
 	})
 	if err != nil {

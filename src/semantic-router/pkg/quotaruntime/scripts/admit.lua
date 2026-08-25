@@ -7,12 +7,13 @@ local rule_count = tonumber(ARGV[6])
 local max_usage_backlog = tonumber(ARGV[#ARGV])
 local now, now_microseconds = quota_server_time()
 local deadline = now + lease_milliseconds
+local precondition_argument_count = 6
 local rule_argument_count = 15
 
 if #KEYS ~= 5 + precondition_count + rule_count * 4 then
   return redis.error_reply("QUOTA_INVALID admit key count")
 end
-if #ARGV ~= 7 + precondition_count * 5 + rule_count * rule_argument_count then
+if #ARGV ~= 7 + precondition_count * precondition_argument_count + rule_count * rule_argument_count then
   return redis.error_reply("QUOTA_INVALID admit argument count")
 end
 if max_usage_backlog == nil or max_usage_backlog < 1 then
@@ -67,7 +68,7 @@ local limiting_reason = ""
 
 for index = 1, rule_count do
   local key_offset = 4 + precondition_count + (index - 1) * 4
-  local argument_offset = 6 + precondition_count * 5 + (index - 1) * rule_argument_count
+  local argument_offset = 6 + precondition_count * precondition_argument_count + (index - 1) * rule_argument_count
   local meta_key = KEYS[key_offset + 1]
   local event_key = KEYS[key_offset + 2]
   local value_key = KEYS[key_offset + 3]
@@ -213,7 +214,7 @@ redis.call("HSET", KEYS[2], "state", "admitted", "digest", admission_digest,
 
 for index = 1, rule_count do
   local key_offset = 4 + precondition_count + (index - 1) * 4
-  local argument_offset = 6 + precondition_count * 5 + (index - 1) * rule_argument_count
+  local argument_offset = 6 + precondition_count * precondition_argument_count + (index - 1) * rule_argument_count
   local meta_key = KEYS[key_offset + 1]
   local event_key = KEYS[key_offset + 2]
   local fence_key = KEYS[key_offset + 4]

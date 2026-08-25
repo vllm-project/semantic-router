@@ -70,7 +70,7 @@ type AuthoringModel struct {
 	Name           string                      `yaml:"name" json:"name"`
 	Card           AuthoringModelCard          `yaml:"card" json:"card"`
 	Connections    []modelauthoring.Connection `yaml:"connections" json:"connections"`
-	Execution      ModelExecutionSettings      `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+	Execution      ModelExecutionSettings      `yaml:"control,omitempty" json:"control,omitempty"`
 	RuntimePricing ModelRuntimePricing         `yaml:"pricing,omitempty" json:"pricing,omitempty"`
 }
 

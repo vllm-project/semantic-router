@@ -158,7 +158,12 @@ func testProbeRequest(protocol llmprotocol.WireFormat, path string) routingmanag
 		NamespaceID: "11111111-1111-4111-8111-111111111111", Timeout: 5 * time.Second,
 		Model: routingsnapshot.Model{
 			ID: "model-one", Revision: 2,
-			Execution: routingsnapshot.ModelExecution{MaxRetries: 0, RequestTimeout: "5s", StreamTimeout: "30s"},
+			Execution: routingsnapshot.ModelExecution{
+				MaxRetries:     2,
+				RetryOn:        []string{"unavailable", "timeout"},
+				RequestTimeout: "5s",
+				StreamTimeout:  "30s",
+			},
 			Backends: []routingsnapshot.Backend{{
 				ID: "22222222-2222-4222-8222-222222222222", ProviderID: "provider-one",
 				WireFormat: protocol, Origin: origin,

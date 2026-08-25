@@ -380,7 +380,11 @@ func (s *Store) ListSubjectUserMemberships(
 		return subjectmanagement.RepositoryPage[subjectmanagement.UserMembership]{}, err
 	}
 	if !query.Scope.All && len(query.Scope.TeamIDs) == 0 {
-		return subjectmanagement.RepositoryPage[subjectmanagement.UserMembership]{Items: []subjectmanagement.UserMembership{}}, nil
+		return emptySubjectRelationshipPage[subjectmanagement.UserMembership](query.IncludeTotal), nil
+	}
+	totalCount, err := s.countSubjectRelationships(ctx, query, subjectCountUserMembershipsQuery)
+	if err != nil {
+		return subjectmanagement.RepositoryPage[subjectmanagement.UserMembership]{}, fmt.Errorf("count User memberships: %w", err)
 	}
 	afterTime, afterID := membershipCursorArgs(query.After)
 	rows, err := s.db.QueryContext(ctx, subjectListUserMembershipsQuery,
@@ -403,7 +407,9 @@ func (s *Store) ListSubjectUserMemberships(
 	if err := rows.Err(); err != nil {
 		return subjectmanagement.RepositoryPage[subjectmanagement.UserMembership]{}, fmt.Errorf("read User membership page: %w", err)
 	}
-	return trimSubjectPage(items, query.Limit), nil
+	page := trimSubjectPage(items, query.Limit)
+	page.TotalCount = totalCount
+	return page, nil
 }
 
 func (s *Store) ListSubjectTeamMembers(
@@ -414,7 +420,11 @@ func (s *Store) ListSubjectTeamMembers(
 		return subjectmanagement.RepositoryPage[subjectmanagement.TeamMember]{}, err
 	}
 	if !query.Scope.All && len(query.Scope.UserIDs) == 0 {
-		return subjectmanagement.RepositoryPage[subjectmanagement.TeamMember]{Items: []subjectmanagement.TeamMember{}}, nil
+		return emptySubjectRelationshipPage[subjectmanagement.TeamMember](query.IncludeTotal), nil
+	}
+	totalCount, err := s.countSubjectRelationships(ctx, query, subjectCountTeamMembersQuery)
+	if err != nil {
+		return subjectmanagement.RepositoryPage[subjectmanagement.TeamMember]{}, fmt.Errorf("count Team members: %w", err)
 	}
 	afterTime, afterID := membershipCursorArgs(query.After)
 	rows, err := s.db.QueryContext(ctx, subjectListTeamMembersQuery,
@@ -427,7 +437,7 @@ func (s *Store) ListSubjectTeamMembers(
 	items := make([]subjectmanagement.TeamMember, 0, query.Limit+1)
 	for rows.Next() {
 		var item subjectmanagement.TeamMember
-		membership, err := scanSubjectMembershipWith(rows, &item.DisplayName, &item.UserStatus)
+		membership, err := scanSubjectMembershipWith(rows, &item.DisplayName, &item.Email, &item.UserStatus)
 		if err != nil {
 			return subjectmanagement.RepositoryPage[subjectmanagement.TeamMember]{}, fmt.Errorf("scan Team member page: %w", err)
 		}
@@ -437,7 +447,43 @@ func (s *Store) ListSubjectTeamMembers(
 	if err := rows.Err(); err != nil {
 		return subjectmanagement.RepositoryPage[subjectmanagement.TeamMember]{}, fmt.Errorf("read Team member page: %w", err)
 	}
-	return trimSubjectPage(items, query.Limit), nil
+	page := trimSubjectPage(items, query.Limit)
+	page.TotalCount = totalCount
+	return page, nil
+}
+
+func emptySubjectRelationshipPage[T any](includeTotal bool) subjectmanagement.RepositoryPage[T] {
+	page := subjectmanagement.RepositoryPage[T]{Items: []T{}}
+	if includeTotal {
+		count := uint64(0)
+		page.TotalCount = &count
+	}
+	return page
+}
+
+func (s *Store) countSubjectRelationships(
+	ctx context.Context,
+	query subjectmanagement.MembershipQuery,
+	statement string,
+) (*uint64, error) {
+	if !query.IncludeTotal {
+		return nil, nil
+	}
+	var ownerID any = query.UserID
+	var ids any = query.Scope.TeamIDs
+	if query.TeamID != "" {
+		ownerID, ids = query.TeamID, query.Scope.UserIDs
+	}
+	var count int64
+	if err := s.db.QueryRowContext(ctx, statement, query.NamespaceID, ownerID, query.Status,
+		query.Scope.All, pq.Array(ids)).Scan(&count); err != nil {
+		return nil, err
+	}
+	if count < 0 {
+		return nil, errors.New("relationship count is negative")
+	}
+	result := uint64(count)
+	return &result, nil
 }
 
 func (s *Store) PutSubjectMembership(

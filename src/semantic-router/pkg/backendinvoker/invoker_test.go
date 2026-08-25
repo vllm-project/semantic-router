@@ -414,24 +414,28 @@ func TestInvokerRequestBuildFailureHasNoSelectedPlan(t *testing.T) {
 	}
 }
 
-func TestInvokerNeverTreatsOverloadResponseAsKnownZero(t *testing.T) {
-	chain := fallbackTestChain(2)
-	chain.Fallback.On = []FallbackTrigger{FallbackOverloaded}
-	calls := 0
-	invoker := &Invoker{Journal: &journalStub{}, Transport: transportFunc(func(*http.Request) (*http.Response, error) {
-		calls++
-		return &http.Response{StatusCode: http.StatusServiceUnavailable, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":"busy"}`))}, nil
-	})}
-	result, err := invoker.InvokeChain(context.Background(), chain)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer result.Response.Body.Close()
-	if calls != 1 || len(result.Outcomes) != 1 || result.Outcomes[0].State != AttemptResponseStarted || result.Selected.ModelID != "model-0" {
-		t.Fatalf("calls=%d result=%+v", calls, result)
-	}
-	if result.Attempt.StatusCode != http.StatusServiceUnavailable || result.Attempt.ErrorCode != "" {
-		t.Fatalf("attempt evidence = %+v, want authoritative status without a transport error code", result.Attempt)
+func TestInvokerNeverTreatsHTTPFailureResponseAsKnownZero(t *testing.T) {
+	for _, status := range []int{http.StatusTooManyRequests, http.StatusServiceUnavailable} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			chain := fallbackTestChain(2)
+			chain.Fallback.On = []FallbackTrigger{FallbackUnavailable}
+			calls := 0
+			invoker := &Invoker{Journal: &journalStub{}, Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(`{"error":"busy"}`))}, nil
+			})}
+			result, err := invoker.InvokeChain(context.Background(), chain)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer result.Response.Body.Close()
+			if calls != 1 || len(result.Outcomes) != 1 || result.Outcomes[0].State != AttemptResponseStarted || result.Selected.ModelID != "model-0" {
+				t.Fatalf("calls=%d result=%+v", calls, result)
+			}
+			if result.Attempt.StatusCode != status || result.Attempt.ErrorCode != "" {
+				t.Fatalf("attempt evidence = %+v, want authoritative status without a transport error code", result.Attempt)
+			}
+		})
 	}
 }
 

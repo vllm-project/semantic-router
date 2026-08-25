@@ -157,3 +157,23 @@ func TestRawLogPageQueryPrunesPartitionsAndUsesBoundedKeyset(t *testing.T) {
 		t.Fatalf("raw log query args = %#v, want bounded page-size-plus-one", args)
 	}
 }
+
+func TestRawLogRequestIDFilterIsExactAndCursorBound(t *testing.T) {
+	query := LogQuery{
+		NamespaceID:       "11111111-1111-4111-8111-111111111111",
+		ExternalRequestID: "request-42",
+		Start:             time.Date(2026, time.August, 22, 0, 0, 0, 0, time.UTC),
+		End:               time.Date(2026, time.August, 22, 1, 0, 0, 0, time.UTC),
+		PageSize:          50,
+		Visibility:        QueryVisibility{All: true},
+	}
+	statement, args := rawLogPageQuery(query, nil)
+	if !strings.Contains(statement, "external_request_id = $6") || args[5] != "request-42" {
+		t.Fatalf("request ID query = %s args=%#v", statement, args)
+	}
+	withoutRequestID := query
+	withoutRequestID.ExternalRequestID = ""
+	if logFilterDigest(query) == logFilterDigest(withoutRequestID) {
+		t.Fatal("request-log cursor digest did not bind request ID")
+	}
+}

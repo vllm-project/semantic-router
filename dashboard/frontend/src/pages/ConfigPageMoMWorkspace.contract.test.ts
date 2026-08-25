@@ -68,6 +68,18 @@ describe('Mixture-of-Models Management API workspace', () => {
     expect(topology).toContain('{canManage ?')
   })
 
+  it('keeps the topology dialog inside a 320px mobile viewport', () => {
+    const styles = readSource('./ConfigPageMoMTopologyDialog.module.css')
+
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.overlay\s*{[\s\S]*?padding: 0\.375rem;/,
+    )
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?\.dialog\s*{[\s\S]*?width: 100%;[\s\S]*?max-height: calc\(100dvh - 0\.75rem\);/,
+    )
+    expect(styles).toMatch(/\.actions > div\s*{[\s\S]*?minmax\(0, 1fr\)/)
+  })
+
   it('duplicates immutable Recipes into a clean custom create flow', () => {
     const panel = readSource('./ConfigPageMoMRoutingPanel.tsx')
     const dialog = readSource('./ConfigPageRecipeDialog.tsx')

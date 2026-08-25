@@ -507,6 +507,11 @@ def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
     monkeypatch.setattr(
         core, "container_network_disconnect", lambda _network, _name: (0, "", "")
     )
+    monkeypatch.setattr(
+        storage_backends,
+        "container_network_disconnect",
+        lambda _network, _name: (0, "", ""),
+    )
 
 
 def _all_managed_names(stack_layout):

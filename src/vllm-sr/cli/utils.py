@@ -6,10 +6,9 @@ import time
 from http import HTTPStatus
 from importlib import import_module
 
-import yaml
-
 from cli.consts import DEFAULT_ENVOY_PORT
 from cli.terminal import TerminalLogHandler
+from cli.yaml_contract import load_yaml
 
 
 def get_logger(name):
@@ -57,7 +56,7 @@ def find_config_file(path=".", file=None):
 def load_config(config_file):
     """Load and parse YAML config file."""
     with open(config_file) as f:
-        return yaml.safe_load(f)
+        return load_yaml(f)
 
 
 def health_check_endpoint(url, timeout=5):

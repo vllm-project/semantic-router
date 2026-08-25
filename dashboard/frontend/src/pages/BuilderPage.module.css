@@ -2394,24 +2394,40 @@
 .modalOverlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 1rem;
+  background: var(--product-dialog-overlay);
   z-index: 100;
-  backdrop-filter: blur(2px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }
 
 .modal {
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border: 2px solid var(--product-dialog-border);
+  border-radius: 18px;
+  background: var(--product-dialog-surface);
   width: min(600px, 90vw);
   max-height: 80dvh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--product-dialog-shadow);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
   outline: none;
+}
+
+@media (max-width: 640px) {
+  .modalOverlay {
+    padding: 0.375rem;
+  }
+
+  .modal {
+    width: 100%;
+    max-height: calc(100dvh - 0.75rem);
+    border-radius: 14px;
+  }
 }
 
 .modalHeader {

@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   padding: 1.4rem;
-  background: rgba(3, 3, 4, 0.64);
+  background: var(--product-dialog-overlay);
   backdrop-filter: blur(18px);
   animation: overlay-in 180ms ease-out;
 }
@@ -20,8 +20,12 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 12rem), var(--surface-panel);
+  border: 2px solid var(--product-dialog-border);
+  border-radius: 18px;
+  background: var(--product-dialog-surface);
+  box-shadow: var(--product-dialog-shadow);
+  backdrop-filter: blur(28px) saturate(140%);
+  -webkit-backdrop-filter: blur(28px) saturate(140%);
   animation: dialog-in 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 

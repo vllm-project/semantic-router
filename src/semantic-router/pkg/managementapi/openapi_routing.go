@@ -110,14 +110,21 @@ var (
 	routingResourceID         = JSONSchema{Type: "string", Pattern: `^[a-z][a-z0-9_-]{2,127}$`}
 	routingRevision           = JSONSchema{Type: "integer", Format: "int64"}
 	routingDigest             = JSONSchema{Type: "string", Pattern: `^sha256:[a-f0-9]{64}$`}
-	routingModelRetryEvidence = []string{"unavailable", "overloaded", "timeout"}
+	routingModelRetryEvidence = []string{"unavailable", "timeout"}
 	routingModelDuration      = JSONSchema{
 		Type: "string", Pattern: routingModelDurationPattern,
 		Description: "Go-style duration between 1s and 24h, such as 30s, 2m, or 1h30m.",
 	}
+	routingModelPrice = JSONSchema{
+		Type: "string", Pattern: routingModelPricePattern,
+		Description: "Exact non-negative price per million tokens, with at most 9 fractional digits and a maximum of 1000000.",
+	}
+	routingNullableModelPrice = JSONSchema{OneOf: []JSONSchema{routingModelPrice, {Type: "null"}}}
+	routingModelQuality       = JSONSchema{Type: "number", Minimum: intPointer(0), Maximum: intPointer(1)}
 )
 
 const routingModelDurationPattern = `^\+?(?:(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:ns|us|µs|μs|ms|s|m|h))+$`
+const routingModelPricePattern = `^(?:(?:0|[1-9][0-9]{0,5})(?:\.[0-9]{1,9})?|1000000(?:\.0{1,9})?)$`
 
 var routingSchemaCatalog = map[string]JSONSchema{
 	"RoutingManifestImportRequest": objectSchema([]string{"manifest"}, map[string]JSONSchema{
@@ -153,8 +160,8 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"timeout": refSchema("RoutingModelTimeoutControl"),
 	}),
 	"RoutingPricing": objectSchema(nil, map[string]JSONSchema{
-		"inputCostPerMillionTokens": nullableDecimal, "outputCostPerMillionTokens": nullableDecimal,
-		"cacheReadCostPerMillionTokens": nullableDecimal, "cacheWriteCostPerMillionTokens": nullableDecimal,
+		"inputCostPerMillionTokens": routingNullableModelPrice, "outputCostPerMillionTokens": routingNullableModelPrice,
+		"cacheReadCostPerMillionTokens": routingNullableModelPrice, "cacheWriteCostPerMillionTokens": routingNullableModelPrice,
 	}),
 	"RoutingReasoningFamily": objectSchema(nil, map[string]JSONSchema{
 		"type": stringSchema, "efforts": arraySchema(stringSchema),
@@ -170,7 +177,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"description":  stringSchema,
 		"capabilities": arraySchema(stringSchema), "reasoning": refSchema("RoutingReasoningFamily"),
 		"loras": arraySchema(stringSchema), "control": refSchema("RoutingModelControl"),
-		"qualityScore": {Type: "number"},
+		"qualityScore": routingModelQuality,
 		"modality":     stringSchema, "tags": arraySchema(stringSchema),
 		"pricing": refSchema("RoutingPricing"), "backends": arraySchema(refSchema("RoutingModelBackendInput")),
 	}),
@@ -180,7 +187,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"description":  stringSchema,
 		"capabilities": arraySchema(stringSchema), "reasoning": refSchema("RoutingReasoningFamily"),
 		"loras": arraySchema(stringSchema), "control": refSchema("RoutingModelControl"),
-		"qualityScore": {Type: "number"},
+		"qualityScore": routingModelQuality,
 		"modality":     stringSchema, "tags": arraySchema(stringSchema),
 		"pricing": refSchema("RoutingPricing"), "backends": arraySchema(refSchema("RoutingModelBackendInput")),
 	}),
@@ -199,7 +206,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"paramSize": stringSchema, "contextWindowSize": boundedIntegerSchema(0, 100_000_000),
 		"description": stringSchema,
 		"reasoning":   refSchema("RoutingReasoningFamily"), "loras": arraySchema(stringSchema),
-		"qualityScore": {Type: "number"},
+		"qualityScore": routingModelQuality,
 		"modality":     stringSchema, "tags": arraySchema(stringSchema),
 		"control": refSchema("RoutingModelControl"), "pricing": refSchema("RoutingPricing"),
 		"backends":  arraySchema(refSchema("RoutingModelBackendView")),
@@ -212,7 +219,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"aliases": arraySchema(stringSchema), "paramSize": stringSchema,
 		"contextWindowSize": boundedIntegerSchema(0, 100_000_000), "description": stringSchema,
 		"capabilities": arraySchema(stringSchema), "reasoning": refSchema("RoutingReasoningFamily"),
-		"loras": arraySchema(stringSchema), "qualityScore": {Type: "number"},
+		"loras": arraySchema(stringSchema), "qualityScore": routingModelQuality,
 		"modality": stringSchema, "tags": arraySchema(stringSchema),
 	}),
 	"RoutingModelCardView": objectSchema([]string{"id", "name", "card"}, map[string]JSONSchema{
@@ -228,7 +235,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"paramSize": stringSchema, "contextWindowSize": boundedIntegerSchema(0, 100_000_000),
 		"description": stringSchema,
 		"reasoning":   refSchema("RoutingReasoningFamily"), "loras": arraySchema(stringSchema),
-		"qualityScore": {Type: "number"},
+		"qualityScore": routingModelQuality,
 		"modality":     stringSchema, "tags": arraySchema(stringSchema),
 		"control": refSchema("RoutingModelControl"), "pricing": refSchema("RoutingPricing"),
 	}),
@@ -298,7 +305,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 	}),
 	"RoutingFallbackPolicy": objectSchema([]string{"strategy", "on"}, map[string]JSONSchema{
 		"strategy": {Type: "string", Enum: []string{"priority"}},
-		"on":       {Type: "array", Items: schemaPointer(JSONSchema{Type: "string", Enum: []string{"unavailable", "overloaded", "timeout"}}), MinItems: intPointer(1), MaxItems: intPointer(3)},
+		"on":       {Type: "array", Items: schemaPointer(JSONSchema{Type: "string", Enum: []string{"unavailable", "timeout"}}), MinItems: intPointer(1), MaxItems: intPointer(2)},
 	}),
 	"RoutingAssignmentSetWrite": objectSchema([]string{"models"}, map[string]JSONSchema{
 		"models":   {Type: "array", Items: schemaPointer(refSchema("RoutingAssignmentWrite")), MinItems: intPointer(1), MaxItems: intPointer(32)},

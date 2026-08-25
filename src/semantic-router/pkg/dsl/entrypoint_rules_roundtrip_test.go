@@ -25,7 +25,7 @@ ENTRYPOINT {
         { decision: "choose", models: [
           { model: "model_b", priority: 0, weight: "0.6", reasoning: { enabled: false } },
           { model: "model_a", priority: 1, weight: "0.4", lora: "reasoning-adapter", reasoning: { enabled: true, effort: "high", description: "Think step by step" } },
-        ], fallback: { strategy: "priority", on: ["unavailable", "overloaded"] } },
+        ], fallback: { strategy: "priority", on: ["unavailable", "timeout"] } },
       ]
     },
   ]
@@ -58,7 +58,7 @@ func TestEntrypointRulesRoundTripAcrossDSLRepresentations(t *testing.T) {
 	}
 	if strings.Contains(decompiled, "model_bindings") ||
 		!strings.Contains(decompiled, `assignments:`) ||
-		!strings.Contains(decompiled, `fallback: { strategy: "priority", on: ["unavailable", "overloaded"] }`) ||
+		!strings.Contains(decompiled, `fallback: { strategy: "priority", on: ["unavailable", "timeout"] }`) ||
 		!strings.Contains(decompiled, `description: "Think step by step"`) {
 		t.Fatalf("decompiled DSL lost v0.3 rule fields:\n%s", decompiled)
 	}

@@ -18,19 +18,48 @@ import (
 var subjectETagPattern = regexp.MustCompile(`^"(user|team|membership):([1-9][0-9]*)"$`)
 
 func subjectListQuery(response http.ResponseWriter, request *http.Request, requestID string, statuses map[string]bool) (mapValues, int, bool) {
-	query, err := strictProviderQuery(request.URL.RawQuery, map[string]bool{
+	query, pageSize, _, ok := subjectCollectionQuery(response, request, requestID, statuses, false)
+	return query, pageSize, ok
+}
+
+func subjectRelationshipListQuery(
+	response http.ResponseWriter,
+	request *http.Request,
+	requestID string,
+	statuses map[string]bool,
+) (mapValues, int, bool, bool) {
+	return subjectCollectionQuery(response, request, requestID, statuses, true)
+}
+
+func subjectCollectionQuery(
+	response http.ResponseWriter,
+	request *http.Request,
+	requestID string,
+	statuses map[string]bool,
+	allowTotal bool,
+) (mapValues, int, bool, bool) {
+	allowed := map[string]bool{
 		"cursor": true, "pageSize": true, "status": true, "search": true,
-	})
+	}
+	if allowTotal {
+		allowed["includeTotal"] = true
+	}
+	query, err := strictProviderQuery(request.URL.RawQuery, allowed)
 	if err != nil || !statuses[query.Get("status")] {
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "List query is invalid.", requestID)
-		return nil, 0, false
+		return nil, 0, false, false
 	}
 	pageSize, err := parseOptionalPageSize(query.Get("pageSize"))
 	if err != nil {
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200.", requestID)
-		return nil, 0, false
+		return nil, 0, false, false
 	}
-	return mapValues(query), pageSize, true
+	includeTotal, err := parseOptionalBoolean(query.Get("includeTotal"))
+	if err != nil {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "includeTotal must be true or false.", requestID)
+		return nil, 0, false, false
+	}
+	return mapValues(query), pageSize, includeTotal, true
 }
 
 type mapValues map[string][]string

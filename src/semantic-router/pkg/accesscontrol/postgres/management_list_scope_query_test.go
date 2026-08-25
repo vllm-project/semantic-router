@@ -67,6 +67,22 @@ func TestManagementSearchQueriesApplyScopeBeforeIndexedSearchAndKeyset(t *testin
 	}
 }
 
+func TestEligibleKeySearchRemainsInsideSelfEligibilityAndCursorBoundary(t *testing.T) {
+	eligibility := strings.Index(eligibleKeyList, "k.owner_user_id = l.user_id")
+	search := strings.Index(eligibleKeyList, "lower(k.name) LIKE $3")
+	cursor := strings.Index(eligibleKeyList, "$4::timestamptz IS NULL")
+	limit := strings.Index(eligibleKeyList, "LIMIT $6")
+	if eligibility < 0 || search < 0 || cursor < 0 || limit < 0 ||
+		eligibility >= search || search >= cursor || cursor >= limit {
+		t.Fatalf("eligibility/search/keyset/limit sequence is invalid: %d/%d/%d/%d",
+			eligibility, search, cursor, limit)
+	}
+	if strings.Contains(eligibleKeyList, "access_api_key_credentials") ||
+		strings.Contains(eligibleKeyList, "secret_") || strings.Contains(eligibleKeyList, "kid") {
+		t.Fatal("self key search must not inspect credential material")
+	}
+}
+
 func TestManagedBindingQueriesNormalizeOptionalUUIDFilters(t *testing.T) {
 	for name, query := range map[string]string{
 		"access bindings": listManagedAccessBindingsQuery,
@@ -77,6 +93,26 @@ func TestManagedBindingQueriesNormalizeOptionalUUIDFilters(t *testing.T) {
 				!strings.Contains(query, "NULLIF($4,'')::uuid IS NULL") ||
 				!strings.Contains(query, "subject_id=NULLIF($4,'')::uuid") {
 				t.Fatal("optional UUID filters are not normalized before PostgreSQL casts")
+			}
+		})
+	}
+}
+
+func TestAuthoritativeRelationshipCountsKeepNamespaceAndVisibilityPredicates(t *testing.T) {
+	for name, test := range map[string]struct {
+		query string
+		scope string
+	}{
+		"user memberships":   {subjectCountUserMembershipsQuery, "m.team_id = ANY($5::uuid[])"},
+		"team members":       {subjectCountTeamMembersQuery, "m.user_id = ANY($5::uuid[])"},
+		"API keys":           {managementCountAPIKeysQuery, "id = ANY($6::uuid[])"},
+		"access assignments": {countFilteredManagedAccessBindingsQuery, "b.policy_id=ANY($7::uuid[])"},
+		"budget assignments": {countFilteredManagedRateBindingsQuery, "b.policy_id=ANY($8::uuid[])"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(test.query, "namespace_id") || !strings.Contains(test.query, "$1") ||
+				!strings.Contains(test.query, test.scope) {
+				t.Fatalf("count query lost namespace or permission scope: %s", test.query)
 			}
 		})
 	}

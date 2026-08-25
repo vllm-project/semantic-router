@@ -9,8 +9,7 @@ import {
 } from 'react'
 
 import { useAuth } from './AuthContext'
-import { managementOperationRequest } from '../utils/managementApiContract'
-import type { ManagementPage, SelfInferenceKey } from '../utils/routerManagementTypes'
+import type { SelfInferenceKey } from '../utils/routerManagementTypes'
 import {
   canReadKeyScopedRouting,
   canReadRouting,
@@ -22,6 +21,12 @@ import {
   type KeyScopedRoutingCatalog,
 } from '../utils/keyScopedRoutingCatalog'
 import type { ManagedRoutingSnapshot } from '../utils/managedRoutingSnapshot'
+import {
+  activeSelfInferenceKeys,
+  fetchSelfInferenceKey,
+  fetchSelfInferenceKeyPage,
+  restoreSelfInferenceKeySelection,
+} from '../utils/selfInferenceKeys'
 
 export type InferenceRoutingAccessStatus = 'idle' | 'loading' | 'ready' | 'unavailable' | 'error'
 
@@ -29,9 +34,11 @@ interface InferenceRoutingAccessValue {
   keys: SelfInferenceKey[]
   keysStatus: InferenceRoutingAccessStatus
   keysError: string | null
+  keysHasMore: boolean
   selectedKey: SelfInferenceKey | null
   selectedKeyId: string
   setSelectedKeyId: (keyId: string) => void
+  selectKey: (key: SelfInferenceKey) => void
   retryKeys: () => void
   catalog: KeyScopedRoutingCatalog | null
   catalogSnapshot: ManagedRoutingSnapshot | null
@@ -44,47 +51,6 @@ interface InferenceRoutingAccessValue {
 const InferenceRoutingAccessContext = createContext<InferenceRoutingAccessValue | undefined>(
   undefined,
 )
-
-function assertKeyPage(payload: unknown): ManagementPage<SelfInferenceKey> {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new Error('Router returned an invalid inference key list.')
-  }
-  const candidate = payload as Partial<ManagementPage<SelfInferenceKey>>
-  if (
-    !Array.isArray(candidate.data) ||
-    !candidate.page ||
-    typeof candidate.page !== 'object' ||
-    typeof candidate.page.hasMore !== 'boolean' ||
-    !Number.isSafeInteger(candidate.page.pageSize)
-  ) {
-    throw new Error('Router returned an invalid inference key list.')
-  }
-  for (const key of candidate.data) {
-    if (
-      !key ||
-      typeof key.keyId !== 'string' ||
-      !key.keyId ||
-      typeof key.name !== 'string' ||
-      !key.owner ||
-      (key.owner.type !== 'user' && key.owner.type !== 'team') ||
-      typeof key.owner.id !== 'string' ||
-      (key.contextTeamId !== undefined && typeof key.contextTeamId !== 'string') ||
-      (key.expiresAt !== undefined && typeof key.expiresAt !== 'string')
-    ) {
-      throw new Error('Router returned an invalid inference key.')
-    }
-  }
-  return candidate as ManagementPage<SelfInferenceKey>
-}
-
-function activeKeys(keys: SelfInferenceKey[]): SelfInferenceKey[] {
-  const now = Date.now()
-  return keys.filter((key) => {
-    if (!key.expiresAt) return true
-    const expiresAt = Date.parse(key.expiresAt)
-    return Number.isFinite(expiresAt) && expiresAt > now
-  })
-}
 
 function selectionStorageKey(namespaceId?: string, userId?: string): string {
   return namespaceId && userId ? `vllm-sr:routing-key:${namespaceId}:${userId}` : ''
@@ -118,6 +84,8 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
   const usesKeyScopedCatalog = canReadKeyScopedRouting(user) && !canReadRouting(user)
   const storageKey = selectionStorageKey(user?.managementNamespaceId, user?.managementUserId)
   const [keys, setKeys] = useState<SelfInferenceKey[]>([])
+  const [keysHasMore, setKeysHasMore] = useState(false)
+  const [selectedKey, setSelectedKey] = useState<SelfInferenceKey | null>(null)
   const [selectedKeyId, setSelectedKeyIdState] = useState('')
   const [keysStatus, setKeysStatus] = useState<InferenceRoutingAccessStatus>('idle')
   const [keysError, setKeysError] = useState<string | null>(null)
@@ -132,6 +100,8 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
 
   useEffect(() => {
     setKeys([])
+    setKeysHasMore(false)
+    setSelectedKey(null)
     setSelectedKeyIdState('')
     setKeysError(null)
     setCatalog(null)
@@ -144,17 +114,20 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
 
     const controller = new AbortController()
     setKeysStatus('loading')
-    void managementOperationRequest('getSelfInferenceKeys', {
-      query: new URLSearchParams({ pageSize: '100' }),
-      signal: controller.signal,
-    })
-      .then(assertKeyPage)
-      .then((page) => {
+    void fetchSelfInferenceKeyPage({}, controller.signal)
+      .then(async (page) => {
         if (controller.signal.aborted) return
-        const eligible = activeKeys(page.data)
         const stored = readStoredSelection(storageKey)
-        const selected = eligible.find((key) => key.keyId === stored) ?? eligible[0] ?? null
-        setKeys(eligible)
+        const selected = await restoreSelfInferenceKeySelection(
+          page.items,
+          stored,
+          (keyId) => fetchSelfInferenceKey(keyId, controller.signal),
+          controller.signal,
+        )
+        if (controller.signal.aborted) return
+        setKeys(page.items)
+        setKeysHasMore(page.hasMore)
+        setSelectedKey(selected)
         setSelectedKeyIdState(selected?.keyId ?? '')
         if (selected) writeStoredSelection(storageKey, selected.keyId)
         setKeysStatus(selected ? 'ready' : 'unavailable')
@@ -162,6 +135,8 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return
         setKeys([])
+        setKeysHasMore(false)
+        setSelectedKey(null)
         setSelectedKeyIdState('')
         setKeysError(errorMessage(cause, 'API keys are unavailable.'))
         setKeysStatus('error')
@@ -171,16 +146,23 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
 
   const setSelectedKeyId = useCallback(
     (keyId: string) => {
-      if (!keys.some((key) => key.keyId === keyId)) return
+      const key = keys.find((candidate) => candidate.keyId === keyId)
+      if (!key && selectedKey?.keyId !== keyId) return
+      setSelectedKey(key ?? selectedKey)
       setSelectedKeyIdState(keyId)
       writeStoredSelection(storageKey, keyId)
     },
-    [keys, storageKey],
+    [keys, selectedKey, storageKey],
   )
 
-  const selectedKey = useMemo(
-    () => keys.find((key) => key.keyId === selectedKeyId) ?? null,
-    [keys, selectedKeyId],
+  const selectKey = useCallback(
+    (key: SelfInferenceKey) => {
+      if (!activeSelfInferenceKeys([key]).length) return
+      setSelectedKey(key)
+      setSelectedKeyIdState(key.keyId)
+      writeStoredSelection(storageKey, key.keyId)
+    },
+    [storageKey],
   )
 
   useEffect(() => {
@@ -233,9 +215,11 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
       keys,
       keysStatus,
       keysError,
+      keysHasMore,
       selectedKey,
       selectedKeyId,
       setSelectedKeyId,
+      selectKey,
       retryKeys,
       catalog,
       catalogSnapshot,
@@ -251,11 +235,13 @@ export function InferenceRoutingAccessProvider({ children }: { children: ReactNo
       catalogStatus,
       keys,
       keysError,
+      keysHasMore,
       keysStatus,
       retryCatalog,
       retryKeys,
       selectedKey,
       selectedKeyId,
+      selectKey,
       setSelectedKeyId,
       usesKeyScopedCatalog,
     ],

@@ -120,9 +120,14 @@ WHERE m.namespace_id = $1 AND m.user_id = $2
   AND ($6::timestamptz IS NULL OR m.created_at < $6 OR (m.created_at = $6 AND m.team_id > $7::uuid))
 ORDER BY m.created_at DESC, m.team_id ASC
 LIMIT $8`
+	subjectCountUserMembershipsQuery = `SELECT count(*)
+FROM access_team_memberships m
+WHERE m.namespace_id = $1 AND m.user_id = $2
+  AND ($3 = '' OR m.status = $3)
+  AND ($4 OR m.team_id = ANY($5::uuid[]))`
 	subjectListTeamMembersQuery = `SELECT m.namespace_id, m.team_id, m.user_id, m.role, m.status,
-       m.revision, m.created_at, m.updated_at, u.display_name,
-       CASE WHEN u.deleted_at IS NULL THEN u.status ELSE 'disabled' END
+	       m.revision, m.created_at, m.updated_at, u.display_name, u.email,
+	       CASE WHEN u.deleted_at IS NULL THEN u.status ELSE 'disabled' END
 FROM access_team_memberships m
 JOIN access_users u ON u.namespace_id = m.namespace_id AND u.id = m.user_id
 WHERE m.namespace_id = $1 AND m.team_id = $2
@@ -131,6 +136,11 @@ WHERE m.namespace_id = $1 AND m.team_id = $2
   AND ($6::timestamptz IS NULL OR m.created_at < $6 OR (m.created_at = $6 AND m.user_id > $7::uuid))
 ORDER BY m.created_at DESC, m.user_id ASC
 LIMIT $8`
+	subjectCountTeamMembersQuery = `SELECT count(*)
+FROM access_team_memberships m
+WHERE m.namespace_id = $1 AND m.team_id = $2
+  AND ($3 = '' OR m.status = $3)
+  AND ($4 OR m.user_id = ANY($5::uuid[]))`
 	subjectCheckMembershipParentsQuery = `SELECT EXISTS (
   SELECT 1 FROM access_teams WHERE namespace_id = $1 AND id = $2
     AND status = 'active' AND deleted_at IS NULL

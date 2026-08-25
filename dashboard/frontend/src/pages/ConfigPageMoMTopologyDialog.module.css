@@ -284,3 +284,51 @@
     transform: rotate(90deg);
   }
 }
+
+@media (max-width: 640px) {
+  .overlay {
+    padding: 0.375rem;
+  }
+
+  .dialog {
+    width: 100%;
+    max-height: calc(100dvh - 0.75rem);
+    border-radius: 14px;
+  }
+
+  .header {
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .heading {
+    gap: 9px;
+  }
+
+  .heading > svg {
+    width: 34px;
+    height: 34px;
+    padding: 8px;
+  }
+
+  .canvas {
+    min-height: 0;
+    padding: 22px 16px 24px;
+  }
+
+  .actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
+    padding: 14px 16px max(14px, env(safe-area-inset-bottom));
+  }
+
+  .actions > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .actions button {
+    min-width: 0;
+    padding-inline: 8px;
+  }
+}

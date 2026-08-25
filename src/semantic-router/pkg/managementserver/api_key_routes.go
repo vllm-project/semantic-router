@@ -124,7 +124,7 @@ func (routes *APIKeyRoutes) ServeHTTP(response http.ResponseWriter, request *htt
 func (routes *APIKeyRoutes) list(response http.ResponseWriter, request *http.Request, requestID string) {
 	query, err := strictProviderQuery(request.URL.RawQuery, map[string]bool{
 		"cursor": true, "pageSize": true, "status": true, "ownerType": true, "ownerId": true,
-		"search": true,
+		"search": true, "includeTotal": true,
 	})
 	if err != nil {
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "API key query is invalid.", requestID)
@@ -133,6 +133,11 @@ func (routes *APIKeyRoutes) list(response http.ResponseWriter, request *http.Req
 	pageSize, err := parseOptionalPageSize(query.Get("pageSize"))
 	if err != nil {
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "pageSize must be between 1 and 200.", requestID)
+		return
+	}
+	includeTotal, err := parseOptionalBoolean(query.Get("includeTotal"))
+	if err != nil {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "includeTotal must be true or false.", requestID)
 		return
 	}
 	namespaceID, session, ok := routes.authenticate(response, request, requestID)
@@ -153,7 +158,8 @@ func (routes *APIKeyRoutes) list(response http.ResponseWriter, request *http.Req
 	page, err := routes.service.List(request.Context(), apikeymanagement.ListKeysRequest{
 		NamespaceID: namespaceID, Status: accesscontrol.APIKeyStatus(query.Get("status")),
 		OwnerKind: accesscontrol.SubjectKind(query.Get("ownerType")), OwnerID: query.Get("ownerId"),
-		Search: query.Get("search"), Cursor: query.Get("cursor"), PageSize: pageSize, Scope: scope,
+		Search: query.Get("search"), Cursor: query.Get("cursor"), PageSize: pageSize,
+		IncludeTotal: includeTotal, Scope: scope,
 	})
 	if err != nil {
 		writeAPIKeyError(response, err, requestID)

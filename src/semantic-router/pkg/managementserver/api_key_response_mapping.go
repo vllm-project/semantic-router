@@ -24,6 +24,7 @@ func newAPIKeyPage(value apikeymanagement.KeyPage) managementapi.APIKeyPage {
 	}
 	return managementapi.APIKeyPage{Data: items, Page: managementapi.PageInfo{
 		NextCursor: value.NextCursor, HasMore: value.HasMore, PageSize: value.PageSize,
+		TotalCount: pageTotalCount(value.TotalCount),
 	}}
 }
 

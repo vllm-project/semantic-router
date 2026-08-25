@@ -166,3 +166,16 @@ func TestPublicRetryDefaultIsEffectiveOnly(t *testing.T) {
 		t.Fatalf("retry default leaked into public source: %+v", exported.Providers.Models[0].Control)
 	}
 }
+
+func TestPublicRetryRejectsOverloadedWithoutKnownZeroEvidence(t *testing.T) {
+	document := strings.Replace(
+		strictV03AuthoringYAML,
+		"    - name: model-a\n",
+		"    - name: model-a\n      control:\n        retry: {count: 1, on: [overloaded]}\n",
+		1,
+	)
+	if _, err := testAuthoringParser(t).ParseYAMLBytes([]byte(document)); err == nil ||
+		!strings.Contains(err.Error(), `must be one of "unavailable" or "timeout"`) {
+		t.Fatalf("ParseYAMLBytes() error = %v", err)
+	}
+}

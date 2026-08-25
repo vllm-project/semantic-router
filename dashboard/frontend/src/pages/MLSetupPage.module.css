@@ -1,6 +1,9 @@
 /* ML Setup Page - 3-Step Onboarding Wizard */
 
 .page {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 2rem;
   max-width: 1100px;
   margin: 0 auto;
@@ -656,12 +659,41 @@
 /* Responsive */
 @media (max-width: 768px) {
   .page {
+    overflow-x: hidden;
     padding: 1rem;
   }
 
   .stepper {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.35rem;
     padding: 0;
-    overflow-x: auto;
+    overflow: visible;
+  }
+
+  .stepConnector {
+    display: none;
+  }
+
+  .stepItem {
+    min-width: 0;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.6rem 0.35rem;
+  }
+
+  .stepLabel {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .stepContent {
+    min-width: 0;
+    padding: 1rem;
   }
 
   .algorithmGrid {
@@ -688,6 +720,25 @@
 
   .actionsRight {
     justify-content: flex-end;
+  }
+
+  .deviceSelector,
+  .actionsLeft,
+  .actionsRight {
+    flex-wrap: wrap;
+  }
+
+  .modelRefRow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .numberInput,
+  .textInput,
+  .selectInput,
+  .fileDropZone,
+  .advancedContent {
+    max-width: 100%;
+    box-sizing: border-box;
   }
 }
 

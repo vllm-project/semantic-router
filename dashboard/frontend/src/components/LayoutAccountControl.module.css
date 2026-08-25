@@ -91,25 +91,34 @@
   /* Cover the physical viewport, including both stable scrollbar gutters. */
   inset-inline: calc((100vw - 100%) / -2);
   z-index: 1200;
-  background: rgba(0, 0, 0, 0.22);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(3, 3, 4, 0.6);
+  backdrop-filter: blur(18px);
 }
 
 .dialog {
-  position: fixed;
+  position: relative;
   display: flex;
   flex-direction: column;
-  width: min(390px, calc(100vw - 2rem));
-  max-height: min(620px, calc(100dvh - 5.5rem));
+  width: min(430px, 100%);
+  max-height: calc(100dvh - 2rem);
   overflow: hidden;
   color: #f5f5f7;
-  background: #101012;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 9px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.012)),
+    rgba(13, 14, 17, 0.88);
+  border: 2px solid rgba(255, 255, 255, 0.72);
+  border-radius: 18px;
   box-shadow:
-    0 28px 70px rgba(0, 0, 0, 0.62),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    0 36px 110px rgba(0, 0, 0, 0.62),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(28px) saturate(140%);
   animation: accountMenuEnter 150ms cubic-bezier(0.22, 1, 0.36, 1);
   outline: none;
+  transform-origin: center;
 }
 
 .dialog::before {
@@ -117,16 +126,13 @@
 }
 
 .dialogHeader {
-  top: 78px;
-  right: clamp(1rem, 3.5vw, 4.5rem);
-  transform-origin: top right;
+  top: auto;
+  right: auto;
 }
 
 .dialogRail {
-  bottom: 1rem;
-  left: 68px;
-  max-height: calc(100dvh - 2rem);
-  transform-origin: bottom left;
+  bottom: auto;
+  left: auto;
 }
 
 .header {
@@ -328,20 +334,11 @@
     justify-content: center;
   }
 
-  .dialogHeader {
-    top: 64px;
-    right: 0.75rem;
-  }
 }
 
 @media (max-width: 1023px) {
   .overlay {
-    display: flex;
-    align-items: center;
-    justify-content: center;
     padding: 0.5rem;
-    background: rgba(0, 0, 0, 0.48);
-    backdrop-filter: blur(18px);
   }
 
   .dialog,

@@ -1,10 +1,4 @@
-import {
-  type AccessAPIKey,
-  type AccessBudget,
-  type AccessGroup,
-  type AccessTeam,
-  type AccessUser,
-} from '../utils/inferenceAccessApi'
+import { type AccessAPIKey, type AccessTeam, type AccessUser } from '../utils/inferenceAccessApi'
 import {
   AccessEntityDetail,
   APIKeyDetail,
@@ -12,7 +6,6 @@ import {
   RequestLogDetail,
 } from './AccessControlDetails'
 import type { EntityDetailKind, EntityDetailValue } from './AccessEntityDetail'
-import { canManageSelfServiceKey } from './AccessControlDetailOverlaysSupport'
 
 interface AccessControlDetailOverlaysProps {
   detailKeyId: string
@@ -23,9 +16,8 @@ interface AccessControlDetailOverlaysProps {
   users: AccessUser[]
   teams: AccessTeam[]
   keys: AccessAPIKey[]
-  groups: AccessGroup[]
-  budgets: AccessBudget[]
   canManage: boolean
+  canRevealKeys: boolean
   canManageDashboardMembers: boolean
   selfService: boolean
   selfUserId: string
@@ -48,9 +40,8 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
     users,
     teams,
     keys,
-    groups,
-    budgets,
     canManage,
+    canRevealKeys,
     canManageDashboardMembers,
     selfService,
     selfUserId,
@@ -62,33 +53,16 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
     onDeleteEntity,
     onEditModelAccess,
   } = props
-  const canEditEntity = Boolean(
-    canManage ||
-      (selfService &&
-        entityKind === 'team' &&
-        teams.some(
-          (team) =>
-            team.id === detailEntityId &&
-            team.members.some(
-              (membership) => membership.userId === selfUserId && membership.role === 'admin',
-            ),
-        )),
-  )
-  const canManageKey =
-    canManage || (selfService && canManageSelfServiceKey(detailKeyId, keys, teams, selfUserId))
-
   return (
     <>
       {detailKeyId ? (
         <APIKeyDetail
           keyId={detailKeyId}
-          users={users}
-          teams={teams}
-          groups={groups}
-          budgets={budgets}
-          canManage={canManageKey}
+          canManage={canManage}
+          canReveal={canRevealKeys}
           canEditPolicy={canManage}
           selfService={selfService}
+          selfUserId={selfUserId}
           onEdit={onEditKey}
           onClose={onClose}
           onChanged={onCatalogChanged}
@@ -112,14 +86,10 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
         <AccessEntityDetail
           kind={entityKind}
           id={detailEntityId}
-          users={users}
-          teams={teams}
-          keys={keys}
-          groups={groups}
-          budgets={budgets}
-          canEdit={canEditEntity}
+          canEdit={canManage}
           canDelete={canManage}
           selfService={selfService}
+          selfUserId={selfUserId}
           onEdit={onEditEntity}
           onDelete={onDeleteEntity}
           onClose={onClose}

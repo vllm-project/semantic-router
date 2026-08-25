@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"gopkg.in/yaml.v2"
+	yamlv2 "gopkg.in/yaml.v2"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/modelauthoring"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
@@ -151,7 +151,7 @@ func (parser *Parser) parseYAMLBytesWithOptions(
 	if expandEnvironment {
 		expandEnvSubstitutionsInMap(raw)
 	}
-	expandedData, marshalErr := yaml.Marshal(raw)
+	expandedData, marshalErr := yamlv2.Marshal(raw)
 	if marshalErr != nil {
 		return nil, fmt.Errorf("failed to marshal normalized config input: %w", marshalErr)
 	}
@@ -214,8 +214,8 @@ func validateV03DocumentBoundary(raw map[string]interface{}) error {
 }
 
 func parseRawConfigMap(data []byte) (map[string]interface{}, error) {
-	var raw map[string]interface{}
-	if unmarshalErr := yaml.Unmarshal(data, &raw); unmarshalErr != nil {
+	raw, unmarshalErr := ParseYAML12Mapping(data)
+	if unmarshalErr != nil {
 		logging.ComponentDebugEvent("config", "config_yaml_map_parse_failed", map[string]interface{}{
 			"error": unmarshalErr.Error(),
 		})
@@ -509,7 +509,7 @@ func parseCanonicalConfigPayload(
 	connectionCompiler modelauthoring.ConnectionCompiler,
 ) (*RouterConfig, error) {
 	canonical := &CanonicalConfig{}
-	if unmarshalErr := yaml.UnmarshalStrict(data, canonical); unmarshalErr != nil {
+	if unmarshalErr := yamlv2.UnmarshalStrict(data, canonical); unmarshalErr != nil {
 		logging.ComponentDebugEvent("config", "config_canonical_parse_failed", map[string]interface{}{
 			"error": unmarshalErr.Error(),
 		})

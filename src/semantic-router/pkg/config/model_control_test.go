@@ -16,7 +16,9 @@ func TestModelControlRoundTripsCanonicalConfig(t *testing.T) {
 		t.Fatalf("ParseYAMLBytes: %v", err)
 	}
 	execution := parsed.ModelConfig["model-a"].Execution
-	if execution.MaxRetries != 2 || execution.RequestTimeout != "45s" || execution.StreamTimeout != "3m" {
+	if execution.MaxRetries != 2 || len(execution.RetryOn) != 1 ||
+		execution.RetryOn[0] != ModelRetryUnavailable ||
+		execution.RequestTimeout != "45s" || execution.StreamTimeout != "3m" {
 		t.Fatalf("control did not normalize: %#v", execution)
 	}
 	exported := CanonicalConfigFromRouterConfig(parsed)

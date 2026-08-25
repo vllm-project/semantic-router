@@ -564,6 +564,10 @@ func testRuntime(t *testing.T) (*Runtime, accesscredential.Issued, *fakeReader, 
 }
 
 func testProjection(t *testing.T) accessprojection.Projection {
+	return testProjectionAtRevision(t, 7)
+}
+
+func testProjectionAtRevision(t *testing.T, revision uint64) accessprojection.Projection {
 	t.Helper()
 	now := time.Date(2026, 8, 22, 1, 2, 3, 0, time.UTC)
 	namespace := accesscontrol.Namespace{
@@ -609,7 +613,7 @@ func testProjection(t *testing.T) accessprojection.Projection {
 		}},
 	}
 	projection, err := accessprojection.Compile(accessprojection.Candidate{
-		Revision: 7, Namespace: namespace, Key: key,
+		Revision: revision, Namespace: namespace, Key: key,
 		Relationships: accesscontrol.APIKeyRelationships{OwnerUser: &user},
 		RoutingClaims: map[string]routingsnapshot.ClaimValue{
 			"tier": {Kind: "string", String: "free"},

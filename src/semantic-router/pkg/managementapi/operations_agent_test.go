@@ -70,12 +70,30 @@ func TestAgentEventContractProvidesDurableHistoryAndSSE(t *testing.T) {
 			t.Fatalf("durable assistant delta omits reconciliation field %s", field)
 		}
 	}
+	summary := document.Components.Schemas["AgentModelStepSummaryEventPayload"]
+	for _, field := range []string{"modelStepId", "requestId", "latencyMilliseconds"} {
+		if !slices.Contains(summary.Required, field) {
+			t.Fatalf("durable model-step summary omits field %s", field)
+		}
+	}
+	if _, leaked := summary.Properties["providerOpaque"]; leaked {
+		t.Fatal("durable model-step summary exposes provider-opaque data")
+	}
+	if _, guessed := summary.Properties["cost"]; guessed {
+		t.Fatal("durable model-step summary exposes non-authoritative cost")
+	}
+	usage := document.Components.Schemas["AgentModelStepUsage"]
+	for _, field := range []string{"inputTokens", "outputTokens", "totalTokens"} {
+		if !slices.Contains(usage.Required, field) {
+			t.Fatalf("durable model-step usage omits authoritative total %s", field)
+		}
+	}
 	if len(document.Components.Schemas["AgentLiveModelStepEvent"].OneOf) != 2 {
 		t.Fatal("live Agent model step does not distinguish delta and terminal frames")
 	}
 	event := document.Components.Schemas["AgentEvent"]
-	if len(event.OneOf) != 10 {
-		t.Fatalf("durable Agent event has %d variants, want 10", len(event.OneOf))
+	if len(event.OneOf) != 11 {
+		t.Fatalf("durable Agent event has %d variants, want 11", len(event.OneOf))
 	}
 	for _, branch := range event.OneOf {
 		if !strings.HasPrefix(branch.Ref, "#/components/schemas/Agent") ||

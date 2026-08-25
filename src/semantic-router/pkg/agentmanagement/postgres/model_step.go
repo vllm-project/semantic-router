@@ -81,11 +81,11 @@ func (store *Store) CommitModelStep(
 	ctx context.Context, request agentmanagement.ModelStepCommit,
 ) (agentmanagement.ModelStepCommitResult, error) {
 	if request.Step.ID == "" || request.Step.Ordinal < 1 || !validModelStopReason(request.Step.StopReason) ||
-		len(request.Step.RequestDigest) != sha256.Size || len(request.Events) > 65 ||
+		len(request.Step.RequestDigest) != sha256.Size || len(request.Events) > 66 ||
 		request.Checkpoint.ThroughSequence < 1 {
 		return agentmanagement.ModelStepCommitResult{}, agentmanagement.ErrInvalid
 	}
-	canonical, err := canonicalModelStepOutput(request.Step.StopReason, request.Events)
+	canonical, err := canonicalModelStepOutput(request.Step.StopReason, request.Step.ID, request.Events)
 	if err != nil {
 		return agentmanagement.ModelStepCommitResult{}, err
 	}
@@ -199,14 +199,19 @@ WHERE namespace_id=$1 AND session_id=$2 AND id=$3 AND worker_id=$4 AND fence=$5 
 	return nil
 }
 
-func canonicalModelStepOutput(stopReason string, events []agentmanagement.EventAppend) ([]byte, error) {
+func canonicalModelStepOutput(
+	stopReason string, modelStepID string, events []agentmanagement.EventAppend,
+) ([]byte, error) {
 	type eventValue struct {
 		Type    agentmanagement.EventType `json:"type"`
 		Payload json.RawMessage           `json:"payload"`
 	}
 	values := make([]eventValue, 0, len(events))
+	summaryCount := 0
 	for _, event := range events {
-		if event.Type != agentmanagement.EventAssistantDelta && event.Type != agentmanagement.EventToolRequest {
+		if event.Type != agentmanagement.EventAssistantDelta &&
+			event.Type != agentmanagement.EventModelStepSummary &&
+			event.Type != agentmanagement.EventToolRequest {
 			return nil, agentmanagement.ErrInvalid
 		}
 		normalized, err := agentmanagement.NormalizeEventAppend(agentmanagement.EventAppend{
@@ -216,7 +221,24 @@ func canonicalModelStepOutput(stopReason string, events []agentmanagement.EventA
 		if err != nil {
 			return nil, err
 		}
+		switch normalized.Type {
+		case agentmanagement.EventAssistantDelta:
+			var payload agentmanagement.AssistantDeltaEvent
+			if err := json.Unmarshal(normalized.Payload, &payload); err != nil || payload.ModelStepID != modelStepID {
+				return nil, agentmanagement.ErrInvalid
+			}
+		case agentmanagement.EventModelStepSummary:
+			var payload agentmanagement.ModelStepSummaryEvent
+			if err := json.Unmarshal(normalized.Payload, &payload); err != nil ||
+				payload.ModelStepID != modelStepID || summaryCount != 0 {
+				return nil, agentmanagement.ErrInvalid
+			}
+			summaryCount++
+		}
 		values = append(values, eventValue{Type: normalized.Type, Payload: normalized.Payload})
+	}
+	if summaryCount != 1 {
+		return nil, agentmanagement.ErrInvalid
 	}
 	return json.Marshal(struct {
 		StopReason string       `json:"stopReason"`

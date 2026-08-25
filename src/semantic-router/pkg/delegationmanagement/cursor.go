@@ -21,6 +21,7 @@ type cursorPayload struct {
 	NamespaceID string    `json:"namespaceId"`
 	PrincipalID string    `json:"principalId,omitempty"`
 	APIKeyID    string    `json:"keyId,omitempty"`
+	Search      string    `json:"search,omitempty"`
 	CreatedAt   time.Time `json:"createdAt"`
 	ID          string    `json:"id"`
 }

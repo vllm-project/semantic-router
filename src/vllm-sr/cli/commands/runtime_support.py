@@ -8,6 +8,8 @@ from pathlib import Path
 
 import yaml
 
+from cli.yaml_contract import load_yaml
+
 from cli.bootstrap import BootstrapResult
 from cli.commands.runtime_kb import (
     _sync_runtime_kb_store,
@@ -103,7 +105,7 @@ def config_env_references(config_path: Path | str | None) -> set[str]:
     if config_path is None:
         return set()
     try:
-        document = yaml.safe_load(Path(config_path).read_text())
+        document = load_yaml(Path(config_path).read_text())
     except (OSError, yaml.YAMLError):
         return set()
 
@@ -222,7 +224,7 @@ def _resolve_effective_config_document(
     materialize_local_runtime: bool = True,
 ) -> tuple[dict[str, object], bool]:
     with config_path.open() as handle:
-        config = yaml.safe_load(handle) or {}
+        config = load_yaml(handle) or {}
 
     if materialize_local_runtime:
         kb_runtime_required, changed = _sync_runtime_kb_store(config, config_path)

@@ -9,24 +9,28 @@ import "fmt"
 type AdmissionCheckKind string
 
 const (
-	AdmissionCheckHashEqual    AdmissionCheckKind = "hash_equal"
-	AdmissionCheckStringEqual  AdmissionCheckKind = "string_equal"
-	AdmissionCheckKeyAbsent    AdmissionCheckKind = "key_absent"
-	AdmissionCheckSetMember    AdmissionCheckKind = "set_member"
-	AdmissionCheckNotBefore    AdmissionCheckKind = "hash_not_before"
-	AdmissionCheckExpiresAfter AdmissionCheckKind = "hash_expires_after"
+	AdmissionCheckHashEqual             AdmissionCheckKind = "hash_equal"
+	AdmissionCheckPublishedHashEqual    AdmissionCheckKind = "published_hash_equal"
+	AdmissionCheckStringEqual           AdmissionCheckKind = "string_equal"
+	AdmissionCheckKeyAbsent             AdmissionCheckKind = "key_absent"
+	AdmissionCheckSetMember             AdmissionCheckKind = "set_member"
+	AdmissionCheckNotBefore             AdmissionCheckKind = "hash_not_before"
+	AdmissionCheckPublishedNotBefore    AdmissionCheckKind = "published_hash_not_before"
+	AdmissionCheckExpiresAfter          AdmissionCheckKind = "hash_expires_after"
+	AdmissionCheckPublishedExpiresAfter AdmissionCheckKind = "published_hash_expires_after"
 )
 
 // AdmissionPrecondition describes one partition-local access projection
 // assertion. Failure must be a public non-success outcome; Reason is a stable
 // machine-facing code rather than a secret-bearing store value.
 type AdmissionPrecondition struct {
-	Key      string
-	Kind     AdmissionCheckKind
-	Field    string
-	Expected string
-	Failure  AdmissionDisposition
-	Reason   string
+	Key           string
+	Kind          AdmissionCheckKind
+	Field         string
+	Expected      string
+	PublicationID string
+	Failure       AdmissionDisposition
+	Reason        string
 }
 
 func (p AdmissionPrecondition) Validate() error {
@@ -45,7 +49,7 @@ func (p AdmissionPrecondition) Validate() error {
 		return fmt.Errorf("%w: precondition reason is too long", ErrInvalidRequest)
 	}
 	switch p.Kind {
-	case AdmissionCheckHashEqual:
+	case AdmissionCheckHashEqual, AdmissionCheckPublishedHashEqual:
 		if err := validateOpaque("precondition field", p.Field); err != nil {
 			return err
 		}
@@ -63,7 +67,8 @@ func (p AdmissionPrecondition) Validate() error {
 		if p.Field != "" || p.Expected != "" {
 			return fmt.Errorf("%w: key_absent accepts neither field nor expected value", ErrInvalidRequest)
 		}
-	case AdmissionCheckNotBefore, AdmissionCheckExpiresAfter:
+	case AdmissionCheckNotBefore, AdmissionCheckExpiresAfter,
+		AdmissionCheckPublishedNotBefore, AdmissionCheckPublishedExpiresAfter:
 		if err := validateOpaque("precondition field", p.Field); err != nil {
 			return err
 		}
@@ -72,6 +77,16 @@ func (p AdmissionPrecondition) Validate() error {
 		}
 	default:
 		return fmt.Errorf("%w: unsupported precondition kind %q", ErrInvalidRequest, p.Kind)
+	}
+	published := p.Kind == AdmissionCheckPublishedHashEqual ||
+		p.Kind == AdmissionCheckPublishedNotBefore ||
+		p.Kind == AdmissionCheckPublishedExpiresAfter
+	if published {
+		if err := validateProjectionValue(p.PublicationID); err != nil {
+			return fmt.Errorf("%w: published precondition requires a publication ID", err)
+		}
+	} else if p.PublicationID != "" {
+		return fmt.Errorf("%w: %s does not accept a publication ID", ErrInvalidRequest, p.Kind)
 	}
 	return nil
 }

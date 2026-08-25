@@ -246,9 +246,8 @@ strings under `providers.models[].pricing`; per-Model retries and deadlines are
 structured under `providers.models[].control.retry` and
 `providers.models[].control.timeout`. Runtime authority is derived from the configured
 stores, and no caller-controlled Router bypass participates in inference. The
-[upgrade guide](../installation/upgrade-rollback.md) owns offline conversion from an
-earlier manifest; serving code implements only this target contract. Every other
-public v0.3 concept keeps its existing role.
+serving code implements only this target contract. Every other public v0.3 concept
+keeps its existing role.
 
 This boundary does not expose connections to Recipe authors. Every Model read has a
 permission-filtered **ModelCardView** projection from `routing.modelCards`, containing semantic identity,
@@ -390,7 +389,7 @@ entrypoints:
             priority: 1
         fallback:
           strategy: priority
-          on: [unavailable, overloaded]
+          on: [unavailable, timeout]
 
 global:
   billing:
@@ -559,7 +558,9 @@ they bind a versioned ProviderCredential and return only redacted metadata.
 The strict v0.3 pricing surface contains only the four quoted per-million-token
 fields above. Its invocation surface contains only `control.retry` and
 `control.timeout`. Runtime parsing does not accept aliases or a second flattened
-control shape.
+control shape. Static YAML, routing import/export, Management Model CRUD, and the
+Dashboard's advanced Model form all use that same nested value; none translates a
+user-visible `runtime` or `reliability` alternative.
 
 The common Entrypoint form is `model_names + recipe + assignments`; the Dashboard presents
 exactly that flow. Each assignment selects Models by readable name and may add a
@@ -600,7 +601,7 @@ Recipe decision cannot consume. There is no second assignment or pool resource.
 
 Fallback is absent by default. `strategy: priority` requires at least two contiguous
 priority tiers beginning at zero and a bounded non-empty `on` set drawn from
-`unavailable`, `overloaded`, and `timeout`. It is valid only for a Recipe decision
+`unavailable` and `timeout`. It is valid only for a Recipe decision
 whose dispatch cardinality is one. Multiple references at the active priority remain
 the Recipe algorithm's weighted candidate set; Models in a lower priority are never
 sampled while a higher tier is eligible. A multi-dispatch decision keeps every Model
@@ -1174,7 +1175,7 @@ Router and customized by duplication.
 | RPM | More than 12 requests in an exact rolling minute, boundary timestamps, concurrent admission, and idempotent retry. |
 | Tokens | Actual input/output/total usage, crossing request allowed, next request denied, reset, overshoot bound only with concurrency plus generation caps, and unknown-usage reconciliation. |
 | Cost | Eight-hour sliding and calendar budgets, crossing request then next-request denial, exact decimal arithmetic, API-key breakdown/detail parity, live remaining/reset, inherited bindings, unpriced/incomplete/fenced state, and multi-currency separation. |
-| Execution shapes | File/persisted Model digest parity; defaults/bounds and Dashboard Advanced round-trip; only proven-pre-inference retry, no retry after a visible byte, total request/stream timeout; priority fallback selection, same-Model retry exhaustion, unavailable/overloaded/proven-zero timeout, deadline preservation, no fallback after output or unknown usage; four exclusive billing buckets, cache inheritance, explicit zero/unpriced state, pinned historical price revision; and non-streaming, streaming, disconnect, fusion, workflow, and looper accounting. |
+| Execution shapes | File/persisted Model digest parity; defaults/bounds and Dashboard Advanced round-trip; only proven-pre-inference retry, no retry after a visible byte, total request/stream timeout; priority fallback selection, same-Model retry exhaustion, unavailable/proven-zero timeout, deadline preservation, no fallback after output or unknown usage; four exclusive billing buckets, cache inheritance, explicit zero/unpriced state, pinned historical price revision; and non-streaming, streaming, disconnect, fusion, workflow, and looper accounting. |
 | Consistency | Staged expansion gate, restrictive deny barrier, routing snapshot acknowledgements, access/routing dependency order, contiguous watermarks, failed-operation blocking, overlapping mutations, lost projector, duplicate outbox delivery, policy-only rebuild, and stale revision conflict. |
 | Replicas | Identical result from every Router replica with no sticky session and no local cache dependence. |
 | Usage | Counter/ledger agreement, duplicate stream delivery, PostgreSQL outage backlog, rollup reconciliation, retention, and cursor pagination. |

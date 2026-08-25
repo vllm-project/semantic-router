@@ -23,19 +23,21 @@ type PolicyQuery struct {
 }
 
 type BindingQuery struct {
-	NamespaceID string
-	PolicyID    string
-	Subject     *Subject
-	Status      accesscontrol.BindingStatus
-	Mode        accesscontrol.RateBindingMode
-	Scope       accesscontrol.ResultScope
-	After       *Cursor
-	Limit       int
+	NamespaceID  string
+	PolicyID     string
+	Subject      *Subject
+	Status       accesscontrol.BindingStatus
+	Mode         accesscontrol.RateBindingMode
+	Scope        accesscontrol.ResultScope
+	After        *Cursor
+	Limit        int
+	IncludeTotal bool
 }
 
 type RepositoryPage[T any] struct {
-	Items   []T
-	HasMore bool
+	Items      []T
+	HasMore    bool
+	TotalCount *uint64
 }
 
 type Repository interface {

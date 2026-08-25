@@ -48,6 +48,7 @@ const AccessControlPage: React.FC = () => {
     visibleNavItems,
     selfService,
     canManage,
+    canRevealKeys,
     canManageDashboardMembers,
     canReadUsers,
     canReadTeams,
@@ -60,6 +61,7 @@ const AccessControlPage: React.FC = () => {
   const invitationOnboardingRequested = detailParams.get('onboarding') === 'invitation'
   const detailKeyId = activeView === 'api-keys' ? detailParams.get('key') || '' : ''
   const detailLogId = activeView === 'request-logs' ? detailParams.get('log') || '' : ''
+  const requestedPageQuery = detailParams.get('q')?.trim() || ''
   const requestedCreateKind = detailParams.get('create') || ''
   const entityKind =
     activeView === 'users'
@@ -104,7 +106,11 @@ const AccessControlPage: React.FC = () => {
   const [createdKey, setCreatedKey] = useState<CreatedAccessAPIKey | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [identityTab, setIdentityTab] = useState<IdentityTab>('users')
-  const [pageState, setPageState] = useState<PageState>({ page: 1, pageSize: 10, query: '' })
+  const [pageState, setPageState] = useState<PageState>({
+    page: 1,
+    pageSize: 10,
+    query: activeView === 'request-logs' ? requestedPageQuery : '',
+  })
   const [pageCursors, setPageCursors] = useState<Record<string, Record<number, string>>>({})
   const [usageScope, setUsageScope] = useState<UsageScope>({
     type: 'global',
@@ -135,9 +141,13 @@ const AccessControlPage: React.FC = () => {
   }, [toast])
 
   useEffect(() => {
-    setPageState((current) => ({ ...current, page: 1, query: '' }))
+    setPageState((current) => ({
+      ...current,
+      page: 1,
+      query: activeView === 'request-logs' ? requestedPageQuery : '',
+    }))
     setPageCursors({})
-  }, [activeView])
+  }, [activeView, requestedPageQuery])
 
   useEffect(() => {
     setPageCursors({})
@@ -189,7 +199,7 @@ const AccessControlPage: React.FC = () => {
         const [nextOverview, nextKeys, ownTeams] = await Promise.all([
           inferenceAccessApi.overview(),
           selfService
-            ? inferenceAccessApi.selfKeys()
+            ? inferenceAccessApi.selfKeys({ limit: 25 })
             : Promise.resolve(emptyAccessPage<AccessAPIKey>()),
           selfService
             ? inferenceAccessApi.selfTeams()
@@ -297,7 +307,9 @@ const AccessControlPage: React.FC = () => {
       }
       if (activeView === 'api-keys') {
         const page = selfService
-          ? await inferenceAccessApi.selfKeys()
+          ? await inferenceAccessApi.selfKeys(
+              accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
+            )
           : await inferenceAccessApi.keys(
               accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
             )
@@ -722,7 +734,13 @@ const AccessControlPage: React.FC = () => {
           entityKind,
         }}
         catalog={{ users, teams, keys, groups, budgets }}
-        permissions={{ canManage, canManageDashboardMembers, selfService, selfUserId }}
+        permissions={{
+          canManage,
+          canRevealKeys,
+          canManageDashboardMembers,
+          selfService,
+          selfUserId,
+        }}
         editorError={editorError}
         saving={saving}
         onEditorChange={setEditor}
@@ -764,7 +782,16 @@ const AccessControlPage: React.FC = () => {
         onEditEntity={(kind, item) => {
           setEntityEditorReturn({ kind, id: item.id })
           if (kind === 'user') setEditor({ kind, value: item as AccessUser })
-          if (kind === 'team') setEditor({ kind, value: item as AccessTeam })
+          if (kind === 'team') {
+            void inferenceAccessApi
+              .teamForEdit(item.id)
+              .then((team) => setEditor({ kind, value: team }))
+              .catch((nextError) =>
+                setToast(
+                  nextError instanceof Error ? nextError.message : 'Could not load the team.',
+                ),
+              )
+          }
           if (kind === 'group') setEditor({ kind, value: item as AccessGroup })
           if (kind === 'budget') setEditor({ kind, value: item as AccessBudget })
           closeDetail()

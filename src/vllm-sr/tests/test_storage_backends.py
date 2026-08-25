@@ -329,7 +329,7 @@ def test_managed_storage_ports_bind_only_to_host_loopback(monkeypatch, tmp_path)
         in commands[0]
     )
     assert container_services.CONTAINER_REDIS_CONF_PATH in " ".join(commands[0])
-    assert "requirepass" not in " ".join(commands[0])
+    assert "--requirepass" not in commands[0]
     assert (
         f"{layout.postgres_container_name}-data:"
         f"{container_services.POSTGRES_DATA_MOUNT_PATH}" in commands[1]

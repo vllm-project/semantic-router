@@ -43,4 +43,17 @@ describe('Recipe Builder boundary', () => {
     expect(route).toContain('models: []')
     expect(route).toContain('Assign models after this Recipe is used by a Mixture-of-Model.')
   })
+
+  it('removes every mutation entry point for routing readers', () => {
+    const page = readSource('./BuilderPage.tsx')
+    const toolbar = readSource('./builderPageToolbar.tsx')
+
+    expect(toolbar).toContain('const editable = !readOnly && !immutable')
+    expect(toolbar).toContain('{editable ? (')
+    expect(toolbar).toContain('{!readOnly ? (')
+    expect(page).toContain('readOnly={!editable}')
+    expect(page).toContain('open={editable && showImportModal}')
+    expect(page).toContain('open={editable && guideOpen}')
+    expect(page).toContain('{editable ? (')
+  })
 })

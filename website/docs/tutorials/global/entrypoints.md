@@ -89,7 +89,7 @@ entrypoints:
             priority: 1
         fallback:
           strategy: priority
-          on: [unavailable, overloaded, timeout]
+          on: [unavailable, timeout]
 ```
 
 Each key under `assignments` is a Decision name from the selected Recipe.

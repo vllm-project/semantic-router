@@ -346,13 +346,15 @@ func (service *Service) ListUserMemberships(ctx context.Context, request Members
 		return Page[UserMembership]{}, ErrInvalidRequest
 	}
 	if !request.Scope.All && len(request.Scope.TeamIDs) == 0 {
-		return Page[UserMembership]{Items: []UserMembership{}, PageSize: pageSize}, nil
+		return emptyRelationshipPage[UserMembership](pageSize, request.IncludeTotal), nil
 	}
 	page, err := service.repository.ListUserMemberships(ctx, query)
 	if err != nil {
 		return Page[UserMembership]{}, err
 	}
-	result := Page[UserMembership]{Items: page.Items, HasMore: page.HasMore, PageSize: pageSize}
+	result := Page[UserMembership]{
+		Items: page.Items, HasMore: page.HasMore, PageSize: pageSize, TotalCount: page.TotalCount,
+	}
 	if page.HasMore {
 		if len(page.Items) == 0 {
 			return Page[UserMembership]{}, ErrUnavailable
@@ -369,13 +371,15 @@ func (service *Service) ListTeamMembers(ctx context.Context, request MembershipL
 		return Page[TeamMember]{}, ErrInvalidRequest
 	}
 	if !request.Scope.All && len(request.Scope.UserIDs) == 0 {
-		return Page[TeamMember]{Items: []TeamMember{}, PageSize: pageSize}, nil
+		return emptyRelationshipPage[TeamMember](pageSize, request.IncludeTotal), nil
 	}
 	page, err := service.repository.ListTeamMembers(ctx, query)
 	if err != nil {
 		return Page[TeamMember]{}, err
 	}
-	result := Page[TeamMember]{Items: page.Items, HasMore: page.HasMore, PageSize: pageSize}
+	result := Page[TeamMember]{
+		Items: page.Items, HasMore: page.HasMore, PageSize: pageSize, TotalCount: page.TotalCount,
+	}
 	if page.HasMore {
 		if len(page.Items) == 0 {
 			return Page[TeamMember]{}, ErrUnavailable
@@ -384,6 +388,15 @@ func (service *Service) ListTeamMembers(ctx context.Context, request MembershipL
 		result.NextCursor, err = service.membershipCursor("team_members", request, last.CreatedAt, last.UserID)
 	}
 	return result, err
+}
+
+func emptyRelationshipPage[T any](pageSize int, includeTotal bool) Page[T] {
+	page := Page[T]{Items: []T{}, PageSize: pageSize}
+	if includeTotal {
+		count := uint64(0)
+		page.TotalCount = &count
+	}
+	return page
 }
 
 func (service *Service) PutMembership(ctx context.Context, request PutMembershipRequest) (MutationResult, error) {
@@ -530,6 +543,7 @@ func (service *Service) membershipQuery(request MembershipListRequest, kind stri
 	query := MembershipQuery{
 		NamespaceID: request.NamespaceID, UserID: request.UserID,
 		TeamID: request.TeamID, Status: string(request.Status), Scope: request.Scope, Limit: pageSize,
+		IncludeTotal: request.IncludeTotal,
 	}
 	if request.Cursor != "" {
 		cursor, err := service.cursors.decode(request.Cursor)

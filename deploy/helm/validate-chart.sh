@@ -177,7 +177,7 @@ if helm template canonical-empty-release "$CHART_PATH" \
     log_error "An empty canonical config silently fell back to chart defaults"
     exit 1
 fi
-if ! grep -Eq "configOverride must be a non-empty mapping|configOverride: Must have at least 1 properties" \
+if ! grep -Eq "configOverride must be a non-empty mapping|configOverride: Must have at least 1 properties|/configOverride.*minProperties.*got 0" \
     "$TEMP_DIR/canonical-empty-template.yaml"; then
     log_error "Empty canonical config failed without the expected safety error"
     exit 1
@@ -200,6 +200,8 @@ configOverride:
       management_api:
         enabled: false
         port: 9080
+envFromSecrets:
+  - store-only-management
 EOF
 
 helm template store-only-release "$CHART_PATH" \
@@ -260,6 +262,10 @@ configOverride:
         port: 9443
       backend_dispatch:
         port: 8181
+service:
+  type: LoadBalancer
+envFromSecrets:
+  - durable-management
 podDisruptionBudget:
   enabled: true
 topologySpread:
@@ -303,6 +309,17 @@ if grep -Eq '^(providers|routing|recipes|entrypoints):' "$TEMP_DIR/durable-rende
 fi
 if ! grep -q 'name: durable-release-semantic-router-management' "$TEMP_DIR/durable-template.yaml"; then
     log_error "Enabled Management API did not render a dedicated Service"
+    exit 1
+fi
+if ! awk '
+    /^---$/ { in_service = 0; is_metrics = 0; is_cluster_ip = 0 }
+    /^kind: Service$/ { in_service = 1 }
+    in_service && $1 == "name:" && $2 == "durable-release-semantic-router-metrics" { is_metrics = 1 }
+    is_metrics && $1 == "type:" && $2 == "ClusterIP" { is_cluster_ip = 1 }
+    is_metrics && is_cluster_ip { found = 1 }
+    END { exit(found ? 0 : 1) }
+' "$TEMP_DIR/durable-template.yaml"; then
+    log_error "Metrics Service inherited the public LoadBalancer exposure"
     exit 1
 fi
 if ! awk '

@@ -82,7 +82,7 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
                     ],
                     "fallback": {
                         "strategy": "priority",
-                        "on": ["unavailable", "overloaded"],
+                        "on": ["unavailable", "timeout"],
                     },
                 }
             },
@@ -143,7 +143,7 @@ def test_parse_user_config_accepts_entrypoints_and_recipes(tmp_path: Path) -> No
     assignment = parsed.entrypoints[0].assignments["privacy-route"]
     assert [model.priority for model in assignment.models] == [0, 1]
     assert assignment.fallback is not None
-    assert assignment.fallback.on == ["unavailable", "overloaded"]
+    assert assignment.fallback.on == ["unavailable", "timeout"]
     assert parsed.recipes[0].name == "privacy-first"
     assert parsed.recipes[0].routing.decisions[0].name == "privacy-route"
 

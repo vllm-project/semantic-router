@@ -23,7 +23,11 @@ import {
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
-import { canAccessDashboardPath, canAccessMLSetup } from '../utils/accessControl'
+import {
+  canAccessDashboardPath,
+  canAccessMLSetup,
+  resolveAccessLandingPath,
+} from '../utils/accessControl'
 import { preloadDashboardRoute } from '../app/routeLoaders'
 
 interface LayoutProps {
@@ -64,7 +68,10 @@ const Layout: React.FC<LayoutProps> = ({
   const location = useLocation()
   const navigate = useNavigate()
   const canUseMLSetup = canAccessMLSetup(user)
-  const primaryNavLinks = PRIMARY_NAV_LINKS.filter((link) => canAccessDashboardPath(user, link.to))
+  const accessLandingPath = resolveAccessLandingPath(user)
+  const primaryNavLinks = PRIMARY_NAV_LINKS.map((link) =>
+    link.to === '/access/usage' && accessLandingPath ? { ...link, to: accessLandingPath } : link,
+  ).filter((link) => canAccessDashboardPath(user, link.to))
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)

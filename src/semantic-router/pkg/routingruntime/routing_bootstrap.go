@@ -24,6 +24,9 @@ type bootstrapCredentialBinding struct {
 	catalogRevision     string
 	credentialMode      providercredential.Mode
 	credentialAdapterID string
+	backendID           string
+	modelName           string
+	connectionOrdinal   int
 }
 
 func seedDurableRoutingDatabase(
@@ -52,19 +55,81 @@ func seedDurableRoutingDatabase(
 		_, seedErr := store.SeedEmptyNamespace(ctx, namespaceID, cfg.BillingCurrency)
 		return seedErr
 	}
-	_, err = store.SeedEmptyStore(ctx, cfg.RoutingSnapshot, func() ([]routingpostgres.BootstrapProviderCredential, error) {
-		return materializeBootstrapCredentials(cfg, cfg.RoutingSnapshot, codec, catalog)
+	bootstrapSnapshot, credentialNames, err := compileDurableBootstrapSnapshot(cfg.RoutingSnapshot)
+	if err != nil {
+		return err
+	}
+	_, err = store.SeedEmptyStore(ctx, bootstrapSnapshot, func() ([]routingpostgres.BootstrapProviderCredential, error) {
+		return materializeBootstrapCredentials(cfg, bootstrapSnapshot, credentialNames, codec, catalog)
 	})
 	return err
+}
+
+// compileDurableBootstrapSnapshot is the one file-authoring to durable-state
+// identity boundary. Human-authored credential aliases stay readable in YAML
+// and DSL documents; PostgreSQL and every published backend reference receive
+// a deterministic UUID scoped to the public Namespace. Dynamic Management
+// resources already carry native UUIDs and never pass through this bootstrap
+// compiler.
+func compileDurableBootstrapSnapshot(
+	snapshot *routingsnapshot.Snapshot,
+) (*routingsnapshot.Snapshot, map[string]string, error) {
+	if snapshot == nil {
+		return nil, nil, errors.New("routing bootstrap snapshot is required")
+	}
+	if _, err := uuid.Parse(snapshot.NamespaceID); err != nil {
+		return nil, nil, errors.New("routing bootstrap Namespace ID must be a UUID")
+	}
+
+	bundle := snapshot.Bundle
+	bundle.Models = append([]routingsnapshot.Model(nil), snapshot.Models...)
+	credentialNames := make(map[string]string)
+	for modelIndex := range bundle.Models {
+		model := &bundle.Models[modelIndex]
+		model.Backends = append([]routingsnapshot.Backend(nil), model.Backends...)
+		for backendIndex := range model.Backends {
+			backend := &model.Backends[backendIndex]
+			name := backend.ProviderCredentialID
+			if name == "" {
+				continue
+			}
+			if err := providercredential.ValidateName(name); err != nil {
+				return nil, nil, fmt.Errorf(
+					"bootstrap backend %q provider credential alias %q is invalid: %w",
+					backend.ID, name, err,
+				)
+			}
+			credentialID := durableBootstrapCredentialID(snapshot.NamespaceID, name)
+			if previous, collision := credentialNames[credentialID]; collision && previous != name {
+				return nil, nil, errors.New("routing bootstrap provider credential identity collision")
+			}
+			credentialNames[credentialID] = name
+			backend.ProviderCredentialID = credentialID
+		}
+	}
+	compiled, err := routingsnapshot.Compile(bundle)
+	if err != nil {
+		return nil, nil, fmt.Errorf("compile durable routing bootstrap snapshot: %w", err)
+	}
+	return compiled, credentialNames, nil
+}
+
+func durableBootstrapCredentialID(namespaceID, name string) string {
+	namespace := uuid.MustParse(namespaceID)
+	return uuid.NewSHA1(
+		namespace,
+		[]byte("vllm-sr/provider-credential-bootstrap/v1\x00"+name),
+	).String()
 }
 
 func materializeBootstrapCredentials(
 	cfg *config.RouterConfig,
 	snapshot *routingsnapshot.Snapshot,
+	credentialNames map[string]string,
 	codec providercredential.Codec,
 	catalog *providercatalog.Snapshot,
 ) ([]routingpostgres.BootstrapProviderCredential, error) {
-	bindings, err := bootstrapCredentialBindings(snapshot, catalog)
+	bindings, err := bootstrapCredentialBindings(snapshot, credentialNames, catalog)
 	if err != nil {
 		return nil, err
 	}
@@ -76,49 +141,89 @@ func materializeBootstrapCredentials(
 	result := make([]routingpostgres.BootstrapProviderCredential, 0, len(ids))
 	now := time.Now().UTC()
 	for _, id := range ids {
-		definition, exists := cfg.BackendCredentials.File[id]
-		if !exists {
-			return nil, fmt.Errorf("bootstrap provider credential %q has no file secret source", id)
+		name, mapped := credentialNames[id]
+		if !mapped {
+			return nil, errors.New("durable routing bootstrap credential mapping is incomplete")
 		}
-		secret, err := readBootstrapCredentialSecret(definition)
-		if err != nil {
-			return nil, fmt.Errorf("load bootstrap provider credential %q: %w", id, err)
+		definition, exists := cfg.BackendCredentials.File[name]
+		if !exists {
+			return nil, fmt.Errorf("bootstrap provider credential alias %q has no file secret source", name)
 		}
 		binding := bindings[id]
-		if definition.CredentialAdapterID != binding.credentialAdapterID {
-			providercredential.Zero(secret)
-			return nil, fmt.Errorf(
-				"bootstrap provider credential %q adapter does not match provider %q",
-				id, binding.providerID,
-			)
+		seed, err := materializeBootstrapCredential(
+			name, id, definition, binding, snapshot, codec, now,
+		)
+		if err != nil {
+			return nil, err
 		}
-		versionID := uuid.NewSHA1(
-			uuid.NameSpaceOID,
-			[]byte("vllm-sr/provider-credential-bootstrap-version/v1\x00"+id+"\x00"+snapshot.SemanticDigest),
-		).String()
-		credential := providercredential.Credential{
-			ID: id, NamespaceID: snapshot.NamespaceID,
-			Name:       "bootstrap-" + strings.ReplaceAll(id, "-", "")[:12],
-			ProviderID: binding.providerID, CredentialMode: binding.credentialMode,
-			CredentialAdapterID: binding.credentialAdapterID,
-			CatalogRevision:     binding.catalogRevision, NormalizedOrigin: binding.origin,
-			Status: providercredential.StatusActive, ActiveVersionID: &versionID,
-			Revision: 1, CreatedAt: now, UpdatedAt: now,
-		}
-		version, sealErr := codec.Seal(credential, versionID, secret, now)
-		providercredential.Zero(secret)
-		if sealErr != nil {
-			return nil, fmt.Errorf("seal bootstrap provider credential %q: %w", id, sealErr)
-		}
-		result = append(result, routingpostgres.BootstrapProviderCredential{
-			Credential: credential, Version: version,
-		})
+		result = append(result, seed)
 	}
 	return result, nil
 }
 
+func materializeBootstrapCredential(
+	name string,
+	credentialID string,
+	definition config.BackendCredentialConfig,
+	binding bootstrapCredentialBinding,
+	snapshot *routingsnapshot.Snapshot,
+	codec providercredential.Codec,
+	now time.Time,
+) (routingpostgres.BootstrapProviderCredential, error) {
+	secret, err := readBootstrapCredentialSecret(definition)
+	if err != nil {
+		return routingpostgres.BootstrapProviderCredential{}, fmt.Errorf(
+			"load bootstrap provider credential alias %q: %w", name, err,
+		)
+	}
+	return sealBootstrapCredential(name, credentialID, definition, binding, snapshot, codec, now, secret)
+}
+
+func sealBootstrapCredential(
+	name string,
+	credentialID string,
+	definition config.BackendCredentialConfig,
+	binding bootstrapCredentialBinding,
+	snapshot *routingsnapshot.Snapshot,
+	codec providercredential.Codec,
+	now time.Time,
+	secret []byte,
+) (routingpostgres.BootstrapProviderCredential, error) {
+	defer providercredential.Zero(secret)
+	if definition.CredentialAdapterID != binding.credentialAdapterID {
+		return routingpostgres.BootstrapProviderCredential{}, fmt.Errorf(
+			"bootstrap provider credential alias %q adapter %q does not match provider %q adapter %q",
+			name, definition.CredentialAdapterID, binding.providerID, binding.credentialAdapterID,
+		)
+	}
+	versionID := uuid.NewSHA1(
+		uuid.NameSpaceOID,
+		[]byte("vllm-sr/provider-credential-bootstrap-version/v1\x00"+credentialID+"\x00"+snapshot.SemanticDigest),
+	).String()
+	displayName := name
+	if _, parseErr := uuid.Parse(name); parseErr == nil {
+		displayName = readableBootstrapCredentialName(binding)
+	}
+	credential := providercredential.Credential{
+		ID: credentialID, NamespaceID: snapshot.NamespaceID, Name: displayName,
+		ProviderID: binding.providerID, CredentialMode: binding.credentialMode,
+		CredentialAdapterID: binding.credentialAdapterID,
+		CatalogRevision:     binding.catalogRevision, NormalizedOrigin: binding.origin,
+		Status: providercredential.StatusActive, ActiveVersionID: &versionID,
+		Revision: 1, CreatedAt: now, UpdatedAt: now,
+	}
+	version, err := codec.Seal(credential, versionID, secret, now)
+	if err != nil {
+		return routingpostgres.BootstrapProviderCredential{}, fmt.Errorf(
+			"seal bootstrap provider credential alias %q: %w", name, err,
+		)
+	}
+	return routingpostgres.BootstrapProviderCredential{Credential: credential, Version: version}, nil
+}
+
 func bootstrapCredentialBindings(
 	snapshot *routingsnapshot.Snapshot,
+	credentialNames map[string]string,
 	catalog *providercatalog.Snapshot,
 ) (map[string]bootstrapCredentialBinding, error) {
 	bindings := make(map[string]bootstrapCredentialBinding)
@@ -129,9 +234,16 @@ func bootstrapCredentialBindings(
 		if model.CatalogRevision != catalog.Revision() {
 			return nil, fmt.Errorf("bootstrap Model %q does not match the installed provider catalog revision", model.ID)
 		}
-		for _, backend := range model.Backends {
+		for backendIndex, backend := range model.Backends {
 			if backend.ProviderCredentialID == "" {
 				continue
+			}
+			name, mapped := credentialNames[backend.ProviderCredentialID]
+			if !mapped {
+				return nil, fmt.Errorf(
+					"bootstrap backend %q references an unmapped provider credential",
+					backend.ID,
+				)
 			}
 			provider, found := catalog.Get(backend.ProviderID)
 			if !found || provider.Credential.Mode == providercatalog.CredentialNone ||
@@ -146,14 +258,47 @@ func bootstrapCredentialBindings(
 				catalogRevision:     model.CatalogRevision,
 				credentialMode:      providercredential.Mode(provider.Credential.Mode),
 				credentialAdapterID: provider.Credential.AdapterID,
+				backendID:           backend.ID,
+				modelName:           model.Name,
+				connectionOrdinal:   backendIndex + 1,
 			}
-			if previous, exists := bindings[backend.ProviderCredentialID]; exists && previous != binding {
-				return nil, fmt.Errorf("bootstrap provider credential %q is reused across incompatible backends", backend.ProviderCredentialID)
+			if previous, exists := bindings[backend.ProviderCredentialID]; exists {
+				if !previous.compatible(binding) {
+					return nil, fmt.Errorf(
+						"bootstrap provider credential alias %q is reused by incompatible backends %q and %q: "+
+							"provider, credential mode, adapter, origin, and catalog revision must match",
+						name, previous.backendID, binding.backendID,
+					)
+				}
+				continue
 			}
 			bindings[backend.ProviderCredentialID] = binding
 		}
 	}
 	return bindings, nil
+}
+
+func readableBootstrapCredentialName(binding bootstrapCredentialBinding) string {
+	name := fmt.Sprintf(
+		"%s · %s · connection %d",
+		binding.modelName, binding.providerID, binding.connectionOrdinal,
+	)
+	for len(name) > 256 {
+		runes := []rune(name)
+		if len(runes) <= 1 {
+			return "Provider credential"
+		}
+		name = string(runes[:len(runes)-1])
+	}
+	return name
+}
+
+func (binding bootstrapCredentialBinding) compatible(other bootstrapCredentialBinding) bool {
+	return binding.providerID == other.providerID &&
+		binding.origin == other.origin &&
+		binding.catalogRevision == other.catalogRevision &&
+		binding.credentialMode == other.credentialMode &&
+		binding.credentialAdapterID == other.credentialAdapterID
 }
 
 func readBootstrapCredentialSecret(definition config.BackendCredentialConfig) ([]byte, error) {

@@ -132,7 +132,7 @@ export default function ConfigPageMixtureDialog({
     setFallbacks((current) => ({
       ...current,
       [decisionId]: enabled
-        ? { strategy: 'priority', on: ['unavailable', 'overloaded', 'timeout'] }
+        ? { strategy: 'priority', on: ['unavailable', 'timeout'] }
         : undefined,
     }))
   }

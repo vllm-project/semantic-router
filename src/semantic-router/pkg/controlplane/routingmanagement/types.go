@@ -65,9 +65,19 @@ type ManifestDiff struct {
 }
 
 type ManifestImportRequest struct {
-	Document         []byte
+	Prepared         PreparedManifest
 	DryRun           bool
 	ExpectedRevision int64
+}
+
+// PreparedManifest is the immutable result of resolving one human-readable
+// manifest inside its target Namespace. CredentialIDs are exposed only so the
+// Management transport can authorize every exact ProviderCredential before a
+// mutation. Import verifies the snapshot digest and Namespace again.
+type PreparedManifest struct {
+	NamespaceID   string
+	Snapshot      *routingsnapshot.Snapshot
+	CredentialIDs []string
 }
 
 type ManifestImportResult struct {

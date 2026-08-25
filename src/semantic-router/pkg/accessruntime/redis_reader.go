@@ -60,6 +60,23 @@ func (r *RedisProjectionReader) LocateCredential(
 	if len(values) == 0 {
 		return CredentialLocation{}, ErrProjectionNotFound
 	}
+	namespaceID, partition, locateCredentialErr := directoryCoordinates(values)
+	if locateCredentialErr != nil {
+		return CredentialLocation{}, locateCredentialErr
+	}
+	accessGate, routingGate, locateCredentialErr := r.readPublicationGates(ctx, namespaceID, partition)
+	if locateCredentialErr != nil {
+		return CredentialLocation{}, locateCredentialErr
+	}
+	if accessGate.PublicationID != routingGate.PublicationID ||
+		accessGate.RuntimeEpoch != routingGate.RuntimeEpoch || accessGate.Revision != routingGate.Revision ||
+		routingGate.SnapshotDigest == "" || routingGate.Revision > math.MaxInt64 {
+		return CredentialLocation{}, fmt.Errorf("%w: publication gates disagree", ErrRuntimeCorrupt)
+	}
+	values, locateCredentialErr = selectActivePointer(values, accessGate.PublicationID, "credential directory")
+	if locateCredentialErr != nil {
+		return CredentialLocation{}, locateCredentialErr
+	}
 	required := []string{"publication_id", "state", "partition", "namespace_id", "kind", "public_id"}
 	for _, field := range required {
 		if strings.TrimSpace(values[field]) == "" {
@@ -74,16 +91,13 @@ func (r *RedisProjectionReader) LocateCredential(
 		NamespaceID: values["namespace_id"], QuotaPartition: values["partition"],
 		PublicationID: values["publication_id"],
 	}
+	if location.NamespaceID != namespaceID || location.QuotaPartition != partition {
+		return CredentialLocation{}, fmt.Errorf("%w: credential directory coordinates changed", ErrRuntimeCorrupt)
+	}
 	if _, err := quotaruntime.NewAccessProjectionKeyspaceWithPrefix(r.keyPrefix, location.QuotaPartition); err != nil {
 		return CredentialLocation{}, fmt.Errorf("%w: invalid credential partition", ErrRuntimeCorrupt)
 	}
-	accessGate, routingGate, locateCredentialErr := r.readPublicationGates(ctx, location.NamespaceID, location.QuotaPartition)
-	if locateCredentialErr != nil {
-		return CredentialLocation{}, locateCredentialErr
-	}
-	if accessGate.PublicationID != location.PublicationID || routingGate.PublicationID != location.PublicationID ||
-		accessGate.RuntimeEpoch != routingGate.RuntimeEpoch || accessGate.Revision != routingGate.Revision ||
-		routingGate.SnapshotDigest == "" || routingGate.Revision > math.MaxInt64 {
+	if accessGate.PublicationID != location.PublicationID {
 		return CredentialLocation{}, fmt.Errorf("%w: credential directory and publication gates disagree", ErrRuntimeCorrupt)
 	}
 	location.RuntimeEpoch = routingGate.RuntimeEpoch
@@ -109,6 +123,10 @@ func (r *RedisProjectionReader) ReadCredential(
 	}
 	if len(values) == 0 {
 		return accessprojection.CredentialProjection{}, ErrProjectionNotFound
+	}
+	values, err = selectActivePointer(values, location.PublicationID, "credential")
+	if err != nil {
+		return accessprojection.CredentialProjection{}, err
 	}
 	required := []string{"publication_id", "state", "kind", "kid", "key_id", "secret_hmac", "pepper_version", "status", "not_before_ms"}
 	for _, field := range required {
@@ -192,6 +210,10 @@ func (r *RedisProjectionReader) ReadActivePolicy(
 	}
 	if len(values) == 0 {
 		return ActivePolicy{}, ErrProjectionNotFound
+	}
+	values, err = selectActivePointer(values, location.PublicationID, "active policy")
+	if err != nil {
+		return ActivePolicy{}, err
 	}
 	if values["publication_id"] != location.PublicationID || values["state"] != string(accesspublisher.PointerStateActive) {
 		return ActivePolicy{}, fmt.Errorf("%w: active policy does not match the active publication", ErrRuntimeCorrupt)
@@ -320,6 +342,51 @@ func (r *RedisProjectionReader) readPublicationGates(
 			fmt.Errorf("%w: invalid routing publication gate", ErrRuntimeCorrupt)
 	}
 	return accessGate, routingGate, nil
+}
+
+func directoryCoordinates(values map[string]string) (string, string, error) {
+	namespaceID, err := stablePointerCoordinate(values, "namespace_id")
+	if err != nil {
+		return "", "", fmt.Errorf("%w: credential directory namespace: %w", ErrRuntimeCorrupt, err)
+	}
+	partition, err := stablePointerCoordinate(values, "partition")
+	if err != nil {
+		return "", "", fmt.Errorf("%w: credential directory partition: %w", ErrRuntimeCorrupt, err)
+	}
+	return namespaceID, partition, nil
+}
+
+func stablePointerCoordinate(values map[string]string, field string) (string, error) {
+	active := strings.TrimSpace(values[field])
+	pending := strings.TrimSpace(values["pending_"+field])
+	if active != "" && pending != "" && active != pending {
+		return "", fmt.Errorf("active and pending values disagree")
+	}
+	if pending != "" {
+		return pending, nil
+	}
+	if active != "" {
+		return active, nil
+	}
+	return "", fmt.Errorf("value is missing")
+}
+
+func selectActivePointer(
+	values map[string]string,
+	publicationID string,
+	label string,
+) (map[string]string, error) {
+	selected, state, err := accesspublisher.SelectPointer(values, publicationID)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %s does not match the active publication", ErrRuntimeCorrupt, label)
+	}
+	if state == accesspublisher.PointerStateTombstone {
+		return nil, ErrProjectionNotFound
+	}
+	if state != accesspublisher.PointerStateActive {
+		return nil, fmt.Errorf("%w: %s state is invalid", ErrRuntimeCorrupt, label)
+	}
+	return selected, nil
 }
 
 func parseProjectionMilliseconds(value string) (time.Time, error) {

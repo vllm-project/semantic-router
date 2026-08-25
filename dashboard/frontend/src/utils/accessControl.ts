@@ -286,6 +286,25 @@ export function canSelfManageInferenceAccess(user?: PermissionUser | null): bool
   return managementHas(user, 'key.manage')
 }
 
+export function canRevealInferenceKey(user?: PermissionUser | null): boolean {
+  return managementHas(user, 'key.reveal')
+}
+
+const ACCESS_LANDING_PATHS = [
+  '/access/usage',
+  '/access/api-keys',
+  '/access/users',
+  '/access/teams',
+  '/access/access-groups',
+  '/access/budgets',
+  '/logs',
+  '/access/audit-logs',
+] as const
+
+export function resolveAccessLandingPath(user?: PermissionUser | null): string | null {
+  return ACCESS_LANDING_PATHS.find((path) => canAccessDashboardPath(user, path)) ?? null
+}
+
 export function isModelConsumer(user?: PermissionUser | null): boolean {
   if (!user || !managementHas(user, 'delegation.use')) return false
   return (
@@ -294,10 +313,8 @@ export function isModelConsumer(user?: PermissionUser | null): boolean {
     !hasPermission(user, STATUS_READ_PERMISSION) &&
     !managementHasAny(
       user,
-      'key.manage',
       'user.manage',
       'team.manage',
-      'membership.manage',
       'access_policy.manage',
       'rate_policy.manage',
       'routing.manage',

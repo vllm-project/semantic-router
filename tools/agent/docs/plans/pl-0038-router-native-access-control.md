@@ -103,8 +103,11 @@ Kubernetes.
   responsive layout, accessibility, and permission-visibility regression coverage.
 - [ ] `RAC-06` Close file-only and durable Docker/Kubernetes composition, schema
   upgrade ordering, readiness, failure, recovery, and operator documentation.
-- [ ] `RAC-07` Run the 10,000-key scale gate, full protocol and feature regression,
-  remote hardware-backed acceptance, repository gates, and pull-request CI.
+- [ ] `RAC-07` Run `make perf-access-capacity` against an isolated Valkey for the
+  reproducible 10,000-key projection, multi-replica admission, usage-lag, memory,
+  Redis-operation, and Router-replica failover report; then run the separate full
+  protocol, Router/Envoy HTTP, store-failure, remote hardware-backed, repository,
+  and pull-request gates.
 
 ## Next Action
 

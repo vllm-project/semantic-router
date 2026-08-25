@@ -116,6 +116,7 @@ func (service *Service) bindingQuery(request ListBindingsRequest, kind string, r
 	query := BindingQuery{
 		NamespaceID: request.NamespaceID, PolicyID: request.PolicyID,
 		Subject: request.Subject, Status: request.Status, Mode: request.Mode, Scope: request.Scope, Limit: pageSize,
+		IncludeTotal: request.IncludeTotal,
 	}
 	if request.Cursor != "" {
 		cursor, err := service.cursors.decode(request.Cursor)
@@ -179,8 +180,9 @@ func bindingPage[T AccessPolicyBinding | RateLimitBinding](
 	items []T,
 	hasMore bool,
 	pageSize int,
+	totalCount *uint64,
 ) (Page[T], error) {
-	result := Page[T]{Items: items, HasMore: hasMore, PageSize: pageSize}
+	result := Page[T]{Items: items, HasMore: hasMore, PageSize: pageSize, TotalCount: totalCount}
 	if !hasMore {
 		return result, nil
 	}

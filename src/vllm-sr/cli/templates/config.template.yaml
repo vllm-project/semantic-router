@@ -25,7 +25,7 @@ providers:
       control:
         retry:
           count: 2
-          'on': [unavailable, overloaded, timeout]
+          on: [unavailable, timeout]
         timeout:
           request: 60s
           stream: 10m

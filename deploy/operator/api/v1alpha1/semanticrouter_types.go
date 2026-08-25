@@ -103,8 +103,9 @@ type SemanticRouterSpec struct {
 	// +optional
 	Env []corev1.EnvVar `json:"env,omitempty"`
 
-	// EnvFrom adds environment sources to the Router and Management schema
-	// migration containers.
+	// EnvFrom adds environment sources to the Router. When the Management
+	// PostgreSQL DSN uses an environment reference, the migration Job projects
+	// only that key from one unprefixed Secret source.
 	// +optional
 	EnvFrom []corev1.EnvFromSource `json:"envFrom,omitempty"`
 
@@ -113,8 +114,9 @@ type SemanticRouterSpec struct {
 	// +optional
 	Volumes []corev1.Volume `json:"volumes,omitempty"`
 
-	// VolumeMounts mounts deployment-owned volumes into the Router and Management
-	// schema migration containers.
+	// VolumeMounts mounts deployment-owned volumes into the Router. When the
+	// Management PostgreSQL DSN uses a file reference, the migration Job receives
+	// only the most-specific matching read-only mount and its volume.
 	// +optional
 	VolumeMounts []corev1.VolumeMount `json:"volumeMounts,omitempty"`
 

@@ -57,7 +57,7 @@ func TestRegistryReturnsDefensiveCopies(t *testing.T) {
 
 func TestRegistryMatchesNormativeEndpointInventory(t *testing.T) {
 	const (
-		coreManagementEndpointCount = 195
+		coreManagementEndpointCount = 196
 		agentEndpointCount          = 36
 	)
 	documentPath := filepath.Join("..", "..", "..", "..", "website", "docs", "proposals", "router-native-access-control-management-api.md")

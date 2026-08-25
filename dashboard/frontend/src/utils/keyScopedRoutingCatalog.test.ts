@@ -100,13 +100,13 @@ describe('key-scoped routing catalog', () => {
         ...catalog,
         models: [{ ...catalog.models[0], backends: [{ credentialId: 'secret' }] }],
       }),
-    ).toThrow('invalid key-scoped Model')
+    ).toThrow('RoutingCatalog')
     expect(() =>
       assertKeyScopedRoutingCatalog({
         ...catalog,
         recipes: [{ ...catalog.recipes[0], document: { signals: {} } }],
       }),
-    ).toThrow('invalid key-scoped Recipe')
+    ).toThrow('RoutingCatalog')
   })
 
   it('rejects assignments to a Model outside the visible projection', () => {

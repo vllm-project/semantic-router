@@ -46,6 +46,9 @@ type modelStepCollector struct {
 	toolCalls   map[int]*streamedToolCall
 	text        strings.Builder
 	liveOrdinal int
+	observation PublicInferenceObservation
+	observed    bool
+	usage       *agentmanagement.ModelStepUsage
 }
 
 type modelStepOutput struct {
@@ -72,6 +75,9 @@ func newModelStepCollector(
 func (collector *modelStepCollector) consume(event llmprotocol.Event) error {
 	if collector.terminal {
 		return fmt.Errorf("%w: inference emitted data after its terminal event", agentmanagement.ErrConflict)
+	}
+	if event.Usage != nil {
+		collector.captureAuthoritativeUsage(event.Usage)
 	}
 	switch event.Type {
 	case llmprotocol.EventResponseStarted:
@@ -131,11 +137,58 @@ func (collector *modelStepCollector) consume(event llmprotocol.Event) error {
 	case llmprotocol.EventReasoningDelta, llmprotocol.EventUsageUpdated,
 		llmprotocol.EventOutputItemCompleted, llmprotocol.EventProviderOpaque:
 		// Reasoning and provider-opaque data are deliberately not durable Agent
-		// transcript fields. Usage is accounted by the ordinary public path.
+		// transcript fields. Only authoritative usage is retained through the
+		// closed model_step_summary projection.
 	default:
 		return fmt.Errorf("%w: unsupported inference event %q", agentmanagement.ErrConflict, event.Type)
 	}
 	return nil
+}
+
+func (collector *modelStepCollector) observe(observation PublicInferenceObservation) error {
+	if collector.observed || strings.TrimSpace(observation.RequestID) == "" {
+		return fmt.Errorf("%w: public inference observation is invalid", agentmanagement.ErrConflict)
+	}
+	collector.observation = observation
+	collector.observed = true
+	return nil
+}
+
+func (collector *modelStepCollector) captureAuthoritativeUsage(usage *llmprotocol.Usage) {
+	if usage == nil || usage.State != llmprotocol.UsageAvailable ||
+		!authoritativeTokenCount(usage.InputTotal) ||
+		!authoritativeTokenCount(usage.OutputTotal) ||
+		!authoritativeTokenCount(usage.Total) {
+		return
+	}
+	input := *usage.InputTotal.Value
+	output := *usage.OutputTotal.Value
+	total := *usage.Total.Value
+	if input < 0 || output < 0 || total < 0 || input > int64(1<<53-1)-output || total != input+output {
+		return
+	}
+	collector.usage = &agentmanagement.ModelStepUsage{
+		InputTokens:           input,
+		OutputTokens:          output,
+		TotalTokens:           total,
+		InputUncachedTokens:   authoritativeTokenPointer(usage.InputUncached),
+		InputCacheReadTokens:  authoritativeTokenPointer(usage.InputCacheRead),
+		InputCacheWriteTokens: authoritativeTokenPointer(usage.InputCacheWrite),
+		OutputReasoningTokens: authoritativeTokenPointer(usage.OutputReasoning),
+		OutputOtherTokens:     authoritativeTokenPointer(usage.OutputOther),
+	}
+}
+
+func authoritativeTokenCount(value llmprotocol.TokenCount) bool {
+	return value.Value != nil && value.Provenance == llmprotocol.UsageAuthoritative
+}
+
+func authoritativeTokenPointer(value llmprotocol.TokenCount) *int64 {
+	if !authoritativeTokenCount(value) || *value.Value < 0 || *value.Value > int64(1<<53-1) {
+		return nil
+	}
+	result := *value.Value
+	return &result
 }
 
 func (collector *modelStepCollector) toolCall(itemIndex int) (*streamedToolCall, error) {
@@ -187,6 +240,9 @@ func (collector *modelStepCollector) finish() (modelStepOutput, error) {
 	if collector.stop == "" || collector.stop == llmprotocol.StopUnknown {
 		return modelStepOutput{}, fmt.Errorf("%w: inference response has no stable stop reason", agentmanagement.ErrConflict)
 	}
+	if !collector.observed {
+		return modelStepOutput{}, fmt.Errorf("%w: inference response has no Router observation", agentmanagement.ErrConflict)
+	}
 	output := modelStepOutput{StopReason: collector.stop}
 	if !utf8.ValidString(collector.text.String()) {
 		return modelStepOutput{}, fmt.Errorf("%w: inference returned invalid text", agentmanagement.ErrInvalid)
@@ -203,6 +259,25 @@ func (collector *modelStepCollector) finish() (modelStepOutput, error) {
 		}
 		output.Events = append(output.Events, collector.workerEvent(agentmanagement.EventAssistantDelta, payload))
 	}
+	summaryPayload, err := json.Marshal(agentmanagement.ModelStepSummaryEvent{
+		ModelStepID:         collector.modelStepID,
+		RequestID:           collector.observation.RequestID,
+		SelectedRecipe:      collector.observation.SelectedRecipe,
+		SelectedDecision:    collector.observation.SelectedDecision,
+		SelectedModel:       collector.observation.SelectedModel,
+		SelectedAlgorithm:   collector.observation.SelectedAlgorithm,
+		ResponsePath:        collector.observation.ResponsePath,
+		LatencyMilliseconds: collector.observation.LatencyMilliseconds,
+		TTFTMilliseconds:    collector.observation.TTFTMilliseconds,
+		Usage:               collector.usage,
+	})
+	if err != nil {
+		return modelStepOutput{}, err
+	}
+	output.Events = append(
+		output.Events,
+		collector.workerEvent(agentmanagement.EventModelStepSummary, summaryPayload),
+	)
 	if len(collector.toolCalls) == 0 {
 		if collector.stop == llmprotocol.StopToolCall {
 			return modelStepOutput{}, fmt.Errorf("%w: inference ended for a missing tool call", agentmanagement.ErrConflict)

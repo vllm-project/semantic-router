@@ -112,8 +112,6 @@ func compileDispatchFallback(policy *config.RoutingFallbackPolicy) (backendinvok
 		switch value {
 		case string(backendinvoker.FallbackUnavailable):
 			trigger = backendinvoker.FallbackUnavailable
-		case string(backendinvoker.FallbackOverloaded):
-			trigger = backendinvoker.FallbackOverloaded
 		case string(backendinvoker.FallbackTimeout):
 			trigger = backendinvoker.FallbackTimeout
 		default:

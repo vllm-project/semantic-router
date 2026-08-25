@@ -49,6 +49,45 @@ describe('Router Management access client', () => {
     )
   })
 
+  it('resolves an Agent response to its scoped request log by exact request ID', async () => {
+    const requestId = '11111111-1111-4111-8111-111111111111'
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        data: [
+          {
+            admissionId: 'admission-1',
+            eventId: '22222222-2222-4222-8222-222222222222',
+            externalRequestId: requestId,
+            occurredAt: '2026-08-25T00:00:00Z',
+            completedAt: '2026-08-25T00:00:01Z',
+            protocol: 'openai_chat_v1',
+            path: '/v1/chat/completions',
+            statusCode: 200,
+            usageState: 'known_actual',
+            inputTokens: '8',
+            outputTokens: '3',
+            latencyMilliseconds: 1000,
+            stream: true,
+            toolCall: false,
+            costs: [],
+          },
+        ],
+        page: { hasMore: false, pageSize: 10 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      inferenceAccessApi.requestLogs({ q: ` ${requestId} `, limit: 10 }),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ requestId })],
+    })
+    const requestedURL = new URL(String(fetchMock.mock.calls[0][0]), 'http://dashboard.local')
+    expect(requestedURL.pathname).toBe('/api/router/management/v1/request-logs')
+    expect(requestedURL.searchParams.get('requestId')).toBe(requestId)
+    expect(requestedURL.searchParams.get('pageSize')).toBe('10')
+  })
+
   it('hydrates a selected API key without reading credential material', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       response({
@@ -75,28 +114,31 @@ describe('Router Management access client', () => {
 
   it('creates a key with a typed one-of owner and policy references', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      response({
-        data: {
-          keyId: 'key-1',
-          name: 'Production',
-          owner: { type: 'team', id: 'team-1' },
-          status: 'active',
-          revision: 1,
-          createdAt: '2026-08-23T00:00:00Z',
-          updatedAt: '2026-08-23T00:00:00Z',
+      response(
+        {
+          data: {
+            keyId: 'key-1',
+            name: 'Production',
+            owner: { type: 'team', id: 'team-1' },
+            status: 'active',
+            revision: 1,
+            createdAt: '2026-08-23T00:00:00Z',
+            updatedAt: '2026-08-23T00:00:00Z',
+          },
+          credential: {
+            credentialId: 'credential-1',
+            keyId: 'key-1',
+            kid: 'vsr_live_123',
+            status: 'active',
+            revealable: true,
+            notBefore: '2026-08-23T00:00:00Z',
+            createdAt: '2026-08-23T00:00:00Z',
+          },
+          secret: 'vsr-secret',
+          deliveryExpiresAt: '2026-08-23T00:05:00Z',
         },
-        credential: {
-          credentialId: 'credential-1',
-          keyId: 'key-1',
-          kid: 'vsr_live_123',
-          status: 'active',
-          revealable: true,
-          notBefore: '2026-08-23T00:00:00Z',
-          createdAt: '2026-08-23T00:00:00Z',
-        },
-        secret: 'vsr-secret',
-        deliveryExpiresAt: '2026-08-23T00:05:00Z',
-      }),
+        201,
+      ),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -124,28 +166,31 @@ describe('Router Management access client', () => {
 
   it('creates a key and an ordinary inline quota in one atomic request', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      response({
-        data: {
-          keyId: 'key-2',
-          name: 'Agent key',
-          owner: { type: 'user', id: 'user-1' },
-          status: 'active',
-          revision: 1,
-          createdAt: '2026-08-23T00:00:00Z',
-          updatedAt: '2026-08-23T00:00:00Z',
+      response(
+        {
+          data: {
+            keyId: 'key-2',
+            name: 'Agent key',
+            owner: { type: 'user', id: 'user-1' },
+            status: 'active',
+            revision: 1,
+            createdAt: '2026-08-23T00:00:00Z',
+            updatedAt: '2026-08-23T00:00:00Z',
+          },
+          credential: {
+            credentialId: 'credential-2',
+            keyId: 'key-2',
+            kid: 'vsr_live_456',
+            status: 'active',
+            revealable: true,
+            notBefore: '2026-08-23T00:00:00Z',
+            createdAt: '2026-08-23T00:00:00Z',
+          },
+          secret: 'vsr-secret-2',
+          deliveryExpiresAt: '2026-08-23T00:05:00Z',
         },
-        credential: {
-          credentialId: 'credential-2',
-          keyId: 'key-2',
-          kid: 'vsr_live_456',
-          status: 'active',
-          revealable: true,
-          notBefore: '2026-08-23T00:00:00Z',
-          createdAt: '2026-08-23T00:00:00Z',
-        },
-        secret: 'vsr-secret-2',
-        deliveryExpiresAt: '2026-08-23T00:05:00Z',
-      }),
+        201,
+      ),
     )
     vi.stubGlobal('fetch', fetchMock)
 
@@ -202,7 +247,7 @@ describe('Router Management access client', () => {
       const url = String(input)
       if (url.endsWith('/teams') && init?.method === 'POST') {
         return Promise.resolve(
-          response({ resource: { type: 'team', id: 'team-1', revision: 1 } }, 201),
+          response({ resource: { kind: 'team', id: 'team-1', revision: 1 } }, 201),
         )
       }
       if (url.endsWith('/teams/team-1')) {
@@ -227,8 +272,24 @@ describe('Router Management access client', () => {
         return Promise.resolve(
           response({
             data: [
-              { policyId: 'access-1', status: 'active', revision: 1 },
-              { policyId: 'access-2', status: 'active', revision: 1 },
+              {
+                bindingId: 'access-binding-1',
+                policyId: 'access-1',
+                subject: { type: 'team', id: 'team-1' },
+                status: 'active',
+                revision: 1,
+                createdAt: '2026-08-23T00:00:00Z',
+                updatedAt: '2026-08-23T00:00:00Z',
+              },
+              {
+                bindingId: 'access-binding-2',
+                policyId: 'access-2',
+                subject: { type: 'team', id: 'team-1' },
+                status: 'active',
+                revision: 1,
+                createdAt: '2026-08-23T00:00:00Z',
+                updatedAt: '2026-08-23T00:00:00Z',
+              },
             ],
             page: { hasMore: false, pageSize: 200 },
           }),
@@ -237,7 +298,19 @@ describe('Router Management access client', () => {
       if (url.includes('/rate-limit-bindings')) {
         return Promise.resolve(
           response({
-            data: [{ policyId: 'budget-1', mode: 'allocation', status: 'active', revision: 1 }],
+            data: [
+              {
+                bindingId: 'rate-binding-1',
+                policyId: 'budget-1',
+                subject: { type: 'team', id: 'team-1' },
+                mode: 'allocation',
+                quotaPartitionId: 'quota-team-1',
+                status: 'active',
+                revision: 1,
+                createdAt: '2026-08-23T00:00:00Z',
+                updatedAt: '2026-08-23T00:00:00Z',
+              },
+            ],
             page: { hasMore: false, pageSize: 200 },
           }),
         )
@@ -353,7 +426,7 @@ describe('Router Management access client', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({ resource: { type: 'rate_limit_policy', id: 'rate-1', revision: 1 } }),
+        response({ resource: { kind: 'rate_limit_policy', id: 'rate-1', revision: 1 } }, 201),
       )
       .mockResolvedValueOnce(
         response({
@@ -380,6 +453,12 @@ describe('Router Management access client', () => {
           },
         }),
       )
+      .mockResolvedValueOnce(
+        response({ data: [], page: { hasMore: false, pageSize: 1, totalCount: '0' } }),
+      )
+      .mockResolvedValue(
+        response({ data: [], page: { hasMore: false, pageSize: 1, totalCount: '0' } }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     await inferenceAccessApi.saveBudget({
@@ -399,12 +478,13 @@ describe('Router Management access client', () => {
       ],
     })
 
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
       name: 'Eight hour spend',
       status: 'active',
       rules: [
         {
-          ruleId: 'rule-1',
           metric: 'cost',
           algorithm: 'sliding_log',
           limit: '20.000000000000001',
@@ -420,7 +500,7 @@ describe('Router Management access client', () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        response({ resource: { type: 'access_policy', id: 'policy-1', revision: 1 } }),
+        response({ resource: { kind: 'access_policy', id: 'policy-1', revision: 1 } }, 201),
       )
       .mockResolvedValueOnce(
         response({
@@ -449,12 +529,20 @@ describe('Router Management access client', () => {
           },
         }),
       )
+      .mockResolvedValueOnce(
+        response({ data: [], page: { hasMore: false, pageSize: 1, totalCount: '0' } }),
+      )
+      .mockResolvedValue(
+        response({ data: [], page: { hasMore: false, pageSize: 1, totalCount: '0' } }),
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     await inferenceAccessApi.saveGroup({
       name: 'Product models',
       resources: [{ resourceType: 'entrypoint', resourceId: 'blend' }],
     })
+
+    expect(fetchMock).toHaveBeenCalledTimes(3)
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/router/management/v1/access-policies')
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
@@ -588,7 +676,9 @@ describe('Router Management access client', () => {
         return Promise.resolve(response({ points: [], grain: 'hour', final: true }))
       }
       if (url.includes('/usage/breakdowns')) {
-        return Promise.resolve(response({ dimension: 'api_key', rows: [], grain: 'hour' }))
+        return Promise.resolve(
+          response({ dimension: 'api_key', rows: [], grain: 'hour', final: true }),
+        )
       }
       return Promise.resolve(response({ totals, grain: 'hour', final: true }))
     })
@@ -670,5 +760,104 @@ describe('Router Management access client', () => {
     })
     expect(fetchMock.mock.calls[0][0]).toBe('/api/router/management/v1/me')
     expect(fetchMock.mock.calls[0][1].headers).not.toHaveProperty('VLLM-SR-Namespace')
+  })
+
+  it('loads direct relationship pages with exact totals and cursor continuation', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        response({
+          data: [
+            {
+              teamId: 'team-1',
+              userId: 'user-1',
+              role: 'admin',
+              status: 'active',
+              revision: 1,
+              createdAt: '2026-08-23T00:00:00Z',
+              updatedAt: '2026-08-23T00:00:00Z',
+              teamName: 'Platform',
+              teamStatus: 'active',
+            },
+          ],
+          page: { hasMore: true, nextCursor: 'page-2', pageSize: 1, totalCount: '2' },
+        }),
+      )
+      .mockResolvedValueOnce(
+        response({
+          data: [
+            {
+              teamId: 'team-2',
+              userId: 'user-1',
+              role: 'member',
+              status: 'active',
+              revision: 1,
+              createdAt: '2026-08-22T00:00:00Z',
+              updatedAt: '2026-08-22T00:00:00Z',
+              teamName: 'Research',
+              teamStatus: 'active',
+            },
+          ],
+          page: { hasMore: false, pageSize: 1 },
+        }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const first = await inferenceAccessApi.userMemberships('user-1', { limit: 1 })
+    const second = await inferenceAccessApi.userMemberships('user-1', {
+      limit: 1,
+      cursor: first.nextCursor,
+      includeTotal: false,
+    })
+
+    expect(first).toMatchObject({ total: 2, hasMore: true, items: [{ teamName: 'Platform' }] })
+    expect(second).toMatchObject({ hasMore: false, items: [{ teamName: 'Research' }] })
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      '/api/router/management/v1/users/user-1/memberships?pageSize=1&includeTotal=true',
+    )
+    expect(fetchMock.mock.calls[1][0]).toBe(
+      '/api/router/management/v1/users/user-1/memberships?cursor=page-2&pageSize=1',
+    )
+  })
+
+  it('derives policy detail assignment counts from the authoritative binding collection', async () => {
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith('/access-policies/policy-1')) {
+        return Promise.resolve(
+          response({
+            data: {
+              policyId: 'policy-1',
+              name: 'Developers',
+              description: '',
+              status: 'active',
+              grants: [],
+              revision: 1,
+              createdAt: '2026-08-23T00:00:00Z',
+              updatedAt: '2026-08-23T00:00:00Z',
+            },
+          }),
+        )
+      }
+      return Promise.resolve(
+        response({ data: [], page: { hasMore: false, pageSize: 1, totalCount: '37' } }),
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(inferenceAccessApi.group('policy-1')).resolves.toMatchObject({
+      id: 'policy-1',
+      assignmentCount: 37,
+    })
+    expect(
+      fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .some(
+          (url) =>
+            url.includes('/access-policy-bindings?') &&
+            url.includes('policyId=policy-1') &&
+            url.includes('includeTotal=true'),
+        ),
+    ).toBe(true)
   })
 })

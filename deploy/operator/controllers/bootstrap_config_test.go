@@ -147,18 +147,10 @@ func TestGenerateVolumesMountsOnlySelectedBootstrapKey(t *testing.T) {
 		}},
 	}}
 	volumes := reconciler.generateVolumes(router, gatewayModeExternal)
-	configVolume := volumes[0].ConfigMap
-	if configVolume == nil || configVolume.Name != "router-bootstrap-v7" {
-		t.Fatalf("config volume = %#v", configVolume)
-	}
-	if len(configVolume.Items) != 1 || configVolume.Items[0].Key != "production.yaml" || configVolume.Items[0].Path != "config.yaml" {
-		t.Fatalf("config volume items = %#v", configVolume.Items)
-	}
+	requireSelectedBootstrapConfig(t, volumes[0].ConfigMap, "router-bootstrap-v7", "production.yaml")
 
 	mount := reconciler.generateVolumeMounts(router)[0]
-	if mount.Name != "config-volume" || mount.MountPath != "/app/config.yaml" || mount.SubPath != "config.yaml" || !mount.ReadOnly {
-		t.Fatalf("bootstrap volume mount = %#v", mount)
-	}
+	requireBootstrapVolumeMount(t, mount)
 
 	container := reconciler.buildSemanticRouterContainer(router, bootstrapDeploymentContract{
 		ManagementStore: true, ManagementAPIEnabled: true, ManagementPort: 9443, BackendDispatchPort: 8181,
@@ -167,10 +159,56 @@ func TestGenerateVolumesMountsOnlySelectedBootstrapKey(t *testing.T) {
 	for _, variable := range container.Env {
 		ownedEnvironment[variable.Name] = variable.Value
 	}
-	if ownedEnvironment["CONFIG_FILE"] != "/app/config.yaml" {
-		t.Fatalf("CONFIG_FILE = %q", ownedEnvironment["CONFIG_FILE"])
+	requireOperatorEnvironment(t, ownedEnvironment)
+}
+
+func requireSelectedBootstrapConfig(
+	t *testing.T,
+	configVolume *corev1.ConfigMapVolumeSource,
+	wantName string,
+	wantKey string,
+) {
+	t.Helper()
+	if configVolume == nil {
+		t.Fatal("config volume is nil")
 	}
-	if ownedEnvironment[managementInternalListenerEnv] != "true" {
-		t.Fatalf("%s = %q", managementInternalListenerEnv, ownedEnvironment[managementInternalListenerEnv])
+	if configVolume.Name != wantName {
+		t.Fatalf("config volume name = %q, want %q", configVolume.Name, wantName)
+	}
+	if len(configVolume.Items) != 1 {
+		t.Fatalf("config volume items = %#v, want one selected key", configVolume.Items)
+	}
+	item := configVolume.Items[0]
+	if item.Key != wantKey {
+		t.Fatalf("config volume key = %q, want %q", item.Key, wantKey)
+	}
+	if item.Path != "config.yaml" {
+		t.Fatalf("config volume path = %q, want config.yaml", item.Path)
+	}
+}
+
+func requireBootstrapVolumeMount(t *testing.T, mount corev1.VolumeMount) {
+	t.Helper()
+	if mount.Name != "config-volume" {
+		t.Fatalf("bootstrap volume mount name = %q", mount.Name)
+	}
+	if mount.MountPath != "/app/config.yaml" {
+		t.Fatalf("bootstrap volume mount path = %q", mount.MountPath)
+	}
+	if mount.SubPath != "config.yaml" {
+		t.Fatalf("bootstrap volume subpath = %q", mount.SubPath)
+	}
+	if !mount.ReadOnly {
+		t.Fatal("bootstrap volume mount must be read-only")
+	}
+}
+
+func requireOperatorEnvironment(t *testing.T, environment map[string]string) {
+	t.Helper()
+	if environment["CONFIG_FILE"] != "/app/config.yaml" {
+		t.Fatalf("CONFIG_FILE = %q", environment["CONFIG_FILE"])
+	}
+	if environment[managementInternalListenerEnv] != "true" {
+		t.Fatalf("%s = %q", managementInternalListenerEnv, environment[managementInternalListenerEnv])
 	}
 }

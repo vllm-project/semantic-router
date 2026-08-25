@@ -66,6 +66,23 @@ func TestPolicyRoutesPushExactPolicyScopeBeforePagination(t *testing.T) {
 	}
 }
 
+func TestPolicyBindingRouteForwardsExactTotalRequest(t *testing.T) {
+	totalCount := uint64(19)
+	service := &policyServiceStub{accessBindingPage: policymanagement.Page[policymanagement.AccessPolicyBinding]{
+		Items: []policymanagement.AccessPolicyBinding{}, PageSize: 4, TotalCount: &totalCount,
+	}}
+	routes := newTestPolicyRoutes(t, service, &policyBulkStub{}, &authorizerStub{})
+	request := authorizedRequest(t, http.MethodGet,
+		accessBindingsPath+"?policyId="+policyOneID+"&pageSize=4&includeTotal=true", nil)
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !service.lastAccessBindingList.IncludeTotal ||
+		service.lastAccessBindingList.PolicyID != policyOneID ||
+		!strings.Contains(response.Body.String(), `"totalCount":"19"`) {
+		t.Fatalf("status=%d request=%#v body=%s", response.Code, service.lastAccessBindingList, response.Body.String())
+	}
+}
+
 func TestPolicyRoutesHideDeniedResourceBeforeCASAndEnforceDeleteCAS(t *testing.T) {
 	now := policyTestNow()
 	policy := policymanagement.AccessPolicy{
@@ -194,15 +211,17 @@ func (service *policyBulkStub) EnqueueRateBindings(_ context.Context, _ policybu
 }
 
 type policyServiceStub struct {
-	accessPolicy       policymanagement.AccessPolicy
-	accessPage         policymanagement.Page[policymanagement.AccessPolicy]
-	lastAccessList     policymanagement.ListPoliciesRequest
-	createRateResult   policymanagement.MutationResult
-	deleteAccessResult policymanagement.MutationResult
-	lastCreateRate     policymanagement.CreateRateLimitPolicyRequest
-	lastDeleteAccess   policymanagement.DeletePolicyRequest
-	createRateCalls    int
-	deleteAccessCalls  int
+	accessPolicy          policymanagement.AccessPolicy
+	accessPage            policymanagement.Page[policymanagement.AccessPolicy]
+	lastAccessList        policymanagement.ListPoliciesRequest
+	accessBindingPage     policymanagement.Page[policymanagement.AccessPolicyBinding]
+	lastAccessBindingList policymanagement.ListBindingsRequest
+	createRateResult      policymanagement.MutationResult
+	deleteAccessResult    policymanagement.MutationResult
+	lastCreateRate        policymanagement.CreateRateLimitPolicyRequest
+	lastDeleteAccess      policymanagement.DeletePolicyRequest
+	createRateCalls       int
+	deleteAccessCalls     int
 }
 
 func (service *policyServiceStub) Ready(context.Context) error { return nil }
@@ -258,8 +277,9 @@ func (service *policyServiceStub) GetAccessBinding(context.Context, string, stri
 	return policymanagement.AccessPolicyBinding{}, policymanagement.ErrNotFound
 }
 
-func (service *policyServiceStub) ListAccessBindings(context.Context, policymanagement.ListBindingsRequest) (policymanagement.Page[policymanagement.AccessPolicyBinding], error) {
-	return policymanagement.Page[policymanagement.AccessPolicyBinding]{}, nil
+func (service *policyServiceStub) ListAccessBindings(_ context.Context, request policymanagement.ListBindingsRequest) (policymanagement.Page[policymanagement.AccessPolicyBinding], error) {
+	service.lastAccessBindingList = request
+	return service.accessBindingPage, nil
 }
 
 func (service *policyServiceStub) CreateAccessBinding(context.Context, policymanagement.CreateAccessBindingRequest) (policymanagement.MutationResult, error) {

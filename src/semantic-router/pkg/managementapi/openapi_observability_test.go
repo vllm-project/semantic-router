@@ -48,6 +48,19 @@ func TestOpenAPIUsesTypedObservabilityResponsesAndQueries(t *testing.T) {
 	if _, exists := document.Components.Schemas["RequestDispatch"]; !exists {
 		t.Fatal("request-log detail schemas are missing")
 	}
+	requestLogs := document.Paths[BasePath+"/request-logs"]["get"]
+	foundRequestID := false
+	for _, parameter := range requestLogs.Parameters {
+		if parameter.In == "query" && parameter.Name == "requestId" {
+			foundRequestID = parameter.Schema.MaxLength != nil && *parameter.Schema.MaxLength == 256
+		}
+	}
+	if !foundRequestID {
+		t.Fatal("request-log query omits the bounded exact requestId filter")
+	}
+	if _, exists := document.Components.Schemas["RequestLog"].Properties["externalRequestId"]; !exists {
+		t.Fatal("request-log response omits externalRequestId correlation")
+	}
 	if _, exists := document.Components.Schemas["AuditEvent"]; !exists {
 		t.Fatal("audit event schema is missing")
 	}

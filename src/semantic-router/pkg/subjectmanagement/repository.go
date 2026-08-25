@@ -39,18 +39,20 @@ type TeamQuery struct {
 }
 
 type MembershipQuery struct {
-	NamespaceID string
-	UserID      string
-	TeamID      string
-	Status      string
-	Scope       accesscontrol.ResultScope
-	After       *MembershipCursor
-	Limit       int
+	NamespaceID  string
+	UserID       string
+	TeamID       string
+	Status       string
+	Scope        accesscontrol.ResultScope
+	After        *MembershipCursor
+	Limit        int
+	IncludeTotal bool
 }
 
 type RepositoryPage[T any] struct {
-	Items   []T
-	HasMore bool
+	Items      []T
+	HasMore    bool
+	TotalCount *uint64
 }
 
 type Repository interface {

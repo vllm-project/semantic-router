@@ -51,6 +51,24 @@ func (r *SemanticRouterReconciler) reconcileMigrationJob(
 	sr *vllmv1alpha1.SemanticRouter,
 	bootstrap bootstrapDeploymentContract,
 ) (*vllmv1alpha1.MigrationStatus, error) {
+	job, err := r.desiredMigrationJob(sr, bootstrap)
+	if err != nil {
+		return nil, err
+	}
+	found, created, err := r.getOrCreateMigrationJob(ctx, sr, job)
+	if err != nil {
+		return nil, err
+	}
+	if created {
+		return &vllmv1alpha1.MigrationStatus{JobName: job.Name, State: migrationStatePending}, nil
+	}
+	return r.migrationJobStatus(ctx, sr, found)
+}
+
+func (r *SemanticRouterReconciler) desiredMigrationJob(
+	sr *vllmv1alpha1.SemanticRouter,
+	bootstrap bootstrapDeploymentContract,
+) (*batchv1.Job, error) {
 	job, err := r.generateMigrationJob(sr, bootstrap)
 	if err != nil {
 		return nil, err
@@ -58,33 +76,48 @@ func (r *SemanticRouterReconciler) reconcileMigrationJob(
 	if err := controllerutil.SetControllerReference(sr, job, r.Scheme); err != nil {
 		return nil, err
 	}
+	return job, nil
+}
 
+func (r *SemanticRouterReconciler) getOrCreateMigrationJob(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+	desired *batchv1.Job,
+) (*batchv1.Job, bool, error) {
 	found := &batchv1.Job{}
-	err = r.Get(ctx, client.ObjectKeyFromObject(job), found)
-	if err != nil && client.IgnoreNotFound(err) != nil {
-		return nil, err
-	}
-	if err != nil {
-		if err := r.Create(ctx, job); err != nil {
-			return nil, err
+	err := r.Get(ctx, client.ObjectKeyFromObject(desired), found)
+	if err == nil {
+		if err := ensureControlledBy(found, sr, "Management schema migration Job"); err != nil {
+			return nil, false, err
 		}
-		return &vllmv1alpha1.MigrationStatus{JobName: job.Name, State: migrationStatePending}, nil
+		return found, false, nil
 	}
-	if err := ensureControlledBy(found, sr, "Management schema migration Job"); err != nil {
-		return nil, err
+	if client.IgnoreNotFound(err) != nil {
+		return nil, false, err
 	}
+	if err := r.Create(ctx, desired); err != nil {
+		return nil, false, err
+	}
+	return desired, true, nil
+}
 
+func (r *SemanticRouterReconciler) migrationJobStatus(
+	ctx context.Context,
+	sr *vllmv1alpha1.SemanticRouter,
+	found *batchv1.Job,
+) (*vllmv1alpha1.MigrationStatus, error) {
 	for _, condition := range found.Status.Conditions {
 		if condition.Type == batchv1.JobFailed && condition.Status == corev1.ConditionTrue {
 			return &vllmv1alpha1.MigrationStatus{JobName: found.Name, State: migrationStateFailed},
 				fmt.Errorf("management schema migration Job %s failed", found.Name)
 		}
-		if condition.Type == batchv1.JobComplete && condition.Status == corev1.ConditionTrue {
-			if err := r.deleteStaleMigrationJobs(ctx, sr, found.Name); err != nil {
-				return &vllmv1alpha1.MigrationStatus{JobName: found.Name, State: migrationStateSucceeded}, err
-			}
-			return &vllmv1alpha1.MigrationStatus{JobName: found.Name, State: migrationStateSucceeded}, nil
+		if condition.Type != batchv1.JobComplete || condition.Status != corev1.ConditionTrue {
+			continue
 		}
+		if err := r.deleteStaleMigrationJobs(ctx, sr, found.Name); err != nil {
+			return &vllmv1alpha1.MigrationStatus{JobName: found.Name, State: migrationStateSucceeded}, err
+		}
+		return &vllmv1alpha1.MigrationStatus{JobName: found.Name, State: migrationStateSucceeded}, nil
 	}
 	state := migrationStatePending
 	if found.Status.Active > 0 {
@@ -126,6 +159,10 @@ func (r *SemanticRouterReconciler) generateMigrationJob(
 	sr *vllmv1alpha1.SemanticRouter,
 	bootstrap bootstrapDeploymentContract,
 ) (*batchv1.Job, error) {
+	inputs, err := resolveMigrationPodInputs(sr, bootstrap)
+	if err != nil {
+		return nil, err
+	}
 	backoffLimit := int32(6)
 	activeDeadlineSeconds := int64(600)
 	args := []string{"--timeout", "5m"}
@@ -137,7 +174,7 @@ func (r *SemanticRouterReconciler) generateMigrationJob(
 
 	labels := semanticRouterLabels(sr)
 	labels["app.kubernetes.io/component"] = "management-migration"
-	jobName, err := migrationJobName(sr, bootstrap)
+	jobName, err := migrationJobName(sr, bootstrap, inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -166,12 +203,11 @@ func (r *SemanticRouterReconciler) generateMigrationJob(
 						ImagePullPolicy: imagePullPolicy(sr),
 						Command:         []string{"/usr/local/bin/management-migrate"},
 						Args:            args,
-						Env:             sr.Spec.Env,
-						EnvFrom:         sr.Spec.EnvFrom,
+						Env:             inputs.environment,
 						SecurityContext: r.getContainerSecurityContext(sr),
-						VolumeMounts:    sr.Spec.VolumeMounts,
+						VolumeMounts:    inputs.volumeMounts,
 					}},
-					Volumes: sr.Spec.Volumes,
+					Volumes: inputs.volumes,
 				},
 			},
 		},
@@ -181,6 +217,7 @@ func (r *SemanticRouterReconciler) generateMigrationJob(
 func migrationJobName(
 	sr *vllmv1alpha1.SemanticRouter,
 	bootstrap bootstrapDeploymentContract,
+	inputs migrationPodInputs,
 ) (string, error) {
 	revisionInput := struct {
 		Contract           string
@@ -190,7 +227,6 @@ func migrationJobName(
 		ImagePullSecrets   []corev1.LocalObjectReference
 		ServiceAccountName string
 		Env                []corev1.EnvVar
-		EnvFrom            []corev1.EnvFromSource
 		Volumes            []corev1.Volume
 		VolumeMounts       []corev1.VolumeMount
 		NodeSelector       map[string]string
@@ -205,10 +241,9 @@ func migrationJobName(
 		ImagePullPolicy:    imagePullPolicy(sr),
 		ImagePullSecrets:   sr.Spec.ImagePullSecrets,
 		ServiceAccountName: serviceAccountName(sr),
-		Env:                sr.Spec.Env,
-		EnvFrom:            sr.Spec.EnvFrom,
-		Volumes:            sr.Spec.Volumes,
-		VolumeMounts:       sr.Spec.VolumeMounts,
+		Env:                inputs.environment,
+		Volumes:            inputs.volumes,
+		VolumeMounts:       inputs.volumeMounts,
 		NodeSelector:       sr.Spec.NodeSelector,
 		Tolerations:        sr.Spec.Tolerations,
 		Affinity:           sr.Spec.Affinity,

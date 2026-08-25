@@ -85,6 +85,7 @@ type EligibleKeyQuery struct {
 	NamespaceID         string
 	PrincipalID         string
 	ManagementSessionID string
+	Search              string
 	After               *Cursor
 	Limit               int
 }
@@ -107,8 +108,16 @@ type ListRequest struct {
 	PrincipalID         string
 	ManagementSessionID string
 	APIKeyID            string
+	Search              string
 	Cursor              string
 	PageSize            int
+}
+
+type EligibleKeyRequest struct {
+	NamespaceID         string
+	PrincipalID         string
+	ManagementSessionID string
+	KeyID               string
 }
 
 type ResultPage[T any] struct {

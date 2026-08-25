@@ -92,6 +92,9 @@ const emptyTotals = {
   outputTokens: '0',
   totalTokens: '0',
   cost: '0',
+  latency: { averageMilliseconds: 0, p95Milliseconds: 0 },
+  ttft: { averageMilliseconds: 0, p95Milliseconds: 0 },
+  costs: [],
 }
 
 const managementPage = (data: unknown[]) => ({
@@ -102,6 +105,9 @@ const managementPage = (data: unknown[]) => ({
 async function expectCenteredProductDialog(page: Page, dialogName: string) {
   const dialog = page.getByRole('dialog', { name: dialogName })
   await expect(dialog).toBeVisible()
+  await dialog.evaluate(async (element) => {
+    await Promise.all(element.getAnimations().map((animation) => animation.finished))
+  })
   const metrics = await dialog.evaluate((element) => {
     const bounds = element.getBoundingClientRect()
     const style = window.getComputedStyle(element)
@@ -112,8 +118,11 @@ async function expectCenteredProductDialog(page: Page, dialogName: string) {
       centerX: bounds.left + bounds.width / 2,
       centerY: bounds.top + bounds.height / 2,
       borderWidth: Number.parseFloat(style.borderTopWidth),
+      left: bounds.left,
+      top: bounds.top,
       right: bounds.right,
       bottom: bounds.bottom,
+      dialogBackdropFilter: style.backdropFilter || style.webkitBackdropFilter || '',
       backdropFilter: backdropStyle?.backdropFilter || backdropStyle?.webkitBackdropFilter || '',
     }
   })
@@ -122,8 +131,11 @@ async function expectCenteredProductDialog(page: Page, dialogName: string) {
   expect(Math.abs(metrics.centerX - viewport.width / 2)).toBeLessThanOrEqual(2)
   expect(Math.abs(metrics.centerY - viewport.height / 2)).toBeLessThanOrEqual(4)
   expect(metrics.borderWidth).toBeGreaterThanOrEqual(1.5)
+  expect(metrics.left).toBeGreaterThanOrEqual(0)
+  expect(metrics.top).toBeGreaterThanOrEqual(0)
   expect(metrics.right).toBeLessThanOrEqual(viewport.width)
   expect(metrics.bottom).toBeLessThanOrEqual(viewport.height)
+  expect(metrics.dialogBackdropFilter).toContain('blur')
   expect(metrics.backdropFilter).toContain('blur')
   return dialog
 }
@@ -227,24 +239,30 @@ test.describe('Access control identity', () => {
     await expect(dialog.getByRole('radiogroup', { name: 'Team role' })).toHaveCount(0)
   })
 
-  test('keeps invitation and Team creation dialogs centered and usable on mobile', async ({
+  test('keeps every access creation dialog centered and usable at each breakpoint', async ({
     page,
   }) => {
+    const dialogs = [
+      { path: '/access/api-keys', action: 'Create key', title: 'Create API key' },
+      { path: '/access/users', action: 'Invite user', title: 'Invite a user' },
+      { path: '/access/teams', action: 'New team', title: 'Create team' },
+      { path: '/access/access-groups', action: 'New group', title: 'Create access group' },
+      { path: '/access/budgets', action: 'New budget', title: 'Create budget' },
+    ] as const
+
     for (const viewport of [
       { width: 320, height: 568 },
       { width: 390, height: 844 },
       { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
     ]) {
       await page.setViewportSize(viewport)
-      await page.goto('/access/users')
-      await page.getByRole('button', { name: 'Invite user' }).click()
-      const inviteDialog = await expectCenteredProductDialog(page, 'Invite a user')
-      await inviteDialog.getByRole('button', { name: 'Close' }).click()
-
-      await page.goto('/access/teams')
-      await page.getByRole('button', { name: 'New team' }).click()
-      const teamDialog = await expectCenteredProductDialog(page, 'Create team')
-      await teamDialog.getByRole('button', { name: 'Close' }).click()
+      for (const target of dialogs) {
+        await page.goto(target.path)
+        await page.getByRole('button', { name: target.action }).click()
+        const dialog = await expectCenteredProductDialog(page, target.title)
+        await dialog.getByRole('button', { name: 'Close' }).click()
+      }
     }
   })
 
@@ -267,25 +285,41 @@ test.describe('Access control identity', () => {
     )
   })
 
-  test('opens Team membership in a centered detail dialog', async ({ page }) => {
-    await page.goto('/access/teams')
-    await page.getByRole('link', { name: /Platform/ }).click()
+  test('keeps Team membership in a centered detail dialog at each breakpoint', async ({ page }) => {
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport)
+      await page.goto('/access/teams')
+      await page.getByRole('link', { name: /Platform/ }).click()
 
-    const dialog = page.getByRole('dialog', { name: 'Platform' })
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByText('Ada Lovelace')).toBeVisible()
-    await expect(dialog.getByText('Team admin', { exact: true })).toBeVisible()
+      const dialog = await expectCenteredProductDialog(page, 'Platform')
+      await expect(dialog.getByText('Ada Lovelace')).toBeVisible()
+      await expect(dialog.getByText('Team admin', { exact: true })).toBeVisible()
+      await dialog.getByRole('button', { name: 'Close' }).click()
+    }
   })
 
-  test('opens a request log in the shared detail experience', async ({ page }) => {
-    await page.goto('/logs')
-    await page.getByText('vllm-sr/balanced', { exact: true }).click()
+  test('keeps request details in the shared dialog at each breakpoint', async ({ page }) => {
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 390, height: 844 },
+      { width: 768, height: 1024 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport)
+      await page.goto('/logs')
+      await page.getByText('vllm-sr/balanced', { exact: true }).click()
 
-    const dialog = page.getByRole('dialog', { name: 'vllm-sr/balanced' })
-    await expect(dialog).toBeVisible()
-    await expect(dialog.getByRole('button', { name: 'Copy request ID' })).toBeVisible()
-    await expect(dialog.getByRole('link', { name: 'Open in Insights' })).toBeVisible()
-    await expect(dialog.getByRole('button', { name: 'Done' })).toBeVisible()
+      const dialog = await expectCenteredProductDialog(page, 'vllm-sr/balanced')
+      await expect(dialog.getByRole('button', { name: 'Copy request ID' })).toBeVisible()
+      await expect(dialog.getByRole('link', { name: 'Open in Insights' })).toBeVisible()
+      await expect(dialog.getByRole('button', { name: 'Done' })).toBeVisible()
+      await dialog.getByRole('button', { name: 'Close' }).click()
+    }
   })
 
   test('searches routing grants in bounded pages instead of loading a full catalog', async ({

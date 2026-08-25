@@ -4,6 +4,19 @@
 
 ##@ Performance Testing
 
+ACCESS_CAPACITY_KEYS ?= 10000
+ACCESS_CAPACITY_REPLICAS ?= 4
+ACCESS_CAPACITY_CONCURRENCY ?= 64
+ACCESS_CAPACITY_REQUEST_LIMIT ?= 12
+ACCESS_CAPACITY_TIMEOUT ?= 20m
+ACCESS_CAPACITY_USAGE_DRAIN_TIMEOUT ?= 30s
+ACCESS_CAPACITY_MAX_ADMISSION_P99 ?= 100ms
+ACCESS_CAPACITY_MAX_USAGE_LAG_P99 ?= 5s
+ACCESS_CAPACITY_MIN_PROJECTION_KEYS_PER_SECOND ?= 100
+ACCESS_CAPACITY_MAX_PROJECTION_BYTES_PER_KEY ?= 32768
+ACCESS_CAPACITY_MAX_EVENT_BYTES ?= 16384
+ACCESS_CAPACITY_OUTPUT_ROOT ?= $(CURDIR)/.agent-harness/access-capacity
+
 # Create reports directory if it doesn't exist
 .PHONY: ensure-reports-dir
 ensure-reports-dir:
@@ -65,6 +78,30 @@ perf-e2e: build-e2e ensure-reports-dir
 	@echo "Running E2E performance tests..."
 	@./bin/e2e -profile=envoy-ai-gateway \
 	  -tests=performance-throughput,performance-latency,performance-resource
+
+# This opt-in gate uses the production access publication/runtime packages and
+# an isolated prefix in a caller-supplied Redis/Valkey. It is not an HTTP E2E
+# and never serializes the connection URL into its report.
+.PHONY: perf-access-capacity
+perf-access-capacity: ## Run the 10,000-key Router access-runtime capacity gate
+	@$(LOG_TARGET)
+	@test -n "$${ACCESS_CAPACITY_REDIS_URL:-}" || { \
+		echo "ACCESS_CAPACITY_REDIS_URL is required (use an isolated Redis/Valkey)"; \
+		exit 1; \
+	}
+	@cd src/semantic-router && go run ./cmd/access-capacity-gate \
+		--keys "$(ACCESS_CAPACITY_KEYS)" \
+		--replicas "$(ACCESS_CAPACITY_REPLICAS)" \
+		--concurrency "$(ACCESS_CAPACITY_CONCURRENCY)" \
+		--request-limit "$(ACCESS_CAPACITY_REQUEST_LIMIT)" \
+		--timeout "$(ACCESS_CAPACITY_TIMEOUT)" \
+		--usage-drain-timeout "$(ACCESS_CAPACITY_USAGE_DRAIN_TIMEOUT)" \
+		--max-admission-p99 "$(ACCESS_CAPACITY_MAX_ADMISSION_P99)" \
+		--max-usage-lag-p99 "$(ACCESS_CAPACITY_MAX_USAGE_LAG_P99)" \
+		--min-projection-keys-per-second "$(ACCESS_CAPACITY_MIN_PROJECTION_KEYS_PER_SECOND)" \
+		--max-projection-bytes-per-key "$(ACCESS_CAPACITY_MAX_PROJECTION_BYTES_PER_KEY)" \
+		--max-event-bytes "$(ACCESS_CAPACITY_MAX_EVENT_BYTES)" \
+		--output-root "$(ACCESS_CAPACITY_OUTPUT_ROOT)"
 
 # Compare against baseline (report only; use perf-check to fail on regression).
 # Consumes reports/bench-output.txt (a captured benchmark run — 'make perf-check'
@@ -205,6 +242,7 @@ perf-help: ## Show performance testing help
 	@echo ""
 	@echo "E2E Performance:"
 	@echo "  make perf-e2e                - Run E2E performance tests"
+	@echo "  make perf-access-capacity    - Run opt-in 10,000-key access-runtime gate"
 	@echo ""
 	@echo "Baselines & Reports:"
 	@echo "  make perf-baseline-update    - Update performance baselines"

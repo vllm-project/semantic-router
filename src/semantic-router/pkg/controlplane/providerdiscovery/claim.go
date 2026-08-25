@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -150,13 +149,10 @@ func (codec ClaimCodec) Issue(
 			return nil, "", time.Time{}, fmt.Errorf("%w: discovery item identity collision", ErrInvalidClaim)
 		}
 		seenItemIDs[itemID] = struct{}{}
-		capabilities := model.Capabilities
-		if len(capabilities) == 0 {
-			capabilities = plan.Capabilities
-		}
 		result[index] = Model{
 			CatalogItemID: itemID, ProviderModelID: model.ProviderModelID,
-			DisplayName: model.DisplayName, Capabilities: slices.Clone(capabilities),
+			DisplayName:  model.DisplayName,
+			Capabilities: append([]string(nil), model.Capabilities...),
 		}
 		items[index] = claimItem{CatalogItemID: itemID, ProviderModelID: model.ProviderModelID}
 	}

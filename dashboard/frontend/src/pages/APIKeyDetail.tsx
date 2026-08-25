@@ -8,20 +8,16 @@ import {
   type AccessAPIKey,
   type AccessBudget,
   type AccessGroup,
-  type AccessTeam,
-  type AccessUser,
   type QuotaMeter,
 } from '../utils/inferenceAccessApi'
 import { routerPublicEndpoint } from '../utils/routerPublicApi'
 import {
   EMPTY_USAGE,
   costCoverageLabel,
-  effectiveResources,
   formatCosts,
   formatDate,
   formatNumber,
   formatQuotaValue,
-  ownerLabel,
   quotaMeterLabel,
   quotaProgress,
   quotaResetLabel,
@@ -32,13 +28,11 @@ const KEY_QUOTA_REFRESH_MS = 5000
 
 interface KeyDetailProps {
   keyId: string
-  users: AccessUser[]
-  teams: AccessTeam[]
-  groups: AccessGroup[]
-  budgets: AccessBudget[]
   canManage: boolean
+  canReveal: boolean
   canEditPolicy: boolean
   selfService?: boolean
+  selfUserId: string
   onEdit: (key: AccessAPIKey) => void
   onClose: () => void
   onChanged: () => void
@@ -47,13 +41,11 @@ interface KeyDetailProps {
 
 export function APIKeyDetail({
   keyId,
-  users,
-  teams,
-  groups,
-  budgets,
   canManage,
+  canReveal,
   canEditPolicy,
   selfService = false,
+  selfUserId,
   onEdit,
   onClose,
   onChanged,
@@ -61,6 +53,11 @@ export function APIKeyDetail({
 }: KeyDetailProps) {
   const { routerPublicUrl } = useReadonly()
   const [key, setKey] = useState<AccessAPIKey | null>(null)
+  const [ownerName, setOwnerName] = useState('')
+  const [contextTeamName, setContextTeamName] = useState('')
+  const [assignedGroups, setAssignedGroups] = useState<AccessGroup[]>([])
+  const [assignedBudget, setAssignedBudget] = useState<AccessBudget | null>(null)
+  const [canSelfManage, setCanSelfManage] = useState(false)
   const [usage, setUsage] = useState(EMPTY_USAGE)
   const [secret, setSecret] = useState('')
   const [secretVisible, setSecretVisible] = useState(false)
@@ -71,6 +68,33 @@ export function APIKeyDetail({
   const [snippet, setSnippet] = useState<'python' | 'javascript' | 'curl'>('python')
   const [renewArmed, setRenewArmed] = useState(false)
   const [deleteArmed, setDeleteArmed] = useState(false)
+  const relationshipKeyId = key?.id
+  const relationshipOwnerType = key?.ownerType
+  const relationshipOwnerId = key?.ownerId
+  const relationshipContextTeamId = key?.contextTeamId
+  const accessPolicyKey = key?.accessGroupIds.join(',') ?? ''
+  const relationshipBudgetId = key?.effectiveBudgetId || key?.budgetId || key?.quota?.budgetId
+  const relationshipKey = useMemo(
+    () =>
+      relationshipKeyId && relationshipOwnerType && relationshipOwnerId
+        ? {
+            id: relationshipKeyId,
+            ownerType: relationshipOwnerType,
+            ownerId: relationshipOwnerId,
+            contextTeamId: relationshipContextTeamId,
+            accessGroupIds: accessPolicyKey ? accessPolicyKey.split(',') : [],
+            budgetId: relationshipBudgetId,
+          }
+        : null,
+    [
+      accessPolicyKey,
+      relationshipBudgetId,
+      relationshipContextTeamId,
+      relationshipKeyId,
+      relationshipOwnerId,
+      relationshipOwnerType,
+    ],
+  )
   const dialogRef = useAccessibleDialog<HTMLDivElement>({
     isOpen: true,
     onClose,
@@ -80,6 +104,7 @@ export function APIKeyDetail({
   useEffect(() => {
     setLoading(true)
     setError('')
+    setKey(null)
     const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const keyRequest = selfService
       ? inferenceAccessApi.selfKey(keyId)
@@ -87,16 +112,76 @@ export function APIKeyDetail({
     const usageRequest = selfService
       ? inferenceAccessApi.selfKeyUsage(keyId, { from })
       : inferenceAccessApi.keyUsage(keyId, { from })
-    void Promise.all([keyRequest, usageRequest])
-      .then(([nextKey, nextUsage]) => {
-        setKey(nextKey)
-        setUsage(nextUsage)
-      })
+    setUsage(EMPTY_USAGE)
+    void keyRequest
+      .then(setKey)
       .catch((nextError) =>
         setError(nextError instanceof Error ? nextError.message : 'Could not load API key'),
       )
       .finally(() => setLoading(false))
+    void usageRequest.then(setUsage).catch(() => setUsage(EMPTY_USAGE))
   }, [keyId, selfService])
+
+  useEffect(() => {
+    let cancelled = false
+    setOwnerName('')
+    setContextTeamName('')
+    setAssignedGroups([])
+    setAssignedBudget(null)
+    setCanSelfManage(false)
+    if (!relationshipKey) return () => undefined
+
+    const ownerRequest =
+      relationshipKey.ownerType === 'user'
+        ? inferenceAccessApi.userSummary(relationshipKey.ownerId).then((owner) => owner.name)
+        : inferenceAccessApi.teamSummary(relationshipKey.ownerId).then((owner) => owner.name)
+    const contextRequest = relationshipKey.contextTeamId
+      ? inferenceAccessApi.teamSummary(relationshipKey.contextTeamId).then((team) => team.name)
+      : Promise.resolve('')
+    const groupsRequest = Promise.all(
+      relationshipKey.accessGroupIds.map((policyId) =>
+        inferenceAccessApi.groupSummary(policyId).catch(() => null),
+      ),
+    ).then((items) => items.filter((item): item is AccessGroup => item !== null))
+    const budgetId = relationshipKey.budgetId
+    const budgetRequest = budgetId
+      ? inferenceAccessApi.budgetSummary(budgetId).catch(() => null)
+      : Promise.resolve(null)
+    const selfManageRequest = selfService
+      ? relationshipKey.ownerType === 'user'
+        ? Promise.resolve(relationshipKey.ownerId === selfUserId)
+        : inferenceAccessApi
+            .selfTeams()
+            .then((catalog) =>
+              catalog.items.some(
+                (team) =>
+                  team.id === relationshipKey.ownerId &&
+                  team.members.some(
+                    (membership) => membership.userId === selfUserId && membership.role === 'admin',
+                  ),
+              ),
+            )
+            .catch(() => false)
+      : Promise.resolve(false)
+
+    void Promise.all([
+      ownerRequest.catch(() => relationshipKey.ownerId),
+      contextRequest.catch(() => relationshipKey.contextTeamId || ''),
+      groupsRequest,
+      budgetRequest,
+      selfManageRequest,
+    ]).then(([nextOwner, nextContext, nextGroups, nextBudget, nextCanSelfManage]) => {
+      if (cancelled) return
+      setOwnerName(nextOwner)
+      setContextTeamName(nextContext)
+      setAssignedGroups(nextGroups)
+      setAssignedBudget(nextBudget)
+      setCanSelfManage(nextCanSelfManage)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [relationshipKey, selfService, selfUserId])
 
   useEffect(() => {
     let cancelled = false
@@ -133,13 +218,7 @@ export function APIKeyDetail({
     return () => window.clearTimeout(timer)
   }, [copied])
 
-  const resources = useMemo(() => (key ? effectiveResources(key, groups) : []), [groups, key])
-  const effectiveBudget = key
-    ? budgets.find((budget) => budget.id === (key.effectiveBudgetId || key.budgetId))
-    : undefined
-  const quotaBudget = key?.quota
-    ? budgets.find((budget) => budget.id === key.quota?.budgetId) || effectiveBudget
-    : effectiveBudget
+  const resources = useMemo(() => key?.effectiveAccess ?? [], [key])
   const quotaSource = key?.quota?.source || key?.budgetPolicySource
   const quotaSourceLabel =
     quotaSource === 'key'
@@ -149,6 +228,7 @@ export function APIKeyDetail({
         : quotaSource === 'team'
           ? 'Team default'
           : ''
+  const effectiveCanManage = Boolean(canManage || (selfService && canSelfManage))
   const model =
     resources.find((resource) => resource.resourceType === 'entrypoint')?.resourceId ||
     resources[0]?.resourceId ||
@@ -244,7 +324,7 @@ export function APIKeyDetail({
     >
       <aside
         ref={dialogRef}
-        className={styles.detailDrawer}
+        className={styles.detailDialog}
         role="dialog"
         aria-modal="true"
         aria-labelledby="key-detail-title"
@@ -261,7 +341,7 @@ export function APIKeyDetail({
               <h2 id="key-detail-title">{key?.name || 'Key details'}</h2>
               <p>
                 {key
-                  ? `${key.prefix}•••••••• · ${ownerLabel(key, users, teams)}`
+                  ? `${key.prefix}•••••••• · ${ownerName || key.ownerId}`
                   : 'Loading key details…'}
               </p>
             </div>
@@ -289,7 +369,7 @@ export function APIKeyDetail({
                     <span>Secret</span>
                     <strong>{secret ? 'Original key' : 'Hidden by default'}</strong>
                   </div>
-                  {canManage ? (
+                  {canReveal ? (
                     <button
                       type="button"
                       className={styles.secondaryButton}
@@ -358,25 +438,22 @@ export function APIKeyDetail({
                   </div>
                   <div>
                     <dt>Owner</dt>
-                    <dd>{ownerLabel(key, users, teams)}</dd>
+                    <dd>{ownerName || key.ownerId}</dd>
                   </div>
                   <div>
                     <dt>Budget</dt>
                     <dd>
                       {key.quota
-                        ? `${quotaBudget?.name || key.quota.budgetName} · ${quotaSourceLabel}`
-                        : effectiveBudget
-                          ? `${effectiveBudget.name} · ${quotaSourceLabel}`
+                        ? `${assignedBudget?.name || key.quota.budgetName} · ${quotaSourceLabel}`
+                        : assignedBudget
+                          ? `${assignedBudget.name} · ${quotaSourceLabel}`
                           : 'No quota policy'}
                     </dd>
                   </div>
                   <div>
                     <dt>Team context</dt>
                     <dd>
-                      {key.contextTeamId
-                        ? teams.find((team) => team.id === key.contextTeamId)?.name ||
-                          key.contextTeamId
-                        : 'Personal policy'}
+                      {key.contextTeamId ? contextTeamName || key.contextTeamId : 'Personal policy'}
                     </dd>
                   </div>
                   <div>
@@ -400,11 +477,21 @@ export function APIKeyDetail({
                     </dd>
                   </div>
                   <div>
-                    <dt>Model policy</dt>
+                    <dt>Access groups</dt>
+                    <dd>
+                      {assignedGroups.length
+                        ? assignedGroups.map((group) => group.name).join(', ')
+                        : key.accessGroupIds.length
+                          ? key.accessGroupIds.join(', ')
+                          : 'Not assigned'}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Access sources</dt>
                     <dd>
                       {key.accessPolicySources?.length
-                        ? `${key.accessPolicySources.join(' + ')} policy`
-                        : 'Not assigned'}
+                        ? key.accessPolicySources.join(' + ')
+                        : 'None'}
                     </dd>
                   </div>
                   <div>
@@ -487,7 +574,7 @@ export function APIKeyDetail({
             </>
           ) : null}
         </div>
-        {key && canManage ? (
+        {key && effectiveCanManage ? (
           <footer className={styles.detailFooter}>
             {renewArmed ? (
               <div className={styles.detailConfirm} role="alert">

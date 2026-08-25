@@ -151,6 +151,9 @@ func TestRoutingModelPatchIsSparseAndDoesNotRequireBackendRoundTrip(t *testing.T
 
 func TestRoutingModelControlOpenAPIConstraints(t *testing.T) {
 	document := GenerateOpenAPI()
+	if !slices.Equal(routingModelRetryEvidence, []string{"unavailable", "timeout"}) {
+		t.Fatalf("routingModelRetryEvidence = %#v", routingModelRetryEvidence)
+	}
 	retry := document.Components.Schemas["RoutingModelRetryControl"]
 	retryOn := retry.Properties["on"]
 	if retryOn.Items == nil ||
@@ -180,6 +183,61 @@ func TestRoutingModelControlOpenAPIConstraints(t *testing.T) {
 			if pattern.MatchString(value) {
 				t.Errorf("RoutingModelTimeoutControl.%s accepted invalid duration syntax %q", field, value)
 			}
+		}
+	}
+
+	fallbackOn := document.Components.Schemas["RoutingFallbackPolicy"].Properties["on"]
+	if fallbackOn.Items == nil ||
+		!slices.Equal(fallbackOn.Items.Enum, routingModelRetryEvidence) ||
+		fallbackOn.MinItems == nil || *fallbackOn.MinItems != 1 ||
+		fallbackOn.MaxItems == nil || *fallbackOn.MaxItems != int64(len(routingModelRetryEvidence)) {
+		t.Fatalf("RoutingFallbackPolicy.on = %#v", fallbackOn)
+	}
+}
+
+func TestRoutingModelPricingOpenAPIConstraints(t *testing.T) {
+	document := GenerateOpenAPI()
+	pricing := document.Components.Schemas["RoutingPricing"]
+	for _, field := range []string{
+		"inputCostPerMillionTokens", "outputCostPerMillionTokens",
+		"cacheReadCostPerMillionTokens", "cacheWriteCostPerMillionTokens",
+	} {
+		schema := pricing.Properties[field]
+		if len(schema.OneOf) != 2 || schema.OneOf[0].Pattern != routingModelPricePattern || schema.OneOf[1].Type != "null" {
+			t.Fatalf("RoutingPricing.%s = %#v", field, schema)
+		}
+		pattern, err := regexp.Compile(schema.OneOf[0].Pattern)
+		if err != nil {
+			t.Fatalf("RoutingPricing.%s pattern: %v", field, err)
+		}
+		for _, value := range []string{"0", "0.000000001", "999999.999999999", "1000000", "1000000.000"} {
+			if !pattern.MatchString(value) {
+				t.Errorf("RoutingPricing.%s rejected %q", field, value)
+			}
+		}
+		for _, value := range []string{"01", "1e-3", "0.0000000001", "1000000.000000001", "1000001"} {
+			if pattern.MatchString(value) {
+				t.Errorf("RoutingPricing.%s accepted %q", field, value)
+			}
+		}
+	}
+}
+
+func TestRoutingModelMetadataOpenAPIConstraints(t *testing.T) {
+	document := GenerateOpenAPI()
+	for _, name := range []string{
+		"RoutingModelWrite", "RoutingModelPatch", "RoutingModelView", "RoutingModelCard", "RoutingBulkModelSelection",
+	} {
+		schema := document.Components.Schemas[name]
+		contextWindow := schema.Properties["contextWindowSize"]
+		if contextWindow.Minimum == nil || *contextWindow.Minimum != 0 ||
+			contextWindow.Maximum == nil || *contextWindow.Maximum != 100_000_000 {
+			t.Errorf("%s.contextWindowSize = %#v", name, contextWindow)
+		}
+		quality := schema.Properties["qualityScore"]
+		if quality.Minimum == nil || *quality.Minimum != 0 ||
+			quality.Maximum == nil || *quality.Maximum != 1 {
+			t.Errorf("%s.qualityScore = %#v", name, quality)
 		}
 	}
 }

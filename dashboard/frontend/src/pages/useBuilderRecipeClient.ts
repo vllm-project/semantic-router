@@ -149,7 +149,7 @@ export function useBuilderRecipeClient(enabled: boolean) {
         })
         await waitForRoutingMutation(receipt)
         loadedRevision.current = ''
-        await refresh(receipt.resource?.id)
+        await refresh('resource' in receipt ? receipt.resource.id : undefined)
         showNotice('Recipe duplicated')
       } catch (cause) {
         const error = message(cause, 'Recipe could not be duplicated.')

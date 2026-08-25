@@ -124,6 +124,8 @@ func assertMigrationContracts(t *testing.T, schema string) {
 		"agent_tool_sources_description_search_idx",
 		"agent_sessions_page_idx",
 		"agent_sessions_title_search_idx",
+		"'assistant_delta','model_step_summary','tool_request'",
+		"usage_events_external_request_idx",
 		"access_scope JSONB NOT NULL CHECK (jsonb_typeof(access_scope) = 'object')",
 		"policy_outbox_notify_routing_desired_state",
 		"pg_notify('vllm_sr_routing_publication', NEW.namespace_id::text)",

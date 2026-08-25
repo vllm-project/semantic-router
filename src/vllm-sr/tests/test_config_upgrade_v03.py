@@ -150,6 +150,16 @@ def test_rewrite_applies_the_approved_v03_breaks() -> None:
     assert validate_user_config(parsed, log_summary=False) == []
 
 
+def test_rewrite_rejects_status_only_retry_evidence() -> None:
+    source = previous_v03_config()
+    source["providers"]["models"][0]["reliability"]["retry_on"] = "5xx"
+
+    with pytest.raises(ConfigMigrationError) as raised:
+        migrate_v03_config_data(source)
+
+    assert any(issue.code == "unsafe_retry_trigger" for issue in raised.value.issues)
+
+
 def test_rewrite_preserves_recipes_entrypoints_and_model_refs() -> None:
     source = previous_v03_config()
     source["routing"]["decisions"] = []

@@ -81,17 +81,19 @@ observe, and test their complete behavior.
 
 `control.retry.count` is additional attempts after the first and is bounded from zero
 to five. `control.retry.on` is a duplicate-free subset of
-`unavailable|overloaded|timeout`; when count is positive and `on` is omitted it
+`unavailable|timeout`; when count is positive and `on` is omitted it
 defaults to `unavailable`. A configured trigger applies only to Router's fixed
-safe-retry predicate: protocol/transport must
-prove that inference and billable processing never began, although bytes may have
-reached the peer. Such an attempt is `known_zero`; Envoy transport spellings and
-status-code lists are not user configuration. `control.timeout.request` is the total
+safe-retry predicate: transport evidence must prove that neither request nor response
+bytes crossed the backend boundary. Such an attempt is `known_zero`; HTTP status
+codes, including 429 and 503, are response evidence and never imply zero billable
+work. Envoy transport spellings and status-code lists are not user configuration.
+`control.timeout.request` is the total
 non-streaming invocation deadline including retries. `control.timeout.stream` is the total
 streaming lifetime, including retries before the first client-visible byte. Durations
-are 1 second through 24 hours. Defaults are zero retries and 300 seconds for each
-timeout. Management reads return effective immutable values; readable file export
-keeps default-only values omitted.
+use positive Go duration syntax, including compound values such as `1h30m`, and are
+bounded from 1 second through 24 hours. Defaults are zero retries and 300 seconds for
+each timeout. Management reads return effective immutable values; readable file
+export keeps default-only values omitted.
 
 The public gateway strips caller-supplied transport-control, destination, identity,
 and credential headers. Envoy forwards every post-ExtProc inference request through
@@ -171,7 +173,7 @@ assignments:
       - {model: local/secondary, priority: 1, weight: "1"}
     fallback:
       strategy: priority
-      on: [unavailable, overloaded]
+      on: [unavailable, timeout]
 ```
 
 Lower numeric priority wins. The Recipe algorithm chooses only among eligible Models
@@ -182,7 +184,7 @@ and publication validates that every tier satisfies the decision's modality,
 reasoning, tool, context, and protocol requirements.
 
 The invoker exhausts the selected Model's safe same-Model retries before advancing.
-`unavailable`, `overloaded`, and `timeout` are closed Router evidence classes, not
+`unavailable` and `timeout` are closed Router evidence classes, not
 user-supplied status-code lists. A transition is allowed only before visible output
 and when the adapter proves `known_zero`; an ambiguous timeout, partial stream,
 unknown usage, or known billable work is terminal. Skipping a tier because every

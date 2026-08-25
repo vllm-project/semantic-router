@@ -30,15 +30,20 @@ func (repository *keyListRepository) ListKeys(
 ) (RepositoryPage[accesscontrol.APIKey], error) {
 	repository.calls++
 	repository.last = query
+	var totalCount *uint64
+	if query.IncludeTotal {
+		count := uint64(2)
+		totalCount = &count
+	}
 	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
 	if query.After == nil {
 		return RepositoryPage[accesscontrol.APIKey]{Items: []accesscontrol.APIKey{{
 			NamespaceID: keyListNamespace, ID: keyListOne, CreatedAt: now, UpdatedAt: now,
-		}}, HasMore: true}, nil
+		}}, HasMore: true, TotalCount: totalCount}, nil
 	}
 	return RepositoryPage[accesscontrol.APIKey]{Items: []accesscontrol.APIKey{{
 		NamespaceID: keyListNamespace, ID: keyListTwo, CreatedAt: now.Add(-time.Second), UpdatedAt: now,
-	}}}, nil
+	}}, TotalCount: totalCount}, nil
 }
 
 func TestListKeysBindsScopeBeforeStablePagination(t *testing.T) {
@@ -57,9 +62,10 @@ func TestListKeysBindsScopeBeforeStablePagination(t *testing.T) {
 		APIKeyIDs:   []accesscontrol.APIKeyID{keyListOne, keyListTwo},
 	}
 	first, testListKeysBindsScopeBeforeStablePaginationErr := service.List(context.Background(), ListKeysRequest{
-		NamespaceID: keyListNamespace, Search: "  Prod  ", PageSize: 1, Scope: scope,
+		NamespaceID: keyListNamespace, Search: "  Prod  ", PageSize: 1, IncludeTotal: true, Scope: scope,
 	})
-	if testListKeysBindsScopeBeforeStablePaginationErr != nil || len(first.Items) != 1 || !first.HasMore || first.NextCursor == "" || repository.calls != 1 {
+	if testListKeysBindsScopeBeforeStablePaginationErr != nil || len(first.Items) != 1 || !first.HasMore ||
+		first.NextCursor == "" || repository.calls != 1 || first.TotalCount == nil || *first.TotalCount != 2 {
 		t.Fatalf("first page = %#v, calls = %d, error = %v", first, repository.calls, testListKeysBindsScopeBeforeStablePaginationErr)
 	}
 	swapped := accesscontrol.ResultScope{
@@ -77,17 +83,18 @@ func TestListKeysBindsScopeBeforeStablePagination(t *testing.T) {
 		t.Fatalf("search-swapped cursor error = %v, calls = %d", err, repository.calls)
 	}
 	second, testListKeysBindsScopeBeforeStablePaginationErr := service.List(context.Background(), ListKeysRequest{
-		NamespaceID: keyListNamespace, Search: "prod", PageSize: 1, Scope: scope, Cursor: first.NextCursor,
+		NamespaceID: keyListNamespace, Search: "prod", PageSize: 1, IncludeTotal: true,
+		Scope: scope, Cursor: first.NextCursor,
 	})
 	if testListKeysBindsScopeBeforeStablePaginationErr != nil || len(second.Items) != 1 || second.Items[0].ID != keyListTwo ||
-		second.HasMore || repository.calls != 2 {
+		second.HasMore || repository.calls != 2 || second.TotalCount == nil || *second.TotalCount != 2 {
 		t.Fatalf("second page = %#v, calls = %d, error = %v", second, repository.calls, testListKeysBindsScopeBeforeStablePaginationErr)
 	}
 	if repository.last.Scope.All || len(repository.last.Scope.APIKeyIDs) != 2 || repository.last.Search != "prod" {
 		t.Fatalf("repository scope = %#v", repository.last.Scope)
 	}
 	empty, testListKeysBindsScopeBeforeStablePaginationErr := service.List(context.Background(), ListKeysRequest{
-		NamespaceID: keyListNamespace, PageSize: 19,
+		NamespaceID: keyListNamespace, PageSize: 19, IncludeTotal: true,
 		Scope: accesscontrol.ResultScope{
 			NamespaceID: keyListNamespace,
 			ResourceIDs: map[accesscontrol.ScopeResourceType][]accesscontrol.ResourceID{
@@ -95,7 +102,8 @@ func TestListKeysBindsScopeBeforeStablePagination(t *testing.T) {
 			},
 		},
 	})
-	if testListKeysBindsScopeBeforeStablePaginationErr != nil || len(empty.Items) != 0 || empty.PageSize != 19 || repository.calls != 2 {
+	if testListKeysBindsScopeBeforeStablePaginationErr != nil || len(empty.Items) != 0 || empty.PageSize != 19 ||
+		empty.TotalCount == nil || *empty.TotalCount != 0 || repository.calls != 2 {
 		t.Fatalf("empty page = %#v, calls = %d, error = %v", empty, repository.calls, testListKeysBindsScopeBeforeStablePaginationErr)
 	}
 }

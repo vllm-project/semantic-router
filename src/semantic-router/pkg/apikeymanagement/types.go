@@ -22,6 +22,7 @@ type KeyPage struct {
 	NextCursor string
 	HasMore    bool
 	PageSize   int
+	TotalCount *uint64
 }
 
 type CredentialMetadata struct {
@@ -126,14 +127,15 @@ type MutationResult struct {
 }
 
 type ListKeysRequest struct {
-	NamespaceID string
-	Status      accesscontrol.APIKeyStatus
-	OwnerKind   accesscontrol.SubjectKind
-	OwnerID     string
-	Search      string
-	Cursor      string
-	PageSize    int
-	Scope       accesscontrol.ResultScope
+	NamespaceID  string
+	Status       accesscontrol.APIKeyStatus
+	OwnerKind    accesscontrol.SubjectKind
+	OwnerID      string
+	Search       string
+	Cursor       string
+	PageSize     int
+	IncludeTotal bool
+	Scope        accesscontrol.ResultScope
 }
 
 type ListCredentialsRequest struct {
@@ -241,14 +243,15 @@ type CredentialCursor struct {
 }
 
 type KeyQuery struct {
-	NamespaceID string
-	Status      accesscontrol.APIKeyStatus
-	OwnerKind   accesscontrol.SubjectKind
-	OwnerID     string
-	Search      string
-	Scope       accesscontrol.ResultScope
-	After       *KeyCursor
-	Limit       int
+	NamespaceID  string
+	Status       accesscontrol.APIKeyStatus
+	OwnerKind    accesscontrol.SubjectKind
+	OwnerID      string
+	Search       string
+	Scope        accesscontrol.ResultScope
+	After        *KeyCursor
+	Limit        int
+	IncludeTotal bool
 }
 
 type CredentialQuery struct {
@@ -260,8 +263,9 @@ type CredentialQuery struct {
 }
 
 type RepositoryPage[T any] struct {
-	Items   []T
-	HasMore bool
+	Items      []T
+	HasMore    bool
+	TotalCount *uint64
 }
 
 type StoredSecret struct {

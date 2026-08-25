@@ -77,10 +77,8 @@ func fallbackTriggerOrder(trigger FallbackTrigger) int {
 	switch trigger {
 	case FallbackUnavailable:
 		return 0
-	case FallbackOverloaded:
-		return 1
 	case FallbackTimeout:
-		return 2
+		return 1
 	default:
 		return -1
 	}

@@ -244,15 +244,13 @@ export default function ConfigPageAddModelsDialog({
         const created = await createProviderCredential(
           {
             providerId: provider.providerId,
-            catalogRevision,
             name: credentialName.trim(),
             secret: secret.trim(),
             baseUrl: provider.origin.mode === 'user_supplied' ? baseUrl.trim() : undefined,
-            connectionFields: typedFields,
           },
           controller.signal,
         )
-        resolvedCredentialId = created.data.id
+        resolvedCredentialId = created.data.credentialId
         setCredentialId(resolvedCredentialId)
       }
       const result = await discoverProviderModels(

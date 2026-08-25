@@ -145,13 +145,13 @@ kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/
 kubectl apply -f https://raw.githubusercontent.com/vllm-project/semantic-router/refs/heads/main/deploy/kubernetes/istio/envoyfilter.yaml
 ```
 
-The example filter sets `failure_mode_allow: true`, which lets Envoy continue
-its HTTP filter chain when ExtProc is unavailable. It does not guarantee that
-the request reaches a backend: the supplied routes require `x-selected-model`,
-so route selection can still fail when the Router did not add that header. A
-true bypass needs a deliberate catch-all route, which also changes the security
-boundary. Prefer fail-close behavior when semantic routing is an authorization
-or data-boundary control, and test the exact outage path before production use.
+The example filter sets `failure_mode_allow: false`. ExtProc is the inference
+authentication, model-access, and quota decision point, so an unavailable
+Router fails closed instead of allowing the request to continue without those
+checks. It also sends response bodies to ExtProc so backend-authoritative token
+usage can be settled; streaming responses switch to streamed processing at
+response headers. Test both the outage and settlement paths before production
+use.
 
 ## Step 7: Install gateway routes
 

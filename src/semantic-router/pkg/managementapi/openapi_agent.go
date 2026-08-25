@@ -409,6 +409,32 @@ var agentSchemaCatalog = map[string]JSONSchema{
 			"text": {Type: "string", MinLength: intPointer(1)},
 		}),
 	}),
+	"AgentModelStepUsage": objectSchema([]string{"inputTokens", "outputTokens", "totalTokens"}, map[string]JSONSchema{
+		"inputTokens":           boundedIntegerSchema(0, 1<<53-1),
+		"outputTokens":          boundedIntegerSchema(0, 1<<53-1),
+		"totalTokens":           boundedIntegerSchema(0, 1<<53-1),
+		"inputUncachedTokens":   boundedIntegerSchema(0, 1<<53-1),
+		"inputCacheReadTokens":  boundedIntegerSchema(0, 1<<53-1),
+		"inputCacheWriteTokens": boundedIntegerSchema(0, 1<<53-1),
+		"outputReasoningTokens": boundedIntegerSchema(0, 1<<53-1),
+		"outputOtherTokens":     boundedIntegerSchema(0, 1<<53-1),
+	}),
+	"AgentModelStepSummaryEventPayload": objectSchema([]string{
+		"modelStepId", "requestId", "latencyMilliseconds",
+	}, map[string]JSONSchema{
+		"modelStepId":       uuid,
+		"requestId":         {Type: "string", MinLength: intPointer(1), MaxLength: intPointer(256)},
+		"selectedRecipe":    {Type: "string", MaxLength: intPointer(256)},
+		"selectedDecision":  {Type: "string", MaxLength: intPointer(256)},
+		"selectedModel":     {Type: "string", MaxLength: intPointer(256)},
+		"selectedAlgorithm": {Type: "string", MaxLength: intPointer(256)},
+		"responsePath": {Type: "string", Enum: []string{
+			"upstream", "cache", "fast_response", "looper", "image_generation",
+		}},
+		"latencyMilliseconds": boundedIntegerSchema(0, 24*60*60*1000),
+		"ttftMilliseconds":    boundedIntegerSchema(0, 24*60*60*1000),
+		"usage":               refSchema("AgentModelStepUsage"),
+	}),
 	"AgentToolRequestEventPayload": objectSchema([]string{"invocationId", "toolName", "arguments", "class"}, map[string]JSONSchema{
 		"invocationId": uuid, "toolName": stringSchema, "arguments": openObject,
 		"class": {Type: "string", Enum: []string{"read", "write", "execute"}},
@@ -449,6 +475,7 @@ var agentSchemaCatalog = map[string]JSONSchema{
 	}),
 	"AgentEventPayload": {OneOf: []JSONSchema{
 		refSchema("AgentUserInputEventPayload"), refSchema("AgentAssistantDeltaEventPayload"),
+		refSchema("AgentModelStepSummaryEventPayload"),
 		refSchema("AgentToolRequestEventPayload"), refSchema("AgentToolResultEventPayload"),
 		refSchema("AgentProgressEventPayload"), refSchema("AgentContextCheckpointEventPayload"),
 		refSchema("AgentApprovalRequestEventPayload"), refSchema("AgentApprovalResultEventPayload"),
@@ -456,6 +483,7 @@ var agentSchemaCatalog = map[string]JSONSchema{
 	}},
 	"AgentUserInputEvent":         agentEventSchema("user_input", "AgentUserInputEventPayload"),
 	"AgentAssistantDeltaEvent":    agentEventSchema("assistant_delta", "AgentAssistantDeltaEventPayload"),
+	"AgentModelStepSummaryEvent":  agentEventSchema("model_step_summary", "AgentModelStepSummaryEventPayload"),
 	"AgentToolRequestEvent":       agentEventSchema("tool_request", "AgentToolRequestEventPayload"),
 	"AgentToolResultEvent":        agentEventSchema("tool_result", "AgentToolResultEventPayload"),
 	"AgentProgressEvent":          agentEventSchema("progress", "AgentProgressEventPayload"),
@@ -466,6 +494,7 @@ var agentSchemaCatalog = map[string]JSONSchema{
 	"AgentTerminalEvent":          agentEventSchema("terminal", "AgentTerminalEventPayload"),
 	"AgentEvent": {OneOf: []JSONSchema{
 		refSchema("AgentUserInputEvent"), refSchema("AgentAssistantDeltaEvent"),
+		refSchema("AgentModelStepSummaryEvent"),
 		refSchema("AgentToolRequestEvent"), refSchema("AgentToolResultEvent"),
 		refSchema("AgentProgressEvent"), refSchema("AgentContextCheckpointEvent"),
 		refSchema("AgentApprovalRequestEvent"), refSchema("AgentApprovalResultEvent"),

@@ -177,12 +177,14 @@ helm-safety-validate: helm-ci-setup
 	echo "Validating durable routing operational listener..."; \
 	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set-string 'config.global.stores.management.postgres.dsn_env=ROUTER_MANAGEMENT_DSN' \
+		--set-string 'envFromSecrets[0]=router-management-secrets' \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/durable-routing.yaml"; \
 	grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/durable-routing.yaml"; \
 	grep -A6 "startupProbe:" "$$tmp_dir/durable-routing.yaml" | grep -q "scheme: HTTP"; \
 	echo "Validating enabled Management API probe protocol..."; \
 	helm template $(HELM_RELEASE_NAME) $(HELM_CHART_PATH) \
 		--set-string 'config.global.stores.management.postgres.dsn_env=ROUTER_MANAGEMENT_DSN' \
+		--set-string 'envFromSecrets[0]=router-management-secrets' \
 		--set 'config.global.services.management_api.enabled=true' \
 		--namespace $(HELM_NAMESPACE) > "$$tmp_dir/management-api.yaml"; \
 	grep -q "name: VLLM_SR_MANAGEMENT_INTERNAL_LISTENER" "$$tmp_dir/management-api.yaml"; \

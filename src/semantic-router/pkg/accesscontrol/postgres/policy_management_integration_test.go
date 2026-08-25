@@ -201,15 +201,17 @@ func assertAccessPolicyBinding(
 		t.Fatalf("create AccessPolicy binding = %#v, %v", binding, err)
 	}
 	page, err := service.ListAccessBindings(ctx, policymanagement.ListBindingsRequest{
-		NamespaceID: policyTestNamespaceID, PageSize: 1, Scope: all,
+		NamespaceID: policyTestNamespaceID, PageSize: 1, IncludeTotal: true, Scope: all,
 	})
-	if err != nil || len(page.Items) != 1 || page.Items[0].ID != binding.ID {
+	if err != nil || len(page.Items) != 1 || page.Items[0].ID != binding.ID ||
+		page.TotalCount == nil || *page.TotalCount != 1 {
 		t.Fatalf("AccessPolicy binding page = %#v, %v", page, err)
 	}
 	narrow, err := service.ListAccessBindings(ctx, policymanagement.ListBindingsRequest{
-		NamespaceID: policyTestNamespaceID, PageSize: 10, Scope: exact,
+		NamespaceID: policyTestNamespaceID, PageSize: 10, IncludeTotal: true, Scope: exact,
 	})
-	if err != nil || len(narrow.Items) != 1 || narrow.Items[0].ID != binding.ID || narrow.HasMore {
+	if err != nil || len(narrow.Items) != 1 || narrow.Items[0].ID != binding.ID || narrow.HasMore ||
+		narrow.TotalCount == nil || *narrow.TotalCount != 1 {
 		t.Fatalf("associated-policy binding scope page = %#v, %v", narrow, err)
 	}
 	if _, err := service.DeleteAccessPolicy(ctx, policymanagement.DeletePolicyRequest{
@@ -238,9 +240,10 @@ func assertRatePolicyLifecycle(
 		t.Fatalf("create RateLimit binding = %#v, %v", binding, bindingErr)
 	}
 	page, pageErr := service.ListRateBindings(ctx, policymanagement.ListBindingsRequest{
-		NamespaceID: policyTestNamespaceID, PageSize: 1, Scope: scope,
+		NamespaceID: policyTestNamespaceID, PageSize: 1, IncludeTotal: true, Scope: scope,
 	})
-	if pageErr != nil || len(page.Items) != 1 || page.Items[0].ID != binding.ID {
+	if pageErr != nil || len(page.Items) != 1 || page.Items[0].ID != binding.ID ||
+		page.TotalCount == nil || *page.TotalCount != 1 {
 		t.Fatalf("RateLimit binding page = %#v, %v", page, pageErr)
 	}
 	if _, err := service.CreateRateBinding(ctx, policymanagement.CreateRateBindingRequest{

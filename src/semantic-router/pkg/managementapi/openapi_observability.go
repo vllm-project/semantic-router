@@ -38,7 +38,8 @@ var (
 		"stream", "toolCall", "costs",
 	}, map[string]JSONSchema{
 		"admissionId": stringSchema, "eventId": stringSchema,
-		"occurredAt": timestamp, "completedAt": timestamp, "protocol": stringSchema,
+		"externalRequestId": {Type: "string", MaxLength: intPointer(256)},
+		"occurredAt":        timestamp, "completedAt": timestamp, "protocol": stringSchema,
 		"path": stringSchema, "statusCode": {Type: "integer", Format: "int32"},
 		"errorCode": stringSchema, "usageState": stringSchema,
 		"inputTokens": whole, "outputTokens": whole,
@@ -285,6 +286,7 @@ func observabilityParameters(contract OperationContract) []OpenAPIParameter {
 	}
 	if contract.Path == BasePath+"/request-logs" {
 		parameters = append(parameters,
+			observabilityQueryParameter("requestId", JSONSchema{Type: "string", MaxLength: intPointer(256)}),
 			observabilityQueryParameter("cursor", JSONSchema{Type: "string"}),
 			observabilityQueryParameter("pageSize", boundedIntegerSchema(1, 200)),
 		)

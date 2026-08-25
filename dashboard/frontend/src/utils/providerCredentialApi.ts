@@ -1,59 +1,37 @@
 import {
-  ManagementApiError,
-  hasOnlyKeys,
-  isNonEmptyString,
-  isRecord,
-  managementOperationRequest,
-} from './managementApiContract'
-import { MANAGEMENT_API_HEADERS } from '../generated/managementApiContract'
-import type { ProviderConnectionValue } from './providerCatalogApi'
+  MANAGEMENT_API_HEADERS,
+  type ProviderCredentialCreateRequest,
+  type ProviderCredentialDetail,
+} from '../generated/managementApiContract'
 
-export interface CreateProviderCredentialInput {
-  providerId: string
-  catalogRevision: string
-  name: string
-  secret: string
-  baseUrl?: string
-  connectionFields?: Record<string, ProviderConnectionValue>
-}
+import { ManagementApiError, managementApiClient } from './managementApiContract'
 
-export interface ProviderCredentialSummary {
-  id: string
-  providerId: string
-  name: string
-  revision: number
-  status: 'active'
-}
+export type CreateProviderCredentialInput = ProviderCredentialCreateRequest
+export type CreateProviderCredentialResult = ProviderCredentialDetail
 
-export interface CreateProviderCredentialResult {
-  data: ProviderCredentialSummary
-}
-
-// ProviderCredential transport is intentionally isolated here. The Router
-// endpoint still owns origin normalization, adapter selection, encryption,
-// persistence, and authorization; the Dashboard never derives those values.
+// Provider credential transport is intentionally isolated here. The Router
+// owns origin normalization, adapter selection, encryption, persistence, and
+// authorization; the Dashboard only maps the product form to the generated
+// Management contract.
 export async function createProviderCredential(
   input: CreateProviderCredentialInput,
   signal?: AbortSignal,
 ): Promise<CreateProviderCredentialResult> {
-  const payload = await managementOperationRequest('postProviderCredentials', {
+  const mutation = await managementApiClient.postProviderCredentials({
     body: input,
     headers: { [MANAGEMENT_API_HEADERS.idempotencyKey]: crypto.randomUUID() },
     signal,
   })
-  if (
-    !isRecord(payload) ||
-    !hasOnlyKeys(payload, ['data']) ||
-    !isRecord(payload.data) ||
-    !hasOnlyKeys(payload.data, ['id', 'providerId', 'name', 'revision', 'status']) ||
-    !isNonEmptyString(payload.data.id) ||
-    !isNonEmptyString(payload.data.providerId) ||
-    !isNonEmptyString(payload.data.name) ||
-    !Number.isSafeInteger(payload.data.revision) ||
-    Number(payload.data.revision) < 1 ||
-    payload.data.status !== 'active'
-  ) {
-    throw new ManagementApiError('Provider credential returned an invalid contract.', 502)
+  if (!('resource' in mutation.data) || mutation.data.resource.kind !== 'provider_credential') {
+    throw new ManagementApiError(
+      'Provider credential creation did not return a resource reference.',
+      502,
+    )
   }
-  return payload as unknown as CreateProviderCredentialResult
+
+  const detail = await managementApiClient.getProviderCredentialsByCredentialId({
+    pathParameters: { credentialId: mutation.data.resource.id },
+    signal,
+  })
+  return detail.data
 }

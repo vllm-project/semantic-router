@@ -66,7 +66,7 @@ func TestDispatchCapabilityRejectsMalformedCandidateChains(t *testing.T) {
 		"duplicate trigger": func(capability *DispatchCapability) {
 			capability.Fallback.On = []FallbackTrigger{FallbackUnavailable, FallbackUnavailable}
 		},
-		"unknown trigger": func(capability *DispatchCapability) { capability.Fallback.On = []FallbackTrigger{"other"} },
+		"response-only overload trigger": func(capability *DispatchCapability) { capability.Fallback.On = []FallbackTrigger{"overloaded"} },
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := base

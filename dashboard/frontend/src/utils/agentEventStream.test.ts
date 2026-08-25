@@ -139,4 +139,33 @@ describe('Agent event stream', () => {
     expect(reconcileAgentLiveModelSteps([first], liveEvent(3, 'gap'))).toEqual([])
     expect(reconcileAgentLiveModelSteps([first], liveEvent(0, '', 'discarded'))).toEqual([])
   })
+
+  it('decodes and canonically replays a durable model-step summary', async () => {
+    const summary: AgentEvent<'model_step_summary'> = {
+      sessionId: '11111111-1111-4111-8111-111111111111',
+      turnId: '22222222-2222-4222-8222-222222222222',
+      sequence: 2,
+      type: 'model_step_summary',
+      createdAt: '2026-08-23T00:00:00Z',
+      payload: {
+        modelStepId: '33333333-3333-4333-8333-333333333333',
+        requestId: 'request-42',
+        selectedRecipe: 'balance',
+        selectedDecision: 'Complex',
+        selectedModel: 'remote/frontier',
+        selectedAlgorithm: 'static',
+        responsePath: 'upstream',
+        latencyMilliseconds: 420,
+        ttftMilliseconds: 84,
+        usage: { inputTokens: 120, outputTokens: 48, totalTokens: 168 },
+      },
+    }
+    const payload = `id: 2\nevent: model_step_summary\ndata: ${JSON.stringify(summary)}\n\n`
+    const decoded = await collect(
+      parseAgentEventStream(byteStream([new TextEncoder().encode(payload)])),
+    )
+    expect(decoded).toEqual([summary])
+    expect(mergeAgentEvents([], decoded as AgentEvent[])).toEqual([summary])
+    expect(mergeAgentEvents([summary], decoded as AgentEvent[])).toEqual([summary])
+  })
 })

@@ -189,6 +189,7 @@ User may request that credential through these operations:
 
 ~~~text
 GET    /management/v1/self/inference-keys
+GET    /management/v1/self/inference-keys/{keyId}
 GET    /management/v1/self/inference-sessions
 POST   /management/v1/self/inference-sessions
 DELETE /management/v1/self/inference-sessions/{sessionId}
@@ -197,7 +198,9 @@ DELETE /management/v1/self/inference-sessions/{sessionId}
 Creation names a namespace and selects either a key owned by the linked User or a
 Team-owned key for an active membership when self-service policy permits that use.
 `GET /self/inference-keys` returns only safe ID/name/owner/expiry metadata for those
-eligible keys; it never reveals a key secret or grants general Team-key read access.
+eligible keys. Its scoped by-ID companion returns the same metadata for one eligible
+key and otherwise returns not found; neither operation reveals a key secret or grants
+general Team-key read access.
 The response is the distinct, non-revealable delegated-credential format specified
 by the resource contract, bound to key ID, User ID, Team context, audience, and
 Management session with a short expiry. Each inference request resolves the selected
@@ -777,7 +780,9 @@ four nullable non-negative decimal-string prices per million tokens:
 inherit input when omitted; explicit zero means free, while absent input/output means
 unpriced. The namespace supplies the immutable billing currency. Management reads
 return the effective immutable revision; readable file export omits values that were
-only defaulted. Probe uses that same saved control revision.
+only defaulted. Probe uses the saved retry policy, while its control-plane operation
+deadline is the smaller of the saved request timeout and five minutes so a long
+inference deadline cannot make model verification unbounded.
 
 The Model create, update, and read surface uses one nested value; flattened retry or
 timeout fields are not accepted:

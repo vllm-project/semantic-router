@@ -196,3 +196,75 @@ mode field.
 {{- $access := (get $services "access") | default (dict) -}}
 {{- if ((get $access "enabled") | default false) }}true{{ else }}false{{ end -}}
 {{- end }}
+
+{{/*
+Project only the PostgreSQL DSN environment variable into the one-shot schema
+migrator. A single envFrom Secret is converted into one secretKeyRef so the
+other Router credentials in that Secret never enter the migration container.
+*/}}
+{{- define "semantic-router.managementMigrationEnv" -}}
+{{- $root := index . 0 -}}
+{{- $dsnEnv := index . 1 -}}
+{{- $matches := list -}}
+{{- range $variable := concat $root.Values.env $root.Values.extraEnv -}}
+{{- if eq ((get $variable "name") | default "") $dsnEnv -}}
+{{- $valueFrom := (get $variable "valueFrom") | default (dict) -}}
+{{- $secretKeyRef := (get $valueFrom "secretKeyRef") | default (dict) -}}
+{{- if or (empty (get $secretKeyRef "name")) (empty (get $secretKeyRef "key")) -}}
+{{- fail (printf "Management PostgreSQL DSN environment variable %s must use a Secret key reference" $dsnEnv) -}}
+{{- end -}}
+{{- $matches = append $matches $variable -}}
+{{- end -}}
+{{- end -}}
+{{- if gt (len $matches) 1 -}}
+{{- fail (printf "Management PostgreSQL DSN environment variable %s is declared more than once" $dsnEnv) -}}
+{{- end -}}
+{{- if eq (len $matches) 0 -}}
+{{- if ne (len $root.Values.envFromSecrets) 1 -}}
+{{- fail (printf "Management PostgreSQL DSN environment variable %s requires one explicit env Secret reference or exactly one envFromSecrets entry" $dsnEnv) -}}
+{{- end -}}
+{{- $secretName := first $root.Values.envFromSecrets -}}
+{{- $matches = append $matches (dict "name" $dsnEnv "valueFrom" (dict "secretKeyRef" (dict "name" $secretName "key" $dsnEnv))) -}}
+{{- end -}}
+{{- toYaml $matches -}}
+{{- end }}
+
+{{/*
+Select the most-specific read-only Secret projection containing a PostgreSQL
+DSN file. The migration Job never inherits unrelated Router volume mounts.
+*/}}
+{{- define "semantic-router.managementMigrationFileProjection" -}}
+{{- $root := index . 0 -}}
+{{- $dsnFile := index . 1 -}}
+{{- $selected := dict -}}
+{{- $selectedLength := 0 -}}
+{{- range $mount := $root.Values.extraVolumeMounts -}}
+{{- $mountPath := (get $mount "mountPath") | default "" -}}
+{{- $subPath := (get $mount "subPath") | default "" -}}
+{{- $subPathExpr := (get $mount "subPathExpr") | default "" -}}
+{{- $prefix := printf "%s/" (trimSuffix "/" $mountPath) -}}
+{{- $contains := ternary (eq $mountPath $dsnFile) (or (eq $mountPath $dsnFile) (hasPrefix $prefix $dsnFile)) (or (ne $subPath "") (ne $subPathExpr "")) -}}
+{{- if and (eq ((get $mount "readOnly") | default false) true) $contains (gt (len $mountPath) $selectedLength) -}}
+{{- $_ := set $selected "mount" $mount -}}
+{{- $selectedLength = len $mountPath -}}
+{{- end -}}
+{{- end -}}
+{{- if not (hasKey $selected "mount") -}}
+{{- fail (printf "Management PostgreSQL DSN file %s requires a matching read-only extraVolumeMount" $dsnFile) -}}
+{{- end -}}
+{{- $mount := get $selected "mount" -}}
+{{- $volumeName := get $mount "name" -}}
+{{- $volumes := list -}}
+{{- range $volume := $root.Values.extraVolumes -}}
+{{- if eq ((get $volume "name") | default "") $volumeName -}}
+{{- if not (or (hasKey $volume "secret") (hasKey $volume "projected") (hasKey $volume "csi")) -}}
+{{- fail (printf "Management PostgreSQL DSN file volume %s must use a Secret, projected, or CSI source" $volumeName) -}}
+{{- end -}}
+{{- $volumes = append $volumes $volume -}}
+{{- end -}}
+{{- end -}}
+{{- if ne (len $volumes) 1 -}}
+{{- fail (printf "Management PostgreSQL DSN file mount %s requires exactly one extraVolume" $volumeName) -}}
+{{- end -}}
+{{- toYaml (dict "volumeMounts" (list $mount) "volumes" $volumes) -}}
+{{- end }}

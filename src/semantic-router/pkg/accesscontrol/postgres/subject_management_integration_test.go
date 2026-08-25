@@ -343,16 +343,28 @@ func assertSubjectMembershipAndUpdate(
 		t.Fatalf("put membership = %#v, %v", membership, err)
 	}
 	userMemberships, err := service.ListUserMemberships(ctx, subjectmanagement.MembershipListRequest{
-		NamespaceID: subjectTestNamespaceID, UserID: userID, PageSize: 10, Scope: scope,
+		NamespaceID: subjectTestNamespaceID, UserID: userID, PageSize: 10,
+		IncludeTotal: true, Scope: scope,
 	})
-	if err != nil || len(userMemberships.Items) != 1 || userMemberships.Items[0].TeamName != "Platform" {
+	if err != nil || len(userMemberships.Items) != 1 || userMemberships.Items[0].TeamName != "Platform" ||
+		userMemberships.TotalCount == nil || *userMemberships.TotalCount != 1 {
 		t.Fatalf("User memberships = %#v, %v", userMemberships, err)
 	}
 	teamMembers, err := service.ListTeamMembers(ctx, subjectmanagement.MembershipListRequest{
-		NamespaceID: subjectTestNamespaceID, TeamID: teamID, PageSize: 10, Scope: scope,
+		NamespaceID: subjectTestNamespaceID, TeamID: teamID, PageSize: 10,
+		IncludeTotal: true, Scope: scope,
 	})
-	if err != nil || len(teamMembers.Items) != 1 || teamMembers.Items[0].DisplayName != "First User" {
+	if err != nil || len(teamMembers.Items) != 1 || teamMembers.Items[0].DisplayName != "First User" ||
+		teamMembers.Items[0].Email != "first@example.com" || teamMembers.TotalCount == nil ||
+		*teamMembers.TotalCount != 1 {
 		t.Fatalf("Team members = %#v, %v", teamMembers, err)
+	}
+	hidden, err := service.ListUserMemberships(ctx, subjectmanagement.MembershipListRequest{
+		NamespaceID: subjectTestNamespaceID, UserID: userID, PageSize: 10, IncludeTotal: true,
+		Scope: accesscontrol.ResultScope{NamespaceID: subjectTestNamespaceID},
+	})
+	if err != nil || len(hidden.Items) != 0 || hidden.TotalCount == nil || *hidden.TotalCount != 0 {
+		t.Fatalf("permission-filtered User memberships = %#v, %v", hidden, err)
 	}
 	newName := "Platform Engineering"
 	request := subjectmanagement.UpdateTeamRequest{

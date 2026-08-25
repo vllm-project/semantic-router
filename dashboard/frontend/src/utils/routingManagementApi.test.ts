@@ -16,8 +16,14 @@ const model = (id: string) => ({
   modelRevision: 1,
   catalogRevision: `sha256:${'a'.repeat(64)}`,
   aliases: [],
+  paramSize: '32B',
+  contextWindowSize: 131072,
+  description: 'A connected model.',
   capabilities: ['text'],
   loras: [],
+  qualityScore: 0.9,
+  modality: 'text',
+  tags: ['general'],
   control: {
     retry: { count: 0, on: [] },
     timeout: { request: '30s', stream: '60s' },
@@ -58,6 +64,22 @@ afterEach(() => {
 })
 
 describe('routingManagementApi', () => {
+  it('exports the portable manifest through the generated text operation', async () => {
+    const response = new Response('version: v0.3\n', {
+      status: 200,
+      headers: { 'Content-Type': 'application/yaml' },
+    })
+    const json = vi.spyOn(response, 'json')
+    const request = vi.fn().mockResolvedValue(response)
+    vi.stubGlobal('fetch', request)
+
+    await expect(routingManagementApi.exportCurrentManifest()).resolves.toBe('version: v0.3\n')
+    expect(json).not.toHaveBeenCalled()
+    expect(testRequest(request.mock.calls[0][0], request.mock.calls[0][1]).headers.get('Accept')).toBe(
+      'application/yaml',
+    )
+  })
+
   it('loads semantic Model Cards without a backend or runtime projection', async () => {
     const request = vi.fn(
       async (_input: RequestInfo | URL, _init?: RequestInit) =>
@@ -155,6 +177,69 @@ describe('routingManagementApi', () => {
     expect(requests).toHaveLength(2)
     expect(requests[0].headers.get('VLLM-SR-Namespace')).toBe('namespace-1')
     expect(new URL(requests[1].url).searchParams.get('cursor')).toBe('cursor-2')
+  })
+
+  it.each(['1e-3', '1000000.000000001'])(
+    'rejects Model price responses outside the exact decimal contract: %s',
+    async (inputCostPerMillionTokens) => {
+      const valid = model('model-a')
+      const invalid = {
+        ...valid,
+        pricing: { ...valid.pricing, inputCostPerMillionTokens },
+      }
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify({ data: [invalid], page: { hasMore: false, pageSize: 100 } }),
+              { status: 200, headers: { 'Content-Type': mediaType } },
+            ),
+        ),
+      )
+
+      await expect(routingManagementApi.listModels()).rejects.toThrow('RoutingModelPage')
+    },
+  )
+
+  it('rejects Model control responses outside the exact duration contract', async () => {
+    const valid = model('model-a')
+    const invalid = {
+      ...valid,
+      control: { ...valid.control, timeout: { request: '999ms', stream: '60s' } },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ data: [invalid], page: { hasMore: false, pageSize: 100 } }),
+            { status: 200, headers: { 'Content-Type': mediaType } },
+          ),
+      ),
+    )
+
+    await expect(routingManagementApi.listModels()).rejects.toThrow('Model control')
+  })
+
+  it('rejects response-only overload as retry evidence', async () => {
+    const valid = model('model-a')
+    const invalid = {
+      ...valid,
+      control: { ...valid.control, retry: { count: 1, on: ['overloaded'] } },
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({ data: [invalid], page: { hasMore: false, pageSize: 100 } }),
+            { status: 200, headers: { 'Content-Type': mediaType } },
+          ),
+      ),
+    )
+
+    await expect(routingManagementApi.listModels()).rejects.toThrow('RoutingModelPage')
   })
 
   it('supports bounded server-side search for routing selectors', async () => {
@@ -283,7 +368,7 @@ describe('routingManagementApi', () => {
       ],
     })
 
-    expect(receipt.resource?.id).toBe('entrypoint-one')
+    expect('resource' in receipt ? receipt.resource.id : undefined).toBe('entrypoint-one')
     expect(requests[0].headers.get('Idempotency-Key')).toBeTruthy()
     expect(await requests[0].json()).toMatchObject({
       rules: [

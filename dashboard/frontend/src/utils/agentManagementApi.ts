@@ -1,7 +1,6 @@
 import {
   MANAGEMENT_API_HEADERS,
-  assertManagementApiAgentSchema,
-  createManagementApiAgentClient,
+  assertManagementApiSchema,
   type AgentEvent,
   type AgentLiveModelStepEvent,
   type AgentProfileInput,
@@ -16,20 +15,20 @@ import {
   type OperationReference,
   type ResourceReference,
 } from '../generated/managementApiContract'
-import { managementApiAgentTransport, managementOperationStream } from './managementApiContract'
-
-const client = createManagementApiAgentClient(managementApiAgentTransport)
+import { managementApiClient as client, managementOperationStream } from './managementApiContract'
 
 type AgentDetail<Resource> = ManagementApiClientResponse<Resource> & { etag: string }
+type CommandHeaders = Record<typeof MANAGEMENT_API_HEADERS.idempotencyKey, string>
+type RevisionHeaders = Record<typeof MANAGEMENT_API_HEADERS.ifMatch, string>
 
-function commandHeaders(): Record<string, string> {
+function commandHeaders(): CommandHeaders {
   if (typeof crypto === 'undefined' || typeof crypto.randomUUID !== 'function') {
     throw new Error('This browser cannot create a secure Management request.')
   }
   return { [MANAGEMENT_API_HEADERS.idempotencyKey]: crypto.randomUUID() }
 }
 
-function revisionHeaders(etag: string): Record<string, string> {
+function revisionHeaders(etag: string): RevisionHeaders {
   if (!etag.trim()) throw new Error('A current resource ETag is required.')
   return { [MANAGEMENT_API_HEADERS.ifMatch]: etag }
 }
@@ -57,7 +56,7 @@ async function requireDetail<Resource>(
 ): Promise<AgentDetail<Resource>> {
   const response = await responsePromise
   if (!response.etag) throw new Error('Router did not return the resource revision token.')
-  return { data: response.data.data, etag: response.etag }
+  return { ...response, data: response.data.data, etag: response.etag }
 }
 
 function abortableDelay(milliseconds: number, signal?: AbortSignal): Promise<void> {
@@ -131,10 +130,10 @@ const sessionDetail = (id: string, signal?: AbortSignal) =>
   requireDetail(client.getAgentSessionsBySession({ pathParameters: { session: id }, signal }))
 
 export const assertAgentEvent = (value: unknown): AgentEvent =>
-  assertManagementApiAgentSchema('AgentEvent', value)
+  assertManagementApiSchema('AgentEvent', value)
 
 export const assertAgentLiveModelStepEvent = (value: unknown): AgentLiveModelStepEvent =>
-  assertManagementApiAgentSchema('AgentLiveModelStepEvent', value)
+  assertManagementApiSchema('AgentLiveModelStepEvent', value)
 
 export const agentManagementApi = {
   listProfiles: profilePage,

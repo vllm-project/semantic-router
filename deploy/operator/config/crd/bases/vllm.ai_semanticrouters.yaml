@@ -1185,8 +1185,9 @@ spec:
                 type: array
               envFrom:
                 description: |-
-                  EnvFrom adds environment sources to the Router and Management schema
-                  migration containers.
+                  EnvFrom adds environment sources to the Router. When the Management
+                  PostgreSQL DSN uses an environment reference, the migration Job projects
+                  only that key from one unprefixed Secret source.
                 items:
                   description: EnvFromSource represents the source of a set of ConfigMaps
                     or Secrets
@@ -2595,8 +2596,9 @@ spec:
                 type: object
               volumeMounts:
                 description: |-
-                  VolumeMounts mounts deployment-owned volumes into the Router and Management
-                  schema migration containers.
+                  VolumeMounts mounts deployment-owned volumes into the Router. When the
+                  Management PostgreSQL DSN uses a file reference, the migration Job receives
+                  only the most-specific matching read-only mount and its volume.
                 items:
                   description: VolumeMount describes a mounting of a Volume within
                     a container.

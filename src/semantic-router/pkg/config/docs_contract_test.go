@@ -29,6 +29,8 @@ var configContractRequiredDocs = []docNeedles{
 		needles: []string{
 			"version: v0.3",
 			"`providers.models`",
+			"structured invocation `control`",
+			"`global.billing.currency`",
 			"`routing.modelCards`",
 			"`model_names`",
 			"`recipes[].routing.projections`",
@@ -51,6 +53,8 @@ var configContractRequiredDocs = []docNeedles{
 			"version:\nlisteners:\nproviders:\nrouting:\nrecipes:\nentrypoints:\nglobal:",
 			"`entrypoints[].model_names`",
 			"backend_refs:",
+			"control:",
+			"global.billing.currency",
 			"vllm-sr validate --config config.yaml",
 			"Environment references and secrets",
 			"Entrypoints and recipes",
@@ -300,6 +304,17 @@ var configContractForbiddenDocs = []docNeedles{
 			"\nmodels:\n",
 			"connections:",
 			"recipes[].document",
+			"model_bindings",
+			"control_plane:",
+		},
+	},
+	{
+		path: repoRel("website", "docs", "installation", "configuration.md"),
+		needles: []string{
+			"model_bindings",
+			"control_plane:",
+			"providers.models[].runtime",
+			"providers.models[].reliability",
 		},
 	},
 	{

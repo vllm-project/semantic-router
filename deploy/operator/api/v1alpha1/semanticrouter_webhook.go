@@ -127,6 +127,17 @@ func (r *SemanticRouter) validateBootstrap() error {
 }
 
 func (r *SemanticRouter) validateDeploymentContract() error {
+	seenVolumes, err := r.validateDeploymentVolumes()
+	if err != nil {
+		return err
+	}
+	if err := r.validateDeploymentVolumeMounts(seenVolumes); err != nil {
+		return err
+	}
+	return r.validateTopologySpread()
+}
+
+func (r *SemanticRouter) validateDeploymentVolumes() (map[string]struct{}, error) {
 	reservedVolumes := map[string]struct{}{
 		"cache-volume":        {},
 		"config-volume":       {},
@@ -139,13 +150,17 @@ func (r *SemanticRouter) validateDeploymentContract() error {
 	seenVolumes := make(map[string]struct{}, len(r.Spec.Volumes))
 	for _, volume := range r.Spec.Volumes {
 		if _, reserved := reservedVolumes[volume.Name]; reserved {
-			return fmt.Errorf("volumes must not override Operator-owned volume %s", volume.Name)
+			return nil, fmt.Errorf("volumes must not override Operator-owned volume %s", volume.Name)
 		}
 		if _, duplicate := seenVolumes[volume.Name]; duplicate {
-			return fmt.Errorf("volumes contains duplicate name %s", volume.Name)
+			return nil, fmt.Errorf("volumes contains duplicate name %s", volume.Name)
 		}
 		seenVolumes[volume.Name] = struct{}{}
 	}
+	return seenVolumes, nil
+}
+
+func (r *SemanticRouter) validateDeploymentVolumeMounts(seenVolumes map[string]struct{}) error {
 	for _, mount := range r.Spec.VolumeMounts {
 		if _, declared := seenVolumes[mount.Name]; !declared {
 			return fmt.Errorf("volumeMounts references undeclared deployment volume %s", mount.Name)
@@ -154,16 +169,19 @@ func (r *SemanticRouter) validateDeploymentContract() error {
 			return fmt.Errorf("volumeMounts must not override the Operator-mounted Router config")
 		}
 	}
+	return nil
+}
 
-	if r.Spec.TopologySpread.Enabled != nil && *r.Spec.TopologySpread.Enabled {
-		if r.Spec.TopologySpread.MaxSkew < 0 {
-			return fmt.Errorf("topologySpread.maxSkew must be greater than 0")
-		}
-		if r.Spec.TopologySpread.WhenUnsatisfiable != "" &&
-			r.Spec.TopologySpread.WhenUnsatisfiable != "DoNotSchedule" &&
-			r.Spec.TopologySpread.WhenUnsatisfiable != "ScheduleAnyway" {
-			return fmt.Errorf("topologySpread.whenUnsatisfiable must be DoNotSchedule or ScheduleAnyway")
-		}
+func (r *SemanticRouter) validateTopologySpread() error {
+	if r.Spec.TopologySpread.Enabled == nil || !*r.Spec.TopologySpread.Enabled {
+		return nil
+	}
+	if r.Spec.TopologySpread.MaxSkew < 0 {
+		return fmt.Errorf("topologySpread.maxSkew must be greater than 0")
+	}
+	whenUnsatisfiable := r.Spec.TopologySpread.WhenUnsatisfiable
+	if whenUnsatisfiable != "" && whenUnsatisfiable != "DoNotSchedule" && whenUnsatisfiable != "ScheduleAnyway" {
+		return fmt.Errorf("topologySpread.whenUnsatisfiable must be DoNotSchedule or ScheduleAnyway")
 	}
 	return nil
 }
@@ -199,28 +217,33 @@ func (r *SemanticRouter) validatePersistence() error {
 
 // validateProbes validates probe configurations
 func (r *SemanticRouter) validateProbes() error {
-	// Validate startup probe
-	if r.Spec.StartupProbe != nil && (r.Spec.StartupProbe.Enabled == nil || *r.Spec.StartupProbe.Enabled) {
-		if err := r.validateProbeSpec("startupProbe", r.Spec.StartupProbe); err != nil {
+	probes := []struct {
+		name string
+		spec *ProbeSpec
+	}{
+		{name: "startupProbe", spec: r.Spec.StartupProbe},
+		{name: "livenessProbe", spec: r.Spec.LivenessProbe},
+		{name: "readinessProbe", spec: r.Spec.ReadinessProbe},
+	}
+	for _, probe := range probes {
+		if !probeSpecEnabled(probe.spec) {
+			continue
+		}
+		if err := r.validateProbeSpec(probe.name, probe.spec); err != nil {
 			return err
 		}
 	}
-
-	// Validate liveness probe
-	if r.Spec.LivenessProbe != nil && (r.Spec.LivenessProbe.Enabled == nil || *r.Spec.LivenessProbe.Enabled) {
-		if err := r.validateProbeSpec("livenessProbe", r.Spec.LivenessProbe); err != nil {
-			return err
-		}
-	}
-
-	// Validate readiness probe
-	if r.Spec.ReadinessProbe != nil && (r.Spec.ReadinessProbe.Enabled == nil || *r.Spec.ReadinessProbe.Enabled) {
-		if err := r.validateProbeSpec("readinessProbe", r.Spec.ReadinessProbe); err != nil {
-			return err
-		}
-	}
-
 	return nil
+}
+
+func probeSpecEnabled(probe *ProbeSpec) bool {
+	if probe == nil {
+		return false
+	}
+	if probe.Enabled != nil {
+		return *probe.Enabled
+	}
+	return true
 }
 
 // validateProbeSpec validates a single probe specification
