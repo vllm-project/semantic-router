@@ -36,6 +36,9 @@ log = get_logger(__name__)
 
 ServiceStarter = Callable[[], tuple[int, str, str]]
 
+_MIN_NETWORK_PORT = 1
+_MAX_NETWORK_PORT = 65_535
+
 
 def log_startup_banner(
     config_file, listeners, stack_layout: RuntimeStackLayout
@@ -320,7 +323,7 @@ def _envoy_listener_readiness_command(listener_port: int) -> list[str]:
     """Return a bounded TCP probe for Envoy's configured public listener."""
 
     port = int(listener_port)
-    if not 1 <= port <= 65535:
+    if not _MIN_NETWORK_PORT <= port <= _MAX_NETWORK_PORT:
         raise ValueError("Envoy listener port must be between 1 and 65535")
     return [
         "timeout",
