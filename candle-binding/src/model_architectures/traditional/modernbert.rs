@@ -1234,6 +1234,96 @@ impl TraditionalModernBertClassifier {
 /// Token entity tuple returned by `classify_tokens`: (token, label_id, confidence, start, end)
 type TokenEntityTuple = (String, usize, f32, usize, usize);
 
+/// One token's resolved BIO classification, consumed by [`merge_bio_entities`].
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct BioToken<'a> {
+    /// Full BIO label, for example `B-PERSON`, `I-PERSON` or `O`.
+    pub label: &'a str,
+    /// Byte offset of the token's start in the original text.
+    pub start: usize,
+    /// Byte offset of the token's end in the original text.
+    pub end: usize,
+    /// Probability the model assigned to `label`.
+    pub confidence: f32,
+}
+
+/// A run of BIO tokens merged into a single entity.
+#[derive(Debug, Clone)]
+pub(crate) struct BioEntity {
+    pub entity_type: String,
+    pub start: usize,
+    pub end: usize,
+    pub text: String,
+    /// Arithmetic mean of the per-token confidences merged into this entity.
+    pub confidence: f32,
+    /// Number of tokens merged into this entity.
+    pub token_count: u32,
+}
+
+impl BioEntity {
+    /// Fold one more token's confidence into the running arithmetic mean.
+    ///
+    /// This deliberately is not `(self.confidence + confidence) / 2.0`. That
+    /// form is a running pairwise fold, which gives the last token weight 1/2
+    /// and the leading `B-` token weight 1/2^(n-1), so an entity's confidence
+    /// ends up depending on how many tokens it happened to split into.
+    fn accumulate(&mut self, confidence: f32) {
+        self.token_count += 1;
+        self.confidence += (confidence - self.confidence) / self.token_count as f32;
+    }
+}
+
+/// Merge a sequence of BIO-labelled tokens into entities.
+///
+/// `tokens` must already have special tokens removed and must be in text order.
+/// Offsets are byte offsets into `text`.
+pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<BioEntity> {
+    let mut entities: Vec<BioEntity> = Vec::new();
+    let mut current: Option<BioEntity> = None;
+
+    for token in tokens {
+        if let Some(entity_type) = token.label.strip_prefix("B-") {
+            // Beginning of a new entity.
+            if let Some(entity) = current.take() {
+                entities.push(entity);
+            }
+            current = Some(BioEntity {
+                entity_type: entity_type.to_string(),
+                start: token.start,
+                end: token.end,
+                text: text[token.start..token.end].to_string(),
+                confidence: token.confidence,
+                token_count: 1,
+            });
+        } else if let Some(entity_type) = token.label.strip_prefix("I-") {
+            // Continuation of the open entity, when the type matches.
+            if let Some(ref mut entity) = current {
+                if entity.entity_type == entity_type {
+                    entity.end = token.end;
+                    entity.text = text[entity.start..entity.end].to_string();
+                    entity.accumulate(token.confidence);
+                } else {
+                    // Different entity type: close the open entity, drop this token.
+                    entities.push(entity.clone());
+                    current = None;
+                }
+            }
+            // An I- tag with no open entity is ignored.
+        } else {
+            // O tag closes any open entity.
+            if let Some(entity) = current.take() {
+                entities.push(entity);
+            }
+        }
+    }
+
+    if let Some(entity) = current.take() {
+        entities.push(entity);
+    }
+
+    entities
+}
+
 impl TraditionalModernBertTokenClassifier {
     /// Create a new traditional ModernBERT token classifier with auto-detected variant
     pub fn new(model_id: &str, use_cpu: bool) -> Result<Self> {
@@ -1471,78 +1561,25 @@ impl TraditionalModernBertTokenClassifier {
             return Ok(results);
         }
 
-        // BIO tag entity extraction (like old architecture)
-        #[derive(Debug, Clone)]
-        struct TokenEntity {
-            entity_type: String,
-            start: usize,
-            end: usize,
-            text: String,
-            confidence: f32,
-        }
-
-        let mut entities = Vec::new();
-        let mut current_entity: Option<TokenEntity> = None;
-
-        for (i, (&pred_id, offset)) in predictions_vec
+        // BIO tag entity extraction
+        let labeled: Vec<BioToken<'_>> = predictions_vec
             .iter()
             .zip(tokenization_result.offsets.iter())
             .enumerate()
-        {
-            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0))
-            // Note: All special tokens have zero-length offsets, including BOS at index 0
-            if offset.0 == 0 && offset.1 == 0 {
-                continue;
-            }
+            // Skip special tokens (BOS, EOS, PAD, etc. have offset (0,0)).
+            .filter(|(_, (_, offset))| !(offset.0 == 0 && offset.1 == 0))
+            .map(|(i, (&pred_id, offset))| BioToken {
+                label: id2label
+                    .get(&pred_id.to_string())
+                    .map(String::as_str)
+                    .unwrap_or("O"),
+                start: offset.0,
+                end: offset.1,
+                confidence: probs_data[i][pred_id as usize],
+            })
+            .collect();
 
-            // Get label from prediction ID
-            let label = id2label
-                .get(&pred_id.to_string())
-                .unwrap_or(&"O".to_string())
-                .clone();
-            let confidence = probs_data[i][pred_id as usize];
-
-            if let Some(stripped) = label.strip_prefix("B-") {
-                // Beginning of new entity
-                if let Some(entity) = current_entity.take() {
-                    entities.push(entity);
-                }
-
-                let entity_type = stripped.to_string();
-                current_entity = Some(TokenEntity {
-                    entity_type,
-                    start: offset.0,
-                    end: offset.1,
-                    text: text[offset.0..offset.1].to_string(),
-                    confidence,
-                });
-            } else if let Some(entity_type) = label.strip_prefix("I-") {
-                // Inside current entity
-                if let Some(ref mut entity) = current_entity {
-                    if entity.entity_type == entity_type {
-                        // Extend current entity
-                        entity.end = offset.1;
-                        entity.text = text[entity.start..entity.end].to_string();
-                        // Update confidence with average
-                        entity.confidence = (entity.confidence + confidence) / 2.0;
-                    } else {
-                        // Different entity type, finish current and don't start new
-                        entities.push(entity.clone());
-                        current_entity = None;
-                    }
-                } // If no current entity, ignore I- tag
-            } else {
-                // Outside entity (O tag or different entity type)
-                if let Some(entity) = current_entity.take() {
-                    entities.push(entity);
-                }
-            }
-        }
-
-        // Add final entity if exists
-        if let Some(entity) = current_entity.take() {
-            entities.push(entity);
-        }
+        let entities = merge_bio_entities(text, &labeled);
 
         // Convert entities to results format
         for entity in entities {
