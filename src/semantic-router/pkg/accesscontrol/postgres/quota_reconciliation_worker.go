@@ -369,8 +369,8 @@ FROM original`,
 	if err != nil {
 		return fmt.Errorf("insert reconciliation usage event: %w", err)
 	}
-	if count, rowsErr := result.RowsAffected(); rowsErr != nil || count != 1 {
-		return quotareconciliation.ErrReconciliationConflict
+	if err := requireReconciliationUsageInsert(result); err != nil {
+		return err
 	}
 	for _, dispatch := range plan.Dispatches {
 		state := "known_zero"
@@ -401,6 +401,14 @@ FROM original`,
 		}
 	}
 	return nil
+}
+
+func requireReconciliationUsageInsert(result sql.Result) error {
+	count, err := result.RowsAffected()
+	if err == nil && count == 1 {
+		return nil
+	}
+	return quotareconciliation.ErrReconciliationConflict
 }
 
 type reconciliationCostRow struct {

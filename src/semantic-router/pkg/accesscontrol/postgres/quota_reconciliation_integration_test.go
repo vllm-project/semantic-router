@@ -165,6 +165,17 @@ func assertReconciliationMetadataAndRollups(
 	now time.Time,
 ) {
 	t.Helper()
+	assertReconciliationMetadata(t, ctx, db, namespaceID, originalEventID, decisionID)
+	assertReconciliationRollupLifecycle(t, ctx, db, namespaceID, decisionID, now)
+}
+
+func assertReconciliationMetadata(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	namespaceID, originalEventID, decisionID string,
+) {
+	t.Helper()
 	var inheritedDecision, inheritedSource, reason string
 	var hasCompletedAt bool
 	if err := db.QueryRowContext(ctx, `SELECT
@@ -178,34 +189,65 @@ WHERE namespace_id=$1 AND corrects_event_id=$2`, namespaceID, originalEventID).S
 	); err != nil {
 		t.Fatal(err)
 	}
-	if inheritedDecision != decisionID || inheritedSource != "original-event" ||
-		reason != "Apply authoritative provider usage." || !hasCompletedAt {
-		t.Fatalf(
-			"correction metadata decision=%q source=%q reason=%q completedAt=%v",
-			inheritedDecision, inheritedSource, reason, hasCompletedAt,
-		)
-	}
+	assertReconciliationString(t, "decision", inheritedDecision, decisionID)
+	assertReconciliationString(t, "source", inheritedSource, "original-event")
+	assertReconciliationString(t, "reason", reason, "Apply authoritative provider usage.")
+	assertReconciliationBool(t, "completedAt present", hasCompletedAt, true)
+}
 
+func assertReconciliationRollupLifecycle(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	namespaceID, decisionID string,
+	now time.Time,
+) {
+	t.Helper()
+	processor := newReconciliationRollupProcessor(t, db)
+	result := processReconciliationRollups(t, ctx, processor, namespaceID, "initial")
+	assertReconciliationPositive(t, "initial refreshed minutes", result.RefreshedMinutes)
+	processReconciliationRollups(
+		t, ctx, newReconciliationRollupProcessor(t, db), namespaceID, "restart",
+	)
+	assertReconciliationRollupDimensions(t, ctx, db, namespaceID, decisionID, now)
+}
+
+func newReconciliationRollupProcessor(
+	t *testing.T,
+	db *sql.DB,
+) *usageledger.PostgresRollupProcessor {
+	t.Helper()
 	processor, err := usageledger.NewPostgresRollupProcessor(
 		db, usageledger.PostgresRollupProcessorOptions{DirtyBucketLimit: 10},
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
-	result, err := processor.ProcessDirty(ctx, namespaceID)
-	if err != nil || result.RefreshedMinutes == 0 {
-		t.Fatalf("initial rollup refresh = %+v, %v", result, err)
-	}
-	restarted, err := usageledger.NewPostgresRollupProcessor(
-		db, usageledger.PostgresRollupProcessorOptions{DirtyBucketLimit: 10},
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if result, err = restarted.ProcessDirty(ctx, namespaceID); err != nil {
-		t.Fatalf("restart rollup refresh = %+v, %v", result, err)
-	}
+	return processor
+}
 
+func processReconciliationRollups(
+	t *testing.T,
+	ctx context.Context,
+	processor *usageledger.PostgresRollupProcessor,
+	namespaceID, phase string,
+) usageledger.RollupResult {
+	t.Helper()
+	result, err := processor.ProcessDirty(ctx, namespaceID)
+	if err != nil {
+		t.Fatalf("%s rollup refresh = %+v, %v", phase, result, err)
+	}
+	return result
+}
+
+func assertReconciliationRollupDimensions(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	namespaceID, decisionID string,
+	now time.Time,
+) {
+	t.Helper()
 	var negativeRows, decisionRows int
 	var incomplete string
 	if err := db.QueryRowContext(ctx, `SELECT
@@ -220,11 +262,36 @@ WHERE namespace_id=$1 AND bucket_start=$3`,
 	).Scan(&negativeRows, &decisionRows, &incomplete); err != nil {
 		t.Fatal(err)
 	}
-	if negativeRows != 0 || decisionRows != 1 || incomplete != "0" {
-		t.Fatalf(
-			"rollup negative=%d decisionRows=%d incomplete=%s",
-			negativeRows, decisionRows, incomplete,
-		)
+	assertReconciliationInt(t, "negative rollup rows", negativeRows, 0)
+	assertReconciliationInt(t, "decision rollup rows", decisionRows, 1)
+	assertReconciliationString(t, "incomplete dispatches", incomplete, "0")
+}
+
+func assertReconciliationString(t *testing.T, field, got, want string) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %q, want %q", field, got, want)
+	}
+}
+
+func assertReconciliationInt(t *testing.T, field string, got, want int) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %d, want %d", field, got, want)
+	}
+}
+
+func assertReconciliationPositive(t *testing.T, field string, got int) {
+	t.Helper()
+	if got <= 0 {
+		t.Fatalf("%s = %d, want positive", field, got)
+	}
+}
+
+func assertReconciliationBool(t *testing.T, field string, got, want bool) {
+	t.Helper()
+	if got != want {
+		t.Fatalf("%s = %v, want %v", field, got, want)
 	}
 }
 
