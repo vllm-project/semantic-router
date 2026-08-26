@@ -5,9 +5,8 @@
   color: var(--site-text);
 }
 
+/* Column layout comes from the global .site-section-intro lockup. */
 .heading {
-  display: grid;
-  max-width: 43rem;
   gap: 0.8rem;
   margin-bottom: var(--site-section-gap);
 }
@@ -167,14 +166,16 @@
   gap: 1rem;
 }
 
+/* Thumbnail over copy. It used to be a fixed 7.2rem beside the text, so the
+ * image stayed postage-stamp sized however wide the column grew. */
 .videoCard {
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-columns: 7.2rem minmax(0, 1fr);
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.55rem;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-content: start;
+  padding: 0.6rem 0.6rem 0.9rem;
   border: 1px solid var(--site-border);
   border-radius: 0.85rem;
   background: var(--site-surface);
@@ -222,14 +223,14 @@
   top: 50%;
   left: 50%;
   display: grid;
-  width: 2rem;
-  height: 2rem;
+  width: 2.75rem;
+  height: 2.75rem;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.36);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
-  font-size: 0.68rem;
+  font-size: 0.9rem;
   transform: translate(-50%, -50%);
 }
 
@@ -237,21 +238,25 @@
   display: grid;
   min-width: 0;
   gap: 0.35rem;
+  align-content: start;
+  padding-inline: 0.15rem;
 }
 
 .cardCopy strong {
   display: -webkit-box;
   overflow: hidden;
   color: var(--site-text-strong);
-  font-size: 0.76rem;
-  line-height: 1.35;
+  font-size: 0.95rem;
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.4;
+  letter-spacing: -0.01em;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
 }
 
 .cardCopy > span {
-  color: var(--site-muted);
-  font-size: 0.68rem;
+  color: var(--site-muted-bright);
+  font-size: 0.8rem;
   font-weight: var(--site-font-weight-medium);
 }
 
@@ -291,10 +296,6 @@
 @media (max-width: 420px) {
   .directionButton {
     padding-inline: 0.62rem;
-  }
-
-  .videoCard {
-    grid-template-columns: 6.5rem minmax(0, 1fr);
   }
 }
 

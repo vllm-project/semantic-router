@@ -15,8 +15,8 @@ export interface CommitterActivityEntry {
 }
 
 export const committerActivityWindow = {
-  "generatedAt": "2026-08-25",
-  "cutoffDate": "2026-05-25",
+  "generatedAt": "2026-08-26",
+  "cutoffDate": "2026-05-26",
   "months": 3,
   "minimumCommentedIssueThreads": 2,
   "activeCount": 11,
@@ -27,19 +27,19 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "FAUST",
     "login": "FAUST-BENCHOU",
-    "pullRequests": 19,
-    "reviews": 73,
+    "pullRequests": 20,
+    "reviews": 86,
     "issues": 28,
-    "total": 120,
+    "total": 134,
     "status": "active"
   },
   {
     "name": "David Shrader",
     "login": "shraderdm",
-    "pullRequests": 18,
+    "pullRequests": 17,
     "reviews": 6,
     "issues": 16,
-    "total": 40,
+    "total": 39,
     "status": "active"
   },
   {
@@ -54,19 +54,19 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Ramakrishnan Sathyavageeswaran",
     "login": "ramkrishs",
-    "pullRequests": 1,
+    "pullRequests": 2,
     "reviews": 4,
     "issues": 0,
-    "total": 5,
+    "total": 6,
     "status": "active"
   },
   {
     "name": "Teemu Kuusisto",
     "login": "siloteemu",
-    "pullRequests": 11,
+    "pullRequests": 6,
     "reviews": 1,
     "issues": 5,
-    "total": 17,
+    "total": 12,
     "status": "active"
   },
   {
@@ -82,18 +82,18 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "Theo Hsiung",
     "login": "theohsiung",
     "pullRequests": 55,
-    "reviews": 13,
-    "issues": 76,
-    "total": 144,
+    "reviews": 14,
+    "issues": 77,
+    "total": 146,
     "status": "active"
   },
   {
     "name": "Wilson Wu",
     "login": "wilsonwu",
     "pullRequests": 43,
-    "reviews": 7,
+    "reviews": 10,
     "issues": 29,
-    "total": 79,
+    "total": 82,
     "status": "active"
   },
   {

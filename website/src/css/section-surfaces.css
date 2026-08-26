@@ -1,37 +1,69 @@
 /* Shared section headers and compact card copy — avoids awkward forced line breaks. */
 
+/* Section intro lockup.
+ *
+ * This used to be a single column capped at 46rem. Because the content below
+ * it spans the whole frame, the cap left the right half of every section
+ * empty, and the lede broke mid-phrase against an edge nothing else shared.
+ *
+ * Now the intro spans the frame as two columns: title left, lede right. The
+ * eyebrow, and any action after the lede, span both. Expects flat children —
+ * eyebrow, h2, p — so placement is by element and no section needs its own
+ * measure. */
 .site-section-intro {
   display: grid;
-  gap: 0.85rem;
-  max-width: 46rem;
+  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
+  column-gap: var(--rail-gap);
+  row-gap: 0.85rem;
+  align-items: end;
   margin-bottom: 2rem;
 }
 
-.site-section-intro--wide {
-  max-width: 52rem;
+.site-section-intro > * {
+  min-width: 0;
 }
 
+.site-section-intro > h2,
 .site-section-intro__title {
+  grid-column: 1;
   max-width: none;
   margin: 0;
   font-size: var(--site-text-h2);
   line-height: var(--site-leading-tight);
-  text-wrap: pretty;
+  text-wrap: balance;
   overflow-wrap: normal;
   word-break: normal;
 }
 
-.site-section-intro__title--offset {
-  margin-top: 0.65rem;
-}
-
+.site-section-intro > p,
 .site-section-intro__lede {
-  max-width: 42rem;
+  grid-column: 2;
+  max-width: 46ch;
   margin: 0;
   color: var(--site-muted-bright);
   font-size: 1rem;
   line-height: 1.65;
   text-wrap: pretty;
+}
+
+.site-section-intro > :not(h2):not(p) {
+  grid-column: 1 / -1;
+}
+
+/* One column below the shared nav breakpoint. The lede drops back to a
+ * reading measure instead of stretching the full frame. */
+@media (max-width: 996px) {
+  .site-section-intro {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .site-section-intro > h2,
+  .site-section-intro__title,
+  .site-section-intro > p,
+  .site-section-intro__lede {
+    grid-column: 1;
+    max-width: 60ch;
+  }
 }
 
 /* Single-line metadata in narrow cards (roles, affiliations, chip labels). */

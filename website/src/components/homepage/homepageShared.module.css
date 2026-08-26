@@ -17,15 +17,12 @@
   z-index: 1;
 }
 
+/* Column layout comes from the global .site-section-intro lockup in
+ * components.css. Only spacing lives here. */
 .sectionHeader {
   display: grid;
   gap: 0.75rem;
-  max-width: min(100%, 40rem);
   margin-bottom: var(--site-section-gap);
-}
-
-.sectionHeaderWide {
-  max-width: min(100%, 48rem);
 }
 
 .eyebrow {

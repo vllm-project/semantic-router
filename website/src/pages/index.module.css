@@ -460,29 +460,12 @@
 }
 
 .sectionHeading {
-  composes: site-section-intro site-section-intro--wide from global;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-  margin-bottom: 2rem;
+  composes: site-section-intro from global;
 }
 
 .sectionHeading h2 {
-  max-width: none;
-  margin: 0;
-  font-size: var(--site-text-h2);
   line-height: 1.18;
   letter-spacing: -0.025em;
-  text-wrap: pretty;
-}
-
-.sectionHeading p {
-  max-width: 42rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: 1rem;
-  line-height: 1.65;
-  text-wrap: pretty;
 }
 
 .capabilityFrame {
@@ -1016,34 +999,25 @@
   text-wrap: pretty;
 }
 
+/* Statement section: same lockup as every other intro, larger display type. */
 .momProofHeading {
+  composes: site-section-intro from global;
   position: relative;
   z-index: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
-  gap: clamp(1rem, 2vw, 2rem);
-  align-items: end;
   margin-bottom: clamp(1.4rem, 3vw, 2.4rem);
 }
 
 .momProofHeading h2 {
-  max-width: 48rem;
-  margin: 0;
   color: var(--site-text-strong);
   font-size: clamp(2rem, 4.4vw, 4.5rem);
   font-weight: 690;
   line-height: 0.98;
   letter-spacing: -0.055em;
-  text-wrap: balance;
 }
 
 .momProofHeading p {
-  max-width: 45rem;
-  margin: 0.9rem 0 0;
-  color: var(--site-muted-bright);
   font-size: clamp(0.98rem, 1.35vw, 1.18rem);
   line-height: 1.58;
-  text-wrap: pretty;
 }
 
 .momProofFrame {
@@ -1189,7 +1163,7 @@
 }
 
 .finalCtaCopy h2 {
-  max-width: min(100%, 30rem);
+  max-width: 20ch;
   margin: 0;
   color: var(--site-text-strong);
   font-size: var(--site-text-h2);

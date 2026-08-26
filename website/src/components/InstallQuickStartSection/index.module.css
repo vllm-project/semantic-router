@@ -4,10 +4,9 @@
   background: var(--site-bg);
 }
 
+/* Column layout comes from the global .site-section-intro lockup. */
 .heading {
-  display: grid;
   gap: 0.65rem;
-  max-width: min(100%, 42rem);
   margin-bottom: 1.5rem;
 }
 
@@ -21,7 +20,6 @@
 }
 
 .lede {
-  max-width: 42rem;
   margin: 0;
   color: var(--site-text);
   font-size: clamp(0.92rem, 1.05vw, 1rem);
@@ -99,11 +97,14 @@
   list-style: none;
 }
 
+/* Rail, then explanation, then the command itself. The command is short —
+ * given the whole row it left most of the card empty. */
 .step {
   display: grid;
-  grid-template-columns: 2.35rem minmax(0, 1fr);
-  gap: 0.85rem 1rem;
-  padding: 1rem 0;
+  grid-template-columns: 2.35rem minmax(0, 19rem) minmax(0, 1.55fr);
+  gap: 0.85rem 1.75rem;
+  align-items: start;
+  padding: 1.15rem 0;
 }
 
 .step:first-child {
@@ -146,18 +147,26 @@
   background: linear-gradient(180deg, rgba(48, 162, 255, 0.35), var(--site-border));
 }
 
-.stepBody {
+.stepCopy,
+.stepAction {
   display: grid;
   gap: 0.55rem;
   min-width: 0;
+  align-content: start;
 }
 
+.stepAction {
+  gap: 0.7rem;
+}
+
+/* The chip follows the title now that the column is narrow; pushing it to
+ * the far edge was part of what made the row read as empty. */
 .stepHeader {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem 0.75rem;
+  justify-content: flex-start;
+  gap: 0.5rem 0.6rem;
 }
 
 .stepTitle {
@@ -512,6 +521,19 @@
   background: var(--site-hover-surface-bg-soft) !important;
   color: var(--site-brand-blue) !important;
   box-shadow: var(--site-hover-inset) !important;
+}
+
+/* Below the shared nav breakpoint the command stacks under its explanation. */
+@media (max-width: 996px) {
+  .step {
+    grid-template-columns: 2.35rem minmax(0, 1fr);
+    gap: 0.75rem 1rem;
+  }
+
+  .stepCopy,
+  .stepAction {
+    grid-column: 2;
+  }
 }
 
 @media (max-width: 768px) {

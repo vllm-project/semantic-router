@@ -149,7 +149,7 @@ export default function InstallQuickStartSection(): JSX.Element {
   return (
     <section id="install-quickstart" className={styles.section}>
       <div className="site-shell-container">
-        <header className={styles.heading}>
+        <header className={`site-section-intro ${styles.heading}`}>
           <SectionLabel>
             <Translate id="homepage.install.label">Quick start</Translate>
           </SectionLabel>
@@ -194,7 +194,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                 <span className={styles.stepMarker}>01</span>
                 {showFollowup && <span className={styles.stepLine} />}
               </div>
-              <div className={styles.stepBody}>
+              <div className={styles.stepCopy}>
                 <div className={styles.stepHeader}>
                   <h3 className={styles.stepTitle}>
                     <Translate id="homepage.install.step1.title">Install the CLI</Translate>
@@ -206,6 +206,8 @@ export default function InstallQuickStartSection(): JSX.Element {
                     Downloads the installer, prepares Docker, and writes vllm-sr to your PATH.
                   </Translate>
                 </p>
+              </div>
+              <div className={styles.stepAction}>
                 <CommandShell
                   command={installCommand}
                   copyTarget="install-command"
@@ -253,7 +255,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                     <span className={styles.stepMarker}>02</span>
                     <span className={styles.stepLine} />
                   </div>
-                  <div className={styles.stepBody}>
+                  <div className={styles.stepCopy}>
                     <h3 className={styles.stepTitle}>
                       <Translate id="homepage.install.step2.title">Start local serve</Translate>
                     </h3>
@@ -262,6 +264,8 @@ export default function InstallQuickStartSection(): JSX.Element {
                         Boots the router image and dashboard. Skip if the installer already launched it.
                       </Translate>
                     </p>
+                  </div>
+                  <div className={styles.stepAction}>
                     <CommandShell
                       command={serveCommand}
                       copyTarget="serve-command"
@@ -276,7 +280,7 @@ export default function InstallQuickStartSection(): JSX.Element {
                   <div className={styles.stepRail} aria-hidden="true">
                     <span className={styles.stepMarker}>03</span>
                   </div>
-                  <div className={styles.stepBody}>
+                  <div className={styles.stepCopy}>
                     <h3 className={styles.stepTitle}>
                       <Translate id="homepage.install.step3.title">Open the dashboard</Translate>
                     </h3>
@@ -285,6 +289,8 @@ export default function InstallQuickStartSection(): JSX.Element {
                         Setup mode appears on first run. Configure models, then send traffic through the router.
                       </Translate>
                     </p>
+                  </div>
+                  <div className={styles.stepAction}>
                     <a
                       className={styles.dashboardLink}
                       href="http://localhost:8700"
