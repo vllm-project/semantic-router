@@ -56,10 +56,21 @@ jobs:
           docker logs vllm-sr-dashboard-container 2>&1 | tail -200 || true
           echo "=== Legacy Single-Container Logs ==="
           docker logs vllm-sr-container 2>&1 | tail -200 || true
+          echo "=== Storage Logs ==="
+          docker logs vllm-sr-redis 2>&1 | tail -100 || true
+          docker logs vllm-sr-postgres 2>&1 | tail -100 || true
+          echo "=== Stack Networks ==="
+          docker network ls
+          for network in vllm-sr-network vllm-sr-data-network; do
+            echo "--- $network ---"
+            docker network inspect "$network" \
+              --format '{{range .Containers}}{{.Name}} {{end}}' || true
+          done
 
       - name: Clean up
         if: always()
         run: |
-          docker stop vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger 2>/dev/null || true
-          docker rm vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger 2>/dev/null || true
+          docker stop vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger vllm-sr-redis vllm-sr-postgres vllm-sr-milvus vllm-sr-cli-test-probe vllm-sr-cli-test-control-redis 2>/dev/null || true
+          docker rm vllm-sr-container vllm-sr-router-container vllm-sr-envoy-container vllm-sr-dashboard-container vllm-sr-sim-container vllm-sr-grafana vllm-sr-prometheus vllm-sr-jaeger vllm-sr-redis vllm-sr-postgres vllm-sr-milvus vllm-sr-cli-test-probe vllm-sr-cli-test-control-redis 2>/dev/null || true
+          docker network rm vllm-sr-network vllm-sr-data-network 2>/dev/null || true
           docker system prune -f || true
