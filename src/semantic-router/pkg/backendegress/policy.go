@@ -120,13 +120,74 @@ func Compile(config Config) (Policy, error) {
 		identities[identity] = struct{}{}
 		policy.rules = append(policy.rules, rule)
 	}
-	sort.Slice(policy.rules, func(left, right int) bool {
-		if policy.rules[left].wildcard != policy.rules[right].wildcard {
-			return !policy.rules[left].wildcard
-		}
-		return len(policy.rules[left].host) > len(policy.rules[right].host)
-	})
+	sortHostRules(policy.rules)
 	return policy, nil
+}
+
+// Overlay returns a new policy where exact host identities from overrides
+// replace the corresponding base rules. Override schemes must already be
+// allowed by the base policy, preventing a narrow system exception from
+// widening the transport contract for unrelated hosts.
+func Overlay(base, overrides Policy) (Policy, error) {
+	result := Policy{
+		schemes: make(map[string]struct{}, len(base.schemes)),
+		rules:   make([]hostRule, 0, len(base.rules)+len(overrides.rules)),
+	}
+	for scheme := range base.schemes {
+		result.schemes[scheme] = struct{}{}
+	}
+	for scheme := range overrides.schemes {
+		if _, allowed := base.schemes[scheme]; !allowed {
+			return Policy{}, fmt.Errorf("backend egress override scheme %q is not allowed by the base policy", scheme)
+		}
+	}
+	overridden := make(map[string]struct{}, len(overrides.rules))
+	for _, rule := range overrides.rules {
+		if rule.wildcard {
+			return Policy{}, fmt.Errorf("backend egress overrides require exact host identities")
+		}
+		overridden[hostRuleIdentity(rule)] = struct{}{}
+	}
+	for _, rule := range base.rules {
+		if _, replace := overridden[hostRuleIdentity(rule)]; replace {
+			continue
+		}
+		result.rules = append(result.rules, cloneHostRule(rule))
+	}
+	for _, rule := range overrides.rules {
+		result.rules = append(result.rules, cloneHostRule(rule))
+	}
+	sortHostRules(result.rules)
+	return result, nil
+}
+
+func cloneHostRule(rule hostRule) hostRule {
+	ports := make(map[uint16]struct{}, len(rule.ports))
+	for port := range rule.ports {
+		ports[port] = struct{}{}
+	}
+	return hostRule{
+		host:         rule.host,
+		wildcard:     rule.wildcard,
+		ports:        ports,
+		privateCIDRs: append([]netip.Prefix(nil), rule.privateCIDRs...),
+	}
+}
+
+func hostRuleIdentity(rule hostRule) string {
+	if rule.wildcard {
+		return "*." + rule.host
+	}
+	return rule.host
+}
+
+func sortHostRules(rules []hostRule) {
+	sort.Slice(rules, func(left, right int) bool {
+		if rules[left].wildcard != rules[right].wildcard {
+			return !rules[left].wildcard
+		}
+		return len(rules[left].host) > len(rules[right].host)
+	})
 }
 
 func compileHostRule(config HostConfig) (hostRule, error) {
@@ -138,7 +199,7 @@ func compileHostRule(config HostConfig) (hostRule, error) {
 	if host == "" || strings.Contains(host, "*") || strings.TrimSpace(config.Host) != config.Host {
 		return hostRule{}, fmt.Errorf("host pattern is invalid")
 	}
-	if parsed := net.ParseIP(host); parsed == nil && !validDNSName(host) {
+	if parsed := net.ParseIP(host); parsed == nil && !validDNSName(host, !wildcard) {
 		return hostRule{}, fmt.Errorf("host name is invalid")
 	} else if parsed != nil && wildcard {
 		return hostRule{}, fmt.Errorf("IP literals cannot use wildcards")
@@ -248,7 +309,7 @@ func (p Policy) ruleForHost(host string) (hostRule, bool) {
 	return hostRule{}, false
 }
 
-func validDNSName(host string) bool {
+func validDNSName(host string, allowServiceLabels bool) bool {
 	if len(host) > 253 || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") || strings.Contains(host, "..") {
 		return false
 	}
@@ -257,7 +318,8 @@ func validDNSName(host string) bool {
 			return false
 		}
 		for _, char := range label {
-			if char != '-' && (char < 'a' || char > 'z') && (char < '0' || char > '9') {
+			if char != '-' && (!allowServiceLabels || char != '_') &&
+				(char < 'a' || char > 'z') && (char < '0' || char > '9') {
 				return false
 			}
 		}

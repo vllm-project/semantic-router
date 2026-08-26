@@ -147,6 +147,12 @@ func isUniqueViolation(err error) bool {
 	return errors.As(err, &databaseError) && databaseError.Code == "23505"
 }
 
+func retryableTransactionError(err error) bool {
+	var databaseError *pq.Error
+	return errors.As(err, &databaseError) &&
+		(databaseError.Code == "40001" || databaseError.Code == "40P01")
+}
+
 func requireOneRow(result sql.Result) error {
 	rows, err := result.RowsAffected()
 	if err != nil {

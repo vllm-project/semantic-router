@@ -26,6 +26,7 @@ type Dimensions struct {
 	TeamID         string `json:"teamId,omitempty"`
 	EntrypointID   string `json:"entrypointId,omitempty"`
 	RecipeID       string `json:"recipeId,omitempty"`
+	DecisionID     string `json:"decisionId,omitempty"`
 	Protocol       string `json:"protocol,omitempty"`
 	StatusCode     int    `json:"statusCode,omitempty"`
 	ErrorCode      string `json:"errorCode,omitempty"`
@@ -222,7 +223,8 @@ func loadRequestRollups(ctx context.Context, tx *sql.Tx, namespaceID string, sta
 )
 SELECT date_trunc('minute', e.occurred_at),
   COALESCE(e.api_key_id::text,''), COALESCE(e.user_id::text,''), COALESCE(e.team_id::text,''),
-  COALESCE(e.entrypoint_id::text,''), COALESCE(e.recipe_id::text,''), e.protocol,
+  COALESCE(e.entrypoint_id::text,''), COALESCE(e.recipe_id::text,''),
+  COALESCE(e.request_metadata->'decision'->>'id',''), e.protocol,
   e.status_code, COALESCE(e.error_code,''),
   count(*) FILTER (WHERE e.event_kind IN ('actual','unknown'))::text,
   count(*) FILTER (WHERE e.event_kind IN ('actual','unknown') AND e.status_code < 400)::text,
@@ -237,8 +239,8 @@ SELECT date_trunc('minute', e.occurred_at),
 FROM usage_events e
 LEFT JOIN unknown_dispatches u USING (namespace_id, event_date, event_id)
 WHERE e.namespace_id = $1 AND e.occurred_at >= $2 AND e.occurred_at < $3
-GROUP BY 1,2,3,4,5,6,7,8,9
-ORDER BY 1,2,3,4,5,6,7,8,9`, namespaceID, start, end)
+GROUP BY 1,2,3,4,5,6,7,8,9,10
+ORDER BY 1,2,3,4,5,6,7,8,9,10`, namespaceID, start, end)
 	if err != nil {
 		return nil, fmt.Errorf("aggregate request rollups: %w", err)
 	}
@@ -252,7 +254,7 @@ ORDER BY 1,2,3,4,5,6,7,8,9`, namespaceID, start, end)
 		row.View = RollupRequest
 		if err := rows.Scan(&row.BucketStart, &row.Dimensions.APIKeyID, &row.Dimensions.UserID,
 			&row.Dimensions.TeamID, &row.Dimensions.EntrypointID, &row.Dimensions.RecipeID,
-			&row.Dimensions.Protocol, &row.Dimensions.StatusCode, &row.Dimensions.ErrorCode,
+			&row.Dimensions.DecisionID, &row.Dimensions.Protocol, &row.Dimensions.StatusCode, &row.Dimensions.ErrorCode,
 			&requests, &successful, &input, &output, &incomplete,
 			&latencyCount, &latencySum, &ttftCount, &ttftSum, &row.LedgerWatermark); err != nil {
 			return nil, fmt.Errorf("scan request rollup: %w", err)
@@ -289,7 +291,8 @@ func loadRequestCosts(
 ) error {
 	costRows, err := tx.QueryContext(ctx, `SELECT date_trunc('minute', e.occurred_at),
   COALESCE(e.api_key_id::text,''), COALESCE(e.user_id::text,''), COALESCE(e.team_id::text,''),
-  COALESCE(e.entrypoint_id::text,''), COALESCE(e.recipe_id::text,''), e.protocol,
+  COALESCE(e.entrypoint_id::text,''), COALESCE(e.recipe_id::text,''),
+  COALESCE(e.request_metadata->'decision'->>'id',''), e.protocol,
   e.status_code, COALESCE(e.error_code,''), c->>'currency',
   sum((c->>'knownNumerator')::numeric)::text,
   sum((c->>'knownDispatches')::numeric)::text,
@@ -297,8 +300,8 @@ func loadRequestCosts(
 FROM usage_events e
 CROSS JOIN LATERAL jsonb_array_elements(e.costs) c
 WHERE e.namespace_id = $1 AND e.occurred_at >= $2 AND e.occurred_at < $3
-GROUP BY 1,2,3,4,5,6,7,8,9,10
-ORDER BY 1,2,3,4,5,6,7,8,9,10`, namespaceID, start, end)
+GROUP BY 1,2,3,4,5,6,7,8,9,10,11
+ORDER BY 1,2,3,4,5,6,7,8,9,10,11`, namespaceID, start, end)
 	if err != nil {
 		return fmt.Errorf("aggregate request costs: %w", err)
 	}
@@ -308,7 +311,7 @@ ORDER BY 1,2,3,4,5,6,7,8,9,10`, namespaceID, start, end)
 		var dims Dimensions
 		var currency, numerator, known, incomplete string
 		if err := costRows.Scan(&bucket, &dims.APIKeyID, &dims.UserID, &dims.TeamID,
-			&dims.EntrypointID, &dims.RecipeID, &dims.Protocol, &dims.StatusCode, &dims.ErrorCode,
+			&dims.EntrypointID, &dims.RecipeID, &dims.DecisionID, &dims.Protocol, &dims.StatusCode, &dims.ErrorCode,
 			&currency, &numerator, &known, &incomplete); err != nil {
 			return fmt.Errorf("scan request cost rollup: %w", err)
 		}

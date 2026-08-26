@@ -13,6 +13,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentpublication"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agenttoolsource"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentwebsearch"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentworkflow"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendegress"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/routingmanagement"
@@ -32,11 +33,12 @@ const (
 )
 
 type agentRuntimeComposition struct {
-	routes     *managementserver.AgentRoutes
-	workers    []backgroundWorker
-	service    *agentmanagement.Service
-	secrets    *agentruntime.SecretCodec
-	liveEvents *agentruntime.RedisLiveEventBroker
+	routes             *managementserver.AgentRoutes
+	workers            []backgroundWorker
+	service            *agentmanagement.Service
+	secrets            *agentruntime.SecretCodec
+	liveEvents         *agentruntime.RedisLiveEventBroker
+	webSearchTransport *backendegress.Transport
 }
 
 func (composition *agentRuntimeComposition) Close() error {
@@ -48,6 +50,9 @@ func (composition *agentRuntimeComposition) Close() error {
 	}
 	if composition.liveEvents != nil {
 		_ = composition.liveEvents.Close()
+	}
+	if composition.webSearchTransport != nil {
+		composition.webSearchTransport.CloseIdleConnections()
 	}
 	if composition.secrets != nil {
 		composition.secrets.Close()
@@ -170,8 +175,21 @@ func (builder *agentRuntimeBuilder) composeToolsAndAuthority() error {
 	if err != nil {
 		return fmt.Errorf("compose Router-native Agent workflow tools: %w", err)
 	}
+	webSearchTransport, err := backendegress.NewTransport(backendegress.TransportOptions{
+		Guard: backendegress.Guard{Policy: builder.dependencies.EgressPolicy},
+	})
+	if err != nil {
+		return fmt.Errorf("compose Agent web search egress: %w", err)
+	}
+	builder.composition.webSearchTransport = webSearchTransport
+	webSearchTools, err := agentwebsearch.New(agentwebsearch.Options{
+		Client: backendegress.NewHTTPClient(webSearchTransport, false),
+	})
+	if err != nil {
+		return fmt.Errorf("compose Router-native Agent web search: %w", err)
+	}
 	allNativeTools, err := agentruntime.NewCompositeNativeToolProvider(
-		[]agentruntime.NativeToolProvider{nativeTools, workflowTools},
+		[]agentruntime.NativeToolProvider{nativeTools, workflowTools, webSearchTools},
 		agentmanagement.BuiltinBuilderToolNames(),
 	)
 	if err != nil {

@@ -253,12 +253,21 @@ func asciiHostname(host string) bool {
 	if parsed := net.ParseIP(host); parsed != nil {
 		return parsed.String() == host || strings.EqualFold(parsed.String(), host)
 	}
-	for _, char := range host {
-		if char > 127 || (char != '.' && char != '-' && (char < 'a' || char > 'z') && (char < '0' || char > '9')) {
+	if len(host) > 253 || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") || strings.Contains(host, "..") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
 			return false
 		}
+		for _, char := range label {
+			if char > 127 || (char != '-' && char != '_' &&
+				(char < 'a' || char > 'z') && (char < '0' || char > '9')) {
+				return false
+			}
+		}
 	}
-	return !strings.HasPrefix(host, ".") && !strings.HasSuffix(host, ".") && !strings.Contains(host, "..")
+	return true
 }
 
 func validateUUIDs(values map[string]string) error {

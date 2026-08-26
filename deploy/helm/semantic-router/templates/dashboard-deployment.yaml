@@ -10,7 +10,7 @@
 {{- end }}
 {{- if and .Values.dashboard.enabled .Values.dashboard.persistence.enabled }}
 {{- if not (has .Values.dashboard.persistence.accessMode (list "ReadWriteOnce" "ReadWriteOncePod")) }}
-{{- fail "dashboard.persistence.accessMode must be ReadWriteOnce or ReadWriteOncePod: the dashboard's SQLite auth/session store requires single-writer access. ReadWriteMany would allow concurrent writers and corrupt the database" }}
+{{- fail "dashboard.persistence.accessMode must be ReadWriteOnce or ReadWriteOncePod: the dashboard's local SQLite stores require single-writer access. ReadWriteMany would allow concurrent writers and corrupt the databases" }}
 {{- end }}
 {{- end }}
 {{- if .Values.dashboard.enabled }}
@@ -94,6 +94,8 @@ spec:
           value: "{{ .Values.dashboard.persistence.mountPath }}/auth.db"
         - name: DASHBOARD_WORKFLOW_DB_PATH
           value: "{{ .Values.dashboard.persistence.mountPath }}/workflow.sqlite"
+        - name: DASHBOARD_STATUS_DB_PATH
+          value: "{{ .Values.dashboard.persistence.mountPath }}/status.sqlite"
         {{- end }}
         {{- if .Values.dependencies.observability.prometheus.enabled }}
         - name: TARGET_PROMETHEUS_URL

@@ -104,9 +104,10 @@ pricing:
   cache_write_cost_per_million_tokens: "0.12"
 ```
 
-A file-backed Model accepts the existing `api_key` or `api_key_env` credential
-source on each backend reference. Configure exactly one. Prefer `api_key_env` for
-shared or committed manifests:
+A file-backed Model accepts at most one credential source on each backend
+reference: a named `credential` from `global.services.backend_credentials`, an
+inline `api_key`, or `api_key_env`. Omit all three for a no-auth backend. Prefer
+a named credential or `api_key_env` over an inline secret in shared manifests:
 
 ```yaml
 providers:
@@ -292,9 +293,11 @@ global:
         enabled: true
 ```
 
-Requests enter a Recipe only through an explicit Entrypoint alias. A concrete
-Model name selects that Model directly; there is no implicit default Recipe or
-hidden automatic alias.
+Named Recipes are callable only through explicit Entrypoint aliases. A concrete
+Model name selects that Model directly. The preserved top-level `routing`
+shorthand is the sole exception: a complete profile keeps the established
+automatic names unless `global.router.auto_model_names: []` disables them or an
+explicit Entrypoint claims one.
 
 ## Validate and serve
 
@@ -307,9 +310,13 @@ vllm-sr serve --config /path/to/config.yaml
 
 Validation catches schema errors, unresolved references, incompatible recipe
 boundaries, invalid provider bindings, and unsupported plugin or algorithm
-settings before the Router starts. The ordinary local command reads
-`config.yaml` from the current workspace; `--config` selects another immutable
-v0.3 bootstrap manifest. It is not a Model, Recipe, or routing-policy operand.
+settings before the Router starts. The ordinary local command reads `config.yaml`
+from the current workspace. On Docker, if that default file does not exist, the CLI
+creates a secure local Management workspace and a generated v0.3 manifest that
+declares PostgreSQL, Valkey, the Management API, and native access. An existing file
+is never replaced. `--config` selects another immutable v0.3 bootstrap manifest; a
+file that omits the Management and runtime stores is the zero-store file-only path.
+The flag is not a Model, Recipe, routing-policy, or deployment-mode operand.
 
 ## Environment references and secrets
 
@@ -339,9 +346,9 @@ config. Kubernetes deployments place sensitive environment values in Secrets
 rather than ConfigMaps or Helm values. See
 [Security Hardening](security-hardening).
 
-The existing literal `backend_refs[].api_key` input remains accepted for file-backed
-deployments. It is mutually exclusive with `api_key_env`; protect the manifest as a
-credential whenever the literal form is used.
+The literal `backend_refs[].api_key` input remains accepted for file-backed
+deployments. It is mutually exclusive with both `api_key_env` and a named
+`credential`; protect the manifest as a credential whenever the literal form is used.
 
 ## Secure the Management listener
 

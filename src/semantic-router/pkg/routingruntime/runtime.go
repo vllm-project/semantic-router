@@ -35,6 +35,14 @@ type usageSupervisorLifecycle interface {
 	Close() error
 }
 
+type quotaRecoveryLifecycle interface {
+	Reconcile(context.Context) error
+	Run(context.Context) error
+	Started() <-chan struct{}
+	Ready(context.Context) error
+	Close() error
+}
+
 type routingReplicaLifecycle interface {
 	EnsureFleetLease(context.Context) error
 	Run(context.Context) error
@@ -63,6 +71,7 @@ type Runtime struct {
 	publisherWorker        *accesspublisher.Worker
 	publicationCoordinator publicationCoordinator
 	usageSupervisor        usageSupervisorLifecycle
+	quotaRecovery          quotaRecoveryLifecycle
 	routingReplica         routingReplicaLifecycle
 	backendDispatch        backendDispatchLifecycle
 	responseTerminals      backendinvoker.ResponseTerminalStore
@@ -290,6 +299,11 @@ func (runtime *Runtime) reconcileDurableRuntime(ctx context.Context) error {
 			return fmt.Errorf("reconcile usage ledger: %w", err)
 		}
 	}
+	if runtime.quotaRecovery != nil {
+		if err := runtime.quotaRecovery.Reconcile(ctx); err != nil {
+			return fmt.Errorf("reconcile expired quota admissions: %w", err)
+		}
+	}
 	if runtime.outcomeProjector != nil {
 		if _, err := runtime.outcomeProjector.ProcessOnce(ctx); err != nil {
 			return fmt.Errorf("reconcile outcome learning projection: %w", err)
@@ -321,6 +335,9 @@ func (runtime *Runtime) startDurableWorkers(
 	if runtime.usageSupervisor != nil {
 		workerCount++
 	}
+	if runtime.quotaRecovery != nil {
+		workerCount++
+	}
 	if runtime.outcomeProjector != nil {
 		workerCount++
 	}
@@ -332,6 +349,9 @@ func (runtime *Runtime) startDurableWorkers(
 	go runtime.runWorker(workerContext, "routing publication worker stopped", runtime.publisherWorker.Run)
 	if runtime.usageSupervisor != nil {
 		go runtime.runWorker(workerContext, "usage ledger supervisor stopped", runtime.usageSupervisor.Run)
+	}
+	if runtime.quotaRecovery != nil {
+		go runtime.runWorker(workerContext, "quota recovery supervisor stopped", runtime.quotaRecovery.Run)
 	}
 	if runtime.outcomeProjector != nil {
 		go runtime.runWorker(workerContext, "outcome learning projector stopped", runtime.outcomeProjector.Run)
@@ -366,6 +386,14 @@ func (runtime *Runtime) waitForWorkers(ctx context.Context) error {
 	}
 	select {
 	case <-runtime.usageSupervisor.Started():
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+	if runtime.quotaRecovery == nil {
+		return nil
+	}
+	select {
+	case <-runtime.quotaRecovery.Started():
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
@@ -430,6 +458,11 @@ func (runtime *Runtime) Ready(ctx context.Context) error {
 			return err
 		}
 	}
+	if runtime.quotaRecovery != nil {
+		if err := runtime.quotaRecovery.Ready(ctx); err != nil {
+			return err
+		}
+	}
 	if err := runtime.routingReplica.Ready(); err != nil {
 		return err
 	}
@@ -468,6 +501,9 @@ func (runtime *Runtime) Close() error {
 		}
 		if runtime.usageSupervisor != nil {
 			closeErrors = append(closeErrors, runtime.usageSupervisor.Close())
+		}
+		if runtime.quotaRecovery != nil {
+			closeErrors = append(closeErrors, runtime.quotaRecovery.Close())
 		}
 		if closer, ok := runtime.management.(io.Closer); ok {
 			closeErrors = append(closeErrors, closer.Close())

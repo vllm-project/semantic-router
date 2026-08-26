@@ -260,6 +260,80 @@ redis.call('ZADD', KEYS[5], expires, ARGV[1])
 return tostring(expires)
 `)
 
+// activeReplicaReadinessScript linearizes Management credential delivery with
+// the generation actually serving inference. KEYS[1:3] and every registration
+// key share one quota-partition hash slot. ARGV[1:4] identify the exact expected
+// generation; the remaining arguments map one-for-one to registration keys.
+var activeReplicaReadinessScript = redis.NewScript(`
+local expected_count = #ARGV - 4
+if #KEYS ~= expected_count + 3 then
+  return redis.error_reply('ACTIVE_READINESS_INPUT_INVALID')
+end
+
+local access_publication = redis.call('HGET', KEYS[1], 'publication_id') or ''
+local routing_publication = redis.call('HGET', KEYS[2], 'publication_id') or ''
+local access_revision = redis.call('HGET', KEYS[1], 'revision') or ''
+local routing_revision = redis.call('HGET', KEYS[2], 'revision') or ''
+local access_epoch = redis.call('HGET', KEYS[1], 'runtime_epoch') or ''
+local routing_epoch = redis.call('HGET', KEYS[2], 'runtime_epoch') or ''
+if access_publication ~= ARGV[1] or routing_publication ~= ARGV[1]
+   or access_revision ~= ARGV[2] or routing_revision ~= ARGV[2]
+   or access_epoch ~= ARGV[3] or routing_epoch ~= ARGV[3] then
+  return redis.error_reply('EXPECTED_PUBLICATION_CHANGED')
+end
+
+local access_digest = redis.call('HGET', KEYS[1], 'publication_digest') or ''
+local routing_digest = redis.call('HGET', KEYS[2], 'publication_digest') or ''
+local manifest_digest = redis.call('HGET', KEYS[1], 'manifest_digest') or ''
+local snapshot_digest = redis.call('HGET', KEYS[2], 'snapshot_digest') or ''
+local snapshot_key = redis.call('HGET', KEYS[2], 'snapshot_key') or ''
+if #access_digest ~= 64 or access_digest ~= routing_digest or #manifest_digest ~= 64
+   or snapshot_digest ~= ARGV[4] or snapshot_key == '' then
+  return redis.error_reply('ACTIVE_GATE_CORRUPT')
+end
+
+local now = redis.call('TIME')
+local now_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)
+redis.call('ZREMRANGEBYSCORE', KEYS[3], '-inf', now_ms)
+local live = redis.call('ZRANGE', KEYS[3], 0, -1)
+if #live == 0 then
+  return redis.error_reply('NO_ACTIVE_REPLICAS')
+end
+if #live ~= expected_count then
+  return redis.error_reply('ACTIVE_MEMBERSHIP_CHANGED')
+end
+
+local supplied = {}
+for index = 1, expected_count do
+  local replica_id = ARGV[index + 4]
+  if replica_id == '' or supplied[replica_id] then
+    return redis.error_reply('ACTIVE_READINESS_INPUT_INVALID')
+  end
+  supplied[replica_id] = index
+end
+for _, replica_id in ipairs(live) do
+  if not supplied[replica_id] then
+    return redis.error_reply('ACTIVE_MEMBERSHIP_CHANGED')
+  end
+end
+
+local missing = {}
+for index = 1, expected_count do
+  local replica_id = ARGV[index + 4]
+  local registration_key = KEYS[index + 3]
+  local score = tonumber(redis.call('ZSCORE', KEYS[3], replica_id) or '0')
+  local lease = tonumber(redis.call('HGET', registration_key, 'lease_expires_at_ms') or '0')
+  if score <= now_ms or lease <= now_ms or score ~= lease
+     or (redis.call('HGET', registration_key, 'replica_id') or '') ~= replica_id
+     or (redis.call('HGET', registration_key, 'runtime_epoch') or '') ~= ARGV[3]
+     or (redis.call('HGET', registration_key, 'access_publication') or '') ~= ARGV[1]
+     or (redis.call('HGET', registration_key, 'routing_publication') or '') ~= ARGV[1] then
+    missing[#missing + 1] = replica_id
+  end
+end
+return missing
+`)
+
 var acknowledgeScript = redis.NewScript(`
 local now = redis.call('TIME')
 local now_ms = tonumber(now[1]) * 1000 + math.floor(tonumber(now[2]) / 1000)

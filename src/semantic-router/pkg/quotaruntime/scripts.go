@@ -34,6 +34,12 @@ var (
 	//go:embed scripts/read_attempt_evidence.lua
 	readAttemptEvidenceLua string
 
+	//go:embed scripts/next_expired.lua
+	nextExpiredLua string
+
+	//go:embed scripts/read_expired.lua
+	readExpiredLua string
+
 	//go:embed scripts/finalize.lua
 	finalizeLua string
 
@@ -59,6 +65,8 @@ var (
 	beginAttemptScript          = redis.NewScript(exactLua + "\n" + beginAttemptLua)
 	finishAttemptScript         = redis.NewScript(exactLua + "\n" + finishAttemptLua)
 	readAttemptEvidenceScript   = redis.NewScript(exactLua + "\n" + readAttemptEvidenceLua)
+	nextExpiredScript           = redis.NewScript(exactLua + "\n" + nextExpiredLua)
+	readExpiredScript           = redis.NewScript(exactLua + "\n" + readExpiredLua)
 	finalizeScript              = redis.NewScript(exactLua + "\n" + finalizeLua)
 	releaseConcurrencyScript    = redis.NewScript(exactLua + "\n" + releaseConcurrencyLua)
 	readMetersScript            = redis.NewScript(exactLua + "\n" + readMetersLua)

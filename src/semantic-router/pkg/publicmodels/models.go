@@ -46,12 +46,31 @@ type OpenAIModelList struct {
 	Data   []OpenAIModel `json:"data"`
 }
 
+// ModelListBuildOptions controls candidate construction without changing the
+// public visibility policy stored in RouterConfig. Callers that include backend
+// model candidates must apply an authorization filter before exposing the result.
+type ModelListBuildOptions struct {
+	IncludeBackendModelCandidates bool
+}
+
 // NewOpenAIModelList builds the public model catalog from the effective router
 // configuration. The source determines only its stable public behavior.
 func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList {
+	return NewOpenAIModelListWithOptions(cfg, created, ModelListBuildOptions{})
+}
+
+// NewOpenAIModelListWithOptions builds a model catalog for a caller-owned
+// filtering pipeline. The default constructor remains the safe public-list
+// boundary and continues to honor include_config_models_in_list.
+func NewOpenAIModelListWithOptions(
+	cfg *config.RouterConfig,
+	created int64,
+	options ModelListBuildOptions,
+) OpenAIModelList {
 	builder := modelListBuilder{
-		created: created,
-		seen:    map[string]struct{}{},
+		created:                       created,
+		includeBackendModelCandidates: options.IncludeBackendModelCandidates,
+		seen:                          map[string]struct{}{},
 	}
 	builder.appendEntrypointAliases(cfg)
 	builder.appendBackendModels(cfg)
@@ -63,9 +82,10 @@ func NewOpenAIModelList(cfg *config.RouterConfig, created int64) OpenAIModelList
 }
 
 type modelListBuilder struct {
-	created int64
-	models  []OpenAIModel
-	seen    map[string]struct{}
+	created                       int64
+	includeBackendModelCandidates bool
+	models                        []OpenAIModel
+	seen                          map[string]struct{}
 }
 
 func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
@@ -79,7 +99,7 @@ func (b *modelListBuilder) appendEntrypointAliases(cfg *config.RouterConfig) {
 }
 
 func (b *modelListBuilder) appendBackendModels(cfg *config.RouterConfig) {
-	if cfg == nil || !cfg.IncludeConfigModelsInList {
+	if cfg == nil || (!cfg.IncludeConfigModelsInList && !b.includeBackendModelCandidates) {
 		return
 	}
 	b.appendAll(cfg.GetAllModels(), upstreamEndpointOwner, "", passthroughRoute())

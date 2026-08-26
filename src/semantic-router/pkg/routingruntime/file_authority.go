@@ -110,6 +110,7 @@ func newFileAuthorityRuntime(
 		runtime.responseTerminals,
 		egressPolicy,
 		options.BackendDialTimeout,
+		runtime.Ready,
 	)
 	if composeErr != nil {
 		return nil, composeErr

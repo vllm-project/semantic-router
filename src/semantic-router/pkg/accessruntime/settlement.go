@@ -63,6 +63,7 @@ func (r *Runtime) Settle(ctx context.Context, request SettlementRequest) (quotar
 		DispatchCount:      snapshot.dispatchCount,
 		EvidenceRevision:   snapshot.revision,
 		Event:              request.Event,
+		EventEvidenceState: request.EventEvidenceState,
 		FenceID:            request.FenceID,
 		Rules:              cloneRuleBindings(state.rules),
 		Evidence:           evidence,

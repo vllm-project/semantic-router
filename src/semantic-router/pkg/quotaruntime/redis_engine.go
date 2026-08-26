@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 const (
@@ -21,10 +22,11 @@ const (
 
 type RedisEngineOptions struct {
 	FinalizationMarkerTTL time.Duration
-	// MaxUsageBacklog is the largest already-settled usage stream backlog at
-	// which a new admission may start. The check runs in the same partition
-	// script as access and quota admission, so every replica observes one
-	// global boundary. Terminal finalization is deliberately never rejected:
+	// MaxUsageBacklog is the largest unprocessed usage backlog at which a new
+	// admission may start. Backlog is consumer-group lag plus pending delivery,
+	// so acknowledged stream history is excluded. The check runs in the same
+	// partition script as access and quota admission, so every replica observes
+	// one global boundary. Terminal finalization is deliberately never rejected:
 	// requests admitted below the boundary must remain accountably settleable.
 	MaxUsageBacklog int64
 	KeyPrefix       string
@@ -154,6 +156,10 @@ func (e *RedisEngine) Admit(ctx context.Context, request AdmissionRequest) (Admi
 	if admitErr != nil {
 		return AdmissionResult{}, admitErr
 	}
+	recoveryRecord, recoveryDigest, admitErr := encodeAdmissionRecoveryRecord(request.Recovery, request.Rules)
+	if admitErr != nil {
+		return AdmissionResult{}, admitErr
+	}
 	partition, _ := newPartitionKeysWithPrefix(e.keyPrefix, request.Partition)
 	preconditions := append([]AdmissionPrecondition(nil), request.Preconditions...)
 	sortAdmissionPreconditions(preconditions)
@@ -161,8 +167,11 @@ func (e *RedisEngine) Admit(ctx context.Context, request AdmissionRequest) (Admi
 		request.LeaseDuration.Milliseconds(),
 		preconditions,
 		rules,
+		recoveryDigest,
 	)
-	keys, args, admitErr := e.buildAdmissionScriptInput(request, partition, preconditions, rules, planFingerprint)
+	keys, args, admitErr := e.buildAdmissionScriptInput(
+		request, partition, preconditions, rules, planFingerprint, recoveryRecord, recoveryDigest,
+	)
 	if admitErr != nil {
 		return AdmissionResult{}, admitErr
 	}
@@ -182,6 +191,8 @@ func (e *RedisEngine) buildAdmissionScriptInput(
 	preconditions []AdmissionPrecondition,
 	rules []compiledRule,
 	planFingerprint string,
+	recoveryRecord string,
+	recoveryDigest string,
 ) ([]string, []any, error) {
 	keys := []string{
 		partition.pendingIndex,
@@ -196,6 +207,8 @@ func (e *RedisEngine) buildAdmissionScriptInput(
 		planFingerprint,
 		strconv.Itoa(len(preconditions)),
 		strconv.Itoa(len(rules)),
+		recoveryRecord,
+		recoveryDigest,
 	}
 	for _, precondition := range preconditions {
 		keys = append(keys, precondition.Key)
@@ -232,7 +245,7 @@ func (e *RedisEngine) buildAdmissionScriptInput(
 	// offsets stay stable. The Lua admission contract treats this as a pure
 	// backpressure observation before it mutates any counter or pending record.
 	keys = append(keys, partition.usageStream)
-	args = append(args, strconv.FormatInt(e.maxUsageBacklog, 10))
+	args = append(args, usageledger.ConsumerGroupName, strconv.FormatInt(e.maxUsageBacklog, 10))
 	if err := validateRuntimeKeys(keys, partition.tag, e.keyPrefix); err != nil {
 		return nil, nil, err
 	}

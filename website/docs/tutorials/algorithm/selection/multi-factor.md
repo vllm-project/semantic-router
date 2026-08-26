@@ -66,7 +66,7 @@ If all candidates are filtered out, behavior is controlled by `on_no_candidates`
 
 | Value | Behavior |
 |---|---|
-| `cheapest` (default) | Return the candidate with the lowest configured `prompt_per_1m` |
+| `cheapest` (default) | Return the candidate with the lowest configured `providers.models[].pricing.input_cost_per_million_tokens` |
 | `first` | Return the first candidate as listed |
 | `fail` | Return an error to the caller |
 

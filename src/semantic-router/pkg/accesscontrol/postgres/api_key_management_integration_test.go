@@ -197,7 +197,7 @@ func newAPIKeyIntegrationService(t *testing.T, repository apikeymanagement.Repos
 		t.Fatal(err)
 	}
 	service, err := apikeymanagement.NewService(apikeymanagement.Options{
-		Repository: repository, Commands: commands,
+		Repository: repository, Waiter: immediateAPIKeyPublicationWaiter{}, Commands: commands,
 		CursorKeyring: securitykeyring.Symmetric{ActiveVersion: "cursor-v1", Keys: map[string][]byte{
 			"cursor-v1": []byte(strings.Repeat("u", 32)),
 		}},
@@ -208,10 +208,17 @@ func newAPIKeyIntegrationService(t *testing.T, repository apikeymanagement.Repos
 			"response-v1": []byte(strings.Repeat("r", 32)),
 		}},
 		IdempotencyTTL: time.Hour, SecretDeliveryTTL: 10 * time.Minute,
+		PublicationTimeout: 5 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(service.Close)
 	return service
+}
+
+type immediateAPIKeyPublicationWaiter struct{}
+
+func (immediateAPIKeyPublicationWaiter) WaitAPIKeyActive(context.Context, string, string, string) error {
+	return nil
 }

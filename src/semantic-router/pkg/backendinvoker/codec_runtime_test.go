@@ -203,7 +203,7 @@ func chatStreamFixture() string {
 }
 
 func splitChatStreamFixture() ([]byte, []byte) {
-	first := []byte("data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"}}]}\n\n")
+	first := []byte("data: {\"id\":\"response_1\",\"model\":\"source-model\",\"prompt_text\":null,\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"}}]}\n\n")
 	second := []byte("data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
 		"data: {\"id\":\"response_1\",\"model\":\"source-model\",\"choices\":[],\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":1,\"total_tokens\":3}}\n\n" +
 		"data: [DONE]\n\n")

@@ -32,6 +32,15 @@ static_resources:
                 route:
                   cluster: backend_dispatch_cluster
                   timeout: 0s
+                typed_per_filter_config:
+                  envoy.filters.http.cors:
+                    "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.CorsPolicy
+                    allow_origin_string_match:
+                    - prefix: ""
+                    allow_methods: "GET, POST, OPTIONS"
+                    allow_headers: "authorization, content-type, accept, x-vsr-debug, x-session-id"
+                    expose_headers: "*"
+                    max_age: "86400"
           http_filters:
           # Sanitize before ExtProc. Route-level removal would also delete the
           # short-lived capability that ExtProc adds for backend dispatch.
@@ -50,6 +59,9 @@ static_resources:
                       request_handle:headers():remove(name)
                     end
                   end
+          - name: envoy.filters.http.cors
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.filters.http.cors.v3.Cors
           - name: envoy.filters.http.ext_proc
             typed_config:
               "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
@@ -108,6 +120,14 @@ static_resources:
     dns_lookup_family: V4_ONLY
     {% endif %}
     lb_policy: ROUND_ROBIN
+    health_checks:
+    - timeout: 2s
+      interval: 2s
+      no_traffic_interval: 2s
+      unhealthy_threshold: 1
+      healthy_threshold: 1
+      http_health_check:
+        path: /ready
     load_assignment:
       cluster_name: backend_dispatch_cluster
       endpoints:

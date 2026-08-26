@@ -111,8 +111,13 @@ satisfy the algorithm's candidate requirements.
 | Requested model | Router behavior |
 | --- | --- |
 | An Entrypoint `model_names` value | Evaluate only its compiled Recipe and assignments. |
-| Any other name | No Entrypoint alias is created implicitly. |
+| A preserved top-level automatic name | Evaluate the top-level routing profile when it is complete and no explicit Entrypoint claims the name. |
 | A concrete Model name, alias, or LoRA name | Send directly to that Model without Recipe routing. |
+| Any other name | Reject it; no additional Entrypoint alias is created implicitly. |
+
+The preserved automatic names are `vllm-sr/auto`, `auto`, and `MoM` (or the
+configured primary name). Set `global.router.auto_model_names: []` to disable
+them; an explicit Entrypoint is authoritative when it claims one of them.
 
 Entrypoints are listed by `/v1/models` with routing metadata. Successful routed
 responses expose `x-vsr-selected-recipe`; Router Replay and Insights can also

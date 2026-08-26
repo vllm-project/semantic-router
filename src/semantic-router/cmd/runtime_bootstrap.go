@@ -504,6 +504,7 @@ func startAPIServerIfEnabled(
 	ctx context.Context,
 	opts runtimeOptions,
 	runtimeRegistry *routerruntime.Registry,
+	runtimeReadiness apiserver.RuntimeReadiness,
 	managementAPI apiserver.ManagementAPI,
 ) (*apiServerLifecycle, error) {
 	if !opts.enableAPI {
@@ -530,15 +531,16 @@ func startAPIServerIfEnabled(
 			"management_remote_exposure": opts.managementRemoteExpose,
 		})
 		if err := apiserver.InitWithOptions(apiserver.InitOptions{
-			Context:         serverContext,
-			OnListenerStart: func(err error) { listenerStarted <- err },
-			ConfigPath:      opts.configPath,
-			Port:            opts.apiPort,
-			BindAddress:     opts.apiBind,
-			RemoteExposure:  opts.managementRemoteExpose,
-			AuthMode:        opts.managementAuthMode,
-			RuntimeRegistry: runtimeRegistry,
-			ManagementAPI:   managementAPI,
+			Context:          serverContext,
+			OnListenerStart:  func(err error) { listenerStarted <- err },
+			ConfigPath:       opts.configPath,
+			Port:             opts.apiPort,
+			BindAddress:      opts.apiBind,
+			RemoteExposure:   opts.managementRemoteExpose,
+			AuthMode:         opts.managementAuthMode,
+			RuntimeRegistry:  runtimeRegistry,
+			ManagementAPI:    managementAPI,
+			RuntimeReadiness: runtimeReadiness,
 		}); err != nil {
 			logging.ComponentErrorEvent("router", "api_server_failed", map[string]interface{}{
 				"api_port": opts.apiPort,

@@ -21,9 +21,10 @@ Integration Registry composition and adapter rollout.
 ## Router bootstrap configuration
 
 Router YAML always declares the v0.3 routing bootstrap plus optional infrastructure
-and service capabilities. A file-only deployment serves that routing value directly;
-with a Management store, Router seeds only an empty store and uses persisted desired
-state thereafter.
+and service capabilities. A file-only deployment serves that routing value directly.
+When a Management store is empty, Router seeds it atomically from the same manifest;
+after that transaction, persisted desired state is authoritative and later file edits
+are never merged implicitly.
 `global.services.management_api` owns the Management listener, transport
 authentication entrypoint, and one-time bootstrap ceremony. Durable principals, roles,
 bindings, issuers, and sessions are Management resources, not YAML mappings. The
@@ -95,12 +96,14 @@ global:
           loopback_only: true
 ```
 
-Every secret field supports one environment reference or one secret-file reference,
-never both. Keyrings contain an active version and retained verification/decryption
-versions so pepper, KEK, and signing-key rotation do not require an unsafe flag day.
-Literal DSNs or key material are rejected by the runtime contract. Enabling recovery also
-requires a separate `token_file`; omitting it, reusing the bootstrap token, or exposing
-the recovery route off loopback is a startup error.
+Every infrastructure secret field in this block supports one environment reference or
+one secret-file reference, never both. Keyrings contain an active version and retained
+verification/decryption versions so pepper, KEK, and signing-key rotation do not
+require an unsafe flag day. Literal store DSNs, TLS private keys, keyrings, bootstrap
+tokens, and recovery tokens are rejected by the runtime contract. This restriction is
+separate from the file-backed Model `api_key` authoring input described below.
+Enabling recovery also requires a separate `token_file`; omitting it, reusing the
+bootstrap token, or exposing the recovery route off loopback is a startup error.
 
 The configured `routing_security.hmac_keyring_file` or
 `routing_security.hmac_keyring_env` source provides a dedicated 256-bit, versioned
@@ -191,26 +194,34 @@ global:
 ```
 
 The manifest is read-only and compiled before readiness. A file-backed backend may
-reference a named environment/file/Secret credential declared in bootstrap, never a
-literal secret or dynamic ProviderCredential UID. The compiler creates the same
-in-process backend-credential interface without persistence or reveal. Users, Teams,
-keys, policies, bindings, usage, and audit never appear in YAML. When the Management
-store is present, Models, Recipes, and Entrypoints are seeded only into an empty
-Namespace and later changed through explicit Management API imports or mutations.
+use exactly one of a named bootstrap `credential`, `api_key_env`, or inline `api_key`;
+the named or environment-backed forms are preferred. An inline value remains part of
+the public file schema, but makes the whole manifest secret-bearing and is never
+returned by configuration APIs. File-backed Models cannot reference a dynamic
+ProviderCredential UID. The compiler creates the same in-process backend-credential
+interface without persistence or reveal. Users, Teams, inference API keys, policies,
+bindings, usage, and audit never appear in YAML. When the Management store is present,
+Models, Recipes, and Entrypoints are seeded only into an empty Namespace and later
+changed through explicit Management API imports or mutations.
 
-The user-facing launch contract is one command: `vllm-sr serve`. It resolves
-`./config.yaml`, or the immutable v0.3 manifest selected by `--config`, and starts
-the capability-derived topology. Built-in Recipes are installed into persistent
+The user-facing launch contract is one command: `vllm-sr serve`. Docker uses an
+existing `./config.yaml` or the immutable v0.3 manifest selected by `--config`. If the
+default file is absent, the CLI creates a secure local Management workspace whose
+generated manifest declares PostgreSQL, Valkey, Management API, and native access.
+Kubernetes requires an explicit manifest. In every case the typed blocks determine
+the topology; there is no mode field. Built-in Recipes are installed into persistent
 desired state when configured; Models, Entrypoints, decision assignments, and fallback
 priorities are configured through the Management API. Portable Recipe packages are
 validated or imported through those same resources. Infrastructure flags such as
 target, image, platform, namespace, and secret sources configure deployment only.
 File-backed startup reads exactly one immutable manifest, and `--config` selects that
-bootstrap manifest without authoring routing state.
+complete bootstrap rather than a Model, Recipe, or deployment mode.
 
 ## Docker-first deployment
 
-The minimum topology depends on configured capabilities:
+The minimum topology depends on configured capabilities. On fresh local Docker
+startup, the generated Management-workspace manifest selects the last row; an
+explicit manifest that omits both stores selects the first:
 
 | Configuration | Required | Dynamic behavior |
 | --- | --- | --- |

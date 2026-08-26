@@ -248,8 +248,9 @@ func admissionPlanFingerprint(
 	leaseMilliseconds int64,
 	preconditions []AdmissionPrecondition,
 	rules []compiledRule,
+	recoveryDigest string,
 ) string {
-	fields := []string{strconv.FormatInt(leaseMilliseconds, 10)}
+	fields := []string{strconv.FormatInt(leaseMilliseconds, 10), recoveryDigest}
 	for _, precondition := range preconditions {
 		fields = append(fields,
 			precondition.Key,

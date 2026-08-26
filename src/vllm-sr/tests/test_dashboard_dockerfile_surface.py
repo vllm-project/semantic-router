@@ -550,6 +550,8 @@ def test_router_entrypoint_does_not_override_management_listener_config() -> Non
     assert "-enable-api=true" in content
     assert "-api-port=" not in content
     assert "-api-bind=" not in content
+    assert "data.get('setup')" not in content
+    assert "Setup mode enabled" not in content
 
 
 @pytest.mark.parametrize("entrypoint", [VLLM_SR_ENTRYPOINT, EXTPROC_ENTRYPOINT])

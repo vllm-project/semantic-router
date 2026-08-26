@@ -42,14 +42,22 @@ pricing:
   cache_write_cost_per_million_tokens: "0.625"
 ```
 
-Static authoring and Management CRUD/import/export use this same logical shape.
-Empty and default-only fields are omitted. A fixed-origin Integration lets the
-control plane fill its default endpoint; a no-auth backend omits key fields. The
-authoring value never contains generated IDs, revisions, catalog hashes, or compiled
-backend data. File authoring preserves the existing mutually exclusive
-`backend_refs[].api_key` and `backend_refs[].api_key_env` inputs; environment
-references are preferred for shared manifests. Dynamic resource APIs accept only
-ProviderCredential references and never return secret material in Model responses.
+Static authoring and Management CRUD/import/export use the same Model semantics, not
+the same wire serialization. YAML preserves the readable-name split between the
+provider Model and `routing.modelCards`. A Management write presents the card fields,
+backend inputs, `control`, and `pricing` as one revisioned Model resource, while its
+read-only Model-card projection is the only view exposed to Recipe and DSL authoring.
+Management JSON uses camelCase and resource IDs; human YAML uses the v0.3 names shown
+above. Empty and default-only fields are omitted from human export. A fixed-origin
+Integration lets the control plane fill its default endpoint; a no-auth backend
+omits key fields. The authoring value never contains generated IDs, revisions,
+catalog hashes, or compiled backend data. File authoring preserves three mutually
+exclusive credential inputs: `backend_refs[].credential` references a named
+`global.services.backend_credentials` entry, while `backend_refs[].api_key` and
+`backend_refs[].api_key_env` retain their direct and environment-backed forms.
+Named credentials or environment references are preferred for shared manifests.
+Dynamic resource APIs accept only ProviderCredential references and never return
+secret material in Model responses.
 
 Reasoning keeps wire behavior and semantic support separate as well. The physical
 Model selects a named `providers.defaults.reasoning_families` entry through

@@ -24,9 +24,12 @@ vllm-sr serve
 ```
 
 `vllm-sr serve` uses `config.yaml` in the current directory as its static
-bootstrap. When the Management API is configured, the Dashboard can create and
-publish Models, Recipes, assignments, and Entrypoints without rewriting that
-file.
+bootstrap. If the file is absent, the first Docker run creates the secure local
+Management workspace; its generated manifest declares PostgreSQL, Valkey, the
+Management API, and native access. An existing file is used as authored, so a
+manifest without those store and service blocks remains file-only. When the
+Management API is configured, the Dashboard can create and publish Models, Recipes,
+assignments, and Entrypoints without rewriting that file.
 
 Select another v0.3 bootstrap without copying it into the workspace:
 
@@ -102,11 +105,12 @@ vllm-sr dashboard
 vllm-sr stop
 ```
 
-Use `--minimal` to run only Router and Envoy, without Dashboard or the optional
-observability stack. Prometheus, Grafana, and Jaeger are not ordinary `serve`
-dependencies; add `--with-observability` to start them. Use `--readonly` to keep the Dashboard available without
-allowing configuration changes. Neither Dashboard nor observability is needed
-for request routing or access enforcement. Pin images and review
+Use `--minimal` to omit Dashboard; it does not remove PostgreSQL or Valkey when the
+selected manifest requires them. Prometheus, Grafana, and Jaeger are not ordinary
+`serve` dependencies; add `--with-observability` to start them. Use `--readonly` to
+keep the Dashboard available without allowing configuration changes. Neither
+Dashboard nor observability is needed for request routing or access enforcement. Pin
+images and review
 [Security Hardening](security-hardening) before exposing a listener beyond a
 trusted host.
 

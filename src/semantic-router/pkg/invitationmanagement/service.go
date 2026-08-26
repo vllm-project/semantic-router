@@ -30,35 +30,41 @@ const (
 )
 
 type Options struct {
-	Repository        Repository
-	Commands          *managementcommand.Codec
-	CursorKeyring     securitykeyring.Symmetric
-	InvitationPeppers accesscredential.PepperKeyring
-	ResponseKEK       accesscredential.KEKKeyring
-	FirstKeys         FirstKeyPreparer
-	IdempotencyTTL    time.Duration
-	SecretDeliveryTTL time.Duration
-	Now               func() time.Time
-	NewID             func() string
+	Repository         Repository
+	Commands           *managementcommand.Codec
+	CursorKeyring      securitykeyring.Symmetric
+	InvitationPeppers  accesscredential.PepperKeyring
+	ResponseKEK        accesscredential.KEKKeyring
+	FirstKeys          FirstKeyPreparer
+	PublicationWaiter  FirstKeyPublicationWaiter
+	IdempotencyTTL     time.Duration
+	SecretDeliveryTTL  time.Duration
+	PublicationTimeout time.Duration
+	Now                func() time.Time
+	NewID              func() string
 }
 
 type Service struct {
-	repository        Repository
-	commands          *managementcommand.Codec
-	cursors           cursorCodec
-	tokens            *tokenCodec
-	responseKEK       accesscredential.KEKKeyring
-	firstKeys         FirstKeyPreparer
-	idempotencyTTL    time.Duration
-	secretDeliveryTTL time.Duration
-	now               func() time.Time
-	newID             func() string
+	repository         Repository
+	commands           *managementcommand.Codec
+	cursors            cursorCodec
+	tokens             *tokenCodec
+	responseKEK        accesscredential.KEKKeyring
+	firstKeys          FirstKeyPreparer
+	publicationWaiter  FirstKeyPublicationWaiter
+	idempotencyTTL     time.Duration
+	secretDeliveryTTL  time.Duration
+	publicationTimeout time.Duration
+	now                func() time.Time
+	newID              func() string
 }
 
 func NewService(options Options) (*Service, error) {
 	if options.Repository == nil || options.Commands == nil ||
 		options.IdempotencyTTL < minimumIdempotencyTTL || options.IdempotencyTTL > maximumIdempotencyTTL ||
 		options.SecretDeliveryTTL < minimumSecretDeliveryTTL || options.SecretDeliveryTTL > maximumSecretDeliveryTTL ||
+		(options.FirstKeys != nil && (options.PublicationWaiter == nil || options.PublicationTimeout <= 0 ||
+			options.PublicationTimeout > 30*time.Second)) ||
 		options.ResponseKEK.Validate() != nil {
 		return nil, ErrUnavailable
 	}
@@ -82,8 +88,10 @@ func NewService(options Options) (*Service, error) {
 	return &Service{
 		repository: options.Repository, commands: options.Commands, cursors: cursors, tokens: tokens,
 		responseKEK: options.ResponseKEK.Clone(), firstKeys: options.FirstKeys,
-		idempotencyTTL: options.IdempotencyTTL, secretDeliveryTTL: options.SecretDeliveryTTL,
-		now: now, newID: newID,
+		publicationWaiter: options.PublicationWaiter,
+		idempotencyTTL:    options.IdempotencyTTL, secretDeliveryTTL: options.SecretDeliveryTTL,
+		publicationTimeout: options.PublicationTimeout,
+		now:                now, newID: newID,
 	}, nil
 }
 
@@ -216,7 +224,7 @@ func (service *Service) Create(ctx context.Context, request CreateRequest) (Secr
 		Expected: request.Expected, DisplayName: request.DisplayName, Snapshot: snapshot,
 		ExpiresAt: request.ExpiresAt.UTC(), Status: StatusPending, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
-	body, createErr := json.Marshal(issuedInvitation{Data: invitation, Token: token, DeliveryExpiresAt: deliveryExpiresAt})
+	invitation, body, createErr := marshalIssuedInvitation(invitation, token, deliveryExpiresAt)
 	if createErr != nil {
 		return SecretResult{}, ErrUnavailable
 	}
@@ -283,7 +291,7 @@ func (service *Service) Rotate(ctx context.Context, request RotateRequest) (Secr
 	updated := current
 	updated.ExpiresAt, updated.Revision, updated.UpdatedAt = expiresAt, current.Revision+1, now
 	deliveryExpiresAt := now.Add(service.secretDeliveryTTL)
-	body, rotateErr := json.Marshal(issuedInvitation{Data: updated, Token: token, DeliveryExpiresAt: deliveryExpiresAt})
+	updated, body, rotateErr := marshalIssuedInvitation(updated, token, deliveryExpiresAt)
 	if rotateErr != nil {
 		return SecretResult{}, ErrUnavailable
 	}
@@ -354,6 +362,7 @@ func (service *Service) prepareAcceptance(ctx context.Context, request AcceptReq
 	}
 	seal := service.acceptanceSealer(invitation, ids.userID, firstKey, now)
 	return AcceptMutation{
+		NamespaceID:  invitation.NamespaceID,
 		InvitationID: invitation.ID, TokenHMAC: append([]byte(nil), digest...), PepperVersion: pepperVersion,
 		Identity: request.Identity, PrincipalID: ids.principalID, UserID: ids.userID,
 		RoleBindingIDs: ids.roleBindingIDs, AccessBindingID: ids.accessBindingID,
@@ -389,7 +398,7 @@ func (service *Service) Onboard(ctx context.Context, request PrivilegedOnboardin
 		if err != nil {
 			return PrivilegedOnboardingResult{}, err
 		}
-		return service.replayOnboarding(command, stored, now)
+		return service.replayOnboarding(ctx, command, stored, now)
 	}
 	snapshot, onboardErr := service.resolveOnboardingSnapshot(ctx, request)
 	if onboardErr != nil {
@@ -418,13 +427,33 @@ func (service *Service) Onboard(ctx context.Context, request PrivilegedOnboardin
 		return PrivilegedOnboardingResult{}, onboardErr
 	}
 	body, result, onboardErr := service.openAcceptance(envelope)
-	return PrivilegedOnboardingResult{Result: result, CanonicalJSON: body, Replayed: envelope.Replayed}, onboardErr
+	if onboardErr != nil {
+		zero(body)
+		return PrivilegedOnboardingResult{}, onboardErr
+	}
+	if onboardErr = service.waitFirstKeyActive(ctx, request.NamespaceID, result); onboardErr != nil {
+		zero(body)
+		return PrivilegedOnboardingResult{}, onboardErr
+	}
+	return PrivilegedOnboardingResult{Result: result, CanonicalJSON: body, Replayed: envelope.Replayed}, nil
 }
 
 type issuedInvitation struct {
 	Data              Invitation `json:"data"`
 	Token             string     `json:"token"`
 	DeliveryExpiresAt time.Time  `json:"deliveryExpiresAt"`
+}
+
+func marshalIssuedInvitation(
+	invitation Invitation,
+	token string,
+	deliveryExpiresAt time.Time,
+) (Invitation, []byte, error) {
+	invitation.Snapshot = cloneSnapshot(invitation.Snapshot)
+	body, err := json.Marshal(issuedInvitation{
+		Data: invitation, Token: token, DeliveryExpiresAt: deliveryExpiresAt,
+	})
+	return invitation, body, err
 }
 
 func (service *Service) replayInvitationSecret(_ context.Context, command managementcommand.Command, stored StoredSecret, now time.Time) (SecretResult, error) {
@@ -449,7 +478,7 @@ func (service *Service) replayInvitationSecret(_ context.Context, command manage
 	return SecretResult{Invitation: decoded.Data, Token: decoded.Token, CanonicalJSON: body, Replayed: true}, nil
 }
 
-func (service *Service) replayOnboarding(command managementcommand.Command, stored StoredSecret, now time.Time) (PrivilegedOnboardingResult, error) {
+func (service *Service) replayOnboarding(ctx context.Context, command managementcommand.Command, stored StoredSecret, now time.Time) (PrivilegedOnboardingResult, error) {
 	if stored.Result.ResourceType != "onboarding" || !now.Before(stored.Secret.ExpiresAt) {
 		return PrivilegedOnboardingResult{}, ErrSecretExpired
 	}
@@ -464,7 +493,35 @@ func (service *Service) replayOnboarding(command managementcommand.Command, stor
 		zero(body)
 		return PrivilegedOnboardingResult{}, ErrUnavailable
 	}
+	if err := service.waitFirstKeyActive(ctx, command.Scope.NamespaceID, result); err != nil {
+		zero(body)
+		return PrivilegedOnboardingResult{}, err
+	}
 	return PrivilegedOnboardingResult{Result: result, CanonicalJSON: body, Replayed: true}, nil
+}
+
+func (service *Service) waitFirstKeyActive(
+	ctx context.Context,
+	namespaceID string,
+	result AcceptanceResult,
+) error {
+	if result.APIKeyID == "" && result.APIKey == "" {
+		return nil
+	}
+	if service == nil || service.publicationWaiter == nil || service.publicationTimeout <= 0 ||
+		!canonicalUUID(namespaceID) || !canonicalUUID(result.APIKeyID) || result.APIKey == "" {
+		return ErrUnavailable
+	}
+	kind, publicID, err := accesscredential.PublicID(result.APIKey)
+	if err != nil || kind != accesscredential.KindAPIKey {
+		return ErrUnavailable
+	}
+	waitCtx, cancel := context.WithTimeout(ctx, service.publicationTimeout)
+	defer cancel()
+	if err := service.publicationWaiter.WaitAPIKeyActive(waitCtx, namespaceID, result.APIKeyID, publicID); err != nil {
+		return fmt.Errorf("%w: wait for first API key publication: %w", ErrUnavailable, err)
+	}
+	return nil
 }
 
 func (service *Service) openAcceptance(stored AcceptanceEnvelope) ([]byte, AcceptanceResult, error) {
@@ -654,9 +711,9 @@ func snapshotMatchesRequest(snapshot OnboardingSnapshot, grants []RequestedRoleG
 
 func cloneSnapshot(snapshot OnboardingSnapshot) OnboardingSnapshot {
 	result := snapshot
-	result.RoleGrants = append([]RoleGrant(nil), snapshot.RoleGrants...)
+	result.RoleGrants = append([]RoleGrant{}, snapshot.RoleGrants...)
 	for index := range result.RoleGrants {
-		result.RoleGrants[index].DelegationCeiling = append([]string(nil), result.RoleGrants[index].DelegationCeiling...)
+		result.RoleGrants[index].DelegationCeiling = append([]string{}, result.RoleGrants[index].DelegationCeiling...)
 	}
 	if snapshot.Team != nil {
 		team := *snapshot.Team

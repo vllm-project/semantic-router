@@ -142,7 +142,7 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		"diff": refSchema("RoutingManifestDiff"), "operationId": {Type: "string", Format: "uuid"},
 		"desiredRevision": routingRevision, "replayed": {Type: "boolean"},
 	}),
-	"RoutingModelRetryControl": objectSchema(nil, map[string]JSONSchema{
+	"RoutingModelRetryControl": objectSchema([]string{"count", "on"}, map[string]JSONSchema{
 		"count": boundedIntegerSchema(0, 5),
 		"on": {
 			Type: "array", Items: schemaPointer(JSONSchema{
@@ -151,11 +151,11 @@ var routingSchemaCatalog = map[string]JSONSchema{
 			MaxItems: intPointer(int64(len(routingModelRetryEvidence))), UniqueItems: true,
 		},
 	}),
-	"RoutingModelTimeoutControl": objectSchema(nil, map[string]JSONSchema{
+	"RoutingModelTimeoutControl": objectSchema([]string{"request", "stream"}, map[string]JSONSchema{
 		"request": routingModelDuration,
 		"stream":  routingModelDuration,
 	}),
-	"RoutingModelControl": objectSchema(nil, map[string]JSONSchema{
+	"RoutingModelControl": objectSchema([]string{"retry", "timeout"}, map[string]JSONSchema{
 		"retry":   refSchema("RoutingModelRetryControl"),
 		"timeout": refSchema("RoutingModelTimeoutControl"),
 	}),
@@ -340,11 +340,12 @@ var routingSchemaCatalog = map[string]JSONSchema{
 		},
 	}),
 	"RoutingEntrypointView": objectSchema([]string{
-		"id", "name", "status", "revision", "entrypointRevision", "aliases", "ruleCount", "assignedModelCount", "createdAt", "updatedAt",
+		"id", "name", "status", "revision", "entrypointRevision", "aliases", "recipeIds", "ruleCount", "assignedModelCount", "createdAt", "updatedAt",
 	}, map[string]JSONSchema{
 		"id": routingResourceID, "name": stringSchema,
 		"status":   {Type: "string", Enum: []string{"draft", "active", "disabled"}},
 		"revision": routingRevision, "entrypointRevision": routingRevision, "aliases": arraySchema(stringSchema),
+		"recipeIds": arraySchema(routingResourceID),
 		"ruleCount": boundedIntegerSchema(0, 64), "assignedModelCount": boundedIntegerSchema(0, 131072),
 		"rules":     arraySchema(refSchema("RoutingEntrypointRuleView")),
 		"createdAt": timestampSchema, "updatedAt": timestampSchema,

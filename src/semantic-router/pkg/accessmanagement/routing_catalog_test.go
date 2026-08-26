@@ -29,7 +29,8 @@ func TestRoutingCatalogUsesAppliedKeyProjectionAndHidesCrossScopeResources(t *te
 	applied := accessruntime.AppliedPolicy{
 		Active: accessruntime.ActivePolicy{
 			KeyID: testKeySubject.ID, Revision: appliedProjection.Revision, Digest: appliedProjection.Digest,
-			RoutingRevision: snapshot.Revision, RoutingSnapshotHash: snapshot.Digest,
+			PublicationID: "publication-9", RuntimeEpoch: 2,
+			RoutingRevision: snapshot.Revision, RoutingDocumentDigest: strings.Repeat("d", 64),
 		},
 		Projection: appliedProjection,
 	}
@@ -37,15 +38,24 @@ func TestRoutingCatalogUsesAppliedKeyProjectionAndHidesCrossScopeResources(t *te
 		&repositoryStub{snapshot: testSnapshot(desiredProjection)},
 		&appliedStub{policy: applied}, &meterStub{}, &waiterStub{},
 	)
-	service.routing = &routingSnapshotStub{snapshot: &snapshot}
+	reader := &routingPublicationStub{publication: &RoutingPublication{
+		RoutingDocumentDigest: applied.Active.RoutingDocumentDigest, Snapshot: snapshot,
+	}}
+	service.routing = reader
 
 	catalog, err := service.GetRoutingCatalog(context.Background(), testNamespaceID, testKeySubject)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if catalog.Subject != testKeySubject || catalog.PolicyDigest != appliedProjection.Digest ||
-		catalog.RoutingDigest != snapshot.Digest || catalog.RoutingRevision != snapshot.Revision {
+		catalog.RoutingDigest != applied.Active.RoutingDocumentDigest || catalog.RoutingRevision != snapshot.Revision {
 		t.Fatalf("catalog publication identity = %#v", catalog)
+	}
+	if reader.pin.NamespaceID != testNamespaceID || reader.pin.QuotaPartition != "partition-1" ||
+		reader.pin.PublicationID != applied.Active.PublicationID || reader.pin.RuntimeEpoch != applied.Active.RuntimeEpoch ||
+		reader.pin.RoutingRevision != applied.Active.RoutingRevision ||
+		reader.pin.RoutingDocumentDigest != applied.Active.RoutingDocumentDigest {
+		t.Fatalf("routing publication pin = %#v", reader.pin)
 	}
 	if len(catalog.Models) != 1 || catalog.Models[0].ID != "model-visible" ||
 		len(catalog.Entrypoints) != 1 || catalog.Entrypoints[0].ID != "entrypoint-visible" ||
@@ -66,12 +76,16 @@ func TestRoutingCatalogFailsClosedWhenRoutingPinDoesNotMatchSnapshot(t *testing.
 	snapshot := routingCatalogSnapshot()
 	applied := testAppliedPolicy(projection)
 	applied.Active.RoutingRevision = snapshot.Revision
-	applied.Active.RoutingSnapshotHash = strings.Repeat("f", 64)
+	applied.Active.PublicationID = "publication-9"
+	applied.Active.RuntimeEpoch = 2
+	applied.Active.RoutingDocumentDigest = strings.Repeat("f", 64)
 	service := newTestService(t,
 		&repositoryStub{snapshot: testSnapshot(projection)},
 		&appliedStub{policy: applied}, &meterStub{}, &waiterStub{},
 	)
-	service.routing = &routingSnapshotStub{snapshot: &snapshot}
+	service.routing = &routingPublicationStub{publication: &RoutingPublication{
+		RoutingDocumentDigest: strings.Repeat("e", 64), Snapshot: snapshot,
+	}}
 
 	_, err := service.GetRoutingCatalog(context.Background(), testNamespaceID, testKeySubject)
 	if !errors.Is(err, ErrUnavailable) {

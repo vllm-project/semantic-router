@@ -35,16 +35,21 @@ func composeAccessIdentity(
 	if err != nil {
 		return nil, fmt.Errorf("compose API-key repository: %w", err)
 	}
+	publicationWaiter, err := delegationmanagement.NewRedisPublicationWaiter(dependencies.Redis, keyPrefix)
+	if err != nil {
+		return nil, fmt.Errorf("compose access publication waiter: %w", err)
+	}
 	apiKeys, err := apikeymanagement.NewService(apikeymanagement.Options{
-		Repository: repository, Commands: commands,
-		CursorKeyring:     dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
-		APIKeyPeppers:     dependencies.Keyrings.APIKeyPeppers,
-		ResponseKEK:       dependencies.Keyrings.ResponseKEK,
-		RevealKEK:         dependencies.Keyrings.RevealKEK,
-		DefaultRevealable: defaultRevealable,
-		IdempotencyTTL:    defaultIdempotencyTTL,
-		SecretDeliveryTTL: defaultSecretDeliveryTTL,
-		Now:               now,
+		Repository: repository, Waiter: publicationWaiter, Commands: commands,
+		CursorKeyring:      dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
+		APIKeyPeppers:      dependencies.Keyrings.APIKeyPeppers,
+		ResponseKEK:        dependencies.Keyrings.ResponseKEK,
+		RevealKEK:          dependencies.Keyrings.RevealKEK,
+		DefaultRevealable:  defaultRevealable,
+		IdempotencyTTL:     defaultIdempotencyTTL,
+		SecretDeliveryTTL:  defaultSecretDeliveryTTL,
+		PublicationTimeout: defaultPublicationTimeout,
+		Now:                now,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose API-key Management: %w", err)
@@ -53,11 +58,6 @@ func composeAccessIdentity(
 	if err != nil {
 		apiKeys.Close()
 		return nil, fmt.Errorf("compose delegation repository: %w", err)
-	}
-	publicationWaiter, err := delegationmanagement.NewRedisPublicationWaiter(dependencies.Redis, keyPrefix)
-	if err != nil {
-		apiKeys.Close()
-		return nil, fmt.Errorf("compose delegation publication waiter: %w", err)
 	}
 	delegations, err := delegationmanagement.NewService(delegationmanagement.Options{
 		Repository: delegationRepository, Waiter: publicationWaiter, Commands: commands,
@@ -99,13 +99,15 @@ func composeAccessIdentity(
 	}
 	invitations, err := invitationmanagement.NewService(invitationmanagement.Options{
 		Repository: atomicStore, Commands: commands,
-		CursorKeyring:     dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
-		InvitationPeppers: dependencies.Keyrings.Invitations,
-		ResponseKEK:       dependencies.Keyrings.ResponseKEK,
-		FirstKeys:         firstKeys,
-		IdempotencyTTL:    defaultIdempotencyTTL,
-		SecretDeliveryTTL: defaultSecretDeliveryTTL,
-		Now:               now,
+		CursorKeyring:      dependencies.Keyrings.Routing.ManagementCursor.Symmetric(),
+		InvitationPeppers:  dependencies.Keyrings.Invitations,
+		ResponseKEK:        dependencies.Keyrings.ResponseKEK,
+		FirstKeys:          firstKeys,
+		PublicationWaiter:  publicationWaiter,
+		IdempotencyTTL:     defaultIdempotencyTTL,
+		SecretDeliveryTTL:  defaultSecretDeliveryTTL,
+		PublicationTimeout: defaultPublicationTimeout,
+		Now:                now,
 	})
 	if err != nil {
 		firstKeys.Close()

@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"regexp"
 	"testing"
@@ -241,6 +242,114 @@ func TestRotateTokenIDRejectsStaleTokenID(t *testing.T) {
 	assertExpectations(t, mock)
 }
 
+func TestReissueIssuerSessionReusesExistingDurableSessionToken(t *testing.T) {
+	store, mock := newMockStore(t)
+	draft := issuerReissueDraft("token-next")
+	mock.ExpectBegin()
+	mock.ExpectQuery(queryPattern(lockPrincipalQuery)).
+		WithArgs(principalID).
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("active"))
+	mock.ExpectQuery(queryPattern(lockIssuerSessionQuery)).
+		WithArgs(principalID, sourceID, "issuer-session", "vllm-sr-management",
+			testNow.Add(-5*time.Minute), []byte(`{"aal":"aal2","amr":["pwd","otp"]}`)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "now"}).AddRow(sessionID, testNow))
+	mock.ExpectQuery(queryPattern(liveSessionQuery)).WithArgs(sessionID).
+		WillReturnRows(humanSessionRows("token-current", "active", nil))
+	mock.ExpectCommit()
+
+	type result struct {
+		live   managementauth.LiveSession
+		issued managementauth.IssuedToken
+		found  bool
+	}
+	got, err := inTransaction(context.Background(), store, sql.LevelSerializable,
+		func(tx *sql.Tx) (result, error) {
+			live, issued, found, err := store.ReissueIssuerSessionInTransaction(
+				context.Background(),
+				tx,
+				draft,
+				func(_ context.Context, session managementauth.LiveSession, now time.Time) (managementauth.IssuedToken, error) {
+					if session.TokenID != "token-current" || !now.Equal(testNow) {
+						t.Fatalf("prepared session = %+v at %v", session, now)
+					}
+					return managementauth.IssuedToken{
+						AccessToken: "access-next", TokenType: "Bearer", ExpiresIn: 15 * time.Minute,
+						ManagementSessionID: session.ID,
+					}, nil
+				},
+			)
+			return result{live: live, issued: issued, found: found}, err
+		})
+	if err != nil || !got.found || got.live.ID != sessionID || got.live.TokenID != "token-current" ||
+		got.issued.ManagementSessionID != sessionID {
+		t.Fatalf("ReissueIssuerSessionInTransaction() = %+v, %v", got, err)
+	}
+	assertExpectations(t, mock)
+}
+
+func TestReissueIssuerSessionDoesNotReuseChangedIssuerEvidence(t *testing.T) {
+	store, mock := newMockStore(t)
+	draft := issuerReissueDraft("token-next")
+	draft.Human.AMR = []string{"pwd"}
+	mock.ExpectBegin()
+	mock.ExpectQuery(queryPattern(lockPrincipalQuery)).
+		WithArgs(principalID).
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("active"))
+	mock.ExpectQuery(queryPattern(lockIssuerSessionQuery)).
+		WithArgs(principalID, sourceID, "issuer-session", "vllm-sr-management",
+			testNow.Add(-5*time.Minute), []byte(`{"aal":"aal2","amr":["pwd"]}`)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "now"}))
+	mock.ExpectCommit()
+
+	found, err := inTransaction(context.Background(), store, sql.LevelSerializable,
+		func(tx *sql.Tx) (bool, error) {
+			_, _, found, err := store.ReissueIssuerSessionInTransaction(
+				context.Background(), tx, draft,
+				func(context.Context, managementauth.LiveSession, time.Time) (managementauth.IssuedToken, error) {
+					t.Fatal("issuer must not run for changed evidence")
+					return managementauth.IssuedToken{}, nil
+				},
+			)
+			return found, err
+		})
+	if err != nil || found {
+		t.Fatalf("ReissueIssuerSessionInTransaction() = %t, %v", found, err)
+	}
+	assertExpectations(t, mock)
+}
+
+func TestReissueIssuerSessionRejectsInactiveIssuerSession(t *testing.T) {
+	store, mock := newMockStore(t)
+	draft := issuerReissueDraft("token-next")
+	mock.ExpectBegin()
+	mock.ExpectQuery(queryPattern(lockPrincipalQuery)).
+		WithArgs(principalID).
+		WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("active"))
+	mock.ExpectQuery(queryPattern(lockIssuerSessionQuery)).
+		WithArgs(principalID, sourceID, "issuer-session", "vllm-sr-management",
+			testNow.Add(-5*time.Minute), []byte(`{"aal":"aal2","amr":["pwd","otp"]}`)).
+		WillReturnRows(sqlmock.NewRows([]string{"id", "now"}).AddRow(sessionID, testNow))
+	mock.ExpectQuery(queryPattern(liveSessionQuery)).WithArgs(sessionID).
+		WillReturnRows(humanSessionRows("token-current", "revoked", testNow.Add(-time.Second)))
+	mock.ExpectRollback()
+
+	_, err := inTransaction(context.Background(), store, sql.LevelSerializable,
+		func(tx *sql.Tx) (bool, error) {
+			_, _, found, err := store.ReissueIssuerSessionInTransaction(
+				context.Background(), tx, draft,
+				func(context.Context, managementauth.LiveSession, time.Time) (managementauth.IssuedToken, error) {
+					t.Fatal("issuer must not run for an inactive issuer session")
+					return managementauth.IssuedToken{}, nil
+				},
+			)
+			return found, err
+		})
+	if !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+		t.Fatalf("ReissueIssuerSessionInTransaction() error = %v", err)
+	}
+	assertExpectations(t, mock)
+}
+
 func TestRevokeIsCASAndIdempotent(t *testing.T) {
 	t.Run("first revoke", func(t *testing.T) {
 		store, mock := newMockStore(t)
@@ -298,3 +407,19 @@ func TestGetRejectsUnknownAssuranceFields(t *testing.T) {
 }
 
 func pointer(value string) *string { return &value }
+
+func issuerReissueDraft(tokenID string) managementauth.SessionDraft {
+	return managementauth.SessionDraft{
+		ID: sessionID, PrincipalID: principalID, TokenID: tokenID,
+		IssuerSessionID: pointer("issuer-session"), Audience: "vllm-sr-management",
+		AuthSourceKind: managementauth.AuthSourceIssuer, AuthSourceID: sourceID,
+		EvidenceKind: managementauth.EvidenceHuman,
+		Human: &managementauth.HumanEvidence{
+			AuthenticationTime: testNow.Add(-5 * time.Minute).Unix(),
+			AAL:                "aal2",
+			AMR:                []string{"pwd", "otp"},
+		},
+		AuthenticatedAt:   testNow.Add(-5 * time.Minute),
+		EvidenceExpiresAt: testNow.Add(8 * time.Hour),
+	}
+}

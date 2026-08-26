@@ -108,7 +108,7 @@ func TestStartAPIServerWaitsForListenerAndShutsDown(t *testing.T) {
 	defer cancel()
 	lifecycle, err := startAPIServerIfEnabled(ctx, runtimeOptions{
 		enableAPI: true, apiPort: port, apiBind: "127.0.0.1", port: 50051, metricsPort: 9190,
-	}, routerruntime.NewRegistry(&cfg), nil)
+	}, routerruntime.NewRegistry(&cfg), nil, nil)
 	if err != nil {
 		t.Fatalf("startAPIServerIfEnabled() error = %v", err)
 	}
@@ -153,7 +153,7 @@ func TestStartAPIServerRejectsInvalidManagementTLSBeforeReturning(t *testing.T) 
 	cfg.ManagementAPI.TLS.PrivateKeyFile = privateKeyFile
 	_, err := startAPIServerIfEnabled(context.Background(), runtimeOptions{
 		enableAPI: true, apiPort: port, apiBind: "127.0.0.1", port: 50051, metricsPort: 9190,
-	}, routerruntime.NewRegistry(&cfg), runtimeManagementAPIStub{})
+	}, routerruntime.NewRegistry(&cfg), runtimeManagementAPIStub{}, runtimeManagementAPIStub{})
 	if err == nil || !strings.Contains(err.Error(), "invalid or do not match") {
 		t.Fatalf("invalid durable Management API TLS startup error = %v", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -62,6 +63,9 @@ func listEntrypointsTx(
 )
 SELECT page.namespace_id,page.id,revision.name,page.status,page.revision,
   page.created_at,page.updated_at,revision.revision,revision.aliases,
+  ARRAY(SELECT DISTINCT rule.recipe_id FROM routing_entrypoint_rules rule
+   WHERE rule.entrypoint_id=page.id AND rule.entrypoint_revision=page.current_revision
+   ORDER BY rule.recipe_id),
   (SELECT count(*) FROM routing_entrypoint_rules rule
    WHERE rule.entrypoint_id=page.id AND rule.entrypoint_revision=page.current_revision),
   (SELECT count(DISTINCT assignment.model_id) FROM routing_assignment_models assignment
@@ -87,6 +91,9 @@ ORDER BY page.created_at DESC,page.id DESC`
 )
 SELECT page.namespace_id,page.id,revision.name,page.status,page.revision,
   page.created_at,page.updated_at,revision.revision,revision.aliases,
+  ARRAY(SELECT DISTINCT rule.recipe_id FROM routing_entrypoint_rules rule
+   WHERE rule.entrypoint_id=page.id AND rule.entrypoint_revision=page.current_revision
+   ORDER BY rule.recipe_id),
   (SELECT count(*) FROM routing_entrypoint_rules rule
    WHERE rule.entrypoint_id=page.id AND rule.entrypoint_revision=page.current_revision),
   (SELECT count(DISTINCT assignment.model_id) FROM routing_assignment_models assignment
@@ -133,7 +140,7 @@ func scanEntrypointSummary(rows *sql.Rows) (routingmanagement.Entrypoint, error)
 	if err := rows.Scan(
 		&entrypoint.NamespaceID, &entrypoint.ID, &entrypoint.Name, &entrypoint.Status,
 		&entrypoint.Revision, &entrypoint.CreatedAt, &entrypoint.UpdatedAt,
-		&entrypoint.Current.Revision, &aliases, &entrypoint.RuleCount,
+		&entrypoint.Current.Revision, &aliases, pq.Array(&entrypoint.RecipeIDs), &entrypoint.RuleCount,
 		&entrypoint.AssignedModelCount,
 	); err != nil {
 		return routingmanagement.Entrypoint{}, err
@@ -179,7 +186,21 @@ func loadEntrypointTx(
 	}
 	result.RuleCount = len(result.Current.Rules)
 	result.AssignedModelCount = assignedModels
+	result.RecipeIDs = referencedRecipeIDs(result.Current.Rules)
 	return result, nil
+}
+
+func referencedRecipeIDs(rules []routingsnapshot.EntrypointRule) []string {
+	seen := make(map[string]struct{}, len(rules))
+	for _, rule := range rules {
+		seen[rule.RecipeID] = struct{}{}
+	}
+	result := make([]string, 0, len(seen))
+	for recipeID := range seen {
+		result = append(result, recipeID)
+	}
+	sort.Strings(result)
+	return result
 }
 
 func loadEntrypointHeader(

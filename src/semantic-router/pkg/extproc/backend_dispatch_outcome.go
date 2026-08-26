@@ -186,6 +186,7 @@ func applyDispatchOutcomeAttempts(
 		// The private handler failed before a physical attempt began. Preserve a
 		// single local known-zero record for request settlement without turning
 		// any planned fallback Model into attempted usage.
+		state.noDispatchProven = true
 		dispatch := state.dispatches[0]
 		dispatch.settlementEligible = true
 		dispatch.attempted = false

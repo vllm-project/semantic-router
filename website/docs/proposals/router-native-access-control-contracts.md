@@ -124,7 +124,8 @@ normative.
 | `management_principals`, `management_roles`, `management_role_bindings` | Global management identities, built-in/custom permission sets, and cluster/namespace/resource scopes. |
 | `management_installation_state` | Singleton bootstrap-consumed marker, recovery nonces, and immutable receipts. |
 | `management_principal_user_links`, `management_service_accounts`, `management_service_account_credentials` | Namespace links and cluster- or namespace-owned rotated automation identities. |
-| `trusted_identity_issuers`, `management_mtls_mappings`, `management_sessions`, `management_invitations` | Identity exchange, certificate mapping, revocation, step-up attributes, and one-time onboarding authority. |
+| `trusted_identity_issuers`, `management_mtls_mappings`, `management_exchange_challenges`, `management_sessions`, `management_invitations` | Identity exchange, one-time nonce coordination, certificate mapping, revocation, step-up attributes, and one-time onboarding authority. |
+| `management_backchannel_logout_replays`, `management_issuer_logout_tombstones` | Logout-token replay protection plus durable digested SID and subject selectors that fence exchange/logout races. |
 | `management_session_policy` | Cluster singleton for Management token/session TTL, active-session limits, and cluster-action assurance/authentication age. |
 | `management_security_policies` | Namespace-scoped assurance and authentication-age requirements for sensitive actions. |
 | `delegated_inference_sessions` | Short-lived, non-revealable Playground-style credentials tied to one logical key and Management session. |
@@ -166,7 +167,9 @@ normative.
 | ManagementRole | Built-in or namespace-owned custom role, immutable validated permission set, mutable display metadata, immutable built-in flag, revision. |
 | Role binding | Principal and role FKs, discriminated cluster, namespace, Team, User, or resource scope with namespace, typed resource kind/ID, separate delegation-ceiling permission set, status, revision. |
 | Principal/User link | Principal plus namespace maps to at most one User in that namespace; several login identities may explicitly link to one User. |
-| Management session | Principal, issuer session, token ID, audience, auth-source kind and stable issuer/service-credential/mTLS mapping ID, typed human or workload assurance evidence, source-assured/auth times, expiry, status, revocation time. |
+| Management exchange challenge | Opaque challenge ID, issuer FK, nonce digest, rate-identity digest, expiry, one-time consumption time, and creation time. The raw nonce is returned once and never persisted. |
+| Management session | Principal, issuer session, stable token ID, audience, auth-source kind and stable issuer/service-credential/mTLS mapping ID, typed human or workload assurance evidence, source-assured/auth times, expiry, status, revocation time. Exact issuer reissue preserves this row and token ID; changed evidence creates another bounded row. |
+| Issuer logout tombstone | Issuer, `sid` or `subject` selector kind, domain-separated selector digest, effective logout issue/expiry times, and installation time. It stores no raw SID or subject. SID selectors reject every later exchange for that SID; subject selectors reject evidence authenticated no later than the watermark. |
 | Management invitation | Expected identity, namespace, role/scope grants, optional registered TeamRole, expiry, token HMAC, and one-use status. Team onboarding pins membership but leaves User policy layers empty so Team changes continue to apply; no-Team onboarding pins immutable default-policy IDs/revisions resolved from self-service policy. |
 | mTLS identity mapping | Global immutable ID, exact normalized SPIFFE ID, SAN URI, SAN DNS, or subject-DN digest matcher, ManagementPrincipal FK, workload-assurance class and assured-at time, status, revision; uniqueness prevents ambiguous matches. |
 | Service account/credential | ManagementPrincipal subtype with reserved issuer, immutable cluster or namespace owner scope, public credential ID, HMAC/pepper, workload-assurance class and assured-at time, lifecycle, expiry, and no inference authority. Namespace-owned principals cannot bind elsewhere. |
@@ -193,6 +196,17 @@ token/session TTL, active-session limits, and assurance/authentication-age rules
 cluster-scoped actions. JWT `exp` is the earliest of verified bootstrap evidence
 expiry, cluster token TTL, and durable session expiry; exchange rejects a new session
 when its deterministic active-session limit would be exceeded.
+
+Issuer reissue is identity-preserving, not a refresh-token mutation. Exact principal,
+source, issuer-session, audience, authentication-time, and assurance evidence reuse
+one durable session and its stable token ID; each returned JWT remains independently
+bounded by the original durable/evidence expiry. Changed evidence creates a new
+session under the same active-session limit. Serializable principal/session locking
+prevents concurrent replicas from creating duplicate first sessions. Before either
+reuse or creation, the transaction locks and checks durable digested SID and subject
+logout selectors. A SID tombstone always denies that SID; a subject watermark denies
+evidence authenticated at or before the logout and permits only genuinely later
+reauthentication.
 
 An action-authentication requirement is an explicit OR-set of typed predicates, not
 one scalar AAL. A human predicate contains `minimum_aal`, accepted AMR, and
@@ -764,11 +778,15 @@ backend-invoker-only and plaintext is zeroed after use. Management discovery and
 connection probes use an explicit Management resolver and may read PostgreSQL; that
 resolver is never composed into inference.
 
-File-backed Models instead reference a bootstrap name whose secret comes from an
-environment/file/Secret reference outside the manifest. Startup compiles it into the
-same in-process backend-credential interface. File-backed routing never persists,
-reveals, or dynamically rotates that value, and dynamic resources can never reference
-the static bootstrap namespace.
+File-backed Models resolve exactly one bootstrap credential input: a named
+`backend_refs[].credential` whose `global.services.backend_credentials` definition
+uses `secret_file` or `secret_env`, a direct `backend_refs[].api_key_env`, or a literal
+`backend_refs[].api_key`. The literal form is accepted but makes the manifest
+secret-bearing; it is held only while compiling the same in-process
+backend-credential interface and is never serialized, persisted, revealed, or
+returned by a configuration API. Dynamic resources can never reference the static
+bootstrap credential namespace, and file-backed Models cannot reference a dynamic
+ProviderCredential UID.
 
 ## Model visibility and invocation contract
 

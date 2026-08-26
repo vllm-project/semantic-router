@@ -504,11 +504,11 @@ COPY --from=go-builder /app/lib/ /app/lib/
 COPY config/config.yaml /app/config/
 COPY config/backend-egress-policy.yaml /app/config/backend-egress-policy.yaml
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
-COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/config/recipes/built-in/latest/mom-v1/config.yaml
-COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/config/recipes/built-in/latest/mom-v1/metadata.yaml
+COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/recipes/built-in/latest/mom-v1/config.yaml
+COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/recipes/built-in/latest/mom-v1/metadata.yaml
 
 ENV LD_LIBRARY_PATH=/app/lib
-ENV VLLM_SR_CONFIG_BASE_DIR=/app/config
+ENV VLLM_SR_CONFIG_BASE_DIR=/app
 # Default to candle binding; set AI_BINDING=onnx or openvino for alternative backends
 ENV AI_BINDING=candle
 

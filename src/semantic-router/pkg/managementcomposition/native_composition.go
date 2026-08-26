@@ -374,9 +374,15 @@ func (builder *nativeCompositionBuilder) composeAccessReadRoutes() error {
 	if err != nil {
 		return fmt.Errorf("compose access publication waiter: %w", err)
 	}
+	routing, err := newAccessRoutingPublicationReader(
+		builder.dependencies.Redis, builder.factory.keyPrefix,
+	)
+	if err != nil {
+		return fmt.Errorf("compose applied routing-publication reader: %w", err)
+	}
 	service, err := accessmanagement.NewService(accessmanagement.ServiceOptions{
 		Repository: builder.dependencies.AccessStore, Applied: applied,
-		Routing: accessRoutingSnapshotReader{service: builder.routing.Service},
+		Routing: routing,
 		Meters:  builder.quotaRuntime, Waiter: waiter,
 	})
 	if err != nil {

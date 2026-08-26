@@ -95,6 +95,11 @@ class RuntimeStackLayout:
     def envoy_listener_service_url(self, listener_port: int) -> str:
         return f"http://{self.envoy_container_name}:{listener_port}"
 
+    def envoy_listener_url(self, listener_port: int) -> str:
+        """Return the browser-reachable origin published by local Envoy."""
+
+        return f"http://localhost:{listener_port + self.port_offset}"
+
     @property
     def jaeger_ui_url(self) -> str:
         return f"http://localhost:{self.jaeger_ui_port}"

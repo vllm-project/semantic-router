@@ -18,7 +18,7 @@ import (
 type Service struct {
 	repository Repository
 	applied    AppliedPolicyReader
-	routing    RoutingSnapshotReader
+	routing    RoutingPublicationReader
 	meters     MeterReader
 	waiter     PublicationWaiter
 }
@@ -26,7 +26,7 @@ type Service struct {
 type ServiceOptions struct {
 	Repository Repository
 	Applied    AppliedPolicyReader
-	Routing    RoutingSnapshotReader
+	Routing    RoutingPublicationReader
 	Meters     MeterReader
 	Waiter     PublicationWaiter
 }

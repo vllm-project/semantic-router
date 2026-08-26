@@ -145,19 +145,29 @@ const checkpointSelect = `SELECT id::text,session_id::text,turn_id::text,through
   FROM agent_context_checkpoints`
 
 func encodeCheckpoint(value agentmanagement.Checkpoint) ([]byte, []byte, []byte, []byte, []byte, []byte, error) {
-	goals, err := json.Marshal(value.UnresolvedGoals)
+	// PostgreSQL owns a closed array contract for every checkpoint collection.
+	// A nil Go slice marshals as JSON null, which is a valid JSON value but not
+	// a valid durable checkpoint collection. Normalize once at the persistence
+	// boundary and use the same values for both stored columns and the content
+	// digest so the digest always describes the exact durable representation.
+	goalValues := append([]string{}, value.UnresolvedGoals...)
+	resourceValues := append([]agentmanagement.ResourceReference{}, value.ResourceReferences...)
+	toolResultValues := append([]string{}, value.ToolResultReferences...)
+	decisionValues := append([]string{}, value.Decisions...)
+
+	goals, err := json.Marshal(goalValues)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
-	resources, err := json.Marshal(value.ResourceReferences)
+	resources, err := json.Marshal(resourceValues)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
-	toolResults, err := json.Marshal(value.ToolResultReferences)
+	toolResults, err := json.Marshal(toolResultValues)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
-	decisions, err := json.Marshal(value.Decisions)
+	decisions, err := json.Marshal(decisionValues)
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, err
 	}
@@ -181,7 +191,7 @@ func encodeCheckpoint(value agentmanagement.Checkpoint) ([]byte, []byte, []byte,
 		State           json.RawMessage                     `json:"state"`
 	}{
 		value.SessionID, value.TurnID, value.ThroughSequence, value.Summary,
-		value.UnresolvedGoals, value.ResourceReferences, value.ToolResultReferences, value.Decisions, stateBytes,
+		goalValues, resourceValues, toolResultValues, decisionValues, stateBytes,
 	})
 	return goals, resources, toolResults, decisions, stateBytes, canonical, err
 }

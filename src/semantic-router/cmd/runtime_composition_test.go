@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -25,6 +27,25 @@ func TestResolveProductionManagementFactoryUsesRouterNativeComposition(t *testin
 	cfg.ManagementAPI.Auth.Mode = config.ManagementAuthModeBearer
 	if factory, err = resolveProductionManagementFactory(&cfg); err == nil || factory != nil {
 		t.Fatalf("legacy bearer factory = %v, %v; want fail closed", factory, err)
+	}
+}
+
+func TestResolveManagementIssuerEgressPolicyLoadsSystemPolicy(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "issuer-egress.yaml")
+	if err := os.WriteFile(path, []byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: dashboard.internal, ports: [8743], allow_cidrs: [172.31.0.0/16]}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(managementIssuerEgressPolicyFileEnv, path)
+	policy, err := resolveManagementIssuerEgressPolicy()
+	if err != nil || policy == nil {
+		t.Fatalf("resolveManagementIssuerEgressPolicy() = %v, %v", policy, err)
+	}
+	if _, err := policy.AuthorizeOrigin("https://dashboard.internal:8743"); err != nil {
+		t.Fatalf("system issuer origin = %v", err)
 	}
 }
 

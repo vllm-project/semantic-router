@@ -1,6 +1,7 @@
 import pytest
 from cli import (
     container_cli,
+    container_issuer_egress,
     container_start,
     core,
     runtime_lifecycle,
@@ -61,6 +62,20 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
             "dashboard": "test-image",
         },
     )
+    issuer_policy_path = tmp_path / "management-issuer-egress.yaml"
+    issuer_policy_path.write_text("version: v1\n")
+    monkeypatch.setattr(
+        container_start,
+        "_local_dashboard_runtime_environment",
+        lambda *_args: {"DASHBOARD_ISSUER": "https://issuer.local"},
+    )
+    monkeypatch.setattr(
+        container_start,
+        "materialize_management_issuer_egress_policy",
+        lambda **_kwargs: container_issuer_egress.ManagementIssuerEgressPolicy(
+            host_path=issuer_policy_path
+        ),
+    )
     captured = _capture_run_commands(monkeypatch)
     _stub_valid_container_cli(monkeypatch, tmp_path)
 
@@ -81,6 +96,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
         in dashboard_cmd
     )
     assert "TARGET_ENVOY_URL=http://vllm-sr-envoy-container:8899" in dashboard_cmd
+    assert "DASHBOARD_ROUTER_PUBLIC_URL=http://localhost:8899" in dashboard_cmd
     assert not any("VLLM_SR_ENVOY_CONFIG_PATH=" in token for token in dashboard_cmd)
     assert "ENVOY_EXTPROC_ADDRESS=vllm-sr-router-container" in dashboard_cmd
     assert "ENVOY_ROUTER_API_ADDRESS=vllm-sr-router-container" in dashboard_cmd
@@ -88,6 +104,13 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     assert not any("VLLM_SR_RUNTIME_CONFIG_PATH=" in token for token in dashboard_cmd)
     assert not any("VLLM_SR_SOURCE_CONFIG_PATH=" in token for token in dashboard_cmd)
     router_cmd = _find_container_run_cmd(captured, "vllm-sr-router-container")
+    assert (
+        "VLLM_SR_INTERNAL_MANAGEMENT_ISSUER_EGRESS_POLICY_FILE="
+        "/app/.vllm-sr/management-issuer-egress-policy.yaml"
+    ) in router_cmd
+    assert (
+        f"{issuer_policy_path}:/app/.vllm-sr/management-issuer-egress-policy.yaml:ro,z"
+    ) in router_cmd
     assert "127.0.0.1:8080:8080" in router_cmd
     assert "127.0.0.1:50051:50051" in router_cmd
     assert "127.0.0.1:9190:9190" in router_cmd
@@ -97,7 +120,7 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     for command in (router_cmd, envoy_cmd, dashboard_cmd):
         assert command[command.index("--restart") + 1] == "unless-stopped"
     assert (
-        "http://127.0.0.1:8080/health"
+        "http://127.0.0.1:8080/ready"
         in router_cmd[router_cmd.index("--health-cmd") + 1]
     )
     assert "/ready" in envoy_cmd[envoy_cmd.index("--health-cmd") + 1]
@@ -200,7 +223,7 @@ def test_split_runtime_honors_management_listener_port(tmp_path, monkeypatch):
     dashboard_cmd = _find_container_run_cmd(captured, "vllm-sr-dashboard-container")
     assert "127.0.0.1:9090:9090" in router_cmd
     assert (
-        "http://127.0.0.1:9090/health"
+        "http://127.0.0.1:9090/ready"
         in router_cmd[router_cmd.index("--health-cmd") + 1]
     )
     assert "127.0.0.1:8080:8080" not in router_cmd

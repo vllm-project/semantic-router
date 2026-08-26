@@ -34,15 +34,16 @@ func Init(configPath string, port int) error {
 
 // InitOptions carries management listener startup overrides.
 type InitOptions struct {
-	Context         context.Context
-	OnListenerStart func(error)
-	ConfigPath      string
-	Port            int
-	BindAddress     string
-	RemoteExposure  *bool
-	AuthMode        string
-	RuntimeRegistry *routerruntime.Registry
-	ManagementAPI   ManagementAPI
+	Context          context.Context
+	OnListenerStart  func(error)
+	ConfigPath       string
+	Port             int
+	BindAddress      string
+	RemoteExposure   *bool
+	AuthMode         string
+	RuntimeRegistry  *routerruntime.Registry
+	ManagementAPI    ManagementAPI
+	RuntimeReadiness RuntimeReadiness
 }
 
 // InitWithRuntime starts the API server using the shared runtime registry when
@@ -139,6 +140,14 @@ func prepareClassificationAPIServer(
 	if !capabilities.ManagementAPI && opts.ManagementAPI != nil {
 		return nil, config.ManagementAPIConfig{}, fmt.Errorf("disabled Management API rejects a Router-native Management application")
 	}
+	runtimeReadiness := opts.RuntimeReadiness
+	if runtimeReadiness == nil && opts.ManagementAPI != nil {
+		// A production ManagementAPI is already the aggregate runtime wrapper.
+		runtimeReadiness = opts.ManagementAPI
+	}
+	if capabilities.DurableRouting && runtimeReadiness == nil {
+		return nil, config.ManagementAPIConfig{}, fmt.Errorf("durable routing requires process runtime readiness")
+	}
 	var listenerTLS *managementListenerTLS
 	if capabilities.ManagementAPI {
 		listenerTLS, err = loadManagementListenerTLS(managementCfg.TLS, time.Now())
@@ -197,6 +206,7 @@ func prepareClassificationAPIServer(
 		memoryStore:         memoryStore,
 		startupStatusConfig: &cfg.StartupStatus,
 		managementAPI:       opts.ManagementAPI,
+		runtimeReadiness:    runtimeReadiness,
 		managementTLS:       listenerTLS,
 	}
 	return apiServer, managementCfg, nil
@@ -375,8 +385,19 @@ func (s *ClassificationAPIServer) handleReady(w http.ResponseWriter, request *ht
 			return
 		}
 	}
-	if s.managementAPI != nil {
-		if err := s.managementAPI.Ready(request.Context()); err != nil {
+	readiness := s.runtimeReadiness
+	if readiness == nil && s.managementAPI != nil {
+		readiness = s.managementAPI
+	}
+	if s.capabilities.DurableRouting && readiness == nil {
+		s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"status": "starting", "service": "classification-api", "ready": false,
+			"phase": "routing_runtime", "message": "Routing runtime is not ready.",
+		})
+		return
+	}
+	if readiness != nil {
+		if err := readiness.Ready(request.Context()); err != nil {
 			s.writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
 				"status": "starting", "service": "classification-api", "ready": false,
 				"phase": "routing_runtime", "message": "Routing runtime is not ready.",

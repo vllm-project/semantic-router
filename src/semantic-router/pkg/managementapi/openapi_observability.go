@@ -35,7 +35,7 @@ var (
 	requestLog = objectSchema([]string{
 		"admissionId", "eventId", "occurredAt", "completedAt", "protocol", "path",
 		"statusCode", "usageState", "inputTokens", "outputTokens", "latencyMilliseconds",
-		"stream", "toolCall", "costs",
+		"stream", "toolCall", "models", "costs",
 	}, map[string]JSONSchema{
 		"admissionId": stringSchema, "eventId": stringSchema,
 		"externalRequestId": {Type: "string", MaxLength: intPointer(256)},
@@ -48,7 +48,10 @@ var (
 		"stream":              {Type: "boolean"}, "toolCall": {Type: "boolean"},
 		"apiKeyId": stringSchema, "userId": stringSchema, "teamId": stringSchema,
 		"entrypointId": stringSchema, "recipeId": stringSchema,
-		"metadata": {Type: "object", AdditionalProperties: boolPointer(true)}, "costs": costs,
+		"decisionId": stringSchema, "decisionName": stringSchema,
+		"decisionTier": {Type: "integer", Format: "int32"},
+		"models":       arraySchema(refSchema("RequestModel")),
+		"metadata":     {Type: "object", AdditionalProperties: boolPointer(true)}, "costs": costs,
 	})
 	auditEvent = objectSchema([]string{
 		"id", "namespaceId", "chainSequence", "actorChain", "action", "resourceType",
@@ -134,6 +137,9 @@ var (
 )
 
 var observabilitySchemaCatalog = map[string]JSONSchema{
+	"RequestModel": objectSchema([]string{"id", "name", "revision"}, map[string]JSONSchema{
+		"id": stringSchema, "name": stringSchema, "revision": {Type: "integer", Format: "int64"},
+	}),
 	"TimingSummary": timing,
 	"UsageTotals":   usageTotals,
 	"UsageSummary": objectSchema([]string{"totals", "grain", "final"}, map[string]JSONSchema{
@@ -260,10 +266,7 @@ func observabilityParameters(contract OperationContract) []OpenAPIParameter {
 		for _, name := range []string{"actorPrincipalId", "action", "resourceType", "resourceId", "outcome", "requestId"} {
 			parameters = append(parameters, observabilityQueryParameter(name, JSONSchema{Type: "string"}))
 		}
-		return append(parameters,
-			observabilityQueryParameter("cursor", JSONSchema{Type: "string"}),
-			observabilityQueryParameter("pageSize", boundedIntegerSchema(1, 200)),
-		)
+		return parameters
 	}
 	for _, name := range []string{
 		"teamId", "userId", "apiKeyId", "entrypointId", "recipeId", "logicalModelId",
@@ -287,8 +290,6 @@ func observabilityParameters(contract OperationContract) []OpenAPIParameter {
 	if contract.Path == BasePath+"/request-logs" {
 		parameters = append(parameters,
 			observabilityQueryParameter("requestId", JSONSchema{Type: "string", MaxLength: intPointer(256)}),
-			observabilityQueryParameter("cursor", JSONSchema{Type: "string"}),
-			observabilityQueryParameter("pageSize", boundedIntegerSchema(1, 200)),
 		)
 	}
 	return parameters
@@ -321,7 +322,7 @@ func observabilityGrainSchema() JSONSchema {
 
 func observabilityBreakdownSchema() JSONSchema {
 	return JSONSchema{Type: "string", Enum: []string{
-		"api_key", "user", "team", "entrypoint", "recipe", "logical_model",
+		"api_key", "user", "team", "entrypoint", "recipe", "decision", "logical_model",
 		"backend", "provider", "status", "dispatch_type",
 	}}
 }

@@ -55,6 +55,7 @@ type requestDispatchState struct {
 	capabilityIssued      bool
 	requestDigest         string
 	outcomeConsumed       bool
+	noDispatchProven      bool
 	selectedDispatchID    string
 }
 

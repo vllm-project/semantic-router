@@ -7,8 +7,10 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 const maxUsageEventBytes = 1 << 20
@@ -60,17 +62,31 @@ func (e *RedisEngine) validateFinalizationRequest(
 	if err := validateDigest("finalization digest", request.FinalizationDigest); err != nil {
 		return nil, nil, err
 	}
-	if request.DispatchCount == 0 {
-		return nil, nil, fmt.Errorf("%w: finalization requires at least one dispatch", ErrInvalidRequest)
-	}
 	if request.EvidenceRevision > maximumEvidenceRevision {
 		return nil, nil, fmt.Errorf("%w: attempt evidence revision is outside the supported range", ErrInvalidRequest)
+	}
+	if !request.ExpectedAdmissionDeadline.IsZero() &&
+		(request.ExpectedAdmissionDeadline.UnixMilli() <= 0 ||
+			request.ExpectedAdmissionDeadline.Nanosecond()%int(time.Millisecond) != 0) {
+		return nil, nil, fmt.Errorf(
+			"%w: expected admission deadline must be a positive millisecond-aligned instant",
+			ErrInvalidRequest,
+		)
 	}
 	if request.Event == "" || len(request.Event) > maxUsageEventBytes || strings.ContainsRune(request.Event, '\x00') {
 		return nil, nil, fmt.Errorf(
 			"%w: usage event must be non-empty, NUL-free, and at most %d bytes",
 			ErrInvalidRequest,
 			maxUsageEventBytes,
+		)
+	}
+	switch request.EventEvidenceState {
+	case usageledger.EvidenceKnown, usageledger.EvidenceMixed, usageledger.EvidenceUnknown:
+	default:
+		return nil, nil, fmt.Errorf(
+			"%w: invalid terminal event evidence state %q",
+			ErrInvalidRequest,
+			request.EventEvidenceState,
 		)
 	}
 	rules, finalizeErr := compileRulesWithPrefix(e.keyPrefix, request.Partition, request.Rules)
@@ -181,6 +197,8 @@ func (e *RedisEngine) buildFinalizationScriptInput(
 		request.FenceID,
 		strconv.FormatUint(uint64(request.DispatchCount), 10),
 		strconv.FormatUint(request.EvidenceRevision, 10),
+		string(request.EventEvidenceState),
+		finalizationExpectedDeadline(request.ExpectedAdmissionDeadline),
 		strconv.Itoa(len(actual)),
 	}
 	for _, rule := range actual {
@@ -243,8 +261,10 @@ func finalizationPlanFingerprint(request FinalizationRequest, rules []compiledRu
 	fields := []string{
 		request.FenceID,
 		request.Event,
+		string(request.EventEvidenceState),
 		strconv.FormatUint(uint64(request.DispatchCount), 10),
 		strconv.FormatUint(request.EvidenceRevision, 10),
+		finalizationExpectedDeadline(request.ExpectedAdmissionDeadline),
 	}
 	for _, rule := range rules {
 		evidence := request.Evidence[rule.identity]
@@ -257,4 +277,11 @@ func finalizationPlanFingerprint(request FinalizationRequest, rules []compiledRu
 	}
 	digest := sha256.Sum256([]byte(strings.Join(fields, "\x00")))
 	return hex.EncodeToString(digest[:])
+}
+
+func finalizationExpectedDeadline(value time.Time) string {
+	if value.IsZero() {
+		return ""
+	}
+	return strconv.FormatInt(value.UnixMilli(), 10)
 }

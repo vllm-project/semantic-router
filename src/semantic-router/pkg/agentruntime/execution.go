@@ -164,17 +164,17 @@ func (worker *Worker) runModelStep(
 		ctx, prepared.credential, prepared.request, collector.consume,
 	)
 	if generateErr != nil {
-		return generateErr
+		return wrapModelStepStageFailure(modelStepStageInferenceStream, generateErr)
 	}
 	if observeErr := collector.observe(observation); observeErr != nil {
-		return observeErr
+		return wrapModelStepStageFailure(modelStepStageRouterObservation, observeErr)
 	}
 	output, err := collector.finish()
 	if err != nil {
-		return err
+		return wrapModelStepStageFailure(modelStepStageFinish, err)
 	}
 	if commitErr := worker.commitModelStep(ctx, lease, profile, prepared, output); commitErr != nil {
-		return commitErr
+		return wrapModelStepStageFailure(modelStepStageCommit, commitErr)
 	}
 	committedLiveOutput = true
 	collector.publishLiveTerminal(agentmanagement.LiveModelStepCommitted)

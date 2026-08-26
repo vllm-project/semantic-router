@@ -11,6 +11,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 func TestRedisEngineAdmissionFinalizationUnknownAndMeters(t *testing.T) {
@@ -159,7 +160,7 @@ func assertKnownFinalization(
 	finalization := FinalizationRequest{
 		Partition: partition, AdmissionID: first.AdmissionID, AdmissionDigest: first.Digest,
 		FinalizationDigest: "usage-a", DispatchCount: 1,
-		Event: `{"admissionId":"admission-a"}`, Rules: rules,
+		Event: `{"admissionId":"admission-a"}`, EventEvidenceState: "known", Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			tokenIdentity: {State: ActualEvidenceKnown, Amount: quotaInteger(t, "12")},
 			costIdentity:  {State: ActualEvidenceKnown, Amount: currencyDecimal(t, "2.5").ScaledInteger()},
@@ -238,7 +239,7 @@ func assertUnknownFinalization(
 	unknown := FinalizationRequest{
 		Partition: partition, AdmissionID: blocked.AdmissionID, AdmissionDigest: blocked.Digest,
 		FinalizationDigest: "unknown-b", DispatchCount: 1,
-		Event:   `{"admissionId":"admission-b"}`,
+		Event: `{"admissionId":"admission-b"}`, EventEvidenceState: "unknown",
 		FenceID: "fence-b", Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			tokenIdentity: {State: ActualEvidenceUnknown, Reason: "provider_usage_unavailable"},
@@ -391,7 +392,7 @@ func TestRedisEngineEightHourActualCostWindowBlocksOnlyAfterSettlement(t *testin
 	finalization := FinalizationRequest{
 		Partition: partition, AdmissionID: first.AdmissionID, AdmissionDigest: first.Digest,
 		FinalizationDigest: "eight-hour-cost-usage", DispatchCount: 1,
-		Event: `{"admissionId":"eight-hour-cost-a"}`, Rules: rules,
+		Event: `{"admissionId":"eight-hour-cost-a"}`, EventEvidenceState: "known", Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			identity: {State: ActualEvidenceKnown, Amount: currencyDecimal(t, "1.25").ScaledInteger()},
 		},
@@ -456,6 +457,105 @@ func TestRedisEngineAppliesGlobalUsageBackpressureWithoutBreakingIdempotency(t *
 	}
 	if exists, existsErr := client.Exists(context.Background(), keys.pending(blockedRequest.AdmissionID)).Result(); existsErr != nil || exists != 0 {
 		t.Fatalf("backpressured admission pending state = (%d, %v), want absent", exists, existsErr)
+	}
+
+	diagnostics, err := NewRedisDiagnostics(client, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeRead, err := diagnostics.Snapshot(context.Background(), partition)
+	if err != nil || beforeRead.UsageStreamBacklog != 1 {
+		t.Fatalf("undelivered usage backlog = (%+v, %v), want 1", beforeRead, err)
+	}
+	messages, err := client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
+		Group: usageledger.ConsumerGroupName, Consumer: "writer-a",
+		Streams: []string{keys.usageStream, ">"}, Count: 1,
+	}).Result()
+	if err != nil || len(messages) != 1 || len(messages[0].Messages) != 1 {
+		t.Fatalf("read usage backlog = (%+v, %v)", messages, err)
+	}
+	pendingSnapshot, err := diagnostics.Snapshot(context.Background(), partition)
+	if err != nil || pendingSnapshot.UsageStreamBacklog != 1 {
+		t.Fatalf("pending usage backlog = (%+v, %v), want 1", pendingSnapshot, err)
+	}
+	if err := client.XAdd(context.Background(), &redis.XAddArgs{
+		Stream: keys.usageStream, Values: map[string]any{"event": "second-settlement"},
+	}).Err(); err != nil {
+		t.Fatalf("seed combined usage backlog: %v", err)
+	}
+	combined, err := diagnostics.Snapshot(context.Background(), partition)
+	if err != nil || combined.UsageStreamBacklog != 2 {
+		t.Fatalf("combined lag plus pending backlog = (%+v, %v), want 2", combined, err)
+	}
+	messageID := messages[0].Messages[0].ID
+	if err := client.XAck(context.Background(), keys.usageStream, usageledger.ConsumerGroupName, messageID).Err(); err != nil {
+		t.Fatalf("acknowledge retained usage item: %v", err)
+	}
+	afterAck, err := diagnostics.Snapshot(context.Background(), partition)
+	if err != nil || afterAck.UsageStreamBacklog != 1 {
+		t.Fatalf("backlog after acknowledging one retained item = (%+v, %v), want 1", afterAck, err)
+	}
+	messages, err = client.XReadGroup(context.Background(), &redis.XReadGroupArgs{
+		Group: usageledger.ConsumerGroupName, Consumer: "writer-a",
+		Streams: []string{keys.usageStream, ">"}, Count: 1,
+	}).Result()
+	if err != nil || len(messages) != 1 || len(messages[0].Messages) != 1 {
+		t.Fatalf("read remaining usage backlog = (%+v, %v)", messages, err)
+	}
+	if err := client.XAck(
+		context.Background(), keys.usageStream, usageledger.ConsumerGroupName, messages[0].Messages[0].ID,
+	).Err(); err != nil {
+		t.Fatalf("acknowledge remaining retained usage item: %v", err)
+	}
+	afterAck, err = diagnostics.Snapshot(context.Background(), partition)
+	if err != nil || afterAck.UsageStreamBacklog != 0 {
+		t.Fatalf("fully acknowledged usage backlog = (%+v, %v), want 0", afterAck, err)
+	}
+	if length, lengthErr := client.XLen(context.Background(), keys.usageStream).Result(); lengthErr != nil || length != 2 {
+		t.Fatalf("retained stream history = (%d, %v), want two acknowledged items", length, lengthErr)
+	}
+	resumedRequest := request
+	resumedRequest.AdmissionID = "after-acknowledgement"
+	resumedRequest.Digest = "after-acknowledgement"
+	resumed, err := engine.Admit(context.Background(), resumedRequest)
+	if err != nil || !resumed.Allowed() {
+		t.Fatalf("Admit() after acknowledgement = (%+v, %v), want allowed", resumed, err)
+	}
+}
+
+func TestRedisEngineFailsClosedWhenUsageConsumerGroupIsUnavailable(t *testing.T) {
+	client, partition := integrationRedis(t)
+	engine, err := NewRedisEngine(client, RedisEngineOptions{MaxUsageBacklog: 10})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preconditions, _, _ := seedAccessProjection(t, client, partition)
+	keys, _ := newPartitionKeys(partition)
+	if removed, err := client.XGroupDestroy(
+		context.Background(), keys.usageStream, usageledger.ConsumerGroupName,
+	).Result(); err != nil || removed != 1 {
+		t.Fatalf("remove usage consumer group = (%v, %v), want removed", removed, err)
+	}
+	if err := client.XAdd(context.Background(), &redis.XAddArgs{
+		Stream: keys.usageStream, Values: map[string]any{"event": "unconsumed"},
+	}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	request := AdmissionRequest{
+		Partition: partition, AdmissionID: "missing-consumer-group", Digest: "missing-consumer-group",
+		LeaseDuration: time.Minute, Preconditions: preconditions,
+	}
+	result, err := engine.Admit(context.Background(), request)
+	if err != nil || result.Disposition != AdmissionUnavailable ||
+		result.BlockingReason != "usage accounting consumer group is unavailable" {
+		t.Fatalf("Admit() without usage consumer group = (%+v, %v), want unavailable", result, err)
+	}
+	diagnostics, err := NewRedisDiagnostics(client, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := diagnostics.Snapshot(context.Background(), partition); !errors.Is(err, ErrRuntimeUnavailable) {
+		t.Fatalf("Snapshot() without usage consumer group error = %v, want %v", err, ErrRuntimeUnavailable)
 	}
 }
 
@@ -612,7 +712,7 @@ func TestRedisEngineHeartbeatRenewsGlobalConcurrencyLeaseAndStopsAtSettlement(t 
 	if _, finalizeErr := admittingReplica.Finalize(context.Background(), FinalizationRequest{
 		Partition: partition, AdmissionID: request.AdmissionID, AdmissionDigest: request.Digest,
 		FinalizationDigest: "heartbeat-final", DispatchCount: 1,
-		Event: `{"admissionId":"heartbeat-admission"}`, Rules: rules,
+		Event: `{"admissionId":"heartbeat-admission"}`, EventEvidenceState: "known", Rules: rules,
 	}); finalizeErr != nil {
 		t.Fatalf("Finalize() error = %v", finalizeErr)
 	}
@@ -681,7 +781,7 @@ func TestRedisEngineActualRetryWaitsUntilCapacityReturns(t *testing.T) {
 		if _, settleErr := engine.Finalize(context.Background(), FinalizationRequest{
 			Partition: partition, AdmissionID: admissionID, AdmissionDigest: admissionID,
 			FinalizationDigest: admissionID, DispatchCount: 1,
-			Event: `{"admissionId":"` + admissionID + `"}`,
+			Event: `{"admissionId":"` + admissionID + `"}`, EventEvidenceState: "known",
 			Rules: rules,
 			Evidence: map[quota.CounterIdentity]ActualEvidence{
 				identity: {State: ActualEvidenceKnown, Amount: quotaInteger(t, amount)},

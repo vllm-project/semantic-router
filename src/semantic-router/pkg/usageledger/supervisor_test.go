@@ -82,6 +82,10 @@ func (stream *supervisorStream) ReadNew(ctx context.Context, _ int64, _ time.Dur
 }
 
 func (*supervisorStream) Ack(context.Context, []string) error { return nil }
+func (*supervisorStream) Quarantine(context.Context, StreamItem, string) (bool, error) {
+	return true, nil
+}
+func (*supervisorStream) Quarantined(context.Context) (int64, error) { return 0, nil }
 
 type supervisorStore struct{}
 

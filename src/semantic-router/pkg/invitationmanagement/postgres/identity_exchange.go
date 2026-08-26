@@ -39,6 +39,11 @@ func (store *AtomicExchangeStore) ExchangeIdentity(ctx context.Context,
 		}
 		return inTransaction(ctx, store.Store, sql.LevelSerializable,
 			func(tx *sql.Tx) (invitationmanagement.AtomicIdentityExchangeResult, error) {
+				if err := store.sessions.RejectLoggedOutIssuerIdentityInTransaction(
+					ctx, tx, mutation.Identity,
+				); err != nil {
+					return invitationmanagement.AtomicIdentityExchangeResult{}, err
+				}
 				principalID, err := findPrincipal(ctx, tx, mutation.Identity.Issuer, mutation.Identity.Subject)
 				if err != nil {
 					if errors.Is(err, invitationmanagement.ErrNotFound) {
@@ -48,6 +53,16 @@ func (store *AtomicExchangeStore) ExchangeIdentity(ctx context.Context,
 				}
 				draft := mutation.Session
 				draft.PrincipalID = principalID
+				if live, issued, found, err := store.sessions.ReissueIssuerSessionInTransaction(
+					ctx,
+					tx,
+					draft,
+					mutation.IssueSession,
+				); err != nil {
+					return invitationmanagement.AtomicIdentityExchangeResult{}, err
+				} else if found {
+					return invitationmanagement.AtomicIdentityExchangeResult{Session: live, Issued: issued}, nil
+				}
 				live, err := store.sessions.CreateInTransaction(ctx, tx, draft)
 				if err != nil {
 					return invitationmanagement.AtomicIdentityExchangeResult{}, err
@@ -73,6 +88,11 @@ func (store *AtomicExchangeStore) exchangeInvitation(ctx context.Context,
 ) (invitationmanagement.AtomicIdentityExchangeResult, error) {
 	return inTransaction(ctx, store.Store, sql.LevelSerializable,
 		func(tx *sql.Tx) (invitationmanagement.AtomicIdentityExchangeResult, error) {
+			if err := store.sessions.RejectLoggedOutIssuerIdentityInTransaction(
+				ctx, tx, mutation.Identity,
+			); err != nil {
+				return invitationmanagement.AtomicIdentityExchangeResult{}, err
+			}
 			var live managementauth.LiveSession
 			var issued managementauth.IssuedToken
 			hooks := acceptanceSessionHooks{

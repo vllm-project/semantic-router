@@ -519,7 +519,12 @@ func effectiveGrantDTOs(values []accessmanagement.GrantView) []managementapi.Eff
 func effectiveQuotaDTO(value accessmanagement.EffectiveQuota) managementapi.EffectiveQuota {
 	result := managementapi.EffectiveQuota{
 		Meters:         make([]managementapi.QuotaMeter, 0, len(value.Meters)),
-		LimitingRuleID: value.LimitingRuleID, UnknownUsageFences: append([]string(nil), value.FenceIDs...), AsOf: value.AsOf,
+		LimitingRuleID: value.LimitingRuleID,
+		UnknownUsageFences: append(
+			make([]string, 0, len(value.FenceIDs)),
+			value.FenceIDs...,
+		),
+		AsOf: value.AsOf,
 	}
 	for _, view := range value.Meters {
 		meter := view.Meter
@@ -540,7 +545,10 @@ func effectiveQuotaDTO(value accessmanagement.EffectiveQuota) managementapi.Effe
 			Remaining: remaining, Overage: overage, ResetAt: meter.ResetAt, Completeness: string(meter.Completeness),
 			KnownDispatches:      managementapi.WholeQuantity(meter.KnownDispatches),
 			IncompleteDispatches: managementapi.WholeQuantity(meter.IncompleteDispatches),
-			CapacityState:        string(meter.CapacityState), ActiveFenceIDs: append([]string(nil), meter.ActiveFenceIDs...),
+			CapacityState:        string(meter.CapacityState), ActiveFenceIDs: append(
+				make([]string, 0, len(meter.ActiveFenceIDs)),
+				meter.ActiveFenceIDs...,
+			),
 			Freshness: managementapi.MeterFreshness{Source: "valkey", AsOf: value.AsOf},
 		})
 	}

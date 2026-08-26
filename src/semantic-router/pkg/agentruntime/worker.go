@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentmanagement"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 type WorkerOptions struct {
@@ -132,7 +133,10 @@ func (worker *Worker) runClaimLoop(ctx context.Context, workerID string) error {
 		switch {
 		case err == nil:
 			worker.processLease(ctx, lease)
-		case errors.Is(err, agentmanagement.ErrNotFound):
+		case errors.Is(err, agentmanagement.ErrNotFound), errors.Is(err, agentmanagement.ErrConflict):
+			// A conflict is expected queue contention between workers, not a
+			// process-level failure. Back off exactly like an empty queue so one
+			// claimant cannot cancel an unrelated turn owned by another loop.
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
@@ -170,6 +174,25 @@ func (worker *Worker) processLease(parent context.Context, lease agentmanagement
 		failure := safeWorkerFailure(err)
 		if errors.Is(err, agentmanagement.ErrCancelled) {
 			status, failure = agentmanagement.TurnCancelled, nil
+		} else {
+			diagnostic := safeWorkerFailureDiagnostic(err)
+			fields := map[string]interface{}{
+				"session_id": lease.SessionID, "turn_id": lease.TurnID,
+				"failure_code": failure.Code, "failure_class": diagnostic.class,
+			}
+			if diagnostic.upstreamStatus != 0 {
+				fields["upstream_status"] = diagnostic.upstreamStatus
+			}
+			if diagnostic.modelStepStage != "" {
+				fields["model_step_stage"] = diagnostic.modelStepStage
+			}
+			if diagnostic.protocolCategory != "" {
+				fields["protocol_category"] = diagnostic.protocolCategory
+			}
+			if diagnostic.protocolCode != "" {
+				fields["protocol_code"] = diagnostic.protocolCode
+			}
+			logging.ComponentErrorEvent("agent-runtime", "agent_turn_failed", fields)
 		}
 		transition = agentmanagement.TurnTransition{
 			Lease: lease, Status: status, Failure: failure, CompletedAt: worker.now().UTC(),

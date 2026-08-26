@@ -30,9 +30,10 @@ POST /management/v1/auth/token-exchange
 
 Before starting login, the client requests an exchange challenge with `issuerId`. The
 Router returns a random nonce, opaque `exchangeChallengeId`, and short expiry and
-stores only the bound nonce hash/state in Valkey. The client supplies that nonce to
-its OIDC authorization request or local assertion signer. The token-exchange JSON is
-a discriminated union with `issuerId`, `exchangeChallengeId`, `subjectToken`, and
+stores the issuer, nonce digest, rate-identity digest, expiry, and one-time consumption
+state in PostgreSQL. The raw nonce is never persisted. The client supplies that nonce
+to its OIDC authorization request or local assertion signer. The token-exchange JSON
+is a discriminated union with `issuerId`, `exchangeChallengeId`, `subjectToken`, and
 `subjectTokenType` equal to `oidc_id_token` or `router_local_assertion`; it may also
 carry `invitationToken` on a fresh exchange. The Router loads the expected nonce,
 validates configured issuer, audience, signature algorithm and keys, exact token nonce,
@@ -117,11 +118,17 @@ not replace the human principal. Audit records both actors.
 Access tokens have no refresh token and an old bearer is never sufficient to renew
 itself. Before access-token expiry, a client repeats token exchange with a fresh
 verified issuer assertion or repeats service-token authentication with the live
-credential or mTLS identity. The Router may reuse an active durable session only when
-the principal, source kind/ID, issuer session ID, and complete evidence object match;
-it then CAS-rotates `jti`, immediately invalidating the old token. Re-exchange never
-extends the durable session or evidence expiry. A changed source, issuer session, or
-evidence creates a new bounded session subject to the active-session limit.
+credential or mTLS identity. For issuer exchange, the Router reuses an active durable
+session only when principal, source kind/ID, issuer session ID, audience,
+authentication time, and the complete evidence object match exactly. That reissue
+keeps the durable session ID and `jti` stable, does not extend durable session or
+evidence expiry, and returns another short-lived token bounded by the same expiry.
+Previously issued tokens for that exact session may overlap until their own bounded
+expiry; independently cached tokens on several Dashboard replicas therefore do not
+invalidate one another. A changed source, issuer session, audience, authentication
+time, or evidence creates a separate bounded session subject to the active-session
+limit. Serializable exchange and a principal/session row lock ensure concurrent
+first exchange or reissue converges to one durable result across replicas.
 
 Management sessions are global. Cluster policy alone sets JWT/session TTL, active-
 session limits, and typed cluster-action authentication predicates; namespace policy
@@ -140,10 +147,18 @@ the broader principal barrier and revokes every source.
 token from the named trusted issuer, never by a browser cookie or Management bearer
 token. The Router validates configured `iss`, Management client `aud`, signature,
 `iat`, `jti`, and the back-channel logout event claim; `nonce` is forbidden and at
-least one of `sid` or `sub` is required. A `sid` revokes matching issuer sessions; a
-`sub` without `sid` revokes every session for that `(issuer, subject)`. The hashed
-`jti` is retained through token expiry for replay rejection. Repeating an already
-applied valid logout is an idempotent `200`; a reused ID with different claims is rejected.
+least one of `sid` or `sub` is required. In one serializable transaction, a `sid`
+revokes matching issuer sessions and installs a durable issuer/SID tombstone; a `sub`
+without `sid` revokes sessions authenticated no later than the logout event and
+installs a durable issuer/subject authentication-time watermark. Selector values are
+stored only as domain-separated digests. Exchange locks and checks both applicable
+selectors before reading or creating a session, so a logout that arrives before or
+concurrently with exchange cannot be bypassed by a late commit. A SID cannot be
+reissued after its tombstone. Subject authentication evidence strictly newer than the
+logout watermark may create a new session, while older or equal evidence is denied.
+The hashed logout-token `jti` is retained through token expiry for replay rejection.
+Repeating an already applied valid logout is an idempotent `200`; a reused ID with
+different claims is rejected.
 
 Any fresh verified token exchange may carry a matching invitation, whether the exact
 `(issuer, subject)` principal is new or active. One CAS transaction consumes it,
@@ -218,6 +233,13 @@ therefore cannot bypass discovery, authorization, quota, logs, or usage accounti
 The Router publishes one generated OpenAPI contract under
 <code>/management/v1</code>. It is the sole authority for dynamic mutations;
 file-only deployments do not start a mutable Management API.
+
+This is an optional capability of the same v0.3 bootstrap, not a `managed` deployment
+mode. `global.stores.management` selects durable desired state, while
+`global.services.management_api.enabled` exposes its authorized HTTP mutation and
+query surface. With the listener disabled, PostgreSQL publication can remain active
+without a public Management endpoint. With no Management store, the static manifest
+remains the sole routing authority.
 
 ### Version negotiation
 
@@ -796,6 +818,14 @@ timeout fields are not accepted:
 }
 ~~~
 
+Provider-specific `connectionFields` are the one deliberately dynamic request
+object in Model and discovery writes. Their effective schema comes from the exact
+active Provider Definition returned by `/providers`, not from Dashboard code. The
+server rejects undeclared, missing required, incorrectly typed, or out-of-range
+values before a compiler runs, and the published backend contains only the compiler's
+closed non-secret output. This OpenAPI envelope therefore does not create an
+open-ended data-plane configuration map.
+
 Model PATCH is sparse: omitted fields retain their server-owned value. Changing
 control, pricing, name, aliases, capabilities, reasoning, or LoRAs therefore never
 requires a client to read or resubmit backend origins, compiled connection values, or
@@ -1023,7 +1053,10 @@ use their resource-specific bounded one-time response envelope.
 
 ~~~json
 {
-  "keyId": "key_01...",
+  "subject": {
+    "type": "api_key",
+    "id": "74b7bdf1-69e1-40c7-a1af-92e9e4d5f252"
+  },
   "revision": 42,
   "appliedRevision": 42,
   "access": {
@@ -1032,6 +1065,7 @@ use their resource-specific bounded one-time response envelope.
         "resourceType": "entrypoint",
         "resourceId": "ep_blend_01...",
         "permissions": ["discover", "invoke"],
+        "effect": "allow",
         "source": {"subjectType": "user", "subjectId": "usr_01...", "bindingId": "ab_01..."}
       }
     ]
@@ -1042,7 +1076,11 @@ use their resource-specific bounded one-time response envelope.
         "policyId": "rlp_developer_01...",
         "ruleId": "rpm_rolling",
         "bindingId": "rb_key_01...",
-        "source": {"subjectType": "api_key", "subjectId": "key_01..."},
+        "source": {
+          "subjectType": "api_key",
+          "subjectId": "key_01...",
+          "bindingId": "rb_key_01..."
+        },
         "counterOwner": "rb_key_01...",
         "metric": "requests",
         "algorithm": "sliding_log",
@@ -1069,7 +1107,7 @@ use their resource-specific bounded one-time response envelope.
 Each grant names its source and binding. Each non-cost meter returns whole-unit
 limit/used/remaining; cost meters use the public decimal shape in the
 [quota runtime](./router-native-access-control-quota-runtime). All include live reset,
-freshness, completeness, and capacity state from the same admission Functions. The response
+freshness, completeness, and capacity state from the same admission runtime. The response
 identifies the limiting rule; analytics lag cannot alter live quota.
 
 ## Management authorization

@@ -247,6 +247,7 @@ type Readiness struct {
 	AppliedRevision uint64
 	AccessGate      string
 	RoutingGate     string
+	RoutingDigest   string
 	ProjectorLag    uint64
 }
 

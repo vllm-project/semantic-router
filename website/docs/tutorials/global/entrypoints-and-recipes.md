@@ -35,10 +35,15 @@ selects its Recipe and assigns Models to every Decision name. The virtual Model
 name is then replaced by the
 selected backend Model.
 
-There is no implicit default Recipe or automatic alias. Every virtual model is
-an explicit Entrypoint, and every Entrypoint assigns all of its Recipe's
-decisions. Generated snapshot identities are not part of human authoring.
-`model_names` lists every callable alias; these aliases all resolve to the same Entrypoint.
+Named Recipes do not acquire implicit aliases. Every virtual model authored in
+`entrypoints` is explicit, and every Entrypoint assigns all of its Recipe's
+decisions. The preserved top-level `routing` shorthand is the only exception:
+when it contains a complete profile, it retains the established automatic names
+`vllm-sr/auto`, `auto`, and `MoM` (or the configured primary name) unless an
+explicit Entrypoint claims them. Set `global.router.auto_model_names: []` to
+disable those shorthand names. Generated snapshot identities are not part of
+human authoring. `model_names` lists every callable alias for an explicit
+Entrypoint; those aliases all resolve to the same Entrypoint.
 
 Concrete backend model names are different: they select that model directly
 and bypass recipe routing. Use a virtual entrypoint when clients should ask for

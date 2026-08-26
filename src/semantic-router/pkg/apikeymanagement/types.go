@@ -285,6 +285,8 @@ type CreateMutation struct {
 }
 
 type RateLimitOverrideMutation struct {
+	// PolicyID and InlinePolicy are a strict one-of. Binding.PolicyID always
+	// carries the resolved policy ID used by the allocation.
 	PolicyID     string
 	InlinePolicy *policymanagement.RateLimitPolicy
 	Binding      policymanagement.RateLimitBinding

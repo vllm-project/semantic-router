@@ -1,8 +1,11 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -14,22 +17,44 @@ import (
 	"github.com/lib/pq"
 )
 
+var immutableMigrationSHA256 = map[string]string{
+	"0001_management.sql":                       "8bb1fba4c42abbd66058d89a8d1b97c171ad87ffb99025ef15219902ae3ce9fb",
+	"0002_access_audit_actor_chain.sql":         "47527b2825b8b7467743baab73c7e8efa4c29d04b7699e98b66849e2c1730786",
+	"0003_issuer_logout_tombstones.sql":         "db4d183eada857e4c7d45bd259b99fc78eacf927e6ae03597608f0594b334463",
+	"0004_agent_event_summary_usage_lookup.sql": "54e6a37ac2fe7e73bf5890e37e00563b661b2c3622aa46fdc83acc6d9db88696",
+}
+
 func TestEmbeddedMigrationsAreOrderedAndCoverAuthorities(t *testing.T) {
 	migrations, err := Migrations()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(migrations) != 1 {
-		t.Fatalf("migration count = %d, want one clean Management baseline", len(migrations))
+	if len(migrations) == 0 {
+		t.Fatal("embedded Management migrations are empty")
+	}
+	if len(migrations) != len(immutableMigrationSHA256) {
+		t.Fatalf("migration count = %d, immutable digest manifest count = %d",
+			len(migrations), len(immutableMigrationSHA256))
 	}
 	if migrations[0].Version != 1 || migrations[0].Name != "0001_management.sql" {
 		t.Fatalf("baseline migration = (%d, %q), want (1, %q)",
 			migrations[0].Version, migrations[0].Name, "0001_management.sql")
 	}
+	if expected := sha256.Sum256([]byte(migrations[0].SQL)); migrations[0].Digest != expected {
+		t.Fatal("baseline migration digest does not cover its exact embedded SQL")
+	}
 	var schema strings.Builder
 	for i, migration := range migrations {
 		if i > 0 && migrations[i-1].Version >= migration.Version {
 			t.Fatalf("migration versions are not strictly increasing: %d then %d", migrations[i-1].Version, migration.Version)
+		}
+		wantDigest, exists := immutableMigrationSHA256[migration.Name]
+		if !exists {
+			t.Fatalf("migration %q is missing from the immutable digest manifest", migration.Name)
+		}
+		if got := hex.EncodeToString(migration.Digest[:]); got != wantDigest {
+			t.Fatalf("immutable migration %q digest = %q, want %q; add a new migration instead of editing history",
+				migration.Name, got, wantDigest)
 		}
 		schema.WriteString(migration.SQL)
 	}
@@ -44,7 +69,7 @@ func assertMigrationTables(t *testing.T, schema string) {
 		"access_api_key_credentials", "access_policies", "rate_limit_policies",
 		"management_principals", "management_sessions", "management_invitations",
 		"management_backchannel_logout_replays", "management_exchange_challenges",
-		"management_revocation_barriers",
+		"management_revocation_barriers", "management_issuer_logout_tombstones",
 		"provider_credentials", "routing_models", "routing_recipes",
 		"routing_recipe_distributions", "routing_recipe_provenance",
 		"routing_entrypoints", "routing_snapshots", "routing_publications",
@@ -96,6 +121,8 @@ func assertMigrationContracts(t *testing.T, schema string) {
 		"octet_length(idempotency_digest) = 32",
 		"octet_length(snapshot_digest) = 32",
 		"claims_digest BYTEA NOT NULL CHECK (octet_length(claims_digest) = 32)",
+		"selector_kind TEXT NOT NULL CHECK (selector_kind IN ('sid','subject'))",
+		"PRIMARY KEY (issuer_id, selector_kind, selector_digest)",
 		"credential_mode TEXT NOT NULL CHECK (credential_mode IN ('optional','required'))",
 		"management_idempotency_cluster_identity_uq",
 		"management_idempotency_namespace_identity_uq",
@@ -125,6 +152,12 @@ func assertMigrationContracts(t *testing.T, schema string) {
 		"agent_sessions_page_idx",
 		"agent_sessions_title_search_idx",
 		"'assistant_delta','model_step_summary','tool_request'",
+		"CONSTRAINT management_operations_id_namespace_uq UNIQUE (id, namespace_id)",
+		"CONSTRAINT usage_event_reconciliation_shape_ck CHECK",
+		"CONSTRAINT usage_dispatch_correction_shape_ck CHECK",
+		"CONSTRAINT unknown_fence_binding_metric_ck CHECK",
+		"latency_histogram JSONB NOT NULL DEFAULT ''[]''::jsonb",
+		"param_size TEXT NOT NULL DEFAULT ''",
 		"usage_events_external_request_idx",
 		"access_scope JSONB NOT NULL CHECK (jsonb_typeof(access_scope) = 'object')",
 		"policy_outbox_notify_routing_desired_state",
@@ -144,21 +177,27 @@ func TestMigrationVersionRejectsInvalidNames(t *testing.T) {
 	}
 }
 
-func TestAppliedMigrationsMustMatchEmbeddedPrefix(t *testing.T) {
+func TestAppliedMigrationsMustMatchEmbeddedIdentityAndPrefix(t *testing.T) {
 	migrations := []Migration{
-		{Version: 1, Name: "0001_baseline.sql"},
-		{Version: 2, Name: "0002_forward.sql"},
+		migrationFixture(1, "0001_baseline.sql", "CREATE TABLE baseline(id BIGINT PRIMARY KEY);"),
+		migrationFixture(2, "0002_forward.sql", "CREATE TABLE forward(id BIGINT PRIMARY KEY);"),
 	}
+	first := appliedMigrationFixture(migrations[0])
+	second := appliedMigrationFixture(migrations[1])
+	renamed := first
+	renamed.Name = "0001_preview.sql"
+	unknown := first
+	unknown.Name = "0003_future.sql"
 	for name, test := range map[string]struct {
-		applied map[int64]string
+		applied map[int64]appliedMigration
 		wantErr bool
 	}{
-		"empty":          {applied: map[int64]string{}},
-		"prefix":         {applied: map[int64]string{1: "0001_baseline.sql"}},
-		"complete":       {applied: map[int64]string{1: "0001_baseline.sql", 2: "0002_forward.sql"}},
-		"renamed":        {applied: map[int64]string{1: "0001_preview.sql"}, wantErr: true},
-		"unknown":        {applied: map[int64]string{3: "0003_future.sql"}, wantErr: true},
-		"missing prefix": {applied: map[int64]string{2: "0002_forward.sql"}, wantErr: true},
+		"empty":          {applied: map[int64]appliedMigration{}},
+		"prefix":         {applied: map[int64]appliedMigration{1: first}},
+		"complete":       {applied: map[int64]appliedMigration{1: first, 2: second}},
+		"renamed":        {applied: map[int64]appliedMigration{1: renamed}, wantErr: true},
+		"unknown":        {applied: map[int64]appliedMigration{3: unknown}, wantErr: true},
+		"missing prefix": {applied: map[int64]appliedMigration{2: second}, wantErr: true},
 	} {
 		t.Run(name, func(t *testing.T) {
 			err := validateAppliedMigrations(migrations, test.applied)
@@ -167,6 +206,29 @@ func TestAppliedMigrationsMustMatchEmbeddedPrefix(t *testing.T) {
 			}
 		})
 	}
+	tampered := appliedMigrationFixture(migrations[0])
+	tampered.Digest[0] ^= 0xff
+	if err := validateAppliedMigrations(
+		migrations,
+		map[int64]appliedMigration{1: tampered},
+	); err == nil || !strings.Contains(err.Error(), "content digest") {
+		t.Fatalf("tampered migration digest error = %v", err)
+	}
+	missingDigest := appliedMigration{Name: migrations[0].Name}
+	if err := validateAppliedMigrations(
+		migrations,
+		map[int64]appliedMigration{migrations[0].Version: missingDigest},
+	); err == nil || !strings.Contains(err.Error(), "content digest") {
+		t.Fatalf("missing migration digest error = %v", err)
+	}
+}
+
+func migrationFixture(version int64, name, sql string) Migration {
+	return Migration{Version: version, Name: name, Digest: sha256.Sum256([]byte(sql)), SQL: sql}
+}
+
+func appliedMigrationFixture(migration Migration) appliedMigration {
+	return appliedMigration{Name: migration.Name, Digest: bytes.Clone(migration.Digest[:])}
 }
 
 func TestBaselineSeedsLeastPrivilegeBuiltInRoles(t *testing.T) {
@@ -174,8 +236,8 @@ func TestBaselineSeedsLeastPrivilegeBuiltInRoles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(migrations) != 1 {
-		t.Fatalf("migration count = %d, want one baseline", len(migrations))
+	if len(migrations) == 0 {
+		t.Fatal("embedded Management migrations are empty")
 	}
 	baseline := migrations[0].SQL
 	for _, contract := range []string{
@@ -193,6 +255,14 @@ func TestBaselineSeedsLeastPrivilegeBuiltInRoles(t *testing.T) {
 	}
 	if strings.Contains(baseline, "preview usage schema") {
 		t.Fatal("Management baseline contains a preview-schema upgrade guard")
+	}
+	for _, forwardContract := range []string{
+		"model_step_summary",
+		"usage_events_external_request_idx",
+	} {
+		if strings.Contains(baseline, forwardContract) {
+			t.Fatalf("Management baseline contains forward contract %q", forwardContract)
+		}
 	}
 }
 
@@ -260,6 +330,49 @@ WHERE month_start=date_trunc('month',current_date)::date AND state='active'`).Sc
 	if migrationCount != len(migrations) {
 		t.Fatalf("migration ledger count = %d, want %d", migrationCount, len(migrations))
 	}
+	var appliedName string
+	var appliedDigest []byte
+	if err := db.QueryRowContext(ctx, `SELECT name,content_digest
+FROM router_management_schema_migrations WHERE version=$1`, migrations[0].Version).Scan(
+		&appliedName, &appliedDigest,
+	); err != nil {
+		t.Fatalf("read migration ledger digest: %v", err)
+	}
+	if appliedName != migrations[0].Name || !bytes.Equal(appliedDigest, migrations[0].Digest[:]) {
+		t.Fatalf("migration ledger identity = (%q,%x), want (%q,%x)",
+			appliedName, appliedDigest, migrations[0].Name, migrations[0].Digest)
+	}
+}
+
+func TestMigratorRejectsIncompleteLedgerSchema(t *testing.T) {
+	databaseURL := migrationTestDatabaseURL(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	db, schemaName := isolatedMigrationDatabase(t, ctx, databaseURL)
+	if _, err := db.ExecContext(ctx, `
+CREATE TABLE router_management_schema_migrations (
+  version BIGINT PRIMARY KEY,
+  name TEXT NOT NULL UNIQUE,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
+)`); err != nil {
+		t.Fatalf("create incomplete migration ledger: %v", err)
+	}
+
+	if err := (Migrator{DB: db}).Apply(ctx); err == nil {
+		t.Fatal("Migrator accepted a ledger without immutable content digests")
+	}
+	var digestColumnCount int
+	if err := db.QueryRowContext(ctx, `
+SELECT count(*)
+FROM information_schema.columns
+WHERE table_schema=$1
+  AND table_name='router_management_schema_migrations'
+  AND column_name='content_digest'`, schemaName).Scan(&digestColumnCount); err != nil {
+		t.Fatalf("inspect incomplete migration ledger: %v", err)
+	}
+	if digestColumnCount != 0 {
+		t.Fatal("Migrator rewrote an incomplete migration ledger")
+	}
 }
 
 func assertManagementIdentitySeeds(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -279,12 +392,12 @@ FROM management_roles`).Scan(&roles, &distinctIDs, &validDigests); err != nil {
 		digest      string
 	}{
 		"viewer": {
-			permissions: []string{"provider_catalog.read", "routing.read"},
-			digest:      "26ad6974c2b80418b7df50daa1de9582b922bff92b44c2f2f7acc0d98fd6cab0",
+			permissions: []string{"agent.read", "provider_catalog.read", "routing.read", "tool.read"},
+			digest:      "457a9204a91594a24e10ce7ab98b16fe61ec569104e7f25b9fadfe5e78f08ceb",
 		},
 		"consumer": {
-			permissions: []string{"access_policy.read", "delegation.use", "key.read", "operation.read", "quota.read", "rate_policy.read", "routing_context.read", "team.read", "usage.read", "user.read"},
-			digest:      "a5b59e087f29c4a510d034d9ca44565805482ca1b4c477fb0d96b3919eb4c1fd",
+			permissions: []string{"access_policy.read", "agent.read", "agent.use", "delegation.use", "key.read", "operation.read", "quota.read", "rate_policy.read", "routing_context.read", "team.read", "tool.invoke", "tool.read", "usage.read", "user.read"},
+			digest:      "42f87d9c0231abac6d6f5256f4c40d5d5789f9c9d8739c264785d0bf58560fd6",
 		},
 	} {
 		var permissionJSON []byte

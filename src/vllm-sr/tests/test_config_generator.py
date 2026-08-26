@@ -123,6 +123,22 @@ def test_file_config_envoy_has_only_stable_router_owned_upstreams(
         {
             "match": {"prefix": "/"},
             "route": {"cluster": "backend_dispatch_cluster", "timeout": "0s"},
+            "typed_per_filter_config": {
+                "envoy.filters.http.cors": {
+                    "@type": (
+                        "type.googleapis.com/"
+                        "envoy.extensions.filters.http.cors.v3.CorsPolicy"
+                    ),
+                    "allow_origin_string_match": [{"prefix": ""}],
+                    "allow_methods": "GET, POST, OPTIONS",
+                    "allow_headers": (
+                        "authorization, content-type, accept, "
+                        "x-vsr-debug, x-session-id"
+                    ),
+                    "expose_headers": "*",
+                    "max_age": "86400",
+                }
+            },
         }
     ]
 
@@ -134,10 +150,34 @@ def test_file_config_envoy_has_only_stable_router_owned_upstreams(
         "PRIVATE_PROVIDER_TOKEN",
         "X-Provider-Version",
         "retry_policy",
-        "health_checks",
         "fallback:",
     ):
         assert private_value not in rendered_text
+    dispatch = _cluster(rendered, "backend_dispatch_cluster")
+    assert dispatch["health_checks"][0]["http_health_check"] == {"path": "/ready"}
+
+
+def test_public_route_allows_authenticated_browser_streaming(tmp_path, monkeypatch):
+    rendered, _ = _render(tmp_path, monkeypatch)
+    hcm = _connection_manager(rendered)
+    route = hcm["route_config"]["virtual_hosts"][0]["routes"][0]
+    cors = route["typed_per_filter_config"]["envoy.filters.http.cors"]
+
+    assert route["route"]["timeout"] == "0s"
+    assert cors["allow_origin_string_match"] == [{"prefix": ""}]
+    assert cors["allow_methods"] == "GET, POST, OPTIONS"
+    assert {header.strip() for header in cors["allow_headers"].split(",")} >= {
+        "authorization",
+        "content-type",
+        "accept",
+        "x-vsr-debug",
+        "x-session-id",
+    }
+    assert cors["expose_headers"] == "*"
+    filter_names = [item["name"] for item in hcm["http_filters"]]
+    assert filter_names.index("envoy.filters.http.cors") < filter_names.index(
+        "envoy.filters.http.ext_proc"
+    )
 
 
 def test_file_config_envoy_uses_static_clusters_for_ip_endpoints(tmp_path, monkeypatch):
@@ -178,6 +218,7 @@ def test_public_internal_headers_are_removed_before_extproc(tmp_path, monkeypatc
     filters = _connection_manager(rendered)["http_filters"]
     assert [item["name"] for item in filters] == [
         "envoy.filters.http.lua",
+        "envoy.filters.http.cors",
         "envoy.filters.http.ext_proc",
         "envoy.filters.http.router",
     ]
@@ -185,7 +226,7 @@ def test_public_internal_headers_are_removed_before_extproc(tmp_path, monkeypatc
     assert set(re.findall(r'"(x-[a-z0-9-]+)"', sanitizer)) == set(
         INTERNAL_REQUEST_HEADERS
     )
-    assert filters[1]["typed_config"]["failure_mode_allow"] is False
+    assert filters[2]["typed_config"]["failure_mode_allow"] is False
 
 
 def test_multiple_public_listeners_share_one_dispatch_cluster(tmp_path, monkeypatch):

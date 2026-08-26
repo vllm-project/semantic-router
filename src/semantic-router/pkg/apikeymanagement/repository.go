@@ -15,6 +15,14 @@ type Repository interface {
 	CredentialRevealRepository
 }
 
+// PublicationWaiter closes the desired-state to data-plane handoff before a
+// newly issued credential is returned to its caller. The one-time secret must
+// never be observable before every Router replica can authenticate it through
+// the shared applied projection.
+type PublicationWaiter interface {
+	WaitAPIKeyActive(context.Context, string, string, string) error
+}
+
 type RepositoryLifecycle interface {
 	Ready(context.Context, *managementcommand.Codec) error
 	ReplaySecret(context.Context, managementcommand.Command) (StoredSecret, bool, error)

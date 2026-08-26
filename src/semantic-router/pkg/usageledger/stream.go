@@ -2,6 +2,9 @@ package usageledger
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -12,8 +15,17 @@ import (
 )
 
 var (
-	partitionPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
-	keyPrefixPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(:[A-Za-z0-9][A-Za-z0-9._-]*)*$`)
+	partitionPattern        = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+	keyPrefixPattern        = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*(:[A-Za-z0-9][A-Za-z0-9._-]*)*$`)
+	quarantineReasonPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+)
+
+const (
+	// ConsumerGroupName is the canonical group shared by usage writers and
+	// admission backpressure. Keeping one name makes lag plus pending the
+	// authoritative distributed backlog across every Router replica.
+	ConsumerGroupName         = "usage-writers"
+	maxQuarantinePayloadBytes = maxEventBytes + 4096
 )
 
 type StreamItem struct {
@@ -26,6 +38,8 @@ type Stream interface {
 	ReadNew(context.Context, int64, time.Duration) ([]StreamItem, error)
 	ClaimStale(context.Context, int64, time.Duration) ([]StreamItem, error)
 	Ack(context.Context, []string) error
+	Quarantine(context.Context, StreamItem, string) (bool, error)
+	Quarantined(context.Context) (int64, error)
 }
 
 type RedisStreamOptions struct {
@@ -36,10 +50,11 @@ type RedisStreamOptions struct {
 }
 
 type RedisStream struct {
-	client   redis.UniversalClient
-	key      string
-	group    string
-	consumer string
+	client        redis.UniversalClient
+	key           string
+	quarantineKey string
+	group         string
+	consumer      string
 }
 
 func NewRedisStream(client redis.UniversalClient, options RedisStreamOptions) (*RedisStream, error) {
@@ -59,10 +74,15 @@ func NewRedisStream(client redis.UniversalClient, options RedisStreamOptions) (*
 		return nil, err
 	}
 	key := "usage-stream:{" + options.Partition + "}"
+	quarantineKey := "usage-quarantine:{" + options.Partition + "}"
 	if options.KeyPrefix != "" {
 		key = options.KeyPrefix + ":" + key
+		quarantineKey = options.KeyPrefix + ":" + quarantineKey
 	}
-	return &RedisStream{client: client, key: key, group: options.Group, consumer: options.Consumer}, nil
+	return &RedisStream{
+		client: client, key: key, quarantineKey: quarantineKey,
+		group: options.Group, consumer: options.Consumer,
+	}, nil
 }
 
 func (s *RedisStream) EnsureGroup(ctx context.Context) error {
@@ -129,7 +149,12 @@ func (s *RedisStream) Ack(ctx context.Context, ids []string) error {
 			return err
 		}
 	}
-	count, err := s.client.XAck(ctx, s.key, s.group, ids...).Result()
+	args := make([]any, 0, len(ids)+1)
+	args = append(args, s.group)
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	count, err := acknowledgeUsageScript.Run(ctx, s.client, []string{s.key}, args...).Int64()
 	if err != nil {
 		return fmt.Errorf("acknowledge usage stream: %w", err)
 	}
@@ -137,6 +162,56 @@ func (s *RedisStream) Ack(ctx context.Context, ids []string) error {
 		return fmt.Errorf("acknowledge usage stream: acknowledged %d of %d items", count, len(ids))
 	}
 	return nil
+}
+
+// Quarantine durably moves one pending malformed item out of the admission
+// backlog. The bounded original payload is retained before the source item is
+// acknowledged and deleted, so operators can recover accounting evidence
+// without one poisoned record preventing later valid records from ingesting.
+func (s *RedisStream) Quarantine(
+	ctx context.Context,
+	item StreamItem,
+	reason string,
+) (bool, error) {
+	if err := validateConsumerName("stream ID", item.ID); err != nil {
+		return false, err
+	}
+	if !quarantineReasonPattern.MatchString(reason) {
+		return false, fmt.Errorf("usage quarantine reason is not canonical")
+	}
+	payload, err := json.Marshal(item.Values)
+	if err != nil {
+		return false, fmt.Errorf("encode usage quarantine payload: %w", err)
+	}
+	if len(payload) == 0 || len(payload) > maxQuarantinePayloadBytes {
+		return false, fmt.Errorf("usage quarantine payload exceeds its bounded envelope")
+	}
+	digest := sha256.Sum256(payload)
+	value, err := quarantineUsageScript.Run(ctx, s.client, []string{s.key, s.quarantineKey},
+		s.group, item.ID, reason, string(payload), hex.EncodeToString(digest[:]),
+	).Result()
+	if err != nil {
+		return false, fmt.Errorf("quarantine usage stream item: %w", err)
+	}
+	fields, ok := value.([]any)
+	if !ok || len(fields) != 2 {
+		return false, fmt.Errorf("quarantine usage stream item returned an invalid result")
+	}
+	moved, ok := fields[0].(int64)
+	if !ok || (moved != 0 && moved != 1) {
+		return false, fmt.Errorf("quarantine usage stream item returned an invalid state")
+	}
+	return moved == 1, nil
+}
+
+// Quarantined reports the durable number of malformed items retained for
+// operator inspection. Quarantined payloads never re-enter normal ingestion.
+func (s *RedisStream) Quarantined(ctx context.Context) (int64, error) {
+	count, err := s.client.XLen(ctx, s.quarantineKey).Result()
+	if err != nil {
+		return 0, fmt.Errorf("read usage quarantine backlog: %w", err)
+	}
+	return count, nil
 }
 
 func convertMessages(messages []redis.XMessage) ([]StreamItem, error) {

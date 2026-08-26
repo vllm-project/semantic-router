@@ -57,7 +57,7 @@ def test_router_healthcheck_uses_configured_tls_listener():
     )
 
     assert " -k " in f" {healthcheck.command} "
-    assert "https://127.0.0.1:9443/health" in healthcheck.command
+    assert "https://127.0.0.1:9443/ready" in healthcheck.command
     assert healthcheck.start_period == "30m"
 
 

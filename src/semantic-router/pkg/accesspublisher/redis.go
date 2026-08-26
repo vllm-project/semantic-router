@@ -598,8 +598,11 @@ func classifyRedisPublicationError(err error) error {
 		return ErrEpochMismatch
 	case strings.Contains(message, "HEAD_SUPERSEDED"):
 		return ErrSuperseded
-	case strings.Contains(message, "ACK_INCOMPLETE"), strings.Contains(message, "REPLICA_LEASE_EXPIRED"):
+	case strings.Contains(message, "ACK_INCOMPLETE"), strings.Contains(message, "REPLICA_LEASE_EXPIRED"),
+		strings.Contains(message, "NO_ACTIVE_REPLICAS"):
 		return ErrAcknowledgements
+	case strings.Contains(message, "EXPECTED_PUBLICATION_CHANGED"), strings.Contains(message, "ACTIVE_MEMBERSHIP_CHANGED"):
+		return ErrPublicationChanged
 	case strings.Contains(message, "NAMESPACE_DIRECTORY_FULL"):
 		return ErrDirectoryFull
 	case strings.Contains(message, "IMMUTABLE_CONFLICT"), strings.Contains(message, "POINTER_CONFLICT"),
@@ -609,7 +612,8 @@ func classifyRedisPublicationError(err error) error {
 		strings.Contains(message, "STATE_CONFLICT"), strings.Contains(message, "BARRIERS_REQUIRED"):
 		return fmt.Errorf("%w: Redis publication compare-and-set failed", ErrConflict)
 	case strings.Contains(message, "NOT_VALIDATED"), strings.Contains(message, "VALIDATION_CONFLICT"),
-		strings.Contains(message, "POINTER_STATE_INVALID"):
+		strings.Contains(message, "POINTER_STATE_INVALID"), strings.Contains(message, "ACTIVE_GATE_CORRUPT"),
+		strings.Contains(message, "ACTIVE_READINESS_INPUT_INVALID"):
 		return fmt.Errorf("%w: Redis staged publication failed validation", ErrStagedCorrupt)
 	default:
 		return err

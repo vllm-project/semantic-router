@@ -15,11 +15,22 @@ the same versioned APIs.
 
 ## Product contract
 
-Playground has two modes:
+Playground has three explicit modes:
 
 - **Chat** calls an authorized Model or Mixture-of-Models.
+- **Agent** adds a durable Router session that may search the public web and use
+  authorized tools.
 - **Builder** turns a natural-language routing goal into a validated Recipe and
   Entrypoint, tests it, and asks for one explicit confirmation before publishing.
+
+Chat is not an Agent transport. The client obtains a memory-only delegated inference
+credential, calls the ordinary OpenAI-compatible `/v1/chat/completions` endpoint with
+`stream: true`, and renders standard server-sent deltas as they arrive. Final usage
+and safe routing/request headers attach to the completed response. Conversation
+metadata may use Management CRUD, but no Chat inference request is proxied through a
+Dashboard route or encoded as an Agent Turn/Event protocol. Agent and Builder use the
+durable Agent Turn, Tool, and Artifact contracts below; only Builder receives routing
+mutation tools and the publication approval contract.
 
 Builder lives in the Playground composer menu and uses authenticated Router Agent
 sessions, the canonical Recipe store, and the public inference path. Users choose an

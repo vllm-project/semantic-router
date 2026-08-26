@@ -172,8 +172,9 @@ func assertAttemptEvidenceFinalization(
 		Partition: partition, AdmissionID: journal.AdmissionID, AdmissionDigest: admissionDigest,
 		FinalizationDigest: "final-attempts", DispatchCount: 1,
 		EvidenceRevision: evidenceRevision, Event: `{"admissionId":"admission-attempts"}`,
-		Rules:    rules,
-		Evidence: map[quota.CounterIdentity]ActualEvidence{},
+		EventEvidenceState: "known",
+		Rules:              rules,
+		Evidence:           map[quota.CounterIdentity]ActualEvidence{},
 	}
 	finalized, err := first.Finalize(context.Background(), finalization)
 	if err != nil || finalized.Idempotent {
@@ -247,7 +248,8 @@ func TestRedisAttemptEvidenceSurfacesCrashedAttemptAsUnknownForFencing(t *testin
 		Partition: partition, AdmissionID: "admission-crash", AdmissionDigest: admissionDigest,
 		FinalizationDigest: "final-crash", DispatchCount: 1,
 		EvidenceRevision: evidence.Revision, Event: `{"admissionId":"admission-crash"}`,
-		FenceID: "fence-crash", Rules: rules,
+		EventEvidenceState: "unknown",
+		FenceID:            "fence-crash", Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			identity: {State: ActualEvidenceUnknown, Reason: unfinishedAttemptCode},
 		},
@@ -326,7 +328,8 @@ func TestRedisFinalizationCompareAndSetsAttemptEvidenceRevision(t *testing.T) {
 		Partition: partition, AdmissionID: reference.AdmissionID, AdmissionDigest: admissionDigest,
 		FinalizationDigest: "final-evidence-cas", DispatchCount: 1,
 		EvidenceRevision: started.Revision, Event: `{"admissionId":"admission-evidence-cas"}`,
-		FenceID: "fence-evidence-cas", Rules: rules,
+		EventEvidenceState: "unknown",
+		FenceID:            "fence-evidence-cas", Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			identity: {State: ActualEvidenceUnknown, Reason: "attempt_unfinished"},
 		},

@@ -46,6 +46,34 @@ const (
 	testPlatformRole = "10000000-0000-5000-8000-000000000002"
 )
 
+func TestInvitationPostgresListsEmptyFirstPage(t *testing.T) {
+	dsn := os.Getenv("VLLM_SR_CONTROL_PLANE_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("PostgreSQL invitation test database is not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	db := isolatedInvitationDatabase(t, ctx, dsn)
+	if err := (controlpostgres.Migrator{DB: db}).Apply(ctx); err != nil {
+		t.Fatal(err)
+	}
+	store, err := invitationpostgres.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := store.List(ctx, invitationmanagement.InvitationQuery{
+		NamespaceID: testNamespaceID,
+		Now:         time.Now().UTC(),
+		Limit:       20,
+	})
+	if err != nil {
+		t.Fatalf("List() empty first page error = %v", err)
+	}
+	if len(page.Items) != 0 || page.HasMore {
+		t.Fatalf("List() empty first page = %+v, want no items and no next page", page)
+	}
+}
+
 func TestInvitationPostgresAtomicOnboardingAndBoundedReplay(t *testing.T) {
 	dsn := os.Getenv("VLLM_SR_CONTROL_PLANE_TEST_DATABASE_URL")
 	if dsn == "" {
@@ -104,6 +132,7 @@ func TestInvitationPostgresAtomicOnboardingAndBoundedReplay(t *testing.T) {
 		}, testSessionIssuer)
 	}
 	accepted := assertInvitationAcceptReplay(t, ctx, exchanges, accept, issued)
+	assertIssuerSessionReissue(t, ctx, db, exchanges)
 
 	assertInvitationMaterialization(t, ctx, db, issued, accepted)
 	assertInvitationDefaultPolicies(t, ctx, db, service, accept, actor)
@@ -194,6 +223,58 @@ func assertInvitationAcceptReplay(
 	return accepted
 }
 
+func assertIssuerSessionReissue(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	exchanges *invitationmanagement.IdentityExchangeCoordinator,
+) {
+	t.Helper()
+	issuerSessionID := "dashboard-session-" + uuid.NewString()
+	authenticatedAt := time.Now().UTC().Add(-time.Minute).Truncate(time.Second)
+	exchange := func(tokenID string) managementauth.IdentityExchangeResult {
+		t.Helper()
+		result, err := exchanges.ExchangeIdentity(ctx, managementauth.IdentityExchangeRequest{
+			Identity: managementauth.VerifiedExternalIdentity{
+				IssuerID: testIssuerID, Issuer: "https://issuer.example", Subject: "subject-1",
+				IssuerSessionID: &issuerSessionID, AAL: "aal2", AMR: []string{"pwd"},
+				AuthenticatedAt: authenticatedAt, EvidenceExpiresAt: authenticatedAt.Add(2 * time.Hour),
+			},
+			RequestID: "issuer-reissue-" + tokenID,
+			Session: managementauth.SessionDraft{
+				ID: uuid.NewString(), TokenID: tokenID, Audience: "vllm-sr-management",
+				IssuerSessionID: &issuerSessionID,
+				AuthSourceKind:  managementauth.AuthSourceIssuer, AuthSourceID: testIssuerID,
+				EvidenceKind: managementauth.EvidenceHuman,
+				Human: &managementauth.HumanEvidence{
+					AuthenticationTime: authenticatedAt.Unix(), AAL: "aal2", AMR: []string{"pwd"},
+				},
+				AuthenticatedAt: authenticatedAt, EvidenceExpiresAt: authenticatedAt.Add(2 * time.Hour),
+			},
+		}, testSessionIssuer)
+		if err != nil {
+			t.Fatalf("ExchangeIdentity(%q) error = %v", tokenID, err)
+		}
+		return result
+	}
+	first := exchange("issuer-token-first")
+	second := exchange("issuer-token-second")
+	if first.Issued.ManagementSessionID == "" || second.Issued.ManagementSessionID != first.Issued.ManagementSessionID {
+		t.Fatalf("issuer session reissue IDs = %q, %q",
+			first.Issued.ManagementSessionID, second.Issued.ManagementSessionID)
+	}
+	var count int
+	var tokenID string
+	if err := db.QueryRowContext(ctx, `SELECT count(*), max(token_id)
+FROM management_sessions
+WHERE auth_source_id=$1 AND issuer_session_id=$2`, testIssuerID, issuerSessionID).Scan(&count, &tokenID); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 || tokenID != "issuer-token-first" {
+		t.Fatalf("issuer session rows = %d, token = %q", count, tokenID)
+	}
+}
+
 func assertInvitationMaterialization(
 	t *testing.T,
 	ctx context.Context,
@@ -202,7 +283,7 @@ func assertInvitationMaterialization(
 	accepted managementauth.IdentityExchangeResult,
 ) {
 	t.Helper()
-	var principalLinks, memberships, userAccess, userRate, teamAccess, teamRate, keys, credentials int
+	var principalLinks, memberships, userAccess, userRate, teamAccess, teamRate, keys, credentials, invalidAuditChains int
 	err := db.QueryRowContext(ctx, `SELECT
   (SELECT count(*) FROM management_principal_user_links WHERE namespace_id=$1 AND user_id=$2),
   (SELECT count(*) FROM access_team_memberships WHERE namespace_id=$1 AND team_id=$3 AND user_id=$2 AND status='active'),
@@ -211,16 +292,18 @@ func assertInvitationMaterialization(
   (SELECT count(*) FROM access_policy_bindings WHERE namespace_id=$1 AND subject_id=$3 AND policy_id=$4 AND status='active'),
   (SELECT count(*) FROM rate_limit_bindings WHERE namespace_id=$1 AND subject_id=$3 AND policy_id=$5 AND status='active'),
   (SELECT count(*) FROM access_api_keys WHERE namespace_id=$1 AND owner_user_id=$2 AND status='active'),
-  (SELECT count(*) FROM access_api_key_credentials c JOIN access_api_keys k ON k.id=c.api_key_id WHERE k.namespace_id=$1 AND k.owner_user_id=$2 AND c.status='active')`,
+  (SELECT count(*) FROM access_api_key_credentials c JOIN access_api_keys k ON k.id=c.api_key_id WHERE k.namespace_id=$1 AND k.owner_user_id=$2 AND c.status='active'),
+  (SELECT count(*) FROM access_audit_events WHERE namespace_id=$1
+    AND jsonb_typeof(actor_chain) IS DISTINCT FROM 'array')`,
 		testNamespaceID, accepted.Onboarding.UserID, testTeamID, testAccessID, testRateID,
-	).Scan(&principalLinks, &memberships, &userAccess, &userRate, &teamAccess, &teamRate, &keys, &credentials)
+	).Scan(&principalLinks, &memberships, &userAccess, &userRate, &teamAccess, &teamRate, &keys, &credentials, &invalidAuditChains)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if principalLinks != 1 || memberships != 1 || userAccess != 0 || userRate != 0 ||
-		teamAccess != 1 || teamRate != 1 || keys != 1 || credentials != 1 {
-		t.Fatalf("materialized counts = link:%d membership:%d userAccess:%d userRate:%d teamAccess:%d teamRate:%d key:%d credential:%d",
-			principalLinks, memberships, userAccess, userRate, teamAccess, teamRate, keys, credentials)
+		teamAccess != 1 || teamRate != 1 || keys != 1 || credentials != 1 || invalidAuditChains != 0 {
+		t.Fatalf("materialized counts = link:%d membership:%d userAccess:%d userRate:%d teamAccess:%d teamRate:%d key:%d credential:%d invalidAuditChain:%d",
+			principalLinks, memberships, userAccess, userRate, teamAccess, teamRate, keys, credentials, invalidAuditChains)
 	}
 	policyStore, err := accesspostgres.New(db)
 	if err != nil {
@@ -599,6 +682,8 @@ func newInvitationService(t *testing.T, db *sql.DB, invitationPeppers accesscred
 		},
 		ResponseKEK: responseKEK, FirstKeys: firstKeys,
 		IdempotencyTTL: time.Hour, SecretDeliveryTTL: time.Hour,
+		PublicationWaiter:  invitationPublicationWaiter{},
+		PublicationTimeout: 5 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -609,6 +694,12 @@ func newInvitationService(t *testing.T, db *sql.DB, invitationPeppers accesscred
 	}
 	t.Cleanup(service.Close)
 	return service, exchanges, responseKEK
+}
+
+type invitationPublicationWaiter struct{}
+
+func (invitationPublicationWaiter) WaitAPIKeyActive(context.Context, string, string, string) error {
+	return nil
 }
 
 func testSessionIssuer(_ context.Context, session managementauth.LiveSession,

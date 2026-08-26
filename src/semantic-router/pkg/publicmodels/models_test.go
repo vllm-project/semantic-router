@@ -77,6 +77,29 @@ func TestNewOpenAIModelListDoesNotInventDefaultAliases(t *testing.T) {
 	}
 }
 
+func TestBackendCandidatesRequirePublicFlagOrExplicitFilteringPipeline(t *testing.T) {
+	cfg := &config.RouterConfig{
+		BackendModels: config.BackendModels{ModelConfig: map[string]config.ModelParams{
+			"private/backend": {ResourceID: "model-private-backend", ResourceRevision: 1},
+		}},
+	}
+
+	publicList := NewOpenAIModelList(cfg, 123)
+	if len(publicList.Data) != 0 {
+		t.Fatalf("public catalog ignored disabled backend visibility: %+v", publicList.Data)
+	}
+
+	candidates := NewOpenAIModelListWithOptions(cfg, 123, ModelListBuildOptions{
+		IncludeBackendModelCandidates: true,
+	})
+	if len(candidates.Data) != 1 || candidates.Data[0].ID != "private/backend" {
+		t.Fatalf("authorized filtering candidates = %+v", candidates.Data)
+	}
+	if cfg.IncludeConfigModelsInList {
+		t.Fatal("candidate construction mutated the public visibility policy")
+	}
+}
+
 func assertPublicModel(
 	t *testing.T,
 	model OpenAIModel,

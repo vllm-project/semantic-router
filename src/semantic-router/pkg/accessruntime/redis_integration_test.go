@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +21,84 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 )
+
+func TestRedisReaderClassifiesStagedCredentialAsPending(t *testing.T) {
+	address := os.Getenv("ACCESSRUNTIME_TEST_REDIS_ADDR")
+	if address == "" {
+		t.Skip("ACCESSRUNTIME_TEST_REDIS_ADDR is not configured")
+	}
+	client := redis.NewClient(&redis.Options{Addr: address})
+	t.Cleanup(func() { _ = client.Close() })
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		t.Fatalf("ping Redis: %v", err)
+	}
+	prefix := "access-pending-it:" + uuid.NewString()
+	t.Cleanup(func() { deletePrefix(context.Background(), client, prefix+":*") })
+	const (
+		namespaceID = "11111111-1111-4111-8111-111111111111"
+		partition   = "tenant-pending"
+		publicID    = "pendingcredential0001"
+		pendingID   = "publication-pending"
+		activeID    = "publication-active"
+	)
+	directory, err := quotaruntime.CredentialDirectoryKeyWithPrefix(
+		prefix, string(accesscredential.KindAPIKey), publicID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.HSet(ctx, directory, map[string]any{
+		"pending_publication_id": pendingID,
+		"pending_state":          "active",
+		"pending_partition":      partition,
+		"pending_namespace_id":   namespaceID,
+		"pending_kind":           string(accesscredential.KindAPIKey),
+		"pending_public_id":      publicID,
+	}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	reader, err := NewRedisProjectionReader(RedisProjectionReaderOptions{
+		Client: client, KeyPrefix: prefix,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.LocateCredential(ctx, accesscredential.KindAPIKey, publicID); !errors.Is(err, ErrPublicationPending) {
+		t.Fatalf("first staged publication = %v, want pending", err)
+	}
+	keys, err := accesspublisher.NewKeyspace(prefix, namespaceID, partition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := client.HSet(ctx, keys.AccessGate(), map[string]any{
+		"publication_id": activeID, "revision": 1, "runtime_epoch": 1,
+		"publication_digest": strings.Repeat("a", 64),
+		"manifest_digest":    strings.Repeat("b", 64),
+	}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if err := client.HSet(ctx, keys.RoutingGate(), map[string]any{
+		"publication_id": activeID, "revision": 1, "runtime_epoch": 1,
+		"publication_digest": strings.Repeat("a", 64),
+		"snapshot_digest":    strings.Repeat("c", 64),
+		"snapshot_key":       keys.RoutingSnapshot(1),
+	}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.LocateCredential(ctx, accesscredential.KindAPIKey, publicID); !errors.Is(err, ErrPublicationPending) {
+		t.Fatalf("next staged publication = %v, want pending", err)
+	}
+	if err := client.HSet(ctx, directory,
+		"publication_id", "unexpected-active", "state", "active",
+	).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reader.LocateCredential(ctx, accesscredential.KindAPIKey, publicID); !errors.Is(err, ErrRuntimeCorrupt) {
+		t.Fatalf("mismatched active pointer = %v, want corrupt", err)
+	}
+}
 
 func TestRedisRuntimeUsesOnePrefixedAtomicAccessAndQuotaPath(t *testing.T) {
 	address := os.Getenv("ACCESSRUNTIME_TEST_REDIS_ADDR")

@@ -60,7 +60,7 @@ func routingSnapshotExportDTO(snapshot routingsnapshot.Snapshot) managementapi.R
 	for index, entrypoint := range snapshot.Entrypoints {
 		entrypoints[index] = managementapi.RoutingSnapshotEntrypoint{
 			ID: entrypoint.ID, Revision: entrypoint.Revision, Name: entrypoint.Name,
-			Aliases: append([]string(nil), entrypoint.Aliases...), Rules: routingEntrypointRulesDTO(entrypoint.Rules),
+			Aliases: append([]string{}, entrypoint.Aliases...), Rules: routingEntrypointRulesDTO(entrypoint.Rules),
 		}
 	}
 	return managementapi.RoutingSnapshotExport{

@@ -26,7 +26,7 @@ func TestOpenAPIUsesTypedObservabilityResponsesAndQueries(t *testing.T) {
 	foundDimension := false
 	for _, parameter := range breakdown.Parameters {
 		if parameter.In == "query" && parameter.Name == "dimension" {
-			foundDimension = len(parameter.Schema.Enum) == 10
+			foundDimension = len(parameter.Schema.Enum) == 11
 		}
 	}
 	if !foundDimension {
@@ -60,6 +60,16 @@ func TestOpenAPIUsesTypedObservabilityResponsesAndQueries(t *testing.T) {
 	}
 	if _, exists := document.Components.Schemas["RequestLog"].Properties["externalRequestId"]; !exists {
 		t.Fatal("request-log response omits externalRequestId correlation")
+	}
+	requestLog := document.Components.Schemas["RequestLog"]
+	for _, field := range []string{"decisionId", "decisionName", "decisionTier", "models"} {
+		if _, exists := requestLog.Properties[field]; !exists {
+			t.Errorf("request-log response omits %s routing evidence", field)
+		}
+	}
+	if requestLog.Properties["models"].Items == nil ||
+		requestLog.Properties["models"].Items.Ref != "#/components/schemas/RequestModel" {
+		t.Fatal("request-log Model snapshots are not typed")
 	}
 	if _, exists := document.Components.Schemas["AuditEvent"]; !exists {
 		t.Fatal("audit event schema is missing")

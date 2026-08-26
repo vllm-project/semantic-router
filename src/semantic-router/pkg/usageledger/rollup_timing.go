@@ -21,13 +21,14 @@ func loadRequestTimingHistograms(
 ) error {
 	base := `SELECT date_trunc('minute', e.occurred_at),
   COALESCE(e.api_key_id::text,''), COALESCE(e.user_id::text,''), COALESCE(e.team_id::text,''),
-  COALESCE(e.entrypoint_id::text,''), COALESCE(e.recipe_id::text,''), e.protocol,
+  COALESCE(e.entrypoint_id::text,''), COALESCE(e.recipe_id::text,''),
+  COALESCE(e.request_metadata->'decision'->>'id',''), e.protocol,
   e.status_code, COALESCE(e.error_code,''), %s AS bucket_index, count(*)::text
 FROM usage_events e
 WHERE e.namespace_id = $1 AND e.occurred_at >= $2 AND e.occurred_at < $3
   AND e.event_kind IN ('actual','unknown') %s
-GROUP BY 1,2,3,4,5,6,7,8,9,10
-ORDER BY 1,2,3,4,5,6,7,8,9,10`
+GROUP BY 1,2,3,4,5,6,7,8,9,10,11
+ORDER BY 1,2,3,4,5,6,7,8,9,10,11`
 	for _, metric := range []struct {
 		name      string
 		column    string
@@ -47,7 +48,7 @@ ORDER BY 1,2,3,4,5,6,7,8,9,10`
 			var bucketIndex int
 			var count string
 			if err := queryRows.Scan(&bucket, &dims.APIKeyID, &dims.UserID, &dims.TeamID,
-				&dims.EntrypointID, &dims.RecipeID, &dims.Protocol, &dims.StatusCode,
+				&dims.EntrypointID, &dims.RecipeID, &dims.DecisionID, &dims.Protocol, &dims.StatusCode,
 				&dims.ErrorCode, &bucketIndex, &count); err != nil {
 				queryRows.Close()
 				return fmt.Errorf("scan request %s histogram: %w", metric.name, err)

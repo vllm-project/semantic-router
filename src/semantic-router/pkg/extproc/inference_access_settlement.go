@@ -22,6 +22,7 @@ type inferenceSettlementPlan struct {
 	aggregate       usageaccounting.Aggregate
 	payload         string
 	digest          string
+	evidenceState   usageledger.EvidenceState
 	fenceID         string
 }
 
@@ -36,8 +37,12 @@ func (r *OpenAIRouter) completeAndSettlePrimaryInference(
 	state := ctx.DispatchState
 	state.mu.Lock()
 	dispatchID := state.selectedDispatchID
+	noDispatchProven := state.noDispatchProven
 	state.mu.Unlock()
 	if dispatchID == "" {
+		if noDispatchProven {
+			return r.settleNoBackendInference(ctx, statusCode, "backend_dispatch_not_started")
+		}
 		return r.settleInference(ctx, statusCode, terminalErrorCode(statusCode), nil)
 	}
 	recorded := usageFromResponse(usage)
@@ -247,7 +252,7 @@ func (r *OpenAIRouter) settleInference(
 		_, err = r.InferenceAccess.Settle(settlementContext, accessruntime.SettlementRequest{
 			Admission: admission, AttemptEvidence: plan.attemptEvidence,
 			Aggregate: plan.aggregate, FinalizationDigest: plan.digest,
-			Event: plan.payload, FenceID: plan.fenceID,
+			Event: plan.payload, EventEvidenceState: plan.evidenceState, FenceID: plan.fenceID,
 		})
 		if errors.Is(err, quotaruntime.ErrEvidenceChanged) && attempt < 2 {
 			plan = nil
@@ -321,17 +326,25 @@ func (r *OpenAIRouter) buildInferenceSettlement(
 		dispatchState.mu.Unlock()
 		return nil, fmt.Errorf("settlement has no dispatch journal")
 	}
+	// The quota finalizer compare-and-sets the complete Redis dispatch journal.
+	// Primary fallback candidates are journaled before the private dispatch
+	// handler starts, even though only the authenticated attempted prefix belongs
+	// in usage and cost accounting. Keep those two views separate: evidence must
+	// cover every journaled ordinal, while the terminal ledger contains only
+	// candidates proven attempted by the signed dispatch outcome.
+	evidenceDispatches := make([]*inferenceDispatch, 0, len(dispatchState.dispatches))
 	dispatches := make([]*inferenceDispatch, 0, len(dispatchState.dispatches))
 	for index, dispatch := range dispatchState.dispatches {
 		if dispatch == nil {
 			dispatchState.mu.Unlock()
 			return nil, fmt.Errorf("settlement dispatch %d is unavailable", index)
 		}
-		if !dispatch.settlementEligible {
-			continue
-		}
 		clone := *dispatch
 		clone.attempts = append([]usageledger.Attempt(nil), dispatch.attempts...)
+		evidenceDispatches = append(evidenceDispatches, &clone)
+		if !clone.settlementEligible {
+			continue
+		}
 		if clone.completedAt.IsZero() {
 			clone.completedAt = time.Now().UTC()
 			clone.state = usageaccounting.EvidenceUnknown
@@ -346,12 +359,12 @@ func (r *OpenAIRouter) buildInferenceSettlement(
 
 	attemptEvidence, buildInferenceSettlementErr := r.InferenceAccess.ReadAttemptEvidence(
 		settlementContext,
-		attemptEvidenceRequest(admission, dispatches),
+		attemptEvidenceRequest(admission, evidenceDispatches),
 	)
 	if buildInferenceSettlementErr != nil {
 		return nil, buildInferenceSettlementErr
 	}
-	if err := reconcileAttemptEvidence(dispatches, attemptEvidence); err != nil {
+	if err := reconcileAttemptEvidence(evidenceDispatches, attemptEvidence); err != nil {
 		return nil, err
 	}
 	aggregator := usageaccounting.NewAggregator()
@@ -393,7 +406,7 @@ func (r *OpenAIRouter) buildInferenceSettlement(
 	}
 	return &inferenceSettlementPlan{
 		attemptEvidence: attemptEvidence, aggregate: aggregate, payload: payload,
-		digest: event.FinalizationDigest, fenceID: fenceID,
+		digest: event.FinalizationDigest, evidenceState: event.EvidenceState, fenceID: fenceID,
 	}, nil
 }
 

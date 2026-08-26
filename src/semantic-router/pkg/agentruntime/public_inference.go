@@ -65,6 +65,14 @@ type HTTPPublicInferenceClient struct {
 	now      func() time.Time
 }
 
+type publicInferenceHTTPError struct {
+	statusCode int
+}
+
+func (failure *publicInferenceHTTPError) Error() string {
+	return fmt.Sprintf("agent public inference returned HTTP %d", failure.statusCode)
+}
+
 // NewHTTPPublicInferenceClient binds the Agent worker to the deployment's
 // public Envoy listener. The delegated credential therefore receives exactly
 // the same policy, quota, routing, accounting, and logging behavior as any
@@ -147,7 +155,7 @@ func (client *HTTPPublicInferenceClient) Generate(
 	defer response.Body.Close()
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		_, _ = io.CopyN(io.Discard, response.Body, 64<<10)
-		return PublicInferenceObservation{}, fmt.Errorf("agent public inference returned HTTP %d", response.StatusCode)
+		return PublicInferenceObservation{}, &publicInferenceHTTPError{statusCode: response.StatusCode}
 	}
 	mediaType, _, err := mime.ParseMediaType(response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "text/event-stream" {

@@ -18,6 +18,7 @@ var ErrLedgerCorrupt = errors.New("usage ledger invariant violation")
 type BatchResult struct {
 	Inserted         int
 	Duplicate        int
+	Quarantined      int
 	projectionEvents []TerminalEvent
 }
 
@@ -260,30 +261,17 @@ func persistInferenceReplay(ctx context.Context, tx *sql.Tx, event TerminalEvent
 		RecipeID: event.Routing.RecipeID, RecipeName: event.Routing.RecipeName,
 		RecipeRevision: event.Routing.RecipeRevision,
 	}
-	modelsByKey := make(map[string]outcomefeedback.ServedModel)
-	for _, dispatch := range event.Dispatches {
-		if routing.DecisionID == "" && dispatch.DecisionID != "" {
-			routing.DecisionID = dispatch.DecisionID
-			routing.DecisionName = dispatch.DecisionName
-			routing.DecisionTier = dispatch.DecisionTier
-		}
-		if !dispatchActuallyServed(dispatch) || dispatch.ModelID == "" ||
-			dispatch.ModelName == "" || dispatch.ModelRevision <= 0 {
-			continue
-		}
-		model := outcomefeedback.ServedModel{
-			ID: dispatch.ModelID, Name: dispatch.ModelName, Revision: dispatch.ModelRevision,
-		}
-		modelsByKey[model.ID+"\x00"+model.Name+"\x00"+fmt.Sprint(model.Revision)] = model
+	decision, modelSnapshots := terminalRoutingEvidence(event)
+	if decision != nil {
+		routing.DecisionID = decision.ID
+		routing.DecisionName = decision.Name
+		routing.DecisionTier = decision.Tier
 	}
-	keys := make([]string, 0, len(modelsByKey))
-	for key := range modelsByKey {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	models := make([]outcomefeedback.ServedModel, 0, len(keys))
-	for _, key := range keys {
-		models = append(models, modelsByKey[key])
+	models := make([]outcomefeedback.ServedModel, 0, len(modelSnapshots))
+	for _, model := range modelSnapshots {
+		models = append(models, outcomefeedback.ServedModel{
+			ID: model.ID, Name: model.Name, Revision: model.Revision,
+		})
 	}
 	routingJSON, err := json.Marshal(routing)
 	if err != nil {
@@ -447,20 +435,63 @@ type safeEventMetadata struct {
 	CacheState         string            `json:"cacheState,omitempty"`
 	PrincipalSnapshots PrincipalSnapshot `json:"principalSnapshots"`
 	RoutingSnapshots   RoutingSnapshot   `json:"routingSnapshots"`
+	Decision           *requestDecision  `json:"decision,omitempty"`
+	Models             []RequestModel    `json:"models"`
 	ServedInputKnown   bool              `json:"servedInputKnown"`
 	ServedOutputKnown  bool              `json:"servedOutputKnown"`
 	QuotaReceipts      []QuotaReceipt    `json:"quotaReceipts,omitempty"`
 	Metadata           map[string]string `json:"metadata,omitempty"`
 }
 
+type requestDecision struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	Tier int    `json:"tier,omitempty"`
+}
+
 func eventMetadata(event TerminalEvent) safeEventMetadata {
+	decision, models := terminalRoutingEvidence(event)
 	return safeEventMetadata{
 		CompletedAt: event.CompletedAt, Stream: event.Stream, ToolCall: event.ToolCall,
 		CacheState: event.CacheState, PrincipalSnapshots: event.Principal,
-		RoutingSnapshots: event.Routing, ServedInputKnown: event.Served.InputKnown,
+		RoutingSnapshots: event.Routing, Decision: decision, Models: models,
+		ServedInputKnown:  event.Served.InputKnown,
 		ServedOutputKnown: event.Served.OutputKnown, QuotaReceipts: event.QuotaReceipts,
 		Metadata: event.Metadata,
 	}
+}
+
+// terminalRoutingEvidence derives the non-secret request-routing snapshot from
+// the terminal event itself. Replay persistence is optional, so observability
+// must never depend on a replay row to identify the decision or served Models.
+func terminalRoutingEvidence(event TerminalEvent) (*requestDecision, []RequestModel) {
+	var decision *requestDecision
+	modelsByKey := make(map[string]RequestModel)
+	for _, dispatch := range event.Dispatches {
+		if decision == nil && dispatch.DecisionID != "" {
+			decision = &requestDecision{
+				ID: dispatch.DecisionID, Name: dispatch.DecisionName, Tier: dispatch.DecisionTier,
+			}
+		}
+		if !dispatchActuallyServed(dispatch) || dispatch.ModelID == "" ||
+			dispatch.ModelName == "" || dispatch.ModelRevision <= 0 {
+			continue
+		}
+		model := RequestModel{
+			ID: dispatch.ModelID, Name: dispatch.ModelName, Revision: dispatch.ModelRevision,
+		}
+		modelsByKey[model.ID+"\x00"+model.Name+"\x00"+fmt.Sprint(model.Revision)] = model
+	}
+	keys := make([]string, 0, len(modelsByKey))
+	for key := range modelsByKey {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	models := make([]RequestModel, 0, len(keys))
+	for _, key := range keys {
+		models = append(models, modelsByKey[key])
+	}
+	return decision, models
 }
 
 func nullString(value string) any {

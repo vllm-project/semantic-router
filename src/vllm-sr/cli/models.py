@@ -698,6 +698,8 @@ class ResponseCacheRevisionConfig(BaseModel):
 class ResponseCachePluginConfig(BaseModel):
     """Configuration for response_cache plugin."""
 
+    model_config = ConfigDict(extra="forbid")
+
     enabled: bool
     mode: Literal["semantic", "exact", "exact_then_semantic"] = "semantic"
     scope: Literal["user", "team", "tenant", "global"] = "user"
@@ -705,32 +707,9 @@ class ResponseCachePluginConfig(BaseModel):
     request_controls: Optional[ResponseCacheRequestControlsConfig] = None
     personalized: Optional[ResponseCachePersonalizedConfig] = None
     revision: Optional[ResponseCacheRevisionConfig] = None
-    # Deprecated flat compatibility fields.
-    allow_request_controls: bool = False
-    control_header: Optional[str] = None
-    similarity_threshold: Optional[float] = Field(
-        default=None,
-        ge=0.0,
-        le=1.0,
-        description="Similarity threshold (0.0-1.0, default: None)",
-    )
     ttl_seconds: Optional[int] = Field(
         default=None, ge=0, description="TTL in seconds (must be >= 0, default: None)"
     )
-
-    @model_validator(mode="after")
-    def validate_compatibility_fields(self):
-        if self.semantic is not None and self.similarity_threshold is not None:
-            raise ValueError(
-                "semantic.similarity_threshold conflicts with similarity_threshold"
-            )
-        if self.request_controls is not None and (
-            self.allow_request_controls or self.control_header is not None
-        ):
-            raise ValueError(
-                "request_controls conflicts with deprecated request-control fields"
-            )
-        return self
 
 
 CompressionTokenLimit = Literal["auto"] | int
@@ -2142,7 +2121,6 @@ class UserConfig(BaseModel):
     entrypoints: List[Entrypoint] = Field(default_factory=list)
     recipes: List[Recipe] = Field(default_factory=list)
     global_: Optional[Dict[str, Any]] = Field(default=None, alias="global")
-    setup: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def validate_resource_boundary(self):

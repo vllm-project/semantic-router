@@ -154,7 +154,7 @@ func startUsageObserver(
 ) (<-chan usageObservation, error) {
 	stream, err := usageledger.NewRedisStream(client, usageledger.RedisStreamOptions{
 		KeyPrefix: prefix, Partition: fixturePartition,
-		Group: "capacity-gate", Consumer: "capacity-observer",
+		Group: usageledger.ConsumerGroupName, Consumer: "capacity-observer",
 	})
 	if err != nil {
 		return nil, err

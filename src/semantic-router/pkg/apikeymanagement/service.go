@@ -23,38 +23,43 @@ const (
 )
 
 type Options struct {
-	Repository        Repository
-	Commands          *managementcommand.Codec
-	CursorKeyring     securitykeyring.Symmetric
-	APIKeyPeppers     accesscredential.PepperKeyring
-	ResponseKEK       accesscredential.KEKKeyring
-	RevealKEK         *accesscredential.KEKKeyring
-	DefaultRevealable bool
-	IdempotencyTTL    time.Duration
-	SecretDeliveryTTL time.Duration
-	Now               func() time.Time
-	NewID             func() string
+	Repository         Repository
+	Waiter             PublicationWaiter
+	Commands           *managementcommand.Codec
+	CursorKeyring      securitykeyring.Symmetric
+	APIKeyPeppers      accesscredential.PepperKeyring
+	ResponseKEK        accesscredential.KEKKeyring
+	RevealKEK          *accesscredential.KEKKeyring
+	DefaultRevealable  bool
+	IdempotencyTTL     time.Duration
+	SecretDeliveryTTL  time.Duration
+	PublicationTimeout time.Duration
+	Now                func() time.Time
+	NewID              func() string
 }
 
 type Service struct {
-	repository        Repository
-	commands          *managementcommand.Codec
-	cursors           cursorCodec
-	peppers           accesscredential.PepperKeyring
-	responseKEK       accesscredential.KEKKeyring
-	revealKEK         *accesscredential.KEKKeyring
-	defaultRevealable bool
-	idempotencyTTL    time.Duration
-	secretTTL         time.Duration
-	now               func() time.Time
-	newID             func() string
+	repository         Repository
+	waiter             PublicationWaiter
+	commands           *managementcommand.Codec
+	cursors            cursorCodec
+	peppers            accesscredential.PepperKeyring
+	responseKEK        accesscredential.KEKKeyring
+	revealKEK          *accesscredential.KEKKeyring
+	defaultRevealable  bool
+	idempotencyTTL     time.Duration
+	secretTTL          time.Duration
+	publicationTimeout time.Duration
+	now                func() time.Time
+	newID              func() string
 }
 
 func NewService(options Options) (*Service, error) {
-	if options.Repository == nil || options.Commands == nil || options.APIKeyPeppers.Validate() != nil ||
+	if options.Repository == nil || options.Waiter == nil || options.Commands == nil || options.APIKeyPeppers.Validate() != nil ||
 		options.ResponseKEK.Validate() != nil || options.IdempotencyTTL < time.Minute ||
 		options.IdempotencyTTL > 7*24*time.Hour || options.SecretDeliveryTTL < time.Minute ||
-		options.SecretDeliveryTTL > options.IdempotencyTTL {
+		options.SecretDeliveryTTL > options.IdempotencyTTL || options.PublicationTimeout <= 0 ||
+		options.PublicationTimeout > 30*time.Second {
 		return nil, ErrUnavailable
 	}
 	if options.RevealKEK != nil {
@@ -84,11 +89,12 @@ func NewService(options Options) (*Service, error) {
 		revealKEK = &owned
 	}
 	return &Service{
-		repository: options.Repository, commands: options.Commands, cursors: cursors,
+		repository: options.Repository, waiter: options.Waiter, commands: options.Commands, cursors: cursors,
 		peppers: peppers, responseKEK: responseKEK,
 		revealKEK: revealKEK, defaultRevealable: options.DefaultRevealable,
 		idempotencyTTL: options.IdempotencyTTL, secretTTL: options.SecretDeliveryTTL,
-		now: now, newID: newID,
+		publicationTimeout: options.PublicationTimeout,
+		now:                now, newID: newID,
 	}, nil
 }
 
@@ -276,6 +282,9 @@ func (service *Service) Create(ctx context.Context, request CreateRequest) (Secr
 			return SecretMutationResult{}, ErrUnavailable
 		}
 		return service.replaySecret(ctx, command, *created.Stored, service.timeNow())
+	}
+	if err := service.waitAPIKeyActive(ctx, request.NamespaceID, keyID, credential.KID); err != nil {
+		return SecretMutationResult{}, err
 	}
 	return secretMutation(created.Key, credential, plaintext, accessReceipts, rateReceipt, body, false), nil
 }
@@ -483,6 +492,9 @@ func (service *Service) Rotate(ctx context.Context, request RotateRequest) (Secr
 		}
 		return service.replaySecret(ctx, command, *result.Stored, service.timeNow())
 	}
+	if err := service.waitAPIKeyActive(ctx, request.NamespaceID, request.KeyID, credential.KID); err != nil {
+		return SecretMutationResult{}, err
+	}
 	return secretMutation(result.Key, credential, plaintext, nil, nil, body, false), nil
 }
 
@@ -514,6 +526,10 @@ func (service *Service) Reveal(ctx context.Context, request RevealRequest) (stri
 		revealAAD(request.NamespaceID, request.KeyID, request.CredentialID, credential.KID))
 	if err != nil {
 		return "", ErrCredentialUnavailable
+	}
+	if err := service.waitAPIKeyActive(ctx, request.NamespaceID, request.KeyID, credential.KID); err != nil {
+		zero(plaintext)
+		return "", err
 	}
 	if err := service.repository.RecordReveal(ctx, snapshot, request.Actor); err != nil {
 		zero(plaintext)

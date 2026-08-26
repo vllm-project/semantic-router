@@ -58,6 +58,7 @@ type ManagementDependencies struct {
 	SessionStore               *managementauthpostgres.Store
 	Catalog                    *catalogapplication.Application
 	EgressPolicy               backendegress.Policy
+	IssuerEgressPolicy         backendegress.Policy
 	ProtocolCodecs             *protocolcodec.Registry
 	CredentialAdapters         backendresolver.StaticRegistry
 	DiscoveryAdapters          *providerdiscovery.Registry
@@ -73,15 +74,16 @@ type ManagementDependencies struct {
 }
 
 type Options struct {
-	ManagementFactory        ManagementFactory
-	ProviderIntegrations     []providercatalog.Integration
-	ProviderBackendCompilers []providercatalog.BackendCompiler
-	ReplicaID                string
-	ProviderCatalogGroups    []providercatalog.RolloutGroup
-	RequiredCatalogGroups    []providercatalog.RolloutGroup
-	ProviderCatalogLease     time.Duration
-	ProviderCatalogRenew     time.Duration
-	StartupTimeout           time.Duration
-	BackendDialTimeout       time.Duration
-	DiscoveryClaimTTL        time.Duration
+	ManagementFactory            ManagementFactory
+	ProviderIntegrations         []providercatalog.Integration
+	ProviderBackendCompilers     []providercatalog.BackendCompiler
+	ReplicaID                    string
+	ProviderCatalogGroups        []providercatalog.RolloutGroup
+	RequiredCatalogGroups        []providercatalog.RolloutGroup
+	ProviderCatalogLease         time.Duration
+	ProviderCatalogRenew         time.Duration
+	StartupTimeout               time.Duration
+	BackendDialTimeout           time.Duration
+	DiscoveryClaimTTL            time.Duration
+	ManagementIssuerEgressPolicy *backendegress.Policy
 }

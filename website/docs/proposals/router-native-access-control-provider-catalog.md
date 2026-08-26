@@ -127,6 +127,14 @@ cookie, proxy, host, content-length, transfer-encoding, and other credential or
 transport-framing headers are forbidden in Definition compiler and discovery
 configuration.
 
+The Management OpenAPI represents submitted `connectionFields` as a bounded JSON
+object because each installed Definition owns a different field set. That object is
+not schemaless at runtime: the active Definition is the schema, and the control plane
+rejects undeclared names, missing required values, wrong kinds, invalid options, and
+values outside their declared bounds before discovery, probing, or publication. The
+compiler then emits a closed typed connection; neither the original object nor
+unknown fields enter a routing snapshot.
+
 `static.backend.v1` accepts a literal canonical path and bounded non-secret headers.
 It accepts no Provider-specific form fields and covers normal fixed-origin and
 user-supplied-origin integrations. A Provider that needs a typed field registers a
@@ -337,9 +345,12 @@ keys; no provider resource is mounted into either environment.
 
 File-backed authoring uses the same Integration Registry and backend compilers in the
 CLI or compiler process. Its final local routing snapshot already contains one wire
-format, canonical origin, compiled non-secret connection, and a bootstrap
-credential reference. Provider catalog APIs, discovery Operations, PostgreSQL
-catalog tables, and dynamic activation are not started.
+format, canonical origin, compiled non-secret connection, and an in-process bootstrap
+credential handle when authentication is configured. The authoring input may be a
+named environment/file credential, `api_key_env`, or the accepted but discouraged
+inline `api_key`; the inline value makes the manifest secret-bearing and never appears
+in export or persistent state. Provider catalog APIs, discovery Operations,
+PostgreSQL catalog tables, and dynamic activation are not started.
 
 Both deployment shapes derive catalog provenance identically from canonical Integration
 Definitions and registry-owned revisions. The inference runtime never reopens

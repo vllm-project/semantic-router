@@ -38,6 +38,10 @@ Kubernetes.
 - Publish the versioned `/management/v1` OpenAPI contract for Dashboard, CLI,
   automation, and independent consoles. Keep manifest, HTTP API, and PostgreSQL
   schema evolution independently versioned and explicitly upgraded.
+- Keep Management login stable across control-plane replicas: exact issuer SID and
+  evidence reuse one bounded durable session/token ID, changed evidence creates a
+  separately limited session, and durable digested SID/subject logout selectors
+  prevent late exchange from reviving logged-out authority.
 - Cover Dashboard and Playground authorization, delegated inference, Agent Builder,
   usage/cost visibility, provider onboarding, topology, and accessible responsive UX
   through the same Router APIs.
@@ -54,12 +58,26 @@ Kubernetes.
 - Using inference API keys as Management API credentials.
 - Letting gateway retries choose another logical Model or create unaccounted work.
 - Maintaining multiple serving-time readers or writers for one public contract.
+- Restoring Dashboard or listener APIs that patch Router YAML or write knowledge-base
+  files into a running replica.
+- Adding a dynamic KnowledgeBase Management resource or Dashboard editor. Reusable
+  knowledge bases remain file-authored under `global.model_catalog.kbs[]`; the missing
+  durable resource is recorded explicitly in TD047 and is not a shipped capability of
+  this plan.
 
 ## Exit Criteria
 
 - The strict v0.3 manifest, Management OpenAPI, generated clients, schema, examples,
   and Dashboard forms expose the same Model control, pricing, Recipe, Entrypoint,
   assignment, and fallback contract.
+- Strict parsing rejects alternate retry/pricing layouts, generated routing identity,
+  dynamic access resources, and deployment-mode selectors in human YAML. The offline
+  migrator is not imported by validation or serving code and its output passes the
+  same strict parser.
+- The generated `/management/v1` route inventory and schemas match the normative API:
+  Model writes use nested `control` and string pricing, Entrypoint writes own complete
+  Decision assignments and fallback, and provider-specific connection fields are
+  validated by the active Integration Definition before compilation.
 - File-only startup compiles one immutable manifest without PostgreSQL, Valkey,
   Management mutations, or native API-key state.
 - Durable routing seeds only an empty PostgreSQL authority from the manifest; every
@@ -67,6 +85,10 @@ Kubernetes.
 - Every access-enabled inference endpoint, including discovery, streaming,
   Playground, direct Model tests, and Mixture-of-Models, uses one Router access
   runtime and one effective-policy evaluator.
+- Concurrent first exchange and exact-evidence reissue converge on one durable
+  Management session without cross-replica token invalidation; changed evidence is
+  bounded by the active-session policy, and SID/subject logout wins every exchange
+  race while allowing only genuinely newer subject reauthentication.
 - Multiple Router replicas enforce the same API-key lifecycle, model visibility,
   RPM, actual-token, actual-cost, and concurrency state through Valkey.
 - Settlement records every internal dispatch exactly once, permits the crossing
@@ -88,17 +110,23 @@ Kubernetes.
 
 ## Task List
 
-- [ ] `RAC-01` Close the v0.3 manifest, Management OpenAPI, generated-client, schema,
-  import/export, and documentation contract gates.
+This plan is in progress. The implementation seams exist, but no task below is closed
+until its complete contract, failure, recovery, and release gates pass. In particular,
+the open checkboxes must not be interpreted as shipped-but-undocumented work, and the
+separate KnowledgeBase gap above is not part of the current delivery claim.
+
+- [ ] `RAC-01` Close strict v0.3 parse/export/migration, Management OpenAPI route and
+  schema inventory, generated-client, import/export, and documentation drift gates.
 - [ ] `RAC-02` Close PostgreSQL desired-state, Valkey publication, API-key lifecycle,
   effective policy, global admission, actual settlement, reconciliation, usage,
   rollup, and audit tests.
 - [ ] `RAC-03` Close Model control/pricing, Provider Integration compilation,
   ProviderCredential dispatch, Recipe/Entrypoint publication, priority fallback,
   protocol codec, and direct-inference tests.
-- [ ] `RAC-04` Close Management authentication, authorization, invitations,
-  Team/User inheritance, delegated inference, scoped list/detail/statistics, and
-  independent-console contracts.
+- [ ] `RAC-04` Close Management authentication, exact-evidence session reissue,
+  SID/subject logout races, authorization, invitations, Team/User inheritance,
+  delegated inference, scoped list/detail/statistics, and independent-console
+  contracts.
 - [ ] `RAC-05` Close Dashboard, Playground, Agent Builder, topology, cost/quota,
   responsive layout, accessibility, and permission-visibility regression coverage.
 - [ ] `RAC-06` Close file-only and durable Docker/Kubernetes composition, schema
@@ -123,6 +151,9 @@ instead of adding transitional behavior to the target contract.
   joins.
 - Human YAML and DSL contain readable names, not generated IDs, revisions, backend
   identities, catalog digests, or secret material.
+- Same-version authoring normalization applies documented v0.3 defaults and
+  canonical projections only. Removed layouts are handled by the offline migrator,
+  which is never imported by validation, serving, import, or publication.
 - Public behavior changes require API-level negative authorization and failure-mode
   coverage as well as successful-path tests.
 - Main processors, handlers, config loaders, and CLI commands remain small

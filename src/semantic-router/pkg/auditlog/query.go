@@ -132,7 +132,7 @@ func (queries PostgresQueries) List(
 	// #nosec G201 -- queryWhere emits only fixed column/cast clauses; every value remains a bind parameter.
 	statement := fmt.Sprintf(`SELECT id::text, namespace_id::text, desired_revision,
   chain_sequence, COALESCE(actor_principal_id::text,''), actor_chain, action,
-  resource_type, COALESCE(resource_id,''), request_id, COALESCE(source_ip::text,''),
+  resource_type, COALESCE(resource_id,''), request_id, COALESCE(host(source_ip),''),
   outcome, reason, before_revision, after_revision, details, previous_hash,
   event_hash, created_at
 FROM access_audit_events
@@ -163,6 +163,7 @@ LIMIT $%d`, where, len(args))
 		page.Items = items[:query.PageSize]
 		page.NextCursor, listErr = codec.encode(cursorValue{
 			Version: 1, NamespaceID: query.NamespaceID, QueryDigest: digest,
+			Start: query.Start.UnixNano(), End: query.End.UnixNano(),
 			CreatedAt: last.CreatedAt.UnixNano(), EventID: last.ID,
 		})
 		if listErr != nil {
@@ -306,6 +307,8 @@ type cursorValue struct {
 	Version     int    `json:"v"`
 	NamespaceID string `json:"n"`
 	QueryDigest string `json:"q"`
+	Start       int64  `json:"s"`
+	End         int64  `json:"u"`
 	CreatedAt   int64  `json:"t"`
 	EventID     string `json:"e"`
 }
@@ -368,6 +371,10 @@ func (codec *CursorCodec) decode(encoded string) (cursorValue, error) {
 	if value.Version != 1 || value.CreatedAt <= 0 {
 		return cursorValue{}, fmt.Errorf("%w: cursor payload", ErrInvalidQuery)
 	}
+	start, end := time.Unix(0, value.Start).UTC(), time.Unix(0, value.End).UTC()
+	if !start.Before(end) {
+		return cursorValue{}, fmt.Errorf("%w: cursor time range", ErrInvalidQuery)
+	}
 	if _, err := uuid.Parse(value.NamespaceID); err != nil {
 		return cursorValue{}, fmt.Errorf("%w: cursor namespace", ErrInvalidQuery)
 	}
@@ -375,4 +382,15 @@ func (codec *CursorCodec) decode(encoded string) (cursorValue, error) {
 		return cursorValue{}, fmt.Errorf("%w: cursor identity", ErrInvalidQuery)
 	}
 	return value, nil
+}
+
+// TimeRange returns the immutable query window carried by a verified cursor.
+// Management handlers use it only to restore omitted default bounds; List
+// still verifies the cursor against the complete namespace-and-filter digest.
+func (codec *CursorCodec) TimeRange(encoded string) (time.Time, time.Time, error) {
+	value, err := codec.decode(encoded)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return time.Unix(0, value.Start).UTC(), time.Unix(0, value.End).UTC(), nil
 }

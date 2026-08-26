@@ -3,6 +3,7 @@ package usageledger
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testsupport/signedtoken"
 )
@@ -17,6 +18,8 @@ func TestLogCursorRejectsNonCanonicalSignatureEncoding(t *testing.T) {
 		Version:     1,
 		NamespaceID: testNamespaceID,
 		QueryDigest: strings.Repeat("a", 64),
+		Start:       time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC).UnixNano(),
+		End:         time.Date(2026, 8, 23, 0, 0, 0, 0, time.UTC).UnixNano(),
 		OccurredAt:  1,
 		EventID:     testEventID("canonical-signature"),
 	})

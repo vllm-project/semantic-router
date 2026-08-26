@@ -114,9 +114,10 @@ FROM usage_events WHERE %s`, where)
 	if err != nil {
 		return RequestDetail{}, err
 	}
+	receipts := append(make([]QuotaReceipt, 0, len(metadata.QuotaReceipts)), metadata.QuotaReceipts...)
 	return RequestDetail{
 		Request: request, Routing: metadata.RoutingSnapshots,
-		QuotaReceipts: metadata.QuotaReceipts, Dispatches: dispatches,
+		QuotaReceipts: receipts, Dispatches: dispatches,
 	}, nil
 }
 

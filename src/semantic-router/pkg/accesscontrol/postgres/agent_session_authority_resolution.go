@@ -22,15 +22,12 @@ func selectAgentInferenceKey(
 	if uuid.Validate(keyID) != nil {
 		return delegationmanagement.EligibleKey{}, agentmanagement.ErrInvalid
 	}
-	var team any
-	if effectiveTeamID != "" {
-		if uuid.Validate(effectiveTeamID) != nil {
-			return delegationmanagement.EligibleKey{}, agentmanagement.ErrInvalid
-		}
-		team = effectiveTeamID
+	team, requireExactTeam, err := agentInferenceTeamConstraint(effectiveTeamID)
+	if err != nil {
+		return delegationmanagement.EligibleKey{}, err
 	}
 	return queryAgentInferenceKey(
-		ctx, tx, namespaceID, principalID, team, true, keyID, target,
+		ctx, tx, namespaceID, principalID, team, requireExactTeam, keyID, target,
 		[]accesscontrol.GrantPermission{
 			accesscontrol.GrantPermissionDiscover, accesscontrol.GrantPermissionInvoke,
 		}, true,
@@ -44,19 +41,29 @@ func selectAgentInferenceKeyRead(
 	if uuid.Validate(keyID) != nil {
 		return delegationmanagement.EligibleKey{}, agentmanagement.ErrInvalid
 	}
-	var team any
-	if effectiveTeamID != "" {
-		if uuid.Validate(effectiveTeamID) != nil {
-			return delegationmanagement.EligibleKey{}, agentmanagement.ErrInvalid
-		}
-		team = effectiveTeamID
+	team, requireExactTeam, err := agentInferenceTeamConstraint(effectiveTeamID)
+	if err != nil {
+		return delegationmanagement.EligibleKey{}, err
 	}
 	return queryAgentInferenceKey(
-		ctx, tx, namespaceID, principalID, team, true, keyID, target,
+		ctx, tx, namespaceID, principalID, team, requireExactTeam, keyID, target,
 		[]accesscontrol.GrantPermission{
 			accesscontrol.GrantPermissionDiscover, accesscontrol.GrantPermissionInvoke,
 		}, false,
 	)
+}
+
+// effectiveTeamID is an optional client-side narrowing constraint, never the
+// source of team attribution. When omitted, the pinned eligible key remains
+// authoritative and its validated owner/context team is returned by the query.
+func agentInferenceTeamConstraint(effectiveTeamID string) (any, bool, error) {
+	if effectiveTeamID == "" {
+		return nil, false, nil
+	}
+	if uuid.Validate(effectiveTeamID) != nil {
+		return nil, false, agentmanagement.ErrInvalid
+	}
+	return effectiveTeamID, true, nil
 }
 
 func queryAgentInferenceKey(

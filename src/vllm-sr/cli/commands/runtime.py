@@ -7,9 +7,6 @@ import webbrowser
 from pathlib import Path
 
 import click
-import yaml
-
-from cli.yaml_contract import load_yaml
 
 from cli.bootstrap import ensure_bootstrap_workspace
 from cli.commands.common import exit_with_logged_error
@@ -121,17 +118,6 @@ def _resolve_serve_config(
             raise ValueError(
                 "Kubernetes deployment requires a complete ./config.yaml; "
                 "automatic first-run workspace creation is available only for Docker"
-            )
-        try:
-            document = load_yaml(config_path.read_text(encoding="utf-8")) or {}
-        except (OSError, yaml.YAMLError) as exc:
-            raise ValueError(
-                "Kubernetes deployment requires a valid YAML config"
-            ) from exc
-        if isinstance(document, dict) and document.get("setup") is not None:
-            raise ValueError(
-                "Kubernetes deployment does not support Dashboard setup-mode configs; "
-                "provide a complete Router config and explicit Kubernetes Secrets"
             )
         return config_path
     state_root_dir = (

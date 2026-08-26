@@ -61,15 +61,15 @@ def router_healthcheck(
     *,
     tls_enabled: bool,
 ) -> DockerHealthcheck:
-    """Probe Router process health through its private Management listener."""
+    """Probe Router serving readiness through its private operational listener."""
 
     scheme = "https" if tls_enabled else "http"
     arguments = ["curl", "-fsS"]
     if tls_enabled:
-        # Startup readiness validates the configured trust chain separately.
-        # This Docker probe stays on container loopback and owns only liveness.
+        # Runtime readiness validates the configured trust chain separately.
+        # This Docker probe stays on container loopback.
         arguments.append("-k")
-    arguments.append(f"{scheme}://127.0.0.1:{management_port}/health")
+    arguments.append(f"{scheme}://127.0.0.1:{management_port}/ready")
     return DockerHealthcheck(
         command=shlex.join(arguments),
         start_period="30m",

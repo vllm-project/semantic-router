@@ -73,7 +73,9 @@ func NewAgentSessionAuthority(options AgentSessionAuthorityOptions) (*AgentSessi
 	}
 	return &AgentSessionAuthority{
 		store: options.Store, management: options.Management,
-		peppers: options.Peppers, secrets: options.Secrets,
+		// The factory erases its short-lived keyring after composition. The
+		// authority must own the issuer it retains for future session creation.
+		peppers: options.Peppers.Clone(), secrets: options.Secrets,
 		waiter: options.Waiter, audience: options.Audience, renewalLead: lead, now: now,
 	}, nil
 }

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 var (
@@ -180,6 +181,10 @@ type AdmissionRequest struct {
 	LeaseDuration time.Duration
 	Preconditions []AdmissionPrecondition
 	Rules         []RuleBinding
+	// Recovery is the bounded, non-secret request snapshot needed to settle an
+	// expired admission after its owning Router replica disappears. It never
+	// contains headers, credentials, prompts, responses, or arbitrary metadata.
+	Recovery *AdmissionRecoveryContext
 }
 
 type AdmissionDisposition string
@@ -398,7 +403,16 @@ type FinalizationRequest struct {
 	FinalizationDigest string
 	DispatchCount      uint32
 	EvidenceRevision   uint64
-	Event              string
+	// ExpectedAdmissionDeadline is set only by lease recovery. Finalize compares
+	// it with the still-pending admission in the same Redis transaction so a
+	// concurrent heartbeat cannot be mistaken for an abandoned request.
+	ExpectedAdmissionDeadline time.Time
+	Event                     string
+	// EventEvidenceState describes the durable terminal event as a whole. It is
+	// deliberately independent from response-actual counter evidence: an event
+	// can be unknown even when no response-actual rule exists, and a known
+	// backend event can still leave a served-usage counter unresolved.
+	EventEvidenceState usageledger.EvidenceState
 	FenceID            string
 	Rules              []RuleBinding
 	Evidence           map[quota.CounterIdentity]ActualEvidence

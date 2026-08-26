@@ -20,16 +20,20 @@ type chatResponseWire struct {
 	SystemFingerprint *string                   `json:"system_fingerprint,omitempty"`
 	PromptLogprobs    *chatNullOnlyWire         `json:"prompt_logprobs,omitempty"`
 	PromptTokenIDs    []int64                   `json:"prompt_token_ids,omitempty"`
+	PromptText        *chatNullOnlyWire         `json:"prompt_text,omitempty"`
 	KVTransferParams  *chatKVTransferParamsWire `json:"kv_transfer_params,omitempty"`
+	ECTransferParams  *chatNullOnlyWire         `json:"ec_transfer_params,omitempty"`
+	Metrics           *chatNullOnlyWire         `json:"metrics,omitempty"`
 }
 
 type chatChoiceWire struct {
-	Index        int                 `json:"index"`
-	Message      chatMessageWire     `json:"message"`
-	FinishReason *string             `json:"finish_reason"`
-	Logprobs     *chatLogprobsWire   `json:"logprobs,omitempty"`
-	StopReason   *chatStopReasonWire `json:"stop_reason,omitempty"`
-	TokenIDs     []int64             `json:"token_ids,omitempty"`
+	Index         int                 `json:"index"`
+	Message       chatMessageWire     `json:"message"`
+	FinishReason  *string             `json:"finish_reason"`
+	Logprobs      *chatLogprobsWire   `json:"logprobs,omitempty"`
+	StopReason    *chatStopReasonWire `json:"stop_reason,omitempty"`
+	TokenIDs      []int64             `json:"token_ids,omitempty"`
+	RoutedExperts *chatNullOnlyWire   `json:"routed_experts,omitempty"`
 }
 
 type chatServiceTierWire string

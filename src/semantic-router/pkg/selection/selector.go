@@ -149,6 +149,11 @@ type Dependency struct {
 
 // SelectionContext provides context for model selection decisions
 type SelectionContext struct {
+	// AffinityKey is an opaque, request-stable value used by selectors that
+	// distribute traffic. It must not contain credentials or mutable process
+	// state. The Router supplies its immutable request ID.
+	AffinityKey string
+
 	// Query is the user's input query text
 	Query string
 

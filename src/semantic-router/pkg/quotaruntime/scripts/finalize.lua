@@ -7,7 +7,9 @@ local marker_ttl_milliseconds = tonumber(ARGV[6])
 local fence_id = ARGV[7]
 local expected_dispatch_count = tonumber(ARGV[8])
 local expected_evidence_revision = tonumber(ARGV[9])
-local actual_count = tonumber(ARGV[10])
+local event_evidence_state = ARGV[10]
+local expected_admission_deadline = ARGV[11]
+local actual_count = tonumber(ARGV[12])
 local now = quota_time_milliseconds()
 local evidence_argument_count = 8
 
@@ -26,6 +28,10 @@ if not quota_key_has_type(KEYS[1], "zset")
     or not quota_key_has_type(KEYS[5], "stream")
     or not quota_key_has_type(KEYS[6], "hash") then
   return redis.error_reply("QUOTA_CORRUPT finalization base key type")
+end
+if event_evidence_state ~= "known" and event_evidence_state ~= "mixed"
+    and event_evidence_state ~= "unknown" then
+  return redis.error_reply("QUOTA_INVALID terminal event evidence state")
 end
 
 local terminal_state = redis.call("HGET", KEYS[4], "state")
@@ -46,6 +52,14 @@ end
 if redis.call("HGET", KEYS[2], "digest") ~= admission_digest then
   return redis.error_reply("QUOTA_CONFLICT admission digest differs")
 end
+if expected_admission_deadline ~= "" then
+  local observed_deadline = redis.call("HGET", KEYS[2], "deadline")
+  if observed_deadline ~= expected_admission_deadline
+      or tonumber(expected_admission_deadline) == nil
+      or tonumber(expected_admission_deadline) > now then
+    return redis.error_reply("QUOTA_CONFLICT admission lease changed during recovery")
+  end
+end
 local admission_plan_digest = redis.call("HGET", KEYS[2], "plan_digest")
 if admission_plan_digest == false or admission_plan_digest == "" then
   return redis.error_reply("QUOTA_CORRUPT admission plan digest is missing")
@@ -58,13 +72,13 @@ local dispatch_count = quota_from_count(redis.call("HLEN", KEYS[3]))
 if dispatch_count == nil then
   return redis.error_reply("QUOTA_CORRUPT dispatch count exceeds exact Lua range")
 end
-if expected_dispatch_count == nil or expected_dispatch_count < 1
+if expected_dispatch_count == nil or expected_dispatch_count < 0
     or expected_dispatch_count ~= math.floor(expected_dispatch_count)
     or dispatch_count ~= string.format("%.0f", expected_dispatch_count) then
   return redis.error_reply("QUOTA_CONFLICT settlement dispatch journal differs")
 end
 
-local argument_offset = 10
+local argument_offset = 12
 local key_offset = 6
 local updates = {}
 local known_count = 0
@@ -285,11 +299,11 @@ for index = 1, concurrency_count do
   redis.call("ZREM", KEYS[key_offset + index], admission_id)
 end
 
-local evidence_state = "known"
+local quota_evidence_state = "known"
 if known_count == 0 and unknown_count > 0 then
-  evidence_state = "unknown"
+  quota_evidence_state = "unknown"
 elseif known_count > 0 and unknown_count > 0 then
-  evidence_state = "mixed"
+  quota_evidence_state = "mixed"
 end
 if unknown_count > 0 then
   redis.call("HSET", KEYS[6],
@@ -299,14 +313,14 @@ if unknown_count > 0 then
     "finalization_digest", finalization_digest,
     "created_at", string.format("%.0f", now),
     "dispatch_count", dispatch_count,
-    "evidence_state", evidence_state)
+    "quota_evidence_state", quota_evidence_state)
 end
 
 local stream_id = redis.call("XADD", KEYS[5], "*",
   "admission_id", admission_id,
   "admission_digest", admission_digest,
   "finalization_digest", finalization_digest,
-  "evidence_state", evidence_state,
+  "evidence_state", event_evidence_state,
   "event", event_payload)
 redis.call("ZREM", KEYS[1], admission_id)
 redis.call("HSET", KEYS[2],
@@ -314,7 +328,7 @@ redis.call("HSET", KEYS[2],
   "finalization_digest", finalization_digest,
   "admission_plan_digest", admission_plan_digest,
   "plan_digest", plan_digest,
-  "evidence_state", evidence_state,
+  "evidence_state", event_evidence_state,
   "stream_id", stream_id,
   "finalized_at", string.format("%.0f", now))
 redis.call("PEXPIRE", KEYS[2], marker_ttl_milliseconds)
@@ -325,9 +339,9 @@ redis.call("HSET", KEYS[4],
   "finalization_digest", finalization_digest,
   "admission_plan_digest", admission_plan_digest,
   "plan_digest", plan_digest,
-  "evidence_state", evidence_state,
+  "evidence_state", event_evidence_state,
   "stream_id", stream_id,
   "finalized_at", string.format("%.0f", now))
 redis.call("PEXPIRE", KEYS[4], marker_ttl_milliseconds)
 redis.call("DEL", KEYS[#KEYS])
-return {"finalized", "0", string.format("%.0f", now), evidence_state, stream_id}
+return {"finalized", "0", string.format("%.0f", now), event_evidence_state, stream_id}

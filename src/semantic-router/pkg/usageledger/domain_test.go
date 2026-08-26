@@ -112,7 +112,12 @@ func TestCursorRejectsTamperingAndBindsQuery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	value := logCursor{Version: 1, NamespaceID: testNamespaceID, QueryDigest: digestHex("query"), OccurredAt: 42, EventID: testEventID("cursor")}
+	start := time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC)
+	end := start.Add(time.Hour)
+	value := logCursor{
+		Version: 1, NamespaceID: testNamespaceID, QueryDigest: digestHex("query"),
+		Start: start.UnixNano(), End: end.UnixNano(), OccurredAt: 42, EventID: testEventID("cursor"),
+	}
 	encoded, err := codec.encode(value)
 	if err != nil {
 		t.Fatal(err)
@@ -120,6 +125,10 @@ func TestCursorRejectsTamperingAndBindsQuery(t *testing.T) {
 	decoded, err := codec.decode(encoded)
 	if err != nil || decoded != value {
 		t.Fatalf("decode = (%+v, %v), want %+v", decoded, err, value)
+	}
+	gotStart, gotEnd, err := codec.TimeRange(encoded)
+	if err != nil || !gotStart.Equal(start) || !gotEnd.Equal(end) {
+		t.Fatalf("TimeRange() = (%s, %s, %v), want (%s, %s)", gotStart, gotEnd, err, start, end)
 	}
 	tamperedBytes := []byte(encoded)
 	if tamperedBytes[0] == 'A' {
@@ -146,10 +155,13 @@ func TestAutomaticGrainBoundsPointCardinality(t *testing.T) {
 }
 
 type fakeStream struct {
-	claimed []StreamItem
-	new     []StreamItem
-	acked   []string
-	ackErr  error
+	claimed       []StreamItem
+	new           []StreamItem
+	acked         []string
+	quarantined   []StreamItem
+	reasons       []string
+	ackErr        error
+	quarantineErr error
 }
 
 func (s *fakeStream) EnsureGroup(context.Context) error { return nil }
@@ -164,6 +176,19 @@ func (s *fakeStream) ClaimStale(context.Context, int64, time.Duration) ([]Stream
 func (s *fakeStream) Ack(_ context.Context, ids []string) error {
 	s.acked = append(s.acked, ids...)
 	return s.ackErr
+}
+
+func (s *fakeStream) Quarantine(_ context.Context, item StreamItem, reason string) (bool, error) {
+	if s.quarantineErr != nil {
+		return false, s.quarantineErr
+	}
+	s.quarantined = append(s.quarantined, item)
+	s.reasons = append(s.reasons, reason)
+	return true, nil
+}
+
+func (s *fakeStream) Quarantined(context.Context) (int64, error) {
+	return int64(len(s.quarantined)), nil
 }
 
 type fakeStore struct {
@@ -203,6 +228,76 @@ func TestWorkerAcknowledgesOnlyAfterDurableCommit(t *testing.T) {
 	}
 	if len(stream.acked) != 1 || stream.acked[0] != item.ID {
 		t.Fatalf("acked = %v, want committed item", stream.acked)
+	}
+}
+
+func TestWorkerQuarantinesPoisonAndPersistsLaterValidItems(t *testing.T) {
+	occurred := time.Date(2026, 8, 22, 12, 0, 10, 0, time.UTC)
+	poisonEvent := testTerminalEvent("worker-poison", occurred)
+	poisonPayload, err := EncodeTerminalEvent(poisonEvent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	poison := StreamItem{ID: "3-0", Values: streamValues(poisonEvent, poisonPayload)}
+	poison.Values["evidence_state"] = string(EvidenceUnknown)
+
+	validEvent := testTerminalEvent("worker-valid", occurred.Add(time.Second))
+	validPayload, err := EncodeTerminalEvent(validEvent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	valid := StreamItem{ID: "4-0", Values: streamValues(validEvent, validPayload)}
+	stream := &fakeStream{new: []StreamItem{poison, valid}}
+	store := &fakeStore{result: BatchResult{Inserted: 1}}
+	worker, err := NewWorker(stream, store, WorkerOptions{
+		NamespaceID: testNamespaceID, BatchSize: 10, Block: time.Millisecond, ReclaimIdle: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := worker.ProcessOnce(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Inserted != 1 || result.Quarantined != 1 {
+		t.Fatalf("ProcessOnce() = %+v, want one insert and one quarantine", result)
+	}
+	if len(stream.quarantined) != 1 || stream.quarantined[0].ID != poison.ID ||
+		len(stream.reasons) != 1 || stream.reasons[0] != "event_envelope_mismatch" {
+		t.Fatalf("quarantine = %+v reasons=%v", stream.quarantined, stream.reasons)
+	}
+	if len(store.events) != 1 || store.events[0].AdmissionID != validEvent.AdmissionID {
+		t.Fatalf("persisted events = %+v, want only the valid event", store.events)
+	}
+	if len(stream.acked) != 1 || stream.acked[0] != valid.ID {
+		t.Fatalf("acked = %v, want only the valid item", stream.acked)
+	}
+}
+
+func TestWorkerLeavesBatchPendingWhenQuarantineIsUnavailable(t *testing.T) {
+	event := testTerminalEvent("worker-poison-failure", time.Date(2026, 8, 22, 12, 0, 10, 0, time.UTC))
+	payload, err := EncodeTerminalEvent(event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	item := StreamItem{ID: "5-0", Values: streamValues(event, payload)}
+	item.Values["evidence_state"] = string(EvidenceUnknown)
+	stream := &fakeStream{new: []StreamItem{item}, quarantineErr: errors.New("quarantine unavailable")}
+	store := &fakeStore{}
+	worker, err := NewWorker(stream, store, WorkerOptions{
+		NamespaceID: testNamespaceID, BatchSize: 10, Block: time.Millisecond, ReclaimIdle: time.Second,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := worker.ProcessOnce(context.Background()); err == nil ||
+		!strings.Contains(err.Error(), "retain poisoned usage stream item") {
+		t.Fatalf("ProcessOnce() error = %v, want quarantine failure", err)
+	}
+	if len(store.events) != 0 || len(stream.acked) != 0 {
+		t.Fatalf("failed quarantine persisted=%d acked=%v", len(store.events), stream.acked)
 	}
 }
 

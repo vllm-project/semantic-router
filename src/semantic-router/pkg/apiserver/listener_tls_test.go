@@ -146,10 +146,11 @@ func TestDurableRoutingOperationalListenerRemainsPlaintextWithoutManagementAPI(t
 	serverDone := make(chan error, 1)
 	go func() {
 		serverDone <- InitWithOptions(InitOptions{
-			Context:         ctx,
-			OnListenerStart: func(err error) { listenerStarted <- err },
-			Port:            port,
-			RuntimeRegistry: routerruntime.NewRegistry(&cfg),
+			Context:          ctx,
+			OnListenerStart:  func(err error) { listenerStarted <- err },
+			Port:             port,
+			RuntimeRegistry:  routerruntime.NewRegistry(&cfg),
+			RuntimeReadiness: &managementAPIStub{},
 		})
 	}()
 	select {

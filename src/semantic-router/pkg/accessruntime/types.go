@@ -12,10 +12,12 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageaccounting"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 var (
 	ErrProjectionNotFound = errors.New("access runtime projection not found")
+	ErrPublicationPending = errors.New("access runtime publication is pending")
 	ErrRuntimeUnavailable = errors.New("access runtime unavailable")
 	ErrRuntimeCorrupt     = errors.New("access runtime projection is corrupt")
 	ErrInvalidSession     = errors.New("access runtime session is invalid")
@@ -24,13 +26,15 @@ var (
 // ActivePolicy is the only policy pointer honored by inference. A staged
 // document is inert until the projector atomically advances this value.
 type ActivePolicy struct {
-	KeyID               string
-	Revision            uint64
-	Digest              string
-	PublicationID       string
-	RuntimeEpoch        uint64
-	RoutingRevision     int64
-	RoutingSnapshotHash string
+	KeyID           string
+	Revision        uint64
+	Digest          string
+	PublicationID   string
+	RuntimeEpoch    uint64
+	RoutingRevision int64
+	// RoutingDocumentDigest is the coupled routing-document digest used by the data
+	// plane. It is not the nested routingsnapshot.Snapshot digest.
+	RoutingDocumentDigest string
 }
 
 // AppliedPolicy is a credential-free Management view of the one immutable
@@ -50,12 +54,14 @@ type AppliedPolicyReader interface {
 // global public-kid directory. The directory is only a locator; every field is
 // pinned again against partition-local publication gates during admission.
 type CredentialLocation struct {
-	NamespaceID         string
-	QuotaPartition      string
-	PublicationID       string
-	RuntimeEpoch        uint64
-	RoutingRevision     int64
-	RoutingSnapshotHash string
+	NamespaceID     string
+	QuotaPartition  string
+	PublicationID   string
+	RuntimeEpoch    uint64
+	RoutingRevision int64
+	// RoutingDocumentDigest identifies the exact immutable routing document selected
+	// by the coupled publication gates.
+	RoutingDocumentDigest string
 }
 
 // ProjectionReader is the narrow read seam implemented by Valkey/Redis. The
@@ -157,6 +163,10 @@ type AdmissionRequest struct {
 	AdmissionID   string
 	RequestDigest string
 	LeaseDuration time.Duration
+	// Recovery contains only the bounded, non-secret identity needed by the
+	// Router-owned lease recovery worker. Runtime verifies its tenant fields
+	// against Session before persisting it with the atomic admission.
+	Recovery *quotaruntime.AdmissionRecoveryContext
 }
 
 type DiscoveryRequest struct {
@@ -403,5 +413,6 @@ type SettlementRequest struct {
 	Aggregate          usageaccounting.Aggregate
 	FinalizationDigest string
 	Event              string
+	EventEvidenceState usageledger.EvidenceState
 	FenceID            string
 }

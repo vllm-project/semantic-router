@@ -152,8 +152,12 @@ func (store *Store) GetTurn(
 func (store *Store) ClaimNextTurn(
 	ctx context.Context, workerID string, expiresAt time.Time,
 ) (agentmanagement.TurnLease, error) {
-	return inTransaction(ctx, store, func(tx *sql.Tx) (agentmanagement.TurnLease, error) {
-		row := tx.QueryRowContext(ctx, `WITH candidate AS (
+	// The candidate lock and fenced update are one PostgreSQL statement, so its
+	// statement transaction is the complete atomicity boundary. Forcing a
+	// SERIALIZABLE transaction makes expected multi-worker queue arbitration
+	// surface as a serialization failure without strengthening the lease or
+	// fencing guarantees.
+	row := store.db.QueryRowContext(ctx, `WITH candidate AS (
   SELECT id FROM agent_turns
   WHERE (status='queued' AND cancel_requested_at IS NULL)
      OR (status='running' AND lease_expires_at<=clock_timestamp())
@@ -169,13 +173,15 @@ FROM candidate
 WHERE turn.id=candidate.id
 RETURNING turn.namespace_id::text,turn.session_id::text,turn.id::text,turn.worker_id,
           turn.fence,turn.registry_revision,turn.lease_expires_at`, workerID, expiresAt.UTC())
-		var lease agentmanagement.TurnLease
-		if err := row.Scan(&lease.NamespaceID, &lease.SessionID, &lease.TurnID, &lease.WorkerID,
-			&lease.Fence, &lease.RegistryRevision, &lease.ExpiresAt); err != nil {
-			return agentmanagement.TurnLease{}, mapNotFound(err)
+	var lease agentmanagement.TurnLease
+	if err := row.Scan(&lease.NamespaceID, &lease.SessionID, &lease.TurnID, &lease.WorkerID,
+		&lease.Fence, &lease.RegistryRevision, &lease.ExpiresAt); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return agentmanagement.TurnLease{}, agentmanagement.ErrNotFound
 		}
-		return lease, nil
-	})
+		return agentmanagement.TurnLease{}, fmt.Errorf("claim Agent Turn: %w", classifyWriteError(err))
+	}
+	return lease, nil
 }
 
 func (store *Store) RenewTurn(

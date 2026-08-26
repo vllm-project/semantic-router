@@ -2,6 +2,7 @@ package accessruntime
 
 import (
 	"encoding/base64"
+	"fmt"
 	"strconv"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscredential"
@@ -67,7 +68,7 @@ func compilePreconditions(
 		hashEqual(publicationKeys.RoutingGate(), "publication_id", active.PublicationID, quotaruntime.AdmissionUnavailable, "routing_publication_changed"),
 		hashEqual(publicationKeys.RoutingGate(), "runtime_epoch", strconv.FormatUint(active.RuntimeEpoch, 10), quotaruntime.AdmissionUnavailable, "runtime_epoch_changed"),
 		hashEqual(publicationKeys.RoutingGate(), "revision", strconv.FormatInt(active.RoutingRevision, 10), quotaruntime.AdmissionUnavailable, "routing_revision_changed"),
-		hashEqual(publicationKeys.RoutingGate(), "snapshot_digest", active.RoutingSnapshotHash, quotaruntime.AdmissionUnavailable, "routing_snapshot_changed"),
+		hashEqual(publicationKeys.RoutingGate(), "snapshot_digest", active.RoutingDocumentDigest, quotaruntime.AdmissionUnavailable, "routing_snapshot_changed"),
 		publishedHashEqual(credentialKey, active.PublicationID, "state", "active", quotaruntime.AdmissionUnauthenticated, "credential_changed"),
 		publishedHashEqual(credentialKey, active.PublicationID, "kind", string(kind), quotaruntime.AdmissionUnauthenticated, "credential_changed"),
 		publishedHashEqual(credentialKey, active.PublicationID, "key_id", credential.KeyID, quotaruntime.AdmissionUnauthenticated, "credential_changed"),
@@ -91,9 +92,20 @@ func compilePreconditions(
 			publishedHashEqual(credentialKey, active.PublicationID, "principal_id", credential.PrincipalID, quotaruntime.AdmissionForbidden, "management_principal_changed"),
 			publishedHashEqual(credentialKey, active.PublicationID, "delegation_epoch", strconv.FormatUint(credential.DelegationEpoch, 10), quotaruntime.AdmissionForbidden, "key_delegation_changed"),
 			publishedHashEqual(credentialKey, active.PublicationID, "user_id", credential.UserID, quotaruntime.AdmissionForbidden, "delegation_user_changed"),
-			publishedHashEqual(credentialKey, active.PublicationID, "team_id", credential.TeamID, quotaruntime.AdmissionForbidden, "delegation_team_changed"),
 			publishedHashEqual(credentialKey, active.PublicationID, "audience", credential.Audience, quotaruntime.AdmissionUnauthenticated, "delegation_audience_changed"),
 		)
+		// User-owned keys deliberately carry no Team identity. Empty values are
+		// not valid atomic precondition operands. Authentication verifies the
+		// credential-to-policy subject binding before compiling these checks, so
+		// a credential cannot inject a Team into a user-owned policy. Team-owned
+		// delegations still pin their Team in the same atomic access check as the
+		// remaining authority fields.
+		if credential.TeamID != "" {
+			checks = append(checks, publishedHashEqual(
+				credentialKey, active.PublicationID, "team_id", credential.TeamID,
+				quotaruntime.AdmissionForbidden, "delegation_team_changed",
+			))
+		}
 	}
 	if credential.ExpiresAt != nil {
 		checks = append(checks, publishedTimeCheck(
@@ -112,6 +124,11 @@ func compilePreconditions(
 			Key: denied.key, Kind: quotaruntime.AdmissionCheckKeyAbsent,
 			Failure: quotaruntime.AdmissionForbidden, Reason: denied.reason,
 		})
+	}
+	for index, check := range checks {
+		if err := check.Validate(); err != nil {
+			return nil, fmt.Errorf("precondition %d (%s): %w", index, check.Reason, err)
+		}
 	}
 	return checks, nil
 }
@@ -198,7 +215,7 @@ func tenantContext(
 		UserID: userID, TeamID: teamID,
 		PolicyRevision: projection.Revision, PolicyDigest: projection.Digest,
 		PublicationID: active.PublicationID, RuntimeEpoch: active.RuntimeEpoch,
-		RoutingRevision: active.RoutingRevision, RoutingDigest: active.RoutingSnapshotHash,
+		RoutingRevision: active.RoutingRevision, RoutingDigest: active.RoutingDocumentDigest,
 		BillingCurrency: projection.BillingCurrency,
 		RoutingClaims:   claims,
 	}

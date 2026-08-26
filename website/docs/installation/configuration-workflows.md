@@ -9,6 +9,12 @@ Semantic Router always starts from one readable `version: v0.3` manifest. The
 components configured in that manifest determine which capabilities are active;
 there is no separate deployment-mode switch.
 
+For local Docker only, running `vllm-sr serve` without `--config` in a directory that
+has no `config.yaml` creates the secure Management-workspace manifest first. That
+generated file explicitly selects PostgreSQL, Valkey, the Management API, and native
+access. An existing or explicitly selected manifest is never replaced or promoted;
+omitting those store and service blocks is the file-only, zero-store topology.
+
 - Without `global.stores.management`, the file is the immutable routing authority.
 - With a Management store, Router initializes an empty store atomically from the
   file. PostgreSQL is the sole desired-state authority after that transaction.

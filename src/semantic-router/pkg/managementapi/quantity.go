@@ -197,8 +197,13 @@ func (meter QuotaMeter) Validate() error {
 			return fmt.Errorf("known capacity requires a complete meter and remaining capacity")
 		}
 	case "fenced":
-		if meter.Enforcement != "enforce" || meter.Completeness == "complete" || meter.Remaining != nil || len(meter.ActiveFenceIDs) == 0 {
-			return fmt.Errorf("fenced capacity requires enforced incomplete usage and an active fence")
+		// Enforced incomplete usage is itself fail-closed even before a fence
+		// identity is available. Conversely, a corrected binding-level fence
+		// remains closed until its durable ledger commit, so an individual rule
+		// can already be complete while the binding still carries a fence.
+		if meter.Enforcement != "enforce" || meter.Remaining != nil ||
+			(meter.Completeness == "complete" && len(meter.ActiveFenceIDs) == 0) {
+			return fmt.Errorf("fenced capacity requires enforced unresolved usage or an active fence")
 		}
 	case "unknown":
 		if meter.Enforcement != "shadow" || meter.Completeness == "complete" || meter.Remaining != nil || len(meter.ActiveFenceIDs) != 0 {
@@ -253,6 +258,12 @@ func validateMeterCapacity(meter QuotaMeter) error {
 		return fmt.Errorf("quota used is invalid")
 	}
 	if meter.Completeness != "complete" {
+		return nil
+	}
+	// A complete meter can remain fenced while the corrected binding waits for
+	// its durable ledger commit. Capacity is intentionally undisclosed in that
+	// state, so there is no remaining quantity to reconcile.
+	if meter.CapacityState == "fenced" {
 		return nil
 	}
 	remaining, ok := new(big.Rat).SetString(string(*meter.Remaining))

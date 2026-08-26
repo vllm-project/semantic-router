@@ -47,7 +47,11 @@ func (r *OpenAIRouter) handleAuthorizedModelsRequest(
 	allowedEntrypoints := inferenceResourceSet(discovery.Resources[accesscontrol.GrantResourceEntrypoint])
 	allowedModels := inferenceResourceSet(discovery.Resources[accesscontrol.GrantResourceModel])
 	claims := entrypointClaims(discovery.Tenant.RoutingClaims)
-	catalog := publicmodels.NewOpenAIModelList(r.Config, time.Now().Unix())
+	catalog := publicmodels.NewOpenAIModelListWithOptions(
+		r.Config,
+		time.Now().Unix(),
+		publicmodels.ModelListBuildOptions{IncludeBackendModelCandidates: true},
+	)
 	filtered := catalog.Data[:0]
 	for _, item := range catalog.Data {
 		if r.modelCatalogItemAllowed(item.ID, forPath, claims, allowedEntrypoints, allowedModels) {

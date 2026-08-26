@@ -11,9 +11,11 @@ import (
 const vLLMChatResponseExtensionsFixture = `{
   "id":"chatcmpl-1","object":"chat.completion","created":7,
   "model":"provider-model","service_tier":"default","system_fingerprint":"fp_1",
-  "prompt_logprobs":null,"prompt_token_ids":[11,12],"kv_transfer_params":{},
+  "prompt_logprobs":null,"prompt_token_ids":[11,12],"prompt_text":null,"kv_transfer_params":{},
+  "ec_transfer_params":null,"metrics":null,
   "choices":[{
     "index":0,"finish_reason":"stop","stop_reason":106,"token_ids":[13],"logprobs":null,
+    "routed_experts":null,
     "message":{"role":"assistant","content":"OK","refusal":null,"annotations":null,
       "audio":null,"function_call":null,"tool_calls":[],"reasoning":null}
   }],
@@ -91,6 +93,10 @@ func TestOpenAIChatResponseRejectsInvalidClosedExecutionMetadata(t *testing.T) {
 	engine := NewBuiltinEngine()
 	tests := map[string]string{
 		"non_null_prompt_logprobs": strings.Replace(vLLMChatResponseExtensionsFixture, `"prompt_logprobs":null`, `"prompt_logprobs":[]`, 1),
+		"non_null_prompt_text":     strings.Replace(vLLMChatResponseExtensionsFixture, `"prompt_text":null`, `"prompt_text":"private prompt"`, 1),
+		"non_null_ec_transfer":     strings.Replace(vLLMChatResponseExtensionsFixture, `"ec_transfer_params":null`, `"ec_transfer_params":{}`, 1),
+		"non_null_metrics":         strings.Replace(vLLMChatResponseExtensionsFixture, `"metrics":null`, `"metrics":{}`, 1),
+		"non_null_routed_experts":  strings.Replace(vLLMChatResponseExtensionsFixture, `"routed_experts":null`, `"routed_experts":[]`, 1),
 		"nested_kv_field":          strings.Replace(vLLMChatResponseExtensionsFixture, `"kv_transfer_params":{}`, `"kv_transfer_params":{"future":true}`, 1),
 		"unknown_service_tier":     strings.Replace(vLLMChatResponseExtensionsFixture, `"service_tier":"default"`, `"service_tier":"future"`, 1),
 		"non_scalar_stop_reason":   strings.Replace(vLLMChatResponseExtensionsFixture, `"stop_reason":106`, `"stop_reason":true`, 1),
@@ -133,9 +139,10 @@ func TestOpenAIChatStreamAcceptsClosedVLLMExecutionMetadataAndRejectsFutureField
 	}
 	frame := []byte("data: {\"id\":\"chatcmpl-1\",\"object\":\"chat.completion.chunk\",\"created\":7," +
 		"\"model\":\"provider-model\",\"service_tier\":\"default\",\"system_fingerprint\":\"fp_1\"," +
-		"\"prompt_logprobs\":null,\"prompt_token_ids\":[11],\"kv_transfer_params\":{}," +
+		"\"prompt_logprobs\":null,\"prompt_token_ids\":[11],\"prompt_text\":null,\"kv_transfer_params\":{}," +
+		"\"ec_transfer_params\":null,\"metrics\":null," +
 		"\"choices\":[{\"index\":0,\"finish_reason\":null,\"stop_reason\":null,\"token_ids\":[12]," +
-		"\"logprobs\":null,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\",\"audio\":null,\"function_call\":null}}]}\n\n")
+		"\"logprobs\":null,\"routed_experts\":null,\"delta\":{\"role\":\"assistant\",\"content\":\"OK\",\"audio\":null,\"function_call\":null}}]}\n\n")
 	frames, events, _, pushErr := stream.Push(frame)
 	if pushErr != nil {
 		t.Fatalf("Push() error = %v", pushErr)

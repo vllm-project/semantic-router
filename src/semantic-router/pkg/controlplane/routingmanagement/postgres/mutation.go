@@ -171,7 +171,7 @@ WHERE namespace_id = $1 FOR UPDATE`, namespaceID).Scan(&count, &previous); err !
 	document := auditDocument{
 		EventID: eventID, NamespaceID: namespaceID,
 		DesiredRevision: desiredRevisionText, ChainSequence: fmt.Sprintf("%d", count+1),
-		ActorPrincipalID: meta.PrincipalID, ActorChain: append([]string(nil), meta.ActorChain...),
+		ActorPrincipalID: meta.PrincipalID, ActorChain: append([]string{}, meta.ActorChain...),
 		Action: mutation.action, ResourceType: mutation.resourceType, ResourceID: mutation.resourceID,
 		RequestID: meta.RequestID, Outcome: "allowed", Reason: meta.Reason,
 		BeforeRevision: before, AfterRevision: after, Details: cloneAuditDetails(mutation.references),

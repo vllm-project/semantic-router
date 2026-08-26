@@ -2,6 +2,7 @@ package backenddispatch
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 func TestServerOwnsPrivateListenerLifecycle(t *testing.T) {
 	server, testServerOwnsPrivateListenerLifecycleErr := NewServer(ServerOptions{
 		BindAddress: "127.0.0.1",
+		Readiness:   func(context.Context) error { return nil },
 		Handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 			writer.WriteHeader(http.StatusNoContent)
 		}),
@@ -42,13 +44,61 @@ func TestServerOwnsPrivateListenerLifecycle(t *testing.T) {
 	}
 }
 
+func TestServerReadinessFailsClosedWithoutInvokingDispatch(t *testing.T) {
+	readyErr := errors.New("routing publication is unavailable")
+	dispatchCalls := 0
+	server, err := NewServer(ServerOptions{
+		BindAddress: "127.0.0.1",
+		Readiness:   func(context.Context) error { return readyErr },
+		Handler: http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
+			dispatchCalls++
+			writer.WriteHeader(http.StatusNoContent)
+		}),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := server.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer server.Close()
+
+	response, err := http.Get("http://" + server.Address() + "/ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(response.Body)
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusServiceUnavailable || dispatchCalls != 0 {
+		t.Fatalf("unready response = %d %q, dispatch calls = %d", response.StatusCode, body, dispatchCalls)
+	}
+	if strings.Contains(string(body), readyErr.Error()) {
+		t.Fatalf("readiness response exposed internal error: %s", body)
+	}
+
+	readyErr = nil
+	response, err = http.Get("http://" + server.Address() + "/ready")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = response.Body.Close()
+	if response.StatusCode != http.StatusOK || dispatchCalls != 0 {
+		t.Fatalf("ready response = %d, dispatch calls = %d", response.StatusCode, dispatchCalls)
+	}
+}
+
 func TestServerRejectsInvalidCompositionAndDoubleStart(t *testing.T) {
-	if _, err := NewServer(ServerOptions{BindAddress: "localhost", Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})}); err == nil {
+	ready := func(context.Context) error { return nil }
+	if _, err := NewServer(ServerOptions{BindAddress: "localhost", Readiness: ready, Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})}); err == nil {
 		t.Fatal("hostname bind unexpectedly accepted")
+	}
+	if _, err := NewServer(ServerOptions{BindAddress: "127.0.0.1", Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {})}); err == nil {
+		t.Fatal("missing readiness unexpectedly accepted")
 	}
 	server, err := NewServer(ServerOptions{
 		BindAddress: "127.0.0.1", ShutdownTimeout: time.Second,
-		Handler: http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
+		Readiness: ready,
+		Handler:   http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}),
 	})
 	if err != nil {
 		t.Fatal(err)

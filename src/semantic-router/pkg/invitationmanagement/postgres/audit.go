@@ -98,7 +98,7 @@ WHERE namespace_id=$1 FOR UPDATE`, namespaceID).Scan(&count, &previousHash); err
 	createdAt = createdAt.UTC().Truncate(time.Microsecond)
 	document := auditDocument{
 		EventID: uuid.NewString(), NamespaceID: namespaceID, ChainSequence: strconv.FormatInt(count+1, 10),
-		ActorPrincipalID: actor.PrincipalID, ActorChain: append([]string(nil), actor.ActorChain...),
+		ActorPrincipalID: actor.PrincipalID, ActorChain: append([]string{}, actor.ActorChain...),
 		Action: action, ResourceType: resourceType, ResourceID: resourceID, RequestID: actor.RequestID,
 		Outcome: "allowed", Reason: actor.Reason, AfterRevision: strconv.FormatUint(after, 10),
 		PreviousHash: hex.EncodeToString(previousHash), CreatedAt: createdAt.Format(time.RFC3339Nano),

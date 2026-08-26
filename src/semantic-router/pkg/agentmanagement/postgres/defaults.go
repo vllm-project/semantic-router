@@ -18,15 +18,21 @@ const (
 	defaultChatProfileName    = "Chat"
 	defaultBuilderProfileName = "Builder"
 	defaultMutationAttempts   = 4
+
+	builtinBuilderSkillRevision int64 = 2
+	defaultProfileRevision      int64 = 2
 )
 
-var builtinBuilderSkillID = uuid.NewSHA1(uuid.NameSpaceURL, []byte("vllm-sr/router-agent-skill/builder/v1")).String()
+var builtinBuilderSkillID = uuid.NewSHA1(
+	uuid.NameSpaceURL,
+	[]byte("vllm-sr/router-agent-skill/builder/v1"),
+).String()
 
 func builtinBuilderToolNames() []string {
 	return agentmanagement.BuiltinBuilderToolNames()
 }
 
-const builtinBuilderInstructions = `Design and tune a Mixture-of-Models through Router-native tools. Start by reading the live catalog and examples; never assume a component schema. Keep drafts unpublished while validating, probing, and evaluating. Prepare an Entrypoint and publication plan only when the dependency closure and gates are valid. Publication always requires a separate human approval.`
+const builtinBuilderInstructions = `Design and tune a Mixture-of-Models through Router-native tools. Start by reading the live catalog and examples; never assume a component schema. Search the public web only when current external evidence would improve the design. Keep drafts unpublished while validating, probing, and evaluating. Prepare an Entrypoint and publication plan only when the dependency closure and gates are valid. Publication always requires a separate human approval.`
 
 func builtinBuilderSkillInput() (agentmanagement.SkillInput, error) {
 	return agentmanagement.NormalizeSkillInput(agentmanagement.SkillInput{
@@ -144,14 +150,16 @@ func (reconciler *DefaultReconciler) ensureBuiltinSkill(ctx context.Context) err
 		_, err := inTransaction(ctx, reconciler.store, func(tx *sql.Tx) (struct{}, error) {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO agent_skills
   (id,namespace_id,name,description,builtin,status,current_revision,revision)
-VALUES ($1,NULL,$2,$3,TRUE,'active',1,1)
-ON CONFLICT (id) DO NOTHING`, builtinBuilderSkillID, input.Name, input.Description); err != nil {
+VALUES ($1,NULL,$2,$3,TRUE,'active',$4,1)
+ON CONFLICT (id) DO NOTHING`, builtinBuilderSkillID, input.Name, input.Description,
+				builtinBuilderSkillRevision); err != nil {
 				return struct{}{}, classifyWriteError(err)
 			}
 			if _, err := tx.ExecContext(ctx, `INSERT INTO agent_skill_revisions
   (skill_id,namespace_id,revision,instructions,required_tools,minimum_capabilities,content_digest)
-VALUES ($1,NULL,1,$2,$3,$4,$5) ON CONFLICT (skill_id,revision) DO NOTHING`,
-				builtinBuilderSkillID, input.Instructions, required, minimum, digest[:]); err != nil {
+VALUES ($1,NULL,$2,$3,$4,$5,$6) ON CONFLICT (skill_id,revision) DO NOTHING`,
+				builtinBuilderSkillID, builtinBuilderSkillRevision, input.Instructions,
+				required, minimum, digest[:]); err != nil {
 				return struct{}{}, classifyWriteError(err)
 			}
 			var storedName, storedDescription, storedStatus string
@@ -161,15 +169,16 @@ VALUES ($1,NULL,1,$2,$3,$4,$5) ON CONFLICT (skill_id,revision) DO NOTHING`,
 			if err := tx.QueryRowContext(ctx, `SELECT skill.name,skill.description,skill.builtin,
        skill.status,skill.current_revision,revision.content_digest
 FROM agent_skills skill
-JOIN agent_skill_revisions revision ON revision.skill_id=skill.id AND revision.revision=1
-WHERE skill.id=$1 AND skill.namespace_id IS NULL`, builtinBuilderSkillID).Scan(
+JOIN agent_skill_revisions revision ON revision.skill_id=skill.id AND revision.revision=$2
+WHERE skill.id=$1 AND skill.namespace_id IS NULL`,
+				builtinBuilderSkillID, builtinBuilderSkillRevision).Scan(
 				&storedName, &storedDescription, &storedBuiltin, &storedStatus, &storedRevision, &storedDigest,
 			); err != nil {
 				return struct{}{}, mapNotFound(err)
 			}
 			if storedName != input.Name || storedDescription != input.Description || !storedBuiltin ||
-				storedStatus != string(agentmanagement.StatusActive) || storedRevision != 1 ||
-				!bytes.Equal(storedDigest, digest[:]) {
+				storedStatus != string(agentmanagement.StatusActive) ||
+				storedRevision != builtinBuilderSkillRevision || !bytes.Equal(storedDigest, digest[:]) {
 				return struct{}{}, fmt.Errorf("%w: built-in Agent Skill identity conflicts with Router defaults", agentmanagement.ErrConflict)
 			}
 			return struct{}{}, nil
@@ -190,10 +199,15 @@ func (reconciler *DefaultReconciler) ensureNamespaceDefaults(ctx context.Context
 					return struct{}{}, err
 				}
 				for _, mode := range definition.input.DefaultForModes {
-					if _, err := tx.ExecContext(ctx, `INSERT INTO agent_profile_defaults
-  (namespace_id,mode,profile_id,profile_revision,updated_by,updated_at)
-VALUES ($1,$2,$3,1,NULL,$4)
-ON CONFLICT (namespace_id,mode) DO NOTHING`, namespaceID, mode, definition.id, reconciler.now().UTC()); err != nil {
+					if _, err := tx.ExecContext(
+						ctx,
+						insertDefaultProfileMapping,
+						namespaceID,
+						mode,
+						definition.id,
+						defaultProfileRevision,
+						reconciler.now().UTC(),
+					); err != nil {
 						return struct{}{}, classifyWriteError(err)
 					}
 				}
@@ -209,40 +223,53 @@ type defaultProfileDefinition struct {
 	input agentmanagement.ProfileInput
 }
 
+const insertDefaultProfileMapping = `INSERT INTO agent_profile_defaults
+  (namespace_id,mode,profile_id,profile_revision,updated_by,updated_at)
+VALUES ($1,$2,$3,$4,NULL,$5)
+ON CONFLICT (namespace_id,mode) DO NOTHING`
+
 func defaultProfileDefinitions(namespaceID string) ([]defaultProfileDefinition, error) {
 	namespaceUUID, err := uuid.Parse(namespaceID)
 	if err != nil {
 		return nil, fmt.Errorf("parse Namespace for Agent defaults: %w", err)
 	}
+	chatInput := agentmanagement.ProfileInput{
+		Name:            defaultChatProfileName,
+		Description:     "Router-managed default.",
+		SupportedModes:  []agentmanagement.SessionMode{agentmanagement.SessionChat},
+		DefaultForModes: []agentmanagement.SessionMode{agentmanagement.SessionChat},
+		ToolPolicy: agentmanagement.ToolPolicy{Allow: []string{
+			"router.skills.read",
+			agentmanagement.ToolWebSearch,
+		}},
+		ApprovalPolicy:     "required",
+		MaximumTurnSeconds: 900,
+		MaximumToolSteps:   64,
+		ContextTokenBudget: 65536,
+	}
+	builderInput := agentmanagement.ProfileInput{
+		Name:            defaultBuilderProfileName,
+		Description:     "Router-managed default.",
+		SupportedModes:  []agentmanagement.SessionMode{agentmanagement.SessionBuilder},
+		DefaultForModes: []agentmanagement.SessionMode{agentmanagement.SessionBuilder},
+		Skills: []agentmanagement.SkillReference{{
+			ID:       builtinBuilderSkillID,
+			Revision: builtinBuilderSkillRevision,
+		}},
+		ToolPolicy:         agentmanagement.ToolPolicy{Allow: builtinBuilderToolNames()},
+		ApprovalPolicy:     "required",
+		MaximumTurnSeconds: 900,
+		MaximumToolSteps:   64,
+		ContextTokenBudget: 65536,
+	}
 	definitions := []defaultProfileDefinition{
 		{
-			id: uuid.NewSHA1(namespaceUUID, []byte("router-agent-profile/chat/v1")).String(),
-			input: agentmanagement.ProfileInput{
-				Name:               defaultChatProfileName,
-				Description:        "Router-managed default.",
-				SupportedModes:     []agentmanagement.SessionMode{agentmanagement.SessionChat},
-				DefaultForModes:    []agentmanagement.SessionMode{agentmanagement.SessionChat},
-				ToolPolicy:         agentmanagement.ToolPolicy{Allow: []string{"router.skills.read"}},
-				ApprovalPolicy:     "required",
-				MaximumTurnSeconds: 900,
-				MaximumToolSteps:   64,
-				ContextTokenBudget: 65536,
-			},
+			id:    uuid.NewSHA1(namespaceUUID, []byte("router-agent-profile/chat/v1")).String(),
+			input: chatInput,
 		},
 		{
-			id: uuid.NewSHA1(namespaceUUID, []byte("router-agent-profile/builder/v1")).String(),
-			input: agentmanagement.ProfileInput{
-				Name:               defaultBuilderProfileName,
-				Description:        "Router-managed default.",
-				SupportedModes:     []agentmanagement.SessionMode{agentmanagement.SessionBuilder},
-				DefaultForModes:    []agentmanagement.SessionMode{agentmanagement.SessionBuilder},
-				Skills:             []agentmanagement.SkillReference{{ID: builtinBuilderSkillID, Revision: 1}},
-				ToolPolicy:         agentmanagement.ToolPolicy{Allow: builtinBuilderToolNames()},
-				ApprovalPolicy:     "required",
-				MaximumTurnSeconds: 900,
-				MaximumToolSteps:   64,
-				ContextTokenBudget: 65536,
-			},
+			id:    uuid.NewSHA1(namespaceUUID, []byte("router-agent-profile/builder/v1")).String(),
+			input: builderInput,
 		},
 	}
 	for index := range definitions {
@@ -266,17 +293,18 @@ func insertDefaultProfile(
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO agent_profiles
   (id,namespace_id,name,description,status,current_revision,revision)
-VALUES ($1,$2,$3,$4,'active',1,1)
-ON CONFLICT (id) DO NOTHING`, profileID, namespaceID, input.Name, input.Description); err != nil {
+VALUES ($1,$2,$3,$4,'active',$5,1)
+ON CONFLICT (id) DO NOTHING`, profileID, namespaceID, input.Name, input.Description,
+		defaultProfileRevision); err != nil {
 		return classifyWriteError(err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO agent_profile_revisions
   (profile_id,namespace_id,revision,target_model_id,target_entrypoint_id,minimum_target_capabilities,
    supported_modes,tool_policy,approval_policy,maximum_turn_seconds,maximum_tool_steps,
    context_token_budget,content_digest)
-VALUES ($1,$2,1,NULL,NULL,$3,$4,$5,$6,$7,$8,$9,$10)
+VALUES ($1,$2,$3,NULL,NULL,$4,$5,$6,$7,$8,$9,$10,$11)
 ON CONFLICT (profile_id,revision) DO NOTHING`, profileID, namespaceID,
-		encoded.minimumCapabilities, encoded.supportedModes, encoded.toolPolicy,
+		defaultProfileRevision, encoded.minimumCapabilities, encoded.supportedModes, encoded.toolPolicy,
 		input.ApprovalPolicy, input.MaximumTurnSeconds, input.MaximumToolSteps,
 		input.ContextTokenBudget, digest[:]); err != nil {
 		return classifyWriteError(err)
@@ -284,28 +312,32 @@ ON CONFLICT (profile_id,revision) DO NOTHING`, profileID, namespaceID,
 	for ordinal, skill := range input.Skills {
 		if _, err := tx.ExecContext(ctx, `INSERT INTO agent_profile_skills
   (namespace_id,profile_id,profile_revision,ordinal,skill_id,skill_namespace_id,skill_revision)
-VALUES ($1,$2,1,$3,$4,NULL,$5) ON CONFLICT (profile_id,profile_revision,ordinal) DO NOTHING`,
-			namespaceID, profileID, ordinal, skill.ID, skill.Revision); err != nil {
+VALUES ($1,$2,$3,$4,$5,NULL,$6) ON CONFLICT (profile_id,profile_revision,ordinal) DO NOTHING`,
+			namespaceID, profileID, defaultProfileRevision, ordinal, skill.ID, skill.Revision); err != nil {
 			return classifyWriteError(err)
 		}
 	}
 	var storedName, storedDescription, storedStatus string
+	var storedRevision int64
 	var storedDigest []byte
-	if err := tx.QueryRowContext(ctx, `SELECT profile.name,profile.description,profile.status,revision.content_digest
+	if err := tx.QueryRowContext(ctx, `SELECT profile.name,profile.description,profile.status,
+       profile.current_revision,revision.content_digest
 FROM agent_profiles profile
-JOIN agent_profile_revisions revision ON revision.profile_id=profile.id AND revision.revision=1
-WHERE profile.namespace_id=$1 AND profile.id=$2`, namespaceID, profileID).Scan(
-		&storedName, &storedDescription, &storedStatus, &storedDigest,
+JOIN agent_profile_revisions revision ON revision.profile_id=profile.id AND revision.revision=$3
+WHERE profile.namespace_id=$1 AND profile.id=$2`, namespaceID, profileID, defaultProfileRevision).Scan(
+		&storedName, &storedDescription, &storedStatus, &storedRevision, &storedDigest,
 	); err != nil {
 		return mapNotFound(err)
 	}
 	if storedName != input.Name || storedDescription != input.Description ||
-		storedStatus != string(agentmanagement.StatusActive) || !bytes.Equal(storedDigest, digest[:]) {
+		storedStatus != string(agentmanagement.StatusActive) || storedRevision != defaultProfileRevision ||
+		!bytes.Equal(storedDigest, digest[:]) {
 		return fmt.Errorf("%w: default Agent Profile identity conflicts with Router defaults", agentmanagement.ErrConflict)
 	}
 	var storedSkillCount int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM agent_profile_skills
-WHERE namespace_id=$1 AND profile_id=$2 AND profile_revision=1`, namespaceID, profileID).Scan(&storedSkillCount); err != nil {
+WHERE namespace_id=$1 AND profile_id=$2 AND profile_revision=$3`,
+		namespaceID, profileID, defaultProfileRevision).Scan(&storedSkillCount); err != nil {
 		return fmt.Errorf("verify default Agent Profile Skills: %w", err)
 	}
 	if storedSkillCount != len(input.Skills) {
@@ -316,8 +348,8 @@ WHERE namespace_id=$1 AND profile_id=$2 AND profile_revision=1`, namespaceID, pr
 		var storedSkillRevision int64
 		if err := tx.QueryRowContext(ctx, `SELECT skill_id::text,skill_revision
 FROM agent_profile_skills
-WHERE namespace_id=$1 AND profile_id=$2 AND profile_revision=1 AND ordinal=$3`,
-			namespaceID, profileID, ordinal).Scan(&storedSkillID, &storedSkillRevision); err != nil {
+WHERE namespace_id=$1 AND profile_id=$2 AND profile_revision=$3 AND ordinal=$4`,
+			namespaceID, profileID, defaultProfileRevision, ordinal).Scan(&storedSkillID, &storedSkillRevision); err != nil {
 			return mapNotFound(err)
 		}
 		if storedSkillID != skill.ID || storedSkillRevision != skill.Revision {

@@ -4,6 +4,9 @@ local lease_milliseconds = tonumber(ARGV[3])
 local plan_digest = ARGV[4]
 local precondition_count = tonumber(ARGV[5])
 local rule_count = tonumber(ARGV[6])
+local recovery_record = ARGV[7]
+local recovery_digest = ARGV[8]
+local usage_consumer_group = ARGV[#ARGV - 1]
 local max_usage_backlog = tonumber(ARGV[#ARGV])
 local now, now_microseconds = quota_server_time()
 local deadline = now + lease_milliseconds
@@ -13,18 +16,25 @@ local rule_argument_count = 15
 if #KEYS ~= 5 + precondition_count + rule_count * 4 then
   return redis.error_reply("QUOTA_INVALID admit key count")
 end
-if #ARGV ~= 7 + precondition_count * precondition_argument_count + rule_count * rule_argument_count then
+if #ARGV ~= 10 + precondition_count * precondition_argument_count + rule_count * rule_argument_count then
   return redis.error_reply("QUOTA_INVALID admit argument count")
 end
 if max_usage_backlog == nil or max_usage_backlog < 1 then
   return redis.error_reply("QUOTA_INVALID maximum usage backlog")
+end
+if usage_consumer_group == nil or usage_consumer_group == "" then
+  return redis.error_reply("QUOTA_INVALID usage consumer group")
+end
+if (recovery_record == "" and recovery_digest ~= "") or
+    (recovery_record ~= "" and recovery_digest == "") then
+  return redis.error_reply("QUOTA_INVALID incomplete admission recovery record")
 end
 
 if redis.call("EXISTS", KEYS[4]) == 1 then
   return redis.error_reply("QUOTA_CONFLICT admission is already terminal")
 end
 
-local access_disposition, access_reason = quota_check_access(precondition_count, 4, 6, now)
+local access_disposition, access_reason = quota_check_access(precondition_count, 4, 8, now)
 if access_disposition == nil then
   return redis.error_reply("QUOTA_INVALID unsupported admission precondition")
 end
@@ -56,9 +66,45 @@ end
 if usage_stream_type ~= "none" and usage_stream_type ~= "stream" then
   return redis.error_reply("QUOTA_CORRUPT usage stream key type")
 end
-if redis.call("XLEN", usage_stream_key) >= max_usage_backlog then
-  return {"unavailable", "0", "0", string.format("%.0f", now), "", "",
-    "usage accounting backlog is full"}
+if usage_stream_type == "stream" then
+  local consumer_group_found = false
+  local usage_backlog = nil
+  local groups = redis.call("XINFO", "GROUPS", usage_stream_key)
+  for _, group in ipairs(groups) do
+    local name = nil
+    local pending = nil
+    local lag = nil
+    for field_index = 1, #group, 2 do
+      local field = group[field_index]
+      if field == "name" then
+        name = group[field_index + 1]
+      elseif field == "pending" then
+        pending = tonumber(group[field_index + 1])
+      elseif field == "lag" then
+        lag = tonumber(group[field_index + 1])
+      end
+    end
+    if name == usage_consumer_group then
+      consumer_group_found = true
+      if pending == nil or pending < 0 then
+        return redis.error_reply("QUOTA_CORRUPT usage consumer group pending count")
+      end
+      if lag == nil or lag < 0 then
+        return {"unavailable", "0", "0", string.format("%.0f", now), "", "",
+          "usage accounting backlog is indeterminate"}
+      end
+      usage_backlog = pending + lag
+      break
+    end
+  end
+  if not consumer_group_found then
+    return {"unavailable", "0", "0", string.format("%.0f", now), "", "",
+      "usage accounting consumer group is unavailable"}
+  end
+  if usage_backlog >= max_usage_backlog then
+    return {"unavailable", "0", "0", string.format("%.0f", now), "", "",
+      "usage accounting backlog is full"}
+  end
 end
 
 local observations = {}
@@ -68,7 +114,7 @@ local limiting_reason = ""
 
 for index = 1, rule_count do
   local key_offset = 4 + precondition_count + (index - 1) * 4
-  local argument_offset = 6 + precondition_count * precondition_argument_count + (index - 1) * rule_argument_count
+  local argument_offset = 8 + precondition_count * precondition_argument_count + (index - 1) * rule_argument_count
   local meta_key = KEYS[key_offset + 1]
   local event_key = KEYS[key_offset + 2]
   local value_key = KEYS[key_offset + 3]
@@ -211,10 +257,14 @@ local enforce_bindings = {}
 redis.call("HSET", KEYS[2], "state", "admitted", "digest", admission_digest,
   "plan_digest", plan_digest, "lease_ms", string.format("%.0f", lease_milliseconds),
   "heartbeat_at", string.format("%.0f", now), "deadline", string.format("%.0f", deadline))
+if recovery_record ~= "" then
+  redis.call("HSET", KEYS[2], "recovery_record", recovery_record,
+    "recovery_digest", recovery_digest)
+end
 
 for index = 1, rule_count do
   local key_offset = 4 + precondition_count + (index - 1) * 4
-  local argument_offset = 6 + precondition_count * precondition_argument_count + (index - 1) * rule_argument_count
+  local argument_offset = 8 + precondition_count * precondition_argument_count + (index - 1) * rule_argument_count
   local meta_key = KEYS[key_offset + 1]
   local event_key = KEYS[key_offset + 2]
   local fence_key = KEYS[key_offset + 4]

@@ -54,7 +54,7 @@ func (store *Store) List(
 FROM management_invitations
 WHERE namespace_id=$1
   AND ($2='' OR CASE WHEN status='pending' AND expires_at<=$3 THEN 'expired' ELSE status END=$2)
-  AND ($4::timestamptz IS NULL OR expires_at>$4 OR (expires_at=$4 AND id>$5::uuid))
+  AND ($4::timestamptz IS NULL OR expires_at>$4 OR (expires_at=$4 AND id>NULLIF($5,'')::uuid))
 ORDER BY expires_at,id LIMIT $6`, query.NamespaceID, query.Status, query.Now, afterTime, afterID, query.Limit+1)
 	if err != nil {
 		return invitationmanagement.RepositoryPage{}, fmt.Errorf("list invitations: %w", err)

@@ -2,9 +2,14 @@ package backendegress
 
 import (
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
+	"math/big"
 	"net/netip"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testPolicy = `version: v1
@@ -76,6 +81,138 @@ func TestPolicyRejectsUnknownFieldsAndUnsafeCIDRs(t *testing.T) {
 		if _, err := Parse([]byte(document)); err == nil {
 			t.Fatalf("unsafe policy succeeded:\n%s", document)
 		}
+	}
+}
+
+func TestPolicyAllowsExactContainerServiceLabelsButNotWildcardPatterns(t *testing.T) {
+	policy, err := Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: team_a-dashboard, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+  - {host: _team.internal, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+  - {host: team_.internal, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+  - {host: team_.blue-vllm-sr-dashboard-container, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, origin := range []string{
+		"https://team_a-dashboard:8743",
+		"https://_team.internal:8743",
+		"https://team_.internal:8743",
+		"https://team_.blue-vllm-sr-dashboard-container:8743",
+	} {
+		if _, err := policy.AuthorizeOrigin(origin); err != nil {
+			t.Fatalf("exact container service label %q = %v", origin, err)
+		}
+	}
+	if _, err := Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: "*.team_a.internal", ports: [443]}
+`)); err == nil {
+		t.Fatal("wildcard policy accepted a non-DNS service label")
+	}
+}
+
+func TestExactContainerServiceLabelMatchesTLSIdentity(t *testing.T) {
+	const hostname = "team_a-vllm-sr-dashboard-container"
+	policy, err := Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: team_a-vllm-sr-dashboard-container, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := (Guard{
+		Policy: policy,
+		Resolver: resolverStub{addresses: map[string][]netip.Addr{
+			hostname: {netip.MustParseAddr("172.24.0.4")},
+		}},
+	}).Resolve(context.Background(), "https://"+hostname+":8743")
+	if err != nil || resolved.ServerName != hostname || len(resolved.Addresses) != 1 {
+		t.Fatalf("resolved exact container service = %+v, %v", resolved, err)
+	}
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC()
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(1),
+		NotBefore:    now.Add(-time.Minute),
+		NotAfter:     now.Add(time.Hour),
+		DNSNames:     []string{hostname},
+	}
+	encoded, err := x509.CreateCertificate(rand.Reader, template, template, publicKey, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certificate, err := x509.ParseCertificate(encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := certificate.VerifyHostname(resolved.ServerName); err != nil {
+		t.Fatalf("exact container TLS identity = %v", err)
+	}
+	if err := certificate.VerifyHostname("other-service"); err == nil {
+		t.Fatal("container TLS identity matched another service")
+	}
+}
+
+func TestOverlayReplacesStalePrivateHostException(t *testing.T) {
+	base, err := Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: api.example.com, ports: [443]}
+  - {host: dashboard.internal, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	overrides, err := Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: dashboard.internal, ports: [8743], allow_cidrs: [172.31.0.0/16]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy, err := Overlay(base, overrides)
+	if err != nil {
+		t.Fatal(err)
+	}
+	guard := Guard{Policy: policy, Resolver: resolverStub{addresses: map[string][]netip.Addr{
+		"dashboard.internal": {netip.MustParseAddr("172.31.0.4")},
+	}}}
+	if _, err := guard.Resolve(context.Background(), "https://dashboard.internal:8743"); err != nil {
+		t.Fatalf("current private issuer = %v", err)
+	}
+	guard.Resolver = resolverStub{addresses: map[string][]netip.Addr{
+		"dashboard.internal": {netip.MustParseAddr("172.24.0.4")},
+	}}
+	if _, err := guard.Resolve(context.Background(), "https://dashboard.internal:8743"); err == nil {
+		t.Fatal("stale private issuer range remained authorized")
+	}
+	if _, err := policy.AuthorizeOrigin("https://api.example.com"); err != nil {
+		t.Fatalf("base public origin was lost: %v", err)
+	}
+}
+
+func TestOverlayCannotExpandBaseSchemes(t *testing.T) {
+	base, _ := Parse([]byte("version: v1\nschemes: [https]\nhosts: [{host: api.example.com, ports: [443]}]\n"))
+	overrides, _ := Parse([]byte("version: v1\nschemes: [http]\nhosts: [{host: issuer.internal, ports: [80], allow_cidrs: [10.20.0.0/16]}]\n"))
+	if _, err := Overlay(base, overrides); err == nil || !strings.Contains(err.Error(), "not allowed") {
+		t.Fatalf("scheme-expanding overlay error = %v", err)
+	}
+}
+
+func TestOverlayRejectsWildcardOverrides(t *testing.T) {
+	base, _ := Parse([]byte("version: v1\nschemes: [https]\nhosts: [{host: api.example.com, ports: [443]}]\n"))
+	overrides, _ := Parse([]byte("version: v1\nschemes: [https]\nhosts: [{host: '*.internal.example.com', ports: [443]}]\n"))
+	if _, err := Overlay(base, overrides); err == nil || !strings.Contains(err.Error(), "exact host identities") {
+		t.Fatalf("wildcard overlay error = %v", err)
 	}
 }
 

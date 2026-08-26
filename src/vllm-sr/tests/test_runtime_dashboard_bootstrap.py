@@ -18,6 +18,34 @@ def test_dashboard_open_bootstrap_defaults_true_without_admin(monkeypatch):
     assert dashboard_env["DASHBOARD_ALLOW_OPEN_BOOTSTRAP"] == "true"
 
 
+def test_dashboard_router_public_url_defaults_to_host_envoy_listener(monkeypatch):
+    monkeypatch.delenv("DASHBOARD_ROUTER_PUBLIC_URL", raising=False)
+    layout = resolve_runtime_stack(stack_name="test", port_offset=100)
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=layout,
+    )
+
+    assert dashboard_env["DASHBOARD_ROUTER_PUBLIC_URL"] == "http://localhost:8999"
+    assert dashboard_env["TARGET_ENVOY_URL"] == (
+        "http://test-vllm-sr-envoy-container:8899"
+    )
+
+
+def test_dashboard_router_public_url_preserves_explicit_origin(monkeypatch):
+    monkeypatch.setenv("DASHBOARD_ROUTER_PUBLIC_URL", "https://router.example.test")
+
+    dashboard_env = _build_dashboard_runtime_env(
+        common_env={},
+        listener_port=8899,
+        stack_layout=resolve_runtime_stack(stack_name="test", port_offset=100),
+    )
+
+    assert dashboard_env["DASHBOARD_ROUTER_PUBLIC_URL"] == "https://router.example.test"
+
+
 def test_dashboard_bootstrap_admin_is_scoped_to_dashboard(monkeypatch):
     monkeypatch.delenv("DASHBOARD_ALLOW_OPEN_BOOTSTRAP", raising=False)
     monkeypatch.setenv("DASHBOARD_ADMIN_EMAIL", "core@vllm-sr.ai")

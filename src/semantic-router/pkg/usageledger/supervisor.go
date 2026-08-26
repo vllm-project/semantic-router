@@ -7,10 +7,11 @@ import (
 	"sort"
 	"sync"
 	"time"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
 
 const (
-	defaultConsumerGroup     = "usage-writers"
 	defaultReconcileInterval = 5 * time.Second
 	defaultRollupInterval    = 5 * time.Second
 	defaultSupervisorMinWait = 100 * time.Millisecond
@@ -27,7 +28,6 @@ type SupervisorOptions struct {
 	Storage    StorageLifecycle
 
 	ReplicaID         string
-	ConsumerGroup     string
 	BatchSize         int64
 	Block             time.Duration
 	ReclaimIdle       time.Duration
@@ -87,12 +87,6 @@ func NewSupervisor(options SupervisorOptions) (*Supervisor, error) {
 	if len(options.ReplicaID) > maxReplicaIDLength || !partitionPattern.MatchString(options.ReplicaID) {
 		return nil, fmt.Errorf("usage supervisor replica ID is not canonical")
 	}
-	if options.ConsumerGroup == "" {
-		options.ConsumerGroup = defaultConsumerGroup
-	}
-	if err := validateConsumerName("group", options.ConsumerGroup); err != nil {
-		return nil, err
-	}
 	if options.ReconcileInterval == 0 {
 		options.ReconcileInterval = defaultReconcileInterval
 	}
@@ -122,7 +116,7 @@ func NewSupervisor(options SupervisorOptions) (*Supervisor, error) {
 	return &Supervisor{
 		namespaces: options.Namespaces, streams: options.Streams, store: options.Store,
 		rollups: options.Rollups, storage: options.Storage, afterCommit: afterCommit, replicaID: options.ReplicaID,
-		consumerGroup: options.ConsumerGroup, workerOptions: workerOptions,
+		consumerGroup: ConsumerGroupName, workerOptions: workerOptions,
 		reconcileInterval: options.ReconcileInterval, rollupInterval: options.RollupInterval,
 		minBackoff: options.MinBackoff, maxBackoff: options.MaxBackoff,
 		workers: make(map[string]*namespaceWorker), started: make(chan struct{}), runDone: make(chan struct{}),
@@ -280,6 +274,16 @@ func (supervisor *Supervisor) prepareNamespace(
 	}
 	if err := worker.Ensure(ctx); err != nil {
 		return nil, fmt.Errorf("ensure usage stream for namespace %q: %w", namespace.ID, err)
+	}
+	quarantined, err := worker.Quarantined(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("inspect usage quarantine for namespace %q: %w", namespace.ID, err)
+	}
+	if quarantined > 0 {
+		logging.ComponentWarnEvent("usageledger", "usage_quarantine_present", map[string]interface{}{
+			"namespace_id": namespace.ID,
+			"items":        quarantined,
+		})
 	}
 	if _, err := supervisor.rollups.ProcessDirty(ctx, namespace.ID); err != nil {
 		return nil, fmt.Errorf("refresh usage rollups for namespace %q: %w", namespace.ID, err)
@@ -501,8 +505,14 @@ func (worker *namespaceWorker) runIngestion(ctx context.Context) {
 	defer worker.wait.Done()
 	backoff := worker.minBackoff
 	for {
-		_, err := worker.worker.ProcessOnce(ctx)
+		result, err := worker.worker.ProcessOnce(ctx)
 		if err == nil {
+			if result.Quarantined > 0 {
+				logging.ComponentErrorEvent("usageledger", "usage_events_quarantined", map[string]interface{}{
+					"namespace_id": worker.namespace.ID,
+					"items":        result.Quarantined,
+				})
+			}
 			worker.setIngestError(nil)
 			backoff = worker.minBackoff
 			continue

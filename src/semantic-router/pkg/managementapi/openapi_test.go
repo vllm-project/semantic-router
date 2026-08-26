@@ -61,6 +61,14 @@ func TestGenerateOpenAPI31IsDeterministicAndRegistryDriven(t *testing.T) {
 		if strings.Join(accept.Schema.Enum, "\n") != strings.Join(wantMedia, "\n") {
 			t.Errorf("%s %s Accept media = %v, want %v", contract.Method, contract.Path, accept.Schema.Enum, wantMedia)
 		}
+		seenParameters := make(map[string]struct{}, len(operation.Parameters))
+		for _, parameter := range operation.Parameters {
+			key := parameter.In + "\x00" + parameter.Name
+			if _, duplicate := seenParameters[key]; duplicate {
+				t.Errorf("%s %s publishes duplicate %s parameter %q", contract.Method, contract.Path, parameter.In, parameter.Name)
+			}
+			seenParameters[key] = struct{}{}
+		}
 	}
 }
 

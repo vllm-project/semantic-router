@@ -162,13 +162,16 @@ func TestAdmissionChecksAccessBeforeCounterMutation(t *testing.T) {
 func TestAdmissionAppliesUsageBackpressureBeforeCounterMutation(t *testing.T) {
 	t.Parallel()
 
-	backlog := strings.Index(admitLua, `redis.call("XLEN", usage_stream_key)`)
+	backlog := strings.Index(admitLua, `redis.call("XINFO", "GROUPS", usage_stream_key)`)
 	consume := strings.Index(admitLua, `redis.call("ZADD", event_key, now, admission_id)`)
 	if backlog < 0 || consume < 0 || backlog > consume {
 		t.Fatal("usage backlog is not checked before quota consumption")
 	}
 	if strings.Contains(finalizeLua, `usage accounting backlog is full`) {
 		t.Fatal("terminal finalization must remain available after admission")
+	}
+	if strings.Contains(admitLua, `redis.call("XLEN", usage_stream_key)`) {
+		t.Fatal("historical acknowledged stream entries must not count as backlog")
 	}
 }
 

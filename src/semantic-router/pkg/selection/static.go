@@ -103,6 +103,19 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 	if err := ValidateSelectionContext(selCtx); err != nil {
 		return nil, err
 	}
+	if selected, scores, ok := weightedStaticCandidate(selCtx); ok {
+		logging.Infof("[StaticSelector] Candidates: %v → Selected: %s (request affinity)",
+			getModelNames(selCtx.CandidateModels), selected.Model)
+		return &SelectionResult{
+			SelectedModel: selected.Model,
+			LoRAName:      selected.LoRAName,
+			Score:         scores[selected.Model],
+			Confidence:    1.0,
+			Method:        MethodStatic,
+			Reasoning:     "Static weighted request affinity",
+			AllScores:     scores,
+		}, nil
+	}
 
 	allScores := make(map[string]float64)
 	var bestModel *config.ModelRef
@@ -154,6 +167,19 @@ func (s *StaticSelector) Select(ctx context.Context, selCtx *SelectionContext) (
 		Reasoning:     reasoning,
 		AllScores:     allScores,
 	}, nil
+}
+
+// weightedStaticCandidate applies Entrypoint assignment weights only when the
+// complete active tier has explicit positive weights and the request supplies
+// stable affinity. Legacy ModelRefs with omitted weights retain score/first
+// selection. SHA-256 keeps the choice stable across Router replicas and process
+// restarts without shared mutable state.
+func weightedStaticCandidate(selCtx *SelectionContext) (*config.ModelRef, map[string]float64, bool) {
+	if selCtx == nil || selCtx.AffinityKey == "" || len(selCtx.CandidateModels) < 2 {
+		return nil, nil, false
+	}
+	scope := string(selCtx.RecipeName) + "\x00" + selCtx.DecisionName + "\x00" + selCtx.AffinityKey
+	return WeightedModelRefForAffinity(selCtx.CandidateModels, scope)
 }
 
 // UpdateFeedback does nothing for static selector (no learning)

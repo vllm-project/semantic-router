@@ -234,6 +234,22 @@ func TestQuotaAndCostSemanticValidation(t *testing.T) {
 	if err := partial.Validate(); err != nil {
 		t.Fatalf("partial quota validation error = %v", err)
 	}
+	unresolvedWithoutFence := partial
+	unresolvedWithoutFence.ActiveFenceIDs = nil
+	if err := unresolvedWithoutFence.Validate(); err != nil {
+		t.Fatalf("unresolved enforced quota validation error = %v", err)
+	}
+	correctedWithOpenFence := partial
+	correctedWithOpenFence.Completeness = "complete"
+	correctedWithOpenFence.KnownDispatches = "2"
+	correctedWithOpenFence.IncompleteDispatches = "0"
+	if err := correctedWithOpenFence.Validate(); err != nil {
+		t.Fatalf("corrected fenced quota validation error = %v", err)
+	}
+	correctedWithOpenFence.ActiveFenceIDs = nil
+	if err := correctedWithOpenFence.Validate(); err == nil {
+		t.Fatal("complete quota without an active fence unexpectedly reported fenced capacity")
+	}
 	partial.Remaining = &zeroRemaining
 	if err := partial.Validate(); err == nil {
 		t.Fatal("partial quota meter unexpectedly claimed remaining capacity")

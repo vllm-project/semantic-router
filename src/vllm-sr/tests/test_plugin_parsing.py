@@ -353,6 +353,31 @@ class TestToolsPluginConfig:
 class TestPluginConfigurationValidation:
     """Test plugin configuration validation."""
 
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [
+            ("allow_request_controls", True),
+            ("control_header", "x-vsr-cache-control"),
+            ("similarity_threshold", 0.9),
+        ],
+    )
+    def test_response_cache_rejects_removed_flat_fields(self, field, value):
+        temp_path = _write_config(
+            [
+                {
+                    "type": "response_cache",
+                    "configuration": {"enabled": True, field: value},
+                }
+            ]
+        )
+
+        try:
+            config = parse_user_config(temp_path)
+            errors = validate_user_config(config)
+            assert any(field in str(error) for error in errors)
+        finally:
+            os.unlink(temp_path)
+
     def test_invalid_router_replay_config(self):
         """Test that invalid router_replay configuration is caught."""
         temp_path = _write_config(

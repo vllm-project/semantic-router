@@ -12,6 +12,7 @@ const (
 	ToolRecipeEvaluate    = "router.recipe.evaluate"
 	ToolEntrypointPrepare = "router.entrypoint.prepare"
 	ToolPublishPrepare    = "router.publish.prepare"
+	ToolWebSearch         = "search_web"
 )
 
 // BuiltinBuilderToolNames is the single canonical allowlist shared by default
@@ -29,5 +30,6 @@ func BuiltinBuilderToolNames() []string {
 		ToolRecipeEvaluate,
 		ToolEntrypointPrepare,
 		ToolPublishPrepare,
+		ToolWebSearch,
 	}
 }

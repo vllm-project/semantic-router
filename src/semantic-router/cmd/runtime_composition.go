@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendegress"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/extproc"
@@ -16,6 +17,8 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 )
+
+const managementIssuerEgressPolicyFileEnv = "VLLM_SR_INTERNAL_MANAGEMENT_ISSUER_EGRESS_POLICY_FILE"
 
 // processRuntime owns process composition and immutable Router generations as
 // one lifecycle. The ExtProc listener borrows only the request resolver and
@@ -64,6 +67,10 @@ func composeProcessRuntime(
 			return nil, errors.New("VLLM_SR_REPLICA_ID is required for durable routing")
 		}
 		if capabilities.ManagementAPI {
+			options.ManagementIssuerEgressPolicy, err = resolveManagementIssuerEgressPolicy()
+			if err != nil {
+				return nil, err
+			}
 			factory, factoryErr := resolveProductionManagementFactory(cfg)
 			if factoryErr != nil {
 				return nil, factoryErr
@@ -140,6 +147,18 @@ func composeProcessRuntime(
 	return result, nil
 }
 
+func resolveManagementIssuerEgressPolicy() (*backendegress.Policy, error) {
+	path := strings.TrimSpace(os.Getenv(managementIssuerEgressPolicyFileEnv))
+	if path == "" {
+		return nil, nil
+	}
+	policy, err := backendegress.LoadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("load system Management issuer egress policy: %w", err)
+	}
+	return &policy, nil
+}
+
 func (runtime *processRuntime) Start(ctx context.Context) error {
 	if runtime == nil || runtime.core == nil {
 		return errors.New("process runtime is unavailable")
@@ -148,6 +167,23 @@ func (runtime *processRuntime) Start(ctx context.Context) error {
 		return fmt.Errorf("start process runtime: %w", err)
 	}
 	return nil
+}
+
+// Ready is the complete serving contract for the operational probe. Durable
+// routing remains unready until publication, access, provider, and dispatch
+// dependencies are all usable, independently of Management API enablement.
+func (runtime *processRuntime) Ready(ctx context.Context) error {
+	if runtime == nil || runtime.core == nil {
+		return errors.New("process runtime is unavailable")
+	}
+	if runtime.capabilities.ManagementAPI {
+		management := runtime.core.ManagementAPI()
+		if management == nil {
+			return errors.New("management runtime is unavailable")
+		}
+		return management.Ready(ctx)
+	}
+	return runtime.core.Ready(ctx)
 }
 
 func (runtime *processRuntime) ManagementAPI() routingruntime.ManagementAPI {

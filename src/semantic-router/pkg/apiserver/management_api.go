@@ -15,3 +15,9 @@ type ManagementAPI interface {
 	Register(*http.ServeMux)
 	Ready(context.Context) error
 }
+
+// RuntimeReadiness is the process-owned serving contract behind /ready. It is
+// independent of whether the optional Management API surface is enabled.
+type RuntimeReadiness interface {
+	Ready(context.Context) error
+}

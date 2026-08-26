@@ -44,8 +44,18 @@ func TestRoutingListsApplyExactScopeBeforeStablePagination(t *testing.T) {
 		models[index].ID, models[index].Name = id, id
 		models[index].Backends[0].ID = uuid.NewString()
 	}
-	if _, _, err := store.CreateModels(ctx, namespaceID, models, mutationMeta("seed scoped Models")); err != nil {
+	seedMeta := mutationMeta("seed scoped Models")
+	if _, _, err := store.CreateModels(ctx, namespaceID, models, seedMeta); err != nil {
 		t.Fatal(err)
+	}
+	var emptyActorChain bool
+	if err := db.QueryRowContext(ctx, `SELECT actor_chain = '[]'::jsonb
+FROM access_audit_events
+WHERE namespace_id=$1 AND request_id=$2`, namespaceID, seedMeta.RequestID).Scan(&emptyActorChain); err != nil {
+		t.Fatalf("read routing audit actor chain: %v", err)
+	}
+	if !emptyActorChain {
+		t.Fatal("routing audit actor chain was not persisted as an empty array")
 	}
 	modelScope := exactRoutingScope(namespaceID, accesscontrol.ScopeResourceModel,
 		"model_one", "model_three", "model_four")
@@ -109,6 +119,7 @@ func TestRoutingListsApplyExactScopeBeforeStablePagination(t *testing.T) {
 	})
 	if testRoutingListsApplyExactScopeBeforeStablePaginationErr != nil || len(entrypointPage.Items) != 1 || entrypointPage.Items[0].ID != "entrypoint_two" ||
 		entrypointPage.Items[0].RuleCount != 1 || entrypointPage.Items[0].AssignedModelCount != 1 ||
+		len(entrypointPage.Items[0].RecipeIDs) != 1 || entrypointPage.Items[0].RecipeIDs[0] != "recipe_two" ||
 		len(entrypointPage.Items[0].Current.Rules) != 0 {
 		t.Fatalf("exact Entrypoint page = %#v, %v", entrypointPage, testRoutingListsApplyExactScopeBeforeStablePaginationErr)
 	}

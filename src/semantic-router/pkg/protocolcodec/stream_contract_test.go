@@ -56,6 +56,30 @@ func TestStreamStateRejectsAvailableToUnknownUsage(t *testing.T) {
 	}
 }
 
+func TestOpenAIChatStreamRetainsOptionalBreakdownAcrossTotalsOnlyUsage(t *testing.T) {
+	decoder := OpenAIChatCodec{}.NewDecoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	payload := []byte(
+		"data: {\"id\":\"response_1\",\"model\":\"model\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"hello\"},\"finish_reason\":null}]}\n\n" +
+			"data: {\"id\":\"response_1\",\"model\":\"model\",\"choices\":[],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":4,\"total_tokens\":24,\"prompt_tokens_details\":{\"cached_tokens\":7},\"completion_tokens_details\":{\"reasoning_tokens\":1}}}\n\n" +
+			"data: {\"id\":\"response_1\",\"model\":\"model\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"stop\"}]}\n\n" +
+			"data: {\"id\":\"response_1\",\"model\":\"model\",\"choices\":[],\"usage\":{\"prompt_tokens\":20,\"completion_tokens\":4,\"total_tokens\":24}}\n\n" +
+			"data: [DONE]\n\n",
+	)
+	events, _, err := decoder.Push(payload)
+	if err != nil {
+		t.Fatalf("Push() error = %v", err)
+	}
+	terminal := events[len(events)-1]
+	if terminal.Type != llmprotocol.EventResponseCompleted || terminal.Usage == nil ||
+		terminal.Usage.InputCacheRead.Value == nil || *terminal.Usage.InputCacheRead.Value != 7 ||
+		terminal.Usage.OutputReasoning.Value == nil || *terminal.Usage.OutputReasoning.Value != 1 {
+		t.Fatalf("terminal usage = %#v", terminal.Usage)
+	}
+}
+
 func TestStreamStateRequiresCompleteToolLifecycle(t *testing.T) {
 	state := newTestStreamState()
 	startTestStream(t, state)

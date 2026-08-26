@@ -2,6 +2,7 @@ package managementserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -19,6 +20,7 @@ type accessReadServiceStub struct {
 	checkResult accessmanagement.AccessCheckResult
 	context     accessmanagement.RoutingContext
 	catalog     accessmanagement.RoutingCatalog
+	policy      accessmanagement.EffectivePolicy
 	check       accessmanagement.AccessCheckRequest
 	update      accessmanagement.UpdateRoutingContextRequest
 	inspectCall int
@@ -33,7 +35,7 @@ func (stub *accessReadServiceStub) Inspect(context.Context, string, accessmanage
 }
 
 func (stub *accessReadServiceStub) GetEffectivePolicy(context.Context, string, accessmanagement.Subject) (accessmanagement.EffectivePolicy, error) {
-	return accessmanagement.EffectivePolicy{}, nil
+	return stub.policy, nil
 }
 
 func (stub *accessReadServiceStub) GetQuota(context.Context, string, accessmanagement.Subject) (accessmanagement.EffectiveQuota, error) {
@@ -181,6 +183,146 @@ func TestKeyScopedRoutingCatalogUsesKeyAuthorizationWithoutGlobalRoutingPermissi
 		len(authorization.Targets["key"]) != 1 ||
 		authorization.Targets["key"][0].Scope.ResourceID != accesscontrol.ResourceID(subject.ID) {
 		t.Fatalf("routing catalog authorization = %#v", authorization)
+	}
+}
+
+func TestKeyScopedRoutingCatalogEncodesRequiredEmptyCollectionsAsArrays(t *testing.T) {
+	emptyWire, err := json.Marshal(routingCatalogDTO(accessmanagement.RoutingCatalog{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var emptyPayload map[string]json.RawMessage
+	if err := json.Unmarshal(emptyWire, &emptyPayload); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"models", "recipes", "entrypoints"} {
+		if string(emptyPayload[field]) != "[]" {
+			t.Errorf("RoutingCatalog.%s = %s, want []: %s", field, emptyPayload[field], emptyWire)
+		}
+	}
+
+	mapped := routingCatalogDTO(accessmanagement.RoutingCatalog{
+		Models:  []accessmanagement.RoutingCatalogModel{{}},
+		Recipes: []accessmanagement.RoutingCatalogRecipe{{}},
+		Entrypoints: []accessmanagement.RoutingCatalogEntrypoint{{
+			Rules: []accessmanagement.RoutingCatalogRule{{
+				Assignments: map[string]accessmanagement.RoutingCatalogAssignmentSet{"decision_empty": {}},
+			}},
+		}},
+	})
+	wire, err := json.Marshal(mapped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload struct {
+		Models []struct {
+			Aliases      json.RawMessage `json:"aliases"`
+			Capabilities json.RawMessage `json:"capabilities"`
+			LoRAs        json.RawMessage `json:"loras"`
+			Tags         json.RawMessage `json:"tags"`
+		} `json:"models"`
+		Recipes []struct {
+			Decisions json.RawMessage `json:"decisions"`
+		} `json:"recipes"`
+		Entrypoints []struct {
+			Aliases json.RawMessage `json:"aliases"`
+			Rules   []struct {
+				Assignments map[string]struct {
+					Models json.RawMessage `json:"models"`
+				} `json:"assignments"`
+			} `json:"rules"`
+		} `json:"entrypoints"`
+	}
+	if err := json.Unmarshal(wire, &payload); err != nil {
+		t.Fatal(err)
+	}
+	model := payload.Models[0]
+	for field, value := range map[string]json.RawMessage{
+		"aliases": model.Aliases, "capabilities": model.Capabilities, "loras": model.LoRAs, "tags": model.Tags,
+	} {
+		if string(value) != "[]" {
+			t.Errorf("RoutingCatalogModel.%s = %s, want []: %s", field, value, wire)
+		}
+	}
+	if string(payload.Recipes[0].Decisions) != "[]" || string(payload.Entrypoints[0].Aliases) != "[]" ||
+		string(payload.Entrypoints[0].Rules[0].Assignments["decision_empty"].Models) != "[]" {
+		t.Fatalf("nested required collections must be arrays: %s", wire)
+	}
+}
+
+func TestEffectivePolicyEncodesRequiredEmptyCollectionsAsArrays(t *testing.T) {
+	subject := accessmanagement.Subject{
+		Kind: accesscontrol.SubjectKindAPIKey,
+		ID:   "44444444-4444-4444-8444-444444444444",
+	}
+	service := &accessReadServiceStub{
+		inspection: accessmanagement.AuthorizationContext{Subject: subject},
+		policy: accessmanagement.EffectivePolicy{
+			Subject: subject, DesiredRevision: 2, AppliedRevision: 2,
+			Quota: accessmanagement.EffectiveQuota{AsOf: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)},
+		},
+	}
+	routes := newTestAccessReadRoutes(t, service, AuthorizerFunc(func(context.Context, AuthorizationRequest) (AuthorizationDecision, error) {
+		return AuthorizationDecision{}, nil
+	}))
+	mux := http.NewServeMux()
+	routes.Register(mux)
+	request := authorizedRequest(t, http.MethodGet,
+		managementapi.BasePath+"/api-keys/44444444-4444-4444-8444-444444444444/effective-policy", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	var payload struct {
+		Quota struct {
+			Meters             json.RawMessage `json:"meters"`
+			UnknownUsageFences json.RawMessage `json:"unknownUsageFences"`
+		} `json:"quota"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if string(payload.Quota.Meters) != "[]" || string(payload.Quota.UnknownUsageFences) != "[]" {
+		t.Fatalf("required collections must be arrays: %s", response.Body.String())
+	}
+	mapped := effectiveQuotaDTO(accessmanagement.EffectiveQuota{Meters: []accessmanagement.QuotaMeterView{{}}})
+	activeFenceIDs, err := json.Marshal(mapped.Meters[0].ActiveFenceIDs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(activeFenceIDs) != "[]" {
+		t.Fatalf("active fence IDs must encode as an array: %s", activeFenceIDs)
+	}
+	canonicalMeter := managementapi.QuotaMeter{
+		PolicyID: "policy-1", RuleID: "rule-1", BindingID: "binding-1",
+		Source: managementapi.GrantSource{
+			SubjectType: "api_key", SubjectID: subject.ID, BindingID: "binding-1",
+		},
+		CounterOwner: subject.ID, Metric: "total_tokens", Algorithm: "sliding_log",
+		Accounting: "response_actual", Enforcement: "enforce",
+		Limit: "1", Used: "0", Remaining: nil,
+		Completeness: "unknown", KnownDispatches: "0", IncompleteDispatches: "1",
+		CapacityState: "fenced", ActiveFenceIDs: []string{"fence-1"},
+		Freshness: managementapi.MeterFreshness{
+			Source: "valkey", AsOf: time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC),
+		},
+	}
+	meterWire, err := json.Marshal(canonicalMeter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var meterFields map[string]json.RawMessage
+	if err := json.Unmarshal(meterWire, &meterFields); err != nil {
+		t.Fatal(err)
+	}
+	for _, optional := range []string{"window", "currency", "overage", "resetAt"} {
+		if _, present := meterFields[optional]; present {
+			t.Errorf("empty optional QuotaMeter.%s must be omitted: %s", optional, meterWire)
+		}
+	}
+	if string(meterFields["remaining"]) != "null" {
+		t.Errorf("required nullable QuotaMeter.remaining = %s, want null: %s", meterFields["remaining"], meterWire)
 	}
 }
 

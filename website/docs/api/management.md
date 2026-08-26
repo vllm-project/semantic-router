@@ -19,7 +19,7 @@ The Router registry generates two checked artifacts in every source release:
   base path, media type, protocol headers, HTTP methods, operation IDs, and a
   typed path builder.
 
-The checked artifacts and the live managed listener's `GET /openapi.json` are
+The checked artifacts and the live Management listener's `GET /openapi.json` are
 generated from the same Router registry. Use the checked document to build a
 client for a release; use the live document to confirm the contract exposed by
 a running deployment.

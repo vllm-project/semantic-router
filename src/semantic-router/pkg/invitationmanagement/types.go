@@ -1,6 +1,7 @@
 package invitationmanagement
 
 import (
+	"context"
 	"net/netip"
 	"time"
 
@@ -235,6 +236,12 @@ type FirstKeyPreparer interface {
 	Close()
 }
 
+// FirstKeyPublicationWaiter closes the durable-control-plane to applied-data-
+// plane handoff before a one-time key secret is returned to its owner.
+type FirstKeyPublicationWaiter interface {
+	WaitAPIKeyActive(context.Context, string, string, string) error
+}
+
 type AcceptRequest struct {
 	Token                    string
 	Identity                 AcceptanceIdentity
@@ -246,6 +253,7 @@ type AcceptRequest struct {
 }
 
 type AcceptMutation struct {
+	NamespaceID              string
 	InvitationID             string
 	TokenHMAC                []byte
 	PepperVersion            string

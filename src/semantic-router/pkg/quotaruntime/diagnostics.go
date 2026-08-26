@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 // PartitionDiagnostics is a read-only, point-in-time observation of the
@@ -55,8 +57,13 @@ func (diagnostics *RedisDiagnostics) Snapshot(
 	if err != nil {
 		return PartitionDiagnostics{}, fmt.Errorf("%w: read quota runtime time", ErrRuntimeUnavailable)
 	}
+	usageBacklog, err := consumerGroupBacklog(
+		ctx, diagnostics.client, keys.usageStream, usageledger.ConsumerGroupName,
+	)
+	if err != nil {
+		return PartitionDiagnostics{}, fmt.Errorf("%w: read usage accounting backlog: %v", ErrRuntimeUnavailable, err)
+	}
 	pipeline := diagnostics.client.Pipeline()
-	usageBacklog := pipeline.XLen(ctx, keys.usageStream)
 	pending := pipeline.ZCard(ctx, keys.pendingIndex)
 	expired := pipeline.ZCount(ctx, keys.pendingIndex, "-inf", strconv.FormatInt(asOf.UnixMilli(), 10))
 	oldest := pipeline.ZRangeWithScores(ctx, keys.pendingIndex, 0, 0)
@@ -65,7 +72,7 @@ func (diagnostics *RedisDiagnostics) Snapshot(
 		return PartitionDiagnostics{}, fmt.Errorf("%w: read quota runtime queues", ErrRuntimeUnavailable)
 	}
 	result := PartitionDiagnostics{
-		Partition: partition, AsOf: asOf.UTC(), UsageStreamBacklog: usageBacklog.Val(),
+		Partition: partition, AsOf: asOf.UTC(), UsageStreamBacklog: usageBacklog,
 		PendingAdmissions: pending.Val(), ExpiredPendingAdmissions: expired.Val(),
 		RecoveryState: "ready",
 	}
@@ -77,4 +84,36 @@ func (diagnostics *RedisDiagnostics) Snapshot(
 		result.RecoveryState = "reconciliation_required"
 	}
 	return result, nil
+}
+
+func consumerGroupBacklog(
+	ctx context.Context,
+	client redis.UniversalClient,
+	stream string,
+	group string,
+) (int64, error) {
+	streamType, err := client.Type(ctx, stream).Result()
+	if err != nil {
+		return 0, err
+	}
+	if streamType == "none" {
+		return 0, nil
+	}
+	if streamType != "stream" {
+		return 0, fmt.Errorf("usage stream key has type %q", streamType)
+	}
+	groups, err := client.XInfoGroups(ctx, stream).Result()
+	if err != nil {
+		return 0, err
+	}
+	for _, candidate := range groups {
+		if candidate.Name != group {
+			continue
+		}
+		if candidate.Pending < 0 || candidate.Lag < 0 {
+			return 0, fmt.Errorf("usage consumer group backlog is indeterminate")
+		}
+		return candidate.Pending + candidate.Lag, nil
+	}
+	return 0, fmt.Errorf("usage consumer group %q is unavailable", group)
 }

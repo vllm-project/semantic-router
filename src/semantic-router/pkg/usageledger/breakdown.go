@@ -16,6 +16,7 @@ const (
 	BreakdownTeam         BreakdownDimension = "team"
 	BreakdownEntrypoint   BreakdownDimension = "entrypoint"
 	BreakdownRecipe       BreakdownDimension = "recipe"
+	BreakdownDecision     BreakdownDimension = "decision"
 	BreakdownLogicalModel BreakdownDimension = "logical_model"
 	BreakdownBackend      BreakdownDimension = "backend"
 	BreakdownProvider     BreakdownDimension = "provider"
@@ -38,9 +39,9 @@ type UsageBreakdown struct {
 	Dimension       BreakdownDimension `json:"dimension"`
 	Rows            []BreakdownRow     `json:"rows"`
 	Grain           Grain              `json:"grain"`
-	AsOf            *time.Time         `json:"asOf"`
-	LedgerWatermark *time.Time         `json:"ledgerWatermark"`
-	IngestionLag    *time.Duration     `json:"ingestionLag"`
+	AsOf            *time.Time         `json:"asOf,omitempty"`
+	LedgerWatermark *time.Time         `json:"ledgerWatermark,omitempty"`
+	IngestionLag    *time.Duration     `json:"ingestionLag,omitempty"`
 	Final           bool               `json:"final"`
 }
 
@@ -232,8 +233,9 @@ func breakdownKey(dimension BreakdownDimension) (string, bool, bool) {
 	}{
 		BreakdownAPIKey: {"apiKeyId", false}, BreakdownUser: {"userId", false},
 		BreakdownTeam: {"teamId", false}, BreakdownEntrypoint: {"entrypointId", false},
-		BreakdownRecipe: {"recipeId", false}, BreakdownLogicalModel: {"logicalModelId", true},
-		BreakdownBackend: {"backendId", true}, BreakdownProvider: {"providerId", true},
+		BreakdownRecipe: {"recipeId", false}, BreakdownDecision: {"decisionId", false},
+		BreakdownLogicalModel: {"logicalModelId", true},
+		BreakdownBackend:      {"backendId", true}, BreakdownProvider: {"providerId", true},
 		BreakdownStatus: {"statusCode", false}, BreakdownDispatchType: {"dispatchType", true},
 	}
 	value, ok := values[dimension]

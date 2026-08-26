@@ -18849,14 +18849,6 @@
             }
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "end",
             "in": "query",
             "required": false,
@@ -18871,16 +18863,6 @@
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200
             }
           },
           {
@@ -40110,14 +40092,6 @@
             }
           },
           {
-            "name": "cursor",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string"
-            }
-          },
-          {
             "name": "dispatchType",
             "in": "query",
             "required": false,
@@ -40156,16 +40130,6 @@
             "required": false,
             "schema": {
               "type": "string"
-            }
-          },
-          {
-            "name": "pageSize",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200
             }
           },
           {
@@ -57741,6 +57705,7 @@
                 "team",
                 "entrypoint",
                 "recipe",
+                "decision",
                 "logical_model",
                 "backend",
                 "provider",
@@ -80583,6 +80548,7 @@
           "latencyMilliseconds",
           "stream",
           "toolCall",
+          "models",
           "costs"
         ],
         "properties": {
@@ -80601,6 +80567,16 @@
             "items": {
               "$ref": "#/components/schemas/CostSummary"
             }
+          },
+          "decisionId": {
+            "type": "string"
+          },
+          "decisionName": {
+            "type": "string"
+          },
+          "decisionTier": {
+            "type": "integer",
+            "format": "int32"
           },
           "entrypointId": {
             "type": "string"
@@ -80626,6 +80602,12 @@
           "metadata": {
             "type": "object",
             "additionalProperties": true
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RequestModel"
+            }
           },
           "occurredAt": {
             "type": "string",
@@ -80728,6 +80710,27 @@
           },
           "page": {
             "$ref": "#/components/schemas/PageInfo"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RequestModel": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "revision"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int64"
           }
         },
         "additionalProperties": false
@@ -82174,6 +82177,7 @@
           "revision",
           "entrypointRevision",
           "aliases",
+          "recipeIds",
           "ruleCount",
           "assignedModelCount",
           "createdAt",
@@ -82205,6 +82209,13 @@
           },
           "name": {
             "type": "string"
+          },
+          "recipeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{2,127}$"
+            }
           },
           "revision": {
             "type": "integer",
@@ -82582,6 +82593,10 @@
       },
       "RoutingModelControl": {
         "type": "object",
+        "required": [
+          "retry",
+          "timeout"
+        ],
         "properties": {
           "retry": {
             "$ref": "#/components/schemas/RoutingModelRetryControl"
@@ -82692,6 +82707,10 @@
       },
       "RoutingModelRetryControl": {
         "type": "object",
+        "required": [
+          "count",
+          "on"
+        ],
         "properties": {
           "count": {
             "type": "integer",
@@ -82715,6 +82734,10 @@
       },
       "RoutingModelTimeoutControl": {
         "type": "object",
+        "required": [
+          "request",
+          "stream"
+        ],
         "properties": {
           "request": {
             "type": "string",
@@ -85781,6 +85804,7 @@
               "team",
               "entrypoint",
               "recipe",
+              "decision",
               "logical_model",
               "backend",
               "provider",

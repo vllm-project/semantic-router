@@ -156,6 +156,11 @@ func (routes *ObservabilityRoutes) auditEvents(response http.ResponseWriter, req
 		writeProviderError(response, http.StatusForbidden, "forbidden", "Permission denied.", requestID)
 		return
 	}
+	values, err = inheritCursorTimeRange(values, routes.auditCursors.TimeRange)
+	if err != nil {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Audit query is invalid.", requestID)
+		return
+	}
 	start, end, ok := routes.timeRange(response, values, requestID)
 	if !ok {
 		return
@@ -259,6 +264,11 @@ func (routes *ObservabilityRoutes) requestLogs(response http.ResponseWriter, req
 	if !ok {
 		return
 	}
+	values, err = inheritCursorTimeRange(values, routes.logCursors.TimeRange)
+	if err != nil {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Request-log query is invalid.", requestID)
+		return
+	}
 	start, end, ok := routes.timeRange(response, values, requestID)
 	if !ok {
 		return
@@ -275,7 +285,6 @@ func (routes *ObservabilityRoutes) requestLogs(response http.ResponseWriter, req
 	if pageSize == 0 {
 		pageSize = routes.defaultPageSize
 	}
-	_ = session
 	page, err := routes.queries.ListLogs(request.Context(), usageledger.LogQuery{
 		NamespaceID: namespaceID, ExternalRequestID: values.Get("requestId"),
 		Start: start, End: end, Filters: filters,
@@ -285,10 +294,39 @@ func (routes *ObservabilityRoutes) requestLogs(response http.ResponseWriter, req
 		writeObservabilityError(response, err, requestID)
 		return
 	}
+	if !routes.canReadInternalDimensions(request.Context(), session, namespaceID, visibility) {
+		for index := range page.Items {
+			page.Items[index].Models = []usageledger.RequestModel{}
+		}
+	}
 	writeProviderJSON(response, http.StatusOK, requestLogPageResponse{
 		Data: page.Items,
 		Page: managementapi.PageInfo{NextCursor: page.NextCursor, HasMore: page.NextCursor != "", PageSize: pageSize},
 	}, requestID)
+}
+
+type cursorTimeRangeResolver func(string) (time.Time, time.Time, error)
+
+func inheritCursorTimeRange(values url.Values, resolve cursorTimeRangeResolver) (url.Values, error) {
+	cursor := values.Get("cursor")
+	if cursor == "" || (values.Get("start") != "" && values.Get("end") != "") {
+		return values, nil
+	}
+	start, end, err := resolve(cursor)
+	if err != nil {
+		return nil, err
+	}
+	inherited := make(url.Values, len(values)+2)
+	for key, items := range values {
+		inherited[key] = append([]string(nil), items...)
+	}
+	if inherited.Get("start") == "" {
+		inherited.Set("start", start.Format(time.RFC3339Nano))
+	}
+	if inherited.Get("end") == "" {
+		inherited.Set("end", end.Format(time.RFC3339Nano))
+	}
+	return inherited, nil
 }
 
 func (routes *ObservabilityRoutes) requestLogDetail(response http.ResponseWriter, request *http.Request, requestID string) {
@@ -312,13 +350,23 @@ func (routes *ObservabilityRoutes) requestLogDetail(response http.ResponseWriter
 		writeObservabilityError(response, err, requestID)
 		return
 	}
-	internal, err := routes.scopes.ResolveResultScope(request.Context(),
-		accesscontrol.ManagementPrincipalID(session.Session.PrincipalID), accesscontrol.NamespaceID(namespaceID),
-		accesscontrol.PermissionUsageInternalDimensionsRead)
-	if err != nil || !internal.Covers(scopeFromVisibility(namespaceID, visibility)) {
+	if !routes.canReadInternalDimensions(request.Context(), session, namespaceID, visibility) {
 		detail.Dispatches = nil
+		detail.Request.Models = []usageledger.RequestModel{}
 	}
 	writeProviderJSON(response, http.StatusOK, requestLogDetailResponse{Data: detail}, requestID)
+}
+
+func (routes *ObservabilityRoutes) canReadInternalDimensions(
+	ctx context.Context,
+	session managementauth.AuthenticatedSession,
+	namespaceID string,
+	visibility usageledger.QueryVisibility,
+) bool {
+	internal, err := routes.scopes.ResolveResultScope(ctx,
+		accesscontrol.ManagementPrincipalID(session.Session.PrincipalID), accesscontrol.NamespaceID(namespaceID),
+		accesscontrol.PermissionUsageInternalDimensionsRead)
+	return err == nil && internal.Covers(scopeFromVisibility(namespaceID, visibility))
 }
 
 func (routes *ObservabilityRoutes) authorizedUsageQuery(

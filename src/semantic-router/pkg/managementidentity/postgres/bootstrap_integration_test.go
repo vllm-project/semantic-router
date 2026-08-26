@@ -61,6 +61,15 @@ GROUP BY receipt`).Scan(&persisted); err != nil {
 	if strings.Contains(persisted, first.ServiceCredential) || strings.Contains(persisted, "vsm_") {
 		t.Fatal("bootstrap secret was persisted in receipt or audit metadata")
 	}
+	var emptyActorChain bool
+	if err := database.QueryRow(`SELECT actor_chain = '[]'::jsonb
+FROM access_audit_events
+WHERE action='management.bootstrap' AND resource_id=$1`, first.PrincipalID).Scan(&emptyActorChain); err != nil {
+		t.Fatalf("read bootstrap audit actor chain: %v", err)
+	}
+	if !emptyActorChain {
+		t.Fatal("bootstrap audit actor chain was not persisted as an empty array")
+	}
 
 	now = now.Add(bootstrapResultTTL + time.Second)
 	if _, err := service.Bootstrap(context.Background(), request, bootstrapTestToken); !errors.Is(err, managementidentity.ErrBootstrapResultExpired) {

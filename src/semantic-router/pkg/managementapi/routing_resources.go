@@ -71,7 +71,7 @@ type RoutingResolvedRecipe struct {
 
 type RoutingModelRetryControl struct {
 	Count int      `json:"count"`
-	On    []string `json:"on,omitempty"`
+	On    []string `json:"on"`
 }
 
 type RoutingModelTimeoutControl struct {
@@ -307,6 +307,7 @@ type RoutingEntrypointView struct {
 	Revision           int64                   `json:"revision"`
 	EntrypointRevision int64                   `json:"entrypointRevision"`
 	Aliases            []string                `json:"aliases"`
+	RecipeIDs          []string                `json:"recipeIds"`
 	RuleCount          int                     `json:"ruleCount"`
 	AssignedModelCount int                     `json:"assignedModelCount"`
 	Rules              []RoutingEntrypointRule `json:"rules,omitempty"`

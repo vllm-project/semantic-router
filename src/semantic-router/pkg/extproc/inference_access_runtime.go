@@ -19,6 +19,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routingsnapshot"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageaccounting"
@@ -204,22 +205,42 @@ func (r *OpenAIRouter) admitInferenceRequest(
 
 	digest := inferenceRequestDigest(request, state.target)
 	lease := r.inferenceAdmissionLease(candidates)
+	settlementModel := strings.TrimSpace(selectedModel)
+	if settlementModel == "" && len(candidates) > 0 {
+		settlementModel = candidates[0]
+	}
+	recovery, err := r.inferenceAdmissionRecovery(request, state, settlementModel)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "inference_admission_recovery_failed", map[string]interface{}{
+			"error_class": fmt.Sprintf("%T", err),
+		})
+		return r.createInferenceAccessError(quotaruntime.AdmissionUnavailable, nil)
+	}
 	admission, err := r.InferenceAccess.Admit(ctx, accessruntime.AdmissionRequest{
 		Session:       state.session,
 		Target:        state.target,
 		AdmissionID:   uuid.NewString(),
 		RequestDigest: digest,
 		LeaseDuration: lease,
+		Recovery:      recovery,
 	})
-	if err != nil || !admission.Result.Allowed() {
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "inference_admission_failed", map[string]interface{}{
+			"disposition": admission.Result.Disposition,
+			"reason":      admission.Result.BlockingReason,
+			"error_class": fmt.Sprintf("%T", err),
+		})
+		return r.createInferenceAccessError(admission.Result.Disposition, admission.Result.RetryAt)
+	}
+	if !admission.Result.Allowed() {
+		logging.ComponentWarnEvent("extproc", "inference_admission_blocked", map[string]interface{}{
+			"disposition": admission.Result.Disposition,
+			"reason":      admission.Result.BlockingReason,
+		})
 		return r.createInferenceAccessError(admission.Result.Disposition, admission.Result.RetryAt)
 	}
 	if admission.Tenant.NamespaceID == "" {
 		return r.createInferenceAccessError(quotaruntime.AdmissionUnavailable, nil)
-	}
-	settlementModel := strings.TrimSpace(selectedModel)
-	if settlementModel == "" && len(candidates) > 0 {
-		settlementModel = candidates[0]
 	}
 	state.mu.Lock()
 	state.admission = &admission

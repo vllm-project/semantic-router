@@ -29,8 +29,10 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/providercredential"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/providercredential/backendresolver"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotarecovery"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 const (
@@ -446,6 +448,16 @@ func composePublicationRuntime(
 		if err != nil {
 			return err
 		}
+		namespaces, namespaceErr := usageledger.NewPostgresNamespaceSource(foundation.database)
+		if namespaceErr != nil {
+			return fmt.Errorf("compose quota recovery namespace source: %w", namespaceErr)
+		}
+		runtime.quotaRecovery, err = quotarecovery.NewSupervisor(quotarecovery.SupervisorOptions{
+			Namespaces: namespaces, Runtime: quotaEngine,
+		})
+		if err != nil {
+			return fmt.Errorf("compose quota recovery supervisor: %w", err)
+		}
 	}
 	var journal backendinvoker.Journal = backendinvoker.ProcessLocalJournal{}
 	if capabilities.NativeAccess {
@@ -457,6 +469,7 @@ func composePublicationRuntime(
 	runtime.backendDispatch, err = newBackendDispatchComposition(
 		cfg.BackendDispatch, inferenceProviderResolver, foundation.protocolCodecs, journal,
 		runtime.responseTerminals, foundation.egressPolicy, options.BackendDialTimeout,
+		runtime.Ready,
 	)
 	return err
 }
@@ -472,13 +485,25 @@ func composeManagementRuntime(
 	if !capabilities.ManagementAPI {
 		return nil
 	}
+	issuerEgressPolicy := foundation.egressPolicy
+	if options.ManagementIssuerEgressPolicy != nil {
+		var err error
+		issuerEgressPolicy, err = backendegress.Overlay(
+			foundation.egressPolicy,
+			*options.ManagementIssuerEgressPolicy,
+		)
+		if err != nil {
+			return fmt.Errorf("compose Management issuer egress policy: %w", err)
+		}
+	}
 	factoryKeyrings := runtime.keyrings.clone()
 	defer factoryKeyrings.zero()
 	management, err := options.ManagementFactory.Build(ctx, ManagementDependencies{
 		Database: foundation.database, Redis: foundation.redisClient,
 		AccessStore: foundation.accessStore, SessionStore: foundation.sessionStore,
 		Catalog: foundation.catalogApplication, EgressPolicy: foundation.egressPolicy,
-		ProtocolCodecs: foundation.protocolCodecs, CredentialAdapters: foundation.credentialAdapters,
+		IssuerEgressPolicy: issuerEgressPolicy,
+		ProtocolCodecs:     foundation.protocolCodecs, CredentialAdapters: foundation.credentialAdapters,
 		DiscoveryAdapters: foundation.discoveryAdapters, ProviderCredentialCodec: foundation.providerCodec,
 		ProviderCredentialResolver: foundation.providerResolver,
 		BootstrapToken:             foundation.bootstrapToken, BootstrapTokenPresent: foundation.bootstrapTokenPresent,

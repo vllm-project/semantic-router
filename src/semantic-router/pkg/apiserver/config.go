@@ -31,6 +31,7 @@ type ClassificationAPIServer struct {
 	// start reading from a different backend after a successful reload.
 	startupStatusConfig     *config.StartupStatusConfig
 	managementAPI           ManagementAPI
+	runtimeReadiness        RuntimeReadiness
 	managementTLS           *managementListenerTLS
 	responseCache           *cache.ResponseCacheService
 	contextCompression      *contextcompression.Service

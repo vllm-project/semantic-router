@@ -26,6 +26,12 @@ func TestCompileDurableRoutingSnapshotBuildsEntrypointRuntimeWithoutProviderRout
 	if compiled.BillingCurrency != snapshot.Currency {
 		t.Fatalf("compiled billing currency = %q, want %q", compiled.BillingCurrency, snapshot.Currency)
 	}
+	if !compiled.Access.Enabled {
+		t.Fatal("compiled durable Router generation disabled native access")
+	}
+	if !reflect.DeepEqual(compiled.Access, base.Access) {
+		t.Fatalf("compiled durable Router access config = %+v, want %+v", compiled.Access, base.Access)
+	}
 	if len(compiled.VLLMEndpoints) != 0 {
 		t.Fatalf("durable routing snapshot created source provider endpoints: %+v", compiled.VLLMEndpoints)
 	}

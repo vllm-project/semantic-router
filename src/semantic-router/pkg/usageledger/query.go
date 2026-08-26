@@ -94,9 +94,9 @@ type UsageTotals struct {
 type UsageSummary struct {
 	Totals          UsageTotals    `json:"totals"`
 	Grain           Grain          `json:"grain"`
-	AsOf            *time.Time     `json:"asOf"`
-	LedgerWatermark *time.Time     `json:"ledgerWatermark"`
-	IngestionLag    *time.Duration `json:"ingestionLag"`
+	AsOf            *time.Time     `json:"asOf,omitempty"`
+	LedgerWatermark *time.Time     `json:"ledgerWatermark,omitempty"`
+	IngestionLag    *time.Duration `json:"ingestionLag,omitempty"`
 	Final           bool           `json:"final"`
 }
 
@@ -108,9 +108,9 @@ type SeriesPoint struct {
 type UsageSeries struct {
 	Points          []SeriesPoint  `json:"points"`
 	Grain           Grain          `json:"grain"`
-	AsOf            *time.Time     `json:"asOf"`
-	LedgerWatermark *time.Time     `json:"ledgerWatermark"`
-	IngestionLag    *time.Duration `json:"ingestionLag"`
+	AsOf            *time.Time     `json:"asOf,omitempty"`
+	LedgerWatermark *time.Time     `json:"ledgerWatermark,omitempty"`
+	IngestionLag    *time.Duration `json:"ingestionLag,omitempty"`
 	Final           bool           `json:"final"`
 }
 

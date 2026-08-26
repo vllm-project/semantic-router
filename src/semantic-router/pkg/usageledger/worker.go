@@ -9,6 +9,33 @@ import (
 
 var ErrPoisonedStreamItem = errors.New("poisoned usage stream item")
 
+type poisonedStreamItemError struct {
+	itemID string
+	reason string
+	cause  error
+}
+
+func (err *poisonedStreamItemError) Error() string {
+	if err.cause == nil {
+		return fmt.Sprintf("%v: item %q (%s)", ErrPoisonedStreamItem, err.itemID, err.reason)
+	}
+	return fmt.Sprintf("%v: item %q (%s): %v", ErrPoisonedStreamItem, err.itemID, err.reason, err.cause)
+}
+
+func (*poisonedStreamItemError) Unwrap() error { return ErrPoisonedStreamItem }
+
+func poisonedStreamItem(itemID, reason string, cause error) error {
+	return &poisonedStreamItemError{itemID: itemID, reason: reason, cause: cause}
+}
+
+func streamItemPoisonReason(err error) (string, bool) {
+	var poisoned *poisonedStreamItemError
+	if !errors.As(err, &poisoned) {
+		return "", false
+	}
+	return poisoned.reason, true
+}
+
 // WorkerOptions configures one namespace-local stream consumer.
 type WorkerOptions struct {
 	NamespaceID string
@@ -74,6 +101,10 @@ func (w *Worker) Ensure(ctx context.Context) error {
 	return w.stream.EnsureGroup(ctx)
 }
 
+func (w *Worker) Quarantined(ctx context.Context) (int64, error) {
+	return w.stream.Quarantined(ctx)
+}
+
 // ProcessOnce reclaims a stale pending batch before reading new work. It
 // acknowledges nothing unless the complete PostgreSQL batch committed.
 func (w *Worker) ProcessOnce(ctx context.Context) (BatchResult, error) {
@@ -90,23 +121,48 @@ func (w *Worker) ProcessOnce(ctx context.Context) (BatchResult, error) {
 	if len(items) == 0 {
 		return BatchResult{}, nil
 	}
+	result := BatchResult{}
 	events := make([]TerminalEvent, 0, len(items))
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
 		event, err := decodeStreamItem(item)
 		if err != nil {
-			return BatchResult{}, err
+			reason, poisoned := streamItemPoisonReason(err)
+			if !poisoned {
+				return result, err
+			}
+			moved, quarantineErr := w.stream.Quarantine(ctx, item, reason)
+			if quarantineErr != nil {
+				return result, fmt.Errorf("retain poisoned usage stream item: %w", quarantineErr)
+			}
+			if moved {
+				result.Quarantined++
+			}
+			continue
 		}
 		if event.NamespaceID != w.namespaceID {
-			return BatchResult{}, fmt.Errorf("%w: item %q belongs to another namespace", ErrPoisonedStreamItem, item.ID)
+			err := poisonedStreamItem(item.ID, "namespace_mismatch", nil)
+			moved, quarantineErr := w.stream.Quarantine(ctx, item, "namespace_mismatch")
+			if quarantineErr != nil {
+				return result, fmt.Errorf("retain %v: %w", err, quarantineErr)
+			}
+			if moved {
+				result.Quarantined++
+			}
+			continue
 		}
 		events = append(events, event)
 		ids = append(ids, item.ID)
 	}
-	result, processOnceErr := w.store.PersistBatch(ctx, events)
-	if processOnceErr != nil {
-		return BatchResult{}, processOnceErr
+	if len(events) == 0 {
+		return result, nil
 	}
+	persisted, processOnceErr := w.store.PersistBatch(ctx, events)
+	if processOnceErr != nil {
+		return result, processOnceErr
+	}
+	persisted.Quarantined += result.Quarantined
+	result = persisted
 	if w.afterCommit != nil {
 		if err := w.afterCommit.AfterCommit(ctx, result.projectionEvents); err != nil {
 			// The ledger commit remains authoritative and the stream items stay
@@ -161,24 +217,24 @@ func (w *Worker) Run(ctx context.Context) error {
 func decodeStreamItem(item StreamItem) (TerminalEvent, error) {
 	required := []string{"admission_id", "admission_digest", "finalization_digest", "evidence_state", "event"}
 	if len(item.Values) != len(required) {
-		return TerminalEvent{}, fmt.Errorf("%w: item %q has an unexpected field set", ErrPoisonedStreamItem, item.ID)
+		return TerminalEvent{}, poisonedStreamItem(item.ID, "field_set_invalid", nil)
 	}
 	for _, field := range required {
 		if item.Values[field] == "" {
-			return TerminalEvent{}, fmt.Errorf("%w: item %q is missing %q", ErrPoisonedStreamItem, item.ID, field)
+			return TerminalEvent{}, poisonedStreamItem(item.ID, "required_field_missing", nil)
 		}
 	}
 	event, err := DecodeTerminalEvent(item.Values["event"])
 	if err != nil {
-		return TerminalEvent{}, fmt.Errorf("%w: item %q: %w", ErrPoisonedStreamItem, item.ID, err)
+		return TerminalEvent{}, poisonedStreamItem(item.ID, "terminal_event_invalid", err)
 	}
 	if event.AdmissionID != item.Values["admission_id"] ||
 		event.FinalizationDigest != item.Values["finalization_digest"] ||
 		string(event.EvidenceState) != item.Values["evidence_state"] {
-		return TerminalEvent{}, fmt.Errorf("%w: item %q envelope does not match its terminal event", ErrPoisonedStreamItem, item.ID)
+		return TerminalEvent{}, poisonedStreamItem(item.ID, "event_envelope_mismatch", nil)
 	}
 	if !isHexDigest(item.Values["admission_digest"]) {
-		return TerminalEvent{}, fmt.Errorf("%w: item %q has an invalid admission digest", ErrPoisonedStreamItem, item.ID)
+		return TerminalEvent{}, poisonedStreamItem(item.ID, "admission_digest_invalid", nil)
 	}
 	return event, nil
 }

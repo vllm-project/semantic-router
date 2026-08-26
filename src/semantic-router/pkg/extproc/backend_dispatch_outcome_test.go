@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -130,11 +131,11 @@ func TestRoutingOnlyDurableRoutingRequestUsesPublishedFallbackAssignment(t *test
 		Action: config.EntrypointRuleAction{Assignments: map[string]config.RoutingAssignmentSet{
 			decisionID: {
 				Models: []config.RoutingModelAssignment{
-					{ModelName: "active-a", Priority: 0},
-					{ModelName: "active-b", Priority: 0},
-					{ModelName: "fallback-z", Priority: 1},
-					{ModelName: "fallback-a", Priority: 1},
-					{ModelName: "last", Priority: 2},
+					{ModelName: "active-a", Priority: 0, Weight: "1"},
+					{ModelName: "active-b", Priority: 0, Weight: "1"},
+					{ModelName: "fallback-z", Priority: 1, Weight: "3"},
+					{ModelName: "fallback-a", Priority: 1, Weight: "1"},
+					{ModelName: "last", Priority: 2, Weight: "1"},
 				},
 				Fallback: &config.RoutingFallbackPolicy{
 					Strategy: "priority", On: []string{"unavailable", "timeout"},
@@ -147,6 +148,7 @@ func TestRoutingOnlyDurableRoutingRequestUsesPublishedFallbackAssignment(t *test
 		Rules: []config.EntrypointRule{rule},
 	}}}}
 	ctx := &RequestContext{
+		RequestID:    "request-42",
 		RequestModel: "virtual/model", Headers: map[string]string{":path": "/v1/chat/completions"},
 		VSRSelectedDecision: &config.Decision{ID: decisionID},
 	}
@@ -154,19 +156,21 @@ func TestRoutingOnlyDurableRoutingRequestUsesPublishedFallbackAssignment(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []primaryDispatchCandidate{
-		{model: "active-b", priority: 0},
-		{model: "fallback-a", priority: 1},
-		{model: "fallback-z", priority: 1},
-		{model: "last", priority: 2},
+	if len(candidates) != 3 {
+		t.Fatalf("candidates = %+v, want one candidate from each priority tier", candidates)
 	}
-	if len(candidates) != len(want) {
-		t.Fatalf("candidates = %+v, want %+v", candidates, want)
+	if candidates[0] != (primaryDispatchCandidate{model: "active-b", priority: 0}) ||
+		candidates[1].priority != 1 ||
+		candidates[1].model != "fallback-a" && candidates[1].model != "fallback-z" ||
+		candidates[2] != (primaryDispatchCandidate{model: "last", priority: 2}) {
+		t.Fatalf("weighted priority chain = %+v", candidates)
 	}
-	for index := range want {
-		if candidates[index] != want[index] {
-			t.Fatalf("candidate %d = %+v, want %+v", index, candidates[index], want[index])
-		}
+	again, _, err := router.primaryDispatchCandidates(ctx, "active-b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(candidates, again) {
+		t.Fatalf("request-affine fallback changed: first=%+v second=%+v", candidates, again)
 	}
 	if len(fallback.On) != 2 || fallback.On[0] != backendinvoker.FallbackUnavailable ||
 		fallback.On[1] != backendinvoker.FallbackTimeout {

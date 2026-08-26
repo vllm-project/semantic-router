@@ -24,6 +24,9 @@ import (
 const (
 	defaultRequestTimeout = 5 * time.Minute
 	defaultStreamTimeout  = 5 * time.Minute
+	maximumModelTimeout   = 24 * time.Hour
+	maximumSafeAttempts   = 6
+	maximumChainTimeout   = maximumDispatchCandidates * maximumSafeAttempts * maximumModelTimeout
 )
 
 var errEmptyTransportResponse = errors.New("transport returned an empty response")
@@ -52,9 +55,10 @@ func (i *Invoker) Invoke(ctx context.Context, plan Plan) (Result, error) {
 	return i.InvokeChain(ctx, PlanChain{Candidates: []Plan{plan}})
 }
 
-// InvokeChain executes one signed, snapshot-resolved candidate chain. It
-// exhausts a candidate's own backend retries before considering the next
-// Model and never resets the request deadline while advancing the chain.
+// InvokeChain executes one signed, snapshot-resolved candidate chain. Each
+// physical attempt is capped by its Model timeout. One bounded deadline,
+// derived from every candidate and safe attempt, is shared by the complete
+// chain and never resets while retries or fallback advance.
 func (i *Invoker) InvokeChain(ctx context.Context, chain PlanChain) (Result, error) {
 	if err := validatePlanChain(chain); err != nil {
 		return Result{}, err
@@ -209,7 +213,23 @@ func (i *Invoker) invokeCandidate(
 	for number := 1; number <= plan.Execution.MaxRetries+1; number++ {
 		backend := selectBackend(plan.Backends, plan.DispatchID, number)
 		attempt := Attempt{ID: plan.DispatchID + ":" + strconv.Itoa(number), Number: number, BackendID: backend.ID, StartedAt: now().UTC()}
-		attemptExecution := i.invokeCandidateAttempt(requestCtx, invokeCtx, cancel, transport, now, plan, backend, attempt)
+		attemptCtx, attemptCancel := context.WithDeadline(
+			invokeCtx,
+			localAttemptDeadline(now(), deadline, plan),
+		)
+		attemptExecution := i.invokeCandidateAttempt(
+			requestCtx,
+			attemptCtx,
+			cancelTogether(attemptCancel, cancel),
+			transport,
+			now,
+			plan,
+			backend,
+			attempt,
+		)
+		if attemptExecution.response == nil {
+			attemptCancel()
+		}
 		execution.attempt, execution.err = attemptExecution.attempt, attemptExecution.err
 		if attemptExecution.recorded {
 			appendAttempt(&execution.outcome, attemptExecution.attempt)
@@ -326,18 +346,56 @@ func failedResponseTerminal(cause error) ResponseTerminal {
 }
 
 func chainTimeout(chain PlanChain) time.Duration {
-	plan := chain.Candidates[0]
+	total := time.Duration(0)
+	for _, plan := range chain.Candidates {
+		attempts := plan.Execution.MaxRetries + 1
+		if attempts < 1 {
+			attempts = 1
+		}
+		timeout := localAttemptTimeout(plan)
+		if timeout > maximumChainTimeout/time.Duration(attempts) {
+			return maximumChainTimeout
+		}
+		candidateBudget := timeout * time.Duration(attempts)
+		if candidateBudget > maximumChainTimeout-total {
+			return maximumChainTimeout
+		}
+		total += candidateBudget
+	}
+	if total > 0 {
+		return total
+	}
+	return defaultRequestTimeout
+}
+
+func localAttemptTimeout(plan Plan) time.Duration {
 	timeout := plan.Execution.RequestTimeout
 	if plan.Streaming {
 		timeout = plan.Execution.StreamTimeout
-	}
-	if timeout > 0 {
+		if timeout <= 0 {
+			return defaultStreamTimeout
+		}
 		return timeout
 	}
-	if plan.Streaming {
-		return defaultStreamTimeout
+	if timeout <= 0 {
+		return defaultRequestTimeout
 	}
-	return defaultRequestTimeout
+	return timeout
+}
+
+func localAttemptDeadline(now, chainDeadline time.Time, plan Plan) time.Time {
+	deadline := now.Add(localAttemptTimeout(plan))
+	if chainDeadline.Before(deadline) {
+		return chainDeadline
+	}
+	return deadline
+}
+
+func cancelTogether(first, second context.CancelFunc) context.CancelFunc {
+	return func() {
+		first()
+		second()
+	}
 }
 
 func candidateOutcome(plan Plan) CandidateOutcome {
@@ -604,6 +662,9 @@ func validatePlan(plan Plan) error {
 	if plan.Execution.MaxRetries < 0 || plan.Execution.MaxRetries > 5 {
 		return fmt.Errorf("max retries must be between 0 and 5")
 	}
+	if !validModelTimeout(plan.Execution.RequestTimeout) || !validModelTimeout(plan.Execution.StreamTimeout) {
+		return fmt.Errorf("request and stream timeouts must be zero or between %s and %s", time.Second, maximumModelTimeout)
+	}
 	if plan.Execution.MaxRetries == 0 && len(plan.Execution.RetryOn) != 0 {
 		return fmt.Errorf("retry triggers require at least one retry")
 	}
@@ -630,6 +691,10 @@ func validatePlan(plan Plan) error {
 		totalWeight += backend.Weight
 	}
 	return nil
+}
+
+func validModelTimeout(timeout time.Duration) bool {
+	return timeout == 0 || timeout >= time.Second && timeout <= maximumModelTimeout
 }
 
 type cancelOnCloseBody struct {

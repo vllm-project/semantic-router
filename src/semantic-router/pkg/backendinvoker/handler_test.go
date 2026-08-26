@@ -3,10 +3,13 @@ package backendinvoker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -15,6 +18,12 @@ type planResolverStub struct{ plans PlanChain }
 
 func (s planResolverStub) ResolvePlans(context.Context, DispatchCapability) (PlanChain, error) {
 	return s.plans, nil
+}
+
+type planResolverFunc func(context.Context, DispatchCapability) (PlanChain, error)
+
+func (f planResolverFunc) ResolvePlans(ctx context.Context, capability DispatchCapability) (PlanChain, error) {
+	return f(ctx, capability)
 }
 
 type observerStub struct{}
@@ -38,6 +47,32 @@ func TestHandlerRejectsRequestDigestMismatch(t *testing.T) {
 	handler.ServeHTTP(response, request)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d", response.Code)
+	}
+	outcome, err := keyring.VerifyOutcome(response.Header().Get(DispatchOutcomeHeader), capability.Audience, now)
+	if err != nil {
+		t.Fatalf("verify pre-dispatch outcome: %v", err)
+	}
+	if outcome.RequestID != capability.RequestID || len(outcome.Attempted) != 0 {
+		t.Fatalf("pre-dispatch outcome = %+v", outcome)
+	}
+}
+
+func TestHandlerDoesNotSignOutcomeForUnverifiedCapability(t *testing.T) {
+	handler := &Handler{
+		Audience: "backend-invoker",
+		Plans:    planResolverStub{}, Invoker: &Invoker{}, Observer: observerStub{},
+	}
+	request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{}`))
+	request.Header.Set(DispatchCapabilityHeader, "not-a-capability")
+	response := httptest.NewRecorder()
+
+	handler.ServeHTTP(response, request)
+
+	if response.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", response.Code, http.StatusUnauthorized)
+	}
+	if values := response.Header().Values(DispatchOutcomeHeader); len(values) != 0 {
+		t.Fatalf("unverified request received dispatch outcome headers %#v", values)
 	}
 }
 
@@ -167,4 +202,154 @@ func TestHandlerRejectsResolvedCandidateSubstitutionBeforeDispatch(t *testing.T)
 	if response.Code != http.StatusUnauthorized || journal.dispatches != 0 {
 		t.Fatalf("status=%d dispatches=%d", response.Code, journal.dispatches)
 	}
+}
+
+func TestHandlerConcurrentSnapshotGapReturnsIsolatedKnownZeroOutcome(t *testing.T) {
+	const requestCount = 32
+	now := time.Unix(1_700_000_000, 0).UTC()
+	body := []byte(`{"model":"vllm-sr/blend","messages":[{"role":"user","content":"hello"}]}`)
+	keyring := SigningKeyring{
+		ActiveVersion: "v1", Keys: map[string][]byte{"v1": []byte(strings.Repeat("k", 32))},
+		MaxLifetime: time.Minute,
+	}
+	ready := make(chan struct{}, requestCount)
+	release := make(chan struct{})
+	resolver := planResolverFunc(func(ctx context.Context, capability DispatchCapability) (PlanChain, error) {
+		ready <- struct{}{}
+		select {
+		case <-release:
+		case <-ctx.Done():
+			return PlanChain{}, ctx.Err()
+		}
+		if capability.RequestID == "request-gap" {
+			return PlanChain{}, errors.New("exact routing snapshot is not available on this replica")
+		}
+		return PlanChain{Candidates: []Plan{planForCapability(capability)}}, nil
+	})
+	journal := &concurrentJournal{}
+	var physicalAttempts atomic.Int64
+	handler := &Handler{
+		Audience: "backend-invoker", Keyring: keyring, Plans: resolver,
+		Invoker: &Invoker{
+			Journal: journal,
+			Transport: transportFunc(func(*http.Request) (*http.Response, error) {
+				physicalAttempts.Add(1)
+				return &http.Response{
+					StatusCode: http.StatusOK, Header: make(http.Header),
+					Body: io.NopCloser(strings.NewReader(testChatResponseBody)),
+				}, nil
+			}),
+		},
+		Observer: observerStub{}, Now: func() time.Time { return now },
+	}
+	type result struct {
+		requestID string
+		response  *httptest.ResponseRecorder
+	}
+	results := make(chan result, requestCount)
+	var workers sync.WaitGroup
+	for index := 0; index < requestCount; index++ {
+		requestID := fmt.Sprintf("request-%02d", index)
+		if index == 0 {
+			requestID = "request-gap"
+		}
+		capability := completeTestCapability(DispatchCapability{
+			NamespaceID: "ns", QuotaPartition: "partition", RoutingRevision: 1,
+			AdmissionID: "adm", AdmissionDigest: strings.Repeat("b", 64),
+			Candidates: []DispatchCandidate{testDispatchCandidate(
+				fmt.Sprintf("dispatch-%02d", index), "mdl", 1,
+			)},
+			RequestDigest: RequestDigest(http.MethodPost, "/v1/chat/completions", "", body),
+			Method:        http.MethodPost, Path: "/v1/chat/completions", Audience: "backend-invoker",
+			IssuedAt: now.Unix(), ExpiresAt: now.Add(time.Minute).Unix(),
+		})
+		capability.RequestID = requestID
+		token, err := keyring.Sign(capability, now)
+		if err != nil {
+			t.Fatal(err)
+		}
+		workers.Add(1)
+		go func() {
+			defer workers.Done()
+			request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(string(body)))
+			request.Header.Set(DispatchCapabilityHeader, token)
+			request.Header.Set("Content-Type", "application/json")
+			response := httptest.NewRecorder()
+			handler.ServeHTTP(response, request)
+			results <- result{requestID: requestID, response: response}
+		}()
+	}
+	for index := 0; index < requestCount; index++ {
+		<-ready
+	}
+	close(release)
+	workers.Wait()
+	close(results)
+
+	for completed := range results {
+		values := completed.response.Header().Values(DispatchOutcomeHeader)
+		if len(values) != 1 {
+			t.Fatalf("request %s outcome headers = %#v, want exactly one", completed.requestID, values)
+		}
+		outcome, err := keyring.VerifyOutcome(values[0], "backend-invoker", now)
+		if err != nil {
+			t.Fatalf("request %s outcome verification: %v", completed.requestID, err)
+		}
+		if outcome.RequestID != completed.requestID {
+			t.Fatalf("request %s received outcome for %s", completed.requestID, outcome.RequestID)
+		}
+		if completed.requestID == "request-gap" {
+			if completed.response.Code != http.StatusNotFound || len(outcome.Attempted) != 0 {
+				t.Fatalf("snapshot-gap response = %d, outcome = %+v", completed.response.Code, outcome)
+			}
+			continue
+		}
+		if completed.response.Code != http.StatusOK || len(outcome.Attempted) != 1 ||
+			outcome.SelectedDispatchID == "" || outcome.Attempted[0].State != AttemptResponseStarted {
+			t.Fatalf("request %s response = %d, outcome = %+v", completed.requestID, completed.response.Code, outcome)
+		}
+	}
+	if got := physicalAttempts.Load(); got != requestCount-1 {
+		t.Fatalf("physical attempts = %d, want %d", got, requestCount-1)
+	}
+	if got := journal.dispatches.Load(); got != requestCount-1 {
+		t.Fatalf("journaled dispatches = %d, want %d", got, requestCount-1)
+	}
+}
+
+type concurrentJournal struct {
+	dispatches atomic.Int64
+}
+
+func (journal *concurrentJournal) BeginDispatch(context.Context, Plan, time.Time) error {
+	journal.dispatches.Add(1)
+	return nil
+}
+
+func (*concurrentJournal) BeginAttempt(context.Context, Plan, Attempt) error { return nil }
+
+func (*concurrentJournal) FinishAttempt(context.Context, Plan, AttemptResult) error { return nil }
+
+func planForCapability(capability DispatchCapability) Plan {
+	plan := testPlan()
+	candidate := capability.Candidates[0]
+	plan.NamespaceID = capability.NamespaceID
+	plan.QuotaPartition = capability.QuotaPartition
+	plan.PublicationID = capability.PublicationID
+	plan.RuntimeEpoch = capability.RuntimeEpoch
+	plan.RoutingRevision = capability.RoutingRevision
+	plan.RoutingDigest = capability.RoutingDigest
+	plan.AdmissionID = capability.AdmissionID
+	plan.AdmissionDigest = capability.AdmissionDigest
+	plan.RequestID = capability.RequestID
+	plan.DispatchID = candidate.DispatchID
+	plan.DispatchType = candidate.DispatchType
+	plan.Ordinal = candidate.Ordinal
+	plan.Priority = candidate.Priority
+	plan.DispatchPlanDigest = candidate.DispatchPlanDigest
+	plan.ModelID = candidate.ModelID
+	plan.ModelRevision = candidate.ModelRevision
+	plan.Execution.MaxRetries = 0
+	plan.Execution.RetryOn = nil
+	return plan
 }

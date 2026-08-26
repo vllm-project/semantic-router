@@ -31,7 +31,6 @@ CANONICAL_TOP_LEVEL_KEYS = frozenset(
         "entrypoints",
         "recipes",
         "global",
-        "setup",
     }
 )
 

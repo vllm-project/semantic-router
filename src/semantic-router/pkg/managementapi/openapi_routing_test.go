@@ -155,6 +155,9 @@ func TestRoutingModelControlOpenAPIConstraints(t *testing.T) {
 		t.Fatalf("routingModelRetryEvidence = %#v", routingModelRetryEvidence)
 	}
 	retry := document.Components.Schemas["RoutingModelRetryControl"]
+	if !slices.Equal(retry.Required, []string{"count", "on"}) {
+		t.Fatalf("RoutingModelRetryControl.required = %#v", retry.Required)
+	}
 	retryOn := retry.Properties["on"]
 	if retryOn.Items == nil ||
 		!slices.Equal(retryOn.Items.Enum, routingModelRetryEvidence) ||
@@ -164,6 +167,9 @@ func TestRoutingModelControlOpenAPIConstraints(t *testing.T) {
 	}
 
 	timeout := document.Components.Schemas["RoutingModelTimeoutControl"]
+	if !slices.Equal(timeout.Required, []string{"request", "stream"}) {
+		t.Fatalf("RoutingModelTimeoutControl.required = %#v", timeout.Required)
+	}
 	for _, field := range []string{"request", "stream"} {
 		schema := timeout.Properties[field]
 		if schema.Pattern != routingModelDurationPattern ||
@@ -192,6 +198,10 @@ func TestRoutingModelControlOpenAPIConstraints(t *testing.T) {
 		fallbackOn.MinItems == nil || *fallbackOn.MinItems != 1 ||
 		fallbackOn.MaxItems == nil || *fallbackOn.MaxItems != int64(len(routingModelRetryEvidence)) {
 		t.Fatalf("RoutingFallbackPolicy.on = %#v", fallbackOn)
+	}
+	control := document.Components.Schemas["RoutingModelControl"]
+	if !slices.Equal(control.Required, []string{"retry", "timeout"}) {
+		t.Fatalf("RoutingModelControl.required = %#v", control.Required)
 	}
 }
 
@@ -258,13 +268,16 @@ func TestRoutingOpenAPIExposesTopologyAsExplicitDetailOption(t *testing.T) {
 	if _, exists := view.Properties["rules"]; !exists {
 		t.Fatal("Entrypoint detail schema omitted authorized rules")
 	}
-	for _, field := range []string{"ruleCount", "assignedModelCount"} {
+	for _, field := range []string{"recipeIds", "ruleCount", "assignedModelCount"} {
 		if _, exists := view.Properties[field]; !exists {
 			t.Fatalf("Entrypoint summary schema omitted %s", field)
 		}
 		if !slices.Contains(view.Required, field) {
 			t.Fatalf("Entrypoint summary schema does not require %s", field)
 		}
+	}
+	if items := view.Properties["recipeIds"].Items; items == nil || items.Pattern != routingResourceID.Pattern {
+		t.Fatalf("Entrypoint recipeIds schema = %#v", view.Properties["recipeIds"])
 	}
 }
 

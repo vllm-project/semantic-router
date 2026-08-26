@@ -7,6 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementauth"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementidentity"
@@ -20,7 +23,32 @@ func (store *Store) ApplyBackchannelLogout(
 	if err != nil {
 		return managementidentity.BackchannelLogoutResult{}, err
 	}
+	var lastErr error
+	for attempt := 0; attempt < 4; attempt++ {
+		result, err := store.applyBackchannelLogoutOnce(ctx, request, identity, tokenDigest)
+		if err == nil {
+			return result, nil
+		}
+		lastErr = err
+		if !retryableLogoutTransactionError(err) || ctx.Err() != nil {
+			return managementidentity.BackchannelLogoutResult{}, err
+		}
+	}
+	return managementidentity.BackchannelLogoutResult{},
+		fmt.Errorf("apply Management back-channel logout after transaction retries: %w", lastErr)
+}
+
+func (store *Store) applyBackchannelLogoutOnce(
+	ctx context.Context,
+	request managementidentity.BackchannelLogout,
+	identity managementauth.BackchannelLogoutIdentity,
+	tokenDigest [sha256.Size]byte,
+) (managementidentity.BackchannelLogoutResult, error) {
 	return inTransaction(ctx, store, sql.LevelSerializable, func(tx *sql.Tx) (managementidentity.BackchannelLogoutResult, error) {
+		selectorKind, selectorDigest := backchannelLogoutSelector(identity)
+		if _, err := tx.ExecContext(ctx, lockBackchannelLogoutSelectorQuery, selectorDigest[:]); err != nil {
+			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("lock Management back-channel logout selector: %w", err)
+		}
 		var issuer, status string
 		var revision uint64
 		if err := tx.QueryRowContext(ctx, `SELECT issuer,status,revision
@@ -65,15 +93,33 @@ WHERE issuer_id=$1 AND token_id_digest=$2 FOR UPDATE`, identity.IssuerID, tokenD
 				return managementidentity.BackchannelLogoutResult{}, managementidentity.ErrBackchannelReplay
 			}
 		}
+		var effectiveLogoutIssuedAt time.Time
+		if err := tx.QueryRowContext(
+			ctx,
+			upsertBackchannelLogoutTombstoneQuery,
+			identity.IssuerID,
+			selectorKind,
+			selectorDigest[:],
+			identity.IssuedAt.UTC(),
+			identity.ExpiresAt.UTC(),
+		).Scan(&effectiveLogoutIssuedAt); err != nil {
+			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("persist Management back-channel logout selector: %w", err)
+		}
 
-		plan := backchannelLogoutPlanFor(identity.IssuerID, issuer, identity.IssuerSessionID, identity.Subject)
+		plan := backchannelLogoutPlanFor(
+			identity.IssuerID,
+			issuer,
+			identity.IssuerSessionID,
+			identity.Subject,
+			effectiveLogoutIssuedAt.UTC(),
+		)
+		if _, err := tx.ExecContext(ctx, plan.expireQuery, plan.arguments...); err != nil {
+			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("expire Management sessions for back-channel logout: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, plan.revokeQuery, plan.arguments...); err != nil {
+			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("apply Management back-channel logout: %w", err)
+		}
 		if !replayed {
-			if _, err := tx.ExecContext(ctx, plan.expireQuery, plan.arguments...); err != nil {
-				return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("expire Management sessions for back-channel logout: %w", err)
-			}
-			if _, err := tx.ExecContext(ctx, plan.revokeQuery, plan.arguments...); err != nil {
-				return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("apply Management back-channel logout: %w", err)
-			}
 			if err := appendAudit(ctx, tx, auditMutation{
 				Action: "management_session.backchannel_logout", ResourceType: "trusted_identity_issuer",
 				ResourceID: identity.IssuerID, AfterRevision: revision, ExternalActor: true,
@@ -108,6 +154,39 @@ WHERE issuer_id=$1 AND token_id_digest=$2 FOR UPDATE`, identity.IssuerID, tokenD
 	})
 }
 
+const lockBackchannelLogoutSelectorQuery = `SELECT pg_advisory_xact_lock(
+  hashtextextended(encode($1::bytea, 'hex'), 0))`
+
+const upsertBackchannelLogoutTombstoneQuery = `INSERT INTO management_issuer_logout_tombstones
+  (issuer_id,selector_kind,selector_digest,logout_issued_at,logout_expires_at)
+VALUES ($1,$2,$3,$4,$5)
+ON CONFLICT (issuer_id,selector_kind,selector_digest) DO UPDATE SET
+  logout_expires_at = CASE
+    WHEN EXCLUDED.logout_issued_at > management_issuer_logout_tombstones.logout_issued_at
+      THEN EXCLUDED.logout_expires_at
+    WHEN EXCLUDED.logout_issued_at = management_issuer_logout_tombstones.logout_issued_at
+      THEN GREATEST(management_issuer_logout_tombstones.logout_expires_at, EXCLUDED.logout_expires_at)
+    ELSE management_issuer_logout_tombstones.logout_expires_at
+  END,
+  logout_issued_at = GREATEST(
+    management_issuer_logout_tombstones.logout_issued_at,
+    EXCLUDED.logout_issued_at
+  )
+RETURNING logout_issued_at`
+
+func backchannelLogoutSelector(identity managementauth.BackchannelLogoutIdentity) (string, [sha256.Size]byte) {
+	if identity.IssuerSessionID != "" {
+		return "sid", managementauth.IssuerSessionLogoutDigest(identity.IssuerID, identity.IssuerSessionID)
+	}
+	return "subject", managementauth.IssuerSubjectLogoutDigest(identity.IssuerID, identity.Subject)
+}
+
+func retryableLogoutTransactionError(err error) bool {
+	var databaseError *pq.Error
+	return errors.As(err, &databaseError) &&
+		(databaseError.Code == "40001" || databaseError.Code == "40P01")
+}
+
 func validatedBackchannelLogout(request managementidentity.BackchannelLogout) (managementauth.BackchannelLogoutIdentity, [sha256.Size]byte, error) {
 	identity := request.Identity
 	if !canonicalUUID(identity.IssuerID) || identity.TokenID == "" ||
@@ -123,7 +202,8 @@ func validatedBackchannelLogout(request managementidentity.BackchannelLogout) (m
 const backchannelLogoutSIDSelector = `auth_source_kind='issuer' AND auth_source_id=$1 AND issuer_session_id=$2`
 
 const backchannelLogoutSubjectSelector = `auth_source_kind='issuer' AND auth_source_id=$1 AND principal_id IN
-  (SELECT id FROM management_principals WHERE issuer=$2 AND subject=$3)`
+  (SELECT id FROM management_principals WHERE issuer=$2 AND subject=$3)
+  AND authenticated_at<=$4`
 
 const expireBackchannelLogoutBySIDQuery = `UPDATE management_sessions SET status='expired'
 WHERE ` + backchannelLogoutSIDSelector + ` AND status='active' AND expires_at<=clock_timestamp()`
@@ -154,7 +234,10 @@ type backchannelLogoutPlan struct {
 	arguments   []any
 }
 
-func backchannelLogoutPlanFor(issuerID, issuer, issuerSessionID, subject string) backchannelLogoutPlan {
+func backchannelLogoutPlanFor(
+	issuerID, issuer, issuerSessionID, subject string,
+	logoutIssuedAt time.Time,
+) backchannelLogoutPlan {
 	if issuerSessionID != "" {
 		return backchannelLogoutPlan{
 			expireQuery: expireBackchannelLogoutBySIDQuery,
@@ -165,6 +248,6 @@ func backchannelLogoutPlanFor(issuerID, issuer, issuerSessionID, subject string)
 	return backchannelLogoutPlan{
 		expireQuery: expireBackchannelLogoutBySubjectQuery,
 		revokeQuery: revokeBackchannelLogoutBySubjectQuery, listQuery: listBackchannelLogoutBySubjectQuery,
-		arguments: []any{issuerID, issuer, subject},
+		arguments: []any{issuerID, issuer, subject, logoutIssuedAt},
 	}
 }

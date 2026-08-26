@@ -584,21 +584,10 @@ class TestCLITargetRouting:
         assert captured["readonly"] is True
         assert captured["enable_observability"] is False
 
-    @pytest.mark.parametrize("config_state", ["missing", "setup"])
-    def test_k8s_requires_existing_non_setup_config_without_workspace_mutation(
-        self, monkeypatch, tmp_path, config_state
+    def test_k8s_requires_existing_config_without_workspace_mutation(
+        self, monkeypatch, tmp_path
     ):
         config_path = tmp_path / "config.yaml"
-        if config_state == "setup":
-            config_path.write_text(
-                yaml.safe_dump(
-                    {
-                        "version": "v0.3",
-                        "setup": {"mode": True, "state": "bootstrap"},
-                    }
-                ),
-                encoding="utf-8",
-            )
         before = {path.name for path in tmp_path.iterdir()}
         bootstrap = MagicMock(side_effect=AssertionError("bootstrap was called"))
         backend_builder = MagicMock(side_effect=AssertionError("backend was called"))

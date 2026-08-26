@@ -109,6 +109,7 @@ def test_resolve_runtime_stack_supports_custom_stack_name_and_port_offset():
         stack_layout.envoy_listener_service_url(8899)
         == "http://audit-a-vllm-sr-envoy-container:8899"
     )
+    assert stack_layout.envoy_listener_url(8899) == "http://localhost:9099"
 
 
 def test_start_vllm_sr_uses_state_root_override(monkeypatch, tmp_path):

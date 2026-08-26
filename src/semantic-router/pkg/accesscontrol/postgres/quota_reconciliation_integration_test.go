@@ -40,7 +40,11 @@ func TestUnknownUsageReconciliationPostgresLifecycle(t *testing.T) {
 		admissionID = "admission-reconciliation-one"
 		dispatchID  = "dispatch-reconciliation-one"
 	)
-	now := time.Date(2026, 8, 23, 10, 0, 0, 0, time.UTC)
+	// The command coordinator compares expiry with PostgreSQL's wall clock.
+	// Anchor the fixture to the test run so this integration test cannot age
+	// into a permanently expired command while preserving deterministic
+	// relative timestamps throughout the lifecycle below.
+	now := time.Now().UTC().Truncate(time.Microsecond)
 	evidenceDigest := strings.Repeat("ab", 32)
 	seedUnknownUsageReconciliation(t, ctx, db, now, evidenceDigest, namespaceID, principalID,
 		userID, policyID, ruleID, bindingID, fenceID, eventID, admissionID, dispatchID)

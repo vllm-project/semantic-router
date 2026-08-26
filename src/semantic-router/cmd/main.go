@@ -58,7 +58,7 @@ func main() {
 	// Start the API server early so /startup-status is available during
 	// model downloads and initialization.
 	apiLifecycle, err := startAPIServerIfEnabled(
-		processContext, opts, runtimeRegistry, processRuntime.ManagementAPI(),
+		processContext, opts, runtimeRegistry, processRuntime, processRuntime.ManagementAPI(),
 	)
 	if err != nil {
 		cancelProcess()

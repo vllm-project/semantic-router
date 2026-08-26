@@ -121,6 +121,7 @@ def test_current_v03_schema_exposes_only_additive_model_control() -> None:
         (("providers", "models", 0), "runtime", {"max_retries": 2}),
         (("recipes", 0), "document", {}),
         (("entrypoints", 0), "name", "vllm-sr/balance"),
+        ((), "setup", {"mode": True}),
     ],
 )
 def test_current_v03_rejects_middle_state_fields(

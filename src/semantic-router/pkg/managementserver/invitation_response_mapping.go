@@ -11,7 +11,7 @@ func invitationDTO(value invitationmanagement.Invitation) managementapi.Invitati
 		grants[index] = managementapi.InvitationRoleGrant{
 			RoleID: grant.RoleID, RoleRevision: grant.RoleRevision,
 			RolePermissionsDigest: grant.RolePermissionsDigest, ScopeKind: grant.ScopeKind,
-			DelegationCeiling: append([]string(nil), grant.DelegationCeiling...),
+			DelegationCeiling: append([]string{}, grant.DelegationCeiling...),
 			SourceBindingID:   grant.SourceBindingID, SourceBindingRevision: grant.SourceBindingRevision,
 			SourceRoleID: grant.SourceRoleID, SourcePermissionsDigest: grant.SourcePermissionsDigest,
 		}

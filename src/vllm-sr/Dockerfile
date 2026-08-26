@@ -209,7 +209,6 @@ COPY --from=ml-builder /build/out/ /usr/local/lib/
 COPY --from=nlp-builder /build/out/ /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
-ENV VLLM_SR_CONFIG_BASE_DIR=/app
 
 # Copy candle-binding Go files (needed for go.mod replace directive)
 COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
@@ -289,6 +288,7 @@ COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
 COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
 
 ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV VLLM_SR_CONFIG_BASE_DIR=/app
 
 WORKDIR /app
 RUN mkdir -p /app /app/.vllm-sr /app/config /app/models

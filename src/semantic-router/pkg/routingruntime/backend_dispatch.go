@@ -24,6 +24,7 @@ type backendDispatchComposition struct {
 	observer    backendinvoker.ResponseObserver
 	egress      backendegress.Policy
 	dialTimeout time.Duration
+	readiness   func(context.Context) error
 
 	mu        sync.RWMutex
 	runtime   *backenddispatch.Runtime
@@ -43,8 +44,9 @@ func newBackendDispatchComposition(
 	finalizer backendinvoker.ResponseFinalizer,
 	egress backendegress.Policy,
 	dialTimeout time.Duration,
+	readiness func(context.Context) error,
 ) (*backendDispatchComposition, error) {
-	if credentials == nil || codecs == nil || journal == nil || finalizer == nil {
+	if credentials == nil || codecs == nil || journal == nil || finalizer == nil || readiness == nil {
 		return nil, errors.New("backend dispatch dependencies are incomplete")
 	}
 	if _, err := cfg.CapabilityLifetime(); err != nil {
@@ -53,6 +55,7 @@ func newBackendDispatchComposition(
 	return &backendDispatchComposition{
 		config: cfg, credentials: credentials, codecs: codecs, journal: journal, finalizer: finalizer,
 		observer: backendinvoker.ForwardResponseObserver{}, egress: egress, dialTimeout: dialTimeout,
+		readiness: readiness,
 	}, nil
 }
 
@@ -103,6 +106,7 @@ func (composition *backendDispatchComposition) Attach(
 		BindAddress: composition.config.BindAddress,
 		Port:        composition.config.Port,
 		Handler:     dispatchRuntime.Handler(),
+		Readiness:   composition.readiness,
 	})
 	if err != nil {
 		_ = dispatchRuntime.Close()

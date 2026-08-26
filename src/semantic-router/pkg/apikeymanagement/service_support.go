@@ -126,6 +126,7 @@ func (service *Service) compileRateLimitOverride(
 		return nil, nil, err
 	}
 	mutation := &RateLimitOverrideMutation{PolicyID: input.PolicyID}
+	resolvedPolicyID := input.PolicyID
 	created := false
 	if input.InlinePolicy != nil {
 		policyID, err := service.nextID()
@@ -153,17 +154,17 @@ func (service *Service) compileRateLimitOverride(
 			return nil, nil, ErrInvalidRequest
 		}
 		mutation.InlinePolicy = &compiled
-		mutation.PolicyID = policyID
+		resolvedPolicyID = policyID
 		created = true
 	}
 	mutation.Binding = policymanagement.RateLimitBinding{
-		ID: bindingID, NamespaceID: namespaceID, PolicyID: mutation.PolicyID,
+		ID: bindingID, NamespaceID: namespaceID, PolicyID: resolvedPolicyID,
 		Subject: policymanagement.Subject{Type: accesscontrol.SubjectKindAPIKey, ID: keyID},
 		Mode:    accesscontrol.RateBindingAllocation, Status: accesscontrol.BindingStatusActive,
 		Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
 	return mutation, &RateLimitOverrideReceipt{
-		PolicyID: mutation.PolicyID, BindingID: bindingID, Created: created,
+		PolicyID: resolvedPolicyID, BindingID: bindingID, Created: created,
 	}, nil
 }
 
@@ -215,7 +216,22 @@ func (service *Service) replaySecret(ctx context.Context, command managementcomm
 	}, issued.Secret, issued.AccessPolicyBindings,
 		issued.RateLimitOverride, append([]byte(nil), plaintext...), true)
 	result.ResponseRevision = stored.Result.ResourceRevision
+	if err := service.waitAPIKeyActive(ctx, command.Scope.NamespaceID, stored.Result.ResourceID, issued.Credential.KID); err != nil {
+		return SecretMutationResult{}, err
+	}
 	return result, nil
+}
+
+func (service *Service) waitAPIKeyActive(ctx context.Context, namespaceID, keyID, publicID string) error {
+	if service == nil || service.waiter == nil {
+		return ErrUnavailable
+	}
+	waitContext, cancel := context.WithTimeout(ctx, service.publicationTimeout)
+	defer cancel()
+	if err := service.waiter.WaitAPIKeyActive(waitContext, namespaceID, keyID, publicID); err != nil {
+		return fmt.Errorf("%w: API key publication: %w", ErrUnavailable, err)
+	}
+	return nil
 }
 
 func (service *Service) bindCommand(namespaceID, principalID, endpoint, key string, body any, now time.Time) (managementcommand.Command, error) {

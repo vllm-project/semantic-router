@@ -49,11 +49,31 @@ func (coordinator *IdentityExchangeCoordinator) ExchangeIdentity(
 	if request.InvitationToken != "" || !existingIdentityMatchesSession(request.Identity, request.Session) {
 		return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationDenied
 	}
+	for attempt := 0; attempt < 4; attempt++ {
+		result, err := coordinator.exchangeIdentityOnce(ctx, request, issue)
+		if err == nil {
+			return result, nil
+		}
+		if !retryableTransactionError(err) || ctx.Err() != nil {
+			return managementauth.IdentityExchangeResult{}, err
+		}
+	}
+	return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationUnavailable
+}
+
+func (coordinator *IdentityExchangeCoordinator) exchangeIdentityOnce(
+	ctx context.Context,
+	request managementauth.IdentityExchangeRequest,
+	issue managementauth.PreparedSessionIssuer,
+) (managementauth.IdentityExchangeResult, error) {
 	tx, err := coordinator.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 	if err != nil {
 		return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationUnavailable
 	}
 	defer func() { _ = tx.Rollback() }()
+	if err := coordinator.sessions.RejectLoggedOutIssuerIdentityInTransaction(ctx, tx, request.Identity); err != nil {
+		return managementauth.IdentityExchangeResult{}, err
+	}
 	var principalID string
 	err = tx.QueryRowContext(ctx, `SELECT id::text FROM management_principals
 WHERE issuer=$1 AND subject=$2 AND status='active'`, request.Identity.Issuer, request.Identity.Subject).Scan(&principalID)
@@ -61,10 +81,29 @@ WHERE issuer=$1 AND subject=$2 AND status='active'`, request.Identity.Issuer, re
 		return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationDenied
 	}
 	if err != nil {
+		if retryableTransactionError(err) {
+			return managementauth.IdentityExchangeResult{}, err
+		}
 		return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationUnavailable
 	}
 	draft := request.Session
 	draft.PrincipalID = principalID
+	if _, issued, found, err := coordinator.sessions.ReissueIssuerSessionInTransaction(
+		ctx,
+		tx,
+		draft,
+		issue,
+	); err != nil {
+		return managementauth.IdentityExchangeResult{}, err
+	} else if found {
+		if err := tx.Commit(); err != nil {
+			if retryableTransactionError(err) {
+				return managementauth.IdentityExchangeResult{}, err
+			}
+			return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationUnavailable
+		}
+		return managementauth.IdentityExchangeResult{Issued: issued}, nil
+	}
 	live, err := coordinator.sessions.CreateInTransaction(ctx, tx, draft)
 	if err != nil {
 		return managementauth.IdentityExchangeResult{}, err
@@ -74,6 +113,9 @@ WHERE issuer=$1 AND subject=$2 AND status='active'`, request.Identity.Issuer, re
 		return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationUnavailable
 	}
 	if err := tx.Commit(); err != nil {
+		if retryableTransactionError(err) {
+			return managementauth.IdentityExchangeResult{}, err
+		}
 		return managementauth.IdentityExchangeResult{}, managementauth.ErrAuthenticationUnavailable
 	}
 	return managementauth.IdentityExchangeResult{Issued: issued}, nil

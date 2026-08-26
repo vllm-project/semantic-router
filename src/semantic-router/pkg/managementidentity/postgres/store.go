@@ -65,8 +65,13 @@ func (store *Store) Ready(ctx context.Context) error {
 	if err := store.validateInstallationSeed(ctx); err != nil {
 		return err
 	}
-	rows, readyErr := store.database.QueryContext(ctx, `SELECT issuer_id,token_id_digest,claims_digest,expires_at
-FROM management_backchannel_logout_replays LIMIT 0`)
+	rows, readyErr := store.database.QueryContext(ctx, `SELECT
+  replay.issuer_id,replay.token_id_digest,replay.claims_digest,replay.expires_at,
+  tombstone.selector_kind,tombstone.selector_digest,
+  tombstone.logout_issued_at,tombstone.logout_expires_at
+FROM management_backchannel_logout_replays AS replay
+FULL OUTER JOIN management_issuer_logout_tombstones AS tombstone ON FALSE
+LIMIT 0`)
 	if readyErr != nil {
 		return fmt.Errorf("validate Management identity lifecycle schema: %w", readyErr)
 	}

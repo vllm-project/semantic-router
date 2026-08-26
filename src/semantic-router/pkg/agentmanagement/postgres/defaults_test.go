@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/google/uuid"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/agentmanagement"
 )
@@ -34,6 +35,7 @@ func TestBuiltinBuilderSkillUsesExactRouterToolAllowlist(t *testing.T) {
 		"router.recipe.validate",
 		"router.recipes.examples",
 		"router.skills.read",
+		"search_web",
 	}
 	if !slices.Equal(skill.RequiredTools, want) {
 		t.Fatalf("built-in Builder tools = %v, want %v", skill.RequiredTools, want)
@@ -48,6 +50,10 @@ func TestBuiltinBuilderSkillUsesExactRouterToolAllowlist(t *testing.T) {
 	first[0] = "router.future.mutating-tool"
 	if builtinBuilderToolNames()[0] == first[0] {
 		t.Fatal("builtinBuilderToolNames returned shared mutable state")
+	}
+	wantID := uuid.NewSHA1(uuid.NameSpaceURL, []byte("vllm-sr/router-agent-skill/builder/v1")).String()
+	if builtinBuilderSkillID != wantID {
+		t.Fatalf("built-in Builder Skill ID = %q, want stable identity %q", builtinBuilderSkillID, wantID)
 	}
 }
 
@@ -66,7 +72,21 @@ func TestDefaultProfileDefinitionsAreDeterministicAndLeastPrivilege(t *testing.T
 	if len(first) != 2 || first[0].id == first[1].id {
 		t.Fatalf("default Profile identities = %#v, want two distinct resources", first)
 	}
-
+	namespaceUUID := uuid.MustParse(testNamespaceID)
+	definitionsByMode := make(map[agentmanagement.SessionMode]defaultProfileDefinition, len(first))
+	for _, definition := range first {
+		definitionsByMode[definition.input.DefaultForModes[0]] = definition
+	}
+	chatDefinition := definitionsByMode[agentmanagement.SessionChat]
+	wantChatID := uuid.NewSHA1(namespaceUUID, []byte("router-agent-profile/chat/v1")).String()
+	if chatDefinition.id != wantChatID {
+		t.Fatalf("Chat Profile ID = %q, want %q", chatDefinition.id, wantChatID)
+	}
+	builderDefinition := definitionsByMode[agentmanagement.SessionBuilder]
+	wantBuilderID := uuid.NewSHA1(namespaceUUID, []byte("router-agent-profile/builder/v1")).String()
+	if builderDefinition.id != wantBuilderID {
+		t.Fatalf("Builder Profile ID = %q, want %q", builderDefinition.id, wantBuilderID)
+	}
 	skill, err := builtinBuilderSkillInput()
 	if err != nil {
 		t.Fatalf("builtinBuilderSkillInput() error = %v", err)
@@ -87,14 +107,18 @@ func TestDefaultProfileDefinitionsAreDeterministicAndLeastPrivilege(t *testing.T
 	}
 
 	chat := profiles[agentmanagement.SessionChat]
-	if !slices.Equal(chat.ToolPolicy.Allow, []string{"router.skills.read"}) || len(chat.Skills) != 0 {
+	wantChatTools := []string{"router.skills.read", agentmanagement.ToolWebSearch}
+	if !slices.Equal(chat.ToolPolicy.Allow, wantChatTools) || len(chat.Skills) != 0 {
 		t.Fatalf("Chat Profile authority = tools %v, Skills %v", chat.ToolPolicy.Allow, chat.Skills)
 	}
 	builder := profiles[agentmanagement.SessionBuilder]
 	if !slices.Equal(builder.ToolPolicy.Allow, skill.RequiredTools) {
 		t.Fatalf("Builder Profile tools = %v, built-in Skill requires %v", builder.ToolPolicy.Allow, skill.RequiredTools)
 	}
-	wantSkills := []agentmanagement.SkillReference{{ID: builtinBuilderSkillID, Revision: 1}}
+	wantSkills := []agentmanagement.SkillReference{{
+		ID:       builtinBuilderSkillID,
+		Revision: builtinBuilderSkillRevision,
+	}}
 	if !reflect.DeepEqual(builder.Skills, wantSkills) {
 		t.Fatalf("Builder Profile Skills = %#v, want %#v", builder.Skills, wantSkills)
 	}
@@ -120,6 +144,27 @@ func TestDefaultProfileDefinitionsAreDeterministicAndLeastPrivilege(t *testing.T
 func TestDefaultProfileDefinitionsRejectInvalidNamespace(t *testing.T) {
 	if _, err := defaultProfileDefinitions("not-a-uuid"); err == nil {
 		t.Fatal("defaultProfileDefinitions() accepted an invalid Namespace")
+	}
+}
+
+func TestRouterDefaultsDeclareOnlyCurrentContentRevisions(t *testing.T) {
+	if builtinBuilderSkillRevision != 2 {
+		t.Fatalf("built-in Builder Skill revision = %d, want 2", builtinBuilderSkillRevision)
+	}
+	if defaultProfileRevision != 2 {
+		t.Fatalf("default Profile revision = %d, want 2", defaultProfileRevision)
+	}
+	definitions, err := defaultProfileDefinitions(testNamespaceID)
+	if err != nil {
+		t.Fatalf("defaultProfileDefinitions() error = %v", err)
+	}
+	for _, definition := range definitions {
+		for _, skill := range definition.input.Skills {
+			if skill.Revision != builtinBuilderSkillRevision {
+				t.Fatalf("default Profile %q pins Skill revision %d, want %d",
+					definition.input.Name, skill.Revision, builtinBuilderSkillRevision)
+			}
+		}
 	}
 }
 
@@ -150,11 +195,11 @@ func TestDefaultReconcilerAcceptsDeterministicResourcesAcrossReplicas(t *testing
 	}
 
 	for _, reconciler := range []*DefaultReconciler{first, second} {
-		expectExistingBuiltinSkill(t, mock)
+		expectFinalBuiltinSkill(t, mock, 0)
 		if err := reconciler.ensureBuiltinSkill(context.Background()); err != nil {
 			t.Fatalf("ensureBuiltinSkill() error = %v", err)
 		}
-		expectExistingNamespaceProfiles(t, mock, fixedNow)
+		expectFinalNamespaceProfiles(t, mock, fixedNow, 0)
 		if err := reconciler.ensureNamespaceDefaults(context.Background(), testNamespaceID); err != nil {
 			t.Fatalf("ensureNamespaceDefaults() error = %v", err)
 		}
@@ -168,7 +213,89 @@ func TestDefaultReconcilerAcceptsDeterministicResourcesAcrossReplicas(t *testing
 	}
 }
 
-func expectExistingBuiltinSkill(t *testing.T, mock sqlmock.Sqlmock) {
+func TestDefaultReconcilerCreatesFinalResourcesInFreshDatabase(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	fixedNow := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	reconciler, err := NewDefaultReconciler(&Store{db: database}, time.Minute, func() time.Time { return fixedNow })
+	if err != nil {
+		t.Fatalf("NewDefaultReconciler() error = %v", err)
+	}
+	expectFinalBuiltinSkill(t, mock, 1)
+	if err := reconciler.ensureBuiltinSkill(context.Background()); err != nil {
+		t.Fatalf("ensureBuiltinSkill() error = %v", err)
+	}
+	expectFinalNamespaceProfiles(t, mock, fixedNow, 1)
+	if err := reconciler.ensureNamespaceDefaults(context.Background(), testNamespaceID); err != nil {
+		t.Fatalf("ensureNamespaceDefaults() error = %v", err)
+	}
+	mock.ExpectClose()
+	if err := database.Close(); err != nil {
+		t.Fatalf("close SQL mock: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("fresh default reconciliation did not create only current resources: %v", err)
+	}
+}
+
+func TestDefaultProfileRejectsNonCurrentResourceRevision(t *testing.T) {
+	database, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New() error = %v", err)
+	}
+	definitions, err := defaultProfileDefinitions(testNamespaceID)
+	if err != nil {
+		t.Fatalf("defaultProfileDefinitions() error = %v", err)
+	}
+	definition := definitions[0]
+	encoded, digest, err := encodeProfileRevision(definition.input)
+	if err != nil {
+		t.Fatalf("encodeProfileRevision() error = %v", err)
+	}
+	mock.ExpectBegin()
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_profiles")).
+		WithArgs(definition.id, testNamespaceID, definition.input.Name, definition.input.Description,
+			defaultProfileRevision).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_profile_revisions")).
+		WithArgs(
+			definition.id, testNamespaceID, defaultProfileRevision,
+			encoded.minimumCapabilities, encoded.supportedModes, encoded.toolPolicy,
+			definition.input.ApprovalPolicy, definition.input.MaximumTurnSeconds,
+			definition.input.MaximumToolSteps, definition.input.ContextTokenBudget, digest[:],
+		).
+		WillReturnResult(sqlmock.NewResult(0, 0))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT profile.name,profile.description,profile.status,")).
+		WithArgs(testNamespaceID, definition.id, defaultProfileRevision).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"name", "description", "status", "current_revision", "content_digest",
+		}).AddRow(definition.input.Name, definition.input.Description,
+			string(agentmanagement.StatusActive), defaultProfileRevision-1, digest[:]))
+	mock.ExpectRollback()
+
+	tx, err := database.Begin()
+	if err != nil {
+		t.Fatalf("begin transaction: %v", err)
+	}
+	err = insertDefaultProfile(context.Background(), tx, testNamespaceID, definition.id, definition.input)
+	if !errors.Is(err, agentmanagement.ErrConflict) {
+		t.Fatalf("insertDefaultProfile() error = %v, want conflict", err)
+	}
+	if err := tx.Rollback(); err != nil {
+		t.Fatalf("rollback transaction: %v", err)
+	}
+	mock.ExpectClose()
+	if err := database.Close(); err != nil {
+		t.Fatalf("close SQL mock: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("strict default Profile verification SQL mismatch: %v", err)
+	}
+}
+
+func expectFinalBuiltinSkill(t *testing.T, mock sqlmock.Sqlmock, affectedRows int64) {
 	t.Helper()
 	input, err := builtinBuilderSkillInput()
 	if err != nil {
@@ -180,20 +307,21 @@ func expectExistingBuiltinSkill(t *testing.T, mock sqlmock.Sqlmock) {
 	}
 	mock.ExpectBegin()
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_skills")).
-		WithArgs(builtinBuilderSkillID, input.Name, input.Description).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+		WithArgs(builtinBuilderSkillID, input.Name, input.Description, builtinBuilderSkillRevision).
+		WillReturnResult(sqlmock.NewResult(0, affectedRows))
 	mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_skill_revisions")).
-		WithArgs(builtinBuilderSkillID, input.Instructions, required, minimum, digest[:]).
-		WillReturnResult(sqlmock.NewResult(0, 0))
+		WithArgs(builtinBuilderSkillID, builtinBuilderSkillRevision, input.Instructions, required, minimum, digest[:]).
+		WillReturnResult(sqlmock.NewResult(0, affectedRows))
 	mock.ExpectQuery(regexp.QuoteMeta("SELECT skill.name,skill.description,skill.builtin")).
-		WithArgs(builtinBuilderSkillID).
+		WithArgs(builtinBuilderSkillID, builtinBuilderSkillRevision).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"name", "description", "builtin", "status", "current_revision", "content_digest",
-		}).AddRow(input.Name, input.Description, true, string(agentmanagement.StatusActive), int64(1), digest[:]))
+		}).AddRow(input.Name, input.Description, true, string(agentmanagement.StatusActive),
+			builtinBuilderSkillRevision, digest[:]))
 	mock.ExpectCommit()
 }
 
-func expectExistingNamespaceProfiles(t *testing.T, mock sqlmock.Sqlmock, now time.Time) {
+func expectFinalNamespaceProfiles(t *testing.T, mock sqlmock.Sqlmock, now time.Time, affectedRows int64) {
 	t.Helper()
 	definitions, err := defaultProfileDefinitions(testNamespaceID)
 	if err != nil {
@@ -206,37 +334,40 @@ func expectExistingNamespaceProfiles(t *testing.T, mock sqlmock.Sqlmock, now tim
 			t.Fatalf("encodeProfileRevision(%q) error = %v", definition.input.Name, err)
 		}
 		mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_profiles")).
-			WithArgs(definition.id, testNamespaceID, definition.input.Name, definition.input.Description).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+			WithArgs(definition.id, testNamespaceID, definition.input.Name, definition.input.Description,
+				defaultProfileRevision).
+			WillReturnResult(sqlmock.NewResult(0, affectedRows))
 		mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_profile_revisions")).
 			WithArgs(
-				definition.id, testNamespaceID, encoded.minimumCapabilities, encoded.supportedModes,
+				definition.id, testNamespaceID, defaultProfileRevision,
+				encoded.minimumCapabilities, encoded.supportedModes,
 				encoded.toolPolicy, definition.input.ApprovalPolicy, definition.input.MaximumTurnSeconds,
 				definition.input.MaximumToolSteps, definition.input.ContextTokenBudget, digest[:],
 			).
-			WillReturnResult(sqlmock.NewResult(0, 0))
+			WillReturnResult(sqlmock.NewResult(0, affectedRows))
 		for ordinal, skill := range definition.input.Skills {
 			mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_profile_skills")).
-				WithArgs(testNamespaceID, definition.id, ordinal, skill.ID, skill.Revision).
-				WillReturnResult(sqlmock.NewResult(0, 0))
+				WithArgs(testNamespaceID, definition.id, defaultProfileRevision, ordinal, skill.ID, skill.Revision).
+				WillReturnResult(sqlmock.NewResult(0, affectedRows))
 		}
-		mock.ExpectQuery(regexp.QuoteMeta("SELECT profile.name,profile.description,profile.status,revision.content_digest")).
-			WithArgs(testNamespaceID, definition.id).
+		mock.ExpectQuery(regexp.QuoteMeta("SELECT profile.name,profile.description,profile.status,")).
+			WithArgs(testNamespaceID, definition.id, defaultProfileRevision).
 			WillReturnRows(sqlmock.NewRows([]string{
-				"name", "description", "status", "content_digest",
-			}).AddRow(definition.input.Name, definition.input.Description, string(agentmanagement.StatusActive), digest[:]))
+				"name", "description", "status", "current_revision", "content_digest",
+			}).AddRow(definition.input.Name, definition.input.Description,
+				string(agentmanagement.StatusActive), defaultProfileRevision, digest[:]))
 		mock.ExpectQuery(regexp.QuoteMeta("SELECT count(*) FROM agent_profile_skills")).
-			WithArgs(testNamespaceID, definition.id).
+			WithArgs(testNamespaceID, definition.id, defaultProfileRevision).
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(len(definition.input.Skills)))
 		for ordinal, skill := range definition.input.Skills {
 			mock.ExpectQuery(regexp.QuoteMeta("SELECT skill_id::text,skill_revision")).
-				WithArgs(testNamespaceID, definition.id, ordinal).
+				WithArgs(testNamespaceID, definition.id, defaultProfileRevision, ordinal).
 				WillReturnRows(sqlmock.NewRows([]string{"skill_id", "skill_revision"}).AddRow(skill.ID, skill.Revision))
 		}
 		for _, mode := range definition.input.DefaultForModes {
-			mock.ExpectExec(regexp.QuoteMeta("INSERT INTO agent_profile_defaults")).
-				WithArgs(testNamespaceID, mode, definition.id, now).
-				WillReturnResult(sqlmock.NewResult(0, 0))
+			mock.ExpectExec("^"+regexp.QuoteMeta(insertDefaultProfileMapping)+"$").
+				WithArgs(testNamespaceID, mode, definition.id, defaultProfileRevision, now).
+				WillReturnResult(sqlmock.NewResult(0, affectedRows))
 		}
 	}
 	mock.ExpectCommit()

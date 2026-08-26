@@ -332,6 +332,70 @@ func TestStaticSelector_Select(t *testing.T) {
 	}
 }
 
+func TestStaticSelectorUsesWeightedRequestAffinity(t *testing.T) {
+	candidates := []config.ModelRef{
+		{Model: "model-a", Weight: 1},
+		{Model: "model-b", Weight: 3},
+	}
+
+	for _, test := range []struct {
+		name   string
+		sample float64
+		want   string
+	}{
+		{name: "first bucket start", sample: 0, want: "model-a"},
+		{name: "first bucket end", sample: 0.249999, want: "model-a"},
+		{name: "second bucket start", sample: 0.25, want: "model-b"},
+		{name: "second bucket end", sample: 0.999999, want: "model-b"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			selected, scores, ok := weightedModelRefAt(candidates, 4, test.sample)
+			if !ok || selected == nil || selected.Model != test.want {
+				t.Fatalf("selected = %#v, ok = %t, want %s", selected, ok, test.want)
+			}
+			if scores["model-a"] != 0.25 || scores["model-b"] != 0.75 {
+				t.Fatalf("normalized scores = %#v", scores)
+			}
+		})
+	}
+
+	selector := NewStaticSelector(DefaultStaticConfig())
+	selectionContext := &SelectionContext{
+		AffinityKey:     "request-42",
+		RecipeName:      "recipe-a",
+		DecisionName:    "decision-a",
+		CandidateModels: candidates,
+	}
+	first, err := selector.Select(context.Background(), selectionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := selector.Select(context.Background(), selectionContext)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first.SelectedModel != second.SelectedModel || first.Reasoning != "Static weighted request affinity" {
+		t.Fatalf("request affinity was not stable: first=%+v second=%+v", first, second)
+	}
+}
+
+func TestStaticSelectorPreservesLegacyFirstCandidateWithoutExplicitWeights(t *testing.T) {
+	selector := NewStaticSelector(DefaultStaticConfig())
+	result, err := selector.Select(context.Background(), &SelectionContext{
+		AffinityKey: "request-42",
+		CandidateModels: []config.ModelRef{
+			{Model: "model-a"},
+			{Model: "model-b"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.SelectedModel != "model-a" || result.Reasoning == "Static weighted request affinity" {
+		t.Fatalf("legacy static selection changed: %+v", result)
+	}
+}
+
 func TestRegistry(t *testing.T) {
 	registry := NewRegistry()
 

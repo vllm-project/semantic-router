@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -84,9 +85,9 @@ func TestListEntrypointsLoadsSummariesInOneQuery(t *testing.T) {
 		WithArgs(namespaceID, true, sqlmock.AnyArg(), routingmanagement.Status(""), nil, nil, 11).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"namespace_id", "id", "name", "status", "revision", "created_at", "updated_at",
-			"entrypoint_revision", "aliases", "rule_count", "assigned_model_count",
+			"entrypoint_revision", "aliases", "recipe_ids", "rule_count", "assigned_model_count",
 		}).AddRow(namespaceID, "entrypoint_one", "Entrypoint One", "active", 4,
-			createdAt, updatedAt, 3, []byte(`["vllm-sr/one"]`), 2, 5))
+			createdAt, updatedAt, 3, []byte(`["vllm-sr/one"]`), "{recipe_a,recipe_b}", 2, 5))
 	mock.ExpectCommit()
 
 	page, err := store.ListEntrypoints(context.Background(), namespaceID, routingmanagement.ListQuery{
@@ -98,6 +99,7 @@ func TestListEntrypointsLoadsSummariesInOneQuery(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(page.Items) != 1 || page.Items[0].RuleCount != 2 || page.Items[0].AssignedModelCount != 5 ||
+		!reflect.DeepEqual(page.Items[0].RecipeIDs, []string{"recipe_a", "recipe_b"}) ||
 		len(page.Items[0].Current.Rules) != 0 {
 		t.Fatalf("Entrypoint summaries = %#v", page.Items)
 	}

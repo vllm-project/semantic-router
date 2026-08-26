@@ -611,28 +611,40 @@ func decodeChatTokenLogprobs(wire *chatLogprobsWire) []llmprotocol.TokenLogprob 
 }
 
 func decodeChatUsage(wire chatUsageWire) llmprotocol.Usage {
-	cached := int64(0)
+	usage := llmprotocol.Usage{
+		State:           llmprotocol.UsageAvailable,
+		InputUncached:   unknownCount(),
+		InputCacheRead:  unknownCount(),
+		InputCacheWrite: unknownCount(),
+		OutputReasoning: unknownCount(),
+		OutputOther:     unknownCount(),
+		InputTotal:      authoritative(wire.PromptTokens),
+		OutputTotal:     authoritative(wire.CompletionTokens),
+		Total:           authoritative(wire.TotalTokens),
+	}
 	if wire.PromptTokensDetails != nil {
-		cached = wire.PromptTokensDetails.CachedTokens
+		cached := wire.PromptTokensDetails.CachedTokens
+		uncached := wire.PromptTokens - cached
+		if cached < 0 || wire.PromptTokens < cached {
+			uncached = -1
+		}
+		usage.InputCacheRead = authoritative(cached)
+		usage.InputUncached = llmprotocol.TokenCount{
+			Value: llmprotocol.Int64(uncached), Provenance: llmprotocol.UsageDerived,
+		}
 	}
-	reasoning := int64(0)
 	if wire.CompletionTokensDetails != nil {
-		reasoning = wire.CompletionTokensDetails.ReasoningTokens
+		reasoning := wire.CompletionTokensDetails.ReasoningTokens
+		other := wire.CompletionTokens - reasoning
+		if reasoning < 0 || wire.CompletionTokens < reasoning {
+			other = -1
+		}
+		usage.OutputReasoning = authoritative(reasoning)
+		usage.OutputOther = llmprotocol.TokenCount{
+			Value: llmprotocol.Int64(other), Provenance: llmprotocol.UsageDerived,
+		}
 	}
-	uncached := wire.PromptTokens - cached
-	if uncached < 0 {
-		uncached = 0
-	}
-	other := wire.CompletionTokens - reasoning
-	if other < 0 {
-		other = 0
-	}
-	return llmprotocol.Usage{
-		State:         llmprotocol.UsageAvailable,
-		InputUncached: authoritative(uncached), InputCacheRead: authoritative(cached), InputCacheWrite: unknownCount(),
-		OutputReasoning: authoritative(reasoning), OutputOther: authoritative(other),
-		InputTotal: authoritative(wire.PromptTokens), OutputTotal: authoritative(wire.CompletionTokens), Total: authoritative(wire.TotalTokens),
-	}
+	return usage
 }
 
 func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope llmprotocol.Envelope, policy llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error) {

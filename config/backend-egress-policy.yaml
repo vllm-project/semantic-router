@@ -33,3 +33,4 @@ hosts:
   - {host: ai-gateway.vercel.sh, ports: [443]}
   - {host: api.cometapi.com, ports: [443]}
   - {host: api.sakana.ai, ports: [443]}
+  - {host: html.duckduckgo.com, ports: [443]}

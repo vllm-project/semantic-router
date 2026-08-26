@@ -1,7 +1,9 @@
 package postgres
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"database/sql"
 	"embed"
 	"errors"
@@ -22,7 +24,13 @@ var migrationFiles embed.FS
 type Migration struct {
 	Version int64
 	Name    string
+	Digest  [sha256.Size]byte
 	SQL     string
+}
+
+type appliedMigration struct {
+	Name   string
+	Digest []byte
 }
 
 // Migrations returns the embedded migration set in application order.
@@ -47,7 +55,12 @@ func Migrations() ([]Migration, error) {
 		if strings.TrimSpace(string(body)) == "" {
 			return nil, fmt.Errorf("migration %s is empty", entry.Name())
 		}
-		migrations = append(migrations, Migration{Version: version, Name: entry.Name(), SQL: string(body)})
+		migrations = append(migrations, Migration{
+			Version: version,
+			Name:    entry.Name(),
+			Digest:  sha256.Sum256(body),
+			SQL:     string(body),
+		})
 	}
 	sort.Slice(migrations, func(i, j int) bool { return migrations[i].Version < migrations[j].Version })
 	for i := range migrations {
@@ -104,30 +117,44 @@ func (m Migrator) Apply(ctx context.Context) (returnErr error) {
 		}
 	}()
 
+	applied, applyErr := prepareMigrationLedger(ctx, conn, migrations)
+	if applyErr != nil {
+		return applyErr
+	}
+	return applyPendingMigrations(ctx, conn, migrations, applied)
+}
+
+func prepareMigrationLedger(
+	ctx context.Context,
+	conn *sql.Conn,
+	migrations []Migration,
+) (map[int64]appliedMigration, error) {
 	if _, err := conn.ExecContext(ctx, `
 CREATE TABLE IF NOT EXISTS router_management_schema_migrations (
   version BIGINT PRIMARY KEY,
   name TEXT NOT NULL UNIQUE,
+  content_digest BYTEA NOT NULL
+    CONSTRAINT router_management_schema_migrations_content_digest_ck
+    CHECK (octet_length(content_digest) = 32),
   applied_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp()
 )`); err != nil {
-		return fmt.Errorf("create migration ledger: %w", err)
+		return nil, fmt.Errorf("create migration ledger: %w", err)
 	}
-
-	applied, applyErr := appliedVersions(ctx, conn)
-	if applyErr != nil {
-		return applyErr
+	applied, err := appliedVersions(ctx, conn)
+	if err != nil {
+		return nil, err
 	}
 	if err := validateAppliedMigrations(migrations, applied); err != nil {
-		return err
+		return nil, err
 	}
-	return applyPendingMigrations(ctx, conn, migrations, applied)
+	return applied, nil
 }
 
 func applyPendingMigrations(
 	ctx context.Context,
 	conn *sql.Conn,
 	migrations []Migration,
-	applied map[int64]string,
+	applied map[int64]appliedMigration,
 ) error {
 	for _, migration := range migrations {
 		if _, exists := applied[migration.Version]; exists {
@@ -139,8 +166,8 @@ func applyPendingMigrations(
 		}
 		if _, err = tx.ExecContext(ctx, migration.SQL); err == nil {
 			_, err = tx.ExecContext(ctx,
-				`INSERT INTO router_management_schema_migrations(version, name) VALUES ($1, $2)`,
-				migration.Version, migration.Name,
+				`INSERT INTO router_management_schema_migrations(version, name, content_digest) VALUES ($1, $2, $3)`,
+				migration.Version, migration.Name, migration.Digest[:],
 			)
 		}
 		if err != nil {
@@ -154,22 +181,23 @@ func applyPendingMigrations(
 	return nil
 }
 
-func appliedVersions(ctx context.Context, conn *sql.Conn) (_ map[int64]string, returnErr error) {
-	rows, err := conn.QueryContext(ctx, `SELECT version,name FROM router_management_schema_migrations ORDER BY version`)
+func appliedVersions(ctx context.Context, conn *sql.Conn) (_ map[int64]appliedMigration, returnErr error) {
+	rows, err := conn.QueryContext(ctx, `SELECT version,name,content_digest FROM router_management_schema_migrations ORDER BY version`)
 	if err != nil {
 		return nil, fmt.Errorf("read applied migrations: %w", err)
 	}
 	defer func() {
 		returnErr = errors.Join(returnErr, rows.Close())
 	}()
-	versions := make(map[int64]string)
+	versions := make(map[int64]appliedMigration)
 	for rows.Next() {
 		var version int64
-		var name string
-		if err := rows.Scan(&version, &name); err != nil {
+		var migration appliedMigration
+		if err := rows.Scan(&version, &migration.Name, &migration.Digest); err != nil {
 			return nil, fmt.Errorf("scan applied migration: %w", err)
 		}
-		versions[version] = name
+		migration.Digest = bytes.Clone(migration.Digest)
+		versions[version] = migration
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterate applied migrations: %w", err)
@@ -177,18 +205,21 @@ func appliedVersions(ctx context.Context, conn *sql.Conn) (_ map[int64]string, r
 	return versions, nil
 }
 
-func validateAppliedMigrations(migrations []Migration, applied map[int64]string) error {
-	embedded := make(map[int64]string, len(migrations))
+func validateAppliedMigrations(migrations []Migration, applied map[int64]appliedMigration) error {
+	embedded := make(map[int64]Migration, len(migrations))
 	for _, migration := range migrations {
-		embedded[migration.Version] = migration.Name
+		embedded[migration.Version] = migration
 	}
-	for version, name := range applied {
+	for version, migration := range applied {
 		expected, exists := embedded[version]
 		if !exists {
-			return fmt.Errorf("database contains unknown control-plane migration %d (%s)", version, name)
+			return fmt.Errorf("database contains unknown control-plane migration %d (%s)", version, migration.Name)
 		}
-		if name != expected {
-			return fmt.Errorf("control-plane migration %d name is %q, want %q", version, name, expected)
+		if migration.Name != expected.Name {
+			return fmt.Errorf("control-plane migration %d name is %q, want %q", version, migration.Name, expected.Name)
+		}
+		if !bytes.Equal(migration.Digest, expected.Digest[:]) {
+			return fmt.Errorf("control-plane migration %d content digest does not match embedded migration %q", version, expected.Name)
 		}
 	}
 	missing := false

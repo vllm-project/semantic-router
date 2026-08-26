@@ -300,7 +300,6 @@ rebuild-and-test: install
 	@echo ""
 	@echo "Dependencies included in the image:"
 	@echo "  router binary"
-	@echo "  setup-mode YAML helper"
 	@echo "  router health probe tooling"
 	@echo ""
 	@read -p "Press Enter to continue or Ctrl+C to cancel..." dummy

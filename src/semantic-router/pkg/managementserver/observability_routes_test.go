@@ -2,8 +2,10 @@ package managementserver
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +34,11 @@ func TestSubjectUsageRoutePinsPathResourceIntoAuthorizationAndSQLQuery(t *testin
 
 	if response.Code != http.StatusOK || queries.summaryCalls != 1 {
 		t.Fatalf("subject usage status=%d calls=%d body=%s", response.Code, queries.summaryCalls, response.Body.String())
+	}
+	for _, invalidOptional := range []string{`"asOf":null`, `"ledgerWatermark":null`, `"ingestionLag":null`} {
+		if strings.Contains(response.Body.String(), invalidOptional) {
+			t.Fatalf("subject usage emitted optional field as null: %s", response.Body.String())
+		}
 	}
 	if queries.lastUsage.Filters.UserID != observabilityUserID ||
 		len(queries.lastUsage.Visibility.UserIDs) != 1 || queries.lastUsage.Visibility.UserIDs[0] != observabilityUserID ||
@@ -87,6 +94,60 @@ func TestObservabilityUsagePushesAuthorizedScopeIntoQuery(t *testing.T) {
 	}
 }
 
+func TestObservabilityUsageResponsesHaveStrictEmptyShapes(t *testing.T) {
+	timing := usageledger.TimingSummary{
+		SampleCount: "0", TotalMilliseconds: "0", PercentilesAreEstimated: true,
+	}
+	totals := usageledger.UsageTotals{
+		Requests: "0", SuccessfulRequests: "0", InputTokens: "0", OutputTokens: "0",
+		TotalTokens: "0", IncompleteDispatches: "0", Completeness: usageledger.CompletenessComplete,
+		Costs: []usageledger.CostSummary{}, Latency: timing, TTFT: timing,
+	}
+	queries := &usageQueryServiceStub{
+		summary: usageledger.UsageSummary{Totals: totals, Grain: usageledger.GrainHour},
+		series: usageledger.UsageSeries{
+			Points: []usageledger.SeriesPoint{}, Grain: usageledger.GrainHour,
+		},
+		breakdown: usageledger.UsageBreakdown{
+			Dimension: usageledger.BreakdownAPIKey, Rows: []usageledger.BreakdownRow{},
+			Grain: usageledger.GrainHour,
+		},
+	}
+	routes := newTestObservabilityRoutes(t, queries, &resultScopeStub{values: map[accesscontrol.Permission]managementauthorization.ResultScope{
+		accesscontrol.PermissionUsageRead: {NamespaceID: testNamespaceID, All: true},
+	}})
+
+	for name, test := range map[string]struct {
+		path     string
+		required []string
+	}{
+		"summary":   {path: usagePath + "?grain=hour", required: []string{"totals", "grain", "final"}},
+		"series":    {path: usagePath + "/series?grain=hour", required: []string{"points", "grain", "final"}},
+		"breakdown": {path: usagePath + "/breakdowns?dimension=api_key&grain=hour", required: []string{"dimension", "rows", "grain", "final"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response := serveObservabilityRequest(t, routes, test.path, testNamespaceID)
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			var payload map[string]any
+			if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			for _, field := range test.required {
+				if _, found := payload[field]; !found {
+					t.Errorf("required field %q is absent from %s", field, response.Body.String())
+				}
+			}
+			for _, field := range []string{"asOf", "ledgerWatermark", "ingestionLag"} {
+				if _, found := payload[field]; found {
+					t.Errorf("unavailable optional field %q must be omitted from %s", field, response.Body.String())
+				}
+			}
+		})
+	}
+}
+
 func TestObservabilityInternalBreakdownRequiresMatchingInternalScope(t *testing.T) {
 	queries := &usageQueryServiceStub{}
 	scopes := &resultScopeStub{values: map[accesscontrol.Permission]managementauthorization.ResultScope{
@@ -103,7 +164,11 @@ func TestObservabilityInternalBreakdownRequiresMatchingInternalScope(t *testing.
 
 func TestObservabilityRequestDetailRedactsDispatchesWithoutInternalPermission(t *testing.T) {
 	queries := &usageQueryServiceStub{detail: usageledger.RequestDetail{
-		Request:    usageledger.RequestLog{AdmissionID: "admission-1", EventID: "44444444-4444-4444-8444-444444444444", Costs: []usageledger.CostSummary{}},
+		Request: usageledger.RequestLog{
+			AdmissionID: "admission-1", EventID: "44444444-4444-4444-8444-444444444444",
+			Models: []usageledger.RequestModel{{ID: "private-model", Name: "Private Model", Revision: 1}},
+			Costs:  []usageledger.CostSummary{},
+		},
 		Dispatches: []usageledger.DispatchDetail{{DispatchID: "dispatch-1", ProviderID: "private-provider"}},
 	}}
 	scopes := &resultScopeStub{values: map[accesscontrol.Permission]managementauthorization.ResultScope{
@@ -115,6 +180,7 @@ func TestObservabilityRequestDetailRedactsDispatchesWithoutInternalPermission(t 
 	target := managementapi.BasePath + "/namespaces/" + testNamespaceID + "/request-logs/admission-1"
 	response := serveObservabilityRequest(t, routes, target, testNamespaceID)
 	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "private-provider") ||
+		strings.Contains(response.Body.String(), "Private Model") ||
 		!strings.Contains(response.Body.String(), `"request"`) {
 		t.Fatalf("request detail status=%d body=%s", response.Code, response.Body.String())
 	}
@@ -123,18 +189,42 @@ func TestObservabilityRequestDetailRedactsDispatchesWithoutInternalPermission(t 
 	}
 }
 
+func TestObservabilityRequestLogPageRedactsModelsWithoutInternalPermission(t *testing.T) {
+	queries := &usageQueryServiceStub{logs: usageledger.LogPage{Items: []usageledger.RequestLog{{
+		AdmissionID: "admission-1", EventID: "44444444-4444-4444-8444-444444444444",
+		Models: []usageledger.RequestModel{{ID: "private-model", Name: "Private Model", Revision: 1}},
+		Costs:  []usageledger.CostSummary{},
+	}}}}
+	scopes := &resultScopeStub{values: map[accesscontrol.Permission]managementauthorization.ResultScope{
+		accesscontrol.PermissionLogRead: {NamespaceID: testNamespaceID, TeamIDs: []accesscontrol.TeamID{observabilityTeamID}},
+	}, errors: map[accesscontrol.Permission]error{
+		accesscontrol.PermissionUsageInternalDimensionsRead: managementauthorization.ErrDenied,
+	}}
+	routes := newTestObservabilityRoutes(t, queries, scopes)
+	response := serveObservabilityRequest(t, routes, requestLogsPath, testNamespaceID)
+	if response.Code != http.StatusOK || strings.Contains(response.Body.String(), "Private Model") {
+		t.Fatalf("request-log redaction status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
 func TestObservabilityRequestLogPageUsesCanonicalEnvelope(t *testing.T) {
 	queries := &usageQueryServiceStub{logs: usageledger.LogPage{
-		Items:      []usageledger.RequestLog{{AdmissionID: "admission-1", EventID: "44444444-4444-4444-8444-444444444444", Costs: []usageledger.CostSummary{}}},
+		Items: []usageledger.RequestLog{{
+			AdmissionID: "admission-1", EventID: "44444444-4444-4444-8444-444444444444",
+			Models: []usageledger.RequestModel{{ID: "model-one", Name: "Model One", Revision: 1}},
+			Costs:  []usageledger.CostSummary{},
+		}},
 		NextCursor: "signed-cursor",
 	}}
 	routes := newTestObservabilityRoutes(t, queries, &resultScopeStub{values: map[accesscontrol.Permission]managementauthorization.ResultScope{
-		accesscontrol.PermissionLogRead: {NamespaceID: testNamespaceID, All: true},
+		accesscontrol.PermissionLogRead:                     {NamespaceID: testNamespaceID, All: true},
+		accesscontrol.PermissionUsageInternalDimensionsRead: {NamespaceID: testNamespaceID, All: true},
 	}})
 	response := serveObservabilityRequest(t, routes, requestLogsPath+"?pageSize=1", testNamespaceID)
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"data"`) ||
 		!strings.Contains(response.Body.String(), `"nextCursor":"signed-cursor"`) ||
-		!strings.Contains(response.Body.String(), `"hasMore":true`) {
+		!strings.Contains(response.Body.String(), `"hasMore":true`) ||
+		!strings.Contains(response.Body.String(), `"name":"Model One"`) {
 		t.Fatalf("request-log page status=%d body=%s", response.Code, response.Body.String())
 	}
 }
@@ -167,6 +257,24 @@ func TestObservabilityAuditUsesCanonicalEnvelopeAndTypedFilters(t *testing.T) {
 	}
 	if audit.calls != 1 || audit.last.Filters.Action != "key.disable" || audit.last.PageSize != 1 {
 		t.Fatalf("audit query=%#v calls=%d", audit.last, audit.calls)
+	}
+}
+
+func TestObservabilityCursorInheritsOmittedTimeRange(t *testing.T) {
+	start := time.Date(2026, 8, 22, 0, 0, 0, 123, time.UTC)
+	end := start.Add(24 * time.Hour)
+	values := url.Values{"cursor": {"signed-cursor"}, "pageSize": {"2"}}
+	got, err := inheritCursorTimeRange(values, func(cursor string) (time.Time, time.Time, error) {
+		if cursor != "signed-cursor" {
+			t.Fatalf("cursor = %q", cursor)
+		}
+		return start, end, nil
+	})
+	if err != nil || got.Get("start") != start.Format(time.RFC3339Nano) || got.Get("end") != end.Format(time.RFC3339Nano) {
+		t.Fatalf("inheritCursorTimeRange() = (%v, %v)", got, err)
+	}
+	if values.Get("start") != "" || values.Get("end") != "" {
+		t.Fatalf("inheritCursorTimeRange mutated caller values: %v", values)
 	}
 }
 

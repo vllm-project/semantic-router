@@ -11,8 +11,16 @@
 *.svg binary
 *.pdf binary
 
-# Generated wheel resources mirror config/recipes/built-in and are byte-checked by CI.
-# Keep them in source distributions, but collapse their duplicate GitHub diff.
+# Generated Management API artifacts are byte-checked by CI.
+website/static/openapi/management/v1/management.openapi.json linguist-generated=true
+website/static/openapi/apiserver/apiserver.openapi.json linguist-generated=true
+dashboard/frontend/src/generated/managementApiContract.ts linguist-generated=true
+
+# Generated Operator artifacts are regenerated and drift-checked by CI.
+deploy/operator/api/**/zz_generated.deepcopy.go linguist-generated=true
+deploy/operator/config/crd/bases/** linguist-generated=true
+deploy/operator/config/rbac/role.yaml linguist-generated=true
+deploy/operator/bundle/manifests/** linguist-generated=true
 
 # Prebuilt CK Flash Attention shared library (ROCm/gfx942)
 onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* binary

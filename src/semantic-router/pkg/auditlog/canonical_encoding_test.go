@@ -3,6 +3,7 @@ package auditlog
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/internal/testsupport/signedtoken"
 )
@@ -17,6 +18,8 @@ func TestCursorRejectsNonCanonicalSignatureEncoding(t *testing.T) {
 		Version:     1,
 		NamespaceID: "11111111-1111-4111-8111-111111111111",
 		QueryDigest: strings.Repeat("a", 64),
+		Start:       time.Date(2026, 8, 22, 0, 0, 0, 0, time.UTC).UnixNano(),
+		End:         time.Date(2026, 8, 23, 0, 0, 0, 0, time.UTC).UnixNano(),
 		CreatedAt:   1,
 		EventID:     "22222222-2222-4222-8222-222222222222",
 	})

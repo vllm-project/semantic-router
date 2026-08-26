@@ -72,8 +72,21 @@ type RequestLog struct {
 	TeamID              string            `json:"teamId,omitempty"`
 	EntrypointID        string            `json:"entrypointId,omitempty"`
 	RecipeID            string            `json:"recipeId,omitempty"`
+	DecisionID          string            `json:"decisionId,omitempty"`
+	DecisionName        string            `json:"decisionName,omitempty"`
+	DecisionTier        int               `json:"decisionTier,omitempty"`
+	Models              []RequestModel    `json:"models"`
 	Metadata            map[string]string `json:"metadata,omitempty"`
 	Costs               []CostSummary     `json:"costs"`
+}
+
+// RequestModel is the immutable, non-secret Model snapshot associated with a
+// routed request. Names and revisions are retained with the event so historic
+// logs remain readable after the live routing catalog changes.
+type RequestModel struct {
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Revision int64  `json:"revision"`
 }
 
 type LogPage struct {
@@ -85,6 +98,8 @@ type logCursor struct {
 	Version     int    `json:"v"`
 	NamespaceID string `json:"n"`
 	QueryDigest string `json:"q"`
+	Start       int64  `json:"s"`
+	End         int64  `json:"u"`
 	OccurredAt  int64  `json:"t"`
 	EventID     string `json:"e"`
 }
@@ -160,6 +175,7 @@ func (q PostgresQueries) listLogPage(
 		page.Items = items[:query.PageSize]
 		page.NextCursor, err = codec.encode(logCursor{
 			Version: 1, NamespaceID: query.NamespaceID, QueryDigest: filterDigest,
+			Start: query.Start.UnixNano(), End: query.End.UnixNano(),
 			OccurredAt: last.OccurredAt.UnixNano(), EventID: last.EventID,
 		})
 		if err != nil {
@@ -223,6 +239,14 @@ func scanRequestLogWithMetadata(row rowScanner) (RequestLog, safeEventMetadata, 
 	item.Stream = metadata.Stream
 	item.ToolCall = metadata.ToolCall
 	item.Metadata = metadata.Metadata
+	if metadata.Decision != nil {
+		item.DecisionID = metadata.Decision.ID
+		item.DecisionName = metadata.Decision.Name
+		item.DecisionTier = metadata.Decision.Tier
+	}
+	// Historical rows written before request snapshots are explicitly exposed as
+	// an empty Model list. Never fabricate evidence from the mutable catalog.
+	item.Models = append(make([]RequestModel, 0, len(metadata.Models)), metadata.Models...)
 	return item, metadata, nil
 }
 
@@ -349,6 +373,10 @@ func (c *LogCursorCodec) decode(encoded string) (logCursor, error) {
 	if err := decoder.Decode(&value); err != nil || value.Version != 1 || value.OccurredAt <= 0 {
 		return logCursor{}, fmt.Errorf("request-log cursor is invalid")
 	}
+	start, end := time.Unix(0, value.Start).UTC(), time.Unix(0, value.End).UTC()
+	if !start.Before(end) {
+		return logCursor{}, fmt.Errorf("request-log cursor is invalid")
+	}
 	if _, err := uuid.Parse(value.NamespaceID); err != nil {
 		return logCursor{}, fmt.Errorf("request-log cursor is invalid")
 	}
@@ -359,4 +387,15 @@ func (c *LogCursorCodec) decode(encoded string) (logCursor, error) {
 		return logCursor{}, fmt.Errorf("request-log cursor is invalid")
 	}
 	return value, nil
+}
+
+// TimeRange returns the immutable query window carried by a verified cursor.
+// Management handlers use it only to restore omitted default bounds; ListLogs
+// still verifies the cursor against the complete authorized query digest.
+func (c *LogCursorCodec) TimeRange(encoded string) (time.Time, time.Time, error) {
+	value, err := c.decode(encoded)
+	if err != nil {
+		return time.Time{}, time.Time{}, err
+	}
+	return time.Unix(0, value.Start).UTC(), time.Unix(0, value.End).UTC(), nil
 }

@@ -28,6 +28,7 @@ import (
 const (
 	defaultIdempotencyTTL       = time.Hour
 	defaultSecretDeliveryTTL    = 10 * time.Minute
+	defaultPublicationTimeout   = 20 * time.Second
 	defaultCredentialRetirement = 30 * time.Second
 	// #nosec G101 -- this is a public JWT issuer label, not a credential.
 	managementTokenIssuer = "vllm-sr"

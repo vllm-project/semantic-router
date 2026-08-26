@@ -12,6 +12,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 func TestRedisEngineEnforcesConfiguredKeyPrefix(t *testing.T) {
@@ -171,7 +172,7 @@ func TestRedisEngineCalendarActualFinalizationCrossing(t *testing.T) {
 	if _, err := engine.Finalize(context.Background(), FinalizationRequest{
 		Partition: partition, AdmissionID: admission.AdmissionID, AdmissionDigest: admission.Digest,
 		FinalizationDigest: "usage", DispatchCount: 1,
-		Event: `{"admissionId":"calendar-actual-a"}`,
+		Event: `{"admissionId":"calendar-actual-a"}`, EventEvidenceState: "known",
 		Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			identity: {State: ActualEvidenceKnown, Amount: quotaInteger(t, "12")},
@@ -229,7 +230,7 @@ func TestRedisEngineMixedFinalizationDebitsAndFencesPrecisely(t *testing.T) {
 	request := FinalizationRequest{
 		Partition: partition, AdmissionID: admission.AdmissionID, AdmissionDigest: admission.Digest,
 		FinalizationDigest: "finalization-1", DispatchCount: 1,
-		Event:   `{"admissionId":"mixed-a"}`,
+		Event: `{"admissionId":"mixed-a"}`, EventEvidenceState: "mixed",
 		FenceID: "mixed-fence", Rules: rules,
 		Evidence: map[quota.CounterIdentity]ActualEvidence{
 			backendIdentity: {State: ActualEvidenceUnknown, Reason: "backend_usage_missing"},
@@ -479,6 +480,11 @@ func integrationRedis(t *testing.T) (*redis.Client, string) {
 		t.Fatalf("Redis PING: %v", err)
 	}
 	partition := fmt.Sprintf("quota-it-%d", time.Now().UnixNano())
+	keys, _ := newPartitionKeys(partition)
+	if err := client.XGroupCreateMkStream(ctx, keys.usageStream, usageledger.ConsumerGroupName, "0").Err(); err != nil {
+		client.Close()
+		t.Fatalf("create usage consumer group: %v", err)
+	}
 	t.Cleanup(func() {
 		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cleanupCancel()

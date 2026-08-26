@@ -79,7 +79,7 @@ FROM access_audit_heads WHERE namespace_id = $1 FOR UPDATE`, mutation.NamespaceI
 	createdAt = createdAt.UTC().Truncate(time.Microsecond)
 	document := auditDocument{
 		EventID: uuid.NewString(), NamespaceID: mutation.NamespaceID,
-		ActorPrincipalID: mutation.Actor.PrincipalID, ActorChain: append([]string(nil), mutation.Actor.ActorChain...),
+		ActorPrincipalID: mutation.Actor.PrincipalID, ActorChain: append([]string{}, mutation.Actor.ActorChain...),
 		Action: mutation.Action, ResourceType: mutation.ResourceType, ResourceID: mutation.ResourceID,
 		RequestID: mutation.Actor.RequestID, Outcome: "allowed", Reason: mutation.Actor.Reason,
 		AfterRevision: strconv.FormatUint(mutation.AfterRevision, 10), PreviousHash: hex.EncodeToString(previousHash),

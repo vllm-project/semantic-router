@@ -161,6 +161,7 @@ func executeEvent(
 	if _, err := current.runtime.Settle(ctx, accessruntime.SettlementRequest{
 		Admission: admission, AttemptEvidence: evidence, Aggregate: usageaccounting.Aggregate{},
 		FinalizationDigest: digest("finalization", admissionID), Event: string(event),
+		EventEvidenceState: "known",
 	}); err != nil {
 		result.err = err
 		return result

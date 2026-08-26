@@ -700,5 +700,6 @@ func testRoutingEntrypoint(id string) routingmanagement.Entrypoint {
 				},
 			}},
 		},
+		RecipeIDs: []string{"recipe_one"},
 	}
 }

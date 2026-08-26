@@ -3,9 +3,11 @@ package accessruntime
 import (
 	"context"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotaruntime"
 )
 
@@ -21,6 +23,10 @@ func (r *Runtime) Admit(ctx context.Context, request AdmissionRequest) (Admissio
 		return Admission{Result: result, Target: request.Target}, err
 	}
 	preparedAt := time.Now().UTC()
+	recovery, err := authoritativeAdmissionRecovery(state.tenant, request.Target, request.Recovery)
+	if err != nil {
+		return Admission{Result: unavailable("invalid_admission_recovery"), Target: request.Target}, err
+	}
 
 	result, err = r.engine.Admit(ctx, quotaruntime.AdmissionRequest{
 		Partition:     state.tenant.QuotaPartition,
@@ -29,6 +35,7 @@ func (r *Runtime) Admit(ctx context.Context, request AdmissionRequest) (Admissio
 		LeaseDuration: request.LeaseDuration,
 		Preconditions: preconditions,
 		Rules:         cloneRuleBindings(state.rules),
+		Recovery:      recovery,
 	})
 	if err != nil {
 		return Admission{Result: unavailable("atomic_admission_failed"), Target: request.Target}, err
@@ -54,4 +61,37 @@ func (r *Runtime) Admit(ctx context.Context, request AdmissionRequest) (Admissio
 		Result: result, Tenant: tenant, Rules: cloneRuleBindings(state.rules), Target: request.Target,
 		RequestDigest: request.RequestDigest, PreparedAt: preparedAt, state: internal,
 	}, nil
+}
+
+func authoritativeAdmissionRecovery(
+	tenant TenantContext,
+	target Target,
+	provided *quotaruntime.AdmissionRecoveryContext,
+) (*quotaruntime.AdmissionRecoveryContext, error) {
+	if provided == nil {
+		return nil, nil
+	}
+	if tenant.PolicyRevision > math.MaxInt64 {
+		return nil, fmt.Errorf("access policy revision exceeds recovery range")
+	}
+	recovery := *provided
+	if recovery.NamespaceID != tenant.NamespaceID ||
+		recovery.Principal.APIKeyID != tenant.APIKeyID ||
+		recovery.Principal.UserID != tenant.UserID ||
+		recovery.Principal.TeamID != tenant.TeamID ||
+		recovery.Routing.AccessRevision != int64(tenant.PolicyRevision) ||
+		recovery.FallbackDispatch.Currency != tenant.BillingCurrency {
+		return nil, fmt.Errorf("admission recovery identity differs from authenticated tenant")
+	}
+	switch target.ResourceType {
+	case accesscontrol.GrantResourceEntrypoint:
+		if recovery.Routing.EntrypointID != string(target.ResourceID) {
+			return nil, fmt.Errorf("admission recovery entrypoint differs from authorized target")
+		}
+	case accesscontrol.GrantResourceModel:
+		if recovery.FallbackDispatch.ModelID != string(target.ResourceID) {
+			return nil, fmt.Errorf("admission recovery Model differs from authorized target")
+		}
+	}
+	return &recovery, nil
 }

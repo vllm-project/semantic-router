@@ -14,6 +14,10 @@ from cli.consts import (
 )
 from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_runtime_env
+from cli.container_issuer_egress import (
+    MANAGEMENT_ISSUER_EGRESS_POLICY_ENV,
+    materialize_management_issuer_egress_policy,
+)
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
@@ -118,6 +122,19 @@ def container_start_vllm_sr(
     dashboard_runtime_env = _local_dashboard_runtime_environment(
         runtime_paths["effective_config_path"], config_dir, stack_layout
     )
+    if dashboard_runtime_env and not minimal:
+        issuer_egress = materialize_management_issuer_egress_policy(
+            runtime=runtime,
+            network_name=runtime_network_name,
+            state_root_dir=config_dir,
+            stack_layout=stack_layout,
+        )
+        runtime_paths["management_issuer_egress_policy_mount"] = (
+            issuer_egress.mount_spec
+        )
+        runtime_paths["management_issuer_egress_policy_container_path"] = (
+            issuer_egress.container_path
+        )
     trust_bundle = dashboard_runtime_env.get("SSL_CERT_FILE", "").strip()
     if trust_bundle:
         common_env.setdefault("SSL_CERT_FILE", trust_bundle)
@@ -401,6 +418,11 @@ def _build_router_runtime_command(
         },
         normalized_platform,
     )
+    issuer_egress_policy = runtime_paths.get(
+        "management_issuer_egress_policy_container_path", ""
+    )
+    if issuer_egress_policy:
+        router_env[MANAGEMENT_ISSUER_EGRESS_POLICY_ENV] = issuer_egress_policy
     # Names only. Each explicit binding is rendered as an inheriting `-e NAME`
     # flag, while its value exists only in the Router Docker child environment.
     for name in router_child_env_names:
@@ -418,6 +440,11 @@ def _build_router_runtime_command(
         env_vars=router_env,
         mount_specs=[
             *_router_runtime_mount_specs(runtime_paths),
+            *(
+                [runtime_paths["management_issuer_egress_policy_mount"]]
+                if runtime_paths.get("management_issuer_egress_policy_mount")
+                else []
+            ),
             *(
                 [f"{router_env['SSL_CERT_FILE']}:{router_env['SSL_CERT_FILE']}:ro"]
                 if router_env.get("SSL_CERT_FILE")
@@ -638,6 +665,7 @@ def _build_dashboard_runtime_env(
         "DASHBOARD_ISSUER_TLS_KEY_FILE",
         "DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE",
         "DASHBOARD_JWT_SECRET",
+        "DASHBOARD_ROUTER_PUBLIC_URL",
     ):
         value = os.getenv(name)
         if value:
@@ -669,6 +697,9 @@ def _build_dashboard_runtime_env(
     )
     dashboard_env.setdefault(
         "TARGET_ENVOY_URL", stack_layout.envoy_listener_service_url(listener_port)
+    )
+    dashboard_env.setdefault(
+        "DASHBOARD_ROUTER_PUBLIC_URL", stack_layout.envoy_listener_url(listener_port)
     )
     dashboard_env.setdefault(
         "TARGET_ENVOY_ADMIN_URL", stack_layout.envoy_admin_service_url

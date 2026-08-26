@@ -44,13 +44,18 @@ type appliedStub struct {
 	err    error
 }
 
-type routingSnapshotStub struct {
-	snapshot *routingsnapshot.Snapshot
-	err      error
+type routingPublicationStub struct {
+	publication *RoutingPublication
+	err         error
+	pin         RoutingPublicationPin
 }
 
-func (stub *routingSnapshotStub) ReadRoutingSnapshot(context.Context, string, int64) (*routingsnapshot.Snapshot, error) {
-	return stub.snapshot, stub.err
+func (stub *routingPublicationStub) ReadRoutingPublication(
+	_ context.Context,
+	pin RoutingPublicationPin,
+) (*RoutingPublication, error) {
+	stub.pin = pin
+	return stub.publication, stub.err
 }
 
 func (stub *appliedStub) ReadAppliedPolicy(context.Context, string, string, string) (accessruntime.AppliedPolicy, error) {
@@ -308,7 +313,8 @@ func testAppliedPolicy(projection accessprojection.Projection) accessruntime.App
 	return accessruntime.AppliedPolicy{
 		Active: accessruntime.ActivePolicy{
 			KeyID: testKeySubject.ID, Revision: projection.Revision, Digest: projection.Digest,
-			RoutingRevision: 9, RoutingSnapshotHash: strings.Repeat("e", 64),
+			PublicationID: "publication-9", RuntimeEpoch: 2,
+			RoutingRevision: 9, RoutingDocumentDigest: strings.Repeat("e", 64),
 		},
 		Projection: projection,
 	}
@@ -334,7 +340,7 @@ func newTestService(
 ) *Service {
 	t.Helper()
 	service, err := NewService(ServiceOptions{
-		Repository: repository, Applied: applied, Routing: &routingSnapshotStub{}, Meters: meters, Waiter: waiter,
+		Repository: repository, Applied: applied, Routing: &routingPublicationStub{}, Meters: meters, Waiter: waiter,
 	})
 	if err != nil {
 		t.Fatal(err)

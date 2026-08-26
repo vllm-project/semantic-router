@@ -73,6 +73,33 @@ func TestRoutingModelViewRedactsBackendExecutionInternals(t *testing.T) {
 	}
 }
 
+func TestRoutingModelViewEncodesRequiredEmptyCollectionsAsArrays(t *testing.T) {
+	wire, err := json.Marshal(routingModelViewDTO(routingmanagement.Model{}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(wire, &payload); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"aliases", "capabilities", "loras", "tags", "backends"} {
+		if string(payload[field]) != "[]" {
+			t.Errorf("RoutingModelView.%s = %s, want []: %s", field, payload[field], wire)
+		}
+	}
+	var control struct {
+		Retry struct {
+			On []string `json:"on"`
+		} `json:"retry"`
+	}
+	if err := json.Unmarshal(payload["control"], &control); err != nil {
+		t.Fatal(err)
+	}
+	if control.Retry.On == nil {
+		t.Fatalf("RoutingModelView.control.retry.on = null or omitted, want []: %s", wire)
+	}
+}
+
 func TestRoutingModelCardViewContainsOnlySemanticAuthoringData(t *testing.T) {
 	model := routingmanagement.Model{
 		ResourceIdentity: routingmanagement.ResourceIdentity{
@@ -137,6 +164,7 @@ func TestRoutingEntrypointListOmitsTopology(t *testing.T) {
 				},
 			}},
 		},
+		RecipeIDs: []string{"recipe_safe"},
 		RuleCount: 1, AssignedModelCount: 2,
 	}
 	listWire, err := json.Marshal(routingEntrypointViewDTO(entrypoint, false))
@@ -147,7 +175,8 @@ func TestRoutingEntrypointListOmitsTopology(t *testing.T) {
 		t.Fatalf("Entrypoint identity view leaked topology: %s", listWire)
 	}
 	if !strings.Contains(string(listWire), `"ruleCount":1`) ||
-		!strings.Contains(string(listWire), `"assignedModelCount":2`) {
+		!strings.Contains(string(listWire), `"assignedModelCount":2`) ||
+		!strings.Contains(string(listWire), `"recipeIds":["recipe_safe"]`) {
 		t.Fatalf("Entrypoint list omitted its bounded summary: %s", listWire)
 	}
 	detailWire, err := json.Marshal(routingEntrypointViewDTO(entrypoint, true))

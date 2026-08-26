@@ -59,7 +59,8 @@ func (h *Handler) prepareDispatchRequest(
 	if h.Now != nil {
 		now = h.Now
 	}
-	capability, serveHTTPErr := h.Keyring.Verify(strings.TrimSpace(request.Header.Get(DispatchCapabilityHeader)), h.Audience, now().UTC())
+	verifiedAt := now().UTC()
+	capability, serveHTTPErr := h.Keyring.Verify(strings.TrimSpace(request.Header.Get(DispatchCapabilityHeader)), h.Audience, verifiedAt)
 	if serveHTTPErr != nil {
 		http.Error(w, "invalid dispatch capability", http.StatusUnauthorized)
 		return preparedDispatchRequest{}, false
@@ -71,30 +72,30 @@ func (h *Handler) prepareDispatchRequest(
 	}
 	body, serveHTTPErr := io.ReadAll(io.LimitReader(request.Body, limit+1))
 	if serveHTTPErr != nil || int64(len(body)) > limit {
-		h.writeWireError(w, capability.WireFormat, http.StatusRequestEntityTooLarge,
+		h.writePreDispatchError(w, capability, verifiedAt, http.StatusRequestEntityTooLarge,
 			llmprotocol.ErrorInvalidRequest, "request_too_large", "request body is too large", serveHTTPErr)
 		return preparedDispatchRequest{}, false
 	}
 	if request.Method != capability.Method || request.URL.Path != capability.Path ||
 		request.URL.RawQuery != capability.Query {
-		h.writeWireError(w, capability.WireFormat, http.StatusUnauthorized,
+		h.writePreDispatchError(w, capability, verifiedAt, http.StatusUnauthorized,
 			llmprotocol.ErrorAuthentication, "dispatch_mismatch", "dispatch request could not be authenticated", nil)
 		return preparedDispatchRequest{}, false
 	}
 	digest := RequestDigest(request.Method, request.URL.Path, request.URL.RawQuery, body)
 	if len(digest) != len(capability.RequestDigest) || subtle.ConstantTimeCompare([]byte(digest), []byte(capability.RequestDigest)) != 1 {
-		h.writeWireError(w, capability.WireFormat, http.StatusUnauthorized,
+		h.writePreDispatchError(w, capability, verifiedAt, http.StatusUnauthorized,
 			llmprotocol.ErrorAuthentication, "dispatch_mismatch", "dispatch request could not be authenticated", nil)
 		return preparedDispatchRequest{}, false
 	}
 	plans, serveHTTPErr := h.Plans.ResolvePlans(request.Context(), capability)
 	if serveHTTPErr != nil {
-		h.writeWireError(w, capability.WireFormat, http.StatusNotFound,
+		h.writePreDispatchError(w, capability, verifiedAt, http.StatusNotFound,
 			llmprotocol.ErrorNotFound, "dispatch_target_unavailable", "dispatch target is unavailable", serveHTTPErr)
 		return preparedDispatchRequest{}, false
 	}
 	if err := bindCapabilityToPlans(&plans, capability); err != nil {
-		h.writeWireError(w, capability.WireFormat, http.StatusUnauthorized,
+		h.writePreDispatchError(w, capability, verifiedAt, http.StatusUnauthorized,
 			llmprotocol.ErrorAuthentication, "dispatch_target_mismatch", "dispatch target could not be authenticated", err)
 		return preparedDispatchRequest{}, false
 	}
@@ -111,6 +112,27 @@ func (h *Handler) prepareDispatchRequest(
 		plan.SourceFormat = capability.WireFormat
 	}
 	return preparedDispatchRequest{capability: capability, plans: plans, now: now().UTC()}, true
+}
+
+// writePreDispatchError proves that a verified capability reached a terminal
+// private-handler failure before any physical backend attempt began. The
+// signed empty outcome is request-bound evidence; callers must not infer
+// known-zero usage from an unsigned error response.
+func (h *Handler) writePreDispatchError(
+	w http.ResponseWriter,
+	capability DispatchCapability,
+	now time.Time,
+	status int,
+	category llmprotocol.ErrorCategory,
+	code, message string,
+	cause error,
+) {
+	if err := setDispatchOutcome(w.Header(), h.Keyring, capability, Result{}, now); err != nil {
+		h.writeWireError(w, capability.WireFormat, http.StatusServiceUnavailable,
+			llmprotocol.ErrorInternal, "dispatch_outcome_unavailable", "dispatch outcome is unavailable", err)
+		return
+	}
+	h.writeWireError(w, capability.WireFormat, status, category, code, message, cause)
 }
 
 func (h *Handler) invokePreparedRequest(

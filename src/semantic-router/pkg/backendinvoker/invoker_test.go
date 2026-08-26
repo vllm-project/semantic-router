@@ -17,12 +17,14 @@ import (
 type journalStub struct {
 	dispatches int
 	plans      []Plan
+	deadlines  []time.Time
 	attempts   []AttemptResult
 }
 
-func (j *journalStub) BeginDispatch(_ context.Context, plan Plan, _ time.Time) error {
+func (j *journalStub) BeginDispatch(_ context.Context, plan Plan, deadline time.Time) error {
 	j.dispatches++
 	j.plans = append(j.plans, plan)
+	j.deadlines = append(j.deadlines, deadline)
 	return nil
 }
 func (j *journalStub) BeginAttempt(context.Context, Plan, Attempt) error { return nil }
@@ -439,19 +441,23 @@ func TestInvokerNeverTreatsHTTPFailureResponseAsKnownZero(t *testing.T) {
 	}
 }
 
-func TestInvokerUsesOneSharedDeadlineAcrossFallbackCandidates(t *testing.T) {
+func TestInvokerUsesOneChainDeadlineAndCandidateLocalAttemptTimeouts(t *testing.T) {
 	chain := fallbackTestChain(2)
 	chain.Fallback.On = []FallbackTrigger{FallbackUnavailable}
+	chain.Candidates[0].Execution.MaxRetries = 1
+	chain.Candidates[0].Execution.RetryOn = []FallbackTrigger{FallbackUnavailable}
 	chain.Candidates[0].Execution.RequestTimeout = time.Minute
 	chain.Candidates[1].Execution.RequestTimeout = 10 * time.Minute
-	deadlines := make([]time.Time, 0, 2)
-	invoker := &Invoker{Journal: &journalStub{}, Transport: transportFunc(func(request *http.Request) (*http.Response, error) {
+	journal := &journalStub{}
+	deadlines := make([]time.Time, 0, 3)
+	started := time.Now()
+	invoker := &Invoker{Journal: journal, Transport: transportFunc(func(request *http.Request) (*http.Response, error) {
 		deadline, ok := request.Context().Deadline()
 		if !ok {
 			t.Fatal("backend request has no deadline")
 		}
 		deadlines = append(deadlines, deadline)
-		if len(deadlines) == 1 {
+		if len(deadlines) <= 2 {
 			return nil, NewKnownZeroTransportFailure(FallbackUnavailable, errors.New("dial failed"))
 		}
 		return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(testChatResponseBody))}, nil
@@ -461,8 +467,51 @@ func TestInvokerUsesOneSharedDeadlineAcrossFallbackCandidates(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer result.Response.Body.Close()
-	if len(deadlines) != 2 || !deadlines[0].Equal(deadlines[1]) {
-		t.Fatalf("candidate deadlines = %+v", deadlines)
+	if len(deadlines) != 3 {
+		t.Fatalf("attempt deadlines = %+v", deadlines)
+	}
+	assertDeadlineNear(t, deadlines[0], started.Add(time.Minute))
+	assertDeadlineNear(t, deadlines[1], started.Add(time.Minute))
+	assertDeadlineNear(t, deadlines[2], started.Add(10*time.Minute))
+	if len(journal.deadlines) != 2 || !journal.deadlines[0].Equal(journal.deadlines[1]) {
+		t.Fatalf("dispatch chain deadlines = %+v", journal.deadlines)
+	}
+	assertDeadlineNear(t, journal.deadlines[0], started.Add(12*time.Minute))
+	for index, attemptDeadline := range deadlines {
+		if attemptDeadline.After(journal.deadlines[0]) {
+			t.Fatalf("attempt %d deadline %s exceeds chain deadline %s", index, attemptDeadline, journal.deadlines[0])
+		}
+	}
+}
+
+func TestChainTimeoutIncludesEveryCandidateAndSafeAttempt(t *testing.T) {
+	chain := fallbackTestChain(3)
+	chain.Candidates[0].Execution.MaxRetries = 2
+	chain.Candidates[0].Execution.RequestTimeout = time.Minute
+	chain.Candidates[1].Execution.RequestTimeout = 2 * time.Minute
+	chain.Candidates[2].Execution.MaxRetries = 1
+	chain.Candidates[2].Execution.RequestTimeout = 3 * time.Minute
+	if got, want := chainTimeout(chain), 11*time.Minute; got != want {
+		t.Fatalf("request chain timeout = %s, want %s", got, want)
+	}
+
+	for index := range chain.Candidates {
+		chain.Candidates[index].Streaming = true
+	}
+	chain.Candidates[0].Execution.StreamTimeout = 4 * time.Minute
+	chain.Candidates[1].Execution.StreamTimeout = 5 * time.Minute
+	chain.Candidates[2].Execution.StreamTimeout = 6 * time.Minute
+	if got, want := chainTimeout(chain), 29*time.Minute; got != want {
+		t.Fatalf("stream chain timeout = %s, want %s", got, want)
+	}
+}
+
+func assertDeadlineNear(t *testing.T, got, want time.Time) {
+	t.Helper()
+	const tolerance = 2 * time.Second
+	delta := got.Sub(want)
+	if delta < -tolerance || delta > tolerance {
+		t.Fatalf("deadline = %s, want %s ± %s", got, want, tolerance)
 	}
 }
 
@@ -660,6 +709,25 @@ func TestValidatePlanRejectsBackendWeightOverflow(t *testing.T) {
 	}
 	if err := validatePlan(plan); err == nil {
 		t.Fatal("accepted overflowing backend weights")
+	}
+}
+
+func TestValidatePlanRejectsTimeoutOutsidePublishedBounds(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		timeout time.Duration
+	}{
+		{name: "negative", timeout: -time.Second},
+		{name: "subsecond", timeout: time.Millisecond},
+		{name: "over maximum", timeout: maximumModelTimeout + time.Second},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			plan := testPlan()
+			plan.Execution.RequestTimeout = test.timeout
+			if err := validatePlan(plan); err == nil || !strings.Contains(err.Error(), "timeouts") {
+				t.Fatalf("validatePlan() error = %v", err)
+			}
+		})
 	}
 }
 

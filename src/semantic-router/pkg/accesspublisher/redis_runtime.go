@@ -728,7 +728,11 @@ func (s *RedisStore) Readiness(ctx context.Context, namespaceID, partition strin
 	if err != nil && !errors.Is(err, redis.Nil) {
 		return Readiness{}, fmt.Errorf("read publication readiness: %w", err)
 	}
-	readiness := Readiness{AccessGate: accessCommand.Val()["publication_id"], RoutingGate: routingCommand.Val()["publication_id"]}
+	readiness := Readiness{
+		AccessGate:    accessCommand.Val()["publication_id"],
+		RoutingGate:   routingCommand.Val()["publication_id"],
+		RoutingDigest: routingCommand.Val()["snapshot_digest"],
+	}
 	readiness.RuntimeEpoch, _ = strconv.ParseUint(epochCommand.Val(), 10, 64)
 	readiness.DesiredRevision, _ = strconv.ParseUint(accessCommand.Val()["revision"], 10, 64)
 	readiness.AppliedRevision, _ = strconv.ParseUint(appliedCommand.Val()["desired_revision"], 10, 64)

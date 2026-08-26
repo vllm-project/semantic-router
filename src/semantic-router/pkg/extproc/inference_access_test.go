@@ -3,6 +3,7 @@ package extproc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"sync"
@@ -253,6 +254,13 @@ func TestEntrypointGrantAuthorizesPublishedInternalModels(t *testing.T) {
 	if len(fake.admissions) != 1 || fake.admissions[0].Target.ResourceType != accesscontrol.GrantResourceEntrypoint {
 		t.Fatalf("unexpected admission: %+v", fake.admissions)
 	}
+	recovery := fake.admissions[0].Recovery
+	if recovery == nil || recovery.Routing.EntrypointID != cfg.Entrypoints[0].ID ||
+		recovery.Routing.EntrypointRuleID != cfg.Entrypoints[0].Rules[0].ID ||
+		recovery.Routing.RecipeID != recipe.ID ||
+		recovery.FallbackDispatch.ModelID != cfg.ModelConfig["internal-model"].ResourceID {
+		t.Fatalf("admission recovery lost durable routing identity: %+v", recovery)
+	}
 	if err := router.settleNoBackendInference(ctx, 500, "pre_dispatch_failure"); err != nil {
 		t.Fatal(err)
 	}
@@ -266,6 +274,12 @@ func TestEntrypointGrantAuthorizesPublishedInternalModels(t *testing.T) {
 	if len(event.Dispatches) != 1 || event.Dispatches[0].ModelName != "internal-model" ||
 		event.Dispatches[0].UsageState != usageledger.UsageKnownZero {
 		t.Fatalf("pre-dispatch event = %+v", event.Dispatches)
+	}
+	if event.Routing.EntrypointID != cfg.Entrypoints[0].ID ||
+		event.Routing.EntrypointRuleID != cfg.Entrypoints[0].Rules[0].ID ||
+		event.Routing.RecipeID != recipe.ID || event.Dispatches[0].DecisionID != recipe.Profile.Decisions[0].ID ||
+		event.Dispatches[0].ModelID != cfg.ModelConfig["internal-model"].ResourceID {
+		t.Fatalf("terminal event lost durable routing identity: %+v", event)
 	}
 }
 
@@ -300,8 +314,37 @@ func TestDirectModelDenialIsNondisclosing(t *testing.T) {
 	}
 }
 
+func TestDirectModelRecoveryPreservesDurableModelIdentity(t *testing.T) {
+	cfg := inferenceTestConfig(t)
+	fake := &fakeInferenceAccess{}
+	router := &OpenAIRouter{Config: cfg, InferenceAccess: fake}
+	tenant := inferenceTestTenant("")
+	ctx := &RequestContext{
+		Headers: map[string]string{":path": "/v1/chat/completions"}, RequestID: uuid.NewString(),
+		RequestModel: "internal-model", StartTime: time.Now().UTC(),
+		InferenceAccess: &inferenceRequestAccess{tenant: tenant},
+	}
+	if response := router.authorizeInferenceTarget(context.Background(), ctx, ctx.RequestModel); response != nil {
+		t.Fatalf("direct Model authorization failed: status=%d", inferenceAccessDisposition(response))
+	}
+	recovery, err := router.inferenceAdmissionRecovery(ctx, ctx.InferenceAccess, ctx.RequestModel)
+	if err != nil {
+		t.Fatalf("inferenceAdmissionRecovery() error = %v", err)
+	}
+	wantModelID := cfg.ModelConfig[ctx.RequestModel].ResourceID
+	if ctx.InferenceAccess.target.ResourceType != accesscontrol.GrantResourceModel ||
+		string(ctx.InferenceAccess.target.ResourceID) != wantModelID ||
+		recovery.FallbackDispatch.ModelID != wantModelID || recovery.Routing.EntrypointID != "" {
+		t.Fatalf("direct Model recovery identity = target:%+v recovery:%+v", ctx.InferenceAccess.target, recovery)
+	}
+}
+
 func TestNativeAccessModelsUsesOneCatalogSnapshotAndRoutingClaims(t *testing.T) {
 	cfg := inferenceTestConfig(t)
+	cfg.IncludeConfigModelsInList = false
+	cfg.ModelConfig["ungranted-model"] = config.ModelParams{
+		ResourceID: "mdl_ungranted_model", ResourceRevision: 1,
+	}
 	tenant := inferenceTestTenant("")
 	tenant.RoutingClaims = map[string]routingsnapshot.ClaimValue{
 		"tier": {Kind: "string", String: "free"},
@@ -331,7 +374,7 @@ func TestNativeAccessModelsUsesOneCatalogSnapshotAndRoutingClaims(t *testing.T) 
 		t.Fatal(err)
 	}
 	if len(catalog.Data) != 1 || catalog.Data[0].ID != "internal-model" {
-		t.Fatalf("claim-ineligible entrypoint leaked into catalog: %+v", catalog.Data)
+		t.Fatalf("authorized backend discovery leaked or omitted a model: %+v", catalog.Data)
 	}
 
 	fake.catalog.Tenant.RoutingClaims["tier"] = routingsnapshot.ClaimValue{Kind: "string", String: "premium"}
@@ -348,6 +391,9 @@ func TestNativeAccessModelsUsesOneCatalogSnapshotAndRoutingClaims(t *testing.T) 
 	}
 	if !slices.Contains(ids, "virtual/premium") || !slices.Contains(ids, "internal-model") {
 		t.Fatalf("eligible catalog = %v", ids)
+	}
+	if slices.Contains(ids, "ungranted-model") {
+		t.Fatalf("ungranted backend model leaked into catalog: %v", ids)
 	}
 }
 
@@ -382,6 +428,90 @@ func TestStreamingSettlementUsesNeutralAuthoritativeActualAndIsIdempotent(t *tes
 	}
 	if event.ExternalRequestID != ctx.RequestID {
 		t.Fatalf("external request ID = %q, want %q", event.ExternalRequestID, ctx.RequestID)
+	}
+}
+
+func TestSettlementEvidenceCoversCompleteFallbackJournalWithoutBillingUnattemptedCandidates(t *testing.T) {
+	cfg := inferenceTestConfig(t)
+	base := cfg.ModelConfig["internal-model"]
+	for index, name := range []string{"fallback-one", "fallback-two"} {
+		params := base
+		params.ResourceID = fmt.Sprintf("mdl_fallback_%d", index+1)
+		params.ResourceRevision = int64(index + 2)
+		cfg.ModelConfig[name] = params
+	}
+	pending := true
+	fake := &fakeInferenceAccess{}
+	fake.readEvidence = func(request accessruntime.AttemptEvidenceRequest) (accessruntime.AttemptEvidenceSnapshot, error) {
+		snapshot, err := responseStartedEvidence(request)
+		if err != nil {
+			return accessruntime.AttemptEvidenceSnapshot{}, err
+		}
+		for index := 1; index < len(snapshot.Dispatches); index++ {
+			snapshot.Dispatches[index] = accessruntime.AttemptEvidenceObservation{
+				DispatchID: request.Dispatches[index].DispatchID,
+			}
+		}
+		return snapshot, nil
+	}
+	fake.settle = func(request accessruntime.SettlementRequest) (quotaruntime.FinalizationResult, error) {
+		if len(request.AttemptEvidence.Observations()) != len(fake.journal) {
+			return quotaruntime.FinalizationResult{}, fmt.Errorf("settlement dispatch journal differs")
+		}
+		if request.FenceID != "" {
+			return quotaruntime.FinalizationResult{}, fmt.Errorf("known fallback settlement opened a fence")
+		}
+		pending = false
+		return quotaruntime.FinalizationResult{}, nil
+	}
+	router := &OpenAIRouter{Config: cfg, InferenceAccess: fake}
+	ctx := admittedInferenceTestContext("internal-model")
+	for index, name := range []string{"internal-model", "fallback-one", "fallback-two"} {
+		if _, err := router.beginInferenceDispatchCandidate(
+			ctx.TraceContext, ctx, name, index, true, false,
+		); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx.DispatchState.mu.Lock()
+	ctx.DispatchState.primaryDispatchID = ctx.DispatchState.dispatches[0].id
+	ctx.DispatchState.primaryCandidateCount = len(ctx.DispatchState.dispatches)
+	ctx.DispatchState.mu.Unlock()
+	applyPrimaryDispatchOutcome(t, ctx, backendinvoker.AttemptResponseStarted)
+
+	usage := responseUsageMetrics{
+		promptTokens: 7, promptTokensReported: true,
+		completionTokens: 3, completionTokensReported: true,
+		totalTokens: 10, totalTokensReported: true,
+	}
+	if err := router.completeAndSettlePrimaryInference(ctx, usage, 200); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.evidenceReads) != 1 || len(fake.evidenceReads[0].Dispatches) != 3 {
+		t.Fatalf("attempt evidence read = %+v, want the complete three-candidate journal", fake.evidenceReads)
+	}
+	if len(fake.settlements) != 1 {
+		t.Fatalf("settlement evidence = %+v, want all three journaled candidates", fake.settlements)
+	}
+	observations := fake.settlements[0].AttemptEvidence.Observations()
+	if len(observations) != 3 {
+		t.Fatalf("settlement evidence = %+v, want all three journaled candidates", fake.settlements)
+	}
+	if !observations[0].Present || observations[1].Present || observations[2].Present {
+		t.Fatalf("fallback execution evidence = %+v, want one attempted and two not executed", observations)
+	}
+	event, err := usageledger.DecodeTerminalEvent(fake.settlements[0].Event)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(event.Dispatches) != 1 || event.Dispatches[0].ModelID != base.ResourceID ||
+		event.Dispatches[0].UsageState != usageledger.UsageKnownActual ||
+		event.EvidenceState != usageledger.EvidenceKnown || event.Fence != nil ||
+		fake.settlements[0].FenceID != "" {
+		t.Fatalf("terminal usage included an unattempted fallback candidate: %+v", event)
+	}
+	if pending {
+		t.Fatal("known fallback settlement left the admission pending")
 	}
 }
 
@@ -636,7 +766,7 @@ func admittedInferenceTestContext(model string) *RequestContext {
 		InferenceAccess: &inferenceRequestAccess{
 			target: accessruntime.Target{
 				ResourceType: accesscontrol.GrantResourceModel,
-				ResourceID:   "00000000-0000-0000-0000-000000000201",
+				ResourceID:   "mdl_internal_model",
 				Permission:   accesscontrol.GrantPermissionInvoke,
 			},
 			admission: &accessruntime.Admission{
@@ -644,7 +774,7 @@ func admittedInferenceTestContext(model string) *RequestContext {
 				Tenant: tenant,
 				Target: accessruntime.Target{
 					ResourceType: accesscontrol.GrantResourceModel,
-					ResourceID:   "00000000-0000-0000-0000-000000000201",
+					ResourceID:   "mdl_internal_model",
 					Permission:   accesscontrol.GrantPermissionInvoke,
 				},
 				RequestDigest: strings.Repeat("d", 64), PreparedAt: time.Now().UTC(),
@@ -670,8 +800,8 @@ func inferenceTestConfig(t *testing.T) *config.RouterConfig {
 	const (
 		recipeID     = "recipe-test"
 		decisionID   = "decision-test"
-		modelID      = "00000000-0000-0000-0000-000000000201"
-		entrypointID = "00000000-0000-0000-0000-000000000202"
+		modelID      = "mdl_internal_model"
+		entrypointID = "ep_virtual_premium"
 	)
 	one := "1"
 	cfg := &config.RouterConfig{

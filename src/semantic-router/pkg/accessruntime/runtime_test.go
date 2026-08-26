@@ -171,10 +171,15 @@ func TestDelegationPinsAuthorityAndRechecksSharedLifecycleBarrier(t *testing.T) 
 	}
 	for field, expected := range map[string]int{
 		"management_session_id": 1, "principal_id": 1, "delegation_epoch": 2,
-		"user_id": 1, "team_id": 1, "audience": 1,
+		"user_id": 1, "team_id": 0, "audience": 1,
 	} {
 		if countPreconditionField(engine.accessRequest.Preconditions, field) != expected {
 			t.Fatalf("delegated authority field %q not pinned %d times: %+v", field, expected, engine.accessRequest.Preconditions)
+		}
+	}
+	for index, precondition := range engine.accessRequest.Preconditions {
+		if err := precondition.Validate(); err != nil {
+			t.Fatalf("user-owned delegation precondition %d is invalid: %+v: %v", index, precondition, err)
 		}
 	}
 	barriers.state.SessionDenied = true
@@ -185,6 +190,36 @@ func TestDelegationPinsAuthorityAndRechecksSharedLifecycleBarrier(t *testing.T) 
 	})
 	if err != nil || admission.Result.Disposition != quotaruntime.AdmissionForbidden || admission.Result.BlockingReason != "management_session_denied" {
 		t.Fatalf("revoked delegated Admit() = %+v, %v", admission, err)
+	}
+}
+
+func TestTeamOwnedDelegationPinsNonEmptyTeamPrecondition(t *testing.T) {
+	_, _, reader, _ := testRuntime(t)
+	credential := reader.credential
+	credential.Kind = string(accesscredential.KindDelegation)
+	credential.ManagementSessionID = "management-session-1"
+	credential.PrincipalID = "principal-1"
+	credential.DelegationEpoch = reader.policy.DelegationEpoch
+	credential.UserID = reader.policy.UserID
+	credential.TeamID = "team-1"
+	credential.Audience = "vllm-sr-inference"
+	projection := reader.policy
+	projection.TeamID = credential.TeamID
+
+	preconditions, err := compilePreconditions(
+		"test:access", reader.location, accesscredential.KindDelegation,
+		"delegation001", credential, reader.active, projection,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countPreconditionField(preconditions, "team_id") != 1 {
+		t.Fatalf("team-owned delegation did not pin Team identity: %+v", preconditions)
+	}
+	for index, precondition := range preconditions {
+		if err := precondition.Validate(); err != nil {
+			t.Fatalf("team-owned delegation precondition %d is invalid: %+v: %v", index, precondition, err)
+		}
 	}
 }
 
@@ -465,6 +500,7 @@ func TestReadAttemptEvidencePinsOneStableAdmissionRevision(t *testing.T) {
 	if _, err := runtime.Settle(context.Background(), SettlementRequest{
 		Admission: admission, AttemptEvidence: snapshot,
 		FinalizationDigest: "final-evidence", Event: `{"admissionId":"admission-evidence"}`,
+		EventEvidenceState: "known",
 	}); err != nil {
 		t.Fatalf("Settle() with genuine evidence snapshot error = %v", err)
 	}
@@ -476,6 +512,7 @@ func TestReadAttemptEvidencePinsOneStableAdmissionRevision(t *testing.T) {
 		Admission:          admission,
 		AttemptEvidence:    AttemptEvidenceSnapshot{Dispatches: snapshot.Observations()},
 		FinalizationDigest: "forged-evidence", Event: `{"admissionId":"admission-evidence"}`,
+		EventEvidenceState: "known",
 	}); err == nil {
 		t.Fatal("Settle() accepted a caller-constructed attempt evidence snapshot")
 	}
@@ -534,7 +571,7 @@ func testRuntime(t *testing.T) (*Runtime, accesscredential.Issued, *fakeReader, 
 		location: CredentialLocation{
 			NamespaceID: projection.NamespaceID, QuotaPartition: projection.QuotaPartition,
 			PublicationID: "publication-1", RuntimeEpoch: 1, RoutingRevision: 1,
-			RoutingSnapshotHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			RoutingDocumentDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		credential: accessprojection.CredentialProjection{
 			Kind: string(accesscredential.KindAPIKey), KID: issued.Digest.PublicID, KeyID: projection.KeyID,
@@ -544,7 +581,7 @@ func testRuntime(t *testing.T) (*Runtime, accesscredential.Issued, *fakeReader, 
 		active: ActivePolicy{
 			KeyID: projection.KeyID, Revision: projection.Revision, Digest: projection.Digest,
 			PublicationID: "publication-1", RuntimeEpoch: 1, RoutingRevision: 1,
-			RoutingSnapshotHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			RoutingDocumentDigest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		policy: projection,
 	}

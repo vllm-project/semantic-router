@@ -20,11 +20,31 @@ type AppliedPolicyReader interface {
 	ReadAppliedPolicy(context.Context, string, string, string) (accessruntime.AppliedPolicy, error)
 }
 
-// RoutingSnapshotReader returns the immutable Router snapshot pinned by an
-// applied key policy. Management clients never read mutable authoring rows to
-// derive a consumer-visible catalog.
-type RoutingSnapshotReader interface {
-	ReadRoutingSnapshot(context.Context, string, int64) (*routingsnapshot.Snapshot, error)
+// RoutingPublicationPin is the complete coupled generation selected by one
+// applied API-key policy. RoutingDocumentDigest identifies the immutable routing
+// document used by the data plane; it is deliberately distinct from the
+// nested routingsnapshot.Snapshot digest.
+type RoutingPublicationPin struct {
+	NamespaceID           string
+	QuotaPartition        string
+	PublicationID         string
+	RuntimeEpoch          uint64
+	RoutingRevision       int64
+	RoutingDocumentDigest string
+}
+
+// RoutingPublication is the verified consumer-safe part of one exact runtime
+// publication. RoutingDocumentDigest remains the data-plane document digest while
+// Snapshot carries its independently verified nested snapshot digest.
+type RoutingPublication struct {
+	RoutingDocumentDigest string
+	Snapshot              routingsnapshot.Snapshot
+}
+
+// RoutingPublicationReader resolves only the exact active runtime publication
+// named by a key policy. It must not fall back to a newer authoring snapshot.
+type RoutingPublicationReader interface {
+	ReadRoutingPublication(context.Context, RoutingPublicationPin) (*RoutingPublication, error)
 }
 
 type MeterReader interface {

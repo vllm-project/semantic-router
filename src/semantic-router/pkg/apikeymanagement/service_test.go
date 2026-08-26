@@ -63,6 +63,8 @@ func TestCreateCompilesImmutablePolicyReceipts(t *testing.T) {
 	}
 	if mutation.RateLimitOverride == nil || mutation.RateLimitOverride.InlinePolicy == nil ||
 		mutation.RateLimitOverride.InlinePolicy.ID != testRatePolicy ||
+		mutation.RateLimitOverride.PolicyID != "" ||
+		mutation.RateLimitOverride.Binding.PolicyID != testRatePolicy ||
 		mutation.RateLimitOverride.Binding.ID != testRateBinding ||
 		mutation.RateLimitOverride.InlinePolicy.Rules[0].ID != testRateRule {
 		t.Fatalf("compiled rate override = %#v", mutation.RateLimitOverride)
@@ -105,6 +107,25 @@ func TestCreateReplicaReplayUsesTimeAfterCommandLock(t *testing.T) {
 	}
 }
 
+func TestCreateDoesNotReturnSecretBeforeCredentialPublication(t *testing.T) {
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	waiter := &apiKeyPublicationWaiterStub{err: context.DeadlineExceeded}
+	service := newAPIKeyTestServiceWithWaiter(t, &apiKeyRepositoryStub{}, waiter,
+		func() time.Time { return now }, []string{testKeyID, testCredentialID})
+	result, err := service.Create(context.Background(), CreateRequest{
+		NamespaceID: testNamespaceID, Name: "Globally ready key",
+		Owner:          Owner{Kind: accesscontrol.SubjectKindUser, ID: testOwnerID},
+		IdempotencyKey: "create-api-key-publication-01", Actor: testAPIKeyActor(),
+	})
+	if !errors.Is(err, ErrUnavailable) || waiter.waits != 1 || waiter.keyID != testKeyID || waiter.publicID == "" ||
+		!waiter.hasDeadline {
+		t.Fatalf("publication result err=%v waiter=%#v", err, waiter)
+	}
+	if result.Secret != "" || result.CanonicalJSON != nil || result.Key.ID != "" {
+		t.Fatalf("secret-bearing result escaped with publication error: %#v", result)
+	}
+}
+
 func TestRotateUsesIndexedActiveCredentialLookup(t *testing.T) {
 	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
 	repository := &apiKeyRepositoryStub{
@@ -128,6 +149,44 @@ func TestRotateUsesIndexedActiveCredentialLookup(t *testing.T) {
 	}
 }
 
+func TestRevealDoesNotExposeCredentialBeforePublication(t *testing.T) {
+	revealKEK := accesscredential.KEKKeyring{
+		ActiveVersion: "reveal-v1",
+		Keys: map[string][]byte{
+			"reveal-v1": []byte(strings.Repeat("v", 32)),
+		},
+	}
+	envelope, err := revealKEK.Seal(
+		[]byte("vsr_credential-public-id_0000000000000000000000000000000000000000000"),
+		revealAAD(testNamespaceID, testKeyID, testCredentialID, "credential-public-id"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &apiKeyRepositoryStub{active: RevealSnapshot{
+		NamespaceID: testNamespaceID,
+		Credential: accesscontrol.CredentialVersion{
+			ID: testCredentialID, APIKeyID: testKeyID, KID: "credential-public-id",
+			KEKVersion: envelope.KeyVersion, CiphertextNonce: envelope.Nonce,
+			SecretCiphertext: envelope.Ciphertext,
+		},
+	}}
+	waiter := &apiKeyPublicationWaiterStub{err: context.DeadlineExceeded}
+	service := &Service{
+		repository: repository, waiter: waiter, revealKEK: &revealKEK,
+		publicationTimeout: time.Second,
+	}
+	secret, err := service.Reveal(context.Background(), RevealRequest{
+		NamespaceID: testNamespaceID, KeyID: testKeyID, CredentialID: testCredentialID,
+		Actor: testAPIKeyActor(),
+	})
+	if !errors.Is(err, ErrUnavailable) || secret != "" || waiter.waits != 1 ||
+		repository.revealRecords != 0 {
+		t.Fatalf("reveal result secret=%q err=%v waiter=%#v records=%d",
+			secret, err, waiter, repository.revealRecords)
+	}
+}
+
 type apiKeyRepositoryStub struct {
 	key                   accesscontrol.APIKey
 	active                RevealSnapshot
@@ -136,6 +195,28 @@ type apiKeyRepositoryStub struct {
 	replayCredentialDelay time.Duration
 	activeReads           int
 	credentialLists       int
+	revealRecords         int
+}
+
+type apiKeyPublicationWaiterStub struct {
+	err         error
+	waits       int
+	keyID       string
+	publicID    string
+	hasDeadline bool
+}
+
+func (waiter *apiKeyPublicationWaiterStub) WaitAPIKeyActive(
+	ctx context.Context,
+	_ string,
+	keyID string,
+	publicID string,
+) error {
+	_, waiter.hasDeadline = ctx.Deadline()
+	waiter.waits++
+	waiter.keyID = keyID
+	waiter.publicID = publicID
+	return waiter.err
 }
 
 func (repository *apiKeyRepositoryStub) Ready(context.Context, *managementcommand.Codec) error {
@@ -222,16 +303,29 @@ func (repository *apiKeyRepositoryStub) RevokeCredential(context.Context, string
 }
 
 func (repository *apiKeyRepositoryStub) GetRevealSnapshot(context.Context, string, string, string) (RevealSnapshot, error) {
-	return RevealSnapshot{}, ErrUnavailable
+	return repository.active, nil
 }
 
 func (repository *apiKeyRepositoryStub) RecordReveal(context.Context, RevealSnapshot, Actor) error {
-	return ErrUnavailable
+	repository.revealRecords++
+	return nil
 }
 
 func newAPIKeyTestService(
 	t *testing.T,
 	repository Repository,
+	now func() time.Time,
+	ids []string,
+) *Service {
+	return newAPIKeyTestServiceWithWaiter(
+		t, repository, &apiKeyPublicationWaiterStub{}, now, ids,
+	)
+}
+
+func newAPIKeyTestServiceWithWaiter(
+	t *testing.T,
+	repository Repository,
+	waiter PublicationWaiter,
 	now func() time.Time,
 	ids []string,
 ) *Service {
@@ -244,7 +338,7 @@ func newAPIKeyTestService(
 	}
 	index := 0
 	service, err := NewService(Options{
-		Repository: repository, Commands: commands,
+		Repository: repository, Waiter: waiter, Commands: commands,
 		CursorKeyring: securitykeyring.Symmetric{ActiveVersion: "cursor-v1", Keys: map[string][]byte{
 			"cursor-v1": []byte(strings.Repeat("u", 32)),
 		}},
@@ -254,7 +348,8 @@ func newAPIKeyTestService(
 		ResponseKEK: accesscredential.KEKKeyring{ActiveVersion: "response-v1", Keys: map[string][]byte{
 			"response-v1": []byte(strings.Repeat("r", 32)),
 		}},
-		IdempotencyTTL: time.Hour, SecretDeliveryTTL: 10 * time.Minute, Now: now,
+		IdempotencyTTL: time.Hour, SecretDeliveryTTL: 10 * time.Minute,
+		PublicationTimeout: 5 * time.Second, Now: now,
 		NewID: func() string {
 			if index >= len(ids) {
 				t.Fatalf("deterministic ID source exhausted at %d", index)
@@ -307,12 +402,13 @@ func TestServiceOwnsAndErasesSecretKeyrings(t *testing.T) {
 		"reveal-v1": []byte(strings.Repeat("v", 32)),
 	}}
 	service, err := NewService(Options{
-		Repository: &apiKeyRepositoryStub{}, Commands: commands,
+		Repository: &apiKeyRepositoryStub{}, Waiter: &apiKeyPublicationWaiterStub{}, Commands: commands,
 		CursorKeyring: securitykeyring.Symmetric{ActiveVersion: "cursor-v1", Keys: map[string][]byte{
 			"cursor-v1": []byte(strings.Repeat("u", 32)),
 		}},
 		APIKeyPeppers: peppers, ResponseKEK: responseKEK, RevealKEK: &revealKEK,
 		IdempotencyTTL: time.Hour, SecretDeliveryTTL: 10 * time.Minute,
+		PublicationTimeout: 5 * time.Second,
 	})
 	if err != nil {
 		t.Fatal(err)

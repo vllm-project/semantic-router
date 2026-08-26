@@ -38,6 +38,15 @@ one publication path into the data plane.
 - `dashboard-managed-access-lifecycle` covers authentication, scoped model
   discovery, cross-replica quota enforcement, rotation, disablement, and actual
   usage settlement through public interfaces.
+- Reusable knowledge bases are currently valid only as startup assets declared by
+  `global.model_catalog.kbs[]`. The durable routing snapshot and `/management/v1`
+  routing resources contain Models, Recipes, and Entrypoints, but no KnowledgeBase
+  resource or revision. Router API tests explicitly reject the retired
+  `/config/kbs` mutation paths, and Dashboard navigation intentionally omits the old
+  file-backed editor. Dynamic KnowledgeBase management is outside PL0038's current
+  delivery scope and must not be presented as implemented; it needs a separate
+  Router-owned resource proposal and explicit future plan scope before a Build
+  surface can return.
 - Docker, Helm, and operator contracts have focused tests. The debt remains open
   until the complete release validation matrix satisfies every exit criterion below.
 
@@ -57,9 +66,10 @@ settlement, usage stream, and audit. Public inference always passes through the 
 AccessRuntime. Dashboard, CLI, and custom consoles use generated Management clients;
 Playground uses a short-lived delegated credential and the public inference path.
 
-Routing persists only Model, Recipe, and Entrypoint. Entrypoint rule actions own
-decision assignments. Dashboard is an optional client, API-key identity comes only
-from Router verification, and globally enforced counters have one Valkey authority.
+Routing persists Model, Recipe, and Entrypoint resources. Entrypoint rule actions own
+decision assignments; there is no detached Model-to-Recipe association resource or API.
+Dashboard is an optional client, API-key identity comes only from Router verification,
+and globally enforced counters have one Valkey authority.
 
 ## Exit Criteria
 

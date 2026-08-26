@@ -31,19 +31,26 @@ func (service *Service) GetRoutingCatalog(
 	if err != nil {
 		return RoutingCatalog{}, err
 	}
-	if applied.Active.RoutingRevision <= 0 || !validDigest(applied.Active.RoutingSnapshotHash) {
+	if applied.Active.RoutingRevision <= 0 || !validDigest(applied.Active.RoutingDocumentDigest) ||
+		strings.TrimSpace(applied.Active.PublicationID) == "" || applied.Active.RuntimeEpoch == 0 {
 		return RoutingCatalog{}, fmt.Errorf("%w: applied key policy has no routing publication pin", ErrUnavailable)
 	}
-	snapshot, err := service.routing.ReadRoutingSnapshot(ctx, namespaceID, applied.Active.RoutingRevision)
+	publication, err := service.routing.ReadRoutingPublication(ctx, RoutingPublicationPin{
+		NamespaceID: namespaceID, QuotaPartition: desired.QuotaPartition,
+		PublicationID: applied.Active.PublicationID, RuntimeEpoch: applied.Active.RuntimeEpoch,
+		RoutingRevision:       applied.Active.RoutingRevision,
+		RoutingDocumentDigest: applied.Active.RoutingDocumentDigest,
+	})
 	if err != nil {
-		return RoutingCatalog{}, fmt.Errorf("%w: read applied routing snapshot: %w", ErrUnavailable, err)
+		return RoutingCatalog{}, fmt.Errorf("%w: read applied routing publication: %w", ErrUnavailable, err)
 	}
-	if snapshot == nil || snapshot.NamespaceID != namespaceID ||
-		snapshot.Revision != applied.Active.RoutingRevision ||
-		snapshot.Digest != applied.Active.RoutingSnapshotHash {
-		return RoutingCatalog{}, fmt.Errorf("%w: applied routing snapshot does not match the key policy pin", ErrUnavailable)
+	if publication == nil || publication.Snapshot.NamespaceID != namespaceID ||
+		publication.Snapshot.Revision != applied.Active.RoutingRevision ||
+		publication.RoutingDocumentDigest != applied.Active.RoutingDocumentDigest ||
+		!validDigest(publication.Snapshot.Digest) {
+		return RoutingCatalog{}, fmt.Errorf("%w: applied routing publication does not match the key policy pin", ErrUnavailable)
 	}
-	return compileRoutingCatalog(subject, applied, *snapshot), nil
+	return compileRoutingCatalog(subject, applied, *publication), nil
 }
 
 func (service *Service) appliedKeyPolicy(
@@ -89,12 +96,13 @@ func validDigest(value string) bool {
 func compileRoutingCatalog(
 	subject Subject,
 	applied accessruntime.AppliedPolicy,
-	snapshot routingsnapshot.Snapshot,
+	publication RoutingPublication,
 ) RoutingCatalog {
+	snapshot := publication.Snapshot
 	result := RoutingCatalog{
 		Subject: subject, PolicyRevision: applied.Active.Revision,
 		PolicyDigest: applied.Active.Digest, RoutingRevision: snapshot.Revision,
-		RoutingDigest: snapshot.Digest,
+		RoutingDigest: publication.RoutingDocumentDigest,
 	}
 	visibleModels := make(map[string]struct{})
 	for _, model := range snapshot.Models {

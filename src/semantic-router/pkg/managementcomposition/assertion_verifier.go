@@ -22,7 +22,7 @@ func composeAssertionVerifier(
 		return nil, fmt.Errorf("compose trusted-issuer repository: %w", err)
 	}
 	transport, err := backendegress.NewTransport(backendegress.TransportOptions{
-		Guard: backendegress.Guard{Policy: dependencies.EgressPolicy},
+		Guard: backendegress.Guard{Policy: dependencies.IssuerEgressPolicy},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("compose trusted-issuer egress transport: %w", err)

@@ -202,12 +202,12 @@ func routingModelViewDTO(model routingmanagement.Model) managementapi.RoutingMod
 	return managementapi.RoutingModelView{
 		ID: model.ID, Name: model.Name, Status: string(model.Status), Revision: model.Revision,
 		ModelRevision: model.Current.Revision, CatalogRevision: model.Current.CatalogRevision,
-		Aliases: append([]string(nil), model.Current.Aliases...), Capabilities: append([]string(nil), model.Current.Capabilities...),
+		Aliases: append([]string{}, model.Current.Aliases...), Capabilities: append([]string{}, model.Current.Capabilities...),
 		ParamSize: model.Current.ParamSize, ContextWindowSize: model.Current.ContextWindowSize,
 		Description: model.Current.Description,
-		Reasoning:   routingReasoningDTO(model.Current.Reasoning), LoRAs: append([]string(nil), model.Current.LoRAs...),
+		Reasoning:   routingReasoningDTO(model.Current.Reasoning), LoRAs: append([]string{}, model.Current.LoRAs...),
 		QualityScore: model.Current.QualityScore, Modality: model.Current.Modality,
-		Tags:    append([]string(nil), model.Current.Tags...),
+		Tags:    append([]string{}, model.Current.Tags...),
 		Control: routingModelControlDTO(model.Current.Execution), Pricing: managementapi.RoutingPricing(model.Current.Pricing),
 		Backends: backends, CreatedAt: model.CreatedAt, UpdatedAt: model.UpdatedAt,
 	}
@@ -255,7 +255,8 @@ func routingRecipeViewDTO(recipe routingmanagement.Recipe) managementapi.Routing
 func routingEntrypointViewDTO(entrypoint routingmanagement.Entrypoint, includeTopology bool) managementapi.RoutingEntrypointView {
 	view := managementapi.RoutingEntrypointView{
 		ID: entrypoint.ID, Name: entrypoint.Name, Status: string(entrypoint.Status), Revision: entrypoint.Revision,
-		EntrypointRevision: entrypoint.Current.Revision, Aliases: append([]string(nil), entrypoint.Current.Aliases...),
+		EntrypointRevision: entrypoint.Current.Revision, Aliases: append([]string{}, entrypoint.Current.Aliases...),
+		RecipeIDs: append([]string{}, entrypoint.RecipeIDs...),
 		RuleCount: entrypoint.RuleCount, AssignedModelCount: entrypoint.AssignedModelCount,
 		CreatedAt: entrypoint.CreatedAt, UpdatedAt: entrypoint.UpdatedAt,
 	}
@@ -351,7 +352,7 @@ func routingModelControlDTO(value routingsnapshot.ModelExecution) managementapi.
 	return managementapi.RoutingModelControl{
 		Retry: managementapi.RoutingModelRetryControl{
 			Count: value.MaxRetries,
-			On:    append([]string(nil), value.RetryOn...),
+			On:    append([]string{}, value.RetryOn...),
 		},
 		Timeout: managementapi.RoutingModelTimeoutControl{
 			Request: value.RequestTimeout,
@@ -381,10 +382,12 @@ func routingEntrypointRulesDTO(values []routingsnapshot.EntrypointRule) []manage
 func routingEntrypointRuleDTO(value routingsnapshot.EntrypointRule) managementapi.RoutingEntrypointRule {
 	assignments := make(map[string]managementapi.RoutingAssignmentSet, len(value.Assignments))
 	for decisionID, valueSet := range value.Assignments {
-		assignmentSet := managementapi.RoutingAssignmentSet{}
+		assignmentSet := managementapi.RoutingAssignmentSet{
+			Models: make([]managementapi.RoutingAssignment, 0, len(valueSet.Models)),
+		}
 		if valueSet.Fallback != nil {
 			assignmentSet.Fallback = &managementapi.RoutingFallbackPolicy{
-				Strategy: valueSet.Fallback.Strategy, On: append([]string(nil), valueSet.Fallback.On...),
+				Strategy: valueSet.Fallback.Strategy, On: append([]string{}, valueSet.Fallback.On...),
 			}
 		}
 		for _, assignment := range valueSet.Models {

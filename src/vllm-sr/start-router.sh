@@ -58,20 +58,6 @@ echo "  Config file: $CONFIG_FILE"
 # publication is independently constrained by the split-stack launcher.
 export VLLM_SR_MANAGEMENT_INTERNAL_LISTENER=true
 
-# Preserve setup-mode behavior from the historical single-container entrypoint.
-if python3 -c "
-import sys, yaml
-try:
-    data = yaml.safe_load(open('$CONFIG_FILE')) or {}
-    setup = data.get('setup')
-    sys.exit(0 if isinstance(setup, dict) and setup.get('mode') else 1)
-except Exception:
-    sys.exit(1)
-"; then
-    echo "Setup mode enabled: router disabled"
-    exec sleep infinity
-fi
-
 # Start router
 merge_custom_ca_with_system_roots
 echo "Starting router..."

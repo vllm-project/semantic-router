@@ -17,9 +17,13 @@ const (
 
 func TestNormalizeOrigin(t *testing.T) {
 	for input, expected := range map[string]string{
-		"HTTPS://API.Example.com:443/v1/": "https://api.example.com/v1",
-		"http://[2001:db8::1]:80/":        "http://[2001:db8::1]",
-		"https://api.example.com":         "https://api.example.com",
+		"HTTPS://API.Example.com:443/v1/":                     "https://api.example.com/v1",
+		"http://[2001:db8::1]:80/":                            "http://[2001:db8::1]",
+		"https://api.example.com":                             "https://api.example.com",
+		"https://team_a-dashboard:8743":                       "https://team_a-dashboard:8743",
+		"https://_team.internal:8743":                         "https://_team.internal:8743",
+		"https://team_.internal:8743":                         "https://team_.internal:8743",
+		"https://team_.blue-vllm-sr-dashboard-container:8743": "https://team_.blue-vllm-sr-dashboard-container:8743",
 	} {
 		actual, err := NormalizeOrigin(input)
 		if err != nil || actual != expected {
@@ -29,6 +33,7 @@ func TestNormalizeOrigin(t *testing.T) {
 	for _, invalid := range []string{
 		"https://user:secret@example.com", "https://example.com/a/../b",
 		"https://example.com/a%2fb", "https://example.com/?key=secret", "file:///tmp/socket",
+		"https://-service.internal", "https://service-.internal",
 	} {
 		if _, err := NormalizeOrigin(invalid); err == nil {
 			t.Fatalf("NormalizeOrigin(%q) succeeded", invalid)

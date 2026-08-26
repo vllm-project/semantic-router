@@ -99,6 +99,20 @@ WHERE id = $1
   AND token_id = $2
   AND status = 'active'`
 
+	lockIssuerSessionQuery = `SELECT id::text, clock_timestamp()
+FROM management_sessions
+WHERE principal_id = $1
+  AND auth_source_kind = 'issuer'
+  AND auth_source_id = $2
+  AND issuer_session_id = $3
+  AND audience = $4
+  AND evidence_kind = 'human'
+  AND authenticated_at = $5
+  AND assurance = $6::jsonb
+ORDER BY created_at DESC
+LIMIT 1
+FOR UPDATE`
+
 	revokeSessionQuery = `UPDATE management_sessions
 SET status = 'revoked', revoked_at = clock_timestamp()
 WHERE id = $1

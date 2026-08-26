@@ -101,6 +101,15 @@ func (coordinator *IdentityExchangeCoordinator) ExchangeIdentity(ctx context.Con
 		return managementauth.IdentityExchangeResult{}, mapExchangeError(err)
 	}
 	defer zero(result.CanonicalJSON)
+	if result.Acceptance != nil {
+		namespaceID := ""
+		if mutation.Acceptance != nil {
+			namespaceID = mutation.Acceptance.NamespaceID
+		}
+		if err := coordinator.service.waitFirstKeyActive(ctx, namespaceID, *result.Acceptance); err != nil {
+			return managementauth.IdentityExchangeResult{}, mapExchangeError(err)
+		}
+	}
 	exchange := managementauth.IdentityExchangeResult{Issued: result.Issued, Replayed: result.Replayed}
 	if result.Acceptance != nil {
 		exchange.Onboarding = &managementauth.InvitationOnboarding{

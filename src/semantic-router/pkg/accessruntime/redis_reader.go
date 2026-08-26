@@ -23,8 +23,12 @@ import (
 )
 
 type RedisProjectionReader struct {
-	client    redis.Cmdable
+	client    redisHashReader
 	keyPrefix string
+}
+
+type redisHashReader interface {
+	HGetAll(context.Context, string) *redis.MapStringStringCmd
 }
 
 type RedisProjectionReaderOptions struct {
@@ -49,33 +53,97 @@ func (r *RedisProjectionReader) LocateCredential(
 	kind accesscredential.Kind,
 	publicID string,
 ) (CredentialLocation, error) {
-	key, locateCredentialErr := quotaruntime.CredentialDirectoryKeyWithPrefix(r.keyPrefix, string(kind), publicID)
-	if locateCredentialErr != nil {
-		return CredentialLocation{}, fmt.Errorf("credential directory key: %w", locateCredentialErr)
+	_, values, namespaceID, partition, err := r.readCredentialDirectory(ctx, kind, publicID)
+	if err != nil {
+		return CredentialLocation{}, err
 	}
-	values, locateCredentialErr := r.client.HGetAll(ctx, key).Result()
-	if locateCredentialErr != nil {
-		return CredentialLocation{}, fmt.Errorf("%w: read credential directory", ErrRuntimeUnavailable)
+	accessGate, routingGate, err := r.readPublicationGates(ctx, namespaceID, partition)
+	if err != nil {
+		return CredentialLocation{}, err
+	}
+	return r.resolveCredentialLocation(values, kind, publicID, namespaceID, partition, accessGate, routingGate)
+}
+
+// LocateCredentialCoherent closes the directory-to-gate race for the
+// low-frequency Management publication barrier. The request hot path keeps
+// LocateCredential's single directory/gate snapshot and remains fail-closed.
+func (r *RedisProjectionReader) LocateCredentialCoherent(
+	ctx context.Context,
+	kind accesscredential.Kind,
+	publicID string,
+) (CredentialLocation, error) {
+	key, _, namespaceID, partition, err := r.readCredentialDirectory(ctx, kind, publicID)
+	if err != nil {
+		return CredentialLocation{}, err
+	}
+	accessGateBefore, routingGateBefore, err := r.readPublicationGates(ctx, namespaceID, partition)
+	if err != nil {
+		return CredentialLocation{}, err
+	}
+	values, err := r.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return CredentialLocation{}, fmt.Errorf("%w: reread credential directory", ErrRuntimeUnavailable)
 	}
 	if len(values) == 0 {
 		return CredentialLocation{}, ErrProjectionNotFound
 	}
-	namespaceID, partition, locateCredentialErr := directoryCoordinates(values)
-	if locateCredentialErr != nil {
-		return CredentialLocation{}, locateCredentialErr
+	stableNamespaceID, stablePartition, err := directoryCoordinates(values)
+	if err != nil {
+		return CredentialLocation{}, err
 	}
-	accessGate, routingGate, locateCredentialErr := r.readPublicationGates(ctx, namespaceID, partition)
-	if locateCredentialErr != nil {
-		return CredentialLocation{}, locateCredentialErr
+	if stableNamespaceID != namespaceID || stablePartition != partition {
+		return CredentialLocation{}, fmt.Errorf("%w: credential directory coordinates changed", ErrRuntimeCorrupt)
 	}
+	accessGate, routingGate, err := r.readPublicationGates(ctx, namespaceID, partition)
+	if err != nil {
+		return CredentialLocation{}, err
+	}
+	if accessGateBefore != accessGate || routingGateBefore != routingGate {
+		return CredentialLocation{}, ErrPublicationPending
+	}
+	return r.resolveCredentialLocation(values, kind, publicID, namespaceID, partition, accessGate, routingGate)
+}
+
+func (r *RedisProjectionReader) readCredentialDirectory(
+	ctx context.Context,
+	kind accesscredential.Kind,
+	publicID string,
+) (string, map[string]string, string, string, error) {
+	key, err := quotaruntime.CredentialDirectoryKeyWithPrefix(r.keyPrefix, string(kind), publicID)
+	if err != nil {
+		return "", nil, "", "", fmt.Errorf("credential directory key: %w", err)
+	}
+	values, err := r.client.HGetAll(ctx, key).Result()
+	if err != nil {
+		return "", nil, "", "", fmt.Errorf("%w: read credential directory", ErrRuntimeUnavailable)
+	}
+	if len(values) == 0 {
+		return "", nil, "", "", ErrProjectionNotFound
+	}
+	namespaceID, partition, err := directoryCoordinates(values)
+	if err != nil {
+		return "", nil, "", "", err
+	}
+	return key, values, namespaceID, partition, nil
+}
+
+func (r *RedisProjectionReader) resolveCredentialLocation(
+	values map[string]string,
+	kind accesscredential.Kind,
+	publicID string,
+	namespaceID string,
+	partition string,
+	accessGate accesspublisher.PublicationGate,
+	routingGate accesspublisher.PublicationGate,
+) (CredentialLocation, error) {
 	if accessGate.PublicationID != routingGate.PublicationID ||
 		accessGate.RuntimeEpoch != routingGate.RuntimeEpoch || accessGate.Revision != routingGate.Revision ||
 		routingGate.SnapshotDigest == "" || routingGate.Revision > math.MaxInt64 {
 		return CredentialLocation{}, fmt.Errorf("%w: publication gates disagree", ErrRuntimeCorrupt)
 	}
-	values, locateCredentialErr = selectActivePointer(values, accessGate.PublicationID, "credential directory")
-	if locateCredentialErr != nil {
-		return CredentialLocation{}, locateCredentialErr
+	values, err := selectActivePointer(values, accessGate.PublicationID, "credential directory")
+	if err != nil {
+		return CredentialLocation{}, err
 	}
 	required := []string{"publication_id", "state", "partition", "namespace_id", "kind", "public_id"}
 	for _, field := range required {
@@ -103,7 +171,7 @@ func (r *RedisProjectionReader) LocateCredential(
 	location.RuntimeEpoch = routingGate.RuntimeEpoch
 	// #nosec G115 -- the PostgreSQL BIGINT bound is checked above.
 	location.RoutingRevision = int64(routingGate.Revision)
-	location.RoutingSnapshotHash = routingGate.SnapshotDigest
+	location.RoutingDocumentDigest = routingGate.SnapshotDigest
 	return location, nil
 }
 
@@ -229,7 +297,8 @@ func (r *RedisProjectionReader) ReadActivePolicy(
 	return ActivePolicy{
 		KeyID: keyID, Revision: revision, Digest: digest,
 		PublicationID: location.PublicationID, RuntimeEpoch: location.RuntimeEpoch,
-		RoutingRevision: location.RoutingRevision, RoutingSnapshotHash: location.RoutingSnapshotHash,
+		RoutingRevision:       location.RoutingRevision,
+		RoutingDocumentDigest: location.RoutingDocumentDigest,
 	}, nil
 }
 
@@ -291,7 +360,7 @@ func (r *RedisProjectionReader) ReadAppliedPolicy(
 	location := CredentialLocation{
 		NamespaceID: namespaceID, QuotaPartition: partition,
 		PublicationID: accessGate.PublicationID, RuntimeEpoch: accessGate.RuntimeEpoch,
-		RoutingRevision: routingRevision, RoutingSnapshotHash: routingGate.SnapshotDigest,
+		RoutingRevision: routingRevision, RoutingDocumentDigest: routingGate.SnapshotDigest,
 	}
 	active, err := r.ReadActivePolicy(ctx, location, keyID)
 	if err != nil {
@@ -321,15 +390,51 @@ func (r *RedisProjectionReader) readPublicationGates(
 		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{},
 			fmt.Errorf("%w: invalid publication keyspace", ErrRuntimeCorrupt)
 	}
-	accessValues, err := r.client.HGetAll(ctx, keys.AccessGate()).Result()
+	accessValues, routingValues, err := r.readPublicationGateValues(ctx, keys)
 	if err != nil {
 		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{},
 			fmt.Errorf("%w: read publication gates", ErrRuntimeUnavailable)
 	}
-	routingValues, err := r.client.HGetAll(ctx, keys.RoutingGate()).Result()
+	accessGate, routingGate, parseErr := parsePublicationGatePair(accessValues, routingValues)
+	if parseErr == nil || errors.Is(parseErr, ErrPublicationPending) {
+		return accessGate, routingGate, parseErr
+	}
+	refreshedAccess, refreshedRouting, err := r.readPublicationGateValues(ctx, keys)
 	if err != nil {
 		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{},
 			fmt.Errorf("%w: read publication gates", ErrRuntimeUnavailable)
+	}
+	if !equalStringMaps(accessValues, refreshedAccess) || !equalStringMaps(routingValues, refreshedRouting) {
+		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{}, ErrPublicationPending
+	}
+	return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{}, parseErr
+}
+
+func (r *RedisProjectionReader) readPublicationGateValues(
+	ctx context.Context,
+	keys accesspublisher.Keyspace,
+) (map[string]string, map[string]string, error) {
+	accessValues, err := r.client.HGetAll(ctx, keys.AccessGate()).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	routingValues, err := r.client.HGetAll(ctx, keys.RoutingGate()).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+	return accessValues, routingValues, nil
+}
+
+func parsePublicationGatePair(
+	accessValues map[string]string,
+	routingValues map[string]string,
+) (accesspublisher.PublicationGate, accesspublisher.PublicationGate, error) {
+	if len(accessValues) == 0 && len(routingValues) == 0 {
+		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{}, ErrPublicationPending
+	}
+	if len(accessValues) == 0 || len(routingValues) == 0 {
+		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{},
+			fmt.Errorf("%w: publication gate pair is incomplete", ErrRuntimeCorrupt)
 	}
 	accessGate, err := accesspublisher.ParsePublicationGate(accessValues)
 	if err != nil {
@@ -341,7 +446,24 @@ func (r *RedisProjectionReader) readPublicationGates(
 		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{},
 			fmt.Errorf("%w: invalid routing publication gate", ErrRuntimeCorrupt)
 	}
+	if accessGate.PublicationID != routingGate.PublicationID ||
+		accessGate.RuntimeEpoch != routingGate.RuntimeEpoch || accessGate.Revision != routingGate.Revision {
+		return accesspublisher.PublicationGate{}, accesspublisher.PublicationGate{},
+			fmt.Errorf("%w: publication gate pair disagrees", ErrRuntimeCorrupt)
+	}
 	return accessGate, routingGate, nil
+}
+
+func equalStringMaps(left, right map[string]string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for key, value := range left {
+		if right[key] != value {
+			return false
+		}
+	}
+	return true
 }
 
 func directoryCoordinates(values map[string]string) (string, string, error) {
@@ -378,6 +500,9 @@ func selectActivePointer(
 ) (map[string]string, error) {
 	selected, state, err := accesspublisher.SelectPointer(values, publicationID)
 	if err != nil {
+		if pointerAwaitsPublication(values, publicationID) {
+			return nil, ErrPublicationPending
+		}
 		return nil, fmt.Errorf("%w: %s does not match the active publication", ErrRuntimeCorrupt, label)
 	}
 	if state == accesspublisher.PointerStateTombstone {
@@ -387,6 +512,19 @@ func selectActivePointer(
 		return nil, fmt.Errorf("%w: %s state is invalid", ErrRuntimeCorrupt, label)
 	}
 	return selected, nil
+}
+
+func pointerAwaitsPublication(values map[string]string, activePublicationID string) bool {
+	if strings.TrimSpace(values[accesspublisher.FieldPublicationID]) != "" {
+		return false
+	}
+	pendingPublicationID := strings.TrimSpace(values[accesspublisher.FieldPendingPublicationID])
+	if pendingPublicationID == "" || pendingPublicationID == activePublicationID {
+		return false
+	}
+	pendingState := accesspublisher.PointerState(values[accesspublisher.FieldPendingState])
+	return pendingState == accesspublisher.PointerStateActive ||
+		pendingState == accesspublisher.PointerStateTombstone
 }
 
 func parseProjectionMilliseconds(value string) (time.Time, error) {

@@ -241,6 +241,7 @@ func (r *OpenAIRouter) buildSelectionContext(
 	}
 
 	return &selection.SelectionContext{
+		AffinityKey:                selectionAffinityKey(reqCtx),
 		Query:                      query,
 		DecisionName:               decisionName,
 		RecipeName:                 recipeName,
@@ -257,6 +258,13 @@ func (r *OpenAIRouter) buildSelectionContext(
 		ConversationHistory:        conversationHistory,
 		CacheAffinityCtx:           r.buildCacheAffinityContext(reqCtx, modelRefs),
 	}
+}
+
+func selectionAffinityKey(reqCtx *RequestContext) string {
+	if reqCtx == nil {
+		return ""
+	}
+	return reqCtx.RequestID
 }
 
 func (r *OpenAIRouter) buildAgenticSessionContext(

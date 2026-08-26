@@ -120,10 +120,8 @@ access:delegation:<session-id> -> HMAC, session, principal, key/delegation epoch
 access:delegation-epoch:<key-id> -> current epoch
 access:provider-credential:<credential-id>:<version> -> provider, origin, wrapped secret, KEK, lifecycle
 access:provider-credential:active:<credential-id> -> status, revision, active/retiring versions
-management:session:<session-id> -> principal, issuer session, token/auth-source IDs, auth facts, expiry
-management:auth-source:<kind>:<source-id> -> principal, status, revision
-management:sessions-by-auth-source:<kind>:<source-id> -> active session IDs
-management:exchange-challenge:<challenge-id> -> issuer, nonce hash, state, expiry
+management:revocations:active -> optional applied revocation generation
+management:revocations:g:<generation> -> ready marker plus session/principal/source deny projection
 routing:snapshot:<namespace-id>:<revision> -> digest, compiled Models/Recipes/Entrypoints
 routing:active:<namespace-id> -> active revision/digest
 routing:fleet-replicas:v1 -> bounded live Router process leases
@@ -146,6 +144,13 @@ usage-stream:{partition}
 access:applied-revision:<namespace-id>
 ```
 
+Management sessions, issuer evidence, exchange challenges, and logout tombstones stay
+authoritative in PostgreSQL. When a runtime store is configured, only the rebuildable
+Management revocation-barrier generation is projected to Valkey for globally
+acknowledged deny checks; a Management-store-only deployment performs the same checks
+against PostgreSQL. Neither form moves browser sessions into the inference-access
+keyspace or makes Valkey a Management identity authority.
+
 A 2-4 KiB compiled policy keeps 10,000 keys in tens of MiB before store overhead; the
 hot path never joins PostgreSQL. Access runtime reads Valkey for every credential verification
 and has no positive local authorization cache. A later revisioned L1 cache may use at
@@ -161,6 +166,17 @@ closing the join race without a cross-slot transaction. A process that joins aft
 activation remains unready for that namespace until it has loaded the active generation.
 Fleet membership is liveness only; it carries no tenant, credential, grant, or routing
 authority and never appears in user-authored configuration.
+
+A secret-bearing Management mutation has one additional delivery barrier. Before the
+one-time API key or delegated credential leaves Management, one partition-local
+operation compares the exact publication ID, runtime epoch, routing revision, and
+routing digest observed by the credential reader with the coupled active gates. Using
+store time, that same operation expires dead namespace leases and verifies that every
+remaining live replica registered that exact generation. Membership change retries the
+observation; a corrupt gate fails closed; an empty fleet is never success. A replica
+that exits between candidate acknowledgement and local activation stops blocking only
+after its lease expires, while a joining replica cannot register or serve a different
+generation under the active gate.
 
 `access:active:<key-id>` is the sole active policy pointer. A pending pointer is ignored
 until its publication gate activates; CAS revisions prevent stale projectors. Pending

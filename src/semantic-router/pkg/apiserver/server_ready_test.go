@@ -3,15 +3,23 @@
 package apiserver
 
 import (
+	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/runtimecapabilities"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
+
+type readinessStub struct{ err error }
+
+func (stub *readinessStub) Ready(context.Context) error { return stub.err }
 
 func TestHandleReadyReturns503WhenStatusFileMissing(t *testing.T) {
 	tmpDir := t.TempDir()
@@ -55,6 +63,41 @@ func TestHandleReadyReturns200WhenStartupReady(t *testing.T) {
 
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200 when startup ready, got %d", rr.Code)
+	}
+}
+
+func TestHandleReadyFailsClosedUntilDurableRuntimeIsReady(t *testing.T) {
+	readiness := &readinessStub{err: errors.New("active routing generation is unavailable")}
+	apiServer := &ClassificationAPIServer{
+		capabilities:       runtimecapabilities.RuntimeCapabilities{DurableRouting: true},
+		runtimeReadiness:   readiness,
+		startupStateLoader: func() *startupstatus.State { return &startupstatus.State{Phase: "ready", Ready: true} },
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/ready", nil)
+	response := httptest.NewRecorder()
+	apiServer.handleReady(response, request)
+	if response.Code != http.StatusServiceUnavailable || strings.Contains(response.Body.String(), readiness.err.Error()) {
+		t.Fatalf("unready response = %d %s", response.Code, response.Body.String())
+	}
+
+	readiness.err = nil
+	response = httptest.NewRecorder()
+	apiServer.handleReady(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("ready response = %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestHandleReadyFailsClosedWithoutDurableRuntimeReadiness(t *testing.T) {
+	apiServer := &ClassificationAPIServer{
+		capabilities:       runtimecapabilities.RuntimeCapabilities{DurableRouting: true},
+		startupStateLoader: func() *startupstatus.State { return &startupstatus.State{Phase: "ready", Ready: true} },
+	}
+	response := httptest.NewRecorder()
+	apiServer.handleReady(response, httptest.NewRequest(http.MethodGet, "/ready", nil))
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("missing runtime readiness response = %d %s", response.Code, response.Body.String())
 	}
 }
 

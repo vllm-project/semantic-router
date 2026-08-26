@@ -19,6 +19,7 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesspublisher"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessruntime"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendegress"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/backendinvoker"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/outcomefeedback"
@@ -33,6 +34,55 @@ func durableRuntimeCapabilities() runtimecapabilities.RuntimeCapabilities {
 		DurableRouting:   true,
 		ManagementAPI:    true,
 		DistributedState: true,
+	}
+}
+
+func TestManagementIssuerEgressDoesNotWidenProviderBoundary(t *testing.T) {
+	base, err := backendegress.Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: models.example, ports: [443]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer, err := backendegress.Parse([]byte(`version: v1
+schemes: [https]
+hosts:
+  - {host: dashboard.internal, ports: [8743], allow_cidrs: [172.24.0.0/16]}
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var captured ManagementDependencies
+	err = composeManagementRuntime(
+		context.Background(),
+		&Runtime{},
+		nil,
+		runtimecapabilities.RuntimeCapabilities{ManagementAPI: true},
+		Options{
+			ManagementIssuerEgressPolicy: &issuer,
+			ManagementFactory: ManagementFactoryFunc(func(
+				_ context.Context,
+				dependencies ManagementDependencies,
+			) (ManagementAPI, error) {
+				captured = dependencies
+				return providerBootstrapManagementStub{}, nil
+			}),
+		},
+		&durableFoundation{egressPolicy: base},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := captured.EgressPolicy.AuthorizeOrigin("https://dashboard.internal:8743"); err == nil {
+		t.Fatal("system issuer widened provider egress")
+	}
+	if _, err := captured.IssuerEgressPolicy.AuthorizeOrigin("https://dashboard.internal:8743"); err != nil {
+		t.Fatalf("issuer egress is unavailable: %v", err)
+	}
+	if _, err := captured.EgressPolicy.AuthorizeOrigin("https://models.example"); err != nil {
+		t.Fatalf("provider egress was lost: %v", err)
 	}
 }
 

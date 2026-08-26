@@ -113,17 +113,44 @@ def test_envoy_uses_only_the_stable_backend_dispatch_hop(tmp_path, monkeypatch):
         "address": "router.internal",
         "port_value": 8187,
     }
+    assert dispatch["health_checks"] == [
+        {
+            "timeout": "2s",
+            "interval": "2s",
+            "no_traffic_interval": "2s",
+            "unhealthy_threshold": 1,
+            "healthy_threshold": 1,
+            "http_health_check": {"path": "/ready"},
+        }
+    ]
 
     hcm = _http_connection_manager(rendered)
     assert hcm["route_config"]["virtual_hosts"][0]["routes"] == [
         {
             "match": {"prefix": "/"},
             "route": {"cluster": "backend_dispatch_cluster", "timeout": "0s"},
+            "typed_per_filter_config": {
+                "envoy.filters.http.cors": {
+                    "@type": (
+                        "type.googleapis.com/"
+                        "envoy.extensions.filters.http.cors.v3.CorsPolicy"
+                    ),
+                    "allow_origin_string_match": [{"prefix": ""}],
+                    "allow_methods": "GET, POST, OPTIONS",
+                    "allow_headers": (
+                        "authorization, content-type, accept, "
+                        "x-vsr-debug, x-session-id"
+                    ),
+                    "expose_headers": "*",
+                    "max_age": "86400",
+                }
+            },
         }
     ]
     filters = hcm["http_filters"]
     assert [item["name"] for item in filters] == [
         "envoy.filters.http.lua",
+        "envoy.filters.http.cors",
         "envoy.filters.http.ext_proc",
         "envoy.filters.http.router",
     ]
@@ -131,7 +158,7 @@ def test_envoy_uses_only_the_stable_backend_dispatch_hop(tmp_path, monkeypatch):
     assert set(re.findall(r'"(x-[a-z0-9-]+)"', sanitizer)) == set(
         INTERNAL_REQUEST_HEADERS
     )
-    assert filters[1]["typed_config"]["failure_mode_allow"] is False
+    assert filters[2]["typed_config"]["failure_mode_allow"] is False
     assert "retry_policy" not in output_path.read_text(encoding="utf-8")
 
 
@@ -200,3 +227,5 @@ def test_static_local_envoy_uses_the_same_dispatch_contract():
     assert {
         cluster["name"] for cluster in rendered["static_resources"]["clusters"]
     } == {"extproc_service", "backend_dispatch_cluster"}
+    dispatch = _cluster(rendered, "backend_dispatch_cluster")
+    assert dispatch["health_checks"][0]["http_health_check"] == {"path": "/ready"}

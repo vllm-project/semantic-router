@@ -270,7 +270,8 @@ func TestRedisPublicationStagesAcknowledgesAndActivatesAtomically(t *testing.T) 
 		t.Fatal("restriction barrier remained after the applied watermark")
 	}
 	readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr := store.Readiness(ctx, second.NamespaceID, second.QuotaPartition)
-	if testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr != nil || !readiness.Ready || readiness.AppliedRevision != 2 {
+	if testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr != nil || !readiness.Ready ||
+		readiness.AppliedRevision != 2 || readiness.RoutingDigest != second.Routing.Digest {
 		t.Fatalf("second readiness = %+v, %v", readiness, testRedisPublicationStagesAcknowledgesAndActivatesAtomicallyErr)
 	}
 	assertRestrictiveDiagnostics(t, ctx, store, second)
@@ -370,6 +371,22 @@ func TestRedisActivationClosesReplicaJoinRaceAndExpiresLeases(t *testing.T) {
 	}
 }
 
+func TestRedisActiveReplicaReadinessFailsClosedWithoutADataPlane(t *testing.T) {
+	store, _, _, ctx := redisIntegrationStore(t)
+	publication := mustPublication(t, 1, "100")
+	publishWithoutReplicas(t, ctx, store, publication)
+
+	status, err := store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID, Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	)
+	if !errors.Is(err, ErrAcknowledgements) || status.Complete() {
+		t.Fatalf("empty active replica readiness = %+v, %v", status, err)
+	}
+}
+
 func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t *testing.T) {
 	store, client, prefix, ctx := redisIntegrationStore(t)
 	store.requireFleetReplicas = true
@@ -456,6 +473,77 @@ func TestRedisFleetRequirementPinsFirstNamespaceUntilEveryReplicaAcknowledges(t 
 	}
 	if err := store.Activate(ctx, plan); err != nil {
 		t.Fatal(err)
+	}
+	activated, statusErr := store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID, Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	)
+	if statusErr != nil || activated.Complete() ||
+		!equalReplicaIDs(activated.Missing, []string{"router-a", "router-b"}) {
+		t.Fatalf("candidate-only active replica status = %+v, %v", activated, statusErr)
+	}
+	if _, err := store.RegisterReplica(ctx, publication.NamespaceID, publication.QuotaPartition, ReplicaRegistration{
+		ReplicaID: "router-a", RuntimeEpoch: publication.RuntimeEpoch,
+		AccessPublication: publication.ID, RoutingPublication: publication.ID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	activated, statusErr = store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID, Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	)
+	if statusErr != nil || activated.Complete() || !equalReplicaIDs(activated.Missing, []string{"router-b"}) {
+		t.Fatalf("single activated replica status = %+v, %v", activated, statusErr)
+	}
+	// A candidate participant that exits before installing the active
+	// generation must stop blocking delivery once its namespace lease expires.
+	if err := client.ZAdd(ctx, keys.ReplicaIndex(), redis.Z{Score: 0, Member: "router-b"}).Err(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID, Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	); !errors.Is(err, ErrPublicationChanged) {
+		t.Fatalf("expired membership transition = %v, want publication changed retry", err)
+	}
+	activated, statusErr = store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID, Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	)
+	if statusErr != nil || !activated.Complete() || !equalReplicaIDs(activated.Required, []string{"router-a"}) {
+		t.Fatalf("readiness after expired replica retirement = %+v, %v", activated, statusErr)
+	}
+	if _, err := store.RegisterReplica(ctx, publication.NamespaceID, publication.QuotaPartition, ReplicaRegistration{
+		ReplicaID: "router-b", RuntimeEpoch: publication.RuntimeEpoch,
+		AccessPublication: publication.ID, RoutingPublication: publication.ID,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	activated, statusErr = store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID, Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	)
+	if statusErr != nil || !activated.Complete() ||
+		!equalReplicaIDs(activated.Required, []string{"router-a", "router-b"}) {
+		t.Fatalf("all activated replica status = %+v, %v", activated, statusErr)
+	}
+	if _, err := store.ActiveReplicaAcknowledgements(
+		ctx, publication.NamespaceID, publication.QuotaPartition, ActiveGeneration{
+			PublicationID: publication.ID + "-stale", Revision: publication.DesiredRevision,
+			RuntimeEpoch: publication.RuntimeEpoch, RoutingSnapshotDigest: publication.Routing.Digest,
+		},
+	); !errors.Is(err, ErrPublicationChanged) {
+		t.Fatalf("stale expected generation = %v, want publication changed", err)
 	}
 	diagnostics, diagnosticsErr := store.Diagnostics(ctx, publication.NamespaceID, publication.QuotaPartition)
 	if diagnosticsErr != nil {

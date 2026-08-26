@@ -122,7 +122,16 @@ func barrierAcknowledgementsRequired(encodedPlan string) (bool, error) {
 }
 
 func readinessDiagnostics(value Readiness) ReadinessDiagnostics {
-	return ReadinessDiagnostics(value)
+	return ReadinessDiagnostics{
+		Ready:           value.Ready,
+		Reason:          value.Reason,
+		RuntimeEpoch:    value.RuntimeEpoch,
+		DesiredRevision: value.DesiredRevision,
+		AppliedRevision: value.AppliedRevision,
+		AccessGate:      value.AccessGate,
+		RoutingGate:     value.RoutingGate,
+		ProjectorLag:    value.ProjectorLag,
+	}
 }
 
 func sortedUnique(values []string) []string {

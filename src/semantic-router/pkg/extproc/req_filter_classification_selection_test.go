@@ -378,6 +378,22 @@ func TestBuildSelectionContextUsesPinnedSessionIDAndToolLoopFacts(t *testing.T) 
 	}
 }
 
+func TestBuildSelectionContextUsesImmutableRequestAffinity(t *testing.T) {
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	selCtx := router.buildSelectionContext(
+		[]config.ModelRef{{Model: "model-a", Weight: 1}, {Model: "model-b", Weight: 1}},
+		"balanced",
+		"query",
+		nil,
+		"",
+		nil,
+		&RequestContext{RequestID: "request-42"},
+	)
+	if selCtx.AffinityKey != "request-42" {
+		t.Fatalf("affinity key = %q, want immutable request ID", selCtx.AffinityKey)
+	}
+}
+
 func TestBuildSelectionContextMarksUserAfterToolResultAsToolLoop(t *testing.T) {
 	router := &OpenAIRouter{Config: &config.RouterConfig{}}
 	reqCtx := &RequestContext{

@@ -18,11 +18,11 @@ func routingCatalogDTO(value accessmanagement.RoutingCatalog) managementapi.Rout
 	for _, model := range value.Models {
 		result.Models = append(result.Models, managementapi.RoutingCatalogModel{
 			ID: model.ID, Revision: model.Revision, Name: model.Name,
-			Aliases: append([]string(nil), model.Aliases...), ParamSize: model.ParamSize,
+			Aliases: append([]string{}, model.Aliases...), ParamSize: model.ParamSize,
 			ContextWindowSize: model.ContextWindowSize, Description: model.Description,
-			Capabilities: append([]string(nil), model.Capabilities...),
-			Reasoning:    routingReasoningDTO(model.Reasoning), LoRAs: append([]string(nil), model.LoRAs...),
-			QualityScore: model.QualityScore, Modality: model.Modality, Tags: append([]string(nil), model.Tags...),
+			Capabilities: append([]string{}, model.Capabilities...),
+			Reasoning:    routingReasoningDTO(model.Reasoning), LoRAs: append([]string{}, model.LoRAs...),
+			QualityScore: model.QualityScore, Modality: model.Modality, Tags: append([]string{}, model.Tags...),
 			Pricing: managementapi.RoutingPricing(model.Pricing),
 		})
 	}
@@ -50,7 +50,7 @@ func routingCatalogDTO(value accessmanagement.RoutingCatalog) managementapi.Rout
 		}
 		result.Entrypoints = append(result.Entrypoints, managementapi.RoutingCatalogEntrypoint{
 			ID: entrypoint.ID, Revision: entrypoint.Revision, Name: entrypoint.Name,
-			Aliases: append([]string(nil), entrypoint.Aliases...), Rules: routingEntrypointRulesDTO(rules),
+			Aliases: append([]string{}, entrypoint.Aliases...), Rules: routingEntrypointRulesDTO(rules),
 		})
 	}
 	return result

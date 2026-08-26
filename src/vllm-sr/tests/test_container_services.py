@@ -1,3 +1,4 @@
+import json
 import subprocess
 
 from cli import container_mounts, container_services
@@ -77,6 +78,46 @@ def test_container_create_network_accepts_exact_existing_name(monkeypatch):
 
     assert container_services.container_create_network("vllm-sr-network")[0] == 0
     assert len(calls) == 1
+
+
+def test_container_network_subnets_supports_docker_and_podman_shapes(monkeypatch):
+    payload = [
+        {
+            "IPAM": {"Config": [{"Subnet": "172.24.0.0/16"}]},
+            "subnets": [
+                {"subnet": "fd42:24::/64"},
+                {"subnet": "172.24.0.0/16"},
+            ],
+        }
+    ]
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout=json.dumps(payload), stderr=""
+        ),
+    )
+
+    assert container_services.container_network_subnets(
+        "vllm-sr-network", runtime="podman"
+    ) == (0, ["172.24.0.0/16", "fd42:24::/64"], "")
+
+
+def test_container_network_subnets_fails_closed_on_invalid_inspection(monkeypatch):
+    monkeypatch.setattr(
+        container_services.subprocess,
+        "run",
+        lambda command, **_kwargs: subprocess.CompletedProcess(
+            command, 0, stdout="{}", stderr=""
+        ),
+    )
+
+    return_code, subnets, error = container_services.container_network_subnets(
+        "vllm-sr-network", runtime="docker"
+    )
+    assert return_code != 0
+    assert subnets == []
+    assert "one document" in error
 
 
 def _storage_start_environment(monkeypatch, commands, *, status="not found"):

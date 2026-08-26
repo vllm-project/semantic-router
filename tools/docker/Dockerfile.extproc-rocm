@@ -13,7 +13,10 @@
 # ============================================================================
 # Stage 1: Build candle-binding Rust library (x86_64, CPU-only)
 # ============================================================================
-FROM rust:1.90 AS candle-builder
+# Keep build artifacts compatible with the Ubuntu 22.04 ROCm runtime below.
+# Floating Debian tags can advance glibc beyond the runtime image and produce
+# binaries that build successfully but cannot start on deployment.
+FROM rust:1.90-bullseye AS candle-builder
 
 RUN apt-get update && apt-get install -y \
     build-essential pkg-config lld clang libssl-dev \
@@ -45,7 +48,7 @@ RUN cd candle-binding && \
 # Uses rocm-dynamic feature (dlopen at runtime, no link-time ORT dependency).
 # ort 2.0.0-rc.10 targets ORT 1.22, matching onnxruntime-rocm on PyPI.
 # ============================================================================
-FROM rust:1.90 AS onnx-rocm-builder
+FROM rust:1.90-bullseye AS onnx-rocm-builder
 
 RUN apt-get update && apt-get install -y \
     build-essential pkg-config lld clang libssl-dev \
@@ -78,7 +81,7 @@ RUN cd onnx-binding && \
 # ============================================================================
 # Stage 3: Build ml-binding Rust library
 # ============================================================================
-FROM rust:1.90 AS ml-builder
+FROM rust:1.90-bullseye AS ml-builder
 
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
@@ -98,7 +101,7 @@ RUN cd ml-binding && \
 # ============================================================================
 # Stage 4: Build nlp-binding Rust library
 # ============================================================================
-FROM rust:1.90 AS nlp-builder
+FROM rust:1.90-bullseye AS nlp-builder
 
 ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
 
@@ -140,9 +143,19 @@ RUN cmake -B build -G Ninja \
 # ============================================================================
 # Stage 6: Build Go application (both candle and onnx binaries)
 # ============================================================================
-FROM golang:1.25 AS go-builder
+FROM golang:1.25.0-bookworm AS go-toolchain
 
-RUN apt-get update && apt-get install -y libssl-dev file && rm -rf /var/lib/apt/lists/*
+# Go no longer publishes a 1.25 Bullseye image. Copy the pinned upstream
+# toolchain into Bullseye so cgo links against a libc baseline supported by the
+# Ubuntu 22.04 ROCm runtime instead of inheriting the builder distribution ABI.
+FROM debian:bullseye-slim AS go-builder
+
+COPY --from=go-toolchain /usr/local/go /usr/local/go
+ENV PATH=/usr/local/go/bin:${PATH}
+
+RUN apt-get update && apt-get install -y \
+    build-essential ca-certificates file git libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -237,8 +250,8 @@ COPY onnx-binding/ort-ck-flash-attn/prebuilt/libort_ck_flash_attn.so* /app/lib/
 COPY config/config.yaml /app/config/
 COPY config/backend-egress-policy.yaml /app/config/backend-egress-policy.yaml
 COPY config/knowledge_bases/ /app/config/knowledge_bases/
-COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/config/recipes/built-in/latest/mom-v1/config.yaml
-COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/config/recipes/built-in/latest/mom-v1/metadata.yaml
+COPY config/recipes/built-in/latest/mom-v1/config.yaml /app/recipes/built-in/latest/mom-v1/config.yaml
+COPY config/recipes/built-in/latest/mom-v1/metadata.yaml /app/recipes/built-in/latest/mom-v1/metadata.yaml
 COPY tools/docker/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
@@ -247,7 +260,7 @@ ENV ORT_DYLIB_PATH=/usr/local/lib/python3.10/dist-packages/onnxruntime/capi/libo
     LD_LIBRARY_PATH=/app/lib:/opt/rocm/lib:/usr/local/lib/python3.10/dist-packages/onnxruntime/capi \
     ORT_CK_FLASH_ATTN_LIB=/app/lib/libort_ck_flash_attn.so \
     AI_BINDING=onnx
-ENV VLLM_SR_CONFIG_BASE_DIR=/app/config
+ENV VLLM_SR_CONFIG_BASE_DIR=/app
 
 EXPOSE 50051
 

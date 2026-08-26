@@ -265,6 +265,7 @@ type RecipeInput struct {
 type Entrypoint struct {
 	ResourceIdentity
 	Current            routingsnapshot.Entrypoint
+	RecipeIDs          []string
 	RuleCount          int
 	AssignedModelCount int
 }

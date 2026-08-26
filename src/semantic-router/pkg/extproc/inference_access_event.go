@@ -217,8 +217,15 @@ func terminalUsageDispatch(
 	}
 	decisionID, decisionName := "", ""
 	if request != nil && request.VSRSelectedDecision != nil {
-		decisionID = canonicalOptionalUUID(request.VSRSelectedDecision.ID)
+		decisionID, err = durableResourceID("terminal decision", request.VSRSelectedDecision.ID)
+		if err != nil {
+			return usageledger.Dispatch{}, err
+		}
 		decisionName = request.VSRSelectedDecision.Name
+	}
+	modelID, err := durableResourceID("terminal Model", dispatch.modelID)
+	if err != nil {
+		return usageledger.Dispatch{}, err
 	}
 	item := usageledger.Dispatch{
 		DispatchID:       dispatch.id,
@@ -227,7 +234,7 @@ func terminalUsageDispatch(
 		DecisionID:       decisionID,
 		DecisionName:     decisionName,
 		DecisionTier:     decisionTier(request),
-		ModelID:          canonicalModelIdentity(dispatch.modelID),
+		ModelID:          modelID,
 		ModelName:        dispatch.model,
 		ModelRevision:    dispatch.modelRevision,
 		PricingRevision:  dispatch.modelRevision,
@@ -296,17 +303,29 @@ func terminalRoutingSnapshot(request *RequestContext, state *inferenceRequestAcc
 	accessRevision := int64(state.admission.Tenant.PolicyRevision)
 	result := usageledger.RoutingSnapshot{AccessRevision: accessRevision}
 	if state.entrypoint != nil {
-		result.EntrypointID = canonicalOptionalUUID(state.entrypoint.ID)
+		entrypointID, err := durableResourceID("terminal entrypoint", state.entrypoint.ID)
+		if err != nil {
+			return usageledger.RoutingSnapshot{}, err
+		}
+		result.EntrypointID = entrypointID
 		result.EntrypointName = state.entrypoint.Name
 		result.RoutingRevision = state.entrypoint.Revision
 	}
 	if state.rule != nil {
-		result.EntrypointRuleID = canonicalOptionalUUID(state.rule.ID)
+		ruleID, err := durableResourceID("terminal entrypoint rule", state.rule.ID)
+		if err != nil {
+			return usageledger.RoutingSnapshot{}, err
+		}
+		result.EntrypointRuleID = ruleID
 		result.EntrypointRuleName = state.rule.Name
 	}
 	if request != nil {
 		if recipe := request.Routing.SelectedRecipe(); recipe != nil {
-			result.RecipeID = canonicalOptionalUUID(recipe.ID)
+			recipeID, err := durableResourceID("terminal recipe", recipe.ID)
+			if err != nil {
+				return usageledger.RoutingSnapshot{}, err
+			}
+			result.RecipeID = recipeID
 			result.RecipeName = string(recipe.Name)
 			result.RecipeRevision = recipe.Revision
 		}
@@ -425,21 +444,6 @@ func canonicalOptionalUUID(value string) string {
 		return ""
 	}
 	return parsed.String()
-}
-
-func canonicalModelIdentity(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" || len(value) > 256 {
-		return ""
-	}
-	for index, character := range []byte(value) {
-		if character >= 'A' && character <= 'Z' || character >= 'a' && character <= 'z' ||
-			character >= '0' && character <= '9' || (index > 0 && strings.ContainsRune("._:/-", rune(character))) {
-			continue
-		}
-		return ""
-	}
-	return value
 }
 
 func canonicalTerminalStatus(status int) int {

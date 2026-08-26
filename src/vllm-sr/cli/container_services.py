@@ -172,6 +172,47 @@ def container_create_network(network_name):
         return (exc.returncode, exc.stdout, exc.stderr)
 
 
+def container_network_subnets(network_name, *, runtime=None):
+    """Return the IPAM subnets assigned to one exact container network.
+
+    Docker exposes them through ``IPAM.Config`` while rootless Podman exposes
+    the same information through ``subnets``.  Keep this adapter at the
+    container-runtime seam so higher-level startup code never parses runtime
+    implementation details itself.
+    """
+
+    runtime = runtime or get_container_runtime()
+    command = [runtime, "network", "inspect", network_name]
+    try:
+        result = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        return (exc.returncode, [], exc.stderr)
+    try:
+        documents = json.loads(result.stdout)
+        if not isinstance(documents, list) or len(documents) != 1:
+            raise ValueError("network inspect must return one document")
+        document = documents[0]
+        if not isinstance(document, dict):
+            raise ValueError("network inspect document must be an object")
+        subnets = []
+        ipam = document.get("IPAM")
+        if isinstance(ipam, dict):
+            for entry in ipam.get("Config") or []:
+                if isinstance(entry, dict) and isinstance(entry.get("Subnet"), str):
+                    subnets.append(entry["Subnet"])
+        for entry in document.get("subnets") or []:
+            if isinstance(entry, dict) and isinstance(entry.get("subnet"), str):
+                subnets.append(entry["subnet"])
+    except (json.JSONDecodeError, TypeError, ValueError) as exc:
+        return (1, [], f"invalid network inspection response: {exc}")
+    return (0, list(dict.fromkeys(subnets)), "")
+
+
 def container_remove_network(network_name):
     """Remove a Docker network."""
     runtime = get_container_runtime()

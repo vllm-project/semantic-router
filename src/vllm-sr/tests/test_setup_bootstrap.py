@@ -88,6 +88,9 @@ def test_dashboard_bootstrap_authority_remains_isolated_after_consumption(tmp_pa
     token.unlink()
     environment = local_dashboard_environment(tmp_path, layout)
 
+    assert environment["DASHBOARD_ISSUER"] == (
+        f"https://{layout.dashboard_container_name}:8743"
+    )
     assert environment["DASHBOARD_ROUTER_BOOTSTRAP_TOKEN_FILE"] == str(token)
     assert (
         environment["DASHBOARD_ISSUER_TLS_KEY_FILE"]

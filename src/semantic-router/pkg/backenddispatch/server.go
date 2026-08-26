@@ -22,6 +22,7 @@ type ServerOptions struct {
 	BindAddress       string
 	Port              int
 	Handler           http.Handler
+	Readiness         func(context.Context) error
 	ReadHeaderTimeout time.Duration
 	IdleTimeout       time.Duration
 	ShutdownTimeout   time.Duration
@@ -52,6 +53,9 @@ func NewServer(options ServerOptions) (*Server, error) {
 	}
 	if isNil(options.Handler) {
 		return nil, fmt.Errorf("backend dispatch handler is required")
+	}
+	if options.Readiness == nil {
+		return nil, fmt.Errorf("backend dispatch readiness is required")
 	}
 	if options.ReadHeaderTimeout == 0 {
 		options.ReadHeaderTimeout = defaultReadHeaderTimeout
@@ -94,7 +98,7 @@ func (server *Server) Start(ctx context.Context) error {
 	server.listener = listener
 	server.address = listener.Addr().String()
 	server.server = &http.Server{
-		Handler:           server.options.Handler,
+		Handler:           server,
 		ReadHeaderTimeout: server.options.ReadHeaderTimeout,
 		IdleTimeout:       server.options.IdleTimeout,
 		MaxHeaderBytes:    64 << 10,
@@ -103,6 +107,33 @@ func (server *Server) Start(ctx context.Context) error {
 	server.started = true
 	go server.serve(listener)
 	return nil
+}
+
+// ServeHTTP reserves one private readiness route for data-plane membership.
+// Every other request remains behind the capability-verifying dispatch
+// handler. Readiness errors are deliberately redacted from the wire.
+func (server *Server) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	if request.URL.Path != "/ready" {
+		server.options.Handler.ServeHTTP(writer, request)
+		return
+	}
+	writer.Header().Set("Content-Type", "application/json")
+	if request.Method != http.MethodGet && request.Method != http.MethodHead {
+		writer.Header().Set("Allow", "GET, HEAD")
+		writer.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	if err := server.options.Readiness(request.Context()); err != nil {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		if request.Method != http.MethodHead {
+			_, _ = writer.Write([]byte(`{"ready":false}`))
+		}
+		return
+	}
+	writer.WriteHeader(http.StatusOK)
+	if request.Method != http.MethodHead {
+		_, _ = writer.Write([]byte(`{"ready":true}`))
+	}
 }
 
 func (server *Server) serve(listener net.Listener) {
