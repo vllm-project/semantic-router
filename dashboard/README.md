@@ -143,6 +143,11 @@ differs from the backend's `Host`, as behind a reverse proxy or the Vite dev
 proxy (`http://localhost:3001`). Unset, the origin check is advisory and the
 CSRF token is the guarantee. `Authorization: Bearer` requests are exempt.
 
+The same list governs the ClawRoom WebSocket handshake. CORS does not apply to
+handshakes, so the origin check is the only cross-origin control there; a
+split-origin frontend that is not listed can authenticate and write but cannot
+open the room socket.
+
 Read-only mode and the two writable-surface flags are independent. A read-only
 ConfigMap, GitOps-owned config, or read-only Recipe store should be reflected in
 the matching flag so the UI does not offer operations the runtime cannot

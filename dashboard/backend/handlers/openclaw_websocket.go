@@ -69,12 +69,18 @@ type WSClient struct {
 	closeMu  sync.Mutex
 }
 
-var wsUpgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	// CORS does not cover handshakes, so this is the only cross-origin control. Every
-	// dashboard client builds its URL from window.location.host. See #2465.
-	CheckOrigin: auth.OriginChecker(nil),
+// wsUpgrader builds the upgrader for one handshake. It is a method rather than a package
+// var so the configured allowlist reaches CheckOrigin: a same-origin dashboard needs no
+// allowlist, but a split-origin frontend allowed by DASHBOARD_ALLOWED_ORIGINS would
+// otherwise be able to POST and still have its handshake rejected.
+func (h *OpenClawHandler) wsUpgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		// CORS does not cover handshakes, so this is the only cross-origin control. Every
+		// dashboard client builds its URL from window.location.host. See #2465.
+		CheckOrigin: auth.OriginChecker(h.allowedOrigins),
+	}
 }
 
 func wsOutboundFromLastRoomEvent(roomID string, event clawRoomStreamEvent) (WSOutboundMessage, bool) {
@@ -125,7 +131,8 @@ func (h *OpenClawHandler) handleRoomWebSocket(w http.ResponseWriter, r *http.Req
 	}
 
 	// Upgrade to WebSocket
-	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	upgrader := h.wsUpgrader()
+	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("openclaw: WebSocket upgrade failed: %v", err)
 		return
