@@ -5,7 +5,7 @@
 ##@ Linter
 
 # codespell is installed into .venv-agent by tools/make/agent.mk (agent-venv-install).
-AGENT_VENV ?= $(CURDIR)/.venv-agent
+AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_CODESPELL ?= $(AGENT_VENV)/bin/codespell
 
 markdown-lint: agent-markdown-bootstrap ## Lint all markdown files in the project
