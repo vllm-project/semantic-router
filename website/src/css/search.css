@@ -569,6 +569,15 @@ html[data-theme='dark'],
   font-size: var(--text-xs);
 }
 
+/*
+ * Moving within the list on the left, leaving it on the right — the split the
+ * Claude Code and LangChain palettes use. Escape is the one hint that is not
+ * about the results, so it does not sit in their run.
+ */
+.site-search-modal__footer > :last-child {
+  margin-left: auto;
+}
+
 .site-search-modal__footer kbd {
   margin-right: var(--space-1);
   padding: 1px 5px;
@@ -587,9 +596,17 @@ html[data-theme='dark'],
     max-height: 80vh;
   }
 
-  /* Two of the three hints are unreachable without a keyboard. */
-  .site-search-modal__footer > :not(:first-child) {
+  /*
+   * Only the way out earns the width here. Dropping the two navigation hints
+   * rather than the last one also means the survivor is the one that still
+   * makes sense on a touch screen.
+   */
+  .site-search-modal__footer > :not(:last-child) {
     display: none;
+  }
+
+  .site-search-modal__footer > :last-child {
+    margin-left: 0;
   }
 }
 /* ------------------------------------------------------------------ *
