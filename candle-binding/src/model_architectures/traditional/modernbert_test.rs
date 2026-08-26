@@ -1857,3 +1857,166 @@ fn test_candle_short_prompt_not_truncated() {
         capped_count
     );
 }
+
+/// The confidence of a merged entity must be the arithmetic mean of the
+/// confidences of every token in it.
+///
+/// Regression test. The previous implementation used
+/// `(entity.confidence + confidence) / 2.0`, a running pairwise fold that
+/// weights the last subword 1/2 and the leading `B-` token 1/2^(n-1). For the
+/// four tokens below that fold returns 0.8925 while the mean is 0.8050, which
+/// straddles a 0.85 PII threshold.
+#[rstest]
+fn test_modernbert_bio_entity_confidence_is_token_mean() {
+    let text = "john.doe@example.com";
+    let confidences = [0.98_f32, 0.30, 0.95, 0.99];
+    let tokens = [
+        BioToken {
+            label: "B-EMAIL_ADDRESS",
+            start: 0,
+            end: 4,
+            confidence: confidences[0],
+        },
+        BioToken {
+            label: "I-EMAIL_ADDRESS",
+            start: 4,
+            end: 8,
+            confidence: confidences[1],
+        },
+        BioToken {
+            label: "I-EMAIL_ADDRESS",
+            start: 8,
+            end: 9,
+            confidence: confidences[2],
+        },
+        BioToken {
+            label: "I-EMAIL_ADDRESS",
+            start: 9,
+            end: 20,
+            confidence: confidences[3],
+        },
+    ];
+
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 1);
+
+    let entity = &entities[0];
+    assert_eq!(entity.entity_type, "EMAIL_ADDRESS");
+    assert_eq!(entity.text, text);
+    assert_eq!(entity.token_count, 4);
+
+    let expected = confidences.iter().sum::<f32>() / confidences.len() as f32;
+    assert!(
+        (entity.confidence - expected).abs() < 1e-6,
+        "confidence {} is not the mean {}",
+        entity.confidence,
+        expected
+    );
+
+    // Guard against a regression back to the pairwise fold.
+    let pairwise_fold = confidences
+        .iter()
+        .copied()
+        .reduce(|acc, c| (acc + c) / 2.0)
+        .unwrap();
+    assert!(
+        (entity.confidence - pairwise_fold).abs() > 1e-3,
+        "confidence matches the old pairwise fold {}",
+        pairwise_fold
+    );
+}
+
+/// A single-token entity keeps the token's own confidence.
+#[rstest]
+fn test_modernbert_bio_entity_confidence_single_token() {
+    let text = "Seoul";
+    let tokens = [BioToken {
+        label: "B-GPE",
+        start: 0,
+        end: 5,
+        confidence: 0.42,
+    }];
+
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].token_count, 1);
+    assert!((entities[0].confidence - 0.42).abs() < 1e-6);
+}
+
+/// Two tokens are the one case where the old fold and the mean agree, so this
+/// pins that the fix did not shift the easy case.
+#[rstest]
+fn test_modernbert_bio_entity_confidence_two_tokens() {
+    let text = "John Smith";
+    let tokens = [
+        BioToken {
+            label: "B-PERSON",
+            start: 0,
+            end: 4,
+            confidence: 0.9,
+        },
+        BioToken {
+            label: "I-PERSON",
+            start: 4,
+            end: 10,
+            confidence: 0.6,
+        },
+    ];
+
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 1);
+    assert_eq!(entities[0].token_count, 2);
+    assert!((entities[0].confidence - 0.75).abs() < 1e-6);
+}
+
+/// Entity boundary handling is unchanged: `O` closes an entity, a mismatched
+/// `I-` closes it and is dropped, and an `I-` with no open entity is ignored.
+#[rstest]
+fn test_modernbert_bio_entity_boundaries() {
+    let text = "aa bb cc dd";
+    let tokens = [
+        BioToken {
+            label: "I-PERSON",
+            start: 0,
+            end: 2,
+            confidence: 0.9,
+        }, // orphan, ignored
+        BioToken {
+            label: "B-PERSON",
+            start: 3,
+            end: 5,
+            confidence: 0.8,
+        },
+        BioToken {
+            label: "I-GPE",
+            start: 6,
+            end: 8,
+            confidence: 0.7,
+        }, // mismatch, closes
+        BioToken {
+            label: "B-GPE",
+            start: 9,
+            end: 11,
+            confidence: 0.6,
+        },
+        BioToken {
+            label: "O",
+            start: 11,
+            end: 11,
+            confidence: 0.5,
+        }, // closes
+    ];
+
+    let entities = merge_bio_entities(text, &tokens);
+    assert_eq!(entities.len(), 2);
+
+    assert_eq!(entities[0].entity_type, "PERSON");
+    assert_eq!(entities[0].text, "bb");
+    assert_eq!(entities[0].token_count, 1);
+    assert!((entities[0].confidence - 0.8).abs() < 1e-6);
+
+    assert_eq!(entities[1].entity_type, "GPE");
+    assert_eq!(entities[1].text, "dd");
+    assert_eq!(entities[1].token_count, 1);
+    assert!((entities[1].confidence - 0.6).abs() < 1e-6);
+}
