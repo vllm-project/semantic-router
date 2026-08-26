@@ -1,6 +1,7 @@
 import React from 'react'
 import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import IconExternalLink from '@theme/Icon/ExternalLink'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import { localizeResearchEntries, researchPapers, sortResearchEntries } from '@site/src/data/researchContent'
 import styles from './index.module.css'
@@ -70,6 +71,7 @@ export default function ResearchPaperCarousel(): JSX.Element {
                         className={styles.paperLink}
                       >
                         <Translate id="homepage.researchCarousel.paperLink">Read paper</Translate>
+                        <IconExternalLink />
                       </a>
                     </div>
                   </article>
