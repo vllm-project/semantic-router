@@ -137,6 +137,39 @@ socket connections, so anyone able to `docker exec` bypasses the password. Keep
 [container-runtime access](#limit-container-runtime-access) restricted
 accordingly.
 
+### Network layering
+
+The local stack runs on two bridge networks.
+
+| Container | `vllm-sr-network` | `vllm-sr-data-network` |
+| --- | --- | --- |
+| Redis, Postgres, Milvus | no | yes |
+| Router | yes | yes |
+| Envoy, Dashboard, simulator | yes | no |
+| Jaeger, Prometheus, Grafana | yes | no |
+| OpenClaw workloads | yes | no |
+
+Router is the only container on both. Requests reach it over the application
+network; it reaches the stores over the data network. A named stack prefixes
+both names, so two stacks share neither. Milvus joins the data network even
+though it has no credentials of its own yet.
+
+This closes east-west reachability. A container on the application network --
+a sidecar, the simulator, an image chosen for an OpenClaw workload -- cannot
+open a connection to `vllm-sr-redis:6379` or `vllm-sr-postgres:5432` at all. The
+storage ports remain published on `127.0.0.1` only, which closes the same
+exposure from the host side.
+
+It does not constrain a caller that can reach the container runtime. Such a
+caller can attach a container to any network, so the split is a boundary for
+workloads, not for the runtime socket.
+
+A stack created before the split has its stores on the application network. The
+next `vllm-sr serve` attaches each running store to the data network and
+detaches it from the application network. If that detach fails, `serve` stops
+rather than continuing: a stack that reports the isolation without having it is
+worse than one that refuses to start.
+
 ### Rotate
 
 ```bash

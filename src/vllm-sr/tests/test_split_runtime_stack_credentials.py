@@ -7,6 +7,7 @@ that holds the runtime socket -- so the tests carry their own command-and-env
 capture rather than the plain command capture the sibling module uses.
 """
 
+import subprocess
 from types import SimpleNamespace
 
 import pytest
@@ -67,12 +68,22 @@ def _capture_run_commands_with_env(monkeypatch):
         captured.append((cmd, env))
         return SimpleNamespace(stdout="container-id\n", stderr="")
 
-    monkeypatch.setattr(container_start.subprocess, "run", fake_run)
+    monkeypatch.setattr(subprocess, "run", fake_run)
     return captured
 
 
 def _commands_by_container(captured):
-    return {cmd[cmd.index("--name") + 1]: (cmd, env) for cmd, env in captured}
+    """Index the creating command of each container.
+
+    Router also needs a `network connect` and a `start`, neither of which names
+    a container with `--name`; they carry no environment of their own and are
+    not what these assertions are about.
+    """
+    return {
+        cmd[cmd.index("--name") + 1]: (cmd, env)
+        for cmd, env in captured
+        if "--name" in cmd
+    }
 
 
 def test_container_start_vllm_sr_gives_storage_credentials_to_router_alone(

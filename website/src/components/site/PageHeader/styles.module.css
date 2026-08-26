@@ -1,0 +1,64 @@
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-5);
+  padding-bottom: var(--space-5);
+  border-bottom: 1px solid var(--site-border);
+}
+
+.text {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  max-width: var(--measure);
+}
+
+.eyebrow {
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: var(--text-xs);
+  font-weight: var(--site-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+}
+
+.title {
+  margin: 0;
+  color: var(--site-text-strong);
+  font-size: var(--text-3xl);
+  font-weight: var(--site-font-weight-semibold);
+  line-height: 1.15;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+/*
+ * Wraps rather than shrinks. The blog subtitle previously combined
+ * `white-space: nowrap` with `clamp(0.7rem, …)`, so on a narrow laptop it
+ * stayed on one line by dropping to 11px.
+ */
+.description {
+  margin: 0;
+  color: var(--site-muted);
+  font-size: var(--text-base);
+  line-height: 1.6;
+  text-wrap: pretty;
+}
+
+.actions {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+@media (max-width: 640px) {
+  .header {
+    gap: var(--space-4);
+    padding-bottom: var(--space-4);
+  }
+
+  .actions {
+    width: 100%;
+  }
+}

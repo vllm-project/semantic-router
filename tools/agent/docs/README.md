@@ -57,7 +57,6 @@ The default loop is:
 
 ```bash
 make agent-report ENV=cpu CHANGED_FILES="..."
-make agent-validate
 make agent-ci-gate CHANGED_FILES="..."
 ```
 
@@ -78,7 +77,6 @@ make agent-ci-gate CHANGED_FILES="..."
 - [../../tools/agent/skill-registry.yaml](../../../tools/agent/skill-registry.yaml)
 - [../../tools/agent/test-domain-registry.yaml](../../../tools/agent/test-domain-registry.yaml)
 - [../../tools/agent/task-matrix.yaml](../../../tools/agent/task-matrix.yaml)
-- [../../tools/agent/e2e-profile-map.yaml](../../../tools/agent/e2e-profile-map.yaml)
 - [../../tools/agent/structure-rules.yaml](../../../tools/agent/structure-rules.yaml)
 - [../../tools/agent/maintainer-policy.yaml](../../../tools/agent/maintainer-policy.yaml)
 - [../../tools/make/agent.mk](../../../tools/make/agent.mk)
