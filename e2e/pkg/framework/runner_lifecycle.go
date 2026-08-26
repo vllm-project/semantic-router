@@ -159,7 +159,11 @@ func (r *Runner) cleanupClusterWithLogs(state *runState) {
 		r.log("📝 Collecting semantic-router logs before cluster cleanup...")
 		logCtx, logCancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer logCancel()
-		if err := r.collectSemanticRouterLogs(logCtx, state.kubeClient); err != nil {
+		if err := r.collectSemanticRouterLogs(
+			logCtx,
+			state.kubeClient,
+			r.routerDiagnosticsNamespace(),
+		); err != nil {
 			r.log("Warning: failed to collect semantic-router logs before cleanup: %v", err)
 		}
 	}
@@ -216,6 +220,9 @@ func (r *Runner) setupProfile(ctx context.Context, state *runState) error {
 		ImageTag:    r.opts.ImageTag,
 		Verbose:     r.opts.Verbose,
 		ValuesFiles: state.valuesFiles,
+		CollectRouterDiagnostics: func(diagCtx context.Context, namespace string) error {
+			return r.collectSemanticRouterLogs(diagCtx, state.kubeClient, namespace)
+		},
 	}
 
 	if err := r.profile.Setup(ctx, setupOpts); err != nil {

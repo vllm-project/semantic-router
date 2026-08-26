@@ -45,6 +45,12 @@ func (p *Profile) Name() string {
 	return "agentgateway"
 }
 
+// RouterDiagnosticsNamespace identifies the namespace that owns this
+// profile's Semantic Router deployment.
+func (p *Profile) RouterDiagnosticsNamespace() string {
+	return agentGatewayNamespace
+}
+
 // Description returns the profile description.
 func (p *Profile) Description() string {
 	return fmt.Sprintf("Tests Semantic Router through agentgateway (version: %s)", agentGatewayVersion)
@@ -61,6 +67,7 @@ func (p *Profile) Setup(ctx context.Context, opts *framework.SetupOptions) error
 	defer func() {
 		if r := recover(); r != nil {
 			p.log("Panic during setup, cleaning up...")
+			p.collectSetupFailureDiagnostics(opts)
 			p.cleanupPartialDeployment(ctx, opts, state)
 			panic(r)
 		}

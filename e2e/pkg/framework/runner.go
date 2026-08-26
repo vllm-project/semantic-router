@@ -3,7 +3,6 @@ package framework
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -299,95 +298,6 @@ func (r *Runner) printAllPodsDebugInfo(ctx context.Context, client *kubernetes.C
 	fmt.Printf("\n")
 	fmt.Println(strings.Repeat("=", 80))
 	fmt.Printf("\n")
-}
-
-// collectSemanticRouterLogs collects logs from semantic-router pods and saves to file
-func (r *Runner) collectSemanticRouterLogs(ctx context.Context, client *kubernetes.Clientset) error {
-	// Find semantic-router pods
-	pods, err := client.CoreV1().Pods("vllm-semantic-router-system").List(ctx, metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list semantic-router pods: %w", err)
-	}
-
-	if len(pods.Items) == 0 {
-		r.log("Warning: no semantic-router pods found")
-		return nil
-	}
-
-	// Collect logs from all semantic-router pods
-	var allLogs strings.Builder
-	allLogs.WriteString("========================================\n")
-	allLogs.WriteString("Semantic Router Logs\n")
-	allLogs.WriteString("========================================\n\n")
-
-	for _, pod := range pods.Items {
-		r.appendPodLogs(ctx, client, &allLogs, pod)
-	}
-
-	// Write logs to file
-	logFilename := "semantic-router-logs.txt"
-	if err := os.WriteFile(logFilename, []byte(allLogs.String()), 0644); err != nil {
-		return fmt.Errorf("failed to write log file: %w", err)
-	}
-
-	r.log("✅ Semantic router logs saved to: %s", logFilename)
-	return nil
-}
-
-func (r *Runner) appendPodLogs(
-	ctx context.Context,
-	client *kubernetes.Clientset,
-	allLogs *strings.Builder,
-	pod corev1.Pod,
-) {
-	fmt.Fprintf(allLogs, "=== Pod: %s (Namespace: %s) ===\n", pod.Name, pod.Namespace)
-	fmt.Fprintf(allLogs, "Status: %s\n", pod.Status.Phase)
-	fmt.Fprintf(allLogs, "Node: %s\n", pod.Spec.NodeName)
-	if pod.Status.StartTime != nil {
-		fmt.Fprintf(allLogs, "Started: %s\n", pod.Status.StartTime.Format(time.RFC3339))
-	}
-	allLogs.WriteString("\n")
-
-	for _, container := range pod.Spec.Containers {
-		r.appendContainerLogs(ctx, client, allLogs, pod, container.Name)
-	}
-
-	allLogs.WriteString("\n")
-}
-
-func (r *Runner) appendContainerLogs(
-	ctx context.Context,
-	client *kubernetes.Clientset,
-	allLogs *strings.Builder,
-	pod corev1.Pod,
-	containerName string,
-) {
-	fmt.Fprintf(allLogs, "--- Container: %s ---\n", containerName)
-
-	logOptions := &corev1.PodLogOptions{Container: containerName}
-	req := client.CoreV1().Pods(pod.Namespace).GetLogs(pod.Name, logOptions)
-	logs, err := req.Stream(ctx)
-	if err != nil {
-		fmt.Fprintf(allLogs, "Error getting logs: %v\n\n", err)
-		return
-	}
-
-	logBytes, readErr := io.ReadAll(logs)
-	if closeErr := logs.Close(); closeErr != nil {
-		r.log("Warning: failed to close log stream for %s/%s: %v", pod.Name, containerName, closeErr)
-	}
-	if readErr != nil {
-		fmt.Fprintf(allLogs, "Error reading logs: %v\n\n", readErr)
-		return
-	}
-
-	if len(logBytes) == 0 {
-		allLogs.WriteString("(no logs available)\n\n")
-		return
-	}
-
-	allLogs.Write(logBytes)
-	allLogs.WriteString("\n\n")
 }
 
 func getPodReadyStatus(pod corev1.Pod) string {

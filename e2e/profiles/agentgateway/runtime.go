@@ -106,8 +106,20 @@ func (p *Profile) deploySemanticRouter(ctx context.Context, deployer *helm.Deplo
 
 func (p *Profile) failSetup(ctx context.Context, opts *framework.SetupOptions, state *setupState, err error) error {
 	p.log("ERROR: %v", err)
+	p.collectSetupFailureDiagnostics(opts)
 	p.cleanupPartialDeployment(ctx, opts, state)
 	return err
+}
+
+func (p *Profile) collectSetupFailureDiagnostics(opts *framework.SetupOptions) {
+	if opts.CollectRouterDiagnostics == nil {
+		return
+	}
+	diagnosticsCtx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
+	defer cancel()
+	if err := opts.CollectRouterDiagnostics(diagnosticsCtx, agentGatewayNamespace); err != nil {
+		p.log("Warning: failed to collect Router diagnostics before cleanup: %v", err)
+	}
 }
 
 func (p *Profile) cleanupPartialDeployment(ctx context.Context, opts *framework.SetupOptions, state *setupState) {

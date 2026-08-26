@@ -49,6 +49,11 @@ type SetupOptions struct {
 	// ValuesFiles contains paths to Helm values files
 	// keyed by Helm release name for profile-specific overlays.
 	ValuesFiles map[string]string
+
+	// CollectRouterDiagnostics persists Router pod logs and namespace events.
+	// Profiles with custom teardown ordering call it before removing a failed
+	// Router deployment.
+	CollectRouterDiagnostics func(ctx context.Context, namespace string) error
 }
 
 // TeardownOptions contains options for profile teardown

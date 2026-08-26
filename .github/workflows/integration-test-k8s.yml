@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 90
     env:
       E2E_SEMANTIC_ROUTER_HELM_TIMEOUT: 60m
+      SEMANTIC_ROUTER_LOG_NAMESPACE: ${{ matrix.profile == 'agentgateway' && 'agentgateway-system' || 'vllm-semantic-router-system' }}
+      SEMANTIC_ROUTER_LOG_POLL_INTERVAL: '5'
     strategy:
       fail-fast: false  # Continue testing other profiles even if one fails
       matrix:
@@ -157,11 +159,14 @@ jobs:
             echo "========================================" >> semantic-router-logs.txt
             echo "" >> semantic-router-logs.txt
 
-            for pod in $(kubectl get pods -n vllm-semantic-router-system -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
+            ROUTER_LOG_NAMESPACE="${SEMANTIC_ROUTER_LOG_NAMESPACE:-vllm-semantic-router-system}"
+            for pod in $(kubectl get pods -n "${ROUTER_LOG_NAMESPACE}" -o jsonpath='{.items[*].metadata.name}' 2>/dev/null); do
               echo "=== Pod: $pod ===" >> semantic-router-logs.txt
-              kubectl describe pod "$pod" -n vllm-semantic-router-system >> semantic-router-logs.txt 2>&1 || true
+              kubectl describe pod "$pod" -n "${ROUTER_LOG_NAMESPACE}" >> semantic-router-logs.txt 2>&1 || true
               echo "--- Logs ---" >> semantic-router-logs.txt
-              kubectl logs "$pod" -n vllm-semantic-router-system --all-containers=true >> semantic-router-logs.txt 2>&1 || true
+              kubectl logs "$pod" -n "${ROUTER_LOG_NAMESPACE}" --all-containers=true >> semantic-router-logs.txt 2>&1 || true
+              echo "--- Previous Logs ---" >> semantic-router-logs.txt
+              kubectl logs "$pod" -n "${ROUTER_LOG_NAMESPACE}" --all-containers=true --previous >> semantic-router-logs.txt 2>&1 || true
               echo "" >> semantic-router-logs.txt
             done
 
