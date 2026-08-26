@@ -145,7 +145,7 @@ domains:
 
   cli:
     owner: vllm-sr-cli
-    contract: CLI serve, status, logs, stop, topology, and image-pull behavior works with real containers.
+    contract: CLI serve, status, logs, stop, topology, storage network isolation, and image-pull behavior works with real containers.
     layer: runtime-integration
     selector: cli
     pr_job: cli
