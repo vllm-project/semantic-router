@@ -44,7 +44,7 @@ func resolveMigrationPodInputs(
 		return migrationPodInputs{environment: environment}, err
 	}
 	if bootstrap.PostgresDSNFile == "" {
-		return migrationPodInputs{}, fmt.Errorf("Management migration requires a PostgreSQL DSN source")
+		return migrationPodInputs{}, fmt.Errorf("management migration requires a PostgreSQL DSN source")
 	}
 	volume, mount, err := migrationDSNFileProjection(sr, bootstrap.PostgresDSNFile)
 	if err != nil {

@@ -40,9 +40,9 @@ describe('OpenAI Chat Completions transport', () => {
 
   it('streams the standard endpoint with delegated bearer authority', async () => {
     const body = [
-      'data: {"id":"chatcmpl-1","model":"vllm-sr/blend","choices":[{"index":0,"delta":{"content":"Hel"}}]}',
+      'data: {"id":"chatcmpl-1","model":"vllm-sr/blend","choices":[{"index":0,"delta":{"content":"He"}}]}',
       '',
-      'data:{"choices":[{"index":0,"delta":{"content":"lo"},"finish_reason":"stop"}]}',
+      'data:{"choices":[{"index":0,"delta":{"content":"llo"},"finish_reason":"stop"}]}',
       '',
       'data: {"choices":[],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}',
       '',
@@ -75,8 +75,8 @@ describe('OpenAI Chat Completions transport', () => {
     })
     order.push('complete')
 
-    expect(deltas).toEqual(['Hel', 'lo'])
-    expect(order).toEqual(['delta:Hel', 'delta:lo', 'complete'])
+    expect(deltas).toEqual(['He', 'llo'])
+    expect(order).toEqual(['delta:He', 'delta:llo', 'complete'])
     expect(result).toMatchObject({
       finishReason: 'stop',
       model: 'vllm-sr/blend',

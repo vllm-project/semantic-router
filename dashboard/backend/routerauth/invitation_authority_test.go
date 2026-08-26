@@ -173,7 +173,8 @@ func TestInvitationCreateHandlerUsesRouterAuthorityWithoutAutomaticFirstKey(t *t
 	t.Cleanup(func() { _ = store.Close() })
 	service := dashboardauth.NewService(store, "invitation-handler-secret", 12)
 	service.ConfigureInvitations(provider, nil, "", "https://dashboard.example.test")
-	if err := service.EnsureBootstrapAdmin(t.Context(), "admin@example.test", "a-secure-password", "Admin"); err != nil {
+	err = service.EnsureBootstrapAdmin(t.Context(), "admin@example.test", "a-secure-password", "Admin")
+	if err != nil {
 		t.Fatal(err)
 	}
 	dashboardToken, _, err := service.Login(t.Context(), "admin@example.test", "a-secure-password")
@@ -203,13 +204,13 @@ func TestInvitationAuthorityErrorKeepsOnlySafeRouterDiagnostics(t *testing.T) {
 	t.Parallel()
 	now := time.Now().UTC()
 	requestID := "30000000-0000-4000-8000-000000000099"
-	secretCanary := "sk-must-not-cross-the-dashboard-boundary"
+	upstreamDetailCanary := "private-detail-must-not-cross-the-dashboard-boundary"
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
 		response.Header().Set(managementapi.HeaderRequestID, requestID)
 		response.Header().Set("Content-Type", managementMediaType)
 		response.WriteHeader(http.StatusServiceUnavailable)
 		_ = json.NewEncoder(response).Encode(managementapi.ErrorResponse{Error: managementapi.APIError{
-			Code: "invitation_service_unavailable", Message: "internal failure " + secretCanary,
+			Code: "invitation_service_unavailable", Message: "internal failure " + upstreamDetailCanary,
 			RequestID: requestID,
 		}})
 	}))
@@ -226,10 +227,10 @@ func TestInvitationAuthorityErrorKeepsOnlySafeRouterDiagnostics(t *testing.T) {
 		authorityError.Code != "invitation_service_unavailable" || authorityError.RequestID != requestID {
 		t.Fatalf("CreateInvitation() error = %#v", err)
 	}
-	if strings.Contains(authorityError.Error(), secretCanary) {
+	if strings.Contains(authorityError.Error(), upstreamDetailCanary) {
 		t.Fatalf("invitation error exposed upstream body: %q", authorityError.Error())
 	}
-	if safeInvitationRequestID(secretCanary) != "" {
+	if safeInvitationRequestID(upstreamDetailCanary) != "" {
 		t.Fatal("credential-shaped request ID was accepted as a public diagnostic")
 	}
 	if safeInvitationErrorCode("secret_material") != "" {
