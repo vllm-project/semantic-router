@@ -151,6 +151,29 @@ func ToOpenAIResponseBodyWithExt(anthropicResponse []byte, model string, ext *ir
 	return toOpenAIResponseBody(anthropicResponse, model, ext)
 }
 
+// IsErrorBody reports whether body is an Anthropic API error envelope.
+// Error responses must not be decoded as zero-valued successful messages.
+func IsErrorBody(body []byte) bool {
+	var envelope struct {
+		Type  string          `json:"type"`
+		Error json.RawMessage `json:"error"`
+	}
+	return json.Unmarshal(body, &envelope) == nil &&
+		envelope.Type == "error" && len(envelope.Error) > 0
+}
+
+func toOpenAIErrorBody(body []byte) ([]byte, error) {
+	var envelope struct {
+		Error json.RawMessage `json:"error"`
+	}
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, err
+	}
+	return json.Marshal(struct {
+		Error json.RawMessage `json:"error"`
+	}{Error: envelope.Error})
+}
+
 // toOpenAIResponseBody is the internal form that exposes the
 // IRExtensions side channel. It is called by ToOpenAIResponseBody with a
 // nil ext to preserve the existing inverse cell byte-for-byte; the
@@ -159,6 +182,9 @@ func ToOpenAIResponseBodyWithExt(anthropicResponse []byte, model string, ext *ir
 // flattening that the OpenAI envelope cannot represent.
 func toOpenAIResponseBody(anthropicResponse []byte, model string, ext *ir.IRExtensions) ([]byte, error) {
 	logging.Debugf("Raw Anthropic response: %s", logging.ContentDescriptorBytes(anthropicResponse))
+	if IsErrorBody(anthropicResponse) {
+		return toOpenAIErrorBody(anthropicResponse)
+	}
 
 	var resp anthropic.Message
 	if err := json.Unmarshal(anthropicResponse, &resp); err != nil {

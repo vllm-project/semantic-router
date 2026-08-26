@@ -146,6 +146,9 @@ type anthropicErrorDetail struct {
 //     stop reasons "pause_turn" or "refusal"), it overrides the
 //     OpenAI-derived mapping.
 func EmitAnthropicResponse(responseBody []byte, ext *ir.IRExtensions, model string) ([]byte, error) {
+	if IsErrorBody(responseBody) {
+		return responseBody, nil
+	}
 	var oa openai.ChatCompletion
 	if err := json.Unmarshal(responseBody, &oa); err != nil {
 		return nil, fmt.Errorf("anthropic outbound: parse OpenAI response: %w", err)
