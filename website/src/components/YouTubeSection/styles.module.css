@@ -26,17 +26,24 @@
   color: var(--site-muted-bright);
   font-size: var(--site-text-small);
   line-height: var(--site-leading-relaxed);
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
+/* Player left, playlist right. The playlist rows are compact on purpose here,
+ * the way a video player's queue is, rather than being a grid of cards that
+ * happen to be small. Nothing is left over to fill. */
 .showcase {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: minmax(0, 1.75fr) minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
 }
 
 .featuredVideo {
   display: grid;
-  grid-template-columns: minmax(15rem, 0.72fr) minmax(0, 1.65fr);
+  grid-column: 1;
+  grid-row: 1 / span 2;
+  grid-template-rows: auto auto auto;
   border: 1px solid var(--site-border);
   border-radius: 1.25rem;
   background:
@@ -48,11 +55,15 @@
 
 .videoMeta {
   display: flex;
+  grid-row: 2;
   flex-direction: column;
   align-items: flex-start;
-  justify-content: center;
-  gap: 0.65rem;
-  padding: clamp(1.35rem, 3vw, 2.4rem);
+  gap: 0.5rem;
+  padding: clamp(1rem, 2vw, 1.5rem);
+}
+
+.playerControls {
+  grid-row: 3;
 }
 
 .videoKind {
@@ -85,6 +96,7 @@
 
 .playerFrame {
   position: relative;
+  grid-row: 1;
   min-width: 0;
   aspect-ratio: 16 / 9;
   background: #000;
@@ -147,8 +159,10 @@
 
 .videoRail {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.75rem;
+  grid-column: 2;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: 0.5rem;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -161,40 +175,36 @@
 
 .videoPagination {
   display: flex;
+  grid-column: 2;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
-/* Thumbnail over copy. It used to be a fixed 7.2rem beside the text, so the
- * image stayed postage-stamp sized however wide the column grew. */
+/* Queue rows: thumbnail beside copy, sized to the playlist column. */
 .videoCard {
   display: grid;
   width: 100%;
   min-width: 0;
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: 0.8rem;
-  align-content: start;
-  padding: 0.6rem 0.6rem 0.9rem;
-  border: 1px solid var(--site-border);
-  border-radius: 0.85rem;
-  background: var(--site-surface);
+  grid-template-columns: 10rem minmax(0, 1fr);
+  gap: 0.85rem;
+  align-items: start;
+  padding: 0.5rem;
+  border: 1px solid transparent;
+  border-radius: 0.75rem;
+  background: transparent;
   color: inherit;
   cursor: pointer;
   font: inherit;
   text-align: left;
   transition:
     border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    transform var(--site-transition-fast),
-    box-shadow var(--site-transition-fast);
+    background var(--site-transition-fast);
 }
 
 .videoCard:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg-soft);
-  box-shadow: var(--site-hover-glow);
-  transform: translateY(-2px);
+  border-color: var(--site-border);
+  background: var(--site-surface);
 }
 
 .videoCardActive {
@@ -223,46 +233,75 @@
   top: 50%;
   left: 50%;
   display: grid;
-  width: 2.75rem;
-  height: 2.75rem;
+  width: 1.9rem;
+  height: 1.9rem;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.36);
   border-radius: 50%;
   background: rgba(0, 0, 0, 0.7);
   color: #fff;
-  font-size: 0.9rem;
+  font-size: 0.62rem;
   transform: translate(-50%, -50%);
 }
 
 .cardCopy {
   display: grid;
   min-width: 0;
-  gap: 0.35rem;
+  gap: 0.25rem;
   align-content: start;
-  padding-inline: 0.15rem;
+  padding-top: 0.1rem;
 }
 
 .cardCopy strong {
   display: -webkit-box;
   overflow: hidden;
   color: var(--site-text-strong);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: var(--site-font-weight-semibold);
-  line-height: 1.4;
-  letter-spacing: -0.01em;
+  line-height: 1.38;
+  letter-spacing: -0.005em;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 3;
 }
 
 .cardCopy > span {
-  color: var(--site-muted-bright);
-  font-size: 0.8rem;
+  color: var(--site-muted);
+  font-size: 0.78rem;
   font-weight: var(--site-font-weight-medium);
 }
 
-@media (max-width: 1100px) {
+/* Below the shared nav breakpoint the queue moves under the player and becomes
+ * a swipeable strip, since a 21rem side column stops being viable. */
+@media (max-width: 996px) {
+  .showcase {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .featuredVideo,
+  .videoRail,
+  .videoPagination {
+    grid-column: 1;
+  }
+
+  .featuredVideo {
+    grid-row: auto;
+  }
+
   .videoRail {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    display: flex;
+    margin-right: calc(var(--gutter) * -1);
+    padding-right: var(--gutter);
+    overflow-x: auto;
+    scroll-snap-type: x proximity;
+  }
+
+  .videoRailItem {
+    flex: 0 0 min(86vw, 22rem);
+    scroll-snap-align: start;
+  }
+
+  .videoPagination {
+    justify-content: center;
   }
 }
 
@@ -271,25 +310,8 @@
     padding: clamp(2.5rem, 7vw, 3.25rem) 0;
   }
 
-  .featuredVideo {
-    grid-template-columns: 1fr;
-  }
-
   .videoMeta {
-    padding: 1.25rem;
-  }
-
-  .videoRail {
-    display: flex;
-    margin-right: calc(var(--ifm-spacing-horizontal) * -1);
-    padding-right: var(--ifm-spacing-horizontal);
-    overflow-x: auto;
-    scroll-snap-type: x proximity;
-  }
-
-  .videoRailItem {
-    flex: 0 0 min(86vw, 23rem);
-    scroll-snap-align: start;
+    padding: 1rem;
   }
 }
 

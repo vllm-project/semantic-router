@@ -1,21 +1,19 @@
 /* Shared section headers and compact card copy — avoids awkward forced line breaks. */
 
-/* Section intro lockup.
+/* Section intro.
  *
- * This used to be a single column capped at 46rem. Because the content below
- * it spans the whole frame, the cap left the right half of every section
- * empty, and the lede broke mid-phrase against an edge nothing else shared.
+ * One treatment for every section: eyebrow, title and lede stacked flush left
+ * above the section's full-width content.
  *
- * Now the intro spans the frame as two columns: title left, lede right. The
- * eyebrow, and any action after the lede, span both. Expects flat children —
- * eyebrow, h2, p — so placement is by element and no section needs its own
- * measure. */
+ * No reading-measure cap on the title or lede. A capped measure made these
+ * one-sentence ledes wrap early and leave a hole to the right of them; uncapped
+ * they sit on a single line at wide viewports and wrap only when the frame
+ * genuinely runs out. `balance` then keeps whatever wrapping does happen even,
+ * rather than dropping two or three words onto a second line. */
 .site-section-intro {
   display: grid;
-  grid-template-columns: minmax(0, 6fr) minmax(0, 5fr);
-  column-gap: var(--rail-gap);
-  row-gap: 0.85rem;
-  align-items: end;
+  justify-items: start;
+  gap: 0.85rem;
   margin-bottom: 2rem;
 }
 
@@ -25,7 +23,6 @@
 
 .site-section-intro > h2,
 .site-section-intro__title {
-  grid-column: 1;
   max-width: none;
   margin: 0;
   font-size: var(--site-text-h2);
@@ -35,35 +32,18 @@
   word-break: normal;
 }
 
+/* `balance` rather than `pretty`: these ledes are one to three lines, and
+ * `pretty` only rescues a single-word last line. It left breaks like
+ * "...composes decisions, and executes / the selected path." Balance evens the
+ * lines instead, and browsers without it just fall back to normal wrapping. */
 .site-section-intro > p,
 .site-section-intro__lede {
-  grid-column: 2;
-  max-width: 46ch;
+  max-width: none;
   margin: 0;
   color: var(--site-muted-bright);
   font-size: 1rem;
   line-height: 1.65;
-  text-wrap: pretty;
-}
-
-.site-section-intro > :not(h2):not(p) {
-  grid-column: 1 / -1;
-}
-
-/* One column below the shared nav breakpoint. The lede drops back to a
- * reading measure instead of stretching the full frame. */
-@media (max-width: 996px) {
-  .site-section-intro {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .site-section-intro > h2,
-  .site-section-intro__title,
-  .site-section-intro > p,
-  .site-section-intro__lede {
-    grid-column: 1;
-    max-width: 60ch;
-  }
+  text-wrap: balance;
 }
 
 /* Single-line metadata in narrow cards (roles, affiliations, chip labels). */

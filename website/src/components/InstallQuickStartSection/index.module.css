@@ -4,10 +4,28 @@
   background: var(--site-bg);
 }
 
-/* Column layout comes from the global .site-section-intro lockup. */
+/* Copy left, install card right. The card holds one short command, so given
+ * the whole frame it sat in the left third with a dead zone beside it. Pairing
+ * it with the section copy fills the row and still leaves the command alone in
+ * its own block rather than wrapped by text. */
+.split {
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(0, 6fr);
+  column-gap: var(--rail-gap);
+  row-gap: var(--site-section-gap);
+  align-items: start;
+}
+
+.copy {
+  display: grid;
+  align-content: start;
+  gap: 1.5rem;
+  min-width: 0;
+}
+
 .heading {
   gap: 0.65rem;
-  margin-bottom: 1.5rem;
+  margin-bottom: 0;
 }
 
 .heading h2 {
@@ -25,7 +43,7 @@
   font-size: clamp(0.92rem, 1.05vw, 1rem);
   font-weight: var(--site-font-weight-medium);
   line-height: 1.65;
-  text-wrap: pretty;
+  text-wrap: balance;
 }
 
 .ledeMuted {
@@ -97,13 +115,9 @@
   list-style: none;
 }
 
-/* Rail, then explanation, then the command itself. The command is short —
- * given the whole row it left most of the card empty. */
 .step {
   display: grid;
-  grid-template-columns: 2.35rem minmax(0, 19rem) minmax(0, 1.55fr);
-  gap: 0.85rem 1.75rem;
-  align-items: start;
+  gap: 0.85rem;
   padding: 1.15rem 0;
 }
 
@@ -113,38 +127,6 @@
 
 .step:last-child {
   padding-bottom: 0.15rem;
-}
-
-.stepRail {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-height: 100%;
-}
-
-.stepMarker {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: 1.85rem;
-  height: 1.85rem;
-  border: 1px solid rgba(48, 162, 255, 0.35);
-  border-radius: 50%;
-  background: rgba(48, 162, 255, 0.1);
-  color: var(--site-brand-blue);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.stepLine {
-  flex: 1 1 auto;
-  width: 1px;
-  min-height: 1rem;
-  margin-top: 0.45rem;
-  background: linear-gradient(180deg, rgba(48, 162, 255, 0.35), var(--site-border));
 }
 
 .stepCopy,
@@ -159,8 +141,6 @@
   gap: 0.7rem;
 }
 
-/* The chip follows the title now that the column is narrow; pushing it to
- * the far edge was part of what made the row read as empty. */
 .stepHeader {
   display: flex;
   flex-wrap: wrap;
@@ -202,41 +182,87 @@
   text-transform: uppercase;
 }
 
-.commandPair {
-  display: grid;
-  gap: 0.85rem;
+/* Card footer: the two secondary actions share one row, so neither leaves a
+ * band of empty card beneath it. */
+.cardFooter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem 1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--site-border);
 }
 
 .removeDetails {
-  margin-top: 0.15rem;
-  border-top: 1px solid var(--site-border);
-  padding-top: 0.65rem;
+  min-width: 0;
 }
 
+.removeDetails[open] {
+  flex: 1 1 100%;
+}
+
+/* Reads as a control rather than a label: chevron, sentence case, hover tint. */
 .removeSummary {
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.6rem 0.35rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
   color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: var(--site-font-weight-medium);
   list-style: none;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+.removeSummary:hover {
+  border-color: var(--site-border);
+  background: var(--site-surface);
+  color: var(--site-text);
+}
+
+.removeSummary:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+.removeChevron {
+  display: inline-block;
+  font-size: 0.9rem;
+  line-height: 1;
+  transition: transform var(--site-transition-fast);
+}
+
+.removeDetails[open] .removeChevron {
+  transform: rotate(90deg);
 }
 
 .removeSummary::-webkit-details-marker {
   display: none;
 }
 
+.removeSummary::marker {
+  content: '';
+}
+
 .removeDetails[open] .removeSummary {
-  margin-bottom: 0.45rem;
+  margin-bottom: 0.55rem;
   color: var(--site-text);
 }
 
 .followupToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   width: fit-content;
-  margin-top: 0.15rem;
-  padding: 0.45rem 0.8rem;
+  margin-left: auto;
+  padding: 0.45rem 0.85rem;
   border: 1px solid rgba(48, 162, 255, 0.28);
   border-radius: 999px;
   background: rgba(48, 162, 255, 0.08);
@@ -266,21 +292,6 @@
   outline-offset: 2px;
 }
 
-.removeBlock {
-  display: grid;
-  gap: 0.35rem;
-}
-
-.removeLabel {
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .removeHint {
   margin: 0 0 0.45rem;
   color: var(--site-muted);
@@ -290,11 +301,56 @@
 }
 
 .commandShell {
-  overflow: hidden;
-  border: 1px solid rgba(48, 162, 255, 0.18);
-  border-radius: 0.8rem;
-  background: rgba(0, 0, 0, 0.22);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.85rem 0.75rem 0.85rem 0.9rem;
+  border: 1px solid rgba(48, 162, 255, 0.22);
+  border-radius: 0.7rem;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.commandPrompt {
+  color: var(--site-accent-strong);
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.95rem;
+  font-weight: 600;
+  user-select: none;
+}
+
+.copyButton {
+  display: grid;
+  width: 1.95rem;
+  height: 1.95rem;
+  place-items: center;
+  border: 1px solid var(--site-border);
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--site-muted-bright);
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition:
+    border-color var(--site-transition-fast),
+    background var(--site-transition-fast),
+    color var(--site-transition-fast);
+}
+
+.copyButton:hover {
+  border-color: var(--site-hover-border);
+  background: rgba(48, 162, 255, 0.1);
+  color: var(--site-accent-strong);
+}
+
+.copyButton:focus-visible {
+  outline: 2px solid var(--site-accent);
+  outline-offset: 2px;
+}
+
+.copyButtonSuccess,
+.copyButtonSuccess:hover {
+  border-color: rgba(48, 162, 255, 0.55);
+  color: var(--site-brand-blue);
 }
 
 .commandShellRemove {
@@ -302,112 +358,9 @@
   background: rgba(0, 0, 0, 0.14);
 }
 
-.commandShellRemove .commandBlock::before {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.12));
-}
-
 .commandShellRemove .command {
   color: var(--site-muted-bright);
   font-size: clamp(0.8rem, 1vw, 0.92rem);
-}
-
-.commandToolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.45rem 0.65rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.terminalMeta {
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-width: 0;
-}
-
-.terminalDots {
-  display: inline-flex;
-  gap: 0.28rem;
-}
-
-.terminalDot {
-  width: 0.45rem;
-  height: 0.45rem;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.shellLabel {
-  overflow: hidden;
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  letter-spacing: 0.04em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.copyChip {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 0.3rem;
-  min-height: 1.55rem;
-  padding: 0.15rem 0.5rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  color: var(--site-muted-bright);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    color var(--site-transition-fast),
-    box-shadow var(--site-transition-fast);
-}
-
-.copyChip:hover {
-  border-color: var(--site-hover-border);
-  background: rgba(48, 162, 255, 0.1);
-  color: var(--site-brand-blue);
-}
-
-.copyChip:focus-visible {
-  outline: 2px solid var(--site-accent);
-  outline-offset: 2px;
-}
-
-.copyChipSuccess {
-  border-color: rgba(48, 162, 255, 0.45);
-  background: rgba(48, 162, 255, 0.14);
-  color: var(--site-brand-blue);
-}
-
-.copyChipIcon {
-  font-size: 0.72rem;
-  line-height: 1;
-}
-
-.commandBlock {
-  position: relative;
-  overflow: hidden;
-  padding: 0.8rem 0.9rem 0.85rem;
-}
-
-.commandBlock::before {
-  content: '';
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--site-gradient-brand-bar);
 }
 
 .command {
@@ -418,7 +371,7 @@
   background: transparent;
   color: var(--site-text-strong);
   font-family: var(--ifm-font-family-monospace);
-  font-size: clamp(0.84rem, 1.1vw, 0.98rem);
+  font-size: clamp(0.9rem, 1.1vw, 1.05rem);
   line-height: 1.5;
   white-space: nowrap;
   scrollbar-width: thin;
@@ -481,9 +434,8 @@
 
 .frameFooter {
   display: grid;
-  gap: 0.85rem;
-  padding-top: 0.35rem;
-  border-top: 1px solid var(--site-border);
+  gap: 0.9rem;
+  justify-items: start;
 }
 
 .note {
@@ -523,71 +475,58 @@
   box-shadow: var(--site-hover-inset) !important;
 }
 
-/* Below the shared nav breakpoint the command stacks under its explanation. */
 @media (max-width: 996px) {
-  .step {
-    grid-template-columns: 2.35rem minmax(0, 1fr);
-    gap: 0.75rem 1rem;
-  }
-
-  .stepCopy,
-  .stepAction {
-    grid-column: 2;
+  .split {
+      grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 768px) {
   .section {
-    padding: 3rem 0;
+      padding: 3rem 0;
   }
 
   .frame {
-    padding: 1rem;
+      padding: 1rem;
   }
 
   .step {
-    grid-template-columns: 1.85rem minmax(0, 1fr);
-    gap: 0.65rem 0.75rem;
-    padding: 0.85rem 0;
-  }
-
-  .stepMarker {
-    width: 1.65rem;
-    height: 1.65rem;
-    font-size: 0.54rem;
+      grid-template-columns: 1.85rem minmax(0, 1fr);
+      gap: 0.65rem 0.75rem;
+      padding: 0.85rem 0;
   }
 
   .command {
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-size: 0.82rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      font-size: 0.82rem;
   }
 
   .dashboardLink {
-    width: 100%;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
+      width: 100%;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto;
   }
 
   .dashboardUrl {
-    grid-column: 1;
-    grid-row: 2;
+      grid-column: 1;
+      grid-row: 2;
   }
 
   .dashboardArrow {
-    grid-column: 2;
-    grid-row: 1 / span 2;
-    align-self: center;
+      grid-column: 2;
+      grid-row: 1 / span 2;
+      align-self: center;
   }
 
   .actions {
-    display: grid;
-    grid-template-columns: 1fr;
+      display: grid;
+      grid-template-columns: 1fr;
   }
 
   .guideLink,
   .docsLink {
-    width: 100%;
+      width: 100%;
   }
 }
 
@@ -595,6 +534,6 @@
   .guideLink:global(.pill):hover,
   .dashboardLink:hover,
   .dashboardLink:focus-visible {
-    transform: none;
+      transform: none;
   }
 }
