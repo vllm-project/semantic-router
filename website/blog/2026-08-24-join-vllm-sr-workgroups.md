@@ -189,8 +189,9 @@ how a Router Model is trained, or which MoM recipe is best.
 
 Production users need clear answers to practical questions: Who can call each
 model? How much can they use? What changed? Is the system healthy? Can a model,
-recipe, or Router upgrade be rolled out and reversed safely? The answers must
-remain consistent across deployment environments.
+recipe, or Router upgrade be rolled out and reversed safely? Which deployment
+path is maintained, and which components does it own? The answers must remain
+consistent across deployment environments.
 
 ### Scope
 
@@ -202,6 +203,10 @@ remain consistent across deployment environments.
   and failure recovery.
 - Model and recipe onboarding, draining, gray release, promotion, rollback, and
   auditable vLLM-SR upgrades.
+- Stable, scalable deployment and lifecycle APIs across environments; CRDs and
+  the Operator provide their Kubernetes implementation.
+- Maintained Docker, Kubernetes, Operator, and OpenShift reference stacks with
+  clear component ownership and reusable hardware overlays.
 - A tested support matrix across Docker, Kubernetes, CPU, AMD, NVIDIA,
   precision, images, and maintained configurations.
 
@@ -216,6 +221,7 @@ capabilities rather than publishing private product plans.
 
 - [Build multi-tenant inference access, quotas, and usage controls](https://github.com/vllm-project/semantic-router/issues/2960)
 - [Build versioned configuration activation and rollback](https://github.com/vllm-project/semantic-router/issues/2326)
+- [Define deployment architecture and reference stacks across environments and hardware](https://github.com/vllm-project/semantic-router/issues/3043)
 - [Establish production observability and supported-environment qualification](https://github.com/vllm-project/semantic-router/issues/2993)
 
 ## [Agentic & Context](https://github.com/vllm-project/semantic-router/issues/2987)
