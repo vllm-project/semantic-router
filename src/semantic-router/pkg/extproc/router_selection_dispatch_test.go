@@ -9,7 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
-func TestResolveSelectionEmbeddingFuncUsesRemoteProvider(t *testing.T) {
+func TestSelectionEmbeddingRuntimeUsesRequestedRemoteConfig(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/v1/embeddings" {
 			t.Fatalf("request path = %q, want /v1/embeddings", r.URL.Path)
@@ -25,7 +25,7 @@ func TestResolveSelectionEmbeddingFuncUsesRemoteProvider(t *testing.T) {
 	}))
 	defer server.Close()
 
-	embed := resolveSelectionEmbeddingFunc(&config.RouterConfig{
+	embed, defaultConfig := resolveSelectionEmbeddingFunc(&config.RouterConfig{
 		InlineModels: config.InlineModels{
 			EmbeddingModels: config.EmbeddingModels{
 				EmbeddingConfig: config.HNSWConfig{
@@ -41,11 +41,99 @@ func TestResolveSelectionEmbeddingFuncUsesRemoteProvider(t *testing.T) {
 		},
 	})
 
-	embedding, err := embed("hello")
+	embedding, err := embed("hello", defaultConfig)
 	if err != nil {
 		t.Fatalf("selection embedding function error = %v", err)
 	}
 	if len(embedding) != 2 || embedding[0] != float32(0.1) {
 		t.Fatalf("embedding = %#v, want two remote values", embedding)
+	}
+}
+
+func TestBuildModelSelectionConfigCarriesMLModelRequest(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType:       "mmbert",
+					TargetDimension: 768,
+				},
+			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			ModelSelection: config.ModelSelectionConfig{
+				ML: config.MLSelectionConfig{
+					ModelsPath:   "models/ml-selection",
+					ModelType:    config.EmbeddingModelTypeQwen3,
+					EmbeddingDim: 1024,
+				},
+			},
+		},
+	}
+
+	mlCfg := buildModelSelectionConfig(cfg).ML
+	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 {
+		t.Fatalf("ML selection embedding model = %q, want %q", mlCfg.ModelType, config.EmbeddingModelTypeQwen3)
+	}
+	if mlCfg.EmbeddingDim != 1024 {
+		t.Fatalf("ML selection embedding dimension = %d, want 1024", mlCfg.EmbeddingDim)
+	}
+	if cfg.EmbeddingConfig.ModelType != "mmbert" {
+		t.Fatalf("default embedding model = %q, want mmbert", cfg.EmbeddingConfig.ModelType)
+	}
+	if cfg.EmbeddingConfig.TargetDimension != 768 {
+		t.Fatalf("default embedding dimension = %d, want 768", cfg.EmbeddingConfig.TargetDimension)
+	}
+}
+
+func TestLegacyMLDimensionDoesNotSelectAnotherModel(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType:       "mmbert",
+					TargetDimension: 768,
+				},
+			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			ModelSelection: config.ModelSelectionConfig{
+				ML: config.MLSelectionConfig{ModelsPath: "models/ml-selection", EmbeddingDim: 1024},
+			},
+		},
+	}
+
+	mlCfg := buildModelSelectionConfig(cfg).ML
+	if mlCfg.ModelType != "" {
+		t.Fatalf("legacy embedding_dim selected model %q, want factory default", mlCfg.ModelType)
+	}
+	if mlCfg.EmbeddingDim != 1024 {
+		t.Fatalf("legacy embedding dimension = %d, want 1024", mlCfg.EmbeddingDim)
+	}
+}
+
+func TestQwenMLRequestUsesModelDefaultDimension(t *testing.T) {
+	cfg := &config.RouterConfig{
+		InlineModels: config.InlineModels{
+			EmbeddingModels: config.EmbeddingModels{
+				EmbeddingConfig: config.HNSWConfig{
+					ModelType:       "mmbert",
+					TargetDimension: 768,
+				},
+			},
+		},
+		IntelligentRouting: config.IntelligentRouting{
+			ModelSelection: config.ModelSelectionConfig{
+				ML: config.MLSelectionConfig{
+					ModelsPath: "models/ml-selection",
+					ModelType:  config.EmbeddingModelTypeQwen3,
+				},
+			},
+		},
+	}
+
+	mlCfg := buildModelSelectionConfig(cfg).ML
+	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 || mlCfg.EmbeddingDim != 0 {
+		t.Fatalf("ML selection embedding config = %s/%d, want Qwen3/0 (model-native dimension)", mlCfg.ModelType, mlCfg.EmbeddingDim)
 	}
 }
