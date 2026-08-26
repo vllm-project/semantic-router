@@ -45,7 +45,7 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		return buildResponseBodyContinueResponse(nil, nil)
 	}
 
-        chunkStr := string(transformed)
+	chunkStr := string(transformed)
 	ctx.HasStreamingChunks = true
 	r.parseStreamingChunk(chunkStr, ctx)
 
