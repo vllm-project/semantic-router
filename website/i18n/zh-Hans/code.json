@@ -322,7 +322,6 @@
     "message": "标签",
     "description": "The title of the tag list page"
   },
-
   "homepage.hero.intelligentRouting": {
     "message": "智能路由"
   },
@@ -590,20 +589,11 @@
   "homepage.install.label": {
     "message": "快速上手"
   },
-  "homepage.install.meta": {
-    "message": "只保留一条官方支持的本地启动路径：复制安装命令，执行后即可进入控制台。"
-  },
   "homepage.install.title.human": {
     "message": "一条命令，本地跑起来。"
   },
-  "homepage.install.description.human": {
-    "message": "首跑路径收敛为一个安装脚本，负责在 macOS 和 Linux 上配置 CLI 与本地服务流程。"
-  },
   "homepage.install.frameLabel.human": {
     "message": "一键安装"
-  },
-  "homepage.install.footer.human": {
-    "message": "默认安装到 ~/.local/share/vllm-sr，写入 ~/.local/bin/vllm-sr；Windows 仍按文档中的手动 pip 方式安装。"
   },
   "homepage.install.primaryCta": {
     "message": "查看完整安装指南"
@@ -2473,7 +2463,6 @@
   "homepage.meta.socialTitle": {
     "message": "构建你的 Mixture-of-Models | vLLM Semantic Router"
   },
-
   "homepage.whereItLives.title": {
     "message": "它的位置"
   },
