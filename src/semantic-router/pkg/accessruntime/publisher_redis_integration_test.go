@@ -36,6 +36,26 @@ const (
 )
 
 func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *testing.T) {
+	fixture := newPublisherDelegationFixture(t)
+	authentication := authenticatePublisherDelegation(t, fixture)
+	assertPublisherDelegationAuthorization(t, fixture, authentication)
+	discoveryRequest := publisherDelegationDiscoveryRequest(authentication.Session)
+	assertPublisherDelegationDiscovery(t, fixture, discoveryRequest)
+	assertPublisherDelegationRevocationGates(t, fixture, discoveryRequest)
+}
+
+type publisherDelegationFixture struct {
+	ctx           context.Context
+	client        *redis.Client
+	prefix        string
+	issued        accesscredential.Issued
+	publicationID string
+	runtime       *Runtime
+	barriers      *managementauthredis.Store
+}
+
+func newPublisherDelegationFixture(t *testing.T) publisherDelegationFixture {
+	t.Helper()
 	address := os.Getenv("ACCESSRUNTIME_TEST_REDIS_ADDR")
 	if address == "" {
 		address = os.Getenv("ACCESSPUBLISHER_REDIS_ADDR")
@@ -47,7 +67,7 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 	client := redis.NewClient(&redis.Options{Addr: address})
 	t.Cleanup(func() { _ = client.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 	if err := client.Ping(ctx).Err(); err != nil {
 		t.Fatalf("ping Redis: %v", err)
 	}
@@ -65,6 +85,22 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 		t.Fatalf("issue delegated credential: %v", err)
 	}
 	state := publisherDelegationDesiredState(issued, time.Now().UTC().Add(-time.Minute).Truncate(time.Millisecond))
+	published := publishPublisherDelegationState(t, ctx, client, prefix, state)
+	runtime, barriers := newPublisherDelegationRuntime(t, ctx, client, prefix, keyring)
+	return publisherDelegationFixture{
+		ctx: ctx, client: client, prefix: prefix, issued: issued,
+		publicationID: published.PublicationID, runtime: runtime, barriers: barriers,
+	}
+}
+
+func publishPublisherDelegationState(
+	t *testing.T,
+	ctx context.Context,
+	client *redis.Client,
+	prefix string,
+	state accesspublisher.DesiredState,
+) accesspublisher.ProcessResult {
+	t.Helper()
 	outbox := &publisherDelegationOutbox{batch: accesspublisher.OutboxBatch{
 		NamespaceID:     publisherDelegationNamespaceID,
 		DesiredRevision: state.Revision,
@@ -109,7 +145,17 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 			delegated.Projection.TeamID == "",
 		)
 	}
+	return published
+}
 
+func newPublisherDelegationRuntime(
+	t *testing.T,
+	ctx context.Context,
+	client *redis.Client,
+	prefix string,
+	keyring accesscredential.PepperKeyring,
+) (*Runtime, *managementauthredis.Store) {
+	t.Helper()
 	reader, err := NewRedisProjectionReader(RedisProjectionReaderOptions{Client: client, KeyPrefix: prefix})
 	if err != nil {
 		t.Fatalf("create runtime projection reader: %v", err)
@@ -134,8 +180,18 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 	if err != nil {
 		t.Fatalf("create access runtime: %v", err)
 	}
+	return runtime, barriers
+}
 
-	authentication, err := runtime.Authenticate(ctx, AuthenticationRequest{Credential: issued.Plaintext})
+func authenticatePublisherDelegation(
+	t *testing.T,
+	fixture publisherDelegationFixture,
+) Authentication {
+	t.Helper()
+	authentication, err := fixture.runtime.Authenticate(
+		fixture.ctx,
+		AuthenticationRequest{Credential: fixture.issued.Plaintext},
+	)
 	if err != nil || !authentication.Result.Allowed() {
 		t.Fatalf("Authenticate() = %+v, %v", authentication, err)
 	}
@@ -143,11 +199,19 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 		authentication.Tenant.NamespaceID != publisherDelegationNamespaceID ||
 		authentication.Tenant.APIKeyID != publisherDelegationKeyID ||
 		authentication.Tenant.UserID != publisherDelegationUserID || authentication.Tenant.TeamID != "" ||
-		authentication.Tenant.PublicationID != published.PublicationID {
+		authentication.Tenant.PublicationID != fixture.publicationID {
 		t.Fatalf("authenticated delegated tenant = %+v, source = %q", authentication.Tenant, authentication.Source)
 	}
+	return authentication
+}
 
-	authorization, err := runtime.Authorize(ctx, AuthorizationRequest{
+func assertPublisherDelegationAuthorization(
+	t *testing.T,
+	fixture publisherDelegationFixture,
+	authentication Authentication,
+) {
+	t.Helper()
+	authorization, err := fixture.runtime.Authorize(fixture.ctx, AuthorizationRequest{
 		Session: authentication.Session,
 		Target: Target{
 			ResourceType: accesscontrol.GrantResourceEntrypoint,
@@ -158,7 +222,7 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 	if err != nil || !authorization.Result.Allowed() || authorization.Tenant.TeamID != "" {
 		t.Fatalf("Authorize() = %+v, %v", authorization, err)
 	}
-	admission, err := runtime.Admit(ctx, AdmissionRequest{
+	admission, err := fixture.runtime.Admit(fixture.ctx, AdmissionRequest{
 		Session: authentication.Session,
 		Target: Target{
 			ResourceType: accesscontrol.GrantResourceEntrypoint,
@@ -172,15 +236,25 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 	if err != nil || !admission.Result.Allowed() || admission.Result.PlanDigest == "" || admission.Tenant.TeamID != "" {
 		t.Fatalf("Admit() = %+v, %v", admission, err)
 	}
+}
 
-	discoveryRequest := CatalogDiscoveryRequest{
-		Session: authentication.Session,
+func publisherDelegationDiscoveryRequest(session Session) CatalogDiscoveryRequest {
+	return CatalogDiscoveryRequest{
+		Session: session,
 		Queries: []DiscoveryQuery{
 			{ResourceType: accesscontrol.GrantResourceEntrypoint, Permission: accesscontrol.GrantPermissionDiscover},
 			{ResourceType: accesscontrol.GrantResourceModel, Permission: accesscontrol.GrantPermissionDiscover},
 		},
 	}
-	discovery, err := runtime.DiscoverCatalog(ctx, discoveryRequest)
+}
+
+func assertPublisherDelegationDiscovery(
+	t *testing.T,
+	fixture publisherDelegationFixture,
+	discoveryRequest CatalogDiscoveryRequest,
+) {
+	t.Helper()
+	discovery, err := fixture.runtime.DiscoverCatalog(fixture.ctx, discoveryRequest)
 	if err != nil || !discovery.Result.Allowed() {
 		t.Fatalf("DiscoverCatalog() = %+v, %v", discovery, err)
 	}
@@ -190,33 +264,43 @@ func TestPublisherRedisRuntimeAuthenticatesUserOwnedDelegationWithoutTeam(t *tes
 		len(models) != 1 || models[0] != publisherDelegationAllowedModelID {
 		t.Fatalf("discovered resources = %+v", discovery.Resources)
 	}
+}
 
-	projectionKeys, err := quotaruntime.NewAccessProjectionKeyspaceWithPrefix(prefix, publisherDelegationPartition)
+func assertPublisherDelegationRevocationGates(
+	t *testing.T,
+	fixture publisherDelegationFixture,
+	discoveryRequest CatalogDiscoveryRequest,
+) {
+	t.Helper()
+	projectionKeys, err := quotaruntime.NewAccessProjectionKeyspaceWithPrefix(
+		fixture.prefix,
+		publisherDelegationPartition,
+	)
 	if err != nil {
 		t.Fatalf("create access projection keyspace: %v", err)
 	}
 	modelDenyKey := projectionKeys.Deny(string(accesscontrol.GrantResourceModel), publisherDelegationAllowedModelID)
-	if err := client.SAdd(
-		ctx,
+	if err := fixture.client.SAdd(
+		fixture.ctx,
 		modelDenyKey,
 		"model-discovery-regression",
 	).Err(); err != nil {
 		t.Fatalf("install model deny gate: %v", err)
 	}
-	blocked, err := runtime.DiscoverCatalog(ctx, discoveryRequest)
+	blocked, err := fixture.runtime.DiscoverCatalog(fixture.ctx, discoveryRequest)
 	if err != nil || blocked.Result.Disposition != quotaruntime.AdmissionForbidden || blocked.Result.Reason != "resource_denied" {
 		t.Fatalf("DiscoverCatalog() behind model deny gate = %+v, %v", blocked, err)
 	}
 
-	if err := client.SRem(ctx, modelDenyKey, "model-discovery-regression").Err(); err != nil {
+	if err := fixture.client.SRem(fixture.ctx, modelDenyKey, "model-discovery-regression").Err(); err != nil {
 		t.Fatalf("clear model deny gate: %v", err)
 	}
-	if err := barriers.InstallDeny(
-		ctx, managementauth.BarrierManagementSession, publisherDelegationManagementSession,
+	if err := fixture.barriers.InstallDeny(
+		fixture.ctx, managementauth.BarrierManagementSession, publisherDelegationManagementSession,
 	); err != nil {
 		t.Fatalf("install management session deny: %v", err)
 	}
-	revoked, err := runtime.DiscoverCatalog(ctx, discoveryRequest)
+	revoked, err := fixture.runtime.DiscoverCatalog(fixture.ctx, discoveryRequest)
 	if err != nil || revoked.Result.Disposition != quotaruntime.AdmissionForbidden || revoked.Result.Reason != "management_session_denied" {
 		t.Fatalf("DiscoverCatalog() behind management session deny = %+v, %v", revoked, err)
 	}
@@ -387,7 +471,28 @@ func publisherDelegationDesiredState(
 		SecretHMAC: issued.Digest.HMAC, PepperVersion: issued.Digest.PepperVersion,
 		Status: accesscontrol.CredentialStatusActive, NotBefore: now, ExpiresAt: &expiresAt, CreatedAt: now,
 	}
-	routing := routingsnapshot.Bundle{
+	routing := publisherDelegationRouting(namespace, revision)
+	return accesspublisher.DesiredState{
+		Namespace: namespace, Revision: revision, RevisionTime: now,
+		Keys: []accessprojection.Candidate{candidate},
+		Credentials: []accesspublisher.CredentialCandidate{{
+			Kind: accesspublisher.CredentialKindDelegation, Credential: credential,
+			Delegation: &accessprojection.DelegationContext{
+				ManagementSessionID: publisherDelegationManagementSession,
+				PrincipalID:         publisherDelegationPrincipalID,
+				DelegationEpoch:     1, UserID: publisherDelegationUserID, TeamID: "",
+				Audience: publisherDelegationAudience,
+			},
+		}},
+		Routing: routing,
+	}
+}
+
+func publisherDelegationRouting(
+	namespace accesscontrol.Namespace,
+	revision uint64,
+) routingsnapshot.Bundle {
+	return routingsnapshot.Bundle{
 		NamespaceID: string(namespace.ID), Revision: int64(revision), Currency: "USD",
 		Models: []routingsnapshot.Model{
 			publisherDelegationModel(publisherDelegationAllowedModelID, "a"),
@@ -416,20 +521,6 @@ func publisherDelegationDesiredState(
 				},
 			}},
 		}},
-	}
-	return accesspublisher.DesiredState{
-		Namespace: namespace, Revision: revision, RevisionTime: now,
-		Keys: []accessprojection.Candidate{candidate},
-		Credentials: []accesspublisher.CredentialCandidate{{
-			Kind: accesspublisher.CredentialKindDelegation, Credential: credential,
-			Delegation: &accessprojection.DelegationContext{
-				ManagementSessionID: publisherDelegationManagementSession,
-				PrincipalID:         publisherDelegationPrincipalID,
-				DelegationEpoch:     1, UserID: publisherDelegationUserID, TeamID: "",
-				Audience: publisherDelegationAudience,
-			},
-		}},
-		Routing: routing,
 	}
 }
 

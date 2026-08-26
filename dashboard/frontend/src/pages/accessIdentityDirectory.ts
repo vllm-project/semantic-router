@@ -54,6 +54,7 @@ export function mergeAccessIdentityRows(
     if (matchedMemberIds.has(member.id)) return
     rows.push({
       key: `member:${member.id}`,
+      access: undefined,
       member,
       name: member.name,
       email: member.email,
@@ -89,9 +90,7 @@ export async function findAccessUserByEmail(
   let cursor: string | undefined
   do {
     const page = await loadPage({ cursor, limit: 200, q: normalized })
-    const match = page.items.find(
-      (user) => normalizeIdentityEmail(user.email) === normalized,
-    )
+    const match = page.items.find((user) => normalizeIdentityEmail(user.email) === normalized)
     if (match) return match
     const nextCursor = page.hasMore ? page.nextCursor : undefined
     if (nextCursor && seenCursors.has(nextCursor)) {

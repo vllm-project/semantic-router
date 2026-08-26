@@ -129,9 +129,7 @@ const AccessControlWorkspace = ({
           </button>
         </div>
       ) : null}
-      {loading ? (
-        <ProductLoadingState compact label={`Loading ${activeMeta.label}`} />
-      ) : null}
+      {loading ? <ProductLoadingState compact label={`Loading ${activeMeta.label}`} /> : null}
       {!loading ? children : null}
     </main>
 

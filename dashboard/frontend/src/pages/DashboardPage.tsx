@@ -165,10 +165,7 @@ const DashboardPage: React.FC = () => {
         className={`${styles.page} ${styles.statusOnlyPage}`}
         data-testid="routing-access-status-only"
       >
-        <StatusAvailabilityPanel
-          status={availabilityStatus}
-          lastUpdated={statusLastUpdated}
-        />
+        <StatusAvailabilityPanel status={availabilityStatus} lastUpdated={statusLastUpdated} />
       </div>
     )
   }
@@ -195,9 +192,7 @@ const DashboardPage: React.FC = () => {
         <div className={styles.errorBanner} role="alert">
           <span>{managementIdentityError || `Failed to load data: ${error}`}</span>
           <button
-            onClick={() =>
-              void (managementIdentityError ? refreshSession() : fetchAll(true))
-            }
+            onClick={() => void (managementIdentityError ? refreshSession() : fetchAll(true))}
           >
             Retry
           </button>

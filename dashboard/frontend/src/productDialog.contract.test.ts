@@ -47,19 +47,28 @@ describe('dashboard product dialog system', () => {
   })
 
   it('keeps model and Access management dialogs on one responsive content measure', () => {
-    const styles = [
-      readSource('./pages/ConfigPageAddModelsDialog.module.css'),
-      readSource('./components/EditModal.module.css'),
-      readSource('./components/ViewModal.module.css'),
-      readSource('./pages/AccessControlPage.module.css'),
-    ]
+    const addModelStyles = readSource('./pages/ConfigPageAddModelsDialog.module.css')
+    const editStyles = readSource('./components/EditModal.module.css')
+    const viewStyles = readSource('./components/ViewModal.module.css')
+    const accessStyles = readSource('./pages/AccessControlPage.module.css')
+    const modelSection = readSource('./pages/ConfigPageModelsSection.tsx')
+    const styles = [addModelStyles, editStyles, viewStyles, accessStyles]
 
     styles.forEach((source) =>
       expect(source).toContain('width: min(var(--product-dialog-content-width), 100%);'),
     )
     expect(
-      styles[3].match(/width: min\(var\(--product-dialog-content-width\), 100%\);/g),
+      accessStyles.match(/width: min\(var\(--product-dialog-content-width\), 100%\);/g),
     ).toHaveLength(3)
+    expect(modelSection).toContain('openEditModal<ModelFormState>')
+    expect(modelSection).toContain('openViewModal(')
+    expect(addModelStyles).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.dialog\s*{[\s\S]*?width: 100%;/,
+    )
+    expect(editStyles).toMatch(/@media \(max-width: 768px\)[\s\S]*?\.modal\s*{[\s\S]*?width: 100%;/)
+    expect(viewStyles).toMatch(
+      /@media \(max-width: 768px\)[\s\S]*?\.dialogShell\s*{[\s\S]*?width: 100%;/,
+    )
   })
 
   it('uses the same glass material for Builder and DSL import dialogs', () => {

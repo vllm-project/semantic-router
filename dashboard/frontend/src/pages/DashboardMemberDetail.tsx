@@ -204,17 +204,16 @@ export function DashboardMemberDetail({
               <div>
                 <strong>Couldn’t finish</strong>
                 <p>{actionError}</p>
-                {deletionProgress.dashboardLoginRemoved && !deletionProgress.modelIdentityDeleted ? (
+                {deletionProgress.modelIdentityDeleted &&
+                !deletionProgress.dashboardLoginRemoved ? (
                   <small>
-                    Dashboard login is removed. Retry to delete the remaining model identity.
+                    Model access is removed. Retry to remove the remaining Dashboard login.
                   </small>
                 ) : null}
               </div>
             </div>
           ) : null}
-          {!member && !error ? (
-            <ProductLoadingState compact label="Loading user details" />
-          ) : null}
+          {!member && !error ? <ProductLoadingState compact label="Loading user details" /> : null}
           {member ? (
             <>
               <div className={styles.detailMetrics}>
@@ -311,11 +310,7 @@ export function DashboardMemberDetail({
           {member && confirming === 'remove-login' ? (
             <div className={styles.detailConfirm} role="alert">
               <span>Remove Dashboard login? Model access stays active.</span>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                disabled={actionPending}
-              >
+              <button type="button" onClick={() => setConfirming(null)} disabled={actionPending}>
                 Cancel
               </button>
               <button type="button" onClick={() => void removeLogin()} disabled={actionPending}>
@@ -326,15 +321,11 @@ export function DashboardMemberDetail({
           ) : member && modelUser && confirming === 'delete-user' ? (
             <div className={styles.detailConfirm} role="alert">
               <span>
-                {deletionProgress.dashboardLoginRemoved
-                  ? 'Delete the remaining model identity?'
+                {deletionProgress.modelIdentityDeleted
+                  ? 'Remove the remaining Dashboard login?'
                   : 'Delete this user, Dashboard login, and model identity?'}
               </span>
-              <button
-                type="button"
-                onClick={() => setConfirming(null)}
-                disabled={actionPending}
-              >
+              <button type="button" onClick={() => setConfirming(null)} disabled={actionPending}>
                 Cancel
               </button>
               <button type="button" onClick={() => void deleteUser()} disabled={actionPending}>

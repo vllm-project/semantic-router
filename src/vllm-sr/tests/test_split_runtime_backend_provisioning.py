@@ -15,23 +15,7 @@ def _backend_provisioning_config():
     }
 
 
-def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
-    monkeypatch, tmp_path
-):
-    load_paths = []
-    provisioned = {}
-
-    def record(name, ret=(0, "", "")):
-        def _fn(*args, **kwargs):
-            provisioned.setdefault("calls", []).append((name, args, kwargs))
-            return ret
-
-        return _fn
-
-    def fake_load_config(path):
-        load_paths.append(path)
-        return _backend_provisioning_config()
-
+def _install_runtime_fakes(monkeypatch, provisioned, record, fake_load_config):
     monkeypatch.setattr(core, "print_vllm_logo", lambda: None)
     monkeypatch.setattr(core, "ensure_clean_runtime_container", lambda _name: None)
     monkeypatch.setattr(core, "load_config", fake_load_config)
@@ -39,23 +23,14 @@ def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
         core,
         "provision_storage_backends",
         lambda config, stack_layout, **_kwargs: (
-            provisioned.update(
-                {
-                    "config": config,
-                    "stack_layout": stack_layout,
-                }
-            )
+            provisioned.update({"config": config, "stack_layout": stack_layout})
             or {"milvus", "redis", "postgres"}
         ),
     )
     monkeypatch.setattr(
         core, "_resolve_router_child_environment", lambda *_args, **_kwargs: {}
     )
-    monkeypatch.setattr(
-        runtime_lifecycle,
-        "container_status",
-        lambda _name: "running",
-    )
+    monkeypatch.setattr(runtime_lifecycle, "container_status", lambda _name: "running")
     monkeypatch.setattr(
         runtime_lifecycle,
         "container_create_network",
@@ -92,6 +67,26 @@ def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
         core, "recover_openclaw_containers", lambda *args, **kwargs: None
     )
     monkeypatch.setattr(core, "log_runtime_summary", lambda *args, **kwargs: None)
+
+
+def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
+    monkeypatch, tmp_path
+):
+    load_paths = []
+    provisioned = {}
+
+    def record(name, ret=(0, "", "")):
+        def _fn(*args, **kwargs):
+            provisioned.setdefault("calls", []).append((name, args, kwargs))
+            return ret
+
+        return _fn
+
+    def fake_load_config(path):
+        load_paths.append(path)
+        return _backend_provisioning_config()
+
+    _install_runtime_fakes(monkeypatch, provisioned, record, fake_load_config)
     source_config = tmp_path / "source-config.yaml"
     compiled_bootstrap = tmp_path / ".vllm-sr" / "compiled-bootstrap.yaml"
     core.start_vllm_sr(

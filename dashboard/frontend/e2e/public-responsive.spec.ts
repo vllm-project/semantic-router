@@ -96,10 +96,7 @@ test.describe('Public and transition surfaces on short screens', () => {
         await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
         const loading = page.getByRole('status', { name: 'Opening dashboard' })
         await expect(loading).toBeVisible()
-        await expect(loading.locator('img')).toHaveAttribute(
-          'src',
-          '/vllm-sr-logo.white.png',
-        )
+        await expect(loading.locator('img')).toHaveAttribute('src', '/vllm-sr-logo.white.png')
         await expectNoPublicOverflow(page, `authenticated handoff at ${viewport.name}`)
       }
     } finally {

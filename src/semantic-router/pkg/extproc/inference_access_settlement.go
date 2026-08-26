@@ -321,42 +321,10 @@ func (r *OpenAIRouter) buildInferenceSettlement(
 	if dispatchState == nil {
 		return nil, fmt.Errorf("settlement dispatch state is unavailable")
 	}
-	dispatchState.mu.Lock()
-	if len(dispatchState.dispatches) == 0 {
-		dispatchState.mu.Unlock()
-		return nil, fmt.Errorf("settlement has no dispatch journal")
+	evidenceDispatches, dispatches, err := snapshotSettlementDispatches(dispatchState)
+	if err != nil {
+		return nil, err
 	}
-	// The quota finalizer compare-and-sets the complete Redis dispatch journal.
-	// Primary fallback candidates are journaled before the private dispatch
-	// handler starts, even though only the authenticated attempted prefix belongs
-	// in usage and cost accounting. Keep those two views separate: evidence must
-	// cover every journaled ordinal, while the terminal ledger contains only
-	// candidates proven attempted by the signed dispatch outcome.
-	evidenceDispatches := make([]*inferenceDispatch, 0, len(dispatchState.dispatches))
-	dispatches := make([]*inferenceDispatch, 0, len(dispatchState.dispatches))
-	for index, dispatch := range dispatchState.dispatches {
-		if dispatch == nil {
-			dispatchState.mu.Unlock()
-			return nil, fmt.Errorf("settlement dispatch %d is unavailable", index)
-		}
-		clone := *dispatch
-		clone.attempts = append([]usageledger.Attempt(nil), dispatch.attempts...)
-		evidenceDispatches = append(evidenceDispatches, &clone)
-		if !clone.settlementEligible {
-			continue
-		}
-		if clone.completedAt.IsZero() {
-			clone.completedAt = time.Now().UTC()
-			clone.state = usageaccounting.EvidenceUnknown
-			clone.reason = "request_terminated"
-		}
-		dispatches = append(dispatches, &clone)
-	}
-	dispatchState.mu.Unlock()
-	if len(dispatches) == 0 {
-		return nil, fmt.Errorf("settlement has no attempted dispatch")
-	}
-
 	attemptEvidence, buildInferenceSettlementErr := r.InferenceAccess.ReadAttemptEvidence(
 		settlementContext,
 		attemptEvidenceRequest(admission, evidenceDispatches),
@@ -408,6 +376,41 @@ func (r *OpenAIRouter) buildInferenceSettlement(
 		attemptEvidence: attemptEvidence, aggregate: aggregate, payload: payload,
 		digest: event.FinalizationDigest, evidenceState: event.EvidenceState, fenceID: fenceID,
 	}, nil
+}
+
+func snapshotSettlementDispatches(
+	state *requestDispatchState,
+) ([]*inferenceDispatch, []*inferenceDispatch, error) {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+	if len(state.dispatches) == 0 {
+		return nil, nil, fmt.Errorf("settlement has no dispatch journal")
+	}
+	// The quota finalizer compares the complete journal, while usage contains
+	// only the authenticated attempted prefix. Preserve both immutable views.
+	evidence := make([]*inferenceDispatch, 0, len(state.dispatches))
+	attempted := make([]*inferenceDispatch, 0, len(state.dispatches))
+	for index, dispatch := range state.dispatches {
+		if dispatch == nil {
+			return nil, nil, fmt.Errorf("settlement dispatch %d is unavailable", index)
+		}
+		clone := *dispatch
+		clone.attempts = append([]usageledger.Attempt(nil), dispatch.attempts...)
+		evidence = append(evidence, &clone)
+		if !clone.settlementEligible {
+			continue
+		}
+		if clone.completedAt.IsZero() {
+			clone.completedAt = time.Now().UTC()
+			clone.state = usageaccounting.EvidenceUnknown
+			clone.reason = "request_terminated"
+		}
+		attempted = append(attempted, &clone)
+	}
+	if len(attempted) == 0 {
+		return nil, nil, fmt.Errorf("settlement has no attempted dispatch")
+	}
+	return evidence, attempted, nil
 }
 
 func settlementNeedsFence(admission accessruntime.Admission, aggregate usageaccounting.Aggregate) bool {

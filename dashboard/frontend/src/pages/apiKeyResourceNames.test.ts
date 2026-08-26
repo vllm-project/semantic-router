@@ -48,7 +48,7 @@ describe('API key visible resource names', () => {
     const resolutions = apiKeyResourceResolutions(resources, catalog)
 
     expect(apiKeyVisibleResourceName(resources[0], resolutions)).toBe('local/fast')
-    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe('Balanced routing')
+    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe('vllm-sr/blend')
     expect(apiKeyQuickstartModel(resources, resolutions)).toBe('vllm-sr/blend')
   })
 
@@ -59,7 +59,9 @@ describe('API key visible resource names', () => {
     } satisfies RoutingCatalog
     const resolutions = apiKeyResourceResolutions(resources, withoutAlias)
 
-    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe('Balanced routing')
+    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe(
+      'Unavailable Mixture-of-Model',
+    )
     expect(apiKeyQuickstartModel(resources, resolutions)).toBe('local/fast')
   })
 
@@ -89,7 +91,16 @@ describe('API key visible resource names', () => {
 
     expect(apiKeyVisibleResourceNames(duplicateResources, resolutions)).toEqual([
       'local/fast',
-      'Balanced routing',
+      'vllm-sr/blend',
     ])
+  })
+
+  it('never exposes display names or internal ids as callable model names', () => {
+    const resolutions = apiKeyResourceResolutions(resources, catalog)
+    const visibleNames = apiKeyVisibleResourceNames(resources, resolutions)
+
+    expect(visibleNames).not.toContain('Balanced routing')
+    expect(visibleNames).not.toContain('mdl_internal_123')
+    expect(visibleNames).not.toContain('ep_internal_456')
   })
 })

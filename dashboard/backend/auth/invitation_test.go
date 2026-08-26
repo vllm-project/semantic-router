@@ -187,6 +187,41 @@ func TestInvitationAcceptanceAllowsPolicyWithoutAutomaticFirstKey(t *testing.T) 
 	}
 }
 
+func TestInvitationAcceptanceSecretResponseIsNotStored(t *testing.T) {
+	svc, _, admin := configuredInvitationService(t)
+	created := createRouterInvitation(t, svc, admin, invitationInput{
+		Email: "secret-response@example.com", Name: "Secret Response", Role: RoleRead,
+	})
+	request := httptest.NewRequest(http.MethodPost, "/api/auth/invitations/accept", strings.NewReader(`{
+		"token":"`+created.InvitationToken+`","name":"Secret Response","password":"a-secure-password"
+	}`))
+	response := httptest.NewRecorder()
+
+	invitationAcceptHandler(svc).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" ||
+		!strings.Contains(response.Body.String(), "test-onboarding-key") {
+		t.Fatalf("accept status=%d headers=%#v body=%s", response.Code, response.Header(), response.Body.String())
+	}
+}
+
+func TestInvitationInfoUsingOneTimeTokenIsNotStored(t *testing.T) {
+	svc, _, admin := configuredInvitationService(t)
+	created := createRouterInvitation(t, svc, admin, invitationInput{
+		Email: "info-cache@example.com", Name: "Info Cache", Role: RoleRead,
+	})
+	request := httptest.NewRequest(
+		http.MethodGet, "/api/auth/invitations/info?token="+created.InvitationToken, nil,
+	)
+	response := httptest.NewRecorder()
+
+	invitationInfoHandler(svc).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" {
+		t.Fatalf("info status=%d headers=%#v body=%s", response.Code, response.Header(), response.Body.String())
+	}
+}
+
 func TestDashboardInvitationRoleMappingIsExact(t *testing.T) {
 	for role, roleID := range map[string]string{
 		RoleAdmin: routerPlatformAdminRoleID,

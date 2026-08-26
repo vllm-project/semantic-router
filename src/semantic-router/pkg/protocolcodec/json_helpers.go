@@ -13,7 +13,7 @@ import (
 
 var (
 	errDuplicateJSONField = errors.New("duplicate JSON field")
-	errTrailingJSON      = errors.New("trailing JSON document")
+	errTrailingJSON       = errors.New("trailing JSON document")
 )
 
 func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {

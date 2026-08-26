@@ -21,13 +21,12 @@ func TestClaimNextTurnUsesAtomicStatementAndClassifiesContention(t *testing.T) {
 	t.Cleanup(func() { _ = database.Close() })
 
 	expiresAt := time.Date(2026, time.August, 26, 5, 0, 0, 0, time.UTC)
-	mock.ExpectQuery("^" + regexp.QuoteMeta("WITH candidate AS (")).
+	mock.ExpectQuery("^"+regexp.QuoteMeta("WITH candidate AS (")).
 		WithArgs("worker/1", expiresAt).
 		WillReturnError(&pq.Error{Code: "40001"})
 
 	store := &Store{db: database}
-	if _, err := store.ClaimNextTurn(context.Background(), "worker/1", expiresAt);
-		!errors.Is(err, agentmanagement.ErrConflict) {
+	if _, err := store.ClaimNextTurn(context.Background(), "worker/1", expiresAt); !errors.Is(err, agentmanagement.ErrConflict) {
 		t.Fatalf("ClaimNextTurn() error = %v, want conflict", err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
@@ -43,7 +42,7 @@ func TestClaimNextTurnReturnsFencedLease(t *testing.T) {
 	t.Cleanup(func() { _ = database.Close() })
 
 	expiresAt := time.Date(2026, time.August, 26, 5, 0, 0, 0, time.UTC)
-	mock.ExpectQuery("^" + regexp.QuoteMeta("WITH candidate AS (")).
+	mock.ExpectQuery("^"+regexp.QuoteMeta("WITH candidate AS (")).
 		WithArgs("worker/1", expiresAt).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"namespace_id", "session_id", "turn_id", "worker_id", "fence", "registry_revision", "lease_expires_at",

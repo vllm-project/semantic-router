@@ -66,8 +66,7 @@ func TestCanonicalModelStepOutputRequiresOneMatchingSummary(t *testing.T) {
 		"duplicate":  {summary(stepID), summary(stepID)},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := canonicalModelStepOutput("end_turn", stepID, events);
-				!errors.Is(err, agentmanagement.ErrInvalid) {
+			if _, err := canonicalModelStepOutput("end_turn", stepID, events); !errors.Is(err, agentmanagement.ErrInvalid) {
 				t.Fatalf("canonicalModelStepOutput() error = %v, want ErrInvalid", err)
 			}
 		})

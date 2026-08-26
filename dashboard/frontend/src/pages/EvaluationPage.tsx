@@ -224,9 +224,7 @@ export function EvaluationPage() {
                 role={resultsError ? 'alert' : 'status'}
               >
                 <h2>{resultsError ? 'Results are unavailable' : 'No results available'}</h2>
-                <p>
-                  {resultsError || 'No result payload was returned for this evaluation.'}
-                </p>
+                <p>{resultsError || 'No result payload was returned for this evaluation.'}</p>
                 {resultsError ? (
                   <button type="button" onClick={() => void refreshResults()}>
                     <ProductIcon name="refresh" /> Retry

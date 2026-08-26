@@ -22,6 +22,15 @@ func TestInvitationOpenAPIUsesSynchronousOneTimeContracts(t *testing.T) {
 	if _, found := snapshot.OneOf[1].Properties["accessPolicyId"]; found {
 		t.Fatal("Team onboarding snapshot unexpectedly materializes a User policy override")
 	}
+	create, found := LookupOperation(MethodPOST, BasePath+"/invitations")
+	if !found || create.Async != AsyncSynchronous || create.Revision != RevisionReturns ||
+		create.Secret.Output != SecretOutputOneTime || !create.Secret.NoStore {
+		t.Fatalf("create contract = %#v", create)
+	}
+	createResponse := document.Paths[BasePath+"/invitations"]["post"].Responses["201"]
+	if createResponse.Content[JSONMediaType].Schema.Ref != "#/components/schemas/InvitationIssuedSecret" {
+		t.Fatalf("create response schema = %#v", createResponse.Content)
+	}
 	rotate, found := LookupOperation(MethodPOST, BasePath+"/invitations/{invitationId}:rotate-token")
 	if !found || rotate.Revision != RevisionCAS || rotate.Secret.Output != SecretOutputOneTime || !rotate.Secret.NoStore {
 		t.Fatalf("rotate contract = %#v", rotate)

@@ -287,17 +287,9 @@ func (collector *modelStepCollector) finish() (modelStepOutput, error) {
 	if collector.stop != llmprotocol.StopToolCall && collector.stop != llmprotocol.StopUnknown {
 		return modelStepOutput{}, fmt.Errorf("%w: inference returned tool calls with an invalid stop reason", agentmanagement.ErrConflict)
 	}
-	indices := make([]int, 0, len(collector.toolCalls))
-	for index := range collector.toolCalls {
-		indices = append(indices, index)
-	}
-	sort.Ints(indices)
-	if len(indices) > 1 {
-		for _, index := range indices {
-			if collector.toolCalls[index].name == "router.publish.prepare" {
-				return modelStepOutput{}, fmt.Errorf("%w: publish preparation must be the only tool call in a model step", agentmanagement.ErrConflict)
-			}
-		}
+	indices, err := collector.validatedToolCallIndices()
+	if err != nil {
+		return modelStepOutput{}, err
 	}
 	for _, index := range indices {
 		call := collector.toolCalls[index]
@@ -334,6 +326,22 @@ func (collector *modelStepCollector) finish() (modelStepOutput, error) {
 		output.Events = append(output.Events, collector.workerEvent(agentmanagement.EventToolRequest, encoded))
 	}
 	return output, nil
+}
+
+func (collector *modelStepCollector) validatedToolCallIndices() ([]int, error) {
+	indices := make([]int, 0, len(collector.toolCalls))
+	for index := range collector.toolCalls {
+		indices = append(indices, index)
+	}
+	sort.Ints(indices)
+	if len(indices) > 1 {
+		for _, index := range indices {
+			if collector.toolCalls[index].name == "router.publish.prepare" {
+				return nil, fmt.Errorf("%w: publish preparation must be the only tool call in a model step", agentmanagement.ErrConflict)
+			}
+		}
+	}
+	return indices, nil
 }
 
 func (collector *modelStepCollector) publishLiveText(value string) {

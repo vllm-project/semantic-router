@@ -142,7 +142,7 @@ func (provider *managementSessionProvider) bootstrapExternalPrincipal(
 		map[string]string{
 			"Authorization":                    "VSR-Bootstrap " + token,
 			managementapi.HeaderIdempotencyKey: installationKey("bootstrap", identity.UserID),
-		}, []int{http.StatusCreated}, &result)
+		}, []int{http.StatusCreated}, &result, true)
 	if err != nil || !canonicalUUID(result.PrincipalID) || !result.FinalizationRequired {
 		return errFirstAdminProvisioning
 	}
@@ -349,7 +349,7 @@ func (provider *managementSessionProvider) authorizedManagementRequest(
 	for name, value := range headers {
 		requestHeaders[name] = value
 	}
-	return provider.managementRequest(ctx, method, path, body, requestHeaders, wantStatuses, response)
+	return provider.managementRequest(ctx, method, path, body, requestHeaders, wantStatuses, response, false)
 }
 
 func (provider *managementSessionProvider) managementRequest(
@@ -359,6 +359,7 @@ func (provider *managementSessionProvider) managementRequest(
 	headers map[string]string,
 	wantStatuses []int,
 	response any,
+	strictResponse bool,
 ) error {
 	var reader io.Reader
 	if body != nil {
@@ -401,6 +402,11 @@ func (provider *managementSessionProvider) managementRequest(
 		return errFirstAdminProvisioning
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 256<<10))
+	if strictResponse {
+		// Bootstrap responses are secret-bearing variants, not additive resource
+		// projections. Keep their envelope closed to prevent variant confusion.
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(response); err != nil {
 		return errFirstAdminProvisioning
 	}

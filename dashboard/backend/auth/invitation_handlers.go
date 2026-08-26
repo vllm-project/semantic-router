@@ -80,7 +80,7 @@ func adminInvitationsHandler(svc *Service) http.HandlerFunc {
 				return
 			}
 			writeAudit(r, svc, "member.invite", "/api/admin/invitations", ac.UserID)
-			respondJSON(w, item)
+			respondInvitationSecretJSON(w, item)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -127,7 +127,7 @@ func adminInvitationItemHandler(svc *Service) http.HandlerFunc {
 				return
 			}
 			writeAudit(r, svc, "member.invitation_resend", "/api/admin/invitations/", ac.UserID)
-			respondJSON(w, item)
+			respondInvitationSecretJSON(w, item)
 			return
 		}
 		if len(parts) != 1 || r.Method != http.MethodDelete {
@@ -150,6 +150,7 @@ func adminInvitationItemHandler(svc *Service) http.HandlerFunc {
 
 func invitationInfoHandler(svc *Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "no-store")
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -191,11 +192,16 @@ func invitationAcceptHandler(svc *Service) http.HandlerFunc {
 		}
 		setAuthSessionCookie(w, r, accepted.AccessToken, svc.ttlDuration)
 		writeAudit(r, svc, "member.invitation_accept", "/api/auth/invitations/accept", accepted.User.ID)
-		respondJSON(w, struct {
+		respondInvitationSecretJSON(w, struct {
 			User       *User                          `json:"user"`
 			Onboarding managementapi.OnboardingResult `json:"onboarding"`
 		}{User: accepted.User, Onboarding: accepted.Onboarding})
 	}
+}
+
+func respondInvitationSecretJSON(w http.ResponseWriter, payload any) {
+	w.Header().Set("Cache-Control", "no-store")
+	respondJSON(w, payload)
 }
 
 func invitationNamespace(w http.ResponseWriter, r *http.Request) (string, bool) {

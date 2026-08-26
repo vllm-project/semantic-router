@@ -102,11 +102,18 @@ func (e *RedisEngine) validateFinalizationRequest(
 		)
 	}
 
+	if err := validateFinalizationEvidence(request, actual); err != nil {
+		return nil, nil, err
+	}
+	return actual, concurrency, nil
+}
+
+func validateFinalizationEvidence(request FinalizationRequest, actual []compiledRule) error {
 	unknownCount := 0
 	for _, rule := range actual {
 		evidence, exists := request.Evidence[rule.identity]
 		if !exists {
-			return nil, nil, fmt.Errorf(
+			return fmt.Errorf(
 				"%w: missing evidence for %s",
 				ErrInvalidRequest,
 				rule.identity.String(),
@@ -115,7 +122,7 @@ func (e *RedisEngine) validateFinalizationRequest(
 		switch evidence.State {
 		case ActualEvidenceKnown:
 			if evidence.Reason != "" {
-				return nil, nil, fmt.Errorf(
+				return fmt.Errorf(
 					"%w: known evidence cannot carry an unknown reason",
 					ErrInvalidRequest,
 				)
@@ -123,22 +130,22 @@ func (e *RedisEngine) validateFinalizationRequest(
 		case ActualEvidenceUnknown:
 			unknownCount++
 			if !evidence.Amount.IsZero() {
-				return nil, nil, fmt.Errorf(
+				return fmt.Errorf(
 					"%w: unknown evidence cannot carry an amount",
 					ErrInvalidRequest,
 				)
 			}
 			if err := validateOpaque("unknown evidence reason", evidence.Reason); err != nil {
-				return nil, nil, err
+				return err
 			}
 			if len(evidence.Reason) > 128 {
-				return nil, nil, fmt.Errorf(
+				return fmt.Errorf(
 					"%w: unknown evidence reason is too long",
 					ErrInvalidRequest,
 				)
 			}
 		default:
-			return nil, nil, fmt.Errorf(
+			return fmt.Errorf(
 				"%w: invalid actual evidence state %q",
 				ErrInvalidRequest,
 				evidence.State,
@@ -147,20 +154,20 @@ func (e *RedisEngine) validateFinalizationRequest(
 	}
 	for identity := range request.Evidence {
 		if err := identity.Validate(); err != nil {
-			return nil, nil, fmt.Errorf("%w: evidence counter: %w", ErrInvalidRequest, err)
+			return fmt.Errorf("%w: evidence counter: %w", ErrInvalidRequest, err)
 		}
 	}
 	if unknownCount > 0 {
 		if err := validateOpaque("fence ID", request.FenceID); err != nil {
-			return nil, nil, err
+			return err
 		}
 	} else if request.FenceID != "" {
-		return nil, nil, fmt.Errorf(
+		return fmt.Errorf(
 			"%w: fence ID is valid only when some usage is unknown",
 			ErrInvalidRequest,
 		)
 	}
-	return actual, concurrency, nil
+	return nil
 }
 
 func (e *RedisEngine) buildFinalizationScriptInput(

@@ -187,6 +187,14 @@ func (service *Service) List(ctx context.Context, request ListKeysRequest) (KeyP
 	return result, listErr
 }
 
+func (service *Service) revealableForCreate(requested *bool) bool {
+	revealable := service.defaultRevealable
+	if requested != nil {
+		revealable = *requested
+	}
+	return revealable
+}
+
 func (service *Service) Create(ctx context.Context, request CreateRequest) (SecretMutationResult, error) {
 	if service == nil {
 		return SecretMutationResult{}, ErrUnavailable
@@ -201,10 +209,7 @@ func (service *Service) Create(ctx context.Context, request CreateRequest) (Secr
 	if createErr != nil {
 		return SecretMutationResult{}, createErr
 	}
-	revealable := service.defaultRevealable
-	if request.Revealable != nil {
-		revealable = *request.Revealable
-	}
+	revealable := service.revealableForCreate(request.Revealable)
 	if validateActor(request.NamespaceID, request.Actor) != nil ||
 		validateName(request.Name) != nil || validateOwner(request.NamespaceID, request.Owner, request.ContextTeamID) != nil ||
 		validateFutureExpiry(request.ExpiresAt, now) != nil || (revealable && service.revealKEK == nil) {

@@ -8,13 +8,21 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/delegationmanagement"
 )
 
-type DelegationReadService interface {
+type DelegationContextService interface {
 	Ready(context.Context) error
 	ResolveSelf(context.Context, string, string, string) (delegationmanagement.SelfContext, error)
+}
+
+type DelegationResourceReadService interface {
 	GetKey(context.Context, string, string) (accesscontrol.APIKey, error)
 	GetSession(context.Context, string, string) (delegationmanagement.Session, error)
 	ListEligibleKeys(context.Context, delegationmanagement.ListRequest) (delegationmanagement.ResultPage[delegationmanagement.EligibleKey], error)
 	GetEligibleKey(context.Context, delegationmanagement.EligibleKeyRequest) (delegationmanagement.EligibleKey, error)
+}
+
+type DelegationReadService interface {
+	DelegationContextService
+	DelegationResourceReadService
 }
 
 type DelegationMutationService interface {

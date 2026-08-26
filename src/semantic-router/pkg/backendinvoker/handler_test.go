@@ -242,11 +242,7 @@ func TestHandlerConcurrentSnapshotGapReturnsIsolatedKnownZeroOutcome(t *testing.
 		},
 		Observer: observerStub{}, Now: func() time.Time { return now },
 	}
-	type result struct {
-		requestID string
-		response  *httptest.ResponseRecorder
-	}
-	results := make(chan result, requestCount)
+	results := make(chan concurrentHandlerResult, requestCount)
 	var workers sync.WaitGroup
 	for index := 0; index < requestCount; index++ {
 		requestID := fmt.Sprintf("request-%02d", index)
@@ -276,7 +272,7 @@ func TestHandlerConcurrentSnapshotGapReturnsIsolatedKnownZeroOutcome(t *testing.
 			request.Header.Set("Content-Type", "application/json")
 			response := httptest.NewRecorder()
 			handler.ServeHTTP(response, request)
-			results <- result{requestID: requestID, response: response}
+			results <- concurrentHandlerResult{requestID: requestID, response: response}
 		}()
 	}
 	for index := 0; index < requestCount; index++ {
@@ -286,6 +282,27 @@ func TestHandlerConcurrentSnapshotGapReturnsIsolatedKnownZeroOutcome(t *testing.
 	workers.Wait()
 	close(results)
 
+	assertConcurrentSnapshotOutcomes(t, results, keyring, now)
+	if got := physicalAttempts.Load(); got != requestCount-1 {
+		t.Fatalf("physical attempts = %d, want %d", got, requestCount-1)
+	}
+	if got := journal.dispatches.Load(); got != requestCount-1 {
+		t.Fatalf("journaled dispatches = %d, want %d", got, requestCount-1)
+	}
+}
+
+type concurrentHandlerResult struct {
+	requestID string
+	response  *httptest.ResponseRecorder
+}
+
+func assertConcurrentSnapshotOutcomes(
+	t *testing.T,
+	results <-chan concurrentHandlerResult,
+	keyring SigningKeyring,
+	now time.Time,
+) {
+	t.Helper()
 	for completed := range results {
 		values := completed.response.Header().Values(DispatchOutcomeHeader)
 		if len(values) != 1 {
@@ -308,12 +325,6 @@ func TestHandlerConcurrentSnapshotGapReturnsIsolatedKnownZeroOutcome(t *testing.
 			outcome.SelectedDispatchID == "" || outcome.Attempted[0].State != AttemptResponseStarted {
 			t.Fatalf("request %s response = %d, outcome = %+v", completed.requestID, completed.response.Code, outcome)
 		}
-	}
-	if got := physicalAttempts.Load(); got != requestCount-1 {
-		t.Fatalf("physical attempts = %d, want %d", got, requestCount-1)
-	}
-	if got := journal.dispatches.Load(); got != requestCount-1 {
-		t.Fatalf("journaled dispatches = %d, want %d", got, requestCount-1)
 	}
 }
 

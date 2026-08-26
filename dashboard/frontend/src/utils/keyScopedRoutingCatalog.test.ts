@@ -94,19 +94,16 @@ describe('key-scoped routing catalog', () => {
     })
   })
 
-  it('rejects server fields outside the credential-free contract', () => {
-    expect(() =>
-      assertKeyScopedRoutingCatalog({
-        ...catalog,
-        models: [{ ...catalog.models[0], backends: [{ credentialId: 'secret' }] }],
-      }),
-    ).toThrow('RoutingCatalog')
-    expect(() =>
-      assertKeyScopedRoutingCatalog({
-        ...catalog,
-        recipes: [{ ...catalog.recipes[0], document: { signals: {} } }],
-      }),
-    ).toThrow('RoutingCatalog')
+  it('accepts additive fields without materializing them in the read-only topology', () => {
+    const parsed = assertKeyScopedRoutingCatalog({
+      ...catalog,
+      models: [{ ...catalog.models[0], futureMetadata: { region: 'new' } }],
+      recipes: [{ ...catalog.recipes[0], futureMetadata: { family: 'new' } }],
+    })
+    const snapshot = keyScopedCatalogSnapshot(parsed)
+
+    expect(snapshot.models[0]).not.toHaveProperty('futureMetadata')
+    expect(snapshot.recipes[0]).not.toHaveProperty('futureMetadata')
   })
 
   it('rejects assignments to a Model outside the visible projection', () => {

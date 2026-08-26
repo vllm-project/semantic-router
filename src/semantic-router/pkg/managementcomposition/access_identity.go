@@ -71,20 +71,40 @@ func composeAccessIdentity(
 		return nil, fmt.Errorf("compose delegation Management: %w", err)
 	}
 
+	invitations, err := composeInvitationManagement(dependencies, commands, publicationWaiter, now)
+	if err != nil {
+		delegations.Close()
+		apiKeys.Close()
+		return nil, err
+	}
+	exchanges, err := invitationmanagement.NewIdentityExchangeCoordinator(invitations)
+	if err != nil {
+		invitations.Close()
+		delegations.Close()
+		apiKeys.Close()
+		return nil, fmt.Errorf("compose invitation identity exchange: %w", err)
+	}
+	return &accessIdentityComposition{
+		apiKeys: apiKeys, delegations: delegations, invitations: invitations, exchanges: exchanges,
+	}, nil
+}
+
+func composeInvitationManagement(
+	dependencies routingruntime.ManagementDependencies,
+	commands *managementcommand.Codec,
+	publicationWaiter invitationmanagement.FirstKeyPublicationWaiter,
+	now func() time.Time,
+) (*invitationmanagement.Service, error) {
 	firstKeys, err := invitationmanagement.NewAPIKeyFirstKeyPreparer(
 		dependencies.Keyrings.APIKeyPeppers,
 		nil,
 	)
 	if err != nil {
-		delegations.Close()
-		apiKeys.Close()
 		return nil, fmt.Errorf("compose invitation first-key issuer: %w", err)
 	}
 	invitationStore, err := invitationpostgres.New(dependencies.Database)
 	if err != nil {
 		firstKeys.Close()
-		delegations.Close()
-		apiKeys.Close()
 		return nil, fmt.Errorf("compose invitation repository: %w", err)
 	}
 	atomicStore, err := invitationpostgres.NewAtomicExchangeStore(
@@ -93,8 +113,6 @@ func composeAccessIdentity(
 	)
 	if err != nil {
 		firstKeys.Close()
-		delegations.Close()
-		apiKeys.Close()
 		return nil, fmt.Errorf("compose atomic invitation exchange: %w", err)
 	}
 	invitations, err := invitationmanagement.NewService(invitationmanagement.Options{
@@ -111,20 +129,9 @@ func composeAccessIdentity(
 	})
 	if err != nil {
 		firstKeys.Close()
-		delegations.Close()
-		apiKeys.Close()
 		return nil, fmt.Errorf("compose invitation Management: %w", err)
 	}
-	exchanges, err := invitationmanagement.NewIdentityExchangeCoordinator(invitations)
-	if err != nil {
-		invitations.Close()
-		delegations.Close()
-		apiKeys.Close()
-		return nil, fmt.Errorf("compose invitation identity exchange: %w", err)
-	}
-	return &accessIdentityComposition{
-		apiKeys: apiKeys, delegations: delegations, invitations: invitations, exchanges: exchanges,
-	}, nil
+	return invitations, nil
 }
 
 func (composition *accessIdentityComposition) Close() error {

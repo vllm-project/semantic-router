@@ -247,8 +247,7 @@ func typeScriptPropertyName(name string) string {
 	return tsString(name)
 }
 
-func renderRuntimeSchemaValidator(output *strings.Builder) {
-	output.WriteString(`function managementApiSchemaReference(schema: ManagementApiRuntimeSchema): ManagementApiRuntimeSchema {
+const runtimeSchemaValidatorTypeScript = `function managementApiSchemaReference(schema: ManagementApiRuntimeSchema): ManagementApiRuntimeSchema {
   if (!schema.$ref) return schema
   const name = schema.$ref.replace('#/components/schemas/', '') as ManagementApiSchemaName
   return MANAGEMENT_API_SCHEMAS[name]
@@ -387,5 +386,8 @@ export function assertManagementApiResponseSchema<SchemaName extends ManagementA
   }
   return value as ManagementApiSchemas[SchemaName]
 }
-`)
+`
+
+func renderRuntimeSchemaValidator(output *strings.Builder) {
+	output.WriteString(runtimeSchemaValidatorTypeScript)
 }

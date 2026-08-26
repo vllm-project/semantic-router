@@ -117,21 +117,7 @@ func normalizeEventPayload(eventType EventType, raw json.RawMessage) (any, error
 		}
 		return value, nil
 	case EventApprovalRequest:
-		value, err := decodeTranscript[ApprovalRequestEvent](raw)
-		if err != nil || uuid.Validate(value.PlanID) != nil || !validSHA256Digest(value.PlanDigest) ||
-			value.PlanRevision < 1 || strings.TrimSpace(value.PlanETag) == "" || value.ExpiresAt.IsZero() {
-			return EventAppend{}, fmt.Errorf("%w: Agent approval request event is invalid", ErrInvalid)
-		}
-		if value.Summary.Topology, err = sanitizeOptionalTranscriptObject(value.Summary.Topology); err != nil {
-			return EventAppend{}, err
-		}
-		if value.Summary.Assignments, err = sanitizeOptionalTranscriptObject(value.Summary.Assignments); err != nil {
-			return EventAppend{}, err
-		}
-		if value.Summary.GateResults, err = sanitizeOptionalTranscriptValue(value.Summary.GateResults); err != nil {
-			return EventAppend{}, err
-		}
-		return value, nil
+		return normalizeApprovalRequestEvent(raw)
 	case EventApprovalResult:
 		value, err := decodeTranscript[ApprovalResultEvent](raw)
 		if err != nil || uuid.Validate(value.PlanID) != nil ||
@@ -157,6 +143,24 @@ func normalizeEventPayload(eventType EventType, raw json.RawMessage) (any, error
 	default:
 		return nil, fmt.Errorf("%w: Agent event type is invalid", ErrInvalid)
 	}
+}
+
+func normalizeApprovalRequestEvent(raw json.RawMessage) (any, error) {
+	value, err := decodeTranscript[ApprovalRequestEvent](raw)
+	if err != nil || uuid.Validate(value.PlanID) != nil || !validSHA256Digest(value.PlanDigest) ||
+		value.PlanRevision < 1 || strings.TrimSpace(value.PlanETag) == "" || value.ExpiresAt.IsZero() {
+		return EventAppend{}, fmt.Errorf("%w: Agent approval request event is invalid", ErrInvalid)
+	}
+	if value.Summary.Topology, err = sanitizeOptionalTranscriptObject(value.Summary.Topology); err != nil {
+		return EventAppend{}, err
+	}
+	if value.Summary.Assignments, err = sanitizeOptionalTranscriptObject(value.Summary.Assignments); err != nil {
+		return EventAppend{}, err
+	}
+	if value.Summary.GateResults, err = sanitizeOptionalTranscriptValue(value.Summary.GateResults); err != nil {
+		return EventAppend{}, err
+	}
+	return value, nil
 }
 
 func decodeTranscript[T any](raw []byte) (T, error) {

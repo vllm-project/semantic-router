@@ -175,7 +175,7 @@ func recordCredentialRevocation(
 ) error {
 	_, err := appendMutationRecords(ctx, tx, accesscontrol.NamespaceID(revocation.namespaceID), outboxMutation{
 		AggregateType: "api_key", AggregateID: revocation.keyID, AggregateRevision: updated.Revision,
-		Operation: outboxCredentialRevoked,
+		Operation:  outboxCredentialRevoked,
 		References: map[string]string{"credentialId": revocation.credentialID},
 	}, revocation.meta)
 	return err

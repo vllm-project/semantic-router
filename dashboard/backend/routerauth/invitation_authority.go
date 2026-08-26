@@ -116,7 +116,7 @@ func (provider *managementSessionProvider) AcceptInvitation(
 			IssuerID:            provider.issuerID,
 			ExchangeChallengeID: challenge.ExchangeChallengeID, SubjectToken: assertion,
 			SubjectTokenType: "router_local_assertion", InvitationToken: &token,
-		}, http.StatusOK, &exchanged)
+		}, http.StatusOK, &exchanged, true)
 	if err != nil || exchanged.Onboarding == nil || exchanged.AccessToken == "" ||
 		exchanged.TokenType != "Bearer" || exchanged.ExpiresIn <= 0 {
 		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable

@@ -1,20 +1,20 @@
-import { managementOperationRequest } from './managementApiContract'
-import type {
-  DiscoverModelsPage,
-  DiscoverModelsRequest,
-  DiscoveredModel,
-  PageInfo,
-  ProviderCatalogDetail as WireProviderCatalogDetail,
-  ProviderCatalogDisplay as WireProviderCatalogDisplay,
-  ProviderCatalogIcon as WireProviderCatalogIcon,
-  ProviderCatalogItem as WireProviderCatalogItem,
-  ProviderCatalogPage as WireProviderCatalogPage,
-  ProviderConnectionField as WireProviderConnectionField,
-  ProviderCredentialPrompt as WireProviderCredentialPrompt,
-  ProviderFieldOption as WireProviderFieldOption,
-  ProviderInterface as WireProviderInterface,
-  ProviderOriginPrompt as WireProviderOriginPrompt,
+import {
+  type DiscoverModelsPage,
+  type DiscoverModelsRequest,
+  type DiscoveredModel,
+  type PageInfo,
+  type ProviderCatalogDetail as WireProviderCatalogDetail,
+  type ProviderCatalogDisplay as WireProviderCatalogDisplay,
+  type ProviderCatalogIcon as WireProviderCatalogIcon,
+  type ProviderCatalogItem as WireProviderCatalogItem,
+  type ProviderCatalogPage as WireProviderCatalogPage,
+  type ProviderConnectionField as WireProviderConnectionField,
+  type ProviderCredentialPrompt as WireProviderCredentialPrompt,
+  type ProviderFieldOption as WireProviderFieldOption,
+  type ProviderInterface as WireProviderInterface,
+  type ProviderOriginPrompt as WireProviderOriginPrompt,
 } from '../generated/managementApiContract'
+import { managementOperationRequest } from './managementApiContract'
 
 export type ProviderCredentialMode = WireProviderCredentialPrompt['mode']
 export type ProviderOriginMode = WireProviderOriginPrompt['mode']

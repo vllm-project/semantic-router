@@ -18,15 +18,11 @@ describe('unified user deletion', () => {
       { id: 'dashboard-id', email: 'other@example.com' },
     ]
 
-    expect(
-      findLinkedModelUser({ email: 'person@example.com' }, users),
-    ).toEqual(users[0])
-    expect(
-      findLinkedModelUser({ email: 'missing@example.com' }, users),
-    ).toBeNull()
+    expect(findLinkedModelUser({ email: 'person@example.com' }, users)).toEqual(users[0])
+    expect(findLinkedModelUser({ email: 'missing@example.com' }, users)).toBeNull()
   })
 
-  it('removes Dashboard login before deleting the Router identity', async () => {
+  it('deletes the Router identity before removing the Dashboard login', async () => {
     const calls: string[] = []
     const progress = await deleteUnifiedUser(initialProgress(), {
       removeDashboardLogin: vi.fn(async () => {
@@ -37,55 +33,55 @@ describe('unified user deletion', () => {
       }),
     })
 
-    expect(calls).toEqual(['login', 'identity'])
+    expect(calls).toEqual(['identity', 'login'])
     expect(progress).toEqual({ dashboardLoginRemoved: true, modelIdentityDeleted: true })
   })
 
   it('preserves completed progress so a retry only repeats the failed step', async () => {
-    const removeDashboardLogin = vi.fn(async () => undefined)
-    const firstDelete = vi.fn(async () => {
-      throw new Error('Router is unavailable')
+    const deleteModelIdentity = vi.fn(async () => undefined)
+    const firstRemove = vi.fn(async () => {
+      throw new Error('Login removal failed')
     })
 
     let progress = initialProgress()
     try {
       await deleteUnifiedUser(progress, {
-        removeDashboardLogin,
-        deleteModelIdentity: firstDelete,
+        removeDashboardLogin: firstRemove,
+        deleteModelIdentity,
       })
       throw new Error('deletion unexpectedly succeeded')
     } catch (error) {
       expect(error).toBeInstanceOf(UnifiedUserDeletionError)
       progress = (error as UnifiedUserDeletionError).progress
-      expect(progress).toEqual({ dashboardLoginRemoved: true, modelIdentityDeleted: false })
+      expect(progress).toEqual({ dashboardLoginRemoved: false, modelIdentityDeleted: true })
     }
 
-    const deleteModelIdentity = vi.fn(async () => undefined)
+    const removeDashboardLogin = vi.fn(async () => undefined)
     const completed = await deleteUnifiedUser(progress, {
       removeDashboardLogin,
       deleteModelIdentity,
     })
 
     expect(removeDashboardLogin).toHaveBeenCalledTimes(1)
-    expect(firstDelete).toHaveBeenCalledTimes(1)
+    expect(firstRemove).toHaveBeenCalledTimes(1)
     expect(deleteModelIdentity).toHaveBeenCalledTimes(1)
     expect(completed).toEqual({ dashboardLoginRemoved: true, modelIdentityDeleted: true })
   })
 
-  it('does not attempt Router deletion when removing the login fails', async () => {
-    const deleteModelIdentity = vi.fn(async () => undefined)
+  it('does not remove the login when Router deletion fails', async () => {
+    const removeDashboardLogin = vi.fn(async () => undefined)
 
     await expect(
       deleteUnifiedUser(initialProgress(), {
-        removeDashboardLogin: vi.fn(async () => {
-          throw new Error('Login removal failed')
+        removeDashboardLogin,
+        deleteModelIdentity: vi.fn(async () => {
+          throw new Error('Router is unavailable')
         }),
-        deleteModelIdentity,
       }),
     ).rejects.toMatchObject({
-      message: 'Login removal failed',
+      message: 'Router is unavailable',
       progress: { dashboardLoginRemoved: false, modelIdentityDeleted: false },
     })
-    expect(deleteModelIdentity).not.toHaveBeenCalled()
+    expect(removeDashboardLogin).not.toHaveBeenCalled()
   })
 })

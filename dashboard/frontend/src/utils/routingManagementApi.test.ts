@@ -332,28 +332,29 @@ describe('routingManagementApi', () => {
   it('rejects an Entrypoint summary that drops its Recipe references', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            data: [
-              {
-                id: 'entrypoint-one',
-                name: 'One',
-                status: 'active',
-                revision: 1,
-                entrypointRevision: 1,
-                aliases: ['one'],
-                recipeIds: [],
-                ruleCount: 1,
-                assignedModelCount: 1,
-                createdAt: '2026-08-23T00:00:00Z',
-                updatedAt: '2026-08-23T00:00:00Z',
-              },
-            ],
-            page: { hasMore: false, pageSize: 100 },
-          }),
-          { status: 200, headers: { 'Content-Type': mediaType } },
-        ),
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              data: [
+                {
+                  id: 'entrypoint-one',
+                  name: 'One',
+                  status: 'active',
+                  revision: 1,
+                  entrypointRevision: 1,
+                  aliases: ['one'],
+                  recipeIds: [],
+                  ruleCount: 1,
+                  assignedModelCount: 1,
+                  createdAt: '2026-08-23T00:00:00Z',
+                  updatedAt: '2026-08-23T00:00:00Z',
+                },
+              ],
+              page: { hasMore: false, pageSize: 100 },
+            }),
+            { status: 200, headers: { 'Content-Type': mediaType } },
+          ),
       ),
     )
 

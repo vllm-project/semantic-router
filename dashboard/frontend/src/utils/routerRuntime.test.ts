@@ -23,15 +23,11 @@ function history(...serviceNames: string[]): StatusHistory {
     services: serviceNames.map((name) => ({
       name,
       hours: Array.from({ length: STATUS_HISTORY_HOURS }, (_, index) => ({
-        observedAt: new Date(
-          through.getTime() - (STATUS_HISTORY_HOURS - 1 - index) * 3_600_000,
-        )
+        observedAt: new Date(through.getTime() - (STATUS_HISTORY_HOURS - 1 - index) * 3_600_000)
           .toISOString()
           .replace('.000Z', 'Z'),
         status:
-          index === STATUS_HISTORY_HOURS - 1
-            ? ('operational' as const)
-            : ('unknown' as const),
+          index === STATUS_HISTORY_HOURS - 1 ? ('operational' as const) : ('unknown' as const),
       })),
     })),
   }

@@ -186,26 +186,7 @@ func terminalUsageDispatch(
 	if startedAt.IsZero() || completedAt.Before(startedAt) {
 		startedAt = completedAt
 	}
-	attempts := append([]usageledger.Attempt(nil), dispatch.attempts...)
-	if len(attempts) == 0 {
-		attemptStatus := 0
-		if state == usageledger.UsageKnownActual {
-			attemptStatus = canonicalTerminalStatus(statusCode)
-		}
-		errorCode := ""
-		if state == usageledger.UsageUnknown {
-			errorCode = unknownReason
-		}
-		attemptKind := "missing"
-		if !dispatch.attemptEvidenceRequired {
-			attemptKind = "local"
-		}
-		attempts = []usageledger.Attempt{{
-			AttemptID: dispatch.id + "/attempt/" + attemptKind, Ordinal: 0,
-			State: state, StatusCode: attemptStatus, ErrorCode: errorCode,
-			StartedAt: startedAt, CompletedAt: completedAt,
-		}}
-	}
+	attempts := terminalUsageAttempts(dispatch, state, unknownReason, statusCode, startedAt, completedAt)
 	dispatchType := dispatch.dispatchType
 	if dispatchType == "" {
 		dispatchType = inferenceDispatchType(index)
@@ -253,6 +234,37 @@ func terminalUsageDispatch(
 	}
 	item.EvidenceDigest = terminalDispatchEvidenceDigest(item)
 	return item, nil
+}
+
+func terminalUsageAttempts(
+	dispatch *inferenceDispatch,
+	state usageledger.UsageState,
+	unknownReason string,
+	statusCode int,
+	startedAt,
+	completedAt time.Time,
+) []usageledger.Attempt {
+	attempts := append([]usageledger.Attempt(nil), dispatch.attempts...)
+	if len(attempts) != 0 {
+		return attempts
+	}
+	attemptStatus := 0
+	if state == usageledger.UsageKnownActual {
+		attemptStatus = canonicalTerminalStatus(statusCode)
+	}
+	errorCode := ""
+	if state == usageledger.UsageUnknown {
+		errorCode = unknownReason
+	}
+	attemptKind := "missing"
+	if !dispatch.attemptEvidenceRequired {
+		attemptKind = "local"
+	}
+	return []usageledger.Attempt{{
+		AttemptID: dispatch.id + "/attempt/" + attemptKind, Ordinal: 0,
+		State: state, StatusCode: attemptStatus, ErrorCode: errorCode,
+		StartedAt: startedAt, CompletedAt: completedAt,
+	}}
 }
 
 func terminalDispatchCost(

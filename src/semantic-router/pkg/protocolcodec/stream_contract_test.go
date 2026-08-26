@@ -349,6 +349,20 @@ func assertPublicStreamErrorWire(
 	if err := json.Unmarshal(parsed.Data, &object); err != nil {
 		t.Fatalf("public error payload is invalid JSON: %v: %s", err, parsed.Data)
 	}
+	assertPublicStreamErrorPayload(t, format, failure, parsed, object, code, message, parameter)
+}
+
+func assertPublicStreamErrorPayload(
+	t *testing.T,
+	format llmprotocol.WireFormat,
+	failure llmprotocol.FailureScope,
+	parsed sseFrame,
+	object map[string]json.RawMessage,
+	code,
+	message,
+	parameter string,
+) {
+	t.Helper()
 	switch format {
 	case llmprotocol.OpenAIChatV1:
 		if parsed.Event != "" || len(object) != 1 || object["error"] == nil {

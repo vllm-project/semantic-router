@@ -45,114 +45,185 @@ func (store *Store) applyBackchannelLogoutOnce(
 	tokenDigest [sha256.Size]byte,
 ) (managementidentity.BackchannelLogoutResult, error) {
 	return inTransaction(ctx, store, sql.LevelSerializable, func(tx *sql.Tx) (managementidentity.BackchannelLogoutResult, error) {
-		selectorKind, selectorDigest := backchannelLogoutSelector(identity)
-		if _, err := tx.ExecContext(ctx, lockBackchannelLogoutSelectorQuery, selectorDigest[:]); err != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("lock Management back-channel logout selector: %w", err)
-		}
-		var issuer, status string
-		var revision uint64
-		if err := tx.QueryRowContext(ctx, `SELECT issuer,status,revision
+		return applyBackchannelLogoutTransaction(ctx, tx, request, identity, tokenDigest)
+	})
+}
+
+func applyBackchannelLogoutTransaction(
+	ctx context.Context,
+	tx *sql.Tx,
+	request managementidentity.BackchannelLogout,
+	identity managementauth.BackchannelLogoutIdentity,
+	tokenDigest [sha256.Size]byte,
+) (managementidentity.BackchannelLogoutResult, error) {
+	issuer, revision, err := lockBackchannelLogoutIssuer(ctx, tx, identity)
+	if err != nil {
+		return managementidentity.BackchannelLogoutResult{}, err
+	}
+	replayed, err := recordBackchannelLogoutReplay(ctx, tx, identity, tokenDigest)
+	if err != nil {
+		return managementidentity.BackchannelLogoutResult{}, err
+	}
+	effectiveLogoutIssuedAt, err := persistBackchannelLogoutTombstone(ctx, tx, identity)
+	if err != nil {
+		return managementidentity.BackchannelLogoutResult{}, err
+	}
+	plan := backchannelLogoutPlanFor(
+		identity.IssuerID, issuer, identity.IssuerSessionID, identity.Subject, effectiveLogoutIssuedAt.UTC(),
+	)
+	if _, err := tx.ExecContext(ctx, plan.expireQuery, plan.arguments...); err != nil {
+		return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("expire Management sessions for back-channel logout: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, plan.revokeQuery, plan.arguments...); err != nil {
+		return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("apply Management back-channel logout: %w", err)
+	}
+	if err := appendBackchannelLogoutAudit(ctx, tx, request, identity, revision, replayed); err != nil {
+		return managementidentity.BackchannelLogoutResult{}, err
+	}
+	ids, err := listBackchannelRevokedSessionIDs(ctx, tx, plan)
+	if err != nil {
+		return managementidentity.BackchannelLogoutResult{}, err
+	}
+	return managementidentity.BackchannelLogoutResult{SessionIDs: ids, Replayed: replayed}, nil
+}
+
+func lockBackchannelLogoutIssuer(
+	ctx context.Context,
+	tx *sql.Tx,
+	identity managementauth.BackchannelLogoutIdentity,
+) (string, uint64, error) {
+	_, selectorDigest := backchannelLogoutSelector(identity)
+	if _, err := tx.ExecContext(ctx, lockBackchannelLogoutSelectorQuery, selectorDigest[:]); err != nil {
+		return "", 0, fmt.Errorf("lock Management back-channel logout selector: %w", err)
+	}
+	var issuer, status string
+	var revision uint64
+	if err := tx.QueryRowContext(ctx, `SELECT issuer,status,revision
 FROM trusted_identity_issuers WHERE id=$1 FOR SHARE`, identity.IssuerID).Scan(&issuer, &status, &revision); err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return managementidentity.BackchannelLogoutResult{}, managementidentity.ErrNotFound
-			}
-			return managementidentity.BackchannelLogoutResult{}, err
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", 0, managementidentity.ErrNotFound
 		}
-		if status != "active" {
-			return managementidentity.BackchannelLogoutResult{}, managementidentity.ErrNotFound
+		return "", 0, err
+	}
+	if status != "active" {
+		return "", 0, managementidentity.ErrNotFound
+	}
+	return issuer, revision, nil
+}
+
+func recordBackchannelLogoutReplay(
+	ctx context.Context,
+	tx *sql.Tx,
+	identity managementauth.BackchannelLogoutIdentity,
+	tokenDigest [sha256.Size]byte,
+) (bool, error) {
+	if _, err := tx.ExecContext(ctx, expireBackchannelLogoutReplaysQuery); err != nil {
+		return false, fmt.Errorf("expire Management back-channel logout replays: %w", err)
+	}
+	inserted, err := tx.ExecContext(
+		ctx, insertBackchannelLogoutReplayQuery,
+		identity.IssuerID, tokenDigest[:], identity.ClaimsDigest[:], identity.ExpiresAt.UTC(),
+	)
+	if err != nil {
+		return false, fmt.Errorf("record Management back-channel logout replay: %w", err)
+	}
+	count, err := inserted.RowsAffected()
+	if err != nil || count < 0 || count > 1 {
+		return false, errors.New("management back-channel logout replay state is invalid")
+	}
+	if count == 1 {
+		return false, nil
+	}
+	var stored []byte
+	if err := tx.QueryRowContext(
+		ctx, selectBackchannelLogoutReplayQuery, identity.IssuerID, tokenDigest[:],
+	).Scan(&stored); err != nil || !slices.Equal(stored, identity.ClaimsDigest[:]) {
+		return false, managementidentity.ErrBackchannelReplay
+	}
+	return true, nil
+}
+
+func persistBackchannelLogoutTombstone(
+	ctx context.Context,
+	tx *sql.Tx,
+	identity managementauth.BackchannelLogoutIdentity,
+) (time.Time, error) {
+	selectorKind, selectorDigest := backchannelLogoutSelector(identity)
+	var effectiveLogoutIssuedAt time.Time
+	err := tx.QueryRowContext(
+		ctx, upsertBackchannelLogoutTombstoneQuery, identity.IssuerID, selectorKind, selectorDigest[:],
+		identity.IssuedAt.UTC(), identity.ExpiresAt.UTC(),
+	).Scan(&effectiveLogoutIssuedAt)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("persist Management back-channel logout selector: %w", err)
+	}
+	return effectiveLogoutIssuedAt, nil
+}
+
+func appendBackchannelLogoutAudit(
+	ctx context.Context,
+	tx *sql.Tx,
+	request managementidentity.BackchannelLogout,
+	identity managementauth.BackchannelLogoutIdentity,
+	revision uint64,
+	replayed bool,
+) error {
+	if replayed {
+		return nil
+	}
+	return appendAudit(ctx, tx, auditMutation{
+		Action: "management_session.backchannel_logout", ResourceType: "trusted_identity_issuer",
+		ResourceID: identity.IssuerID, AfterRevision: revision, ExternalActor: true,
+		Actor: managementidentity.MutationActor{
+			RequestID: request.RequestID,
+			Reason:    "Trusted issuer back-channel logout",
+		},
+	})
+}
+
+func listBackchannelRevokedSessionIDs(
+	ctx context.Context,
+	tx *sql.Tx,
+	plan backchannelLogoutPlan,
+) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, plan.listQuery, plan.arguments...)
+	if err != nil {
+		return nil, fmt.Errorf("list back-channel revoked Management sessions: %w", err)
+	}
+	defer rows.Close()
+	ids := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
 		}
-		if _, err := tx.ExecContext(ctx, `WITH expired AS (
+		if !canonicalUUID(id) {
+			return nil, errors.New("stored Management session identifier is invalid")
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+const expireBackchannelLogoutReplaysQuery = `WITH expired AS (
   SELECT issuer_id,token_id_digest FROM management_backchannel_logout_replays
   WHERE expires_at<=clock_timestamp()-interval '2 minutes' ORDER BY expires_at LIMIT 1000
 )
 DELETE FROM management_backchannel_logout_replays replay
 USING expired
-WHERE replay.issuer_id=expired.issuer_id AND replay.token_id_digest=expired.token_id_digest`); err != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("expire Management back-channel logout replays: %w", err)
-		}
-		inserted, applyBackchannelLogoutErr := tx.ExecContext(ctx, `INSERT INTO management_backchannel_logout_replays
+WHERE replay.issuer_id=expired.issuer_id AND replay.token_id_digest=expired.token_id_digest`
+
+const insertBackchannelLogoutReplayQuery = `INSERT INTO management_backchannel_logout_replays
   (issuer_id,token_id_digest,claims_digest,expires_at)
 VALUES ($1,$2,$3,$4)
-ON CONFLICT (issuer_id,token_id_digest) DO NOTHING`, identity.IssuerID, tokenDigest[:], identity.ClaimsDigest[:], identity.ExpiresAt.UTC())
-		if applyBackchannelLogoutErr != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("record Management back-channel logout replay: %w", applyBackchannelLogoutErr)
-		}
-		count, applyBackchannelLogoutErr := inserted.RowsAffected()
-		if applyBackchannelLogoutErr != nil || count < 0 || count > 1 {
-			return managementidentity.BackchannelLogoutResult{}, errors.New("management back-channel logout replay state is invalid")
-		}
-		replayed := count == 0
-		if replayed {
-			var stored []byte
-			if err := tx.QueryRowContext(ctx, `SELECT claims_digest
-FROM management_backchannel_logout_replays
-WHERE issuer_id=$1 AND token_id_digest=$2 FOR UPDATE`, identity.IssuerID, tokenDigest[:]).Scan(&stored); err != nil {
-				return managementidentity.BackchannelLogoutResult{}, managementidentity.ErrBackchannelReplay
-			}
-			if !slices.Equal(stored, identity.ClaimsDigest[:]) {
-				return managementidentity.BackchannelLogoutResult{}, managementidentity.ErrBackchannelReplay
-			}
-		}
-		var effectiveLogoutIssuedAt time.Time
-		if err := tx.QueryRowContext(
-			ctx,
-			upsertBackchannelLogoutTombstoneQuery,
-			identity.IssuerID,
-			selectorKind,
-			selectorDigest[:],
-			identity.IssuedAt.UTC(),
-			identity.ExpiresAt.UTC(),
-		).Scan(&effectiveLogoutIssuedAt); err != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("persist Management back-channel logout selector: %w", err)
-		}
+ON CONFLICT (issuer_id,token_id_digest) DO NOTHING`
 
-		plan := backchannelLogoutPlanFor(
-			identity.IssuerID,
-			issuer,
-			identity.IssuerSessionID,
-			identity.Subject,
-			effectiveLogoutIssuedAt.UTC(),
-		)
-		if _, err := tx.ExecContext(ctx, plan.expireQuery, plan.arguments...); err != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("expire Management sessions for back-channel logout: %w", err)
-		}
-		if _, err := tx.ExecContext(ctx, plan.revokeQuery, plan.arguments...); err != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("apply Management back-channel logout: %w", err)
-		}
-		if !replayed {
-			if err := appendAudit(ctx, tx, auditMutation{
-				Action: "management_session.backchannel_logout", ResourceType: "trusted_identity_issuer",
-				ResourceID: identity.IssuerID, AfterRevision: revision, ExternalActor: true,
-				Actor: managementidentity.MutationActor{
-					RequestID: request.RequestID,
-					Reason:    "Trusted issuer back-channel logout",
-				},
-			}); err != nil {
-				return managementidentity.BackchannelLogoutResult{}, err
-			}
-		}
-		rows, applyBackchannelLogoutErr := tx.QueryContext(ctx, plan.listQuery, plan.arguments...)
-		if applyBackchannelLogoutErr != nil {
-			return managementidentity.BackchannelLogoutResult{}, fmt.Errorf("list back-channel revoked Management sessions: %w", applyBackchannelLogoutErr)
-		}
-		defer rows.Close()
-		ids := make([]string, 0)
-		for rows.Next() {
-			var id string
-			if err := rows.Scan(&id); err != nil {
-				return managementidentity.BackchannelLogoutResult{}, err
-			}
-			if !canonicalUUID(id) {
-				return managementidentity.BackchannelLogoutResult{}, errors.New("stored Management session identifier is invalid")
-			}
-			ids = append(ids, id)
-		}
-		if err := rows.Err(); err != nil {
-			return managementidentity.BackchannelLogoutResult{}, err
-		}
-		return managementidentity.BackchannelLogoutResult{SessionIDs: ids, Replayed: replayed}, nil
-	})
-}
+const selectBackchannelLogoutReplayQuery = `SELECT claims_digest
+FROM management_backchannel_logout_replays
+WHERE issuer_id=$1 AND token_id_digest=$2 FOR UPDATE`
 
 const lockBackchannelLogoutSelectorQuery = `SELECT pg_advisory_xact_lock(
   hashtextextended(encode($1::bytea, 'hex'), 0))`

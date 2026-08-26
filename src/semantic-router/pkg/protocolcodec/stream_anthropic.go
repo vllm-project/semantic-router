@@ -73,6 +73,13 @@ func (decoder *anthropicStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Ev
 	if wire.Type == "" {
 		wire.Type = parsed.Event
 	}
+	return decoder.decodeEvent(wire, frame)
+}
+
+func (decoder *anthropicStreamDecoder) decodeEvent(
+	wire anthropicEventWire,
+	frame []byte,
+) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
 	events := make([]llmprotocol.Event, 0, 2)
 	switch wire.Type {
 	case "message_start":

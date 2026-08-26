@@ -527,11 +527,7 @@ export function APIKeyDetail({
                           </button>
                         </span>
                       ) : visibleResourceNames.length ? (
-                        visibleResourceNames.map((name) => (
-                          <code key={name}>
-                            {name}
-                          </code>
-                        ))
+                        visibleResourceNames.map((name) => <code key={name}>{name}</code>)
                       ) : (
                         'No models assigned'
                       )}

@@ -32,27 +32,15 @@ export function findLinkedModelUser<T extends { id: string; email: string }>(
 }
 
 /**
- * Remove the Dashboard login first, then tombstone the Router identity. If the
- * second step fails, the remaining Router user stays visible and the returned
- * progress lets a retry resume without repeating step one.
+ * Revoke the Router identity before removing the Dashboard login. A partial
+ * failure therefore leaves a visible login with no model access, and either
+ * the in-place retry or the directory state after a reload can finish safely.
  */
 export async function deleteUnifiedUser(
   current: UnifiedUserDeletionProgress,
   dependencies: UnifiedUserDeletionDependencies,
 ): Promise<UnifiedUserDeletionProgress> {
   let progress = { ...current }
-
-  if (!progress.dashboardLoginRemoved) {
-    try {
-      await dependencies.removeDashboardLogin()
-      progress = { ...progress, dashboardLoginRemoved: true }
-    } catch (error) {
-      throw new UnifiedUserDeletionError(
-        errorMessage(error, 'Could not remove Dashboard login'),
-        progress,
-      )
-    }
-  }
 
   if (!progress.modelIdentityDeleted) {
     try {
@@ -61,6 +49,18 @@ export async function deleteUnifiedUser(
     } catch (error) {
       throw new UnifiedUserDeletionError(
         errorMessage(error, 'Could not delete model identity'),
+        progress,
+      )
+    }
+  }
+
+  if (!progress.dashboardLoginRemoved) {
+    try {
+      await dependencies.removeDashboardLogin()
+      progress = { ...progress, dashboardLoginRemoved: true }
+    } catch (error) {
+      throw new UnifiedUserDeletionError(
+        errorMessage(error, 'Could not remove Dashboard login'),
         progress,
       )
     }

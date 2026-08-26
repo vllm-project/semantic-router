@@ -129,9 +129,7 @@ export default function InsightsRecordPage() {
             {loading ? 'Refreshing…' : 'Refresh'}
           </button>
         </div>
-        {loading ? (
-          <ProductLoadingState compact label="Loading insight record" />
-        ) : null}
+        {loading ? <ProductLoadingState compact label="Loading insight record" /> : null}
 
         {!loading && !error && record ? (
           <ViewPanel

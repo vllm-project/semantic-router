@@ -52,8 +52,9 @@ func TestManagementSessionProviderExchangesPrincipalAssertionAndCachesToken(t *t
 		case managementBasePath + "/auth/exchange-challenges":
 			challengeCalls++
 			response.WriteHeader(http.StatusCreated)
-			_ = json.NewEncoder(response).Encode(exchangeChallenge{
-				ExchangeChallengeID: challengeID, Nonce: "router-nonce", ExpiresAt: now.Add(time.Minute),
+			_ = json.NewEncoder(response).Encode(map[string]any{
+				"exchangeChallengeId": challengeID, "nonce": "router-nonce",
+				"expiresAt": now.Add(time.Minute), "futureMetadata": "ignored",
 			})
 		case managementBasePath + "/auth/token-exchange":
 			exchangeCalls++
@@ -126,6 +127,34 @@ func TestManagementSessionProviderExchangesPrincipalAssertionAndCachesToken(t *t
 	}
 }
 
+func TestManagementResponseDecodingClosesOnlySecretBearingVariants(t *testing.T) {
+	t.Parallel()
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set("Content-Type", managementMediaType)
+		_ = json.NewEncoder(response).Encode(map[string]any{
+			"accessToken": "token", "tokenType": "Bearer", "expiresIn": 60,
+			"managementSessionId": "10000000-0000-4000-8000-000000000003",
+			"onboarding":          map[string]any{},
+		})
+	}))
+	defer server.Close()
+
+	provider := &managementSessionProvider{routerURL: server.URL, client: server.Client()}
+	var envelope managementTokenEnvelope
+	if err := provider.request(
+		context.Background(), http.MethodPost, "/response", map[string]string{},
+		http.StatusOK, &envelope, true,
+	); err == nil {
+		t.Fatal("closed token envelope accepted an onboarding variant")
+	}
+	if err := provider.request(
+		context.Background(), http.MethodPost, "/response", map[string]string{},
+		http.StatusOK, &envelope, false,
+	); err != nil {
+		t.Fatalf("additive resource response rejected a future field: %v", err)
+	}
+}
+
 func TestManagementSessionProviderRejectsInvalidSourceSessionExpiry(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
@@ -168,7 +197,9 @@ func TestManagementSessionProviderRetiresDerivedSessionByIssuerSessionID(t *test
 		if err := json.NewDecoder(request.Body).Decode(&requestBody); err != nil {
 			t.Error(err)
 		}
-		_ = json.NewEncoder(response).Encode(map[string]bool{"applied": true, "replayed": false})
+		_ = json.NewEncoder(response).Encode(map[string]any{
+			"applied": true, "replayed": false, "futureMetadata": "ignored",
+		})
 	}))
 	defer server.Close()
 

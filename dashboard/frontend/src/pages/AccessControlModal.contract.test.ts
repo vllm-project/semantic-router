@@ -75,8 +75,12 @@ describe('access-control modal experience', () => {
     expect(
       styles.match(/width: min\(var\(--product-dialog-content-width\), 100%\);/g),
     ).toHaveLength(3)
+    expect(styles).toMatch(/@media \(max-width: 760px\)[\s\S]*?\.modal\s*{[\s\S]*?width: 100%;/)
     expect(styles).toMatch(
-      /@media \(max-width: 760px\)[\s\S]*?\.modal\s*{[\s\S]*?width: 100%;/,
+      /@media \(max-width: 760px\)[\s\S]*?\.detailDialog\s*{[\s\S]*?width: 100%;/,
+    )
+    expect(styles).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.entityDetailDialog\s*{[\s\S]*?width: 100%;/,
     )
   })
 
@@ -86,13 +90,11 @@ describe('access-control modal experience', () => {
     const styles = readSource('./AccessControlPage.module.css')
 
     expect(dialog).toContain('inlineCompactMenu')
+    expect(dialog).toContain('placeholder="Search Team name"')
     expect(picker).toContain('styles.asyncPickerInlineExpanded')
-    expect(styles).toMatch(
-      /\.asyncPickerInlineExpanded \.asyncPickerSearch\s*{[\s\S]*?border: 0;/,
-    )
-    expect(styles).toMatch(
-      /\.asyncPickerInlineExpanded \.asyncPickerMenu\s*{[\s\S]*?border: 0;/,
-    )
+    expect(picker.match(/type="search"/g)).toHaveLength(1)
+    expect(styles).toMatch(/\.asyncPickerInlineExpanded \.asyncPickerSearch\s*{[\s\S]*?border: 0;/)
+    expect(styles).toMatch(/\.asyncPickerInlineExpanded \.asyncPickerMenu\s*{[\s\S]*?border: 0;/)
   })
 
   it('returns from entity editing to the same detail dialog', () => {
@@ -105,6 +107,8 @@ describe('access-control modal experience', () => {
   it('keeps entity deletion pending and failure state inside the open dialog', () => {
     const detail = readSource('./AccessEntityDetail.tsx')
     const page = readSource('./AccessControlPage.tsx')
+    const directory = readSource('./useAccessControlDirectory.ts')
+    const viewData = readSource('./useAccessControlViewData.ts')
     const tombstones = readSource('./accessEntityDeletionState.ts')
 
     expect(detail).toContain('const [deletePending, setDeletePending]')
@@ -115,11 +119,13 @@ describe('access-control modal experience', () => {
     expect(page).toContain('removeLocalEntity(kind, id)')
     expect(page).toContain('refreshAfterDelete()')
     expect(page).toContain('rememberDeletedAccessEntity(deletionTombstonesRef.current, kind, id)')
-    expect(page).toContain('omitDeletedAccessEntities(')
-    expect(page).toContain('generation === viewLoadGenerationRef.current')
+    expect(directory).toContain('omitDeletedAccessEntities(')
+    expect(viewData).toContain('generation === viewLoadGenerationRef.current')
     expect(tombstones).toContain('dashboard-member')
     expect(tombstones).toContain("| 'key'")
-    expect(page).toContain("rememberDeletedAccessEntity(deletionTombstonesRef.current, 'key', keyId)")
+    expect(page).toContain(
+      "rememberDeletedAccessEntity(deletionTombstonesRef.current, 'key', keyId)",
+    )
   })
 
   it('separates Dashboard login removal from coordinated user deletion', () => {
@@ -153,6 +159,8 @@ describe('access-control modal experience', () => {
     expect(detail).toContain('Edit access & quota')
     expect(detail).toContain('disabled={!snippets}')
     expect(detail).toContain('No request-ready model is available for this key.')
+    expect(detail).toContain('apiKeyVisibleResourceNames(resources, resourceResolutions)')
+    expect(detail).toContain('apiKeyQuickstartModel(resources, resourceResolutions)')
     expect(detail).toContain("? 'Names unavailable'")
     expect(detail).not.toContain("key.accessGroupIds.join(', ')")
     expect(detail).not.toContain('YOUR_MODEL')
@@ -240,14 +248,18 @@ describe('access-control modal experience', () => {
 
   it('keeps table pagination independent from bounded form selectors', () => {
     const page = readSource('./AccessControlPage.tsx')
+    const directory = readSource('./useAccessControlDirectory.ts')
+    const viewData = readSource('./useAccessControlViewData.ts')
     const fields = readSource('./AccessControlEditorFields.tsx')
     const invitation = readSource('./DashboardMemberInviteDialog.tsx')
     const picker = readSource('./AccessAsyncResourcePicker.tsx')
     const usage = readSource('./AccessControlUsageView.tsx')
 
-    expect(page).toContain('accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page])')
-    expect(page).toContain('loadAllAccessUsers(inferenceAccessApi.users)')
-    expect(page).toContain('loadAllDashboardMembers()')
+    expect(viewData).toContain(
+      'accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page])',
+    )
+    expect(viewData).toContain('loadAllAccessUsers(inferenceAccessApi.users)')
+    expect(directory).toContain('loadAllDashboardMembers()')
     expect(page).toContain('selectors={accessControlSelectorSources}')
     expect(page).not.toContain('inferenceAccessApi.users({ limit: 100 })')
     expect(page).not.toContain('inferenceAccessApi.teams({ limit: 100 })')
@@ -271,7 +283,7 @@ describe('access-control modal experience', () => {
   })
 
   it('renders access grants with product names instead of internal resource ids', () => {
-    const page = readSource('./AccessControlPage.tsx')
+    const labels = readSource('./useAccessControlViewData.ts')
     const policies = readSource('./AccessControlPolicyViews.tsx')
     const detail = renderToStaticMarkup(
       createElement(AccessGroupResourceTags, {
@@ -286,10 +298,10 @@ describe('access-control modal experience', () => {
       }),
     )
 
-    expect(page).toContain('accessControlSelectorSources.models.detail(resource.resourceId)')
-    expect(page).toContain('accessControlSelectorSources.entrypoints.detail(resource.resourceId)')
-    expect(page).toContain("'Model name unavailable'")
-    expect(page).toContain("'Mixture-of-Model name unavailable'")
+    expect(labels).toContain('accessControlSelectorSources.models.detail(resource.resourceId)')
+    expect(labels).toContain('accessControlSelectorSources.entrypoints.detail(resource.resourceId)')
+    expect(labels).toContain("'Model name unavailable'")
+    expect(labels).toContain("'Mixture-of-Model name unavailable'")
     expect(policies).toContain('props.resourceName(resource.resourceType, resource.resourceId)')
     expect(detail).toContain('Customer support model')
     expect(detail).toContain('Customer support endpoint')
@@ -298,13 +310,13 @@ describe('access-control modal experience', () => {
   })
 
   it('lets viewers read Dashboard identities without requesting invitation authority', () => {
-    const page = readSource('./AccessControlPage.tsx')
+    const directory = readSource('./useAccessControlDirectory.ts')
     const identities = readSource('./AccessControlIdentityViews.tsx')
 
-    expect(page).toContain('if (!canReadDashboardMembers) return')
-    expect(page).toContain('canManageDashboardMembers')
-    expect(page).toContain('? dashboardMemberInvitationApi.list()')
-    expect(page).toContain(': Promise.resolve({ items: [] as DashboardMemberInvitation[] })')
+    expect(directory).toContain('if (!canReadDashboardMembers) return')
+    expect(directory).toContain('canManageDashboardMembers')
+    expect(directory).toContain('? dashboardMemberInvitationApi.list()')
+    expect(directory).toContain(': Promise.resolve({ items: [] as DashboardMemberInvitation[] })')
     expect(identities).toContain(
       "props.canManageDashboardMembers && props.identityTab === 'invitations'",
     )

@@ -24,14 +24,14 @@ def _decision(**overrides):
 
 
 def test_decision_without_description_parses():
-    config = UserConfig(version="0.3", routing={"decisions": [_decision()]})
+    config = UserConfig(version="v0.3", routing={"decisions": [_decision()]})
 
     assert config.decisions[0].description is None
 
 
 def test_decision_with_description_still_parses():
     config = UserConfig(
-        version="0.3",
+        version="v0.3",
         routing={"decisions": [_decision(description="Routes vision requests.")]},
     )
 

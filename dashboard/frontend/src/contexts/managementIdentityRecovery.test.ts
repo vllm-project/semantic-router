@@ -22,9 +22,7 @@ describe('Router Management identity recovery', () => {
   })
 
   it('backs off retries without ever exceeding the recovery ceiling', () => {
-    expect([0, 1, 2, 3].map(managementIdentityRecoveryDelay)).toEqual([
-      2_000, 4_000, 8_000, 16_000,
-    ])
+    expect([0, 1, 2, 3].map(managementIdentityRecoveryDelay)).toEqual([2_000, 4_000, 8_000, 16_000])
     expect(managementIdentityRecoveryDelay(4)).toBe(30_000)
     expect(managementIdentityRecoveryDelay(100)).toBe(30_000)
   })

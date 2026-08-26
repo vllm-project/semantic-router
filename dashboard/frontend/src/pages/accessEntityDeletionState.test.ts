@@ -22,9 +22,9 @@ describe('access entity deletion tombstones', () => {
     const tombstones = createAccessEntityDeletionTombstones()
     rememberDeletedAccessEntity(tombstones, 'dashboard-member', 'shared-id')
 
-    expect(omitDeletedAccessEntities(tombstones, 'dashboard-member', [{ id: 'shared-id' }])).toEqual(
-      [],
-    )
+    expect(
+      omitDeletedAccessEntities(tombstones, 'dashboard-member', [{ id: 'shared-id' }]),
+    ).toEqual([])
     expect(omitDeletedAccessEntities(tombstones, 'user', [{ id: 'shared-id' }])).toEqual([
       { id: 'shared-id' },
     ])
@@ -35,10 +35,7 @@ describe('access entity deletion tombstones', () => {
     rememberDeletedAccessEntity(tombstones, 'key', 'key-deleted')
 
     expect(
-      omitDeletedAccessEntities(tombstones, 'key', [
-        { id: 'key-deleted' },
-        { id: 'key-active' },
-      ]),
+      omitDeletedAccessEntities(tombstones, 'key', [{ id: 'key-deleted' }, { id: 'key-active' }]),
     ).toEqual([{ id: 'key-active' }])
   })
 })

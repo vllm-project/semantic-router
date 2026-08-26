@@ -163,56 +163,9 @@ func (client *HTTPPublicInferenceClient) Generate(
 		return PublicInferenceObservation{}, errors.New("agent public inference did not return a semantic event stream")
 	}
 	observation := publicInferenceObservationFromHeaders(response.Header, requestID)
-	stream, err := client.engine.NewStream(
-		llmprotocol.OpenAIChatV1,
-		llmprotocol.OpenAIChatV1,
-		llmprotocol.StreamContext{
-			Context:     callContext,
-			PublicModel: request.Model,
-		},
+	firstOutputAt, err := client.emitPublicInferenceStream(
+		callContext, request.Model, response.Body, emit, now,
 	)
-	if err != nil {
-		return PublicInferenceObservation{}, fmt.Errorf("open Agent inference stream: %w", err)
-	}
-	var firstOutputAt *time.Time
-	emitObserved := func(event llmprotocol.Event) error {
-		if firstOutputAt == nil && publicInferenceOutputStarted(event) {
-			seenAt := now()
-			firstOutputAt = &seenAt
-		}
-		return emit(event)
-	}
-	buffer := make([]byte, 32<<10)
-	for {
-		count, readErr := response.Body.Read(buffer)
-		if count > 0 {
-			_, events, _, decodeErr := stream.Push(buffer[:count])
-			for _, event := range events {
-				if emitErr := emitObserved(event); emitErr != nil {
-					return PublicInferenceObservation{}, emitErr
-				}
-			}
-			if decodeErr != nil {
-				return PublicInferenceObservation{}, fmt.Errorf("decode Agent inference stream: %w", decodeErr)
-			}
-		}
-		if readErr != nil {
-			if !errors.Is(readErr, io.EOF) {
-				_, events, _, _ := stream.Finalize(readErr)
-				for _, event := range events {
-					_ = emitObserved(event)
-				}
-				return PublicInferenceObservation{}, fmt.Errorf("read Agent inference stream: %w", readErr)
-			}
-			break
-		}
-	}
-	_, events, _, err := stream.Finalize(nil)
-	for _, event := range events {
-		if emitErr := emitObserved(event); emitErr != nil {
-			return PublicInferenceObservation{}, emitErr
-		}
-	}
 	if err != nil {
 		return PublicInferenceObservation{}, err
 	}
@@ -226,6 +179,69 @@ func (client *HTTPPublicInferenceClient) Generate(
 		observation.TTFTMilliseconds = &ttft
 	}
 	return observation, nil
+}
+
+func (client *HTTPPublicInferenceClient) emitPublicInferenceStream(
+	ctx context.Context,
+	publicModel string,
+	source io.Reader,
+	emit func(llmprotocol.Event) error,
+	now func() time.Time,
+) (*time.Time, error) {
+	stream, err := client.engine.NewStream(
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.StreamContext{
+			Context:     ctx,
+			PublicModel: publicModel,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("open Agent inference stream: %w", err)
+	}
+	var firstOutputAt *time.Time
+	emitObserved := func(event llmprotocol.Event) error {
+		if firstOutputAt == nil && publicInferenceOutputStarted(event) {
+			seenAt := now()
+			firstOutputAt = &seenAt
+		}
+		return emit(event)
+	}
+	buffer := make([]byte, 32<<10)
+	for {
+		count, readErr := source.Read(buffer)
+		if count > 0 {
+			_, events, _, decodeErr := stream.Push(buffer[:count])
+			for _, event := range events {
+				if emitErr := emitObserved(event); emitErr != nil {
+					return nil, emitErr
+				}
+			}
+			if decodeErr != nil {
+				return nil, fmt.Errorf("decode Agent inference stream: %w", decodeErr)
+			}
+		}
+		if readErr != nil {
+			if !errors.Is(readErr, io.EOF) {
+				_, events, _, _ := stream.Finalize(readErr)
+				for _, event := range events {
+					_ = emitObserved(event)
+				}
+				return nil, fmt.Errorf("read Agent inference stream: %w", readErr)
+			}
+			break
+		}
+	}
+	_, events, _, err := stream.Finalize(nil)
+	for _, event := range events {
+		if emitErr := emitObserved(event); emitErr != nil {
+			return nil, emitErr
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return firstOutputAt, nil
 }
 
 func publicInferenceObservationFromHeaders(

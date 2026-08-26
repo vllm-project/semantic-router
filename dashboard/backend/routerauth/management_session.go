@@ -292,6 +292,7 @@ func (provider *managementSessionProvider) RetireDashboardSession(
 		map[string]string{"issuerId": provider.issuerID, "logoutToken": logoutToken},
 		http.StatusOK,
 		&response,
+		false,
 	); err != nil || (!response.Applied && !response.Replayed) {
 		return ErrManagementSessionUnavailable
 	}
@@ -328,7 +329,7 @@ func (provider *managementSessionProvider) challenge(ctx context.Context) (excha
 	var response exchangeChallenge
 	err := provider.request(ctx, http.MethodPost, managementBasePath+"/auth/exchange-challenges", map[string]string{
 		"issuerId": provider.issuerID,
-	}, http.StatusCreated, &response)
+	}, http.StatusCreated, &response, false)
 	return response, err
 }
 
@@ -386,7 +387,7 @@ func (provider *managementSessionProvider) exchange(
 		"exchangeChallengeId": challengeID,
 		"subjectToken":        assertion,
 		"subjectTokenType":    "router_local_assertion",
-	}, http.StatusOK, &response)
+	}, http.StatusOK, &response, true)
 	return response, err
 }
 
@@ -397,6 +398,7 @@ func (provider *managementSessionProvider) request(
 	body any,
 	expectedStatus int,
 	response any,
+	strictResponse bool,
 ) error {
 	encoded, err := json.Marshal(body)
 	if err != nil {
@@ -423,6 +425,12 @@ func (provider *managementSessionProvider) request(
 		)
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 64<<10))
+	if strictResponse {
+		// Token exchange has mutually exclusive normal and onboarding envelopes.
+		// Reject unknown fields so a one-time onboarding secret can never be
+		// discarded while the response is mistaken for a normal session.
+		decoder.DisallowUnknownFields()
+	}
 	if err := decoder.Decode(response); err != nil {
 		return err
 	}

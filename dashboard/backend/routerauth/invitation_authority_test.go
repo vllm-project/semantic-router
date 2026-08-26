@@ -192,9 +192,10 @@ func TestInvitationCreateHandlerUsesRouterAuthorityWithoutAutomaticFirstKey(t *t
 	request.Header.Set(managementapi.HeaderIdempotencyKey, "invite-handler-contract")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), invitationResourceID) ||
+	if response.Code != http.StatusOK || response.Header().Get("Cache-Control") != "no-store" ||
+		!strings.Contains(response.Body.String(), invitationResourceID) ||
 		!strings.Contains(response.Body.String(), "router-invitation-token") {
-		t.Fatalf("create status=%d body=%s", response.Code, response.Body.String())
+		t.Fatalf("create status=%d headers=%#v body=%s", response.Code, response.Header(), response.Body.String())
 	}
 }
 

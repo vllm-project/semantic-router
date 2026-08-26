@@ -82,7 +82,7 @@ describe('provider catalog management client', () => {
     )
   })
 
-  it('loads strict provider detail and rejects executor metadata', async () => {
+  it('loads provider detail across additive Management response fields', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(response({ data: provider, catalogRevision: revision }))
@@ -97,7 +97,9 @@ describe('provider catalog management client', () => {
     await expect(getProviderCatalogDetail('example')).resolves.toMatchObject({
       data: { providerId: 'example' },
     })
-    await expect(getProviderCatalogDetail('example')).rejects.toMatchObject({ status: 502 })
+    await expect(getProviderCatalogDetail('example')).resolves.toMatchObject({
+      data: { providerId: 'example' },
+    })
   })
 
   it('discovers by credential reference and typed fields without sending a raw key', async () => {

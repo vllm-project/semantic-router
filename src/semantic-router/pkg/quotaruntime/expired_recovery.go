@@ -414,25 +414,9 @@ func (e *RedisEngine) buildExpiredFinalization(
 	} else if unknown > 0 {
 		evidenceState = usageledger.EvidenceUnknown
 	}
-	actualEvidence := make(map[quota.CounterIdentity]ActualEvidence)
-	fenceBindings := make([]usageledger.FenceBinding, 0)
-	for _, binding := range snapshot.record.Rules {
-		if !binding.isResponseActual() {
-			continue
-		}
-		identity, err := binding.Counter()
-		if err != nil {
-			return FinalizationRequest{}, err
-		}
-		if unknown == 0 {
-			actualEvidence[identity] = ActualEvidence{State: ActualEvidenceKnown, Amount: quota.QuotaInteger{}}
-			continue
-		}
-		actualEvidence[identity] = ActualEvidence{State: ActualEvidenceUnknown, Reason: expiredAdmissionReason}
-		fenceBindings = append(fenceBindings, usageledger.FenceBinding{
-			BindingID: identity.BindingID, RuleID: identity.RuleID,
-			AdmissionLimit: binding.limit().String(),
-		})
+	actualEvidence, fenceBindings, err := expiredRecoveryEvidence(snapshot.record.Rules, unknown)
+	if err != nil {
+		return FinalizationRequest{}, err
 	}
 	completedAt := snapshot.deadline.UTC()
 	for _, dispatch := range dispatches {
@@ -444,7 +428,37 @@ func (e *RedisEngine) buildExpiredFinalization(
 	if completedAt.Before(occurredAt) {
 		occurredAt = completedAt
 	}
-	event := usageledger.TerminalEvent{
+	event := expiredRecoveryEvent(snapshot, evidenceState, unknown, occurredAt, completedAt, dispatches)
+	fenceID := ""
+	if unknown > 0 && len(fenceBindings) > 0 {
+		fenceID = snapshot.record.Context.FenceID
+		event.Fence = &usageledger.UnknownFence{
+			FenceID: fenceID, Reason: expiredAdmissionReason, Bindings: fenceBindings,
+		}
+	}
+	encoded, digest, err := finalizeRecoveryEvent(event)
+	if err != nil {
+		return FinalizationRequest{}, err
+	}
+	return FinalizationRequest{
+		Partition: snapshot.partition, AdmissionID: snapshot.admissionID,
+		AdmissionDigest: snapshot.admissionDigest, FinalizationDigest: digest,
+		DispatchCount: uint32(len(snapshot.dispatches)), EvidenceRevision: observedRevision,
+		ExpectedAdmissionDeadline: snapshot.deadline,
+		Event:                     encoded, EventEvidenceState: evidenceState,
+		FenceID: fenceID, Rules: snapshot.record.Rules, Evidence: actualEvidence,
+	}, nil
+}
+
+func expiredRecoveryEvent(
+	snapshot expiredAdmissionSnapshot,
+	evidenceState usageledger.EvidenceState,
+	unknown int,
+	occurredAt time.Time,
+	completedAt time.Time,
+	dispatches []usageledger.Dispatch,
+) usageledger.TerminalEvent {
+	return usageledger.TerminalEvent{
 		Schema:              usageledger.TerminalEventSchema,
 		EventID:             snapshot.record.Context.EventID,
 		NamespaceID:         snapshot.record.Context.NamespaceID,
@@ -483,25 +497,33 @@ func (e *RedisEngine) buildExpiredFinalization(
 		},
 		Dispatches: dispatches,
 	}
-	fenceID := ""
-	if unknown > 0 && len(fenceBindings) > 0 {
-		fenceID = snapshot.record.Context.FenceID
-		event.Fence = &usageledger.UnknownFence{
-			FenceID: fenceID, Reason: expiredAdmissionReason, Bindings: fenceBindings,
+}
+
+func expiredRecoveryEvidence(
+	rules []RuleBinding,
+	unknown int,
+) (map[quota.CounterIdentity]ActualEvidence, []usageledger.FenceBinding, error) {
+	actual := make(map[quota.CounterIdentity]ActualEvidence)
+	fences := make([]usageledger.FenceBinding, 0)
+	for _, binding := range rules {
+		if !binding.isResponseActual() {
+			continue
 		}
+		identity, err := binding.Counter()
+		if err != nil {
+			return nil, nil, err
+		}
+		if unknown == 0 {
+			actual[identity] = ActualEvidence{State: ActualEvidenceKnown, Amount: quota.QuotaInteger{}}
+			continue
+		}
+		actual[identity] = ActualEvidence{State: ActualEvidenceUnknown, Reason: expiredAdmissionReason}
+		fences = append(fences, usageledger.FenceBinding{
+			BindingID: identity.BindingID, RuleID: identity.RuleID,
+			AdmissionLimit: binding.limit().String(),
+		})
 	}
-	encoded, digest, err := finalizeRecoveryEvent(event)
-	if err != nil {
-		return FinalizationRequest{}, err
-	}
-	return FinalizationRequest{
-		Partition: snapshot.partition, AdmissionID: snapshot.admissionID,
-		AdmissionDigest: snapshot.admissionDigest, FinalizationDigest: digest,
-		DispatchCount: uint32(len(snapshot.dispatches)), EvidenceRevision: observedRevision,
-		ExpectedAdmissionDeadline: snapshot.deadline,
-		Event:                     encoded, EventEvidenceState: evidenceState,
-		FenceID: fenceID, Rules: snapshot.record.Rules, Evidence: actualEvidence,
-	}, nil
+	return actual, fences, nil
 }
 
 func (e *RedisEngine) expiredUsageDispatch(

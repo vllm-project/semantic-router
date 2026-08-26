@@ -173,23 +173,7 @@ func prepareClassificationAPIServer(
 		metrics.SetBatchMetricsConfig(metricsConfig)
 	}
 
-	// Get memory store if available (set by ExtProc router during init)
-	var memoryStore memory.Store
-	if shouldInitMemoryStore(cfg) {
-		memoryStore = resolveMemoryStore(cfg, opts.RuntimeRegistry)
-		if memoryStore != nil {
-			logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
-		} else {
-			logging.ComponentWarnEvent("apiserver", "memory_api_degraded", map[string]interface{}{
-				"reason": "memory_store_unavailable",
-				"status": 503,
-			})
-		}
-	} else {
-		logging.ComponentEvent("apiserver", "memory_api_disabled", map[string]interface{}{
-			"reason": "config_disabled",
-		})
-	}
+	memoryStore := initializeAPIMemoryStore(cfg, opts.RuntimeRegistry)
 
 	liveClassificationSvc := newLiveClassificationService(
 		classificationSvc,
@@ -210,6 +194,28 @@ func prepareClassificationAPIServer(
 		managementTLS:       listenerTLS,
 	}
 	return apiServer, managementCfg, nil
+}
+
+func initializeAPIMemoryStore(
+	cfg *config.RouterConfig,
+	runtimeRegistry *routerruntime.Registry,
+) memory.Store {
+	if !shouldInitMemoryStore(cfg) {
+		logging.ComponentEvent("apiserver", "memory_api_disabled", map[string]interface{}{
+			"reason": "config_disabled",
+		})
+		return nil
+	}
+	store := resolveMemoryStore(cfg, runtimeRegistry)
+	if store != nil {
+		logging.ComponentEvent("apiserver", "memory_api_enabled", map[string]interface{}{})
+		return store
+	}
+	logging.ComponentWarnEvent("apiserver", "memory_api_degraded", map[string]interface{}{
+		"reason": "memory_store_unavailable",
+		"status": 503,
+	})
+	return nil
 }
 
 func managementListenerTransport(listenerTLS *managementListenerTLS) string {

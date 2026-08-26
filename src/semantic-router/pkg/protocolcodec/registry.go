@@ -22,13 +22,21 @@ type CodecMetadata interface {
 	Stateless() bool
 }
 
-type BufferedCodec interface {
+type MessageCodec interface {
 	DecodeRequest([]byte, llmprotocol.Policy) (llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Diagnostics, error)
 	EncodeRequest(llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error)
 	DecodeResponse([]byte, llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error)
 	EncodeResponse(llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error)
+}
+
+type TransportErrorCodec interface {
 	DecodeTransportError([]byte, llmprotocol.Policy) (llmprotocol.TransportError, llmprotocol.Diagnostics, error)
 	EncodeTransportError(llmprotocol.TransportError) []byte
+}
+
+type BufferedCodec interface {
+	MessageCodec
+	TransportErrorCodec
 }
 
 type Codec interface {

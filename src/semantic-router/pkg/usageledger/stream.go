@@ -33,13 +33,21 @@ type StreamItem struct {
 	Values map[string]string
 }
 
-type Stream interface {
+type StreamConsumer interface {
 	EnsureGroup(context.Context) error
 	ReadNew(context.Context, int64, time.Duration) ([]StreamItem, error)
 	ClaimStale(context.Context, int64, time.Duration) ([]StreamItem, error)
 	Ack(context.Context, []string) error
+}
+
+type StreamQuarantine interface {
 	Quarantine(context.Context, StreamItem, string) (bool, error)
 	Quarantined(context.Context) (int64, error)
+}
+
+type Stream interface {
+	StreamConsumer
+	StreamQuarantine
 }
 
 type RedisStreamOptions struct {
