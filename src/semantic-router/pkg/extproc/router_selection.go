@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
@@ -114,7 +115,14 @@ func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selec
 }
 
 func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
-	modelType := models.EmbeddingConfig.ModelType
+	// Normalized once here so every downstream consumer -- the batched-FFI
+	// capability check, GetEmbeddingBatched, and GetEmbeddingWithModelType's
+	// own exact-match validation -- sees the same casing. Config validation
+	// already accepts "Qwen3" case-insensitively without rewriting the
+	// configured value, so an unnormalized modelType would otherwise pass
+	// SupportsBatchedEmbedding's tolerant check and then fail the FFI's
+	// strict one, or fail GetEmbeddingWithModelType's exact match either way.
+	modelType := strings.ToLower(strings.TrimSpace(models.EmbeddingConfig.ModelType))
 	if modelType != "" {
 		return modelType
 	}
