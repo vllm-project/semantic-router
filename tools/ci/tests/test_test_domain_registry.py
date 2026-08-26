@@ -73,7 +73,7 @@ class TestDomainRegistryTest(unittest.TestCase):
         )
 
     def test_local_recipe_selection_uses_registry_paths_and_commands(self) -> None:
-        context = resolve_context(["src/semantic-router/pkg/projection/projection.go"])
+        context = resolve_context(["src/semantic-router/pkg/projectiontrace/trace.go"])
 
         self.assertIn("maintained-recipes", context.matched_rules)
         self.assertIn("make recipe-conformance-static", context.fast_tests)
@@ -91,6 +91,13 @@ class TestDomainRegistryTest(unittest.TestCase):
 
         self.assertIn("envoy-ai-gateway", context.ci_e2e_profiles)
         self.assertIn("envoy-ai-gateway", context.local_e2e_profiles)
+
+    def test_harness_make_change_stays_on_lightweight_local_path(self) -> None:
+        context = resolve_context(["tools/make/agent.mk"])
+
+        self.assertFalse(context.requires_local_smoke)
+        self.assertEqual(context.local_e2e_profiles, [])
+        self.assertEqual(context.ci_e2e_profiles, [])
 
 
 if __name__ == "__main__":

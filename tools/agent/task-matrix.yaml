@@ -50,6 +50,9 @@ rules:
       - tools/agent/scripts/**
       - tools/ci/**
       - tools/make/agent.mk
+      - tools/make/linter.mk
+      - tools/make/pre-commit.mk
+      - .pre-commit-config.yaml
       - .github/actions/**
       - .github/workflows/**
       - .mergify.yml
@@ -193,7 +196,7 @@ rules:
     fast_tests:
       - make agent-validate
     feature_tests: []
-    requires_local_smoke: true
+    requires_local_smoke: false
   - name: ci-general
     doc_only: false
     loop_mode: completion

@@ -55,7 +55,7 @@ make build-e2e
 ./bin/e2e -help
 ```
 
-[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml)
+[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
 records CI ownership, selection mode, and path triggers. Profile code remains
 the source of truth for deployment behavior and its exact test list.
 
@@ -140,13 +140,13 @@ until the selected cases are known to be isolated.
 
 | Selection | Meaning | Source of truth |
 | --- | --- | --- |
-| Default local | Runs when no profile is specified | `default_local_profiles` in the profile map |
-| Full CI | Runs in the complete E2E matrix | `full_ci_profiles` in the profile map |
-| Affected | Selected when owned paths change | `profile_rules` in the profile map |
-| Manual only | Requires explicit selection and profile prerequisites | `manual_profile_rules` in the profile map |
+| Default local | Runs when no profile is specified | `default_local: true` in the test-domain registry |
+| Full CI | Runs in the complete E2E matrix | `full_ci: true` in the test-domain registry |
+| Affected | Selected when owned paths change | `selection: pr` and `paths` in the test-domain registry |
+| Manual only | Requires explicit selection and profile prerequisites | `selection: manual` in the test-domain registry |
 
-[`tools/agent/e2e-profile-map.yaml`](../tools/agent/e2e-profile-map.yaml) owns
-the exact selection mode, path triggers, and coverage role for every entry.
+[`tools/agent/test-domain-registry.yaml`](../tools/agent/test-domain-registry.yaml)
+owns the exact selection mode, path triggers, and coverage role for every entry.
 “Manual” describes lifecycle and prerequisites; it is not evidence that the
 profile passed in another environment.
 
@@ -157,7 +157,7 @@ profile passed in another environment.
    access.
 3. Register it in `e2e/profiles/all/imports.go`.
 4. Add its ownership and selection mode to
-   `tools/agent/e2e-profile-map.yaml`.
+   `tools/agent/test-domain-registry.yaml`.
 5. Reuse test cases where the contract is shared; add a new test only for a new
    externally visible behavior.
 6. Add deterministic assertions. A request that merely returned any response

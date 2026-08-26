@@ -31,7 +31,7 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.63rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.1em;
   text-overflow: ellipsis;
   text-transform: uppercase;
@@ -43,7 +43,7 @@
   margin-left: auto;
   color: var(--site-text-strong);
   font-size: clamp(1.05rem, 2vw, 1.4rem);
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.05;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -80,7 +80,7 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .podiumIdentity {
@@ -94,7 +94,7 @@
   overflow: hidden;
   color: var(--site-text);
   font-size: 0.82rem;
-  font-weight: 650;
+  font-weight: var(--site-font-weight-semibold);
   line-height: 1.25;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -127,7 +127,7 @@
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   font-variant-numeric: tabular-nums;
 }
 
@@ -135,7 +135,7 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.58rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
@@ -161,8 +161,8 @@
 
 .sectionHeader h2 {
   margin: 0;
-  font-size: clamp(1.8rem, 4vw, 3rem);
-  font-weight: 550;
+  font-size: var(--text-2xl);
+  font-weight: var(--site-font-weight-medium);
   letter-spacing: -0.03em;
   line-height: 1;
 }
@@ -202,7 +202,7 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.1em;
   text-align: right;
   text-transform: uppercase;
@@ -221,7 +221,7 @@
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.82rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   text-align: right;
   text-transform: uppercase;
   appearance: none;
@@ -245,7 +245,7 @@
   color: var(--site-muted);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.68rem;
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
@@ -312,7 +312,7 @@
   color: var(--site-muted-bright);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.78rem;
-  font-weight: 900;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .contributor {
@@ -327,7 +327,7 @@
   width: 2.8rem;
   height: 2.8rem;
   border: 1px solid var(--site-border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   object-fit: cover;
   background: var(--site-surface-alt);
 }
@@ -354,7 +354,7 @@
   overflow: hidden;
   color: var(--site-text-strong);
   font-size: 1.02rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -373,7 +373,7 @@
   color: #ffffff;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.62rem;
-  font-weight: 900;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.08em;
   line-height: 1;
   box-shadow:
@@ -385,7 +385,7 @@
 .newContributorPill::before {
   width: 0.36rem;
   height: 0.36rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   background: #35d399;
   box-shadow: 0 0 10px rgba(53, 211, 153, 0.55);
   content: "";
@@ -426,7 +426,7 @@
   display: none;
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.64rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
@@ -436,7 +436,7 @@
   color: var(--site-text);
   font-family: var(--ifm-font-family-monospace);
   font-size: 0.98rem;
-  font-weight: 850;
+  font-weight: var(--site-font-weight-bold);
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -454,7 +454,7 @@
 }
 
 .share > span {
-  font-weight: 800;
+  font-weight: var(--site-font-weight-bold);
 }
 
 .shareTrack {

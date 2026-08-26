@@ -26,12 +26,12 @@
   align-items: center;
   gap: 0.55rem;
   padding: 0.5rem 0.85rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--site-border);
   background: rgba(255, 255, 255, 0.035);
   color: var(--site-muted);
   font-size: 0.78rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   transition:
     border-color 180ms ease,
     color 180ms ease,
@@ -105,7 +105,7 @@
 .stageLabel {
   margin-bottom: 0.5rem;
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--site-muted-bright);
@@ -122,7 +122,7 @@
 .inputBox {
   width: min(100%, 420px);
   padding: 0.85rem 1rem;
-  border-radius: 0.55rem;
+  border-radius: var(--radius-md);
   font-size: 0.8rem;
   line-height: 1.45;
   text-align: center;
@@ -141,7 +141,7 @@
   padding: 0.28rem 0.42rem;
   border: 1px solid var(--site-border);
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   white-space: nowrap;
   font-family: var(--ifm-font-family-monospace);
 }
@@ -167,7 +167,7 @@
 .embeddingBar {
   width: 220px;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
 
 .embBarToken {
@@ -223,7 +223,7 @@
   padding: 0.42rem 0.5rem;
   border: 1px solid var(--site-border);
   font-size: 0.62rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   color: var(--site-text);
 }
 
@@ -273,7 +273,7 @@
   gap: 0.65rem;
   width: 100%;
   padding: 0.78rem 0.85rem;
-  border-radius: 0.65rem;
+  border-radius: var(--radius-md);
   cursor: default;
   transition:
     border-color 180ms ease,
@@ -302,7 +302,7 @@
 
 .branchTitle {
   font-size: 0.74rem;
-  font-weight: 700;
+  font-weight: var(--site-font-weight-bold);
   color: var(--site-text);
 }
 
@@ -334,7 +334,7 @@
   background: rgba(255, 255, 255, 0.05);
   color: var(--site-muted-bright);
   font-size: 0.5rem;
-  font-weight: 600;
+  font-weight: var(--site-font-weight-semibold);
   white-space: nowrap;
 }
 

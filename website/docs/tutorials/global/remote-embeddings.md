@@ -7,6 +7,8 @@ OpenAI-compatible endpoint instead of loading a local embedding model. The
 provider is configured once under `global.model_catalog.embeddings.semantic`;
 embedding-backed signals and selectors keep the same route configuration.
 
+![Remote embedding request flow through Semantic Router](/img/remote-embeddings-flow.png)
+
 Two fields have different roles:
 
 - `embedding_config.model_type: remote` selects remote execution.

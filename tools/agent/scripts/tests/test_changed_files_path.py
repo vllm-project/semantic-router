@@ -76,26 +76,33 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
         )
         git_diff.assert_not_called()
 
-    def test_resolve_e2e_profiles_does_not_mutate_default_profiles(self) -> None:
-        e2e_map = {
-            "full_ci_triggers": ["src/**"],
-            "default_local_profiles": ["envoy-ai-gateway"],
-            "full_ci_profiles": ["envoy-ai-gateway", "dashboard"],
-            "profile_rules": {},
-            "manual_profile_rules": {
-                "manual-smoke": {"paths": ["src/semantic-router/**"]}
+    def test_resolve_e2e_profiles_does_not_mutate_registry_profiles(self) -> None:
+        test_domain_registry = {
+            "domains": {},
+            "profiles": {
+                "envoy-ai-gateway": {
+                    "selection": "pr",
+                    "default_local": True,
+                    "full_ci": True,
+                    "paths": ["src/semantic-router/**"],
+                },
+                "manual-smoke": {
+                    "selection": "manual",
+                    "paths": ["src/semantic-router/**"],
+                },
             },
-            "workflow_suite_rules": {},
         }
 
         local_profiles, _, _, _ = agent_context_resolution.resolve_e2e_profiles(
             ["src/semantic-router/pkg/apiserver/server.go"],
-            e2e_map,
+            test_domain_registry,
             set(),
         )
 
         self.assertEqual(local_profiles, ["envoy-ai-gateway", "manual-smoke"])
-        self.assertEqual(e2e_map["default_local_profiles"], ["envoy-ai-gateway"])
+        self.assertTrue(
+            test_domain_registry["profiles"]["envoy-ai-gateway"]["default_local"]
+        )
 
     def test_agent_lint_passes_large_change_sets_by_path(self) -> None:
         makefile = (

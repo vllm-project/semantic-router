@@ -8,9 +8,9 @@
 AGENT_VENV ?= $(CURDIR)/.venv-agent
 AGENT_CODESPELL ?= $(AGENT_VENV)/bin/codespell
 
-markdown-lint: ## Lint all markdown files in the project
+markdown-lint: agent-markdown-bootstrap ## Lint all markdown files in the project
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+	PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
@@ -20,9 +20,9 @@ markdown-lint: ## Lint all markdown files in the project
 		--ignore models \
 		--ignore vsr
 
-markdown-lint-fix: ## Auto-fix markdown lint issues
+markdown-lint-fix: agent-markdown-bootstrap ## Auto-fix markdown lint issues
 	@$(LOG_TARGET)
-	markdownlint -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
+	PATH="$(AGENT_NODEENV)/bin:$$PATH" "$(AGENT_MARKDOWNLINT)" -c tools/linter/markdown/markdownlint.yaml "**/*.md" \
 		--ignore node_modules \
 		--ignore website/node_modules \
 		--ignore dashboard/frontend/node_modules \
