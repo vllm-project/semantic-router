@@ -186,6 +186,14 @@ func TestToOpenAIResponseBody_BasicConversion(t *testing.T) {
 	assert.Equal(t, int64(18), result.Usage.TotalTokens)
 }
 
+func TestToOpenAIResponseBody_PreservesErrorEnvelope(t *testing.T) {
+	body := []byte(`{"type":"error","error":{"type":"authentication_error","message":"API key is invalid."}}`)
+
+	result, err := ToOpenAIResponseBody(body, "claude-sonnet-4-5")
+	require.NoError(t, err)
+	assert.JSONEq(t, `{"error":{"type":"authentication_error","message":"API key is invalid."}}`, string(result))
+}
+
 func TestToOpenAIResponseBody_MaxTokensStopReason(t *testing.T) {
 	anthropicResp := &anthropic.Message{
 		ID:         "msg_123",
