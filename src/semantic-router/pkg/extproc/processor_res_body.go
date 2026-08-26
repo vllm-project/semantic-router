@@ -105,6 +105,13 @@ func (r *OpenAIRouter) normalizeProviderResponseBody(
 	if ctx.APIFormat != config.APIFormatAnthropic {
 		return responseBody, false, nil
 	}
+	if anthropic.IsErrorBody(responseBody) {
+		if ctx.ClientProtocol == config.ClientProtocolAnthropic {
+			return responseBody, false, nil
+		}
+		transformedBody, err := anthropic.ToOpenAIResponseBody(responseBody, ctx.RequestModel)
+		return transformedBody, true, err
+	}
 
 	// Pass IRExtensions through so the Anthropic-only stop reason, cache
 	// usage counters, server-tool counts, and thinking-block signatures
