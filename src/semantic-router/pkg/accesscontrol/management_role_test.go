@@ -59,7 +59,7 @@ func TestBuiltInRolesHaveExactPermissionSets(t *testing.T) {
 			PermissionRoutingRead, PermissionProviderCatalogRead, PermissionAgentRead, PermissionToolRead,
 		}},
 		{BuiltInRoleConsumer, []Permission{
-			PermissionUserRead, PermissionTeamRead, PermissionKeyRead,
+			PermissionUserRead, PermissionTeamRead, PermissionKeyRead, PermissionKeyReveal,
 			PermissionDelegationUse, PermissionAccessPolicyRead, PermissionRatePolicyRead,
 			PermissionRoutingContextRead, PermissionQuotaRead, PermissionUsageRead, PermissionOperationRead,
 			PermissionAgentRead, PermissionAgentUse, PermissionToolRead, PermissionToolInvoke,
@@ -174,7 +174,7 @@ func TestBuiltInPermissionsAreDefensiveCopies(t *testing.T) {
 func TestKeyRevealIsSeparatelyAssigned(t *testing.T) {
 	for _, roleName := range []BuiltInRoleName{
 		BuiltInRoleClusterAdmin, BuiltInRolePlatformAdmin, BuiltInRoleOperator,
-		BuiltInRoleAccessAdmin, BuiltInRoleAnalyst, BuiltInRoleViewer, BuiltInRoleConsumer,
+		BuiltInRoleAccessAdmin, BuiltInRoleAnalyst, BuiltInRoleViewer,
 	} {
 		role, _ := BuiltInRole(roleName)
 		if role.Permissions.Contains(PermissionKeyReveal) {
@@ -183,6 +183,10 @@ func TestKeyRevealIsSeparatelyAssigned(t *testing.T) {
 	}
 	if !DelegablePermissions().Contains(PermissionKeyReveal) {
 		t.Fatal("bootstrap delegation ceiling must be able to delegate key.reveal")
+	}
+	consumer, _ := BuiltInRole(BuiltInRoleConsumer)
+	if !consumer.Permissions.Contains(PermissionKeyReveal) {
+		t.Fatal("consumer must be able to reveal credentials within its user-scoped binding")
 	}
 }
 

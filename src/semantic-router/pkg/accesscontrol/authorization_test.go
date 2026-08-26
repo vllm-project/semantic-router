@@ -55,6 +55,36 @@ func TestConsumerRoleRequiresUserScope(t *testing.T) {
 	}
 }
 
+func TestConsumerCanRevealOnlyUserOwnedAPIKeys(t *testing.T) {
+	role, _ := BuiltInRole(BuiltInRoleConsumer)
+	binding := validRoleBinding(role, UserScope("ns-1", "user-1"))
+
+	tests := []struct {
+		name     string
+		ancestor Scope
+		want     bool
+	}{
+		{name: "own key", ancestor: UserScope("ns-1", "user-1"), want: true},
+		{name: "another user key", ancestor: UserScope("ns-1", "user-2")},
+		{name: "team key", ancestor: TeamScope("ns-1", "team-1")},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			target := ScopedTarget{
+				Scope:     ResourceScope("ns-1", ScopeResourceAPIKey, "key-1"),
+				Ancestors: []Scope{test.ancestor},
+			}
+			allowed, err := Authorizes(binding, role, PermissionKeyReveal, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if allowed != test.want {
+				t.Fatalf("allowed = %v, want %v", allowed, test.want)
+			}
+		})
+	}
+}
+
 func TestCanDelegateRoleBinding(t *testing.T) {
 	sourceRole, _ := BuiltInRole(BuiltInRolePlatformAdmin)
 	source := validRoleBinding(sourceRole, NamespaceScope("ns-1"))

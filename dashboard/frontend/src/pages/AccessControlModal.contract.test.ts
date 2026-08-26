@@ -183,14 +183,17 @@ describe('access-control modal experience', () => {
     )
   })
 
-  it('refreshes an open key quota without replacing the dialog with a loading state', () => {
+  it('loads a key snapshot once without background polling or auth-object churn', () => {
     const detail = readSource('./APIKeyDetail.tsx')
 
-    expect(detail).toContain('const KEY_QUOTA_REFRESH_MS = 5000')
-    expect(detail).toContain('window.setInterval(() => void refreshQuota(), KEY_QUOTA_REFRESH_MS)')
-    expect(detail).toContain("document.addEventListener('visibilitychange', refreshWhenVisible)")
-    expect(detail).toContain('if (document.hidden || inFlight) return')
-    expect(detail).toContain('if (!cancelled) setKey(next)')
+    expect(detail).toContain(
+      'const includeInternalUsageDimensions = canReadInternalUsageDimensions(currentUser)',
+    )
+    expect(detail).toContain('[includeInternalUsageDimensions, keyId, selfService]')
+    expect(detail).not.toContain('KEY_QUOTA_REFRESH_MS')
+    expect(detail).not.toContain('window.setInterval')
+    expect(detail).not.toContain("document.addEventListener('visibilitychange'")
+    expect(detail).not.toContain('[currentUser, keyId, selfService]')
   })
 
   it('keeps the key quota override visible without opening advanced settings', () => {

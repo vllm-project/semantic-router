@@ -39,8 +39,6 @@ import {
 import { buildAPIKeyQuickstartSnippets } from './apiKeyQuickstartSnippets'
 import styles from './AccessControlPage.module.css'
 
-const KEY_QUOTA_REFRESH_MS = 5000
-
 interface KeyDetailProps {
   keyId: string
   canManage: boolean
@@ -68,6 +66,7 @@ export function APIKeyDetail({
 }: KeyDetailProps) {
   const { routerPublicUrl } = useReadonly()
   const { user: currentUser } = useAuth()
+  const includeInternalUsageDimensions = canReadInternalUsageDimensions(currentUser)
   const [key, setKey] = useState<AccessAPIKey | null>(null)
   const [ownerName, setOwnerName] = useState('')
   const [contextTeamName, setContextTeamName] = useState('')
@@ -134,14 +133,14 @@ export function APIKeyDetail({
           keyId,
           { from },
           {
-            internalDimensions: canReadInternalUsageDimensions(currentUser),
+            internalDimensions: includeInternalUsageDimensions,
           },
         )
       : inferenceAccessApi.keyUsage(
           keyId,
           { from },
           {
-            internalDimensions: canReadInternalUsageDimensions(currentUser),
+            internalDimensions: includeInternalUsageDimensions,
           },
         )
     setUsage(EMPTY_USAGE)
@@ -174,7 +173,7 @@ export function APIKeyDetail({
     return () => {
       cancelled = true
     }
-  }, [currentUser, keyId, selfService])
+  }, [includeInternalUsageDimensions, keyId, selfService])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -253,35 +252,6 @@ export function APIKeyDetail({
       cancelled = true
     }
   }, [relationshipKey, selfService, selfUserId])
-
-  useEffect(() => {
-    let cancelled = false
-    let inFlight = false
-    const refreshQuota = async () => {
-      if (document.hidden || inFlight) return
-      inFlight = true
-      try {
-        const next = selfService
-          ? await inferenceAccessApi.selfKey(keyId)
-          : await inferenceAccessApi.key(keyId)
-        if (!cancelled) setKey(next)
-      } catch {
-        // Keep the last complete snapshot during a transient background refresh failure.
-      } finally {
-        inFlight = false
-      }
-    }
-    const refreshWhenVisible = () => {
-      if (!document.hidden) void refreshQuota()
-    }
-    const interval = window.setInterval(() => void refreshQuota(), KEY_QUOTA_REFRESH_MS)
-    document.addEventListener('visibilitychange', refreshWhenVisible)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', refreshWhenVisible)
-    }
-  }, [keyId, selfService])
 
   useEffect(() => {
     if (!copied) return

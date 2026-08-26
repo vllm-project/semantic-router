@@ -134,6 +134,7 @@ describe('config write access', () => {
         'agent.use',
         'delegation.use',
         'key.read',
+        'key.reveal',
         'access_policy.read',
         'routing_context.read',
         'tool.invoke',
@@ -145,6 +146,7 @@ describe('config write access', () => {
     expect(canReadRouting(consumer)).toBe(false)
     expect(canReadKeyScopedRouting(consumer)).toBe(true)
     expect(canReadRoutingCatalog(consumer)).toBe(true)
+    expect(canRevealInferenceKey(consumer)).toBe(true)
     expect(canAccessDashboardPath(consumer, '/config/entrypoints-recipes')).toBe(true)
     expect(canAccessDashboardPath(consumer, '/topology')).toBe(true)
     expect(canAccessDashboardPath(consumer, '/playground')).toBe(true)

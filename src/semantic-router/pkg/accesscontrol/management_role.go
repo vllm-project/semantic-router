@@ -88,7 +88,7 @@ var builtInRolePermissions = map[BuiltInRoleName]PermissionSet{
 		PermissionAgentRead, PermissionToolRead,
 	),
 	BuiltInRoleConsumer: mustPermissionSet(
-		PermissionUserRead, PermissionTeamRead, PermissionKeyRead,
+		PermissionUserRead, PermissionTeamRead, PermissionKeyRead, PermissionKeyReveal,
 		PermissionDelegationUse, PermissionAccessPolicyRead, PermissionRatePolicyRead,
 		PermissionRoutingContextRead, PermissionQuotaRead, PermissionUsageRead, PermissionOperationRead,
 		PermissionAgentRead, PermissionAgentUse, PermissionToolRead, PermissionToolInvoke,

@@ -105,16 +105,18 @@ credential_revealer: [key.read, key.reveal]
 analyst: [namespace.read, user.read, team.read, key.read, quota.read, usage.read,
           log.read, audit.read]
 viewer: [routing.read, provider_catalog.read, agent.read, tool.read]
-consumer: [user.read, team.read, key.read, delegation.use,
+consumer: [user.read, team.read, key.read, key.reveal, delegation.use,
            access_policy.read, rate_policy.read, routing_context.read, quota.read,
            usage.read, operation.read, agent.read, agent.use, tool.read,
            tool.invoke]
 ~~~
 
 `key.reveal` is absent from every broad administrator preset and must be assigned
-deliberately. A `consumer` binding is always User-scoped and deliberately excludes
-`key.manage`: it can inspect its own key, effective policy, quota, usage, and Operations
-and can create delegated Playground sessions. Its key-scoped `routing-catalog` view
+deliberately. The narrow `consumer` preset includes it only because a consumer binding
+is always User-scoped: authorization can therefore reveal credentials owned by that
+User, but not Team-owned or another User's credentials. The preset deliberately excludes
+`key.manage`: it can inspect and reveal its own key, effective policy, quota, usage, and
+Operations and can create delegated Playground sessions. Its key-scoped `routing-catalog` view
 is compiled from that key's applied grants and exposes only discoverable Models,
 Entrypoints, and their safe topology metadata; it does not require or imply
 namespace-wide `routing.read`. The consumer cannot create, rotate, reassign, or delete

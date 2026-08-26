@@ -22,6 +22,7 @@ var immutableMigrationSHA256 = map[string]string{
 	"0002_access_audit_actor_chain.sql":         "47527b2825b8b7467743baab73c7e8efa4c29d04b7699e98b66849e2c1730786",
 	"0003_issuer_logout_tombstones.sql":         "db4d183eada857e4c7d45bd259b99fc78eacf927e6ae03597608f0594b334463",
 	"0004_agent_event_summary_usage_lookup.sql": "54e6a37ac2fe7e73bf5890e37e00563b661b2c3622aa46fdc83acc6d9db88696",
+	"0005_consumer_self_key_reveal.sql":         "54293859db40357fb09e8dd9149ad1648d70c1c9052c3af03f8e2e036e0b78e0",
 }
 
 func TestEmbeddedMigrationsAreOrderedAndCoverAuthorities(t *testing.T) {
@@ -396,8 +397,8 @@ FROM management_roles`).Scan(&roles, &distinctIDs, &validDigests); err != nil {
 			digest:      "457a9204a91594a24e10ce7ab98b16fe61ec569104e7f25b9fadfe5e78f08ceb",
 		},
 		"consumer": {
-			permissions: []string{"access_policy.read", "agent.read", "agent.use", "delegation.use", "key.read", "operation.read", "quota.read", "rate_policy.read", "routing_context.read", "team.read", "tool.invoke", "tool.read", "usage.read", "user.read"},
-			digest:      "42f87d9c0231abac6d6f5256f4c40d5d5789f9c9d8739c264785d0bf58560fd6",
+			permissions: []string{"access_policy.read", "agent.read", "agent.use", "delegation.use", "key.read", "key.reveal", "operation.read", "quota.read", "rate_policy.read", "routing_context.read", "team.read", "tool.invoke", "tool.read", "usage.read", "user.read"},
+			digest:      "50e9622a3481c88a7177cf7288023193b43691cb26a923ceee09422344fa64a3",
 		},
 	} {
 		var permissionJSON []byte

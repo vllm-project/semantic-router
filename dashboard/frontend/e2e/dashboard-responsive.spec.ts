@@ -81,6 +81,8 @@ const keyScopedCatalog = {
       id: 'recipe_consumer',
       revision: 1,
       name: 'Consumer',
+      signals: [],
+      projections: [],
       decisions: [{ id: 'decision_default', name: 'Default', dispatchCardinality: 'single' }],
     },
   ],
@@ -730,6 +732,7 @@ test.describe('Dashboard responsive route matrix', () => {
         'access_policy.read',
         'delegation.use',
         'key.read',
+        'key.reveal',
         'routing_context.read',
         'usage.read',
       ],
@@ -742,6 +745,11 @@ test.describe('Dashboard responsive route matrix', () => {
     await expect(overview.getByRole('button', { name: /Decisions/ })).toHaveCount(0)
     await expect(overview.getByRole('button', { name: /API Keys/ })).toBeVisible()
     await expect(overview.getByRole('button', { name: /Try a request/ })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Intelligence Layers' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'System Health' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Access', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Models', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('heading', { name: 'Decisions Overview' })).toHaveCount(0)
     await expect(page.getByRole('link', { name: 'Playground', exact: true })).toBeVisible()
     await expect(page.getByRole('button', { name: /System/ })).toHaveCount(0)
     await page.getByRole('button', { name: /Build/ }).click()
@@ -772,6 +780,7 @@ test.describe('Dashboard responsive route matrix', () => {
         'access_policy.read',
         'delegation.use',
         'key.read',
+        'key.reveal',
         'routing_context.read',
         'usage.read',
       ],
@@ -811,6 +820,7 @@ test.describe('Dashboard responsive route matrix', () => {
         'access_policy.read',
         'delegation.use',
         'key.read',
+        'key.reveal',
         'routing_context.read',
         'usage.read',
       ],

@@ -65,6 +65,20 @@ describe('dashboard product surfaces', () => {
     expect(page).toContain('if (!canReadConfig) return')
   })
 
+  it('keeps the consumer home useful through its key-scoped routing projection', () => {
+    const page = readSource('./DashboardPage.tsx')
+
+    expect(page).toContain('useInferenceRoutingAccess()')
+    expect(page).toContain(
+      'const overviewConfig = canReadConfig ? config : usesKeyScopedCatalog ? catalogSnapshot : null',
+    )
+    expect(page).toContain('{canReadIntelligence ? (')
+    expect(page).toContain('{showSystemHealth ? (')
+    expect(page).toContain('<h2 className={styles.cardTitle}>Access</h2>')
+    expect(page).toContain('{canReadStatus ? (')
+    expect(page).toContain('No accessible routing paths')
+  })
+
   it('does not present dashboard actions that the current identity cannot open', () => {
     const page = readSource('./DashboardPage.tsx')
     const hero = readSource('./DashboardRoutingHero.tsx')

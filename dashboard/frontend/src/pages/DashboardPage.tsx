@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
+import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
 import { useSystemStatus } from '../contexts/SystemStatusContext'
 import { canAccessDashboardPath } from '../utils/accessControl'
 import { inferenceAccessApi, type AccessOverview } from '../utils/inferenceAccessApi'
@@ -38,6 +39,7 @@ const DashboardPage: React.FC = () => {
     routingAccess,
     refresh: refreshSystemStatus,
   } = useSystemStatus()
+  const { catalogSnapshot, catalogStatus, usesKeyScopedCatalog } = useInferenceRoutingAccess()
 
   const [config, setConfig] = useState<ManagedRoutingSnapshot | null>(null)
   const [accessOverview, setAccessOverview] = useState<AccessOverview | null>(null)
@@ -56,9 +58,16 @@ const DashboardPage: React.FC = () => {
   )
   const routingAccessUnavailable = routingIdentityUnavailable || routingAccess !== 'operational'
   const canReadConfig = !routingAccessUnavailable && canAccessDashboardPath(user, '/config/models')
+  const canReadIntelligence =
+    canReadConfig ||
+    (!routingAccessUnavailable &&
+      usesKeyScopedCatalog &&
+      canAccessDashboardPath(user, '/topology'))
   const canReadAccess = !routingAccessUnavailable && canAccessDashboardPath(user, '/access/usage')
   const canReadStatus = canAccessDashboardPath(user, '/status')
+  const showSystemHealth = !routingAccessUnavailable
   const canUsePlayground = !routingAccessUnavailable && canAccessDashboardPath(user, '/playground')
+  const overviewConfig = canReadConfig ? config : usesKeyScopedCatalog ? catalogSnapshot : null
   const fetchAccess = useCallback(async () => {
     if (!canReadAccess) return
     setAccessOverview(await inferenceAccessApi.overview())
@@ -108,12 +117,21 @@ const DashboardPage: React.FC = () => {
   }, [canReadConfig, configRequest, fetchAll])
 
   const signalStats = useMemo(
-    () => (config ? countSignals(config) : { total: 0, byType: {} }),
-    [config],
+    () => (overviewConfig ? countSignals(overviewConfig) : { total: 0, byType: {} }),
+    [overviewConfig],
   )
-  const decisionCount = useMemo(() => (config ? countDecisions(config) : 0), [config])
-  const modelCount = useMemo(() => (config ? countModels(config) : 0), [config])
-  const pluginCount = useMemo(() => (config ? countPlugins(config) : 0), [config])
+  const decisionCount = useMemo(
+    () => (overviewConfig ? countDecisions(overviewConfig) : 0),
+    [overviewConfig],
+  )
+  const modelCount = useMemo(
+    () => (overviewConfig ? countModels(overviewConfig) : 0),
+    [overviewConfig],
+  )
+  const pluginCount = useMemo(
+    () => (overviewConfig ? countPlugins(overviewConfig) : 0),
+    [overviewConfig],
+  )
   const currentDecisions = useMemo(() => (config ? getAllDecisions(config) : []), [config])
   const categorizedDecisions = useMemo(
     () => (config ? categorizeDecisions(config) : { guardrails: [], routing: [], fallbacks: [] }),
@@ -172,8 +190,8 @@ const DashboardPage: React.FC = () => {
         </div>
       ) : null}
 
-      <div className={`${styles.mainGrid} ${!canReadConfig ? styles.mainGridCompact : ''}`}>
-        {canReadConfig ? (
+      <div className={`${styles.mainGrid} ${!canReadIntelligence ? styles.mainGridCompact : ''}`}>
+        {canReadIntelligence ? (
           <div className={styles.card}>
             <div className={styles.cardHeader}>
               <h2 className={styles.cardTitle}>Intelligence Layers</h2>
@@ -187,34 +205,43 @@ const DashboardPage: React.FC = () => {
               </button>
             </div>
             <div className={styles.flowContainer}>
-              {config ? (
+              {overviewConfig ? (
                 <DashboardMiniFlowDiagram
                   signals={signalStats}
                   decisions={decisionCount}
                   models={modelCount}
                   plugins={pluginCount}
                 />
+              ) : (canReadConfig && loading) ||
+                (usesKeyScopedCatalog && catalogStatus === 'loading') ? (
+                <ProductLoadingState compact label="Loading routing overview" />
               ) : (
-                <div className={styles.emptyState}>No configuration loaded</div>
+                <div className={styles.emptyState}>
+                  {usesKeyScopedCatalog && catalogStatus === 'error'
+                    ? 'Routing overview unavailable'
+                    : 'No accessible routing paths'}
+                </div>
               )}
             </div>
           </div>
         ) : null}
 
-        {canReadStatus || canReadAccess ? (
+        {showSystemHealth || canReadAccess ? (
           <div className={styles.rightCol}>
-            {canReadStatus ? (
+            {showSystemHealth ? (
               <div className={styles.card}>
                 <div className={styles.cardHeader}>
                   <h2 className={styles.cardTitle}>System Health</h2>
-                  <button
-                    type="button"
-                    className={styles.cardAction}
-                    onClick={() => navigate('/status')}
-                  >
-                    Details
-                    <ProductIcon name="chevron-right" aria-hidden="true" />
-                  </button>
+                  {canReadStatus ? (
+                    <button
+                      type="button"
+                      className={styles.cardAction}
+                      onClick={() => navigate('/status')}
+                    >
+                      Details
+                      <ProductIcon name="chevron-right" aria-hidden="true" />
+                    </button>
+                  ) : null}
                 </div>
                 <div className={styles.healthContent}>
                   {status ? (

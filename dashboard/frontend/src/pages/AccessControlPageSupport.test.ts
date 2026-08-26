@@ -47,6 +47,19 @@ describe('Access Control page permissions', () => {
     expect(manager.canManage).toBe(true)
   })
 
+  it('shows scoped reveal for a read-only consumer without exposing key management', () => {
+    const consumer = resolveAccessControlPage(
+      {
+        managementUserId: 'user-1',
+        managementPermissions: ['delegation.use', 'key.read', 'key.reveal', 'usage.read'],
+      },
+      '/access/api-keys',
+    )
+
+    expect(consumer.canRevealKeys).toBe(true)
+    expect(consumer.canManage).toBe(false)
+  })
+
   it('threads reveal, lifecycle, and policy controls through distinct UI capabilities', () => {
     const detail = readFileSync(new URL('./APIKeyDetail.tsx', import.meta.url), 'utf8')
     const overlays = readFileSync(
