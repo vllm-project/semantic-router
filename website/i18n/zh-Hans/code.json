@@ -592,14 +592,8 @@
   "homepage.install.title.human": {
     "message": "一条命令，本地跑起来。"
   },
-  "homepage.install.frameLabel.human": {
-    "message": "一键安装"
-  },
   "homepage.install.primaryCta": {
     "message": "查看完整安装指南"
-  },
-  "homepage.install.copy.idle": {
-    "message": "复制命令"
   },
   "homepage.install.copy.copied": {
     "message": "已复制"
