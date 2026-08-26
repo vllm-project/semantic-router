@@ -11,6 +11,7 @@ import {
 } from './routeManifest'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { canAccessDashboardPath, type PermissionUser } from '../utils/accessControl'
+import { useSystemStatus } from '../contexts/SystemStatusContext'
 import {
   loadAccessControlPage,
   loadBuilderPage,
@@ -27,7 +28,6 @@ import {
   loadOpenClawPage,
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
-  loadStatusPage,
   loadTopologyPage,
   loadTracingPage,
 } from './routeLoaders'
@@ -61,7 +61,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   openclaw: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
-  status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
   tracing: <RecoverableLazyRoute loader={loadTracingPage} routeLabel="Tracing" />,
 }
@@ -100,7 +99,12 @@ const AuthorizedFullscreenRoute: React.FC<{
   user: PermissionUser | null
 }> = ({ children, user }) => {
   const { pathname } = useLocation()
-  return canAccessDashboardPath(user, pathname) ? children : <Navigate to="/dashboard" replace />
+  const { routingAccess } = useSystemStatus()
+  return routingAccess === 'operational' && canAccessDashboardPath(user, pathname) ? (
+    children
+  ) : (
+    <Navigate to="/dashboard" replace />
+  )
 }
 
 const AuthorizedShellRoute: React.FC<AuthorizedShellRouteProps> = ({
@@ -110,10 +114,34 @@ const AuthorizedShellRoute: React.FC<AuthorizedShellRouteProps> = ({
   user,
 }) => {
   const { pathname } = useLocation()
-  return canAccessDashboardPath(user, pathname) ? (
+  const { routingAccess } = useSystemStatus()
+  const routingReady = route.page === 'dashboard' || routingAccess === 'operational'
+  return routingReady && canAccessDashboardPath(user, pathname) ? (
     renderShellElement(route, configSection, setConfigSection)
   ) : (
     <Navigate to="/dashboard" replace />
+  )
+}
+
+const AuthorizedMLSetupRoute: React.FC<{
+  canUseMLSetup: boolean
+  configSection: ConfigSection
+  setConfigSection: (section: ConfigSection) => void
+  user: PermissionUser | null
+}> = ({ canUseMLSetup, configSection, setConfigSection, user }) => {
+  const { routingAccess } = useSystemStatus()
+  if (
+    routingAccess !== 'operational' ||
+    !canUseMLSetup ||
+    !canAccessDashboardPath(user, '/ml-setup')
+  ) {
+    return <Navigate to="/dashboard" replace />
+  }
+  return renderShellContent(
+    {},
+    <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
+    configSection,
+    setConfigSection,
   )
 }
 
@@ -167,16 +195,12 @@ export const renderAuthenticatedAppRoutes = ({
     <Route
       path="/ml-setup"
       element={
-        canUseMLSetup ? (
-          renderShellContent(
-            {},
-            <RecoverableLazyRoute loader={loadMLSetupPage} routeLabel="ML setup" />,
-            configSection,
-            setConfigSection,
-          )
-        ) : (
-          <Navigate to="/dashboard" replace />
-        )
+        <AuthorizedMLSetupRoute
+          canUseMLSetup={canUseMLSetup}
+          configSection={configSection}
+          setConfigSection={setConfigSection}
+          user={user}
+        />
       }
     />
     <Route path="*" element={<Navigate to="/dashboard" replace />} />

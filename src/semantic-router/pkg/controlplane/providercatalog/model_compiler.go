@@ -120,6 +120,7 @@ func (compiler ModelCompiler) CompileBackend(
 	if compileBackendErr != nil {
 		return CompiledModelBackend{}, fmt.Errorf("%w: compile Provider backend: %w", ErrInvalidRequest, compileBackendErr)
 	}
+	connection.Path = compiledPathForOrigin(origin, connection.Path)
 	connection, compileBackendErr = routingsnapshot.CanonicalizeBackendConnection(connection)
 	if compileBackendErr != nil {
 		return CompiledModelBackend{}, fmt.Errorf("%w: Provider compiler emitted an invalid backend connection: %w", ErrInvalidRequest, compileBackendErr)

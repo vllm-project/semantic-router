@@ -9,6 +9,7 @@ import AuthenticatedShell from './AuthenticatedShell'
 import { renderAuthenticatedAppRoutes } from './AuthenticatedAppRoutes'
 import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { loadLandingPage, loadLoginPage } from './routeLoaders'
+import StatusRoute from './StatusRoute'
 
 const AppRouter: React.FC = () => {
   const { user } = useAuth()
@@ -27,6 +28,12 @@ const AppRouter: React.FC = () => {
           element={<RecoverableLazyRoute loader={loadLoginPage} routeLabel="Login" />}
         />
         <Route path="/auth/transition" element={<AuthTransitionPage />} />
+        <Route
+          path="/status"
+          element={
+            <StatusRoute configSection={configSection} setConfigSection={setConfigSection} />
+          }
+        />
 
         <Route element={<AuthGate />}>
           <Route element={<AuthenticatedShell />}>

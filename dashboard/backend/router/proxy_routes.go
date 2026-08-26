@@ -1,6 +1,7 @@
 package router
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -53,6 +54,15 @@ func registerRouterManagementProxy(
 		}
 		if err := routerauth.RewriteManagementAuthorization(r, managementSessions); err != nil {
 			log.Printf("Router Management session acquisition failed: %v", err)
+			w.Header().Set("Cache-Control", "no-store")
+			var sessionErr *routerauth.ManagementSessionError
+			if errors.As(err, &sessionErr) {
+				if retryAfter := sessionErr.RetryAfterHeader(); retryAfter != "" {
+					w.Header().Set("Retry-After", retryAfter)
+				}
+				http.Error(w, sessionErr.Error(), sessionErr.HTTPStatus())
+				return
+			}
 			http.Error(w, "Router Management session is unavailable", http.StatusServiceUnavailable)
 			return
 		}

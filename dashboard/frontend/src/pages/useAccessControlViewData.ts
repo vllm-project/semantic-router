@@ -40,6 +40,7 @@ interface CurrentViewOptions {
   canReadTeams: boolean
   canReadGroups: boolean
   canReadBudgets: boolean
+  canReadInternalUsageDimensions: boolean
   usageScope: UsageScope
   pageState: AccessControlPageState
   pageCursors: Record<string, Record<number, string>>
@@ -67,6 +68,7 @@ export const useAccessControlCurrentView = ({
   canReadTeams,
   canReadGroups,
   canReadBudgets,
+  canReadInternalUsageDimensions,
   usageScope,
   pageState,
   pageCursors,
@@ -119,7 +121,7 @@ export const useAccessControlCurrentView = ({
         if (activeView === 'usage') {
           const nextUsage = await (
             selfService ? inferenceAccessApi.selfUsage : inferenceAccessApi.usage
-          )(usageFilter)
+          )(usageFilter, { internalDimensions: canReadInternalUsageDimensions })
           if (!isLatest()) return
           setUsage(nextUsage)
         }
@@ -245,6 +247,7 @@ export const useAccessControlCurrentView = ({
       activeView,
       canReadBudgets,
       canReadGroups,
+      canReadInternalUsageDimensions,
       canReadTeams,
       canReadUsers,
       deletionTombstonesRef,

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
+import { useAuth } from '../contexts/AuthContext'
+import { canReadInternalUsageDimensions } from '../utils/accessControl'
 import {
   inferenceAccessApi,
   type AccessAPIKey,
@@ -164,6 +166,7 @@ export function AccessEntityDetail({
   onDelete: (kind: EntityDetailKind, id: string) => Promise<void>
   onClose: () => void
 }) {
+  const { user: currentUser } = useAuth()
   const [item, setItem] = useState<EntityDetailValue | null>(null)
   const [usage, setUsage] = useState<UsageSummary | null>(null)
   const [memberships, setMemberships] = useState<AccessPage<TeamMembership> | null>(null)
@@ -219,9 +222,21 @@ export function AccessEntityDetail({
     const from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const usageRequest =
       kind === 'user'
-        ? inferenceAccessApi.userUsage(id, { from })
+        ? inferenceAccessApi.userUsage(
+            id,
+            { from },
+            {
+              internalDimensions: canReadInternalUsageDimensions(currentUser),
+            },
+          )
         : kind === 'team'
-          ? inferenceAccessApi.teamUsage(id, { from })
+          ? inferenceAccessApi.teamUsage(
+              id,
+              { from },
+              {
+                internalDimensions: canReadInternalUsageDimensions(currentUser),
+              },
+            )
           : Promise.resolve(null)
     setMemberships(null)
     setMembers(null)
@@ -260,7 +275,7 @@ export function AccessEntityDetail({
     return () => {
       cancelled = true
     }
-  }, [id, kind, selfService])
+  }, [currentUser, id, kind, selfService])
 
   const accessPolicyIds = useMemo(
     () => accessAssignments?.items.map((assignment) => assignment.policyId) ?? [],

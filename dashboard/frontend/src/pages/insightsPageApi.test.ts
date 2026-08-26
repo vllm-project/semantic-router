@@ -42,6 +42,8 @@ const slice = (id: string, requests: number) => ({
 })
 
 const usage: UsageSummary = {
+  final: true,
+  completeness: 'complete',
   granularity: 'hour',
   requests: 40,
   successful: 39,

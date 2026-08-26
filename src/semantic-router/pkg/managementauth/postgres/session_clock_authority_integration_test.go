@@ -32,7 +32,7 @@ func (clockAuthorityChallenges) Create(context.Context, string, string, time.Tim
 	return managementauth.ExchangeChallenge{}, errors.New("not used")
 }
 
-func (clockAuthorityChallenges) Consume(context.Context, string, string, string, time.Time) error {
+func (clockAuthorityChallenges) Consume(context.Context, string, string, string, string, time.Time) error {
 	return errors.New("not used")
 }
 

@@ -259,6 +259,45 @@ func TestConcurrentFirstIssuerExchangeReusesOneDurableSession(t *testing.T) {
 	assertDistinctIssuerSessionLimit(t, fixture, changedIdentity, changedDraft)
 }
 
+func TestExpiredIssuerSessionIsReplacedWhileRevocationRemainsTerminal(t *testing.T) {
+	fixture := newConcurrentIssuerExchangeFixture(t)
+	firstDraft := fixture.baseDraft
+	firstDraft.ID = uuid.NewString()
+	firstDraft.TokenID = "initial-expiry-token-" + uuid.NewString()
+	first, err := fixture.coordinator.ExchangeIdentity(fixture.ctx, managementauth.IdentityExchangeRequest{
+		Identity: fixture.identity, Session: firstDraft,
+	}, issueIdentityExchangeSession)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, updateErr := fixture.database.ExecContext(fixture.ctx, `UPDATE management_sessions
+SET status='expired' WHERE id=$1`, first.Issued.ManagementSessionID); updateErr != nil {
+		t.Fatal(updateErr)
+	}
+	replacementDraft := fixture.baseDraft
+	replacementDraft.ID = uuid.NewString()
+	replacementDraft.TokenID = "replacement-expiry-token-" + uuid.NewString()
+	replacement, err := fixture.coordinator.ExchangeIdentity(fixture.ctx, managementauth.IdentityExchangeRequest{
+		Identity: fixture.identity, Session: replacementDraft,
+	}, issueIdentityExchangeSession)
+	if err != nil || replacement.Issued.ManagementSessionID == first.Issued.ManagementSessionID {
+		t.Fatalf("expired replacement = %+v, %v", replacement, err)
+	}
+	if _, updateErr := fixture.database.ExecContext(fixture.ctx, `UPDATE management_sessions
+SET status='revoked',revoked_at=clock_timestamp() WHERE id=$1`, replacement.Issued.ManagementSessionID); updateErr != nil {
+		t.Fatal(updateErr)
+	}
+	rejectedDraft := fixture.baseDraft
+	rejectedDraft.ID = uuid.NewString()
+	rejectedDraft.TokenID = "rejected-revocation-token-" + uuid.NewString()
+	_, err = fixture.coordinator.ExchangeIdentity(fixture.ctx, managementauth.IdentityExchangeRequest{
+		Identity: fixture.identity, Session: rejectedDraft,
+	}, issueIdentityExchangeSession)
+	if !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+		t.Fatalf("revoked issuer session exchange error = %v", err)
+	}
+}
+
 type concurrentIssuerExchangeFixture struct {
 	database        *sql.DB
 	ctx             context.Context

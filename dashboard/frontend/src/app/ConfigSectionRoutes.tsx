@@ -6,12 +6,14 @@ import RecoverableLazyRoute from './RecoverableLazyRoute'
 import { loadConfigPage } from './routeLoaders'
 import { useAuth } from '../contexts/AuthContext'
 import { canAccessDashboardPath } from '../utils/accessControl'
+import { useSystemStatus } from '../contexts/SystemStatusContext'
 
 export const ConfigSectionRoute: React.FC<{
   configSection: ConfigSection
   setConfigSection: (section: ConfigSection) => void
 }> = ({ configSection, setConfigSection }) => {
   const { user } = useAuth()
+  const { routingAccess } = useSystemStatus()
   const { section } = useParams<{ section: string }>()
   const normalized = section?.toLowerCase() ?? ''
 
@@ -50,7 +52,10 @@ export const ConfigSectionRoute: React.FC<{
     return <Navigate to="/config/models" replace />
   }
 
-  if (!canAccessDashboardPath(user, `/config/${normalized || 'models'}`)) {
+  if (
+    routingAccess !== 'operational' ||
+    !canAccessDashboardPath(user, `/config/${normalized || 'models'}`)
+  ) {
     return <Navigate to="/dashboard" replace />
   }
 

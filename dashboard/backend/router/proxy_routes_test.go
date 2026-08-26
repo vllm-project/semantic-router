@@ -6,10 +6,12 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	dashboardauth "github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/proxy"
+	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
 )
 
 func TestSmartAPIRouterReturnsNotFoundForUnknownAPIPath(t *testing.T) {
@@ -102,10 +104,13 @@ func TestRegisterFleetSimRoutesProxiesSimulatorPaths(t *testing.T) {
 	}
 }
 
-type testManagementSessions struct{ token string }
+type testManagementSessions struct {
+	token string
+	err   error
+}
 
 func (provider testManagementSessions) ManagementAccessToken(context.Context, dashboardauth.AuthContext) (string, error) {
-	return provider.token, nil
+	return provider.token, provider.err
 }
 
 func TestRouterManagementProxyUsesPrincipalSessionAndStripsBrowserCredentials(t *testing.T) {
@@ -152,6 +157,41 @@ func TestRouterManagementProxyFailsClosedWithoutPrincipalExchange(t *testing.T) 
 	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/api/router/management/v1/me", nil))
 	if recorder.Code != http.StatusServiceUnavailable || calls != 0 {
 		t.Fatalf("status=%d upstream calls=%d", recorder.Code, calls)
+	}
+}
+
+func TestRouterManagementProxyPreservesSessionExchangeStatus(t *testing.T) {
+	for _, testCase := range []struct {
+		name, retryAfter string
+		status           int
+	}{
+		{name: "reauthenticate", status: http.StatusUnauthorized},
+		{name: "backoff", status: http.StatusTooManyRequests, retryAfter: "12"},
+		{name: "unavailable", status: http.StatusServiceUnavailable},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			var upstreamCalls int
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				upstreamCalls++
+				w.WriteHeader(http.StatusNoContent)
+			}))
+			defer server.Close()
+			mux := http.NewServeMux()
+			provider := testManagementSessions{err: &routerauth.ManagementSessionError{
+				Status: testCase.status, RetryAfter: 12 * time.Second,
+			}}
+			registerRouterManagementProxy(mux, &config.Config{RouterAPIURL: server.URL}, provider)
+			request := httptest.NewRequest(http.MethodGet, "/api/router/management/v1/me", nil)
+			request = request.WithContext(dashboardauth.WithAuthContext(request.Context(), dashboardauth.AuthContext{
+				UserID: "user-1", SessionID: "dashboard-session-1",
+			}))
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, request)
+			if response.Code != testCase.status || response.Header().Get("Retry-After") != testCase.retryAfter ||
+				response.Header().Get("Cache-Control") != "no-store" || upstreamCalls != 0 {
+				t.Fatalf("status=%d headers=%v upstreamCalls=%d", response.Code, response.Header(), upstreamCalls)
+			}
+		})
 	}
 }
 

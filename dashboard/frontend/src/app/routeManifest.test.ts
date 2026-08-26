@@ -25,6 +25,10 @@ describe('dashboard route manifest', () => {
     })
   })
 
+  it('keeps public Status outside the authority-dependent shell', () => {
+    expect(shellRouteDefinitions.some((route) => route.path === '/status')).toBe(false)
+  })
+
   it('keeps retired plugin-operation pages out of the shell', () => {
     expect(shellRouteDefinitions.some((route) => route.path.startsWith('/plugins'))).toBe(false)
   })

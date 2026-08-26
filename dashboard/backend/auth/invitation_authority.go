@@ -47,9 +47,10 @@ type RouterInvitationAcceptanceResult struct {
 // needed to correlate a failed invitation request. It deliberately omits
 // upstream messages, response details, and secret-bearing requests.
 type InvitationAuthorityError struct {
-	Status    int
-	Code      string
-	RequestID string
+	Status     int
+	Code       string
+	RequestID  string
+	RetryAfter time.Duration
 }
 
 func (err *InvitationAuthorityError) Error() string {

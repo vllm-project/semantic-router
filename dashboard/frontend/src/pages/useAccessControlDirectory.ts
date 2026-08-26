@@ -48,6 +48,7 @@ interface AccessControlDirectoryOptions {
   canReadTeams: boolean
   canReadGroups: boolean
   canReadBudgets: boolean
+  canReadInternalUsageDimensions: boolean
 }
 
 export const useAccessControlDirectory = ({
@@ -63,6 +64,7 @@ export const useAccessControlDirectory = ({
   canReadTeams,
   canReadGroups,
   canReadBudgets,
+  canReadInternalUsageDimensions,
 }: AccessControlDirectoryOptions) => {
   const [overview, setOverview] = useState(EMPTY_ACCESS_OVERVIEW)
   const [usage, setUsage] = useState(EMPTY_ACCESS_USAGE)
@@ -244,6 +246,7 @@ export const useAccessControlDirectory = ({
     canReadTeams,
     canReadGroups,
     canReadBudgets,
+    canReadInternalUsageDimensions,
     usageScope,
     pageState,
     pageCursors,

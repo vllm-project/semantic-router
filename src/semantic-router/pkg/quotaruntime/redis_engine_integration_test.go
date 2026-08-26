@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quota"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 func TestRedisEngineAdmissionFinalizationUnknownAndMeters(t *testing.T) {
@@ -34,6 +35,219 @@ func TestRedisEngineAdmissionFinalizationUnknownAndMeters(t *testing.T) {
 	costIdentity, _ := rules[1].Counter()
 	assertKnownFinalization(t, client, engine, partition, first, rules, tokenIdentity, costIdentity)
 	assertUnknownFinalization(t, client, engine, partition, first, blocked, rules, tokenIdentity, costIdentity)
+}
+
+func TestRedisReconciliationClearsExpiredSlidingUnknownAcrossReplicas(t *testing.T) {
+	client, partition := integrationRedis(t)
+	first, err := NewRedisEngine(client, RedisEngineOptions{FinalizationMarkerTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := NewRedisEngine(client, RedisEngineOptions{FinalizationMarkerTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := []RuleBinding{tokenRule(t, "binding-expired", "tokens", "1000", time.Minute, 0)}
+	preconditions, _, _ := seedAccessProjection(t, client, partition)
+	identity, err := rules[0].Counter()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	finalizeSlidingUsage(t, first, AdmissionRequest{
+		Partition: partition, AdmissionID: "admission-current", Digest: "request-current",
+		LeaseDuration: time.Minute, Preconditions: preconditions, Rules: rules,
+	}, "dispatch-current", "usage-current", "", identity, ActualEvidence{
+		State: ActualEvidenceKnown, Amount: quotaInteger(t, "7"),
+	})
+	finalizeSlidingUsage(t, first, AdmissionRequest{
+		Partition: partition, AdmissionID: "admission-expired", Digest: "request-expired",
+		LeaseDuration: time.Minute, Preconditions: preconditions, Rules: rules,
+	}, "dispatch-expired", "usage-expired", "fence-expired", identity, ActualEvidence{
+		State: ActualEvidenceUnknown, Reason: "provider_usage_unavailable",
+	})
+
+	reconciliation := ReconciliationRequest{
+		Partition: partition, FenceID: "fence-expired", AdmissionID: "admission-expired",
+		ReconciliationID: "reconciliation-expired", PlanDigest: strings.Repeat("c", 64),
+		Event: `{"admissionId":"admission-expired","kind":"correction"}`,
+		Corrections: []CounterCorrection{{
+			BindingID: "binding-expired", RuleID: "tokens", Metric: quota.MetricTotalTokens,
+			Algorithm: quota.AlgorithmSlidingLog, Enforcement: quota.EnforcementEnforce,
+			Amount: "5", CounterIncompleteCount: "1", ChargeAt: time.Now().UTC().Add(-time.Hour),
+			Window: time.Minute, Charge: true, Known: true,
+		}},
+	}
+	assertConcurrentReconciliation(t, []*RedisEngine{first, second}, reconciliation)
+
+	meters, err := first.ReadMeters(context.Background(), MeterReadRequest{Partition: partition, Rules: rules})
+	if err != nil {
+		t.Fatal(err)
+	}
+	corrected := meterByRule(t, meters, "tokens")
+	if corrected.Used != "7" || corrected.KnownDispatches != "1" ||
+		corrected.IncompleteDispatches != "0" || corrected.CapacityState != quota.CapacityFenced ||
+		len(corrected.ActiveFenceIDs) != 1 || corrected.ActiveFenceIDs[0] != "fence-expired" {
+		t.Fatalf("corrected expired-window meter = %+v", corrected)
+	}
+
+	removal := FenceRemovalRequest{
+		Partition: partition, FenceID: "fence-expired", ReconciliationID: "reconciliation-expired",
+		PlanDigest: strings.Repeat("c", 64), Counters: []FenceCounter{{
+			BindingID: "binding-expired", RuleID: "tokens", Metric: quota.MetricTotalTokens,
+		}},
+	}
+	assertConcurrentFenceRemoval(t, []*RedisEngine{first, second}, removal)
+	meters, err = second.ReadMeters(context.Background(), MeterReadRequest{Partition: partition, Rules: rules})
+	if err != nil {
+		t.Fatal(err)
+	}
+	released := meterByRule(t, meters, "tokens")
+	if released.Used != "7" || released.KnownDispatches != "1" ||
+		released.IncompleteDispatches != "0" || released.CapacityState != quota.CapacityAvailable ||
+		len(released.ActiveFenceIDs) != 0 {
+		t.Fatalf("released expired-window meter = %+v", released)
+	}
+}
+
+func TestRedisFenceReleasePreservesLastFenceWhenUsageIsIncomplete(t *testing.T) {
+	client, partition := integrationRedis(t)
+	engine, err := NewRedisEngine(client, RedisEngineOptions{FinalizationMarkerTTL: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rules := []RuleBinding{tokenRule(t, "binding-guard", "tokens", "1000", time.Minute, 0)}
+	preconditions, _, _ := seedAccessProjection(t, client, partition)
+	identity, err := rules[0].Counter()
+	if err != nil {
+		t.Fatal(err)
+	}
+	finalizeSlidingUsage(t, engine, AdmissionRequest{
+		Partition: partition, AdmissionID: "admission-guard", Digest: "request-guard",
+		LeaseDuration: time.Minute, Preconditions: preconditions, Rules: rules,
+	}, "dispatch-guard", "usage-guard", "fence-guard", identity, ActualEvidence{
+		State: ActualEvidenceUnknown, Reason: "provider_usage_unavailable",
+	})
+	keys, err := newPartitionKeys(partition)
+	if err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("d", 64)
+	if writeErr := client.HSet(context.Background(), keys.fence("fence-guard"),
+		"state", "corrected", "reconciliation_id", "reconciliation-guard",
+		"reconciliation_digest", digest).Err(); writeErr != nil {
+		t.Fatal(writeErr)
+	}
+	_, err = engine.RemoveReconciledFence(context.Background(), FenceRemovalRequest{
+		Partition: partition, FenceID: "fence-guard", ReconciliationID: "reconciliation-guard",
+		PlanDigest: digest, Counters: []FenceCounter{{
+			BindingID: "binding-guard", RuleID: "tokens", Metric: quota.MetricTotalTokens,
+		}},
+	})
+	if !errors.Is(err, ErrRuntimeCorrupt) {
+		t.Fatalf("RemoveReconciledFence() error = %v, want %v", err, ErrRuntimeCorrupt)
+	}
+	meters, err := engine.ReadMeters(context.Background(), MeterReadRequest{Partition: partition, Rules: rules})
+	if err != nil {
+		t.Fatal(err)
+	}
+	guarded := meterByRule(t, meters, "tokens")
+	if guarded.IncompleteDispatches != "1" || guarded.CapacityState != quota.CapacityFenced ||
+		len(guarded.ActiveFenceIDs) != 1 || guarded.ActiveFenceIDs[0] != "fence-guard" {
+		t.Fatalf("failed release mutated fenced meter = %+v", guarded)
+	}
+}
+
+func finalizeSlidingUsage(
+	t *testing.T,
+	engine *RedisEngine,
+	request AdmissionRequest,
+	dispatchID, finalizationDigest, fenceID string,
+	identity quota.CounterIdentity,
+	evidence ActualEvidence,
+) {
+	t.Helper()
+	admission, err := engine.Admit(context.Background(), request)
+	if err != nil || !admission.Allowed() {
+		t.Fatalf("Admit(%s) = %+v, %v", request.AdmissionID, admission, err)
+	}
+	if _, err := engine.JournalDispatch(context.Background(), DispatchJournalRequest{
+		Partition: request.Partition, AdmissionID: request.AdmissionID, AdmissionDigest: request.Digest,
+		DispatchID: dispatchID, Digest: "journal-" + dispatchID,
+	}); err != nil {
+		t.Fatalf("JournalDispatch(%s): %v", request.AdmissionID, err)
+	}
+	state := usageledger.EvidenceKnown
+	if evidence.State == ActualEvidenceUnknown {
+		state = usageledger.EvidenceUnknown
+	}
+	if _, err := engine.Finalize(context.Background(), FinalizationRequest{
+		Partition: request.Partition, AdmissionID: request.AdmissionID, AdmissionDigest: request.Digest,
+		FinalizationDigest: finalizationDigest, DispatchCount: 1, FenceID: fenceID,
+		Event: `{"kind":"terminal"}`, EventEvidenceState: state,
+		Rules: request.Rules, Evidence: map[quota.CounterIdentity]ActualEvidence{identity: evidence},
+	}); err != nil {
+		t.Fatalf("Finalize(%s): %v", request.AdmissionID, err)
+	}
+}
+
+type concurrentMutationResult struct {
+	idempotent bool
+	err        error
+}
+
+func assertConcurrentReconciliation(
+	t *testing.T,
+	engines []*RedisEngine,
+	request ReconciliationRequest,
+) {
+	t.Helper()
+	results := make(chan concurrentMutationResult, len(engines))
+	for _, engine := range engines {
+		go func(engine *RedisEngine) {
+			result, err := engine.ApplyReconciliation(context.Background(), request)
+			results <- concurrentMutationResult{idempotent: result.Idempotent, err: err}
+		}(engine)
+	}
+	assertOneNewMutation(t, results, len(engines), "ApplyReconciliation")
+}
+
+func assertConcurrentFenceRemoval(
+	t *testing.T,
+	engines []*RedisEngine,
+	request FenceRemovalRequest,
+) {
+	t.Helper()
+	results := make(chan concurrentMutationResult, len(engines))
+	for _, engine := range engines {
+		go func(engine *RedisEngine) {
+			result, err := engine.RemoveReconciledFence(context.Background(), request)
+			results <- concurrentMutationResult{idempotent: result.Idempotent, err: err}
+		}(engine)
+	}
+	assertOneNewMutation(t, results, len(engines), "RemoveReconciledFence")
+}
+
+func assertOneNewMutation(
+	t *testing.T,
+	results <-chan concurrentMutationResult,
+	count int,
+	operation string,
+) {
+	t.Helper()
+	newMutations := 0
+	for index := 0; index < count; index++ {
+		result := <-results
+		if result.err != nil {
+			t.Fatalf("%s concurrent call: %v", operation, result.err)
+		}
+		if !result.idempotent {
+			newMutations++
+		}
+	}
+	if newMutations != 1 {
+		t.Fatalf("%s new mutations = %d, want 1", operation, newMutations)
+	}
 }
 
 func assertAdmissionGuardsAndIdempotency(
@@ -328,14 +542,20 @@ func assertUsageReconciliation(
 	}
 	released, testRedisEngineAdmissionFinalizationUnknownAndMetersErr := engine.RemoveReconciledFence(context.Background(), FenceRemovalRequest{
 		Partition: partition, FenceID: "fence-b", ReconciliationID: "reconciliation-b",
-		PlanDigest: strings.Repeat("a", 64), BindingIDs: []string{"binding-user"},
+		PlanDigest: strings.Repeat("a", 64), Counters: []FenceCounter{
+			{BindingID: "binding-user", RuleID: "tokens", Metric: quota.MetricTotalTokens},
+			{BindingID: "binding-user", RuleID: "cost", Metric: quota.MetricCost},
+		},
 	})
 	if testRedisEngineAdmissionFinalizationUnknownAndMetersErr != nil || released.Idempotent {
 		t.Fatalf("RemoveReconciledFence() = (%+v, %v), want new release", released, testRedisEngineAdmissionFinalizationUnknownAndMetersErr)
 	}
 	released, testRedisEngineAdmissionFinalizationUnknownAndMetersErr = engine.RemoveReconciledFence(context.Background(), FenceRemovalRequest{
 		Partition: partition, FenceID: "fence-b", ReconciliationID: "reconciliation-b",
-		PlanDigest: strings.Repeat("a", 64), BindingIDs: []string{"binding-user"},
+		PlanDigest: strings.Repeat("a", 64), Counters: []FenceCounter{
+			{BindingID: "binding-user", RuleID: "tokens", Metric: quota.MetricTotalTokens},
+			{BindingID: "binding-user", RuleID: "cost", Metric: quota.MetricCost},
+		},
 	})
 	if testRedisEngineAdmissionFinalizationUnknownAndMetersErr != nil || !released.Idempotent {
 		t.Fatalf("duplicate RemoveReconciledFence() = (%+v, %v), want idempotent", released, testRedisEngineAdmissionFinalizationUnknownAndMetersErr)

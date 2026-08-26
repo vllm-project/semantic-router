@@ -13,6 +13,7 @@ import {
   canRunEvaluation,
   canManageRouting,
   canReadKeyScopedRouting,
+  canReadInternalUsageDimensions,
   canReadRouting,
   canReadRoutingCatalog,
   canRevealInferenceKey,
@@ -301,6 +302,12 @@ describe('config write access', () => {
         managementPermissions: ['delegation.use', 'key.read', 'access_policy.read'],
       }),
     ).toBe(false)
+    expect(
+      canReadInternalUsageDimensions({
+        managementPermissions: ['usage.read', 'usage.internal_dimensions.read'],
+      }),
+    ).toBe(true)
+    expect(canReadInternalUsageDimensions({ managementPermissions: ['usage.read'] })).toBe(false)
   })
 
   it('authorizes the complete routing workspace only from Router Management capabilities', () => {
@@ -336,6 +343,10 @@ describe('config write access', () => {
       managementIdentityError: 'Principal link is unavailable.',
     }
     expect(canAccessDashboardPath(disconnectedAdmin, '/config/entrypoints-recipes')).toBe(false)
+    expect(canAccessDashboardPath(disconnectedAdmin, '/openclaw')).toBe(false)
+    expect(canAccessDashboardPath(disconnectedAdmin, '/logs')).toBe(false)
+    expect(canAccessDashboardPath(disconnectedAdmin, '/status')).toBe(false)
+    expect(canAccessDashboardPath(disconnectedAdmin, '/dashboard')).toBe(true)
     expect(canReadRouting(disconnectedAdmin)).toBe(false)
     expect(canManageRouting(disconnectedAdmin)).toBe(false)
   })

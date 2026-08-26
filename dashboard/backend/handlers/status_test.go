@@ -28,7 +28,7 @@ func TestStatusHandlerExposesOnlyPublicAvailability(t *testing.T) {
 	var requestedPaths []string
 	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestedPaths = append(requestedPaths, r.URL.Path)
-		if r.URL.Path != "/health" {
+		if r.URL.Path != "/health" && r.URL.Path != "/ready" {
 			http.Error(w, `{"secret":"must-not-be-exposed"}`, http.StatusUnauthorized)
 			return
 		}
@@ -55,8 +55,8 @@ func TestStatusHandlerExposesOnlyPublicAvailability(t *testing.T) {
 	if got := recorder.Header().Get("Cache-Control"); got != "no-store" {
 		t.Fatalf("Cache-Control = %q, want no-store", got)
 	}
-	if !reflect.DeepEqual(requestedPaths, []string{"/health", "/health"}) {
-		t.Fatalf("Router paths = %v, want only sampled and live /health probes", requestedPaths)
+	if !reflect.DeepEqual(requestedPaths, []string{"/health", "/ready", "/health", "/ready"}) {
+		t.Fatalf("Router paths = %v, want sampled and live health/readiness probes", requestedPaths)
 	}
 
 	var payload map[string]json.RawMessage
@@ -100,6 +100,55 @@ func TestStatusHandlerExposesOnlyPublicAvailability(t *testing.T) {
 		if strings.Contains(strings.ToLower(recorder.Body.String()), forbidden) {
 			t.Fatalf("public status leaked forbidden value %q: %s", forbidden, recorder.Body.String())
 		}
+	}
+}
+
+func TestStatusHandlerSeparatesRouterProcessHealthFromRoutingAccess(t *testing.T) {
+	originalContainerDetection := isRunningInContainer
+	isRunningInContainer = func() bool { return false }
+	t.Cleanup(func() { isRunningInContainer = originalContainerDetection })
+	t.Setenv(routerContainerNameEnv, "status-readiness-contract")
+	t.Setenv(envoyContainerNameEnv, "status-readiness-contract")
+	t.Setenv(dashboardContainerNameEnv, "status-readiness-contract")
+	t.Setenv("TARGET_ENVOY_URL", "http://127.0.0.1:1")
+
+	router := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/health":
+			w.WriteHeader(http.StatusNoContent)
+		case "/ready":
+			http.Error(w, `{"status":"starting"}`, http.StatusServiceUnavailable)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(router.Close)
+
+	recorder := httptest.NewRecorder()
+	StatusHandler(router.URL, nil).ServeHTTP(
+		recorder,
+		httptest.NewRequest(http.MethodGet, "/api/status", nil),
+	)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", recorder.Code, http.StatusOK, recorder.Body.String())
+	}
+
+	var status SystemStatus
+	if err := json.Unmarshal(recorder.Body.Bytes(), &status); err != nil {
+		t.Fatal(err)
+	}
+	if status.Overall != "degraded" {
+		t.Fatalf("overall = %q, want degraded", status.Overall)
+	}
+	byName := make(map[string]ServiceStatus, len(status.Services))
+	for _, service := range status.Services {
+		byName[service.Name] = service
+	}
+	if routerStatus := byName["Router"]; !routerStatus.Healthy || routerStatus.Status != "operational" {
+		t.Fatalf("Router = %#v, want operational", routerStatus)
+	}
+	if routingAccess := byName["Routing access"]; routingAccess.Healthy || routingAccess.Status != "unavailable" {
+		t.Fatalf("Routing access = %#v, want unavailable", routingAccess)
 	}
 }
 

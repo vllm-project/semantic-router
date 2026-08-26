@@ -32,6 +32,27 @@ const catalog = {
       id: 'recipe_blend',
       revision: 4,
       name: 'Blend',
+      signals: [
+        { type: 'keywords', name: 'simple-query' },
+        { type: 'classifiers', name: 'intent' },
+      ],
+      projections: [
+        {
+          type: 'score',
+          name: 'intent-score',
+          members: [],
+          inputs: [{ type: 'keyword', name: 'simple-query' }],
+          outputs: [],
+        },
+        {
+          type: 'mapping',
+          name: 'intent-map',
+          members: [],
+          inputs: [],
+          source: 'intent-score',
+          outputs: ['simple'],
+        },
+      ],
       decisions: [{ id: 'decision_simple', name: 'Simple', dispatchCardinality: 'single' }],
     },
   ],
@@ -75,6 +96,28 @@ describe('key-scoped routing catalog', () => {
     ])
     expect(snapshot.models[0]).not.toHaveProperty('backends')
     expect(snapshot.recipes[0].document).toEqual({
+      signals: {
+        keywords: [{ name: 'simple-query', operator: 'OR', keywords: [], case_sensitive: false }],
+        classifiers: [{ name: 'intent', type: 'local', labels: [] }],
+      },
+      projections: {
+        partitions: [],
+        scores: [
+          {
+            name: 'intent-score',
+            method: '',
+            inputs: [{ type: 'keyword', name: 'simple-query', weight: 0 }],
+          },
+        ],
+        mappings: [
+          {
+            name: 'intent-map',
+            source: 'intent-score',
+            method: '',
+            outputs: [{ name: 'simple' }],
+          },
+        ],
+      },
       decisions: [
         {
           id: 'decision_simple',
@@ -83,6 +126,9 @@ describe('key-scoped routing catalog', () => {
         },
       ],
     })
+    expect(JSON.stringify(snapshot.recipes[0].document)).not.toMatch(
+      /prompt|instructions|origin|credential|threshold.*private/i,
+    )
     expect(snapshot.entrypoints[0]).toMatchObject({
       assignedModelCount: 1,
       ruleCount: 1,

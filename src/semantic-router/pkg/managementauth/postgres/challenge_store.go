@@ -109,11 +109,11 @@ func (store *ChallengeStore) Create(
 	}
 	var count int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM management_exchange_challenges
-WHERE rate_identity_digest=$1 AND expires_at>$2`, rateDigest[:], now.UTC()).Scan(&count); err != nil {
+WHERE rate_identity_digest=$1 AND consumed_at IS NULL AND expires_at>$2`, rateDigest[:], now.UTC()).Scan(&count); err != nil {
 		return managementauth.ExchangeChallenge{}, fmt.Errorf("count Management exchange challenges: %w", err)
 	}
 	if count >= store.rateLimit {
-		return managementauth.ExchangeChallenge{}, managementauth.ErrAuthenticationDenied
+		return managementauth.ExchangeChallenge{}, &managementauth.ChallengeCapacityError{RetryAfter: store.ttl}
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO management_exchange_challenges
   (id,issuer_id,nonce_digest,rate_identity_digest,expires_at)
@@ -128,18 +128,20 @@ VALUES ($1,$2,$3,$4,$5)`, id, issuerID, nonceDigest[:], rateDigest[:], expiresAt
 
 func (store *ChallengeStore) Consume(
 	ctx context.Context,
-	id, issuerID, nonce string,
+	id, issuerID, nonce, rateIdentity string,
 	now time.Time,
 ) error {
 	if store == nil || store.db == nil || !canonicalUUID(id) || !canonicalUUID(issuerID) || now.IsZero() ||
-		len(nonce) != 43 || strings.TrimSpace(nonce) != nonce {
+		len(nonce) != 43 || strings.TrimSpace(nonce) != nonce || !canonicalRateIdentity(rateIdentity) {
 		return managementauth.ErrAuthenticationDenied
 	}
 	digest := challengeDigest(issuerID, nonce)
+	rateDigest := sha256.Sum256([]byte(rateIdentity))
 	result, err := store.db.ExecContext(ctx, `UPDATE management_exchange_challenges
-SET consumed_at=$4
-WHERE id=$1 AND issuer_id=$2 AND nonce_digest=$3 AND consumed_at IS NULL AND expires_at>$4`,
-		id, issuerID, digest[:], now.UTC())
+SET consumed_at=$5
+WHERE id=$1 AND issuer_id=$2 AND nonce_digest=$3 AND rate_identity_digest=$4
+  AND consumed_at IS NULL AND expires_at>$5`,
+		id, issuerID, digest[:], rateDigest[:], now.UTC())
 	if err != nil {
 		return fmt.Errorf("consume Management exchange challenge: %w", err)
 	}

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { ReadonlyProvider } from './contexts/ReadonlyContext'
 import { AuthProvider } from './contexts/AuthContext'
 import { InferenceRoutingAccessProvider } from './contexts/InferenceRoutingAccessContext'
+import { SystemStatusProvider } from './contexts/SystemStatusContext'
 import AppRouter from './app/AppRouter'
 import ProductIcon from './components/ProductIcon'
 
@@ -71,13 +72,15 @@ const App: React.FC = () => {
   }
 
   return (
-    <AuthProvider>
-      <InferenceRoutingAccessProvider>
-        <ReadonlyProvider>
-          <AppRouter />
-        </ReadonlyProvider>
-      </InferenceRoutingAccessProvider>
-    </AuthProvider>
+    <SystemStatusProvider>
+      <AuthProvider>
+        <InferenceRoutingAccessProvider>
+          <ReadonlyProvider>
+            <AppRouter />
+          </ReadonlyProvider>
+        </InferenceRoutingAccessProvider>
+      </AuthProvider>
+    </SystemStatusProvider>
   )
 }
 

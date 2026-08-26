@@ -2,6 +2,7 @@ package accessmanagement
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -62,6 +63,20 @@ func TestRoutingCatalogUsesAppliedKeyProjectionAndHidesCrossScopeResources(t *te
 		len(catalog.Recipes) != 1 || catalog.Recipes[0].ID != "recipe-visible" {
 		t.Fatalf("catalog was not filtered by the applied projection: %#v", catalog)
 	}
+	if len(catalog.Recipes[0].Signals) != 2 || catalog.Recipes[0].Signals[0].Type != "keywords" ||
+		catalog.Recipes[0].Signals[0].Name != "simple-query" ||
+		len(catalog.Recipes[0].Projections) != 3 {
+		t.Fatalf("catalog topology projection = %#v", catalog.Recipes[0])
+	}
+	wire, err := json.Marshal(catalog)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, privateValue := range []string{"PRIVATE CLASSIFIER PROMPT", "private phrase", "https://private.example"} {
+		if strings.Contains(string(wire), privateValue) {
+			t.Fatalf("catalog exposed private Recipe content %q: %s", privateValue, wire)
+		}
+	}
 	assignments := catalog.Entrypoints[0].Rules[0].Assignments["decision-visible"].Models
 	if len(assignments) != 1 || assignments[0].ModelID != "model-visible" {
 		t.Fatalf("topology exposed a hidden Model assignment: %#v", assignments)
@@ -121,8 +136,19 @@ func routingCatalogSnapshot() routingsnapshot.Snapshot {
 				{ID: "model-hidden", Revision: 1, Name: "Other Team Model"},
 			},
 			Recipes: []routingsnapshot.Recipe{
-				{ID: "recipe-visible", Revision: 1, Name: "Visible Recipe", Decisions: []routingsnapshot.Decision{{ID: "decision-visible", Name: "Visible"}}},
-				{ID: "recipe-hidden", Revision: 1, Name: "Other Team Recipe", Decisions: []routingsnapshot.Decision{{ID: "decision-hidden", Name: "Hidden"}}},
+				{ID: "recipe-visible", Revision: 1, Name: "Visible Recipe", Decisions: []routingsnapshot.Decision{{ID: "decision-visible", Name: "Visible"}}, Document: json.RawMessage(`{
+  "signals": {
+    "keywords": [{"name":"simple-query","keywords":["private phrase"]}],
+    "classifiers": [{"name":"intent","instructions":"PRIVATE CLASSIFIER PROMPT","origin":"https://private.example"}]
+  },
+  "projections": {
+    "partitions": [{"name":"intent-band","members":["simple-query"],"semantics":"exclusive"}],
+    "scores": [{"name":"intent-score","inputs":[{"type":"keyword","name":"simple-query","weight":0.9}]}],
+    "mappings": [{"name":"intent-map","source":"intent-score","outputs":[{"name":"simple","lte":0.4}]}]
+  },
+  "decisions": [{"name":"Visible","rules":{}}]
+}`)},
+				{ID: "recipe-hidden", Revision: 1, Name: "Other Team Recipe", Decisions: []routingsnapshot.Decision{{ID: "decision-hidden", Name: "Hidden"}}, Document: json.RawMessage(`{"signals":{},"projections":{},"decisions":[{"name":"Hidden","rules":{}}]}`)},
 			},
 			Entrypoints: []routingsnapshot.Entrypoint{
 				{ID: "entrypoint-visible", Revision: 1, Name: "Visible MoM", Aliases: []string{"visible"}, Rules: []routingsnapshot.EntrypointRule{{

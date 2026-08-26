@@ -78,10 +78,12 @@ type managementSessionProvider struct {
 	now                func() time.Time
 	bootstrapTokenFile string
 
-	mu          sync.Mutex
-	cache       map[string]cachedManagementToken
-	inflight    map[string]*managementTokenExchange
-	delegations map[evaluationDelegationCacheKey]cachedEvaluationDelegation
+	mu                    sync.Mutex
+	cache                 map[string]cachedManagementToken
+	inflight              map[string]*managementTokenExchange
+	reauthenticateUntil   map[string]time.Time
+	challengeBackoffUntil time.Time
+	delegations           map[evaluationDelegationCacheKey]cachedEvaluationDelegation
 }
 
 type cachedManagementToken struct {
@@ -141,7 +143,8 @@ func NewManagementSessionProvider(options ManagementSessionOptions) (ManagementI
 		signer: options.Signer, client: client, now: now,
 		bootstrapTokenFile: strings.TrimSpace(options.BootstrapTokenFile),
 		cache:              make(map[string]cachedManagementToken), inflight: make(map[string]*managementTokenExchange),
-		delegations: make(map[evaluationDelegationCacheKey]cachedEvaluationDelegation),
+		reauthenticateUntil: make(map[string]time.Time),
+		delegations:         make(map[evaluationDelegationCacheKey]cachedEvaluationDelegation),
 	}, nil
 }
 
@@ -190,6 +193,13 @@ func (provider *managementSessionProvider) managementCredential(
 		return cachedManagementToken{}, ErrManagementSessionUnavailable
 	}
 	provider.mu.Lock()
+	if retryAt, rejected := provider.reauthenticateUntil[principal.SessionID]; rejected {
+		if now.Before(retryAt) {
+			provider.mu.Unlock()
+			return cachedManagementToken{}, &ManagementSessionError{Status: http.StatusUnauthorized}
+		}
+		delete(provider.reauthenticateUntil, principal.SessionID)
+	}
 	cached, ok := provider.cache[principal.SessionID]
 	if ok && now.Add(tokenRefreshSkew).Before(cached.expiresAt) {
 		provider.mu.Unlock()
@@ -210,6 +220,9 @@ func (provider *managementSessionProvider) managementCredential(
 	provider.mu.Unlock()
 
 	token, managementSessionID, expiresAt, err := provider.issueManagementToken(ctx, principal, now)
+	if err != nil {
+		err = classifyManagementSessionError(err)
+	}
 	credential := cachedManagementToken{
 		accessToken: token, managementSessionID: managementSessionID, expiresAt: expiresAt,
 	}
@@ -217,6 +230,12 @@ func (provider *managementSessionProvider) managementCredential(
 	if err == nil {
 		provider.pruneCacheLocked(now)
 		provider.cache[principal.SessionID] = credential
+	} else if errors.Is(err, ErrManagementSessionReauthentication) {
+		provider.pruneCacheLocked(now)
+		if provider.reauthenticateUntil == nil {
+			provider.reauthenticateUntil = make(map[string]time.Time)
+		}
+		provider.reauthenticateUntil[principal.SessionID] = principal.ExpiresAt.UTC()
 	}
 	pending.credential, pending.err = credential, err
 	delete(provider.inflight, principal.SessionID)
@@ -232,7 +251,7 @@ func (provider *managementSessionProvider) issueManagementToken(
 ) (string, string, time.Time, error) {
 	challenge, err := provider.challenge(ctx)
 	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: create exchange challenge: %w", ErrManagementSessionUnavailable, err)
+		return "", "", time.Time{}, err
 	}
 	if challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
 		return "", "", time.Time{}, fmt.Errorf("%w: invalid exchange challenge", ErrManagementSessionUnavailable)
@@ -243,7 +262,7 @@ func (provider *managementSessionProvider) issueManagementToken(
 	}
 	envelope, err := provider.exchange(ctx, challenge.ExchangeChallengeID, assertion)
 	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: exchange source assertion: %w", ErrManagementSessionUnavailable, err)
+		return "", "", time.Time{}, err
 	}
 	managementSessionID, sessionIDErr := uuid.Parse(envelope.ManagementSessionID)
 	if envelope.AccessToken == "" || envelope.TokenType != "Bearer" || envelope.ExpiresIn <= 0 ||
@@ -299,6 +318,7 @@ func (provider *managementSessionProvider) RetireDashboardSession(
 	provider.mu.Lock()
 	cached := provider.cache[dashboardSessionID]
 	delete(provider.cache, dashboardSessionID)
+	delete(provider.reauthenticateUntil, dashboardSessionID)
 	provider.clearEvaluationDelegationsLocked(cached.managementSessionID)
 	provider.mu.Unlock()
 	return nil
@@ -308,6 +328,11 @@ func (provider *managementSessionProvider) pruneCacheLocked(now time.Time) {
 	for sessionID, cached := range provider.cache {
 		if !now.Add(tokenRefreshSkew).Before(cached.expiresAt) {
 			delete(provider.cache, sessionID)
+		}
+	}
+	for sessionID, expiresAt := range provider.reauthenticateUntil {
+		if !now.Before(expiresAt) {
+			delete(provider.reauthenticateUntil, sessionID)
 		}
 	}
 	for len(provider.cache) >= maxManagementSessionCacheEntries {
@@ -323,13 +348,45 @@ func (provider *managementSessionProvider) pruneCacheLocked(now time.Time) {
 		}
 		delete(provider.cache, oldestSession)
 	}
+	for len(provider.reauthenticateUntil) >= maxManagementSessionCacheEntries {
+		var oldestSession string
+		var oldestExpiry time.Time
+		for sessionID, expiresAt := range provider.reauthenticateUntil {
+			if oldestSession == "" || expiresAt.Before(oldestExpiry) {
+				oldestSession, oldestExpiry = sessionID, expiresAt
+			}
+		}
+		if oldestSession == "" {
+			return
+		}
+		delete(provider.reauthenticateUntil, oldestSession)
+	}
 }
 
 func (provider *managementSessionProvider) challenge(ctx context.Context) (exchangeChallenge, error) {
+	now := provider.now().UTC()
+	provider.mu.Lock()
+	if now.Before(provider.challengeBackoffUntil) {
+		retryAfter := provider.challengeBackoffUntil.Sub(now)
+		provider.mu.Unlock()
+		return exchangeChallenge{}, &ManagementSessionError{
+			Status: http.StatusTooManyRequests, RetryAfter: boundedManagementRetryAfter(retryAfter),
+		}
+	}
+	provider.mu.Unlock()
 	var response exchangeChallenge
 	err := provider.request(ctx, http.MethodPost, managementBasePath+"/auth/exchange-challenges", map[string]string{
 		"issuerId": provider.issuerID,
 	}, http.StatusCreated, &response, false)
+	if err != nil {
+		classified := classifyManagementSessionError(err)
+		if classified.Status == http.StatusTooManyRequests {
+			provider.mu.Lock()
+			provider.challengeBackoffUntil = now.Add(boundedManagementRetryAfter(classified.RetryAfter))
+			provider.mu.Unlock()
+		}
+		return exchangeChallenge{}, classified
+	}
 	return response, err
 }
 
@@ -416,13 +473,20 @@ func (provider *managementSessionProvider) request(
 	}
 	defer result.Body.Close()
 	mediaType, _, mediaTypeErr := mime.ParseMediaType(result.Header.Get("Content-Type"))
-	if result.StatusCode != expectedStatus || mediaTypeErr != nil || mediaType != managementMediaType {
+	if result.StatusCode != expectedStatus {
 		_, _ = io.Copy(io.Discard, io.LimitReader(result.Body, 64<<10))
-		return fmt.Errorf(
-			"unexpected response status=%d content_type=%q",
-			result.StatusCode,
-			mediaType,
-		)
+		responseNow := time.Now().UTC()
+		if provider.now != nil {
+			responseNow = provider.now().UTC()
+		}
+		return &routerManagementResponseError{
+			Status: result.StatusCode, RetryAfter: parseManagementRetryAfter(result.Header.Get("Retry-After"), responseNow),
+			RequestID: safeInvitationRequestID(result.Header.Get("X-Request-ID")),
+		}
+	}
+	if mediaTypeErr != nil || mediaType != managementMediaType {
+		_, _ = io.Copy(io.Discard, io.LimitReader(result.Body, 64<<10))
+		return fmt.Errorf("unexpected response content_type=%q", mediaType)
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 64<<10))
 	if strictResponse {
@@ -455,6 +519,10 @@ func RewriteManagementAuthorization(request *http.Request, provider ManagementSe
 	token, err := provider.ManagementAccessToken(request.Context(), principal)
 	if err != nil || strings.TrimSpace(token) == "" || strings.ContainsAny(token, "\r\n\t ") {
 		if err != nil {
+			var sessionErr *ManagementSessionError
+			if errors.As(err, &sessionErr) {
+				return sessionErr
+			}
 			return fmt.Errorf("%w: %w", ErrManagementSessionUnavailable, err)
 		}
 		return ErrManagementSessionUnavailable

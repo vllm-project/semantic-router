@@ -176,12 +176,13 @@ func (service *Service) PrepareDiscovery(
 	if request.ProviderCursor != "" && !canonicalText(request.ProviderCursor, 1, 4096) {
 		return DiscoveryPlan{}, fmt.Errorf("%w: provider cursor is invalid", ErrInvalidRequest)
 	}
+	discoveryPath := compiledPathForOrigin(origin, provider.Discovery.Path)
 	plan := DiscoveryPlan{
 		CatalogRevision: snapshot.Revision(), NamespaceID: request.NamespaceID,
 		ProviderID: provider.ID, DiscoveryAdapterID: provider.Discovery.AdapterID,
 		CredentialMode:      provider.Credential.Mode,
 		CredentialAdapterID: provider.Credential.AdapterID, CredentialID: request.CredentialID,
-		NormalizedOrigin: origin, Path: provider.Discovery.Path, ConnectionFields: fields,
+		NormalizedOrigin: origin, Path: discoveryPath, ConnectionFields: fields,
 		Headers: cloneStringMap(provider.Discovery.Headers),
 		Search:  request.Search, PageSize: pageSize, ProviderCursor: request.ProviderCursor,
 	}

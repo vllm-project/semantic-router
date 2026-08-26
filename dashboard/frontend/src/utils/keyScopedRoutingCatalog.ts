@@ -62,6 +62,78 @@ function countAssignedModels(rules: RoutingEntrypointRule[]): number {
   ).size
 }
 
+function readonlySignal(type: string, name: string): Record<string, unknown> {
+  const base = { name }
+  switch (type) {
+    case 'keywords':
+      return { ...base, operator: 'OR', keywords: [], case_sensitive: false }
+    case 'embeddings':
+      return { ...base, threshold: 0, candidates: [], aggregation_method: 'max' }
+    case 'domains':
+      return { ...base, description: '', mmlu_categories: [] }
+    case 'context':
+      return { ...base, min_tokens: '', max_tokens: '' }
+    case 'complexity':
+      return { ...base, threshold: 0, easy: { candidates: [] }, hard: { candidates: [] } }
+    case 'role_bindings':
+      return { ...base, role: '', subjects: [] }
+    case 'jailbreak':
+      return { ...base, threshold: 0, include_history: false }
+    case 'pii':
+      return { ...base, threshold: 0, pii_types_allowed: [], include_history: false }
+    case 'kb':
+      return { ...base, kb: '', target: { kind: 'label', value: '' }, match: 'best' }
+    case 'metadata':
+      return { ...base, key: '', predicate: {} }
+    case 'classifiers':
+      return { ...base, type: 'local', labels: [] }
+    default:
+      return base
+  }
+}
+
+function readonlySignals(recipe: RoutingCatalogRecipe): Record<string, unknown[]> {
+  const result: Record<string, unknown[]> = {}
+  for (const signal of recipe.signals) {
+    const group = result[signal.type] ?? []
+    group.push(readonlySignal(signal.type, signal.name))
+    result[signal.type] = group
+  }
+  return result
+}
+
+function readonlyProjections(recipe: RoutingCatalogRecipe) {
+  const partitions: Record<string, unknown>[] = []
+  const scores: Record<string, unknown>[] = []
+  const mappings: Record<string, unknown>[] = []
+  for (const projection of recipe.projections) {
+    if (projection.type === 'partition') {
+      partitions.push({
+        name: projection.name,
+        semantics: '',
+        members: projection.members,
+        default: '',
+      })
+    }
+    if (projection.type === 'score') {
+      scores.push({
+        name: projection.name,
+        method: '',
+        inputs: projection.inputs.map((input) => ({ ...input, weight: 0 })),
+      })
+    }
+    if (projection.type === 'mapping') {
+      mappings.push({
+        name: projection.name,
+        source: projection.source ?? '',
+        method: '',
+        outputs: projection.outputs.map((name) => ({ name })),
+      })
+    }
+  }
+  return { partitions, scores, mappings }
+}
+
 export function keyScopedCatalogSnapshot(catalog: KeyScopedRoutingCatalog): ManagedRoutingSnapshot {
   const models: RoutingModelCardView[] = catalog.models.map((model) => ({
     id: model.id,
@@ -92,6 +164,8 @@ export function keyScopedCatalogSnapshot(catalog: KeyScopedRoutingCatalog): Mana
     immutable: true,
     decisions: recipe.decisions,
     document: {
+      signals: readonlySignals(recipe),
+      projections: readonlyProjections(recipe),
       decisions: recipe.decisions.map((decision) => ({
         id: decision.id,
         name: decision.name,

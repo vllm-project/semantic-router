@@ -127,6 +127,88 @@ func TestManagementSessionProviderExchangesPrincipalAssertionAndCachesToken(t *t
 	}
 }
 
+func TestManagementSessionProviderStopsRetryingRejectedDashboardSession(t *testing.T) {
+	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	var challengeCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != managementBasePath+"/auth/exchange-challenges" {
+			http.NotFound(response, request)
+			return
+		}
+		challengeCalls++
+		response.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+	providerValue, err := NewManagementSessionProvider(ManagementSessionOptions{
+		RouterURL: server.URL, IssuerURL: "https://dashboard.example.test",
+		IssuerID: "10000000-0000-4000-8000-000000000001", Signer: &recordingAssertionSigner{},
+		Client: server.Client(), Now: func() time.Time { return now },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal := dashboardauth.AuthContext{
+		UserID: "dashboard-user", SessionID: "dashboard-session", ExpiresAt: now.Add(12 * time.Hour),
+	}
+	for attempt := 0; attempt < 2; attempt++ {
+		_, err = providerValue.ManagementAccessToken(context.Background(), principal)
+		if !errors.Is(err, ErrManagementSessionReauthentication) {
+			t.Fatalf("attempt %d error = %v", attempt, err)
+		}
+	}
+	if challengeCalls != 1 {
+		t.Fatalf("rejected Dashboard session challenge calls = %d", challengeCalls)
+	}
+	principal.SessionID = "new-dashboard-session"
+	_, err = providerValue.ManagementAccessToken(context.Background(), principal)
+	if !errors.Is(err, ErrManagementSessionReauthentication) || challengeCalls != 2 {
+		t.Fatalf("new Dashboard session error=%v challenge calls=%d", err, challengeCalls)
+	}
+}
+
+func TestManagementSessionProviderAppliesSharedBoundedChallengeBackoff(t *testing.T) {
+	current := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	var challengeCalls int
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != managementBasePath+"/auth/exchange-challenges" {
+			http.NotFound(response, request)
+			return
+		}
+		challengeCalls++
+		response.Header().Set("Retry-After", "30")
+		response.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+	providerValue, err := NewManagementSessionProvider(ManagementSessionOptions{
+		RouterURL: server.URL, IssuerURL: "https://dashboard.example.test",
+		IssuerID: "10000000-0000-4000-8000-000000000001", Signer: &recordingAssertionSigner{},
+		Client: server.Client(), Now: func() time.Time { return current },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sessionID := range []string{"dashboard-session-1", "dashboard-session-2"} {
+		_, err = providerValue.ManagementAccessToken(context.Background(), dashboardauth.AuthContext{
+			UserID: "dashboard-user", SessionID: sessionID, ExpiresAt: current.Add(12 * time.Hour),
+		})
+		var sessionErr *ManagementSessionError
+		if !errors.As(err, &sessionErr) || sessionErr.Status != http.StatusTooManyRequests ||
+			sessionErr.RetryAfter <= 0 || sessionErr.RetryAfter > 30*time.Second {
+			t.Fatalf("session %s error = %#v", sessionID, err)
+		}
+	}
+	if challengeCalls != 1 {
+		t.Fatalf("challenge calls during shared backoff = %d", challengeCalls)
+	}
+	current = current.Add(31 * time.Second)
+	_, _ = providerValue.ManagementAccessToken(context.Background(), dashboardauth.AuthContext{
+		UserID: "dashboard-user", SessionID: "dashboard-session-3", ExpiresAt: current.Add(12 * time.Hour),
+	})
+	if challengeCalls != 2 {
+		t.Fatalf("challenge calls after backoff = %d", challengeCalls)
+	}
+}
+
 func TestManagementResponseDecodingClosesOnlySecretBearingVariants(t *testing.T) {
 	t.Parallel()
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {

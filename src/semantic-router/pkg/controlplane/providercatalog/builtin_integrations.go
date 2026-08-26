@@ -7,7 +7,7 @@ import "github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmproto
 // constructing a Registry; inference processes never load this metadata.
 func BuiltinIntegrations() []Integration {
 	specs := []builtinIntegrationSpec{
-		withResponses(privateProvider("vllm", "vLLM", "vLLM endpoint", lobeIcon("vllm", true))),
+		vLLMProvider(),
 		withResponses(privateProvider("sglang", "SGLang", "SGLang endpoint", urlIcon("https://raw.githubusercontent.com/sgl-project/sgl-docs/main/favicon.png"))),
 		withResponses(privateProvider("amd-atom", "AMD ATOM", "AMD ATOM endpoint", assetIcon("/amd.png"))),
 		withResponses(privateProvider("openai-compatible", "OpenAI compatible", "OpenAI-compatible endpoint", lobeIcon("openai", false))),
@@ -76,6 +76,17 @@ type builtinIntegrationSpec struct {
 func openAIProvider() builtinIntegrationSpec {
 	spec := fixedProvider("openai", "OpenAI", "https://api.openai.com/v1", lobeIcon("openai", false))
 	return withResponses(spec)
+}
+
+func vLLMProvider() builtinIntegrationSpec {
+	spec := withResponses(privateProvider("vllm", "vLLM", "vLLM endpoint", lobeIcon("vllm", true)))
+	// Keep the Integration contract complete. Compilation removes any leading
+	// API-base segments already present in a user-supplied origin, so both a
+	// server origin and the conventional /v1 base URL target the same API.
+	spec.Path = "/v1/chat/completions"
+	spec.Discovery.Path = "/v1/models"
+	spec.AdditionalInterfaces[0].Compiler.Config["path"] = "/v1/responses"
+	return spec
 }
 
 func withResponses(spec builtinIntegrationSpec) builtinIntegrationSpec {

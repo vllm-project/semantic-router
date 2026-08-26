@@ -20,6 +20,8 @@ const overview: AccessOverview = {
 }
 
 const usage: UsageSummary = {
+  final: true,
+  completeness: 'complete',
   granularity: 'hour',
   requests: 147,
   successful: 146,

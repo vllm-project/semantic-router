@@ -46,19 +46,25 @@ func TestChallengeStoreIntegrationOneTimeAndRateLimited(t *testing.T) {
 	if challenge.Nonce == "" || !challenge.ExpiresAt.Equal(now.Add(30*time.Second)) {
 		t.Fatalf("challenge = %+v", challenge)
 	}
-	if err := store.Consume(context.Background(), challenge.ID, issuerID, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+	if err := store.Consume(context.Background(), challenge.ID, issuerID, "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", "198.51.100.20", now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
 		t.Fatalf("wrong nonce consume error = %v", err)
 	}
-	if err := store.Consume(context.Background(), challenge.ID, issuerID, challenge.Nonce, now); err != nil {
+	if err := store.Consume(context.Background(), challenge.ID, issuerID, challenge.Nonce, "198.51.100.21", now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+		t.Fatalf("cross-identity consume error = %v", err)
+	}
+	if err := store.Consume(context.Background(), challenge.ID, issuerID, challenge.Nonce, "198.51.100.20", now); err != nil {
 		t.Fatalf("consume error = %v", err)
 	}
-	if err := store.Consume(context.Background(), challenge.ID, issuerID, challenge.Nonce, now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+	if err := store.Consume(context.Background(), challenge.ID, issuerID, challenge.Nonce, "198.51.100.20", now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
 		t.Fatalf("replay error = %v", err)
 	}
 	if _, err := store.Create(context.Background(), issuerID, "198.51.100.20", now); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Create(context.Background(), issuerID, "198.51.100.20", now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+	if _, err := store.Create(context.Background(), issuerID, "198.51.100.20", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Create(context.Background(), issuerID, "198.51.100.20", now); !errors.Is(err, managementauth.ErrChallengeCapacityExceeded) {
 		t.Fatalf("rate limit error = %v", err)
 	}
 }

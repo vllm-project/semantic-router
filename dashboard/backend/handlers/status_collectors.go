@@ -35,15 +35,29 @@ func collectManagedDockerStatus(routerAPIURL string) SystemStatus {
 	status.Overall = "healthy"
 
 	routerHealthy, routerMsg := resolveManagedRouterStatus(routerAPIURL)
+	routingAccessHealthy, routingAccessMsg := resolveManagedRoutingAccessStatus(routerAPIURL)
 	envoyHealthy, envoyMsg := resolveManagedEnvoyStatus()
 	dashboardHealthy, dashboardMsg := resolveManagedDashboardStatus()
 
 	status.Services = append(status.Services,
 		buildServiceStatus("Router", boolToStatus(routerHealthy), routerHealthy, routerMsg, "container"),
+		buildServiceStatus(
+			"Routing access",
+			routingAccessStatus(routingAccessHealthy),
+			routingAccessHealthy,
+			routingAccessMsg,
+			"readiness",
+		),
 		buildServiceStatus("Envoy", boolToStatus(envoyHealthy), envoyHealthy, envoyMsg, "container"),
 		buildServiceStatus("Dashboard", boolToStatus(dashboardHealthy), dashboardHealthy, dashboardMsg, "container"),
 	)
-	setManagedDockerOverall(&status, routerHealthy, envoyHealthy, dashboardHealthy)
+	setManagedDockerOverall(
+		&status,
+		routerHealthy,
+		routingAccessHealthy,
+		envoyHealthy,
+		dashboardHealthy,
+	)
 
 	return status
 }
@@ -73,6 +87,19 @@ func collectDirectStatus(routerAPIURL string) (SystemStatus, bool) {
 	status.Overall = "healthy"
 	status.Services = append(status.Services, buildServiceStatus("Router", "running", true, routerMsg, "process"))
 
+	routingAccessHealthy, routingAccessMsg := checkHTTPHealth(routerAPIURL + "/ready")
+	status.Services = append(
+		status.Services,
+		buildServiceStatus(
+			"Routing access",
+			routingAccessStatus(routingAccessHealthy),
+			routingAccessHealthy,
+			routingAccessMsg,
+			"readiness",
+		),
+	)
+	setDegradedWhenUnhealthy(&status, routingAccessHealthy)
+
 	appendDirectEnvoyStatus(&status)
 	status.Services = append(status.Services, buildServiceStatus("Dashboard", "running", true, "Running", "process"))
 
@@ -88,6 +115,7 @@ func collectDashboardOnlyHostStatus(routerAPIURL string) SystemStatus {
 
 	status.Services = append(status.Services,
 		buildServiceStatus("Router", "not running", false, routerMsg, "process"),
+		buildServiceStatus("Routing access", "not running", false, routerMsg, "readiness"),
 	)
 	appendDirectEnvoyStatus(&status)
 	status.Services = append(status.Services,
@@ -119,6 +147,13 @@ func buildServiceStatus(name, serviceStatus string, healthy bool, _ string, _ st
 		Status:  publicServiceStatus(serviceStatus, healthy),
 		Healthy: healthy,
 	}
+}
+
+func routingAccessStatus(healthy bool) string {
+	if healthy {
+		return "operational"
+	}
+	return "unavailable"
 }
 
 func publicServiceStatus(status string, healthy bool) string {
@@ -163,6 +198,16 @@ func resolveManagedRouterStatus(routerAPIURL string) (bool, string) {
 		}
 	}
 	return resolveManagedServiceStatus(containerStatus)
+}
+
+// resolveManagedRoutingAccessStatus reports the Router readiness contract,
+// which includes the active routing runtime and Router Management authority.
+// Process health alone must never be presented as usable routing access.
+func resolveManagedRoutingAccessStatus(routerAPIURL string) (bool, string) {
+	if routerAPIURL == "" {
+		return false, "Router readiness URL is not configured"
+	}
+	return checkHTTPHealth(routerAPIURL + "/ready")
 }
 
 func resolveManagedEnvoyStatus() (bool, string) {

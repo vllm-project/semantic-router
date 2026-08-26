@@ -121,6 +121,8 @@ export const EMPTY_ACCESS_OVERVIEW: AccessOverview = {
 }
 
 export const EMPTY_ACCESS_USAGE: UsageSummary = {
+  final: true,
+  completeness: 'complete',
   granularity: 'hour',
   requests: 0,
   successful: 0,

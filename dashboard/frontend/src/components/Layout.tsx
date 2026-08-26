@@ -27,6 +27,7 @@ import {
 } from './LayoutNavSupport'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { useSystemStatus } from '../contexts/SystemStatusContext'
 import {
   canAccessDashboardPath,
   canAccessMLSetup,
@@ -69,14 +70,20 @@ const Layout: React.FC<LayoutProps> = ({
   const pendingMenuFocusRef = useRef<'active-tab' | 'last-link' | null>(null)
   const { user, logout } = useAuth()
   const { fleetSimEnabled } = useReadonly()
+  const { routingAccess } = useSystemStatus()
   const location = useLocation()
   const navigate = useNavigate()
   const canUseMLSetup = canAccessMLSetup(user)
   const accessLandingPath = resolveAccessLandingPath(user)
   const primaryNavLinks = PRIMARY_NAV_LINKS.map((link) =>
     link.to === '/access/usage' && accessLandingPath ? { ...link, to: accessLandingPath } : link,
-  ).filter((link) => canAccessDashboardPath(user, link.to))
+  ).filter(
+    (link) =>
+      (link.to === '/dashboard' || routingAccess === 'operational') &&
+      canAccessDashboardPath(user, link.to),
+  )
   const canAccessMenuItem = (item: LayoutMenuItem) =>
+    routingAccess === 'operational' &&
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
   const systemMenuCategories = filterLayoutMenuCategories(

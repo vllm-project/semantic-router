@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -183,6 +184,11 @@ func invitationAcceptHandler(svc *Service) http.HandlerFunc {
 		}
 		accepted, err := svc.AcceptInvitation(r.Context(), req.Token, req.Name, req.Password)
 		if err != nil {
+			var authority *InvitationAuthorityError
+			if errors.As(err, &authority) || errors.Is(err, ErrInvitationAuthorityUnavailable) {
+				writeInvitationAuthorityError(w, err)
+				return
+			}
 			status := http.StatusBadRequest
 			if errors.Is(err, ErrInvitationUnavailable) {
 				status = http.StatusGone
@@ -251,10 +257,24 @@ func writeInvitationAuthorityError(w http.ResponseWriter, err error) {
 		if upstream.RequestID != "" {
 			w.Header().Set(managementapi.HeaderRequestID, upstream.RequestID)
 		}
+		if upstream.Status == http.StatusTooManyRequests {
+			seconds := int64((boundedInvitationRetryAfter(upstream.RetryAfter) + time.Second - 1) / time.Second)
+			w.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+		}
 		http.Error(w, upstream.Error(), upstream.Status)
 	case errors.Is(err, ErrInvitationAuthorityUnavailable):
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	default:
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
+}
+
+func boundedInvitationRetryAfter(value time.Duration) time.Duration {
+	if value <= 0 {
+		return time.Second
+	}
+	if value > 10*time.Minute {
+		return 10 * time.Minute
+	}
+	return value
 }

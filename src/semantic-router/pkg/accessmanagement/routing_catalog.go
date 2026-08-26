@@ -2,6 +2,7 @@ package accessmanagement
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -50,7 +51,11 @@ func (service *Service) GetRoutingCatalog(
 		!validDigest(publication.Snapshot.Digest) {
 		return RoutingCatalog{}, fmt.Errorf("%w: applied routing publication does not match the key policy pin", ErrUnavailable)
 	}
-	return compileRoutingCatalog(subject, applied, *publication), nil
+	catalog, err := compileRoutingCatalog(subject, applied, *publication)
+	if err != nil {
+		return RoutingCatalog{}, fmt.Errorf("%w: compile key-scoped routing catalog: %w", ErrUnavailable, err)
+	}
+	return catalog, nil
 }
 
 func (service *Service) appliedKeyPolicy(
@@ -97,7 +102,7 @@ func compileRoutingCatalog(
 	subject Subject,
 	applied accessruntime.AppliedPolicy,
 	publication RoutingPublication,
-) RoutingCatalog {
+) (RoutingCatalog, error) {
 	snapshot := publication.Snapshot
 	result := RoutingCatalog{
 		Subject: subject, PolicyRevision: applied.Active.Revision,
@@ -131,13 +136,112 @@ func compileRoutingCatalog(
 		if _, visible := visibleRecipes[recipe.ID]; !visible {
 			continue
 		}
+		topology, err := catalogRecipeTopology(recipe.Document)
+		if err != nil {
+			return RoutingCatalog{}, fmt.Errorf("recipe %q topology: %w", recipe.ID, err)
+		}
 		result.Recipes = append(result.Recipes, RoutingCatalogRecipe{
 			ID: recipe.ID, Revision: recipe.Revision, Name: recipe.Name,
 			Description: recipe.Description,
 			Decisions:   append([]routingsnapshot.Decision(nil), recipe.Decisions...),
+			Signals:     topology.Signals,
+			Projections: topology.Projections,
 		})
 	}
-	return result
+	return result, nil
+}
+
+var catalogSignalTypes = []string{
+	"keywords", "embeddings", "domains", "fact_check", "user_feedbacks", "reasks",
+	"preferences", "language", "context", "structure", "complexity", "modality",
+	"role_bindings", "jailbreak", "pii", "kb", "conversation", "events", "metadata",
+	"classifiers",
+}
+
+type catalogRecipeDocument struct {
+	Signals map[string][]struct {
+		Name string `json:"name"`
+	} `json:"signals"`
+	Projections struct {
+		Partitions []struct {
+			Name    string   `json:"name"`
+			Members []string `json:"members"`
+		} `json:"partitions"`
+		Scores []struct {
+			Name   string `json:"name"`
+			Inputs []struct {
+				Type   string `json:"type"`
+				Name   string `json:"name"`
+				KB     string `json:"kb"`
+				Metric string `json:"metric"`
+			} `json:"inputs"`
+		} `json:"scores"`
+		Mappings []struct {
+			Name    string `json:"name"`
+			Source  string `json:"source"`
+			Outputs []struct {
+				Name string `json:"name"`
+			} `json:"outputs"`
+		} `json:"mappings"`
+	} `json:"projections"`
+}
+
+type catalogRecipeTopologyView struct {
+	Signals     []RoutingCatalogSignal
+	Projections []RoutingCatalogProjection
+}
+
+func catalogRecipeTopology(document json.RawMessage) (catalogRecipeTopologyView, error) {
+	var source catalogRecipeDocument
+	if len(document) == 0 || !json.Valid(document) {
+		return catalogRecipeTopologyView{}, fmt.Errorf("document is not valid JSON")
+	}
+	if err := json.Unmarshal(document, &source); err != nil {
+		return catalogRecipeTopologyView{}, fmt.Errorf("decode document: %w", err)
+	}
+	result := catalogRecipeTopologyView{
+		Signals:     make([]RoutingCatalogSignal, 0),
+		Projections: make([]RoutingCatalogProjection, 0),
+	}
+	// Deliberately whitelist signal families. A new family remains private until
+	// this security projection explicitly chooses how to represent it.
+	for _, signalType := range catalogSignalTypes {
+		for _, signal := range source.Signals[signalType] {
+			if name := strings.TrimSpace(signal.Name); name != "" {
+				result.Signals = append(result.Signals, RoutingCatalogSignal{Type: signalType, Name: name})
+			}
+		}
+	}
+	for _, projection := range source.Projections.Partitions {
+		result.Projections = append(result.Projections, RoutingCatalogProjection{
+			Type: "partition", Name: projection.Name,
+			Members: append([]string{}, projection.Members...), Inputs: []RoutingCatalogProjectionReference{}, Outputs: []string{},
+		})
+	}
+	for _, projection := range source.Projections.Scores {
+		view := RoutingCatalogProjection{
+			Type: "score", Name: projection.Name, Members: []string{},
+			Inputs: make([]RoutingCatalogProjectionReference, 0, len(projection.Inputs)), Outputs: []string{},
+		}
+		for _, input := range projection.Inputs {
+			view.Inputs = append(view.Inputs, RoutingCatalogProjectionReference{
+				Type: input.Type, Name: input.Name, KB: input.KB, Metric: input.Metric,
+			})
+		}
+		result.Projections = append(result.Projections, view)
+	}
+	for _, projection := range source.Projections.Mappings {
+		view := RoutingCatalogProjection{
+			Type: "mapping", Name: projection.Name, Members: []string{},
+			Inputs: []RoutingCatalogProjectionReference{}, Source: projection.Source,
+			Outputs: make([]string, 0, len(projection.Outputs)),
+		}
+		for _, output := range projection.Outputs {
+			view.Outputs = append(view.Outputs, output.Name)
+		}
+		result.Projections = append(result.Projections, view)
+	}
+	return result, nil
 }
 
 func discoverable(

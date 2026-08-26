@@ -45,6 +45,15 @@ func appendCanonicalManifestModels(
 		if err != nil {
 			return nil, err
 		}
+		if model.Reasoning.Type != "" {
+			provider.ReasoningFamily = model.Name
+			if manifest.Providers.Defaults.ReasoningFamilies == nil {
+				manifest.Providers.Defaults.ReasoningFamilies = make(map[string]ReasoningFamilyConfig)
+			}
+			manifest.Providers.Defaults.ReasoningFamilies[provider.ReasoningFamily] = ReasoningFamilyConfig{
+				Type: model.Reasoning.Type, Parameter: reasoningParameter(model.Reasoning.Type),
+			}
+		}
 		manifest.Providers.Models = append(manifest.Providers.Models, provider)
 		manifest.Routing.ModelCards = append(manifest.Routing.ModelCards, canonicalModelCardFromSnapshot(model))
 	}

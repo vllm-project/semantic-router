@@ -80,7 +80,24 @@ func (s *Store) ReissueIssuerSessionInTransaction(
 	if err != nil {
 		return managementauth.LiveSession{}, managementauth.IssuedToken{}, false, err
 	}
-	if err := current.ValidateAt(now); err != nil || !issuerReissueDraftMatches(draft, current) {
+	if !issuerReissueDraftMatches(draft, current) ||
+		current.PrincipalStatus != managementauth.ResourceActive ||
+		current.AuthSourceStatus != managementauth.ResourceActive {
+		return managementauth.LiveSession{}, managementauth.IssuedToken{}, false,
+			managementauth.ErrAuthenticationDenied
+	}
+	if current.Status == managementauth.SessionRevoked {
+		return managementauth.LiveSession{}, managementauth.IssuedToken{}, false,
+			managementauth.ErrAuthenticationDenied
+	}
+	if current.Status == managementauth.SessionExpired || !now.Before(current.ExpiresAt) {
+		// An expired Router-derived session is not a logout tombstone. The
+		// still-live, freshly verified issuer session may create a replacement
+		// in the caller's transaction; CreateInTransaction expires any stale
+		// active row before enforcing the active-session limit.
+		return managementauth.LiveSession{}, managementauth.IssuedToken{}, false, nil
+	}
+	if validationErr := current.ValidateAt(now); validationErr != nil {
 		return managementauth.LiveSession{}, managementauth.IssuedToken{}, false,
 			managementauth.ErrAuthenticationDenied
 	}

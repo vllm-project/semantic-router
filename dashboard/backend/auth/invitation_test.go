@@ -390,6 +390,18 @@ func TestInvitationAuthorityErrorPreservesOnlyPublicBFFDiagnostics(t *testing.T)
 	}
 }
 
+func TestInvitationAuthorityRateLimitPreservesBoundedRetryAfter(t *testing.T) {
+	t.Parallel()
+	response := httptest.NewRecorder()
+	writeInvitationAuthorityError(response, &InvitationAuthorityError{
+		Status: http.StatusTooManyRequests, Code: "challenge_capacity_exceeded", RetryAfter: 45 * time.Second,
+	})
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "45" ||
+		!strings.Contains(response.Body.String(), "challenge_capacity_exceeded") {
+		t.Fatalf("BFF response status=%d headers=%#v body=%q", response.Code, response.Header(), response.Body.String())
+	}
+}
+
 func TestReadOnlyDashboardMemberCannotManageInvitations(t *testing.T) {
 	svc, _, _ := configuredInvitationService(t)
 	request := httptest.NewRequest("GET", "/api/admin/invitations", nil)

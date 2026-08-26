@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { useReadonly } from '../contexts/ReadonlyContext'
+import { useAuth } from '../contexts/AuthContext'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import { copyText } from '../utils/clipboard'
 import {
@@ -16,6 +17,7 @@ import {
   type KeyScopedRoutingCatalog,
 } from '../utils/keyScopedRoutingCatalog'
 import { routerPublicEndpoint } from '../utils/routerPublicApi'
+import { canReadInternalUsageDimensions } from '../utils/accessControl'
 import {
   EMPTY_USAGE,
   costCoverageLabel,
@@ -24,6 +26,8 @@ import {
   formatNumber,
   formatQuotaValue,
   quotaMeterLabel,
+  quotaCapacityLabel,
+  quotaCapacityNote,
   quotaProgress,
   quotaResetLabel,
 } from './AccessControlDetailSupport'
@@ -63,6 +67,7 @@ export function APIKeyDetail({
   onDeleted,
 }: KeyDetailProps) {
   const { routerPublicUrl } = useReadonly()
+  const { user: currentUser } = useAuth()
   const [key, setKey] = useState<AccessAPIKey | null>(null)
   const [ownerName, setOwnerName] = useState('')
   const [contextTeamName, setContextTeamName] = useState('')
@@ -72,6 +77,7 @@ export function APIKeyDetail({
   const [routingCatalogAttempt, setRoutingCatalogAttempt] = useState(0)
   const [canSelfManage, setCanSelfManage] = useState(false)
   const [usage, setUsage] = useState(EMPTY_USAGE)
+  const [usageState, setUsageState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [secret, setSecret] = useState('')
   const [secretVisible, setSecretVisible] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -124,9 +130,22 @@ export function APIKeyDetail({
       ? inferenceAccessApi.selfKey(keyId)
       : inferenceAccessApi.key(keyId)
     const usageRequest = selfService
-      ? inferenceAccessApi.selfKeyUsage(keyId, { from })
-      : inferenceAccessApi.keyUsage(keyId, { from })
+      ? inferenceAccessApi.selfKeyUsage(
+          keyId,
+          { from },
+          {
+            internalDimensions: canReadInternalUsageDimensions(currentUser),
+          },
+        )
+      : inferenceAccessApi.keyUsage(
+          keyId,
+          { from },
+          {
+            internalDimensions: canReadInternalUsageDimensions(currentUser),
+          },
+        )
     setUsage(EMPTY_USAGE)
+    setUsageState('loading')
     void keyRequest
       .then((nextKey) => {
         if (!cancelled) setKey(nextKey)
@@ -141,15 +160,21 @@ export function APIKeyDetail({
       })
     void usageRequest
       .then((nextUsage) => {
-        if (!cancelled) setUsage(nextUsage)
+        if (!cancelled) {
+          setUsage(nextUsage)
+          setUsageState('ready')
+        }
       })
       .catch(() => {
-        if (!cancelled) setUsage(EMPTY_USAGE)
+        if (!cancelled) {
+          setUsage(EMPTY_USAGE)
+          setUsageState('error')
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [keyId, selfService])
+  }, [currentUser, keyId, selfService])
 
   useEffect(() => {
     const controller = new AbortController()
@@ -446,24 +471,52 @@ export function APIKeyDetail({
               <div className={styles.detailMetrics}>
                 <article>
                   <span>7-day requests</span>
-                  <strong>{formatNumber(usage.requests)}</strong>
+                  <strong>
+                    {usageState === 'loading'
+                      ? 'Syncing'
+                      : usageState === 'error'
+                        ? '—'
+                        : formatNumber(usage.requests)}
+                  </strong>
                 </article>
                 <article>
                   <span>7-day tokens</span>
-                  <strong>{formatNumber(usage.totalTokens)}</strong>
+                  <strong>
+                    {usageState === 'loading'
+                      ? 'Syncing'
+                      : usageState === 'error'
+                        ? '—'
+                        : formatNumber(usage.totalTokens)}
+                  </strong>
                 </article>
                 <article>
                   <span>Success rate</span>
                   <strong>
-                    {usage.requests
-                      ? `${((usage.successful / usage.requests) * 100).toFixed(1)}%`
-                      : '—'}
+                    {usageState === 'loading'
+                      ? 'Syncing'
+                      : usageState === 'error'
+                        ? '—'
+                        : usage.requests
+                          ? `${((usage.successful / usage.requests) * 100).toFixed(1)}%`
+                          : 'No requests'}
                   </strong>
                 </article>
                 <article>
                   <span>7-day spend</span>
-                  <strong title={formatCosts(usage.costs)}>{formatCosts(usage.costs)}</strong>
-                  <small>{costCoverageLabel(usage.costs)}</small>
+                  <strong title={formatCosts(usage.costs)}>
+                    {usageState === 'loading'
+                      ? 'Syncing'
+                      : usageState === 'error'
+                        ? '—'
+                        : formatCosts(usage.costs)}
+                  </strong>
+                  <small>
+                    {usageState === 'error'
+                      ? 'Usage has not synced yet'
+                      : !usage.final || usage.completeness !== 'complete'
+                        ? 'Finalizing recent requests'
+                        : costCoverageLabel(usage.costs)}
+                  </small>
                 </article>
               </div>
 
@@ -570,21 +623,15 @@ export function APIKeyDetail({
                               {formatQuotaValue(meter, meter.limit)}
                             </small>
                           </div>
-                          <strong>
-                            {meter.remaining === null
-                              ? 'Usage unavailable'
-                              : `${formatQuotaValue(meter, meter.remaining)} left`}
-                          </strong>
+                          <strong>{quotaCapacityLabel(meter)}</strong>
                           <div className={styles.quotaTrack} aria-hidden="true">
                             <i style={{ width: `${percent}%` }} />
                           </div>
                           {resetLabel ? (
                             <small className={styles.quotaReset}>{resetLabel}</small>
                           ) : null}
-                          {meter.completeness !== 'complete' ? (
-                            <small className={styles.quotaReset}>
-                              Usage data is {meter.completeness}.
-                            </small>
+                          {quotaCapacityNote(meter) ? (
+                            <small className={styles.quotaReset}>{quotaCapacityNote(meter)}</small>
                           ) : null}
                         </article>
                       )

@@ -12,6 +12,7 @@ import {
 } from '../utils/inferenceAccessApi'
 import { claimInvitationOnboarding } from '../utils/invitationOnboarding'
 import { ManagementApiError } from '../utils/managementApiContract'
+import { canReadInternalUsageDimensions } from '../utils/accessControl'
 import AccessControlViews, { type IdentityTab } from './AccessControlViews'
 import AccessControlPageOverlays from './AccessControlPageOverlays'
 import AccessControlWorkspace from './AccessControlWorkspace'
@@ -163,6 +164,7 @@ const AccessControlPage: React.FC = () => {
     canReadTeams,
     canReadGroups,
     canReadBudgets,
+    canReadInternalUsageDimensions: canReadInternalUsageDimensions(currentUser),
   })
   const { ownerName, resourceName } = useAccessControlLabels({
     activeView,

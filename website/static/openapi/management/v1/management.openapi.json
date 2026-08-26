@@ -81207,13 +81207,81 @@
         },
         "additionalProperties": false
       },
+      "RoutingCatalogProjection": {
+        "type": "object",
+        "required": [
+          "type",
+          "name",
+          "members",
+          "inputs",
+          "outputs"
+        ],
+        "properties": {
+          "inputs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingCatalogProjectionReference"
+            }
+          },
+          "members": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "outputs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "source": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "partition",
+              "score",
+              "mapping"
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutingCatalogProjectionReference": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "kb": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
       "RoutingCatalogRecipe": {
         "type": "object",
         "required": [
           "id",
           "revision",
           "name",
-          "decisions"
+          "decisions",
+          "signals",
+          "projections"
         ],
         "properties": {
           "decisions": {
@@ -81232,10 +81300,22 @@
           "name": {
             "type": "string"
           },
+          "projections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingCatalogProjection"
+            }
+          },
           "revision": {
             "type": "integer",
             "format": "int64",
             "minimum": 1
+          },
+          "signals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RoutingCatalogSignal"
+            }
           }
         },
         "additionalProperties": false
@@ -81280,6 +81360,22 @@
             "type": "integer",
             "format": "int64",
             "minimum": 1
+          }
+        },
+        "additionalProperties": false
+      },
+      "RoutingCatalogSignal": {
+        "type": "object",
+        "required": [
+          "type",
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
           }
         },
         "additionalProperties": false

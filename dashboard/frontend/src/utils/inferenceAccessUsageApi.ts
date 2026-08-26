@@ -5,9 +5,11 @@ import type {
   AccessPage,
   AccessUsageEvent,
   UsageFilter,
+  UsageReadCapabilities,
   UsageSlice,
   UsageSummary,
 } from './inferenceAccessTypes'
+import { ManagementApiError } from './managementApiContract'
 import type {
   ManagementAccessStatistics,
   ManagementPage,
@@ -45,6 +47,8 @@ const usageBreakdownQuery = (filter: UsageFilter, dimension: string) => {
 }
 
 const emptyUsage = (): UsageSummary => ({
+  final: true,
+  completeness: 'complete',
   granularity: 'hour',
   requests: 0,
   successful: 0,
@@ -68,6 +72,33 @@ const emptyUsage = (): UsageSummary => ({
   byKey: [],
 })
 
+const emptyBreakdown = (dimension: string, grain: ManagementUsageBreakdown['grain']) =>
+  ({
+    dimension,
+    rows: [],
+    grain,
+    final: true,
+  }) as ManagementUsageBreakdown
+
+const requestedGrain = (filter: UsageFilter): ManagementUsageBreakdown['grain'] =>
+  filter.granularity && filter.granularity !== 'auto' ? filter.granularity : 'hour'
+
+async function optionalBreakdown(
+  filter: UsageFilter,
+  dimension: string,
+): Promise<ManagementUsageBreakdown> {
+  try {
+    return await request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+      query: usageBreakdownQuery(filter, dimension),
+    })
+  } catch (error) {
+    if (error instanceof ManagementApiError && error.status === 403) {
+      return emptyBreakdown(dimension, requestedGrain(filter))
+    }
+    throw error
+  }
+}
+
 async function loadUsage(
   filter: UsageFilter,
   summaryOperationId:
@@ -77,35 +108,28 @@ async function loadUsage(
     | 'getTeamsByTeamIdUsage',
   pathParameters: Record<string, string> | undefined,
   summaryFilter: UsageFilter = filter,
+  capabilities: UsageReadCapabilities = {},
 ): Promise<UsageSummary> {
+  const publicFilter = capabilities.internalDimensions ? filter : { ...filter, model: undefined }
+  const publicSummaryFilter = capabilities.internalDimensions
+    ? summaryFilter
+    : { ...summaryFilter, model: undefined }
   const [summary, series, byModel, byEntrypoint, byRecipe, byDecision, byUser, byTeam, byKey] =
     await Promise.all([
       request<ManagementUsageSummary>(summaryOperationId, {
         pathParameters,
-        query: usageQuery(summaryFilter),
+        query: usageQuery(publicSummaryFilter),
       }),
-      request<ManagementUsageSeries>('getUsageSeries', { query: usageQuery(filter) }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'logical_model'),
-      }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'entrypoint'),
-      }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'recipe'),
-      }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'decision'),
-      }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'user'),
-      }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'team'),
-      }),
-      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-        query: usageBreakdownQuery(filter, 'api_key'),
-      }),
+      request<ManagementUsageSeries>('getUsageSeries', { query: usageQuery(publicFilter) }),
+      capabilities.internalDimensions
+        ? optionalBreakdown(publicFilter, 'logical_model')
+        : Promise.resolve(emptyBreakdown('logical_model', requestedGrain(publicFilter))),
+      optionalBreakdown(publicFilter, 'entrypoint'),
+      optionalBreakdown(publicFilter, 'recipe'),
+      optionalBreakdown(publicFilter, 'decision'),
+      optionalBreakdown(publicFilter, 'user'),
+      optionalBreakdown(publicFilter, 'team'),
+      optionalBreakdown(publicFilter, 'api_key'),
     ])
   const totals = summary.totals
   const requests = Number(totals.requests)
@@ -124,6 +148,9 @@ async function loadUsage(
   })
   return {
     ...emptyUsage(),
+    final: summary.final,
+    completeness: totals.completeness,
+    ...(summary.asOf ? { asOf: summary.asOf } : {}),
     granularity: summary.grain,
     requests,
     successful,
@@ -160,29 +187,44 @@ async function loadUsage(
   }
 }
 
-export async function usage(filter: UsageFilter = {}): Promise<UsageSummary> {
-  return loadUsage(filter, 'getUsage', undefined)
+export async function usage(
+  filter: UsageFilter = {},
+  capabilities: UsageReadCapabilities = {},
+): Promise<UsageSummary> {
+  return loadUsage(filter, 'getUsage', undefined, filter, capabilities)
 }
 
-export async function keyUsage(keyId: string, filter: UsageFilter = {}): Promise<UsageSummary> {
+export async function keyUsage(
+  keyId: string,
+  filter: UsageFilter = {},
+  capabilities: UsageReadCapabilities = {},
+): Promise<UsageSummary> {
   const exactFilter = { ...filter, keyId }
   const summaryFilter = { ...filter }
   delete summaryFilter.keyId
-  return loadUsage(exactFilter, 'getApiKeysByKeyIdUsage', { keyId }, summaryFilter)
+  return loadUsage(exactFilter, 'getApiKeysByKeyIdUsage', { keyId }, summaryFilter, capabilities)
 }
 
-export async function userUsage(userId: string, filter: UsageFilter = {}): Promise<UsageSummary> {
+export async function userUsage(
+  userId: string,
+  filter: UsageFilter = {},
+  capabilities: UsageReadCapabilities = {},
+): Promise<UsageSummary> {
   const exactFilter = { ...filter, userId }
   const summaryFilter = { ...filter }
   delete summaryFilter.userId
-  return loadUsage(exactFilter, 'getUsersByUserIdUsage', { userId }, summaryFilter)
+  return loadUsage(exactFilter, 'getUsersByUserIdUsage', { userId }, summaryFilter, capabilities)
 }
 
-export async function teamUsage(teamId: string, filter: UsageFilter = {}): Promise<UsageSummary> {
+export async function teamUsage(
+  teamId: string,
+  filter: UsageFilter = {},
+  capabilities: UsageReadCapabilities = {},
+): Promise<UsageSummary> {
   const exactFilter = { ...filter, teamId }
   const summaryFilter = { ...filter }
   delete summaryFilter.teamId
-  return loadUsage(exactFilter, 'getTeamsByTeamIdUsage', { teamId }, summaryFilter)
+  return loadUsage(exactFilter, 'getTeamsByTeamIdUsage', { teamId }, summaryFilter, capabilities)
 }
 
 function mapRequestLog(item: ManagementRequestLog): AccessUsageEvent {

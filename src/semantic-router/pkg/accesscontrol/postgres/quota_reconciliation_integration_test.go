@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"net/netip"
 	"os"
 	"strings"
@@ -88,9 +89,15 @@ func TestUnknownUsageReconciliationPostgresLifecycle(t *testing.T) {
 		t.Fatalf("Prepare() = %#v, %v", enqueued, testUnknownUsageReconciliationPostgresLifecycleErr)
 	}
 	claim, found, testUnknownUsageReconciliationPostgresLifecycleErr := store.Claim(ctx, "worker-one", now.Add(time.Second), time.Minute)
-	if testUnknownUsageReconciliationPostgresLifecycleErr != nil || !found || claim.Plan.OperationID != operationID || claim.Plan.Corrections[0].Amount != "7" ||
+	if testUnknownUsageReconciliationPostgresLifecycleErr != nil || !found || claim.Plan.OperationID != operationID ||
+		claim.Plan.Corrections[0].Amount != "7" || claim.Plan.Corrections[0].CounterIncompleteCount != "1" ||
 		!claim.Plan.Corrections[0].Known {
 		t.Fatalf("Claim() = %#v, %v, %v", claim, found, testUnknownUsageReconciliationPostgresLifecycleErr)
+	}
+	if competing, competingFound, err := store.Claim(
+		ctx, "worker-two", now.Add(time.Second), time.Minute,
+	); err != nil || competingFound {
+		t.Fatalf("competing Claim() = %#v, %v, %v, want no claim", competing, competingFound, err)
 	}
 	if err := store.MarkRuntimeApplied(ctx, claim, "1-0", now.Add(2*time.Second)); err != nil {
 		t.Fatal(err)
@@ -100,6 +107,20 @@ func TestUnknownUsageReconciliationPostgresLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	claim.Phase = quotareconciliation.PhaseLedgerApplied
+	competingClaim := claim
+	competingClaim.LeaseOwner = "worker-two"
+	competingClaim.LeaseToken = "b0000000-0000-4000-8000-000000000000"
+	if _, err := store.Complete(ctx, competingClaim, now.Add(4*time.Second)); !errors.Is(err, quotareconciliation.ErrLeaseLost) {
+		t.Fatalf("competing Complete() error = %v, want %v", err, quotareconciliation.ErrLeaseLost)
+	}
+	var preCompletionState string
+	if err := db.QueryRowContext(ctx, `SELECT state FROM unknown_usage_fences
+WHERE namespace_id=$1 AND id=$2`, namespaceID, fenceID).Scan(&preCompletionState); err != nil {
+		t.Fatal(err)
+	}
+	if preCompletionState != string(quotareconciliation.FenceReconciling) {
+		t.Fatalf("competing replica changed fence state to %q", preCompletionState)
+	}
 	completed, testUnknownUsageReconciliationPostgresLifecycleErr := store.Complete(ctx, claim, now.Add(4*time.Second))
 	if testUnknownUsageReconciliationPostgresLifecycleErr != nil || completed.State != quotareconciliation.OperationSucceeded || completed.Completed != 1 {
 		t.Fatalf("Complete() = %#v, %v", completed, testUnknownUsageReconciliationPostgresLifecycleErr)

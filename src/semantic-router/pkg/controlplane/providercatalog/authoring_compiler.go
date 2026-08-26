@@ -69,6 +69,7 @@ func (compiler AuthoringCompiler) CompileConnection(
 	if compileConnectionErr != nil {
 		return modelauthoring.CompileResult{}, fmt.Errorf("compile Provider connection: %w", compileConnectionErr)
 	}
+	compiledConnection.Path = compiledPathForOrigin(origin, compiledConnection.Path)
 	compiledConnection, compileConnectionErr = applyTransportOverrides(compiledConnection, connection.Transport)
 	if compileConnectionErr != nil {
 		return modelauthoring.CompileResult{}, fmt.Errorf("provider compiler emitted an invalid connection: %w", compileConnectionErr)

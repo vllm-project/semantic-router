@@ -70,10 +70,10 @@ describe('dashboard product surfaces', () => {
     const hero = readSource('./DashboardRoutingHero.tsx')
 
     expect(page).toContain("canAccessDashboardPath(user, '/status')")
-    expect(page).toContain(
-      'canReadStatus ? statusRequest.run({ allowHidden: true }) : Promise.resolve()',
-    )
-    expect(page).toContain('if (!canReadStatus) return')
+    expect(page).toContain('useSystemStatus()')
+    expect(page).toContain("routingAccess !== 'operational'")
+    expect(page).not.toContain('fetchSystemStatus')
+    expect(page).not.toContain('statusRequest')
     expect(page).toContain('{canReadStatus ? (')
     expect(page).toContain('<h2 className={styles.cardTitle}>System Health</h2>')
     expect(page).toContain("canAccessDashboardPath(user, '/playground')")

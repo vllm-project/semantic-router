@@ -18,10 +18,26 @@ var (
 	ErrSessionLimitExceeded      = errors.New("management session limit exceeded")
 	ErrAuthenticationDenied      = errors.New("management authentication denied")
 	ErrAuthenticationUnavailable = errors.New("management authentication state is unavailable")
+	ErrChallengeCapacityExceeded = errors.New("management exchange challenge capacity exceeded")
 	ErrInvitationExpired         = errors.New("management invitation expired")
 	ErrInvitationResultExpired   = errors.New("management invitation result expired")
 	ErrInvitationConflict        = errors.New("management invitation conflicts with current identity state")
 )
+
+// ChallengeCapacityError reports a temporary exhaustion of outstanding
+// exchange challenges. RetryAfter is bounded by the store's challenge TTL and
+// is safe to translate into an HTTP Retry-After header.
+type ChallengeCapacityError struct {
+	RetryAfter time.Duration
+}
+
+func (err *ChallengeCapacityError) Error() string {
+	return ErrChallengeCapacityExceeded.Error()
+}
+
+func (err *ChallengeCapacityError) Unwrap() error {
+	return ErrChallengeCapacityExceeded
+}
 
 type SessionStatus string
 

@@ -238,6 +238,33 @@ func TestInvitationAuthorityErrorKeepsOnlySafeRouterDiagnostics(t *testing.T) {
 	}
 }
 
+func TestInvitationAcceptancePreservesChallengeBackoff(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	requestID := "30000000-0000-4000-8000-000000000099"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != managementBasePath+"/auth/exchange-challenges" {
+			http.NotFound(response, request)
+			return
+		}
+		response.Header().Set(managementapi.HeaderRequestID, requestID)
+		response.Header().Set("Retry-After", "30")
+		response.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+	provider := newInvitationProvider(t, server, now, &recordingAssertionSigner{})
+	_, err := provider.AcceptInvitation(context.Background(), dashboardauth.RouterInvitationAcceptance{
+		NamespaceID: invitationNamespace, InvitationToken: "router-token", PlannedSubject: invitationSubject,
+		Email: "member@example.test", DisplayName: "Member", SessionExpiresAt: now.Add(12 * time.Hour),
+	})
+	var authorityErr *dashboardauth.InvitationAuthorityError
+	if !errors.As(err, &authorityErr) || authorityErr.Status != http.StatusTooManyRequests ||
+		authorityErr.Code != "challenge_capacity_exceeded" || authorityErr.RequestID != requestID ||
+		authorityErr.RetryAfter != 30*time.Second {
+		t.Fatalf("AcceptInvitation() error = %#v", err)
+	}
+}
+
 func TestInvitationAuthorityRevokeReturnsRouterRevision(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)

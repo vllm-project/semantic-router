@@ -3,13 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
+import { useSystemStatus } from '../contexts/SystemStatusContext'
 import { canAccessDashboardPath } from '../utils/accessControl'
 import { inferenceAccessApi, type AccessOverview } from '../utils/inferenceAccessApi'
 import {
   fetchManagedRoutingOverviewSnapshot,
   type ManagedRoutingSnapshot,
 } from '../utils/managedRoutingSnapshot'
-import { fetchSystemStatus, type SystemStatus } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
 import DashboardRoutingHero from './DashboardRoutingHero'
 import DashboardRoutingProfiles from './DashboardRoutingProfiles'
@@ -24,33 +24,26 @@ import {
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
-import { routingUnavailableStatus } from './statusPageSupport'
 import styles from './DashboardPage.module.css'
 
 const formatWholeCount = (value: string) => new Intl.NumberFormat('en-US').format(BigInt(value))
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
-  const { refreshSession, user } = useAuth()
+  const { user } = useAuth()
+  const {
+    status,
+    isLoading: statusLoading,
+    lastUpdated: statusLastUpdated,
+    routingAccess,
+    refresh: refreshSystemStatus,
+  } = useSystemStatus()
 
   const [config, setConfig] = useState<ManagedRoutingSnapshot | null>(null)
-  const [status, setStatus] = useState<SystemStatus | null>(null)
   const [accessOverview, setAccessOverview] = useState<AccessOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [statusLastUpdated, setStatusLastUpdated] = useState<Date | null>(null)
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      setStatus(await fetchSystemStatus())
-      setStatusLastUpdated(new Date())
-    } catch (cause) {
-      setStatus(null)
-      setStatusLastUpdated(null)
-      throw cause
-    }
-  }, [])
 
   const fetchConfig = useCallback(async () => {
     const snapshot = await fetchManagedRoutingOverviewSnapshot()
@@ -58,19 +51,19 @@ const DashboardPage: React.FC = () => {
     setError(null)
   }, [])
 
-  const routingAccessUnavailable = user?.managementIdentityStatus === 'unavailable'
-  const managementIdentityError =
-    user?.managementIdentityStatus === 'error' ? user.managementIdentityError : null
+  const routingIdentityUnavailable = Boolean(
+    user?.managementIdentityStatus && user.managementIdentityStatus !== 'ready',
+  )
+  const routingAccessUnavailable = routingIdentityUnavailable || routingAccess !== 'operational'
   const canReadConfig = !routingAccessUnavailable && canAccessDashboardPath(user, '/config/models')
   const canReadAccess = !routingAccessUnavailable && canAccessDashboardPath(user, '/access/usage')
-  const canReadStatus = routingAccessUnavailable || canAccessDashboardPath(user, '/status')
+  const canReadStatus = canAccessDashboardPath(user, '/status')
   const canUsePlayground = !routingAccessUnavailable && canAccessDashboardPath(user, '/playground')
   const fetchAccess = useCallback(async () => {
     if (!canReadAccess) return
     setAccessOverview(await inferenceAccessApi.overview())
   }, [canReadAccess])
 
-  const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
   const configRequest = useMemo(() => createVisibilityAwareRequest(fetchConfig), [fetchConfig])
 
   const fetchAll = useCallback(
@@ -79,8 +72,8 @@ const DashboardPage: React.FC = () => {
       try {
         await Promise.all([
           canReadConfig ? configRequest.run({ allowHidden: true }) : Promise.resolve(),
-          canReadStatus ? statusRequest.run({ allowHidden: true }) : Promise.resolve(),
           fetchAccess(),
+          manual ? refreshSystemStatus() : Promise.resolve(),
         ])
         setError(null)
       } catch (err) {
@@ -90,16 +83,10 @@ const DashboardPage: React.FC = () => {
         setRefreshing(false)
       }
     },
-    [canReadConfig, canReadStatus, configRequest, fetchAccess, statusRequest],
+    [canReadConfig, configRequest, fetchAccess, refreshSystemStatus],
   )
 
   useEffect(() => {
-    const pollStatus = () => {
-      if (!canReadStatus) return
-      void statusRequest.run().catch(() => {
-        // Ignore transient status polling errors.
-      })
-    }
     const pollConfig = () => {
       if (!canReadConfig) return
       void configRequest.run().catch((pollError) => {
@@ -109,21 +96,16 @@ const DashboardPage: React.FC = () => {
       })
     }
     const onVisibilityChange = () => {
-      if (!document.hidden) {
-        pollStatus()
-        pollConfig()
-      }
+      if (!document.hidden) pollConfig()
     }
     void fetchAll()
-    const statusInterval = window.setInterval(pollStatus, 10000)
     const configInterval = window.setInterval(pollConfig, 30000)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
-      window.clearInterval(statusInterval)
       window.clearInterval(configInterval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [canReadConfig, canReadStatus, configRequest, fetchAll, statusRequest])
+  }, [canReadConfig, configRequest, fetchAll])
 
   const signalStats = useMemo(
     () => (config ? countSignals(config) : { total: 0, byType: {} }),
@@ -150,12 +132,7 @@ const DashboardPage: React.FC = () => {
       ]),
     [categorizedDecisions],
   )
-  const availabilityStatus = useMemo(
-    () => (routingAccessUnavailable ? routingUnavailableStatus(status) : status),
-    [routingAccessUnavailable, status],
-  )
-
-  if (loading && !config && !status) {
+  if ((loading || statusLoading) && !config && !status) {
     return <ProductLoadingState label="Loading dashboard" />
   }
 
@@ -165,7 +142,7 @@ const DashboardPage: React.FC = () => {
         className={`${styles.page} ${styles.statusOnlyPage}`}
         data-testid="routing-access-status-only"
       >
-        <StatusAvailabilityPanel status={availabilityStatus} lastUpdated={statusLastUpdated} />
+        <StatusAvailabilityPanel status={status} lastUpdated={statusLastUpdated} />
       </div>
     )
   }
@@ -188,14 +165,10 @@ const DashboardPage: React.FC = () => {
         onNavigate={navigate}
       />
 
-      {managementIdentityError || error ? (
+      {error ? (
         <div className={styles.errorBanner} role="alert">
-          <span>{managementIdentityError || `Failed to load data: ${error}`}</span>
-          <button
-            onClick={() => void (managementIdentityError ? refreshSession() : fetchAll(true))}
-          >
-            Retry
-          </button>
+          <span>{`Failed to load data: ${error}`}</span>
+          <button onClick={() => void fetchAll(true)}>Retry</button>
         </div>
       ) : null}
 

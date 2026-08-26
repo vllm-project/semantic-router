@@ -155,7 +155,10 @@ describe('access-control modal experience', () => {
     expect(detail).toContain('key.quota.meters.map')
     expect(detail).toContain('formatQuotaValue')
     expect(detail).toContain('formatCosts(usage.costs)')
-    expect(detail).toContain('Usage unavailable')
+    expect(detail).toContain('quotaCapacityLabel(meter)')
+    expect(detail).toContain("'No requests'")
+    expect(detail).toContain("'Finalizing recent requests'")
+    expect(detail).not.toContain('Usage unavailable')
     expect(detail).toContain('Edit access & quota')
     expect(detail).toContain('disabled={!snippets}')
     expect(detail).toContain('No request-ready model is available for this key.')
@@ -166,6 +169,18 @@ describe('access-control modal experience', () => {
     expect(detail).not.toContain('YOUR_MODEL')
     expect(detail).not.toContain('Rotate key')
     expect(detail.match(/<dt>Owner<\/dt>/g)).toHaveLength(1)
+  })
+
+  it('aligns invitation Team controls to one shared 40px measure', () => {
+    const styles = readSource('./AccessControlPage.module.css')
+
+    expect(styles).toMatch(/\.asyncPickerSearch\s*{[\s\S]*?height: 40px;[\s\S]*?min-height: 40px;/)
+    expect(styles).toMatch(
+      /\.asyncPickerCompactValue\s*{[\s\S]*?height: 40px;[\s\S]*?min-height: 40px;/,
+    )
+    expect(styles).toMatch(
+      /\.asyncPickerInlineExpanded \.asyncPickerSearch\s*{[\s\S]*?height: 40px;[\s\S]*?min-height: 40px;/,
+    )
   })
 
   it('refreshes an open key quota without replacing the dialog with a loading state', () => {

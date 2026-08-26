@@ -181,6 +181,7 @@ describe('Router Management access client', () => {
     const usage = await inferenceAccessApi.keyUsage('key-1', {
       from: '2026-08-23T00:00:00Z',
       granularity: 'minute',
+      model: 'internal-model-id',
     })
 
     const urls = fetchMock.mock.calls.map(([input]) => String(input))
@@ -188,13 +189,69 @@ describe('Router Management access client', () => {
     expect(exact).not.toContain('apiKeyId=')
     expect(
       urls.filter((url) => url.includes('/usage/series') || url.includes('/usage/breakdowns')),
-    ).toHaveLength(8)
+    ).toHaveLength(7)
     expect(
       urls
         .filter((url) => url.includes('/usage/series') || url.includes('/usage/breakdowns'))
         .every((url) => url.includes('apiKeyId=key-1')),
     ).toBe(true)
+    expect(urls.some((url) => url.includes('dimension=logical_model'))).toBe(false)
+    expect(urls.some((url) => url.includes('logicalModelId='))).toBe(false)
     expect(usage.costs[0]).toMatchObject({ currency: 'USD', knownAmount: '0.0014' })
+  })
+
+  it('keeps required usage available when an optional internal breakdown is forbidden', async () => {
+    const timing = {
+      sampleCount: '0',
+      totalMilliseconds: '0',
+      averageMilliseconds: 0,
+      p50Milliseconds: 0,
+      p95Milliseconds: 0,
+      p99Milliseconds: 0,
+      percentilesAreEstimated: false,
+    }
+    const totals = {
+      requests: '0',
+      successfulRequests: '0',
+      inputTokens: '0',
+      outputTokens: '0',
+      totalTokens: '0',
+      incompleteDispatches: '0',
+      completeness: 'complete',
+      costs: [],
+      latency: timing,
+      ttft: timing,
+    }
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.includes('dimension=logical_model')) {
+        return Promise.resolve(
+          response(
+            { error: { code: 'forbidden', message: 'Internal dimensions are hidden.' } },
+            403,
+          ),
+        )
+      }
+      if (url.includes('/usage/series')) {
+        return Promise.resolve(response({ points: [], grain: 'hour', final: true }))
+      }
+      if (url.includes('/usage/breakdowns')) {
+        return Promise.resolve(
+          response({ dimension: 'api_key', rows: [], grain: 'hour', final: true }),
+        )
+      }
+      return Promise.resolve(response({ totals, grain: 'hour', final: true }))
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      inferenceAccessApi.keyUsage('key-1', {}, { internalDimensions: true }),
+    ).resolves.toMatchObject({ requests: 0, final: true, byModel: [] })
+    expect(
+      fetchMock.mock.calls
+        .map(([input]) => String(input))
+        .some((url) => url.includes('dimension=logical_model')),
+    ).toBe(true)
   })
 
   it('builds overview from bounded statistics plus the existing usage ledger queries', async () => {
@@ -254,7 +311,7 @@ describe('Router Management access client', () => {
       tokensToday: 140,
     })
     const urls = fetchMock.mock.calls.map(([input]) => String(input))
-    expect(urls).toHaveLength(10)
+    expect(urls).toHaveLength(9)
     expect(
       urls.some((url) =>
         /\/(users|teams|api-keys|access-policies|rate-limit-policies)(\?|$)/.test(url),

@@ -102,7 +102,13 @@ func (provider *managementSessionProvider) AcceptInvitation(
 	}
 	now := provider.now().UTC()
 	challenge, err := provider.challenge(ctx)
-	if err != nil || challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
+	if err != nil {
+		if authorityErr := invitationAuthorityFromManagementError(err); authorityErr != nil {
+			return dashboardauth.RouterInvitationAcceptanceResult{}, authorityErr
+		}
+		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
+	}
+	if challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
 		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	assertion, err := provider.invitationAssertion(request, challenge.Nonce, now)
@@ -117,7 +123,13 @@ func (provider *managementSessionProvider) AcceptInvitation(
 			ExchangeChallengeID: challenge.ExchangeChallengeID, SubjectToken: assertion,
 			SubjectTokenType: "router_local_assertion", InvitationToken: &token,
 		}, http.StatusOK, &exchanged, true)
-	if err != nil || exchanged.Onboarding == nil || exchanged.AccessToken == "" ||
+	if err != nil {
+		if authorityErr := invitationAuthorityFromManagementError(err); authorityErr != nil {
+			return dashboardauth.RouterInvitationAcceptanceResult{}, authorityErr
+		}
+		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
+	}
+	if exchanged.Onboarding == nil || exchanged.AccessToken == "" ||
 		exchanged.TokenType != "Bearer" || exchanged.ExpiresIn <= 0 {
 		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
@@ -127,7 +139,10 @@ func (provider *managementSessionProvider) AcceptInvitation(
 		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	identity, err := provider.invitedIdentity(ctx, exchanged.AccessToken)
-	if err != nil || identity.Principal.PrincipalID != onboarding.PrincipalID {
+	if err != nil {
+		return dashboardauth.RouterInvitationAcceptanceResult{}, err
+	}
+	if identity.Principal.PrincipalID != onboarding.PrincipalID {
 		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	role, err := invitedDashboardRole(identity, request.NamespaceID, onboarding)
@@ -228,6 +243,9 @@ func (provider *managementSessionProvider) authorizedInvitationRequestWithHeader
 	}
 	token, err := provider.ManagementAccessToken(ctx, actor)
 	if err != nil {
+		if authorityErr := invitationAuthorityFromManagementError(err); authorityErr != nil {
+			return nil, authorityErr
+		}
 		return nil, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	requestHeaders := map[string]string{
@@ -306,7 +324,10 @@ func (provider *managementSessionProvider) routerRequestWithHeaders(
 }
 
 func invitationAuthorityResponseError(result *http.Response) *dashboardauth.InvitationAuthorityError {
-	diagnostic := &dashboardauth.InvitationAuthorityError{Status: result.StatusCode}
+	diagnostic := &dashboardauth.InvitationAuthorityError{
+		Status:     result.StatusCode,
+		RetryAfter: parseManagementRetryAfter(result.Header.Get("Retry-After"), time.Now().UTC()),
+	}
 	if requestID := safeInvitationRequestID(result.Header.Get(managementapi.HeaderRequestID)); requestID != "" {
 		diagnostic.RequestID = requestID
 	}
@@ -327,7 +348,7 @@ func invitationAuthorityResponseError(result *http.Response) *dashboardauth.Invi
 
 func safeInvitationErrorCode(value string) string {
 	switch value {
-	case "authentication_unavailable", "authorization_unavailable", "conflict", "forbidden",
+	case "authentication_unavailable", "authorization_unavailable", "challenge_capacity_exceeded", "conflict", "forbidden",
 		"identity_already_onboarded", "invalid_cursor", "invalid_idempotency_key", "invalid_namespace",
 		"invalid_precondition", "invalid_request",
 		"invitation_expired", "invitation_service_unavailable", "not_found", "onboarding_defaults_changed",
@@ -336,6 +357,16 @@ func safeInvitationErrorCode(value string) string {
 		return value
 	default:
 		return ""
+	}
+}
+
+func newInvitationAuthorityError(status int, code, requestID string, retryAfter time.Duration) error {
+	if status != http.StatusUnauthorized && status != http.StatusTooManyRequests && status != http.StatusServiceUnavailable {
+		status = http.StatusServiceUnavailable
+	}
+	return &dashboardauth.InvitationAuthorityError{
+		Status: status, Code: safeInvitationErrorCode(code), RequestID: safeInvitationRequestID(requestID),
+		RetryAfter: boundedManagementRetryAfter(retryAfter),
 	}
 }
 

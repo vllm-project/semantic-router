@@ -1,50 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React from 'react'
 import ProductLoadingState from '../components/ProductLoadingState'
-import { fetchSystemStatus, type SystemStatus } from '../utils/routerRuntime'
-import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { useSystemStatus } from '../contexts/SystemStatusContext'
 import StatusAvailabilityPanel from './StatusAvailabilityPanel'
 import styles from './StatusPage.module.css'
 
 const StatusPage: React.FC = () => {
-  const [status, setStatus] = useState<SystemStatus | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
-  const fetchStatus = useCallback(async () => {
-    try {
-      setStatus(await fetchSystemStatus())
-      setLastUpdated(new Date())
-      setError(null)
-    } catch (err) {
-      setStatus(null)
-      setLastUpdated(null)
-      setError(err instanceof Error ? err.message : 'Unknown error')
-    } finally {
-      setLoading(false)
-    }
-  }, [])
+  const { status, isLoading, error, lastUpdated, refresh } = useSystemStatus()
 
-  const statusRequest = useMemo(() => createVisibilityAwareRequest(fetchStatus), [fetchStatus])
-
-  useEffect(() => {
-    void statusRequest.run({ allowHidden: true })
-
-    const refreshWhenVisible = () => {
-      if (!document.hidden) void statusRequest.run()
-    }
-    document.addEventListener('visibilitychange', refreshWhenVisible)
-
-    const interval = window.setInterval(() => {
-      void statusRequest.run()
-    }, 10000)
-
-    return () => {
-      window.clearInterval(interval)
-      document.removeEventListener('visibilitychange', refreshWhenVisible)
-    }
-  }, [statusRequest])
-
-  if (loading && !status) {
+  if (isLoading && !status) {
     return <ProductLoadingState label="Checking service availability" />
   }
 
@@ -66,16 +29,16 @@ const StatusPage: React.FC = () => {
           <button
             type="button"
             className={styles.liveRefreshButton}
-            onClick={() => void statusRequest.run({ allowHidden: true })}
+            onClick={() => void refresh()}
             aria-label="Refresh system status"
             title={lastUpdated ? `Last checked ${lastUpdated.toLocaleTimeString()}` : 'Check now'}
           >
             <i
               className={`${styles.liveDot} ${
-                lastUpdated ? styles.liveDotHealthy : styles.liveDotUnavailable
+                lastUpdated && !error ? styles.liveDotHealthy : styles.liveDotUnavailable
               }`}
             />
-            {lastUpdated ? 'Live' : error ? 'Unavailable' : 'Checking'}
+            {lastUpdated && !error ? 'Live' : error ? 'Unavailable' : 'Checking'}
           </button>
         </div>
       </header>

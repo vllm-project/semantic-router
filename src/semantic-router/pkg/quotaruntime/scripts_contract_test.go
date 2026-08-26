@@ -137,6 +137,29 @@ func TestFinalizationAtomicallyClassifiesEveryActualCounter(t *testing.T) {
 	}
 }
 
+func TestReconciliationCannotReleaseIncompleteLastFence(t *testing.T) {
+	t.Parallel()
+
+	if !strings.Contains(reconcileUnknownLua,
+		`redis.call("HSET", update.meta, "incomplete", update.next_incomplete)`) {
+		t.Fatal("reconciliation does not clear expired sliding-window incomplete usage")
+	}
+	for _, contract := range []string{
+		`redis.call("SCARD", binding_fences_key) == 1`,
+		`quota_compare(incomplete, "0") ~= 0`,
+		`last fence has incomplete usage`,
+	} {
+		if !strings.Contains(removeReconciledFenceLua, contract) {
+			t.Fatalf("fence release is missing atomic completeness guard %q", contract)
+		}
+	}
+	guard := strings.Index(removeReconciledFenceLua, `last fence has incomplete usage`)
+	release := strings.Index(removeReconciledFenceLua, `redis.call("SREM", binding_fences_key, fence_id)`)
+	if guard < 0 || release < 0 || guard > release {
+		t.Fatal("fence release mutates the binding set before validating completeness")
+	}
+}
+
 func TestFinalizationAllowsAFullCrossingDebit(t *testing.T) {
 	t.Parallel()
 

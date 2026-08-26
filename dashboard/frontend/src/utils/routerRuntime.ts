@@ -29,6 +29,7 @@ export interface SystemStatus {
 }
 
 export const STATUS_HISTORY_HOURS = 90
+export const ROUTING_ACCESS_SERVICE_NAME = 'Routing access'
 
 const ISO_UTC_HOUR_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:00:00Z$/
 
@@ -126,6 +127,15 @@ export function assertSystemStatus(value: unknown): SystemStatus {
     throw new TypeError('Status API returned an invalid response.')
   }
   return validStatus
+}
+
+export function isRoutingAccessOperational(status: SystemStatus): boolean {
+  return status.services.some(
+    (service) =>
+      service.name === ROUTING_ACCESS_SERVICE_NAME &&
+      service.status === 'operational' &&
+      service.healthy,
+  )
 }
 
 export async function fetchSystemStatus(fetcher: typeof fetch = fetch): Promise<SystemStatus> {

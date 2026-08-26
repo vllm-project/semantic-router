@@ -44,12 +44,22 @@ type ReconciliationResult struct {
 	StreamID string
 }
 
+// FenceCounter identifies one enforced response-actual counter protected by
+// an unknown-usage fence. Fence release validates the counter and its binding
+// fence set in the same Redis transaction, so the last fence can never be
+// removed while incomplete usage remains.
+type FenceCounter struct {
+	BindingID string
+	RuleID    string
+	Metric    quota.Metric
+}
+
 type FenceRemovalRequest struct {
 	Partition        string
 	FenceID          string
 	ReconciliationID string
 	PlanDigest       string
-	BindingIDs       []string
+	Counters         []FenceCounter
 }
 
 func (e *RedisEngine) ApplyReconciliation(
@@ -192,27 +202,51 @@ func (e *RedisEngine) RemoveReconciledFence(
 	if err := validateDigest("reconciliation plan digest", request.PlanDigest); err != nil {
 		return MutationResult{}, err
 	}
-	bindings := append([]string(nil), request.BindingIDs...)
-	sort.Strings(bindings)
+	counters := append([]FenceCounter(nil), request.Counters...)
+	if len(counters) > 4096 {
+		return MutationResult{}, fmt.Errorf("%w: too many fenced counters", ErrInvalidRequest)
+	}
+	sort.Slice(counters, func(left, right int) bool {
+		if counters[left].BindingID != counters[right].BindingID {
+			return counters[left].BindingID < counters[right].BindingID
+		}
+		return counters[left].RuleID < counters[right].RuleID
+	})
 	partition, _ := newPartitionKeysWithPrefix(e.keyPrefix, request.Partition)
 	keys := []string{partition.fence(request.FenceID)}
-	last := ""
-	for _, bindingID := range bindings {
-		if err := validateOpaque("fenced binding ID", bindingID); err != nil {
-			return MutationResult{}, err
+	seen := make(map[quota.CounterIdentity]struct{}, len(counters))
+	for index, counter := range counters {
+		identity, err := quota.NewCounterIdentity(counter.BindingID, counter.RuleID)
+		if err != nil {
+			return MutationResult{}, fmt.Errorf(
+				"%w: invalid fenced counter %d",
+				ErrInvalidRequest,
+				index,
+			)
 		}
-		if bindingID == last {
-			continue
+		if _, duplicate := seen[identity]; duplicate {
+			return MutationResult{}, fmt.Errorf("%w: duplicate fenced counter", ErrInvalidRequest)
 		}
-		last = bindingID
-		keys = append(keys, partition.bindingFences(bindingID))
+		seen[identity] = struct{}{}
+		kind, err := counter.Metric.CounterKind()
+		if err != nil || counter.Metric == quota.MetricRequests ||
+			counter.Metric == quota.MetricConcurrentRequests {
+			return MutationResult{}, fmt.Errorf(
+				"%w: fenced counter %d is not response-actual",
+				ErrInvalidRequest,
+				index,
+			)
+		}
+		counterKeys := partition.counter(identity, kind)
+		keys = append(keys, counterKeys.fences, counterKeys.meta)
 	}
 	if err := validateRuntimeKeys(keys, partition.tag, e.keyPrefix); err != nil {
 		return MutationResult{}, err
 	}
 	value, err := removeReconciledFenceScript.Run(ctx, e.client, keys,
 		request.FenceID, request.ReconciliationID, request.PlanDigest,
-		strconv.FormatInt(e.finalizationMarkerTTL.Milliseconds(), 10)).Result()
+		strconv.FormatInt(e.finalizationMarkerTTL.Milliseconds(), 10),
+		strconv.Itoa(len(counters))).Result()
 	if err != nil {
 		return MutationResult{}, mapScriptError(err)
 	}

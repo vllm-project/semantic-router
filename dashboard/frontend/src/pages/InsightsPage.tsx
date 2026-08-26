@@ -26,6 +26,8 @@ import type {
   InsightsRecord,
 } from './insightsPageTypes'
 import { inferenceAccessApi } from '../utils/inferenceAccessApi'
+import { useAuth } from '../contexts/AuthContext'
+import { canReadInternalUsageDimensions } from '../utils/accessControl'
 
 const insightsPageSize = 25
 const insightsSearchDebounceMs = 300
@@ -57,6 +59,7 @@ const EMPTY_AGGREGATE: InsightsAggregateResponse = {
 
 export default function InsightsPage() {
   const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
   const [searchParams] = useSearchParams()
   const initialSearch = searchParams.get('search') || ''
   const [records, setRecords] = useState<InsightsRecord[]>([])
@@ -104,9 +107,12 @@ export default function InsightsPage() {
           q: activeFilters.searchTerm.trim() || undefined,
           model: activeFilters.modelFilter === 'all' ? undefined : activeFilters.modelFilter,
         }),
-        inferenceAccessApi.usage({
-          model: activeFilters.modelFilter === 'all' ? undefined : activeFilters.modelFilter,
-        }),
+        inferenceAccessApi.usage(
+          {
+            model: activeFilters.modelFilter === 'all' ? undefined : activeFilters.modelFilter,
+          },
+          { internalDimensions: canReadInternalUsageDimensions(currentUser) },
+        ),
       ])
       if (requestSequenceRef.current !== requestSequence) {
         return
@@ -158,7 +164,7 @@ export default function InsightsPage() {
         setLoading(false)
       }
     }
-  }, [activeFilters, currentCursor, currentPage])
+  }, [activeFilters, currentCursor, currentPage, currentUser])
 
   useEffect(() => {
     const debounceTimer = window.setTimeout(() => {

@@ -23,6 +23,17 @@ func TestRoutingCatalogOpenAPIIsKeyScopedAndCannotExposeCredentialsOrRecipeSourc
 	if _, exposed := recipe.Properties["document"]; exposed {
 		t.Fatal("consumer routing catalog exposes Recipe source document")
 	}
+	for _, schemaName := range []string{
+		"RoutingCatalogRecipe", "RoutingCatalogSignal", "RoutingCatalogProjection",
+		"RoutingCatalogProjectionReference",
+	} {
+		schema := document.Components.Schemas[schemaName]
+		for _, privateField := range []string{"document", "prompt", "instructions", "origin", "credentials", "threshold", "weight"} {
+			if _, exposed := schema.Properties[privateField]; exposed {
+				t.Fatalf("%s exposes private Recipe field %q", schemaName, privateField)
+			}
+		}
+	}
 	contract, found := LookupOperation(MethodGET, BasePath+"/api-keys/{keyId}/routing-catalog")
 	if !found || contract.Permission.Canonical() !=
 		"(key.read@key AND access_policy.read@key AND routing_context.read@key)" {

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import styles from './OpenClawPage.module.css'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
@@ -13,7 +14,22 @@ import { type OpenClawStatus, type TeamProfile } from './OpenClawPageSupport'
 import { ArchitectureTab, DashboardTab, StatusTab, TeamTab, WorkerTab } from './OpenClawPageTabs'
 import { OpenClawRequestNotice } from './OpenClawRequestNotice'
 
-type OpenClawTab = 'architecture' | 'dashboard' | 'team' | 'provision' | 'status'
+export type OpenClawTab = 'architecture' | 'dashboard' | 'team' | 'provision' | 'status'
+
+const tabToView: Record<OpenClawTab, string> = {
+  architecture: 'overview',
+  dashboard: 'console',
+  team: 'teams',
+  provision: 'workers',
+  status: 'status',
+}
+
+const viewToTab = new Map(
+  Object.entries(tabToView).map(([tab, view]) => [view, tab as OpenClawTab]),
+)
+
+export const resolveOpenClawTab = (searchParams: URLSearchParams): OpenClawTab =>
+  viewToTab.get(searchParams.get('view')?.trim().toLowerCase() ?? '') ?? 'architecture'
 
 const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }> = [
   {
@@ -38,7 +54,7 @@ const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }>
   },
   {
     key: 'dashboard',
-    label: 'Claw Console',
+    label: 'Console',
     icon: (
       <svg
         width="16"
@@ -58,7 +74,7 @@ const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }>
   },
   {
     key: 'team',
-    label: 'Claw Team',
+    label: 'Teams',
     icon: (
       <svg
         width="16"
@@ -79,7 +95,7 @@ const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }>
   },
   {
     key: 'provision',
-    label: 'Claw Worker',
+    label: 'Workers',
     icon: (
       <svg
         width="16"
@@ -99,7 +115,7 @@ const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }>
   },
   {
     key: 'status',
-    label: 'Claw Dashboard',
+    label: 'Status',
     icon: (
       <svg
         width="16"
@@ -126,7 +142,8 @@ const OpenClawPage: React.FC = () => {
   const permissionsLoading = authLoading || readonlyLoading
   const canManage = !permissionsLoading && !serverReadonly && canManageOpenClaw(user)
   const managementDisabled = !canManage
-  const [activeTab, setActiveTab] = useState<OpenClawTab>('architecture')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const activeTab = useMemo(() => resolveOpenClawTab(searchParams), [searchParams])
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
@@ -193,6 +210,16 @@ const OpenClawPage: React.FC = () => {
     void fetchTeams(true)
   }, [fetchTeams])
 
+  const selectTab = useCallback(
+    (tab: OpenClawTab) => {
+      const next = new URLSearchParams(searchParams)
+      if (tab === 'architecture') next.delete('view')
+      else next.set('view', tabToView[tab])
+      setSearchParams(next, { replace: true })
+    },
+    [searchParams, setSearchParams],
+  )
+
   useEffect(() => {
     const onVisibilityChange = () => {
       if (!document.hidden) refreshAll()
@@ -211,7 +238,7 @@ const OpenClawPage: React.FC = () => {
 
   const focusTabAt = (index: number) => {
     const nextTab = tabMeta[(index + tabMeta.length) % tabMeta.length]
-    setActiveTab(nextTab.key)
+    selectTab(nextTab.key)
     window.requestAnimationFrame(() => document.getElementById(getTabId(nextTab.key))?.focus())
   }
 
@@ -307,7 +334,7 @@ const OpenClawPage: React.FC = () => {
               aria-controls={getPanelId(tab.key)}
               tabIndex={activeTab === tab.key ? 0 : -1}
               className={`${styles.tab} ${activeTab === tab.key ? styles.tabActive : ''}`}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => selectTab(tab.key)}
               onKeyDown={(event) => handleTabKeyDown(event, index)}
             >
               <span className={styles.tabIcon}>{tab.icon}</span>
@@ -344,7 +371,7 @@ const OpenClawPage: React.FC = () => {
             loading={statusLoading || teamsLoading}
             error={statusError || teamsError}
             onRetry={() => refreshAll(true)}
-            onSwitchToStatus={() => setActiveTab('status')}
+            onSwitchToStatus={() => selectTab('status')}
             readOnly={managementDisabled}
           />
         </div>
@@ -383,8 +410,8 @@ const OpenClawPage: React.FC = () => {
             workersError={statusError}
             onProvisioned={() => refreshAll(true)}
             onRetryWorkers={() => void fetchStatus(true)}
-            onSwitchToTeam={() => setActiveTab('team')}
-            onSwitchToStatus={() => setActiveTab('status')}
+            onSwitchToTeam={() => selectTab('team')}
+            onSwitchToStatus={() => selectTab('status')}
             readOnly={managementDisabled}
           />
         </div>

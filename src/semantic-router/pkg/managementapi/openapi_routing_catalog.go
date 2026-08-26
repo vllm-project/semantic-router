@@ -27,6 +27,18 @@ func routingCatalogSchemas() map[string]JSONSchema {
 		AdditionalProperties: boolPointer(false),
 	}
 	return map[string]JSONSchema{
+		"RoutingCatalogSignal": objectSchema([]string{"type", "name"}, map[string]JSONSchema{
+			"type": text, "name": text,
+		}),
+		"RoutingCatalogProjectionReference": objectSchema([]string{"type"}, map[string]JSONSchema{
+			"type": text, "name": text, "kb": text, "metric": text,
+		}),
+		"RoutingCatalogProjection": objectSchema([]string{"type", "name", "members", "inputs", "outputs"}, map[string]JSONSchema{
+			"type": {Type: "string", Enum: []string{"partition", "score", "mapping"}},
+			"name": text, "members": arraySchema(text),
+			"inputs": arraySchema(refSchema("RoutingCatalogProjectionReference")),
+			"source": text, "outputs": arraySchema(text),
+		}),
 		"RoutingCatalogModel": objectSchema([]string{
 			"id", "revision", "name", "aliases", "capabilities", "loras", "tags", "pricing",
 		}, map[string]JSONSchema{
@@ -37,9 +49,11 @@ func routingCatalogSchemas() map[string]JSONSchema {
 			"loras": arraySchema(text), "qualityScore": {Type: "number"},
 			"modality": text, "tags": arraySchema(text), "pricing": refSchema("RoutingPricing"),
 		}),
-		"RoutingCatalogRecipe": objectSchema([]string{"id", "revision", "name", "decisions"}, map[string]JSONSchema{
+		"RoutingCatalogRecipe": objectSchema([]string{"id", "revision", "name", "decisions", "signals", "projections"}, map[string]JSONSchema{
 			"id": resourceID, "revision": revision, "name": text, "description": text,
-			"decisions": arraySchema(refSchema("RoutingDecision")),
+			"decisions":   arraySchema(refSchema("RoutingDecision")),
+			"signals":     arraySchema(refSchema("RoutingCatalogSignal")),
+			"projections": arraySchema(refSchema("RoutingCatalogProjection")),
 		}),
 		"RoutingCatalogAssignmentSet": objectSchema([]string{"models"}, map[string]JSONSchema{
 			"models":   {Type: "array", Items: schemaPointer(refSchema("RoutingAssignmentView")), MaxItems: intPointer(32)},

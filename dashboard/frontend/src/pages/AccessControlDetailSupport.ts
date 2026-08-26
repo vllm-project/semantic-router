@@ -9,6 +9,8 @@ import type {
 import type { ManagementCostSummary, RateLimitRule } from '../utils/routerManagementTypes'
 
 export const EMPTY_USAGE: UsageSummary = {
+  final: true,
+  completeness: 'complete',
   granularity: 'hour',
   requests: 0,
   successful: 0,
@@ -168,6 +170,22 @@ export function quotaResetLabel(meter: QuotaMeter) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(reset)}`
+}
+
+export function quotaCapacityLabel(meter: QuotaMeter) {
+  if (meter.remaining !== null) return `${formatQuotaValue(meter, meter.remaining)} left`
+  if (meter.capacityState === 'fenced' || meter.completeness === 'partial') {
+    return 'Finalizing usage'
+  }
+  return 'Syncing usage'
+}
+
+export function quotaCapacityNote(meter: QuotaMeter) {
+  if (meter.remaining !== null && meter.completeness === 'complete') return ''
+  if (meter.capacityState === 'fenced' || meter.completeness === 'partial') {
+    return 'Recent requests are finalizing.'
+  }
+  return 'Usage is syncing.'
 }
 export const formatDate = (value?: string) =>
   value

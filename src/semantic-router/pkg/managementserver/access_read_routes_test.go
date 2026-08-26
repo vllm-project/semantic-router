@@ -192,8 +192,8 @@ func TestKeyScopedRoutingCatalogEncodesRequiredEmptyCollectionsAsArrays(t *testi
 		t.Fatal(err)
 	}
 	var emptyPayload map[string]json.RawMessage
-	if err := json.Unmarshal(emptyWire, &emptyPayload); err != nil {
-		t.Fatal(err)
+	if decodeErr := json.Unmarshal(emptyWire, &emptyPayload); decodeErr != nil {
+		t.Fatal(decodeErr)
 	}
 	for _, field := range []string{"models", "recipes", "entrypoints"} {
 		if string(emptyPayload[field]) != "[]" {
@@ -222,7 +222,9 @@ func TestKeyScopedRoutingCatalogEncodesRequiredEmptyCollectionsAsArrays(t *testi
 			Tags         json.RawMessage `json:"tags"`
 		} `json:"models"`
 		Recipes []struct {
-			Decisions json.RawMessage `json:"decisions"`
+			Decisions   json.RawMessage `json:"decisions"`
+			Signals     json.RawMessage `json:"signals"`
+			Projections json.RawMessage `json:"projections"`
 		} `json:"recipes"`
 		Entrypoints []struct {
 			Aliases json.RawMessage `json:"aliases"`
@@ -244,7 +246,8 @@ func TestKeyScopedRoutingCatalogEncodesRequiredEmptyCollectionsAsArrays(t *testi
 			t.Errorf("RoutingCatalogModel.%s = %s, want []: %s", field, value, wire)
 		}
 	}
-	if string(payload.Recipes[0].Decisions) != "[]" || string(payload.Entrypoints[0].Aliases) != "[]" ||
+	if string(payload.Recipes[0].Decisions) != "[]" || string(payload.Recipes[0].Signals) != "[]" ||
+		string(payload.Recipes[0].Projections) != "[]" || string(payload.Entrypoints[0].Aliases) != "[]" ||
 		string(payload.Entrypoints[0].Rules[0].Assignments["decision_empty"].Models) != "[]" {
 		t.Fatalf("nested required collections must be arrays: %s", wire)
 	}

@@ -243,6 +243,9 @@ export interface UsageSlice {
 }
 
 export interface UsageSummary {
+  final: boolean
+  completeness: 'complete' | 'partial' | 'unknown'
+  asOf?: string
   granularity: 'minute' | 'hour' | 'day'
   requests: number
   successful: number
@@ -291,4 +294,8 @@ export interface UsageFilter extends AccessListParams {
   to?: string
   granularity?: 'auto' | 'minute' | 'hour' | 'day'
   timezoneOffset?: number
+}
+
+export interface UsageReadCapabilities {
+  internalDimensions?: boolean
 }

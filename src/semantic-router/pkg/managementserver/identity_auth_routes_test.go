@@ -22,7 +22,7 @@ func (identityAuthenticationStub) CreateChallenge(context.Context, string, strin
 	return managementauth.ExchangeChallenge{}, errors.New("not called")
 }
 
-func (identityAuthenticationStub) Exchange(context.Context, string, string, managementauth.SubjectTokenType, string, string) (managementauth.IdentityExchangeResult, error) {
+func (identityAuthenticationStub) Exchange(context.Context, string, string, string, managementauth.SubjectTokenType, string, string) (managementauth.IdentityExchangeResult, error) {
 	return managementauth.IdentityExchangeResult{}, errors.New("not called")
 }
 
@@ -36,7 +36,9 @@ func (identityAuthenticationStub) MTLSToken(context.Context, managementauth.Veri
 
 type exchangeAuthenticationStub struct {
 	invitationToken string
+	rateIdentity    string
 	result          managementauth.IdentityExchangeResult
+	err             error
 	calls           int
 }
 
@@ -45,6 +47,7 @@ type challengeAuthenticationStub struct {
 	challenge    managementauth.ExchangeChallenge
 	issuerID     string
 	rateIdentity string
+	err          error
 }
 
 func (stub *challengeAuthenticationStub) CreateChallenge(
@@ -54,7 +57,7 @@ func (stub *challengeAuthenticationStub) CreateChallenge(
 ) (managementauth.ExchangeChallenge, error) {
 	stub.issuerID = issuerID
 	stub.rateIdentity = rateIdentity
-	return stub.challenge, nil
+	return stub.challenge, stub.err
 }
 
 func (stub *exchangeAuthenticationStub) Ready(context.Context) error { return nil }
@@ -62,12 +65,13 @@ func (stub *exchangeAuthenticationStub) CreateChallenge(context.Context, string,
 	return managementauth.ExchangeChallenge{}, errors.New("not called")
 }
 
-func (stub *exchangeAuthenticationStub) Exchange(_ context.Context, _, _ string,
+func (stub *exchangeAuthenticationStub) Exchange(_ context.Context, _, _, rateIdentity string,
 	_ managementauth.SubjectTokenType, _ string, invitationToken string,
 ) (managementauth.IdentityExchangeResult, error) {
 	stub.calls++
 	stub.invitationToken = invitationToken
-	return stub.result, nil
+	stub.rateIdentity = rateIdentity
+	return stub.result, stub.err
 }
 
 func (stub *exchangeAuthenticationStub) ServiceToken(context.Context, string) (managementauth.IssuedToken, error) {
@@ -362,9 +366,10 @@ func TestIdentityTokenExchangeReturnsNestedOneTimeOnboarding(t *testing.T) {
   "invitationToken":"vsi_10000000-0000-4000-8000-000000000003_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 }`))
 	request.Header.Set("Content-Type", managementapi.JSONMediaType)
+	request.RemoteAddr = "192.0.2.9:12345"
 	response := httptest.NewRecorder()
 	routes.ServeHTTP(response, request)
-	if response.Code != http.StatusOK || stub.calls != 1 || stub.invitationToken == "" ||
+	if response.Code != http.StatusOK || stub.calls != 1 || stub.invitationToken == "" || stub.rateIdentity != "192.0.2.9" ||
 		response.Header().Get("Cache-Control") != "no-store" {
 		t.Fatalf("exchange status=%d calls=%d headers=%v body=%s", response.Code, stub.calls, response.Header(), response.Body.String())
 	}
@@ -375,6 +380,26 @@ func TestIdentityTokenExchangeReturnsNestedOneTimeOnboarding(t *testing.T) {
 	if payload.Onboarding == nil || payload.Onboarding.APIKey != "vsk_one_time" ||
 		payload.ManagementSessionID != stub.result.Issued.ManagementSessionID {
 		t.Fatalf("exchange payload = %+v", payload)
+	}
+}
+
+func TestIdentityChallengeCapacityReturnsRetryable429(t *testing.T) {
+	stub := &challengeAuthenticationStub{err: &managementauth.ChallengeCapacityError{RetryAfter: 90 * time.Second}}
+	routes, err := NewIdentityAuthRoutes(IdentityAuthRoutesOptions{
+		Service: stub, Bootstrap: &bootstrapStub{}, AllowPlaintextForTests: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(http.MethodPost, managementapi.BasePath+"/auth/exchange-challenges",
+		strings.NewReader(`{"issuerId":"10000000-0000-4000-8000-000000000001"}`))
+	request.RemoteAddr = "192.0.2.9:12345"
+	request.Header.Set("Content-Type", managementapi.JSONMediaType)
+	response := httptest.NewRecorder()
+	routes.ServeHTTP(response, request)
+	if response.Code != http.StatusTooManyRequests || response.Header().Get("Retry-After") != "90" ||
+		!strings.Contains(response.Body.String(), "challenge_capacity_exceeded") {
+		t.Fatalf("status=%d headers=%v body=%s", response.Code, response.Header(), response.Body.String())
 	}
 }
 

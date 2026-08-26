@@ -171,6 +171,35 @@ type RoutingCatalogRecipe struct {
 	Name        string
 	Description string
 	Decisions   []routingsnapshot.Decision
+	Signals     []RoutingCatalogSignal
+	Projections []RoutingCatalogProjection
+}
+
+// RoutingCatalogSignal is the intentionally small, prompt-free signal view.
+// Signal configuration, examples, classifier instructions, and thresholds are
+// never representable in a consumer catalog.
+type RoutingCatalogSignal struct {
+	Type string
+	Name string
+}
+
+type RoutingCatalogProjectionReference struct {
+	Type   string
+	Name   string
+	KB     string
+	Metric string
+}
+
+// RoutingCatalogProjection contains only graph structure needed to render a
+// read-only topology. Methods, weights, calibration, and thresholds stay in
+// the private Recipe document.
+type RoutingCatalogProjection struct {
+	Type    string
+	Name    string
+	Members []string
+	Inputs  []RoutingCatalogProjectionReference
+	Source  string
+	Outputs []string
 }
 
 type RoutingCatalogEntrypoint struct {

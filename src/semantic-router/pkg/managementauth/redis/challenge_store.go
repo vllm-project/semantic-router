@@ -95,27 +95,35 @@ func (store *ChallengeStore) Create(ctx context.Context, issuerID, rateIdentity 
 	digest := challengeDigest(issuerID, nonce)
 	value := issuerID + ":" + hex.EncodeToString(digest[:])
 	rateDigest := sha256.Sum256([]byte(rateIdentity))
+	rateID := hex.EncodeToString(rateDigest[:])
 	accepted, createErr := createChallengeScript.Run(ctx, store.client,
-		[]string{store.challengeKey(id), store.rateKey(hex.EncodeToString(rateDigest[:]))},
-		value, int64(store.ttl/time.Millisecond), store.rateLimit,
+		[]string{store.challengeKey(rateID, id), store.rateKey(rateID)},
+		value, int64(store.ttl/time.Millisecond), store.rateLimit, id, now.UTC().UnixMilli(),
 	).Int64()
 	if createErr != nil {
 		return managementauth.ExchangeChallenge{}, fmt.Errorf("create Management exchange challenge: %w", createErr)
 	}
+	if accepted == 0 {
+		return managementauth.ExchangeChallenge{}, &managementauth.ChallengeCapacityError{RetryAfter: store.ttl}
+	}
 	if accepted != 1 {
-		return managementauth.ExchangeChallenge{}, managementauth.ErrAuthenticationDenied
+		return managementauth.ExchangeChallenge{}, managementauth.ErrAuthenticationUnavailable
 	}
 	return managementauth.ExchangeChallenge{ID: id, Nonce: nonce, ExpiresAt: now.UTC().Add(store.ttl)}, nil
 }
 
-func (store *ChallengeStore) Consume(ctx context.Context, id, issuerID, nonce string, now time.Time) error {
+func (store *ChallengeStore) Consume(ctx context.Context, id, issuerID, nonce, rateIdentity string, now time.Time) error {
 	if store == nil || !challengeIssuerPattern.MatchString(id) || !challengeIssuerPattern.MatchString(issuerID) ||
-		now.IsZero() || len(nonce) != 43 || strings.TrimSpace(nonce) != nonce {
+		now.IsZero() || len(nonce) != 43 || strings.TrimSpace(nonce) != nonce || !canonicalRateIdentity(rateIdentity) {
 		return managementauth.ErrAuthenticationDenied
 	}
 	digest := challengeDigest(issuerID, nonce)
 	expected := issuerID + ":" + hex.EncodeToString(digest[:])
-	consumed, err := consumeChallengeScript.Run(ctx, store.client, []string{store.challengeKey(id)}, expected).Int64()
+	rateDigest := sha256.Sum256([]byte(rateIdentity))
+	rateID := hex.EncodeToString(rateDigest[:])
+	consumed, err := consumeChallengeScript.Run(ctx, store.client,
+		[]string{store.challengeKey(rateID, id), store.rateKey(rateID)}, expected, id,
+	).Int64()
 	if err != nil {
 		return fmt.Errorf("consume Management exchange challenge: %w", err)
 	}
@@ -125,12 +133,12 @@ func (store *ChallengeStore) Consume(ctx context.Context, id, issuerID, nonce st
 	return nil
 }
 
-func (store *ChallengeStore) challengeKey(id string) string {
-	return store.prefix + ":management:challenge:" + id
+func (store *ChallengeStore) challengeKey(rateID, id string) string {
+	return store.prefix + ":management:challenge:{" + rateID + "}:" + id
 }
 
-func (store *ChallengeStore) rateKey(id string) string {
-	return store.prefix + ":management:challenge-rate:" + id
+func (store *ChallengeStore) rateKey(rateID string) string {
+	return store.prefix + ":management:challenge:{" + rateID + "}:outstanding"
 }
 
 func challengeDigest(issuerID, nonce string) [sha256.Size]byte {
@@ -148,11 +156,12 @@ func canonicalRateIdentity(value string) bool {
 }
 
 var createChallengeScript = redisclient.NewScript(`
-local count = redis.call('INCR', KEYS[2])
-if count == 1 then redis.call('PEXPIRE', KEYS[2], ARGV[2]) end
-if count > tonumber(ARGV[3]) then return 0 end
+redis.call('ZREMRANGEBYSCORE', KEYS[2], '-inf', tonumber(ARGV[5]))
+if redis.call('ZCARD', KEYS[2]) >= tonumber(ARGV[3]) then return 0 end
 local inserted = redis.call('SET', KEYS[1], ARGV[1], 'PX', ARGV[2], 'NX')
-if not inserted then return 0 end
+if not inserted then return -1 end
+redis.call('ZADD', KEYS[2], tonumber(ARGV[5]) + tonumber(ARGV[2]), ARGV[4])
+redis.call('PEXPIRE', KEYS[2], ARGV[2])
 return 1
 `)
 
@@ -160,6 +169,8 @@ var consumeChallengeScript = redisclient.NewScript(`
 local value = redis.call('GET', KEYS[1])
 if not value or value ~= ARGV[1] then return 0 end
 redis.call('DEL', KEYS[1])
+redis.call('ZREM', KEYS[2], ARGV[2])
+if redis.call('ZCARD', KEYS[2]) == 0 then redis.call('DEL', KEYS[2]) end
 return 1
 `)
 

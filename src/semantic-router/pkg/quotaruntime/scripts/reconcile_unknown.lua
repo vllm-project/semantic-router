@@ -124,11 +124,20 @@ for index = 1, correction_count do
 end
 
 for _, update in ipairs(updates) do
-  if update.active then
-    if update.algorithm == "sliding_log" and update.should_charge == "1" then
-      redis.call("ZADD", update.events, update.charge_at, update.member)
-      redis.call("HSET", update.values, update.member, update.amount .. "|" .. update.incomplete)
+  if update.algorithm == "sliding_log" then
+    if update.active then
+      if update.should_charge == "1" then
+        redis.call("ZADD", update.events, update.charge_at, update.member)
+        redis.call("HSET", update.values, update.member, update.amount .. "|" .. update.incomplete)
+      end
+      redis.call("HSET", update.meta, "used", update.used, "known", update.known)
     end
+    -- Sliding-log incomplete usage is a scalar because an unresolved dispatch
+    -- has no authoritative event timestamp to index. It therefore cannot age
+    -- out through event pruning. Always remove this fence's exact contribution,
+    -- even when the eventual correction charge belongs to an expired window.
+    redis.call("HSET", update.meta, "incomplete", update.next_incomplete)
+  elseif update.active then
     redis.call("HSET", update.meta, "used", update.used, "known", update.known,
       "incomplete", update.next_incomplete)
   end

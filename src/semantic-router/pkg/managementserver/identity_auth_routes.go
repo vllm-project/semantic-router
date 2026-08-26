@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 type AuthenticationService interface {
 	Ready(context.Context) error
 	CreateChallenge(context.Context, string, string) (managementauth.ExchangeChallenge, error)
-	Exchange(context.Context, string, string, managementauth.SubjectTokenType, string, string) (managementauth.IdentityExchangeResult, error)
+	Exchange(context.Context, string, string, string, managementauth.SubjectTokenType, string, string) (managementauth.IdentityExchangeResult, error)
 	ServiceToken(context.Context, string) (managementauth.IssuedToken, error)
 	MTLSToken(context.Context, managementauth.VerifiedMTLSEvidence) (managementauth.IssuedToken, error)
 }
@@ -332,6 +333,11 @@ func (routes *IdentityAuthRoutes) exchange(response http.ResponseWriter, request
 		writeProviderError(response, http.StatusBadRequest, "invalid_request", "Subject token type is invalid.", requestID)
 		return
 	}
+	address := directRequestIP(request)
+	if !address.IsValid() {
+		writeProviderError(response, http.StatusBadRequest, "invalid_request", "A direct client address is required.", requestID)
+		return
+	}
 	token := body.SubjectToken
 	body.SubjectToken = ""
 	defer zeroString(&token)
@@ -348,7 +354,7 @@ func (routes *IdentityAuthRoutes) exchange(response http.ResponseWriter, request
 		defer zeroString(&invitationToken)
 	}
 	result, err := routes.service.Exchange(request.Context(), body.IssuerID, body.ExchangeChallengeID,
-		tokenType, token, invitationToken)
+		address.String(), tokenType, token, invitationToken)
 	if err != nil {
 		writeAuthenticationError(response, err, requestID)
 		return
@@ -427,6 +433,19 @@ func writeExchangeResult(response http.ResponseWriter, result managementauth.Ide
 
 func writeAuthenticationError(response http.ResponseWriter, err error, requestID string) {
 	switch {
+	case errors.Is(err, managementauth.ErrChallengeCapacityExceeded):
+		retryAfter := time.Second
+		var capacity *managementauth.ChallengeCapacityError
+		if errors.As(err, &capacity) && capacity.RetryAfter > 0 {
+			retryAfter = capacity.RetryAfter
+		}
+		if retryAfter > 10*time.Minute {
+			retryAfter = 10 * time.Minute
+		}
+		seconds := int64((retryAfter + time.Second - 1) / time.Second)
+		response.Header().Set("Retry-After", strconv.FormatInt(seconds, 10))
+		writeProviderError(response, http.StatusTooManyRequests, "challenge_capacity_exceeded",
+			"Too many exchange challenges are outstanding.", requestID)
 	case errors.Is(err, managementauth.ErrAuthenticationDenied), errors.Is(err, managementauth.ErrSessionLimitExceeded):
 		writeProviderError(response, http.StatusUnauthorized, "unauthenticated", "Authentication failed.", requestID)
 	case errors.Is(err, managementauth.ErrInvitationExpired):

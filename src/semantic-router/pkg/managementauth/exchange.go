@@ -17,7 +17,7 @@ type ExchangeChallenge struct {
 type ExchangeChallengeStore interface {
 	Ready(context.Context) error
 	Create(context.Context, string, string, time.Time) (ExchangeChallenge, error)
-	Consume(context.Context, string, string, string, time.Time) error
+	Consume(context.Context, string, string, string, string, time.Time) error
 }
 
 type SubjectTokenType string
@@ -171,8 +171,8 @@ func (service *AuthService) CreateChallenge(ctx context.Context, issuerID, rateI
 	return service.challenges.Create(ctx, issuerID, rateIdentity, service.now().UTC())
 }
 
-func (service *AuthService) Exchange(ctx context.Context, issuerID, challengeID string, tokenType SubjectTokenType,
-	subjectToken, invitationToken string,
+func (service *AuthService) Exchange(ctx context.Context, issuerID, challengeID, rateIdentity string,
+	tokenType SubjectTokenType, subjectToken, invitationToken string,
 ) (IdentityExchangeResult, error) {
 	now := service.now().UTC()
 	if tokenType != SubjectTokenOIDCIDToken && tokenType != SubjectTokenRouterAssertion {
@@ -183,7 +183,7 @@ func (service *AuthService) Exchange(ctx context.Context, issuerID, challengeID 
 		verified.AuthenticatedAt.IsZero() || verified.EvidenceExpiresAt.IsZero() || !now.Before(verified.EvidenceExpiresAt) {
 		return IdentityExchangeResult{}, ErrAuthenticationDenied
 	}
-	if err := service.challenges.Consume(ctx, challengeID, issuerID, verified.Nonce, now); err != nil {
+	if err := service.challenges.Consume(ctx, challengeID, issuerID, verified.Nonce, rateIdentity, now); err != nil {
 		return IdentityExchangeResult{}, ErrAuthenticationDenied
 	}
 	draft, exchangeErr := service.sessionDraft(VerifiedSessionSource{

@@ -6,6 +6,8 @@ import {
   formatCosts,
   formatQuotaValue,
   quotaMeterLabel,
+  quotaCapacityLabel,
+  quotaCapacityNote,
   quotaProgress,
   quotaResetLabel,
 } from './AccessControlDetailSupport'
@@ -61,5 +63,25 @@ describe('API-key actual usage and quota presentation', () => {
       ]),
     ).toBe('$1.250000 USD')
     expect(quotaResetLabel(cost)).toMatch(/^Resets /)
+  })
+
+  it('distinguishes settled zero capacity from syncing and finalizing snapshots', () => {
+    expect(quotaCapacityLabel(meter({ used: '0', remaining: '12' }))).toBe('12 left')
+    expect(quotaCapacityNote(meter({ used: '0', remaining: '12' }))).toBe('')
+    expect(
+      quotaCapacityLabel(
+        meter({ remaining: null, completeness: 'unknown', capacityState: 'unknown' }),
+      ),
+    ).toBe('Syncing usage')
+    expect(
+      quotaCapacityLabel(
+        meter({ remaining: null, completeness: 'partial', capacityState: 'fenced' }),
+      ),
+    ).toBe('Finalizing usage')
+    expect(
+      quotaCapacityNote(
+        meter({ remaining: null, completeness: 'partial', capacityState: 'fenced' }),
+      ),
+    ).toBe('Recent requests are finalizing.')
   })
 })

@@ -27,9 +27,28 @@ func routingCatalogDTO(value accessmanagement.RoutingCatalog) managementapi.Rout
 		})
 	}
 	for _, recipe := range value.Recipes {
+		signals := make([]managementapi.RoutingCatalogSignal, 0, len(recipe.Signals))
+		for _, signal := range recipe.Signals {
+			signals = append(signals, managementapi.RoutingCatalogSignal{Type: signal.Type, Name: signal.Name})
+		}
+		projections := make([]managementapi.RoutingCatalogProjection, 0, len(recipe.Projections))
+		for _, projection := range recipe.Projections {
+			inputs := make([]managementapi.RoutingCatalogProjectionReference, 0, len(projection.Inputs))
+			for _, input := range projection.Inputs {
+				inputs = append(inputs, managementapi.RoutingCatalogProjectionReference{
+					Type: input.Type, Name: input.Name, KB: input.KB, Metric: input.Metric,
+				})
+			}
+			projections = append(projections, managementapi.RoutingCatalogProjection{
+				Type: projection.Type, Name: projection.Name,
+				Members: append([]string{}, projection.Members...), Inputs: inputs,
+				Source: projection.Source, Outputs: append([]string{}, projection.Outputs...),
+			})
+		}
 		result.Recipes = append(result.Recipes, managementapi.RoutingCatalogRecipe{
 			ID: recipe.ID, Revision: recipe.Revision, Name: recipe.Name,
 			Description: recipe.Description, Decisions: routingDecisionsDTO(recipe.Decisions),
+			Signals: signals, Projections: projections,
 		})
 	}
 	for _, entrypoint := range value.Entrypoints {

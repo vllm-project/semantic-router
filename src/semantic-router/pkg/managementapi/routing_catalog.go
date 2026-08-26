@@ -32,11 +32,34 @@ type RoutingCatalogModel struct {
 }
 
 type RoutingCatalogRecipe struct {
-	ID          string            `json:"id"`
-	Revision    int64             `json:"revision"`
-	Name        string            `json:"name"`
-	Description string            `json:"description,omitempty"`
-	Decisions   []RoutingDecision `json:"decisions"`
+	ID          string                     `json:"id"`
+	Revision    int64                      `json:"revision"`
+	Name        string                     `json:"name"`
+	Description string                     `json:"description,omitempty"`
+	Decisions   []RoutingDecision          `json:"decisions"`
+	Signals     []RoutingCatalogSignal     `json:"signals"`
+	Projections []RoutingCatalogProjection `json:"projections"`
+}
+
+type RoutingCatalogSignal struct {
+	Type string `json:"type"`
+	Name string `json:"name"`
+}
+
+type RoutingCatalogProjectionReference struct {
+	Type   string `json:"type"`
+	Name   string `json:"name,omitempty"`
+	KB     string `json:"kb,omitempty"`
+	Metric string `json:"metric,omitempty"`
+}
+
+type RoutingCatalogProjection struct {
+	Type    string                              `json:"type"`
+	Name    string                              `json:"name"`
+	Members []string                            `json:"members"`
+	Inputs  []RoutingCatalogProjectionReference `json:"inputs"`
+	Source  string                              `json:"source,omitempty"`
+	Outputs []string                            `json:"outputs"`
 }
 
 type RoutingCatalogEntrypoint struct {

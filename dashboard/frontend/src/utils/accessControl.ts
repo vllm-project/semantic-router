@@ -151,6 +151,13 @@ export function canAccessDashboardPath(
 ): boolean {
   const normalizedPath = pathname.trim().toLowerCase()
 
+  // The local Dashboard session is not Router authority. If its Router
+  // identity cannot be projected, every Router-backed surface fails closed
+  // and the authenticated shell keeps only its status-aware home.
+  if (user?.managementIdentityStatus && user.managementIdentityStatus !== 'ready') {
+    return normalizedPath === '/dashboard'
+  }
+
   if (normalizedPath.startsWith('/playground')) {
     return canUseDelegatedInference(user)
   }
@@ -319,4 +326,8 @@ export function isModelConsumer(user?: PermissionUser | null): boolean {
 
 export function canViewOwnUsage(user?: PermissionUser | null): boolean {
   return managementHas(user, 'usage.read')
+}
+
+export function canReadInternalUsageDimensions(user?: PermissionUser | null): boolean {
+  return managementHas(user, 'usage.internal_dimensions.read')
 }

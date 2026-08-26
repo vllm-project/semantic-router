@@ -84,8 +84,14 @@ func TestProcessOneKeepsFenceUntilRuntimeAndLedgerAreDurable(t *testing.T) {
 			NamespaceID:      testNamespaceID, Partition: "partition-one", FenceID: testFenceID,
 			AdmissionID: "admission-1", OperationID: testOperationID, Strategy: StrategyActual,
 			Corrections: []quotaruntime.CounterCorrection{
-				{BindingID: "binding-enforce", RuleID: "rule-1", Enforcement: quota.EnforcementEnforce},
-				{BindingID: "binding-shadow", RuleID: "rule-2", Enforcement: quota.EnforcementShadow},
+				{
+					BindingID: "binding-enforce", RuleID: "rule-1",
+					Metric: quota.MetricTotalTokens, Enforcement: quota.EnforcementEnforce,
+				},
+				{
+					BindingID: "binding-shadow", RuleID: "rule-2",
+					Metric: quota.MetricCost, Enforcement: quota.EnforcementShadow,
+				},
 			},
 		},
 	}}
@@ -99,8 +105,40 @@ func TestProcessOneKeepsFenceUntilRuntimeAndLedgerAreDurable(t *testing.T) {
 	if strings.Join(sharedCalls, ",") != strings.Join(want, ",") {
 		t.Fatalf("saga order = %v, want %v", sharedCalls, want)
 	}
-	if len(runtime.removal.BindingIDs) != 1 || runtime.removal.BindingIDs[0] != "binding-enforce" {
-		t.Fatalf("fence removal bindings = %v", runtime.removal.BindingIDs)
+	if len(runtime.removal.Counters) != 1 ||
+		runtime.removal.Counters[0] != (quotaruntime.FenceCounter{
+			BindingID: "binding-enforce", RuleID: "rule-1", Metric: quota.MetricTotalTokens,
+		}) {
+		t.Fatalf("fence removal counters = %v", runtime.removal.Counters)
+	}
+}
+
+func TestProcessOneDoesNotResolveFenceWhenRuntimeReleaseRejectsIncompleteUsage(t *testing.T) {
+	sharedCalls := []string{}
+	repository := &reconciliationTestRepository{calls: &sharedCalls, found: true, claim: Claim{
+		Phase: PhaseLedgerApplied, PlanDigest: strings.Repeat("a", 64), LeaseOwner: "worker-1",
+		LeaseToken: "77777777-7777-4777-8777-777777777777",
+		Plan: Plan{
+			ReconciliationID: "88888888-8888-4888-8888-888888888888",
+			NamespaceID:      testNamespaceID, Partition: "partition-one", FenceID: testFenceID,
+			AdmissionID: "admission-1", OperationID: testOperationID, Strategy: StrategyActual,
+			Corrections: []quotaruntime.CounterCorrection{{
+				BindingID: "binding-enforce", RuleID: "rule-1",
+				Metric: quota.MetricTotalTokens, Enforcement: quota.EnforcementEnforce,
+			}},
+		},
+	}}
+	runtime := &reconciliationTestRuntime{
+		calls: &sharedCalls, removalErr: quotaruntime.ErrRuntimeCorrupt,
+	}
+	service := newReconciliationTestService(t, repository, runtime, testReconciliationNow)
+	processed, err := service.ProcessOne(context.Background())
+	if !processed || !errors.Is(err, quotaruntime.ErrRuntimeCorrupt) {
+		t.Fatalf("process one = %v, %v", processed, err)
+	}
+	want := []string{"claim", "runtime.remove_fence", "repository.release"}
+	if strings.Join(sharedCalls, ",") != strings.Join(want, ",") {
+		t.Fatalf("failed release saga order = %v, want %v", sharedCalls, want)
 	}
 }
 
@@ -196,13 +234,15 @@ func (repository *reconciliationTestRepository) Complete(context.Context, Claim,
 	return Operation{}, nil
 }
 
-func (*reconciliationTestRepository) Release(context.Context, Claim, time.Time, error) error {
+func (repository *reconciliationTestRepository) Release(context.Context, Claim, time.Time, error) error {
+	repository.record("repository.release")
 	return nil
 }
 
 type reconciliationTestRuntime struct {
-	calls   *[]string
-	removal quotaruntime.FenceRemovalRequest
+	calls      *[]string
+	removal    quotaruntime.FenceRemovalRequest
+	removalErr error
 }
 
 func (runtime *reconciliationTestRuntime) record(value string) {
@@ -219,5 +259,5 @@ func (runtime *reconciliationTestRuntime) ApplyReconciliation(context.Context, q
 func (runtime *reconciliationTestRuntime) RemoveReconciledFence(_ context.Context, request quotaruntime.FenceRemovalRequest) (quotaruntime.MutationResult, error) {
 	runtime.record("runtime.remove_fence")
 	runtime.removal = request
-	return quotaruntime.MutationResult{}, nil
+	return quotaruntime.MutationResult{}, runtime.removalErr
 }

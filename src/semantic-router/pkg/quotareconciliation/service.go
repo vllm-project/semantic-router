@@ -331,16 +331,20 @@ func (service *Service) ProcessOne(ctx context.Context) (bool, error) {
 		claim.Phase = PhaseLedgerApplied
 	}
 	if claim.Phase == PhaseLedgerApplied {
-		bindingIDs := make([]string, 0, len(claim.Plan.Corrections))
+		counters := make([]quotaruntime.FenceCounter, 0, len(claim.Plan.Corrections))
 		for _, correction := range claim.Plan.Corrections {
 			if correction.Enforcement == "enforce" {
-				bindingIDs = append(bindingIDs, correction.BindingID)
+				counters = append(counters, quotaruntime.FenceCounter{
+					BindingID: correction.BindingID,
+					RuleID:    correction.RuleID,
+					Metric:    correction.Metric,
+				})
 			}
 		}
 		if _, err := service.runtime.RemoveReconciledFence(ctx, quotaruntime.FenceRemovalRequest{
 			Partition: claim.Plan.Partition, FenceID: claim.Plan.FenceID,
 			ReconciliationID: claim.Plan.ReconciliationID, PlanDigest: claim.PlanDigest,
-			BindingIDs: bindingIDs,
+			Counters: counters,
 		}); err != nil {
 			return fail(err)
 		}

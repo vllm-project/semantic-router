@@ -17,7 +17,7 @@ import (
 func TestPostgresChallengeIsOneTimeAndGloballyRateLimited(t *testing.T) {
 	database, ctx := authCoordinationDatabase(t)
 	issuerID := seedCoordinationIssuer(t, ctx, database)
-	ids := []string{uuid.NewString(), uuid.NewString()}
+	ids := []string{uuid.NewString(), uuid.NewString(), uuid.NewString()}
 	nextID := 0
 	store, err := NewChallengeStore(ChallengeOptions{
 		Database: database, TTL: 30 * time.Second, RateLimit: 1,
@@ -31,18 +31,25 @@ func TestPostgresChallengeIsOneTimeAndGloballyRateLimited(t *testing.T) {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC().Truncate(time.Second)
-	challenge, err := store.Create(ctx, issuerID, "test-rate-identity", now)
+	rateIdentity := "test-rate-identity-" + uuid.NewString()
+	challenge, err := store.Create(ctx, issuerID, rateIdentity, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := store.Create(ctx, issuerID, "test-rate-identity", now); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+	if _, err := store.Create(ctx, issuerID, rateIdentity, now); !errors.Is(err, managementauth.ErrChallengeCapacityExceeded) {
 		t.Fatalf("rate-limited Create() = %v", err)
 	}
-	if err := store.Consume(ctx, challenge.ID, issuerID, challenge.Nonce, now.Add(time.Second)); err != nil {
+	if err := store.Consume(ctx, challenge.ID, issuerID, challenge.Nonce, "different-rate-identity", now.Add(time.Second)); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+		t.Fatalf("cross-identity Consume() = %v", err)
+	}
+	if err := store.Consume(ctx, challenge.ID, issuerID, challenge.Nonce, rateIdentity, now.Add(time.Second)); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Consume(ctx, challenge.ID, issuerID, challenge.Nonce, now.Add(2*time.Second)); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
+	if err := store.Consume(ctx, challenge.ID, issuerID, challenge.Nonce, rateIdentity, now.Add(2*time.Second)); !errors.Is(err, managementauth.ErrAuthenticationDenied) {
 		t.Fatalf("replayed Consume() = %v", err)
+	}
+	if _, err := store.Create(ctx, issuerID, rateIdentity, now.Add(3*time.Second)); err != nil {
+		t.Fatalf("Create() after consume = %v", err)
 	}
 }
 

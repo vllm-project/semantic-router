@@ -38,6 +38,10 @@ func newMockStore(t *testing.T) (*Store, sqlmock.Sqlmock) {
 func queryPattern(query string) string { return regexp.QuoteMeta(query) }
 
 func humanSessionRows(tokenID string, status string, revokedAt any) *sqlmock.Rows {
+	return humanSessionRowsWithExpiry(tokenID, status, revokedAt, testNow.Add(8*time.Hour))
+}
+
+func humanSessionRowsWithExpiry(tokenID string, status string, revokedAt any, expiresAt time.Time) *sqlmock.Rows {
 	return sqlmock.NewRows([]string{
 		"id", "principal_id", "issuer_session_id", "token_id", "audience",
 		"auth_source_kind", "auth_source_id", "evidence_kind", "assurance",
@@ -47,7 +51,7 @@ func humanSessionRows(tokenID string, status string, revokedAt any) *sqlmock.Row
 	}).AddRow(
 		sessionID, principalID, "issuer-session", tokenID, "vllm-sr-management",
 		"issuer", sourceID, "human", []byte(`{"aal":"aal2","amr":["pwd","otp"]}`),
-		testNow.Add(-5*time.Minute), nil, testNow.Add(8*time.Hour), status,
+		testNow.Add(-5*time.Minute), nil, expiresAt, status,
 		revokedAt, testNow.Add(-time.Minute), "active", "active", nil, nil, nil,
 	)
 }
@@ -348,6 +352,49 @@ func TestReissueIssuerSessionRejectsInactiveIssuerSession(t *testing.T) {
 		t.Fatalf("ReissueIssuerSessionInTransaction() error = %v", err)
 	}
 	assertExpectations(t, mock)
+}
+
+func TestReissueIssuerSessionAllowsExpiredDerivedSessionReplacement(t *testing.T) {
+	for _, testCase := range []struct {
+		name      string
+		status    string
+		expiresAt time.Time
+	}{
+		{name: "persisted expired", status: "expired", expiresAt: testNow.Add(-time.Second)},
+		{name: "stale active", status: "active", expiresAt: testNow.Add(-time.Second)},
+	} {
+		t.Run(testCase.name, func(t *testing.T) {
+			store, mock := newMockStore(t)
+			draft := issuerReissueDraft("token-next")
+			mock.ExpectBegin()
+			mock.ExpectQuery(queryPattern(lockPrincipalQuery)).
+				WithArgs(principalID).
+				WillReturnRows(sqlmock.NewRows([]string{"status"}).AddRow("active"))
+			mock.ExpectQuery(queryPattern(lockIssuerSessionQuery)).
+				WithArgs(principalID, sourceID, "issuer-session", "vllm-sr-management",
+					testNow.Add(-5*time.Minute), []byte(`{"aal":"aal2","amr":["pwd","otp"]}`)).
+				WillReturnRows(sqlmock.NewRows([]string{"id", "now"}).AddRow(sessionID, testNow))
+			mock.ExpectQuery(queryPattern(liveSessionQuery)).WithArgs(sessionID).
+				WillReturnRows(humanSessionRowsWithExpiry("token-current", testCase.status, nil, testCase.expiresAt))
+			mock.ExpectCommit()
+
+			found, err := inTransaction(context.Background(), store, sql.LevelSerializable,
+				func(tx *sql.Tx) (bool, error) {
+					_, _, found, err := store.ReissueIssuerSessionInTransaction(
+						context.Background(), tx, draft,
+						func(context.Context, managementauth.LiveSession, time.Time) (managementauth.IssuedToken, error) {
+							t.Fatal("issuer must not run for an expired derived session")
+							return managementauth.IssuedToken{}, nil
+						},
+					)
+					return found, err
+				})
+			if err != nil || found {
+				t.Fatalf("ReissueIssuerSessionInTransaction() = %t, %v", found, err)
+			}
+			assertExpectations(t, mock)
+		})
+	}
 }
 
 func TestRevokeIsCASAndIdempotent(t *testing.T) {
