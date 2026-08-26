@@ -19,7 +19,7 @@ export const committerActivityWindow = {
   "cutoffDate": "2026-05-25",
   "months": 3,
   "minimumCommentedIssueThreads": 2,
-  "activeCount": 10,
+  "activeCount": 11,
   "emeritusCount": 20
 }
 
@@ -45,10 +45,10 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "yangw",
     "login": "drivebyer",
-    "pullRequests": 22,
+    "pullRequests": 23,
     "reviews": 52,
     "issues": 18,
-    "total": 92,
+    "total": 93,
     "status": "active"
   },
   {
@@ -61,12 +61,21 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "status": "active"
   },
   {
-    "name": "siloteemu",
+    "name": "Teemu Kuusisto",
     "login": "siloteemu",
     "pullRequests": 11,
     "reviews": 1,
     "issues": 5,
     "total": 17,
+    "status": "active"
+  },
+  {
+    "name": "Akshay Viswanathan",
+    "login": "akshayv",
+    "pullRequests": 1,
+    "reviews": 0,
+    "issues": 2,
+    "total": 3,
     "status": "active"
   },
   {
@@ -82,9 +91,9 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "Wilson Wu",
     "login": "wilsonwu",
     "pullRequests": 43,
-    "reviews": 6,
+    "reviews": 7,
     "issues": 29,
-    "total": 78,
+    "total": 79,
     "status": "active"
   },
   {

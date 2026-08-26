@@ -40,6 +40,11 @@ export const workGroups: WorkGroup[] = [
         avatar: '/img/team/haichen.jpeg',
         profile: 'https://github.com/haic0',
       },
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
     ],
   },
   {
@@ -70,6 +75,13 @@ export const workGroups: WorkGroup[] = [
         profile: 'https://github.com/adaamko',
       },
     ],
+    members: [
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
+      },
+    ],
   },
   {
     id: 'data-plane-networking',
@@ -87,6 +99,13 @@ export const workGroups: WorkGroup[] = [
         name: 'Yang Wu',
         avatar: 'https://github.com/drivebyer.png',
         profile: 'https://github.com/drivebyer',
+      },
+    ],
+    members: [
+      {
+        name: 'raghavchitkara',
+        avatar: 'https://github.com/raghavchitkara36.png',
+        profile: 'https://github.com/raghavchitkara36',
       },
     ],
   },
@@ -107,12 +126,27 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/AayushSaini101.png',
         profile: 'https://github.com/AayushSaini101',
       },
+      {
+        name: 'Akshay Viswanathan',
+        avatar: 'https://github.com/akshayv.png',
+        profile: 'https://github.com/akshayv',
+      },
     ],
     members: [
       {
         name: 'Abhinav Mahajan',
         avatar: 'https://github.com/abhinav-m22.png',
         profile: 'https://github.com/abhinav-m22',
+      },
+      {
+        name: 'Aakanksha Bhende',
+        avatar: 'https://github.com/aakankshabhende.png',
+        profile: 'https://github.com/aakankshabhende',
+      },
+      {
+        name: 'Pranav Thakur',
+        avatar: 'https://github.com/pranavthakur0-0.png',
+        profile: 'https://github.com/pranavthakur0-0',
       },
     ],
   },
@@ -181,6 +215,11 @@ export const workGroups: WorkGroup[] = [
         avatar: 'https://github.com/aakankshabhende.png',
         profile: 'https://github.com/aakankshabhende',
       },
+      {
+        name: 'Eda Zhou',
+        avatar: 'https://github.com/edamamez.png',
+        profile: 'https://github.com/edamamez',
+      },
     ],
   },
   {
@@ -199,6 +238,11 @@ export const workGroups: WorkGroup[] = [
         name: 'Xunzhuo Liu',
         avatar: 'https://github.com/Xunzhuo.png',
         profile: 'https://github.com/Xunzhuo',
+      },
+      {
+        name: 'FAUST',
+        avatar: 'https://github.com/FAUST-BENCHOU.png',
+        profile: 'https://github.com/FAUST-BENCHOU',
       },
     ],
   },
