@@ -129,7 +129,7 @@ def test_file_config_envoy_has_only_stable_router_owned_upstreams(
                         "type.googleapis.com/"
                         "envoy.extensions.filters.http.cors.v3.CorsPolicy"
                     ),
-                    "allow_origin_string_match": [{"prefix": ""}],
+                    "allow_origin_string_match": [{"safe_regex": {"regex": ".*"}}],
                     "allow_methods": "GET, POST, OPTIONS",
                     "allow_headers": (
                         "authorization, content-type, accept, "
@@ -164,7 +164,7 @@ def test_public_route_allows_authenticated_browser_streaming(tmp_path, monkeypat
     cors = route["typed_per_filter_config"]["envoy.filters.http.cors"]
 
     assert route["route"]["timeout"] == "0s"
-    assert cors["allow_origin_string_match"] == [{"prefix": ""}]
+    assert cors["allow_origin_string_match"] == [{"safe_regex": {"regex": ".*"}}]
     assert cors["allow_methods"] == "GET, POST, OPTIONS"
     assert {header.strip() for header in cors["allow_headers"].split(",")} >= {
         "authorization",

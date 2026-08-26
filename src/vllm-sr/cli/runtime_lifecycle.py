@@ -277,12 +277,67 @@ def _router_readiness_command(
     ]
 
 
+def wait_for_envoy_listener(
+    stack_layout: RuntimeStackLayout,
+    listener_port: int = DEFAULT_LISTENER_PORT,
+) -> None:
+    """Block until Envoy accepts connections on the configured public listener."""
+
+    log.info("Waiting for Envoy listener to become ready...")
+    envoy_container = _runtime_service_container_name(stack_layout, "envoy")
+    start_time = time.time()
+    check_count = 0
+
+    while time.time() - start_time < HEALTH_CHECK_TIMEOUT:
+        check_count += 1
+        status = container_status(envoy_container)
+        if status != "running":
+            log.error(f"Envoy container is not running during readiness wait: {status}")
+            log.info("Showing Envoy container logs:")
+            container_logs(envoy_container, follow=False, tail=120)
+            raise SystemExit(1)
+
+        return_code, _stdout, _stderr = container_exec(
+            envoy_container,
+            _envoy_listener_readiness_command(listener_port),
+        )
+        if return_code == 0:
+            elapsed = int(time.time() - start_time)
+            log.info(
+                f"Envoy listener is ready (after {elapsed}s, {check_count} checks)"
+            )
+            return
+
+        time.sleep(HEALTH_CHECK_INTERVAL)
+
+    log.error(f"Envoy listener failed to become ready after {HEALTH_CHECK_TIMEOUT}s")
+    log.info("Showing Envoy container logs:")
+    container_logs(envoy_container, follow=False, tail=100)
+    raise SystemExit(1)
+
+
+def _envoy_listener_readiness_command(listener_port: int) -> list[str]:
+    """Return a bounded TCP probe for Envoy's configured public listener."""
+
+    port = int(listener_port)
+    if not 1 <= port <= 65535:
+        raise ValueError("Envoy listener port must be between 1 and 65535")
+    return [
+        "timeout",
+        "3",
+        "bash",
+        "-c",
+        (f"exec 3<>/dev/tcp/127.0.0.1/{port} || " f"exec 3<>/dev/tcp/::1/{port}"),
+    ]
+
+
 def wait_and_verify_runtime(
     stack_layout: RuntimeStackLayout,
     dashboard_disabled: bool,
     management_port: int = DEFAULT_API_PORT,
     readiness_token_env: str | None = None,
     management_tls_certificate: str | None = None,
+    listener_port: int = DEFAULT_LISTENER_PORT,
 ) -> None:
     """Wait for readiness and verify every required runtime container."""
     wait_for_router_health(
@@ -291,6 +346,7 @@ def wait_and_verify_runtime(
         readiness_token_env=readiness_token_env,
         management_tls_certificate=management_tls_certificate,
     )
+    wait_for_envoy_listener(stack_layout, listener_port=listener_port)
     for service in ("router", "envoy"):
         ensure_runtime_container_not_exited(
             stack_layout.service_container_name(service)

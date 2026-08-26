@@ -79,6 +79,91 @@ def test_wait_for_router_health_reads_bearer_from_container_environment(monkeypa
     assert "secret-value" not in repr(command)
 
 
+def test_wait_for_envoy_listener_uses_configured_listener_port(monkeypatch):
+    commands = []
+    stack_layout = resolve_runtime_stack()
+    monkeypatch.setattr(runtime_lifecycle, "container_status", lambda _name: "running")
+
+    def fake_exec(container_name, command):
+        commands.append((container_name, command))
+        return 0, "", ""
+
+    monkeypatch.setattr(runtime_lifecycle, "container_exec", fake_exec)
+
+    runtime_lifecycle.wait_for_envoy_listener(stack_layout, listener_port=18889)
+
+    assert commands == [
+        (
+            stack_layout.envoy_container_name,
+            [
+                "timeout",
+                "3",
+                "bash",
+                "-c",
+                ("exec 3<>/dev/tcp/127.0.0.1/18889 || " "exec 3<>/dev/tcp/::1/18889"),
+            ],
+        )
+    ]
+
+
+def test_wait_for_envoy_listener_fails_fast_when_envoy_exits(monkeypatch):
+    calls = {"exec": 0, "logs": 0}
+    monkeypatch.setattr(runtime_lifecycle, "container_status", lambda _name: "exited")
+
+    def fake_exec(*_args, **_kwargs):
+        calls["exec"] += 1
+        return 1, "", ""
+
+    def fake_logs(*_args, **_kwargs):
+        calls["logs"] += 1
+
+    monkeypatch.setattr(runtime_lifecycle, "container_exec", fake_exec)
+    monkeypatch.setattr(runtime_lifecycle, "container_logs", fake_logs)
+
+    with pytest.raises(SystemExit):
+        runtime_lifecycle.wait_for_envoy_listener(resolve_runtime_stack())
+
+    assert calls == {"exec": 0, "logs": 1}
+
+
+def test_wait_and_verify_runtime_requires_router_and_envoy_readiness(monkeypatch):
+    calls = []
+    stack_layout = resolve_runtime_stack()
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "wait_for_router_health",
+        lambda *args, **kwargs: calls.append(("router", args, kwargs)),
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle,
+        "wait_for_envoy_listener",
+        lambda *args, **kwargs: calls.append(("envoy", args, kwargs)),
+    )
+    monkeypatch.setattr(
+        runtime_lifecycle, "ensure_runtime_container_not_exited", lambda *_args: None
+    )
+
+    runtime_lifecycle.wait_and_verify_runtime(
+        stack_layout,
+        dashboard_disabled=True,
+        management_port=9090,
+        listener_port=18889,
+    )
+
+    assert calls == [
+        (
+            "router",
+            (stack_layout,),
+            {
+                "management_port": 9090,
+                "readiness_token_env": None,
+                "management_tls_certificate": None,
+            },
+        ),
+        ("envoy", (stack_layout,), {"listener_port": 18889}),
+    ]
+
+
 def test_runtime_summary_is_clean_human_stdout(capsys):
     stack_layout = resolve_runtime_stack(stack_name="terminal-test", port_offset=200)
 

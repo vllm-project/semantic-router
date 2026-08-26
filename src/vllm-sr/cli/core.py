@@ -20,6 +20,7 @@ from cli.container_cli import (
     load_openclaw_registry,
 )
 from cli.container_images import get_fleet_sim_container_image, get_runtime_images
+from cli.container_runtime_preparation import primary_listener_port
 from cli.control_plane_deployment import (
     LocalControlPlanePlan,
     plan_local_control_plane,
@@ -364,6 +365,7 @@ def _start_runtime_stack(
         management_port,
         readiness_token_env,
         management_tls_certificate,
+        listener_port=primary_listener_port(listeners),
     )
     recover_openclaw_containers(state_root_dir, env_vars, shared_network_name)
     log_runtime_summary(

@@ -62,7 +62,9 @@ def _install_runtime_fakes(monkeypatch, provisioned, record, fake_load_config):
     monkeypatch.setattr(
         runtime_lifecycle, "container_logs", lambda *args, **kwargs: None
     )
-    monkeypatch.setattr(core, "_wait_and_verify_runtime", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        core, "_wait_and_verify_runtime", record("wait_and_verify_runtime", None)
+    )
     monkeypatch.setattr(
         core, "recover_openclaw_containers", lambda *args, **kwargs: None
     )
@@ -111,7 +113,11 @@ def test_start_vllm_sr_loads_compiled_bootstrap_for_backend_provisioning(
     migration = next(
         call for call in provisioned["calls"] if call[0] == "run_management_migration"
     )
+    readiness = next(
+        call for call in provisioned["calls"] if call[0] == "wait_and_verify_runtime"
+    )
     assert runtime_start[2]["env_vars"]["VLLM_SR_MANAGED_STORAGE_BACKENDS"] == (
         "milvus,postgres,redis"
     )
     assert migration[2]["network_name"] == provisioned["stack_layout"].data_network_name
+    assert readiness[2]["listener_port"] == 8899

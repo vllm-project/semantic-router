@@ -135,7 +135,7 @@ def test_envoy_uses_only_the_stable_backend_dispatch_hop(tmp_path, monkeypatch):
                         "type.googleapis.com/"
                         "envoy.extensions.filters.http.cors.v3.CorsPolicy"
                     ),
-                    "allow_origin_string_match": [{"prefix": ""}],
+                    "allow_origin_string_match": [{"safe_regex": {"regex": ".*"}}],
                     "allow_methods": "GET, POST, OPTIONS",
                     "allow_headers": (
                         "authorization, content-type, accept, "
