@@ -26,6 +26,23 @@ REPRESENTATIVE_FIXTURES = {
         (),
         (),
     ),
+    "harness executable": (
+        ["tools/make/agent.mk", "tools/ci/classify_pr_changes.py"],
+        ("quality", "security"),
+        (),
+        (),
+    ),
+    "precommit harness": (
+        [
+            ".pre-commit-config.yaml",
+            ".github/workflows/pre-commit.yml",
+            "tools/docker/Dockerfile.precommit",
+            "tools/make/pre-commit.mk",
+        ],
+        ("quality", "security"),
+        (),
+        (),
+    ),
     "core router": (
         ["src/semantic-router/pkg/extproc/processor.go"],
         ("quality", "security", "core-tests", "e2e", "images"),
@@ -131,9 +148,9 @@ class PRChangeClassifierTests(unittest.TestCase):
 
         self.assertEqual(
             result.selected_jobs,
-            ("quality", "security", "core-tests", "e2e"),
+            ("quality", "security"),
         )
-        self.assertEqual(result.profiles, ("envoy-ai-gateway",))
+        self.assertEqual(result.profiles, ())
         self.assertEqual(result.pr_images, ())
 
     def test_ci_full_does_not_enable_performance(self) -> None:
@@ -226,6 +243,53 @@ class PRChangeClassifierTests(unittest.TestCase):
                 self.assertEqual(result.selected_jobs, ("quality",))
                 self.assertEqual(result.profiles, ())
                 self.assertEqual(result.pr_images, ())
+
+    def test_harness_executable_patterns_set_agent_exec(self) -> None:
+        for path in (
+            "tools/agent/requirements.txt",
+            "tools/make/linter.mk",
+            "tools/make/pre-commit.mk",
+            ".pre-commit-config.yaml",
+        ):
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertTrue(result.signals["agent_exec"])
+
+    def test_ownership_metadata_paths_remain_lightweight(self) -> None:
+        paths = (
+            "OWNER",
+            ".github/CODEOWNERS",
+            "ml-binding/OWNER",
+            "src/semantic-router/OWNER",
+            "dashboard/OWNER",
+            "website/OWNER",
+        )
+
+        for path in paths:
+            with self.subTest(path=path):
+                result = classify([path])
+                self.assertEqual(result.selected_jobs, ("quality",))
+                self.assertEqual(result.profiles, ())
+                self.assertEqual(result.pr_images, ())
+                self.assertTrue(result.signals["docs_only"])
+
+    def test_ownership_metadata_does_not_enable_adjacent_product_domains(
+        self,
+    ) -> None:
+        result = classify(
+            [
+                ".github/CODEOWNERS",
+                "dashboard/OWNER",
+                "deploy/operator/OWNER",
+                "ml-binding/OWNER",
+            ]
+        )
+
+        self.assertFalse(result.signals["dashboard"])
+        self.assertFalse(result.signals["operator"])
+        self.assertFalse(result.signals["core"])
+        self.assertFalse(result.signals["e2e_ml_model_selection"])
+        self.assertEqual(result.selected_jobs, ("quality",))
 
     def test_core_main_publish_excludes_platform_variants(self) -> None:
         result = classify(["src/semantic-router/pkg/extproc/processor.go"])
