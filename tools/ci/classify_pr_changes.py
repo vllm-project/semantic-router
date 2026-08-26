@@ -271,8 +271,8 @@ def _detect_direct_domains(
         "website/static/openapi/apiserver/**",
         "website/static/openapi/management/**",
         "dashboard/frontend/src/generated/managementApiContract.ts",
-        "tools/openapi-gen/**",
-        "tools/management-api-gen/**",
+        "src/semantic-router/cmd/openapi-gen/**",
+        "src/semantic-router/cmd/management-api-gen/**",
     )
     domains["cli_source"] = any(
         is_vllm_sr_product_source(path) for path in product_changed

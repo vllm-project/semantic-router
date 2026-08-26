@@ -148,11 +148,11 @@ docs:
 - tools/agent/docs/tech-debt/td-020-classification-subsystem-boundary-collapse.md
 - tools/agent/docs/tech-debt/td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md
 - tools/agent/docs/tech-debt/td-042-ffi-embedding-structure-debt.md
-- tools/agent/docs/tech-debt/td-043-semantic-router-go-cyclop-debt.md
 - tools/agent/docs/tech-debt/td-044-flow-tool-state-durability-gap.md
 - tools/agent/docs/tech-debt/td-045-reviewed-content-moderation.md
 - tools/agent/docs/tech-debt/td-046-onnx-binding-ci-coverage-gap.md
 - tools/agent/docs/tech-debt/td-047-access-control-control-plane-gap.md
+- tools/agent/docs/tech-debt/td-048-router-control-plane-go-complexity.md
 local_agent_rules:
 - path: src/vllm-sr/cli/AGENTS.md
   scope: src/vllm-sr/cli/**
@@ -305,9 +305,6 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-042-ffi-embedding-structure-debt.md
     steward: candle-binding
     freshness: update when the TD042 debt record changes materially
-  - path: tools/agent/docs/tech-debt/td-043-semantic-router-go-cyclop-debt.md
-    steward: candle-binding
-    freshness: update when the TD043 debt record changes materially
   - path: tools/agent/docs/tech-debt/td-044-flow-tool-state-durability-gap.md
     steward: router-core
     freshness: update when the TD044 debt record changes materially
@@ -320,6 +317,9 @@ doc_governance:
   - path: tools/agent/docs/tech-debt/td-047-access-control-control-plane-gap.md
     steward: dashboard
     freshness: update when access-control scale or multi-host persistence boundaries change
+  - path: tools/agent/docs/tech-debt/td-048-router-control-plane-go-complexity.md
+    steward: router-core
+    freshness: update when Router Go complexity inventory or burn-down changes
 skills:
 - tools/agent/skills/config-platform-change/SKILL.md
 - tools/agent/skills/harness-contract-change/SKILL.md

@@ -257,23 +257,15 @@ func (m *MilvusBackend) DeleteByFileID(ctx context.Context, vectorStoreID string
 }
 
 // Search performs vector similarity search in a Milvus collection.
-//
-//nolint:gocognit,cyclop,funlen
 func (m *MilvusBackend) Search(
 	ctx context.Context, vectorStoreID string, queryEmbedding []float32,
 	topK int, threshold float32, filter map[string]interface{},
 ) ([]SearchResult, error) {
 	colName := m.collectionName(vectorStoreID)
 
-	// Build filter expression with injection prevention.
-	expr := ""
-	if filter != nil {
-		if fid, ok := filter["file_id"].(string); ok && fid != "" {
-			if !safeIdentifierPattern.MatchString(fid) {
-				return nil, fmt.Errorf("invalid file_id filter: contains disallowed characters")
-			}
-			expr = fmt.Sprintf("file_id == \"%s\"", fid)
-		}
+	expr, err := milvusFilterExpression(filter)
+	if err != nil {
+		return nil, err
 	}
 
 	sp, err := entity.NewIndexHNSWSearchParam(m.searchEf)
@@ -296,41 +288,53 @@ func (m *MilvusBackend) Search(
 			if score < float64(threshold) {
 				continue
 			}
-
-			result := SearchResult{Score: score}
-
-			// Extract field values by column name.
-			for _, field := range sr.Fields {
-				switch col := field.(type) {
-				case *entity.ColumnVarChar:
-					val, err := col.ValueByIdx(i)
-					if err != nil {
-						continue
-					}
-					switch col.Name() {
-					case "file_id":
-						result.FileID = val
-					case "filename":
-						result.Filename = val
-					case "content":
-						result.Content = val
-					}
-				case *entity.ColumnInt64:
-					val, err := col.ValueByIdx(i)
-					if err != nil {
-						continue
-					}
-					if col.Name() == "chunk_index" {
-						result.ChunkIndex = int(val)
-					}
-				}
-			}
-
-			results = append(results, result)
+			results = append(results, decodeMilvusSearchResult(sr, i, score))
 		}
 	}
 
 	return results, nil
+}
+
+func milvusFilterExpression(filter map[string]interface{}) (string, error) {
+	fid, ok := filter["file_id"].(string)
+	if !ok || fid == "" {
+		return "", nil
+	}
+	if !safeIdentifierPattern.MatchString(fid) {
+		return "", fmt.Errorf("invalid file_id filter: contains disallowed characters")
+	}
+	return fmt.Sprintf("file_id == \"%s\"", fid), nil
+}
+
+func decodeMilvusSearchResult(sr client.SearchResult, index int, score float64) SearchResult {
+	result := SearchResult{Score: score}
+	for _, field := range sr.Fields {
+		switch col := field.(type) {
+		case *entity.ColumnVarChar:
+			value, err := col.ValueByIdx(index)
+			if err != nil {
+				continue
+			}
+			assignMilvusStringField(&result, col.Name(), value)
+		case *entity.ColumnInt64:
+			value, err := col.ValueByIdx(index)
+			if err == nil && col.Name() == "chunk_index" {
+				result.ChunkIndex = int(value)
+			}
+		}
+	}
+	return result
+}
+
+func assignMilvusStringField(result *SearchResult, name, value string) {
+	switch name {
+	case "file_id":
+		result.FileID = value
+	case "filename":
+		result.Filename = value
+	case "content":
+		result.Content = value
+	}
 }
 
 // Close releases the Milvus client connection.

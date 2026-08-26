@@ -50,7 +50,6 @@ func milvusExtractDocumentRowContent(fields []entity.Column, rowIdx int) (string
 //
 // Returned scores are similarities (larger is more similar) for every metric type.
 //
-//nolint:gocognit,cyclop,funlen,nestif
 func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string, queryEmbedding []float32, threshold float32, topK int, filterExpr string, contentField string, vectorFieldName string, metricType string, ef int) ([]string, []float32, error) {
 	if !c.enabled {
 		return nil, nil, fmt.Errorf("milvus cache is not enabled")
@@ -149,7 +148,6 @@ func (c *MilvusCache) SearchDocuments(ctx context.Context, collectionName string
 
 // GetStats provides current cache performance metrics
 //
-//nolint:nestif
 func (c *MilvusCache) GetStats() CacheStats {
 	c.mu.RLock()
 	defer c.mu.RUnlock()

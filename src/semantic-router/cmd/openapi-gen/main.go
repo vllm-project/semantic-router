@@ -6,7 +6,7 @@
 //
 // Usage:
 //
-//	openapi-gen -format json  > website/static/openapi/apiserver/apiserver.openapi.json
+//	openapi-gen -format json  > apiserver.openapi.json
 //	openapi-gen -format index > generated endpoint index markdown
 package main
 
@@ -78,9 +78,9 @@ type indexGroup struct {
 	match   func(path string) bool
 }
 
-// indexGroups mirrors the grouping previously maintained by hand in
-// website/docs/api/apiserver.md. Routes that fit no group land in
-// "Other endpoints" so the index never silently drops a catalog entry.
+// indexGroups defines the human-readable endpoint sections. Routes that fit no
+// group land in "Other endpoints" so the index never silently drops a catalog
+// entry.
 var indexGroups = []indexGroup{
 	{
 		heading: "Discovery and health",
@@ -122,8 +122,7 @@ var indexGroups = []indexGroup{
 	},
 }
 
-// renderIndexMarkdown renders the grouped endpoint index table that
-// website/docs/api/apiserver.md previously hand-maintained.
+// renderIndexMarkdown renders the grouped endpoint index table.
 func renderIndexMarkdown() []byte {
 	routes := apiserver.ExportedRoutes()
 	assigned := make([]bool, len(routes))

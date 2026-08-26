@@ -178,8 +178,8 @@ agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed 
 	CHANGED_FILES_FILE="$$(mktemp)"; \
 	trap 'rm -f "$$CHANGED_FILES_FILE"' EXIT; \
 	printf '%s\n' "$$RAW_FILES" > "$$CHANGED_FILES_FILE"; \
-	FILE_ARGS="$$(printf '%s\n' "$$RAW_FILES" | paste -sd' ' -)"; \
-	if printf '%s\n' "$$RAW_FILES" | grep -Eq '\.go$$'; then \
+	if [ "$$("$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py needs-go-lint \
+		--changed-files-path "$$CHANGED_FILES_FILE")" = "true" ]; then \
 		$(MAKE) agent-go-bootstrap; \
 	fi; \
 	if printf '%s\n' "$$RAW_FILES" | grep -Eq '\.rs$$'; then \
@@ -189,7 +189,10 @@ agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed 
 		echo "Running baseline pre-commit checks..."; \
 		PRECOMMIT_SKIP="agent-changed-files-lint,golang-lint,cargo-check"; \
 		if [ -n "$${SKIP:-}" ]; then PRECOMMIT_SKIP="$${SKIP},$$PRECOMMIT_SKIP"; fi; \
-		SKIP="$$PRECOMMIT_SKIP" "$(AGENT_PRE_COMMIT)" run --files $$FILE_ARGS || exit $$?; \
+		export SKIP="$$PRECOMMIT_SKIP"; \
+		"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py precommit-files \
+			--changed-files-path "$$CHANGED_FILES_FILE" | \
+			xargs -0 "$(AGENT_PRE_COMMIT)" run --files || exit $$?; \
 	fi; \
 	echo "Running Python lint..." && \
 	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-python-lint --changed-files-path "$$CHANGED_FILES_FILE" && \
@@ -200,7 +203,7 @@ agent-lint: $(AGENT_BOOTSTRAP_DEPS) ## Run lint and structure gates for changed 
 	echo "Running Rust lint..." && \
 	"$(AGENT_PYTHON)" tools/agent/scripts/agent_gate.py run-rust-lint --changed-files-path "$$CHANGED_FILES_FILE" && \
 	echo "Running structure checks..." && \
-	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" $$FILE_ARGS
+	"$(AGENT_PYTHON)" tools/agent/scripts/structure_check.py --base-ref "$(AGENT_BASE_REF)" --changed-files-path "$$CHANGED_FILES_FILE"
 
 agent-fast-gate: $(AGENT_BOOTSTRAP_DEPS) ## Run changed-file lint and rule-selected fast tests
 	@$(LOG_TARGET)

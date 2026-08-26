@@ -176,8 +176,8 @@ class PRChangeClassifierTests(unittest.TestCase):
             "website/static/openapi/apiserver/apiserver.openapi.json",
             "website/static/openapi/management/v1/management.openapi.json",
             "dashboard/frontend/src/generated/managementApiContract.ts",
-            "tools/openapi-gen/main.go",
-            "tools/management-api-gen/main.go",
+            "src/semantic-router/cmd/openapi-gen/main.go",
+            "src/semantic-router/cmd/management-api-gen/main.go",
         ):
             with self.subTest(path=path):
                 result = classify([path])

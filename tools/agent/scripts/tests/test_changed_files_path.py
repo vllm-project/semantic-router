@@ -55,6 +55,37 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
             ],
         )
 
+    def test_changed_files_path_preserves_spaces_and_commas(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            changed_files_path = Path(temp_dir) / "changed-files.txt"
+            changed_files_path.write_text(
+                "pkg/my file.go\npkg/a,b.go\n",
+                encoding="utf-8",
+            )
+
+            changed_files = agent_changed_files.get_changed_files(
+                None, None, str(changed_files_path)
+            )
+
+        self.assertEqual(changed_files, ["pkg/a,b.go", "pkg/my file.go"])
+
+    def test_changed_files_path_only_treats_lf_as_a_delimiter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            changed_files_path = Path(temp_dir) / "changed-files.txt"
+            paths = ["pkg/line\u2028separator.go", "pkg/vertical\vtab.go"]
+            changed_files_path.write_text("\n".join(paths), encoding="utf-8")
+
+            changed_files = agent_changed_files.get_changed_files(
+                None, None, str(changed_files_path)
+            )
+
+        self.assertEqual(changed_files, sorted(paths))
+
+    def test_changed_file_paths_reject_absolute_parent_and_newline(self) -> None:
+        for path in ("/tmp/service.go", "../service.go", "pkg/a\nservice.go"):
+            with self.subTest(path=path), self.assertRaises(ValueError):
+                agent_changed_files.normalize_changed_path(path)
+
     def test_get_changed_files_prefers_path_when_explicit_is_empty(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             changed_files_path = Path(temp_dir) / "changed-files.txt"
@@ -75,6 +106,90 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
             ["tools/agent/scripts/agent_changed_files.py"],
         )
         git_diff.assert_not_called()
+
+    def test_git_changed_files_reports_both_sides_of_a_rename(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "feature"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "agent@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Agent Test"],
+                cwd=root,
+                check=True,
+            )
+            old_path = root / "pkg/legacy.go"
+            old_path.parent.mkdir()
+            old_path.write_text("package pkg\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=root, check=True)
+            subprocess.run(["git", "branch", "target"], cwd=root, check=True)
+            new_path = root / "pkg/current.go"
+            old_path.rename(new_path)
+            subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "rename"], cwd=root, check=True)
+
+            with mock.patch.object(agent_changed_files, "REPO_ROOT", root):
+                changed = agent_changed_files.git_changed_files("target")
+
+        self.assertEqual(changed, ["pkg/current.go", "pkg/legacy.go"])
+
+    def test_git_changed_files_preserves_spaces_and_commas(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "feature"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "agent@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Agent Test"],
+                cwd=root,
+                check=True,
+            )
+            (root / "README.md").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=root, check=True)
+            subprocess.run(["git", "branch", "target"], cwd=root, check=True)
+            package = root / "pkg"
+            package.mkdir()
+            (package / "my file.go").write_text("package pkg\n", encoding="utf-8")
+            (package / "a,b.go").write_text("package pkg\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "paths"], cwd=root, check=True)
+
+            with mock.patch.object(agent_changed_files, "REPO_ROOT", root):
+                changed = agent_changed_files.git_changed_files("target")
+
+        self.assertEqual(changed, ["pkg/a,b.go", "pkg/my file.go"])
+
+    def test_git_changed_files_rejects_an_invalid_explicit_base(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-b", "feature"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "agent@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Agent Test"],
+                cwd=root,
+                check=True,
+            )
+            (root / "README.md").write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-m", "base"], cwd=root, check=True)
+
+            with mock.patch.object(agent_changed_files, "REPO_ROOT", root):
+                with self.assertRaisesRegex(
+                    ValueError, "unable to resolve an explicit changed-file base"
+                ):
+                    agent_changed_files.git_changed_files("missing-target")
 
     def test_resolve_e2e_profiles_does_not_mutate_registry_profiles(self) -> None:
         test_domain_registry = {
@@ -112,6 +227,13 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
 
         self.assertIn('CHANGED_FILES_FILE="$$(mktemp)"', recipe)
         self.assertNotIn("CSV_FILES", recipe)
+        self.assertNotIn("FILE_ARGS", recipe)
+        self.assertIn("xargs -0", recipe)
+        self.assertIn("agent_gate.py precommit-files", recipe)
+        self.assertIn(
+            '--changed-files-path "$$CHANGED_FILES_FILE"',
+            [line for line in recipe.splitlines() if "structure_check.py" in line][0],
+        )
         for command in (
             "run-python-lint",
             "run-go-lint",
@@ -123,6 +245,31 @@ class AgentResolutionChangedFilesPathTests(unittest.TestCase):
             self.assertIn(
                 '--changed-files-path "$$CHANGED_FILES_FILE"', command_lines[0]
             )
+
+    def test_precommit_file_transport_prefixes_leading_dash_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            changed_files_path = Path(temp_dir) / "changed-files.txt"
+            changed_files_path.write_text(
+                "--help\npkg/a,b.go\npkg/my file.go\n", encoding="utf-8"
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT_DIR / "agent_gate.py"),
+                    "precommit-files",
+                    "--changed-files-path",
+                    str(changed_files_path),
+                ],
+                cwd=run_agent_precommit_lint.REPO_ROOT,
+                capture_output=True,
+                check=False,
+            )
+
+        self.assertEqual(result.returncode, 0, result.stderr.decode("utf-8"))
+        self.assertEqual(
+            [part.decode("utf-8") for part in result.stdout.split(b"\0") if part],
+            ["./--help", "./pkg/a,b.go", "./pkg/my file.go"],
+        )
 
 
 class RunAgentPrecommitLintTests(unittest.TestCase):

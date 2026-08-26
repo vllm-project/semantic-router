@@ -110,7 +110,6 @@ func (c *MilvusCache) GetAllEntries(ctx context.Context) ([]string, [][]float32,
 // This is much more efficient than FindSimilar when you already know the ID
 // Used by hybrid cache to fetch documents after local HNSW search
 //
-//nolint:funlen,cyclop,nestif
 func (c *MilvusCache) GetByID(ctx context.Context, requestID, model string) ([]byte, error) {
 	start := time.Now()
 

@@ -41,14 +41,54 @@ def filter_go_issues(
 ) -> list[dict]:
     filtered: list[dict] = []
     for issue in issues:
+        if not isinstance(issue, dict):
+            raise ValueError("Go lint issue payload must be an object")
         pos = issue.get("Pos", {})
+        if not isinstance(pos, dict):
+            raise ValueError("Go lint issue position must be an object")
         filename = pos.get("Filename")
         if not filename:
-            continue
+            raise ValueError("Go lint issue has no filename")
         relative_path = normalize_go_issue_path(repo_root, module_root, filename)
         if relative_path in changed_paths:
             filtered.append(issue)
     return filtered
+
+
+def go_issues_from_payload(payload: dict) -> list[dict]:
+    if not isinstance(payload, dict):
+        raise ValueError("golangci-lint JSON payload must be an object")
+    issues = payload.get("Issues")
+    if not isinstance(issues, list):
+        raise ValueError("golangci-lint JSON payload has no issue list")
+    return issues
+
+
+def go_issue_record(
+    repo_root: Path, module_root: Path, issue: dict
+) -> dict[str, object]:
+    pos = issue.get("Pos", {})
+    filename = pos.get("Filename")
+    if not filename:
+        raise ValueError("Go lint issue has no filename")
+    return {
+        "path": normalize_go_issue_path(repo_root, module_root, filename),
+        "line": int(pos.get("Line", 0)),
+        "column": int(pos.get("Column", 0)),
+        "linter": str(issue.get("FromLinter", "")),
+        "message": str(issue.get("Text", "")),
+    }
+
+
+def repo_relative_go_issue(repo_root: Path, module_root: Path, issue: dict) -> dict:
+    normalized = dict(issue)
+    position = dict(issue.get("Pos", {}))
+    filename = position.get("Filename")
+    if not filename:
+        raise ValueError("Go lint issue has no filename")
+    position["Filename"] = normalize_go_issue_path(repo_root, module_root, filename)
+    normalized["Pos"] = position
+    return normalized
 
 
 def print_go_issues(issues: list[dict]) -> None:

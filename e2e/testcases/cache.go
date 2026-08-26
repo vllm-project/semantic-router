@@ -51,7 +51,6 @@ type CacheResult struct {
 	Error            string
 }
 
-//nolint:cyclop,gocognit // Existing E2E orchestration branches by request outcome.
 func testCache(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {
 	if opts.Verbose {
 		fmt.Println("[Test] Testing semantic cache functionality")
@@ -346,7 +345,6 @@ func sendChatRequest(ctx context.Context, question, localPort string, verbose bo
 	return resp, nil
 }
 
-//nolint:cyclop,funlen,gocognit // Existing reporting branches by category, miss, and error.
 func printCacheResults(results []CacheResult, totalRequests, cacheHits int, hitRate float64) {
 	separator := "================================================================================"
 	fmt.Println("\n" + separator)

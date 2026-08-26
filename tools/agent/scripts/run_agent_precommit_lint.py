@@ -9,7 +9,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from agent_changed_files import git_changed_files, split_changed_files
+from agent_changed_files import git_changed_files, normalize_changed_paths
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKIP_ENV = "AGENT_SKIP_PRECOMMIT_CHANGED_LINT"
@@ -43,7 +43,7 @@ def diff_fallback_base_refs() -> list[str | None]:
 
 
 def resolve_changed_files() -> list[str]:
-    explicit_files = split_changed_files("\n".join(sys.argv[1:]))
+    explicit_files = normalize_changed_paths(sys.argv[1:])
     if explicit_files and not should_fallback_to_git_diff(explicit_files):
         return explicit_files
 

@@ -94,7 +94,6 @@ func (c *MilvusCache) FindSimilarWithThreshold(model string, query string, thres
 
 // LookupSimilarWithThreshold returns response data and similarity atomically.
 //
-//nolint:cyclop,funlen
 func (c *MilvusCache) LookupSimilarWithThreshold(ctx context.Context, model string, query string, threshold float32) (LookupResult, error) {
 	start := time.Now()
 

@@ -11,12 +11,9 @@ import sys
 from pathlib import Path
 
 import yaml
-from go_lint_support import (
-    filter_go_issues,
-    load_golangci_payload,
-    print_go_issues,
-    resolve_golangci_lint,
-)
+from go_complexity_manifest import MANIFEST_RELATIVE_PATH
+from go_lint_gate import go_lint_tool_required, run_go_lint_gate
+from module_file_groups import group_files_by_module
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_DIR = REPO_ROOT / "tools" / "agent"
@@ -30,10 +27,9 @@ MAKEFILES = [
     *sorted((REPO_ROOT / "tools" / "make").glob("*.mk")),
 ]
 GO_AGENT_CONFIG = REPO_ROOT / "tools" / "linter" / "go" / ".golangci.agent.yml"
+GO_COMPLEXITY_DEBT_MANIFEST = REPO_ROOT / MANIFEST_RELATIVE_PATH
 GO_MODULE_CONFIG_OVERRIDES = {
-    REPO_ROOT
-    / "dashboard"
-    / "backend": REPO_ROOT
+    REPO_ROOT / "dashboard" / "backend": REPO_ROOT
     / "tools"
     / "linter"
     / "go"
@@ -201,88 +197,19 @@ def run_reference_config_lint(changed_files: list[str]) -> int:
     return result.returncode
 
 
-def group_files_by_module(
-    changed_files: list[str], manifest_name: str, extensions: set[str]
-) -> dict[Path, list[Path]]:
-    grouped: dict[Path, list[Path]] = {}
-    for changed in changed_files:
-        path = REPO_ROOT / changed
-        if path.suffix not in extensions or not path.exists():
-            continue
-        current = path.parent
-        while current != REPO_ROOT.parent:
-            manifest = current / manifest_name
-            if manifest.exists():
-                grouped.setdefault(current, []).append(path)
-                break
-            if current == REPO_ROOT:
-                break
-            current = current.parent
-    return grouped
-
-
 def run_go_lint(changed_files: list[str], base_ref: str | None = None) -> int:
-    grouped = group_files_by_module(changed_files, "go.mod", {".go"})
-    if not grouped:
-        print("No changed Go files detected.")
-        return 0
+    return run_go_lint_gate(
+        changed_files=changed_files,
+        base_ref=base_ref,
+        repo_root=REPO_ROOT,
+        default_config=GO_AGENT_CONFIG,
+        debt_manifest=GO_COMPLEXITY_DEBT_MANIFEST,
+        module_overrides=GO_MODULE_CONFIG_OVERRIDES,
+    )
 
-    golangci_lint = resolve_golangci_lint(REPO_ROOT)
-    for module_root, files in grouped.items():
-        config_path = GO_MODULE_CONFIG_OVERRIDES.get(module_root, GO_AGENT_CONFIG)
-        changed_paths = {file.relative_to(REPO_ROOT).as_posix() for file in files}
-        package_dirs = sorted(
-            {
-                (
-                    "."
-                    if file.parent == module_root
-                    else f"./{file.parent.relative_to(module_root).as_posix()}"
-                )
-                for file in files
-            }
-        )
-        command = [
-            golangci_lint,
-            "run",
-            "--config",
-            str(config_path),
-        ]
-        if base_ref:
-            command.extend(["--new-from-rev", base_ref])
-        command.extend(
-            [
-                "--issues-exit-code",
-                "0",
-                "--output.json.path",
-                "stdout",
-                "--path-mode",
-                "abs",
-                *package_dirs,
-            ]
-        )
-        print(f"+ {' '.join(command)} (cwd={module_root})")
-        result = subprocess.run(
-            command,
-            cwd=module_root,
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        if result.returncode != 0:
-            sys.stderr.write(result.stdout)
-            sys.stderr.write(result.stderr)
-            return result.returncode
-        if result.stderr:
-            sys.stderr.write(result.stderr)
-        payload = load_golangci_payload(result.stdout)
-        issues = filter_go_issues(
-            REPO_ROOT, module_root, payload.get("Issues", []), changed_paths
-        )
-        if issues:
-            print_go_issues(issues)
-            print(f"{len(issues)} changed-file Go lint issue(s) found.")
-            return 1
-    return 0
+
+def needs_go_lint_tool(changed_files: list[str]) -> bool:
+    return go_lint_tool_required(changed_files, REPO_ROOT)
 
 
 def rust_clippy_base_flags() -> list[str]:
@@ -391,7 +318,7 @@ def run_rust_clippy_for_crate(crate_root: Path, changed_paths: set[Path]) -> int
 
 
 def run_rust_lint(changed_files: list[str]) -> int:
-    grouped = group_files_by_module(changed_files, "Cargo.toml", {".rs"})
+    grouped = group_files_by_module(REPO_ROOT, changed_files, "Cargo.toml", {".rs"})
     if not grouped:
         print("No changed Rust files detected.")
         return 0

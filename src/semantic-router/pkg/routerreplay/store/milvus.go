@@ -110,7 +110,6 @@ func NewMilvusStore(cfg *MilvusConfig, ttlSeconds int, asyncWrites bool) (*Milvu
 
 // createCollection creates the Milvus collection if it doesn't exist.
 //
-//nolint:gocognit
 func (m *MilvusStore) createCollection(ctx context.Context, cfg *MilvusConfig) error {
 	return milvuslifecycle.EnsureCollectionLoadedWithHooksRetry(
 		ctx,

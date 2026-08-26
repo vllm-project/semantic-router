@@ -81,7 +81,7 @@ structure_exceptions:
       - candle-binding/src/ffi/init.rs
     file_checks: relaxed
   - paths:
-      - tools/redis/redis-cache.go
+      - src/semantic-router/cmd/examples/redis-cache/main.go
       - src/semantic-router/pkg/config/canonical_defaults.go
       - src/semantic-router/pkg/config/docs_contract_test.go
       - src/semantic-router/pkg/dsl/emitter_yaml.go

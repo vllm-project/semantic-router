@@ -4,7 +4,7 @@ package apiserver
 
 // This file exposes read-only exports over the route catalog for tooling that
 // needs API surface information without starting the router (e.g. docs
-// generation in tools/openapi-gen). The runtime endpoint at /openapi.json and
+// generation in cmd/openapi-gen). The runtime endpoint at /openapi.json and
 // this export share the same generateOpenAPISpec(), so generated docs cannot
 // diverge from what the server serves.
 

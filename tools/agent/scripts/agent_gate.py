@@ -22,6 +22,7 @@ from agent_resolution import (
 )
 from agent_scorecard import build_harness_scorecard
 from agent_support import (
+    needs_go_lint_tool,
     run_go_lint,
     run_python_lint,
     run_reference_config_lint,
@@ -34,6 +35,15 @@ from agent_validation import validate_manifests
 def handle_changed_files(_args: argparse.Namespace, changed_files: list[str]) -> int:
     if changed_files:
         print("\n".join(changed_files))
+    return 0
+
+
+def handle_precommit_files(
+    _args: argparse.Namespace, changed_files: list[str]
+) -> int:
+    if changed_files:
+        payload = b"\0".join(f"./{path}".encode("utf-8") for path in changed_files)
+        sys.stdout.buffer.write(payload + b"\0")
     return 0
 
 
@@ -105,6 +115,11 @@ def handle_needs_smoke(_args: argparse.Namespace, changed_files: list[str]) -> i
     return 0
 
 
+def handle_needs_go_lint(_args: argparse.Namespace, changed_files: list[str]) -> int:
+    print("true" if needs_go_lint_tool(changed_files) else "false")
+    return 0
+
+
 def handle_run_tests(args: argparse.Namespace, changed_files: list[str]) -> int:
     context = resolve_context(changed_files)
     commands = context.fast_tests
@@ -127,12 +142,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Agent gate helper")
     subparsers = parser.add_subparsers(dest="command", required=True)
     _add_changed_files_subparser(subparsers)
+    _add_simple_changed_file_subparser(subparsers, "precommit-files")
     _add_resolve_subparser(subparsers)
     _add_resolve_skill_subparser(subparsers)
     _add_resolve_env_subparser(subparsers)
     _add_report_subparser(subparsers)
     _add_scorecard_subparser(subparsers)
     _add_needs_smoke_subparser(subparsers)
+    _add_simple_changed_file_subparser(subparsers, "needs-go-lint")
     _add_run_tests_subparser(subparsers)
     _add_simple_changed_file_subparser(subparsers, "run-e2e")
     _add_simple_changed_file_subparser(subparsers, "run-go-lint")
@@ -257,10 +274,12 @@ def main() -> int:
         return 2
     handlers = {
         "changed-files": handle_changed_files,
+        "precommit-files": handle_precommit_files,
         "resolve": handle_resolve,
         "resolve-skill": handle_resolve_skill,
         "report": handle_report,
         "needs-smoke": handle_needs_smoke,
+        "needs-go-lint": handle_needs_go_lint,
         "run-tests": handle_run_tests,
         "run-e2e": lambda _args, files: run_local_e2e(files),
         "run-go-lint": lambda cmd_args, files: run_go_lint(

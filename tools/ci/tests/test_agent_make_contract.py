@@ -78,10 +78,12 @@ class AgentMakeContractTests(unittest.TestCase):
         self.assertIn("AGENT_BOOTSTRAP_DONE=1", fast_gate)
         self.assertNotIn("$(MAKE) agent-validate", fast_gate)
 
-    def test_language_tooling_is_selected_from_changed_file_types(self) -> None:
+    def test_language_tooling_is_selected_from_changed_file_contracts(self) -> None:
         lint = target_block("agent-lint")
 
-        self.assertIn("grep -Eq '\\.go$$'", lint)
+        self.assertIn("agent_gate.py needs-go-lint", lint)
+        self.assertIn('--changed-files-path "$$CHANGED_FILES_FILE"', lint)
+        self.assertNotIn("grep -Eq '\\.go$$'", lint)
         self.assertIn("$(MAKE) agent-go-bootstrap", lint)
         self.assertIn("grep -Eq '\\.rs$$'", lint)
         self.assertIn("$(MAKE) agent-rust-bootstrap", lint)

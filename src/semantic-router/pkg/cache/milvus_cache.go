@@ -48,7 +48,6 @@ type MilvusCacheOptions struct {
 
 // NewMilvusCache initializes a new Milvus-backed semantic cache instance
 //
-//nolint:funlen
 func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 	if !options.Enabled {
 		logging.Debugf("MilvusCache: disabled, returning stub")
@@ -132,7 +131,6 @@ func NewMilvusCache(options MilvusCacheOptions) (*MilvusCache, error) {
 
 // loadMilvusConfig reads and parses the Milvus configuration from file (Deprecated)
 //
-//nolint:cyclop,funlen
 func loadMilvusConfig(configPath string) (*config.MilvusConfig, error) {
 	if configPath == "" {
 		return nil, fmt.Errorf("milvus config path is required")
@@ -462,7 +460,6 @@ func pendingRequestPrimaryKey(requestID string) string {
 
 // UpdateWithResponse completes a pending request by adding the response
 //
-//nolint:gocognit,cyclop,funlen
 func (c *MilvusCache) UpdateWithResponse(requestID string, responseBody []byte, ttlSeconds int) error {
 	ctx := context.Background()
 	start := time.Now()
@@ -589,7 +586,6 @@ func (c *MilvusCache) AddEntry(ctx context.Context, requestID string, model stri
 
 // AddEntriesBatch stores multiple request-response pairs in the cache efficiently
 //
-//nolint:funlen
 func (c *MilvusCache) AddEntriesBatch(entries []CacheEntry) error {
 	start := time.Now()
 
@@ -687,7 +683,6 @@ func (c *MilvusCache) Flush() error {
 
 // addEntry handles the internal logic for storing entries in Milvus
 //
-//nolint:funlen
 func (c *MilvusCache) addEntry(ctx context.Context, id string, requestID string, model string, query string, requestBody, responseBody []byte, ttlSeconds int) error {
 	if ctx == nil {
 		ctx = context.Background()

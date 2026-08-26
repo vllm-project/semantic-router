@@ -16,7 +16,8 @@ This plan owns the following open entries indexed by
 - native binding structure and complexity exceptions;
 - Router Flow state-store validation;
 - reviewed content moderation;
-- ONNX binding runtime coverage.
+- ONNX binding runtime coverage;
+- Repository Go complexity ratcheting and modular extraction.
 
 Release planning and daily GitHub queue state are out of scope.
 
@@ -42,6 +43,8 @@ Release planning and daily GitHub queue state are out of scope.
   guidance.
 - [ ] `ADC-06` Replace hidden moderation behavior with reviewed policy and code.
 - [ ] `ADC-07` Add mandatory CPU-compatible ONNX binding coverage.
+- [ ] `ADC-08` Burn down the declaration-level Router control-plane Go
+  complexity inventory without adding or widening allowances.
 
 ## Next Action
 

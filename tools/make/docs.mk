@@ -160,7 +160,7 @@ docs-all: docs-crd docs-config docs-build ## Generate all documentation (CRD + c
 
 ##@ Management API Contract
 
-MANAGEMENT_API_GEN := tools/management-api-gen
+MANAGEMENT_API_GEN := ./cmd/management-api-gen
 MANAGEMENT_OPENAPI_JSON := website/static/openapi/management/v1/management.openapi.json
 MANAGEMENT_TYPESCRIPT_CONTRACT := dashboard/frontend/src/generated/managementApiContract.ts
 
@@ -169,8 +169,8 @@ management-api-contract-generate: ## Regenerate the checked Management OpenAPI a
 	@$(LOG_TARGET)
 	@mkdir -p $(dir $(MANAGEMENT_OPENAPI_JSON)) $(dir $(MANAGEMENT_TYPESCRIPT_CONTRACT))
 	@cd src/semantic-router && \
-		go run ../../$(MANAGEMENT_API_GEN)/main.go -format openapi -o ../../$(MANAGEMENT_OPENAPI_JSON) && \
-		go run ../../$(MANAGEMENT_API_GEN)/main.go -format typescript -o ../../$(MANAGEMENT_TYPESCRIPT_CONTRACT)
+		go run $(MANAGEMENT_API_GEN) -format openapi -o ../../$(MANAGEMENT_OPENAPI_JSON) && \
+		go run $(MANAGEMENT_API_GEN) -format typescript -o ../../$(MANAGEMENT_TYPESCRIPT_CONTRACT)
 	@echo "Wrote $(MANAGEMENT_OPENAPI_JSON)"
 	@echo "Wrote $(MANAGEMENT_TYPESCRIPT_CONTRACT)"
 
@@ -180,8 +180,8 @@ management-api-contract-check: ## Fail if checked Management API client artifact
 	@TMPDIR_CHECK=$$(mktemp -d) && \
 	trap 'rm -rf "$$TMPDIR_CHECK"' EXIT HUP INT TERM && \
 	cd src/semantic-router && \
-		go run ../../$(MANAGEMENT_API_GEN)/main.go -format openapi -o "$$TMPDIR_CHECK/management.openapi.json" && \
-		go run ../../$(MANAGEMENT_API_GEN)/main.go -format typescript -o "$$TMPDIR_CHECK/managementApiContract.ts" && \
+		go run $(MANAGEMENT_API_GEN) -format openapi -o "$$TMPDIR_CHECK/management.openapi.json" && \
+		go run $(MANAGEMENT_API_GEN) -format typescript -o "$$TMPDIR_CHECK/managementApiContract.ts" && \
 	cd ../.. && \
 	if ! diff -q "$$TMPDIR_CHECK/management.openapi.json" "$(MANAGEMENT_OPENAPI_JSON)" >/dev/null 2>&1; then \
 		echo "ERROR: $(MANAGEMENT_OPENAPI_JSON) is stale. Run 'make management-api-contract-generate' and commit the result." >&2; \
@@ -197,7 +197,7 @@ management-api-contract-check: ## Fail if checked Management API client artifact
 
 ##@ Apiserver API Reference (issue #2774)
 
-OPENAPI_GEN := tools/openapi-gen
+OPENAPI_GEN := ./cmd/openapi-gen
 APISERVER_OPENAPI_JSON := website/static/openapi/apiserver/apiserver.openapi.json
 APISERVER_REFERENCE_MD := website/docs/api/apiserver.md
 APISERVER_INDEX_BEGIN := <!-- BEGIN-GENERATED-ENDPOINT-INDEX -->
@@ -211,7 +211,7 @@ api-docs-openapi: $(if $(CI),rust-ci,rust) ## Export committed apiserver OpenAPI
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
 		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
-		go run ../../$(OPENAPI_GEN)/main.go -format json -o ../../$(APISERVER_OPENAPI_JSON)
+		go run $(OPENAPI_GEN) -format json -o ../../$(APISERVER_OPENAPI_JSON)
 	@echo "Wrote $(APISERVER_OPENAPI_JSON)"
 
 .PHONY: api-docs-generate
@@ -221,7 +221,7 @@ api-docs-generate: api-docs-openapi management-api-contract-generate ## Regenera
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
 		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
-		go run ../../$(OPENAPI_GEN)/main.go -format index -o /tmp/apiserver-endpoint-index.md
+		go run $(OPENAPI_GEN) -format index -o /tmp/apiserver-endpoint-index.md
 	@python3 tools/agent/scripts/embed_generated_index.py \
 		--markdown "$(APISERVER_REFERENCE_MD)" \
 		--index /tmp/apiserver-endpoint-index.md \
@@ -238,11 +238,11 @@ api-docs-check: $(if $(CI),rust-ci,rust) management-api-contract-check ## Fail i
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
 		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
-		go run ../../$(OPENAPI_GEN)/main.go -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
+		go run $(OPENAPI_GEN) -format json -o "$$TMPDIR_CHECK/apiserver.openapi.json" && \
 		CGO_ENABLED=1 \
 		CGO_LDFLAGS="-L$(PWD)/candle-binding/target/release -L$(PWD)/ml-binding/target/release -L$(PWD)/nlp-binding/target/release" \
 		LD_LIBRARY_PATH="$(PWD)/candle-binding/target/release:$(PWD)/ml-binding/target/release:$(PWD)/nlp-binding/target/release" \
-		go run ../../$(OPENAPI_GEN)/main.go -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
+		go run $(OPENAPI_GEN) -format index -o "$$TMPDIR_CHECK/apiserver-endpoint-index.md" && \
 	cd ../.. && \
 	python3 tools/agent/scripts/embed_generated_index.py \
 		--markdown "$$TMPDIR_CHECK/apiserver.md" \

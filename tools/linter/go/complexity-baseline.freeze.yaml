@@ -1,0 +1,12 @@
+schema_version: 1
+manifest_sha256: sha256:ef4e477492cc3af44dd4d32c82a85fe20858975367a92686c3ea5f8c8302b62c
+config_sha256: sha256:5a31a446b2fe86b13fcac4bee1a37ed233562b92695e8a84904885794f1c23a8
+tool:
+  name: golangci-lint
+  version: 2.5.0
+identity:
+  schema_version: 1
+  parser: tree-sitter-go
+  parser_version: 0.25.0
+  core_version: 0.25.2
+  implementation_sha256: sha256:184fca321d9eaa4c9453cb00a7b471f9a8c0c0bafd31760830112e016db60623

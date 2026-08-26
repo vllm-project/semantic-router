@@ -16,6 +16,8 @@ import tree_sitter_rust
 import yaml
 from tree_sitter import Language, Parser
 
+from agent_changed_files import load_changed_files, normalize_changed_paths
+
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RULES_PATH = REPO_ROOT / "tools" / "agent" / "structure-rules.yaml"
 
@@ -540,11 +542,20 @@ def build_argument_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("files", nargs="*")
     parser.add_argument("--base-ref", default=None)
+    parser.add_argument("--changed-files-path", default=None)
     return parser
 
 
 def main() -> int:
     args = build_argument_parser().parse_args()
+    try:
+        paths = normalize_changed_paths(args.files)
+        if args.changed_files_path:
+            paths = sorted(
+                set(paths) | set(load_changed_files(args.changed_files_path) or [])
+            )
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     rules = load_rules()
     parsers = {
         name: build_parser(parser_name)
@@ -553,12 +564,7 @@ def main() -> int:
     }
     findings_by_file: dict[str, list[Finding]] = defaultdict(list)
 
-    for raw_path in args.files:
-        path = raw_path.strip()
-        while path.startswith("./"):
-            path = path[2:]
-        if not path:
-            continue
+    for path in paths:
         for finding in evaluate_root_placement(path, rules):
             findings_by_file[finding.file].append(finding)
         for finding in evaluate_file(path, rules, parsers, args.base_ref):

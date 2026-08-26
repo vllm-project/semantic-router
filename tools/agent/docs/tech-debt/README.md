@@ -56,10 +56,10 @@ Every entry uses these sections:
 - [TD020: Classification subsystem boundaries](td-020-classification-subsystem-boundary-collapse.md)
 - [TD027: Fleet-sim optimizer boundaries](td-027-fleet-sim-optimizer-and-public-surface-boundary-collapse.md)
 - [TD042: FFI embedding structure](td-042-ffi-embedding-structure-debt.md)
-- [TD043: Go binding complexity](td-043-semantic-router-go-cyclop-debt.md)
 - [TD044: Flow tool-state durability](td-044-flow-tool-state-durability-gap.md)
 - [TD045: Reviewed content moderation](td-045-reviewed-content-moderation.md)
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
+- [TD048: Go complexity debt ratchet](td-048-router-control-plane-go-complexity.md)
 
 ### PL-0038: Router-Native Access Control
 

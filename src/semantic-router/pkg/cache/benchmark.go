@@ -183,7 +183,6 @@ func cosineSimilarity(a, b []float32) float32 {
 // measureSearchLatency performs a search and measures component latencies
 // IMPORTANT: Separates embedding generation time from pure search time
 //
-//nolint:nestif // Pre-existing HNSW/linear search split; #2473 only threads context through it.
 func measureSearchLatency(cache *InMemoryCache, model, query string) latencyMeasurement {
 	measurement := latencyMeasurement{}
 

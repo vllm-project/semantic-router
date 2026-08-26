@@ -72,7 +72,7 @@ run-redis-example: start-redis rust ## Run the Redis cache example
 	@echo "Running Redis cache example..."
 	@cd src/semantic-router && \
 		export LD_LIBRARY_PATH=$${PWD}/../../candle-binding/target/release:$${PWD}/../../nlp-binding/target/release && \
-		go run ../../tools/redis/redis-cache.go
+		go run ./cmd/examples/redis-cache
 	@echo ""
 	@echo "Example complete! Check Redis using:"
 	@echo "  • redis-cli (command line)"
@@ -187,4 +187,3 @@ benchmark-cache-comparison: rust start-redis start-valkey ## Compare all cache b
 	@echo "To clean up:"
 	@echo "  make stop-redis"
 	@echo "  make stop-milvus"
-
