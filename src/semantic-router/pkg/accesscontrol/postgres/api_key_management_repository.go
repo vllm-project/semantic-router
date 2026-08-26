@@ -21,7 +21,8 @@ const (
 	managementListAPIKeysQuery = `SELECT ` + apiKeyColumns + `
 FROM access_api_keys
 WHERE namespace_id = $1
-  AND ($2 = '' OR CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2)
+  AND (($2 = '' AND deleted_at IS NULL)
+       OR ($2 <> '' AND CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2))
   AND ($3 = '' OR ($3 = 'user' AND owner_user_id = $4::uuid)
                 OR ($3 = 'team' AND owner_team_id = $4::uuid))
   AND ($5 OR id = ANY($6::uuid[]) OR owner_user_id = ANY($7::uuid[])
@@ -32,7 +33,8 @@ LIMIT $11`
 	managementSearchAPIKeysQuery = `SELECT ` + apiKeyColumns + `
 FROM access_api_keys
 WHERE namespace_id = $1
-  AND ($2 = '' OR CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2)
+  AND (($2 = '' AND deleted_at IS NULL)
+       OR ($2 <> '' AND CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2))
   AND ($3 = '' OR ($3 = 'user' AND owner_user_id = $4::uuid)
                 OR ($3 = 'team' AND owner_team_id = $4::uuid))
   AND ($5 OR id = ANY($6::uuid[]) OR owner_user_id = ANY($7::uuid[])
@@ -44,7 +46,8 @@ LIMIT $12`
 	managementCountAPIKeysQuery = `SELECT count(*)
 FROM access_api_keys
 WHERE namespace_id = $1
-  AND ($2 = '' OR CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2)
+  AND (($2 = '' AND deleted_at IS NULL)
+       OR ($2 <> '' AND CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2))
   AND ($3 = '' OR ($3 = 'user' AND owner_user_id = $4::uuid)
                 OR ($3 = 'team' AND owner_team_id = $4::uuid))
   AND ($5 OR id = ANY($6::uuid[]) OR owner_user_id = ANY($7::uuid[])
@@ -170,24 +173,60 @@ func (adapter *apiKeyRepositoryAdapter) GetKey(ctx context.Context, namespaceID,
 }
 
 func (adapter *apiKeyRepositoryAdapter) ListKeys(ctx context.Context, query apikeymanagement.KeyQuery) (apikeymanagement.RepositoryPage[accesscontrol.APIKey], error) {
-	if query.Limit < 1 || query.Limit > 200 {
-		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, apikeymanagement.ErrInvalidRequest
+	if err := validateAPIKeyListQuery(query); err != nil {
+		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, err
 	}
-	if _, err := query.Scope.Digest(); err != nil || query.Scope.NamespaceID != accesscontrol.NamespaceID(query.NamespaceID) {
-		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, apikeymanagement.ErrInvalidRequest
-	}
-	normalizedSearch, err := managementsearch.Normalize(query.Search)
-	if err != nil || normalizedSearch != query.Search {
-		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, apikeymanagement.ErrInvalidRequest
-	}
-	if !query.Scope.All && len(query.Scope.APIKeyIDs) == 0 &&
-		len(query.Scope.UserIDs) == 0 && len(query.Scope.TeamIDs) == 0 {
+	if apiKeyListScopeIsEmpty(query.Scope) {
 		return emptyAPIKeyRepositoryPage(query.IncludeTotal), nil
 	}
 	totalCount, err := adapter.countKeys(ctx, query)
 	if err != nil {
 		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, err
 	}
+	items, hasMore, err := adapter.listKeyRows(ctx, query)
+	if err != nil {
+		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, err
+	}
+	return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{
+		Items: items, HasMore: hasMore, TotalCount: totalCount,
+	}, nil
+}
+
+func validateAPIKeyListQuery(query apikeymanagement.KeyQuery) error {
+	if query.Limit < 1 || query.Limit > 200 {
+		return apikeymanagement.ErrInvalidRequest
+	}
+	if _, err := query.Scope.Digest(); err != nil ||
+		query.Scope.NamespaceID != accesscontrol.NamespaceID(query.NamespaceID) {
+		return apikeymanagement.ErrInvalidRequest
+	}
+	normalizedSearch, err := managementsearch.Normalize(query.Search)
+	if err != nil || normalizedSearch != query.Search {
+		return apikeymanagement.ErrInvalidRequest
+	}
+	return nil
+}
+
+func apiKeyListScopeIsEmpty(scope accesscontrol.ResultScope) bool {
+	return !scope.All && len(scope.APIKeyIDs) == 0 && len(scope.UserIDs) == 0 && len(scope.TeamIDs) == 0
+}
+
+func (adapter *apiKeyRepositoryAdapter) listKeyRows(
+	ctx context.Context,
+	query apikeymanagement.KeyQuery,
+) ([]accesscontrol.APIKey, bool, error) {
+	rows, err := adapter.queryKeyRows(ctx, query)
+	if err != nil {
+		return nil, false, fmt.Errorf("list API keys: %w", err)
+	}
+	defer rows.Close()
+	return scanAPIKeyPage(rows, query.Limit)
+}
+
+func (adapter *apiKeyRepositoryAdapter) queryKeyRows(
+	ctx context.Context,
+	query apikeymanagement.KeyQuery,
+) (*sql.Rows, error) {
 	var afterTime any
 	afterID := "00000000-0000-0000-0000-000000000000"
 	if query.After != nil {
@@ -197,39 +236,35 @@ func (adapter *apiKeyRepositoryAdapter) ListKeys(ctx context.Context, query apik
 	if query.OwnerID != "" {
 		ownerID = query.OwnerID
 	}
-	var rows *sql.Rows
+	arguments := []any{
+		query.NamespaceID, query.Status, query.OwnerKind, ownerID, query.Scope.All,
+		pq.Array(query.Scope.APIKeyIDs), pq.Array(query.Scope.UserIDs), pq.Array(query.Scope.TeamIDs),
+	}
 	if query.Search == "" {
-		rows, err = adapter.store.db.QueryContext(ctx, managementListAPIKeysQuery, query.NamespaceID,
-			query.Status, query.OwnerKind, ownerID, query.Scope.All, pq.Array(query.Scope.APIKeyIDs),
-			pq.Array(query.Scope.UserIDs), pq.Array(query.Scope.TeamIDs), afterTime, afterID, query.Limit+1)
-	} else {
-		rows, err = adapter.store.db.QueryContext(ctx, managementSearchAPIKeysQuery, query.NamespaceID,
-			query.Status, query.OwnerKind, ownerID, query.Scope.All, pq.Array(query.Scope.APIKeyIDs),
-			pq.Array(query.Scope.UserIDs), pq.Array(query.Scope.TeamIDs),
-			managementsearch.PrefixPattern(query.Search), afterTime, afterID, query.Limit+1)
+		arguments = append(arguments, afterTime, afterID, query.Limit+1)
+		return adapter.store.db.QueryContext(ctx, managementListAPIKeysQuery, arguments...)
 	}
-	if err != nil {
-		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, fmt.Errorf("list API keys: %w", err)
-	}
-	defer rows.Close()
-	items := make([]accesscontrol.APIKey, 0, query.Limit+1)
+	arguments = append(arguments, managementsearch.PrefixPattern(query.Search), afterTime, afterID, query.Limit+1)
+	return adapter.store.db.QueryContext(ctx, managementSearchAPIKeysQuery, arguments...)
+}
+
+func scanAPIKeyPage(rows *sql.Rows, limit int) ([]accesscontrol.APIKey, bool, error) {
+	items := make([]accesscontrol.APIKey, 0, limit+1)
 	for rows.Next() {
 		item, err := scanAPIKey(rows)
 		if err != nil {
-			return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, fmt.Errorf("scan API key: %w", err)
+			return nil, false, fmt.Errorf("scan API key: %w", err)
 		}
 		items = append(items, item)
 	}
 	if err := rows.Err(); err != nil {
-		return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{}, err
+		return nil, false, err
 	}
-	hasMore := len(items) > query.Limit
+	hasMore := len(items) > limit
 	if hasMore {
-		items = items[:query.Limit]
+		items = items[:limit]
 	}
-	return apikeymanagement.RepositoryPage[accesscontrol.APIKey]{
-		Items: items, HasMore: hasMore, TotalCount: totalCount,
-	}, nil
+	return items, hasMore, nil
 }
 
 func emptyAPIKeyRepositoryPage(includeTotal bool) apikeymanagement.RepositoryPage[accesscontrol.APIKey] {
@@ -317,50 +352,90 @@ func (adapter *apiKeyRepositoryAdapter) UpdateKeyAction(ctx context.Context, mut
 		return apikeymanagement.MutationResult{}, apikeymanagement.ErrInvalidRequest
 	}
 	return inTransaction(ctx, adapter.store, func(tx *sql.Tx) (apikeymanagement.MutationResult, error) {
-		stored, replayed, updateKeyActionErr := commandpostgres.Lock(ctx, tx, mutation.Command)
-		if updateKeyActionErr != nil {
-			return apikeymanagement.MutationResult{}, updateKeyActionErr
-		}
-		if replayed {
-			result, err := storedAPIKeyMutation(stored)
-			if err != nil || result.ResourceID != string(mutation.Key.ID) {
-				if err != nil {
-					return apikeymanagement.MutationResult{}, err
-				}
-				return apikeymanagement.MutationResult{}, apikeymanagement.ErrUnavailable
-			}
-			key, err := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery, mutation.Key.NamespaceID, result.ResourceID))
-			if err != nil {
-				return apikeymanagement.MutationResult{}, mapAPIKeyReadError(err, "read replayed API key")
-			}
-			return apikeymanagement.MutationResult{
-				Key: key, HTTPStatus: result.ResponseStatus, Replayed: true,
-			}, nil
-		}
-		if err := validateAPIKeyRelationshipsTx(ctx, tx, mutation.Key); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		ownerUser, ownerTeam := apiKeyOwnerValues(mutation.Key.Owner)
-		updated, updateKeyActionErr := scanAPIKey(tx.QueryRowContext(ctx, managementUpdateAPIKeyQuery,
-			mutation.Key.NamespaceID, mutation.Key.ID, mutation.ExpectedRevision, mutation.Key.Name,
-			ownerUser, ownerTeam, nullableTeamID(mutation.Key.ContextTeamID), mutation.Key.Status,
-			mutation.Key.ExpiresAt, mutation.Key.PolicyEpoch, mutation.Key.DelegationEpoch))
-		if updateKeyActionErr != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCAS(updateKeyActionErr, "update API key")
-		}
-		if _, err := appendMutationRecords(ctx, tx, mutation.Key.NamespaceID, outboxMutation{
-			AggregateType: "api_key", AggregateID: string(mutation.Key.ID),
-			AggregateRevision: updated.Revision, Operation: outboxUpdated,
-		}, meta); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		if err := commandpostgres.CompleteResource(ctx, tx, mutation.Command, managementcommand.ResourceResult{
-			ResourceType: "api_key", ResourceID: string(updated.ID),
-			ResourceRevision: uint64(updated.Revision), ResponseStatus: 200,
-		}); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		return apikeymanagement.MutationResult{Key: updated, HTTPStatus: 200}, nil
+		return updateKeyActionTx(ctx, tx, mutation, meta)
+	})
+}
+
+func updateKeyActionTx(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation apikeymanagement.UpdateMutation,
+	meta MutationMeta,
+) (apikeymanagement.MutationResult, error) {
+	stored, replayed, err := commandpostgres.Lock(ctx, tx, mutation.Command)
+	if err != nil {
+		return apikeymanagement.MutationResult{}, err
+	}
+	if replayed {
+		return replayedKeyAction(ctx, tx, mutation, stored)
+	}
+	if err := validateAPIKeyRelationshipsTx(ctx, tx, mutation.Key); err != nil {
+		return apikeymanagement.MutationResult{}, err
+	}
+	updated, err := updateAPIKeyActionRow(ctx, tx, mutation)
+	if err != nil {
+		return apikeymanagement.MutationResult{}, err
+	}
+	if err := recordAPIKeyAction(ctx, tx, mutation, updated, meta); err != nil {
+		return apikeymanagement.MutationResult{}, err
+	}
+	return apikeymanagement.MutationResult{Key: updated, HTTPStatus: 200}, nil
+}
+
+func replayedKeyAction(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation apikeymanagement.UpdateMutation,
+	stored managementcommand.StoredResult,
+) (apikeymanagement.MutationResult, error) {
+	result, err := storedAPIKeyMutation(stored)
+	if err != nil {
+		return apikeymanagement.MutationResult{}, err
+	}
+	if result.ResourceID != string(mutation.Key.ID) {
+		return apikeymanagement.MutationResult{}, apikeymanagement.ErrUnavailable
+	}
+	key, err := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery, mutation.Key.NamespaceID, result.ResourceID))
+	if err != nil {
+		return apikeymanagement.MutationResult{}, mapAPIKeyReadError(err, "read replayed API key")
+	}
+	return apikeymanagement.MutationResult{
+		Key: key, HTTPStatus: result.ResponseStatus, Replayed: true,
+	}, nil
+}
+
+func updateAPIKeyActionRow(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation apikeymanagement.UpdateMutation,
+) (accesscontrol.APIKey, error) {
+	ownerUser, ownerTeam := apiKeyOwnerValues(mutation.Key.Owner)
+	updated, err := scanAPIKey(tx.QueryRowContext(ctx, managementUpdateAPIKeyQuery,
+		mutation.Key.NamespaceID, mutation.Key.ID, mutation.ExpectedRevision, mutation.Key.Name,
+		ownerUser, ownerTeam, nullableTeamID(mutation.Key.ContextTeamID), mutation.Key.Status,
+		mutation.Key.ExpiresAt, mutation.Key.PolicyEpoch, mutation.Key.DelegationEpoch))
+	if err != nil {
+		return accesscontrol.APIKey{}, mapAPIKeyCAS(err, "update API key")
+	}
+	return updated, nil
+}
+
+func recordAPIKeyAction(
+	ctx context.Context,
+	tx *sql.Tx,
+	mutation apikeymanagement.UpdateMutation,
+	updated accesscontrol.APIKey,
+	meta MutationMeta,
+) error {
+	if _, err := appendMutationRecords(ctx, tx, mutation.Key.NamespaceID, outboxMutation{
+		AggregateType: "api_key", AggregateID: string(mutation.Key.ID),
+		AggregateRevision: updated.Revision, Operation: outboxUpdated,
+	}, meta); err != nil {
+		return err
+	}
+	return commandpostgres.CompleteResource(ctx, tx, mutation.Command, managementcommand.ResourceResult{
+		ResourceType: "api_key", ResourceID: string(updated.ID),
+		ResourceRevision: uint64(updated.Revision), ResponseStatus: 200,
 	})
 }
 
@@ -443,59 +518,7 @@ func (adapter *apiKeyRepositoryAdapter) RotateCredential(ctx context.Context, mu
 		return apikeymanagement.MutationResult{}, err
 	}
 	return inTransaction(ctx, adapter.store, func(tx *sql.Tx) (apikeymanagement.MutationResult, error) {
-		if replay, found, err := lockAPIKeySecretCommand(ctx, tx, mutation.Command); err != nil || found {
-			if err != nil {
-				return apikeymanagement.MutationResult{}, err
-			}
-			key, err := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery, mutation.NamespaceID, replay.Result.ResourceID))
-			if err != nil {
-				return apikeymanagement.MutationResult{}, mapAPIKeyReadError(err, "read replayed API key")
-			}
-			return apikeymanagement.MutationResult{Key: key, HTTPStatus: replay.Result.ResponseStatus, Replayed: true, Stored: &replay}, nil
-		}
-		updated, err := scanAPIKey(tx.QueryRowContext(ctx, managementAdvanceAPIKeyRevisionQuery,
-			mutation.NamespaceID, mutation.KeyID, mutation.ExpectedRevision, mutation.Credential.CreatedAt))
-		if err != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCAS(err, "rotate API-key credential")
-		}
-		var result sql.Result
-		if mutation.RetireAt == nil {
-			result, err = tx.ExecContext(ctx, managementRevokePreviousCredentialQuery,
-				mutation.NamespaceID, mutation.KeyID, mutation.PreviousCredentialID, mutation.Credential.CreatedAt)
-		} else {
-			result, err = tx.ExecContext(ctx, retireCredentialQuery,
-				mutation.NamespaceID, mutation.KeyID, mutation.PreviousCredentialID, *mutation.RetireAt)
-		}
-		if err != nil {
-			return apikeymanagement.MutationResult{}, fmt.Errorf("retire prior credential: %w", err)
-		}
-		if err := requireOneRow(result, apikeymanagement.ErrCredentialUnavailable); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		if err := insertCredential(ctx, tx, accesscontrol.NamespaceID(mutation.NamespaceID), mutation.Credential); err != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCreateError(err, "insert rotated credential")
-		}
-		if _, err := appendMutationRecords(ctx, tx, accesscontrol.NamespaceID(mutation.NamespaceID), outboxMutation{
-			AggregateType: "api_key", AggregateID: mutation.KeyID, AggregateRevision: updated.Revision,
-			Operation: outboxCredentialRotated, References: map[string]string{
-				"credentialId":        string(mutation.Credential.ID),
-				"retiredCredentialId": mutation.PreviousCredentialID,
-			},
-		}, meta); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		if err := commandpostgres.CompleteSecretResource(ctx, tx, mutation.Command,
-			managementcommand.ResourceResult{
-				ResourceType: "api_key", ResourceID: mutation.KeyID,
-				ResourceRevision: uint64(updated.Revision), ResponseStatus: 200,
-			},
-			managementcommand.SecretResponse{
-				Ciphertext: mutation.Response.Ciphertext, Nonce: mutation.Response.Nonce,
-				KEKVersion: mutation.Response.KeyVersion, ExpiresAt: mutation.ResponseExpiresAt,
-			}); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		return apikeymanagement.MutationResult{Key: updated, HTTPStatus: 200}, nil
+		return rotateCredentialTx(ctx, tx, mutation, meta)
 	})
 }
 
@@ -508,43 +531,12 @@ func (adapter *apiKeyRepositoryAdapter) RevokeCredential(ctx context.Context, na
 	if err != nil {
 		return apikeymanagement.MutationResult{}, apikeymanagement.ErrInvalidRequest
 	}
+	revocation := credentialRevocation{
+		namespaceID: namespaceID, keyID: keyID, credentialID: credentialID,
+		expected: expected, expectedRevision: expectedRevision, meta: meta,
+	}
 	return inTransaction(ctx, adapter.store, func(tx *sql.Tx) (apikeymanagement.MutationResult, error) {
-		key, revokeCredentialErr := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery+" FOR UPDATE", namespaceID, keyID))
-		if revokeCredentialErr != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyReadError(revokeCredentialErr, "lock API key")
-		}
-		if uint64(key.Revision) != expected {
-			return apikeymanagement.MutationResult{}, apikeymanagement.ErrRevisionConflict
-		}
-		if key.Status == accesscontrol.APIKeyStatusActive {
-			var count int
-			if err := tx.QueryRowContext(ctx, managementCountUsableCredentialsQuery, namespaceID, keyID).Scan(&count); err != nil {
-				return apikeymanagement.MutationResult{}, err
-			}
-			if count <= 1 {
-				return apikeymanagement.MutationResult{}, apikeymanagement.ErrLastActiveCredential
-			}
-		}
-		updated, revokeCredentialErr := advanceAPIKeyRevision(
-			ctx, tx, accesscontrol.NamespaceID(namespaceID), accesscontrol.APIKeyID(keyID), expectedRevision,
-		)
-		if revokeCredentialErr != nil {
-			return apikeymanagement.MutationResult{}, mapAPIKeyCAS(revokeCredentialErr, "revoke API-key credential")
-		}
-		result, revokeCredentialErr := tx.ExecContext(ctx, revokeCredentialQuery, namespaceID, keyID, credentialID)
-		if revokeCredentialErr != nil {
-			return apikeymanagement.MutationResult{}, revokeCredentialErr
-		}
-		if err := requireOneRow(result, apikeymanagement.ErrCredentialUnavailable); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		if _, err := appendMutationRecords(ctx, tx, accesscontrol.NamespaceID(namespaceID), outboxMutation{
-			AggregateType: "api_key", AggregateID: keyID, AggregateRevision: updated.Revision,
-			Operation: outboxCredentialRevoked, References: map[string]string{"credentialId": credentialID},
-		}, meta); err != nil {
-			return apikeymanagement.MutationResult{}, err
-		}
-		return apikeymanagement.MutationResult{Key: updated, HTTPStatus: 204}, nil
+		return revokeCredentialTx(ctx, tx, revocation)
 	})
 }
 

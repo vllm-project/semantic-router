@@ -84,6 +84,25 @@ func TestSubjectUserListsHideTombstonesByDefault(t *testing.T) {
 	}
 }
 
+func TestManagementAPIKeyListsHideTombstonesByDefault(t *testing.T) {
+	for name, query := range map[string]string{
+		"list":           managementListAPIKeysQuery,
+		"search":         managementSearchAPIKeysQuery,
+		"count":          managementCountAPIKeysQuery,
+		"searched count": managementCountSearchedAPIKeysQuery,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if !strings.Contains(query, "$2 = '' AND deleted_at IS NULL") {
+				t.Fatal("an unfiltered API-key list must exclude deleted rows")
+			}
+			if !strings.Contains(query,
+				"$2 <> '' AND CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2") {
+				t.Fatal("an explicit deleted-status filter must retain API-key tombstone inspection")
+			}
+		})
+	}
+}
+
 func TestEligibleKeySearchRemainsInsideSelfEligibilityAndCursorBoundary(t *testing.T) {
 	eligibility := strings.Index(eligibleKeyList, "k.owner_user_id = l.user_id")
 	search := strings.Index(eligibleKeyList, "lower(k.name) LIKE $3")

@@ -21,19 +21,8 @@ import (
 )
 
 func TestAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplay(t *testing.T) {
-	dsn := os.Getenv("VLLM_SR_CONTROL_PLANE_TEST_DATABASE_URL")
-	if dsn == "" {
-		dsn = os.Getenv("VLLM_SR_ACCESS_CONTROL_TEST_DATABASE_URL")
-	}
-	if dsn == "" {
-		t.Skip("PostgreSQL API-key Management test database is not configured")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel, db := apiKeyManagementIntegrationDatabase(t)
 	defer cancel()
-	db := isolatedPolicyDatabase(t, ctx, dsn)
-	if err := (controlpostgres.Migrator{DB: db}).Apply(ctx); err != nil {
-		t.Fatal(err)
-	}
 
 	const (
 		namespaceID   = "11111111-1111-4111-8111-111111111111"
@@ -46,31 +35,9 @@ func TestAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplay(t *testin
 		rateRule      = "88888888-8888-4888-8888-888888888888"
 	)
 	seedPolicyManagement(t, ctx, db, namespaceID, principalID, ownerUserID, secondUserID, existingKeyID, "test_model")
-	for _, statement := range []struct {
-		query string
-		args  []any
-	}{
-		{`INSERT INTO access_policies
-  (id,namespace_id,name,status) VALUES ($1,$2,'API key access','active')`, []any{accessPolicy, namespaceID}},
-		{`INSERT INTO rate_limit_policies
-  (id,namespace_id,name,status) VALUES ($1,$2,'API key budget','active')`, []any{ratePolicy, namespaceID}},
-		{`INSERT INTO rate_limit_rules
-  (id,policy_id,metric,algorithm,limit_value,window_seconds,accounting,enforcement,ordinal)
-VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rateRule, ratePolicy}},
-	} {
-		if _, err := db.ExecContext(ctx, statement.query, statement.args...); err != nil {
-			t.Fatal(err)
-		}
-	}
+	seedAPIKeyPolicyOverrides(t, ctx, db, namespaceID, accessPolicy, ratePolicy, rateRule)
 
-	store, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr := New(db)
-	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil {
-		t.Fatal(testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr)
-	}
-	repository, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr := NewAPIKeyManagementRepository(store)
-	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil {
-		t.Fatal(testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr)
-	}
+	repository := newPostgresAPIKeyManagementRepository(t, db)
 	services := []*apikeymanagement.Service{
 		newAPIKeyIntegrationService(t, repository),
 		newAPIKeyIntegrationService(t, repository),
@@ -88,37 +55,205 @@ VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rate
 	}
 
 	result := createAPIKeyAcrossReplicas(t, ctx, services, request)
+	issued := assertIssuedAPIKeyPolicies(t, result, accessPolicy, ratePolicy)
+
+	keyID := string(result.Key.ID)
+	accessBindingID := issued.AccessPolicyBindings[0].BindingID
+	rateBindingID := issued.RateLimitOverride.BindingID
+	assertCreatedAPIKeyRows(t, ctx, db, namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy)
+	assertSearchedAPIKeyPage(t, ctx, services[0], namespaceID, ownerUserID, result.Key.ID)
+	assertPermissionFilteredAPIKeyPage(t, ctx, services[0], namespaceID, ownerUserID, accessPolicy)
+}
+
+func TestAPIKeyManagementPostgresListsExcludeDeletedKeysByDefault(t *testing.T) {
+	ctx, cancel, db := apiKeyManagementIntegrationDatabase(t)
+	defer cancel()
+
+	const (
+		namespaceID = "11111111-1111-4111-8111-111111111111"
+		principalID = "22222222-2222-4222-8222-222222222222"
+		ownerUserID = "33333333-3333-4333-8333-333333333333"
+		secondUser  = "44444444-4444-4444-8444-444444444444"
+		apiKeyID    = "55555555-5555-4555-8555-555555555555"
+	)
+	seedPolicyManagement(t, ctx, db, namespaceID, principalID, ownerUserID, secondUser, apiKeyID, "test_model")
+	repository := newPostgresAPIKeyManagementRepository(t, db)
+	service := newAPIKeyIntegrationService(t, repository)
+	actor := apikeymanagement.Actor{
+		PrincipalID: principalID, ActorChain: []string{principalID},
+		RequestID: "api-key-delete-list", SourceIP: netip.MustParseAddr("192.0.2.12"),
+	}
+	assertDeletedAPIKey(t, ctx, service, namespaceID, apiKeyID, actor)
+
+	scope := accesscontrol.ResultScope{NamespaceID: namespaceID, All: true}
+	assertEmptyAPIKeyPage(t, ctx, service, apikeymanagement.ListKeysRequest{
+		NamespaceID: namespaceID, PageSize: 10, IncludeTotal: true, Scope: scope,
+	}, "default API-key page after delete")
+	assertEmptyAPIKeyPage(t, ctx, service, apikeymanagement.ListKeysRequest{
+		NamespaceID: namespaceID, Search: "EXISTING", PageSize: 10, IncludeTotal: true, Scope: scope,
+	}, "default searched API-key page after delete")
+	assertDeletedAPIKeyPage(t, ctx, service, apiKeyID, apikeymanagement.ListKeysRequest{
+		NamespaceID: namespaceID, Status: accesscontrol.APIKeyStatusDeleted,
+		PageSize: 10, IncludeTotal: true, Scope: scope,
+	})
+}
+
+func apiKeyManagementIntegrationDatabase(t *testing.T) (context.Context, context.CancelFunc, *sql.DB) {
+	t.Helper()
+	dsn := os.Getenv("VLLM_SR_CONTROL_PLANE_TEST_DATABASE_URL")
+	if dsn == "" {
+		dsn = os.Getenv("VLLM_SR_ACCESS_CONTROL_TEST_DATABASE_URL")
+	}
+	if dsn == "" {
+		t.Skip("PostgreSQL API-key Management test database is not configured")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	db := isolatedPolicyDatabase(t, ctx, dsn)
+	if migrationErr := (controlpostgres.Migrator{DB: db}).Apply(ctx); migrationErr != nil {
+		cancel()
+		t.Fatal(migrationErr)
+	}
+	return ctx, cancel, db
+}
+
+func seedAPIKeyPolicyOverrides(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	namespaceID, accessPolicy, ratePolicy, rateRule string,
+) {
+	t.Helper()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO access_policies
+  (id,namespace_id,name,status) VALUES ($1,$2,'API key access','active')`, []any{accessPolicy, namespaceID}},
+		{`INSERT INTO rate_limit_policies
+  (id,namespace_id,name,status) VALUES ($1,$2,'API key budget','active')`, []any{ratePolicy, namespaceID}},
+		{`INSERT INTO rate_limit_rules
+  (id,policy_id,metric,algorithm,limit_value,window_seconds,accounting,enforcement,ordinal)
+VALUES ($1,$2,'requests','sliding_log',12,60,'request','enforce',0)`, []any{rateRule, ratePolicy}},
+	} {
+		if _, execErr := db.ExecContext(ctx, statement.query, statement.args...); execErr != nil {
+			t.Fatal(execErr)
+		}
+	}
+}
+
+func newPostgresAPIKeyManagementRepository(t *testing.T, db *sql.DB) apikeymanagement.Repository {
+	t.Helper()
+	store, storeErr := New(db)
+	if storeErr != nil {
+		t.Fatal(storeErr)
+	}
+	repository, repositoryErr := NewAPIKeyManagementRepository(store)
+	if repositoryErr != nil {
+		t.Fatal(repositoryErr)
+	}
+	return repository
+}
+
+func assertIssuedAPIKeyPolicies(
+	t *testing.T,
+	result apikeymanagement.SecretMutationResult,
+	accessPolicy, ratePolicy string,
+) apikeymanagement.IssuedSecret {
+	t.Helper()
 	var issued apikeymanagement.IssuedSecret
-	if err := json.Unmarshal(result.CanonicalJSON, &issued); err != nil {
-		t.Fatal(err)
+	if decodeErr := json.Unmarshal(result.CanonicalJSON, &issued); decodeErr != nil {
+		t.Fatal(decodeErr)
 	}
 	if len(issued.AccessPolicyBindings) != 1 || issued.AccessPolicyBindings[0].PolicyID != accessPolicy ||
 		issued.RateLimitOverride == nil || issued.RateLimitOverride.PolicyID != ratePolicy ||
 		issued.RateLimitOverride.Created {
 		t.Fatalf("one-time policy receipts = %#v / %#v", issued.AccessPolicyBindings, issued.RateLimitOverride)
 	}
+	return issued
+}
 
-	keyID := string(result.Key.ID)
-	accessBindingID := issued.AccessPolicyBindings[0].BindingID
-	rateBindingID := issued.RateLimitOverride.BindingID
-	assertCreatedAPIKeyRows(t, ctx, db, namespaceID, keyID, accessBindingID, accessPolicy, rateBindingID, ratePolicy)
-	searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr := services[0].List(ctx, apikeymanagement.ListKeysRequest{
+func assertSearchedAPIKeyPage(
+	t *testing.T,
+	ctx context.Context,
+	service *apikeymanagement.Service,
+	namespaceID, ownerUserID string,
+	keyID accesscontrol.APIKeyID,
+) {
+	t.Helper()
+	searched, listErr := service.List(ctx, apikeymanagement.ListKeysRequest{
 		NamespaceID: namespaceID, Search: "ATOMIC DEV", PageSize: 1,
 		OwnerKind: accesscontrol.SubjectKindUser, OwnerID: ownerUserID, IncludeTotal: true,
-		Scope: accesscontrol.ResultScope{NamespaceID: namespaceID, All: true},
+		Scope: accesscontrol.ResultScope{NamespaceID: accesscontrol.NamespaceID(namespaceID), All: true},
 	})
-	if testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr != nil || len(searched.Items) != 1 ||
-		searched.Items[0].ID != result.Key.ID || searched.HasMore || searched.TotalCount == nil ||
-		*searched.TotalCount != 1 {
-		t.Fatalf("searched API-key page = %#v, %v", searched, testAPIKeyManagementPostgresAtomicPolicyOverridesAndReplicaReplayErr)
+	if listErr != nil || len(searched.Items) != 1 || searched.Items[0].ID != keyID || searched.HasMore ||
+		searched.TotalCount == nil || *searched.TotalCount != 1 {
+		t.Fatalf("searched API-key page = %#v, %v", searched, listErr)
 	}
-	hidden, err := services[0].List(ctx, apikeymanagement.ListKeysRequest{
+}
+
+func assertPermissionFilteredAPIKeyPage(
+	t *testing.T,
+	ctx context.Context,
+	service *apikeymanagement.Service,
+	namespaceID, ownerUserID, accessPolicy string,
+) {
+	t.Helper()
+	hidden, listErr := service.List(ctx, apikeymanagement.ListKeysRequest{
 		NamespaceID: namespaceID, OwnerKind: accesscontrol.SubjectKindUser, OwnerID: ownerUserID,
 		PageSize: 1, IncludeTotal: true,
-		Scope: accesscontrol.ResultScope{NamespaceID: namespaceID, APIKeyIDs: []accesscontrol.APIKeyID{accessPolicy}},
+		Scope: accesscontrol.ResultScope{
+			NamespaceID: accesscontrol.NamespaceID(namespaceID),
+			APIKeyIDs:   []accesscontrol.APIKeyID{accesscontrol.APIKeyID(accessPolicy)},
+		},
 	})
-	if err != nil || len(hidden.Items) != 0 || hidden.TotalCount == nil || *hidden.TotalCount != 0 {
-		t.Fatalf("permission-filtered API-key page = %#v, %v", hidden, err)
+	if listErr != nil || len(hidden.Items) != 0 || hidden.TotalCount == nil || *hidden.TotalCount != 0 {
+		t.Fatalf("permission-filtered API-key page = %#v, %v", hidden, listErr)
+	}
+}
+
+func assertDeletedAPIKey(
+	t *testing.T,
+	ctx context.Context,
+	service *apikeymanagement.Service,
+	namespaceID, apiKeyID string,
+	actor apikeymanagement.Actor,
+) {
+	t.Helper()
+	deleted, deleteErr := service.Delete(ctx, apikeymanagement.LifecycleRequest{
+		NamespaceID: namespaceID, KeyID: apiKeyID, ExpectedRevision: 1, Actor: actor,
+	})
+	if deleteErr != nil || deleted.HTTPStatus != 204 || deleted.Key.Status != accesscontrol.APIKeyStatusDeleted {
+		t.Fatalf("delete API key = %#v, %v", deleted, deleteErr)
+	}
+}
+
+func assertEmptyAPIKeyPage(
+	t *testing.T,
+	ctx context.Context,
+	service *apikeymanagement.Service,
+	request apikeymanagement.ListKeysRequest,
+	label string,
+) {
+	t.Helper()
+	page, listErr := service.List(ctx, request)
+	if listErr != nil || len(page.Items) != 0 || page.TotalCount == nil || *page.TotalCount != 0 {
+		t.Fatalf("%s = %#v, %v", label, page, listErr)
+	}
+}
+
+func assertDeletedAPIKeyPage(
+	t *testing.T,
+	ctx context.Context,
+	service *apikeymanagement.Service,
+	apiKeyID string,
+	request apikeymanagement.ListKeysRequest,
+) {
+	t.Helper()
+	tombstones, listErr := service.List(ctx, request)
+	if listErr != nil || len(tombstones.Items) != 1 || tombstones.Items[0].ID != accesscontrol.APIKeyID(apiKeyID) ||
+		tombstones.Items[0].Status != accesscontrol.APIKeyStatusDeleted || tombstones.TotalCount == nil ||
+		*tombstones.TotalCount != 1 {
+		t.Fatalf("deleted API-key page = %#v, %v", tombstones, listErr)
 	}
 }
 
