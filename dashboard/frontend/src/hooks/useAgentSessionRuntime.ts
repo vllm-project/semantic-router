@@ -29,6 +29,26 @@ interface UseAgentSessionRuntimeOptions {
   search?: string
 }
 
+export type AgentSessionLifecycleApi = Pick<
+  AgentManagementApi,
+  'deleteSession' | 'getSession' | 'patchSession'
+>
+
+// Agent sessions have an explicit active -> closed -> deleted lifecycle. Keep
+// that protocol inside the runtime boundary so every UI delete action follows
+// the same compare-and-swap sequence without exposing the intermediate state.
+export async function deleteAgentSession(
+  api: AgentSessionLifecycleApi,
+  sessionId: string,
+): Promise<void> {
+  const current = await api.getSession(sessionId)
+  const deletable =
+    current.data.status === 'active'
+      ? await api.patchSession(sessionId, { status: 'closed' }, current.etag)
+      : current
+  await api.deleteSession(sessionId, deletable.etag)
+}
+
 function describeError(error: unknown, fallback: string): string {
   return error instanceof Error && error.message.trim() ? error.message : fallback
 }
@@ -455,8 +475,7 @@ export function useAgentSessionRuntime({
     async (sessionId: string): Promise<void> => {
       setMutating(true)
       try {
-        const detail = await api.getSession(sessionId)
-        await api.deleteSession(sessionId, detail.etag)
+        await deleteAgentSession(api, sessionId)
         setSessions((current) => current.filter((session) => session.id !== sessionId))
         if (activeSessionIdRef.current === sessionId) {
           setActiveSessionId(null)
