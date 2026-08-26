@@ -46,9 +46,13 @@ describe('generated Management client', () => {
     expectTypeOf<ManagementApiResponse<'getTeams'>>().toEqualTypeOf<TeamPage>()
     expectTypeOf<ManagementApiResponse<'getRoutingModels'>>().toEqualTypeOf<RoutingModelPage>()
     expectTypeOf<ManagementApiResponse<'getRoutingRecipes'>>().toEqualTypeOf<RoutingRecipePage>()
-    expectTypeOf<ManagementApiResponse<'getRoutingEntrypoints'>>().toEqualTypeOf<RoutingEntrypointPage>()
+    expectTypeOf<
+      ManagementApiResponse<'getRoutingEntrypoints'>
+    >().toEqualTypeOf<RoutingEntrypointPage>()
     expectTypeOf<ManagementApiResponse<'getRoutingExportsCurrent'>>().toEqualTypeOf<string>()
-    expectTypeOf<ManagementApiResponse<'getProviderCredentials'>>().toEqualTypeOf<ProviderCredentialPage>()
+    expectTypeOf<
+      ManagementApiResponse<'getProviderCredentials'>
+    >().toEqualTypeOf<ProviderCredentialPage>()
     expectTypeOf<ManagementApiResponse<'getStatistics'>>().toEqualTypeOf<AccessStatistics>()
     expectTypeOf<ManagementApiResponse<'getUsage'>>().toEqualTypeOf<UsageSummary>()
     expectTypeOf<
@@ -174,5 +178,131 @@ describe('generated Management client', () => {
         payload: { content: [{ type: 'text', text: 'wrong payload for terminal' }] },
       }),
     ).toThrow('AgentEvent')
+  })
+
+  it('accepts canonical empty usage responses and rejects nullable freshness fields', () => {
+    const timing = {
+      sampleCount: '0',
+      totalMilliseconds: '0',
+      averageMilliseconds: 0,
+      p50Milliseconds: 0,
+      p95Milliseconds: 0,
+      p99Milliseconds: 0,
+      percentilesAreEstimated: true,
+    }
+    const totals = {
+      requests: '0',
+      successfulRequests: '0',
+      inputTokens: '0',
+      outputTokens: '0',
+      totalTokens: '0',
+      incompleteDispatches: '0',
+      completeness: 'complete' as const,
+      costs: [],
+      latency: timing,
+      ttft: timing,
+    }
+    const responses = [
+      ['UsageSummary', { totals, grain: 'hour', final: false }],
+      ['UsageSeries', { points: [], grain: 'hour', final: false }],
+      ['UsageBreakdown', { dimension: 'api_key', rows: [], grain: 'hour', final: false }],
+    ] as const
+
+    for (const [schemaName, payload] of responses) {
+      expect(assertManagementApiSchema(schemaName, payload)).toEqual(payload)
+      for (const freshnessField of ['asOf', 'ledgerWatermark', 'ingestionLag'] as const) {
+        expect(() =>
+          assertManagementApiSchema(schemaName, { ...payload, [freshnessField]: null }),
+        ).toThrow(schemaName)
+      }
+    }
+  })
+
+  it('accepts explicit unknown request evidence and rejects nullable log arrays', () => {
+    const request = {
+      admissionId: 'request-with-historical-evidence',
+      eventId: '10000000-0000-4000-8000-000000000001',
+      occurredAt: '2026-08-24T00:00:00Z',
+      completedAt: '2026-08-24T00:00:01Z',
+      protocol: 'openai.chat',
+      path: '/v1/chat/completions',
+      statusCode: 200,
+      usageState: 'known_actual',
+      inputTokens: '10',
+      outputTokens: '2',
+      latencyMilliseconds: 1000,
+      stream: true,
+      toolCall: false,
+      models: [],
+      costs: [],
+    }
+    const page = { data: [request], page: { hasMore: false, pageSize: 50 } }
+    const detail = {
+      data: { request, routing: {}, quotaReceipts: [], dispatches: [] },
+    }
+
+    expect(assertManagementApiSchema('RequestLogPage', page)).toEqual(page)
+    expect(assertManagementApiSchema('RequestLogDetail', detail)).toEqual(detail)
+    expect(() =>
+      assertManagementApiSchema('RequestLogPage', {
+        ...page,
+        data: [{ ...request, models: null }],
+      }),
+    ).toThrow('RequestLogPage')
+    expect(() =>
+      assertManagementApiSchema('RequestLogDetail', {
+        data: { ...detail.data, quotaReceipts: null },
+      }),
+    ).toThrow('RequestLogDetail')
+  })
+
+  it('accepts the canonical effective-policy wire shape and rejects nullable optional meters', () => {
+    const policy = {
+      subject: { type: 'api_key' as const, id: '10000000-0000-4000-8000-000000000001' },
+      revision: 12,
+      appliedRevision: 12,
+      access: { grants: [] },
+      quota: {
+        meters: [
+          {
+            policyId: '20000000-0000-4000-8000-000000000001',
+            ruleId: '30000000-0000-4000-8000-000000000001',
+            bindingId: '40000000-0000-4000-8000-000000000001',
+            source: {
+              subjectType: 'api_key',
+              subjectId: '10000000-0000-4000-8000-000000000001',
+              bindingId: '40000000-0000-4000-8000-000000000001',
+            },
+            counterOwner: '10000000-0000-4000-8000-000000000001',
+            metric: 'total_tokens',
+            algorithm: 'sliding_log',
+            accounting: 'response_actual',
+            enforcement: 'enforce',
+            limit: '30000',
+            used: '0',
+            remaining: null,
+            completeness: 'unknown' as const,
+            knownDispatches: '0',
+            incompleteDispatches: '1',
+            capacityState: 'fenced' as const,
+            activeFenceIds: ['50000000-0000-4000-8000-000000000001'],
+            freshness: { source: 'valkey', asOf: '2026-08-26T00:00:00Z' },
+          },
+        ],
+        unknownUsageFences: ['50000000-0000-4000-8000-000000000001'],
+        asOf: '2026-08-26T00:00:00Z',
+      },
+    }
+
+    expect(assertManagementApiSchema('EffectivePolicy', policy)).toEqual(policy)
+    for (const optional of ['currency', 'overage', 'resetAt'] as const) {
+      const meter = { ...policy.quota.meters[0], [optional]: null }
+      expect(() =>
+        assertManagementApiSchema('EffectivePolicy', {
+          ...policy,
+          quota: { ...policy.quota, meters: [meter] },
+        }),
+      ).toThrow('EffectivePolicy')
+    }
   })
 })

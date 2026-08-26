@@ -165,20 +165,44 @@ describe('router model selection', () => {
     ).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
   })
 
-  it('lists only passthrough models authorized by the Router', () => {
-    expect(
-      listRouterModels({
-        data: [
-          { id: CANONICAL_AUTO_MODEL, routing: routingMetadata.defaultRoute },
-          {
-            id: 'local/qwen',
-            description: 'Qwen backend',
-            routing: { resolution: 'passthrough', selectable: true },
-          },
-          { id: 'hidden/model', routing: routingMetadata.passthrough },
-        ],
-      }),
-    ).toEqual([
+  it('keeps passthrough models out of the normal selectable model list', () => {
+    const payload = {
+      data: [
+        { id: CANONICAL_AUTO_MODEL, routing: routingMetadata.defaultRoute },
+        {
+          id: 'local/qwen',
+          description: 'Qwen backend',
+          routing: routingMetadata.passthrough,
+        },
+        {
+          id: 'router/draft',
+          description: 'Draft virtual model',
+          routing: { resolution: 'virtual', selectable: false },
+        },
+      ],
+    }
+
+    expect(listRouterModels(payload)).toEqual([{ id: CANONICAL_AUTO_MODEL, description: '' }])
+  })
+
+  it('includes Router-authorized passthrough models when management opts in', () => {
+    const payload = {
+      data: [
+        { id: CANONICAL_AUTO_MODEL, routing: routingMetadata.defaultRoute },
+        {
+          id: 'local/qwen',
+          description: 'Qwen backend',
+          routing: routingMetadata.passthrough,
+        },
+        {
+          id: 'router/draft',
+          description: 'Draft virtual model',
+          routing: { resolution: 'virtual', selectable: false },
+        },
+      ],
+    }
+
+    expect(listRouterModels(payload, { includeIndividualModels: true })).toEqual([
       { id: CANONICAL_AUTO_MODEL, description: '' },
       {
         id: 'local/qwen',

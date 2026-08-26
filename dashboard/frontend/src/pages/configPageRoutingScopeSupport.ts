@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 
 import {
   routingManagementApi,
@@ -9,10 +10,16 @@ import {
 import type { RoutingProfileLike, RoutingScope } from '../utils/routingScopes'
 import type { ConfigData } from './configPageSupport'
 
-const requestedRecipeScope = () =>
-  typeof window === 'undefined'
-    ? ''
-    : new URLSearchParams(window.location.search).get('recipe')?.trim() || ''
+const recipeScopeFromSearch = (searchParams: URLSearchParams) =>
+  searchParams.get('recipe')?.trim() || ''
+
+export function withRecipeScope(searchParams: URLSearchParams, recipeId: string): URLSearchParams {
+  const next = new URLSearchParams(searchParams)
+  const normalizedRecipeId = recipeId.trim()
+  if (normalizedRecipeId) next.set('recipe', normalizedRecipeId)
+  else next.delete('recipe')
+  return next
+}
 
 const cloneValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -50,10 +57,11 @@ export function managedRecipeDocument(config: ConfigData): Record<string, unknow
 }
 
 export function useRoutingScopeManager() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [recipes, setRecipes] = useState<RoutingRecipe[]>([])
-  const [selectedScopeId, setSelectedScopeId] = useState(requestedRecipeScope)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const requestedScopeId = recipeScopeFromSearch(searchParams)
 
   const loadRecipes = useCallback(async () => {
     setLoading(true)
@@ -61,10 +69,6 @@ export function useRoutingScopeManager() {
     try {
       const next = await routingManagementApi.listRecipes()
       setRecipes(next)
-      setSelectedScopeId((current) => {
-        const match = next.find((recipe) => recipe.id === current || recipe.name === current)
-        return match?.id ?? next[0]?.id ?? ''
-      })
     } catch (cause) {
       setRecipes([])
       setError(cause instanceof Error ? cause.message : 'Recipes could not be loaded.')
@@ -79,13 +83,28 @@ export function useRoutingScopeManager() {
 
   const routingScopes = useMemo(() => recipes.map(recipeScope), [recipes])
   const selectedRecipe = useMemo(
-    () => recipes.find((recipe) => recipe.id === selectedScopeId) ?? recipes[0],
-    [recipes, selectedScopeId],
+    () =>
+      recipes.find(
+        (recipe) => recipe.id === requestedScopeId || recipe.name === requestedScopeId,
+      ) ?? recipes[0],
+    [recipes, requestedScopeId],
   )
   const scopedConfig = useMemo(
     () => (selectedRecipe ? managedRecipeConfig(selectedRecipe) : null),
     [selectedRecipe],
   )
+
+  const setSelectedScopeId = useCallback(
+    (scopeId: string) => {
+      setSearchParams((current) => withRecipeScope(current, scopeId), { replace: true })
+    },
+    [setSearchParams],
+  )
+
+  useEffect(() => {
+    if (!selectedRecipe || requestedScopeId === selectedRecipe.id) return
+    setSearchParams((current) => withRecipeScope(current, selectedRecipe.id), { replace: true })
+  }, [requestedScopeId, selectedRecipe, setSearchParams])
 
   const saveScopedConfig = useCallback(
     async (projectedConfig: ConfigData): Promise<void> => {
@@ -115,7 +134,7 @@ export function useRoutingScopeManager() {
     scopedConfig,
     selectedRecipe,
     selectedScope: selectedRecipe ? recipeScope(selectedRecipe) : undefined,
-    selectedScopeId: selectedRecipe?.id ?? selectedScopeId,
+    selectedScopeId: selectedRecipe?.id ?? requestedScopeId,
     setSelectedScopeId,
   }
 }

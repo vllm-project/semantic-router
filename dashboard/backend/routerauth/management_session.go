@@ -231,18 +231,24 @@ func (provider *managementSessionProvider) issueManagementToken(
 	now time.Time,
 ) (string, string, time.Time, error) {
 	challenge, err := provider.challenge(ctx)
-	if err != nil || challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
-		return "", "", time.Time{}, ErrManagementSessionUnavailable
+	if err != nil {
+		return "", "", time.Time{}, fmt.Errorf("%w: create exchange challenge: %v", ErrManagementSessionUnavailable, err)
+	}
+	if challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
+		return "", "", time.Time{}, fmt.Errorf("%w: invalid exchange challenge", ErrManagementSessionUnavailable)
 	}
 	assertion, err := provider.assertion(principal, challenge.Nonce, now)
 	if err != nil {
-		return "", "", time.Time{}, ErrManagementSessionUnavailable
+		return "", "", time.Time{}, fmt.Errorf("%w: sign source assertion", ErrManagementSessionUnavailable)
 	}
 	envelope, err := provider.exchange(ctx, challenge.ExchangeChallengeID, assertion)
+	if err != nil {
+		return "", "", time.Time{}, fmt.Errorf("%w: exchange source assertion: %v", ErrManagementSessionUnavailable, err)
+	}
 	managementSessionID, sessionIDErr := uuid.Parse(envelope.ManagementSessionID)
-	if err != nil || envelope.AccessToken == "" || envelope.TokenType != "Bearer" || envelope.ExpiresIn <= 0 ||
+	if envelope.AccessToken == "" || envelope.TokenType != "Bearer" || envelope.ExpiresIn <= 0 ||
 		sessionIDErr != nil || managementSessionID.String() != envelope.ManagementSessionID {
-		return "", "", time.Time{}, ErrManagementSessionUnavailable
+		return "", "", time.Time{}, fmt.Errorf("%w: invalid token exchange response", ErrManagementSessionUnavailable)
 	}
 	expiresAt := now.Add(time.Duration(envelope.ExpiresIn) * time.Second)
 	return envelope.AccessToken, envelope.ManagementSessionID, expiresAt, nil
@@ -404,13 +410,17 @@ func (provider *managementSessionProvider) request(
 	request.Header.Set("Accept", managementMediaType)
 	result, err := provider.client.Do(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("send request: %w", err)
 	}
 	defer result.Body.Close()
 	mediaType, _, mediaTypeErr := mime.ParseMediaType(result.Header.Get("Content-Type"))
 	if result.StatusCode != expectedStatus || mediaTypeErr != nil || mediaType != managementMediaType {
 		_, _ = io.Copy(io.Discard, io.LimitReader(result.Body, 64<<10))
-		return ErrManagementSessionUnavailable
+		return fmt.Errorf(
+			"unexpected response status=%d content_type=%q",
+			result.StatusCode,
+			mediaType,
+		)
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 64<<10))
 	decoder.DisallowUnknownFields()
@@ -437,6 +447,9 @@ func RewriteManagementAuthorization(request *http.Request, provider ManagementSe
 	}
 	token, err := provider.ManagementAccessToken(request.Context(), principal)
 	if err != nil || strings.TrimSpace(token) == "" || strings.ContainsAny(token, "\r\n\t ") {
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrManagementSessionUnavailable, err)
+		}
 		return ErrManagementSessionUnavailable
 	}
 	request.Header.Set("Authorization", "Bearer "+token)

@@ -1,7 +1,12 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
 import type { ProductIconName } from './ProductIcon'
 
-export type LayoutDropdownKey = 'build' | 'operate'
+export type LayoutDropdownKey = 'build' | 'system'
+
+export const WORKFLOW_NAV_LABELS: Readonly<Record<LayoutDropdownKey, string>> = {
+  build: 'Build',
+  system: 'System',
+}
 
 export type LayoutConfigSection =
   | 'models'
@@ -10,6 +15,21 @@ export type LayoutConfigSection =
   | 'decisions'
   | 'entrypoints-recipes'
   | 'agent'
+
+const RECIPE_SCOPED_CONFIG_SECTIONS = new Set<LayoutConfigSection>([
+  'signals',
+  'projections',
+  'decisions',
+])
+
+export function configSectionPath(section: LayoutConfigSection, currentSearch = ''): string {
+  const pathname = `/config/${section}`
+  if (!RECIPE_SCOPED_CONFIG_SECTIONS.has(section)) return pathname
+  const recipe = new URLSearchParams(currentSearch).get('recipe')?.trim()
+  if (!recipe) return pathname
+  const search = new URLSearchParams({ recipe })
+  return `${pathname}?${search.toString()}`
+}
 
 type LayoutRouteMenuItem = {
   kind: 'route'
@@ -49,6 +69,17 @@ export interface LayoutNavLink {
   matchMode?: 'exact' | 'prefix'
   activePathPattern?: RegExp
 }
+
+export const shouldHighlightPrimaryNav = (
+  routeActive: boolean,
+  openDropdown: LayoutDropdownKey | null,
+) => routeActive && openDropdown === null
+
+export const shouldHighlightWorkflowNav = (
+  dropdown: LayoutDropdownKey,
+  routeActive: boolean,
+  openDropdown: LayoutDropdownKey | null,
+) => openDropdown === dropdown || (openDropdown === null && routeActive)
 
 export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
   { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
@@ -173,7 +204,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
   },
 ]
 
-export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
+export const SYSTEM_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'runtime',
     label: 'Runtime',
@@ -182,16 +213,7 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
-        items: [
-          { kind: 'route', label: 'Status', icon: 'status', to: '/status' },
-          {
-            kind: 'route',
-            label: 'Plugin Operations',
-            icon: 'puzzle',
-            to: '/plugins',
-            matchMode: 'prefix',
-          },
-        ],
+        items: [{ kind: 'route', label: 'Status', icon: 'status', to: '/status' }],
       },
       {
         title: 'Diagnostics',

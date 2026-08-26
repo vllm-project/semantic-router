@@ -59,6 +59,7 @@ export interface AccessControlViewProps {
   canManage: boolean
   canManageDashboardMembers: boolean
   ownerName: (item: Pick<AccessAPIKey, 'ownerType' | 'ownerId'>) => string
+  resourceName: (resourceType: 'model' | 'entrypoint', resourceId: string) => string
   onOpenKey: (id: string) => void
   onOpenLog: (id: string) => void
   onOpenEntity: (id: string) => void

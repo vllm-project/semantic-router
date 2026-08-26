@@ -1,10 +1,9 @@
 import { expect, test, type Locator } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
+import { withStatusHistory } from './support/status'
 
 const managementMediaType = 'application/vnd.vllm-semantic-router.management.v1+json'
-const transitionCopyPattern = /Entering control plane/i
-
 async function expectDialogInsideViewport(
   dialog: Locator,
   viewport: { width: number; height: number },
@@ -161,7 +160,9 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ overall: 'healthy', deployment_type: 'local', services: [] }),
+        body: JSON.stringify(
+          withStatusHistory({ overall: 'healthy', deployment_type: 'local', services: [] }),
+        ),
       })
     })
 
@@ -169,11 +170,7 @@ test.describe('Dashboard auth flow', () => {
     await expect(page).toHaveURL(/\/login$/)
     await page.getByPlaceholder('you@example.com').fill('admin@example.com')
     await page.getByPlaceholder('••••••••').fill('secret-password')
-    await Promise.all([
-      page.waitForURL(/\/auth\/transition\?to=%2Fstatus$/),
-      page.getByText(transitionCopyPattern).waitFor({ state: 'visible' }),
-      page.getByRole('button', { name: 'Continue' }).click(),
-    ])
+    await page.getByRole('button', { name: 'Continue' }).click()
     await expect(page).toHaveURL(/\/status$/, { timeout: 12000 })
   })
 
@@ -292,7 +289,7 @@ test.describe('Dashboard auth flow', () => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ overall: 'healthy', services: [] }),
+        body: JSON.stringify(withStatusHistory({ overall: 'healthy', services: [] })),
       })
     })
     await page.route('**/api/router/management/v1/**', async (route) => {

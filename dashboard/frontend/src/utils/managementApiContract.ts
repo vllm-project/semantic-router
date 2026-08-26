@@ -124,7 +124,9 @@ function managementQueryString(query: ManagementRequestOptions['query']): string
   return parameters.toString()
 }
 
-function managementCustomHeaders(headers: Record<string, string> | undefined): Record<string, string> {
+function managementCustomHeaders(
+  headers: Record<string, string> | undefined,
+): Record<string, string> {
   const reserved = new Set([
     'accept',
     'content-type',
@@ -219,11 +221,10 @@ async function managementRequestWithMetadata(
       : await response.json().catch(() => null)
   const etag = response.headers.get(MANAGEMENT_API_HEADERS.etag)?.trim()
   const requestId = response.headers.get(MANAGEMENT_API_HEADERS.requestId)?.trim()
-  const secretResultClaim = response.headers
-    .get(MANAGEMENT_API_HEADERS.secretResultClaim)
-    ?.trim()
+  const secretResultClaim = response.headers.get(MANAGEMENT_API_HEADERS.secretResultClaim)?.trim()
   const idempotencyReplayed =
-    response.headers.get(MANAGEMENT_API_HEADERS.idempotencyReplayed)?.trim().toLowerCase() === 'true'
+    response.headers.get(MANAGEMENT_API_HEADERS.idempotencyReplayed)?.trim().toLowerCase() ===
+    'true'
   return {
     data: payload,
     status: response.status,
@@ -299,7 +300,9 @@ export async function managementOperationStream<OperationId extends ManagementAp
   return response
 }
 
-export async function managementOperationRequest<OperationId extends ManagementApiClientOperationId>(
+export async function managementOperationRequest<
+  OperationId extends ManagementApiClientOperationId,
+>(
   operationId: OperationId,
   ...args: ManagementOperationRequestArguments<OperationId>
 ): Promise<ManagementApiResponse<OperationId>> {

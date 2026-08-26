@@ -1,5 +1,9 @@
 import { readFileSync } from 'node:fs'
+import { createElement } from 'react'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
+
+import { AccessGroupResourceTags } from './AccessEntityDetailSupport'
 
 const readSource = (name: string) => readFileSync(new URL(name, import.meta.url), 'utf8')
 
@@ -111,6 +115,61 @@ describe('access-control modal experience', () => {
     expect(fields).toContain('Team')
   })
 
+  it('keeps identity, model access, and quota in the visible editing hierarchy', () => {
+    const fields = readSource('./AccessControlEditorFields.tsx')
+    const primitives = readSource('./AccessControlEditorPrimitives.tsx')
+    const userFields = fields.slice(
+      fields.indexOf('function UserFields'),
+      fields.indexOf('function TeamFields'),
+    )
+    const teamFields = fields.slice(
+      fields.indexOf('function TeamFields'),
+      fields.indexOf('function KeyFields'),
+    )
+    const keyFields = fields.slice(
+      fields.indexOf('function KeyFields'),
+      fields.indexOf('function GroupFields'),
+    )
+    const groupFields = fields.slice(
+      fields.indexOf('function GroupFields'),
+      fields.indexOf('function BudgetFields'),
+    )
+    const budgetFields = fields.slice(
+      fields.indexOf('function BudgetFields'),
+      fields.indexOf('function PolicyFields'),
+    )
+    const policyFields = fields.slice(fields.indexOf('function PolicyFields'))
+
+    expect(primitives).toContain('data-access-section="core"')
+    expect(policyFields).toContain('title="Model access"')
+    expect(policyFields).toContain('title="Quota"')
+    expect(policyFields).not.toContain('compact')
+    expect(userFields.indexOf('<PolicyFields')).toBeLessThan(userFields.indexOf('<Advanced>'))
+    expect(teamFields).toContain('<CoreSection title="Members"')
+    expect(teamFields.indexOf('<CoreSection title="Members"')).toBeLessThan(
+      teamFields.indexOf('<PolicyFields'),
+    )
+    expect(teamFields).not.toContain('compact')
+    expect(keyFields.indexOf('label="Key override"')).toBeLessThan(
+      keyFields.indexOf('<Advanced label="Advanced settings">'),
+    )
+    expect(groupFields).toContain('<CoreSection title="Mixture-of-Models"')
+    expect(groupFields).toContain('<CoreSection title="Single Model"')
+    expect(groupFields).not.toContain('<Advanced')
+    expect(budgetFields).toContain('<AccessBudgetRuleEditor')
+    expect(budgetFields).not.toContain('<Advanced')
+  })
+
+  it('keeps Team members, model access, and quota expanded in the detail dialog', () => {
+    const detail = readSource('./AccessEntityDetail.tsx')
+    const teamOverview = detail.slice(detail.indexOf('{team ? ('), detail.indexOf('{group ? ('))
+
+    expect(teamOverview).toContain('<dt>Model access</dt>')
+    expect(teamOverview).toContain('<dt>Quota</dt>')
+    expect(detail).toContain('<span>Members</span>')
+    expect(detail).not.toContain('<details')
+  })
+
   it('keeps table pagination independent from bounded form selectors', () => {
     const page = readSource('./AccessControlPage.tsx')
     const fields = readSource('./AccessControlEditorFields.tsx')
@@ -139,6 +198,31 @@ describe('access-control modal experience', () => {
     expect(usage).toContain('selectors.keys.detail(id)')
     expect(usage).toContain('.slice(0, 100)')
     expect(usage).not.toContain('props.users.find')
+  })
+
+  it('renders access grants with product names instead of internal resource ids', () => {
+    const page = readSource('./AccessControlPage.tsx')
+    const policies = readSource('./AccessControlPolicyViews.tsx')
+    const detail = renderToStaticMarkup(
+      createElement(AccessGroupResourceTags, {
+        resources: [
+          { resourceType: 'model', resourceId: 'model-internal-id' },
+          { resourceType: 'entrypoint', resourceId: 'entrypoint-internal-id' },
+        ],
+        resourceName: (resourceType, resourceId) =>
+          resourceType === 'model' && resourceId === 'model-internal-id'
+            ? 'Customer support model'
+            : 'Customer support endpoint',
+      }),
+    )
+
+    expect(page).toContain('accessControlSelectorSources.models.detail(resource.resourceId)')
+    expect(page).toContain('accessControlSelectorSources.entrypoints.detail(resource.resourceId)')
+    expect(policies).toContain('props.resourceName(resource.resourceType, resource.resourceId)')
+    expect(detail).toContain('Customer support model')
+    expect(detail).toContain('Customer support endpoint')
+    expect(detail).not.toContain('model-internal-id')
+    expect(detail).not.toContain('entrypoint-internal-id')
   })
 
   it('lets viewers read Dashboard identities without requesting invitation authority', () => {
@@ -184,5 +268,15 @@ describe('access-control modal experience', () => {
     expect(dashboardAccess).toContain('useAccessibleDialog<HTMLFormElement>')
     expect(dashboardAccess).toContain('type="submit"')
     expect(dashboardAccess).toContain('minLength={9}')
+  })
+
+  it('keeps resource pickers clear of decorative fieldset borders', () => {
+    const primitives = readSource('./AccessControlEditorPrimitives.tsx')
+    const styles = readSource('./AccessControlPage.module.css')
+
+    expect(primitives).toContain('role="group"')
+    expect(primitives).toContain('aria-labelledby={titleId}')
+    expect(primitives).not.toContain('<fieldset className={styles.selectionSection}>')
+    expect(styles).toContain('.selectionSectionHeader {')
   })
 })

@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { DIMENSION_INFO, STATUS_INFO, LEVEL_INFO, formatDuration } from '../../types/evaluation'
 import { useProgress, useTask } from '../../hooks/useEvaluation'
 import ProductIcon from '../ProductIcon'
+import ProductLoadingState from '../ProductLoadingState'
 import styles from './ProgressTracker.module.css'
 
 interface ProgressTrackerProps {
@@ -55,12 +56,10 @@ export function ProgressTracker({ taskId, onComplete, onCancel }: ProgressTracke
 
   if (!task) {
     return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner} />
-          <span>{loading ? 'Loading task…' : 'Waiting for task state…'}</span>
-        </div>
-      </div>
+      <ProductLoadingState
+        compact
+        label={loading ? 'Loading evaluation task' : 'Waiting for evaluation task'}
+      />
     )
   }
 

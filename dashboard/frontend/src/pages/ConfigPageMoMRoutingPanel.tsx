@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
 import {
   routingManagementApi,
@@ -186,7 +187,7 @@ export default function ConfigPageMoMRoutingPanel({ activeView, canRead, canMana
   if (!canRead) {
     return <div className={pageStyles.emptyState}>Routing access is required.</div>
   }
-  if (loading) return <div className={pageStyles.emptyState}>Loading routing…</div>
+  if (loading) return <ProductLoadingState compact label="Loading Mixture-of-Models" />
   if (error && usesKeyScopedCatalog) {
     return (
       <div className={pageStyles.emptyState} role="alert">

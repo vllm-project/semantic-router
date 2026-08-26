@@ -10,6 +10,7 @@ import {
 } from '../components/evaluation'
 import ConfirmDialog from '../components/ConfirmDialog'
 import ProductIcon, { type ProductIconName } from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canRunEvaluation, canWriteEvaluation } from '../utils/accessControl'
@@ -215,23 +216,24 @@ export function EvaluationPage() {
             <button type="button" className={styles.backButton} onClick={handleBackFromReport}>
               <ProductIcon name="arrow-left" /> Back to Tasks
             </button>
-            <div
-              className={`${styles.asyncState} ${resultsError ? styles.asyncStateError : ''}`}
-              role={resultsError ? 'alert' : 'status'}
-            >
-              <h2>{resultsError ? 'Results are unavailable' : 'Loading evaluation results…'}</h2>
-              <p>
-                {resultsError ||
-                  (resultsLoading
-                    ? 'Large reports are loaded only when opened.'
-                    : 'No result payload was returned for this evaluation.')}
-              </p>
-              {resultsError ? (
-                <button type="button" onClick={() => void refreshResults()}>
-                  <ProductIcon name="refresh" /> Retry
-                </button>
-              ) : null}
-            </div>
+            {resultsLoading ? (
+              <ProductLoadingState compact label="Loading evaluation results" />
+            ) : (
+              <div
+                className={`${styles.asyncState} ${resultsError ? styles.asyncStateError : ''}`}
+                role={resultsError ? 'alert' : 'status'}
+              >
+                <h2>{resultsError ? 'Results are unavailable' : 'No results available'}</h2>
+                <p>
+                  {resultsError || 'No result payload was returned for this evaluation.'}
+                </p>
+                {resultsError ? (
+                  <button type="button" onClick={() => void refreshResults()}>
+                    <ProductIcon name="refresh" /> Retry
+                  </button>
+                ) : null}
+              </div>
+            )}
           </div>
         ))}
 

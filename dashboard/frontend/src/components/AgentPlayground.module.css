@@ -354,7 +354,7 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
   padding: 0 18px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.065);
@@ -362,57 +362,11 @@
   backdrop-filter: blur(16px);
 }
 
-.topbarIdentity {
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-
-.topbarMark,
-.emptyMark,
 .dialogLogo {
   display: grid;
   place-items: center;
   border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.035);
-}
-
-.topbarMark {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-}
-
-.topbarMark img {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
-}
-
-.topbarIdentity > div:last-child {
-  min-width: 0;
-  display: grid;
-  gap: 1px;
-}
-
-.topbarIdentity strong,
-.topbarIdentity span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topbarIdentity strong {
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 0.76rem;
-  font-weight: 640;
-}
-
-.topbarIdentity span {
-  max-width: 46vw;
-  color: rgba(255, 255, 255, 0.36);
-  font-size: 0.61rem;
 }
 
 .topbarActions {
@@ -482,15 +436,16 @@
 }
 
 .emptyMark {
-  width: 46px;
-  height: 46px;
-  margin-bottom: 18px;
-  border-radius: 13px;
+  width: 74px;
+  height: 74px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
 }
 
 .emptyMark img {
-  width: 27px;
-  height: 27px;
+  width: 68px;
+  height: 68px;
   object-fit: contain;
 }
 
@@ -1054,10 +1009,16 @@
   background: rgba(17, 18, 21, 0.92);
   box-shadow: 0 18px 56px rgba(0, 0, 0, 0.31);
   backdrop-filter: blur(22px) saturate(120%);
+  transition:
+    border-color 150ms ease,
+    box-shadow 150ms ease;
 }
 
 .composer:focus-within {
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow:
+    0 0 0 3px rgba(255, 255, 255, 0.055),
+    0 18px 56px rgba(0, 0, 0, 0.34);
 }
 
 .composerBuilder {
@@ -1110,6 +1071,13 @@
 .composer textarea::placeholder {
   color: rgba(255, 255, 255, 0.31);
 }
+.composer textarea:focus,
+.composer textarea:focus-visible {
+  border: 0;
+  outline: 0;
+  background: transparent;
+  box-shadow: none;
+}
 .composer textarea:disabled {
   cursor: not-allowed;
   opacity: 0.55;
@@ -1137,6 +1105,29 @@
   font-size: 0.59rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.queueButton {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.61rem;
+  font-weight: 650;
+}
+
+.queueButton:hover:not(:disabled),
+.queueButton:focus-visible {
+  border-color: rgba(255, 255, 255, 0.21);
+  outline: none;
+  background: rgba(255, 255, 255, 0.085);
+  color: rgba(255, 255, 255, 0.94);
+}
+
+.queueButton:disabled {
+  opacity: 0.34;
 }
 
 .sendButton,
@@ -1177,6 +1168,131 @@
   color: rgba(255, 255, 255, 0.27);
   font-size: 0.57rem;
   text-align: center;
+}
+
+.composerQueue {
+  width: calc(100% - 24px);
+  max-height: 126px;
+  display: grid;
+  gap: 4px;
+  margin: 6px auto 0;
+  padding: 5px 6px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 10px;
+  background: rgba(17, 18, 21, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.composerQueue > header {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 3px;
+}
+
+.composerQueue > header > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: rgba(255, 255, 255, 0.39);
+  font-size: 0.58rem;
+  font-weight: 620;
+}
+
+.composerQueue > header small {
+  min-width: 17px;
+  height: 17px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.54rem;
+}
+
+.composerQueue > header button {
+  padding: 2px 4px;
+  border: 0;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.57rem;
+  font-weight: 650;
+}
+
+.composerQueue > header button:hover,
+.composerQueue > header button:focus-visible {
+  outline: none;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.composerQueue ol {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.composerQueue li {
+  min-width: 0;
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto 24px;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 3px;
+  border-radius: 7px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.61rem;
+}
+
+.composerQueue li:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.composerQueue li > small {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.53rem;
+  text-align: center;
+}
+
+.composerQueue li > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composerQueue li > em {
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 0.54rem;
+  font-style: normal;
+  white-space: nowrap;
+}
+
+.composerQueue li > button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.composerQueue li > button:hover,
+.composerQueue li > button:focus-visible {
+  outline: none;
+  background: rgba(255, 255, 255, 0.065);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.composerQueue li > button svg {
+  width: 12px;
+  height: 12px;
 }
 
 .fileInput,
@@ -1558,13 +1674,7 @@
 @media (max-width: 620px) {
   .topbar {
     height: 54px;
-    padding-right: 10px;
-  }
-  .topbarMark {
-    display: none;
-  }
-  .topbarIdentity span {
-    max-width: 34vw;
+    padding-inline: 10px;
   }
   .playgroundKeySelector {
     width: auto;

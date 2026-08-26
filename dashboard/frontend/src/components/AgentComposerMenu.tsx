@@ -4,18 +4,24 @@ import ProductIcon from './ProductIcon'
 import styles from './AgentComposerMenu.module.css'
 
 interface AgentComposerMenuProps {
+  agentAvailable: boolean
+  agentEnabled: boolean
   builderAvailable: boolean
   builderEnabled: boolean
   disabled?: boolean
   onAttachFiles: () => void
+  onAgentChange: (enabled: boolean) => void
   onBuilderChange: (enabled: boolean) => void
 }
 
 export default function AgentComposerMenu({
+  agentAvailable,
+  agentEnabled,
   builderAvailable,
   builderEnabled,
   disabled = false,
   onAttachFiles,
+  onAgentChange,
   onBuilderChange,
 }: AgentComposerMenuProps) {
   const [open, setOpen] = useState(false)
@@ -109,29 +115,53 @@ export default function AgentComposerMenu({
               <small>Images, text, and structured data</small>
             </span>
           </button>
-          {builderAvailable ? (
+          {agentAvailable || builderAvailable ? (
             <>
               <div className={styles.divider} role="separator" />
-              <button
-                type="button"
-                className={`${styles.item} ${builderEnabled ? styles.itemActive : ''}`}
-                role="menuitemcheckbox"
-                aria-checked={builderEnabled}
-                data-testid="playground-builder-mode"
-                onClick={() => {
-                  onBuilderChange(!builderEnabled)
-                  close(true)
-                }}
-              >
-                <span className={styles.icon}>
-                  <ProductIcon name="mixture" />
-                </span>
-                <span className={styles.copy}>
-                  <strong>Builder</strong>
-                  <small>Design and test a model path</small>
-                </span>
-                {builderEnabled ? <ProductIcon className={styles.check} name="check" /> : null}
-              </button>
+              {agentAvailable ? (
+                <button
+                  type="button"
+                  className={`${styles.item} ${agentEnabled ? styles.itemActive : ''}`}
+                  role="menuitemcheckbox"
+                  aria-checked={agentEnabled}
+                  data-testid="playground-agent-mode"
+                  onClick={() => {
+                    onAgentChange(!agentEnabled)
+                    close(true)
+                  }}
+                >
+                  <span className={styles.icon}>
+                    <ProductIcon name="globe" />
+                  </span>
+                  <span className={styles.copy}>
+                    <strong>Agent</strong>
+                    <small>Search the web and use tools</small>
+                  </span>
+                  {agentEnabled ? <ProductIcon className={styles.check} name="check" /> : null}
+                </button>
+              ) : null}
+              {builderAvailable ? (
+                <button
+                  type="button"
+                  className={`${styles.item} ${builderEnabled ? styles.itemActive : ''}`}
+                  role="menuitemcheckbox"
+                  aria-checked={builderEnabled}
+                  data-testid="playground-builder-mode"
+                  onClick={() => {
+                    onBuilderChange(!builderEnabled)
+                    close(true)
+                  }}
+                >
+                  <span className={styles.icon}>
+                    <ProductIcon name="mixture" />
+                  </span>
+                  <span className={styles.copy}>
+                    <strong>Builder</strong>
+                    <small>Design and test a model path</small>
+                  </span>
+                  {builderEnabled ? <ProductIcon className={styles.check} name="check" /> : null}
+                </button>
+              ) : null}
             </>
           ) : null}
         </div>

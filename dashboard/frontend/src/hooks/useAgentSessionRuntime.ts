@@ -9,6 +9,7 @@ import {
 } from '../utils/agentEventStream'
 import { activeAgentTurnId, agentTurnIsTerminal } from '../utils/agentEventProjection'
 import { agentManagementApi, type AgentManagementApi } from '../utils/agentManagementApi'
+import { shouldStreamAgentSessionEvents } from '../utils/agentSessionEventPolicy'
 import { ManagementApiError } from '../utils/managementApiContract'
 import type {
   AgentApprovalRequestPayload,
@@ -23,6 +24,7 @@ export type AgentStreamStatus = 'idle' | 'connecting' | 'live' | 'reconnecting' 
 
 interface UseAgentSessionRuntimeOptions {
   api?: AgentManagementApi
+  builderEventsOnly?: boolean
   enabled?: boolean
   search?: string
 }
@@ -69,6 +71,7 @@ function sortSessions(sessions: readonly AgentSession[]): AgentSession[] {
 
 export function useAgentSessionRuntime({
   api = agentManagementApi,
+  builderEventsOnly = false,
   enabled = true,
   search = '',
 }: UseAgentSessionRuntimeOptions = {}) {
@@ -120,6 +123,15 @@ export function useAgentSessionRuntime({
   useEffect(() => {
     searchRef.current = search
   }, [search])
+
+  const activeSession =
+    sessions.find((session) => session.id === activeSessionId) ??
+    (activeSessionSnapshot?.id === activeSessionId ? activeSessionSnapshot : null)
+  const shouldStreamActiveSession = shouldStreamAgentSessionEvents({
+    activeSessionId,
+    activeSessionMode: activeSession?.mode,
+    builderEventsOnly,
+  })
 
   const refreshSessions = useCallback(async () => {
     if (!enabled) return
@@ -197,7 +209,7 @@ export function useAgentSessionRuntime({
   }, [api, enabled, loadingSessions, search, sessionsCursor, sessionsHaveMore])
 
   useEffect(() => {
-    if (!enabled || !activeSessionId) {
+    if (!enabled || !activeSessionId || !shouldStreamActiveSession) {
       eventsPageRequestRef.current?.abort()
       eventsPageGenerationRef.current += 1
       setEvents([])
@@ -361,10 +373,17 @@ export function useAgentSessionRuntime({
       eventsPageRequestRef.current?.abort()
       eventsPageGenerationRef.current += 1
     }
-  }, [activeSessionId, api, enabled, showNotice, streamAttempt])
+  }, [activeSessionId, api, enabled, shouldStreamActiveSession, showNotice, streamAttempt])
 
   const loadMoreEvents = useCallback(async () => {
-    if (!activeSessionId || !eventsHaveMore || !eventsCursor || loadingEvents) return
+    if (
+      !activeSessionId ||
+      !shouldStreamActiveSession ||
+      !eventsHaveMore ||
+      !eventsCursor ||
+      loadingEvents
+    )
+      return
     const sessionId = activeSessionId
     const generation = ++eventsPageGenerationRef.current
     eventsPageRequestRef.current?.abort()
@@ -398,7 +417,15 @@ export function useAgentSessionRuntime({
       }
       if (eventsPageRequestRef.current === controller) eventsPageRequestRef.current = null
     }
-  }, [activeSessionId, api, eventsCursor, eventsHaveMore, loadingEvents, showNotice])
+  }, [
+    activeSessionId,
+    api,
+    eventsCursor,
+    eventsHaveMore,
+    loadingEvents,
+    shouldStreamActiveSession,
+    showNotice,
+  ])
 
   const createSession = useCallback(
     async (input: AgentSessionInput): Promise<AgentSession> => {
@@ -532,9 +559,7 @@ export function useAgentSessionRuntime({
   }, [])
 
   return {
-    activeSession:
-      sessions.find((session) => session.id === activeSessionId) ??
-      (activeSessionSnapshot?.id === activeSessionId ? activeSessionSnapshot : null),
+    activeSession,
     activeSessionId,
     activeTurnId,
     cancelTurn,

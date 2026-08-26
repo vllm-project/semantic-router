@@ -19,6 +19,11 @@ import {
 } from '../utils/managementApiContract'
 import { clearInvitationOnboarding } from '../utils/invitationOnboarding'
 import { fetchCurrentAuthUser, hasAuthenticatedSession, type AuthUser } from './authSession'
+import {
+  classifyManagementIdentityFailure,
+  managementIdentityRecoveryDelay,
+} from './managementIdentityRecovery'
+import { subscribeToAuthSessionRevalidation } from './authSessionRevalidation'
 
 interface AuthContextValue {
   user: AuthUser | null
@@ -46,6 +51,17 @@ const readErrorMessage = async (response: Response): Promise<string> => {
   }
 }
 
+const failClosedAuthorization = (current: AuthUser | null): AuthUser | null =>
+  current
+    ? {
+        ...current,
+        permissions: [],
+        managementPermissions: [],
+        managementIdentityStatus: 'error',
+        managementIdentityError: 'Dashboard authorization could not be revalidated.',
+      }
+    : current
+
 installAuthenticatedFetch()
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -62,7 +78,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const attachManagementIdentity = useCallback(async (nextUser: AuthUser | null) => {
     if (!nextUser) return null
-    setManagementNamespace(null)
     try {
       const identity = assertManagementMe(
         await managementOperationRequest('getMe', { namespace: null }),
@@ -92,14 +107,12 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     } catch (cause) {
       // Local Dashboard access may remain available, but every Router-owned
       // control and inference surface fails closed without scoped permissions.
-      const detail =
-        cause instanceof Error && cause.message.trim()
-          ? cause.message.trim()
-          : 'Router Management identity is unavailable.'
+      const failure = classifyManagementIdentityFailure(cause)
+      setManagementNamespace(null)
       return {
         ...nextUser,
-        managementIdentityStatus: 'error' as const,
-        managementIdentityError: detail,
+        managementIdentityStatus: failure.status,
+        managementIdentityError: failure.detail,
         managementPrincipalId: undefined,
         managementNamespaceId: undefined,
         managementUserId: undefined,
@@ -150,9 +163,68 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   }, [attachManagementIdentity, clearSession])
 
+  const revalidateAuthorization = useCallback(async () => {
+    const generation = sessionGeneration.current
+    try {
+      const result = await fetchCurrentAuthUser()
+      if (sessionGeneration.current !== generation) return
+      if (result.unauthorized) {
+        clearSession()
+        return
+      }
+      if (!result.user) {
+        setManagementNamespace(null)
+        setUser(failClosedAuthorization)
+        return
+      }
+      const nextUser = await attachManagementIdentity(result.user)
+      if (sessionGeneration.current === generation) setUser(nextUser)
+    } catch {
+      if (sessionGeneration.current !== generation) return
+      setManagementNamespace(null)
+      setUser(failClosedAuthorization)
+    }
+  }, [attachManagementIdentity, clearSession])
+
   useEffect(() => {
     void refreshSession()
   }, [refreshSession])
+
+  useEffect(() => {
+    if (!user?.id) return
+    return subscribeToAuthSessionRevalidation(revalidateAuthorization)
+  }, [revalidateAuthorization, user?.id])
+
+  useEffect(() => {
+    if (!user || user.managementIdentityStatus !== 'unavailable') return
+    const recoveringUser = user
+
+    let cancelled = false
+    let timeout: number | undefined
+    let attempt = 0
+    const generation = sessionGeneration.current
+
+    async function retry() {
+      const attached = await attachManagementIdentity(recoveringUser)
+      if (cancelled || sessionGeneration.current !== generation || !attached) return
+      if (attached.managementIdentityStatus === 'unavailable') {
+        schedule()
+        return
+      }
+      setUser((current) => (current?.id === recoveringUser.id ? attached : current))
+    }
+
+    function schedule() {
+      timeout = window.setTimeout(() => void retry(), managementIdentityRecoveryDelay(attempt))
+      attempt += 1
+    }
+
+    schedule()
+    return () => {
+      cancelled = true
+      if (timeout !== undefined) window.clearTimeout(timeout)
+    }
+  }, [attachManagementIdentity, user])
 
   useEffect(() => {
     const handleUnauthorized = () => {

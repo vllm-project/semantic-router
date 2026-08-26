@@ -5,24 +5,81 @@ import type {
   AgentApprovalRequestPayload,
   AgentEvent,
   AgentLiveModelStepEvent,
-  AgentSessionMode,
+  AgentModelStepSummaryEventPayload,
 } from '../generated/managementApiContract'
+import type { PlaygroundInferenceMessage } from '../utils/playgroundInferenceMessages'
 import AgentArtifactResult from './AgentArtifactResult'
 import AgentRouterMetadata from './AgentRouterMetadata'
+import HeaderDisplay from './HeaderDisplay'
 import MarkdownRenderer from './MarkdownRenderer'
 import ProductIcon from './ProductIcon'
+import type { PlaygroundMode } from './playgroundModes'
 import styles from './AgentPlayground.module.css'
 
 interface AgentTimelineProps {
   events: AgentEvent[]
   liveModelSteps: AgentLiveModelStepEvent[]
+  inferenceMessages?: PlaygroundInferenceMessage[]
   hasEarlier: boolean
   loading: boolean
-  mode: AgentSessionMode
+  mode: PlaygroundMode
+  userName: string
   canLoadArtifactContent: boolean
   canReadRequestLogs: boolean
   onLoadEarlier: () => void
   onReview: (approval: AgentApprovalRequestPayload) => void
+}
+
+const RESPONSE_PATHS = new Set<NonNullable<AgentModelStepSummaryEventPayload['responsePath']>>([
+  'upstream',
+  'cache',
+  'fast_response',
+  'looper',
+  'image_generation',
+])
+
+function directRouterMetadata(
+  message: PlaygroundInferenceMessage,
+): AgentModelStepSummaryEventPayload | null {
+  const metadata = message.metadata
+  if (!metadata) return null
+  const headers = metadata.headers
+  const responsePath = headers['x-vsr-response-path']
+  const resolvedResponsePath = RESPONSE_PATHS.has(
+    responsePath as NonNullable<AgentModelStepSummaryEventPayload['responsePath']>,
+  )
+    ? (responsePath as NonNullable<AgentModelStepSummaryEventPayload['responsePath']>)
+    : undefined
+  return {
+    latencyMilliseconds: metadata.latencyMilliseconds,
+    modelStepId: metadata.responseId || message.id,
+    requestId: metadata.requestId || metadata.responseId || 'Unavailable',
+    ...(resolvedResponsePath ? { responsePath: resolvedResponsePath } : {}),
+    ...(headers['x-vsr-selected-algorithm']
+      ? { selectedAlgorithm: headers['x-vsr-selected-algorithm'] }
+      : {}),
+    ...(headers['x-vsr-selected-decision']
+      ? { selectedDecision: headers['x-vsr-selected-decision'] }
+      : {}),
+    ...(headers['x-vsr-selected-model'] || metadata.model
+      ? { selectedModel: headers['x-vsr-selected-model'] || metadata.model }
+      : {}),
+    ...(headers['x-vsr-selected-recipe']
+      ? { selectedRecipe: headers['x-vsr-selected-recipe'] }
+      : {}),
+    ...(metadata.ttftMilliseconds !== undefined
+      ? { ttftMilliseconds: metadata.ttftMilliseconds }
+      : {}),
+    ...(metadata.usage
+      ? {
+          usage: {
+            inputTokens: metadata.usage.promptTokens,
+            outputTokens: metadata.usage.completionTokens,
+            totalTokens: metadata.usage.totalTokens,
+          },
+        }
+      : {}),
+  }
 }
 
 function readableToolName(value: string): string {
@@ -93,9 +150,11 @@ function ToolRow({
 export default function AgentTimeline({
   events,
   liveModelSteps,
+  inferenceMessages = [],
   hasEarlier,
   loading,
   mode,
+  userName,
   canLoadArtifactContent,
   canReadRequestLogs,
   onLoadEarlier,
@@ -122,7 +181,7 @@ export default function AgentTimeline({
         }),
       )
     }
-  }, [items, lastSequence])
+  }, [inferenceMessages, items, lastSequence])
 
   return (
     <div ref={viewportRef} className={styles.timelineViewport} data-testid="agent-timeline">
@@ -143,16 +202,18 @@ export default function AgentTimeline({
             {loading ? 'Loading…' : 'Load earlier messages'}
           </button>
         ) : null}
-        {!loading && items.length === 0 ? (
+        {!loading && items.length === 0 && inferenceMessages.length === 0 ? (
           <div className={styles.emptyConversation}>
             <div className={styles.emptyMark}>
               <img src="/vllm.png" alt="" />
             </div>
-            <h1>{mode === 'builder' ? 'Build your model path' : 'What are you working on?'}</h1>
+            <h1>Welcome, {userName}</h1>
             <p>
               {mode === 'builder'
-                ? 'Describe the workload. The Agent will design, test, and prepare it for review.'
-                : 'Ask, explore, or test a model.'}
+                ? 'Describe the outcome. We’ll compose the model path.'
+                : mode === 'agent'
+                  ? 'Search the web. Use the right tools.'
+                  : 'One prompt. The right model path.'}
             </p>
           </div>
         ) : null}
@@ -232,6 +293,40 @@ export default function AgentTimeline({
             )
           }
           return null
+        })}
+        {inferenceMessages.map((message) => {
+          if (message.status === 'failed' && !message.content) return null
+          const responseMetadata = directRouterMetadata(message)
+          return (
+            <article
+              key={message.id}
+              className={`${styles.message} ${message.role === 'user' ? styles.userMessage : styles.assistantMessage}`}
+              data-testid={`agent-message-${message.role}`}
+            >
+              <div className={styles.messageBody}>
+                {message.role === 'assistant' && message.content ? (
+                  <MarkdownRenderer content={message.content} />
+                ) : (
+                  message.content
+                )}
+                {message.status === 'streaming' ? (
+                  <span className={styles.streamCursor} aria-label="Generating" />
+                ) : null}
+                {message.role === 'assistant' && message.metadata?.headers ? (
+                  <HeaderDisplay headers={message.metadata.headers} />
+                ) : null}
+                {message.role === 'assistant' && responseMetadata ? (
+                  <AgentRouterMetadata
+                    metadata={responseMetadata}
+                    canReadRequestLogs={
+                      canReadRequestLogs &&
+                      Boolean(message.metadata?.requestId || message.metadata?.responseId)
+                    }
+                  />
+                ) : null}
+              </div>
+            </article>
+          )
         })}
       </div>
     </div>

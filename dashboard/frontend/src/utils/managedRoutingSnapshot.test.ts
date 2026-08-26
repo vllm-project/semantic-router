@@ -7,6 +7,7 @@ import type { RoutingEntrypoint, RoutingModelCardView, RoutingRecipe } from './r
 import { routingManagementApi } from './routingManagementApi'
 import {
   buildManagedRoutingSnapshot,
+  fetchManagedRoutingOverviewSnapshot,
   fetchManagedRoutingSnapshot,
   fetchManagedRoutingSummary,
   listManagedRecipeScopes,
@@ -56,6 +57,7 @@ const entrypoint = (
   revision: 1,
   entrypointRevision: 1,
   aliases: [alias],
+  recipeIds: [recipe.id],
   ruleCount: 1,
   assignedModelCount: 1,
   rules: [
@@ -150,6 +152,84 @@ describe('managed routing snapshot', () => {
 
     expect(result.entrypoints).toEqual([summary])
     expect(topology).not.toHaveBeenCalled()
+  })
+
+  it('hydrates one representative Entrypoint per Recipe for Dashboard assignments', async () => {
+    const deepRecipe: RoutingRecipe = {
+      ...recipe,
+      id: 'recipe-deep',
+      name: 'deep',
+      decisions: [{ id: 'decision-deep', name: 'Deep', dispatchCardinality: 'single' }],
+      document: {
+        ...recipe.document,
+        decisions: [
+          {
+            id: 'decision-deep',
+            name: 'Deep',
+            priority: 100,
+            rules: { operator: 'AND', conditions: [] },
+          },
+        ],
+      },
+    }
+    const publicEntrypoint = entrypoint(
+      'entrypoint-public',
+      'vllm-sr/public',
+      'rule-public',
+      'model-fast',
+    )
+    const duplicateEntrypoint = entrypoint(
+      'entrypoint-alias',
+      'vllm-sr/public-alias',
+      'rule-alias',
+      'model-fast',
+    )
+    const deepEntrypoint: RoutingEntrypoint = {
+      ...entrypoint('entrypoint-deep', 'vllm-sr/deep', 'rule-deep', 'model-deep'),
+      recipeIds: [deepRecipe.id],
+      rules: [
+        {
+          id: 'rule-deep',
+          name: 'Default',
+          recipeId: deepRecipe.id,
+          recipeRevision: deepRecipe.revision,
+          assignments: {
+            'decision-deep': {
+              models: [{ modelId: 'model-deep', modelRevision: 1, priority: 0, weight: '1' }],
+            },
+          },
+        },
+      ],
+    }
+    const summaries = [publicEntrypoint, duplicateEntrypoint, deepEntrypoint].map((item) => ({
+      ...item,
+      rules: undefined,
+    }))
+    vi.spyOn(routingManagementApi, 'listModelCards').mockResolvedValue([
+      model('model-fast', 'fast'),
+      model('model-deep', 'deep'),
+    ])
+    vi.spyOn(routingManagementApi, 'listRecipes').mockResolvedValue([recipe, deepRecipe])
+    vi.spyOn(routingManagementApi, 'listEntrypoints').mockResolvedValue(summaries)
+    const topology = vi
+      .spyOn(routingManagementApi, 'getEntrypointTopology')
+      .mockImplementation(async (id) =>
+        id === deepEntrypoint.id ? deepEntrypoint : publicEntrypoint,
+      )
+
+    const result = await fetchManagedRoutingOverviewSnapshot()
+
+    expect(topology.mock.calls.map(([id]) => id)).toEqual([publicEntrypoint.id, deepEntrypoint.id])
+    expect(countDecisions(result)).toBe(2)
+    const assignedModels = result.routingScopes
+      .filter((scope) => scope.hydrated)
+      .flatMap((scope) =>
+        parseConfigToTopology({
+          models: result.models,
+          document: scope.document as ManagedTopologyConfig['document'],
+        }).decisions.flatMap((decision) => decision.modelRefs.map((reference) => reference.model)),
+      )
+    expect(assignedModels).toEqual(expect.arrayContaining(['fast', 'deep']))
   })
 
   it('hydrates only the Entrypoint named by a topology deep link', async () => {

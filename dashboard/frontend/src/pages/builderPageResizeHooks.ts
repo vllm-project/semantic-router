@@ -5,6 +5,7 @@ interface UseResizableWidthOptions {
   minWidth: number
   getMaxWidth: () => number
   stopPropagation?: boolean
+  growthDirection?: 'left' | 'right'
 }
 
 function useResizableWidth({
@@ -12,6 +13,7 @@ function useResizableWidth({
   minWidth,
   getMaxWidth,
   stopPropagation = false,
+  growthDirection = 'left',
 }: UseResizableWidthOptions) {
   const [width, setWidth] = useState(initialWidth)
   const [isDragging, setIsDragging] = useState(false)
@@ -38,8 +40,9 @@ function useResizableWidth({
   useEffect(() => {
     const handleDragMove = (event: MouseEvent) => {
       if (!isDraggingRef.current) return
-      const delta = dragStartXRef.current - event.clientX
-      const maxWidth = getMaxWidth()
+      const pointerDelta = event.clientX - dragStartXRef.current
+      const delta = growthDirection === 'right' ? pointerDelta : -pointerDelta
+      const maxWidth = Math.max(minWidth, getMaxWidth())
       const nextWidth = Math.min(maxWidth, Math.max(minWidth, dragStartWidthRef.current + delta))
       setWidth(nextWidth)
     }
@@ -58,9 +61,18 @@ function useResizableWidth({
       document.removeEventListener('mousemove', handleDragMove)
       document.removeEventListener('mouseup', handleDragEnd)
     }
-  }, [getMaxWidth, minWidth])
+  }, [getMaxWidth, growthDirection, minWidth])
 
-  return { width, isDragging, handleDragStart }
+  const adjustWidth = useCallback(
+    (delta: number) => {
+      setWidth((current) =>
+        Math.min(Math.max(minWidth, getMaxWidth()), Math.max(minWidth, current + delta)),
+      )
+    },
+    [getMaxWidth, minWidth],
+  )
+
+  return { width, isDragging, handleDragStart, adjustWidth }
 }
 
 export { useResizableWidth }

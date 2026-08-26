@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import PermissionList from '../components/PermissionList'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import { inferenceAccessApi, type AccessUser } from '../utils/inferenceAccessApi'
 import type { DashboardMember } from './AccessControlViewTypes'
@@ -87,7 +88,7 @@ export function DashboardMemberDetail({
             </div>
           ) : null}
           {!member && !error ? (
-            <div className={styles.detailLoading}>Loading user details…</div>
+            <ProductLoadingState compact label="Loading user details" />
           ) : null}
           {member ? (
             <>

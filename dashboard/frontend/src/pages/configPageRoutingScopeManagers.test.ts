@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
 import type { RoutingRecipe } from '../utils/routingManagementApi'
-import { managedRecipeConfig, managedRecipeDocument } from './configPageRoutingScopeSupport'
+import {
+  managedRecipeConfig,
+  managedRecipeDocument,
+  withRecipeScope,
+} from './configPageRoutingScopeSupport'
 
 const recipe: RoutingRecipe = {
   id: '00000000-0000-4000-8000-000000000001',
@@ -54,5 +58,15 @@ describe('managed Recipe editor boundary', () => {
       projections: recipe.document.projections,
       decisions: recipe.document.decisions,
     })
+  })
+
+  it('updates only the Recipe URL scope while preserving unrelated query state', () => {
+    const selected = withRecipeScope(
+      new URLSearchParams('view=compact&recipe=old-recipe'),
+      'recipe/balanced',
+    )
+
+    expect(selected.toString()).toBe('view=compact&recipe=recipe%2Fbalanced')
+    expect(withRecipeScope(selected, '').toString()).toBe('view=compact')
   })
 })

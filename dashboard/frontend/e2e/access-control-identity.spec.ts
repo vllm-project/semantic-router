@@ -53,6 +53,9 @@ const budget = {
 const membership = {
   teamId: team.teamId,
   userId: user.userId,
+  displayName: user.displayName,
+  email: user.email,
+  userStatus: user.status,
   role: 'admin',
   status: 'active',
   revision: 1,
@@ -82,6 +85,7 @@ const requestLog = {
   teamId: team.teamId,
   entrypointId: 'vllm-sr/balanced',
   recipeId: 'balanced',
+  models: [{ id: 'model-balanced', name: 'vllm-sr/balanced', revision: 1 }],
   metadata: { externalRequestId: 'chatcmpl-1', request: '{"prompt":"hello"}' },
   costs: [],
 }
@@ -210,7 +214,9 @@ test.describe('Access control identity', () => {
     await mockAccessControl(page)
   })
 
-  test('makes API key ownership explicit and keeps overrides advanced', async ({ page }) => {
+  test('makes API key ownership and policy visible while keeping lifecycle settings advanced', async ({
+    page,
+  }) => {
     await page.goto('/access/api-keys')
     await page.getByRole('button', { name: 'Create key' }).click()
 
@@ -218,13 +224,15 @@ test.describe('Access control identity', () => {
     await expect(dialog.getByText('Owned by')).toBeVisible()
     await expect(dialog.getByRole('radio', { name: /Personal/ })).toBeVisible()
     await expect(dialog.getByRole('radio', { name: /Team/ })).toBeVisible()
-    await expect(dialog.getByRole('searchbox', { name: 'Search users' })).toBeVisible()
+    await expect(dialog.getByRole('combobox', { name: 'Search users' })).toBeVisible()
+    await expect(dialog.getByRole('group', { name: 'Model access' })).toBeVisible()
     const advanced = dialog.locator('details').filter({ hasText: 'Advanced settings' })
     await expect(advanced).not.toHaveAttribute('open', '')
 
     await advanced.locator('summary').click()
     await expect(advanced).toHaveAttribute('open', '')
-    await expect(advanced.getByText('Key override · optional').first()).toBeVisible()
+    await expect(advanced.getByText('Expiration')).toBeVisible()
+    await expect(advanced.getByText('Status')).toBeVisible()
   })
 
   test('keeps Team assignment optional while making Dashboard access explicit', async ({
@@ -263,6 +271,60 @@ test.describe('Access control identity', () => {
         const dialog = await expectCenteredProductDialog(page, target.title)
         await dialog.getByRole('button', { name: 'Close' }).click()
       }
+    }
+  })
+
+  test('keeps access picker headings and Budget actions visually restrained', async ({ page }) => {
+    for (const viewport of [
+      { width: 390, height: 844 },
+      { width: 1440, height: 900 },
+    ]) {
+      await page.setViewportSize(viewport)
+
+      await page.goto('/access/teams')
+      await page.getByRole('button', { name: 'New team' }).click()
+      const teamDialog = page.getByRole('dialog', { name: 'Create team' })
+      await expect(teamDialog.getByRole('group', { name: 'Members' })).toBeVisible()
+      const modelAccess = teamDialog.getByRole('group', { name: 'Model access' })
+      await expect(modelAccess).toBeVisible()
+      await expect(teamDialog.getByRole('group', { name: 'Quota' })).toBeVisible()
+      const pickerGeometry = await modelAccess.evaluate((element) => {
+        const heading = element.querySelector('header')?.getBoundingClientRect()
+        const headingCopy = Array.from(element.querySelector('header')?.children ?? []).map(
+          (child) => child.getBoundingClientRect(),
+        )
+        const search = element.querySelector('input[role="combobox"]')?.getBoundingClientRect()
+        const copyOverlaps =
+          headingCopy.length === 2 &&
+          headingCopy[0].left < headingCopy[1].right &&
+          headingCopy[0].right > headingCopy[1].left &&
+          headingCopy[0].top < headingCopy[1].bottom &&
+          headingCopy[0].bottom > headingCopy[1].top
+        return {
+          spacing: heading && search ? search.top - heading.bottom : -1,
+          copyOverlaps,
+        }
+      })
+      expect(pickerGeometry.spacing).toBeGreaterThanOrEqual(8)
+      expect(pickerGeometry.copyOverlaps).toBe(false)
+
+      await page.goto('/access/budgets')
+      await page.getByRole('button', { name: 'New budget' }).click()
+      const budgetDialog = page.getByRole('dialog', { name: 'Create budget' })
+      const actionSizes = await Promise.all(
+        [
+          budgetDialog.getByRole('button', { name: 'Add limit' }),
+          budgetDialog.getByRole('button', { name: 'Remove limit 1' }),
+        ].map((button) =>
+          button.evaluate((element) => {
+            const bounds = element.getBoundingClientRect()
+            return { width: bounds.width, height: bounds.height }
+          }),
+        ),
+      )
+      expect(actionSizes[0].height).toBeLessThanOrEqual(32)
+      expect(actionSizes[1].height).toBeLessThanOrEqual(32)
+      expect(actionSizes[1].width).toBeLessThanOrEqual(32)
     }
   })
 
@@ -340,6 +402,7 @@ test.describe('Access control identity', () => {
               revision: 1,
               entrypointRevision: 1,
               aliases: ['vllm-sr/balanced'],
+              recipeIds: ['recipe-balanced'],
               ruleCount: 1,
               assignedModelCount: 2,
               createdAt: '2026-08-23T00:00:00Z',
@@ -362,7 +425,7 @@ test.describe('Access control identity', () => {
     await page.goto('/access/access-groups')
     await page.getByRole('button', { name: 'New group' }).click()
     const dialog = page.getByRole('dialog', { name: 'Create access group' })
-    const search = dialog.getByRole('searchbox', { name: 'Search Mixture-of-Models' })
+    const search = dialog.getByRole('combobox', { name: 'Search Mixture-of-Models' })
     await expect(search).toBeVisible()
     await search.fill('balanced')
 

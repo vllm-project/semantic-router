@@ -12,7 +12,6 @@ export type ShellRoutePage =
   | 'monitoring'
   | 'openclaw'
   | 'playground'
-  | 'plugins'
   | 'status'
   | 'topology'
   | 'tracing'
@@ -42,8 +41,6 @@ export const shellRouteDefinitions: readonly ShellRouteDefinition[] = [
   { path: '/topology', page: 'topology' },
   { path: '/tracing', page: 'tracing' },
   { path: '/status', page: 'status' },
-  { path: '/plugins', page: 'plugins' },
-  { path: '/plugins/:plugin', page: 'plugins' },
   { path: '/logs', page: 'access-control' },
   { path: '/insights', page: 'insights' },
   { path: '/insights/:recordId', page: 'insights-record' },

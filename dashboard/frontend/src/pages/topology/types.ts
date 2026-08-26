@@ -286,7 +286,6 @@ export interface ModelConfig {
   name: string
   reasoning_family?: string
   endpoints?: EndpointConfig[]
-  pricing?: PricingConfig
 }
 
 export interface EndpointConfig {
@@ -294,14 +293,6 @@ export interface EndpointConfig {
   weight: number
   endpoint: string
   protocol: 'http' | 'https'
-}
-
-export interface PricingConfig {
-  currency?: string
-  prompt_per_1m?: number
-  cached_input_per_1m?: number
-  cache_write_per_1m?: number
-  completion_per_1m?: number
 }
 
 // ============== Global Plugin Types ==============

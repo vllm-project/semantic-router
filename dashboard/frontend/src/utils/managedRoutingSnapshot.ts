@@ -17,6 +17,7 @@ export interface RoutingDocument {
 
 export interface ManagedRoutingScope {
   id: string
+  recipeId: string
   label: string
   description?: string
   entrypointModelNames: string[]
@@ -111,7 +112,8 @@ function entrypointNamesForRecipe(entrypoints: RoutingEntrypoint[], recipeID: st
   return [
     ...new Set(
       entrypoints.flatMap((entrypoint) =>
-        (entrypoint.rules ?? []).some((rule) => rule.recipeId === recipeID)
+        (entrypoint.rules ?? []).some((rule) => rule.recipeId === recipeID) ||
+        entrypoint.recipeIds.includes(recipeID)
           ? publicNames(entrypoint)
           : [],
       ),
@@ -124,6 +126,7 @@ export function listManagedRecipeScopes(
 ): ManagedRoutingScope[] {
   return catalog.recipes.map((recipe) => ({
     id: `recipe:${recipe.id}`,
+    recipeId: recipe.id,
     label: recipe.name,
     description: recipe.description,
     entrypointModelNames: entrypointNamesForRecipe(catalog.entrypoints, recipe.id),
@@ -154,6 +157,7 @@ function buildTopologyScopes(
       referencedRecipeIDs.add(recipe.id)
       scopes.push({
         id: `entrypoint:${entrypoint.id}:${rule.id}`,
+        recipeId: recipe.id,
         label: rules.length > 1 ? `${names[0]} · ${rule.name}` : names[0],
         description: recipe.description,
         entrypointModelNames: names,
@@ -168,6 +172,7 @@ function buildTopologyScopes(
     if (hydratedIDs.has(entrypoint.id)) continue
     scopes.push({
       id: `entrypoint:${entrypoint.id}`,
+      recipeId: '',
       label: publicNames(entrypoint)[0],
       description: `${entrypoint.ruleCount} routing rule${entrypoint.ruleCount === 1 ? '' : 's'}`,
       entrypointModelNames: publicNames(entrypoint),
@@ -181,9 +186,10 @@ function buildTopologyScopes(
     if (referencedRecipeIDs.has(recipe.id)) continue
     scopes.push({
       id: `recipe:${recipe.id}`,
+      recipeId: recipe.id,
       label: recipe.name,
       description: recipe.description,
-      entrypointModelNames: entrypointNamesForRecipe(hydratedEntrypoints, recipe.id),
+      entrypointModelNames: entrypointNamesForRecipe(summaries, recipe.id),
       document: recipeDocument(recipe),
       source: 'recipe',
       hydrated: true,
@@ -236,6 +242,53 @@ async function fetchManagedRoutingCatalog() {
 export async function fetchManagedRoutingSummary(): Promise<ManagedRoutingSummary> {
   const { models, recipes, entrypoints } = await fetchManagedRoutingCatalog()
   return buildManagedRoutingSummary(models, recipes, entrypoints)
+}
+
+/**
+ * Loads one representative Entrypoint per Recipe for overview surfaces. The
+ * list contract carries only Recipe references, so assignment hydration stays
+ * bounded by the number of Recipes rather than growing with every Entrypoint.
+ */
+export async function fetchManagedRoutingOverviewSnapshot(): Promise<ManagedRoutingSnapshot> {
+  const { models, recipes, entrypoints: summaries } = await fetchManagedRoutingCatalog()
+  const uncoveredRecipes = new Set(recipes.map((recipe) => recipe.id))
+  const representatives: RoutingEntrypoint[] = []
+  for (const summary of summaries) {
+    const covers = summary.recipeIds.filter((recipeID) => uncoveredRecipes.has(recipeID))
+    if (covers.length === 0) continue
+    representatives.push(summary)
+    covers.forEach((recipeID) => uncoveredRecipes.delete(recipeID))
+    if (uncoveredRecipes.size === 0) break
+  }
+  const hydratedEntrypoints = await Promise.all(
+    representatives.map((entrypoint) =>
+      entrypoint.rules
+        ? Promise.resolve(entrypoint)
+        : routingManagementApi.getEntrypointTopology(entrypoint.id),
+    ),
+  )
+  const hydratedRecipeIDs = new Set(
+    hydratedEntrypoints.flatMap(
+      (entrypoint) => entrypoint.rules?.map((rule) => rule.recipeId) ?? [],
+    ),
+  )
+  const missingAssignments = [...uncoveredRecipes].filter((recipeID) =>
+    summaries.some((entrypoint) => entrypoint.recipeIds.includes(recipeID)),
+  )
+  if (
+    missingAssignments.length > 0 ||
+    representatives.some((entrypoint) =>
+      entrypoint.recipeIds.some((recipeID) => !hydratedRecipeIDs.has(recipeID)),
+    )
+  ) {
+    throw new Error('Router returned an incomplete Entrypoint assignment topology.')
+  }
+  return {
+    models: clone(models),
+    recipes: clone(recipes),
+    entrypoints: clone(summaries),
+    routingScopes: buildTopologyScopes(models, recipes, summaries, hydratedEntrypoints),
+  }
 }
 
 /**

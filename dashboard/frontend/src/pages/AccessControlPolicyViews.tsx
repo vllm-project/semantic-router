@@ -121,7 +121,7 @@ export function GroupsView(props: Props) {
           <div className={styles.tagList}>
             {group.resources.map((resource) => (
               <code key={`${resource.resourceType}:${resource.resourceId}`}>
-                {resource.resourceId}
+                {props.resourceName(resource.resourceType, resource.resourceId)}
               </code>
             ))}
           </div>

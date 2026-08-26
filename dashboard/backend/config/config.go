@@ -82,6 +82,9 @@ type Config struct {
 
 	// Durable workflow state (ML pipeline jobs, OpenClaw entities)
 	WorkflowDBPath string
+
+	// Durable Dashboard-local public service history.
+	StatusDBPath string
 }
 
 // env returns the env var or default
@@ -208,6 +211,7 @@ type parsedFlags struct {
 	mlTrainingDir        *string
 	mlServiceURL         *string
 	workflowDBPath       *string
+	statusDBPath         *string
 	auth                 authFlags
 	openClaw             openClawFlags
 }
@@ -254,6 +258,7 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.MLTrainingDir = *flags.mlTrainingDir
 	cfg.MLServiceURL = *flags.mlServiceURL
 	cfg.WorkflowDBPath = *flags.workflowDBPath
+	cfg.StatusDBPath = *flags.statusDBPath
 }
 
 func applyAuthConfig(cfg *Config, flags authFlags) error {
@@ -370,6 +375,7 @@ func bindParsedFlags() parsedFlags {
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 	workflowDBPath := flag.String("workflow-db", env("DASHBOARD_WORKFLOW_DB_PATH", "./data/workflow.sqlite"), "SQLite path for durable dashboard workflow state")
+	statusDBPath := flag.String("status-db", env("DASHBOARD_STATUS_DB_PATH", ""), "SQLite path for durable dashboard service history (defaults beside the auth database)")
 
 	// Authentication configuration
 	auth := bindAuthFlags()
@@ -401,6 +407,7 @@ func bindParsedFlags() parsedFlags {
 		mlTrainingDir:        mlTrainingDir,
 		mlServiceURL:         mlServiceURL,
 		workflowDBPath:       workflowDBPath,
+		statusDBPath:         statusDBPath,
 		auth:                 auth,
 		openClaw:             openClaw,
 	}
@@ -422,10 +429,17 @@ func LoadConfig() (*Config, error) {
 	if err := applyAuthConfig(cfg, flags.auth); err != nil {
 		return nil, err
 	}
+	resolveDashboardStatePaths(cfg)
 	applyOpenClawConfig(cfg, flags.openClaw)
 	if err := resolveConfigPaths(cfg); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
+}
+
+func resolveDashboardStatePaths(cfg *Config) {
+	if strings.TrimSpace(cfg.StatusDBPath) == "" {
+		cfg.StatusDBPath = filepath.Join(filepath.Dir(cfg.AuthDBPath), "status.sqlite")
+	}
 }

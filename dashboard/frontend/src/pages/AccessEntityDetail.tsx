@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import {
   inferenceAccessApi,
@@ -19,10 +20,24 @@ import {
   formatNumber,
   rateLimitRuleLabel,
 } from './AccessControlDetailSupport'
+import {
+  AccessGroupResourceTags,
+  createEntityPolicyNameResolver,
+  formatEntityPolicyNames,
+  resolveEntityPolicyNames,
+  type EntityPolicyNameResolver,
+} from './AccessEntityDetailSupport'
 import styles from './AccessControlPage.module.css'
 
 export type EntityDetailKind = 'user' | 'team' | 'group' | 'budget'
 export type EntityDetailValue = AccessUser | AccessTeam | AccessGroup | AccessBudget
+
+const ENTITY_LABELS: Record<EntityDetailKind, string> = {
+  user: 'User',
+  team: 'Team',
+  group: 'Access group',
+  budget: 'Budget',
+}
 
 type EntityRelationKind =
   | 'memberships'
@@ -133,6 +148,7 @@ export function AccessEntityDetail({
   canDelete,
   selfService = false,
   selfUserId,
+  resourceName,
   onEdit,
   onDelete,
   onClose,
@@ -143,6 +159,7 @@ export function AccessEntityDetail({
   canDelete: boolean
   selfService?: boolean
   selfUserId: string
+  resourceName: (resourceType: 'model' | 'entrypoint', resourceId: string) => string
   onEdit: (kind: EntityDetailKind, item: EntityDetailValue) => void
   onDelete: (kind: EntityDetailKind, id: string) => void
   onClose: () => void
@@ -158,6 +175,23 @@ export function AccessEntityDetail({
   const [budgetAssignments, setBudgetAssignments] = useState<AccessPage<AccessAssignment> | null>(
     null,
   )
+  const [accessPolicyNames, setAccessPolicyNames] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  )
+  const [budgetPolicyNames, setBudgetPolicyNames] = useState<ReadonlyMap<string, string>>(
+    () => new Map(),
+  )
+  const policyNameResolverRef = useRef<EntityPolicyNameResolver | null>(null)
+  if (!policyNameResolverRef.current) {
+    policyNameResolverRef.current = createEntityPolicyNameResolver(async (policyKind, policyId) => {
+      const policy =
+        policyKind === 'access'
+          ? await inferenceAccessApi.groupSummary(policyId)
+          : await inferenceAccessApi.budgetSummary(policyId)
+      return policy.name
+    })
+  }
+  const policyNameResolver = policyNameResolverRef.current
   const [error, setError] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
@@ -222,7 +256,37 @@ export function AccessEntityDetail({
     }
   }, [id, kind, selfService])
 
-  const title = item?.name || `${kind.charAt(0).toUpperCase()}${kind.slice(1)} details`
+  const accessPolicyIds = useMemo(
+    () => accessAssignments?.items.map((assignment) => assignment.policyId) ?? [],
+    [accessAssignments],
+  )
+  const budgetPolicyIds = useMemo(
+    () => budgetAssignments?.items.map((assignment) => assignment.policyId) ?? [],
+    [budgetAssignments],
+  )
+
+  useEffect(() => {
+    let cancelled = false
+    void resolveEntityPolicyNames('access', accessPolicyIds, policyNameResolver).then((names) => {
+      if (!cancelled) setAccessPolicyNames(names)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [accessPolicyIds, policyNameResolver])
+
+  useEffect(() => {
+    let cancelled = false
+    void resolveEntityPolicyNames('budget', budgetPolicyIds, policyNameResolver).then((names) => {
+      if (!cancelled) setBudgetPolicyNames(names)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [budgetPolicyIds, policyNameResolver])
+
+  const entityLabel = ENTITY_LABELS[kind]
+  const title = item?.name || `${entityLabel} details`
   const user = kind === 'user' ? (item as AccessUser | null) : null
   const team = kind === 'team' ? (item as AccessTeam | null) : null
   const group = kind === 'group' ? (item as AccessGroup | null) : null
@@ -292,7 +356,7 @@ export function AccessEntityDetail({
               <img src="/vllm.png" alt="" />
             </div>
             <div>
-              <span>{kind}</span>
+              <span>{entityLabel}</span>
               <h2 id="entity-detail-title">{title}</h2>
               <p>
                 {user?.email ||
@@ -316,7 +380,9 @@ export function AccessEntityDetail({
               </div>
             </div>
           ) : null}
-          {!item && !error ? <div className={styles.detailLoading}>Loading details…</div> : null}
+          {!item && !error ? (
+            <ProductLoadingState compact label={`Loading ${entityLabel.toLowerCase()} details`} />
+          ) : null}
           {usage ? (
             <div className={styles.detailMetrics}>
               <article>
@@ -340,8 +406,8 @@ export function AccessEntityDetail({
           {item ? (
             <section className={styles.detailSection}>
               <div className={styles.detailSectionHeading}>
-                <span>Identity & policy</span>
-                <h3>Effective access</h3>
+                <span>Overview</span>
+                <h3>Access at a glance</h3>
               </div>
               <dl className={styles.detailGrid}>
                 {'status' in item ? (
@@ -376,9 +442,7 @@ export function AccessEntityDetail({
                       <dt>Model access</dt>
                       <dd>
                         {accessAssignments?.items.length
-                          ? accessAssignments.items
-                              .map((assignment) => assignment.policyId)
-                              .join(', ')
+                          ? formatEntityPolicyNames(accessAssignments.items, accessPolicyNames)
                           : 'Inherited from Team context'}
                       </dd>
                     </div>
@@ -386,9 +450,7 @@ export function AccessEntityDetail({
                       <dt>Budget</dt>
                       <dd>
                         {budgetAssignments?.items.length
-                          ? budgetAssignments.items
-                              .map((assignment) => assignment.policyId)
-                              .join(', ')
+                          ? formatEntityPolicyNames(budgetAssignments.items, budgetPolicyNames)
                           : 'Inherited from Team context'}
                       </dd>
                     </div>
@@ -405,16 +467,18 @@ export function AccessEntityDetail({
                       <dd>{ownedKeys?.total ?? '—'}</dd>
                     </div>
                     <div>
-                      <dt>Access groups</dt>
-                      <dd>{accessAssignments?.total ?? '—'}</dd>
+                      <dt>Model access</dt>
+                      <dd>
+                        {accessAssignments?.items.length
+                          ? formatEntityPolicyNames(accessAssignments.items, accessPolicyNames)
+                          : 'None'}
+                      </dd>
                     </div>
                     <div>
-                      <dt>Team budget</dt>
+                      <dt>Quota</dt>
                       <dd>
                         {budgetAssignments?.items.length
-                          ? budgetAssignments.items
-                              .map((assignment) => assignment.policyId)
-                              .join(', ')
+                          ? formatEntityPolicyNames(budgetAssignments.items, budgetPolicyNames)
                           : 'Inherited'}
                       </dd>
                     </div>
@@ -429,11 +493,10 @@ export function AccessEntityDetail({
                     <div className={styles.detailGridWide}>
                       <dt>Visible models</dt>
                       <dd className={styles.detailTags}>
-                        {group.resources.map((resource) => (
-                          <code key={`${resource.resourceType}:${resource.resourceId}`}>
-                            {resource.resourceId}
-                          </code>
-                        ))}
+                        <AccessGroupResourceTags
+                          resources={group.resources}
+                          resourceName={resourceName}
+                        />
                       </dd>
                     </div>
                   </>

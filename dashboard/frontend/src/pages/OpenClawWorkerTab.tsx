@@ -2,6 +2,7 @@ import React, { useDeferredValue, useEffect, useId, useMemo, useRef, useState } 
 
 import ConfirmDialog from '../components/ConfirmDialog'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import {
   filterAndSortOpenClawWorkers,
   getOpenClawPageCount,
@@ -244,10 +245,7 @@ export const WorkerTab: React.FC<WorkerTabProps> = ({
       ) : null}
 
       {workersLoading && containers.length === 0 ? (
-        <div className={styles.loading} role="status">
-          <div className={styles.spinner} />
-          <p>Loading workers…</p>
-        </div>
+        <ProductLoadingState compact label="Loading OpenClaw workers" />
       ) : (
         <>
           <OpenClawCatalogControls

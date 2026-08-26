@@ -1,5 +1,5 @@
 .container {
-  width: min(1280px, 100%);
+  width: min(1040px, 100%);
   flex: 1;
   min-height: 0;
   margin: 0 auto;
@@ -12,6 +12,12 @@
 
 .container > section {
   flex: 0 0 auto;
+}
+
+.availabilityPanel {
+  display: grid;
+  gap: 0.9rem;
+  min-width: 0;
 }
 
 .statusMasthead {
@@ -154,16 +160,21 @@
   font-weight: 650;
 }
 
-.componentBoard,
-.incidentHistory {
+.componentBoard {
   overflow: hidden;
   border: 1px solid var(--color-border);
   border-radius: 9px;
   background: #101012;
 }
 
-.componentBoardHeader,
-.incidentHistory > div:first-child {
+.componentRows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.7rem;
+  padding: 0.85rem;
+}
+
+.componentBoardHeader {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
@@ -172,14 +183,12 @@
   border-bottom: 1px solid var(--color-border);
 }
 
-.componentBoardHeader span,
-.incidentHistory > div:first-child span {
+.componentBoardHeader span {
   color: var(--color-text-muted);
   font-size: 0.68rem;
 }
 
-.componentBoardHeader h2,
-.incidentHistory h2 {
+.componentBoardHeader h2 {
   margin: 0.2rem 0 0;
   font-size: 1rem;
   font-weight: 630;
@@ -187,60 +196,45 @@
 
 .componentRow {
   display: grid;
-  grid-template-columns: minmax(180px, 0.7fr) minmax(220px, 1fr) 100px;
-  align-items: center;
-  gap: 1rem;
-  padding: 0.82rem 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.48rem 1rem;
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.018);
 }
 
-.componentRow:last-child {
-  border-bottom: 0;
-}
-
-.componentRow > div:first-child {
+.componentIdentity {
   display: grid;
-  gap: 0.22rem;
+  gap: 0.18rem;
   min-width: 0;
 }
 
 .componentRow strong {
-  font-size: 0.86rem;
-}
-
-.componentRow > div:first-child span {
-  overflow: hidden;
-  color: var(--color-text-muted);
-  font-size: 0.7rem;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.uptimeBars {
-  height: 28px;
-  display: flex;
-  align-items: stretch;
-  gap: 2px;
-}
-
-.uptimeBars i {
-  flex: 1;
-  min-width: 3px;
-  border-radius: 2px;
-}
-
-.uptimeUp {
-  background: #34d399;
-}
-.uptimeDown {
-  background: #f87171;
+  font-size: 0.88rem;
+  font-weight: 650;
 }
 
 .componentOperational,
-.componentIssue {
+.componentIssue,
+.componentUnavailable,
+.componentUnknown {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   justify-self: end;
   font-size: 0.72rem;
   font-weight: 650;
+}
+
+.componentOperational svg,
+.componentIssue svg,
+.componentUnavailable svg,
+.componentUnknown svg {
+  width: 13px;
+  height: 13px;
 }
 
 .componentOperational {
@@ -251,44 +245,173 @@
   text-transform: capitalize;
 }
 
-.incidentHistory article {
-  display: grid;
-  grid-template-columns: auto minmax(180px, 0.35fr) minmax(0, 1fr);
-  align-items: center;
-  gap: 0.8rem;
-  padding: 0.9rem 1.15rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+.componentUnavailable {
+  color: #f87171;
 }
 
-.incidentHistory article > i {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #fbbf24;
-}
-
-.incidentHistory article div {
-  display: grid;
-  gap: 0.2rem;
-}
-
-.incidentHistory article strong {
-  text-transform: capitalize;
-}
-.incidentHistory article span,
-.incidentHistory article p,
-.noIncidents span {
+.componentUnknown {
   color: var(--color-text-muted);
-  font-size: 0.72rem;
-}
-.incidentHistory article p {
-  margin: 0;
 }
 
-.noIncidents {
+.historyBlock {
   display: grid;
-  gap: 0.28rem;
-  padding: 1.2rem 1.15rem;
+  grid-column: 1 / -1;
+  gap: 0.42rem;
+  min-width: 0;
+  margin-top: 0.55rem;
+}
+
+.historyAxis {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  color: var(--color-text-muted);
+  font-size: 0.61rem;
+}
+
+.historyAxis span:nth-child(2) {
+  text-align: center;
+}
+
+.historyAxis span:last-child {
+  text-align: right;
+}
+
+.historyTrack {
+  display: grid;
+  grid-template-columns: repeat(90, minmax(1px, 1fr));
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  touch-action: pan-y;
+}
+
+.historyTrackShell {
+  position: relative;
+  min-width: 0;
+}
+
+.historySegment {
+  appearance: none;
+  min-width: 0;
+  box-sizing: border-box;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 1px;
+  cursor: default;
+}
+
+.historySegment:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #ffffff;
+  outline-offset: 1px;
+}
+
+.historyTooltip {
+  position: absolute;
+  bottom: calc(100% + 0.38rem);
+  z-index: 3;
+  max-width: min(15rem, calc(100vw - 2rem));
+  padding: 0.32rem 0.48rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 5px;
+  background: #202024;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32);
+  color: var(--color-text);
+  font-size: 0.66rem;
+  font-weight: 620;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.historyTooltipStart {
+  left: 0;
+}
+
+.historyTooltipCenter {
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.historyTooltipEnd {
+  right: 0;
+}
+
+.historyOperational {
+  background: #2f9e68;
+}
+
+.historyStarting {
+  background: #d19a36;
+}
+
+.historyUnavailable {
+  background: #d85656;
+}
+
+.historyUnknown {
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  background:
+    repeating-linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.075) 0,
+      rgba(255, 255, 255, 0.075) 1px,
+      transparent 1px,
+      transparent 3px
+    ),
+    rgba(255, 255, 255, 0.025);
+}
+
+.historyMissing {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.7rem 0 0;
+  color: var(--color-text-muted);
+  font-size: 0.68rem;
+}
+
+.historyMissing strong,
+.componentCondition {
+  color: var(--color-text-secondary);
+  font-size: 0.67rem;
+  font-weight: 620;
+}
+
+.componentCondition {
+  margin-top: 0.08rem;
+}
+
+.historyLegend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 0.65rem 1rem;
+  padding: 0.78rem 1.15rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  color: var(--color-text-muted);
+  font-size: 0.64rem;
+}
+
+.historyLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.34rem;
+}
+
+.historyLegend i {
+  display: inline-block;
+  width: 8px;
+  height: 12px;
+  border-radius: 1px;
 }
 
 .noServices {
@@ -305,31 +428,6 @@
 .noServices span {
   color: var(--color-text-muted);
   font-size: 0.72rem;
-}
-
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  min-height: 420px;
-  color: var(--color-text-secondary);
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .pageEyebrow {
@@ -379,7 +477,14 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+}
+
+.liveDotHealthy {
   background: #72d995;
+}
+
+.liveDotUnavailable {
+  background: #888b94;
 }
 
 .error {
@@ -428,13 +533,13 @@
     gap: 0.8rem;
   }
 
-  .componentRow {
-    grid-template-columns: 1fr auto;
+  .componentRows {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.7rem;
   }
 
-  .uptimeBars {
-    grid-column: 1 / -1;
-    grid-row: 2;
+  .componentRow {
+    padding: 0.9rem;
   }
 }
 
@@ -450,8 +555,7 @@
   }
 
   .eyebrowRow,
-  .componentBoardHeader,
-  .incidentHistory > div:first-child {
+  .componentBoardHeader {
     align-items: flex-start;
     flex-direction: column;
   }
@@ -462,12 +566,22 @@
   }
 
   .componentRow {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 0.65rem;
+    gap: 0.48rem 0.65rem;
+  }
+}
+
+@media (forced-colors: active) {
+  .historySegment,
+  .historyLegend i {
+    border: 1px solid CanvasText;
   }
 
-  .uptimeBars {
-    grid-column: 1;
-    grid-row: auto;
+  .historySegment:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .historyUnknown,
+  .historyLegend .historyUnknown {
+    border-style: dashed;
   }
 }

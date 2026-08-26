@@ -465,37 +465,6 @@
   color: var(--text-secondary, #888);
 }
 
-/* Loading State */
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: var(--text-secondary, #888);
-}
-
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid var(--border-color, #333);
-  border-top-color: var(--accent-color, #8f949c);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 1rem;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.loading p {
-  font-size: 1rem;
-  margin: 0;
-}
-
 /* Error State */
 .error {
   display: flex;
@@ -607,7 +576,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .spinner,
   .flowContainer :global(.react-flow__edge.animated path),
   .flowContainer :global(.react-flow__edge.highlighted-edge) {
     animation: none;

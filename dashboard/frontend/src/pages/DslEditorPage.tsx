@@ -10,6 +10,7 @@ import {
 } from '@/lib/dslLanguage'
 import { DslImportModal } from './DslImportModal'
 import { DslEditorStatusBar } from './DslEditorStatusBar'
+import ProductLoadingState from '@/components/ProductLoadingState'
 import { copyText } from '@/utils/clipboard'
 import styles from './DslEditorPage.module.css'
 
@@ -437,8 +438,7 @@ const DslEditorPage: React.FC<DslEditorPageProps> = ({
           {/* WASM loading overlay */}
           {!wasmReady && !wasmError && (
             <div className={styles.wasmOverlay}>
-              <div className={styles.spinner} />
-              Loading Signal Compiler…
+              <ProductLoadingState compact fill label="Loading Signal Compiler" />
             </div>
           )}
 

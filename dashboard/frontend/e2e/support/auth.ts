@@ -162,9 +162,13 @@ export async function mockAuthenticatedSession(
     })
   })
 
-  await page.route('**/api/router/management/v1/self/inference-sessions', async (route) => {
+  await page.route('**/api/router/management/v1/self/inference-sessions**', async (route) => {
+    if (route.request().method() === 'DELETE') {
+      await route.fulfill({ status: 204 })
+      return
+    }
     await route.fulfill({
-      status: 200,
+      status: 201,
       headers: { 'Content-Type': managementMediaType, 'Cache-Control': 'no-store' },
       body: JSON.stringify({
         resourceId: '10000000-0000-4000-8000-000000000004',

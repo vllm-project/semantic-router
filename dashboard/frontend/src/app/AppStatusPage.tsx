@@ -1,4 +1,5 @@
 import React from 'react'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './AppStatus.module.css'
 
 export interface AppStatusPageProps {
@@ -16,25 +17,23 @@ const AppStatusPage: React.FC<AppStatusPageProps> = ({
   actionLabel,
   onAction,
   variant = 'error',
-}) => (
-  <div className={styles.viewport}>
-    <div className={styles.card} role="status" aria-live="polite">
-      <div className={styles.signalRow}>
-        <span
-          className={`${styles.signal} ${variant === 'loading' ? styles.loadingSignal : ''}`}
-          aria-hidden="true"
-        />
-        <span>{variant === 'loading' ? 'Control plane startup' : 'Control plane attention'}</span>
-      </div>
-      <h1 className={styles.title}>{title}</h1>
-      <p className={styles.description}>{description}</p>
-      {variant === 'error' ? (
+}) =>
+  variant === 'loading' ? (
+    <ProductLoadingState label={title} />
+  ) : (
+    <div className={styles.viewport}>
+      <div className={styles.card} role="status" aria-live="polite">
+        <div className={styles.signalRow}>
+          <span className={styles.signal} aria-hidden="true" />
+          <span>Control plane attention</span>
+        </div>
+        <h1 className={styles.title}>{title}</h1>
+        <p className={styles.description}>{description}</p>
         <button type="button" className={styles.action} onClick={onAction}>
           {actionLabel}
         </button>
-      ) : null}
+      </div>
     </div>
-  </div>
-)
+  )
 
 export default AppStatusPage

@@ -3,7 +3,7 @@ export interface PermissionUser {
   permissions?: string[]
   managementPermissions?: string[]
   managementUserId?: string
-  managementIdentityStatus?: 'ready' | 'error'
+  managementIdentityStatus?: 'ready' | 'unavailable' | 'error'
   managementIdentityError?: string
 }
 
@@ -152,11 +152,11 @@ export function canAccessDashboardPath(
   const normalizedPath = pathname.trim().toLowerCase()
 
   if (normalizedPath.startsWith('/playground')) {
-    return canUseAgent(user)
+    return canUseDelegatedInference(user)
   }
 
   if (normalizedPath.startsWith('/config/agent')) {
-    // A Consumer can use the Agent-backed Playground without receiving the
+    // A Consumer can use standard Playground inference without receiving the
     // workspace-wide Agent and Tool inventory surface. Keep that management
     // surface reserved for non-consumer Dashboard roles.
     return !isModelConsumer(user) && (canReadAgent(user) || canReadAgentTools(user))
@@ -177,7 +177,6 @@ export function canAccessDashboardPath(
       normalizedPath.startsWith('/ml-setup') ||
       normalizedPath.startsWith('/status') ||
       normalizedPath.startsWith('/openclaw') ||
-      normalizedPath.startsWith('/plugins') ||
       normalizedPath.startsWith('/monitoring') ||
       normalizedPath.startsWith('/tracing')
     ) {
@@ -223,11 +222,7 @@ export function canAccessDashboardPath(
       hasPermission(user, TOPOLOGY_READ_PERMISSION)
     )
   }
-  if (
-    normalizedPath.startsWith('/plugins') ||
-    normalizedPath.startsWith('/monitoring') ||
-    normalizedPath.startsWith('/tracing')
-  ) {
+  if (normalizedPath.startsWith('/monitoring') || normalizedPath.startsWith('/tracing')) {
     return canAccessWithPermission(user, LOGS_READ_PERMISSION)
   }
   if (normalizedPath.startsWith('/logs')) {

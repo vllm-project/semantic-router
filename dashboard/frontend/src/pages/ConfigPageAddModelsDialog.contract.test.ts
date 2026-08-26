@@ -76,11 +76,12 @@ describe('provider catalog model onboarding', () => {
     )
   })
 
-  it('keeps both the decision list and each model picker independently scrollable', () => {
+  it('keeps the dialog body as the single model-assignment scroll owner', () => {
     const styles = readSource('./ConfigPageMixtureDialog.module.css')
 
-    expect(styles).toMatch(/\.assignments\s*{[^}]*max-height:[^}]*overflow-y: auto;/s)
-    expect(styles).toMatch(/\.modelPicker\s*{[^}]*max-height:[^}]*overflow-y: auto;/s)
+    expect(styles).toMatch(/\.body\s*{[^}]*overflow-y: auto;/s)
+    expect(styles).not.toMatch(/\.assignments\s*{[^}]*overflow-y:/s)
+    expect(styles).not.toMatch(/\.modelPicker\s*{[^}]*overflow-y:/s)
   })
 
   it('keeps discovery actions explicit, semantic, and accessible', () => {

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import ProductIcon, { type ProductIconName } from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import type { AccessOverview } from '../utils/inferenceAccessApi'
 import type { AccessView } from './AccessControlPageSupport'
 import styles from './AccessControlPage.module.css'
@@ -129,12 +130,7 @@ const AccessControlWorkspace = ({
         </div>
       ) : null}
       {loading ? (
-        <div className={styles.skeletonGrid}>
-          <i />
-          <i />
-          <i />
-          <i />
-        </div>
+        <ProductLoadingState compact label={`Loading ${activeMeta.label}`} />
       ) : null}
       {!loading ? children : null}
     </main>

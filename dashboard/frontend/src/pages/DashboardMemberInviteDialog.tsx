@@ -229,9 +229,7 @@ export default function DashboardMemberInviteDialog({
                   <span>Link expires</span>
                   <select
                     value={expiresInHours}
-                    onChange={(event) =>
-                      updateDraft('expiresInHours', Number(event.target.value))
-                    }
+                    onChange={(event) => updateDraft('expiresInHours', Number(event.target.value))}
                   >
                     <option value={24}>In 24 hours</option>
                     <option value={168}>In 7 days</option>
@@ -253,6 +251,7 @@ export default function DashboardMemberInviteDialog({
                     placeholder="Search Team name"
                     emptyText="No Teams found"
                     compact
+                    inlineCompactMenu
                     compactEmptyLabel="Choose a Team"
                     onChange={(selectedIds) => updateDraft('teamId', selectedIds[0] || '')}
                   />

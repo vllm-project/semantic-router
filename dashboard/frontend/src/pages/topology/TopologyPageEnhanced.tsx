@@ -1,6 +1,6 @@
 // topology/TopologyPageEnhanced.tsx - Full Signal-Driven Decision Pipeline Visualization
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ReactFlow, {
   Node,
   Background,
@@ -21,6 +21,7 @@ import { useTheme } from '../../hooks'
 import { useInferenceRoutingAccess } from '../../contexts/InferenceRoutingAccessContext'
 import InferenceKeySelector from '../../components/InferenceKeySelector'
 import ProductIcon from '../../components/ProductIcon'
+import ProductLoadingState from '../../components/ProductLoadingState'
 import { customNodeTypes } from './components/CustomNodes'
 import { TestQueryInput } from './components/ControlPanel'
 import { ResultCard } from './components/ResultCard'
@@ -59,7 +60,13 @@ const TopologyFlow: React.FC = () => {
     visibleDecisionCount: 0,
     totalDecisionCount: 0,
   })
+  const previewButtonRef = useRef<HTMLButtonElement>(null)
   const requestedScopeId = searchParams.get('scope')
+
+  const closeTestResult = useCallback(() => {
+    clearResult()
+    window.requestAnimationFrame(() => previewButtonRef.current?.focus({ preventScroll: true }))
+  }, [clearResult])
 
   useEffect(() => {
     if (
@@ -171,14 +178,7 @@ const TopologyFlow: React.FC = () => {
   }, [])
 
   if (loading) {
-    return (
-      <div className={styles.container}>
-        <div className={styles.loading}>
-          <div className={styles.spinner}></div>
-          <p>Loading topology...</p>
-        </div>
-      </div>
-    )
+    return <ProductLoadingState label="Loading topology" />
   }
 
   if (error) {
@@ -379,13 +379,16 @@ const TopologyFlow: React.FC = () => {
                 onChange={setTestQuery}
                 onTest={runTest}
                 isLoading={isTestLoading}
+                previewButtonRef={previewButtonRef}
               />
             </div>
           </div>
         ) : null}
 
         {/* Result Card */}
-        {!usesKeyScopedCatalog ? <ResultCard result={testResult} onClose={clearResult} /> : null}
+        {!usesKeyScopedCatalog ? (
+          <ResultCard result={testResult} onClose={closeTestResult} />
+        ) : null}
       </div>
     </div>
   )

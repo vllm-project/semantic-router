@@ -11,6 +11,7 @@ import {
 describe('route preloading', () => {
   it('ignores paths outside the dashboard route registry', () => {
     expect(preloadDashboardRoute('/not-a-dashboard-route')).toBeUndefined()
+    expect(preloadDashboardRoute('/plugins/context-compression')).toBeUndefined()
   })
 
   it('deduplicates repeated route preload requests', () => {

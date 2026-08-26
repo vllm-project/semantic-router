@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
 import type { AuthUser } from '../contexts/authSession'
 import type { CreatedAccessAPIKey } from '../utils/inferenceAccessApi'
@@ -112,6 +113,10 @@ export default function InviteAcceptPage() {
     }
   }
 
+  if (loading) {
+    return <ProductLoadingState label="Opening invitation" />
+  }
+
   const story = invitation ? (
     <>
       <div className={authStyles.brandBadge}>
@@ -157,14 +162,10 @@ export default function InviteAcceptPage() {
         <span>Semantic Router</span>
       </div>
       <div className={authStyles.storyCopy}>
-        <p className={authStyles.storyEyebrow}>{loading ? 'Opening invitation' : 'Invitation'}</p>
-        <h1 className={authStyles.storyTitle}>
-          {loading ? 'Just a moment.' : 'This link is unavailable.'}
-        </h1>
+        <p className={authStyles.storyEyebrow}>Invitation</p>
+        <h1 className={authStyles.storyTitle}>This link is unavailable.</h1>
         <p className={authStyles.storyDescription}>
-          {loading
-            ? 'Your welcome is almost ready.'
-            : 'Ask your administrator for a fresh invitation.'}
+          Ask your administrator for a fresh invitation.
         </p>
       </div>
       <div className={authStyles.storyIdentity}>
@@ -176,14 +177,7 @@ export default function InviteAcceptPage() {
 
   return (
     <AuthExperienceShell story={story}>
-      {loading ? (
-        <section className={authStyles.card}>
-          <div className={authStyles.stageHeader}>
-            <p className={authStyles.stageEyebrow}>One moment</p>
-            <h2 className={authStyles.stageTitle}>Opening your invitation…</h2>
-          </div>
-        </section>
-      ) : !invitation ? (
+      {!invitation ? (
         <section className={authStyles.card}>
           <div className={authStyles.stageHeader}>
             <p className={authStyles.stageEyebrow}>Invitation unavailable</p>

@@ -19,9 +19,9 @@ type evaluationAccessProvider interface {
 	handlers.EvaluationRunAuthorizer
 }
 
-func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config) {
+func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc) {
 	registerHealthRoutes(mux, cfg)
-	registerStatusRoutes(mux, cfg)
+	registerStatusRoutes(mux, cfg, statusHandler)
 }
 
 func registerHealthRoutes(mux *http.ServeMux, cfg *config.Config) {
@@ -29,8 +29,15 @@ func registerHealthRoutes(mux *http.ServeMux, cfg *config.Config) {
 	mux.HandleFunc("/api/settings", handlers.SettingsHandler(cfg))
 }
 
-func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config) {
-	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL))
+func registerStatusRoutes(
+	mux *http.ServeMux,
+	cfg *config.Config,
+	statusHandler http.HandlerFunc,
+) {
+	if statusHandler == nil {
+		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, nil)
+	}
+	mux.HandleFunc("/api/status", statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
 
 	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))

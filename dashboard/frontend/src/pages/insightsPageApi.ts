@@ -28,28 +28,31 @@ export function accessUsageEventToInsightsRecord(event: AccessUsageEvent): Insig
     'selected_model',
     'logicalModelId',
   )
-  const decision = metadataString(
-    event.metadata,
-    'decision',
-    'selectedDecision',
-    'selected_decision',
-  )
+  const decision =
+    event.decisionName ??
+    event.decisionId ??
+    metadataString(event.metadata, 'decision', 'selectedDecision', 'selected_decision')
   const cost = knownCost(event)
   const successful = event.statusCode >= 200 && event.statusCode < 400 && !event.errorCode
+  const routedModels = event.models
+    .map((model) => model.name || model.id)
+    .filter(Boolean)
+    .join(', ')
 
   return {
     id: event.id,
     timestamp: event.createdAt,
     request_id: event.requestId,
-    recipe: event.recipeId,
+    recipe: metadataString(event.routing, 'recipeName') ?? event.recipeId,
     decision,
-    decision_tier: 0,
+    decision_tier: event.decisionTier ?? 0,
     decision_priority: 0,
-    original_model: event.entrypointId,
-    selected_model: selectedModel ?? event.model,
+    original_model: metadataString(event.routing, 'entrypointName') ?? event.entrypointId,
+    selected_model: selectedModel ?? (routedModels || event.model),
     signals: {},
     response_status: event.statusCode,
     lifecycle_state: successful ? 'completed' : 'failed',
+    ended_at: event.completedAt,
     duration_ms: event.latencyMs,
     terminal_reason: event.errorCode,
     from_cache: metadataString(event.metadata, 'cacheStatus', 'cache_status') === 'cached',
@@ -84,20 +87,39 @@ export function usageSummaryToInsightsAggregate(
   usage: UsageSummary,
   visibleRecords: InsightsRecord[] = [],
 ): InsightsAggregateResponse {
-  const models = aggregateEntries(usage.byModel)
-  const decisions = new Map<string, number>()
-  const recipes = new Set<string>()
-  let actualSpend = 0
-  let costRecordCount = 0
+  const models = aggregateEntries(usage.byModel.filter((item) => item.id))
+  const decisions = aggregateEntries(usage.byDecision.filter((item) => item.id))
+  const pricedCurrencies = usage.costs
+    .filter((cost) => cost.completeness !== 'unknown')
+    .map((cost) => cost.currency)
+    .filter(Boolean)
+    .sort()
+  const currency = pricedCurrencies[0]
+  const selectedCosts = usage.costs.filter(
+    (cost) => cost.currency === currency && cost.completeness !== 'unknown',
+  )
+  const actualSpend = selectedCosts.reduce((total, cost) => {
+    const amount = Number(cost.knownAmount)
+    return total + (Number.isFinite(amount) ? amount : 0)
+  }, 0)
+  const costRecordCount = selectedCosts.reduce((total, cost) => {
+    const count = Number(cost.knownDispatches)
+    return total + (Number.isFinite(count) ? count : 0)
+  }, 0)
+  const excludedCostCount = selectedCosts.reduce((total, cost) => {
+    const count = Number(cost.incompleteDispatches)
+    return total + (Number.isFinite(count) ? count : 0)
+  }, 0)
 
-  for (const record of visibleRecords) {
-    if (record.decision) decisions.set(record.decision, (decisions.get(record.decision) ?? 0) + 1)
-    if (record.recipe) recipes.add(record.recipe)
-    if (typeof record.actual_cost === 'number' && record.actual_cost > 0) {
-      actualSpend += record.actual_cost
-      costRecordCount += 1
-    }
-  }
+  const visibleDecisions = new Set(
+    visibleRecords
+      .map((record) => record.decision)
+      .filter((value): value is string => Boolean(value)),
+  )
+  const availableDecisions = new Set([
+    ...usage.byDecision.map((item) => item.id),
+    ...visibleDecisions,
+  ])
 
   return {
     object: 'management.usage.aggregate',
@@ -113,12 +135,12 @@ export function usageSummaryToInsightsAggregate(
       total_saved: 0,
       baseline_spend: 0,
       actual_spend: actualSpend,
-      currency: visibleRecords.find((record) => record.currency)?.currency,
+      currency,
       cost_record_count: costRecordCount,
-      excluded_record_count: Math.max(0, usage.requests - costRecordCount),
+      excluded_record_count: excludedCostCount,
     },
     model_selection: models.distribution,
-    decision_distribution: [...decisions].map(([name, value]) => ({ name, value })),
+    decision_distribution: decisions.distribution,
     signal_distribution: [],
     token_volume: {
       input_tokens: usage.promptTokens,
@@ -126,9 +148,12 @@ export function usageSummaryToInsightsAggregate(
       total_tokens: usage.totalTokens,
       excluded_record_count: 0,
     },
-    token_breakdown: { by_decision: [], by_selected_model: models.tokens },
-    available_recipes: [...recipes].sort(),
-    available_decisions: [...decisions.keys()].sort(),
+    token_breakdown: { by_decision: decisions.tokens, by_selected_model: models.tokens },
+    available_recipes: usage.byRecipe
+      .map((item) => item.id)
+      .filter(Boolean)
+      .sort(),
+    available_decisions: [...availableDecisions].filter(Boolean).sort(),
     available_models: usage.byModel.map((item) => item.id).sort(),
   }
 }

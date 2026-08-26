@@ -1,4 +1,5 @@
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './ConfigPageRoutingScopeState.module.css'
 
 interface Props {
@@ -8,20 +9,19 @@ interface Props {
 }
 
 export default function ConfigPageRoutingScopeState({ error, loading, onRetry }: Props) {
+  if (loading) return <ProductLoadingState compact label="Loading Recipes" />
   const empty = !loading && !error
   return (
     <div className={styles.state} role={error ? 'alert' : 'status'}>
       <div className={styles.copy}>
-        <ProductIcon name={error ? 'alert' : loading ? 'activity' : 'mixture'} />
+        <ProductIcon name={error ? 'alert' : 'mixture'} />
         <div>
           <strong>
-            {error ? 'Recipes unavailable' : loading ? 'Loading Recipes' : 'Create a Recipe first'}
+            {error ? 'Recipes unavailable' : 'Create a Recipe first'}
           </strong>
           <span>
             {error ??
-              (loading
-                ? 'Getting the latest Router-managed design.'
-                : 'Then shape it here without touching deployment configuration.')}
+              'Then shape it here without touching deployment configuration.'}
           </span>
         </div>
       </div>

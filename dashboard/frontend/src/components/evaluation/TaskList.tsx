@@ -5,6 +5,7 @@ import type { EvaluationLevel, EvaluationStatus, EvaluationTask } from '../../ty
 import { STATUS_INFO, LEVEL_INFO, formatDate, formatDuration } from '../../types/evaluation'
 import EvaluationPagination from './EvaluationPagination'
 import ProductIcon from '../ProductIcon'
+import ProductLoadingState from '../ProductLoadingState'
 import {
   EVALUATION_TASK_PAGE_SIZE,
   filterAndSortEvaluationTasks,
@@ -81,12 +82,7 @@ export function TaskList({
   const canCancel = (task: EvaluationTask) => task.status === 'running'
 
   if (loading && tasks.length === 0) {
-    return (
-      <div className={styles.loading} role="status">
-        <div className={styles.spinner} />
-        <span>Loading evaluation tasks…</span>
-      </div>
-    )
+    return <ProductLoadingState compact label="Loading evaluation tasks" />
   }
 
   if (error && tasks.length === 0) {

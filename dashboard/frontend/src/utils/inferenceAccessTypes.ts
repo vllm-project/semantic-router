@@ -1,6 +1,8 @@
 import type {
   ManagementCostSummary,
+  ManagementRequestDispatch,
   ManagementRequestLog,
+  ManagementRequestModel,
   RateLimitRule,
 } from './routerManagementTypes'
 
@@ -165,8 +167,13 @@ export interface AccessUsageEvent {
   teamId?: string
   namespaceId?: string
   model: string
+  models: ManagementRequestModel[]
   entrypointId?: string
   recipeId?: string
+  decisionId?: string
+  decisionName?: string
+  decisionTier?: number
+  completedAt?: string
   streaming?: boolean
   toolCall?: boolean
   costs?: ManagementRequestLog['costs']
@@ -178,6 +185,9 @@ export interface AccessUsageEvent {
   ttftMs?: number
   errorCode?: string
   metadata?: Record<string, unknown>
+  routing?: Record<string, unknown>
+  quotaReceipts?: Array<Record<string, unknown>>
+  dispatches?: ManagementRequestDispatch[]
   createdAt: string
 }
 
@@ -248,6 +258,9 @@ export interface UsageSummary {
   costs: ManagementCostSummary[]
   series: UsagePoint[]
   byModel: UsageSlice[]
+  byEntrypoint: UsageSlice[]
+  byRecipe: UsageSlice[]
+  byDecision: UsageSlice[]
   byUser: UsageSlice[]
   byTeam: UsageSlice[]
   byKey: UsageSlice[]

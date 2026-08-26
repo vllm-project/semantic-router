@@ -25,6 +25,9 @@ describe('AccessBudgetRuleEditor', () => {
     expect(markup).toContain('20.000000000000001')
     expect(markup).toContain('value="8h"')
     expect(markup).toContain('actual settled model usage')
+    expect(markup).toContain('aria-label="Add limit"')
+    expect(markup).toContain('aria-label="Remove limit 1"')
+    expect(markup).not.toContain('>Remove</button>')
   })
 
   it('round-trips common product durations without exposing implementation units', () => {

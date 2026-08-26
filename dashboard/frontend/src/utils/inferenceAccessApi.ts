@@ -847,9 +847,12 @@ export const inferenceAccessApi = {
   requestLog,
   auditLogs: async (filter: AccessListParams = {}) => {
     const page = await request<ManagementPage<AccessAuditEvent>>('getAuditEvents', {
-      query: listQuery(filter),
+      // Audit exposes typed exact filters, not the generic collection search
+      // contract. Keep free-text filtering in the product view until the
+      // Router publishes a bounded audit-search selector.
+      query: query({ cursor: filter.cursor, pageSize: filter.limit }),
     })
-    return viewPage(page, (item) => item, filter.q)
+    return viewPage(page, (item) => item, filter.q?.trim())
   },
   selfTeams: async (): Promise<SelfTeamCatalog> => {
     const identity = assertManagementMe(

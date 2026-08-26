@@ -93,9 +93,13 @@
 
 .body {
   display: grid;
+  min-height: 0;
   gap: 20px;
   padding: 24px 28px 28px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-bottom: 28px;
+  scrollbar-gutter: stable;
 }
 
 .identityGrid {
@@ -147,7 +151,6 @@
 }
 
 .decisionSection {
-  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 13px;
   background: #0d0d0f;
@@ -184,11 +187,6 @@
 
 .assignments {
   display: grid;
-  max-height: min(430px, 46vh);
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .assignment {
@@ -290,11 +288,7 @@
 .modelPicker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  max-height: 210px;
   gap: 6px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-gutter: stable;
 }
 
 .modelPicker label {

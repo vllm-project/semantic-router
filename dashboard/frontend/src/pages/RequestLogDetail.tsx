@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import { copyText } from '../utils/clipboard'
 import {
@@ -33,7 +34,6 @@ export function RequestLogDetail({
   const [log, setLog] = useState<AccessUsageEvent | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [tab, setTab] = useState<'request' | 'response' | 'metadata'>('request')
   const [copied, setCopied] = useState<'request' | 'payload' | ''>('')
   const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
 
@@ -51,14 +51,14 @@ export function RequestLogDetail({
   }, [logId, selfService])
 
   const metadata = log?.metadata || {}
-  const payload =
-    tab === 'request' ? metadata.request : tab === 'response' ? metadata.response : metadata
-  const payloadText =
-    payload === undefined
-      ? ''
-      : typeof payload === 'string'
-        ? payload
-        : JSON.stringify(payload, null, 2)
+  const metadataText = Object.keys(metadata).length > 0 ? JSON.stringify(metadata, null, 2) : ''
+  const route = log?.routing || {}
+  const routeValue = (key: string) => {
+    const value = route[key]
+    return typeof value === 'string' && value.trim() ? value : undefined
+  }
+  const modelNames = log?.models.map((model) => model.name || model.id).filter(Boolean) ?? []
+  const selectedModels = log ? modelNames.join(', ') || log.model || 'Unassigned' : ''
   const identity = log?.teamId
     ? teams.find((team) => team.id === log.teamId)?.name || log.teamId
     : users.find((user) => user.id === log?.userId)?.name || log?.userId || 'Unassigned'
@@ -92,7 +92,7 @@ export function RequestLogDetail({
             </div>
             <div>
               <span>Request log</span>
-              <h2 id="log-detail-title">{log?.model || 'Request details'}</h2>
+              <h2 id="log-detail-title">{selectedModels || 'Request details'}</h2>
               <p>{log?.requestId || 'Loading request…'}</p>
             </div>
           </div>
@@ -101,7 +101,7 @@ export function RequestLogDetail({
           </button>
         </header>
         <div className={styles.detailBody}>
-          {loading ? <div className={styles.detailLoading}>Loading request details…</div> : null}
+          {loading ? <ProductLoadingState compact label="Loading request details" /> : null}
           {error ? (
             <div className={styles.modalError} role="alert">
               <ProductIcon name="alert" aria-hidden="true" />
@@ -164,8 +164,20 @@ export function RequestLogDetail({
                     <dd>{keyName}</dd>
                   </div>
                   <div>
-                    <dt>Model</dt>
-                    <dd>{log.model}</dd>
+                    <dt>Entrypoint</dt>
+                    <dd>{routeValue('entrypointName') || log.entrypointId || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Recipe</dt>
+                    <dd>{routeValue('recipeName') || log.recipeId || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Decision</dt>
+                    <dd>{log.decisionName || log.decisionId || '—'}</dd>
+                  </div>
+                  <div>
+                    <dt>Selected model</dt>
+                    <dd>{selectedModels}</dd>
                   </div>
                   <div>
                     <dt>Total tokens</dt>
@@ -182,45 +194,98 @@ export function RequestLogDetail({
 
               <section className={styles.detailSection}>
                 <div className={styles.detailSectionHeading}>
-                  <span>Payload</span>
-                  <h3>Request & response</h3>
+                  <span>Execution</span>
+                  <h3>Model dispatches</h3>
                 </div>
-                <div className={styles.codeTabs}>
-                  {(['request', 'response', 'metadata'] as const).map((item) => (
-                    <button
-                      type="button"
-                      key={item}
-                      className={tab === item ? styles.codeTabActive : ''}
-                      onClick={() => setTab(item)}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                  {payloadText ? (
-                    <button
-                      type="button"
-                      className={styles.codeCopy}
-                      onClick={() => void copyValue(payloadText, 'payload')}
-                    >
-                      <ProductIcon name={copied === 'payload' ? 'check' : 'copy'} />
-                      {copied === 'payload' ? 'Copied' : 'Copy'}
-                    </button>
-                  ) : null}
-                </div>
-                {metadata.payloadRedacted ? (
-                  <div className={styles.payloadNotice}>
-                    Request and response bodies are visible to workspace builders and
-                    administrators.
+                {log.dispatches?.length ? (
+                  <div className={styles.logDispatchList}>
+                    {log.dispatches.map((dispatch) => (
+                      <article key={dispatch.dispatchId} className={styles.logDispatch}>
+                        <div className={styles.logDispatchHeader}>
+                          <div>
+                            <strong>
+                              {log.models.find((model) => model.id === dispatch.modelId)?.name ||
+                                dispatch.providerModelId ||
+                                dispatch.modelId ||
+                                dispatch.dispatchType}
+                            </strong>
+                            <span>
+                              {dispatch.providerId || 'Router'} · {dispatch.dispatchType}
+                            </span>
+                          </div>
+                          <span>{dispatch.usageState.replace(/_/g, ' ')}</span>
+                        </div>
+                        <dl>
+                          <div>
+                            <dt>Input</dt>
+                            <dd>{formatNumber(Number(dispatch.inputTokens))}</dd>
+                          </div>
+                          <div>
+                            <dt>Output</dt>
+                            <dd>{formatNumber(Number(dispatch.outputTokens))}</dd>
+                          </div>
+                          <div>
+                            <dt>Attempts</dt>
+                            <dd>{dispatch.attempts.length}</dd>
+                          </div>
+                          <div>
+                            <dt>Backend</dt>
+                            <dd>{dispatch.backendId || '—'}</dd>
+                          </div>
+                        </dl>
+                      </article>
+                    ))}
                   </div>
-                ) : payloadText ? (
-                  <pre className={`${styles.codeBlock} ${styles.logPayload}`}>
-                    <code>{payloadText}</code>
-                  </pre>
                 ) : (
                   <div className={styles.payloadNotice}>
-                    No payload was recorded for this request.
+                    Dispatch details are restricted for this account.
                   </div>
                 )}
+              </section>
+
+              {log.quotaReceipts?.length ? (
+                <section className={styles.detailSection}>
+                  <div className={styles.detailSectionHeading}>
+                    <span>Quota</span>
+                    <h3>Accounted usage</h3>
+                  </div>
+                  <div className={styles.logReceiptList}>
+                    {log.quotaReceipts.map((receipt, index) => (
+                      <div key={`${String(receipt.ruleId ?? '')}-${index}`}>
+                        <strong>{String(receipt.metric ?? 'Usage')}</strong>
+                        <span>{String(receipt.amount ?? '—')}</span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              <section className={styles.detailSection}>
+                <div className={styles.detailSectionHeading}>
+                  <span>Evidence</span>
+                  <h3>Request metadata</h3>
+                </div>
+                {metadataText ? (
+                  <>
+                    <div className={styles.codeTabs}>
+                      <span>Metadata</span>
+                      <button
+                        type="button"
+                        className={styles.codeCopy}
+                        onClick={() => void copyValue(metadataText, 'payload')}
+                      >
+                        <ProductIcon name={copied === 'payload' ? 'check' : 'copy'} />
+                        {copied === 'payload' ? 'Copied' : 'Copy'}
+                      </button>
+                    </div>
+                    <pre className={`${styles.codeBlock} ${styles.logPayload}`}>
+                      <code>{metadataText}</code>
+                    </pre>
+                  </>
+                ) : null}
+                <div className={styles.payloadNotice}>
+                  Request and response bodies are not retained in the usage ledger.
+                </div>
               </section>
             </>
           ) : null}

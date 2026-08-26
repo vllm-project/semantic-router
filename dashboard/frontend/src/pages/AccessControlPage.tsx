@@ -84,6 +84,7 @@ const AccessControlPage: React.FC = () => {
   const [groups, setGroups] = useState<AccessGroup[]>([])
   const [budgets, setBudgets] = useState<AccessBudget[]>([])
   const [ownerLabels, setOwnerLabels] = useState<Record<string, string>>({})
+  const [resourceLabels, setResourceLabels] = useState<Record<string, string>>({})
   const [entityTotals, setEntityTotals] = useState<EntityTotals>({
     users: 0,
     teams: 0,
@@ -414,6 +415,45 @@ const AccessControlPage: React.FC = () => {
     }
   }, [activeView, keys, ownerLabels, selfService])
 
+  useEffect(() => {
+    if (activeView !== 'access-groups') return
+    let cancelled = false
+    const resources = Array.from(
+      new Map<string, AccessGroup['resources'][number]>(
+        groups.flatMap((group) =>
+          group.resources.map(
+            (resource) => [`${resource.resourceType}:${resource.resourceId}`, resource] as const,
+          ),
+        ),
+      ).entries(),
+    ).filter(([cacheKey]) => !resourceLabels[cacheKey])
+    if (!resources.length) return
+
+    void (async () => {
+      const next: Record<string, string> = {}
+      for (let offset = 0; offset < resources.length; offset += 6) {
+        const batch = resources.slice(offset, offset + 6)
+        const results = await Promise.allSettled(
+          batch.map(([, resource]) =>
+            resource.resourceType === 'model'
+              ? accessControlSelectorSources.models.detail(resource.resourceId)
+              : accessControlSelectorSources.entrypoints.detail(resource.resourceId),
+          ),
+        )
+        if (cancelled) return
+        results.forEach((result, index) => {
+          if (result.status === 'fulfilled') next[batch[index][0]] = result.value.name
+        })
+      }
+      if (!cancelled && Object.keys(next).length) {
+        setResourceLabels((current) => ({ ...current, ...next }))
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [activeView, groups, resourceLabels])
+
   const ownerName = useCallback(
     (item: Pick<AccessAPIKey, 'ownerType' | 'ownerId'>) =>
       ownerLabels[`${item.ownerType}:${item.ownerId}`] ||
@@ -421,6 +461,12 @@ const AccessControlPage: React.FC = () => {
         ? users.find((user) => user.id === item.ownerId)?.name || item.ownerId
         : teams.find((team) => team.id === item.ownerId)?.name || item.ownerId || 'Unassigned'),
     [ownerLabels, teams, users],
+  )
+
+  const resourceName = useCallback(
+    (resourceType: 'model' | 'entrypoint', resourceId: string) =>
+      resourceLabels[`${resourceType}:${resourceId}`] || resourceId,
+    [resourceLabels],
   )
 
   const openCreate = useCallback(
@@ -715,6 +761,7 @@ const AccessControlPage: React.FC = () => {
           canManage={canManage}
           canManageDashboardMembers={canManageDashboardMembers}
           ownerName={ownerName}
+          resourceName={resourceName}
           onOpenKey={(id) => openDetail('key', id)}
           onOpenLog={(id) => openDetail('log', id)}
           onOpenEntity={(id) => openDetail('item', id)}
@@ -805,6 +852,7 @@ const AccessControlPage: React.FC = () => {
           setEditor({ kind: 'user', value: accessUser })
           closeDetail()
         }}
+        resourceName={resourceName}
       />
     </div>
   )

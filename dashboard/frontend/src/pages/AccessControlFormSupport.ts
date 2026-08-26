@@ -20,7 +20,7 @@ export const ACCESS_EDITOR_TITLES: Record<
     eyebrow: 'Identity',
     create: 'Create team',
     edit: 'Edit team',
-    description: 'Choose Team defaults, then add members and their Team roles.',
+    description: 'Set defaults, then add members.',
   },
   key: {
     eyebrow: 'Credential',
@@ -32,13 +32,13 @@ export const ACCESS_EDITOR_TITLES: Record<
     eyebrow: 'Model policy',
     create: 'Create access group',
     edit: 'Edit access group',
-    description: 'Create a reusable collection of visible models.',
+    description: 'Choose the models this group can use.',
   },
   budget: {
     eyebrow: 'Rate limit',
     create: 'Create budget',
     edit: 'Edit budget',
-    description: 'Create a reusable quota for users, Teams, or API keys.',
+    description: 'Set reusable request, token, or spend limits.',
   },
 }
 

@@ -19,12 +19,22 @@ const PlaygroundPage = () => {
   const invocation = isPlaygroundInvocation(locationState?.playgroundInvocation)
     ? locationState.playgroundInvocation
     : null
+  const requestedModel = new URLSearchParams(location.search).get('model')
   const handleInvocationConsumed = useCallback(() => {
     navigate(`${location.pathname}${location.search}${location.hash}`, {
       replace: true,
       state: null,
     })
   }, [location.hash, location.pathname, location.search, navigate])
+  const handleModelConsumed = useCallback(() => {
+    const params = new URLSearchParams(location.search)
+    params.delete('model')
+    const search = params.toString()
+    navigate(`${location.pathname}${search ? `?${search}` : ''}${location.hash}`, {
+      replace: true,
+      state: location.state,
+    })
+  }, [location.hash, location.pathname, location.search, location.state, navigate])
 
   return (
     <div className={styles.container}>
@@ -33,7 +43,9 @@ const PlaygroundPage = () => {
         <AgentPlayground
           endpoint={routerPublicEndpoint(routerPublicUrl, '/v1/chat/completions')}
           invocation={invocation}
+          initialModel={requestedModel}
           onInvocationConsumed={handleInvocationConsumed}
+          onInitialModelConsumed={handleModelConsumed}
         />
       </div>
     </div>

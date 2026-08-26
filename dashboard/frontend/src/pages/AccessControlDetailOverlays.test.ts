@@ -28,4 +28,13 @@ describe('access detail relationship authority', () => {
     expect(detail).not.toContain('users.find(')
     expect(detail).not.toContain('teams.find(')
   })
+
+  it('resolves User and Team policy labels from canonical policy details', () => {
+    const detail = readSource('./AccessEntityDetail.tsx')
+
+    expect(detail).toContain('inferenceAccessApi.groupSummary(policyId)')
+    expect(detail).toContain('inferenceAccessApi.budgetSummary(policyId)')
+    expect(detail).toContain('formatEntityPolicyNames(accessAssignments.items, accessPolicyNames)')
+    expect(detail).toContain('formatEntityPolicyNames(budgetAssignments.items, budgetPolicyNames)')
+  })
 })

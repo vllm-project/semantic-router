@@ -75,7 +75,7 @@ export default function BuilderPage() {
     plugins: true,
   })
   const [addingEntity, setAddingEntity] = useState<EntityKind | null>(null)
-  const [outputPanelOpen, setOutputPanelOpen] = useState(true)
+  const [outputPanelOpen, setOutputPanelOpen] = useState(false)
   const [guideOpen, setGuideOpen] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [showDuplicateModal, setShowDuplicateModal] = useState(false)
@@ -92,9 +92,21 @@ export default function BuilderPage() {
     isDragging,
     handleDragStart,
   } = useResizableWidth({
-    initialWidth: 380,
+    initialWidth: 440,
+    minWidth: 320,
+    getMaxWidth: () => Math.floor((contentRef.current?.offsetWidth ?? window.innerWidth) * 0.48),
+  })
+  const {
+    width: navigationWidth,
+    isDragging: navigationDragging,
+    handleDragStart: handleNavigationDragStart,
+    adjustWidth: adjustNavigationWidth,
+  } = useResizableWidth({
+    initialWidth: 312,
     minWidth: 240,
-    getMaxWidth: () => Math.floor((contentRef.current?.offsetWidth ?? window.innerWidth) * 0.6),
+    getMaxWidth: () =>
+      Math.min(480, Math.floor((contentRef.current?.offsetWidth ?? window.innerWidth) * 0.42)),
+    growthDirection: 'right',
   })
   const {
     width: guideWidth,
@@ -291,12 +303,14 @@ export default function BuilderPage() {
 
       {client.error || projectionError ? (
         <div className={styles.builderInlineAlert} role="alert">
-          <ProductIcon name="alert" /> {client.error || projectionError}
+          <ProductIcon name="alert" />
+          <span>{client.error || projectionError}</span>
         </div>
       ) : null}
       {client.notice ? (
         <div className={styles.builderNotice} role="status">
-          <ProductIcon name="check" /> {client.notice}
+          <ProductIcon name="check" />
+          <span>{client.notice}</span>
         </div>
       ) : null}
       {selectedRecipe.immutable ? (
@@ -309,7 +323,7 @@ export default function BuilderPage() {
       ) : null}
 
       <div className={styles.content} ref={contentRef}>
-        <div className={styles.editorArea}>
+        <div className={styles.editorArea} data-testid="builder-authoring-area">
           {mode === 'visual' ? (
             <VisualMode
               readOnly={!editable}
@@ -347,6 +361,9 @@ export default function BuilderPage() {
               errorCount={errorCount}
               isValid={isValid}
               onModeSwitch={setMode}
+              navigationWidth={navigationWidth}
+              onNavigationDragStart={handleNavigationDragStart}
+              onNavigationResize={adjustNavigationWidth}
             />
           ) : mode === 'dsl' ? (
             <div className={styles.dslModeContainer}>
@@ -455,7 +472,9 @@ export default function BuilderPage() {
           setPendingRecipeId(null)
         }}
       />
-      {isDragging || guideDragging ? <div className={styles.dragOverlay} /> : null}
+      {isDragging || guideDragging || navigationDragging ? (
+        <div className={styles.dragOverlay} />
+      ) : null}
     </div>
   )
 }

@@ -10,12 +10,16 @@ import ProductIcon, { type ProductIconName } from './ProductIcon'
 import {
   ANALYZE_MENU_CATEGORIES,
   BUILD_MENU_CATEGORIES,
+  configSectionPath,
   filterLayoutMenuCategories,
   findActiveLayoutMenuCategory,
   hasActiveLayoutMenuCategory,
   isLayoutMenuItemActive,
-  OPERATE_MENU_CATEGORIES,
   PRIMARY_NAV_LINKS,
+  SYSTEM_MENU_CATEGORIES,
+  shouldHighlightPrimaryNav,
+  shouldHighlightWorkflowNav,
+  WORKFLOW_NAV_LABELS,
   type LayoutDropdownKey,
   type LayoutMenuCategory,
   type LayoutMenuItem,
@@ -40,12 +44,12 @@ interface LayoutProps {
 
 const DESKTOP_MENU_IDS: Record<LayoutDropdownKey, string> = {
   build: 'layout-mega-menu-build',
-  operate: 'layout-mega-menu-operate',
+  system: 'layout-mega-menu-system',
 }
 
 const DESKTOP_MENU_TRIGGER_IDS: Record<LayoutDropdownKey, string> = {
   build: 'layout-mega-menu-trigger-build',
-  operate: 'layout-mega-menu-trigger-operate',
+  system: 'layout-mega-menu-trigger-system',
 }
 
 const Layout: React.FC<LayoutProps> = ({
@@ -75,14 +79,14 @@ const Layout: React.FC<LayoutProps> = ({
   const canAccessMenuItem = (item: LayoutMenuItem) =>
     canAccessDashboardPath(user, item.kind === 'config' ? `/config/${item.configSection}` : item.to)
   const buildMenuCategories = filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, canAccessMenuItem)
-  const operateMenuCategories = filterLayoutMenuCategories(
-    [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
+  const systemMenuCategories = filterLayoutMenuCategories(
+    [...ANALYZE_MENU_CATEGORIES, ...SYSTEM_MENU_CATEGORIES],
     (item, category) =>
       canAccessMenuItem(item) &&
       (fleetSimEnabled || category.key !== 'fleet-simulation') &&
       (canUseMLSetup || item.kind !== 'route' || item.to !== '/ml-setup'),
   )
-  const hasWorkflowNavigation = buildMenuCategories.length > 0 || operateMenuCategories.length > 0
+  const hasWorkflowNavigation = buildMenuCategories.length > 0 || systemMenuCategories.length > 0
   const accountName = user?.name?.trim() || 'Account'
   const accountEmail = user?.email?.trim() || 'Session pending'
   const accountPermissions = user?.permissions ?? []
@@ -94,8 +98,8 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection,
   )
-  const isOperateActive = hasActiveLayoutMenuCategory(
-    operateMenuCategories,
+  const isSystemActive = hasActiveLayoutMenuCategory(
+    systemMenuCategories,
     location.pathname,
     isConfigPage,
     configSection,
@@ -107,8 +111,8 @@ const Layout: React.FC<LayoutProps> = ({
     isConfigPage,
     configSection,
   )
-  const activeOperateCategory = findActiveLayoutMenuCategory(
-    operateMenuCategories,
+  const activeSystemCategory = findActiveLayoutMenuCategory(
+    systemMenuCategories,
     location.pathname,
     isConfigPage,
     configSection,
@@ -161,7 +165,7 @@ const Layout: React.FC<LayoutProps> = ({
   const handleMenuItemSelect = (item: LayoutMenuItem) => {
     if (item.kind === 'config') {
       onConfigSectionChange?.(item.configSection)
-      navigate(`/config/${item.configSection}`)
+      navigate(configSectionPath(item.configSection, location.search))
     } else {
       navigate(item.to)
     }
@@ -180,7 +184,8 @@ const Layout: React.FC<LayoutProps> = ({
       end={link.matchMode !== 'prefix'}
       to={link.to}
       className={({ isActive }) => {
-        const active = isActive || Boolean(link.activePathPattern?.test(location.pathname))
+        const routeActive = isActive || Boolean(link.activePathPattern?.test(location.pathname))
+        const active = shouldHighlightPrimaryNav(routeActive, openDropdown)
         return active ? `${styles.navLink} ${styles.navLinkActive}` : styles.navLink
       }}
       onFocus={() => void preloadDashboardRoute(link.to)}
@@ -202,6 +207,7 @@ const Layout: React.FC<LayoutProps> = ({
     if (categories.length === 0) return null
 
     const isOpen = openDropdown === dropdown
+    const isHighlighted = shouldHighlightWorkflowNav(dropdown, active, openDropdown)
     const menuId = DESKTOP_MENU_IDS[dropdown]
     const triggerId = DESKTOP_MENU_TRIGGER_IDS[dropdown]
 
@@ -215,7 +221,7 @@ const Layout: React.FC<LayoutProps> = ({
           type="button"
           aria-controls={menuId}
           aria-expanded={isOpen}
-          className={`${styles.navLink} ${active ? styles.navLinkActive : ''}`}
+          className={`${styles.navLink} ${isHighlighted ? styles.navLinkActive : ''}`}
           onClick={(event) => {
             event.stopPropagation()
             toggleDropdown(dropdown)
@@ -261,7 +267,10 @@ const Layout: React.FC<LayoutProps> = ({
             }
             onConfigSelect={handleMenuItemSelect}
             onItemIntent={(item) => {
-              const target = item.kind === 'config' ? `/config/${item.configSection}` : item.to
+              const target =
+                item.kind === 'config'
+                  ? configSectionPath(item.configSection, location.search)
+                  : item.to
               void preloadDashboardRoute(target)
             }}
             onNavigate={closeMenus}
@@ -314,7 +323,10 @@ const Layout: React.FC<LayoutProps> = ({
 
   return (
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
-      <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
+      <header
+        className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}
+        data-app-header
+      >
         <div className={styles.headerContent} data-testid="layout-header-content">
           <BrandLockup className={styles.brandPlacement} />
 
@@ -331,18 +343,18 @@ const Layout: React.FC<LayoutProps> = ({
               >
                 {renderDesktopDropdown(
                   'build',
-                  'Build',
+                  WORKFLOW_NAV_LABELS.build,
                   buildMenuCategories,
                   isBuildActive,
                   activeBuildCategory,
                   'mixture',
                 )}
                 {renderDesktopDropdown(
-                  'operate',
-                  'Operate',
-                  operateMenuCategories,
-                  isOperateActive,
-                  activeOperateCategory,
+                  'system',
+                  WORKFLOW_NAV_LABELS.system,
+                  systemMenuCategories,
+                  isSystemActive,
+                  activeSystemCategory,
                   'activity',
                 )}
               </div>
@@ -410,7 +422,7 @@ const Layout: React.FC<LayoutProps> = ({
                 setMobileMenuOpen((current) => {
                   const next = !current
                   setOpenMobileSection(
-                    next ? (isBuildActive ? 'build' : isOperateActive ? 'operate' : null) : null,
+                    next ? (isBuildActive ? 'build' : isSystemActive ? 'system' : null) : null,
                   )
                   return next
                 })
@@ -453,8 +465,16 @@ const Layout: React.FC<LayoutProps> = ({
             pathname={location.pathname}
             primaryLinks={primaryNavLinks}
             sections={[
-              { key: 'build', label: 'Build', categories: buildMenuCategories },
-              { key: 'operate', label: 'Operate', categories: operateMenuCategories },
+              {
+                key: 'build',
+                label: WORKFLOW_NAV_LABELS.build,
+                categories: buildMenuCategories,
+              },
+              {
+                key: 'system',
+                label: WORKFLOW_NAV_LABELS.system,
+                categories: systemMenuCategories,
+              },
             ]}
             onConfigSelect={handleMenuItemSelect}
             onNavigate={closeMenus}
@@ -465,7 +485,7 @@ const Layout: React.FC<LayoutProps> = ({
         ) : null}
       </header>
 
-      <main className={styles.main}>
+      <main className={styles.main} data-app-main>
         <div className={styles.mainContent}>{children}</div>
       </main>
     </div>

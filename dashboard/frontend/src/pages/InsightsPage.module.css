@@ -8,85 +8,6 @@
   scrollbar-gutter: stable;
 }
 
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  min-height: 50vh;
-  color: var(--color-text-secondary);
-}
-
-.loadingInline {
-  display: flex;
-  min-height: 240px;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  color: var(--color-text-secondary);
-  font-size: 0.82rem;
-}
-
-.loadingInline .spinner {
-  width: 24px;
-  height: 24px;
-  border-width: 2px;
-}
-
-.overviewLoading {
-  display: grid;
-  gap: 1rem;
-  width: 100%;
-  min-width: 0;
-  padding: 1.25rem;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  background: #09090a;
-}
-
-.overviewLoadingCards {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.9rem;
-}
-
-.overviewLoadingCards span {
-  min-height: 78px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  border-radius: var(--radius-md);
-  background: linear-gradient(100deg, #101012 25%, #18181b 45%, #101012 65%);
-  background-size: 220% 100%;
-  animation: overviewLoading 1.25s ease-in-out infinite;
-}
-
-.overviewLoading p {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: 0.78rem;
-}
-
-@keyframes overviewLoading {
-  to {
-    background-position-x: -220%;
-  }
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .toolbar {
   display: flex;
   justify-content: space-between;
@@ -349,10 +270,6 @@
     width: 100%;
   }
 
-  .overviewLoadingCards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
   .pagination,
   .paginationControls {
     justify-content: center;
@@ -361,12 +278,6 @@
 
   .paginationControls {
     flex-wrap: wrap;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .overviewLoadingCards span {
-    animation: none;
   }
 }
 

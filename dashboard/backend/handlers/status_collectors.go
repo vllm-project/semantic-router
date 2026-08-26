@@ -98,8 +98,12 @@ func collectDashboardOnlyHostStatus(routerAPIURL string) SystemStatus {
 }
 
 func appendDirectEnvoyStatus(status *SystemStatus) {
-	envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth("http://localhost:8801/ready")
+	envoyRunning, envoyHealthy, envoyMsg := checkEnvoyHealth(managedEnvoyReadyURL())
 	if !envoyRunning {
+		status.Services = append(status.Services, buildServiceStatus("Envoy", "not running", false, "", "proxy"))
+		if status.Overall == "healthy" {
+			status.Overall = "degraded"
+		}
 		return
 	}
 

@@ -2,12 +2,29 @@ import type { DecisionRule } from './dashboardPageTypes'
 import {
   listManagedRecipeScopes,
   type ManagedRoutingScope,
+  type ManagedRoutingSnapshot,
   type ManagedRoutingSummary,
 } from '../utils/managedRoutingSnapshot'
 import { countSignalsInProfile } from '../utils/routingScopes'
 
 const recipeScopes = (config: ManagedRoutingSummary): ManagedRoutingScope[] =>
   listManagedRecipeScopes(config)
+
+const decisionScopes = (config: ManagedRoutingSummary): ManagedRoutingScope[] => {
+  const topologyScopes = (config as Partial<ManagedRoutingSnapshot>).routingScopes
+  if (!Array.isArray(topologyScopes)) return recipeScopes(config)
+
+  const representativeByRecipe = new Map<string, ManagedRoutingScope>()
+  for (const scope of topologyScopes) {
+    if (!scope.hydrated || scope.source !== 'entrypoint' || !scope.recipeId) continue
+    if (!representativeByRecipe.has(scope.recipeId)) {
+      representativeByRecipe.set(scope.recipeId, scope)
+    }
+  }
+  return representativeByRecipe.size > 0
+    ? [...representativeByRecipe.values()]
+    : recipeScopes(config)
+}
 
 export function countSignals(cfg: ManagedRoutingSummary): {
   total: number
@@ -45,7 +62,7 @@ export function countPlugins(cfg: ManagedRoutingSummary): number {
 }
 
 export function getAllDecisions(cfg: ManagedRoutingSummary): DecisionRule[] {
-  return recipeScopes(cfg).flatMap((scope) =>
+  return decisionScopes(cfg).flatMap((scope) =>
     (scope.document.decisions ?? []).map((decision) => ({
       ...(decision as DecisionRule),
       routingScope: scope.id,

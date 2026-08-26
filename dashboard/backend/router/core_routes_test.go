@@ -13,7 +13,7 @@ import (
 func TestRegisterCoreRoutesDoesNotExposeDashboardRecipeAuthority(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}, nil)
 
 	for _, target := range []struct {
 		method string
@@ -39,7 +39,7 @@ func TestRegisterCoreRoutesDoesNotExposeDashboardRecipeAuthority(t *testing.T) {
 func TestRegisterCoreRoutesDoesNotExposeLegacyModelDiscoveryEndpoint(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}, nil)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/api/models/discover", nil))
 	if response.Code != http.StatusNotFound {
@@ -50,7 +50,7 @@ func TestRegisterCoreRoutesDoesNotExposeLegacyModelDiscoveryEndpoint(t *testing.
 func TestRegisterCoreRoutesDoesNotExposePackagedModelCatalogEndpoint(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}, nil)
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/api/models/catalog", nil))
 	if response.Code != http.StatusNotFound {
@@ -61,7 +61,7 @@ func TestRegisterCoreRoutesDoesNotExposePackagedModelCatalogEndpoint(t *testing.
 func TestRegisterCoreRoutesDoesNotExposeDashboardToolExecution(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}, nil)
 
 	for _, path := range []string{
 		"/api/tools-db",
@@ -83,7 +83,7 @@ func TestRegisterCoreRoutesDoesNotExposeDashboardToolExecution(t *testing.T) {
 func TestRegisterCoreRoutesDoesNotExposeRuntimeConfigAuthority(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}, nil)
 
 	for _, target := range []struct {
 		method string
@@ -124,7 +124,7 @@ func TestRegisterCoreRoutesDoesNotExposeRuntimeConfigAuthority(t *testing.T) {
 func TestRegisterCoreRoutesDoesNotExposeTopologyEvaluationProxy(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()
-	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"})
+	registerCoreRoutes(mux, &config.Config{ConfigDir: t.TempDir(), PythonPath: "python3"}, nil)
 
 	response := httptest.NewRecorder()
 	mux.ServeHTTP(

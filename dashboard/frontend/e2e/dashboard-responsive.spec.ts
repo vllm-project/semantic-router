@@ -3,6 +3,7 @@ import { expect, test, type Locator, type Page, type Route } from '@playwright/t
 import { shellRouteDefinitions } from '../src/app/routeManifest'
 import { ACCESS_NAV_ITEMS } from '../src/pages/AccessControlPageSupport'
 import { mockAuthenticatedAppShell } from './support/auth'
+import { withStatusHistory } from './support/status'
 
 const managementMediaType = 'application/vnd.vllm-semantic-router.management.v1+json'
 const namespaceId = '10000000-0000-4000-8000-000000000001'
@@ -17,11 +18,7 @@ const viewports = [
 ] as const
 
 const shellRouteSample = (path: string) => {
-  if (path === '/plugins') return '/plugins/context-compression'
-  return path
-    .replace(':view', 'usage')
-    .replace(':recordId', `${namespaceId}:${insightAdmissionId}`)
-    .replace(':plugin', 'context-compression')
+  return path.replace(':view', 'usage').replace(':recordId', `${namespaceId}:${insightAdmissionId}`)
 }
 
 const routes = Array.from(
@@ -129,7 +126,9 @@ async function mockResponsiveDashboardData(page: Page) {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ overall: 'healthy', deployment_type: 'local', services: [] }),
+      body: JSON.stringify(
+        withStatusHistory({ overall: 'healthy', deployment_type: 'local', services: [] }),
+      ),
     })
   })
   await page.route('**/api/admin/users**', async (route) => {
@@ -192,8 +191,10 @@ async function mockResponsiveDashboardData(page: Page) {
             apiKeyId: '10000000-0000-4000-8000-000000000003',
             entrypointId: 'vllm-sr/consumer',
             recipeId: 'consumer',
+            externalRequestId: 'chatcmpl-responsive',
             metadata: { externalRequestId: 'chatcmpl-responsive' },
             costs: [],
+            models: [],
           },
           routing: {},
           quotaReceipts: [],
@@ -255,7 +256,10 @@ async function mockResponsiveDashboardData(page: Page) {
   await mockAuthenticatedAppShell(page)
 }
 
-async function mockTopologyPreviewData(page: Page) {
+async function mockTopologyPreviewData(
+  page: Page,
+  options: { immutableRecipe?: boolean; includeAlternateRecipe?: boolean } = {},
+) {
   const now = '2026-08-23T00:00:00Z'
   const pageEnvelope = (data: unknown[]) => ({
     data,
@@ -273,8 +277,21 @@ async function mockTopologyPreviewData(page: Page) {
     status: 'active',
     revision: 1,
     recipeRevision: 1,
-    origin: 'custom',
-    immutable: false,
+    origin: options.immutableRecipe ? 'distribution' : 'custom',
+    immutable: Boolean(options.immutableRecipe),
+    ...(options.immutableRecipe
+      ? {
+          provenance: {
+            distributionId: 'mom-v1',
+            distributionVersion: '1.3.0',
+            assetDigest: `sha256:${'a'.repeat(64)}`,
+            sourceRecipeId: 'recipe_responsive',
+            sourceRevision: 1,
+            recipeDigest: `sha256:${'b'.repeat(64)}`,
+            installedAt: now,
+          },
+        }
+      : {}),
     decisions: [{ id: 'decision_simple', name: 'Simple', dispatchCardinality: 'single' }],
     document: {
       signals: {},
@@ -291,6 +308,15 @@ async function mockTopologyPreviewData(page: Page) {
     createdAt: now,
     updatedAt: now,
   }
+  const alternateRecipe = {
+    ...recipe,
+    id: 'recipe_precision',
+    name: 'precision',
+    description: 'Precision topology fixture',
+    origin: 'custom',
+    immutable: false,
+    provenance: undefined,
+  }
   const entrypoint = {
     id: 'entrypoint_responsive',
     name: 'responsive',
@@ -298,6 +324,7 @@ async function mockTopologyPreviewData(page: Page) {
     revision: 1,
     entrypointRevision: 1,
     aliases: ['vllm-sr/responsive'],
+    recipeIds: [recipe.id],
     ruleCount: 1,
     assignedModelCount: 1,
     createdAt: now,
@@ -313,9 +340,7 @@ async function mockTopologyPreviewData(page: Page) {
         recipeRevision: 1,
         assignments: {
           decision_simple: {
-            models: [
-              { modelId: model.id, modelRevision: 1, priority: 0, weight: '1' },
-            ],
+            models: [{ modelId: model.id, modelRevision: 1, priority: 0, weight: '1' }],
           },
         },
       },
@@ -328,13 +353,16 @@ async function mockTopologyPreviewData(page: Page) {
       body: JSON.stringify(body),
     })
 
-  await page.route('**/api/router/management/v1/routing/model-cards?*', (route) =>
+  await page.route('**/api/router/management/v1/routing/model-cards*', (route) =>
     fulfill(route, pageEnvelope([model])),
   )
-  await page.route('**/api/router/management/v1/routing/recipes?*', (route) =>
-    fulfill(route, pageEnvelope([recipe])),
+  await page.route('**/api/router/management/v1/routing/recipes*', (route) =>
+    fulfill(
+      route,
+      pageEnvelope(options.includeAlternateRecipe ? [recipe, alternateRecipe] : [recipe]),
+    ),
   )
-  await page.route('**/api/router/management/v1/routing/entrypoints?*', (route) =>
+  await page.route('**/api/router/management/v1/routing/entrypoints*', (route) =>
     fulfill(route, pageEnvelope([entrypoint])),
   )
   await page.route(
@@ -368,9 +396,7 @@ async function expectUnobstructedControl(page: Page, control: Locator, label: st
   if (!viewport) return
   expect(box.x, `${label} starts inside the viewport`).toBeGreaterThanOrEqual(0)
   expect(box.y, `${label} starts inside the viewport`).toBeGreaterThanOrEqual(0)
-  expect(box.x + box.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(
-    viewport.width,
-  )
+  expect(box.x + box.width, `${label} ends inside the viewport`).toBeLessThanOrEqual(viewport.width)
   expect(box.y + box.height, `${label} ends inside the viewport`).toBeLessThanOrEqual(
     viewport.height,
   )
@@ -466,6 +492,126 @@ test.describe('Dashboard responsive route matrix', () => {
       await expectNoViewportOverflow(page, `/config/entrypoints-recipes model at ${viewport.name}`)
       await page.getByRole('button', { name: 'Close' }).click()
     }
+  })
+
+  test('shows an authorized single model without a Dashboard data-plane bypass', async ({
+    page,
+  }) => {
+    await mockResponsiveDashboardData(page)
+    await mockTopologyPreviewData(page)
+    let modelDiscoveryAuthorization = ''
+    await page.route('**/v1/models*', async (route) => {
+      modelDiscoveryAuthorization = route.request().headers().authorization || ''
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          object: 'list',
+          data: [
+            {
+              id: 'local/fast',
+              description: 'Connected model',
+              routing: {
+                resolution: 'passthrough',
+                selectable: false,
+                default_route: false,
+              },
+            },
+          ],
+        }),
+      })
+    })
+
+    await page.goto('/dashboard')
+    await expect(
+      page.locator('article').filter({ hasText: 'local/fast' }).getByText('local/fast', {
+        exact: true,
+      }),
+    ).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Chat with local/fast' })).toHaveCount(0)
+    expect(modelDiscoveryAuthorization).toBe('')
+
+    await page.goto('/playground')
+    await expect(page.getByTestId('playground-composer-model-select')).toHaveAttribute(
+      'aria-label',
+      'Model: local/fast',
+    )
+    expect(modelDiscoveryAuthorization).toBe('Bearer vsd_test-delegated-credential')
+  })
+
+  test('keeps the built-in Recipe notice compact so Builder remains usable', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await mockResponsiveDashboardData(page)
+    await mockTopologyPreviewData(page, { immutableRecipe: true })
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      await page.goto('/builder')
+      const notice = page.getByText('Built-in Recipe', { exact: true }).locator('..').locator('..')
+      await expect(notice).toBeVisible({ timeout: 20_000 })
+      const geometry = await notice.evaluate((element) => {
+        const bounds = element.getBoundingClientRect()
+        const iconBounds = element.querySelector('svg')?.getBoundingClientRect()
+        return {
+          height: bounds.height,
+          iconHeight: iconBounds?.height ?? 0,
+          iconWidth: iconBounds?.width ?? 0,
+        }
+      })
+      expect(geometry.height).toBeLessThanOrEqual(44)
+      expect(geometry.iconWidth).toBeLessThanOrEqual(18)
+      expect(geometry.iconHeight).toBeLessThanOrEqual(18)
+      await expect(page.getByText('Signals', { exact: true }).first()).toBeVisible()
+      await expect(page.getByRole('button', { name: 'Recipe', exact: true })).toBeVisible()
+      await expect(page.getByRole('complementary', { name: 'Recipe output' })).toHaveCount(0)
+      const authoringWidth = await page
+        .getByTestId('builder-authoring-area')
+        .evaluate((element) => element.getBoundingClientRect().width)
+      expect(authoringWidth).toBeGreaterThan(viewport.width * 0.84)
+      await expectNoViewportOverflow(page, `/builder at ${viewport.width}px`)
+    }
+  })
+
+  test('uses one bounded Recipe dropdown across routing editors', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' })
+    await mockResponsiveDashboardData(page)
+    await mockTopologyPreviewData(page)
+
+    for (const viewport of viewports) {
+      await page.setViewportSize(viewport)
+      for (const route of ['/config/signals', '/config/decisions', '/config/projections']) {
+        await page.goto(route)
+        const picker = page.getByRole('combobox', { name: /^Recipe/ })
+        await expect(picker).toHaveCount(1)
+        await expectUnobstructedControl(page, picker, `${route} Recipe dropdown`)
+        await expect(picker.locator('option')).toHaveCount(1)
+        await expectNoViewportOverflow(page, `${route} at ${viewport.width}px`)
+      }
+    }
+  })
+
+  test('keeps the selected Recipe in the URL across routing editor tabs', async ({ page }) => {
+    await mockResponsiveDashboardData(page)
+    await mockTopologyPreviewData(page, { includeAlternateRecipe: true })
+
+    await page.goto('/config/signals')
+    const signalRecipe = page.getByRole('combobox', { name: /^Recipe/ })
+    await signalRecipe.selectOption('recipe_precision')
+    await expect(page).toHaveURL(/\/config\/signals\?recipe=recipe_precision$/)
+
+    await page.getByRole('button', { name: 'Build', exact: true }).click()
+    await page.getByRole('button', { name: 'Decisions', exact: true }).click()
+    await expect(page).toHaveURL(/\/config\/decisions\?recipe=recipe_precision$/)
+    await expect(page.getByRole('combobox', { name: /^Recipe/ })).toHaveValue('recipe_precision')
+
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto('/config/projections?recipe=recipe_precision')
+    await expect(page.getByRole('combobox', { name: /^Recipe/ })).toHaveValue('recipe_precision')
+    await page.getByRole('button', { name: 'Toggle menu' }).click()
+    const navigation = page.getByRole('navigation', { name: 'Mobile navigation' })
+    await navigation.getByRole('button', { name: 'Signals', exact: true }).click()
+    await expect(page).toHaveURL(/\/config\/signals\?recipe=recipe_precision$/)
+    await expect(page.getByRole('combobox', { name: /^Recipe/ })).toHaveValue('recipe_precision')
   })
 
   test('keeps Playground controls unobstructed and the mobile conversation drawer accessible', async ({
@@ -597,7 +743,7 @@ test.describe('Dashboard responsive route matrix', () => {
     await expect(overview.getByRole('button', { name: /API Keys/ })).toBeVisible()
     await expect(overview.getByRole('button', { name: /Try a request/ })).toBeVisible()
     await expect(page.getByRole('link', { name: 'Playground', exact: true })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Operate/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /System/ })).toHaveCount(0)
     await page.getByRole('button', { name: /Build/ }).click()
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
     await expect(buildMenu.getByRole('tab', { name: /Routing/ })).toBeVisible()
@@ -635,7 +781,7 @@ test.describe('Dashboard responsive route matrix', () => {
     const navigation = page.getByRole('navigation', { name: 'Mobile navigation' })
 
     await expect(navigation.getByRole('link', { name: 'Playground', exact: true })).toBeVisible()
-    await expect(navigation.getByRole('button', { name: /Operate/ })).toHaveCount(0)
+    await expect(navigation.getByRole('button', { name: /System/ })).toHaveCount(0)
     await navigation.getByRole('button', { name: /Build/ }).click()
     await expect(navigation.getByText('Routing', { exact: true })).toBeVisible()
     await expect(navigation.getByText('Integrations', { exact: true })).toHaveCount(0)
@@ -710,7 +856,6 @@ test.describe('Dashboard responsive route matrix', () => {
       '/ml-setup',
       '/monitoring',
       '/openclaw',
-      '/plugins',
       '/status',
       '/tracing',
     ]) {

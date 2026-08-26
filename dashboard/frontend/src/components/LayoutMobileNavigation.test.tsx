@@ -59,7 +59,7 @@ describe('LayoutMobileNavigation contract', () => {
           primaryLinks: PRIMARY_NAV_LINKS,
           sections: [
             { key: 'build', label: 'Build', categories: [] },
-            { key: 'operate', label: 'Operate', categories: BUILD_MENU_CATEGORIES },
+            { key: 'system', label: 'System', categories: BUILD_MENU_CATEGORIES },
           ],
           onConfigSelect: vi.fn(),
           onNavigate: vi.fn(),
@@ -69,7 +69,7 @@ describe('LayoutMobileNavigation contract', () => {
     )
 
     expect(markup).not.toContain('>Build<')
-    expect(markup).toContain('>Operate<')
+    expect(markup).toContain('>System<')
   })
 
   it('renders only permission-filtered primary destinations', () => {

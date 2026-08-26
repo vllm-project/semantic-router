@@ -56,4 +56,36 @@ describe('Recipe Builder boundary', () => {
     expect(page).toContain('open={editable && guideOpen}')
     expect(page).toContain('{editable ? (')
   })
+
+  it('constrains status icons so banners cannot displace the editor canvas', () => {
+    const styles = readSource('./BuilderPage.module.css')
+
+    expect(styles).toMatch(
+      /\.builderImmutableBanner > svg\s*{[^}]*width: 15px;[^}]*height: 15px;[^}]*flex: 0 0 15px;/s,
+    )
+    expect(styles).toMatch(/\.page\s*{[^}]*min-height: 0;[^}]*overflow: hidden;/s)
+    expect(styles).toMatch(/\.content\s*{[^}]*min-height: 0;[^}]*overflow: hidden;/s)
+  })
+
+  it('opens with a full-width authoring canvas and resizable balanced panels', () => {
+    const page = readSource('./BuilderPage.tsx')
+    const visual = readSource('./builderPageVisualShell.tsx')
+    const styles = readSource('./BuilderPage.module.css')
+
+    expect(page).toContain('const [outputPanelOpen, setOutputPanelOpen] = useState(false)')
+    expect(page).toContain('initialWidth: 440')
+    expect(page).toContain('minWidth: 320')
+    expect(page).toContain('* 0.48')
+    expect(page).toContain('initialWidth: 312')
+    expect(page).toContain("growthDirection: 'right'")
+    expect(visual).toContain('aria-label="Resize Recipe navigation"')
+    expect(visual).toContain('onMouseDown={onNavigationDragStart}')
+    expect(styles).toMatch(/\.navigationResizeHandle\s*{[^}]*cursor: col-resize;/s)
+    expect(styles).toMatch(
+      /@media \(max-width: 1024px\)[\s\S]*?\.content,[\s\S]*?\.visualRow\s*{[^}]*flex-direction: column;/s,
+    )
+    expect(styles).toMatch(
+      /@media \(max-width: 520px\)[\s\S]*?\.builderRecipePicker select\s*{[^}]*width: 100%;[^}]*max-width: none;/s,
+    )
+  })
 })

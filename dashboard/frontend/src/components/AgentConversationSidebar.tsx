@@ -1,9 +1,17 @@
 import { useEffect, useId, useRef, useState } from 'react'
 
-import type { AgentSession } from '../generated/managementApiContract'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import ProductIcon from './ProductIcon'
+import type { PlaygroundMode } from './playgroundModes'
 import styles from './AgentPlayground.module.css'
+
+export interface PlaygroundConversationListItem {
+  id: string
+  mode: PlaygroundMode
+  source: 'browser' | 'router'
+  title: string
+  updatedAt: string
+}
 
 interface AgentConversationSidebarProps {
   activeSessionId: string | null
@@ -11,13 +19,13 @@ interface AgentConversationSidebarProps {
   loading: boolean
   open: boolean
   search: string
-  sessions: AgentSession[]
+  sessions: PlaygroundConversationListItem[]
   sessionsHaveMore: boolean
-  onDeleteRequest: (session: AgentSession) => void
+  onDeleteRequest: (session: PlaygroundConversationListItem) => void
   onLoadMore: () => void
   onNewChat: () => void
   onSearchChange: (value: string) => void
-  onSelect: (session: AgentSession) => void
+  onSelect: (session: PlaygroundConversationListItem) => void
   onToggle: () => void
 }
 
@@ -206,7 +214,13 @@ export default function AgentConversationSidebar({
                   >
                     <span className={styles.sessionTitle}>{session.title}</span>
                     <span className={styles.sessionMeta}>
-                      <span>{session.mode === 'builder' ? 'Builder' : 'Chat'}</span>
+                      <span>
+                        {session.mode === 'builder'
+                          ? 'Builder'
+                          : session.mode === 'agent'
+                            ? 'Agent'
+                            : 'Chat'}
+                      </span>
                       <span aria-hidden="true">·</span>
                       <time dateTime={session.updatedAt}>{relativeTime(session.updatedAt)}</time>
                     </span>

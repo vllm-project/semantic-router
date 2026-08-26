@@ -6,10 +6,10 @@ import type { AccessEditor } from './AccessControlPageSupport'
 import type { AccessControlSelectorSources } from './accessControlSelectorSources'
 import {
   Advanced,
+  CoreSection,
   Field,
   OwnerChoice,
   PickerField,
-  SelectionSection,
   StatusField,
 } from './AccessControlEditorPrimitives'
 import styles from './AccessControlPage.module.css'
@@ -141,19 +141,7 @@ function TeamFields({
           rows={2}
         />
       </Field>
-      {!selfService ? (
-        <PolicyFields
-          accessGroupIds={editor.value.accessGroupIds || []}
-          budgetId={editor.value.budgetId}
-          selectors={selectors}
-          onGroups={(accessGroupIds) => update({ accessGroupIds })}
-          onBudget={(budgetId) => update({ budgetId })}
-          required
-          label="Team defaults"
-          compact
-        />
-      ) : null}
-      <SelectionSection title="Members" detail={`${members.length} selected · optional`}>
+      <CoreSection title="Members" detail={`${members.length} selected · optional`}>
         <AccessAsyncResourcePicker
           ariaLabel="Search users"
           source={selectors.users}
@@ -161,8 +149,6 @@ function TeamFields({
           multiple
           placeholder="Search by name or email"
           emptyText="No users found"
-          compact
-          compactEmptyLabel="Add members"
           onChange={(selectedIds) => {
             const existing = new Map(members.map((member) => [member.userId, member]))
             update({
@@ -207,7 +193,18 @@ function TeamFields({
             )
           }}
         />
-      </SelectionSection>
+      </CoreSection>
+      {!selfService ? (
+        <PolicyFields
+          accessGroupIds={editor.value.accessGroupIds || []}
+          budgetId={editor.value.budgetId}
+          selectors={selectors}
+          onGroups={(accessGroupIds) => update({ accessGroupIds })}
+          onBudget={(budgetId) => update({ budgetId })}
+          required
+          label="Team defaults"
+        />
+      ) : null}
       {!selfService ? (
         <Advanced>
           <StatusField
@@ -443,6 +440,15 @@ function KeyFields({
       ) : null}
       {!selfService ? (
         <>
+          <PolicyFields
+            accessGroupIds={editor.value.accessGroupIds || []}
+            budgetId={editor.value.budgetId}
+            selectors={selectors}
+            onGroups={(accessGroupIds) => update({ accessGroupIds })}
+            onBudget={(budgetId) => update({ budgetId })}
+            label="Key override"
+            showBudget={false}
+          />
           {editor.value.id ? (
             <PolicyFields
               accessGroupIds={editor.value.accessGroupIds || []}
@@ -529,15 +535,6 @@ function KeyFields({
             </>
           )}
           <Advanced label="Advanced settings">
-            <PolicyFields
-              accessGroupIds={editor.value.accessGroupIds || []}
-              budgetId={editor.value.budgetId}
-              selectors={selectors}
-              onGroups={(accessGroupIds) => update({ accessGroupIds })}
-              onBudget={(budgetId) => update({ budgetId })}
-              label="Key override"
-              showBudget={false}
-            />
             <Field label="Expiration" wide hint="Optional">
               <input
                 type="datetime-local"
@@ -586,7 +583,7 @@ function GroupFields({
   }
   return (
     <>
-      <SelectionSection title="Mixture-of-Models" detail="Published API models">
+      <CoreSection title="Mixture-of-Models" detail="Published API models">
         <AccessAsyncResourcePicker
           ariaLabel="Search Mixture-of-Models"
           selectedIds={selectedIds('entrypoint')}
@@ -596,20 +593,18 @@ function GroupFields({
           placeholder="Search Mixture-of-Models"
           emptyText="No Mixture-of-Models found"
         />
-      </SelectionSection>
-      <Advanced label="Single model access">
-        <SelectionSection title="Single models" detail="Direct model access">
-          <AccessAsyncResourcePicker
-            ariaLabel="Search single models"
-            selectedIds={selectedIds('model')}
-            source={selectors.models}
-            onChange={(resourceIds) => setResources('model', resourceIds)}
-            multiple
-            placeholder="Search single models"
-            emptyText="No models found"
-          />
-        </SelectionSection>
-      </Advanced>
+      </CoreSection>
+      <CoreSection title="Single Model" detail="Direct model access">
+        <AccessAsyncResourcePicker
+          ariaLabel="Search single models"
+          selectedIds={selectedIds('model')}
+          source={selectors.models}
+          onChange={(resourceIds) => setResources('model', resourceIds)}
+          multiple
+          placeholder="Search single models"
+          emptyText="No models found"
+        />
+      </CoreSection>
       <Field label="Description" wide hint="Optional">
         <textarea
           value={editor.value.description || ''}
@@ -670,7 +665,6 @@ function PolicyFields({
   inheritBudgetLabel,
   showModels = true,
   showBudget = true,
-  compact = false,
 }: {
   accessGroupIds: string[]
   budgetId?: string
@@ -682,12 +676,11 @@ function PolicyFields({
   inheritBudgetLabel?: string
   showModels?: boolean
   showBudget?: boolean
-  compact?: boolean
 }) {
   return (
     <>
       {showModels ? (
-        <SelectionSection
+        <CoreSection
           title="Model access"
           detail={`${label} · ${required ? 'required' : 'optional'}`}
         >
@@ -698,14 +691,12 @@ function PolicyFields({
             multiple
             placeholder="Search access group name"
             emptyText="No access groups found"
-            compact={compact}
-            compactEmptyLabel="Choose model access"
             onChange={onGroups}
           />
-        </SelectionSection>
+        </CoreSection>
       ) : null}
       {showBudget ? (
-        <PickerField label="Quota" hint={`${label} · ${required ? 'required' : 'optional'}`}>
+        <CoreSection title="Quota" detail={`${label} · ${required ? 'required' : 'optional'}`}>
           <AccessAsyncResourcePicker
             ariaLabel="Search budgets"
             source={selectors.budgets}
@@ -715,11 +706,9 @@ function PolicyFields({
             optionalDescription="Use the next policy in the ownership chain"
             placeholder="Search budget name"
             emptyText="No budgets found"
-            compact={compact}
-            compactEmptyLabel={required ? 'Choose quota' : 'Inherit quota'}
             onChange={(selectedIds) => onBudget(selectedIds[0])}
           />
-        </PickerField>
+        </CoreSection>
       ) : null}
     </>
   )

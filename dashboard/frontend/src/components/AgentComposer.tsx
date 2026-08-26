@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type ChangeEvent, type KeyboardEvent } from 'react'
 
 import type { RouterModelOption } from '../utils/routerModelSelection'
+import AgentComposerQueue, { type PlaygroundQueuedTurn } from './AgentComposerQueue'
 import AgentComposerMenu from './AgentComposerMenu'
 import ChatComposerModelSelect from './ChatComposerModelSelect'
 import {
@@ -9,34 +10,44 @@ import {
   type PlaygroundAttachment,
 } from './playgroundFileAttachments'
 import ProductIcon from './ProductIcon'
+import type { PlaygroundMode } from './playgroundModes'
 import styles from './AgentPlayground.module.css'
 
 interface AgentComposerProps {
+  agentAvailable: boolean
   attachments: PlaygroundAttachment[]
   builderAvailable: boolean
   disabledReason?: string
   input: string
-  mode: 'chat' | 'builder'
+  mode: PlaygroundMode
   models: RouterModelOption[]
+  queuePaused: boolean
+  queuedTurns: PlaygroundQueuedTurn[]
   running: boolean
   selectedModel: string
   targetLocked: boolean
   onAttach: (files: FileList) => void
   onInputChange: (value: string) => void
-  onModeChange: (mode: 'chat' | 'builder') => void
+  onModeChange: (mode: PlaygroundMode) => void
   onModelChange: (model: string) => void
+  onQueue: () => void
+  onQueueRemove: (turnId: string) => void
+  onQueueResume: () => void
   onRemoveAttachment: (id: string) => void
   onSend: () => void
   onStop: () => void
 }
 
 export default function AgentComposer({
+  agentAvailable,
   attachments,
   builderAvailable,
   disabledReason,
   input,
   mode,
   models,
+  queuePaused,
+  queuedTurns,
   running,
   selectedModel,
   targetLocked,
@@ -44,6 +55,9 @@ export default function AgentComposer({
   onInputChange,
   onModeChange,
   onModelChange,
+  onQueue,
+  onQueueRemove,
+  onQueueResume,
   onRemoveAttachment,
   onSend,
   onStop,
@@ -51,6 +65,7 @@ export default function AgentComposer({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [composing, setComposing] = useState(false)
   const canSend = (Boolean(input.trim()) || attachments.length > 0) && !disabledReason && !running
+  const canQueue = (Boolean(input.trim()) || attachments.length > 0) && !disabledReason && running
 
   const handleFiles = useCallback(
     (event: ChangeEvent<HTMLInputElement>) => {
@@ -64,18 +79,22 @@ export default function AgentComposer({
     if (event.key !== 'Enter' || event.shiftKey || composing || event.nativeEvent.isComposing)
       return
     event.preventDefault()
-    if (canSend) onSend()
+    if (canQueue) onQueue()
+    else if (canSend) onSend()
   }
 
   return (
     <div className={styles.composerWrap} data-testid="agent-composer">
-      <div className={`${styles.composer} ${mode === 'builder' ? styles.composerBuilder : ''}`}>
-        {mode === 'builder' ? (
+      <div className={`${styles.composer} ${mode !== 'chat' ? styles.composerBuilder : ''}`}>
+        {mode !== 'chat' ? (
           <div className={styles.builderModeBar}>
             <span>
-              <ProductIcon name="mixture" /> Builder
+              <ProductIcon name={mode === 'builder' ? 'mixture' : 'globe'} />
+              {mode === 'builder' ? 'Builder' : 'Agent'}
             </span>
-            <small>Draft · Validate · Test · Review</small>
+            <small>
+              {mode === 'builder' ? 'Draft · Validate · Test · Review' : 'Web search · Tools'}
+            </small>
           </div>
         ) : null}
         {attachments.length > 0 ? (
@@ -109,11 +128,20 @@ export default function AgentComposer({
           onCompositionEnd={() => setComposing(false)}
           onKeyDown={handleKeyDown}
           placeholder={
-            mode === 'builder' ? 'Describe the model path you want to build…' : 'Ask anything…'
+            mode === 'builder'
+              ? 'Describe the model path you want to build…'
+              : mode === 'agent'
+                ? 'Ask with web search and tools…'
+                : 'Ask anything…'
           }
           rows={1}
-          aria-label={mode === 'builder' ? 'Builder instruction' : 'Message'}
-          disabled={running}
+          aria-label={
+            mode === 'builder'
+              ? 'Builder instruction'
+              : mode === 'agent'
+                ? 'Agent message'
+                : 'Message'
+          }
         />
         <div className={styles.composerFooter}>
           <div className={styles.composerTools}>
@@ -128,10 +156,13 @@ export default function AgentComposer({
               aria-hidden="true"
             />
             <AgentComposerMenu
+              agentAvailable={agentAvailable}
+              agentEnabled={mode === 'agent'}
               builderAvailable={builderAvailable}
               builderEnabled={mode === 'builder'}
               disabled={running}
               onAttachFiles={() => fileInputRef.current?.click()}
+              onAgentChange={(enabled) => onModeChange(enabled ? 'agent' : 'chat')}
               onBuilderChange={(enabled) => onModeChange(enabled ? 'builder' : 'chat')}
             />
             <ChatComposerModelSelect
@@ -143,6 +174,16 @@ export default function AgentComposer({
           </div>
           <div className={styles.composerAction}>
             {disabledReason ? <span>{disabledReason}</span> : null}
+            {running && (input.trim() || attachments.length) ? (
+              <button
+                type="button"
+                className={styles.queueButton}
+                onClick={onQueue}
+                disabled={!canQueue}
+              >
+                Queue
+              </button>
+            ) : null}
             <button
               type="button"
               className={running ? styles.stopButton : styles.sendButton}
@@ -156,10 +197,18 @@ export default function AgentComposer({
           </div>
         </div>
       </div>
+      <AgentComposerQueue
+        paused={queuePaused}
+        turns={queuedTurns}
+        onRemove={onQueueRemove}
+        onResume={onQueueResume}
+      />
       <p className={styles.composerNote}>
         {mode === 'builder'
           ? 'Nothing goes live until you publish.'
-          : 'Your access and limits apply.'}
+          : mode === 'agent'
+            ? 'Search and tool activity stays in this conversation.'
+            : 'Your access and limits apply.'}
       </p>
     </div>
   )

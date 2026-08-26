@@ -25,6 +25,10 @@ describe('dashboard route manifest', () => {
     })
   })
 
+  it('keeps retired plugin-operation pages out of the shell', () => {
+    expect(shellRouteDefinitions.some((route) => route.path.startsWith('/plugins'))).toBe(false)
+  })
+
   it('keeps the Access product entry pointed at Usage', () => {
     expect(redirectRouteDefinitions).toEqual([
       {

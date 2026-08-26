@@ -108,6 +108,7 @@ export function keyScopedCatalogSnapshot(catalog: KeyScopedRoutingCatalog): Mana
     revision: entrypoint.revision,
     entrypointRevision: entrypoint.revision,
     aliases: entrypoint.aliases,
+    recipeIds: [...new Set(entrypoint.rules.map((rule) => rule.recipeId))].sort(),
     ruleCount: entrypoint.rules.length,
     assignedModelCount: countAssignedModels(entrypoint.rules),
     rules: entrypoint.rules,

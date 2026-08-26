@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { DataTable } from '../components/DataTable'
 import InsightsCharts from '../components/InsightsCharts'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import TableHeader from '../components/TableHeader'
 
 import configStyles from './ConfigPage.module.css'
@@ -224,6 +225,10 @@ export default function InsightsPage() {
     [navigate],
   )
 
+  if (loading && !aggregate && records.length === 0) {
+    return <ProductLoadingState label="Loading Insights" />
+  }
+
   return (
     <div className={styles.page}>
       <ConfigPageManagerLayout
@@ -237,18 +242,7 @@ export default function InsightsPage() {
           </div>
         ) : null}
 
-        {loading && !aggregate ? (
-          <section className={styles.overviewLoading} aria-label="Loading insight overview">
-            <div className={styles.overviewLoadingCards} aria-hidden="true">
-              {Array.from({ length: 4 }, (_, index) => (
-                <span key={index} />
-              ))}
-            </div>
-            <p>Loading request intelligence…</p>
-          </section>
-        ) : (
-          <InsightsCharts aggregate={aggregate || EMPTY_AGGREGATE} />
-        )}
+        <InsightsCharts aggregate={aggregate || EMPTY_AGGREGATE} />
 
         <div className={configStyles.sectionPanel}>
           <section className={configStyles.sectionTableBlock}>
@@ -340,10 +334,7 @@ export default function InsightsPage() {
             </div>
 
             {loading && records.length === 0 ? (
-              <div className={styles.loadingInline}>
-                <div className={styles.spinner} />
-                <p>Loading requests…</p>
-              </div>
+              <ProductLoadingState compact label="Loading requests" />
             ) : !hasInsightsData ? (
               <div className={styles.emptyState}>
                 {historyUnavailable ? (

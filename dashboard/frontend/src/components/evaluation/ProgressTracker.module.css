@@ -5,16 +5,6 @@
   overflow: hidden;
 }
 
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: var(--spacing-2xl, 3rem);
-  gap: var(--spacing-md, 1rem);
-  color: var(--color-text-secondary, #999);
-}
-
 .loadError {
   display: flex;
   min-height: 260px;
@@ -43,21 +33,6 @@
   background: transparent;
   color: var(--color-danger, #ef4444);
   cursor: pointer;
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--color-border, #333);
-  border-top-color: var(--color-primary, #8f949c);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .header {

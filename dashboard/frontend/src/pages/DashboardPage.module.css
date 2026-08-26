@@ -10,33 +10,10 @@
   gap: var(--spacing-lg);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Loading / Error                                                    */
-/* ------------------------------------------------------------------ */
-
-.loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+.statusOnlyPage {
+  max-width: 1040px;
+  min-height: calc(100dvh - 78px);
   justify-content: center;
-  min-height: 400px;
-  color: var(--color-text-muted);
-  gap: var(--spacing-md);
-}
-
-.spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 .errorBanner {
@@ -274,28 +251,66 @@
 .modelList {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  padding: 0.35rem var(--spacing-lg) 0.5rem;
+  gap: 0.55rem;
+  padding: 0.7rem var(--spacing-lg) 0.85rem;
 }
 
 .modelRow {
   min-width: 0;
-  min-height: 38px;
-  padding: 0.45rem 0.6rem;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.018);
+  color: inherit;
+  text-align: left;
 }
 
-.modelRow:nth-child(n + 3) {
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+.modelIdentity {
+  min-width: 0;
+  display: grid;
+  gap: 0.2rem;
 }
 
-.modelRow:nth-child(odd) {
-  border-right: 1px solid rgba(255, 255, 255, 0.055);
+.modelIdentity strong,
+.modelIdentity small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modelIdentity strong {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.modelIdentity small {
+  color: rgba(255, 255, 255, 0.38);
+  font-size: 0.64rem;
+}
+
+.modelCapability {
+  max-width: 100px;
+  overflow: hidden;
+  padding: 0.3rem 0.48rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.6rem;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: capitalize;
+  white-space: nowrap;
 }
 
 .modelList .moreServices {
   grid-column: 1 / -1;
-  padding: 0.45rem 0 0.1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.055);
+  padding: 0.25rem 0 0;
 }
 
 .serviceRow {
@@ -552,6 +567,20 @@
   }
 }
 
+@media (max-width: 900px) {
+  .modelList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .modelRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .modelCapability {
+    display: none;
+  }
+}
+
 @media (max-width: 640px) {
   .page {
     gap: 1rem;
@@ -579,18 +608,16 @@
 
   .modelList {
     grid-template-columns: minmax(0, 1fr);
-    padding: 0.3rem 0.45rem 0.45rem;
+    padding: 0.55rem;
   }
 
-  .modelRow,
-  .modelRow:nth-child(odd) {
-    min-height: 40px;
-    border-right: 0;
-    border-top: 1px solid rgba(255, 255, 255, 0.055);
+  .modelRow {
+    min-height: 58px;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
-  .modelRow:first-child {
-    border-top: 0;
+  .modelCapability {
+    display: none;
   }
 
   .accessSnapshot {

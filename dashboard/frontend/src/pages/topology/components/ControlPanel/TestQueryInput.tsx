@@ -1,6 +1,6 @@
 // ControlPanel/TestQueryInput.tsx - Local topology preview input
 
-import React from 'react'
+import React, { type Ref } from 'react'
 import styles from './ControlPanel.module.css'
 
 interface TestQueryInputProps {
@@ -8,6 +8,7 @@ interface TestQueryInputProps {
   onChange: (value: string) => void
   onTest: () => void
   isLoading: boolean
+  previewButtonRef?: Ref<HTMLButtonElement>
 }
 
 export const TestQueryInput: React.FC<TestQueryInputProps> = ({
@@ -15,6 +16,7 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
   onChange,
   onTest,
   isLoading,
+  previewButtonRef,
 }) => {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && e.metaKey) {
@@ -37,7 +39,12 @@ export const TestQueryInput: React.FC<TestQueryInputProps> = ({
           onKeyDown={handleKeyDown}
           rows={1}
         />
-        <button className={styles.testBtn} onClick={onTest} disabled={isLoading || !value.trim()}>
+        <button
+          ref={previewButtonRef}
+          className={styles.testBtn}
+          onClick={onTest}
+          disabled={isLoading || !value.trim()}
+        >
           {isLoading ? 'Previewing…' : 'Preview'}
         </button>
       </div>

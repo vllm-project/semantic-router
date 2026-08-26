@@ -13,6 +13,7 @@ import {
 } from '../utils/openClawCatalogSupport'
 import { OpenClawCatalogControls, OpenClawPagination } from './OpenClawCatalogControls'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './OpenClawPage.module.css'
 import { truncateText, type OpenClawStatus, type TeamProfile } from './OpenClawPageSupport'
 import { OpenClawRequestNotice } from './OpenClawRequestNotice'
@@ -100,12 +101,7 @@ export const DashboardTab: React.FC<DashboardTabProps> = ({
   }, [rosterPage, rosterPageCount])
 
   if (loading && containers.length === 0 && teams.length === 0) {
-    return (
-      <div className={styles.loading} role="status">
-        <div className={styles.spinner} />
-        <p>Loading the OpenClaw control plane…</p>
-      </div>
-    )
+    return <ProductLoadingState compact label="Loading OpenClaw" />
   }
 
   return (

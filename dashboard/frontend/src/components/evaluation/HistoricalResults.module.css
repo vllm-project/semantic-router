@@ -246,7 +246,6 @@
   color: var(--color-text, #e8e8e8);
 }
 
-.loading,
 .errorState,
 .noMatches {
   padding: var(--spacing-2xl, 3rem);

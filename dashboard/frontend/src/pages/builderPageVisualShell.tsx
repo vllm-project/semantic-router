@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useState } from 'react'
+import React, { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
 
 import type { Diagnostic, EditorMode, DSLFieldObject } from '@/types/dsl'
 import { useDSLStore } from '@/stores/dslStore'
 import type { RouteInput } from '@/lib/dslMutations'
 import { formatRoutingMetadataValue } from '@/components/routingMetadataDisplay'
+import ProductLoadingState from '@/components/ProductLoadingState'
 
 import styles from './BuilderPage.module.css'
 import { PluginIcon, RouteIcon, SignalIcon } from './builderPageFormPrimitives'
@@ -55,6 +56,9 @@ interface VisualModeProps {
   errorCount: number
   isValid: boolean
   onModeSwitch: (mode: EditorMode) => void
+  navigationWidth: number
+  onNavigationDragStart: (event: React.MouseEvent) => void
+  onNavigationResize: (delta: number) => void
 }
 
 const VisualMode: React.FC<VisualModeProps> = ({
@@ -92,6 +96,9 @@ const VisualMode: React.FC<VisualModeProps> = ({
   errorCount,
   isValid,
   onModeSwitch,
+  navigationWidth,
+  onNavigationDragStart,
+  onNavigationResize,
 }) => {
   // Collect available signal names for expression builder
   // Complexity signals are referenced as "<name>:easy", "<name>:medium", "<name>:hard" in route conditions
@@ -154,7 +161,7 @@ const VisualMode: React.FC<VisualModeProps> = ({
     <div className={styles.visualContainer}>
       <div className={styles.visualRow}>
         {/* Sidebar */}
-        <div className={styles.sidebar}>
+        <div className={styles.sidebar} style={{ width: navigationWidth }}>
           {/* Dashboard home link */}
           <div
             className={
@@ -403,13 +410,30 @@ const VisualMode: React.FC<VisualModeProps> = ({
             ))}
           </SidebarSection>
         </div>
+        <div
+          className={styles.navigationResizeHandle}
+          role="separator"
+          aria-label="Resize Recipe navigation"
+          aria-orientation="vertical"
+          aria-valuemin={240}
+          aria-valuemax={480}
+          aria-valuenow={Math.round(navigationWidth)}
+          tabIndex={0}
+          onMouseDown={onNavigationDragStart}
+          onKeyDown={(event: KeyboardEvent<HTMLDivElement>) => {
+            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+            event.preventDefault()
+            onNavigationResize(event.key === 'ArrowRight' ? 20 : -20)
+          }}
+        >
+          <span aria-hidden="true" />
+        </div>
 
         {/* Main panel */}
         <div className={styles.mainPanel}>
           {!wasmReady && !wasmError && (
             <div className={styles.wasmOverlay}>
-              <div className={styles.spinner} />
-              Loading Signal Compiler…
+              <ProductLoadingState compact fill label="Loading Signal Compiler" />
             </div>
           )}
 

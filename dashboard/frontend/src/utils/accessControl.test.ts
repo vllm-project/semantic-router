@@ -63,9 +63,6 @@ describe('config write access', () => {
     expect(canAccessDashboardPath({ managementPermissions: ['log.read'] }, '/logs')).toBe(true)
     expect(canAccessDashboardPath({ role: 'read' }, '/logs')).toBe(false)
     expect(canAccessDashboardPath({ role: 'write' }, '/logs')).toBe(false)
-    expect(
-      canAccessDashboardPath({ permissions: ['logs.read'] }, '/plugins/context-compression'),
-    ).toBe(true)
     expect(canAccessDashboardPath({ permissions: ['config.read'] }, '/status')).toBe(false)
     expect(
       canAccessDashboardPath(
@@ -169,6 +166,15 @@ describe('config write access', () => {
     expect(canAccessDashboardPath(consumer, '/access/audit-logs')).toBe(false)
   })
 
+  it('keeps standard Playground chat independent from Agent authority', () => {
+    expect(
+      canAccessDashboardPath({ managementPermissions: ['delegation.use'] }, '/playground'),
+    ).toBe(true)
+    expect(
+      canAccessDashboardPath({ managementPermissions: ['agent.read', 'agent.use'] }, '/playground'),
+    ).toBe(false)
+  })
+
   it('classifies consumers from effective capabilities instead of dashboard role names', () => {
     expect(
       isModelConsumer({
@@ -228,9 +234,7 @@ describe('config write access', () => {
     expect(resolveAccessLandingPath({ managementPermissions: ['key.read', 'key.reveal'] })).toBe(
       '/access/api-keys',
     )
-    expect(resolveAccessLandingPath({ managementPermissions: ['team.read'] })).toBe(
-      '/access/teams',
-    )
+    expect(resolveAccessLandingPath({ managementPermissions: ['team.read'] })).toBe('/access/teams')
     expect(resolveAccessLandingPath({ managementPermissions: [] })).toBeNull()
   })
 

@@ -60,8 +60,13 @@ export default function AccessBudgetRuleEditor({ rules, onChange }: Props) {
           <strong>Limits</strong>
           <span>Each limit is enforced independently.</span>
         </div>
-        <button type="button" onClick={() => onChange([...rules, newRule()])}>
-          <ProductIcon name="plus" /> Add limit
+        <button
+          type="button"
+          aria-label="Add limit"
+          title="Add limit"
+          onClick={() => onChange([...rules, newRule()])}
+        >
+          <ProductIcon name="plus" /> Add
         </button>
       </header>
       <div className={styles.budgetRuleList}>
@@ -75,8 +80,9 @@ export default function AccessBudgetRuleEditor({ rules, onChange }: Props) {
                   type="button"
                   onClick={() => remove(index)}
                   aria-label={`Remove limit ${index + 1}`}
+                  title={`Remove limit ${index + 1}`}
                 >
-                  <ProductIcon name="trash" /> Remove
+                  <ProductIcon name="trash" />
                 </button>
               </div>
               <div className={styles.budgetRuleGrid}>

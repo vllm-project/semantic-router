@@ -3,12 +3,15 @@ import { useCallback, useEffect, useRef } from 'react'
 import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
 import { MANAGEMENT_API_HEADERS } from '../generated/managementApiContract'
 import { managementOperationRequest } from '../utils/managementApiContract'
+import { DelegatedInferenceIssuanceIntents } from '../utils/delegatedInferenceIssuance'
+import { OwnedDelegatedInferenceSessions } from '../utils/ownedDelegatedInferenceSessions'
 import type { SecretEnvelope } from '../utils/routerManagementTypes'
 
 const DELEGATED_SESSION_REFRESH_SKEW_MS = 30_000
 
 interface CachedDelegatedSession {
   keyId: string
+  resourceId: string
   secret: string
   expiresAt: number
 }
@@ -52,22 +55,43 @@ function assertDelegatedSecret(payload: unknown): SecretEnvelope {
   return secret as SecretEnvelope
 }
 
-// This memory-only credential is used only to discover authorized targets from
-// /v1/models. Agent execution creates its own server-side delegation; the
-// browser never owns a durable turn or tool-execution credential.
+// This memory-only credential authorizes the browser's ordinary OpenAI-compatible
+// model discovery and streaming inference calls. Durable API keys and Agent tool
+// authority never enter browser storage.
 export function useDelegatedInferenceSession(): DelegatedInferenceSessionState {
   const { keysStatus, retryKeys, selectedKey } = useInferenceRoutingAccess()
   const sessionRef = useRef<CachedDelegatedSession | null>(null)
   const selectedKeyIdRef = useRef(selectedKey?.keyId ?? '')
   selectedKeyIdRef.current = selectedKey?.keyId ?? ''
+  const ownedSessionsRef = useRef<OwnedDelegatedInferenceSessions | null>(null)
+  if (!ownedSessionsRef.current) {
+    ownedSessionsRef.current = new OwnedDelegatedInferenceSessions((resourceId) => {
+      void managementOperationRequest('deleteSelfInferenceSessionsBySessionId', {
+        pathParameters: { sessionId: resourceId },
+      }).catch(() => undefined)
+    })
+  }
+  const issuanceIntentsRef = useRef<DelegatedInferenceIssuanceIntents | null>(null)
+  if (!issuanceIntentsRef.current) {
+    issuanceIntentsRef.current = new DelegatedInferenceIssuanceIntents(randomIdempotencyKey)
+  }
   const issuanceRef = useRef<{
     keyId: string
     promise: Promise<CachedDelegatedSession>
   } | null>(null)
 
   useEffect(() => {
+    const ownedSessions = ownedSessionsRef.current!
+    ownedSessions.activate(selectedKey?.keyId ?? '')
+    issuanceIntentsRef.current!.reset()
     sessionRef.current = null
     issuanceRef.current = null
+    return () => {
+      sessionRef.current = null
+      issuanceRef.current = null
+      issuanceIntentsRef.current!.reset()
+      ownedSessions.deactivate()
+    }
   }, [selectedKey?.keyId])
 
   const getAccessToken = useCallback(async (): Promise<string> => {
@@ -81,29 +105,53 @@ export function useDelegatedInferenceSession(): DelegatedInferenceSessionState {
       return cached.secret
     }
     if (issuanceRef.current?.keyId !== keyId) {
-      const promise = managementOperationRequest('postSelfInferenceSessions', {
-        headers: { [MANAGEMENT_API_HEADERS.idempotencyKey]: randomIdempotencyKey() },
+      const ownedSessions = ownedSessionsRef.current!
+      const claim = ownedSessions.begin(keyId)
+      if (!claim) {
+        throw new DOMException('Playground credential issuance was superseded.', 'AbortError')
+      }
+      const previous = sessionRef.current
+      const idempotencyKey = issuanceIntentsRef.current!.keyFor(keyId)
+      const issuedPromise = managementOperationRequest('postSelfInferenceSessions', {
+        headers: { [MANAGEMENT_API_HEADERS.idempotencyKey]: idempotencyKey },
         body: { keyId },
       })
         .then(assertDelegatedSecret)
         .then((issued) => {
           const next: CachedDelegatedSession = {
             keyId,
+            resourceId: issued.resourceId,
             secret: issued.secret,
             expiresAt: sessionExpiry(issued.expiresAt),
           }
+          if (!ownedSessions.claim(claim, next)) {
+            throw new DOMException('Playground credential issuance was superseded.', 'AbortError')
+          }
           if (!next.expiresAt || next.expiresAt <= Date.now()) {
+            ownedSessions.retire(next.resourceId)
             throw new Error('Router issued an expired Playground credential.')
           }
-          if (selectedKeyIdRef.current === keyId) sessionRef.current = next
+          if (selectedKeyIdRef.current !== keyId) {
+            ownedSessions.retire(next.resourceId)
+            throw new DOMException('Playground credential issuance was superseded.', 'AbortError')
+          }
+          sessionRef.current = next
+          issuanceIntentsRef.current!.complete(keyId, idempotencyKey)
+          if (previous && previous.resourceId !== next.resourceId) {
+            ownedSessions.retire(previous.resourceId)
+          }
           return next
         })
-        .finally(() => {
-          if (issuanceRef.current?.keyId === keyId) issuanceRef.current = null
-        })
+      const promise: Promise<CachedDelegatedSession> = issuedPromise.finally(() => {
+        if (issuanceRef.current?.promise === promise) issuanceRef.current = null
+      })
       issuanceRef.current = { keyId, promise }
     }
-    const issued = await issuanceRef.current.promise
+    const issuance = issuanceRef.current
+    if (!issuance || issuance.keyId !== keyId) {
+      throw new DOMException('Playground credential issuance was superseded.', 'AbortError')
+    }
+    const issued = await issuance.promise
     return issued.secret
   }, [selectedKey?.keyId])
 

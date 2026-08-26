@@ -27,7 +27,6 @@ import {
   loadOpenClawPage,
   loadPlaygroundFullscreenPage,
   loadPlaygroundPage,
-  loadPluginOperationsPage,
   loadStatusPage,
   loadTopologyPage,
   loadTracingPage,
@@ -62,9 +61,6 @@ const shellPageElements: Record<ShellRoutePage, React.ReactElement> = {
   monitoring: <RecoverableLazyRoute loader={loadMonitoringPage} routeLabel="Monitoring" />,
   openclaw: <RecoverableLazyRoute loader={loadOpenClawPage} routeLabel="OpenClaw" />,
   playground: <RecoverableLazyRoute loader={loadPlaygroundPage} routeLabel="Playground" />,
-  plugins: (
-    <RecoverableLazyRoute loader={loadPluginOperationsPage} routeLabel="Plugin Operations" />
-  ),
   status: <RecoverableLazyRoute loader={loadStatusPage} routeLabel="Status" />,
   topology: <RecoverableLazyRoute loader={loadTopologyPage} routeLabel="Topology" />,
   tracing: <RecoverableLazyRoute loader={loadTracingPage} routeLabel="Tracing" />,

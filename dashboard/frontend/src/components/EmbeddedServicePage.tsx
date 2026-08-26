@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import ProductLoadingState from './ProductLoadingState'
 import ServiceNotConfigured, { type ServiceConfig } from './ServiceNotConfigured'
 import styles from './EmbeddedServicePage.module.css'
 
@@ -137,17 +138,12 @@ export default function EmbeddedServicePage({
         </div>
 
         {(availability === 'checking' || frameLoading) && (
-          <div className={styles.loading} role="status" aria-live="polite">
-            <span className={styles.spinner} aria-hidden="true" />
-            <strong>
-              {frameSlow ? `Still connecting to ${service.name}` : `Loading ${service.name}`}
-            </strong>
-            <p>
-              {frameSlow
-                ? 'The service is taking longer than expected. You can reload or open the full view.'
-                : 'Establishing the embedded observability session.'}
-            </p>
-          </div>
+          <ProductLoadingState
+            className={styles.loading}
+            compact
+            fill
+            label={frameSlow ? `Still connecting to ${service.name}` : `Loading ${service.name}`}
+          />
         )}
 
         {availability === 'available' ? (

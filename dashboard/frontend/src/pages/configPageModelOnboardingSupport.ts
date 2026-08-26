@@ -7,7 +7,6 @@ import type {
 import type {
   FallbackTrigger,
   RoutingBulkImportRequest,
-  RoutingModelControl,
   RoutingModelControlWrite,
   RoutingPricing,
 } from '../utils/routingManagementApi'
@@ -19,8 +18,8 @@ const durationComponentPattern = /([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|m
 const durationUnitMilliseconds = {
   ns: 0.000_001,
   us: 0.001,
-  'µs': 0.001,
-  'μs': 0.001,
+  µs: 0.001,
+  μs: 0.001,
   ms: 1,
   s: 1_000,
   m: 60_000,
@@ -28,6 +27,7 @@ const durationUnitMilliseconds = {
 } as const
 const minimumModelTimeoutMilliseconds = 1_000
 const maximumModelTimeoutMilliseconds = 24 * 60 * 60 * 1_000
+const defaultModelTimeout = '300s'
 
 export function initialProviderFieldValue(field: ProviderConnectionField): EditableConnectionValue {
   if (field.kind === 'boolean') return field.default === 'true'
@@ -79,17 +79,18 @@ export interface ControlFormValues {
   streamTimeout: string
 }
 
-export const MODEL_RETRY_TRIGGERS: readonly FallbackTrigger[] = [
-  'unavailable',
-  'timeout',
-]
+export const MODEL_RETRY_TRIGGERS: readonly FallbackTrigger[] = ['unavailable', 'timeout']
 
 export type ModelControlOverrides = RoutingModelControlWrite
 
 export function buildModelControlOverrides(
   values: ControlFormValues,
 ): ModelControlOverrides | undefined {
-  const control: ModelControlOverrides = {}
+  const control: ModelControlOverrides = {
+    retry: { count: 0, on: [] },
+    timeout: { request: defaultModelTimeout, stream: defaultModelTimeout },
+  }
+  let configured = false
   if (values.maxRetries.trim()) {
     const retries = Number(values.maxRetries)
     if (!Number.isSafeInteger(retries) || retries < 0 || retries > 5) {
@@ -106,10 +107,10 @@ export function buildModelControlOverrides(
       count: retries,
       on: retries > 0 ? (triggers.length ? triggers : ['unavailable']) : [],
     }
+    configured = true
   } else if (values.retryOn.length > 0) {
     throw new Error('Set Max retries before choosing retry conditions.')
   }
-  const timeout: Partial<RoutingModelControl['timeout']> = {}
   for (const [label, value, key] of [
     ['Request timeout', values.requestTimeout, 'request'],
     ['Stream timeout', values.streamTimeout, 'stream'],
@@ -118,10 +119,12 @@ export function buildModelControlOverrides(
     if (normalized && !validModelTimeout(normalized)) {
       throw new Error(`${label} must be a duration from 1s to 24h, such as 30s or 5m.`)
     }
-    if (normalized) timeout[key] = normalized
+    if (normalized) {
+      control.timeout[key] = normalized
+      configured = true
+    }
   }
-  if (Object.keys(timeout).length) control.timeout = timeout
-  return Object.keys(control).length > 0 ? control : undefined
+  return configured ? control : undefined
 }
 
 function validModelTimeout(value: string): boolean {

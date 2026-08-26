@@ -194,7 +194,7 @@ function AccessEditorDialog(props: EditorProps) {
           </button>
           <button type="submit" className={styles.primaryButton} disabled={saving}>
             {!saving ? <ProductIcon name={editor.value.id ? 'check' : 'plus'} /> : null}
-            {saving ? 'Saving…' : editor.value.id ? 'Save changes' : 'Create'}
+            {saving ? 'Saving…' : editor.value.id ? 'Save changes' : meta.create}
           </button>
         </footer>
       </form>

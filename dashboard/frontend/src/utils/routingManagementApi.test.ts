@@ -75,9 +75,9 @@ describe('routingManagementApi', () => {
 
     await expect(routingManagementApi.exportCurrentManifest()).resolves.toBe('version: v0.3\n')
     expect(json).not.toHaveBeenCalled()
-    expect(testRequest(request.mock.calls[0][0], request.mock.calls[0][1]).headers.get('Accept')).toBe(
-      'application/yaml',
-    )
+    expect(
+      testRequest(request.mock.calls[0][0], request.mock.calls[0][1]).headers.get('Accept'),
+    ).toBe('application/yaml')
   })
 
   it('loads semantic Model Cards without a backend or runtime projection', async () => {
@@ -290,6 +290,7 @@ describe('routingManagementApi', () => {
                 revision: 1,
                 entrypointRevision: 1,
                 aliases: ['one'],
+                recipeIds: ['recipe-one'],
                 ruleCount: 1,
                 assignedModelCount: 1,
                 createdAt: '2026-08-23T00:00:00Z',
@@ -326,6 +327,39 @@ describe('routingManagementApi', () => {
     ).resolves.toMatchObject({
       rules: [{ assignments: { decision_one: { models: [{ modelId: 'model-one' }] } } }],
     })
+  })
+
+  it('rejects an Entrypoint summary that drops its Recipe references', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        new Response(
+          JSON.stringify({
+            data: [
+              {
+                id: 'entrypoint-one',
+                name: 'One',
+                status: 'active',
+                revision: 1,
+                entrypointRevision: 1,
+                aliases: ['one'],
+                recipeIds: [],
+                ruleCount: 1,
+                assignedModelCount: 1,
+                createdAt: '2026-08-23T00:00:00Z',
+                updatedAt: '2026-08-23T00:00:00Z',
+              },
+            ],
+            page: { hasMore: false, pageSize: 100 },
+          }),
+          { status: 200, headers: { 'Content-Type': mediaType } },
+        ),
+      ),
+    )
+
+    await expect(routingManagementApi.listEntrypoints()).rejects.toThrow(
+      'Entrypoint Recipe references',
+    )
   })
 
   it('sends the frozen assignment set and validates its mutation receipt', async () => {

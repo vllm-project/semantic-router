@@ -24,3 +24,19 @@ func TestResolveConfigPathsHonorsDashboardBaseDirectoryOverride(t *testing.T) {
 		t.Fatalf("AbsConfigPath = %q", cfg.AbsConfigPath)
 	}
 }
+
+func TestStatusDatabaseDefaultsBesideAuthDatabase(t *testing.T) {
+	dataDir := t.TempDir()
+	cfg := &Config{AuthDBPath: filepath.Join(dataDir, "auth.db")}
+	resolveDashboardStatePaths(cfg)
+	if want := filepath.Join(dataDir, "status.sqlite"); cfg.StatusDBPath != want {
+		t.Fatalf("StatusDBPath = %q, want %q", cfg.StatusDBPath, want)
+	}
+
+	explicit := filepath.Join(t.TempDir(), "service-history.sqlite")
+	cfg.StatusDBPath = explicit
+	resolveDashboardStatePaths(cfg)
+	if cfg.StatusDBPath != explicit {
+		t.Fatalf("explicit StatusDBPath = %q, want %q", cfg.StatusDBPath, explicit)
+	}
+}

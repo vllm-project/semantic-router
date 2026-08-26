@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import ProductIcon from '../components/ProductIcon'
 import type { AccessListParams, AccessPage } from '../utils/inferenceAccessApi'
 import {
@@ -30,6 +30,7 @@ interface Props<T> {
   optionalDescription?: string
   renderSelectedDetail?: (item: T) => ReactNode
   compact?: boolean
+  inlineCompactMenu?: boolean
   compactEmptyLabel?: string
 }
 
@@ -48,8 +49,10 @@ export default function AccessAsyncResourcePicker<T>({
   optionalDescription = 'Use the owner’s effective policy',
   renderSelectedDetail,
   compact = false,
+  inlineCompactMenu = false,
   compactEmptyLabel = 'All',
 }: Props<T>) {
+  const menuId = `access-picker-${useId().replace(/:/g, '')}`
   const [search, setSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [items, setItems] = useState<T[]>([])
@@ -171,7 +174,7 @@ export default function AccessAsyncResourcePicker<T>({
 
   return (
     <div
-      className={`${styles.asyncPicker} ${compact ? styles.asyncPickerCompact : ''}`}
+      className={`${styles.asyncPicker} ${compact ? styles.asyncPickerCompact : ''} ${inlineCompactMenu ? styles.asyncPickerInline : ''}`}
       onBlur={(event) => {
         if (compact && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setExpanded(false)
@@ -191,20 +194,25 @@ export default function AccessAsyncResourcePicker<T>({
           onClick={() => setExpanded(true)}
           aria-haspopup="listbox"
           aria-expanded="false"
+          aria-controls={menuId}
         >
           <span>{compactLabel}</span>
           <ProductIcon name="chevron-down" aria-hidden="true" />
         </button>
       ) : (
-        <label className={styles.asyncPickerSearch}>
+        <div className={styles.asyncPickerSearch}>
           <ProductIcon name="search" aria-hidden="true" />
           <input
             ref={searchInput}
             type="search"
+            role="combobox"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder={placeholder}
             aria-label={ariaLabel}
+            aria-autocomplete="list"
+            aria-controls={menuId}
+            aria-expanded="true"
             autoComplete="off"
             maxLength={200}
           />
@@ -213,11 +221,12 @@ export default function AccessAsyncResourcePicker<T>({
               <ProductIcon name="close" />
             </button>
           ) : null}
-        </label>
+        </div>
       )}
       {!compact || expanded ? (
         <div className={styles.asyncPickerMenu}>
           <div
+            id={menuId}
             className={styles.asyncPickerList}
             role="listbox"
             aria-multiselectable={multiple || undefined}
@@ -285,15 +294,22 @@ export default function AccessAsyncResourcePicker<T>({
                   ? 'Loading…'
                   : `${selectedIds.length} selected`}
             </span>
-            {error ? (
-              <button type="button" onClick={() => void load()} disabled={loading}>
-                <ProductIcon name="refresh" /> Retry
-              </button>
-            ) : hasMore && nextCursor ? (
-              <button type="button" onClick={() => void load(nextCursor)} disabled={loading}>
-                <ProductIcon name="chevron-down" /> More
-              </button>
-            ) : null}
+            <span className={styles.asyncPickerFooterActions}>
+              {error ? (
+                <button type="button" onClick={() => void load()} disabled={loading}>
+                  <ProductIcon name="refresh" /> Retry
+                </button>
+              ) : hasMore && nextCursor ? (
+                <button type="button" onClick={() => void load(nextCursor)} disabled={loading}>
+                  <ProductIcon name="chevron-down" /> More
+                </button>
+              ) : null}
+              {compact && multiple ? (
+                <button type="button" onClick={() => setExpanded(false)}>
+                  <ProductIcon name="check" /> Done
+                </button>
+              ) : null}
+            </span>
           </div>
         </div>
       ) : null}

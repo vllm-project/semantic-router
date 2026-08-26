@@ -1,3 +1,4 @@
+import { createServer, type Server } from 'node:http'
 import { expect, test, type Page, type Route } from '@playwright/test'
 
 import { mockAuthenticatedAppShell } from './support/auth'
@@ -13,6 +14,120 @@ const artifactId = '20000000-0000-4000-8000-000000000006'
 const inferenceKeyId = '10000000-0000-4000-8000-000000000003'
 const digest = `sha256:${'a'.repeat(64)}`
 const onePixelGif = Buffer.from('R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==', 'base64')
+
+interface ChatRequestObservation {
+  authorization: string
+  body: Record<string, unknown>
+  sessionId: string
+}
+
+const chatRequests: ChatRequestObservation[] = []
+const deferredChatFinishes = new Map<string, () => void>()
+let inferenceServer: Server
+let inferenceOrigin = ''
+
+function finalUserText(body: Record<string, unknown>): string {
+  const messages = Array.isArray(body.messages) ? body.messages : []
+  const message = messages.at(-1)
+  if (!message || typeof message !== 'object' || Array.isArray(message)) return ''
+  const content = (message as { content?: unknown }).content
+  if (typeof content === 'string') return content
+  if (!Array.isArray(content)) return ''
+  return content
+    .map((part) =>
+      part && typeof part === 'object' && !Array.isArray(part) && 'text' in part
+        ? String((part as { text?: unknown }).text ?? '')
+        : '',
+    )
+    .join('')
+}
+
+test.beforeAll(async () => {
+  inferenceServer = createServer((request, response) => {
+    const origin = request.headers.origin ?? '*'
+    response.setHeader('Access-Control-Allow-Origin', origin)
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      'authorization, content-type, x-session-id, x-vsr-debug',
+    )
+    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+    response.setHeader(
+      'Access-Control-Expose-Headers',
+      'x-request-id, x-vsr-selected-decision, x-vsr-selected-model',
+    )
+    response.setHeader('Vary', 'Origin')
+    if (request.method === 'OPTIONS') {
+      response.writeHead(204)
+      response.end()
+      return
+    }
+    if (request.method !== 'POST' || request.url !== '/v1/chat/completions') {
+      response.writeHead(404)
+      response.end()
+      return
+    }
+
+    const chunks: Buffer[] = []
+    request.on('data', (chunk: Buffer) => chunks.push(chunk))
+    request.on('end', () => {
+      const body = JSON.parse(Buffer.concat(chunks).toString('utf8')) as Record<string, unknown>
+      chatRequests.push({
+        authorization: request.headers.authorization ?? '',
+        body,
+        sessionId: String(request.headers['x-session-id'] ?? ''),
+      })
+      const prompt = finalUserText(body)
+      const responseId = `chatcmpl-${chatRequests.length}`
+      response.writeHead(200, {
+        'Cache-Control': 'no-cache, no-transform',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'x-request-id': `request-${chatRequests.length}`,
+        'x-vsr-selected-decision': 'Simple',
+        'x-vsr-selected-model': 'local/qwen',
+      })
+      response.write(
+        `data: ${JSON.stringify({ id: responseId, model: 'local/qwen', choices: [{ index: 0, delta: { content: 'The model ' } }] })}\n\n`,
+      )
+      let finished = false
+      const finish = () => {
+        if (finished) return
+        finished = true
+        deferredChatFinishes.delete(prompt)
+        response.write(
+          `data: ${JSON.stringify({ choices: [{ index: 0, delta: { content: 'path is ready.' }, finish_reason: 'stop' }] })}\n\n`,
+        )
+        response.write(
+          `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: Math.max(1, prompt.length), completion_tokens: 4, total_tokens: Math.max(1, prompt.length) + 4 } })}\n\n`,
+        )
+        response.end('data: [DONE]\n\n')
+      }
+      if (prompt.includes('Use my team key')) {
+        deferredChatFinishes.set(prompt, finish)
+      } else {
+        setTimeout(finish, 25)
+      }
+    })
+  })
+  await new Promise<void>((resolve, reject) => {
+    inferenceServer.once('error', reject)
+    inferenceServer.listen(0, '127.0.0.1', resolve)
+  })
+  const address = inferenceServer.address()
+  if (!address || typeof address === 'string')
+    throw new Error('Inference test server did not bind.')
+  inferenceOrigin = `http://127.0.0.1:${address.port}`
+})
+
+test.afterAll(async () => {
+  await new Promise<void>((resolve, reject) => {
+    inferenceServer.close((error) => (error ? reject(error) : resolve()))
+  })
+})
+
+test.afterEach(() => {
+  for (const finish of deferredChatFinishes.values()) finish()
+  deferredChatFinishes.clear()
+})
 
 type AgentEvent = {
   sessionId: string
@@ -89,9 +204,14 @@ function sse(events: AgentEvent[]): string {
     .join('')
 }
 
-async function fulfillJSON(route: Route, body: unknown, headers: Record<string, string> = {}) {
+async function fulfillJSON(
+  route: Route,
+  body: unknown,
+  headers: Record<string, string> = {},
+  status = 200,
+) {
   await route.fulfill({
-    status: 200,
+    status,
     headers: { 'Content-Type': mediaType, ...headers },
     body: JSON.stringify(body),
   })
@@ -170,7 +290,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
           {
             id: 'local/qwen',
             description: 'Connected model',
-            routing: { resolution: 'passthrough', selectable: true, default_route: false },
+            routing: { resolution: 'passthrough', selectable: false, default_route: false },
           },
         ],
       }),
@@ -191,7 +311,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
     await fulfillJSON(route, {
       data: [
         {
-          id: '60000000-0000-4000-8000-000000000001',
+          id: 'model_qwen',
           name: 'Qwen',
           card: {
             aliases: [],
@@ -317,6 +437,8 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
       const input = request.postDataJSON() as { input?: { content?: Array<{ text?: string }> } }
       turnBodies.push(input)
       const text = input.input?.content?.find((item) => item.text)?.text ?? 'Hello'
+      const agentChat = activeSession?.mode === 'chat'
+      const toolName = agentChat ? 'search_web' : 'routing.validate_recipe'
       events = [
         userEvent(1, text),
         {
@@ -327,8 +449,8 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
           createdAt: now,
           payload: {
             invocationId: 'tool-1',
-            toolName: 'routing.validate_recipe',
-            arguments: { recipeId: 'blend' },
+            toolName,
+            arguments: agentChat ? { query: text } : { recipeId: 'blend' },
             class: 'read',
           },
         },
@@ -340,16 +462,21 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
           createdAt: now,
           payload: {
             invocationId: 'tool-1',
-            toolName: 'routing.validate_recipe',
+            toolName,
             status: 'completed',
-            result: { recipeId: 'blend' },
+            result: agentChat ? { results: [{ title: 'Current source' }] } : { recipeId: 'blend' },
             artifactId,
           },
         },
-        assistantEvent(4, 'The model path is ready.'),
+        assistantEvent(4, agentChat ? 'I found a current source.' : 'The model path is ready.'),
         terminalEvent(5),
       ]
-      await fulfillJSON(route, { resource: { kind: 'agent-turn', id: turnId, revision: 1 } })
+      await fulfillJSON(
+        route,
+        { resource: { kind: 'agent-turn', id: turnId, revision: 1 } },
+        {},
+        201,
+      )
       return
     }
 
@@ -383,7 +510,12 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
         target: input.target,
         title: input.title ?? 'New conversation',
       }
-      await fulfillJSON(route, { resource: { kind: 'agent-session', id: sessionId, revision: 1 } })
+      await fulfillJSON(
+        route,
+        { resource: { kind: 'agent-session', id: sessionId, revision: 1 } },
+        {},
+        201,
+      )
       return
     }
 
@@ -617,9 +749,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
       expect(route.request().headers()['if-match']).toBe('"opaque-plan-7"')
       expect(route.request().headers()['idempotency-key']).toBeTruthy()
       published = true
-      await fulfillJSON(route, {
-        operation: { operationId: 'publish-operation-1' },
-      })
+      await fulfillJSON(route, { operation: { operationId: 'publish-operation-1' } }, {}, 202)
     },
   )
   await page.route('**/api/router/management/v1/operations/publish-operation-1', async (route) => {
@@ -644,6 +774,7 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
           revision: 1,
           entrypointRevision: 1,
           aliases: [],
+          recipeIds: ['recipe-agent'],
           ruleCount: 1,
           assignedModelCount: 2,
           createdAt: now,
@@ -667,8 +798,18 @@ async function mockAgentRuntime(page: Page, options: AgentMockOptions = {}) {
 }
 
 async function bootstrap(page: Page, options: AgentMockOptions = {}) {
-  await mockAuthenticatedAppShell(page)
+  await mockAuthenticatedAppShell(page, { settings: { routerPublicUrl: inferenceOrigin } })
   return mockAgentRuntime(page, options)
+}
+
+async function enableBuilderMode(page: Page) {
+  const menu = await openComposerAddMenu(page)
+  await menu.getByRole('menuitemcheckbox', { name: /Builder/ }).click()
+}
+
+async function openConversationSidebar(page: Page) {
+  const sidebar = page.getByTestId('agent-conversation-sidebar')
+  await sidebar.getByRole('button', { name: 'Open conversations' }).click()
 }
 
 test.describe('Router Agent Playground', () => {
@@ -699,11 +840,12 @@ test.describe('Router Agent Playground', () => {
     await expect(page.getByRole('option', { name: /local\/qwen/ })).toBeVisible()
   })
 
-  test('uses one selected owned API key for catalog, model discovery, and Agent execution', async ({
+  test('uses one selected API key for standard streaming inference without an Agent turn', async ({
     page,
   }) => {
     const secondKeyId = '10000000-0000-4000-8000-000000000009'
     await mockAuthenticatedAppShell(page, {
+      settings: { routerPublicUrl: inferenceOrigin },
       user: {
         id: 'consumer-1',
         email: 'consumer@example.com',
@@ -724,6 +866,7 @@ test.describe('Router Agent Playground', () => {
     })
     const mock = await mockAgentRuntime(page)
     const issuedFor: string[] = []
+    const revokedSessions: string[] = []
     const catalogReads: string[] = []
     const modelAuthorizations: string[] = []
 
@@ -748,12 +891,21 @@ test.describe('Router Agent Playground', () => {
     await page.route('**/api/router/management/v1/self/inference-sessions', async (route) => {
       const { keyId } = route.request().postDataJSON() as { keyId: string }
       issuedFor.push(keyId)
-      await fulfillJSON(route, {
-        resourceId: `session-${keyId}`,
-        kind: 'delegated_inference_credential',
-        secret: keyId === secondKeyId ? 'vsd_key-b' : 'vsd_key-a',
-        expiresAt: '2099-08-23T00:00:00Z',
-      })
+      await fulfillJSON(
+        route,
+        {
+          resourceId: `session-${keyId}`,
+          kind: 'delegated_inference_credential',
+          secret: keyId === secondKeyId ? 'vsd_key-b' : 'vsd_key-a',
+          expiresAt: '2099-08-23T00:00:00Z',
+        },
+        {},
+        201,
+      )
+    })
+    await page.route('**/api/router/management/v1/self/inference-sessions/*', async (route) => {
+      revokedSessions.push(new URL(route.request().url()).pathname.split('/').at(-1) ?? '')
+      await route.fulfill({ status: 204 })
     })
     await page.route('**/api/router/management/v1/api-keys/*/routing-catalog', async (route) => {
       const keyId = new URL(route.request().url()).pathname.split('/').at(-2) ?? ''
@@ -845,14 +997,17 @@ test.describe('Router Agent Playground', () => {
     })
 
     await page.goto('/playground')
-    const keySelect = page.getByRole('combobox', { name: 'Use context' })
-    await expect(keySelect).toHaveValue(inferenceKeyId)
+    const keySelect = page.getByRole('combobox', { name: 'Use' })
+    await expect(keySelect).toHaveValue('Personal')
     await expect.poll(() => catalogReads).toContain(inferenceKeyId)
     await expect.poll(() => issuedFor).toContain(inferenceKeyId)
 
-    await keySelect.selectOption(secondKeyId)
+    await keySelect.click()
+    await page.getByRole('option', { name: /Team/ }).click()
+    await expect(keySelect).toHaveValue('Team')
     await expect.poll(() => catalogReads).toContain(secondKeyId)
     await expect.poll(() => issuedFor).toContain(secondKeyId)
+    await expect.poll(() => revokedSessions).toContain(`session-${inferenceKeyId}`)
     await expect.poll(() => modelAuthorizations).toContain('Bearer vsd_key-b')
     await page.getByTestId('playground-composer-model-select').click()
     await expect(page.getByRole('option', { name: /blend-b/ })).toBeVisible()
@@ -860,19 +1015,86 @@ test.describe('Router Agent Playground', () => {
 
     await page.getByRole('textbox', { name: 'Message' }).fill('Use my team key')
     await page.getByRole('button', { name: 'Send message' }).click()
-    await expect.poll(() => mock.sessionBodies.length).toBe(1)
-    expect(mock.sessionBodies[0]).toMatchObject({
-      keyId: secondKeyId,
-      effectiveTeamId: '10000000-0000-4000-8000-000000000012',
-      target: { kind: 'entrypoint', id: 'blend-b' },
+    const assistant = page.getByTestId('agent-message-assistant')
+    await expect(assistant).toContainText('The model ')
+    await expect(assistant.getByTitle('Model: local/qwen')).toHaveCount(0)
+    await expect.poll(() => deferredChatFinishes.has('Use my team key')).toBe(true)
+    deferredChatFinishes.get('Use my team key')?.()
+    await expect(assistant).toContainText('The model path is ready.')
+    await expect(assistant.getByTitle('Model: local/qwen')).toBeVisible()
+
+    const request = chatRequests.find(
+      (observation) => finalUserText(observation.body) === 'Use my team key',
+    )
+    expect(request).toBeDefined()
+    expect(request).toMatchObject({
+      authorization: 'Bearer vsd_key-b',
+      body: {
+        model: 'blend-b',
+        stream: true,
+        stream_options: { include_usage: true },
+      },
     })
+    expect(request?.sessionId).toMatch(/^chat-/)
+    expect(mock.sessionBodies).toHaveLength(0)
+    expect(mock.turnBodies).toHaveLength(0)
+
+    await openConversationSidebar(page)
+    const localConversation = page
+      .getByTestId('agent-conversation-sidebar')
+      .getByRole('button', { name: /^Use my team key\b/ })
+    await expect(localConversation).toBeVisible()
+    await page
+      .getByTestId('agent-conversation-sidebar')
+      .getByRole('button', { name: 'New chat' })
+      .click()
+    await expect(page.getByTestId('agent-message-assistant')).toHaveCount(0)
+    await localConversation.click()
+    await expect(page.getByTestId('agent-message-assistant')).toContainText(
+      'The model path is ready.',
+    )
+    expect(mock.sessionBodies).toHaveLength(0)
+    expect(mock.turnBodies).toHaveLength(0)
+  })
+
+  test('queues a compact follow-up and sends it after the active stream completes', async ({
+    page,
+  }) => {
+    const requestsBefore = chatRequests.length
+    const activePrompt = 'Use my team key while I prepare a follow-up'
+    const queuedPrompt = 'Then compare the selected route with the fastest option'
+    await bootstrap(page)
+    await page.goto('/playground')
+
+    const composer = page.getByRole('textbox', { name: 'Message' })
+    await composer.fill(activePrompt)
+    await page.getByRole('button', { name: 'Send message' }).click()
+    await expect.poll(() => deferredChatFinishes.has(activePrompt)).toBe(true)
+
+    await expect(composer).toBeEnabled()
+    await composer.fill(queuedPrompt)
+    await page.getByRole('button', { name: 'Queue' }).click()
+    const queue = page.getByRole('region', { name: 'Queued messages' })
+    await expect(queue).toContainText(queuedPrompt)
+
+    deferredChatFinishes.get(activePrompt)?.()
+    await expect
+      .poll(() =>
+        chatRequests
+          .slice(requestsBefore)
+          .some((observation) => finalUserText(observation.body) === queuedPrompt),
+      )
+      .toBe(true)
+    await expect(queue).toHaveCount(0)
+    await expect(page.getByTestId('agent-message-assistant')).toHaveCount(2)
   })
 
   test('streams a durable turn and collapses completed tool work', async ({ page }) => {
     const mock = await bootstrap(page)
     await page.goto('/playground')
+    await enableBuilderMode(page)
 
-    await page.getByRole('textbox', { name: 'Message' }).fill('Design a support route')
+    await page.getByRole('textbox', { name: 'Builder instruction' }).fill('Design a support route')
     await page.getByRole('button', { name: 'Send message' }).click()
 
     await expect(page.getByTestId('agent-message-user')).toContainText('Design a support route')
@@ -890,11 +1112,33 @@ test.describe('Router Agent Playground', () => {
     expect(mock.artifactContentReads()).toBe(1)
   })
 
+  test('runs web search only after Agent mode is explicitly enabled', async ({ page }) => {
+    const mock = await bootstrap(page)
+    await page.goto('/playground')
+
+    const menu = await openComposerAddMenu(page)
+    const agentMode = menu.getByRole('menuitemcheckbox', { name: /Agent/ })
+    await expect(agentMode).toContainText('Search the web and use tools')
+    await agentMode.click()
+
+    await expect(page.getByText('Web search · Tools')).toBeVisible()
+    await page.getByRole('textbox', { name: 'Agent message' }).fill('Find the latest release')
+    await page.getByRole('button', { name: 'Send message' }).click()
+
+    await expect.poll(() => mock.sessionBodies.length).toBe(1)
+    expect(mock.sessionBodies[0]).toMatchObject({ mode: 'chat' })
+    await expect(page.getByRole('button', { name: /Search Web/ })).toContainText('Done')
+    await expect(page.getByTestId('agent-message-assistant')).toContainText(
+      'I found a current source.',
+    )
+  })
+
   test('sends an image as durable Agent content instead of a browser-owned chat request', async ({
     page,
   }) => {
     const mock = await bootstrap(page)
     await page.goto('/playground')
+    await enableBuilderMode(page)
 
     const menu = await openComposerAddMenu(page)
     const chooserPromise = page.waitForEvent('filechooser')
@@ -902,7 +1146,7 @@ test.describe('Router Agent Playground', () => {
     const chooser = await chooserPromise
     await chooser.setFiles({ name: 'vision.gif', mimeType: 'image/gif', buffer: onePixelGif })
     await expect(page.getByAltText('Preview of vision.gif')).toBeVisible()
-    await page.getByRole('textbox', { name: 'Message' }).fill('What is visible?')
+    await page.getByRole('textbox', { name: 'Builder instruction' }).fill('What is visible?')
     await page.getByRole('button', { name: 'Send message' }).click()
 
     await expect.poll(() => mock.turnBodies.length).toBe(1)
@@ -926,9 +1170,11 @@ test.describe('Router Agent Playground', () => {
     const mock = await bootstrap(page, {
       initialEvents: [userEvent(1, 'Earlier question'), assistantEvent(2, 'Earlier answer')],
       expireFirstResume: true,
+      existingMode: 'builder',
     })
     await page.goto('/playground')
-    await page.getByRole('button', { name: /^Existing chat\b/ }).click()
+    await openConversationSidebar(page)
+    await page.getByRole('button', { name: /^Build a support router\b/ }).click()
 
     await expect(page.getByRole('alert')).toContainText('Earlier events were archived')
     await expect(page.getByTestId('agent-message-assistant')).toContainText('Recovered')
@@ -940,7 +1186,7 @@ test.describe('Router Agent Playground', () => {
         .getByTestId('agent-playground')
         .locator('header')
         .first()
-        .getByText('Existing chat', { exact: true }),
+        .getByText('Build a support router', { exact: true }),
     ).toBeVisible()
   })
 
@@ -969,6 +1215,7 @@ test.describe('Router Agent Playground', () => {
     }
     const mock = await bootstrap(page, { initialEvents: [approval], existingMode: 'builder' })
     await page.goto('/playground')
+    await openConversationSidebar(page)
     await page.getByRole('button', { name: /^Build a support router\b/ }).click()
 
     await expect(page.getByRole('dialog', { name: 'Publish blend-v2' })).toBeVisible()
@@ -1013,6 +1260,7 @@ test.describe('Router Agent Playground', () => {
 
     const addMenu = await openComposerAddMenu(page)
     await expect(addMenu.getByRole('menuitemcheckbox', { name: /Builder/ })).toHaveCount(0)
+    await expect(addMenu.getByRole('menuitemcheckbox', { name: /Agent/ })).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByTestId('playground-composer-model-select').click()
     await expect(page.getByText('Single Model', { exact: true })).toHaveCount(0)
@@ -1022,7 +1270,7 @@ test.describe('Router Agent Playground', () => {
     await expect(page).toHaveURL(/\/dashboard$/)
   })
 
-  test('rejects a direct Agent management URL without Agent or Tool read access', async ({
+  test('keeps standard Playground available without Agent or Tool read access', async ({
     page,
   }) => {
     await mockAuthenticatedAppShell(page, {
@@ -1040,7 +1288,8 @@ test.describe('Router Agent Playground', () => {
 
     await expect(page).toHaveURL(/\/dashboard$/)
     await page.goto('/playground/fullscreen')
-    await expect(page).toHaveURL(/\/dashboard$/)
+    await expect(page).toHaveURL(/\/playground\/fullscreen$/)
+    await expect(page.getByTestId('agent-playground')).toBeVisible()
   })
 
   test('searches and paginates Agent resources on the Router', async ({ page }) => {
@@ -1207,6 +1456,8 @@ test.describe('Router Agent Playground', () => {
     await page.getByTestId('playground-composer-add').focus()
     await page.keyboard.press('Enter')
     await expect(page.getByRole('menuitem', { name: /Attach files/ })).toBeFocused()
+    await page.keyboard.press('ArrowDown')
+    await expect(page.getByRole('menuitemcheckbox', { name: /Agent/ })).toBeFocused()
     await page.keyboard.press('ArrowDown')
     await expect(page.getByRole('menuitemcheckbox', { name: /Builder/ })).toBeFocused()
     await page.keyboard.press('Escape')

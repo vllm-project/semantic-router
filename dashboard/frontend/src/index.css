@@ -230,16 +230,13 @@ textarea:focus {
   background: #6b6b72;
 }
 
-/* Fullscreen mode - hide Layout header */
-body.playground-fullscreen header {
+/* Fullscreen mode only removes the app shell. Playground owns nested headers
+   and navigation that must remain usable on every viewport. */
+body.playground-fullscreen [data-app-header] {
   display: none !important;
 }
 
-body.playground-fullscreen nav {
-  display: none !important;
-}
-
-body.playground-fullscreen main {
+body.playground-fullscreen [data-app-main] {
   margin-top: 0 !important;
   width: 100% !important;
   padding: 0 !important;

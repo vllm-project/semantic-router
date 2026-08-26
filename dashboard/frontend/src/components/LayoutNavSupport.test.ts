@@ -3,13 +3,41 @@ import { describe, expect, it } from 'vitest'
 import {
   ANALYZE_MENU_CATEGORIES,
   BUILD_MENU_CATEGORIES,
+  configSectionPath,
   filterLayoutMenuCategories,
-  OPERATE_MENU_CATEGORIES,
   PRIMARY_NAV_LINKS,
+  SYSTEM_MENU_CATEGORIES,
+  shouldHighlightPrimaryNav,
+  shouldHighlightWorkflowNav,
+  WORKFLOW_NAV_LABELS,
 } from './LayoutNavSupport'
 import { canAccessDashboardPath } from '../utils/accessControl'
 
 describe('layout navigation route matching', () => {
+  it('uses one product label for the System workflow on every navigation surface', () => {
+    expect(WORKFLOW_NAV_LABELS).toEqual({ build: 'Build', system: 'System' })
+    expect(Object.values(WORKFLOW_NAV_LABELS)).not.toContain('Operate')
+  })
+
+  it('gives an open workflow menu exclusive navigation emphasis', () => {
+    expect(shouldHighlightPrimaryNav(true, 'build')).toBe(false)
+    expect(shouldHighlightWorkflowNav('build', false, 'build')).toBe(true)
+    expect(shouldHighlightWorkflowNav('system', true, 'build')).toBe(false)
+    expect(shouldHighlightPrimaryNav(true, null)).toBe(true)
+    expect(shouldHighlightWorkflowNav('build', true, null)).toBe(true)
+  })
+
+  it('carries the selected Recipe only between Recipe-scoped routing editors', () => {
+    expect(configSectionPath('decisions', '?recipe=recipe%2Fbalanced&view=compact')).toBe(
+      '/config/decisions?recipe=recipe%2Fbalanced',
+    )
+    expect(configSectionPath('projections', '?recipe=recipe%2Fbalanced')).toBe(
+      '/config/projections?recipe=recipe%2Fbalanced',
+    )
+    expect(configSectionPath('signals', '')).toBe('/config/signals')
+    expect(configSectionPath('models', '?recipe=recipe%2Fbalanced')).toBe('/config/models')
+  })
+
   it('keeps retired knowledge-base controls out of navigation', () => {
     expect(BUILD_MENU_CATEGORIES.some((category) => category.key === 'knowledge')).toBe(false)
   })
@@ -72,7 +100,7 @@ describe('layout navigation route matching', () => {
     expect(labels).not.toContain('Global Config')
   })
 
-  it('keeps the lowest consumer out of Operate while preserving read-only Routing', () => {
+  it('keeps the lowest consumer out of System while preserving read-only Routing', () => {
     const consumer = {
       role: 'read',
       permissions: ['config.read', 'topology.read', 'tools.use'],
@@ -97,8 +125,8 @@ describe('layout navigation route matching', () => {
         item.kind === 'config' ? `/config/${item.configSection}` : item.to,
       ),
     )
-    const visibleOperate = filterLayoutMenuCategories(
-      [...ANALYZE_MENU_CATEGORIES, ...OPERATE_MENU_CATEGORIES],
+    const visibleSystem = filterLayoutMenuCategories(
+      [...ANALYZE_MENU_CATEGORIES, ...SYSTEM_MENU_CATEGORIES],
       (item) =>
         canAccessDashboardPath(
           consumer,
@@ -110,6 +138,21 @@ describe('layout navigation route matching', () => {
     expect(
       visibleBuild[0].sections.flatMap((section) => section.items.map((item) => item.label)),
     ).toEqual(['Mixture-of-Models', 'Brain Topology'])
-    expect(visibleOperate).toEqual([])
+    expect(visibleSystem).toEqual([])
+  })
+
+  it('removes OpenClaw as soon as a downgraded permission snapshot is applied', () => {
+    const visibleLabels = (permissions: string[]) =>
+      filterLayoutMenuCategories(BUILD_MENU_CATEGORIES, (item) =>
+        canAccessDashboardPath(
+          { permissions, managementPermissions: ['routing.read'] },
+          item.kind === 'config' ? `/config/${item.configSection}` : item.to,
+        ),
+      ).flatMap((category) =>
+        category.sections.flatMap((section) => section.items.map((item) => item.label)),
+      )
+
+    expect(visibleLabels(['openclaw.read'])).toContain('OpenClaw')
+    expect(visibleLabels([])).not.toContain('OpenClaw')
   })
 })

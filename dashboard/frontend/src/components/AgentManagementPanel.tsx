@@ -30,6 +30,8 @@ import AgentResourceEditor, {
 } from './AgentResourceEditor'
 import ConfirmDialog from './ConfirmDialog'
 import ProductIcon from './ProductIcon'
+import ProductLoadingState from './ProductLoadingState'
+import { resourcesForAgentTab } from './agentManagementResourceProjection'
 import styles from './AgentManagementPanel.module.css'
 
 export type AgentManagementTab = 'profiles' | 'skills' | 'tools' | 'connections'
@@ -71,6 +73,7 @@ export default function AgentManagementPanel({
   const manageTools = canManageAgentTools(user)
   const invokeTools = canInvokeAgentTools(user)
   const [resources, setResources] = useState<AgentResource[]>([])
+  const [resourceTab, setResourceTab] = useState<AgentManagementTab | null>(null)
   const [cursor, setCursor] = useState<string | undefined>()
   const [hasMore, setHasMore] = useState(false)
   const [search, setSearch] = useState('')
@@ -120,11 +123,16 @@ export default function AgentManagementPanel({
       const page = await list(undefined, controller.signal)
       if (controller.signal.aborted || generation !== listGeneration.current) return
       setResources(page.data)
+      setResourceTab(activeTab)
       setCursor(page.page.nextCursor)
       setHasMore(page.page.hasMore)
       setError(null)
     } catch (cause) {
       if (controller.signal.aborted || generation !== listGeneration.current) return
+      setResources([])
+      setResourceTab(activeTab)
+      setCursor(undefined)
+      setHasMore(false)
       setError(
         cause instanceof Error ? cause.message : `${TAB_COPY[activeTab].title} are unavailable.`,
       )
@@ -144,7 +152,7 @@ export default function AgentManagementPanel({
   }, [refresh])
 
   const loadMore = async () => {
-    if (!cursor || !hasMore || loading) return
+    if (resourceTab !== activeTab || !cursor || !hasMore || loading) return
     const generation = ++listGeneration.current
     listController.current?.abort()
     const controller = new AbortController()
@@ -338,6 +346,11 @@ export default function AgentManagementPanel({
   }
 
   const copy = TAB_COPY[activeTab]
+  // A tab can change before its debounced request starts. Bind rows to the tab
+  // that produced them so a Profile is never rendered through the Skill (or
+  // Tool Source) shape during that transition.
+  const visibleResources = resourcesForAgentTab(activeTab, resourceTab, resources)
+  const listIsLoading = loading || resourceTab !== activeTab
   return (
     <>
       <section className={styles.panel}>
@@ -392,13 +405,13 @@ export default function AgentManagementPanel({
           </p>
         ) : null}
 
-        <div className={styles.tableWrap} aria-busy={loading || busy}>
+        <div className={styles.tableWrap} aria-busy={listIsLoading || busy}>
           <table className={styles.table}>
             <thead>
               <AgentResourceTableHeader tab={activeTab} />
             </thead>
             <tbody>
-              {resources.map((resource) => (
+              {visibleResources.map((resource) => (
                 <AgentResourceRow
                   key={resourceId(activeTab, resource)}
                   tab={activeTab}
@@ -409,13 +422,10 @@ export default function AgentManagementPanel({
               ))}
             </tbody>
           </table>
-          {loading && resources.length === 0 ? (
-            <div className={styles.emptyState} role="status">
-              <ProductIcon name="refresh" />
-              <strong>Loading…</strong>
-            </div>
+          {listIsLoading && visibleResources.length === 0 ? (
+            <ProductLoadingState compact label={`Loading ${copy.title}`} />
           ) : null}
-          {!loading && resources.length === 0 ? (
+          {!listIsLoading && visibleResources.length === 0 ? (
             <div className={styles.emptyState}>
               <ProductIcon
                 name={
@@ -438,8 +448,8 @@ export default function AgentManagementPanel({
           ) : null}
         </div>
         <footer className={styles.pagination}>
-          <span>{resources.length} loaded</span>
-          {hasMore ? (
+          <span>{visibleResources.length} loaded</span>
+          {resourceTab === activeTab && hasMore ? (
             <button type="button" onClick={() => void loadMore()} disabled={loading}>
               {loading ? 'Loading…' : 'Load more'}
             </button>

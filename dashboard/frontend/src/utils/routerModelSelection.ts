@@ -25,6 +25,10 @@ export interface RouterModelOption {
   recipe?: string
 }
 
+export interface RouterModelListOptions {
+  includeIndividualModels?: boolean
+}
+
 type RouterModelResolution = 'virtual' | 'passthrough'
 
 interface RouterModelRoutingMetadata {
@@ -102,11 +106,12 @@ function isAutomaticRouterModel(entry: RouterModelRecord): boolean {
   )
 }
 
-function isSelectableRouterModel(entry: RouterModelRecord): boolean {
+function isVisibleRouterModel(entry: RouterModelRecord, includeIndividualModels: boolean): boolean {
   const id = modelId(entry)
-  return (
-    Boolean(id) && !isRetiredRouterModel(entry) && modelRoutingMetadata(entry)?.selectable === true
-  )
+  const routing = modelRoutingMetadata(entry)
+  if (!id || isRetiredRouterModel(entry) || !routing) return false
+  if (routing.resolution === 'passthrough') return includeIndividualModels
+  return routing.selectable
 }
 
 export function selectRouterAutoModel(payload: unknown): string | null {
@@ -122,10 +127,13 @@ export function selectRouterAutoModel(payload: unknown): string | null {
   return automatic ? modelId(automatic) : null
 }
 
-export function listRouterModels(payload: unknown): RouterModelOption[] {
+export function listRouterModels(
+  payload: unknown,
+  { includeIndividualModels = false }: RouterModelListOptions = {},
+): RouterModelOption[] {
   const seen = new Set<string>()
   const models = normalizeModelRecords(payload)
-    .filter(isSelectableRouterModel)
+    .filter((entry) => isVisibleRouterModel(entry, includeIndividualModels))
     .map((entry) => ({
       id: modelId(entry),
       description: typeof entry.description === 'string' ? entry.description.trim() : '',

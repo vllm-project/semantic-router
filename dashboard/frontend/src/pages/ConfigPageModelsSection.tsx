@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { DataTable, type Column } from '../components/DataTable'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import TableHeader from '../components/TableHeader'
 import type { ViewSection } from '../components/ViewModal'
 import {
@@ -556,22 +557,26 @@ export default function ConfigPageModelsSection({
             </button>
           </div>
         ) : null}
-        <DataTable
-          columns={columns}
-          data={filteredModels}
-          keyExtractor={(model) => model.id}
-          onView={viewModel}
-          openOnRowClick
-          emptyMessage={loading ? 'Loading models…' : 'No models yet'}
-          className={styles.managerTable}
-          readonly={isReadonly}
-          pagination={{
-            pageSize: 25,
-            pageSizeOptions: [25, 50, 100],
-            itemLabel: 'models',
-            resetKey: modelsSearch,
-          }}
-        />
+        {loading && models.length === 0 ? (
+          <ProductLoadingState compact label="Loading models" />
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredModels}
+            keyExtractor={(model) => model.id}
+            onView={viewModel}
+            openOnRowClick
+            emptyMessage="No models yet"
+            className={styles.managerTable}
+            readonly={isReadonly}
+            pagination={{
+              pageSize: 25,
+              pageSizeOptions: [25, 50, 100],
+              itemLabel: 'models',
+              resetKey: modelsSearch,
+            }}
+          />
+        )}
       </div>
 
       <ConfigPageAddModelsDialog

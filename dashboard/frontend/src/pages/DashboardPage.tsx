@@ -1,17 +1,19 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
 import { canAccessDashboardPath } from '../utils/accessControl'
 import { inferenceAccessApi, type AccessOverview } from '../utils/inferenceAccessApi'
 import {
-  fetchManagedRoutingSummary,
-  type ManagedRoutingSummary,
+  fetchManagedRoutingOverviewSnapshot,
+  type ManagedRoutingSnapshot,
 } from '../utils/managedRoutingSnapshot'
-import { type SystemStatus } from '../utils/routerRuntime'
+import { fetchSystemStatus, type SystemStatus } from '../utils/routerRuntime'
 import { DashboardMiniFlowDiagram } from './DashboardMiniFlowDiagram'
 import DashboardRoutingHero from './DashboardRoutingHero'
 import DashboardRoutingProfiles from './DashboardRoutingProfiles'
+import StatusAvailabilityPanel from './StatusAvailabilityPanel'
 import {
   categorizeDecisions,
   countDecisions,
@@ -22,40 +24,47 @@ import {
 } from './dashboardPageStats'
 import { buildDecisionPreviewRows, buildSignalBreakdownRows } from './dashboardPageOverview'
 import { createVisibilityAwareRequest } from './visibilityAwareRequest'
+import { routingUnavailableStatus } from './statusPageSupport'
 import styles from './DashboardPage.module.css'
 
 const formatWholeCount = (value: string) => new Intl.NumberFormat('en-US').format(BigInt(value))
 
 const DashboardPage: React.FC = () => {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { refreshSession, user } = useAuth()
 
-  const [config, setConfig] = useState<ManagedRoutingSummary | null>(null)
+  const [config, setConfig] = useState<ManagedRoutingSnapshot | null>(null)
   const [status, setStatus] = useState<SystemStatus | null>(null)
   const [accessOverview, setAccessOverview] = useState<AccessOverview | null>(null)
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [statusLastUpdated, setStatusLastUpdated] = useState<Date | null>(null)
 
   const fetchStatus = useCallback(async () => {
-    const statusRes = await fetch('/api/status')
-    if (statusRes.ok) {
-      setStatus(await statusRes.json())
+    try {
+      setStatus(await fetchSystemStatus())
+      setStatusLastUpdated(new Date())
+    } catch (cause) {
+      setStatus(null)
+      setStatusLastUpdated(null)
+      throw cause
     }
   }, [])
 
   const fetchConfig = useCallback(async () => {
-    const snapshot = await fetchManagedRoutingSummary()
+    const snapshot = await fetchManagedRoutingOverviewSnapshot()
     setConfig(snapshot)
-    setLastUpdated(new Date())
     setError(null)
   }, [])
 
-  const canReadConfig = canAccessDashboardPath(user, '/config/models')
-  const canReadAccess = canAccessDashboardPath(user, '/access/usage')
-  const canReadStatus = canAccessDashboardPath(user, '/status')
-  const canUsePlayground = canAccessDashboardPath(user, '/playground')
+  const routingAccessUnavailable = user?.managementIdentityStatus === 'unavailable'
+  const managementIdentityError =
+    user?.managementIdentityStatus === 'error' ? user.managementIdentityError : null
+  const canReadConfig = !routingAccessUnavailable && canAccessDashboardPath(user, '/config/models')
+  const canReadAccess = !routingAccessUnavailable && canAccessDashboardPath(user, '/access/usage')
+  const canReadStatus = routingAccessUnavailable || canAccessDashboardPath(user, '/status')
+  const canUsePlayground = !routingAccessUnavailable && canAccessDashboardPath(user, '/playground')
   const fetchAccess = useCallback(async () => {
     if (!canReadAccess) return
     setAccessOverview(await inferenceAccessApi.overview())
@@ -70,10 +79,9 @@ const DashboardPage: React.FC = () => {
       try {
         await Promise.all([
           canReadConfig ? configRequest.run({ allowHidden: true }) : Promise.resolve(),
-          statusRequest.run({ allowHidden: true }),
+          canReadStatus ? statusRequest.run({ allowHidden: true }) : Promise.resolve(),
           fetchAccess(),
         ])
-        setLastUpdated(new Date())
         setError(null)
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load dashboard data')
@@ -82,11 +90,12 @@ const DashboardPage: React.FC = () => {
         setRefreshing(false)
       }
     },
-    [canReadConfig, configRequest, fetchAccess, statusRequest],
+    [canReadConfig, canReadStatus, configRequest, fetchAccess, statusRequest],
   )
 
   useEffect(() => {
     const pollStatus = () => {
+      if (!canReadStatus) return
       void statusRequest.run().catch(() => {
         // Ignore transient status polling errors.
       })
@@ -114,7 +123,7 @@ const DashboardPage: React.FC = () => {
       window.clearInterval(configInterval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [canReadConfig, configRequest, fetchAll, statusRequest])
+  }, [canReadConfig, canReadStatus, configRequest, fetchAll, statusRequest])
 
   const signalStats = useMemo(
     () => (config ? countSignals(config) : { total: 0, byType: {} }),
@@ -141,14 +150,25 @@ const DashboardPage: React.FC = () => {
       ]),
     [categorizedDecisions],
   )
+  const availabilityStatus = useMemo(
+    () => (routingAccessUnavailable ? routingUnavailableStatus(status) : status),
+    [routingAccessUnavailable, status],
+  )
 
   if (loading && !config && !status) {
+    return <ProductLoadingState label="Loading dashboard" />
+  }
+
+  if (routingAccessUnavailable) {
     return (
-      <div className={styles.page}>
-        <div className={styles.loading}>
-          <div className={styles.spinner} />
-          <p>Loading dashboard...</p>
-        </div>
+      <div
+        className={`${styles.page} ${styles.statusOnlyPage}`}
+        data-testid="routing-access-status-only"
+      >
+        <StatusAvailabilityPanel
+          status={availabilityStatus}
+          lastUpdated={statusLastUpdated}
+        />
       </div>
     )
   }
@@ -163,28 +183,26 @@ const DashboardPage: React.FC = () => {
         showRoutingMetrics={canReadConfig}
         showAPIKeyMetric={canReadAccess}
         showPlaygroundAction={canUsePlayground}
-        overallStatus={status?.overall}
+        showStatus={canReadStatus}
+        overallStatus={canReadStatus ? status?.overall : undefined}
         refreshing={refreshing}
-        lastUpdated={lastUpdated}
+        lastUpdated={statusLastUpdated}
         onRefresh={() => void fetchAll(true)}
         onNavigate={navigate}
       />
 
-      {user?.managementIdentityStatus === 'error' && (
+      {managementIdentityError || error ? (
         <div className={styles.errorBanner} role="alert">
-          <span>
-            <strong>Routing access unavailable.</strong>{' '}
-            {user.managementIdentityError || 'Reconnect this Dashboard account to the Router.'}
-          </span>
+          <span>{managementIdentityError || `Failed to load data: ${error}`}</span>
+          <button
+            onClick={() =>
+              void (managementIdentityError ? refreshSession() : fetchAll(true))
+            }
+          >
+            Retry
+          </button>
         </div>
-      )}
-
-      {error && (
-        <div className={styles.errorBanner} role="alert">
-          <span>Failed to load data: {error}</span>
-          <button onClick={() => fetchAll(true)}>Retry</button>
-        </div>
-      )}
+      ) : null}
 
       <div className={`${styles.mainGrid} ${!canReadConfig ? styles.mainGridCompact : ''}`}>
         {canReadConfig ? (
@@ -215,109 +233,113 @@ const DashboardPage: React.FC = () => {
           </div>
         ) : null}
 
-        <div className={styles.rightCol}>
-          <div className={styles.card}>
-            <div className={styles.cardHeader}>
-              <h2 className={styles.cardTitle}>System Health</h2>
-              {canReadStatus ? (
-                <button
-                  type="button"
-                  className={styles.cardAction}
-                  onClick={() => navigate('/status')}
-                >
-                  Details
-                  <ProductIcon name="chevron-right" aria-hidden="true" />
-                </button>
-              ) : null}
-            </div>
-            <div className={styles.healthContent}>
-              {status ? (
-                <>
-                  <div className={styles.healthOverall}>
-                    <span
-                      className={`${styles.healthDot} ${
-                        status.overall === 'healthy'
-                          ? styles.healthDotGreen
-                          : status.overall === 'degraded'
-                            ? styles.healthDotYellow
-                            : styles.healthDotRed
-                      }`}
-                    />
-                    <span className={styles.healthLabel}>
-                      {status.overall === 'not_running'
-                        ? 'Not Running'
-                        : status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
-                    </span>
-                  </div>
-                  <div className={styles.servicesList}>
-                    {status.services.slice(0, 6).map((svc, i) => (
-                      <div key={i} className={styles.serviceRow}>
+        {canReadStatus || canReadAccess ? (
+          <div className={styles.rightCol}>
+            {canReadStatus ? (
+              <div className={styles.card}>
+                <div className={styles.cardHeader}>
+                  <h2 className={styles.cardTitle}>System Health</h2>
+                  <button
+                    type="button"
+                    className={styles.cardAction}
+                    onClick={() => navigate('/status')}
+                  >
+                    Details
+                    <ProductIcon name="chevron-right" aria-hidden="true" />
+                  </button>
+                </div>
+                <div className={styles.healthContent}>
+                  {status ? (
+                    <>
+                      <div className={styles.healthOverall}>
                         <span
-                          className={`${styles.svcDot} ${svc.healthy ? styles.svcDotOk : styles.svcDotFail}`}
+                          className={`${styles.healthDot} ${
+                            status.overall === 'healthy'
+                              ? styles.healthDotGreen
+                              : status.overall === 'degraded'
+                                ? styles.healthDotYellow
+                                : styles.healthDotRed
+                          }`}
                         />
-                        <span className={styles.svcName}>{svc.name}</span>
-                        <span
-                          className={`${styles.svcStatus} ${svc.healthy ? styles.svcStatusOk : styles.svcStatusFail}`}
-                        >
-                          {svc.status}
+                        <span className={styles.healthLabel}>
+                          {status.overall === 'not_running'
+                            ? 'Not Running'
+                            : status.overall.charAt(0).toUpperCase() + status.overall.slice(1)}
                         </span>
                       </div>
-                    ))}
-                    {status.services.length > 6 && (
-                      <div className={styles.moreServices}>+{status.services.length - 6} more</div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className={styles.emptyState}>Unable to fetch status</div>
-              )}
-            </div>
-          </div>
-
-          {canReadAccess ? (
-            <div className={styles.card}>
-              <div className={styles.cardHeader}>
-                <h2 className={styles.cardTitle}>Access</h2>
-                <button
-                  type="button"
-                  className={styles.cardAction}
-                  onClick={() => navigate('/access/usage')}
-                >
-                  Details
-                  <ProductIcon name="chevron-right" aria-hidden="true" />
-                </button>
-              </div>
-              {accessOverview ? (
-                <div className={styles.accessSnapshot}>
-                  {accessOverview.activeKeys !== null && (
-                    <div>
-                      <strong>{formatWholeCount(accessOverview.activeKeys)}</strong>
-                      <span>active keys</span>
-                    </div>
+                      <div className={styles.servicesList}>
+                        {status.services.slice(0, 6).map((svc, i) => (
+                          <div key={i} className={styles.serviceRow}>
+                            <span
+                              className={`${styles.svcDot} ${svc.healthy ? styles.svcDotOk : styles.svcDotFail}`}
+                            />
+                            <span className={styles.svcName}>{svc.name}</span>
+                            <span
+                              className={`${styles.svcStatus} ${svc.healthy ? styles.svcStatusOk : styles.svcStatusFail}`}
+                            >
+                              {svc.status}
+                            </span>
+                          </div>
+                        ))}
+                        {status.services.length > 6 && (
+                          <div className={styles.moreServices}>
+                            +{status.services.length - 6} more
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <div className={styles.emptyState}>Unable to fetch status</div>
                   )}
-                  <div>
-                    <strong>{accessOverview.requestsToday.toLocaleString('en-US')}</strong>
-                    <span>requests today</span>
-                  </div>
-                  <div>
-                    <strong>{accessOverview.tokensToday.toLocaleString('en-US')}</strong>
-                    <span>tokens today</span>
-                  </div>
-                  <div>
-                    <strong>
-                      {accessOverview.requestsToday
-                        ? `${Math.round((accessOverview.successfulToday / accessOverview.requestsToday) * 1000) / 10}%`
-                        : '—'}
-                    </strong>
-                    <span>success rate</span>
-                  </div>
                 </div>
-              ) : (
-                <div className={styles.emptyState}>Access data is unavailable</div>
-              )}
-            </div>
-          ) : null}
-        </div>
+              </div>
+            ) : null}
+
+            {canReadAccess ? (
+              <div className={styles.card}>
+                <div className={styles.cardHeader}>
+                  <h2 className={styles.cardTitle}>Access</h2>
+                  <button
+                    type="button"
+                    className={styles.cardAction}
+                    onClick={() => navigate('/access/usage')}
+                  >
+                    Details
+                    <ProductIcon name="chevron-right" aria-hidden="true" />
+                  </button>
+                </div>
+                {accessOverview ? (
+                  <div className={styles.accessSnapshot}>
+                    {accessOverview.activeKeys !== null && (
+                      <div>
+                        <strong>{formatWholeCount(accessOverview.activeKeys)}</strong>
+                        <span>active keys</span>
+                      </div>
+                    )}
+                    <div>
+                      <strong>{accessOverview.requestsToday.toLocaleString('en-US')}</strong>
+                      <span>requests today</span>
+                    </div>
+                    <div>
+                      <strong>{accessOverview.tokensToday.toLocaleString('en-US')}</strong>
+                      <span>tokens today</span>
+                    </div>
+                    <div>
+                      <strong>
+                        {accessOverview.requestsToday
+                          ? `${Math.round((accessOverview.successfulToday / accessOverview.requestsToday) * 1000) / 10}%`
+                          : '—'}
+                      </strong>
+                      <span>success rate</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.emptyState}>Access data is unavailable</div>
+                )}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {canReadConfig && config ? (
@@ -346,11 +368,18 @@ const DashboardPage: React.FC = () => {
           {config?.models.length ? (
             <div className={`${styles.servicesList} ${styles.modelList}`}>
               {config.models.slice(0, 6).map((model) => (
-                <div key={model.id} className={`${styles.serviceRow} ${styles.modelRow}`}>
-                  <span className={`${styles.svcDot} ${styles.svcDotOk}`} />
-                  <span className={styles.svcName}>{model.name}</span>
-                  <span className={styles.svcStatus}>Configured</span>
-                </div>
+                <article key={model.id} className={styles.modelRow}>
+                  <span className={styles.modelIdentity}>
+                    <strong>{model.name}</strong>
+                    <small>
+                      {[model.card.paramSize, model.card.modality].filter(Boolean).join(' · ') ||
+                        'Connected model'}
+                    </small>
+                  </span>
+                  <span className={styles.modelCapability}>
+                    {model.card.capabilities[0] || 'Ready'}
+                  </span>
+                </article>
               ))}
               {config.models.length > 6 ? (
                 <div className={styles.moreServices}>+{config.models.length - 6} more</div>

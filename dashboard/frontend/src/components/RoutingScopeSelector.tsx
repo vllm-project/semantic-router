@@ -1,4 +1,7 @@
+import { useId } from 'react'
+
 import type { RoutingScope } from '../utils/routingScopes'
+import ProductIcon from './ProductIcon'
 import styles from './RoutingScopeSelector.module.css'
 
 interface RoutingScopeSelectorProps {
@@ -14,31 +17,40 @@ export default function RoutingScopeSelector({
   scopes,
   value,
 }: RoutingScopeSelectorProps) {
+  const selectId = useId()
+  const detailId = `${selectId}-detail`
   const selected = scopes.find((scope) => scope.id === value) ?? scopes[0]
   if (!selected) return null
+
+  const detail =
+    selected.entrypointModelNames.length > 0
+      ? selected.entrypointModelNames.join(', ')
+      : selected.description || 'Draft Recipe'
 
   return (
     <div className={styles.root}>
       <div className={styles.heading}>
-        <span className={styles.label}>{label}</span>
-        <span className={styles.detail}>
-          {selected.entrypointModelNames.length > 0
-            ? selected.entrypointModelNames.join(', ')
-            : selected.description || 'Draft Recipe'}
+        <label className={styles.label} htmlFor={selectId}>
+          {label}
+        </label>
+        <span className={styles.detail} id={detailId} title={detail}>
+          {detail}
         </span>
       </div>
-      <div className={styles.tabs} role="group" aria-label={label}>
-        {scopes.map((scope) => (
-          <button
-            key={scope.id}
-            type="button"
-            aria-pressed={scope.id === selected.id}
-            className={scope.id === selected.id ? styles.activeTab : styles.tab}
-            onClick={() => onChange(scope.id)}
-          >
-            {scope.label}
-          </button>
-        ))}
+      <div className={styles.selectShell}>
+        <select
+          id={selectId}
+          value={selected.id}
+          onChange={(event) => onChange(event.target.value)}
+          aria-describedby={detailId}
+        >
+          {scopes.map((scope) => (
+            <option key={scope.id} value={scope.id}>
+              {scope.label}
+            </option>
+          ))}
+        </select>
+        <ProductIcon name="chevron-down" aria-hidden="true" />
       </div>
     </div>
   )

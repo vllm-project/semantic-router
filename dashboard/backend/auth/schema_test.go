@@ -1,8 +1,6 @@
 package auth
 
-import (
-	"testing"
-)
+import "testing"
 
 func TestNewPermissionsExistInAllPermissions(t *testing.T) {
 	t.Parallel()

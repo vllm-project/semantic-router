@@ -10,6 +10,7 @@ const entrypoint = (id: string, assignedModels: number): RoutingEntrypoint => ({
   revision: 1,
   entrypointRevision: 1,
   aliases: [id],
+  recipeIds: [],
   ruleCount: 2,
   assignedModelCount: assignedModels,
   createdAt: '2026-08-23T00:00:00Z',

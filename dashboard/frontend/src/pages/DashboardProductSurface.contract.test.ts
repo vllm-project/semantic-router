@@ -30,6 +30,32 @@ describe('dashboard product surfaces', () => {
     )
   })
 
+  it('keeps the home model inventory passive instead of deep-linking to a backend model', () => {
+    const page = readSource('./DashboardPage.tsx')
+    const pageStyles = readSource('./DashboardPage.module.css')
+
+    expect(page).not.toContain('styles.modelIcon')
+    expect(pageStyles).not.toContain('.modelIcon')
+    expect(page).not.toContain('canChatWithSingleModel')
+    expect(page).not.toContain('/playground?model=')
+    expect(page).not.toContain('styles.modelAction')
+    expect(pageStyles).not.toContain('.modelAction')
+  })
+
+  it('shows every key-authorized single model from the delegated data plane', () => {
+    const playground = readSource('../components/AgentPlayground.tsx')
+    const routingHook = readSource('../components/usePlaygroundRoutingModel.ts')
+
+    expect(playground).not.toContain('includeSingleModels')
+    expect(routingHook).toContain('includeIndividualModels: true')
+    expect(routingHook).toContain('Dashboard role must not hide a Router-authorized model')
+    expect(routingHook).toContain('getRouterModelsEndpoint(endpoint)')
+    expect(routingHook).toContain('fetchPlaygroundModelPayload(')
+    expect(routingHook).toContain('getAccessToken')
+    expect(playground).not.toContain('routingManagementApi.listModelCards')
+    expect(routingHook).not.toContain('routingManagementApi.listModelCards')
+  })
+
   it('does not fetch Router Management routing data without routing.read', () => {
     const page = readSource('./DashboardPage.tsx')
 
@@ -44,13 +70,21 @@ describe('dashboard product surfaces', () => {
     const hero = readSource('./DashboardRoutingHero.tsx')
 
     expect(page).toContain("canAccessDashboardPath(user, '/status')")
+    expect(page).toContain(
+      'canReadStatus ? statusRequest.run({ allowHidden: true }) : Promise.resolve()',
+    )
+    expect(page).toContain('if (!canReadStatus) return')
+    expect(page).toContain('{canReadStatus ? (')
+    expect(page).toContain('<h2 className={styles.cardTitle}>System Health</h2>')
     expect(page).toContain("canAccessDashboardPath(user, '/playground')")
     expect(page).toContain('showRoutingMetrics={canReadConfig}')
     expect(page).toContain('showAPIKeyMetric={canReadAccess}')
     expect(page).toContain('showPlaygroundAction={canUsePlayground}')
+    expect(page).toContain('showStatus={canReadStatus}')
     expect(hero).toContain('{showPlaygroundAction ? (')
     expect(hero).toContain('{showRoutingMetrics ? (')
     expect(hero).toContain('{showAPIKeyMetric ? (')
+    expect(hero).toContain('{showStatus ? (')
   })
 
   it('uses one shared authentication composition for login and invitations', () => {

@@ -70,6 +70,26 @@ const recipe = {
   updatedAt: now,
 }
 
+const longRecipe = {
+  ...recipe,
+  id: 'recipe_long',
+  name: 'long-form',
+  description: 'A complete recipe with a long decision list',
+  decisions: Array.from({ length: 24 }, (_, index) => ({
+    id: `decision_${index + 1}`,
+    name: `Decision ${index + 1}`,
+    dispatchCardinality: 'single',
+  })),
+  document: {
+    ...recipe.document,
+    decisions: Array.from({ length: 24 }, (_, index) => ({
+      id: `decision_${index + 1}`,
+      name: `Decision ${index + 1}`,
+      rules: {},
+    })),
+  },
+}
+
 const entrypoint = {
   id: 'entrypoint_balanced',
   name: 'balanced',
@@ -77,6 +97,7 @@ const entrypoint = {
   revision: 2,
   entrypointRevision: 1,
   aliases: ['vllm-sr/balanced'],
+  recipeIds: [recipe.id],
   ruleCount: 1,
   assignedModelCount: 2,
   createdAt: now,
@@ -128,6 +149,7 @@ async function mockRouting(
   page: Page,
   permissions: string[],
   dashboardRole: 'admin' | 'write' | 'read' = 'read',
+  recipeFixture = recipe,
 ) {
   await mockAuthenticatedAppShell(page, {
     user: {
@@ -146,7 +168,7 @@ async function mockRouting(
   })
   await page.route('**/api/router/management/v1/routing/recipes?*', (route) => {
     reads.push(route.request().url())
-    return fulfill(route, { data: [recipe], page: { hasMore: false, pageSize: 100 } })
+    return fulfill(route, { data: [recipeFixture], page: { hasMore: false, pageSize: 100 } })
   })
   await page.route('**/api/router/management/v1/routing/entrypoints?*', (route) => {
     reads.push(route.request().url())
@@ -310,10 +332,9 @@ test('a broken Management identity is surfaced instead of showing empty routing'
   )
   await page.goto('/config/entrypoints-recipes')
   await expect(page).toHaveURL(/\/dashboard$/)
-  await expect(page.getByRole('alert')).toContainText('Routing access unavailable')
-  await expect(page.getByRole('alert')).toContainText(
-    'Dashboard identity is not linked to this namespace.',
-  )
+  await expect(page.getByTestId('routing-access-status-only')).toBeVisible()
+  await expect(page.getByTestId('status-availability')).toBeVisible()
+  await expect(page.getByRole('alert')).toHaveCount(0)
   expect(reads).toHaveLength(0)
 })
 
@@ -338,4 +359,50 @@ test('routing manager creates a complete per-decision assignment', async ({ page
     'decision_simple',
   ])
   expect(body.rules[0].assignments.decision_simple.models[0].modelId).toBeTruthy()
+})
+
+test('a long decision list uses one scroll surface and keeps dialog actions reachable', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 900, height: 640 })
+  await mockRouting(page, ['routing.read', 'routing.manage'], 'admin', longRecipe)
+  await page.goto('/config/entrypoints-recipes')
+  await page.getByRole('tab', { name: 'Models' }).click()
+  await page.getByRole('button', { name: 'Create model' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Create a mixture' })
+  const lastDecision = dialog.locator('details', { hasText: /^Decision 24/ })
+  const assignments = lastDecision.locator('..')
+  const decisionSection = assignments.locator('..')
+  const dialogBody = decisionSection.locator('..')
+  const createButton = dialog.getByRole('button', { name: 'Create mixture' })
+  const footer = createButton.locator('xpath=ancestor::footer')
+
+  await expect(dialog.getByText('24 decisions', { exact: true })).toBeVisible()
+  await expect(createButton).toBeInViewport()
+  await expect(footer).toBeInViewport()
+
+  const layout = await Promise.all([
+    dialogBody.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      overflowY: window.getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight,
+    })),
+    assignments.evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      overflowY: window.getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight,
+    })),
+  ])
+  expect(layout[0].scrollHeight).toBeGreaterThan(layout[0].clientHeight)
+  expect(layout[0].overflowY).toBe('auto')
+  expect(layout[1].scrollHeight).toBeLessThanOrEqual(layout[1].clientHeight + 1)
+  expect(['auto', 'scroll']).not.toContain(layout[1].overflowY)
+
+  await dialogBody.evaluate((element) => element.scrollTo({ top: element.scrollHeight }))
+  await expect.poll(() => dialogBody.evaluate((element) => element.scrollTop)).toBeGreaterThan(0)
+  await expect(lastDecision).toBeInViewport()
+  await expect(createButton).toBeInViewport()
+  await expect(footer).toBeInViewport()
+  await createButton.click({ trial: true })
 })

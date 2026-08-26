@@ -54,6 +54,7 @@ interface AccessControlPageOverlaysProps {
   onEditEntity: (kind: EntityDetailKind, item: EntityDetailValue) => void
   onDeleteEntity: (kind: EntityDetailKind, id: string) => void
   onEditModelAccess: (user: AccessUser) => void
+  resourceName: (resourceType: 'model' | 'entrypoint', resourceId: string) => string
 }
 
 const AccessControlPageOverlays = ({
@@ -79,6 +80,7 @@ const AccessControlPageOverlays = ({
   onEditEntity,
   onDeleteEntity,
   onEditModelAccess,
+  resourceName,
 }: AccessControlPageOverlaysProps) => (
   <>
     {editor ? (
@@ -124,6 +126,7 @@ const AccessControlPageOverlays = ({
       canManageDashboardMembers={permissions.canManageDashboardMembers}
       selfService={permissions.selfService}
       selfUserId={permissions.selfUserId}
+      resourceName={resourceName}
       onClose={onDetailClose}
       onCatalogChanged={onCatalogChanged}
       onDashboardMembersChanged={onDashboardMembersChanged}

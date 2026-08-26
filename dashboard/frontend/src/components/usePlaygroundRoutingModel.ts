@@ -6,10 +6,12 @@ import {
   type RouterModelOption,
   selectRouterAutoModel,
 } from '../utils/routerModelSelection'
+import { fetchPlaygroundModelPayload } from './playgroundModelDiscovery'
 
 export type PlaygroundRoutingModelStatus = 'discovering' | 'ready' | 'error'
 
 interface PlaygroundRoutingModelSelection {
+  error: string | null
   model: string
   models: RouterModelOption[]
   status: PlaygroundRoutingModelStatus
@@ -43,33 +45,13 @@ function waitWithAbort(milliseconds: number, signal: AbortSignal): Promise<void>
   })
 }
 
-async function fetchJSON(
-  endpoint: string,
-  signal: AbortSignal,
-  getAccessToken: () => Promise<string>,
-): Promise<unknown> {
-  const response = await fetch(endpoint, {
-    cache: 'no-store',
-    credentials: 'omit',
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${await getAccessToken()}`,
-    },
-    signal,
-  })
-  if (!response.ok) {
-    throw new Error(`Model discovery failed with status ${response.status}`)
-  }
-  return response.json() as Promise<unknown>
-}
-
 export function usePlaygroundRoutingModel(
   endpoint: string,
-  includeIndividualModels = false,
   getAccessToken: () => Promise<string>,
   enabled = true,
 ): PlaygroundRoutingModelState {
   const [selection, setSelection] = useState<PlaygroundRoutingModelSelection>({
+    error: null,
     model: '',
     models: [],
     status: 'discovering',
@@ -85,7 +67,7 @@ export function usePlaygroundRoutingModel(
     async (options: PlaygroundModelRefreshOptions = {}): Promise<RouterModelOption[]> => {
       requestRef.current?.abort()
       if (!enabled) {
-        setSelection({ model: '', models: [], status: 'discovering' })
+        setSelection({ error: null, model: '', models: [], status: 'discovering' })
         return []
       }
       const controller = new AbortController()
@@ -93,20 +75,20 @@ export function usePlaygroundRoutingModel(
       const expected = new Set(options.expectedModelIds?.filter(Boolean) ?? [])
       const deadline = Date.now() + Math.max(0, options.timeoutMilliseconds ?? 0)
       let delay = 200
-      setSelection((current) => ({ ...current, status: 'discovering' }))
+      setSelection((current) => ({ ...current, error: null, status: 'discovering' }))
 
       try {
         while (true) {
-          const routerPayload = await fetchJSON(
+          const routerPayload = await fetchPlaygroundModelPayload(
             getRouterModelsEndpoint(endpoint),
             controller.signal,
             getAccessToken,
           )
-          const authorizedModels = listRouterModels(routerPayload)
-          const models = includeIndividualModels
-            ? authorizedModels
-            : authorizedModels.filter((option) => option.kind !== 'individual')
-          const routingModels = authorizedModels.filter((option) => option.kind !== 'individual')
+          // /v1/models is already the key-scoped authorization projection. A
+          // passthrough record is therefore safe to show to every caller that
+          // received it; Dashboard role must not hide a Router-authorized model.
+          const models = listRouterModels(routerPayload, { includeIndividualModels: true })
+          const routingModels = models.filter((option) => option.kind !== 'individual')
           const automaticModel = selectRouterAutoModel(routerPayload)
           const defaultModel = models.some((option) => option.id === automaticModel)
             ? automaticModel
@@ -125,6 +107,7 @@ export function usePlaygroundRoutingModel(
             throw new Error('The published model is not visible from the Router yet.')
           }
           setSelection((current) => ({
+            error: null,
             model: models.some((option) => option.id === current.model)
               ? current.model
               : defaultModel,
@@ -135,14 +118,18 @@ export function usePlaygroundRoutingModel(
         }
       } catch (error) {
         if (!controller.signal.aborted) {
-          setSelection((current) => ({ ...current, status: 'error' }))
+          setSelection((current) => ({
+            ...current,
+            error: error instanceof Error ? error.message : 'Model discovery failed.',
+            status: 'error',
+          }))
         }
         throw error
       } finally {
         if (requestRef.current === controller) requestRef.current = null
       }
     },
-    [enabled, endpoint, getAccessToken, includeIndividualModels],
+    [enabled, endpoint, getAccessToken],
   )
 
   useEffect(() => {

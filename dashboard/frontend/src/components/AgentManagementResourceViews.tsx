@@ -36,6 +36,16 @@ function prettyJSON(value: unknown): string {
   }
 }
 
+function stringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
+}
+
+function itemCount(value: unknown): number {
+  return Array.isArray(value) ? value.length : 0
+}
+
 export function AgentResourceTableHeader({ tab }: { tab: AgentManagementTab }) {
   if (tab === 'profiles')
     return (
@@ -93,6 +103,13 @@ export function AgentResourceRow({
   const skill = resource as AgentSkill
   const tool = resource as AgentToolDefinition
   const connection = resource as AgentToolSource
+  const profileModes = stringList(profile.supportedModes)
+  const skillTools = stringList(skill.requiredTools)
+  const skillCapabilities = stringList(skill.minimumCapabilities)
+  const toolPermissions = stringList(tool.requiredPermissions)
+  const discoveredTools = Array.isArray(connection.discoveredTools)
+    ? connection.discoveredTools
+    : []
   return (
     <tr onClick={disabled ? undefined : onOpen}>
       <td>
@@ -136,13 +153,13 @@ export function AgentResourceRow({
       {tab === 'profiles' ? (
         <>
           <td>
-            {profile.supportedModes.map((mode) => (
+            {profileModes.map((mode) => (
               <span key={mode} className={styles.chip}>
                 {mode === 'chat' ? 'Chat' : 'Builder'}
               </span>
             ))}
           </td>
-          <td>{profile.skills.length}</td>
+          <td>{itemCount(profile.skills)}</td>
           <td>
             <span className={styles.status}>{statusLabel(profile.status)}</span>
           </td>
@@ -152,8 +169,8 @@ export function AgentResourceRow({
       {tab === 'skills' ? (
         <>
           <td>{skill.builtin ? 'Built in' : 'Custom'}</td>
-          <td>{skill.requiredTools.length}</td>
-          <td>{skill.minimumCapabilities.length || '—'}</td>
+          <td>{skillTools.length}</td>
+          <td>{skillCapabilities.length || '—'}</td>
           <td>{formatDate(skill.updatedAt)}</td>
         </>
       ) : null}
@@ -162,18 +179,18 @@ export function AgentResourceRow({
           <td>
             <span className={styles.chip}>{tool.class}</span>
           </td>
-          <td>{tool.requiredPermissions.length || 'None'}</td>
-          <td>{Math.round(tool.timeoutMilliseconds / 1000)}s</td>
+          <td>{toolPermissions.length || 'None'}</td>
+          <td>{Math.round((Number(tool.timeoutMilliseconds) || 0) / 1000)}s</td>
           <td>Ready</td>
         </>
       ) : null}
       {tab === 'connections' ? (
         <>
           <td>Streamable HTTP</td>
-          <td>{connection.discoveredTools.length}</td>
+          <td>{discoveredTools.length}</td>
           <td>
             <span className={styles.status}>
-              {statusLabel(connection.availability.replace(/_/g, ' '))}
+              {statusLabel(connection.availability?.replace(/_/g, ' '))}
             </span>
           </td>
           <td>{formatDate(connection.updatedAt)}</td>
@@ -212,15 +229,24 @@ export function AgentResourceView({
   const skill = resource as AgentSkill
   const tool = resource as AgentToolDefinition
   const connection = resource as AgentToolSource
+  const profileModes = stringList(profile.supportedModes)
+  const profileDefaultModes = stringList(profile.defaultForModes)
+  const profileToolAllow = Array.isArray(profile.toolPolicy?.allow) ? profile.toolPolicy.allow : []
+  const skillTools = stringList(skill.requiredTools)
+  const skillCapabilities = stringList(skill.minimumCapabilities)
+  const toolPermissions = stringList(tool.requiredPermissions)
+  const discoveredTools = Array.isArray(connection.discoveredTools)
+    ? connection.discoveredTools
+    : []
   return (
     <div className={styles.resourceView}>
       {error ? <AgentInlineError message={error} /> : null}
       {tab === 'profiles' ? (
         <div className={styles.detailGrid}>
-          <Detail label="Modes" value={profile.supportedModes.join(', ')} />
-          <Detail label="Default for" value={profile.defaultForModes.join(', ') || 'None'} />
-          <Detail label="Skills" value={String(profile.skills.length)} />
-          <Detail label="Tools" value={String(profile.toolPolicy.allow.length)} />
+          <Detail label="Modes" value={profileModes.join(', ') || 'None'} />
+          <Detail label="Default for" value={profileDefaultModes.join(', ') || 'None'} />
+          <Detail label="Skills" value={String(itemCount(profile.skills))} />
+          <Detail label="Tools" value={String(profileToolAllow.length)} />
           <Detail label="Publishing" value="Review required" />
           <Detail label="Turn timeout" value={`${profile.maximumTurnSeconds}s`} />
           <Detail label="Context" value={`${profile.contextTokenBudget.toLocaleString()} tokens`} />
@@ -230,8 +256,8 @@ export function AgentResourceView({
         <>
           <div className={styles.detailGrid}>
             <Detail label="Type" value={skill.builtin ? 'Built in' : 'Custom'} />
-            <Detail label="Required tools" value={skill.requiredTools.join(', ') || 'None'} />
-            <Detail label="Capabilities" value={skill.minimumCapabilities.join(', ') || 'None'} />
+            <Detail label="Required tools" value={skillTools.join(', ') || 'None'} />
+            <Detail label="Capabilities" value={skillCapabilities.join(', ') || 'None'} />
           </div>
           <section className={styles.instructions}>
             <h3>Instructions</h3>
@@ -245,7 +271,7 @@ export function AgentResourceView({
             <Detail label="Action" value={tool.class} />
             <Detail label="Idempotency" value={tool.idempotency} />
             <Detail label="Timeout" value={`${tool.timeoutMilliseconds} ms`} />
-            <Detail label="Permissions" value={tool.requiredPermissions.join(', ') || 'None'} />
+            <Detail label="Permissions" value={toolPermissions.join(', ') || 'None'} />
           </div>
           <section className={styles.instructions}>
             <h3>Input schema</h3>
@@ -263,17 +289,17 @@ export function AgentResourceView({
             <Detail label="Endpoint" value={connection.endpoint} />
             <Detail label="Transport" value="Streamable HTTP" />
             <Detail label="Credential" value={connection.credentialId ? 'Configured' : 'None'} />
-            <Detail label="Tools" value={String(connection.discoveredTools.length)} />
+            <Detail label="Tools" value={String(discoveredTools.length)} />
             <Detail
               label="Availability"
-              value={statusLabel(connection.availability.replace(/_/g, ' '))}
+              value={statusLabel(connection.availability?.replace(/_/g, ' '))}
             />
             <Detail label="Last update" value={formatDate(connection.updatedAt)} />
           </div>
-          {connection.discoveredTools.length ? (
+          {discoveredTools.length ? (
             <section className={styles.instructions}>
               <h3>Discovered tools</h3>
-              <pre>{connection.discoveredTools.map((item) => item.name).join('\n')}</pre>
+              <pre>{discoveredTools.map((item) => item.name).join('\n')}</pre>
             </section>
           ) : null}
           <section className={styles.instructions}>

@@ -47,8 +47,8 @@ const durationComponentPattern = /([0-9]+(?:\.[0-9]*)?|\.[0-9]+)(ns|us|µs|μs|m
 const durationUnitMilliseconds = {
   ns: 0.000_001,
   us: 0.001,
-  'µs': 0.001,
-  'μs': 0.001,
+  µs: 0.001,
+  μs: 0.001,
   ms: 1,
   s: 1_000,
   m: 60_000,
@@ -140,9 +140,7 @@ function assertAssignmentSet(value: unknown): RoutingAssignmentSet {
       !hasOnlyKeys(value.fallback, ['strategy', 'on']) ||
       value.fallback.strategy !== 'priority' ||
       !Array.isArray(value.fallback.on) ||
-      !value.fallback.on.every(
-        (trigger) => trigger === 'unavailable' || trigger === 'timeout',
-      )
+      !value.fallback.on.every((trigger) => trigger === 'unavailable' || trigger === 'timeout')
     ) {
       throw new Error('Router returned an invalid fallback policy.')
     }
@@ -161,9 +159,7 @@ function assertModelControl(value: unknown): RoutingModelControl {
     value.retry.count < 0 ||
     value.retry.count > 5 ||
     !Array.isArray(value.retry.on) ||
-    !value.retry.on.every(
-      (trigger) => trigger === 'unavailable' || trigger === 'timeout',
-    ) ||
+    !value.retry.on.every((trigger) => trigger === 'unavailable' || trigger === 'timeout') ||
     new Set(value.retry.on).size !== value.retry.on.length ||
     (value.retry.count === 0 ? value.retry.on.length !== 0 : value.retry.on.length === 0) ||
     !isRecord(value.timeout) ||
@@ -200,14 +196,7 @@ function assertModel(value: unknown): RoutingModel {
         'createdAt',
         'updatedAt',
       ],
-      [
-        'paramSize',
-        'contextWindowSize',
-        'description',
-        'reasoning',
-        'qualityScore',
-        'modality',
-      ],
+      ['paramSize', 'contextWindowSize', 'description', 'reasoning', 'qualityScore', 'modality'],
     ) ||
     !isNonEmptyString(value.id) ||
     !isNonEmptyString(value.name) ||
@@ -236,12 +225,7 @@ function assertModel(value: unknown): RoutingModel {
     !value.backends.every(
       (backend) =>
         isRecord(backend) &&
-        hasOnlyKeys(backend, [
-          'providerId',
-          'providerModelId',
-          'credentialConfigured',
-          'weight',
-        ]) &&
+        hasOnlyKeys(backend, ['providerId', 'providerModelId', 'credentialConfigured', 'weight']) &&
         isNonEmptyString(backend.providerId) &&
         isNonEmptyString(backend.providerModelId) &&
         typeof backend.credentialConfigured === 'boolean' &&
@@ -369,12 +353,20 @@ function assertEntrypoint(value: unknown): RoutingEntrypoint {
     !isFiniteInteger(value.revision) ||
     !isFiniteInteger(value.entrypointRevision) ||
     !isStringArray(value.aliases) ||
+    !isStringArray(value.recipeIds) ||
     !isFiniteInteger(value.ruleCount) ||
     value.ruleCount < 0 ||
     !isFiniteInteger(value.assignedModelCount) ||
     value.assignedModelCount < 0
   ) {
     throw new Error('Router returned an invalid Entrypoint.')
+  }
+  if (
+    !value.recipeIds.every(isNonEmptyString) ||
+    new Set(value.recipeIds).size !== value.recipeIds.length ||
+    (value.ruleCount === 0) !== (value.recipeIds.length === 0)
+  ) {
+    throw new Error('Router returned inconsistent Entrypoint Recipe references.')
   }
   let rules: RoutingEntrypointRule[] | undefined
   if (value.rules !== undefined) {
@@ -400,6 +392,15 @@ function assertEntrypoint(value: unknown): RoutingEntrypoint {
         ),
       }
     })
+    const topologyRecipeIDs = [...new Set(rules.map((rule) => rule.recipeId))].sort()
+    const summaryRecipeIDs = [...value.recipeIds].sort()
+    if (
+      rules.length !== value.ruleCount ||
+      topologyRecipeIDs.length !== summaryRecipeIDs.length ||
+      topologyRecipeIDs.some((recipeID, index) => recipeID !== summaryRecipeIDs[index])
+    ) {
+      throw new Error('Router returned inconsistent Entrypoint topology.')
+    }
   }
   return {
     ...(value as unknown as RoutingEntrypoint),

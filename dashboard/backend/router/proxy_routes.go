@@ -52,6 +52,7 @@ func registerRouterManagementProxy(
 			return
 		}
 		if err := routerauth.RewriteManagementAuthorization(r, managementSessions); err != nil {
+			log.Printf("Router Management session acquisition failed: %v", err)
 			http.Error(w, "Router Management session is unavailable", http.StatusServiceUnavailable)
 			return
 		}

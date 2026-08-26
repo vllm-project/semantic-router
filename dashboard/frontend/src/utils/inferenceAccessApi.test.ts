@@ -49,6 +49,51 @@ describe('Router Management access client', () => {
     )
   })
 
+  it('keeps audit free-text search client-side and sends only supported pagination', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        data: [
+          {
+            id: '11111111-1111-4111-8111-111111111111',
+            namespaceId: '22222222-2222-4222-8222-222222222222',
+            chainSequence: 1,
+            actorChain: [],
+            action: 'key.disable',
+            resourceType: 'api_key',
+            resourceId: '33333333-3333-4333-8333-333333333333',
+            requestId: '44444444-4444-4444-8444-444444444444',
+            outcome: 'allowed',
+            reason: 'requested',
+            details: {},
+            eventHash: 'a'.repeat(64),
+            createdAt: '2026-08-25T00:00:00Z',
+          },
+        ],
+        page: { hasMore: false, pageSize: 20 },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      inferenceAccessApi.auditLogs({
+        q: '  key.disable  ',
+        cursor: 'audit-page-2',
+        limit: 20,
+        status: 'active',
+        includeTotal: true,
+      }),
+    ).resolves.toMatchObject({
+      items: [expect.objectContaining({ action: 'key.disable' })],
+    })
+
+    const requestedURL = new URL(String(fetchMock.mock.calls[0][0]), 'http://dashboard.local')
+    expect(requestedURL.pathname).toBe('/api/router/management/v1/audit-events')
+    expect([...requestedURL.searchParams.entries()]).toEqual([
+      ['cursor', 'audit-page-2'],
+      ['pageSize', '20'],
+    ])
+  })
+
   it('resolves an Agent response to its scoped request log by exact request ID', async () => {
     const requestId = '11111111-1111-4111-8111-111111111111'
     const fetchMock = vi.fn().mockResolvedValue(
@@ -70,6 +115,7 @@ describe('Router Management access client', () => {
             stream: true,
             toolCall: false,
             costs: [],
+            models: [],
           },
         ],
         page: { hasMore: false, pageSize: 10 },
@@ -86,6 +132,76 @@ describe('Router Management access client', () => {
     expect(requestedURL.pathname).toBe('/api/router/management/v1/request-logs')
     expect(requestedURL.searchParams.get('requestId')).toBe(requestId)
     expect(requestedURL.searchParams.get('pageSize')).toBe('10')
+    expect(requestedURL.searchParams.has('grain')).toBe(false)
+  })
+
+  it('preserves typed route, quota, and dispatch evidence on request detail', async () => {
+    const namespaceID = '11111111-1111-4111-8111-111111111111'
+    setManagementNamespace(namespaceID)
+    const fetchMock = vi.fn().mockResolvedValue(
+      response({
+        data: {
+          request: {
+            admissionId: 'admission-1',
+            eventId: '22222222-2222-4222-8222-222222222222',
+            occurredAt: '2026-08-25T00:00:00Z',
+            completedAt: '2026-08-25T00:00:01Z',
+            protocol: 'openai_chat_v1',
+            path: '/v1/chat/completions',
+            statusCode: 200,
+            usageState: 'known_actual',
+            inputTokens: '8',
+            outputTokens: '3',
+            latencyMilliseconds: 1000,
+            stream: true,
+            toolCall: false,
+            decisionId: 'decision-simple',
+            decisionName: 'Simple',
+            decisionTier: 1,
+            models: [{ id: 'model-fast', name: 'local/fast', revision: 7 }],
+            costs: [],
+          },
+          routing: { entrypointName: 'vllm-sr/balance', recipeName: 'Balance' },
+          quotaReceipts: [{ ruleId: 'rpm', metric: 'requests', amount: '1' }],
+          dispatches: [
+            {
+              dispatchId: 'dispatch-1',
+              ordinal: 0,
+              dispatchType: 'primary',
+              modelId: 'model-fast',
+              inputTokens: '8',
+              cacheReadTokens: '0',
+              cacheWriteTokens: '0',
+              outputTokens: '3',
+              usageState: 'known_actual',
+              cost: {
+                currency: 'USD',
+                knownAmount: '0.1',
+                completeness: 'complete',
+                knownDispatches: '1',
+                incompleteDispatches: '0',
+              },
+              evidenceDigest: 'a'.repeat(64),
+              startedAt: '2026-08-25T00:00:00Z',
+              completedAt: '2026-08-25T00:00:01Z',
+              attempts: [],
+            },
+          ],
+        },
+      }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(
+      inferenceAccessApi.requestLog(`${namespaceID}:admission-1`),
+    ).resolves.toMatchObject({
+      decisionName: 'Simple',
+      model: 'local/fast',
+      models: [{ name: 'local/fast' }],
+      routing: { recipeName: 'Balance' },
+      quotaReceipts: [{ metric: 'requests' }],
+      dispatches: [{ dispatchId: 'dispatch-1' }],
+    })
   })
 
   it('hydrates a selected API key without reading credential material', async () => {
@@ -626,7 +742,7 @@ describe('Router Management access client', () => {
     expect(exact).not.toContain('apiKeyId=')
     expect(
       urls.filter((url) => url.includes('/usage/series') || url.includes('/usage/breakdowns')),
-    ).toHaveLength(5)
+    ).toHaveLength(8)
     expect(
       urls
         .filter((url) => url.includes('/usage/series') || url.includes('/usage/breakdowns'))
@@ -692,7 +808,7 @@ describe('Router Management access client', () => {
       tokensToday: 140,
     })
     const urls = fetchMock.mock.calls.map(([input]) => String(input))
-    expect(urls).toHaveLength(7)
+    expect(urls).toHaveLength(10)
     expect(
       urls.some((url) =>
         /\/(users|teams|api-keys|access-policies|rate-limit-policies)(\?|$)/.test(url),

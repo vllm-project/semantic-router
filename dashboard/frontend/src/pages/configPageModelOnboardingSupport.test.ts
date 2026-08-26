@@ -85,7 +85,21 @@ describe('model onboarding form contract', () => {
         requestTimeout: '1h30m',
         streamTimeout: '+.5h',
       }),
-    ).toEqual({ timeout: { request: '1h30m', stream: '+.5h' } })
+    ).toEqual({
+      retry: { count: 0, on: [] },
+      timeout: { request: '1h30m', stream: '+.5h' },
+    })
+    expect(
+      buildModelControlOverrides({
+        maxRetries: '1',
+        retryOn: [],
+        requestTimeout: '',
+        streamTimeout: '',
+      }),
+    ).toEqual({
+      retry: { count: 1, on: ['unavailable'] },
+      timeout: { request: '300s', stream: '300s' },
+    })
     expect(
       buildModelPricingOverrides({
         inputCost: '0.25',
@@ -159,7 +173,7 @@ describe('model onboarding form contract', () => {
         namePrefix: 'team',
         control: {
           retry: { count: 2, on: ['unavailable'] },
-          timeout: { stream: '5m' },
+          timeout: { request: '300s', stream: '5m' },
         },
         pricing: {
           inputCostPerMillionTokens: '0.25',
@@ -183,7 +197,7 @@ describe('model onboarding form contract', () => {
           loras: [],
           control: {
             retry: { count: 2, on: ['unavailable'] },
-            timeout: { stream: '5m' },
+            timeout: { request: '300s', stream: '5m' },
           },
           pricing: {
             inputCostPerMillionTokens: '0.25',
@@ -197,7 +211,7 @@ describe('model onboarding form contract', () => {
           loras: [],
           control: {
             retry: { count: 2, on: ['unavailable'] },
-            timeout: { stream: '5m' },
+            timeout: { request: '300s', stream: '5m' },
           },
           pricing: {
             inputCostPerMillionTokens: '0.25',

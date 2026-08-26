@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import ViewPanel, { type ViewPanelAction } from '../components/ViewPanel'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { useAuth } from '../contexts/AuthContext'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import { canAccessReplayFlowDetails } from '../utils/accessControl'
@@ -129,10 +130,7 @@ export default function InsightsRecordPage() {
           </button>
         </div>
         {loading ? (
-          <div className={styles.loading}>
-            <div className={styles.spinner} />
-            <p>Loading insight record...</p>
-          </div>
+          <ProductLoadingState compact label="Loading insight record" />
         ) : null}
 
         {!loading && !error && record ? (

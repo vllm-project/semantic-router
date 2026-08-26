@@ -119,8 +119,8 @@ func TestCollectHostStatusReportsDashboardWhenRouterIsUnavailable(t *testing.T) 
 	if status.Overall != "not_running" {
 		t.Fatalf("overall status = %q, want not_running", status.Overall)
 	}
-	if len(status.Services) != 2 {
-		t.Fatalf("service count = %d, want 2 (%#v)", len(status.Services), status.Services)
+	if len(status.Services) != 3 {
+		t.Fatalf("service count = %d, want 3 (%#v)", len(status.Services), status.Services)
 	}
 
 	router := status.Services[0]
@@ -128,7 +128,12 @@ func TestCollectHostStatusReportsDashboardWhenRouterIsUnavailable(t *testing.T) 
 		t.Fatalf("router service = %#v, want Router not running and unhealthy", router)
 	}
 
-	dashboard := status.Services[1]
+	envoy := status.Services[1]
+	if envoy.Name != "Envoy" || envoy.Healthy || envoy.Status != "unavailable" {
+		t.Fatalf("envoy service = %#v, want Envoy unavailable", envoy)
+	}
+
+	dashboard := status.Services[2]
 	if dashboard.Name != "Dashboard" || !dashboard.Healthy || dashboard.Status != "operational" {
 		t.Fatalf("dashboard service = %#v, want Dashboard running and healthy", dashboard)
 	}

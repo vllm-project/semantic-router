@@ -94,8 +94,12 @@ test.describe('Public and transition surfaces on short screens', () => {
       for (const viewport of productViewports) {
         await page.setViewportSize(viewport)
         await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
-        await expect(page.getByRole('heading', { name: 'Entering control plane' })).toBeVisible()
-        await expect(page.getByRole('progressbar', { name: 'Opening workspace' })).toBeVisible()
+        const loading = page.getByRole('status', { name: 'Opening dashboard' })
+        await expect(loading).toBeVisible()
+        await expect(loading.locator('img')).toHaveAttribute(
+          'src',
+          '/vllm-sr-logo.white.png',
+        )
         await expectNoPublicOverflow(page, `authenticated handoff at ${viewport.name}`)
       }
     } finally {
@@ -277,7 +281,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     expect(layoutWidth.scrollWidth).toBeLessThanOrEqual(layoutWidth.innerWidth)
   })
 
-  test('uses the compact transition layout without clipping progress', async ({ page }) => {
+  test('keeps the unified loading state inside a compact viewport', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 })
     await mockAuthenticatedAppShell(page)
     let releaseAuthentication: () => void = () => undefined
@@ -291,15 +295,12 @@ test.describe('Public and transition surfaces on short screens', () => {
     await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
 
     try {
-      await expect(page.getByRole('heading', { name: 'Entering control plane' })).toBeVisible()
-      await expect(page.getByTestId('auth-transition-scene')).toBeVisible()
+      const loading = page.getByRole('status', { name: 'Opening dashboard' })
+      await expect(loading).toBeVisible()
+      const loadingBox = await loading.boundingBox()
 
-      const progress = page.getByRole('progressbar', { name: 'Opening workspace' })
-      await expect(progress).toBeVisible()
-      const progressBox = await progress.boundingBox()
-
-      expect(progressBox).not.toBeNull()
-      expect((progressBox?.y ?? 0) + (progressBox?.height ?? 0)).toBeLessThanOrEqual(568)
+      expect(loadingBox).not.toBeNull()
+      expect((loadingBox?.y ?? 0) + (loadingBox?.height ?? 0)).toBeLessThanOrEqual(568)
       expect(
         await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       ).toBe(true)
@@ -308,9 +309,7 @@ test.describe('Public and transition surfaces on short screens', () => {
     }
   })
 
-  test('uses a static decision plane and completes immediately with reduced motion', async ({
-    page,
-  }) => {
+  test('opens the dashboard when authentication becomes available', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 })
     await page.emulateMedia({ reducedMotion: 'reduce' })
     await mockAuthenticatedAppShell(page)
@@ -332,13 +331,7 @@ test.describe('Public and transition surfaces on short screens', () => {
 
     await page.goto('/auth/transition?to=/dashboard', { waitUntil: 'domcontentloaded' })
 
-    const scene = page.getByTestId('auth-transition-scene')
-    await expect(scene).toBeVisible()
-    await expect(scene).toHaveAttribute('data-motion', 'static')
-    await expect(page.getByRole('progressbar', { name: 'Opening workspace' })).toHaveAttribute(
-      'aria-valuenow',
-      '100',
-    )
+    await expect(page.getByRole('status', { name: 'Opening dashboard' })).toBeVisible()
     await expect(page).toHaveURL(/\/dashboard$/, { timeout: 5000 })
   })
 })

@@ -63,7 +63,8 @@ function routingListParams(params: AccessListParams) {
 const routingSourceIdentity = {
   id: (item: AccessResourceOption) => item.resourceId,
   title: (item: AccessResourceOption) => item.name,
-  description: (item: AccessResourceOption) => `${item.resourceId} · ${item.status}`,
+  description: (item: AccessResourceOption) =>
+    item.status === 'active' ? 'Available' : item.status === 'draft' ? 'Draft' : 'Disabled',
 }
 
 export const accessControlSelectorSources: AccessControlSelectorSources = {

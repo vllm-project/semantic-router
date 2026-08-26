@@ -658,109 +658,111 @@ export default function ConfigPageProjectionsSection({
       description="Turn signals into clear routing bands."
       scope={selectedScope?.label ?? 'Routing profile'}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        <RoutingScopeSelector
-          scopes={routingScopes}
-          value={selectedScopeId}
-          onChange={setSelectedScopeId}
-        />
-        <p className={styles.productHint}>
-          Trace projection outcomes in{' '}
-          <a
-            href="https://vllm-sr.ai/docs/tutorials/projection/traces"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Insights
-          </a>
-          .
-        </p>
-        <TableHeader
-          title="Projection Surfaces"
-          count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
-          searchPlaceholder="Search partitions, scores, or mappings..."
-          searchValue={search}
-          onSearchChange={setSearch}
-          disabled={scopeReadonly}
-        />
-
-        <section>
+      <div className={styles.sectionPanel}>
+        <div className={`${styles.sectionTableBlock} ${styles.projectionStack}`}>
+          <RoutingScopeSelector
+            scopes={routingScopes}
+            value={selectedScopeId}
+            onChange={setSelectedScopeId}
+          />
+          <p className={styles.productHint}>
+            Trace projection outcomes in{' '}
+            <a
+              href="https://vllm-sr.ai/docs/tutorials/projection/traces"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Insights
+            </a>
+            .
+          </p>
           <TableHeader
-            title="Partitions"
-            count={filteredPartitions.length}
-            onAdd={handleAddPartition}
-            addButtonText="Add Partition"
+            title="Projection Surfaces"
+            count={filteredPartitions.length + filteredScores.length + filteredMappings.length}
+            searchPlaceholder="Search partitions, scores, or mappings..."
+            searchValue={search}
+            onSearchChange={setSearch}
             disabled={scopeReadonly}
-            variant="embedded"
           />
-          <DataTable
-            columns={partitionColumns}
-            data={filteredPartitions}
-            keyExtractor={(row) => row.name}
-            onView={handleViewPartition}
-            openOnRowClick
-            emptyMessage="No projection partitions configured."
-            readonly={scopeReadonly}
-            pagination={{
-              pageSize: 25,
-              pageSizeOptions: [25, 50, 100],
-              itemLabel: 'partitions',
-              resetKey: search,
-            }}
-          />
-        </section>
 
-        <section>
-          <TableHeader
-            title="Scores"
-            count={filteredScores.length}
-            onAdd={handleAddScore}
-            addButtonText="Add Score"
-            disabled={scopeReadonly}
-            variant="embedded"
-          />
-          <DataTable
-            columns={scoreColumns}
-            data={filteredScores}
-            keyExtractor={(row) => row.name}
-            onView={handleViewScore}
-            openOnRowClick
-            emptyMessage="No projection scores configured."
-            readonly={scopeReadonly}
-            pagination={{
-              pageSize: 25,
-              pageSizeOptions: [25, 50, 100],
-              itemLabel: 'scores',
-              resetKey: search,
-            }}
-          />
-        </section>
+          <section>
+            <TableHeader
+              title="Partitions"
+              count={filteredPartitions.length}
+              onAdd={handleAddPartition}
+              addButtonText="Add Partition"
+              disabled={scopeReadonly}
+              variant="embedded"
+            />
+            <DataTable
+              columns={partitionColumns}
+              data={filteredPartitions}
+              keyExtractor={(row) => row.name}
+              onView={handleViewPartition}
+              openOnRowClick
+              emptyMessage="No projection partitions configured."
+              readonly={scopeReadonly}
+              pagination={{
+                pageSize: 25,
+                pageSizeOptions: [25, 50, 100],
+                itemLabel: 'partitions',
+                resetKey: search,
+              }}
+            />
+          </section>
 
-        <section>
-          <TableHeader
-            title="Mappings"
-            count={filteredMappings.length}
-            onAdd={handleAddMapping}
-            addButtonText="Add Mapping"
-            disabled={scopeReadonly}
-            variant="embedded"
-          />
-          <DataTable
-            columns={mappingColumns}
-            data={filteredMappings}
-            keyExtractor={(row) => row.name}
-            onView={handleViewMapping}
-            openOnRowClick
-            emptyMessage="No projection mappings configured."
-            readonly={scopeReadonly}
-            pagination={{
-              pageSize: 25,
-              pageSizeOptions: [25, 50, 100],
-              itemLabel: 'mappings',
-              resetKey: search,
-            }}
-          />
-        </section>
+          <section>
+            <TableHeader
+              title="Scores"
+              count={filteredScores.length}
+              onAdd={handleAddScore}
+              addButtonText="Add Score"
+              disabled={scopeReadonly}
+              variant="embedded"
+            />
+            <DataTable
+              columns={scoreColumns}
+              data={filteredScores}
+              keyExtractor={(row) => row.name}
+              onView={handleViewScore}
+              openOnRowClick
+              emptyMessage="No projection scores configured."
+              readonly={scopeReadonly}
+              pagination={{
+                pageSize: 25,
+                pageSizeOptions: [25, 50, 100],
+                itemLabel: 'scores',
+                resetKey: search,
+              }}
+            />
+          </section>
+
+          <section>
+            <TableHeader
+              title="Mappings"
+              count={filteredMappings.length}
+              onAdd={handleAddMapping}
+              addButtonText="Add Mapping"
+              disabled={scopeReadonly}
+              variant="embedded"
+            />
+            <DataTable
+              columns={mappingColumns}
+              data={filteredMappings}
+              keyExtractor={(row) => row.name}
+              onView={handleViewMapping}
+              openOnRowClick
+              emptyMessage="No projection mappings configured."
+              readonly={scopeReadonly}
+              pagination={{
+                pageSize: 25,
+                pageSizeOptions: [25, 50, 100],
+                itemLabel: 'mappings',
+                resetKey: search,
+              }}
+            />
+          </section>
+        </div>
       </div>
 
       <ConfirmDialog

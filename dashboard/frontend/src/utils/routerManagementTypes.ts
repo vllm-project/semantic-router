@@ -31,8 +31,10 @@ import type {
   RateLimitPolicy,
   RateLimitRule as WireRateLimitRule,
   RateLimitRuleInput,
+  RequestDispatch,
   RequestLog,
   RequestLogDetailData,
+  RequestModel,
   ResourceReference as WireResourceReference,
   SecretEnvelope as WireSecretEnvelope,
   Team,
@@ -121,4 +123,6 @@ export type ManagementUsageSeries = UsageSeries
 export type ManagementUsageBreakdownRow = UsageBreakdownRow
 export type ManagementUsageBreakdown = UsageBreakdown
 export type ManagementRequestLog = RequestLog
+export type ManagementRequestDispatch = RequestDispatch
+export type ManagementRequestModel = RequestModel
 export type ManagementRequestLogDetail = RequestLogDetailData

@@ -1,4 +1,5 @@
 import type { ManagementNamespaceSummary } from '../utils/routerManagementTypes'
+import type { ManagementIdentityStatus } from './managementIdentityRecovery'
 
 export interface AuthUser {
   id: string
@@ -27,7 +28,7 @@ export interface AuthUser {
     revision: number
   }
   /** Whether Router Management identity projection completed for this session. */
-  managementIdentityStatus?: 'ready' | 'error'
+  managementIdentityStatus?: ManagementIdentityStatus
   /** User-facing failure detail. Router permissions remain empty while this is set. */
   managementIdentityError?: string
 }

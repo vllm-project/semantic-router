@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import ProductIcon from '../components/ProductIcon'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import { copyText } from '../utils/clipboard'
@@ -351,7 +352,7 @@ export function APIKeyDetail({
           </button>
         </header>
         <div className={styles.detailBody}>
-          {loading ? <div className={styles.detailLoading}>Loading key details…</div> : null}
+          {loading ? <ProductLoadingState compact label="Loading API key details" /> : null}
           {error ? (
             <div className={styles.modalError} role="alert">
               <ProductIcon name="alert" aria-hidden="true" />

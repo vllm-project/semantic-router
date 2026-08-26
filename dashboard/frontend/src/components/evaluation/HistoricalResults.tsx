@@ -5,6 +5,7 @@ import type { EvaluationLevel, EvaluationStatus, EvaluationTask } from '../../ty
 import { LEVEL_INFO, STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation'
 import EvaluationPagination from './EvaluationPagination'
 import ProductIcon from '../ProductIcon'
+import ProductLoadingState from '../ProductLoadingState'
 import {
   EVALUATION_HISTORY_PAGE_SIZE,
   filterAndSortEvaluationTasks,
@@ -84,11 +85,7 @@ export function HistoricalResults({
   }
 
   if (loading && historicalTasks.length === 0) {
-    return (
-      <div className={styles.loading} role="status">
-        Loading evaluation history…
-      </div>
-    )
+    return <ProductLoadingState compact label="Loading evaluation history" />
   }
 
   if (error && historicalTasks.length === 0) {

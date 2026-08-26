@@ -19,7 +19,7 @@ import type {
   ResourceDetail,
 } from './routerManagementTypes'
 
-const usageQuery = (filter: UsageFilter) =>
+const observabilityQuery = (filter: UsageFilter) =>
   query({
     userId: filter.userId,
     teamId: filter.teamId,
@@ -27,11 +27,16 @@ const usageQuery = (filter: UsageFilter) =>
     logicalModelId: filter.model,
     start: filter.from,
     end: filter.to,
-    grain: filter.granularity ?? 'auto',
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     cursor: filter.cursor,
     pageSize: filter.limit,
   })
+
+const usageQuery = (filter: UsageFilter) => {
+  const params = observabilityQuery(filter)
+  params.set('grain', filter.granularity ?? 'auto')
+  return params
+}
 
 const usageBreakdownQuery = (filter: UsageFilter, dimension: string) => {
   const params = usageQuery(filter)
@@ -55,6 +60,9 @@ const emptyUsage = (): UsageSummary => ({
   costs: [],
   series: [],
   byModel: [],
+  byEntrypoint: [],
+  byRecipe: [],
+  byDecision: [],
   byUser: [],
   byTeam: [],
   byKey: [],
@@ -70,25 +78,35 @@ async function loadUsage(
   pathParameters: Record<string, string> | undefined,
   summaryFilter: UsageFilter = filter,
 ): Promise<UsageSummary> {
-  const [summary, series, byModel, byUser, byTeam, byKey] = await Promise.all([
-    request<ManagementUsageSummary>(summaryOperationId, {
-      pathParameters,
-      query: usageQuery(summaryFilter),
-    }),
-    request<ManagementUsageSeries>('getUsageSeries', { query: usageQuery(filter) }),
-    request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-      query: usageBreakdownQuery(filter, 'logical_model'),
-    }),
-    request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-      query: usageBreakdownQuery(filter, 'user'),
-    }),
-    request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-      query: usageBreakdownQuery(filter, 'team'),
-    }),
-    request<ManagementUsageBreakdown>('getUsageBreakdowns', {
-      query: usageBreakdownQuery(filter, 'api_key'),
-    }),
-  ])
+  const [summary, series, byModel, byEntrypoint, byRecipe, byDecision, byUser, byTeam, byKey] =
+    await Promise.all([
+      request<ManagementUsageSummary>(summaryOperationId, {
+        pathParameters,
+        query: usageQuery(summaryFilter),
+      }),
+      request<ManagementUsageSeries>('getUsageSeries', { query: usageQuery(filter) }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'logical_model'),
+      }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'entrypoint'),
+      }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'recipe'),
+      }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'decision'),
+      }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'user'),
+      }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'team'),
+      }),
+      request<ManagementUsageBreakdown>('getUsageBreakdowns', {
+        query: usageBreakdownQuery(filter, 'api_key'),
+      }),
+    ])
   const totals = summary.totals
   const requests = Number(totals.requests)
   const successful = Number(totals.successfulRequests)
@@ -133,6 +151,9 @@ async function loadUsage(
       costs: point.totals.costs,
     })),
     byModel: byModel.rows.map(slice),
+    byEntrypoint: byEntrypoint.rows.map(slice),
+    byRecipe: byRecipe.rows.map(slice),
+    byDecision: byDecision.rows.map(slice),
     byUser: byUser.rows.map(slice),
     byTeam: byTeam.rows.map(slice),
     byKey: byKey.rows.map(slice),
@@ -178,9 +199,14 @@ function mapRequestLog(item: ManagementRequestLog): AccessUsageEvent {
     userId: item.userId,
     teamId: item.teamId,
     namespaceId: namespaceID || undefined,
-    model: item.entrypointId || item.recipeId || '',
+    model: item.models?.[0]?.name || item.entrypointId || item.recipeId || '',
+    models: item.models ?? [],
     entrypointId: item.entrypointId,
     recipeId: item.recipeId,
+    decisionId: item.decisionId,
+    decisionName: item.decisionName,
+    decisionTier: item.decisionTier,
+    completedAt: item.completedAt,
     streaming: item.stream,
     toolCall: item.toolCall,
     costs: item.costs,
@@ -216,7 +242,7 @@ export async function overview(): Promise<AccessOverview> {
 }
 
 export async function requestLogs(filter: UsageFilter = {}): Promise<AccessPage<AccessUsageEvent>> {
-  const requestQuery = usageQuery(filter)
+  const requestQuery = observabilityQuery(filter)
   if (filter.q?.trim()) requestQuery.set('requestId', filter.q.trim())
   const page = await request<ManagementPage<ManagementRequestLog>>('getRequestLogs', {
     query: requestQuery,
@@ -232,5 +258,10 @@ export async function requestLog(id: string): Promise<AccessUsageEvent> {
     'getNamespacesByNamespaceIdRequestLogsByAdmissionId',
     { pathParameters: { namespaceId: namespaceID, admissionId: admissionID } },
   )
-  return mapRequestLog(detail.data.request)
+  return {
+    ...mapRequestLog(detail.data.request),
+    routing: detail.data.routing,
+    quotaReceipts: detail.data.quotaReceipts,
+    dispatches: detail.data.dispatches,
+  }
 }

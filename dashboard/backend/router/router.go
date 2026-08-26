@@ -1,12 +1,14 @@
 package router
 
 import (
+	"errors"
 	"log"
 	"net/http"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/config"
 	"github.com/vllm-project/semantic-router/dashboard/backend/handlers"
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/statusstore"
 	"github.com/vllm-project/semantic-router/dashboard/backend/workflowstore"
 )
 
@@ -28,11 +30,18 @@ func Setup(cfg *config.Config) *Server {
 	if err != nil {
 		log.Fatalf("workflow store: %v", err)
 	}
+	statusHistory, err := statusstore.Open(cfg.StatusDBPath)
+	if err != nil {
+		log.Printf("Warning: status history is unavailable: %v", err)
+		statusHistory = nil
+	}
+	statusMonitor := handlers.NewStatusMonitor(cfg.RouterAPIURL, statusHistory)
+	statusMonitor.Start()
 
 	mux.HandleFunc("/api/workflows/health", handlers.WorkflowHealthHandler(wf))
 	log.Printf("Workflow health API registered: /api/workflows/health")
 	openClawHandler := newOpenClawHandler(cfg, wf)
-	registerCoreRoutes(mux, cfg)
+	registerCoreRoutes(mux, cfg, statusMonitor.Handler())
 	registerEvaluationRoutes(mux, cfg, managementSessions)
 	registerMLPipelineRoutes(mux, cfg, wf)
 	registerOpenClawRoutes(mux, cfg, openClawHandler)
@@ -42,7 +51,9 @@ func Setup(cfg *config.Config) *Server {
 	mux.Handle("/", handlers.StaticFileServer(cfg.StaticDir))
 	return &Server{
 		Handler: wrapWithAuth(mux, authSvc),
-		Close:   wf.Close,
+		Close: func() error {
+			return errors.Join(statusMonitor.Close(), statusHistory.Close(), wf.Close())
+		},
 	}
 }
 

@@ -73,6 +73,8 @@ describe('ProductIcon', () => {
     for (const name of names) {
       const markup = renderToStaticMarkup(createElement(ProductIcon, { name }))
       expect(markup).toContain('<svg')
+      expect(markup).toContain('width="1em"')
+      expect(markup).toContain('height="1em"')
       expect(markup).toContain('aria-hidden="true"')
       expect(markup).not.toContain('💥')
     }
@@ -86,5 +88,15 @@ describe('ProductIcon', () => {
     expect(markup).toContain('aria-label="More information"')
     expect(markup).toContain('role="img"')
     expect(markup).not.toContain('aria-hidden="true"')
+  })
+
+  it('lets a caller override the safe intrinsic size', () => {
+    const markup = renderToStaticMarkup(
+      createElement(ProductIcon, { name: 'info', width: 18, height: 18 }),
+    )
+
+    expect(markup).toContain('width="18"')
+    expect(markup).toContain('height="18"')
+    expect(markup).not.toContain('width="1em"')
   })
 })

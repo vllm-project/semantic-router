@@ -10,9 +10,11 @@ describe('fleet simulator client', () => {
   it('accepts list responses', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('[]', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        ),
     )
 
     await expect(listJobs()).resolves.toEqual([])
@@ -21,9 +23,11 @@ describe('fleet simulator client', () => {
   it('fails malformed list responses without crashing the route', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue(
-        new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
-      ),
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+        ),
     )
 
     await expect(listJobs()).rejects.toThrow('invalid list response')

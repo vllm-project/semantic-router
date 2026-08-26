@@ -9,6 +9,7 @@ interface DashboardRoutingHeroProps {
   showRoutingMetrics: boolean
   showAPIKeyMetric: boolean
   showPlaygroundAction: boolean
+  showStatus: boolean
   overallStatus?: string
   refreshing: boolean
   lastUpdated: Date | null
@@ -24,6 +25,7 @@ export default function DashboardRoutingHero({
   showRoutingMetrics,
   showAPIKeyMetric,
   showPlaygroundAction,
+  showStatus,
   overallStatus,
   refreshing,
   lastUpdated,
@@ -38,20 +40,22 @@ export default function DashboardRoutingHero({
         <div className={styles.bannerCopy}>
           <div className={styles.eyebrowRow}>
             <span className={styles.eyebrow}>Mixture-of-Models control plane</span>
-            <button
-              type="button"
-              className={`${styles.liveStatus} ${healthy ? styles.liveHealthy : ''}`}
-              onClick={onRefresh}
-              disabled={refreshing}
-              aria-label="Refresh dashboard status"
-              title={
-                lastUpdated
-                  ? `Last checked ${lastUpdated.toLocaleTimeString()}`
-                  : 'Check dashboard status'
-              }
-            >
-              <i /> {refreshing ? 'Checking' : healthy ? 'Live' : overallStatus || 'Check'}
-            </button>
+            {showStatus ? (
+              <button
+                type="button"
+                className={`${styles.liveStatus} ${healthy ? styles.liveHealthy : ''}`}
+                onClick={onRefresh}
+                disabled={refreshing}
+                aria-label="Refresh dashboard status"
+                title={
+                  lastUpdated
+                    ? `Last checked ${lastUpdated.toLocaleTimeString()}`
+                    : 'Check dashboard status'
+                }
+              >
+                <i /> {refreshing ? 'Checking' : healthy ? 'Live' : overallStatus || 'Check'}
+              </button>
+            ) : null}
           </div>
           <h1 id="dashboard-routing-title">Your model system, at a glance.</h1>
           <p>One stable API. Every capability path visible, governed, and ready.</p>

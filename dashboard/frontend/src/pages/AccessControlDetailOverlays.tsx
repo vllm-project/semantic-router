@@ -21,6 +21,7 @@ interface AccessControlDetailOverlaysProps {
   canManageDashboardMembers: boolean
   selfService: boolean
   selfUserId: string
+  resourceName: (resourceType: 'model' | 'entrypoint', resourceId: string) => string
   onClose: () => void
   onCatalogChanged: () => void
   onDashboardMembersChanged: () => void
@@ -45,6 +46,7 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
     canManageDashboardMembers,
     selfService,
     selfUserId,
+    resourceName,
     onClose,
     onCatalogChanged,
     onDashboardMembersChanged,
@@ -90,6 +92,7 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
           canDelete={canManage}
           selfService={selfService}
           selfUserId={selfUserId}
+          resourceName={resourceName}
           onEdit={onEditEntity}
           onDelete={onDeleteEntity}
           onClose={onClose}

@@ -1,4 +1,4 @@
-import type { PropsWithChildren } from 'react'
+import { type PropsWithChildren, useId } from 'react'
 
 import ProductIcon from '../components/ProductIcon'
 import styles from './AccessControlPage.module.css'
@@ -64,19 +64,25 @@ export function StatusField({
   )
 }
 
-export function SelectionSection({
+export function CoreSection({
   title,
   detail,
   children,
 }: PropsWithChildren<{ title: string; detail: string }>) {
+  const titleId = `access-selection-${useId().replace(/:/g, '')}`
   return (
-    <fieldset className={styles.selectionSection}>
-      <legend>
-        <span>{title}</span>
+    <section
+      className={styles.selectionSection}
+      role="group"
+      aria-labelledby={titleId}
+      data-access-section="core"
+    >
+      <header className={styles.selectionSectionHeader}>
+        <span id={titleId}>{title}</span>
         <small>{detail}</small>
-      </legend>
+      </header>
       <div className={styles.choiceGrid}>{children}</div>
-    </fieldset>
+    </section>
   )
 }
 
