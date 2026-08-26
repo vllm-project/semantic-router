@@ -80,45 +80,85 @@ type OpenAIRouter struct {
 	routerLearningRuntime   *routerLearningRuntime
 	lookupTableCancel       func()
 	routerSessionStateStore *sessiontelemetry.RouterSessionStateStoreSlot
+
+	resources *resourceScope
 }
 
-// Close releases background resources held by the router (e.g. lookup table
-// auto-save and periodic re-population goroutines).
 func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
+	return r.closeResources()
+}
+
+func (r *OpenAIRouter) closeResources() error {
+	if r.resources != nil {
+		return r.resources.close()
+	}
+	return r.closeOwnedFields()
+}
+
+func (r *OpenAIRouter) closeOwnedFields() error {
 	if r.lookupTableCancel != nil {
 		r.lookupTableCancel()
 	}
-	r.routerLearningMu.Lock()
 	learningRuntime := r.routerLearningRuntime
-	r.routerLearningMu.Unlock()
 	if learningRuntime != nil {
 		learningRuntime.RetireAndWait()
 	}
-	var closeErrors []error
-	if r.CompressionRecovery != nil {
-		closeErrors = append(closeErrors, r.CompressionRecovery.Close())
+
+	var errs []error
+	collect := func(err error) {
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
+
+	if r.Cache != nil {
+		collect(r.Cache.Close())
+	}
+	if r.RecipeClassifiers != nil {
+		collect(r.RecipeClassifiers.Close())
+	} else {
+		collect(r.Classifier.Close())
+	}
+	collect(closeReplayRecorders(r.ReplayRecorder, r.ReplayRecorders, r.ReplayStoreShared))
+	if len(r.RecipeModelSelectors) > 0 {
+		collect(closeRecipeModelSelectors(r.RecipeModelSelectors))
+	} else {
+		collect(r.ModelSelector.Close())
+	}
+	if r.MemoryStore != nil {
+		collect(r.MemoryStore.Close())
+	}
+	collect(r.RateLimiter.Close())
+	if r.CompressionRecovery != nil {
+		collect(r.CompressionRecovery.Close())
+	}
+	collect(r.ResponseAPIFilter.Close())
 	if r.routerSessionStateStore != nil {
 		sessiontelemetry.UnpublishRouterSessionStateStore(r.routerSessionStateStore)
-		closeErrors = append(closeErrors, r.routerSessionStateStore.RetireAndClose())
+		collect(r.routerSessionStateStore.RetireAndClose())
 	}
-	closeErrors = append(closeErrors, r.closeReplayRecorders())
-	return errors.Join(closeErrors...)
+
+	return errors.Join(errs...)
 }
 
-func (r *OpenAIRouter) closeReplayRecorders() error {
-	if r.ReplayStoreShared {
-		if r.ReplayRecorder == nil {
+func closeReplayRecorders(
+	replayRecorder *routerreplay.Recorder,
+	replayRecorders map[string]*routerreplay.Recorder,
+	replayStoreShared bool,
+) error {
+	if replayStoreShared {
+		if replayRecorder == nil {
 			return nil
 		}
-		return r.ReplayRecorder.Close()
+		return replayRecorder.Close()
 	}
-	seen := make(map[*routerreplay.Recorder]struct{}, len(r.ReplayRecorders)+1)
-	var closeErrors []error
-	for _, recorder := range r.ReplayRecorders {
+
+	seen := make(map[*routerreplay.Recorder]struct{}, len(replayRecorders)+1)
+	var errs []error
+	for _, recorder := range replayRecorders {
 		if recorder == nil {
 			continue
 		}
@@ -126,14 +166,16 @@ func (r *OpenAIRouter) closeReplayRecorders() error {
 			continue
 		}
 		seen[recorder] = struct{}{}
-		closeErrors = append(closeErrors, recorder.Close())
-	}
-	if r.ReplayRecorder != nil {
-		if _, duplicate := seen[r.ReplayRecorder]; !duplicate {
-			closeErrors = append(closeErrors, r.ReplayRecorder.Close())
+		if err := recorder.Close(); err != nil {
+			errs = append(errs, err)
 		}
 	}
-	return errors.Join(closeErrors...)
+	if replayRecorder != nil {
+		if _, duplicate := seen[replayRecorder]; !duplicate {
+			errs = append(errs, replayRecorder.Close())
+		}
+	}
+	return errors.Join(errs...)
 }
 
 // Ensure OpenAIRouter implements the ext_proc calls.

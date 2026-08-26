@@ -27,7 +27,10 @@ package selection
 
 import (
 	"context"
+	"errors"
+	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
@@ -355,8 +358,41 @@ func (r *Registry) Get(method SelectionMethod) (Selector, bool) {
 	return s, ok
 }
 
-// GlobalRegistry is the default registry for selection methods
-var GlobalRegistry = NewRegistry()
+func (r *Registry) Close() error {
+	if r == nil {
+		return nil
+	}
+
+	closers := make([]io.Closer, 0, len(r.selectors))
+	for _, selector := range r.selectors {
+		if closer, ok := selector.(io.Closer); ok {
+			closers = append(closers, closer)
+		}
+	}
+	var errs []error
+	for _, closer := range closers {
+		if err := closer.Close(); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
+}
+
+var globalRegistry atomic.Pointer[Registry]
+
+func init() {
+	globalRegistry.Store(NewRegistry())
+}
+
+// GetGlobalRegistry returns the process-wide default selection registry.
+func GetGlobalRegistry() *Registry {
+	return globalRegistry.Load()
+}
+
+// SetGlobalRegistry replaces the process-wide default selection registry.
+func SetGlobalRegistry(registry *Registry) {
+	globalRegistry.Store(registry)
+}
 
 // Select uses the specified method to select a model
 func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContext) (*SelectionResult, error) {
@@ -364,10 +400,11 @@ func Select(ctx context.Context, method SelectionMethod, selCtx *SelectionContex
 		return nil, err
 	}
 
-	selector, ok := GlobalRegistry.Get(method)
+	registry := GetGlobalRegistry()
+	selector, ok := registry.Get(method)
 	if !ok {
 		// Default to static selection when the requested method is not registered.
-		selector, _ = GlobalRegistry.Get(MethodStatic)
+		selector, _ = registry.Get(MethodStatic)
 	}
 	if selector == nil {
 		// Last-resort default: return the first configured candidate.

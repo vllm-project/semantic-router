@@ -39,6 +39,14 @@ func (f *ResponseAPIFilter) IsEnabled() bool {
 	return f.enabled
 }
 
+// Close releases the response store.
+func (f *ResponseAPIFilter) Close() error {
+	if f == nil || f.store == nil {
+		return nil
+	}
+	return f.store.Close()
+}
+
 // ResponseAPIContext holds context for a Response API request during processing.
 type ResponseAPIContext struct {
 	// IsResponseAPIRequest indicates this is a /v1/responses request
