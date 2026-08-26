@@ -4,7 +4,12 @@ import time
 
 import requests
 
-from memory_tests.base import HTTP_OK, PREVIEW_LENGTH, MemoryFeaturesTest
+from memory_tests.base import (
+    HTTP_OK,
+    MEMORY_TEST_ENTRYPOINT,
+    PREVIEW_LENGTH,
+    MemoryFeaturesTest,
+)
 
 MILVUS_POST_FLUSH_SLEEP_SEC = 3
 
@@ -18,7 +23,11 @@ def _chat_headers(user_id: str) -> dict:
 
 
 def _chat_payload(messages: list, user_id: str) -> dict:
-    return {"model": "MoM", "messages": messages, "metadata": {"user_id": user_id}}
+    return {
+        "model": MEMORY_TEST_ENTRYPOINT,
+        "messages": messages,
+        "metadata": {"user_id": user_id},
+    }
 
 
 class ChatCompletionsMemoryTest(MemoryFeaturesTest):

@@ -24,6 +24,7 @@ HTTP_OK = 200
 PREVIEW_LENGTH = 200
 MSG_PREVIEW_LENGTH = 100
 MIN_CONTENT_MATCHES = 3
+MEMORY_TEST_ENTRYPOINT = "vllm-sr/auto"
 
 
 class MilvusVerifier:
@@ -249,7 +250,7 @@ class MemoryFeaturesTest(SemanticRouterTestBase):
         user = user_id or self.test_user
 
         payload = {
-            "model": "MoM",
+            "model": MEMORY_TEST_ENTRYPOINT,
             "input": message,
             "auto_store": auto_store,
             "instructions": (
