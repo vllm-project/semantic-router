@@ -14,6 +14,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementcommand"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/quotareconciliation"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/securitykeyring"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/usageledger"
 )
 
 func TestUnknownUsageReconciliationPostgresLifecycle(t *testing.T) {
@@ -127,6 +128,9 @@ WHERE namespace_id=$1 AND id=$2`, namespaceID, fenceID).Scan(&preCompletionState
 	}
 
 	assertReconciliationDurableState(t, ctx, db, namespaceID, admissionID, fenceID)
+	assertReconciliationMetadataAndRollups(
+		t, ctx, db, namespaceID, eventID, "decision-complex", now,
+	)
 }
 
 func assertReconciliationDurableState(
@@ -150,6 +154,77 @@ func assertReconciliationDurableState(
 	if settlementState != "settled" || fenceState != "resolved" || correctionEvents != 1 || auditEvents < 3 {
 		t.Fatalf("durable state settlement=%s fence=%s corrections=%d audits=%d",
 			settlementState, fenceState, correctionEvents, auditEvents)
+	}
+}
+
+func assertReconciliationMetadataAndRollups(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	namespaceID, originalEventID, decisionID string,
+	now time.Time,
+) {
+	t.Helper()
+	var inheritedDecision, inheritedSource, reason string
+	var hasCompletedAt bool
+	if err := db.QueryRowContext(ctx, `SELECT
+  request_metadata->'decision'->>'id',
+  request_metadata->'retained'->>'source',
+  request_metadata->>'reason',
+  request_metadata ? 'completedAt'
+FROM usage_events
+WHERE namespace_id=$1 AND corrects_event_id=$2`, namespaceID, originalEventID).Scan(
+		&inheritedDecision, &inheritedSource, &reason, &hasCompletedAt,
+	); err != nil {
+		t.Fatal(err)
+	}
+	if inheritedDecision != decisionID || inheritedSource != "original-event" ||
+		reason != "Apply authoritative provider usage." || !hasCompletedAt {
+		t.Fatalf(
+			"correction metadata decision=%q source=%q reason=%q completedAt=%v",
+			inheritedDecision, inheritedSource, reason, hasCompletedAt,
+		)
+	}
+
+	processor, err := usageledger.NewPostgresRollupProcessor(
+		db, usageledger.PostgresRollupProcessorOptions{DirtyBucketLimit: 10},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := processor.ProcessDirty(ctx, namespaceID)
+	if err != nil || result.RefreshedMinutes == 0 {
+		t.Fatalf("initial rollup refresh = %+v, %v", result, err)
+	}
+	restarted, err := usageledger.NewPostgresRollupProcessor(
+		db, usageledger.PostgresRollupProcessorOptions{DirtyBucketLimit: 10},
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result, err = restarted.ProcessDirty(ctx, namespaceID); err != nil {
+		t.Fatalf("restart rollup refresh = %+v, %v", result, err)
+	}
+
+	var negativeRows, decisionRows int
+	var incomplete string
+	if err := db.QueryRowContext(ctx, `SELECT
+  count(*) FILTER (WHERE incomplete_dispatches < 0),
+  count(*) FILTER (WHERE view='request' AND dimensions->>'decisionId'=$2),
+  COALESCE(sum(incomplete_dispatches) FILTER (
+    WHERE view='request' AND dimensions->>'decisionId'=$2
+  ),0)::text
+FROM usage_rollup_1m
+WHERE namespace_id=$1 AND bucket_start=$3`,
+		namespaceID, decisionID, now.UTC().Truncate(time.Minute),
+	).Scan(&negativeRows, &decisionRows, &incomplete); err != nil {
+		t.Fatal(err)
+	}
+	if negativeRows != 0 || decisionRows != 1 || incomplete != "0" {
+		t.Fatalf(
+			"rollup negative=%d decisionRows=%d incomplete=%s",
+			negativeRows, decisionRows, incomplete,
+		)
 	}
 }
 
@@ -188,7 +263,11 @@ VALUES ($1,$2,$3,$4,'allocation','partition-reconciliation','active')`, []any{bi
    input_tokens,output_tokens,total_tokens,usage_state,costs,request_metadata,occurred_at,ingested_at)
 VALUES ($1,$2,$3,$4,'unknown','openai.chat.v1','/v1/chat/completions',$5,200,
   1,1,2,'unknown','[{"currency":"USD","knownNumerator":"0","knownDispatches":"0","incompleteDispatches":"1"}]',
-  jsonb_build_object('completedAt',$6::timestamptz),$6,$6)`, []any{namespaceID, admissionID, now.Format("2006-01-02"), eventID, userID, now}},
+  jsonb_build_object(
+    'completedAt',$6::timestamptz,
+    'decision',jsonb_build_object('id','decision-complex','label','Complex'),
+    'retained',jsonb_build_object('source','original-event')
+  ),$6,$6)`, []any{namespaceID, admissionID, now.Format("2006-01-02"), eventID, userID, now}},
 		{
 			`INSERT INTO usage_dispatches
   (namespace_id,event_date,event_id,admission_id,dispatch_id,dispatch_ordinal,attempt_count,

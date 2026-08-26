@@ -334,15 +334,27 @@ func insertReconciliationUsage(
 	}
 	unknownDelta := "-" + plan.UnknownDispatchCount
 	eventDate := plan.RequestSnapshot.OccurredAt.UTC().Format("2006-01-02")
-	_, err = tx.ExecContext(ctx, `INSERT INTO usage_events (
+	// Reconciliation reverses the original event inside the same rollup
+	// dimensions. Preserve every metadata dimension generically, then let the
+	// reconciliation facts replace any same-named fields.
+	result, err := tx.ExecContext(ctx, `WITH original AS (
+  SELECT request_metadata
+  FROM usage_events
+  WHERE namespace_id=$1 AND admission_id=$2 AND event_date=$3 AND event_id=$32
+  FOR SHARE
+)
+INSERT INTO usage_events (
   namespace_id,admission_id,event_date,event_id,event_kind,external_request_id,
   protocol,path,api_key_id,credential_id,user_id,team_id,entrypoint_id,entrypoint_rule_id,
   recipe_id,routing_revision,status_code,error_code,input_tokens,output_tokens,total_tokens,
   served_input_tokens,served_output_tokens,served_total_tokens,latency_ms,usage_state,costs,
   request_metadata,occurred_at,ingested_at,reconciliation_id,reconciliation_strategy,
   corrects_event_id,incomplete_dispatch_delta
-) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
-  $19,$20,$21,$22,$23,$24,0,$25,$26,$27,$28,$29,$30,$31,$32,$33)`,
+)
+SELECT $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,
+  $19,$20,$21,$22,$23,$24,0,$25,$26,original.request_metadata || $27::jsonb,
+  $28,$29,$30,$31,$32,$33
+FROM original`,
 		plan.NamespaceID, plan.AdmissionID, eventDate, plan.CorrectionEventID, eventKind,
 		nullableString(plan.RequestSnapshot.ExternalRequestID), plan.RequestSnapshot.Protocol,
 		plan.RequestSnapshot.Path, nullableString(plan.RequestSnapshot.APIKeyID),
@@ -352,10 +364,13 @@ func insertReconciliationUsage(
 		nullRevision(plan.RequestSnapshot.RoutingRevision), plan.RequestSnapshot.StatusCode,
 		nullableString(plan.RequestSnapshot.ErrorCode), input, output, total,
 		plan.ServedInputTokens, plan.ServedOutputTokens, sumQuotaText(plan.ServedInputTokens, plan.ServedOutputTokens),
-		usageState, costPayload, metadata, plan.RequestSnapshot.OccurredAt, now,
+		usageState, costPayload, string(metadata), plan.RequestSnapshot.OccurredAt, now,
 		plan.ReconciliationID, plan.Strategy, plan.OriginalEventID, unknownDelta)
 	if err != nil {
 		return fmt.Errorf("insert reconciliation usage event: %w", err)
+	}
+	if count, rowsErr := result.RowsAffected(); rowsErr != nil || count != 1 {
+		return quotareconciliation.ErrReconciliationConflict
 	}
 	for _, dispatch := range plan.Dispatches {
 		state := "known_zero"
