@@ -95,7 +95,7 @@ func validateVLLMEndpointAddresses(parsed *routerconfig.RouterConfig) error {
 			continue
 		}
 		if err := validateEndpointAddress(endpoint.Address); err != nil {
-			return fmt.Errorf("Config validation failed: vLLM endpoint '%s' address validation failed: %w\n\n%s", endpoint.Name, err, vllmEndpointAddressHelp)
+			return fmt.Errorf("vLLM endpoint '%s' address validation failed: %w\n\n%s", endpoint.Name, err, vllmEndpointAddressHelp)
 		}
 	}
 	return nil

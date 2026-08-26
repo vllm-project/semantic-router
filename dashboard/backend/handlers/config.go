@@ -124,7 +124,7 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 		if err := validateVLLMEndpointAddresses(parsedConfig); err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
 
