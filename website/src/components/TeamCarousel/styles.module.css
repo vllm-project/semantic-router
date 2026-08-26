@@ -40,6 +40,7 @@
 }
 
 .viewport {
+  container-type: inline-size;
   overflow: hidden;
   padding: 1.35rem 0;
   mask-image: linear-gradient(90deg, transparent, #000 2rem, #000 calc(100% - 2rem), transparent);
@@ -53,6 +54,7 @@
 .viewport:focus-within {
   overflow-x: auto;
   scroll-padding-inline: 1.25rem;
+  scroll-snap-type: x proximity;
   scrollbar-color: var(--site-border-strong) transparent;
   scrollbar-width: thin;
   mask-image: none;
@@ -68,7 +70,7 @@
 .track {
   display: flex;
   width: max-content;
-  animation: team-marquee 220s linear infinite;
+  animation: team-marquee 220s linear infinite alternate;
   will-change: transform;
 }
 
@@ -82,6 +84,7 @@
 .memberCard {
   flex: 0 0 17.5rem;
   min-width: 17.5rem;
+  scroll-snap-align: start;
   display: grid;
   align-content: start;
   gap: 0.65rem;
@@ -199,7 +202,7 @@
 
 @keyframes team-marquee {
   to {
-    transform: translateX(-50%);
+    transform: translateX(calc(-100% + 100cqw));
   }
 }
 
@@ -262,15 +265,11 @@
 
   .track {
     animation: none;
+    transform: translateX(0);
     will-change: auto;
   }
 
-  .sequence[aria-hidden='true'] {
-    display: none;
-  }
-
   .memberCard {
-    scroll-snap-align: start;
     transition: none;
   }
 
