@@ -454,6 +454,14 @@ func TestEmitAnthropicError_EmptyErrorTypeCoercesToAPIError(t *testing.T) {
 	assert.Equal(t, "api_error", env.Error.Type)
 }
 
+func TestEmitAnthropicResponse_PreservesErrorEnvelope(t *testing.T) {
+	body := []byte(`{"type":"error","error":{"type":"authentication_error","message":"API key is invalid."}}`)
+
+	result, err := EmitAnthropicResponse(body, nil, "claude-haiku-4-5")
+	require.NoError(t, err)
+	assert.JSONEq(t, string(body), string(result))
+}
+
 // Round-trip: feed an Anthropic Message through the inverse helper
 // (toOpenAIResponseBody with a populated ext), then through the
 // outbound emitter, and assert the structural identity holds for the
