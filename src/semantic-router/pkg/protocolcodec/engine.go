@@ -7,8 +7,9 @@ import (
 )
 
 type (
-	RequestMutation  func(*llmprotocol.Request) error
-	ResponseMutation func(*llmprotocol.Response) error
+	RequestMutation        func(*llmprotocol.Request) error
+	ResponseMutation       func(*llmprotocol.Response) error
+	TransportErrorMutation func(*llmprotocol.TransportError) error
 )
 
 type RequestResult struct {
@@ -23,6 +24,12 @@ type ResponseResult struct {
 	Envelope    llmprotocol.Envelope
 	Body        []byte
 	Diagnostics llmprotocol.Diagnostics
+}
+
+type TransportErrorResult struct {
+	TransportError llmprotocol.TransportError
+	Body           []byte
+	Diagnostics    llmprotocol.Diagnostics
 }
 
 type Engine struct {
@@ -174,6 +181,48 @@ func (engine *Engine) TranslateResponse(source, target llmprotocol.WireFormat, b
 	return ResponseResult{Response: response, Envelope: envelope, Body: encoded, Diagnostics: diagnostics}, translateResponseErr
 }
 
+// TranslateTransportError translates an HTTP non-2xx body through the neutral
+// error contract. It intentionally does not use DecodeResponse: a failed model
+// Response resource and an API transport error are different wire objects.
+func (engine *Engine) TranslateTransportError(
+	source,
+	target llmprotocol.WireFormat,
+	body []byte,
+	mutate TransportErrorMutation,
+) (TransportErrorResult, error) {
+	sourcePair, err := engine.codec(source)
+	if err != nil {
+		return TransportErrorResult{}, err
+	}
+	decodePolicy := engine.policy
+	decodePolicy.UnknownFields = llmprotocol.UnknownReject
+	decodePolicy.SourcePreservation = llmprotocol.SourceDisabled
+	transportError, diagnostics, err := sourcePair.buffered.DecodeTransportError(body, decodePolicy)
+	if err != nil {
+		return TransportErrorResult{Diagnostics: diagnostics}, err
+	}
+	if err := llmprotocol.ValidateTransportError(transportError, engine.policy.Limits); err != nil {
+		return TransportErrorResult{TransportError: transportError, Diagnostics: diagnostics}, err
+	}
+	targetPair, err := engine.codec(target)
+	if err != nil {
+		return TransportErrorResult{TransportError: transportError, Diagnostics: diagnostics}, err
+	}
+	if mutate != nil {
+		if err := mutate(&transportError); err != nil {
+			return TransportErrorResult{TransportError: transportError, Diagnostics: diagnostics}, err
+		}
+	}
+	if err := llmprotocol.ValidateTransportError(transportError, engine.policy.Limits); err != nil {
+		return TransportErrorResult{TransportError: transportError, Diagnostics: diagnostics}, err
+	}
+	return TransportErrorResult{
+		TransportError: transportError,
+		Body:           targetPair.buffered.EncodeTransportError(transportError),
+		Diagnostics:    diagnostics,
+	}, nil
+}
+
 // Preserve-same-format is legal only for byte-identical replay. Once a
 // translation crosses formats or a semantic mutation is possible, decoding is
 // strict so an unknown field can never disappear without an explicit error.
@@ -187,17 +236,41 @@ func (engine *Engine) translationDecodePolicy(source, target llmprotocol.WireFor
 }
 
 func (engine *Engine) EncodeError(format llmprotocol.WireFormat, protocolError *llmprotocol.ProtocolError) ([]byte, error) {
+	if protocolError == nil {
+		protocolError = llmprotocol.NewError(llmprotocol.ErrorInternal, "internal", "request failed", nil)
+	}
+	return engine.EncodeTransportError(format, llmprotocol.TransportError{Error: protocolError})
+}
+
+func (engine *Engine) EncodeTransportError(
+	format llmprotocol.WireFormat,
+	transportError llmprotocol.TransportError,
+) ([]byte, error) {
 	pair, err := engine.codec(format)
 	if err != nil {
 		return nil, err
 	}
-	if protocolError == nil {
-		protocolError = llmprotocol.NewError(llmprotocol.ErrorInternal, "internal", "request failed", nil)
+	if err := llmprotocol.ValidateTransportError(transportError, engine.policy.Limits); err != nil {
+		return nil, err
 	}
-	return pair.buffered.EncodeError(protocolError), nil
+	return pair.buffered.EncodeTransportError(transportError), nil
 }
 
 func (engine *Engine) NewStream(source, target llmprotocol.WireFormat, context llmprotocol.StreamContext) (*StreamEngine, error) {
+	return engine.NewStreamWithMutation(source, target, context, nil)
+}
+
+// StreamEventMutation applies request-scoped policy to decoded neutral events
+// before they reach a public wire encoder. It cannot observe provider bytes or
+// HTTP headers and therefore keeps protocol translation provider-neutral.
+type StreamEventMutation func(*llmprotocol.Event) error
+
+func (engine *Engine) NewStreamWithMutation(
+	source,
+	target llmprotocol.WireFormat,
+	context llmprotocol.StreamContext,
+	mutation StreamEventMutation,
+) (*StreamEngine, error) {
 	sourcePair, err := engine.codec(source)
 	if err != nil {
 		return nil, err
@@ -216,6 +289,7 @@ func (engine *Engine) NewStream(source, target llmprotocol.WireFormat, context l
 	return &StreamEngine{
 		decoder:        sourcePair.stream.NewDecoder(context, streamPolicy),
 		encoder:        targetPair.stream.NewEncoder(context, streamPolicy),
+		mutation:       mutation,
 		maxDiagnostics: engine.policy.Limits.Diagnostics,
 	}, nil
 }
@@ -354,6 +428,7 @@ func appendDiagnostics(left, right llmprotocol.Diagnostics, limit int) llmprotoc
 type StreamEngine struct {
 	decoder        llmprotocol.StreamDecoder
 	encoder        llmprotocol.StreamEncoder
+	mutation       StreamEventMutation
 	maxDiagnostics int
 	terminal       bool
 	finalized      bool
@@ -371,7 +446,13 @@ func (engine *StreamEngine) Push(frame []byte) ([][]byte, []llmprotocol.Event, l
 		return nil, events, diagnostics, err
 	}
 	frames := make([][]byte, 0, len(events))
-	for _, event := range events {
+	for index := range events {
+		if engine.mutation != nil {
+			if mutationErr := engine.mutation(&events[index]); mutationErr != nil {
+				return frames, events, diagnostics, mutationErr
+			}
+		}
+		event := events[index]
 		encoded, eventDiagnostics, encodeErr := engine.encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
 		frames = append(frames, encoded...)
@@ -395,7 +476,13 @@ func (engine *StreamEngine) Finalize(reason error) ([][]byte, []llmprotocol.Even
 	engine.finalized = true
 	events, diagnostics, decodeErr := engine.decoder.Finalize(reason)
 	frames := make([][]byte, 0, len(events)+1)
-	for _, event := range events {
+	for index := range events {
+		if engine.mutation != nil {
+			if mutationErr := engine.mutation(&events[index]); mutationErr != nil {
+				return frames, events, diagnostics, mutationErr
+			}
+		}
+		event := events[index]
 		encoded, eventDiagnostics, encodeErr := engine.encoder.Push(event)
 		diagnostics = appendDiagnostics(diagnostics, eventDiagnostics, engine.maxDiagnostics)
 		frames = append(frames, encoded...)

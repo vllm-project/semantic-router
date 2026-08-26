@@ -442,8 +442,17 @@ func (state *streamState) applyEventEvidence(event llmprotocol.Event) (llmprotoc
 			if err := llmprotocol.ValidateUsage(*event.Usage); err != nil {
 				return llmprotocol.Event{}, err
 			}
-		} else if event.Error == nil || event.Usage != nil {
-			return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_failure_shape", "failed stream requires an error and cannot contain successful usage", nil)
+		} else {
+			if event.Error == nil || event.Usage != nil {
+				return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_failure_shape", "failed stream requires an error and cannot contain successful usage", nil)
+			}
+			switch event.Failure {
+			case "":
+				event.Failure = llmprotocol.FailureTransport
+			case llmprotocol.FailureTransport, llmprotocol.FailureResponse:
+			default:
+				return llmprotocol.Event{}, llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_failure_scope", "failed stream has an invalid failure scope", nil)
+			}
 		}
 		state.terminal = true
 	}

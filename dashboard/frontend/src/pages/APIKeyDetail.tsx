@@ -30,7 +30,7 @@ import {
 import {
   apiKeyQuickstartModel,
   apiKeyResourceResolutions,
-  apiKeyVisibleResourceName,
+  apiKeyVisibleResourceNames,
 } from './apiKeyResourceNames'
 import { buildAPIKeyQuickstartSnippets } from './apiKeyQuickstartSnippets'
 import styles from './AccessControlPage.module.css'
@@ -282,10 +282,14 @@ export function APIKeyDetail({
           : ''
   const effectiveCanManage = Boolean(canManage || (selfService && canSelfManage))
   const model = apiKeyQuickstartModel(resources, resourceResolutions)
+  const visibleResourceNames = useMemo(
+    () => apiKeyVisibleResourceNames(resources, resourceResolutions),
+    [resourceResolutions, resources],
+  )
   // Inference is served by the Router's public listener, never by the Dashboard.
   const baseURL = routerPublicEndpoint(routerPublicUrl, '/v1')
   const snippets = useMemo(
-    () => buildAPIKeyQuickstartSnippets(baseURL, model, secret),
+    () => (model ? buildAPIKeyQuickstartSnippets(baseURL, model, secret) : null),
     [baseURL, model, secret],
   )
 
@@ -522,10 +526,10 @@ export function APIKeyDetail({
                             Retry
                           </button>
                         </span>
-                      ) : resources.length ? (
-                        resources.map((resource) => (
-                          <code key={`${resource.resourceType}:${resource.resourceId}`}>
-                            {apiKeyVisibleResourceName(resource, resourceResolutions)}
+                      ) : visibleResourceNames.length ? (
+                        visibleResourceNames.map((name) => (
+                          <code key={name}>
+                            {name}
                           </code>
                         ))
                       ) : (
@@ -605,6 +609,7 @@ export function APIKeyDetail({
                       key={item}
                       className={snippet === item ? styles.codeTabActive : ''}
                       onClick={() => setSnippet(item)}
+                      disabled={!snippets}
                     >
                       {item === 'javascript' ? 'JavaScript' : item === 'python' ? 'Python' : 'cURL'}
                     </button>
@@ -612,16 +617,33 @@ export function APIKeyDetail({
                   <button
                     type="button"
                     className={styles.codeCopy}
-                    onClick={() => void copy(snippets[snippet], 'snippet')}
+                    onClick={() => (snippets ? void copy(snippets[snippet], 'snippet') : undefined)}
+                    disabled={!snippets}
                   >
                     <ProductIcon name="copy" />
                     {copied === 'snippet' ? 'Copied' : 'Copy code'}
                   </button>
                 </div>
-                <pre className={styles.codeBlock}>
-                  <code>{snippets[snippet]}</code>
-                </pre>
-                {!secret ? (
+                {snippets ? (
+                  <pre className={styles.codeBlock}>
+                    <code>{snippets[snippet]}</code>
+                  </pre>
+                ) : (
+                  <div className={styles.codeHint} role="status">
+                    {routingCatalog === undefined
+                      ? 'Loading an allowed request model…'
+                      : 'No request-ready model is available for this key.'}
+                    {routingCatalog !== undefined ? (
+                      <button
+                        type="button"
+                        onClick={() => setRoutingCatalogAttempt((attempt) => attempt + 1)}
+                      >
+                        Retry
+                      </button>
+                    ) : null}
+                  </div>
+                )}
+                {snippets && !secret ? (
                   <p className={styles.codeHint}>
                     Reveal the key to place it directly in the sample. Environment variables remain
                     the safer default.

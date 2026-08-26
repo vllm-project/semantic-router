@@ -118,9 +118,10 @@ type ModelSwitchGateConfig struct {
 	CacheWarmthWeight float64 `yaml:"cache_warmth_weight,omitempty"`
 }
 
-// MLSelectionConfig holds configuration for the shared ML-based selectors.
+// MLSelectionConfig holds Recipe-local shared settings for artifact-backed ML selectors.
 type MLSelectionConfig struct {
 	ModelsPath   string          `yaml:"models_path,omitempty"`
+	ModelType    string          `yaml:"model_type,omitempty"`
 	EmbeddingDim int             `yaml:"embedding_dim,omitempty"`
 	KNN          *MLKNNConfig    `yaml:"knn,omitempty"`
 	KMeans       *MLKMeansConfig `yaml:"kmeans,omitempty"`

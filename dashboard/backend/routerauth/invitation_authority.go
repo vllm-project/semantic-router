@@ -20,6 +20,17 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/managementapi"
 )
 
+const (
+	maximumInvitationErrorBodyBytes = 64 << 10
+)
+
+type invitationErrorDiagnostic struct {
+	Error struct {
+		Code      string `json:"code"`
+		RequestID string `json:"requestId"`
+	} `json:"error"`
+}
+
 func (provider *managementSessionProvider) ListInvitations(
 	ctx context.Context,
 	actor dashboardauth.AuthContext,
@@ -112,8 +123,7 @@ func (provider *managementSessionProvider) AcceptInvitation(
 	}
 	onboarding := *exchanged.Onboarding
 	if !canonicalUUID(onboarding.InvitationID) || !canonicalUUID(onboarding.PrincipalID) ||
-		!canonicalUUID(onboarding.UserID) || !canonicalUUID(onboarding.APIKeyID) ||
-		onboarding.APIKey == "" || !now.Before(onboarding.DeliveryExpiresAt) {
+		!canonicalUUID(onboarding.UserID) || !validOptionalInvitationKey(onboarding, now) {
 		return dashboardauth.RouterInvitationAcceptanceResult{}, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	identity, err := provider.invitedIdentity(ctx, exchanged.AccessToken)
@@ -125,6 +135,14 @@ func (provider *managementSessionProvider) AcceptInvitation(
 		return dashboardauth.RouterInvitationAcceptanceResult{}, err
 	}
 	return dashboardauth.RouterInvitationAcceptanceResult{Onboarding: onboarding, DashboardRole: role}, nil
+}
+
+func validOptionalInvitationKey(onboarding managementapi.OnboardingResult, now time.Time) bool {
+	hasID, hasSecret := onboarding.APIKeyID != "", onboarding.APIKey != ""
+	if hasID != hasSecret {
+		return false
+	}
+	return !hasID || (canonicalUUID(onboarding.APIKeyID) && now.Before(onboarding.DeliveryExpiresAt))
 }
 
 func (provider *managementSessionProvider) invitationAssertion(
@@ -267,8 +285,7 @@ func (provider *managementSessionProvider) routerRequestWithHeaders(
 	}
 	defer result.Body.Close()
 	if result.StatusCode != wantStatus {
-		_, _ = io.Copy(io.Discard, io.LimitReader(result.Body, 64<<10))
-		return nil, &dashboardauth.InvitationAuthorityError{Status: result.StatusCode}
+		return nil, invitationAuthorityResponseError(result)
 	}
 	if response == nil {
 		_, _ = io.Copy(io.Discard, io.LimitReader(result.Body, 64<<10))
@@ -287,6 +304,47 @@ func (provider *managementSessionProvider) routerRequestWithHeaders(
 		return nil, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	return result.Header.Clone(), nil
+}
+
+func invitationAuthorityResponseError(result *http.Response) *dashboardauth.InvitationAuthorityError {
+	diagnostic := &dashboardauth.InvitationAuthorityError{Status: result.StatusCode}
+	if requestID := safeInvitationRequestID(result.Header.Get(managementapi.HeaderRequestID)); requestID != "" {
+		diagnostic.RequestID = requestID
+	}
+	body, err := io.ReadAll(io.LimitReader(result.Body, maximumInvitationErrorBodyBytes+1))
+	if err != nil || len(body) > maximumInvitationErrorBodyBytes {
+		return diagnostic
+	}
+	var envelope invitationErrorDiagnostic
+	if json.Unmarshal(body, &envelope) != nil {
+		return diagnostic
+	}
+	diagnostic.Code = safeInvitationErrorCode(envelope.Error.Code)
+	if diagnostic.RequestID == "" {
+		diagnostic.RequestID = safeInvitationRequestID(envelope.Error.RequestID)
+	}
+	return diagnostic
+}
+
+func safeInvitationErrorCode(value string) string {
+	switch value {
+	case "authentication_unavailable", "authorization_unavailable", "conflict", "forbidden",
+		"identity_already_onboarded", "invalid_cursor", "invalid_idempotency_key", "invalid_namespace",
+		"invalid_precondition", "invalid_request",
+		"invitation_expired", "invitation_service_unavailable", "not_found", "onboarding_defaults_changed",
+		"precondition_required", "revision_conflict", "secret_result_expired", "unauthenticated",
+		"unsupported_media_type":
+		return value
+	default:
+		return ""
+	}
+}
+
+func safeInvitationRequestID(value string) string {
+	if canonicalUUID(value) {
+		return value
+	}
+	return ""
 }
 
 func invitationETag(revision uint64) string {

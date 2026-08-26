@@ -25,14 +25,15 @@ function identityRows(
   members: DashboardMember[],
   invitations: DashboardMemberInvitation[],
 ) {
-  const memberByEmail = new Map(members.map((member) => [member.email.toLowerCase(), member]))
+  const normalizeEmail = (email: string) => email.trim().toLowerCase()
+  const memberByEmail = new Map(members.map((member) => [normalizeEmail(member.email), member]))
   const invitationByEmail = new Map(
     invitations
       .filter((item) => item.status === 'pending')
-      .map((invitation) => [invitation.email.toLowerCase(), invitation]),
+      .map((invitation) => [normalizeEmail(invitation.email), invitation]),
   )
   return users.map((user) => {
-    const email = user.email.toLowerCase()
+    const email = normalizeEmail(user.email)
     return {
       key: user.id,
       access: user,

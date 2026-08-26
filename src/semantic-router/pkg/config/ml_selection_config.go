@@ -35,6 +35,9 @@ func ValidateMLSelectionAlgorithmConfig(algorithmType string, cfg *MLSelectionCo
 	if cfg.ModelsPath != strings.TrimSpace(cfg.ModelsPath) {
 		return fmt.Errorf("models_path must not contain surrounding whitespace")
 	}
+	if cfg.ModelType != strings.TrimSpace(cfg.ModelType) {
+		return fmt.Errorf("model_type must not contain surrounding whitespace")
+	}
 	if cfg.EmbeddingDim < 0 {
 		return fmt.Errorf("embedding_dim must be positive when configured")
 	}
@@ -142,10 +145,12 @@ func MLSelectionConfigForRoutingProfile(cfg *RouterConfig) (*MLSelectionConfig, 
 		if aggregate == nil {
 			aggregate = &MLSelectionConfig{
 				ModelsPath:   decision.Algorithm.ML.ModelsPath,
+				ModelType:    decision.Algorithm.ML.ModelType,
 				EmbeddingDim: decision.Algorithm.ML.EmbeddingDim,
 			}
 			sharedOwner = decision.Name
 		} else if aggregate.ModelsPath != decision.Algorithm.ML.ModelsPath ||
+			aggregate.ModelType != decision.Algorithm.ML.ModelType ||
 			aggregate.EmbeddingDim != decision.Algorithm.ML.EmbeddingDim {
 			return nil, fmt.Errorf(
 				"decisions %q and %q configure conflicting algorithm.ml shared settings",

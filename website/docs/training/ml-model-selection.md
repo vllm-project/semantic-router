@@ -140,11 +140,20 @@ specific to the benchmarked model names, embedding model, and feature layout.
 
 ### 6. Configure the Router
 
-Merge the selector settings into a complete canonical config. This example is a
-Recipe fragment; the full manifest still needs Models, an Entrypoint, and any
-signals used by the decision. Each ML Decision owns its `algorithm.ml` block.
+Merge the selector settings into a complete canonical config. This excerpt
+still needs Models and any signals used by the decision. Each ML Decision owns
+its `algorithm.ml` block.
 
 ```yaml
+global:
+  model_catalog:
+    embeddings:
+      semantic:
+        qwen3_model_path: models/mom-embedding-pro
+        embedding_config:
+          model_type: qwen3
+          target_dimension: 1024
+
 recipes:
   - name: ml-selection
     routing:
@@ -161,6 +170,7 @@ recipes:
             type: knn
             ml:
               models_path: /models/selection
+              model_type: qwen3
               embedding_dim: 1024
               knn:
                 k: 5
@@ -176,9 +186,15 @@ entrypoints:
           - model: hosted/frontier
 ```
 
-The configured `embedding_dim` and online embedding model must match the
-training artifacts. Assigned Model names must match the candidate labels
-recorded in the benchmark data.
+The semantic embedding model under `global.model_catalog` is the default online
+feature space. A Decision can override it with `algorithm.ml.model_type` and
+`algorithm.ml.embedding_dim`; these two fields are independent. Setting only
+`embedding_dim` keeps the catalog model and changes its target dimension, while
+setting only `model_type` uses that model's native output dimension. Every ML
+Decision in the same Recipe must agree on `models_path`, `model_type`, and
+`embedding_dim` because the Recipe owns one selector registry. The effective
+model and dimension must match the training artifacts. Assigned Model names
+must match the candidate labels recorded in the benchmark data.
 
 ```bash
 vllm-sr validate --config config.yaml

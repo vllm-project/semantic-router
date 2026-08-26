@@ -2,6 +2,7 @@ algorithm:
   type: mlp
   ml:
     models_path: /models/selection
+    model_type: qwen3
     embedding_dim: 1024
     mlp:
       device: cpu

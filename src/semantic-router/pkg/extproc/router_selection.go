@@ -15,25 +15,36 @@ import (
 
 func createModelSelectorRegistries(cfg *config.RouterConfig, replayReader store.Reader) (map[config.RecipeName]*selection.Registry, *selection.Registry, lookuptable.LookupTableStorage, func()) {
 	lt, cancel := buildLookupTable(cfg, replayReader)
+	embed, defaultEmbeddingConfig := resolveSelectionEmbeddingFunc(cfg)
 	registries := make(map[config.RecipeName]*selection.Registry)
 
 	for i := range cfg.Recipes {
 		recipe := &cfg.Recipes[i]
 		scopedConfig := cfg.ConfigForRecipe(recipe)
-		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt)
+		registries[recipe.Name] = createModelSelectorRegistry(scopedConfig, lt, embed, defaultEmbeddingConfig)
 	}
 	for _, recipe := range cfg.ReachableRoutingRecipes() {
 		if recipe == nil || recipe.RuntimeScope() == recipe.Name {
 			continue
 		}
-		registries[recipe.RuntimeScope()] = createModelSelectorRegistry(cfg.ConfigForRecipe(recipe), lt)
+		registries[recipe.RuntimeScope()] = createModelSelectorRegistry(
+			cfg.ConfigForRecipe(recipe),
+			lt,
+			embed,
+			defaultEmbeddingConfig,
+		)
 	}
 	defaultRegistry := registries[config.DefaultRecipeName]
 	selection.GlobalRegistry = defaultRegistry
 	return registries, defaultRegistry, lt, cancel
 }
 
-func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.LookupTableStorage) *selection.Registry {
+func createModelSelectorRegistry(
+	cfg *config.RouterConfig,
+	lt lookuptable.LookupTableStorage,
+	embed func(string, selection.EmbeddingConfig) ([]float32, error),
+	defaultEmbeddingConfig selection.EmbeddingConfig,
+) *selection.Registry {
 	modelSelectionCfg := buildModelSelectionConfig(cfg)
 	backendModels := cfg.BackendModels
 	selectionFactory := selection.NewFactory(modelSelectionCfg)
@@ -44,7 +55,7 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.Lookup
 	if len(cfg.Categories) > 0 {
 		selectionFactory = selectionFactory.WithCategories(cfg.Categories)
 	}
-	selectionFactory = selectionFactory.WithEmbeddingFunc(resolveSelectionEmbeddingFunc(cfg))
+	selectionFactory = selectionFactory.WithEmbeddingFunc(embed, defaultEmbeddingConfig)
 	if lt != nil {
 		selectionFactory = selectionFactory.WithLookupTable(lt)
 	}
@@ -64,54 +75,50 @@ func createModelSelectorRegistry(cfg *config.RouterConfig, lt lookuptable.Lookup
 	return registry
 }
 
-func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) func(string) ([]float32, error) {
-	provider, err := resolveSelectionEmbeddingProvider(cfg)
-	if err != nil {
-		return func(string) ([]float32, error) {
-			return nil, err
-		}
-	}
-	return func(text string) ([]float32, error) {
-		return provider.Embed(context.Background(), text)
-	}
-}
-
-func resolveSelectionEmbeddingProvider(cfg *config.RouterConfig) (embedding.Provider, error) {
+func resolveSelectionEmbeddingFunc(cfg *config.RouterConfig) (func(string, selection.EmbeddingConfig) ([]float32, error), selection.EmbeddingConfig) {
+	models := cfg.EmbeddingModels
 	backend := embedding.BackendOverrideFromEnv()
 	if backend == "" {
-		backend = cfg.EmbeddingBackend()
+		backend = models.EmbeddingBackend()
 	}
+	modelType := selectionEmbeddingModelType(models, backend)
+	defaultConfig := selection.EmbeddingConfig{
+		ModelType:       modelType,
+		TargetDimension: selectionEmbeddingDimension(models, modelType),
+	}
+	var remoteProvider embedding.Provider
+	var remoteError error
 	if backend == config.EmbeddingBackendOpenAICompatible {
-		return embedding.NewProvider(cfg.EmbeddingModels, embedding.ProviderOptions{})
+		remoteProvider, remoteError = embedding.NewProvider(models, embedding.ProviderOptions{})
 	}
-
-	modelType := selectionEmbeddingModelType(cfg, backend)
-	switch backend {
-	case config.EmbeddingBackendOpenVINO:
-		openvinoEmbed := openvinoEmbeddingFunc(modelType)
-		return embedding.NewFuncProvider(backend, 0, func(_ context.Context, text string) ([]float32, error) {
-			return openvinoEmbed(text)
-		})
-	default:
-		return embedding.NewFuncProvider(config.EmbeddingBackendCandle, selectionEmbeddingDimension(cfg, modelType), func(_ context.Context, text string) ([]float32, error) {
-			if modelType == config.EmbeddingModelTypeQwen3 {
-				output, err := candle_binding.GetEmbeddingBatched(text, modelType, selectionEmbeddingDimension(cfg, modelType))
+	return func(text string, embeddingConfig selection.EmbeddingConfig) ([]float32, error) {
+		switch backend {
+		case config.EmbeddingBackendOpenAICompatible:
+			if remoteError != nil {
+				return nil, remoteError
+			}
+			return remoteProvider.Embed(context.Background(), text)
+		case config.EmbeddingBackendOpenVINO:
+			return openvinoEmbeddingFunc(embeddingConfig.ModelType)(text)
+		default:
+			if embeddingConfig.ModelType == config.EmbeddingModelTypeQwen3 {
+				output, err := candle_binding.GetEmbeddingBatched(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
 				if err != nil {
 					return nil, err
 				}
 				return output.Embedding, nil
 			}
-			output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, 0)
+			output, err := candle_binding.GetEmbeddingWithModelType(text, embeddingConfig.ModelType, embeddingConfig.TargetDimension)
 			if err != nil {
 				return nil, err
 			}
 			return output.Embedding, nil
-		})
-	}
+		}
+	}, defaultConfig
 }
 
-func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) string {
-	modelType := cfg.EmbeddingConfig.ModelType
+func selectionEmbeddingModelType(models config.EmbeddingModels, backend string) string {
+	modelType := models.EmbeddingConfig.ModelType
 	if modelType != "" {
 		return modelType
 	}
@@ -121,12 +128,9 @@ func selectionEmbeddingModelType(cfg *config.RouterConfig, backend string) strin
 	return config.EmbeddingModelTypeQwen3
 }
 
-func selectionEmbeddingDimension(cfg *config.RouterConfig, modelType string) int {
-	if mlCfg, err := config.MLSelectionConfigForRoutingProfile(cfg); err == nil && mlCfg != nil && mlCfg.EmbeddingDim > 0 {
-		return mlCfg.EmbeddingDim
-	}
-	if cfg.EmbeddingConfig.TargetDimension > 0 {
-		return cfg.EmbeddingConfig.TargetDimension
+func selectionEmbeddingDimension(models config.EmbeddingModels, modelType string) int {
+	if models.EmbeddingConfig.TargetDimension > 0 {
+		return models.EmbeddingConfig.TargetDimension
 	}
 	if modelType == config.EmbeddingModelTypeQwen3 {
 		return 1024
@@ -338,6 +342,7 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 
 	logging.ComponentEvent("extproc", "ml_model_selection_enabled", map[string]interface{}{
 		"models_path":       mlCfg.ModelsPath,
+		"model_type":        mlCfg.ModelType,
 		"embedding_dim":     mlCfg.EmbeddingDim,
 		"knn_configured":    mlCfg.KNN != nil,
 		"kmeans_configured": mlCfg.KMeans != nil,
@@ -346,6 +351,7 @@ func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfi
 	})
 	result := &selection.MLSelectorConfig{
 		ModelsPath:   mlCfg.ModelsPath,
+		ModelType:    mlCfg.ModelType,
 		EmbeddingDim: mlCfg.EmbeddingDim,
 	}
 	if mlCfg.KNN != nil {

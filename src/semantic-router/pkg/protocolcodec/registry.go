@@ -27,7 +27,8 @@ type BufferedCodec interface {
 	EncodeRequest(llmprotocol.Request, llmprotocol.Envelope, llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error)
 	DecodeResponse([]byte, llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error)
 	EncodeResponse(llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Policy) ([]byte, llmprotocol.Diagnostics, error)
-	EncodeError(*llmprotocol.ProtocolError) []byte
+	DecodeTransportError([]byte, llmprotocol.Policy) (llmprotocol.TransportError, llmprotocol.Diagnostics, error)
+	EncodeTransportError(llmprotocol.TransportError) []byte
 }
 
 type Codec interface {

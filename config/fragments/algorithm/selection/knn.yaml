@@ -2,6 +2,7 @@ algorithm:
   type: knn
   ml:
     models_path: /models/selection
+    model_type: qwen3
     embedding_dim: 1024
     knn:
       k: 5

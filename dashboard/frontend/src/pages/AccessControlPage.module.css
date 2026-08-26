@@ -3041,6 +3041,10 @@
   width: 14px;
   height: 14px;
 }
+.codeTabs button:disabled {
+  cursor: not-allowed;
+  opacity: 0.34;
+}
 .codeBlock {
   max-height: 390px;
   overflow: auto;
@@ -3059,6 +3063,27 @@
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   color: rgba(255, 255, 255, 0.34);
   font-size: 0.64rem;
+}
+.codeHint[role='status'] {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.codeHint button {
+  flex: 0 0 auto;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.035);
+  color: rgba(255, 255, 255, 0.68);
+  font: inherit;
+}
+.codeHint button:hover,
+.codeHint button:focus-visible {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  outline: none;
 }
 
 .logHero {

@@ -369,7 +369,12 @@ config:
   global:
     model_catalog:
       kbs: []
-      embeddings: {}
+      embeddings:
+        semantic:
+          qwen3_model_path: models/mom-embedding-pro
+          embedding_config:
+            model_type: qwen3
+            target_dimension: 1024
       modules:
         classifier: {}
         hallucination_mitigation: {}
@@ -400,7 +405,7 @@ config:
 resources:
   limits:
     cpu: 2000m
-    memory: 8Gi
+    memory: 12Gi
   requests:
     cpu: 500m
     memory: 2Gi

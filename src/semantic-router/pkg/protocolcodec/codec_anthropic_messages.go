@@ -428,6 +428,12 @@ type anthropicErrorWire struct {
 	Message string `json:"message"`
 }
 
+type anthropicTransportErrorWire struct {
+	Type      string              `json:"type"`
+	Error     *anthropicErrorWire `json:"error"`
+	RequestID string              `json:"request_id,omitempty"`
+}
+
 func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (llmprotocol.Response, llmprotocol.Envelope, llmprotocol.Diagnostics, error) {
 	var wire anthropicResponseWire
 	if err := decodeProviderWire(body, &wire, policy); err != nil {
@@ -435,7 +441,7 @@ func (AnthropicMessagesCodec) DecodeResponse(body []byte, policy llmprotocol.Pol
 	}
 	response := llmprotocol.Response{Generation: 1, ID: wire.ID, Model: wire.Model, Usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable}}
 	if wire.Error != nil {
-		response.Error = &llmprotocol.ProtocolError{Category: llmprotocol.ErrorUpstreamUnavailable, Code: wire.Error.Type, Message: wire.Error.Message}
+		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Type), Code: wire.Error.Type, Message: wire.Error.Message}
 		response.StopReason = llmprotocol.StopError
 	}
 	contents, err := decodeAnthropicContent(wire.Content, policy)
@@ -473,7 +479,7 @@ func (AnthropicMessagesCodec) EncodeResponse(response llmprotocol.Response, enve
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		return AnthropicMessagesCodec{}.EncodeError(response.Error), nil, nil
+		return encodeAnthropicError(response.Error, response.ProviderRequestID), nil, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if response.Usage.OutputReasoning.Value != nil {
@@ -542,11 +548,98 @@ func encodeAnthropicStop(reason llmprotocol.StopReason) string {
 	}
 }
 
-func (AnthropicMessagesCodec) EncodeError(protocolError *llmprotocol.ProtocolError) []byte {
-	wire := anthropicResponseWire{Type: "error", Error: &anthropicErrorWire{Type: protocolError.Code, Message: protocolError.Message}}
-	if wire.Error.Type == "" {
-		wire.Error.Type = string(protocolError.Category)
+func encodeAnthropicError(protocolError *llmprotocol.ProtocolError, requestID string) []byte {
+	return AnthropicMessagesCodec{}.EncodeTransportError(llmprotocol.TransportError{
+		Error: protocolError, ProviderRequestID: requestID,
+	})
+}
+
+func (AnthropicMessagesCodec) DecodeTransportError(
+	body []byte,
+	policy llmprotocol.Policy,
+) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	var wire anthropicTransportErrorWire
+	if err := decodeProviderWire(body, &wire, policy); err != nil {
+		return llmprotocol.TransportError{}, nil, err
+	}
+	if wire.Error == nil {
+		return llmprotocol.TransportError{}, nil, llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"upstream_error_required",
+			"upstream transport error body is missing error details",
+			nil,
+		)
+	}
+	return llmprotocol.TransportError{
+		Error: &llmprotocol.ProtocolError{
+			Category: decodeProviderErrorCategory(wire.Error.Type),
+			Code:     wire.Error.Type, Message: wire.Error.Message,
+		},
+		ProviderRequestID: wire.RequestID,
+	}, nil, nil
+}
+
+func (AnthropicMessagesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {
+	protocolError := transportError.Error
+	if protocolError == nil {
+		protocolError = llmprotocol.NewError(llmprotocol.ErrorInternal, "internal", "request failed", nil)
+	}
+	wire := anthropicTransportErrorWire{
+		Type: "error", RequestID: transportError.ProviderRequestID,
+		Error: &anthropicErrorWire{Type: canonicalAnthropicErrorType(protocolError), Message: protocolError.Message},
 	}
 	body, _ := json.Marshal(wire)
 	return body
+}
+
+func canonicalAnthropicErrorType(protocolError *llmprotocol.ProtocolError) string {
+	if protocolError == nil {
+		return "api_error"
+	}
+	if canonicalAnthropicErrorTypeMatchesCategory(protocolError.Code, protocolError.Category) {
+		return protocolError.Code
+	}
+	switch protocolError.Category {
+	case llmprotocol.ErrorInvalidRequest, llmprotocol.ErrorUnsupportedFeature:
+		return "invalid_request_error"
+	case llmprotocol.ErrorAuthentication:
+		return "authentication_error"
+	case llmprotocol.ErrorPermission:
+		return "permission_error"
+	case llmprotocol.ErrorNotFound:
+		return "not_found_error"
+	case llmprotocol.ErrorConflict:
+		return "conflict_error"
+	case llmprotocol.ErrorRateLimited:
+		return "rate_limit_error"
+	case llmprotocol.ErrorUpstreamTimeout:
+		return "timeout_error"
+	default:
+		return "api_error"
+	}
+}
+
+func canonicalAnthropicErrorTypeMatchesCategory(code string, category llmprotocol.ErrorCategory) bool {
+	switch code {
+	case "invalid_request_error", "request_too_large":
+		return category == llmprotocol.ErrorInvalidRequest || category == llmprotocol.ErrorUnsupportedFeature
+	case "authentication_error":
+		return category == llmprotocol.ErrorAuthentication
+	case "billing_error":
+		return category == llmprotocol.ErrorUpstreamUnavailable
+	case "permission_error":
+		return category == llmprotocol.ErrorPermission
+	case "not_found_error":
+		return category == llmprotocol.ErrorNotFound
+	case "conflict_error":
+		return category == llmprotocol.ErrorConflict
+	case "rate_limit_error":
+		return category == llmprotocol.ErrorRateLimited
+	case "timeout_error":
+		return category == llmprotocol.ErrorUpstreamTimeout
+	case "api_error", "overloaded_error":
+		return category == llmprotocol.ErrorUpstreamUnavailable || category == llmprotocol.ErrorInternal
+	default:
+		return false
+	}
 }

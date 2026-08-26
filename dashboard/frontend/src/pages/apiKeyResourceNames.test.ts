@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { RoutingCatalog } from '../generated/managementApiContract'
 import type { AccessResourceRef } from '../utils/inferenceAccessApi'
 import {
-  API_KEY_MODEL_PLACEHOLDER,
   apiKeyQuickstartModel,
   apiKeyResourceResolutions,
   apiKeyVisibleResourceName,
+  apiKeyVisibleResourceNames,
 } from './apiKeyResourceNames'
 
 const resources: AccessResourceRef[] = [
@@ -34,9 +34,9 @@ const catalog = {
   recipes: [],
   entrypoints: [
     {
-      aliases: [],
+      aliases: ['vllm-sr/blend', 'blend'],
       id: 'ep_internal_456',
-      name: 'vllm-sr/blend',
+      name: 'Balanced routing',
       revision: 1,
       rules: [],
     },
@@ -48,8 +48,19 @@ describe('API key visible resource names', () => {
     const resolutions = apiKeyResourceResolutions(resources, catalog)
 
     expect(apiKeyVisibleResourceName(resources[0], resolutions)).toBe('local/fast')
-    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe('vllm-sr/blend')
+    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe('Balanced routing')
     expect(apiKeyQuickstartModel(resources, resolutions)).toBe('vllm-sr/blend')
+  })
+
+  it('never substitutes an Entrypoint display name for a request-facing alias', () => {
+    const withoutAlias = {
+      ...catalog,
+      entrypoints: [{ ...catalog.entrypoints[0], aliases: [] }],
+    } satisfies RoutingCatalog
+    const resolutions = apiKeyResourceResolutions(resources, withoutAlias)
+
+    expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe('Balanced routing')
+    expect(apiKeyQuickstartModel(resources, resolutions)).toBe('local/fast')
   })
 
   it('never falls back to an internal resource id', () => {
@@ -59,7 +70,7 @@ describe('API key visible resource names', () => {
     expect(apiKeyVisibleResourceName(resources[1], resolutions)).toBe(
       'Unavailable Mixture-of-Model',
     )
-    expect(apiKeyQuickstartModel(resources, resolutions)).toBe(API_KEY_MODEL_PLACEHOLDER)
+    expect(apiKeyQuickstartModel(resources, resolutions)).toBeNull()
     const visibleNames = resources.map((resource) =>
       apiKeyVisibleResourceName(resource, resolutions),
     )
@@ -69,6 +80,16 @@ describe('API key visible resource names', () => {
 
   it('shows a neutral loading label until the catalog arrives', () => {
     expect(apiKeyVisibleResourceName(resources[0], {})).toBe('Loading…')
-    expect(apiKeyQuickstartModel(resources, {})).toBe(API_KEY_MODEL_PLACEHOLDER)
+    expect(apiKeyQuickstartModel(resources, {})).toBeNull()
+  })
+
+  it('deduplicates names inherited through more than one grant', () => {
+    const duplicateResources = [resources[0], resources[0], resources[1], resources[1]]
+    const resolutions = apiKeyResourceResolutions(duplicateResources, catalog)
+
+    expect(apiKeyVisibleResourceNames(duplicateResources, resolutions)).toEqual([
+      'local/fast',
+      'Balanced routing',
+    ])
   })
 })

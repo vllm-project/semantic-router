@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -153,10 +154,308 @@ func TestStreamStateRejectsMalformedTerminalShapes(t *testing.T) {
 	}
 
 	state = newTestStreamState()
+	if _, err := state.next(llmprotocol.Event{
+		Type: llmprotocol.EventResponseFailed, StopReason: llmprotocol.StopError,
+		Error:   llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "failed", "failed", nil),
+		Failure: llmprotocol.FailureScope("unknown"),
+	}); err == nil {
+		t.Fatal("failed terminal event with an invalid failure scope was accepted")
+	}
+
+	state = newTestStreamState()
 	startTestStream(t, state)
 	if _, err := state.next(llmprotocol.Event{Type: llmprotocol.EventResponseCompleted}); err == nil {
 		t.Fatal("successful terminal event without output was accepted")
 	}
+}
+
+func TestAnthropicStreamErrorUsesCategoryWhenCodeIsEmpty(t *testing.T) {
+	encoder := AnthropicMessagesCodec{}.NewEncoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	frames, _, err := encoder.Push(llmprotocol.Event{
+		Type:       llmprotocol.EventResponseFailed,
+		StopReason: llmprotocol.StopError,
+		Error: &llmprotocol.ProtocolError{
+			Category: llmprotocol.ErrorAuthentication,
+			Message:  "authentication failed",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(frames) != 1 || !bytes.Contains(frames[0], []byte(`"type":"authentication_error"`)) {
+		t.Fatalf("Anthropic error frame = %q", frames)
+	}
+}
+
+func TestAnthropicStreamFinalizeUsesCanonicalErrorType(t *testing.T) {
+	encoder := AnthropicMessagesCodec{}.NewEncoder(
+		llmprotocol.StreamContext{Context: context.Background(), PublicModel: "model"},
+		llmprotocol.DefaultPolicy(),
+	)
+	frames, _, err := encoder.Finalize(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"api_error\",\"message\":\"stream ended before completion\"}}\n\n"
+	if len(frames) != 1 || string(frames[0]) != golden {
+		t.Fatalf("Anthropic final error = %q, want %q", frames, golden)
+	}
+}
+
+func TestStreamErrorTranslationMatrixPreservesNeutralError(t *testing.T) {
+	fixtures := map[llmprotocol.WireFormat][]byte{
+		llmprotocol.OpenAIChatV1: []byte(
+			"data: {\"error\":{\"message\":\"API key is invalid.\",\"type\":\"authentication_error\",\"param\":\"model\",\"code\":\"authentication_error\"}}\n\n",
+		),
+		llmprotocol.OpenAIResponsesV1: []byte(
+			"event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":1,\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"model\":\"provider-model\",\"status\":\"failed\",\"error\":{\"code\":\"authentication_error\",\"message\":\"API key is invalid.\"}}}\n\n",
+		),
+		llmprotocol.AnthropicMessagesV1: []byte(
+			"event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":\"authentication_error\",\"message\":\"API key is invalid.\"}}\n\n",
+		),
+	}
+	failureScopes := map[llmprotocol.WireFormat]llmprotocol.FailureScope{
+		llmprotocol.OpenAIChatV1:        llmprotocol.FailureTransport,
+		llmprotocol.OpenAIResponsesV1:   llmprotocol.FailureResponse,
+		llmprotocol.AnthropicMessagesV1: llmprotocol.FailureTransport,
+	}
+	parameters := map[llmprotocol.WireFormat]string{
+		llmprotocol.OpenAIChatV1: "model",
+	}
+	formats := []llmprotocol.WireFormat{
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIResponsesV1,
+		llmprotocol.AnthropicMessagesV1,
+	}
+	engine := NewBuiltinEngine()
+	for _, source := range formats {
+		for _, target := range formats {
+			t.Run(string(source)+"/"+string(target), func(t *testing.T) {
+				stream, err := engine.NewStream(source, target, llmprotocol.StreamContext{
+					Context: context.Background(), PublicModel: "public-model",
+				})
+				if err != nil {
+					t.Fatal(err)
+				}
+				frames, events, _, err := stream.Push(fixtures[source])
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertAuthenticationFailureEvent(t, events, failureScopes[source], parameters[source])
+				assertPublicStreamErrorWire(
+					t, target, frames, failureScopes[source], "authentication_error",
+					"API key is invalid.", parameters[source],
+				)
+			})
+		}
+	}
+}
+
+func TestResponsesTopLevelErrorEventUsesTransportScope(t *testing.T) {
+	fixture := []byte(
+		"event: error\ndata: {\"type\":\"error\",\"code\":\"authentication_error\",\"message\":\"API key is invalid.\",\"param\":\"model\",\"sequence_number\":1}\n\n",
+	)
+	engine := NewBuiltinEngine()
+	for _, target := range []llmprotocol.WireFormat{
+		llmprotocol.OpenAIChatV1,
+		llmprotocol.OpenAIResponsesV1,
+		llmprotocol.AnthropicMessagesV1,
+	} {
+		t.Run(string(target), func(t *testing.T) {
+			stream, err := engine.NewStream(
+				llmprotocol.OpenAIResponsesV1,
+				target,
+				llmprotocol.StreamContext{Context: context.Background(), PublicModel: "public-model"},
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			frames, events, _, err := stream.Push(fixture)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertAuthenticationFailureEvent(t, events, llmprotocol.FailureTransport, "model")
+			assertPublicStreamErrorWire(
+				t, target, frames, llmprotocol.FailureTransport, "authentication_error",
+				"API key is invalid.", "model",
+			)
+		})
+	}
+}
+
+func assertAuthenticationFailureEvent(
+	t *testing.T,
+	events []llmprotocol.Event,
+	failure llmprotocol.FailureScope,
+	parameter string,
+) {
+	t.Helper()
+	if len(events) != 1 || events[0].Type != llmprotocol.EventResponseFailed || events[0].Error == nil ||
+		events[0].Failure != failure ||
+		events[0].Error.Category != llmprotocol.ErrorAuthentication ||
+		events[0].Error.Code != "authentication_error" ||
+		events[0].Error.Message != "API key is invalid." || events[0].Error.Parameter != parameter {
+		t.Fatalf("failure events = %#v", events)
+	}
+}
+
+func assertPublicStreamErrorWire(
+	t *testing.T,
+	format llmprotocol.WireFormat,
+	frames [][]byte,
+	failure llmprotocol.FailureScope,
+	code,
+	message,
+	parameter string,
+) {
+	t.Helper()
+	if len(frames) != 1 {
+		t.Fatalf("public error frame count = %d: %q", len(frames), frames)
+	}
+	quotedCode, quotedMessage := string(mustJSON(code)), string(mustJSON(message))
+	quotedParameter := "null"
+	if parameter != "" {
+		quotedParameter = string(mustJSON(parameter))
+	}
+	var golden string
+	switch format {
+	case llmprotocol.OpenAIChatV1:
+		golden = "data: {\"error\":{\"type\":\"authentication_error\",\"code\":" + quotedCode +
+			",\"message\":" + quotedMessage + ",\"param\":" + quotedParameter + "}}\n\n"
+	case llmprotocol.OpenAIResponsesV1:
+		if failure == llmprotocol.FailureResponse {
+			golden = "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":1," +
+				"\"response\":{\"id\":\"response_1\",\"object\":\"response\",\"model\":\"public-model\"," +
+				"\"status\":\"failed\",\"error\":{\"code\":" + quotedCode + ",\"message\":" + quotedMessage + "}}}\n\n"
+		} else {
+			golden = "event: error\ndata: {\"type\":\"error\",\"code\":" + quotedCode +
+				",\"message\":" + quotedMessage + ",\"param\":" + quotedParameter + ",\"sequence_number\":1}\n\n"
+		}
+	case llmprotocol.AnthropicMessagesV1:
+		golden = "event: error\ndata: {\"type\":\"error\",\"error\":{\"type\":" + quotedCode +
+			",\"message\":" + quotedMessage + "}}\n\n"
+	}
+	if string(frames[0]) != golden {
+		t.Fatalf("public error frame = %q, want %q", frames[0], golden)
+	}
+	parsed, err := parseSSEFrame(frames[0], llmprotocol.DefaultPolicy().Limits.SSEFrameBytes)
+	if err != nil {
+		t.Fatalf("public error frame is invalid: %v: %q", err, frames[0])
+	}
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(parsed.Data, &object); err != nil {
+		t.Fatalf("public error payload is invalid JSON: %v: %s", err, parsed.Data)
+	}
+	switch format {
+	case llmprotocol.OpenAIChatV1:
+		if parsed.Event != "" || len(object) != 1 || object["error"] == nil {
+			t.Fatalf("Chat stream error is not canonical: event=%q data=%s", parsed.Event, parsed.Data)
+		}
+		assertOpenAIErrorDetail(t, object["error"], code, message, parameter)
+	case llmprotocol.OpenAIResponsesV1:
+		if failure == llmprotocol.FailureResponse {
+			if parsed.Event != "response.failed" || len(object) != 3 ||
+				string(object["type"]) != `"response.failed"` ||
+				object["response"] == nil || object["error"] != nil {
+				t.Fatalf("Responses failed event is not canonical: event=%q data=%s", parsed.Event, parsed.Data)
+			}
+			var responseObject map[string]json.RawMessage
+			if err := json.Unmarshal(object["response"], &responseObject); err != nil || len(responseObject) != 5 {
+				t.Fatalf("Responses failed resource fields are not canonical: %v data=%s", err, parsed.Data)
+			}
+			var response struct {
+				ID     string `json:"id"`
+				Object string `json:"object"`
+				Model  string `json:"model"`
+				Status string `json:"status"`
+				Error  struct {
+					Code    string `json:"code"`
+					Message string `json:"message"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(object["response"], &response); err != nil ||
+				response.ID != "response_1" || response.Object != "response" ||
+				response.Model != "public-model" || response.Status != "failed" ||
+				response.Error.Code != code || response.Error.Message != message {
+				t.Fatalf("Responses failed resource is not canonical: %+v/%v data=%s", response, err, parsed.Data)
+			}
+			return
+		}
+		if parsed.Event != "error" || len(object) != 5 || string(object["type"]) != `"error"` ||
+			object["response"] != nil || object["error"] != nil {
+			t.Fatalf("Responses transport error is not canonical: event=%q data=%s", parsed.Event, parsed.Data)
+		}
+		assertResponsesTopLevelError(t, object, code, message, parameter)
+	case llmprotocol.AnthropicMessagesV1:
+		if parsed.Event != "error" || len(object) != 2 ||
+			string(object["type"]) != `"error"` || object["error"] == nil {
+			t.Fatalf("Anthropic stream error is not canonical: event=%q data=%s", parsed.Event, parsed.Data)
+		}
+		var detail struct {
+			Type    string `json:"type"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(object["error"], &detail); err != nil ||
+			detail.Type != code || detail.Message != message {
+			t.Fatalf("Anthropic stream error detail is not canonical: %+v/%v data=%s", detail, err, parsed.Data)
+		}
+	default:
+		t.Fatalf("unexpected target format %q", format)
+	}
+}
+
+func assertOpenAIErrorDetail(t *testing.T, raw json.RawMessage, code, message, parameter string) {
+	t.Helper()
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &object); err != nil || len(object) != 4 {
+		t.Fatalf("OpenAI error detail fields are not canonical: %v raw=%s", err, raw)
+	}
+	var detail struct {
+		Type    string  `json:"type"`
+		Code    *string `json:"code"`
+		Message string  `json:"message"`
+		Param   *string `json:"param"`
+	}
+	if err := json.Unmarshal(raw, &detail); err != nil || detail.Type != "authentication_error" ||
+		detail.Code == nil || *detail.Code != code || detail.Message != message ||
+		(parameter == "" && detail.Param != nil) ||
+		(parameter != "" && (detail.Param == nil || *detail.Param != parameter)) {
+		t.Fatalf("OpenAI error detail is not canonical: %+v raw=%s", detail, raw)
+	}
+}
+
+func assertResponsesTopLevelError(
+	t *testing.T,
+	object map[string]json.RawMessage,
+	code,
+	message,
+	parameter string,
+) {
+	t.Helper()
+	var codeValue, messageValue string
+	var parameterValue *string
+	if err := json.Unmarshal(object["code"], &codeValue); err != nil {
+		t.Fatalf("Responses error code is invalid: %v", err)
+	}
+	if err := json.Unmarshal(object["message"], &messageValue); err != nil {
+		t.Fatalf("Responses error message is invalid: %v", err)
+	}
+	if err := json.Unmarshal(object["param"], &parameterValue); err != nil {
+		t.Fatalf("Responses error parameter is invalid: %v", err)
+	}
+	if codeValue != code || messageValue != message ||
+		(parameter == "" && parameterValue != nil) ||
+		(parameter != "" && (parameterValue == nil || *parameterValue != parameter)) {
+		t.Fatalf("Responses top-level error is not canonical: %s", mustJSON(object))
+	}
+}
+
+func mustJSON(value any) []byte {
+	body, _ := json.Marshal(value)
+	return body
 }
 
 func TestStreamFinalizeClassifiesCancellation(t *testing.T) {

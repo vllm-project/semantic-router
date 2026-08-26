@@ -129,6 +129,10 @@ type MLSelectorConfig struct {
 	// EmbeddingDim is the embedding dimension (default: 1024 for Qwen3)
 	EmbeddingDim int `yaml:"embedding_dim"`
 
+	// ModelType selects the embedding model for this selector family. An empty
+	// value uses the factory's default embedding configuration.
+	ModelType string `yaml:"model_type,omitempty"`
+
 	// KNN configuration
 	KNN *KNNConfig `yaml:"knn,omitempty"`
 

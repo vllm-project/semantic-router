@@ -1160,6 +1160,7 @@ recipes:
           knn:
             k: 5
             pretrained_path: /models/selection/knn_model.json
+          model_type: qwen3
           models_path: /models/selection
         type: knn
       description: KNN fallback route for general traffic with OpenAI vector-store RAG.
@@ -1202,6 +1203,7 @@ recipes:
             efficiency_weight: 0.1
             num_clusters: 8
             pretrained_path: /models/selection/kmeans_model.json
+          model_type: qwen3
           models_path: /models/selection
         type: kmeans
       description: KMeans route for clarification requests with local vector-store RAG.
@@ -1249,6 +1251,7 @@ recipes:
     - algorithm:
         ml:
           embedding_dim: 1024
+          model_type: qwen3
           models_path: /models/selection
           svm:
             gamma: 1
@@ -1291,6 +1294,7 @@ recipes:
           mlp:
             device: cpu
             pretrained_path: /models/selection/mlp_model.json
+          model_type: qwen3
           models_path: /models/selection
         type: mlp
       description: Experimental MLP-based model selection route.

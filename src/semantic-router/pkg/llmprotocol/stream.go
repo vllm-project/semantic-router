@@ -4,6 +4,16 @@ import "context"
 
 type EventType string
 
+// FailureScope distinguishes a transport-level stream error from a model
+// response that reached a terminal failed state. Formats that expose only one
+// error event may render both scopes identically.
+type FailureScope string
+
+const (
+	FailureTransport FailureScope = "transport"
+	FailureResponse  FailureScope = "response"
+)
+
 const (
 	EventResponseStarted     EventType = "response.started"
 	EventOutputItemStarted   EventType = "output.item.started"
@@ -31,6 +41,7 @@ type Event struct {
 	StopReason StopReason
 	Usage      *Usage
 	Error      *ProtocolError
+	Failure    FailureScope
 	Opaque     []byte
 }
 

@@ -15,6 +15,7 @@ import {
   type UsageFilter,
 } from '../utils/inferenceAccessApi'
 import { claimInvitationOnboarding } from '../utils/invitationOnboarding'
+import { ManagementApiError } from '../utils/managementApiContract'
 import {
   dashboardMemberInvitationApi,
   type DashboardMemberInvitation,
@@ -33,11 +34,39 @@ import {
   type AccessView,
 } from './AccessControlPageSupport'
 import { usageRangeBounds, type UsageScope } from './accessControlUsageRange'
+import {
+  deleteUnifiedUser,
+  type UnifiedUserDeletionProgress,
+} from './unifiedUserDeletion'
 import styles from './AccessControlPage.module.css'
 
 type PageState = { page: number; pageSize: number; query: string }
 type EntityTotals = Record<'users' | 'teams' | 'api-keys' | 'access-groups' | 'budgets', number>
 type EntityEditorReturn = { kind: Exclude<AccessEditor['kind'], 'key'>; id: string }
+
+const dashboardResponseError = async (response: Response, fallback: string) =>
+  (await response.text()).trim() || fallback
+
+const deleteDashboardLogin = async (memberId: string) => {
+  const response = await fetch(`/api/admin/users/${encodeURIComponent(memberId)}`, {
+    method: 'DELETE',
+  })
+  // A retry after the first step completed is intentionally idempotent.
+  if (!response.ok && response.status !== 404) {
+    throw new Error(await dashboardResponseError(response, 'Could not remove Dashboard login'))
+  }
+}
+
+const deleteRouterEntityIfPresent = async (action: () => Promise<unknown>) => {
+  try {
+    await action()
+  } catch (error) {
+    // DELETE retries are successful when a previous attempt already removed the resource.
+    if (error instanceof ManagementApiError && error.status === 404) return
+    throw error
+  }
+}
+
 const AccessControlPage: React.FC = () => {
   const location = useLocation()
   const navigate = useNavigate()
@@ -176,7 +205,7 @@ const AccessControlPage: React.FC = () => {
 
   const loadDashboardIdentities = useCallback(async () => {
     if (!canReadDashboardMembers) return
-    const [members, invitationsResponse] = await Promise.all([
+    const [membersResult, invitationsResult] = await Promise.allSettled([
       (async () => {
         const response = await fetch('/api/admin/users?page=1&limit=200')
         if (!response.ok) throw new Error(await response.text())
@@ -187,8 +216,11 @@ const AccessControlPage: React.FC = () => {
         ? dashboardMemberInvitationApi.list()
         : Promise.resolve({ items: [] as DashboardMemberInvitation[] }),
     ])
-    setDashboardMembers(members)
-    setInvitations(invitationsResponse.items)
+    if (membersResult.status === 'fulfilled') setDashboardMembers(membersResult.value)
+    if (invitationsResult.status === 'fulfilled') setInvitations(invitationsResult.value.items)
+    if (membersResult.status === 'rejected' && invitationsResult.status === 'rejected') {
+      throw membersResult.reason
+    }
   }, [canManageDashboardMembers, canReadDashboardMembers])
 
   const loadCatalog = useCallback(
@@ -629,19 +661,66 @@ const AccessControlPage: React.FC = () => {
     }
   }
 
+  const removeLocalEntity = (kind: 'user' | 'team' | 'group' | 'budget', id: string) => {
+    if (kind === 'user') setUsers((current) => current.filter((item) => item.id !== id))
+    if (kind === 'team') setTeams((current) => current.filter((item) => item.id !== id))
+    if (kind === 'group') setGroups((current) => current.filter((item) => item.id !== id))
+    if (kind === 'budget') setBudgets((current) => current.filter((item) => item.id !== id))
+    const totalKey: keyof EntityTotals =
+      kind === 'user'
+        ? 'users'
+        : kind === 'team'
+          ? 'teams'
+          : kind === 'group'
+            ? 'access-groups'
+            : 'budgets'
+    setEntityTotals((current) => ({
+      ...current,
+      [totalKey]: Math.max(0, current[totalKey] - 1),
+    }))
+  }
+
+  const refreshAfterDelete = () => {
+    void Promise.all([loadCatalog(false), loadCurrentView()])
+  }
+
   const remove = async (kind: 'user' | 'team' | 'group' | 'budget', id: string) => {
-    try {
-      if (kind === 'user') await inferenceAccessApi.deleteUser(id)
-      if (kind === 'team') await inferenceAccessApi.deleteTeam(id)
-      if (kind === 'group') await inferenceAccessApi.deleteGroup(id)
-      if (kind === 'budget') await inferenceAccessApi.deleteBudget(id)
-      setToast('Deleted')
-      await Promise.all([loadCatalog(false), loadCurrentView()])
-      return true
-    } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Delete failed')
-      return false
-    }
+    await deleteRouterEntityIfPresent(() => {
+      if (kind === 'user') return inferenceAccessApi.deleteUser(id)
+      if (kind === 'team') return inferenceAccessApi.deleteTeam(id)
+      if (kind === 'group') return inferenceAccessApi.deleteGroup(id)
+      return inferenceAccessApi.deleteBudget(id)
+    })
+    removeLocalEntity(kind, id)
+    setToast('Deleted')
+    refreshAfterDelete()
+  }
+
+  const removeLogin = async (memberId: string) => {
+    await deleteDashboardLogin(memberId)
+    setDashboardMembers((current) => current.filter((member) => member.id !== memberId))
+    setToast('Login removed')
+    void loadDashboardIdentities().catch(() => undefined)
+  }
+
+  const removeUnifiedUser = async (
+    memberId: string,
+    modelUserId: string,
+    progress: UnifiedUserDeletionProgress,
+  ) => {
+    const completed = await deleteUnifiedUser(progress, {
+      removeDashboardLogin: async () => {
+        await deleteDashboardLogin(memberId)
+        setDashboardMembers((current) => current.filter((member) => member.id !== memberId))
+      },
+      deleteModelIdentity: () =>
+        deleteRouterEntityIfPresent(() => inferenceAccessApi.deleteUser(modelUserId)),
+    })
+    removeLocalEntity('user', modelUserId)
+    setToast('User deleted')
+    refreshAfterDelete()
+    void loadDashboardIdentities().catch(() => undefined)
+    return completed
   }
 
   const invite = () => setInviteOpen(true)
@@ -815,7 +894,7 @@ const AccessControlPage: React.FC = () => {
         }}
         onDetailClose={closeDetail}
         onCatalogChanged={() => void Promise.all([loadCatalog(false), loadCurrentView()])}
-        onDashboardMembersChanged={() => void loadDashboardIdentities()}
+        onDashboardMembersChanged={() => void loadDashboardIdentities().catch(() => undefined)}
         onEditKey={(key) => {
           setEntityEditorReturn(null)
           setEditor({
@@ -843,11 +922,9 @@ const AccessControlPage: React.FC = () => {
           if (kind === 'budget') setEditor({ kind, value: item as AccessBudget })
           closeDetail()
         }}
-        onDeleteEntity={(kind, id) => {
-          void remove(kind, id).then((deleted) => {
-            if (deleted) closeDetail()
-          })
-        }}
+        onDeleteEntity={remove}
+        onRemoveDashboardLogin={removeLogin}
+        onDeleteUnifiedUser={removeUnifiedUser}
         onEditModelAccess={(accessUser) => {
           setEditor({ kind: 'user', value: accessUser })
           closeDetail()

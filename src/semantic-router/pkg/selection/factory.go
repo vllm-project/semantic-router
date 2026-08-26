@@ -70,11 +70,18 @@ func DefaultModelSelectionConfig() *ModelSelectionConfig {
 
 // Factory creates and initializes selectors based on configuration
 type Factory struct {
-	cfg           *ModelSelectionConfig
-	modelConfig   map[string]config.ModelParams
-	categories    []config.Category
-	embeddingFunc func(string) ([]float32, error)
-	lookupTable   lookuptable.LookupTable
+	cfg                    *ModelSelectionConfig
+	modelConfig            map[string]config.ModelParams
+	categories             []config.Category
+	embeddingFunc          func(string, EmbeddingConfig) ([]float32, error)
+	defaultEmbeddingConfig EmbeddingConfig
+	lookupTable            lookuptable.LookupTable
+}
+
+// EmbeddingConfig identifies an embedding space used by a selector.
+type EmbeddingConfig struct {
+	ModelType       string
+	TargetDimension int
 }
 
 // NewFactory creates a new selector factory
@@ -99,10 +106,28 @@ func (f *Factory) WithCategories(categories []config.Category) *Factory {
 	return f
 }
 
-// WithEmbeddingFunc sets the embedding function for RouterDC
-func (f *Factory) WithEmbeddingFunc(fn func(string) ([]float32, error)) *Factory {
+// WithEmbeddingFunc sets the embedding function and the default embedding space
+// used by selectors without their own embedding configuration.
+func (f *Factory) WithEmbeddingFunc(
+	fn func(string, EmbeddingConfig) ([]float32, error),
+	defaultConfig EmbeddingConfig,
+) *Factory {
 	f.embeddingFunc = fn
+	f.defaultEmbeddingConfig = defaultConfig
 	return f
+}
+
+func (f *Factory) embeddingFuncFor(cfg EmbeddingConfig) func(string) ([]float32, error) {
+	if f.embeddingFunc == nil {
+		return nil
+	}
+	return func(text string) ([]float32, error) {
+		return f.embeddingFunc(text, cfg)
+	}
+}
+
+func (f *Factory) defaultEmbeddingFunc() func(string) ([]float32, error) {
+	return f.embeddingFuncFor(f.defaultEmbeddingConfig)
 }
 
 // WithLookupTable sets the lookup table used by selectors that support data-driven
@@ -128,8 +153,8 @@ func (f *Factory) Create() Selector {
 
 	case MethodRouterDC:
 		routerDCSelector := NewRouterDCSelector(f.cfg.RouterDC)
-		if f.embeddingFunc != nil {
-			routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
+		if embed := f.defaultEmbeddingFunc(); embed != nil {
+			routerDCSelector.SetEmbeddingFunc(embed)
 		}
 		// Initialize model embeddings from descriptions in model config
 		if f.modelConfig != nil {
@@ -151,8 +176,8 @@ func (f *Factory) Create() Selector {
 		if f.modelConfig != nil {
 			hybridSelector.InitializeFromConfig(f.modelConfig, f.categories)
 		}
-		if f.embeddingFunc != nil && hybridSelector.routerDCSelector != nil {
-			hybridSelector.routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
+		if embed := f.defaultEmbeddingFunc(); embed != nil && hybridSelector.routerDCSelector != nil {
+			hybridSelector.routerDCSelector.SetEmbeddingFunc(embed)
 		}
 		if f.lookupTable != nil {
 			hybridSelector.SetLookupTable(f.lookupTable)
@@ -164,8 +189,8 @@ func (f *Factory) Create() Selector {
 		if f.modelConfig != nil {
 			gmtRouterSelector.InitializeFromConfig(f.modelConfig)
 		}
-		if f.embeddingFunc != nil {
-			gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+		if embed := f.defaultEmbeddingFunc(); embed != nil {
+			gmtRouterSelector.SetEmbeddingFunc(embed)
 		}
 		selector = gmtRouterSelector
 
@@ -230,8 +255,8 @@ func (f *Factory) CreateAll() *Registry {
 		routerDCCfg = DefaultRouterDCConfig()
 	}
 	routerDCSelector := NewRouterDCSelector(routerDCCfg)
-	if f.embeddingFunc != nil {
-		routerDCSelector.SetEmbeddingFunc(f.embeddingFunc)
+	if embed := f.defaultEmbeddingFunc(); embed != nil {
+		routerDCSelector.SetEmbeddingFunc(embed)
 	}
 	// Initialize model embeddings from descriptions in model config
 	if f.modelConfig != nil {
@@ -269,8 +294,21 @@ func (f *Factory) CreateAll() *Registry {
 	// Create ML-based selectors (KNN, KMeans, SVM)
 	mlCfg := f.cfg.ML
 	if mlCfg != nil {
+		mlEmbeddingConfig := f.defaultEmbeddingConfig
+		if mlCfg.ModelType != "" {
+			mlEmbeddingConfig.ModelType = mlCfg.ModelType
+			// A new model type without an explicit dimension uses that model's
+			// native output width instead of inheriting the previous model's
+			// dimension.
+			mlEmbeddingConfig.TargetDimension = 0
+		}
+		if mlCfg.EmbeddingDim > 0 {
+			mlEmbeddingConfig.TargetDimension = mlCfg.EmbeddingDim
+		}
+		mlSelectorEmbedding := f.embeddingFuncFor(mlEmbeddingConfig)
+
 		if mlCfg.KNN != nil {
-			knnAdapter, err := CreateKNNSelector(mlCfg, f.embeddingFunc)
+			knnAdapter, err := CreateKNNSelector(mlCfg, mlSelectorEmbedding)
 			if err != nil {
 				logging.Warnf("[SelectionFactory] Failed to create KNN selector: %v", err)
 			} else {
@@ -278,7 +316,7 @@ func (f *Factory) CreateAll() *Registry {
 			}
 		}
 		if mlCfg.KMeans != nil {
-			kmeansAdapter, err := CreateKMeansSelector(mlCfg, f.embeddingFunc)
+			kmeansAdapter, err := CreateKMeansSelector(mlCfg, mlSelectorEmbedding)
 			if err != nil {
 				logging.Warnf("[SelectionFactory] Failed to create KMeans selector: %v", err)
 			} else {
@@ -286,7 +324,7 @@ func (f *Factory) CreateAll() *Registry {
 			}
 		}
 		if mlCfg.SVM != nil {
-			svmAdapter, err := CreateSVMSelector(mlCfg, f.embeddingFunc)
+			svmAdapter, err := CreateSVMSelector(mlCfg, mlSelectorEmbedding)
 			if err != nil {
 				logging.Warnf("[SelectionFactory] Failed to create SVM selector: %v", err)
 			} else {
@@ -294,7 +332,7 @@ func (f *Factory) CreateAll() *Registry {
 			}
 		}
 		if mlCfg.MLP != nil {
-			mlpAdapter, err := CreateMLPSelector(mlCfg, f.embeddingFunc)
+			mlpAdapter, err := CreateMLPSelector(mlCfg, mlSelectorEmbedding)
 			if err != nil {
 				logging.Warnf("[SelectionFactory] Failed to create MLP selector: %v", err)
 			} else {
@@ -323,8 +361,8 @@ func (f *Factory) CreateAll() *Registry {
 	if f.modelConfig != nil {
 		gmtRouterSelector.InitializeFromConfig(f.modelConfig)
 	}
-	if f.embeddingFunc != nil {
-		gmtRouterSelector.SetEmbeddingFunc(f.embeddingFunc)
+	if embed := f.defaultEmbeddingFunc(); embed != nil {
+		gmtRouterSelector.SetEmbeddingFunc(embed)
 	}
 	registry.Register(MethodGMTRouter, gmtRouterSelector)
 
@@ -431,10 +469,16 @@ func CheckDependencyHealth(registry *Registry, configuredMethods []SelectionMeth
 
 // Initialize sets up the global registry with all selectors
 func Initialize(cfg *ModelSelectionConfig, modelConfig map[string]config.ModelParams, categories []config.Category, embeddingFunc func(string) ([]float32, error)) {
+	var embed func(string, EmbeddingConfig) ([]float32, error)
+	if embeddingFunc != nil {
+		embed = func(text string, _ EmbeddingConfig) ([]float32, error) {
+			return embeddingFunc(text)
+		}
+	}
 	factory := NewFactory(cfg).
 		WithModelConfig(modelConfig).
 		WithCategories(categories).
-		WithEmbeddingFunc(embeddingFunc)
+		WithEmbeddingFunc(embed, EmbeddingConfig{})
 
 	// Create all selectors and register globally
 	GlobalRegistry = factory.CreateAll()

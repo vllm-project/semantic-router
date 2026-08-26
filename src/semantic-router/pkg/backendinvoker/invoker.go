@@ -299,7 +299,7 @@ func (i *Invoker) invokeCandidateAttempt(
 		return candidateAttemptExecution{state: candidateAttemptTransportFailed, attempt: result, err: roundTripErr, recorded: true}
 	}
 	closeResponseOnReturn = false
-	return i.transformCandidateResponse(invokeCtx, cancel, plan, backend, result, rawResponse)
+	return i.transformCandidateResponse(invokeCtx, cancel, plan, backend, result, rawResponse, tracker.sensitiveValues)
 }
 
 func (i *Invoker) transformCandidateResponse(
@@ -309,8 +309,9 @@ func (i *Invoker) transformCandidateResponse(
 	backend Backend,
 	attempt AttemptResult,
 	rawResponse *http.Response,
+	sensitiveValues []string,
 ) candidateAttemptExecution {
-	response, err := i.transformResponse(invokeCtx, plan, backend, attempt, rawResponse)
+	response, err := i.transformResponse(invokeCtx, plan, backend, attempt, rawResponse, sensitiveValues)
 	closeResponseOnReturn := response != nil && response.Body != nil
 	defer func() {
 		if closeResponseOnReturn {
@@ -451,6 +452,7 @@ func (i *Invoker) pinProviderCredentials(ctx context.Context, plan Plan) (Plan, 
 type attemptTracker struct {
 	wroteRequest    bool
 	gotResponseByte bool
+	sensitiveValues []string
 }
 
 func (i *Invoker) request(
@@ -496,6 +498,7 @@ func (i *Invoker) request(
 	request.Header.Set("Content-Length", strconv.Itoa(len(translated.Body)))
 	request.ContentLength = int64(len(translated.Body))
 	request.GetBody = nil
+	var sensitiveValues []string
 	if backend.ProviderCredentialID != "" {
 		if err := publication.Validate(); err != nil {
 			return nil, nil, err
@@ -513,8 +516,9 @@ func (i *Invoker) request(
 		if err := applyCredential(request.Header, credential); err != nil {
 			return nil, nil, err
 		}
+		sensitiveValues = credentialSensitiveValues(credential)
 	}
-	tracker := &attemptTracker{}
+	tracker := &attemptTracker{sensitiveValues: sensitiveValues}
 	trace := &httptrace.ClientTrace{
 		WroteRequest:         func(httptrace.WroteRequestInfo) { tracker.wroteRequest = true },
 		GotFirstResponseByte: func() { tracker.gotResponseByte = true },
@@ -546,6 +550,25 @@ func applyCredential(headers http.Header, credential Credential) error {
 		}
 	}
 	return nil
+}
+
+func credentialSensitiveValues(credential Credential) []string {
+	values := make([]string, 0, 2+len(credential.Extra))
+	secret := strings.TrimSpace(credential.Secret)
+	if secret != "" {
+		values = append(values, secret)
+		if applied := credential.Prefix + credential.Secret; applied != secret {
+			values = append(values, applied)
+		}
+	}
+	for _, headers := range credential.Extra {
+		for _, value := range headers {
+			if value = strings.TrimSpace(value); value != "" {
+				values = append(values, value)
+			}
+		}
+	}
+	return values
 }
 
 func sanitizedHeaders(source http.Header) http.Header {

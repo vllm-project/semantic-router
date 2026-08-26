@@ -136,9 +136,13 @@ func (decoder *anthropicStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Ev
 	case "error":
 		protocolError := llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_stream_error", "upstream stream failed", nil)
 		if wire.Error != nil {
+			protocolError.Category = decodeProviderErrorCategory(wire.Error.Type)
 			protocolError.Code, protocolError.Message = wire.Error.Type, wire.Error.Message
 		}
-		normalized, nextErr := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseFailed, Error: protocolError, StopReason: llmprotocol.StopError})
+		normalized, nextErr := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventResponseFailed, Error: protocolError,
+			StopReason: llmprotocol.StopError, Failure: llmprotocol.FailureTransport,
+		})
 		if nextErr != nil {
 			return nil, nil, nextErr
 		}
@@ -298,7 +302,9 @@ func (encoder *anthropicStreamEncoder) Push(event llmprotocol.Event) ([][]byte, 
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "error_event_invalid", "error event is invalid", nil)
 		}
 		wire.Type = "error"
-		wire.Error = &anthropicErrorWire{Type: event.Error.Code, Message: event.Error.Message}
+		wire.Error = &anthropicErrorWire{
+			Type: canonicalAnthropicErrorType(event.Error), Message: event.Error.Message,
+		}
 		encoder.terminal = true
 	case llmprotocol.EventProviderOpaque:
 		if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
@@ -345,7 +351,15 @@ func (encoder *anthropicStreamEncoder) Finalize(reason error) ([][]byte, llmprot
 		return nil, nil, nil
 	}
 	encoder.terminal = true
-	wire := anthropicEventWire{Type: "error", Error: &anthropicErrorWire{Type: "stream_incomplete", Message: "stream ended before completion"}}
+	protocolError := llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable,
+		"stream_incomplete",
+		"stream ended before completion",
+		reason,
+	)
+	wire := anthropicEventWire{Type: "error", Error: &anthropicErrorWire{
+		Type: canonicalAnthropicErrorType(protocolError), Message: protocolError.Message,
+	}}
 	frame, err := encodeSSE(wire.Type, wire)
 	return [][]byte{frame}, nil, err
 }

@@ -26,6 +26,15 @@ type ProtocolError struct {
 	Cause      error
 }
 
+// TransportError is the protocol-neutral representation of an HTTP error
+// response. It is deliberately separate from Response.Error: the latter is a
+// model-generation result (for example, a Responses resource whose status is
+// "failed"), while TransportError represents a non-2xx API response.
+type TransportError struct {
+	Error             *ProtocolError
+	ProviderRequestID string
+}
+
 func (err *ProtocolError) Error() string {
 	if err == nil {
 		return ""

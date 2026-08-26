@@ -3,8 +3,10 @@ package routerauth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -108,6 +110,128 @@ func TestInvitationAuthorityCreateCarriesHumanSessionNamespaceAndIdempotency(t *
 	}, invitationNamespace, "invite-create-123456", request)
 	if err != nil || issued.Token != "router-invitation-token" {
 		t.Fatalf("CreateInvitation() = %#v, %v", issued, err)
+	}
+}
+
+func TestInvitationCreateHandlerUsesRouterAuthorityWithoutAutomaticFirstKey(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC().Truncate(time.Second)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		response.Header().Set("Content-Type", managementMediaType)
+		switch request.URL.Path {
+		case managementBasePath + "/auth/exchange-challenges":
+			response.WriteHeader(http.StatusCreated)
+			writeManagementJSON(t, response, exchangeChallenge{
+				ExchangeChallengeID: invitationChallenge,
+				Nonce:               "invitation-create-chain", ExpiresAt: now.Add(time.Minute),
+			})
+		case managementBasePath + "/auth/token-exchange":
+			writeManagementJSON(t, response, managementTokenEnvelope{
+				AccessToken: "human-management-token", TokenType: "Bearer", ExpiresIn: 300,
+				ManagementSessionID: invitationSession,
+			})
+		case managementBasePath + "/invitations":
+			if request.Method != http.MethodPost || request.Header.Get("Authorization") != "Bearer human-management-token" ||
+				request.Header.Get(managementapi.HeaderNamespaceID) != invitationNamespace ||
+				request.Header.Get(managementapi.HeaderIdempotencyKey) != "invite-handler-contract" {
+				t.Fatalf("invitation request = %s headers=%#v", request.Method, request.Header)
+			}
+			var body managementapi.InvitationCreateRequest
+			decoder := json.NewDecoder(request.Body)
+			decoder.DisallowUnknownFields()
+			if err := decoder.Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			grants := make([]managementapi.InvitationRoleGrant, len(body.RoleGrants))
+			for index, grant := range body.RoleGrants {
+				grants[index] = managementapi.InvitationRoleGrant{RoleID: grant.RoleID, ScopeKind: grant.ScopeKind}
+			}
+			response.WriteHeader(http.StatusCreated)
+			writeManagementJSON(t, response, managementapi.InvitationIssuedSecret{
+				Data: managementapi.Invitation{
+					InvitationID: invitationResourceID, NamespaceID: invitationNamespace,
+					ExpectedIdentity: body.ExpectedIdentity, DisplayName: body.DisplayName,
+					Onboarding: managementapi.InvitationOnboardingSnapshot{
+						RoleGrants: grants, AutomaticFirstKey: false,
+					},
+					ExpiresAt: body.ExpiresAt, Status: "pending", Revision: 1, CreatedAt: now, UpdatedAt: now,
+				},
+				Token: "router-invitation-token", DeliveryExpiresAt: now.Add(time.Hour),
+			})
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	provider := newInvitationProvider(t, server, now, &recordingAssertionSigner{})
+	store, err := dashboardauth.NewStore(t.TempDir() + "/auth.db")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	service := dashboardauth.NewService(store, "invitation-handler-secret", 12)
+	service.ConfigureInvitations(provider, nil, "", "https://dashboard.example.test")
+	if err := service.EnsureBootstrapAdmin(t.Context(), "admin@example.test", "a-secure-password", "Admin"); err != nil {
+		t.Fatal(err)
+	}
+	dashboardToken, _, err := service.Login(t.Context(), "admin@example.test", "a-secure-password")
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux := http.NewServeMux()
+	dashboardauth.RegisterAdminRoutes(mux, service)
+	handler := dashboardauth.AuthenticateRequest(service)(mux)
+	request := httptest.NewRequest(http.MethodPost, "/api/admin/invitations", strings.NewReader(`{
+		"email":"member@example.test","name":"Member","role":"read",
+		"expiresInHours":24,"sendEmail":false
+	}`))
+	request.AddCookie(&http.Cookie{Name: "vsr_session", Value: dashboardToken})
+	request.Header.Set(managementapi.HeaderNamespaceID, invitationNamespace)
+	request.Header.Set(managementapi.HeaderIdempotencyKey, "invite-handler-contract")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), invitationResourceID) ||
+		!strings.Contains(response.Body.String(), "router-invitation-token") {
+		t.Fatalf("create status=%d body=%s", response.Code, response.Body.String())
+	}
+}
+
+func TestInvitationAuthorityErrorKeepsOnlySafeRouterDiagnostics(t *testing.T) {
+	t.Parallel()
+	now := time.Now().UTC()
+	requestID := "30000000-0000-4000-8000-000000000099"
+	secretCanary := "sk-must-not-cross-the-dashboard-boundary"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.Header().Set(managementapi.HeaderRequestID, requestID)
+		response.Header().Set("Content-Type", managementMediaType)
+		response.WriteHeader(http.StatusServiceUnavailable)
+		_ = json.NewEncoder(response).Encode(managementapi.ErrorResponse{Error: managementapi.APIError{
+			Code: "invitation_service_unavailable", Message: "internal failure " + secretCanary,
+			RequestID: requestID,
+		}})
+	}))
+	defer server.Close()
+	provider := newInvitationProvider(t, server, now, &recordingAssertionSigner{})
+	provider.cache["dashboard-session"] = cachedManagementToken{
+		accessToken: "human-management-token", expiresAt: now.Add(time.Hour),
+	}
+	_, err := provider.CreateInvitation(context.Background(), dashboardauth.AuthContext{
+		UserID: "dashboard-user", SessionID: "dashboard-session", ExpiresAt: now.Add(time.Hour),
+	}, invitationNamespace, "invite-error-contract", managementapi.InvitationCreateRequest{})
+	var authorityError *dashboardauth.InvitationAuthorityError
+	if !errors.As(err, &authorityError) || authorityError.Status != http.StatusServiceUnavailable ||
+		authorityError.Code != "invitation_service_unavailable" || authorityError.RequestID != requestID {
+		t.Fatalf("CreateInvitation() error = %#v", err)
+	}
+	if strings.Contains(authorityError.Error(), secretCanary) {
+		t.Fatalf("invitation error exposed upstream body: %q", authorityError.Error())
+	}
+	if safeInvitationRequestID(secretCanary) != "" {
+		t.Fatal("credential-shaped request ID was accepted as a public diagnostic")
+	}
+	if safeInvitationErrorCode("secret_material") != "" {
+		t.Fatal("unknown upstream error code was accepted as a public diagnostic")
 	}
 }
 
@@ -216,6 +340,82 @@ func TestInvitationAcceptReturnsBoundedOnboardingWithoutCachingSecret(t *testing
 		if cached.accessToken == result.Onboarding.APIKey {
 			t.Fatal("one-time onboarding key entered the normal Management session cache")
 		}
+	}
+}
+
+func TestInvitationAcceptAllowsOnboardingWithoutAutomaticFirstKey(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case managementBasePath + "/auth/exchange-challenges":
+			writeCreatedManagementJSON(t, response, exchangeChallenge{
+				ExchangeChallengeID: invitationChallenge,
+				Nonce:               "invitation-without-key", ExpiresAt: now.Add(time.Minute),
+			})
+		case managementBasePath + "/auth/token-exchange":
+			writeManagementJSON(t, response, managementapi.TokenExchangeResponse{
+				ManagementTokenEnvelope: managementapi.ManagementTokenEnvelope{
+					AccessToken: "invited-session-token",
+					TokenType:   "Bearer", ExpiresIn: 300, ManagementSessionID: invitationSession,
+				},
+				Onboarding: &managementapi.OnboardingResult{
+					InvitationID: invitationResourceID,
+					PrincipalID:  invitationPrincipal, UserID: invitationUser,
+				},
+			})
+		case managementBasePath + "/me":
+			writeManagementJSON(t, response, managementapi.Me{
+				Principal: managementapi.MePrincipal{PrincipalID: invitationPrincipal},
+				Namespaces: []managementapi.MeNamespaceScope{{
+					Namespace: managementapi.MeNamespace{NamespaceID: invitationNamespace},
+					User:      &managementapi.MeUser{UserID: invitationUser},
+					RoleBindings: []managementapi.ManagementRoleBinding{{
+						BindingID: "consumer-binding", PrincipalID: invitationPrincipal,
+						RoleID: consumerRoleID, Scope: managementapi.ManagementScope{
+							Kind: "user", NamespaceID: invitationNamespace, UserID: invitationUser,
+						},
+						Status: "active", Revision: 1, CreatedAt: now, UpdatedAt: now,
+					}},
+					SelfServicePolicy: managementapi.MeSelfServicePolicy{AutomaticFirstKey: false, Revision: 1},
+				}},
+			})
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	defer server.Close()
+
+	provider := newInvitationProvider(t, server, now, &recordingAssertionSigner{})
+	result, err := provider.AcceptInvitation(context.Background(), dashboardauth.RouterInvitationAcceptance{
+		NamespaceID: invitationNamespace, InvitationToken: "router-invitation-token",
+		PlannedSubject: invitationSubject, Email: "member@example.test", DisplayName: "Member",
+		SessionExpiresAt: now.Add(12 * time.Hour),
+	})
+	if err != nil || result.DashboardRole != dashboardauth.RoleRead ||
+		result.Onboarding.APIKeyID != "" || result.Onboarding.APIKey != "" {
+		t.Fatalf("AcceptInvitation() = %#v, %v", result, err)
+	}
+}
+
+func TestOptionalInvitationKeyRequiresACompleteUnexpiredPair(t *testing.T) {
+	now := time.Date(2026, time.August, 23, 12, 0, 0, 0, time.UTC)
+	for name, onboarding := range map[string]managementapi.OnboardingResult{
+		"id only":     {APIKeyID: invitationAPIKey},
+		"secret only": {APIKey: "sk-incomplete"},
+		"expired": {
+			APIKeyID: invitationAPIKey, APIKey: "sk-expired",
+			DeliveryExpiresAt: now.Add(-time.Second),
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if validOptionalInvitationKey(onboarding, now) {
+				t.Fatalf("accepted invalid onboarding key: %#v", onboarding)
+			}
+		})
+	}
+	if !validOptionalInvitationKey(managementapi.OnboardingResult{}, now) {
+		t.Fatal("rejected onboarding without an automatic first key")
 	}
 }
 

@@ -242,7 +242,10 @@ func writeInvitationAuthorityError(w http.ResponseWriter, err error) {
 	case errors.Is(err, ErrInvitationUnavailable), errors.Is(err, sql.ErrNoRows):
 		http.Error(w, ErrInvitationUnavailable.Error(), http.StatusGone)
 	case errors.As(err, &upstream) && upstream.Status >= 400 && upstream.Status < 600:
-		http.Error(w, http.StatusText(upstream.Status), upstream.Status)
+		if upstream.RequestID != "" {
+			w.Header().Set(managementapi.HeaderRequestID, upstream.RequestID)
+		}
+		http.Error(w, upstream.Error(), upstream.Status)
 	case errors.Is(err, ErrInvitationAuthorityUnavailable):
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
 	default:

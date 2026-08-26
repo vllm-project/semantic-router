@@ -75,6 +75,7 @@ algorithm:
   type: knn
   ml:
     models_path: ".cache/ml-models"
+    model_type: mmbert
     embedding_dim: 768
     knn:
       k: 5
@@ -82,8 +83,8 @@ algorithm:
 ```
 
 `algorithm.ml` belongs to this Decision. Decisions in the same Recipe must
-agree on `models_path`, `embedding_dim`, and repeated family settings;
-different Recipes can use independent selector artifacts.
+agree on `models_path`, `model_type`, `embedding_dim`, and repeated family
+settings; different Recipes can use independent selector artifacts.
 
 ### Parameters
 

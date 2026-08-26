@@ -74,6 +74,7 @@ func neutralResponseEvents(response llmprotocol.Response) ([]llmprotocol.Event, 
 		return []llmprotocol.Event{{
 			Type: llmprotocol.EventResponseFailed, ResponseID: response.ID,
 			Model: response.Model, StopReason: llmprotocol.StopError, Error: response.Error,
+			Failure: llmprotocol.FailureResponse,
 		}}, nil
 	}
 	events := []llmprotocol.Event{{

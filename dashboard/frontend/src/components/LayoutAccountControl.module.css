@@ -93,7 +93,10 @@
   z-index: 1200;
   display: flex;
   padding: 0;
-  background: transparent;
+  /* The account surface is a contextual popover, not a page-blocking modal. */
+  background-color: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
 .overlayHeader {
@@ -345,9 +348,9 @@
     align-items: center;
     justify-content: center;
     padding: 0.5rem;
-    background: rgba(3, 3, 4, 0.56);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
+    background: rgba(3, 3, 4, 0.56) !important;
+    backdrop-filter: blur(14px) !important;
+    -webkit-backdrop-filter: blur(14px) !important;
   }
 
   .dialog,

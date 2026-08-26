@@ -50,8 +50,13 @@ describe('LayoutAccountControl contract', () => {
       /\.overlayHeader\s*{[\s\S]*?align-items: flex-start;[\s\S]*?justify-content: flex-end;/,
     )
     expect(styles).toContain('width: min(380px, 100%);')
+    expect(styles).toContain('background-color: transparent !important;')
+    expect(styles).toContain('backdrop-filter: none !important;')
     expect(styles).toMatch(
       /@media \(max-width: 640px\)[\s\S]*?\.overlayHeader,[\s\S]*?align-items: center;/,
+    )
+    expect(styles).toMatch(
+      /@media \(max-width: 640px\)[\s\S]*?background: rgba\(3, 3, 4, 0\.56\) !important;/,
     )
   })
 })

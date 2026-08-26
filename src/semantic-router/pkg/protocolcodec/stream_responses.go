@@ -57,6 +57,17 @@ type responsesEventWire struct {
 	Annotation      *responsesAnnotationWire `json:"annotation,omitempty"`
 	Name            string                   `json:"name,omitempty"`
 	Error           *responsesErrorWire      `json:"error,omitempty"`
+	Code            *string                  `json:"code,omitempty"`
+	Message         string                   `json:"message,omitempty"`
+	Param           *string                  `json:"param,omitempty"`
+}
+
+type responsesTransportErrorEventWire struct {
+	Type     string  `json:"type"`
+	Code     *string `json:"code"`
+	Message  string  `json:"message"`
+	Param    *string `json:"param"`
+	Sequence uint64  `json:"sequence_number"`
 }
 
 func (decoder *responsesStreamDecoder) Push(chunk []byte) ([]llmprotocol.Event, llmprotocol.Diagnostics, error) {
@@ -156,8 +167,10 @@ func (decoder *responsesStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Ev
 			usage := decodeResponsesUsage(*wire.Response.Usage)
 			event.Usage = &usage
 		}
-	case "response.failed", "error":
+	case "response.failed":
 		applyResponseFailure(&event, wire)
+	case "error":
+		applyResponsesTransportFailure(&event, wire)
 	case "response.content_part.added", "response.content_part.done", "response.output_text.done", "response.refusal.done", "response.function_call_arguments.done":
 		return nil, nil, nil
 	default:
@@ -224,13 +237,37 @@ func (decoder *responsesStreamDecoder) applyCompletedResponseItem(
 func applyResponseFailure(event *llmprotocol.Event, wire responsesEventWire) {
 	event.Type = llmprotocol.EventResponseFailed
 	event.StopReason = llmprotocol.StopError
+	event.Failure = llmprotocol.FailureResponse
 	event.Error = llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_stream_error", "upstream stream failed", nil)
 	upstreamError := wire.Error
-	if upstreamError == nil && wire.Response != nil {
-		upstreamError = wire.Response.Error
+	if wire.Response != nil {
+		event.ResponseID, event.Model = wire.Response.ID, wire.Response.Model
+		if upstreamError == nil {
+			upstreamError = wire.Response.Error
+		}
 	}
 	if upstreamError != nil {
+		event.Error.Category = decodeProviderErrorCategory(upstreamError.Code)
 		event.Error.Code, event.Error.Message = upstreamError.Code, upstreamError.Message
+	}
+}
+
+func applyResponsesTransportFailure(event *llmprotocol.Event, wire responsesEventWire) {
+	event.Type = llmprotocol.EventResponseFailed
+	event.StopReason = llmprotocol.StopError
+	event.Failure = llmprotocol.FailureTransport
+	event.Error = llmprotocol.NewError(
+		llmprotocol.ErrorUpstreamUnavailable, "upstream_stream_error", "upstream stream failed", nil,
+	)
+	if wire.Code != nil {
+		event.Error.Code = *wire.Code
+		event.Error.Category = decodeProviderErrorCategory(*wire.Code)
+	}
+	if wire.Message != "" {
+		event.Error.Message = wire.Message
+	}
+	if wire.Param != nil {
+		event.Error.Parameter = *wire.Param
 	}
 }
 
@@ -303,9 +340,17 @@ func (encoder *responsesStreamEncoder) Push(event llmprotocol.Event) ([][]byte, 
 		if event.Error == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "error_event_invalid", "error event is invalid", nil)
 		}
+		if event.Failure != llmprotocol.FailureResponse {
+			encoder.terminal = true
+			frame, err := encoder.encodeTransportError(event.Error)
+			return [][]byte{frame}, nil, err
+		}
 		wire.Type = "response.failed"
-		wire.Error = &responsesErrorWire{Code: event.Error.Code, Message: event.Error.Message}
-		wire.Response = &responsesResponseWire{ID: event.ResponseID, Object: "response", Status: "failed", Error: wire.Error}
+		responseError := &responsesErrorWire{Code: event.Error.Code, Message: event.Error.Message}
+		wire.Response = &responsesResponseWire{
+			ID: event.ResponseID, Object: "response", Model: event.Model,
+			Status: "failed", Error: responseError,
+		}
 		encoder.terminal = true
 	case llmprotocol.EventProviderOpaque:
 		if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
@@ -500,7 +545,14 @@ func (encoder *responsesStreamEncoder) Finalize(reason error) ([][]byte, llmprot
 	}
 	encoder.terminal = true
 	protocolError := llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_incomplete", "stream ended before completion", reason)
-	wire := responsesEventWire{Type: "response.failed", Error: &responsesErrorWire{Code: protocolError.Code, Message: protocolError.Message}}
-	frame, err := encodeSSE(wire.Type, wire)
+	frame, err := encoder.encodeTransportError(protocolError)
 	return [][]byte{frame}, nil, err
+}
+
+func (encoder *responsesStreamEncoder) encodeTransportError(protocolError *llmprotocol.ProtocolError) ([]byte, error) {
+	wire := responsesTransportErrorEventWire{
+		Type: "error", Code: optionalString(protocolError.Code), Message: protocolError.Message,
+		Param: optionalString(protocolError.Parameter), Sequence: encoder.nextWireSequence(),
+	}
+	return encodeSSE(wire.Type, wire)
 }

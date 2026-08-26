@@ -532,18 +532,22 @@ func ValidateResponse(response Response, limits Limits) error {
 	if response.Generation == 0 {
 		return NewError(ErrorInternal, "generation_required", "semantic generation is required", nil)
 	}
+	if exceeds(response.ID, limits.IdentifierBytes) || exceeds(response.ProviderRequestID, limits.IdentifierBytes) ||
+		exceeds(response.Model, limits.ModelBytes) || exceeds(response.SourceStopReason, limits.IdentifierBytes) {
+		return NewError(ErrorUpstreamUnavailable, "response_field_limit", "upstream response identity or model exceeds the configured limit", nil)
+	}
 	if response.Error != nil {
 		if len(response.Output) > 0 || len(response.Alternatives) > 0 || response.StopReason != StopError {
 			return NewError(ErrorUpstreamUnavailable, "invalid_error_response", "an error response cannot contain output", nil)
+		}
+		if exceeds(response.Error.Code, limits.IdentifierBytes) || exceeds(response.Error.Parameter, limits.IdentifierBytes) ||
+			exceeds(response.Error.Message, limits.TextBytes) {
+			return NewError(ErrorUpstreamUnavailable, "response_error_limit", "upstream response error exceeds the configured limit", nil)
 		}
 		return nil
 	}
 	if strings.TrimSpace(response.ID) == "" {
 		return NewError(ErrorUpstreamUnavailable, "response_id_required", "upstream response ID is required", nil)
-	}
-	if exceeds(response.ID, limits.IdentifierBytes) || exceeds(response.ProviderRequestID, limits.IdentifierBytes) ||
-		exceeds(response.Model, limits.ModelBytes) || exceeds(response.SourceStopReason, limits.IdentifierBytes) {
-		return NewError(ErrorUpstreamUnavailable, "response_field_limit", "upstream response identity or model exceeds the configured limit", nil)
 	}
 	if !validStopReason(response.StopReason) {
 		return NewError(ErrorUpstreamUnavailable, "invalid_stop_reason", "upstream stop reason is invalid", nil)
@@ -601,6 +605,22 @@ func ValidateResponse(response Response, limits Limits) error {
 	}
 	if err := ValidateUsage(response.Usage); err != nil {
 		return err
+	}
+	return nil
+}
+
+// ValidateTransportError enforces the bounded neutral contract before and
+// after transport-error mutation. The public sanitizer may impose tighter
+// limits before terminal evidence is persisted.
+func ValidateTransportError(transportError TransportError, limits Limits) error {
+	if transportError.Error == nil {
+		return NewError(ErrorUpstreamUnavailable, "transport_error_required", "upstream transport error is missing", nil)
+	}
+	if exceeds(transportError.ProviderRequestID, limits.IdentifierBytes) ||
+		exceeds(transportError.Error.Code, limits.IdentifierBytes) ||
+		exceeds(transportError.Error.Parameter, limits.IdentifierBytes) ||
+		exceeds(transportError.Error.Message, limits.TextBytes) {
+		return NewError(ErrorUpstreamUnavailable, "transport_error_limit", "upstream transport error exceeds the configured limit", nil)
 	}
 	return nil
 }

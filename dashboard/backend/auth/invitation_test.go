@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
@@ -22,17 +23,17 @@ const (
 )
 
 type fakeInvitationAuthority struct {
-	createdRequest  managementapi.InvitationCreateRequest
-	createdActor    AuthContext
-	createErr       error
-	acceptErr       error
-	acceptCalls     int
-	acceptedRequest RouterInvitationAcceptance
-	revoked         bool
-	invitation      managementapi.Invitation
-	token           string
-	onboardingKey   string
-	withoutFirstKey bool
+	createdRequest           managementapi.InvitationCreateRequest
+	createdActor             AuthContext
+	createErr                error
+	acceptErr                error
+	acceptCalls              int
+	acceptedRequest          RouterInvitationAcceptance
+	revoked                  bool
+	invitation               managementapi.Invitation
+	token                    string
+	onboardingKey            string
+	withoutFirstKey          bool
 	disableAutomaticFirstKey bool
 }
 
@@ -334,6 +335,23 @@ func TestRouterInvitationErrorsDoNotCreateLocalAuthority(t *testing.T) {
 	var count int
 	if err := svc.store.db.QueryRow(`SELECT COUNT(*) FROM dashboard_member_invitations`).Scan(&count); err != nil || count != 0 {
 		t.Fatalf("local invitation rows=%d error=%v", count, err)
+	}
+}
+
+func TestInvitationAuthorityErrorPreservesOnlyPublicBFFDiagnostics(t *testing.T) {
+	t.Parallel()
+	requestID := "20000000-0000-4000-8000-000000000099"
+	response := httptest.NewRecorder()
+	writeInvitationAuthorityError(response, &InvitationAuthorityError{
+		Status: http.StatusServiceUnavailable, Code: "invitation_service_unavailable", RequestID: requestID,
+	})
+	if response.Code != http.StatusServiceUnavailable ||
+		response.Header().Get(managementapi.HeaderRequestID) != requestID {
+		t.Fatalf("BFF response status=%d headers=%#v", response.Code, response.Header())
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "invitation_service_unavailable") || !strings.Contains(body, requestID) {
+		t.Fatalf("BFF response omitted public diagnostics: %q", body)
 	}
 }
 

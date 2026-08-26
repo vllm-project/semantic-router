@@ -238,8 +238,8 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 
 	modelSelectionCfg := buildModelSelectionConfig(&cfg)
 	registry := selection.NewFactory(modelSelectionCfg).
-		WithModelConfig(cfg.ModelConfig).
-		WithEmbeddingFunc(func(text string) ([]float32, error) {
+		WithModelConfig(cfg.BackendModels.ModelConfig).
+		WithEmbeddingFunc(func(text string, _ selection.EmbeddingConfig) ([]float32, error) {
 			lower := strings.ToLower(text)
 			switch {
 			case strings.Contains(lower, "coding"):
@@ -249,7 +249,7 @@ func TestSelectorForDecisionMethodBuildsDecisionScopedHybridSelector(t *testing.
 			default:
 				return []float32{0.5, 0.5}, nil
 			}
-		}).
+		}, selection.EmbeddingConfig{}).
 		CreateAll()
 
 	router := &OpenAIRouter{

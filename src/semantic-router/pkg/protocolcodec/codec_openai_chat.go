@@ -559,7 +559,7 @@ func (OpenAIChatCodec) DecodeResponse(body []byte, policy llmprotocol.Policy) (l
 		response.CreatedAt = time.Unix(wire.Created, 0).UTC()
 	}
 	if wire.Error != nil {
-		response.Error = &llmprotocol.ProtocolError{Category: llmprotocol.ErrorUpstreamUnavailable, Code: wire.Error.Code, Message: wire.Error.Message, Parameter: wire.Error.Param}
+		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Type, wire.Error.Code), Code: wire.Error.Code, Message: wire.Error.Message, Parameter: wire.Error.Param}
 		response.StopReason = llmprotocol.StopError
 	}
 	var diagnostics llmprotocol.Diagnostics
@@ -652,7 +652,7 @@ func (OpenAIChatCodec) EncodeResponse(response llmprotocol.Response, envelope ll
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		return OpenAIChatCodec{}.EncodeError(response.Error), nil, nil
+		return OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{Error: response.Error}), nil, nil
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if response.Usage.InputCacheWrite.Value != nil {
@@ -743,8 +743,13 @@ func encodeChatStop(reason llmprotocol.StopReason) string {
 	}
 }
 
-func (OpenAIChatCodec) EncodeError(protocolError *llmprotocol.ProtocolError) []byte {
-	wire := chatResponseWire{Error: &chatErrorWire{Message: protocolError.Message, Type: string(protocolError.Category), Param: protocolError.Parameter, Code: protocolError.Code}}
-	body, _ := json.Marshal(wire)
-	return body
+func (OpenAIChatCodec) DecodeTransportError(
+	body []byte,
+	policy llmprotocol.Policy,
+) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	return decodeOpenAITransportError(body, policy)
+}
+
+func (OpenAIChatCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {
+	return encodeOpenAITransportError(transportError)
 }

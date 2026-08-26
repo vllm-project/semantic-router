@@ -514,7 +514,7 @@ func (OpenAIResponsesCodec) DecodeResponse(body []byte, policy llmprotocol.Polic
 		response.CreatedAt = time.Unix(wire.CreatedAt, 0).UTC()
 	}
 	if wire.Error != nil {
-		response.Error = &llmprotocol.ProtocolError{Category: llmprotocol.ErrorUpstreamUnavailable, Code: wire.Error.Code, Message: wire.Error.Message}
+		response.Error = &llmprotocol.ProtocolError{Category: decodeProviderErrorCategory(wire.Error.Code), Code: wire.Error.Code, Message: wire.Error.Message}
 		response.StopReason = llmprotocol.StopError
 	}
 	for index, item := range wire.Output {
@@ -600,7 +600,15 @@ func (OpenAIResponsesCodec) EncodeResponse(response llmprotocol.Response, envelo
 		return append([]byte(nil), envelope.Response...), nil, nil
 	}
 	if response.Error != nil {
-		return OpenAIResponsesCodec{}.EncodeError(response.Error), nil, nil
+		wire := responsesResponseWire{
+			ID: response.ID, Object: "response", Model: response.Model, Status: "failed",
+			Error: &responsesErrorWire{Code: response.Error.Code, Message: response.Error.Message},
+		}
+		if !response.CreatedAt.IsZero() {
+			wire.CreatedAt = response.CreatedAt.Unix()
+		}
+		body, err := marshalWire(wire)
+		return body, nil, err
 	}
 	var diagnostics llmprotocol.Diagnostics
 	if response.Usage.InputCacheWrite.Value != nil {
@@ -659,8 +667,13 @@ func encodeResponsesUsage(usage llmprotocol.Usage) *responsesUsageWire {
 	return wire
 }
 
-func (OpenAIResponsesCodec) EncodeError(protocolError *llmprotocol.ProtocolError) []byte {
-	wire := responsesResponseWire{Object: "error", Status: "failed", Error: &responsesErrorWire{Code: protocolError.Code, Message: protocolError.Message}}
-	body, _ := json.Marshal(wire)
-	return body
+func (OpenAIResponsesCodec) DecodeTransportError(
+	body []byte,
+	policy llmprotocol.Policy,
+) (llmprotocol.TransportError, llmprotocol.Diagnostics, error) {
+	return decodeOpenAITransportError(body, policy)
+}
+
+func (OpenAIResponsesCodec) EncodeTransportError(transportError llmprotocol.TransportError) []byte {
+	return encodeOpenAITransportError(transportError)
 }

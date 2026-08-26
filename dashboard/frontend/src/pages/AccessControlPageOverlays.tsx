@@ -12,6 +12,7 @@ import AccessControlDetailOverlays from './AccessControlDetailOverlays'
 import type { AccessEditor } from './AccessControlPageSupport'
 import DashboardMemberInviteDialog from './DashboardMemberInviteDialog'
 import { accessControlSelectorSources } from './accessControlSelectorSources'
+import type { UnifiedUserDeletionProgress } from './unifiedUserDeletion'
 
 interface AccessControlPageOverlaysProps {
   editor: AccessEditor | null
@@ -52,7 +53,13 @@ interface AccessControlPageOverlaysProps {
   onDashboardMembersChanged: () => void
   onEditKey: (key: AccessAPIKey) => void
   onEditEntity: (kind: EntityDetailKind, item: EntityDetailValue) => void
-  onDeleteEntity: (kind: EntityDetailKind, id: string) => void
+  onDeleteEntity: (kind: EntityDetailKind, id: string) => Promise<void>
+  onRemoveDashboardLogin: (memberId: string) => Promise<void>
+  onDeleteUnifiedUser: (
+    memberId: string,
+    modelUserId: string,
+    progress: UnifiedUserDeletionProgress,
+  ) => Promise<UnifiedUserDeletionProgress>
   onEditModelAccess: (user: AccessUser) => void
   resourceName: (resourceType: 'model' | 'entrypoint', resourceId: string) => string
 }
@@ -79,6 +86,8 @@ const AccessControlPageOverlays = ({
   onEditKey,
   onEditEntity,
   onDeleteEntity,
+  onRemoveDashboardLogin,
+  onDeleteUnifiedUser,
   onEditModelAccess,
   resourceName,
 }: AccessControlPageOverlaysProps) => (
@@ -133,6 +142,8 @@ const AccessControlPageOverlays = ({
       onEditKey={onEditKey}
       onEditEntity={onEditEntity}
       onDeleteEntity={onDeleteEntity}
+      onRemoveDashboardLogin={onRemoveDashboardLogin}
+      onDeleteUnifiedUser={onDeleteUnifiedUser}
       onEditModelAccess={onEditModelAccess}
     />
   </>

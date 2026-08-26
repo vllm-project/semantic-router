@@ -17,6 +17,7 @@ func TestBuildMLSelectionConfigUsesOnlyScopedRecipe(t *testing.T) {
 					Type: config.DecisionAlgorithmKNN,
 					ML: &config.MLSelectionConfig{
 						EmbeddingDim: 384,
+						ModelType:    "mmbert",
 						KNN:          &config.MLKNNConfig{K: 3},
 					},
 				},
@@ -30,6 +31,7 @@ func TestBuildMLSelectionConfigUsesOnlyScopedRecipe(t *testing.T) {
 					Type: config.DecisionAlgorithmSVM,
 					ML: &config.MLSelectionConfig{
 						EmbeddingDim: 1024,
+						ModelType:    config.EmbeddingModelTypeQwen3,
 						SVM:          &config.MLSVMConfig{Kernel: "linear"},
 					},
 				},
@@ -39,10 +41,10 @@ func TestBuildMLSelectionConfigUsesOnlyScopedRecipe(t *testing.T) {
 
 	nearest := buildMLSelectionConfig(cfg.ConfigForRecipe(&cfg.Recipes[0]))
 	boundary := buildMLSelectionConfig(cfg.ConfigForRecipe(&cfg.Recipes[1]))
-	if nearest == nil || nearest.KNN == nil || nearest.KNN.K != 3 || nearest.SVM != nil || nearest.EmbeddingDim != 384 {
+	if nearest == nil || nearest.KNN == nil || nearest.KNN.K != 3 || nearest.SVM != nil || nearest.ModelType != "mmbert" || nearest.EmbeddingDim != 384 {
 		t.Fatalf("nearest Recipe selector config = %#v", nearest)
 	}
-	if boundary == nil || boundary.SVM == nil || boundary.SVM.Kernel != "linear" || boundary.KNN != nil || boundary.EmbeddingDim != 1024 {
+	if boundary == nil || boundary.SVM == nil || boundary.SVM.Kernel != "linear" || boundary.KNN != nil || boundary.ModelType != config.EmbeddingModelTypeQwen3 || boundary.EmbeddingDim != 1024 {
 		t.Fatalf("boundary Recipe selector config = %#v", boundary)
 	}
 }

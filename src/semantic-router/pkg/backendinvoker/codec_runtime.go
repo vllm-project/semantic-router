@@ -34,6 +34,7 @@ func (i *Invoker) transformResponse(
 	backend Backend,
 	attempt AttemptResult,
 	response *http.Response,
+	sensitiveValues []string,
 ) (*http.Response, error) {
 	if response == nil || response.Body == nil {
 		return nil, fmt.Errorf("backend returned an empty response")
@@ -50,7 +51,18 @@ func (i *Invoker) transformResponse(
 		return nil, transformResponseErr
 	}
 	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
-		protocolError := safeUpstreamHTTPError(response.StatusCode, response.Header)
+		body, readErr := readWireBody(sourceBody, maximumProviderErrorBodyBytes)
+		closeSourceBody = false
+		protocolError, publicBody, providerRequestID := translateUpstreamHTTPError(
+			engine,
+			backend.WireFormat,
+			plan.SourceFormat,
+			response.StatusCode,
+			response.Header,
+			body,
+			readErr,
+			sensitiveValues,
+		)
 		if err := i.finalizeResponse(ctx, plan, attempt, ResponseTerminal{
 			Usage:      llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
 			StopReason: llmprotocol.StopError,
@@ -58,27 +70,27 @@ func (i *Invoker) transformResponse(
 		}); err != nil {
 			return nil, err
 		}
-		body, encodeErr := engine.EncodeError(plan.SourceFormat, protocolError)
-		if encodeErr != nil {
-			return nil, encodeErr
-		}
-		response.Body = io.NopCloser(bytes.NewReader(body))
-		response.ContentLength = int64(len(body))
-		safeHeaders := make(http.Header)
-		safeHeaders.Set("Content-Length", strconv.Itoa(len(body)))
-		safeHeaders.Set("Content-Type", "application/json")
-		if protocolError.RetryAfter > 0 {
-			safeHeaders.Set("Retry-After", strconv.FormatInt(protocolError.RetryAfter, 10))
-		}
-		response.Header = safeHeaders
+		response.Body = io.NopCloser(bytes.NewReader(publicBody))
+		response.ContentLength = int64(len(publicBody))
+		response.Header = publicUpstreamErrorHeaders(
+			len(publicBody),
+			protocolError,
+			providerRequestID,
+			sensitiveValues,
+		)
 		return response, nil
 	}
 	if plan.Streaming && response.StatusCode >= 200 && response.StatusCode < 300 &&
 		strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "text/event-stream") {
-		stream, err := engine.NewStream(backend.WireFormat, plan.SourceFormat, llmprotocol.StreamContext{
-			Context: ctx, Source: backend.WireFormat, Target: plan.SourceFormat,
-			PublicModel: plan.ModelID, ProviderModel: backend.ProviderModelID,
-		})
+		stream, err := engine.NewStreamWithMutation(
+			backend.WireFormat,
+			plan.SourceFormat,
+			llmprotocol.StreamContext{
+				Context: ctx, Source: backend.WireFormat, Target: plan.SourceFormat,
+				PublicModel: plan.ModelID, ProviderModel: backend.ProviderModelID,
+			},
+			publicStreamErrorMutation(sensitiveValues),
+		)
 		if err != nil {
 			return nil, err
 		}

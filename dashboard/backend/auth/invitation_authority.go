@@ -43,17 +43,30 @@ type RouterInvitationAcceptanceResult struct {
 	DashboardRole string
 }
 
-// InvitationAuthorityError preserves only the public Router HTTP status. It
-// deliberately omits upstream response bodies and secret-bearing requests.
+// InvitationAuthorityError preserves the bounded, public Router diagnostics
+// needed to correlate a failed invitation request. It deliberately omits
+// upstream messages, response details, and secret-bearing requests.
 type InvitationAuthorityError struct {
-	Status int
+	Status    int
+	Code      string
+	RequestID string
 }
 
 func (err *InvitationAuthorityError) Error() string {
 	if err == nil {
 		return ErrInvitationAuthorityUnavailable.Error()
 	}
-	return http.StatusText(err.Status)
+	message := http.StatusText(err.Status)
+	if message == "" {
+		message = ErrInvitationAuthorityUnavailable.Error()
+	}
+	if err.Code != "" {
+		message += " [" + err.Code + "]"
+	}
+	if err.RequestID != "" {
+		message += " (request " + err.RequestID + ")"
+	}
+	return message
 }
 
 func invitationRoleGrants(role string) ([]managementapi.InvitationRoleGrantRequest, error) {

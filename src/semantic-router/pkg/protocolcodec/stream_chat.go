@@ -112,7 +112,15 @@ func (decoder *chatStreamDecoder) pushFrame(frame []byte) ([]llmprotocol.Event, 
 		}
 	}
 	if chunk.Error != nil {
-		event, err := decoder.next(llmprotocol.Event{Type: llmprotocol.EventResponseFailed, Error: &llmprotocol.ProtocolError{Category: llmprotocol.ErrorUpstreamUnavailable, Code: chunk.Error.Code, Message: chunk.Error.Message}, StopReason: llmprotocol.StopError})
+		event, err := decoder.next(llmprotocol.Event{
+			Type: llmprotocol.EventResponseFailed,
+			Error: &llmprotocol.ProtocolError{
+				Category: decodeProviderErrorCategory(chunk.Error.Type, chunk.Error.Code),
+				Code:     chunk.Error.Code, Message: chunk.Error.Message, Parameter: chunk.Error.Param,
+			},
+			StopReason: llmprotocol.StopError,
+			Failure:    llmprotocol.FailureTransport,
+		})
 		return []llmprotocol.Event{event}, nil, err
 	}
 	events := make([]llmprotocol.Event, 0, 8)
@@ -332,7 +340,8 @@ func (encoder *chatStreamEncoder) Push(event llmprotocol.Event) ([][]byte, llmpr
 		if event.Error == nil {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorInternal, "error_event_invalid", "error event is invalid", nil)
 		}
-		chunk.Error = &chatErrorWire{Message: event.Error.Message, Type: string(event.Error.Category), Code: event.Error.Code}
+		frame, err := encodeSSE("", openAITransportErrorEnvelope(event.Error))
+		return [][]byte{frame}, nil, err
 	case llmprotocol.EventProviderOpaque:
 		if encoder.policy.UnknownFields != llmprotocol.UnknownPreserveSameFormat || encoder.context.Source != encoder.context.Target {
 			return nil, nil, llmprotocol.NewError(llmprotocol.ErrorUnsupportedFeature, "opaque_event", "opaque provider event cannot cross formats", nil)
@@ -383,7 +392,12 @@ func (encoder *chatStreamEncoder) Finalize(reason error) ([][]byte, llmprotocol.
 	}
 	encoder.terminal = true
 	if reason != nil {
-		body := OpenAIChatCodec{}.EncodeError(llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "stream_incomplete", "stream ended before completion", reason))
+		body := OpenAIChatCodec{}.EncodeTransportError(llmprotocol.TransportError{Error: llmprotocol.NewError(
+			llmprotocol.ErrorUpstreamUnavailable,
+			"stream_incomplete",
+			"stream ended before completion",
+			reason,
+		)})
 		return [][]byte{append([]byte("data: "), append(body, []byte("\n\n")...)...)}, nil, nil
 	}
 	return [][]byte{[]byte("data: [DONE]\n\n")}, nil, nil

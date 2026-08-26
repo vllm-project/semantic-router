@@ -161,7 +161,7 @@ export function AccessEntityDetail({
   selfUserId: string
   resourceName: (resourceType: 'model' | 'entrypoint', resourceId: string) => string
   onEdit: (kind: EntityDetailKind, item: EntityDetailValue) => void
-  onDelete: (kind: EntityDetailKind, id: string) => void
+  onDelete: (kind: EntityDetailKind, id: string) => Promise<void>
   onClose: () => void
 }) {
   const [item, setItem] = useState<EntityDetailValue | null>(null)
@@ -194,7 +194,13 @@ export function AccessEntityDetail({
   const policyNameResolver = policyNameResolverRef.current
   const [error, setError] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const dialogRef = useAccessibleDialog<HTMLDivElement>({ isOpen: true, onClose })
+  const [deletePending, setDeletePending] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
+  const dialogRef = useAccessibleDialog<HTMLDivElement>({
+    isOpen: true,
+    onClose,
+    dismissible: !deletePending,
+  })
   useEffect(() => {
     let cancelled = false
     setError('')
@@ -298,6 +304,21 @@ export function AccessEntityDetail({
           (membership) => membership.userId === selfUserId && membership.role === 'admin',
         )),
   )
+  const remove = async () => {
+    if (!item || deletePending) return
+    setDeletePending(true)
+    setDeleteError('')
+    try {
+      await onDelete(kind, item.id)
+      onClose()
+    } catch (nextError) {
+      setDeleteError(
+        nextError instanceof Error ? nextError.message : `Could not delete ${entityLabel}`,
+      )
+    } finally {
+      setDeletePending(false)
+    }
+  }
   const loadMore = async (
     relation: 'memberships' | 'members' | 'ownedKeys' | 'accessAssignments' | 'budgetAssignments',
   ) => {
@@ -339,7 +360,7 @@ export function AccessEntityDetail({
     <div
       className={`${styles.detailBackdrop} ${styles.entityDetailBackdrop}`}
       onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose()
+        if (event.target === event.currentTarget && !deletePending) onClose()
       }}
     >
       <section
@@ -348,6 +369,7 @@ export function AccessEntityDetail({
         role="dialog"
         aria-modal="true"
         aria-labelledby="entity-detail-title"
+        aria-busy={deletePending}
         tabIndex={-1}
       >
         <header className={styles.detailHeader}>
@@ -366,7 +388,13 @@ export function AccessEntityDetail({
               </p>
             </div>
           </div>
-          <button type="button" className={styles.modalClose} onClick={onClose} aria-label="Close">
+          <button
+            type="button"
+            className={styles.modalClose}
+            onClick={onClose}
+            disabled={deletePending}
+            aria-label="Close"
+          >
             <ProductIcon name="close" />
           </button>
         </header>
@@ -377,6 +405,15 @@ export function AccessEntityDetail({
               <div>
                 <strong>Couldn’t load details</strong>
                 <p>{error}</p>
+              </div>
+            </div>
+          ) : null}
+          {deleteError ? (
+            <div className={styles.modalError} role="alert">
+              <ProductIcon name="alert" aria-hidden="true" />
+              <div>
+                <strong>Couldn’t delete {entityLabel.toLowerCase()}</strong>
+                <p>{deleteError}</p>
               </div>
             </div>
           ) : null}
@@ -698,11 +735,15 @@ export function AccessEntityDetail({
           {item && canDelete && confirmingDelete ? (
             <div className={styles.detailConfirm} role="alert">
               <span>Delete {item.name}?</span>
-              <button type="button" onClick={() => setConfirmingDelete(false)}>
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={deletePending}
+              >
                 Cancel
               </button>
-              <button type="button" onClick={() => onDelete(kind, item.id)}>
-                <ProductIcon name="trash" /> Delete
+              <button type="button" onClick={() => void remove()} disabled={deletePending}>
+                <ProductIcon name="trash" /> {deletePending ? 'Deleting…' : 'Delete'}
               </button>
             </div>
           ) : item && (effectiveCanEdit || canDelete) ? (
@@ -711,7 +752,11 @@ export function AccessEntityDetail({
                 <button
                   type="button"
                   className={styles.dangerButton}
-                  onClick={() => setConfirmingDelete(true)}
+                  onClick={() => {
+                    setDeleteError('')
+                    setConfirmingDelete(true)
+                  }}
+                  disabled={deletePending}
                 >
                   <ProductIcon name="trash" /> Delete
                 </button>
@@ -727,7 +772,12 @@ export function AccessEntityDetail({
               ) : null}
             </>
           ) : null}
-          <button type="button" className={styles.primaryButton} onClick={onClose}>
+          <button
+            type="button"
+            className={styles.primaryButton}
+            onClick={onClose}
+            disabled={deletePending}
+          >
             <ProductIcon name="check" /> Done
           </button>
         </footer>

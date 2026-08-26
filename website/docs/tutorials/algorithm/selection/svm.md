@@ -73,6 +73,7 @@ algorithm:
   type: svm
   ml:
     models_path: ".cache/ml-models"
+    model_type: mmbert
     embedding_dim: 768
     svm:
       kernel: rbf
@@ -81,7 +82,8 @@ algorithm:
 ```
 
 `algorithm.ml` belongs to this Decision. Decisions in the same Recipe must
-agree on shared settings and repeated family settings.
+agree on `models_path`, `model_type`, `embedding_dim`, and repeated family
+settings.
 
 ### Parameters
 

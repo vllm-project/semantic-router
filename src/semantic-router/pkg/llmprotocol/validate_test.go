@@ -185,6 +185,42 @@ func TestValidateUsageRequiresExplicitStateAndSafeTotals(t *testing.T) {
 	}
 }
 
+func TestValidateResponseBoundsErrorIdentityAndMessage(t *testing.T) {
+	limits := DefaultPolicy().Limits
+	valid := Response{
+		Generation: 1,
+		StopReason: StopError,
+		Error:      NewError(ErrorAuthentication, "authentication_error", "API key is invalid.", nil),
+	}
+	if err := ValidateResponse(valid, limits); err != nil {
+		t.Fatalf("valid error response rejected: %v", err)
+	}
+	for name, mutate := range map[string]func(*Response){
+		"provider request ID": func(response *Response) {
+			response.ProviderRequestID = strings.Repeat("r", limits.IdentifierBytes+1)
+		},
+		"error code": func(response *Response) {
+			response.Error.Code = strings.Repeat("c", limits.IdentifierBytes+1)
+		},
+		"error parameter": func(response *Response) {
+			response.Error.Parameter = strings.Repeat("p", limits.IdentifierBytes+1)
+		},
+		"error message": func(response *Response) {
+			response.Error.Message = strings.Repeat("m", limits.TextBytes+1)
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			response := valid
+			copyError := *valid.Error
+			response.Error = &copyError
+			mutate(&response)
+			if err := ValidateResponse(response, limits); err == nil {
+				t.Fatalf("oversized error response accepted: %#v", response)
+			}
+		})
+	}
+}
+
 func TestStableIDUsesUnambiguousLengths(t *testing.T) {
 	if StableID("ab", "c") == StableID("a", "bc") {
 		t.Fatal("stable ID framing collided")

@@ -102,6 +102,36 @@ describe('access-control modal experience', () => {
     expect(page).toContain('?item=${encodeURIComponent(returnTarget.id)}')
   })
 
+  it('keeps entity deletion pending and failure state inside the open dialog', () => {
+    const detail = readSource('./AccessEntityDetail.tsx')
+    const page = readSource('./AccessControlPage.tsx')
+
+    expect(detail).toContain('const [deletePending, setDeletePending]')
+    expect(detail).toContain('const [deleteError, setDeleteError]')
+    expect(detail).toContain('await onDelete(kind, item.id)')
+    expect(detail).toContain('aria-busy={deletePending}')
+    expect(detail).toContain("deletePending ? 'Deleting…' : 'Delete'")
+    expect(page).toContain('removeLocalEntity(kind, id)')
+    expect(page).toContain('refreshAfterDelete()')
+  })
+
+  it('separates Dashboard login removal from coordinated user deletion', () => {
+    const detail = readSource('./DashboardMemberDetail.tsx')
+    const overlays = readSource('./AccessControlDetailOverlays.tsx')
+    const page = readSource('./AccessControlPage.tsx')
+
+    expect(detail).toContain('Remove login')
+    expect(detail).toContain('Delete user')
+    expect(detail).toContain('canManageModelUser')
+    expect(detail).toContain('canDeleteUnifiedUser')
+    expect(detail).toContain('UnifiedUserDeletionError')
+    expect(detail).toContain('findLinkedModelUser(member, users)')
+    expect(page).toContain('error instanceof ManagementApiError && error.status === 404')
+    expect(overlays).toContain('canManage && canManageDashboardMembers')
+    expect(page).toContain('deleteUnifiedUser(progress')
+    expect(page).toContain("removeLocalEntity('user', modelUserId)")
+  })
+
   it('uses plain-language key lifecycle actions and shows live quota capacity', () => {
     const detail = readSource('./APIKeyDetail.tsx')
 
@@ -114,6 +144,9 @@ describe('access-control modal experience', () => {
     expect(detail).toContain('formatCosts(usage.costs)')
     expect(detail).toContain('Usage unavailable')
     expect(detail).toContain('Edit access & quota')
+    expect(detail).toContain('disabled={!snippets}')
+    expect(detail).toContain('No request-ready model is available for this key.')
+    expect(detail).not.toContain('YOUR_MODEL')
     expect(detail).not.toContain('Rotate key')
     expect(detail.match(/<dt>Owner<\/dt>/g)).toHaveLength(1)
   })

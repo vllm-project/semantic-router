@@ -6,6 +6,7 @@ import {
   RequestLogDetail,
 } from './AccessControlDetails'
 import type { EntityDetailKind, EntityDetailValue } from './AccessEntityDetail'
+import type { UnifiedUserDeletionProgress } from './unifiedUserDeletion'
 
 interface AccessControlDetailOverlaysProps {
   detailKeyId: string
@@ -27,7 +28,13 @@ interface AccessControlDetailOverlaysProps {
   onDashboardMembersChanged: () => void
   onEditKey: (key: AccessAPIKey) => void
   onEditEntity: (kind: EntityDetailKind, item: EntityDetailValue) => void
-  onDeleteEntity: (kind: EntityDetailKind, id: string) => void
+  onDeleteEntity: (kind: EntityDetailKind, id: string) => Promise<void>
+  onRemoveDashboardLogin: (memberId: string) => Promise<void>
+  onDeleteUnifiedUser: (
+    memberId: string,
+    modelUserId: string,
+    progress: UnifiedUserDeletionProgress,
+  ) => Promise<UnifiedUserDeletionProgress>
   onEditModelAccess: (user: AccessUser) => void
 }
 
@@ -53,6 +60,8 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
     onEditKey,
     onEditEntity,
     onDeleteEntity,
+    onRemoveDashboardLogin,
+    onDeleteUnifiedUser,
     onEditModelAccess,
   } = props
   return (
@@ -101,9 +110,14 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
       {detailMemberId ? (
         <DashboardMemberDetail
           memberId={detailMemberId}
+          users={users}
           canManage={canManageDashboardMembers}
+          canManageModelUser={canManage}
+          canDeleteUnifiedUser={canManage && canManageDashboardMembers}
           onChanged={onDashboardMembersChanged}
           onEditModelAccess={onEditModelAccess}
+          onRemoveLogin={onRemoveDashboardLogin}
+          onDeleteUser={onDeleteUnifiedUser}
           onClose={onClose}
         />
       ) : null}
