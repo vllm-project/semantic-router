@@ -42,6 +42,14 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		if streamDone {
 			r.finalizeStreamingResponse(ctx)
 		}
+		// Anthropic-only SSE (e.g. content_block_stop) produces no OpenAI
+		// chunk. Nil mutation would pass the raw Anthropic frame through;
+		// Response API clients must not see that leak.
+		if isResponseAPIRequest(ctx) {
+			return buildResponseBodyContinueResponse(&ext_proc.BodyMutation{
+				Mutation: &ext_proc.BodyMutation_Body{Body: []byte{}},
+			}, responseAPIStreamingHeaderMutation())
+		}
 		return buildResponseBodyContinueResponse(nil, nil)
 	}
 
