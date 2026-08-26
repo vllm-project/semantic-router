@@ -22,6 +22,15 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 		ctx.AnthropicStream = anthropic.NewStreamState()
 	}
 
+	// Envoy's streamed mode can split an SSE event at any byte offset;
+	// the translator silently drops data: lines whose JSON is incomplete,
+	// so a split frame would lose its content (and a split message_stop
+	// would lose stream termination). Hold partial frames back until the
+	// closing delimiter arrives, as the Anthropic-client streaming
+	// handler already does.
+	frames, remainder := reassembleSSEFrames(ctx.PendingSSEBytes, responseBody)
+	ctx.PendingSSEBytes = remainder
+
 	// Pass IRExtensions through so the merged Anthropic→OpenAI cell
 	// captures cache counters, stop_reason round-trip fields, and
 	// per-block thinking signatures onto the request-scoped sidecar.
@@ -29,7 +38,7 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 	// router replay, and downstream non-streaming responses consistent
 	// with the streaming case.
 	transformed, streamDone, err := anthropic.TransformSSEChunkToOpenAI(
-		responseBody,
+		frames,
 		ctx.AnthropicStream,
 		ctx.RequestModel,
 		ctx.IRExtensions,
@@ -67,20 +76,18 @@ func (r *OpenAIRouter) handleAnthropicStreamingResponseBody(
 // clients have no dedicated ClientProtocol value (Responses-ness lives on
 // ctx.ResponseAPICtx), so they reach this handler like plain OpenAI clients;
 // their chunks go through the same Response API streaming mutation that
-// handleStreamingResponseBody applies for OpenAI-format backends. The
-// mutation is applied even for empty fragments so raw Anthropic frames
-// (ping, content_block_stop) are always replaced and never leak to a
-// /v1/responses stream. OpenAI clients keep the legacy contract: their
-// chunk bytes pass through untouched when there is nothing to emit.
+// handleStreamingResponseBody applies for OpenAI-format backends.
+//
+// The body is replaced even when the transform produced nothing: raw
+// Anthropic frames (ping, content_block_stop) must never leak to either
+// client, and a partial frame held in ctx.PendingSSEBytes must not also
+// pass through raw — it will be replayed from the buffer once complete.
 func (r *OpenAIRouter) anthropicStreamingChunkMutation(
 	transformed []byte,
 	ctx *RequestContext,
 ) (*ext_proc.BodyMutation, *ext_proc.HeaderMutation) {
 	if isResponseAPIRequest(ctx) {
 		return r.buildResponseAPIStreamingBodyMutation(transformed, ctx), responseAPIStreamingHeaderMutation()
-	}
-	if len(transformed) == 0 {
-		return nil, nil
 	}
 	return &ext_proc.BodyMutation{
 		Mutation: &ext_proc.BodyMutation_Body{Body: transformed},

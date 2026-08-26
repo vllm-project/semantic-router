@@ -139,6 +139,43 @@ func TestResponseAPIStreamingAnthropicBackendSuppressesUntranslatedFrames(t *tes
 	require.Empty(t, bodyMutation.GetBody())
 }
 
+func TestResponseAPIStreamingAnthropicBackendBuffersSplitFrames(t *testing.T) {
+	store := NewMockResponseStore()
+	router := &OpenAIRouter{
+		Config:            &config.RouterConfig{},
+		ResponseAPIFilter: NewResponseAPIFilter(store),
+	}
+	ctx := newAnthropicResponseAPIStreamingTestContext("response-api-anthropic-split")
+
+	// Split the stream mid-JSON inside the content_block_delta frame:
+	// everything up to the cut must be held back, not dropped or leaked.
+	stream := anthropicSSEFrames(anthropicStreamFixture...)
+	cut := strings.Index(string(stream), `"text_delta"`)
+	require.Positive(t, cut)
+
+	firstResp, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+		ResponseBody: &ext_proc.HttpBody{Body: stream[:cut]},
+	}, ctx)
+	require.NoError(t, err)
+	firstMutation := firstResp.GetResponseBody().GetResponse().GetBodyMutation()
+	require.NotNil(t, firstMutation, "partial upstream frames must not pass through untranslated")
+	firstWire := string(firstMutation.GetBody())
+	require.NotContains(t, firstWire, "content_block_delta")
+
+	secondResp, err := router.handleResponseBody(&ext_proc.ProcessingRequest_ResponseBody{
+		ResponseBody: &ext_proc.HttpBody{Body: stream[cut:]},
+	}, ctx)
+	require.NoError(t, err)
+	secondWire := string(secondResp.GetResponseBody().GetResponse().GetBodyMutation().GetBody())
+
+	combined := firstWire + secondWire
+	require.Equal(t, 1, strings.Count(combined, `"delta":"Hi"`), "split delta content must survive exactly once")
+	require.Contains(t, combined, "response.completed")
+	require.Contains(t, combined, `"output_text":"Hi"`)
+	require.NotContains(t, combined, "chat.completion.chunk")
+	require.True(t, ctx.StreamingComplete, "split terminal frames must still finalize the stream")
+}
+
 func TestAnthropicStreamingOpenAIClientKeepsChatCompletionChunks(t *testing.T) {
 	router := &OpenAIRouter{
 		Config: &config.RouterConfig{},
