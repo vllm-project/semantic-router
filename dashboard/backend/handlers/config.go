@@ -123,18 +123,9 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			http.Error(w, fmt.Sprintf("Config validation failed: %v", err), http.StatusBadRequest)
 			return
 		}
-
-		// Explicitly validate vLLM endpoints (Parse doesn't validate endpoints by default)
-		if len(parsedConfig.VLLMEndpoints) > 0 {
-			for _, endpoint := range parsedConfig.VLLMEndpoints {
-				if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
-					continue
-				}
-				if err := validateEndpointAddress(endpoint.Address); err != nil {
-					http.Error(w, fmt.Sprintf("Config validation failed: vLLM endpoint '%s' address validation failed: %v\n\nSupported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: localhost, example.com, api.example.com\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead", endpoint.Name, err), http.StatusBadRequest)
-					return
-				}
-			}
+		if err := validateVLLMEndpointAddresses(parsedConfig); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
 		}
 
 		if rejectRevokedMutation(w, r) {

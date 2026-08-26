@@ -84,6 +84,23 @@ func validateEndpointAddress(address string) error {
 	return nil
 }
 
+const vllmEndpointAddressHelp = "Supported formats:\n- IPv4: 192.168.1.1, 127.0.0.1\n- IPv6: ::1, 2001:db8::1\n- DNS names: localhost, example.com, api.example.com\n\nUnsupported formats:\n- Protocol prefixes: http://, https://\n- Paths: /api/v1, /health\n- Ports in address: use 'port' field instead"
+
+func validateVLLMEndpointAddresses(parsed *routerconfig.RouterConfig) error {
+	if parsed == nil {
+		return nil
+	}
+	for _, endpoint := range parsed.VLLMEndpoints {
+		if endpoint.ProviderProfileName != "" && endpoint.Address == "" {
+			continue
+		}
+		if err := validateEndpointAddress(endpoint.Address); err != nil {
+			return fmt.Errorf("Config validation failed: vLLM endpoint '%s' address validation failed: %w\n\n%s", endpoint.Name, err, vllmEndpointAddressHelp)
+		}
+	}
+	return nil
+}
+
 func validateCanonicalEndpointRefs(configData routerconfig.CanonicalConfig) error {
 	for modelIndex, model := range configData.Providers.Models {
 		for backendIndex, backend := range model.BackendRefs {
