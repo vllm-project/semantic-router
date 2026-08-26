@@ -109,7 +109,9 @@ func requireAnthropicResponseAPIStreamingLifecycle(t *testing.T, wire string, fi
 	require.Equal(t, responseapi.StatusCompleted, completedResponse["status"])
 	usage, ok := completedResponse["usage"].(map[string]interface{})
 	require.True(t, ok)
+	require.Equal(t, float64(3), usage["input_tokens"])
 	require.Equal(t, float64(1), usage["output_tokens"])
+	require.Equal(t, float64(4), usage["total_tokens"])
 }
 
 func TestResponseAPIStreamingAnthropicBackendSuppressesUntranslatedFrames(t *testing.T) {
