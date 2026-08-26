@@ -1254,7 +1254,23 @@ pub(crate) struct BioEntity {
     pub start: usize,
     pub end: usize,
     pub text: String,
+    /// Arithmetic mean of the per-token confidences merged into this entity.
     pub confidence: f32,
+    /// Number of tokens merged into this entity.
+    pub token_count: u32,
+}
+
+impl BioEntity {
+    /// Fold one more token's confidence into the running arithmetic mean.
+    ///
+    /// This deliberately is not `(self.confidence + confidence) / 2.0`. That
+    /// form is a running pairwise fold, which gives the last token weight 1/2
+    /// and the leading `B-` token weight 1/2^(n-1), so an entity's confidence
+    /// ends up depending on how many tokens it happened to split into.
+    fn accumulate(&mut self, confidence: f32) {
+        self.token_count += 1;
+        self.confidence += (confidence - self.confidence) / self.token_count as f32;
+    }
 }
 
 /// Merge a sequence of BIO-labelled tokens into entities.
@@ -1277,6 +1293,7 @@ pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<Bio
                 end: token.end,
                 text: text[token.start..token.end].to_string(),
                 confidence: token.confidence,
+                token_count: 1,
             });
         } else if let Some(entity_type) = token.label.strip_prefix("I-") {
             // Continuation of the open entity, when the type matches.
@@ -1284,8 +1301,7 @@ pub(crate) fn merge_bio_entities(text: &str, tokens: &[BioToken<'_>]) -> Vec<Bio
                 if entity.entity_type == entity_type {
                     entity.end = token.end;
                     entity.text = text[entity.start..entity.end].to_string();
-                    // Update confidence with average
-                    entity.confidence = (entity.confidence + token.confidence) / 2.0;
+                    entity.accumulate(token.confidence);
                 } else {
                     // Different entity type: close the open entity, drop this token.
                     entities.push(entity.clone());
