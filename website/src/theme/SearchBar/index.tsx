@@ -757,7 +757,6 @@ export default function SearchBar(): ReactNode {
                 type="text"
                 value={query}
               />
-              <kbd className="site-search-modal__esc">esc</kbd>
             </div>
 
             <div
@@ -829,31 +828,25 @@ export default function SearchBar(): ReactNode {
               {rows.length === 0 && renderState()}
             </div>
 
+            {/* The only place keys are named, and the only place counting
+                happens is the group headers. Each fact appears once. */}
             <div className="site-search-modal__footer">
-              <span className="site-search-modal__hints">
-                <span>
-                  <kbd>↑</kbd>
-                  <kbd>↓</kbd>
-                  {' '}
-                  {STRINGS.navigate}
-                </span>
-                <span>
-                  <kbd>↵</kbd>
-                  {' '}
-                  {STRINGS.openHint}
-                </span>
-                <span>
-                  <kbd>esc</kbd>
-                  {' '}
-                  {STRINGS.closeHint}
-                </span>
+              <span>
+                <kbd>↑</kbd>
+                <kbd>↓</kbd>
+                {' '}
+                {STRINGS.navigate}
               </span>
-              {rows.length > 0 && (
-                <span className="site-search-modal__tally">
-                  {rows.length}
-                  {rows.length === 1 ? ' result' : ' results'}
-                </span>
-              )}
+              <span>
+                <kbd>↵</kbd>
+                {' '}
+                {STRINGS.openHint}
+              </span>
+              <span>
+                <kbd>esc</kbd>
+                {' '}
+                {STRINGS.closeHint}
+              </span>
             </div>
           </div>
         </div>,

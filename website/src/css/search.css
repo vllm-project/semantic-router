@@ -259,17 +259,6 @@ html[data-theme='dark'],
   letter-spacing: 0;
 }
 
-.site-search-modal__esc {
-  flex: 0 0 auto;
-  padding: 2px 7px;
-  border: 1px solid var(--site-border-strong);
-  border-radius: var(--radius-sm);
-  color: var(--site-muted);
-  font-family: var(--ifm-font-family-monospace);
-  font-size: var(--text-xs);
-  line-height: 1.5;
-}
-
 .site-search-modal__results {
   flex: 1 1 auto;
   overflow-y: auto;
@@ -563,29 +552,21 @@ html[data-theme='dark'],
 
 /* ------------------------------------------------------------------ *
  * Footer
+ *
+ * Keyboard hints only. The result count lives on the group headers and is not
+ * repeated here — with one group on screen the two read as the same number
+ * printed twice.
  * ------------------------------------------------------------------ */
 
 .site-search-modal__footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-2) var(--space-4);
   border-top: 1px solid var(--site-border);
   background: var(--site-surface-alt);
   color: var(--site-muted);
   font-size: var(--text-xs);
-}
-
-.site-search-modal__hints {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.site-search-modal__tally {
-  flex: 0 0 auto;
-  font-family: var(--ifm-font-family-monospace);
 }
 
 .site-search-modal__footer kbd {
@@ -607,7 +588,7 @@ html[data-theme='dark'],
   }
 
   /* Two of the three hints are unreachable without a keyboard. */
-  .site-search-modal__hints > :not(:first-child) {
+  .site-search-modal__footer > :not(:first-child) {
     display: none;
   }
 }
