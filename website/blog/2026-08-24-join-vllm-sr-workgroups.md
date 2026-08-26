@@ -269,7 +269,6 @@ training.
 - [Optimize context for long-session and agentic workloads](https://github.com/vllm-project/semantic-router/issues/2984)
 - [Enable agent-based routing and multi-agent composition](https://github.com/vllm-project/semantic-router/issues/2994)
 - [Develop safe model and workflow switching for long-running agents](https://github.com/vllm-project/semantic-router/issues/2973)
-- [Define a trusted gateway context envelope for agent memory, tools, and budgets](https://github.com/vllm-project/semantic-router/issues/2546)
 
 ## [Developer Experience & Ecosystem](https://github.com/vllm-project/semantic-router/issues/2970)
 
