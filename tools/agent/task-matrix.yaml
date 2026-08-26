@@ -50,6 +50,9 @@ rules:
       - tools/agent/scripts/**
       - tools/ci/**
       - tools/make/agent.mk
+      - tools/make/linter.mk
+      - tools/make/pre-commit.mk
+      - .pre-commit-config.yaml
       - .github/actions/**
       - .github/workflows/**
       - .mergify.yml
@@ -136,6 +139,13 @@ rules:
     execution_plan_policy: long_horizon
     paths:
       - dashboard/**
+      - src/semantic-router/pkg/config/**
+      - src/semantic-router/pkg/dsl/**
+      - src/semantic-router/pkg/modelinventory/**
+      - src/semantic-router/pkg/nlgen/**
+      - src/semantic-router/pkg/startupstatus/**
+      - tools/make/dashboard.mk
+      - .github/workflows/dashboard-test.yml
     fast_tests:
       - make dashboard-check
     feature_tests: []
@@ -188,7 +198,7 @@ rules:
     fast_tests:
       - make agent-validate
     feature_tests: []
-    requires_local_smoke: true
+    requires_local_smoke: false
   - name: ci-general
     doc_only: false
     loop_mode: completion

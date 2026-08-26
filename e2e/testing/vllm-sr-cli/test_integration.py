@@ -14,11 +14,17 @@ import subprocess
 import time
 import unittest
 from contextlib import contextmanager
+from pathlib import Path
 from unittest import mock
 from urllib import error as urllib_error
 from urllib import request as urllib_request
 
 from cli_test_base import HTTP_STATUS_OK, CLITestBase
+
+DEFAULT_MOCK_OPENAI_IMAGE = "ghcr.io/vllm-project/semantic-router/vllm-sr-sim:latest"
+MOCK_OPENAI_IMAGE_ENV = "VLLM_SR_SIM_IMAGE"
+MOCK_OPENAI_SERVER_PORT = 18080
+MOCK_OPENAI_SERVER_PATH = Path(__file__).with_name("mock_openai_upstream.py").resolve()
 
 
 class TestServeIntegration(CLITestBase):
@@ -99,10 +105,19 @@ class TestServeIntegration(CLITestBase):
         self,
         *,
         env: dict[str, str] | None = None,
+        endpoint: str = "host.docker.internal:8000",
+        base_url: str | None = None,
+        provider: str | None = None,
+        api_only: bool = False,
         ensure_models_dir: bool = False,
     ):
         """Start one background serve session and clean it up automatically."""
-        self.write_minimal_canonical_config()
+        self.write_minimal_canonical_config(
+            endpoint=endpoint,
+            base_url=base_url,
+            provider=provider,
+            api_only=api_only,
+        )
         if ensure_models_dir:
             os.makedirs(os.path.join(self.test_dir, "models"), exist_ok=True)
 
@@ -152,6 +167,146 @@ class TestServeIntegration(CLITestBase):
         process.terminate.assert_called_once_with()
         process.kill.assert_not_called()
         self.assertEqual(process.communicate.call_count, 2)
+
+    @contextmanager
+    def _running_mock_upstream(self, container_name: str):
+        """Run the mock OpenAI upstream on the active stack network."""
+        image = os.getenv(MOCK_OPENAI_IMAGE_ENV, DEFAULT_MOCK_OPENAI_IMAGE)
+        result = self._run_subprocess(
+            [
+                self.container_runtime,
+                "run",
+                "-d",
+                "--name",
+                container_name,
+                "--network",
+                self.runtime_stack.network_name,
+                "-v",
+                f"{MOCK_OPENAI_SERVER_PATH}:/mock_openai_upstream.py:ro",
+                "--entrypoint",
+                "python3",
+                image,
+                "-u",
+                "/mock_openai_upstream.py",
+            ],
+            timeout=30,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            f"failed to start mock upstream: {result.stderr}",
+        )
+        self.assertTrue(
+            self.wait_for_container_running(
+                timeout=30,
+                container_name=container_name,
+            ),
+            "mock upstream did not reach running state",
+        )
+        try:
+            yield
+        finally:
+            self._run_subprocess(
+                [self.container_runtime, "rm", "-f", container_name],
+                timeout=30,
+            )
+
+    def _container_log_diagnostics(self, container_names: tuple[str, ...]) -> str:
+        """Collect bounded logs for a failed mock request."""
+        diagnostics = []
+        for container_name in container_names:
+            logs = self._run_subprocess(
+                [
+                    self.container_runtime,
+                    "logs",
+                    "--tail",
+                    "80",
+                    container_name,
+                ],
+                timeout=10,
+            )
+            diagnostics.append(
+                f"{container_name}:\n{(logs.stdout + logs.stderr)[-4000:]}"
+            )
+        return "\n".join(diagnostics)
+
+    def _send_mock_chat_completion(self, mock_container: str):
+        """Send a chat request, retrying until the local stack is ready."""
+        listener_port = 8888 + self.runtime_stack.port_offset
+        request = urllib_request.Request(
+            f"http://localhost:{listener_port}/v1/chat/completions",
+            data=(
+                b'{"model":"test-model","messages":'
+                b'[{"role":"user","content":"ping"}]}'
+            ),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        deadline = time.time() + 60
+        last_error: Exception | None = None
+        while time.time() < deadline:
+            try:
+                with urllib_request.urlopen(request, timeout=10) as response:
+                    self.assertEqual(response.status, 200)
+                    response.read()
+                return
+            except urllib_error.HTTPError as exc:
+                body = exc.read().decode("utf-8", errors="replace")
+                last_error = RuntimeError(f"HTTP {exc.code}: {body}")
+                time.sleep(2)
+            except (
+                urllib_error.URLError,
+                ConnectionError,
+                TimeoutError,
+            ) as exc:
+                last_error = exc
+                time.sleep(2)
+
+        diagnostics = self._container_log_diagnostics(
+            (
+                mock_container,
+                self.ROUTER_CONTAINER_NAME,
+                self.ENVOY_CONTAINER_NAME,
+            )
+        )
+        self.fail(f"request did not reach mock upstream: {last_error}\n{diagnostics}")
+
+    def _mock_upstream_paths(self, mock_container: str) -> set[str]:
+        """Read request paths recorded by the mock upstream."""
+        logs = self._run_subprocess(
+            [self.container_runtime, "logs", mock_container],
+            timeout=10,
+        )
+        self.assertEqual(logs.returncode, 0, logs.stderr)
+        return {
+            line.strip() for line in logs.stdout.splitlines() if line.startswith("/")
+        }
+
+    def _request_paths_for_mock_openai_base_path(
+        self,
+        *,
+        container_suffix: str,
+        base_path: str,
+    ) -> set[str]:
+        """Route one chat request to a path-recording OpenAI mock upstream."""
+        mock_container = f"{self.runtime_stack.stack_name}-{container_suffix}"
+        base_url = f"http://{mock_container}:{MOCK_OPENAI_SERVER_PORT}{base_path}"
+
+        with self._running_serve(
+            base_url=base_url,
+            provider="openai",
+            api_only=True,
+        ):
+            self.assertTrue(
+                self.wait_for_health(
+                    port=self.runtime_stack.api_port,
+                    timeout=self.CONTAINER_STARTUP_TIMEOUT,
+                ),
+                "router API did not become healthy",
+            )
+            with self._running_mock_upstream(mock_container):
+                self._send_mock_chat_completion(mock_container)
+                return self._mock_upstream_paths(mock_container)
 
     @unittest.skipUnless(
         os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
@@ -289,6 +444,58 @@ class TestServeIntegration(CLITestBase):
             "catalog management credential is malformed",
         )
         return token
+
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_is_idempotent(self):
+        """Verify route cache recomputation does not apply a base path twice."""
+        self.print_test_header(
+            "Idempotent Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1beta/openai mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="path-rewrite-upstream",
+            base_path="/v1beta/openai",
+        )
+        self.assertIn(
+            "/v1beta/openai/chat/completions",
+            upstream_paths,
+        )
+        self.assertNotIn(
+            "/v1beta/openaibeta/openai/chat/completions",
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Base URL path was applied exactly once")
+
+    @unittest.skip(
+        "TODO(issue-2885): fix root-cause rewrite idempotency for backend base "
+        "paths that still begin with the /v1 segment after rewriting."
+    )
+    @unittest.skipUnless(
+        os.environ.get("RUN_INTEGRATION_TESTS", "").lower() == "true",
+        "Integration tests disabled. Set RUN_INTEGRATION_TESTS=true to enable.",
+    )
+    def test_base_url_path_rewrite_idempotency_todo_for_v1_segment_prefix(self):
+        """Document the known gap for /v1/chat -> /v1/provider/chat rewrites."""
+        self.print_test_header(
+            "Future Base URL Rewrite Integration Test",
+            "Routes /v1/chat/completions once to a /v1/provider mock upstream",
+        )
+
+        upstream_paths = self._request_paths_for_mock_openai_base_path(
+            container_suffix="provider-rewrite-upstream",
+            base_path="/v1/provider",
+        )
+        self.assertEqual(
+            {"/v1/provider/chat/completions"},
+            upstream_paths,
+        )
+
+        self.print_test_result(True, "Future /v1 segment base URL was applied once")
 
     def _check_health_endpoint(self):
         """Check health endpoint (informational, doesn't fail test)."""

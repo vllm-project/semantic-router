@@ -1,6 +1,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -115,3 +117,67 @@ def test_maybe_append_nvidia_gpu_passthrough_skips_when_disabled():
         cmd, enable_nvidia_gpu=False, runtime="docker"
     )
     assert cmd == []
+
+
+def test_append_supplemental_gids_uses_keep_groups_for_rootless_podman_on_linux(
+    monkeypatch,
+):
+    monkeypatch.setattr(container_run_command.sys, "platform", "linux")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 1000)
+    cmd = []
+    container_run_command.append_supplemental_gids(cmd, [100, 200], "podman")
+    assert cmd == ["--group-add", "keep-groups"]
+
+
+def test_append_supplemental_gids_uses_explicit_gids_for_podman_on_macos(
+    monkeypatch,
+):
+    """macOS Podman machine runs in remote mode and rejects keep-groups (#2954)."""
+    monkeypatch.setattr(container_run_command.sys, "platform", "darwin")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 1000)
+    cmd = []
+    container_run_command.append_supplemental_gids(cmd, [100, 200], "podman")
+    assert cmd == ["--group-add", "100", "--group-add", "200"]
+
+
+def test_append_supplemental_gids_uses_explicit_gids_for_root_podman_on_linux(
+    monkeypatch,
+):
+    monkeypatch.setattr(container_run_command.sys, "platform", "linux")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 0)
+    cmd = []
+    container_run_command.append_supplemental_gids(cmd, [100], "podman")
+    assert cmd == ["--group-add", "100"]
+
+
+def test_append_supplemental_gids_uses_explicit_gids_for_docker_on_linux(
+    monkeypatch,
+):
+    monkeypatch.setattr(container_run_command.sys, "platform", "linux")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 1000)
+    cmd = []
+    container_run_command.append_supplemental_gids(cmd, [100], "docker")
+    assert cmd == ["--group-add", "100"]
+
+
+def test_append_supplemental_gids_dedupes_and_preserves_order(monkeypatch):
+    monkeypatch.setattr(container_run_command.sys, "platform", "linux")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 1000)
+    cmd = []
+    container_run_command.append_supplemental_gids(cmd, [100, 200, 100], "docker")
+    assert cmd == ["--group-add", "100", "--group-add", "200"]
+
+
+def test_append_supplemental_gids_noop_when_empty(monkeypatch):
+    monkeypatch.setattr(container_run_command.sys, "platform", "linux")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 1000)
+    cmd = []
+    container_run_command.append_supplemental_gids(cmd, [], "podman")
+    assert cmd == []
+
+
+def test_append_supplemental_gids_rejects_non_positive_gid(monkeypatch):
+    monkeypatch.setattr(container_run_command.sys, "platform", "darwin")
+    monkeypatch.setattr(container_run_command.os, "geteuid", lambda: 1000)
+    with pytest.raises(ValueError):
+        container_run_command.append_supplemental_gids([], [0], "podman")

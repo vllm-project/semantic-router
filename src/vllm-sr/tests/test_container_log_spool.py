@@ -2,6 +2,7 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 
 import pytest
 from cli.container_log_spool import (
@@ -107,11 +108,22 @@ def test_bounded_log_spool_relay_preserves_output_and_bounds_file(tmp_path):
 
 def test_rootless_podman_retains_host_spool_group(monkeypatch):
     monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(sys, "platform", "linux")
     command = ["podman", "run"]
 
     append_supplemental_gids(command, [1000], "podman")
 
     assert command[-2:] == ["--group-add", "keep-groups"]
+
+
+def test_rootless_podman_on_macos_uses_numeric_group_add(monkeypatch):
+    monkeypatch.setattr(os, "geteuid", lambda: 1000)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    command = ["podman", "run"]
+
+    append_supplemental_gids(command, [1000], "podman")
+
+    assert command[-2:] == ["--group-add", "1000"]
 
 
 def test_docker_uses_fixed_numeric_spool_group():

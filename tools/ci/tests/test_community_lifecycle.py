@@ -1,0 +1,483 @@
+import importlib.util
+import sys
+import unittest
+from pathlib import Path
+
+import yaml
+
+SCRIPT = Path(__file__).resolve().parents[1] / "community_lifecycle.py"
+if str(SCRIPT.parent) not in sys.path:
+    sys.path.insert(0, str(SCRIPT.parent))
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SPEC = importlib.util.spec_from_file_location("community_lifecycle", SCRIPT)
+assert SPEC and SPEC.loader
+community_lifecycle = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = community_lifecycle
+SPEC.loader.exec_module(community_lifecycle)
+
+
+def labels(*names: str) -> list[dict[str, str]]:
+    return [{"name": name} for name in names]
+
+
+class CommunityLifecycleTests(unittest.TestCase):
+    def test_form_workgroup_is_parsed(self) -> None:
+        body = """### Goal
+
+Make routing better.
+
+### Proposed Workgroup
+
+MoM & Routing
+"""
+        self.assertEqual(
+            community_lifecycle.proposed_workgroup(body),
+            "wg/mom-routing",
+        )
+
+    def test_new_issue_enters_acceptance_with_proposed_owner(self) -> None:
+        issue = {
+            "body": "### Proposed Workgroup\n\nEvaluation & Quality\n",
+            "labels": labels("bug"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="opened",
+            event_label=None,
+            actor_can_manage=False,
+        )
+        self.assertEqual(
+            plan.add_labels,
+            {"needs-acceptance", "wg/evaluation-quality"},
+        )
+
+    def test_unaccepted_issue_cannot_be_assigned_or_prioritized(self) -> None:
+        issue = {
+            "body": "",
+            "labels": labels(
+                "priority/P0",
+                "ready-for-dev",
+                "release-blocker",
+                "backlog",
+            ),
+            "assignees": [{"login": "contributor"}],
+            "milestone": {"number": 7},
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="assigned",
+            event_label=None,
+            actor_can_manage=True,
+        )
+        self.assertIn("needs-acceptance", plan.add_labels)
+        self.assertTrue(
+            {
+                "priority/P0",
+                "ready-for-dev",
+                "release-blocker",
+                "backlog",
+            }
+            <= plan.remove_labels
+        )
+        self.assertEqual(plan.remove_assignees, {"contributor"})
+        self.assertTrue(plan.clear_milestone)
+
+    def test_accepted_assigned_issue_becomes_in_progress(self) -> None:
+        issue = {
+            "body": "",
+            "labels": labels(
+                "accepted",
+                "ready-for-dev",
+                "help wanted",
+                "stale",
+                "wg/data-plane-networking",
+            ),
+            "assignees": [{"login": "contributor"}],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="assigned",
+            event_label=None,
+            actor_can_manage=True,
+        )
+        self.assertIn("in-progress", plan.add_labels)
+        self.assertTrue({"ready-for-dev", "help wanted"} <= plan.remove_labels)
+        self.assertIn("needs-acceptance", plan.remove_labels)
+        self.assertIn("stale", plan.remove_labels)
+
+    def test_unassigned_work_does_not_become_contributor_ready_implicitly(self) -> None:
+        issue = {
+            "body": "",
+            "labels": labels(
+                "accepted",
+                "in-progress",
+                "wg/data-plane-networking",
+            ),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="unassigned",
+            event_label=None,
+            actor_can_manage=True,
+        )
+        self.assertIn("in-progress", plan.remove_labels)
+        self.assertNotIn("ready-for-dev", plan.add_labels)
+
+    def test_acceptance_without_one_workgroup_is_rejected(self) -> None:
+        issue = {
+            "body": "",
+            "labels": labels("accepted"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="labeled",
+            event_label="accepted",
+            actor_can_manage=True,
+        )
+        self.assertIn("accepted", plan.remove_labels)
+        self.assertIn("needs-acceptance", plan.add_labels)
+
+    def test_protected_label_from_non_maintainer_is_removed(self) -> None:
+        issue = {
+            "body": "",
+            "labels": labels("accepted", "wg/evaluation-quality"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="labeled",
+            event_label="accepted",
+            actor_can_manage=False,
+        )
+        self.assertIn("accepted", plan.remove_labels)
+        self.assertIn("needs-acceptance", plan.add_labels)
+
+    def test_protected_label_removed_by_non_maintainer_is_restored(self) -> None:
+        issue = {
+            "body": "",
+            "labels": labels("accepted", "wg/evaluation-quality"),
+            "assignees": [],
+            "milestone": None,
+        }
+        plan = community_lifecycle.plan_issue(
+            issue,
+            event_action="unlabeled",
+            event_label="priority/P1",
+            actor_can_manage=False,
+        )
+        self.assertIn("priority/P1", plan.add_labels)
+
+    def test_write_collaborator_can_accept_one_owned_issue(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Feature] Improve context routing",
+                "labels": labels(
+                    "needs-acceptance",
+                    "wg/agentic-context",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "wg/agentic-context")
+
+    def test_accept_command_rejects_actor_without_write_permission(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Feature] Improve context routing",
+                "labels": labels("wg/agentic-context"),
+            },
+            actor_can_manage=False,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("write", evaluation.error or "")
+
+    def test_accept_command_requires_exactly_one_workgroup(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Feature] Improve context routing",
+                "labels": labels(
+                    "wg/agentic-context",
+                    "wg/mom-routing",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("exactly one", evaluation.error or "")
+
+    def test_write_collaborator_can_accept_maintainer_owned_governance(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Governance] Maintain the public roadmap",
+                "labels": labels(
+                    "needs-acceptance",
+                    "owner/maintainers",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "owner/maintainers")
+
+    def test_accept_command_rejects_workgroup_plus_maintainer_owner(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "[Governance] Maintain the public roadmap",
+                "labels": labels(
+                    "wg/evaluation-quality",
+                    "owner/maintainers",
+                ),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("exactly one", evaluation.error or "")
+
+    def test_title_format_accepts_one_open_category(self) -> None:
+        for title in (
+            "[Feature] Add standalone serving",
+            "[CI/Build] Validate community titles",
+            "[v0.5] Publish model cards",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNone(community_lifecycle.title_format_error(title))
+
+    def test_title_format_rejects_missing_or_stacked_categories(self) -> None:
+        for title in (
+            "feature: add standalone serving",
+            "Feature: add standalone serving",
+            "[Router][Docs] Add guidance",
+            "[Router] [Docs] Add guidance",
+            "[] Add guidance",
+            "[Bug]",
+        ):
+            with self.subTest(title=title):
+                self.assertIsNotNone(community_lifecycle.title_format_error(title))
+
+    def test_accept_command_requires_normalized_title(self) -> None:
+        evaluation = community_lifecycle.evaluate_issue_acceptance(
+            {
+                "title": "feature: improve context routing",
+                "labels": labels("wg/agentic-context"),
+            },
+            actor_can_manage=True,
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertIn("bracketed category", evaluation.error or "")
+
+    def test_pr_requires_an_accepted_linked_issue(self) -> None:
+        pull_request = {"draft": False, "user": {"type": "User"}}
+        evaluation = community_lifecycle.evaluate_pull_request(
+            pull_request,
+            [{"labels": labels("needs-acceptance"), "milestone": None}],
+        )
+        self.assertFalse(evaluation.valid)
+        self.assertEqual(evaluation.state_label, "pr/blocked")
+
+    def test_pr_inherits_owner_milestone_and_release_blocker(self) -> None:
+        pull_request = {"draft": False, "user": {"type": "User"}}
+        linked = [
+            {
+                "labels": labels(
+                    "accepted",
+                    "release-blocker",
+                    "wg/enterprise-environment",
+                ),
+                "milestone": {"number": 7},
+            }
+        ]
+        evaluation = community_lifecycle.evaluate_pull_request(pull_request, linked)
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.state_label, "pr/needs-review")
+        self.assertEqual(evaluation.owner_label, "wg/enterprise-environment")
+        self.assertEqual(evaluation.milestone_number, 7)
+        self.assertTrue(evaluation.release_blocker)
+
+    def test_pr_can_inherit_maintainer_governance_owner(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": False, "user": {"type": "User"}},
+            [
+                {
+                    "labels": labels("accepted", "owner/maintainers"),
+                    "milestone": None,
+                }
+            ],
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.owner_label, "owner/maintainers")
+
+    def test_pr_review_and_runtime_signals_select_one_action_state(self) -> None:
+        pull_request = {"draft": False, "user": {"type": "User"}}
+        linked = [
+            {
+                "labels": labels("accepted", "wg/enterprise-environment"),
+                "milestone": None,
+            }
+        ]
+        cases = (
+            ({"review_decision": "CHANGES_REQUESTED"}, "pr/needs-author"),
+            ({"merge_state": "BEHIND"}, "pr/needs-rebase"),
+            ({"checks_state": "FAILURE"}, "pr/blocked"),
+            (
+                {
+                    "review_decision": "APPROVED",
+                    "checks_state": "PENDING",
+                    "merge_state": "CLEAN",
+                },
+                "pr/blocked",
+            ),
+            (
+                {
+                    "review_decision": "APPROVED",
+                    "checks_state": "SUCCESS",
+                    "merge_state": "CLEAN",
+                },
+                "pr/merge-ready",
+            ),
+        )
+        for signals, expected in cases:
+            with self.subTest(expected=expected):
+                evaluation = community_lifecycle.evaluate_pull_request(
+                    pull_request, linked, **signals
+                )
+                self.assertEqual(evaluation.state_label, expected)
+
+    def test_pr_close_candidate_is_not_overwritten_by_reconciliation(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {
+                "draft": False,
+                "user": {"type": "User"},
+                "labels": labels("pr/close-candidate"),
+            },
+            [
+                {
+                    "labels": labels("accepted", "wg/evaluation-quality"),
+                    "milestone": None,
+                }
+            ],
+            review_decision="REVIEW_REQUIRED",
+            checks_state="SUCCESS",
+            merge_state="CLEAN",
+        )
+        self.assertEqual(evaluation.state_label, "pr/close-candidate")
+
+    def test_bot_pr_can_move_to_rebase_without_a_tracking_issue(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": False, "user": {"type": "Bot"}},
+            [],
+            merge_state="BEHIND",
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.state_label, "pr/needs-rebase")
+        self.assertEqual(evaluation.owner_label, "wg/evaluation-quality")
+
+    def test_pr_rejects_multiple_accepted_workgroup_owners(self) -> None:
+        pull_request = {"draft": False, "user": {"type": "User"}}
+        linked = [
+            {
+                "labels": labels("accepted", "wg/enterprise-environment"),
+                "milestone": None,
+            },
+            {
+                "labels": labels("accepted", "wg/evaluation-quality"),
+                "milestone": None,
+            },
+        ]
+        evaluation = community_lifecycle.evaluate_pull_request(pull_request, linked)
+        self.assertFalse(evaluation.valid)
+
+    def test_draft_pr_is_author_work(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": True, "user": {"type": "User"}}, []
+        )
+        self.assertTrue(evaluation.valid)
+        self.assertEqual(evaluation.state_label, "pr/needs-author")
+
+    def test_draft_pr_keeps_accepted_owner_and_milestone_context(self) -> None:
+        evaluation = community_lifecycle.evaluate_pull_request(
+            {"draft": True, "user": {"type": "User"}},
+            [
+                {
+                    "labels": labels(
+                        "accepted",
+                        "release-blocker",
+                        "wg/evaluation-quality",
+                    ),
+                    "milestone": {"number": 7},
+                }
+            ],
+        )
+        self.assertEqual(evaluation.state_label, "pr/needs-author")
+        self.assertEqual(evaluation.owner_label, "wg/evaluation-quality")
+        self.assertEqual(evaluation.milestone_number, 7)
+        self.assertTrue(evaluation.release_blocker)
+
+    def test_related_issue_references_are_extracted(self) -> None:
+        self.assertEqual(
+            community_lifecycle.extract_related_issue_numbers(
+                "[Router] change", "Related #123\nRelated: org/repo#456"
+            ),
+            {123, 456},
+        )
+
+    def test_foreign_related_issue_reference_is_ignored(self) -> None:
+        self.assertEqual(
+            community_lifecycle.extract_related_issue_numbers(
+                "[Router] change",
+                "Related: vllm-project/semantic-router#123\n"
+                "Related: another/repository#456",
+                repository="vllm-project/semantic-router",
+            ),
+            {123},
+        )
+
+    def test_policy_and_issue_forms_match_executable_workgroups(self) -> None:
+        policy = yaml.safe_load(
+            (REPO_ROOT / "tools/agent/maintainer-policy.yaml").read_text()
+        )
+        self.assertEqual(
+            set(policy["labels"]["workgroups"]),
+            set(community_lifecycle.WORKGROUP_LABELS),
+        )
+        for template in (
+            ".github/ISSUE_TEMPLATE/001_feature_request.yaml",
+            ".github/ISSUE_TEMPLATE/002_bug_report.yaml",
+        ):
+            issue_form = yaml.safe_load((REPO_ROOT / template).read_text())
+            workgroup_field = next(
+                field for field in issue_form["body"] if field.get("id") == "workgroup"
+            )
+            options = set(workgroup_field["attributes"]["options"])
+            options.discard("Unsure / Maintainer triage")
+            self.assertEqual(options, set(community_lifecycle.WORKGROUP_OPTIONS))
+        self.assertEqual(
+            policy["labels"]["maintainer_owner"],
+            community_lifecycle.MAINTAINER_OWNER,
+        )
+
+    def test_policy_matches_executable_lifecycle_labels(self) -> None:
+        policy = yaml.safe_load(
+            (REPO_ROOT / "tools/agent/maintainer-policy.yaml").read_text()
+        )
+        lifecycle = policy["labels"]["lifecycle"]
+        self.assertEqual(lifecycle["needs_acceptance"], "needs-acceptance")
+        self.assertEqual(lifecycle["accepted"], "accepted")
+        self.assertEqual(lifecycle["ready_for_dev"], "ready-for-dev")
+        self.assertEqual(lifecycle["in_progress"], "in-progress")
+        self.assertEqual(
+            set(policy["labels"]["pr_state"].values()),
+            set(community_lifecycle.PR_STATE_LABELS),
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

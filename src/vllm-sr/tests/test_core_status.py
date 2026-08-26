@@ -11,6 +11,8 @@ if str(PROJECT_ROOT) not in sys.path:
 
 core = importlib.import_module("cli.core")
 runtime_stack = importlib.import_module("cli.runtime_stack")
+runtime_service_status = importlib.import_module("cli.runtime_service_status")
+storage_backends = importlib.import_module("cli.storage_backends")
 
 
 def test_check_envoy_status_uses_ready_probe_when_available(monkeypatch):
@@ -21,10 +23,14 @@ def test_check_envoy_status_uses_ready_probe_when_available(monkeypatch):
         captured.append((container_name, command))
         return (0, "200", "")
 
-    monkeypatch.setattr(core, "container_exec", fake_exec)
-    monkeypatch.setattr(core, "container_status", lambda _name: "running")
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    monkeypatch.setattr(
+        runtime_service_status, "container_status", lambda _name: "running"
+    )
 
-    assert core._check_envoy_status(stack_layout.envoy_container_name, stack_layout)
+    assert runtime_service_status._check_envoy_status(
+        stack_layout.envoy_container_name, stack_layout
+    )
     assert captured == [
         (
             stack_layout.envoy_container_name,
@@ -51,10 +57,14 @@ def test_check_envoy_status_falls_back_to_envoy_validate(monkeypatch):
         captured.append((container_name, command))
         return next(responses)
 
-    monkeypatch.setattr(core, "container_exec", fake_exec)
-    monkeypatch.setattr(core, "container_status", lambda _name: "running")
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    monkeypatch.setattr(
+        runtime_service_status, "container_status", lambda _name: "running"
+    )
 
-    assert core._check_envoy_status(stack_layout.envoy_container_name, stack_layout)
+    assert runtime_service_status._check_envoy_status(
+        stack_layout.envoy_container_name, stack_layout
+    )
     assert captured == [
         (
             stack_layout.envoy_container_name,
@@ -90,11 +100,15 @@ def test_check_envoy_status_does_not_fallback_for_non_envoy_container(monkeypatc
         captured.append((container_name, command))
         return (127, "", "curl missing")
 
-    monkeypatch.setattr(core, "container_exec", fake_exec)
-    monkeypatch.setattr(core, "container_status", lambda _name: "running")
+    monkeypatch.setattr(runtime_service_status, "container_exec", fake_exec)
+    monkeypatch.setattr(
+        runtime_service_status, "container_status", lambda _name: "running"
+    )
 
     assert (
-        core._check_envoy_status(stack_layout.router_container_name, stack_layout)
+        runtime_service_status._check_envoy_status(
+            stack_layout.router_container_name, stack_layout
+        )
         is False
     )
     assert captured == [
@@ -164,7 +178,10 @@ def test_stop_reports_noop_result_on_stdout(monkeypatch, capsys):
     captured = capsys.readouterr()
     assert captured.out == "Nothing to stop.\n"
     assert "Stopping vLLM Semantic Router" in captured.err
-    assert removed_networks == [stack_layout.network_name]
+    assert removed_networks == [
+        stack_layout.network_name,
+        stack_layout.data_network_name,
+    ]
 
 
 def test_stop_propagates_orphan_network_removal_failure(monkeypatch, capsys):
@@ -437,3 +454,146 @@ def test_never_pull_preflight_skips_sim_when_disabled(monkeypatch):
     )
 
     assert sim_checks == []
+
+
+def _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed):
+    monkeypatch.setattr(core, "resolve_runtime_stack", lambda: stack_layout)
+    monkeypatch.setattr(
+        core, "_managed_container_statuses", lambda _stack_layout: statuses
+    )
+    monkeypatch.setattr(core, "resolve_openclaw_data_dir", lambda _cwd: "/unused")
+    monkeypatch.setattr(core, "load_openclaw_registry", lambda _path: [])
+    monkeypatch.setattr(
+        core,
+        "container_stop_container",
+        lambda name: stopped.append(name) or True,
+    )
+    monkeypatch.setattr(
+        core,
+        "container_remove_container",
+        lambda name: removed.append(name) or True,
+    )
+    monkeypatch.setattr(core, "container_remove_network", lambda _name: (0, "", ""))
+    monkeypatch.setattr(
+        core,
+        "container_network_disconnect_if_attached",
+        lambda _network, _name: (0, "", ""),
+    )
+
+
+def _all_managed_names(stack_layout):
+    return (
+        *stack_layout.runtime_container_names,
+        stack_layout.fleet_sim_container_name,
+        stack_layout.grafana_container_name,
+        stack_layout.prometheus_container_name,
+        stack_layout.jaeger_container_name,
+        *stack_layout.storage_container_names,
+    )
+
+
+def test_stop_keeps_a_storage_container_whose_data_volume_nobody_recorded(
+    monkeypatch, capsys
+):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    statuses = dict.fromkeys(_all_managed_names(stack_layout), "not found")
+    statuses[stack_layout.redis_container_name] = "running"
+    statuses[stack_layout.postgres_container_name] = "running"
+    stopped, removed = [], []
+    _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed)
+    # An old container carries neither credential mount, so its anonymous
+    # volume has no recorded name and removing it would orphan the data.
+    monkeypatch.setattr(
+        storage_backends, "container_mount_destinations", lambda _name: {"/etc/hosts"}
+    )
+
+    disconnected = []
+    monkeypatch.setattr(
+        storage_backends,
+        "container_network_disconnect_if_attached",
+        lambda network, name: disconnected.append((network, name)) or (0, "", ""),
+    )
+
+    core.stop_vllm_sr()
+
+    assert stopped == [
+        stack_layout.redis_container_name,
+        stack_layout.postgres_container_name,
+    ]
+    assert removed == []
+    # A container kept on a stack network blocks removing that network under
+    # Podman, so a preserved container is detached from both. A container old
+    # enough to be preserved sits on the application network, but `stop` cannot
+    # tell that from the container alone and both networks have to go.
+    assert disconnected == [
+        (stack_layout.network_name, stack_layout.redis_container_name),
+        (stack_layout.data_network_name, stack_layout.redis_container_name),
+        (stack_layout.network_name, stack_layout.postgres_container_name),
+        (stack_layout.data_network_name, stack_layout.postgres_container_name),
+    ]
+    captured = capsys.readouterr()
+    assert "stopped but kept" in captured.err
+    assert "next `vllm-sr serve` adopts the volume" in captured.err
+
+
+def test_stop_removes_a_storage_container_this_cli_provisioned(monkeypatch):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    statuses = dict.fromkeys(_all_managed_names(stack_layout), "not found")
+    statuses[stack_layout.redis_container_name] = "running"
+    statuses[stack_layout.postgres_container_name] = "exited"
+    stopped, removed = [], []
+    _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed)
+    mounts = {
+        stack_layout.redis_container_name: {
+            storage_backends.CONTAINER_REDIS_CONF_PATH,
+            "/data",
+        },
+        stack_layout.postgres_container_name: {
+            storage_backends.CONTAINER_POSTGRES_PASSWORD_PATH,
+            "/var/lib/postgresql/data",
+        },
+    }
+    monkeypatch.setattr(storage_backends, "container_mount_destinations", mounts.get)
+
+    core.stop_vllm_sr()
+
+    assert stopped == [stack_layout.redis_container_name]
+    assert removed == [
+        stack_layout.redis_container_name,
+        stack_layout.postgres_container_name,
+    ]
+
+
+def test_stop_keeps_a_storage_container_when_the_runtime_cannot_report_mounts(
+    monkeypatch,
+):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    statuses = dict.fromkeys(_all_managed_names(stack_layout), "not found")
+    statuses[stack_layout.redis_container_name] = "running"
+    stopped, removed = [], []
+    _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed)
+    monkeypatch.setattr(
+        storage_backends, "container_mount_destinations", lambda _name: None
+    )
+
+    core.stop_vllm_sr()
+
+    assert stopped == [stack_layout.redis_container_name]
+    assert removed == []
+
+
+def test_stop_still_removes_milvus_which_keeps_its_data_on_a_bind_mount(monkeypatch):
+    stack_layout = runtime_stack.resolve_runtime_stack()
+    statuses = dict.fromkeys(_all_managed_names(stack_layout), "not found")
+    statuses[stack_layout.milvus_container_name] = "running"
+    stopped, removed = [], []
+    _stop_environment(monkeypatch, stack_layout, statuses, stopped, removed)
+
+    def unreachable(name):
+        raise AssertionError(f"Milvus must not be mount-inspected: {name}")
+
+    monkeypatch.setattr(storage_backends, "container_mount_destinations", unreachable)
+
+    core.stop_vllm_sr()
+
+    assert removed == [stack_layout.milvus_container_name]
