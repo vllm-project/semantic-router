@@ -24,15 +24,11 @@ const errorMessage = (error: unknown, fallback: string) =>
 const normalizedEmail = (email: string) => email.trim().toLowerCase()
 
 export function findLinkedModelUser<T extends { id: string; email: string }>(
-  member: { id: string; email: string },
+  member: { email: string },
   users: readonly T[],
 ): T | null {
   const email = normalizedEmail(member.email)
-  return (
-    users.find((user) => email && normalizedEmail(user.email) === email) ??
-    users.find((user) => user.id === member.id) ??
-    null
-  )
+  return users.find((user) => email && normalizedEmail(user.email) === email) ?? null
 }
 
 /**

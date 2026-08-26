@@ -4,6 +4,7 @@ import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
 import { inferenceAccessApi, type AccessUser } from '../utils/inferenceAccessApi'
+import { findAccessUserByEmail } from './accessIdentityDirectory'
 import type { DashboardMember } from './AccessControlViewTypes'
 import DashboardAccessDialog from './DashboardAccessDialog'
 import { formatDate } from './AccessControlDetailSupport'
@@ -105,7 +106,7 @@ export function DashboardMemberDetail({
       }
     }
     setModelUser(null)
-    void inferenceAccessApi.user(member.id).then(
+    void findAccessUserByEmail(member.email, inferenceAccessApi.users).then(
       (nextUser) => {
         if (!cancelled) setModelUser(nextUser)
       },
@@ -299,7 +300,7 @@ export function DashboardMemberDetail({
                   </div>
                   <div className={styles.detailGridWide}>
                     <dt>Model access</dt>
-                    <dd>Managed with this Dashboard identity</dd>
+                    <dd>{modelUser ? 'Linked model identity' : 'Dashboard login only'}</dd>
                   </div>
                 </dl>
               </section>

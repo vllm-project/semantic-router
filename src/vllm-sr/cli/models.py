@@ -1463,7 +1463,7 @@ class _DecisionBase(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="forbid")
 
     name: str
-    description: str = ""
+    description: Optional[str] = None
     priority: int = 0
     tier: int = Field(default=0, ge=0)
     # A decision without an explicit rule is the canonical match-all fallback.

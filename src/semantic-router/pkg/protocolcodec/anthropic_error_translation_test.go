@@ -50,6 +50,28 @@ func TestAnthropicTransportErrorTranslationUsesCanonicalWireShapes(t *testing.T)
 	}
 }
 
+func TestAnthropicTransportErrorTranslationRejectsMalformedProviderJSON(t *testing.T) {
+	translated, err := NewBuiltinEngine().TranslateTransportError(
+		llmprotocol.AnthropicMessagesV1,
+		llmprotocol.OpenAIChatV1,
+		[]byte(`{"type":"error"`),
+		nil,
+	)
+	if err == nil {
+		t.Fatal("malformed Anthropic transport error was accepted")
+	}
+	protocolError, ok := err.(*llmprotocol.ProtocolError)
+	if !ok || protocolError.Category != llmprotocol.ErrorUpstreamUnavailable {
+		t.Fatalf("malformed provider error = %T %v", err, err)
+	}
+	if protocolError.Code != "invalid_upstream_json" {
+		t.Fatalf("malformed provider error code = %q", protocolError.Code)
+	}
+	if translated.Body != nil || translated.TransportError.Error != nil {
+		t.Fatalf("malformed provider error produced public output: %+v", translated)
+	}
+}
+
 func TestOpenAIProviderCodeDoesNotBecomeAnthropicErrorType(t *testing.T) {
 	tests := []struct {
 		name, errorType, code, anthropicType string

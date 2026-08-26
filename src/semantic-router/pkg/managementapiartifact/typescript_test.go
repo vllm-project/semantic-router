@@ -58,6 +58,7 @@ func TestTypeScriptContractGeneratesTypedManagementClientFromOpenAPI(t *testing.
 		"status: number",
 		"export function createManagementApiClient",
 		"export function assertManagementApiSchema",
+		"export function assertManagementApiResponseSchema",
 		"export function assertManagementApiOperationResponse",
 	} {
 		if !strings.Contains(contract, expected) {
@@ -69,6 +70,34 @@ func TestTypeScriptContractGeneratesTypedManagementClientFromOpenAPI(t *testing.
 		if !strings.Contains(contract, "  "+operation.OperationID+"(") {
 			t.Errorf("TypeScript Management client omits operation %q", operation.OperationID)
 		}
+	}
+}
+
+func TestTypeScriptContractKeepsRequestsClosedAndResponsesForwardCompatible(t *testing.T) {
+	document := managementapi.GenerateOpenAPI()
+	requestSchema, found := document.Components.Schemas["APIKeyCreateRequest"]
+	if !found {
+		t.Fatal("canonical OpenAPI omits APIKeyCreateRequest")
+	}
+	if requestSchema.AdditionalProperties == nil || *requestSchema.AdditionalProperties {
+		t.Fatal("Management v1 request schemas must continue to reject unknown fields")
+	}
+
+	contract := string(RenderTypeScriptContract())
+	for _, expected := range []string{
+		"Management v1 responses permit additive object fields",
+		"function managementApiSchemaRecognizesObjectField",
+		"function managementApiOneOfBranchMatches",
+		"function managementApiSchemaMatches",
+		"allowAdditiveResponseFields",
+		`"additionalProperties":false`,
+	} {
+		if !strings.Contains(contract, expected) {
+			t.Errorf("TypeScript Management contract omits %q", expected)
+		}
+	}
+	if !strings.Contains(contract, "if (!allowAdditiveResponseFields && schema.additionalProperties === false) return false") {
+		t.Fatal("generated validator does not separate strict documents from additive responses")
 	}
 }
 

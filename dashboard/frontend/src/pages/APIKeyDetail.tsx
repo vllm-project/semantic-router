@@ -543,7 +543,7 @@ export function APIKeyDetail({
                       {assignedGroups.length
                         ? assignedGroups.map((group) => group.name).join(', ')
                         : key.accessGroupIds.length
-                          ? key.accessGroupIds.join(', ')
+                          ? 'Names unavailable'
                           : 'Not assigned'}
                     </dd>
                   </div>

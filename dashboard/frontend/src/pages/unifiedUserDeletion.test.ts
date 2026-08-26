@@ -12,18 +12,18 @@ const initialProgress = (): UnifiedUserDeletionProgress => ({
 })
 
 describe('unified user deletion', () => {
-  it('links Dashboard and Router identities by normalized email before id fallback', () => {
+  it('links Dashboard and Router identities only by normalized email', () => {
     const users = [
       { id: 'model-id', email: ' Person@Example.com ' },
       { id: 'dashboard-id', email: 'other@example.com' },
     ]
 
     expect(
-      findLinkedModelUser({ id: 'dashboard-id', email: 'person@example.com' }, users),
+      findLinkedModelUser({ email: 'person@example.com' }, users),
     ).toEqual(users[0])
     expect(
-      findLinkedModelUser({ id: 'dashboard-id', email: 'missing@example.com' }, users),
-    ).toEqual(users[1])
+      findLinkedModelUser({ email: 'missing@example.com' }, users),
+    ).toBeNull()
   })
 
   it('removes Dashboard login before deleting the Router identity', async () => {

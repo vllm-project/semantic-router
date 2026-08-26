@@ -2,6 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest'
 
 import {
   assertManagementApiSchema,
+  assertManagementApiResponseSchema,
   createManagementApiClient,
   type APIKeyPage,
   type AccessStatistics,
@@ -161,8 +162,98 @@ describe('generated Management client', () => {
     ).rejects.toThrow('body for empty Management operation')
   })
 
+  it('accepts additive response fields while preserving required-field and type checks', async () => {
+    const additiveResponse = {
+      data: [
+        {
+          ...profile,
+          futureProfileCapability: { enabled: true },
+        },
+      ],
+      page: {
+        hasMore: false,
+        pageSize: 25,
+        futureCursorHint: 'next-generation',
+      },
+      futurePageMetadata: { source: 'router' },
+    }
+
+    expect(assertManagementApiResponseSchema('AgentProfilePage', additiveResponse)).toEqual(
+      additiveResponse,
+    )
+
+    const forwardCompatibleTransport: ManagementApiTransport = {
+      async request() {
+        return {
+          data: additiveResponse,
+          status: 200,
+          mediaType: 'application/vnd.vllm-semantic-router.management.v1+json',
+        }
+      },
+    }
+    await expect(
+      createManagementApiClient(forwardCompatibleTransport).getAgentProfiles(),
+    ).resolves.toMatchObject({ data: additiveResponse })
+
+    const profileWithoutRequiredName: Record<string, unknown> = { ...profile }
+    delete profileWithoutRequiredName.name
+    expect(() =>
+      assertManagementApiResponseSchema('AgentProfilePage', {
+        data: [profileWithoutRequiredName],
+        page: { hasMore: false, pageSize: 25 },
+      }),
+    ).toThrow('AgentProfilePage')
+
+    expect(() =>
+      assertManagementApiResponseSchema('AgentProfilePage', {
+        data: [{ ...profile, revision: '1' }],
+        page: { hasMore: false, pageSize: 25 },
+      }),
+    ).toThrow('AgentProfilePage')
+
+    const serviceBootstrap = {
+      principalId: '10000000-0000-4000-8000-000000000001',
+      roleBindingId: '20000000-0000-4000-8000-000000000001',
+      serviceAccountId: '30000000-0000-4000-8000-000000000001',
+      serviceCredential: {
+        resourceId: '40000000-0000-4000-8000-000000000001',
+        kind: 'service_credential' as const,
+        secret: 'one-time-secret',
+        expiresAt: '2026-08-26T01:00:00Z',
+      },
+      finalizationRequired: true,
+      futureBootstrapField: 'accepted',
+    }
+    expect(assertManagementApiResponseSchema('BootstrapResponse', serviceBootstrap)).toEqual(
+      serviceBootstrap,
+    )
+    expect(() =>
+      assertManagementApiResponseSchema('BootstrapResponse', {
+        ...serviceBootstrap,
+        serviceAccountId: 3,
+      }),
+    ).toThrow('BootstrapResponse')
+
+    expect(() =>
+      assertManagementApiResponseSchema('MutationReceipt', {
+        resource: { kind: 'api_key', id: 'key-1', revision: 1 },
+        operation: 42,
+      }),
+    ).toThrow('MutationReceipt')
+  })
+
+  it('keeps the generic schema assertion strict for request documents', () => {
+    expect(() =>
+      assertManagementApiSchema('APIKeyCreateRequest', {
+        name: 'Customer key',
+        owner: { type: 'user', id: 'user-1' },
+        futureRequestField: true,
+      }),
+    ).toThrow('APIKeyCreateRequest')
+  })
+
   it('validates discriminated durable Agent event payloads through the generic schema registry', () => {
-    const event = assertManagementApiSchema('AgentEvent', {
+    const event = assertManagementApiResponseSchema('AgentEvent', {
       sessionId: '30000000-0000-4000-8000-000000000001',
       turnId: '40000000-0000-4000-8000-000000000001',
       sequence: 1,
@@ -173,7 +264,7 @@ describe('generated Management client', () => {
     expect(event.type).toBe('terminal')
 
     expect(() =>
-      assertManagementApiSchema('AgentEvent', {
+      assertManagementApiResponseSchema('AgentEvent', {
         ...event,
         payload: { content: [{ type: 'text', text: 'wrong payload for terminal' }] },
       }),
@@ -209,10 +300,10 @@ describe('generated Management client', () => {
     ] as const
 
     for (const [schemaName, payload] of responses) {
-      expect(assertManagementApiSchema(schemaName, payload)).toEqual(payload)
+      expect(assertManagementApiResponseSchema(schemaName, payload)).toEqual(payload)
       for (const freshnessField of ['asOf', 'ledgerWatermark', 'ingestionLag'] as const) {
         expect(() =>
-          assertManagementApiSchema(schemaName, { ...payload, [freshnessField]: null }),
+          assertManagementApiResponseSchema(schemaName, { ...payload, [freshnessField]: null }),
         ).toThrow(schemaName)
       }
     }
@@ -241,16 +332,16 @@ describe('generated Management client', () => {
       data: { request, routing: {}, quotaReceipts: [], dispatches: [] },
     }
 
-    expect(assertManagementApiSchema('RequestLogPage', page)).toEqual(page)
-    expect(assertManagementApiSchema('RequestLogDetail', detail)).toEqual(detail)
+    expect(assertManagementApiResponseSchema('RequestLogPage', page)).toEqual(page)
+    expect(assertManagementApiResponseSchema('RequestLogDetail', detail)).toEqual(detail)
     expect(() =>
-      assertManagementApiSchema('RequestLogPage', {
+      assertManagementApiResponseSchema('RequestLogPage', {
         ...page,
         data: [{ ...request, models: null }],
       }),
     ).toThrow('RequestLogPage')
     expect(() =>
-      assertManagementApiSchema('RequestLogDetail', {
+      assertManagementApiResponseSchema('RequestLogDetail', {
         data: { ...detail.data, quotaReceipts: null },
       }),
     ).toThrow('RequestLogDetail')
@@ -294,11 +385,11 @@ describe('generated Management client', () => {
       },
     }
 
-    expect(assertManagementApiSchema('EffectivePolicy', policy)).toEqual(policy)
+    expect(assertManagementApiResponseSchema('EffectivePolicy', policy)).toEqual(policy)
     for (const optional of ['currency', 'overage', 'resetAt'] as const) {
       const meter = { ...policy.quota.meters[0], [optional]: null }
       expect(() =>
-        assertManagementApiSchema('EffectivePolicy', {
+        assertManagementApiResponseSchema('EffectivePolicy', {
           ...policy,
           quota: { ...policy.quota, meters: [meter] },
         }),

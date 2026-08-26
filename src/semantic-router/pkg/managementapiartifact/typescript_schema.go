@@ -259,10 +259,55 @@ function managementApiStringMatchesFormat(value: string, format?: string): boole
   return true
 }
 
-function managementApiSchemaMatches(schema: ManagementApiRuntimeSchema, value: unknown): boolean {
+function managementApiSchemaRecognizesObjectField(
+  schema: ManagementApiRuntimeSchema,
+  name: string,
+): boolean {
+  schema = managementApiSchemaReference(schema)
+  return Boolean(
+    schema.properties?.[name] ||
+      Object.keys(schema.patternProperties ?? {}).some((expression) =>
+        new RegExp(expression).test(name),
+      ),
+  )
+}
+
+function managementApiOneOfBranchMatches(
+  branch: ManagementApiRuntimeSchema,
+  union: Array<ManagementApiRuntimeSchema>,
+  value: unknown,
+  allowAdditiveResponseFields: boolean,
+): boolean {
+  const resolvedBranch = managementApiSchemaReference(branch)
+  if (
+    allowAdditiveResponseFields &&
+    resolvedBranch.type === 'object' &&
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value)
+  ) {
+    for (const name of Object.keys(value)) {
+      const knownByUnion = union.some((candidate) =>
+        managementApiSchemaRecognizesObjectField(candidate, name),
+      )
+      if (knownByUnion && !managementApiSchemaRecognizesObjectField(resolvedBranch, name)) {
+        return false
+      }
+    }
+  }
+  return managementApiSchemaMatches(branch, value, allowAdditiveResponseFields)
+}
+
+function managementApiSchemaMatches(
+  schema: ManagementApiRuntimeSchema,
+  value: unknown,
+  allowAdditiveResponseFields: boolean,
+): boolean {
   schema = managementApiSchemaReference(schema)
   if (schema.oneOf) {
-    return schema.oneOf.filter((branch) => managementApiSchemaMatches(branch, value)).length === 1
+    return schema.oneOf.filter((branch) =>
+      managementApiOneOfBranchMatches(branch, schema.oneOf!, value, allowAdditiveResponseFields),
+    ).length === 1
   }
   if (schema.enum && !schema.enum.includes(value as string)) return false
 
@@ -292,7 +337,7 @@ function managementApiSchemaMatches(schema: ManagementApiRuntimeSchema, value: u
       (schema.minItems === undefined || value.length >= schema.minItems) &&
       (schema.maxItems === undefined || value.length <= schema.maxItems) &&
       (!schema.uniqueItems || new Set(value.map((item) => JSON.stringify(item))).size === value.length) &&
-      (!schema.items || value.every((item) => managementApiSchemaMatches(schema.items!, item)))
+      (!schema.items || value.every((item) => managementApiSchemaMatches(schema.items!, item, allowAdditiveResponseFields)))
     )
   }
   if (schema.type === 'object') {
@@ -304,17 +349,17 @@ function managementApiSchemaMatches(schema: ManagementApiRuntimeSchema, value: u
     for (const [name, item] of Object.entries(record)) {
       const property = schema.properties?.[name]
       if (property) {
-        if (!managementApiSchemaMatches(property, item)) return false
+        if (!managementApiSchemaMatches(property, item, allowAdditiveResponseFields)) return false
         continue
       }
       const pattern = Object.entries(schema.patternProperties ?? {}).find(([expression]) =>
         new RegExp(expression).test(name),
       )
       if (pattern) {
-        if (!managementApiSchemaMatches(pattern[1], item)) return false
+        if (!managementApiSchemaMatches(pattern[1], item, allowAdditiveResponseFields)) return false
         continue
       }
-      if (schema.additionalProperties === false) return false
+      if (!allowAdditiveResponseFields && schema.additionalProperties === false) return false
     }
     return true
   }
@@ -325,7 +370,19 @@ export function assertManagementApiSchema<SchemaName extends ManagementApiSchema
   schemaName: SchemaName,
   value: unknown,
 ): ManagementApiSchemas[SchemaName] {
-  if (!managementApiSchemaMatches(MANAGEMENT_API_SCHEMAS[schemaName], value)) {
+  if (!managementApiSchemaMatches(MANAGEMENT_API_SCHEMAS[schemaName], value, false)) {
+    throw new Error('Value does not match Management schema ' + schemaName + '.')
+  }
+  return value as ManagementApiSchemas[SchemaName]
+}
+
+// Management v1 responses permit additive object fields. Required fields and
+// every field known to this client still have to match their published schema.
+export function assertManagementApiResponseSchema<SchemaName extends ManagementApiSchemaName>(
+  schemaName: SchemaName,
+  value: unknown,
+): ManagementApiSchemas[SchemaName] {
+  if (!managementApiSchemaMatches(MANAGEMENT_API_SCHEMAS[schemaName], value, true)) {
     throw new Error('Router returned a response that does not match ' + schemaName + '.')
   }
   return value as ManagementApiSchemas[SchemaName]

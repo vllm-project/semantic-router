@@ -500,6 +500,41 @@ func TestTransformResponseBoundsProviderErrorBody(t *testing.T) {
 	}
 }
 
+func TestTransformResponseFailsClosedOnMalformedProviderErrorJSON(t *testing.T) {
+	response, err := (&Invoker{}).transformResponse(
+		context.Background(),
+		Plan{SourceFormat: llmprotocol.OpenAIResponsesV1},
+		Backend{WireFormat: llmprotocol.AnthropicMessagesV1},
+		AttemptResult{},
+		&http.Response{
+			StatusCode: http.StatusUnauthorized,
+			Header:     make(http.Header),
+			Body:       io.NopCloser(strings.NewReader(`{"type":"error"`)),
+		},
+		nil,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = response.Body.Close() })
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertPublicTransportErrorWire(
+		t,
+		llmprotocol.OpenAIResponsesV1,
+		body,
+		"upstream_authentication",
+		"the selected model could not authenticate the request",
+		"",
+		"",
+	)
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("malformed provider error status = %d, want %d", response.StatusCode, http.StatusUnauthorized)
+	}
+}
+
 func TestSafeUpstreamHTTPErrorCategories(t *testing.T) {
 	tests := []struct {
 		status   int

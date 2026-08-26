@@ -3,7 +3,7 @@ import {
   MANAGEMENT_API_HEADERS,
   MANAGEMENT_API_MEDIA_TYPE,
   MANAGEMENT_API_OPERATIONS,
-  assertManagementApiSchema,
+  assertManagementApiResponseSchema,
   assertManagementApiOperationResponse,
   createManagementApiClient,
   managementApiPath,
@@ -370,5 +370,5 @@ function validateManagementOperationResponse<OperationId extends ManagementApiCl
 
 /** Validate the security-sensitive identity projection before it drives navigation or ownership. */
 export function assertManagementMe(value: unknown): ManagementMe {
-  return assertManagementApiSchema('Me', value)
+  return assertManagementApiResponseSchema('Me', value)
 }

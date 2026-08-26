@@ -401,7 +401,6 @@ func (provider *managementSessionProvider) managementRequest(
 		return errFirstAdminProvisioning
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 256<<10))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(response); err != nil {
 		return errFirstAdminProvisioning
 	}

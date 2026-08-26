@@ -23,6 +23,13 @@ import {
 import AccessControlViews, { type DashboardMember, type IdentityTab } from './AccessControlViews'
 import AccessControlPageOverlays from './AccessControlPageOverlays'
 import AccessControlWorkspace from './AccessControlWorkspace'
+import {
+  createAccessEntityDeletionTombstones,
+  omitDeletedAccessEntities,
+  rememberDeletedAccessEntity,
+  type DeletableAccessEntityKind,
+} from './accessEntityDeletionState'
+import { loadAllAccessUsers } from './accessIdentityDirectory'
 import { accessControlSelectorSources } from './accessControlSelectorSources'
 import {
   EMPTY_ACCESS_OVERVIEW,
@@ -38,11 +45,13 @@ import {
   deleteUnifiedUser,
   type UnifiedUserDeletionProgress,
 } from './unifiedUserDeletion'
+import { loadAllDashboardMembers } from './dashboardMemberDirectory'
 import styles from './AccessControlPage.module.css'
 
 type PageState = { page: number; pageSize: number; query: string }
 type EntityTotals = Record<'users' | 'teams' | 'api-keys' | 'access-groups' | 'budgets', number>
 type EntityEditorReturn = { kind: Exclude<AccessEditor['kind'], 'key'>; id: string }
+type RouterEntityKind = Exclude<DeletableAccessEntityKind, 'dashboard-member' | 'key'>
 
 const dashboardResponseError = async (response: Response, fallback: string) =>
   (await response.text()).trim() || fallback
@@ -153,6 +162,10 @@ const AccessControlPage: React.FC = () => {
   })
   const [liveState, setLiveState] = useState<'checking' | 'live' | 'error'>('checking')
   const createRequestHandledRef = useRef(false)
+  const deletionTombstonesRef = useRef(createAccessEntityDeletionTombstones())
+  const dashboardIdentityLoadGenerationRef = useRef(0)
+  const viewLoadGenerationRef = useRef(0)
+  const userDirectoryLoadedRef = useRef(false)
 
   useEffect(() => {
     if (!invitationOnboardingRequested) return
@@ -171,6 +184,7 @@ const AccessControlPage: React.FC = () => {
   }, [toast])
 
   useEffect(() => {
+    if (activeView === 'users') userDirectoryLoadedRef.current = false
     setPageState((current) => ({
       ...current,
       page: 1,
@@ -205,18 +219,23 @@ const AccessControlPage: React.FC = () => {
 
   const loadDashboardIdentities = useCallback(async () => {
     if (!canReadDashboardMembers) return
+    const generation = ++dashboardIdentityLoadGenerationRef.current
     const [membersResult, invitationsResult] = await Promise.allSettled([
-      (async () => {
-        const response = await fetch('/api/admin/users?page=1&limit=200')
-        if (!response.ok) throw new Error(await response.text())
-        const payload = (await response.json()) as { users: DashboardMember[] }
-        return payload.users || []
-      })(),
+      loadAllDashboardMembers(),
       canManageDashboardMembers
         ? dashboardMemberInvitationApi.list()
         : Promise.resolve({ items: [] as DashboardMemberInvitation[] }),
     ])
-    if (membersResult.status === 'fulfilled') setDashboardMembers(membersResult.value)
+    if (generation !== dashboardIdentityLoadGenerationRef.current) return
+    if (membersResult.status === 'fulfilled') {
+      setDashboardMembers(
+        omitDeletedAccessEntities(
+          deletionTombstonesRef.current,
+          'dashboard-member',
+          membersResult.value,
+        ),
+      )
+    }
     if (invitationsResult.status === 'fulfilled') setInvitations(invitationsResult.value.items)
     if (membersResult.status === 'rejected' && invitationsResult.status === 'rejected') {
       throw membersResult.reason
@@ -256,7 +275,9 @@ const AccessControlPage: React.FC = () => {
               : Number(nextOverview.enabledBudgets),
         }))
         if (selfService) {
-          setKeys(nextKeys.items)
+          setKeys(
+            omitDeletedAccessEntities(deletionTombstonesRef.current, 'key', nextKeys.items),
+          )
           const visibleMembers = [...ownTeams.members]
           if (selfUserId && !visibleMembers.some((member) => member.id === selfUserId)) {
             visibleMembers.push({
@@ -311,32 +332,58 @@ const AccessControlPage: React.FC = () => {
     return filter
   }, [usageScope])
 
-  const loadCurrentView = useCallback(async () => {
+  const loadCurrentView = useCallback(async (options: { refreshUserDirectory?: boolean } = {}) => {
+    if (
+      activeView === 'users' &&
+      userDirectoryLoadedRef.current &&
+      !options.refreshUserDirectory
+    ) {
+      return
+    }
+    const generation = ++viewLoadGenerationRef.current
+    const isLatest = () => generation === viewLoadGenerationRef.current
     setViewLoading(true)
     setError('')
     try {
       if (activeView === 'usage') {
-        setUsage(
-          await (selfService ? inferenceAccessApi.selfUsage : inferenceAccessApi.usage)(
-            usageFilter,
-          ),
-        )
+        const nextUsage = await (
+          selfService ? inferenceAccessApi.selfUsage : inferenceAccessApi.usage
+        )(usageFilter)
+        if (!isLatest()) return
+        setUsage(nextUsage)
       }
-      if (activeView === 'users' && canReadUsers && !selfService) {
-        const page = await inferenceAccessApi.users(
-          accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
+      if (
+        activeView === 'users' &&
+        canReadUsers &&
+        !selfService &&
+        (!userDirectoryLoadedRef.current || options.refreshUserDirectory)
+      ) {
+        const nextUsers = omitDeletedAccessEntities(
+          deletionTombstonesRef.current,
+          'user',
+          await loadAllAccessUsers(inferenceAccessApi.users),
         )
-        setUsers(page.items)
-        rememberNextCursor(activeView, page)
-        setEntityTotals((current) => ({ ...current, users: displayTotal(page) }))
+        if (!isLatest()) return
+        setUsers(nextUsers)
+        setEntityTotals((current) => ({ ...current, users: nextUsers.length }))
+        userDirectoryLoadedRef.current = true
       }
       if (activeView === 'teams' && canReadTeams && !selfService) {
         const page = await inferenceAccessApi.teams(
           accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
         )
-        setTeams(page.items)
+        if (!isLatest()) return
+        const visibleItems = omitDeletedAccessEntities(
+          deletionTombstonesRef.current,
+          'team',
+          page.items,
+        )
+        setTeams(visibleItems)
         rememberNextCursor(activeView, page)
-        setEntityTotals((current) => ({ ...current, teams: displayTotal(page) }))
+        setEntityTotals((current) => ({
+          ...current,
+          teams: displayTotal({ ...page, items: visibleItems }),
+        }))
       }
       if (activeView === 'api-keys') {
         const page = selfService
@@ -346,25 +393,52 @@ const AccessControlPage: React.FC = () => {
           : await inferenceAccessApi.keys(
               accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
             )
-        setKeys(page.items)
+        if (!isLatest()) return
+        const visibleItems = omitDeletedAccessEntities(
+          deletionTombstonesRef.current,
+          'key',
+          page.items,
+        )
+        setKeys(visibleItems)
         rememberNextCursor(activeView, page)
-        setEntityTotals((current) => ({ ...current, 'api-keys': displayTotal(page) }))
+        setEntityTotals((current) => ({
+          ...current,
+          'api-keys': displayTotal({ ...page, items: visibleItems }),
+        }))
       }
       if (activeView === 'access-groups' && canReadGroups && !selfService) {
         const page = await inferenceAccessApi.groups(
           accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
         )
-        setGroups(page.items)
+        if (!isLatest()) return
+        const visibleItems = omitDeletedAccessEntities(
+          deletionTombstonesRef.current,
+          'group',
+          page.items,
+        )
+        setGroups(visibleItems)
         rememberNextCursor(activeView, page)
-        setEntityTotals((current) => ({ ...current, 'access-groups': displayTotal(page) }))
+        setEntityTotals((current) => ({
+          ...current,
+          'access-groups': displayTotal({ ...page, items: visibleItems }),
+        }))
       }
       if (activeView === 'budgets' && canReadBudgets && !selfService) {
         const page = await inferenceAccessApi.budgets(
           accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
         )
-        setBudgets(page.items)
+        if (!isLatest()) return
+        const visibleItems = omitDeletedAccessEntities(
+          deletionTombstonesRef.current,
+          'budget',
+          page.items,
+        )
+        setBudgets(visibleItems)
         rememberNextCursor(activeView, page)
-        setEntityTotals((current) => ({ ...current, budgets: displayTotal(page) }))
+        setEntityTotals((current) => ({
+          ...current,
+          budgets: displayTotal({ ...page, items: visibleItems }),
+        }))
       }
       if (activeView === 'request-logs') {
         const page = await (selfService
@@ -376,6 +450,7 @@ const AccessControlPage: React.FC = () => {
               ...usageFilter,
               ...accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
             }))
+        if (!isLatest()) return
         setRequestPage({ ...page, total: displayTotal(page) })
         rememberNextCursor(activeView, page)
       }
@@ -383,13 +458,16 @@ const AccessControlPage: React.FC = () => {
         const page = await inferenceAccessApi.auditLogs(
           accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page]),
         )
+        if (!isLatest()) return
         setAuditPage({ ...page, total: displayTotal(page) })
         rememberNextCursor(activeView, page)
       }
     } catch (nextError) {
-      setError(nextError instanceof Error ? nextError.message : 'Could not load this view')
+      if (isLatest()) {
+        setError(nextError instanceof Error ? nextError.message : 'Could not load this view')
+      }
     } finally {
-      setViewLoading(false)
+      if (isLatest()) setViewLoading(false)
     }
   }, [
     activeView,
@@ -497,7 +575,8 @@ const AccessControlPage: React.FC = () => {
 
   const resourceName = useCallback(
     (resourceType: 'model' | 'entrypoint', resourceId: string) =>
-      resourceLabels[`${resourceType}:${resourceId}`] || resourceId,
+      resourceLabels[`${resourceType}:${resourceId}`] ||
+      (resourceType === 'model' ? 'Model name unavailable' : 'Mixture-of-Model name unavailable'),
     [resourceLabels],
   )
 
@@ -600,6 +679,7 @@ const AccessControlPage: React.FC = () => {
       if (editor.kind === 'user') {
         if (!editor.value.id) throw new Error('User id is required')
         await inferenceAccessApi.saveUser(editor.value as Partial<AccessUser> & { id: string })
+        userDirectoryLoadedRef.current = false
       }
       if (editor.kind === 'team') {
         if (!selfService && (!editor.value.accessGroupIds?.length || !editor.value.budgetId)) {
@@ -661,7 +741,8 @@ const AccessControlPage: React.FC = () => {
     }
   }
 
-  const removeLocalEntity = (kind: 'user' | 'team' | 'group' | 'budget', id: string) => {
+  const removeLocalEntity = (kind: RouterEntityKind, id: string) => {
+    rememberDeletedAccessEntity(deletionTombstonesRef.current, kind, id)
     if (kind === 'user') setUsers((current) => current.filter((item) => item.id !== id))
     if (kind === 'team') setTeams((current) => current.filter((item) => item.id !== id))
     if (kind === 'group') setGroups((current) => current.filter((item) => item.id !== id))
@@ -681,10 +762,10 @@ const AccessControlPage: React.FC = () => {
   }
 
   const refreshAfterDelete = () => {
-    void Promise.all([loadCatalog(false), loadCurrentView()])
+    void Promise.all([loadCatalog(false), loadCurrentView({ refreshUserDirectory: true })])
   }
 
-  const remove = async (kind: 'user' | 'team' | 'group' | 'budget', id: string) => {
+  const remove = async (kind: RouterEntityKind, id: string) => {
     await deleteRouterEntityIfPresent(() => {
       if (kind === 'user') return inferenceAccessApi.deleteUser(id)
       if (kind === 'team') return inferenceAccessApi.deleteTeam(id)
@@ -698,9 +779,18 @@ const AccessControlPage: React.FC = () => {
 
   const removeLogin = async (memberId: string) => {
     await deleteDashboardLogin(memberId)
+    rememberDeletedAccessEntity(deletionTombstonesRef.current, 'dashboard-member', memberId)
     setDashboardMembers((current) => current.filter((member) => member.id !== memberId))
     setToast('Login removed')
     void loadDashboardIdentities().catch(() => undefined)
+  }
+
+  const removeKeyLocally = (keyId: string) => {
+    rememberDeletedAccessEntity(deletionTombstonesRef.current, 'key', keyId)
+    setKeys((current) => current.filter((key) => key.id !== keyId))
+    closeDetail()
+    setToast('API key deleted')
+    void Promise.all([loadCatalog(false), loadCurrentView()])
   }
 
   const removeUnifiedUser = async (
@@ -711,6 +801,7 @@ const AccessControlPage: React.FC = () => {
     const completed = await deleteUnifiedUser(progress, {
       removeDashboardLogin: async () => {
         await deleteDashboardLogin(memberId)
+        rememberDeletedAccessEntity(deletionTombstonesRef.current, 'dashboard-member', memberId)
         setDashboardMembers((current) => current.filter((member) => member.id !== memberId))
       },
       deleteModelIdentity: () =>
@@ -923,6 +1014,7 @@ const AccessControlPage: React.FC = () => {
           closeDetail()
         }}
         onDeleteEntity={remove}
+        onDeleteKey={removeKeyLocally}
         onRemoveDashboardLogin={removeLogin}
         onDeleteUnifiedUser={removeUnifiedUser}
         onEditModelAccess={(accessUser) => {

@@ -83,14 +83,15 @@ func TestInvitationAuthorityCreateCarriesHumanSessionNamespaceAndIdempotency(t *
 		}
 		response.Header().Set("Content-Type", managementMediaType)
 		response.WriteHeader(http.StatusCreated)
-		writeManagementJSON(t, response, managementapi.InvitationIssuedSecret{
-			Data: managementapi.Invitation{
+		writeManagementJSON(t, response, map[string]any{
+			"data": managementapi.Invitation{
 				InvitationID: invitationResourceID, NamespaceID: invitationNamespace,
 				ExpectedIdentity: body.ExpectedIdentity, DisplayName: body.DisplayName,
 				Onboarding: managementapi.InvitationOnboardingSnapshot{AutomaticFirstKey: true},
 				ExpiresAt:  body.ExpiresAt, Status: "pending", Revision: 1, CreatedAt: now, UpdatedAt: now,
 			},
-			Token: "router-invitation-token", DeliveryExpiresAt: now.Add(time.Hour),
+			"token": "router-invitation-token", "deliveryExpiresAt": now.Add(time.Hour),
+			"futurePresentation": map[string]any{"deliveryChannel": "dashboard"},
 		})
 	}))
 	defer server.Close()

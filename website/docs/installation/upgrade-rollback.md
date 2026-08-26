@@ -145,8 +145,9 @@ Content-Type: application/vnd.vllm-semantic-router.management.v1+json
 
 Within `/management/v1`, compatible evolution is limited to additive response
 fields and optional request fields with documented defaults. Clients ignore unknown
-response fields; the server rejects unknown request fields. Removing or renaming a
-field, changing its meaning or default, or altering a lifecycle requires
+response fields at every object nesting level while continuing to validate required
+fields and known-field types; the server rejects unknown request fields. Removing or
+renaming a field, changing its meaning or default, or altering a lifecycle requires
 `/management/v2`, a new media type, and a separately published OpenAPI document.
 Clients never negotiate by Router release number or silently fall back.
 

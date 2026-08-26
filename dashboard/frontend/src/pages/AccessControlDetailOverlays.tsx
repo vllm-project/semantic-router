@@ -29,6 +29,7 @@ interface AccessControlDetailOverlaysProps {
   onEditKey: (key: AccessAPIKey) => void
   onEditEntity: (kind: EntityDetailKind, item: EntityDetailValue) => void
   onDeleteEntity: (kind: EntityDetailKind, id: string) => Promise<void>
+  onDeleteKey: (keyId: string) => void
   onRemoveDashboardLogin: (memberId: string) => Promise<void>
   onDeleteUnifiedUser: (
     memberId: string,
@@ -60,6 +61,7 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
     onEditKey,
     onEditEntity,
     onDeleteEntity,
+    onDeleteKey,
     onRemoveDashboardLogin,
     onDeleteUnifiedUser,
     onEditModelAccess,
@@ -78,8 +80,7 @@ export default function AccessControlDetailOverlays(props: AccessControlDetailOv
           onClose={onClose}
           onChanged={onCatalogChanged}
           onDeleted={() => {
-            onClose()
-            onCatalogChanged()
+            onDeleteKey(detailKeyId)
           }}
         />
       ) : null}

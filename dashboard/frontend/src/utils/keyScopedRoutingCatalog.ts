@@ -1,5 +1,5 @@
 import {
-  assertManagementApiSchema,
+  assertManagementApiResponseSchema,
   type RoutingCatalog,
   type RoutingCatalogEntrypoint,
   type RoutingCatalogModel,
@@ -26,7 +26,7 @@ export type KeyScopedRoutingEntrypoint = RoutingCatalogEntrypoint
  * the visible Entrypoint graph cannot reference a hidden Model.
  */
 export function assertKeyScopedRoutingCatalog(value: unknown): KeyScopedRoutingCatalog {
-  const catalog = assertManagementApiSchema('RoutingCatalog', value)
+  const catalog = assertManagementApiResponseSchema('RoutingCatalog', value)
   const modelIds = new Set(catalog.models.map((model) => model.id))
   for (const entrypoint of catalog.entrypoints) {
     for (const rule of entrypoint.rules) {

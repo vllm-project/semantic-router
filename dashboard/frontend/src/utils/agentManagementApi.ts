@@ -1,6 +1,6 @@
 import {
   MANAGEMENT_API_HEADERS,
-  assertManagementApiSchema,
+  assertManagementApiResponseSchema,
   type AgentEvent,
   type AgentLiveModelStepEvent,
   type AgentProfileInput,
@@ -130,10 +130,10 @@ const sessionDetail = (id: string, signal?: AbortSignal) =>
   requireDetail(client.getAgentSessionsBySession({ pathParameters: { session: id }, signal }))
 
 export const assertAgentEvent = (value: unknown): AgentEvent =>
-  assertManagementApiSchema('AgentEvent', value)
+  assertManagementApiResponseSchema('AgentEvent', value)
 
 export const assertAgentLiveModelStepEvent = (value: unknown): AgentLiveModelStepEvent =>
-  assertManagementApiSchema('AgentLiveModelStepEvent', value)
+  assertManagementApiResponseSchema('AgentLiveModelStepEvent', value)
 
 export const agentManagementApi = {
   listProfiles: profilePage,

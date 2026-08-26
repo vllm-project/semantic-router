@@ -296,7 +296,6 @@ func (provider *managementSessionProvider) routerRequestWithHeaders(
 		return nil, dashboardauth.ErrInvitationAuthorityUnavailable
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 256<<10))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(response); err != nil {
 		return nil, dashboardauth.ErrInvitationAuthorityUnavailable
 	}

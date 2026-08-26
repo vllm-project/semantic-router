@@ -192,7 +192,7 @@ func renderManagementResponseValidators(
 		'; expected ' + successMediaTypes.join(' or ') + '.',
 	)
   }
-  if (!managementApiSchemaMatches(schema, value)) {
+  if (!managementApiSchemaMatches(schema, value, true)) {
     const schemaName = schema.$ref?.replace('#/components/schemas/', '') ?? operationId
     throw new Error('Router returned a response that does not match ' + schemaName + '.')
   }

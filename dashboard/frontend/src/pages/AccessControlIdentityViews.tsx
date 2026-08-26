@@ -7,8 +7,8 @@ import {
   type DashboardMemberInvitation,
 } from '../utils/dashboardMemberInvitations'
 import { copyText } from '../utils/clipboard'
-import type { AccessUser } from '../utils/inferenceAccessApi'
-import type { AccessControlViewProps as Props, DashboardMember } from './AccessControlViewTypes'
+import { mergeAccessIdentityRows } from './accessIdentityDirectory'
+import type { AccessControlViewProps as Props } from './AccessControlViewTypes'
 import {
   Avatar,
   Empty,
@@ -20,36 +20,25 @@ import {
 import { date, slicePage } from './AccessControlViewSupport'
 import styles from './AccessControlPage.module.css'
 
-function identityRows(
-  users: AccessUser[],
-  members: DashboardMember[],
-  invitations: DashboardMemberInvitation[],
-) {
-  const normalizeEmail = (email: string) => email.trim().toLowerCase()
-  const memberByEmail = new Map(members.map((member) => [normalizeEmail(member.email), member]))
-  const invitationByEmail = new Map(
-    invitations
-      .filter((item) => item.status === 'pending')
-      .map((invitation) => [normalizeEmail(invitation.email), invitation]),
-  )
-  return users.map((user) => {
-    const email = normalizeEmail(user.email)
-    return {
-      key: user.id,
-      access: user,
-      member: memberByEmail.get(email),
-      invitation: invitationByEmail.get(email),
-      name: user.name,
-      email: user.email,
-    }
-  })
-}
-
 export function UsersView(props: Props) {
   const rows = useMemo(
-    () => identityRows(props.users, props.dashboardMembers, props.invitations),
+    () => mergeAccessIdentityRows(props.users, props.dashboardMembers, props.invitations),
     [props.dashboardMembers, props.invitations, props.users],
   )
+  const filteredRows = useMemo(() => {
+    const query = props.pageState.query.trim().toLocaleLowerCase()
+    if (!query) return rows
+    return rows.filter((row) =>
+      `${row.name} ${row.email} ${row.access?.status || ''} ${row.member?.role || ''}`
+        .toLocaleLowerCase()
+        .includes(query),
+    )
+  }, [props.pageState.query, rows])
+  const lastPage = Math.max(1, Math.ceil(filteredRows.length / props.pageState.pageSize))
+  const visibleRows = slicePage(filteredRows, {
+    ...props.pageState,
+    page: Math.min(props.pageState.page, lastPage),
+  })
   const activeInvites = props.invitations.filter((item) => item.status === 'pending').length
   return (
     <div className={styles.viewStack}>
@@ -59,7 +48,7 @@ export function UsersView(props: Props) {
           className={props.identityTab === 'users' ? styles.tabActive : ''}
           onClick={() => props.onIdentityTabChange('users')}
         >
-          <ProductIcon name="user" /> Users <span>{props.entityTotals.users}</span>
+          <ProductIcon name="user" /> Users <span>{rows.length}</span>
         </button>
         {props.canManageDashboardMembers ? (
           <button
@@ -88,7 +77,7 @@ export function UsersView(props: Props) {
               <span>Activity</span>
               <span />
             </div>
-            {rows.map((row) => (
+            {visibleRows.map((row) => (
               <div
                 className={`${styles.dataRow} ${styles.userColumns} ${row.access || row.member ? styles.dataRowInteractive : ''}`}
                 key={row.key}
@@ -157,7 +146,7 @@ export function UsersView(props: Props) {
                 </span>
               </div>
             ))}
-            {rows.length === 0 ? (
+            {filteredRows.length === 0 ? (
               <Empty
                 title="No users found"
                 detail="Try a different search or add the first user."
@@ -165,7 +154,7 @@ export function UsersView(props: Props) {
             ) : null}
           </div>
           <Pagination
-            total={props.entityTotals.users}
+            total={filteredRows.length}
             state={props.pageState}
             onChange={props.onPageStateChange}
           />

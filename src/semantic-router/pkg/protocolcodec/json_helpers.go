@@ -3,6 +3,7 @@ package protocolcodec
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -10,12 +11,23 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 )
 
+var (
+	errDuplicateJSONField = errors.New("duplicate JSON field")
+	errTrailingJSON      = errors.New("trailing JSON document")
+)
+
 func decodeWire(body []byte, target any, policy llmprotocol.Policy) error {
 	if len(body) == 0 || len(body) > policy.Limits.BodyBytes {
 		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "body_limit", "request body is empty or exceeds the configured limit", nil)
 	}
 	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "duplicate_json_field", "JSON contains a duplicate field", err)
+		if errors.Is(err, errDuplicateJSONField) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "duplicate_json_field", "JSON contains a duplicate field", err)
+		}
+		if errors.Is(err, errTrailingJSON) {
+			return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "trailing_json", "request body contains trailing JSON", err)
+		}
+		return llmprotocol.NewError(llmprotocol.ErrorInvalidRequest, "invalid_json", "request JSON is invalid", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if rejectUnknownFields(body, policy) {
@@ -35,7 +47,13 @@ func decodeProviderWire(body []byte, target any, policy llmprotocol.Policy) erro
 		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_body_limit", "upstream response is empty or too large", nil)
 	}
 	if err := validateNoDuplicateKeys(body, policy.Limits.JSONDepth); err != nil {
-		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_duplicate_json_field", "upstream response contains a duplicate field", err)
+		if errors.Is(err, errDuplicateJSONField) {
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_duplicate_json_field", "upstream response contains a duplicate field", err)
+		}
+		if errors.Is(err, errTrailingJSON) {
+			return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "upstream_trailing_json", "upstream response contains trailing JSON", err)
+		}
+		return llmprotocol.NewError(llmprotocol.ErrorUpstreamUnavailable, "invalid_upstream_json", "upstream response JSON is invalid", err)
 	}
 	decoder := json.NewDecoder(bytes.NewReader(body))
 	if rejectUnknownFields(body, policy) {
@@ -76,7 +94,10 @@ func validateNoDuplicateKeys(body []byte, maximumDepth int) error {
 	if err := consumeJSONValue(decoder, 0, maximumDepth); err != nil {
 		return err
 	}
-	return requireEOF(decoder)
+	if err := requireEOF(decoder); err != nil {
+		return fmt.Errorf("%w: %v", errTrailingJSON, err)
+	}
+	return nil
 }
 
 // isJSONObject accepts exactly one top-level JSON object. Streamed tool
@@ -119,7 +140,7 @@ func consumeJSONValue(decoder *json.Decoder, depth, maximumDepth int) error {
 				return fmt.Errorf("object key is not a string")
 			}
 			if _, duplicate := seen[key]; duplicate {
-				return fmt.Errorf("duplicate field %q", key)
+				return fmt.Errorf("%w %q", errDuplicateJSONField, key)
 			}
 			seen[key] = struct{}{}
 			if err := consumeJSONValue(decoder, depth+1, maximumDepth); err != nil {

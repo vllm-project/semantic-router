@@ -54,6 +54,7 @@ interface AccessControlPageOverlaysProps {
   onEditKey: (key: AccessAPIKey) => void
   onEditEntity: (kind: EntityDetailKind, item: EntityDetailValue) => void
   onDeleteEntity: (kind: EntityDetailKind, id: string) => Promise<void>
+  onDeleteKey: (keyId: string) => void
   onRemoveDashboardLogin: (memberId: string) => Promise<void>
   onDeleteUnifiedUser: (
     memberId: string,
@@ -86,6 +87,7 @@ const AccessControlPageOverlays = ({
   onEditKey,
   onEditEntity,
   onDeleteEntity,
+  onDeleteKey,
   onRemoveDashboardLogin,
   onDeleteUnifiedUser,
   onEditModelAccess,
@@ -142,6 +144,7 @@ const AccessControlPageOverlays = ({
       onEditKey={onEditKey}
       onEditEntity={onEditEntity}
       onDeleteEntity={onDeleteEntity}
+      onDeleteKey={onDeleteKey}
       onRemoveDashboardLogin={onRemoveDashboardLogin}
       onDeleteUnifiedUser={onDeleteUnifiedUser}
       onEditModelAccess={onEditModelAccess}

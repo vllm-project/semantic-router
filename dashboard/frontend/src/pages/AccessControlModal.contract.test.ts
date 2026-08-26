@@ -105,6 +105,7 @@ describe('access-control modal experience', () => {
   it('keeps entity deletion pending and failure state inside the open dialog', () => {
     const detail = readSource('./AccessEntityDetail.tsx')
     const page = readSource('./AccessControlPage.tsx')
+    const tombstones = readSource('./accessEntityDeletionState.ts')
 
     expect(detail).toContain('const [deletePending, setDeletePending]')
     expect(detail).toContain('const [deleteError, setDeleteError]')
@@ -113,6 +114,12 @@ describe('access-control modal experience', () => {
     expect(detail).toContain("deletePending ? 'Deleting…' : 'Delete'")
     expect(page).toContain('removeLocalEntity(kind, id)')
     expect(page).toContain('refreshAfterDelete()')
+    expect(page).toContain('rememberDeletedAccessEntity(deletionTombstonesRef.current, kind, id)')
+    expect(page).toContain('omitDeletedAccessEntities(')
+    expect(page).toContain('generation === viewLoadGenerationRef.current')
+    expect(tombstones).toContain('dashboard-member')
+    expect(tombstones).toContain("| 'key'")
+    expect(page).toContain("rememberDeletedAccessEntity(deletionTombstonesRef.current, 'key', keyId)")
   })
 
   it('separates Dashboard login removal from coordinated user deletion', () => {
@@ -146,6 +153,8 @@ describe('access-control modal experience', () => {
     expect(detail).toContain('Edit access & quota')
     expect(detail).toContain('disabled={!snippets}')
     expect(detail).toContain('No request-ready model is available for this key.')
+    expect(detail).toContain("? 'Names unavailable'")
+    expect(detail).not.toContain("key.accessGroupIds.join(', ')")
     expect(detail).not.toContain('YOUR_MODEL')
     expect(detail).not.toContain('Rotate key')
     expect(detail.match(/<dt>Owner<\/dt>/g)).toHaveLength(1)
@@ -237,6 +246,8 @@ describe('access-control modal experience', () => {
     const usage = readSource('./AccessControlUsageView.tsx')
 
     expect(page).toContain('accessPageQuery(pageState, pageCursors[activeView]?.[pageState.page])')
+    expect(page).toContain('loadAllAccessUsers(inferenceAccessApi.users)')
+    expect(page).toContain('loadAllDashboardMembers()')
     expect(page).toContain('selectors={accessControlSelectorSources}')
     expect(page).not.toContain('inferenceAccessApi.users({ limit: 100 })')
     expect(page).not.toContain('inferenceAccessApi.teams({ limit: 100 })')
@@ -277,6 +288,8 @@ describe('access-control modal experience', () => {
 
     expect(page).toContain('accessControlSelectorSources.models.detail(resource.resourceId)')
     expect(page).toContain('accessControlSelectorSources.entrypoints.detail(resource.resourceId)')
+    expect(page).toContain("'Model name unavailable'")
+    expect(page).toContain("'Mixture-of-Model name unavailable'")
     expect(policies).toContain('props.resourceName(resource.resourceType, resource.resourceId)')
     expect(detail).toContain('Customer support model')
     expect(detail).toContain('Customer support endpoint')
@@ -295,6 +308,12 @@ describe('access-control modal experience', () => {
     expect(identities).toContain(
       "props.canManageDashboardMembers && props.identityTab === 'invitations'",
     )
+    expect(identities).toContain('mergeAccessIdentityRows(')
+    const dashboardRoleBranch = identities.slice(
+      identities.indexOf('{row.member ? ('),
+      identities.indexOf(') : row.invitation ?', identities.indexOf('{row.member ? (')),
+    )
+    expect(dashboardRoleBranch.match(/\{row\.member\.role\}/g)).toHaveLength(1)
   })
 
   it('keeps dense access tables navigable on narrow screens', () => {

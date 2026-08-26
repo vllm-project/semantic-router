@@ -423,7 +423,6 @@ func (provider *managementSessionProvider) request(
 		)
 	}
 	decoder := json.NewDecoder(io.LimitReader(result.Body, 64<<10))
-	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(response); err != nil {
 		return err
 	}
