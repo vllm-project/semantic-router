@@ -181,6 +181,17 @@ func (provider *managementSessionProvider) ManagementAccessToken(
 	return credential.accessToken, err
 }
 
+// clearSessionReauthenticationBarrier lets a newly provisioned issuer retry
+// the exchange without weakening the denial cached for any other session.
+func (provider *managementSessionProvider) clearSessionReauthenticationBarrier(sessionID string) {
+	if provider == nil || sessionID == "" {
+		return
+	}
+	provider.mu.Lock()
+	delete(provider.reauthenticateUntil, sessionID)
+	provider.mu.Unlock()
+}
+
 func (provider *managementSessionProvider) managementCredential(
 	ctx context.Context,
 	principal dashboardauth.AuthContext,

@@ -79,6 +79,7 @@ func (provider *managementSessionProvider) ProvisionFirstAdmin(
 		if bootstrapErr != nil {
 			return bootstrapErr
 		}
+		provider.clearSessionReauthenticationBarrier(identity.SessionID)
 		accessToken, err = provider.ManagementAccessToken(ctx, actor)
 		if err != nil {
 			return errFirstAdminProvisioning

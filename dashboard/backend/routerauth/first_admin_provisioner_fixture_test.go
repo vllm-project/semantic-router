@@ -122,7 +122,9 @@ func (fixture *firstAdminProvisioningFixture) recordProvisioningCall(request *ht
 
 func (fixture *firstAdminProvisioningFixture) serveExchangeChallenge(response http.ResponseWriter) {
 	if !fixture.bootstrapped {
-		http.Error(response, "not bootstrapped", http.StatusServiceUnavailable)
+		// The Router rejects an assertion from an issuer that bootstrap has not
+		// trusted yet, so exercise the real first-admin response contract.
+		http.Error(response, "issuer is not trusted", http.StatusUnauthorized)
 		return
 	}
 	fixture.challenge++
