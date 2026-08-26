@@ -301,8 +301,8 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, name, password st
 		return nil, err
 	}
 	if accepted.Onboarding.InvitationID != presentation.RouterInvitationID ||
-		accepted.Onboarding.UserID == "" || accepted.Onboarding.APIKeyID == "" ||
-		accepted.Onboarding.APIKey == "" || !accepted.Onboarding.DeliveryExpiresAt.After(time.Now().UTC()) {
+		accepted.Onboarding.UserID == "" ||
+		!validOptionalOnboardingKey(accepted.Onboarding, time.Now().UTC()) {
 		return nil, ErrInvitationAuthorityUnavailable
 	}
 	now := time.Now().Unix()
@@ -330,11 +330,19 @@ func (s *Service) AcceptInvitation(ctx context.Context, token, name, password st
 func validateIssuedInvitation(issued managementapi.InvitationIssuedSecret, namespaceID, subject, email string) error {
 	if issued.Token == "" || issued.Data.InvitationID == "" || issued.Data.NamespaceID != namespaceID ||
 		issued.Data.ExpectedIdentity.Subject != subject || issued.Data.ExpectedIdentity.Email != email ||
-		issued.Data.Revision == 0 || !issued.Data.Onboarding.AutomaticFirstKey ||
+		issued.Data.Revision == 0 ||
 		!issued.DeliveryExpiresAt.After(time.Now().UTC()) {
 		return ErrInvitationAuthorityUnavailable
 	}
 	return nil
+}
+
+func validOptionalOnboardingKey(result managementapi.OnboardingResult, now time.Time) bool {
+	hasID, hasSecret := result.APIKeyID != "", result.APIKey != ""
+	if hasID != hasSecret {
+		return false
+	}
+	return !hasID || result.DeliveryExpiresAt.After(now)
 }
 
 func dashboardInvitation(router managementapi.Invitation, presentation invitationPresentation) (DashboardMemberInvitation, error) {

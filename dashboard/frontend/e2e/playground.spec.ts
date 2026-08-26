@@ -1235,7 +1235,9 @@ test.describe('Router Agent Playground', () => {
     await expect(page.getByRole('option', { name: /blend-v2/ })).toBeVisible()
   })
 
-  test('hides Builder and Single Models without routing manage permission', async ({ page }) => {
+  test('hides Builder but shows Router-authorized Single Models without routing manage permission', async ({
+    page,
+  }) => {
     await mockAuthenticatedAppShell(page, {
       user: {
         id: 'consumer-1',
@@ -1263,8 +1265,8 @@ test.describe('Router Agent Playground', () => {
     await expect(addMenu.getByRole('menuitemcheckbox', { name: /Agent/ })).toBeVisible()
     await page.keyboard.press('Escape')
     await page.getByTestId('playground-composer-model-select').click()
-    await expect(page.getByText('Single Model', { exact: true })).toHaveCount(0)
-    await expect(page.getByRole('option', { name: /local\/qwen/ })).toHaveCount(0)
+    await expect(page.getByText('Single Model', { exact: true })).toBeVisible()
+    await expect(page.getByRole('option', { name: /local\/qwen/ })).toBeVisible()
 
     await page.goto('/config/agent')
     await expect(page).toHaveURL(/\/dashboard$/)

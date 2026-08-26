@@ -46,6 +46,72 @@ def test_core_resolves_management_port_for_startup_health_check():
     assert core._configured_management_port({}) == 8080
 
 
+def _assert_split_runtime_health_policy(router_cmd, envoy_cmd, dashboard_cmd):
+    for command in (router_cmd, envoy_cmd, dashboard_cmd):
+        assert command[command.index("--restart") + 1] == "unless-stopped"
+    assert (
+        "http://127.0.0.1:8080/ready"
+        in router_cmd[router_cmd.index("--health-cmd") + 1]
+    )
+    assert "/ready" in envoy_cmd[envoy_cmd.index("--health-cmd") + 1]
+    assert dashboard_cmd[dashboard_cmd.index("--health-cmd") + 1].endswith(
+        "http://127.0.0.1:8700/healthz"
+    )
+
+
+def _assert_split_runtime_mount_contract(router_cmd, envoy_cmd, dashboard_cmd):
+    for component, command in (
+        ("router", router_cmd),
+        ("envoy", envoy_cmd),
+        ("dashboard", dashboard_cmd),
+    ):
+        assert command[command.index("--entrypoint") + 1] == "/bin/sh"
+        producer_mounts = [
+            mount
+            for mount in _option_values(command, "-v")
+            if mount.endswith(":/var/log/vllm-sr-producer/current.log:z")
+        ]
+        assert len(producer_mounts) == 1
+        assert producer_mounts[0].split(":", 1)[0].endswith(f"/{component}.log")
+
+    for command in (router_cmd, dashboard_cmd):
+        compiled_mounts = [
+            mount
+            for mount in _option_values(command, "-v")
+            if ":/app/.vllm-sr/compiled-bootstrap.yaml:" in mount
+        ]
+        assert len(compiled_mounts) == 1
+        assert compiled_mounts[0].endswith(
+            ":/app/.vllm-sr/compiled-bootstrap.yaml:ro,z"
+        )
+
+    router_mounts = _option_values(router_cmd, "-v")
+    assert not any(
+        mount.endswith(":/app/source-config.yaml:ro,z") for mount in router_mounts
+    )
+    assert not any(mount.endswith(":/app/.vllm-sr:z") for mount in router_mounts)
+    assert not any("/app/.vllm-sr/logs" in mount for mount in router_mounts)
+    assert not any("/app/.vllm-sr/knowledge_bases" in mount for mount in router_mounts)
+    assert router_cmd[-2:] == [
+        "/app/start-router.sh",
+        "/app/.vllm-sr/compiled-bootstrap.yaml",
+    ]
+    assert any(
+        mount.endswith(":/var/log/vllm-sr:ro,z")
+        for mount in _option_values(dashboard_cmd, "-v")
+    )
+    assert not any(
+        mount.endswith(":/app/.vllm-sr:z")
+        for mount in _option_values(dashboard_cmd, "-v")
+    )
+    assert "VLLM_SR_LOG_SPOOL_DIR=/var/log/vllm-sr" in dashboard_cmd
+    assert any(
+        value.startswith("VLLM_SR_LOG_SPOOL_GID=")
+        for value in _option_values(dashboard_cmd, "-e")
+    )
+    assert "--group-add" in envoy_cmd
+
+
 def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     tmp_path, monkeypatch
 ):
@@ -117,67 +183,8 @@ def test_container_start_vllm_sr_sets_split_service_urls_for_dashboard(
     envoy_cmd = _find_container_run_cmd(captured, "vllm-sr-envoy-container")
     assert "0.0.0.0:8899:8899" in envoy_cmd
 
-    for command in (router_cmd, envoy_cmd, dashboard_cmd):
-        assert command[command.index("--restart") + 1] == "unless-stopped"
-    assert (
-        "http://127.0.0.1:8080/ready"
-        in router_cmd[router_cmd.index("--health-cmd") + 1]
-    )
-    assert "/ready" in envoy_cmd[envoy_cmd.index("--health-cmd") + 1]
-    assert dashboard_cmd[dashboard_cmd.index("--health-cmd") + 1].endswith(
-        "http://127.0.0.1:8700/healthz"
-    )
-
-    for component, command in (
-        ("router", router_cmd),
-        ("envoy", envoy_cmd),
-        ("dashboard", dashboard_cmd),
-    ):
-        assert command[command.index("--entrypoint") + 1] == "/bin/sh"
-        producer_mounts = [
-            mount
-            for mount in _option_values(command, "-v")
-            if mount.endswith(":/var/log/vllm-sr-producer/current.log:z")
-        ]
-        assert len(producer_mounts) == 1
-        assert producer_mounts[0].split(":", 1)[0].endswith(f"/{component}.log")
-
-    for command in (router_cmd, dashboard_cmd):
-        compiled_mounts = [
-            mount
-            for mount in _option_values(command, "-v")
-            if ":/app/.vllm-sr/compiled-bootstrap.yaml:" in mount
-        ]
-        assert len(compiled_mounts) == 1
-        assert compiled_mounts[0].endswith(
-            ":/app/.vllm-sr/compiled-bootstrap.yaml:ro,z"
-        )
-
-    router_mounts = _option_values(router_cmd, "-v")
-    assert not any(
-        mount.endswith(":/app/source-config.yaml:ro,z") for mount in router_mounts
-    )
-    assert not any(mount.endswith(":/app/.vllm-sr:z") for mount in router_mounts)
-    assert not any("/app/.vllm-sr/logs" in mount for mount in router_mounts)
-    assert not any("/app/.vllm-sr/knowledge_bases" in mount for mount in router_mounts)
-    assert router_cmd[-2:] == [
-        "/app/start-router.sh",
-        "/app/.vllm-sr/compiled-bootstrap.yaml",
-    ]
-    assert any(
-        mount.endswith(":/var/log/vllm-sr:ro,z")
-        for mount in _option_values(dashboard_cmd, "-v")
-    )
-    assert not any(
-        mount.endswith(":/app/.vllm-sr:z")
-        for mount in _option_values(dashboard_cmd, "-v")
-    )
-    assert "VLLM_SR_LOG_SPOOL_DIR=/var/log/vllm-sr" in dashboard_cmd
-    assert any(
-        value.startswith("VLLM_SR_LOG_SPOOL_GID=")
-        for value in _option_values(dashboard_cmd, "-e")
-    )
-    assert "--group-add" in envoy_cmd
+    _assert_split_runtime_health_policy(router_cmd, envoy_cmd, dashboard_cmd)
+    _assert_split_runtime_mount_contract(router_cmd, envoy_cmd, dashboard_cmd)
 
 
 def test_split_runtime_honors_management_listener_port(tmp_path, monkeypatch):

@@ -21,6 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 	"github.com/vllm-project/semantic-router/e2e/pkg/helpers"
@@ -79,21 +80,7 @@ func (p *Profile) prepareManagedPrerequisites(ctx context.Context, opts *framewo
 	}
 	defer zeroManagedMaterial(&material)
 
-	if err := upsertE2ESecret(
-		ctx,
-		opts,
-		newE2ESecret(namespaceRouter, dashboardRouterSecretName, material.routerSecret, false),
-	); err != nil {
-		return err
-	}
-	if err := upsertE2ESecret(ctx, opts, newDashboardIdentitySecret(material.dashboardSecret)); err != nil {
-		return err
-	}
-	if err := upsertE2ESecret(
-		ctx,
-		opts,
-		newE2ESecret("default", dashboardStoreSecretName, material.storeSecret, false),
-	); err != nil {
+	if err := persistDashboardManagedMaterial(ctx, opts, material); err != nil {
 		return err
 	}
 	if err := resetDashboardDataClaim(ctx, opts); err != nil {
@@ -103,6 +90,28 @@ func (p *Profile) prepareManagedPrerequisites(ctx context.Context, opts *framewo
 		return err
 	}
 
+	return p.deployManagedStores(ctx, opts)
+}
+
+func persistDashboardManagedMaterial(
+	ctx context.Context,
+	opts *framework.SetupOptions,
+	material dashboardManagedMaterial,
+) error {
+	secrets := []*corev1.Secret{
+		newE2ESecret(namespaceRouter, dashboardRouterSecretName, material.routerSecret, false),
+		newDashboardIdentitySecret(material.dashboardSecret),
+		newE2ESecret("default", dashboardStoreSecretName, material.storeSecret, false),
+	}
+	for _, secret := range secrets {
+		if err := upsertE2ESecret(ctx, opts, secret); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Profile) deployManagedStores(ctx context.Context, opts *framework.SetupOptions) error {
 	if err := p.kubectlApplyWithNamespace(ctx, opts.KubeConfig, "default", managedStoresManifest); err != nil {
 		return fmt.Errorf("apply managed stores: %w", err)
 	}
@@ -239,32 +248,11 @@ func newDashboardIdentitySecret(data map[string][]byte) *corev1.Secret {
 
 func resetDashboardDataClaim(ctx context.Context, opts *framework.SetupOptions) error {
 	claims := opts.KubeClient.CoreV1().PersistentVolumeClaims(namespaceRouter)
-	existing, err := claims.Get(ctx, "semantic-router-dashboard-e2e-data", metav1.GetOptions{})
-	if err == nil {
-		if existing.Labels["vllm.ai/e2e-managed"] != "true" {
-			return errors.New("refuse to replace unmanaged Dashboard E2E data claim")
-		}
-		if err := claims.Delete(ctx, existing.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
-			return fmt.Errorf("delete stale Dashboard E2E data claim: %w", err)
-		}
-		if err := wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
-			_, getErr := claims.Get(ctx, existing.Name, metav1.GetOptions{})
-			switch {
-			case apierrors.IsNotFound(getErr):
-				return true, nil
-			case getErr != nil:
-				return false, getErr
-			default:
-				return false, nil
-			}
-		}); err != nil {
-			return fmt.Errorf("wait for stale Dashboard E2E data claim deletion: %w", err)
-		}
-	} else if !apierrors.IsNotFound(err) {
-		return fmt.Errorf("inspect Dashboard E2E data claim: %w", err)
+	if err := removeExistingDashboardDataClaim(ctx, claims); err != nil {
+		return err
 	}
 	storageClass := "standard"
-	_, err = claims.Create(ctx, &corev1.PersistentVolumeClaim{
+	_, err := claims.Create(ctx, &corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: "semantic-router-dashboard-e2e-data", Namespace: namespaceRouter, Labels: e2eManagedLabels,
 		},
@@ -282,6 +270,43 @@ func resetDashboardDataClaim(ctx context.Context, opts *framework.SetupOptions) 
 	return nil
 }
 
+func removeExistingDashboardDataClaim(
+	ctx context.Context,
+	claims corev1client.PersistentVolumeClaimInterface,
+) error {
+	existing, err := claims.Get(ctx, "semantic-router-dashboard-e2e-data", metav1.GetOptions{})
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect Dashboard E2E data claim: %w", err)
+	}
+	if existing.Labels["vllm.ai/e2e-managed"] != "true" {
+		return errors.New("refuse to replace unmanaged Dashboard E2E data claim")
+	}
+	if err := claims.Delete(ctx, existing.Name, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
+		return fmt.Errorf("delete stale Dashboard E2E data claim: %w", err)
+	}
+	if err := waitForDashboardDataClaimDeletion(ctx, claims, existing.Name); err != nil {
+		return fmt.Errorf("wait for stale Dashboard E2E data claim deletion: %w", err)
+	}
+	return nil
+}
+
+func waitForDashboardDataClaimDeletion(
+	ctx context.Context,
+	claims corev1client.PersistentVolumeClaimInterface,
+	name string,
+) error {
+	return wait.PollUntilContextTimeout(ctx, time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := claims.Get(ctx, name, metav1.GetOptions{})
+		if apierrors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	})
+}
+
 func stageBootstrapToken(ctx context.Context, opts *framework.SetupOptions, token []byte) error {
 	if err := upsertE2ESecret(
 		ctx,
@@ -296,31 +321,46 @@ func stageBootstrapToken(ctx context.Context, opts *framework.SetupOptions, toke
 		return err
 	}
 	pods := opts.KubeClient.CoreV1().Pods(namespaceRouter)
+	if err := removeStaleBootstrapWriter(ctx, pods); err != nil {
+		return err
+	}
+	if _, err := pods.Create(ctx, newBootstrapWriterPod(opts.ImageTag), metav1.CreateOptions{}); err != nil {
+		return fmt.Errorf("create bootstrap writer: %w", err)
+	}
+	if err := waitForBootstrapWriter(ctx, pods); err != nil {
+		return err
+	}
+	cleanupBootstrapSeed(ctx, opts, pods)
+	return nil
+}
+
+func removeStaleBootstrapWriter(ctx context.Context, pods corev1client.PodInterface) error {
 	if err := pods.Delete(ctx, dashboardBootstrapWriter, metav1.DeleteOptions{}); err != nil && !apierrors.IsNotFound(err) {
 		return fmt.Errorf("delete stale bootstrap writer: %w", err)
 	}
-	if err := wait.PollUntilContextTimeout(ctx, 250*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
+	err := wait.PollUntilContextTimeout(ctx, 250*time.Millisecond, 30*time.Second, true, func(ctx context.Context) (bool, error) {
 		_, getErr := pods.Get(ctx, dashboardBootstrapWriter, metav1.GetOptions{})
-		switch {
-		case apierrors.IsNotFound(getErr):
+		if apierrors.IsNotFound(getErr) {
 			return true, nil
-		case getErr != nil:
-			return false, getErr
-		default:
-			return false, nil
 		}
-	}); err != nil {
+		return false, getErr
+	})
+	if err != nil {
 		return fmt.Errorf("wait for stale bootstrap writer deletion: %w", err)
 	}
+	return nil
+}
+
+func newBootstrapWriterPod(imageTag string) *corev1.Pod {
 	root := int64(0)
-	writer := &corev1.Pod{
+	return &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: dashboardBootstrapWriter, Namespace: namespaceRouter, Labels: e2eManagedLabels,
 		},
 		Spec: corev1.PodSpec{
 			RestartPolicy: corev1.RestartPolicyNever,
 			Containers: []corev1.Container{{
-				Name: "writer", Image: "ghcr.io/vllm-project/semantic-router/extproc:" + opts.ImageTag,
+				Name: "writer", Image: "ghcr.io/vllm-project/semantic-router/extproc:" + imageTag,
 				ImagePullPolicy: corev1.PullNever,
 				Command:         []string{"/usr/bin/bash", "-ceu"},
 				Args: []string{
@@ -343,10 +383,10 @@ func stageBootstrapToken(ctx context.Context, opts *framework.SetupOptions, toke
 			},
 		},
 	}
-	if _, err := pods.Create(ctx, writer, metav1.CreateOptions{}); err != nil {
-		return fmt.Errorf("create bootstrap writer: %w", err)
-	}
-	err := wait.PollUntilContextTimeout(ctx, time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+}
+
+func waitForBootstrapWriter(ctx context.Context, pods corev1client.PodInterface) error {
+	return wait.PollUntilContextTimeout(ctx, time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
 		pod, getErr := pods.Get(ctx, dashboardBootstrapWriter, metav1.GetOptions{})
 		if getErr != nil {
 			return false, getErr
@@ -360,14 +400,17 @@ func stageBootstrapToken(ctx context.Context, opts *framework.SetupOptions, toke
 			return false, nil
 		}
 	})
-	if err != nil {
-		return err
-	}
+}
+
+func cleanupBootstrapSeed(
+	ctx context.Context,
+	opts *framework.SetupOptions,
+	pods corev1client.PodInterface,
+) {
 	_ = pods.Delete(ctx, dashboardBootstrapWriter, metav1.DeleteOptions{})
 	_ = opts.KubeClient.CoreV1().Secrets(namespaceRouter).Delete(
 		ctx, dashboardBootstrapSeedName, metav1.DeleteOptions{},
 	)
-	return nil
 }
 
 func newDashboardManagedMaterial() (dashboardManagedMaterial, error) {

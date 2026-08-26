@@ -35,7 +35,8 @@ selects its Recipe and assigns Models to every Decision name. The virtual Model
 name is then replaced by the
 selected backend Model.
 
-Named Recipes do not acquire implicit aliases. Every virtual model authored in
+There is no implicit default Recipe or automatic alias for a named Recipe.
+Every virtual model authored in
 `entrypoints` is explicit, and every Entrypoint assigns all of its Recipe's
 decisions. The preserved top-level `routing` shorthand is the only exception:
 when it contains a complete profile, it retains the established automatic names

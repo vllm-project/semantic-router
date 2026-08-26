@@ -177,22 +177,17 @@ func waitForDashboardBuilderReview(
 	deadline := time.Now().Add(dashboardBuilderTurnTimeout)
 	lastPhase := "no events"
 	for time.Now().Before(deadline) {
-		page, err := dashboardBuilderEventsPage(
-			ctx, client, baseURL, token, namespaceID, sessionID, "", verbose,
+		approval, phase, ready, err := pollDashboardBuilderReview(
+			ctx, client, baseURL, token, namespaceID, sessionID, turnID, "", verbose,
 		)
+		if phase != "" {
+			lastPhase = phase
+		}
 		if err != nil {
-			lastPhase = err.Error()
-		} else {
-			approval, phase, ready, inspectErr := inspectDashboardBuilderReviewEvents(page.Data, turnID)
-			if phase != "" {
-				lastPhase = phase
-			}
-			if inspectErr != nil {
-				return dashboardBuilderApproval{}, inspectErr
-			}
-			if ready {
-				return approval, nil
-			}
+			return dashboardBuilderApproval{}, err
+		}
+		if ready {
+			return approval, nil
 		}
 		if err := waitDashboardBuilderPoll(ctx, 2*time.Second); err != nil {
 			return dashboardBuilderApproval{}, err
@@ -202,6 +197,26 @@ func waitForDashboardBuilderReview(
 		"Builder did not prepare a publication review within %s (last phase: %s)",
 		dashboardBuilderTurnTimeout, lastPhase,
 	)
+}
+
+func pollDashboardBuilderReview(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	sessionID string,
+	turnID string,
+	cursor string,
+	verbose bool,
+) (dashboardBuilderApproval, string, bool, error) {
+	page, err := dashboardBuilderEventsPage(
+		ctx, client, baseURL, token, namespaceID, sessionID, cursor, verbose,
+	)
+	if err != nil {
+		return dashboardBuilderApproval{}, err.Error(), false, nil
+	}
+	return inspectDashboardBuilderReviewEvents(page.Data, turnID)
 }
 
 func inspectDashboardBuilderReviewEvents(

@@ -198,31 +198,77 @@ func (client *managedAccessClient) request(
 	expectedStatuses []int,
 	result interface{},
 ) (int, http.Header, error) {
-	var requestBody io.Reader
-	var encoded []byte
-	if payload != nil {
-		var err error
-		encoded, err = json.Marshal(payload)
-		if err != nil {
-			return 0, nil, fmt.Errorf("marshal direct Management request: %w", err)
-		}
-		defer clear(encoded)
-		requestBody = bytes.NewReader(encoded)
+	encoded, err := encodeManagedAccessRequest(payload)
+	if err != nil {
+		return 0, nil, err
 	}
+	defer clear(encoded)
 	requestURL := strings.TrimRight(client.baseURL, "/") + managedAccessManagementBasePath + path
 	if client.verbose {
 		fmt.Printf("[Management] %s %s\n", method, path)
 	}
+	request, err := newManagedAccessRequest(
+		ctx, method, requestURL, client.token, namespaceID, idempotencyKey, encoded, payload != nil, headers,
+	)
+	if err != nil {
+		return 0, nil, err
+	}
+	response, err := client.client.Do(request)
+	if err != nil {
+		return 0, nil, fmt.Errorf("direct Management request failed: %w", err)
+	}
+	defer func() { _ = response.Body.Close() }()
+	return decodeManagedAccessResponse(response, method, path, expectedStatuses, result)
+}
+
+func encodeManagedAccessRequest(payload interface{}) ([]byte, error) {
+	if payload == nil {
+		return nil, nil
+	}
+	encoded, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal direct Management request: %w", err)
+	}
+	return encoded, nil
+}
+
+func newManagedAccessRequest(
+	ctx context.Context,
+	method string,
+	requestURL string,
+	token string,
+	namespaceID string,
+	idempotencyKey string,
+	encoded []byte,
+	hasPayload bool,
+	headers http.Header,
+) (*http.Request, error) {
+	var requestBody io.Reader
+	if hasPayload {
+		requestBody = bytes.NewReader(encoded)
+	}
 	request, err := http.NewRequestWithContext(ctx, method, requestURL, requestBody)
 	if err != nil {
-		return 0, nil, fmt.Errorf("create direct Management request: %w", err)
+		return nil, fmt.Errorf("create direct Management request: %w", err)
 	}
 	request.Header.Set("Accept", managedAccessManagementMediaType)
-	if payload != nil {
+	setManagedAccessRequestHeaders(request, token, namespaceID, idempotencyKey, hasPayload, headers)
+	return request, nil
+}
+
+func setManagedAccessRequestHeaders(
+	request *http.Request,
+	token string,
+	namespaceID string,
+	idempotencyKey string,
+	hasPayload bool,
+	headers http.Header,
+) {
+	if hasPayload {
 		request.Header.Set("Content-Type", managedAccessManagementMediaType)
 	}
-	if client.token != "" {
-		request.Header.Set("Authorization", "Bearer "+client.token)
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
 	}
 	if namespaceID != "" {
 		request.Header.Set(managedAccessNamespaceHeader, namespaceID)
@@ -235,11 +281,15 @@ func (client *managedAccessClient) request(
 			request.Header.Add(name, value)
 		}
 	}
-	response, err := client.client.Do(request)
-	if err != nil {
-		return 0, nil, fmt.Errorf("direct Management request failed: %w", err)
-	}
-	defer func() { _ = response.Body.Close() }()
+}
+
+func decodeManagedAccessResponse(
+	response *http.Response,
+	method string,
+	path string,
+	expectedStatuses []int,
+	result interface{},
+) (int, http.Header, error) {
 	body, err := io.ReadAll(io.LimitReader(response.Body, 4<<20))
 	if err != nil {
 		return response.StatusCode, response.Header.Clone(), fmt.Errorf("read direct Management response: %w", err)

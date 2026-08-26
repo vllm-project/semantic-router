@@ -13,7 +13,7 @@
 }
 
 .dialogShell {
-  width: min(900px, 100%);
+  width: min(var(--product-dialog-content-width), 100%);
   height: min(820px, calc(100dvh - 2.8rem));
   max-height: calc(100dvh - 2.8rem);
   min-height: 0;

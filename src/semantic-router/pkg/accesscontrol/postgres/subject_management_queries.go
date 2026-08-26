@@ -13,14 +13,16 @@ const (
 WHERE namespace_id = $1 AND id = $2`
 	subjectListUsersQuery = `SELECT ` + subjectUserColumns + ` FROM access_users
 WHERE namespace_id = $1
-  AND ($2 = '' OR CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2)
+  AND (($2 = '' AND deleted_at IS NULL)
+       OR ($2 <> '' AND CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2))
   AND ($3 OR id = ANY($4::uuid[]))
   AND ($5::timestamptz IS NULL OR created_at < $5 OR (created_at = $5 AND id > $6::uuid))
 ORDER BY created_at DESC, id ASC
 LIMIT $7`
 	subjectSearchUsersQuery = `SELECT ` + subjectUserColumns + ` FROM access_users
 WHERE namespace_id = $1
-  AND ($2 = '' OR CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2)
+  AND (($2 = '' AND deleted_at IS NULL)
+       OR ($2 <> '' AND CASE WHEN deleted_at IS NULL THEN status ELSE 'deleted' END = $2))
   AND ($3 OR id = ANY($4::uuid[]))
   AND (lower(email) LIKE $5 ESCAPE E'\\' OR lower(display_name) LIKE $5 ESCAPE E'\\'
        OR id::text LIKE $5 ESCAPE E'\\')

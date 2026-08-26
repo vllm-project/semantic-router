@@ -10,7 +10,7 @@
 }
 
 .dialog {
-  width: min(940px, 100%);
+  width: min(var(--product-dialog-content-width), 100%);
   max-height: min(900px, calc(100dvh - 48px));
   display: flex;
   flex-direction: column;

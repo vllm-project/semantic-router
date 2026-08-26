@@ -14,7 +14,7 @@
 }
 
 .modal {
-  width: min(760px, 100%);
+  width: min(var(--product-dialog-content-width), 100%);
   max-height: calc(100dvh - 2.8rem);
   min-height: 0;
   display: flex;

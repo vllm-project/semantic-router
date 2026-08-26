@@ -11,7 +11,6 @@ import subprocess
 from types import SimpleNamespace
 
 import pytest
-
 from cli import container_cli, container_start, storage_secrets
 from cli.runtime_stack import resolve_runtime_stack
 from cli.storage_secrets import (

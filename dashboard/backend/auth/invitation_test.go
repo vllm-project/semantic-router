@@ -32,6 +32,8 @@ type fakeInvitationAuthority struct {
 	invitation      managementapi.Invitation
 	token           string
 	onboardingKey   string
+	withoutFirstKey bool
+	disableAutomaticFirstKey bool
 }
 
 func (authority *fakeInvitationAuthority) ListInvitations(context.Context, AuthContext, string) ([]managementapi.Invitation, error) {
@@ -59,7 +61,7 @@ func (authority *fakeInvitationAuthority) CreateInvitation(_ context.Context, ac
 		ExpectedIdentity: request.ExpectedIdentity, DisplayName: request.DisplayName,
 		Onboarding: managementapi.InvitationOnboardingSnapshot{
 			RoleGrants: grants, Team: request.Team,
-			AutomaticFirstKey: true,
+			AutomaticFirstKey: !authority.disableAutomaticFirstKey,
 		},
 		ExpiresAt: request.ExpiresAt, Status: InvitationPending, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
@@ -96,13 +98,19 @@ func (authority *fakeInvitationAuthority) AcceptInvitation(_ context.Context, re
 	if authority.acceptErr != nil {
 		return RouterInvitationAcceptanceResult{}, authority.acceptErr
 	}
-	if authority.onboardingKey == "" {
+	if authority.onboardingKey == "" && !authority.withoutFirstKey {
 		authority.onboardingKey = "test-onboarding-key"
+	}
+	deliveryExpiresAt := time.Time{}
+	onboardingKeyID := ""
+	if authority.onboardingKey != "" {
+		deliveryExpiresAt = time.Now().UTC().Add(time.Hour)
+		onboardingKeyID = testInvitationKeyID
 	}
 	return RouterInvitationAcceptanceResult{DashboardRole: RoleWrite, Onboarding: managementapi.OnboardingResult{
 		InvitationID: testInvitationID, PrincipalID: testInvitationPrincipal, UserID: testInvitationUserID,
-		APIKeyID: testInvitationKeyID, APIKey: authority.onboardingKey,
-		DeliveryExpiresAt: time.Now().UTC().Add(time.Hour),
+		APIKeyID: onboardingKeyID, APIKey: authority.onboardingKey,
+		DeliveryExpiresAt: deliveryExpiresAt,
 	}}, nil
 }
 
@@ -143,6 +151,38 @@ func TestDashboardInvitationMapsRoleAndOptionalTeamIntoRouterAuthority(t *testin
 		request.RoleGrants[1].RoleID != routerConsumerRoleID || request.RoleGrants[1].ScopeKind != "user" ||
 		request.Team.TeamID != testInvitationTeamID || request.Team.Role != "admin" {
 		t.Fatalf("Router invitation request = %#v", request)
+	}
+}
+
+func TestInvitationCreationDoesNotRequireAutomaticFirstKey(t *testing.T) {
+	svc, authority, admin := configuredInvitationService(t)
+	authority.disableAutomaticFirstKey = true
+
+	created := createRouterInvitation(t, svc, admin, invitationInput{
+		Email: "manual-key@example.com", Name: "Manual Key", Role: RoleRead,
+	})
+	if created.ID != testInvitationID || created.Status != InvitationPending || authority.revoked {
+		t.Fatalf("created invitation = %#v, revoked = %v", created, authority.revoked)
+	}
+}
+
+func TestInvitationAcceptanceAllowsPolicyWithoutAutomaticFirstKey(t *testing.T) {
+	svc, authority, admin := configuredInvitationService(t)
+	authority.disableAutomaticFirstKey = true
+	authority.withoutFirstKey = true
+	created := createRouterInvitation(t, svc, admin, invitationInput{
+		Email: "manual-key-accept@example.com", Name: "Manual Key", Role: RoleRead,
+	})
+
+	accepted, err := svc.AcceptInvitation(
+		t.Context(), created.InvitationToken, "Manual Key", "a-secure-password",
+	)
+	if err != nil {
+		t.Fatalf("AcceptInvitation() error = %v", err)
+	}
+	if accepted.User == nil || accepted.User.Email != "manual-key-accept@example.com" ||
+		accepted.Onboarding.APIKeyID != "" || accepted.Onboarding.APIKey != "" {
+		t.Fatalf("accepted invitation = %#v", accepted)
 	}
 }
 

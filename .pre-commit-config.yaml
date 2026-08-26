@@ -48,6 +48,7 @@ repos:
         entry: .venv-agent/bin/python tools/agent/scripts/precommit_tool.py markdown
         language: system
         files: \.md$
+        require_serial: true
         exclude: ^(node_modules/|website/node_modules/|dashboard/frontend/node_modules/|dashboard/wizmap/node_modules/|bench/|e2e/config/models/|models/|vsr/|website/docs/api/crd-reference\.md$|CLAUDE\.md$)
 
   # Yaml specific hooks

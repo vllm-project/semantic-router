@@ -1,6 +1,5 @@
 import pytest
 import yaml
-
 from cli.yaml_contract import load_yaml
 
 

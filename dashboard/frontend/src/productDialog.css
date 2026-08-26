@@ -7,6 +7,7 @@
  */
 
 :root {
+  --product-dialog-content-width: 940px;
   --product-dialog-border: rgba(255, 255, 255, 0.72);
   --product-dialog-overlay: rgba(3, 3, 4, 0.64);
   --product-dialog-surface:

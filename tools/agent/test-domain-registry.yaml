@@ -441,7 +441,6 @@ profiles:
       - src/semantic-router/pkg/routerreplay/**
       - src/semantic-router/pkg/extproc/router_replay*.go
       - src/semantic-router/pkg/apiserver/route_router_replay*.go
-      - dashboard/backend/router/router_replay*.go
   dynamo:
     owner: e2e
     coverage_role: dynamo-gpu-and-batching

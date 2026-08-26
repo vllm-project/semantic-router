@@ -147,6 +147,21 @@ func assertSubjectUserLifecycle(
 	scope accesscontrol.ResultScope,
 ) string {
 	t.Helper()
+	created := assertSubjectUserCreateAndReplay(t, ctx, service, actor)
+	assertSecondSubjectUser(t, ctx, service, actor, created.ID)
+	assertSubjectUserPagination(t, ctx, service, scope)
+	assertSubjectUserScopeAndSearch(t, ctx, service, scope, created.ID)
+	assertDeletedSubjectUserVisibility(t, ctx, service, actor, scope)
+	return created.ID
+}
+
+func assertSubjectUserCreateAndReplay(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	actor subjectmanagement.Actor,
+) subjectmanagement.MutationResult {
+	t.Helper()
 	request := subjectmanagement.CreateUserRequest{
 		NamespaceID: subjectTestNamespaceID, Email: "FIRST@Example.COM", DisplayName: "First User",
 		IdempotencyKey: "create-user-0123456789", Actor: actor,
@@ -164,13 +179,33 @@ func assertSubjectUserLifecycle(
 	if _, err := service.CreateUser(ctx, request); !errors.Is(err, managementcommand.ErrConflict) {
 		t.Fatalf("conflicting replay error = %v", err)
 	}
+	return created
+}
+
+func assertSecondSubjectUser(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	actor subjectmanagement.Actor,
+	firstUserID string,
+) {
+	t.Helper()
 	second, err := service.CreateUser(ctx, subjectmanagement.CreateUserRequest{
 		NamespaceID: subjectTestNamespaceID, Email: "second@example.com", DisplayName: "Second User",
 		IdempotencyKey: "create-user-9876543210", Actor: actor,
 	})
-	if err != nil || second.ID == created.ID {
+	if err != nil || second.ID == firstUserID {
 		t.Fatalf("create second User = %#v, %v", second, err)
 	}
+}
+
+func assertSubjectUserPagination(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+) {
+	t.Helper()
 	firstPage, err := service.ListUsers(ctx, subjectmanagement.ListRequest{
 		NamespaceID: subjectTestNamespaceID, PageSize: 1, Scope: scope,
 	})
@@ -183,23 +218,95 @@ func assertSubjectUserLifecycle(
 	if err != nil || len(secondPage.Items) != 1 || secondPage.Items[0].ID == firstPage.Items[0].ID {
 		t.Fatalf("second User page = %#v, %v", secondPage, err)
 	}
+}
+
+func assertSubjectUserScopeAndSearch(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+	userID string,
+) {
+	t.Helper()
 	narrow, err := service.ListUsers(ctx, subjectmanagement.ListRequest{
 		NamespaceID: subjectTestNamespaceID, PageSize: 10,
 		Scope: accesscontrol.ResultScope{
 			NamespaceID: subjectTestNamespaceID,
-			UserIDs:     []accesscontrol.UserID{accesscontrol.UserID(created.ID)},
+			UserIDs:     []accesscontrol.UserID{accesscontrol.UserID(userID)},
 		},
 	})
-	if err != nil || len(narrow.Items) != 1 || narrow.Items[0].ID != created.ID || narrow.HasMore {
+	if err != nil || len(narrow.Items) != 1 || narrow.Items[0].ID != userID || narrow.HasMore {
 		t.Fatalf("exact User scope page = %#v, %v", narrow, err)
 	}
 	searched, err := service.ListUsers(ctx, subjectmanagement.ListRequest{
 		NamespaceID: subjectTestNamespaceID, Search: "FIRST@", PageSize: 1, Scope: scope,
 	})
-	if err != nil || len(searched.Items) != 1 || searched.Items[0].ID != created.ID || searched.HasMore {
+	if err != nil || len(searched.Items) != 1 || searched.Items[0].ID != userID || searched.HasMore {
 		t.Fatalf("searched User page = %#v, %v", searched, err)
 	}
-	return created.ID
+}
+
+func assertDeletedSubjectUserVisibility(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	actor subjectmanagement.Actor,
+	scope accesscontrol.ResultScope,
+) {
+	t.Helper()
+	deleted, err := service.CreateUser(ctx, subjectmanagement.CreateUserRequest{
+		NamespaceID: subjectTestNamespaceID, Email: "deleted@example.com", DisplayName: "Deleted User",
+		IdempotencyKey: "create-user-deleted-0123456789", Actor: actor,
+	})
+	if err != nil {
+		t.Fatalf("create User to delete = %#v, %v", deleted, err)
+	}
+	if _, err := service.DeleteUser(ctx, subjectmanagement.DeleteUserRequest{
+		NamespaceID: subjectTestNamespaceID, UserID: deleted.ID, ExpectedRevision: deleted.Revision, Actor: actor,
+	}); err != nil {
+		t.Fatalf("delete User = %v", err)
+	}
+	assertDefaultSubjectUsersExclude(t, ctx, service, scope, deleted.ID)
+	assertDeletedSubjectUserSearch(t, ctx, service, scope, deleted.ID)
+}
+
+func assertDefaultSubjectUsersExclude(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+	excludedID string,
+) {
+	t.Helper()
+	visible, err := service.ListUsers(ctx, subjectmanagement.ListRequest{
+		NamespaceID: subjectTestNamespaceID, PageSize: 10, Scope: scope,
+	})
+	if err != nil || len(visible.Items) != 2 {
+		t.Fatalf("default User page after delete = %#v, %v", visible, err)
+	}
+	for _, item := range visible.Items {
+		if item.ID == excludedID {
+			t.Fatalf("deleted User remained in default page: %#v", visible)
+		}
+	}
+}
+
+func assertDeletedSubjectUserSearch(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+	deletedID string,
+) {
+	t.Helper()
+	deletedPage, err := service.ListUsers(ctx, subjectmanagement.ListRequest{
+		NamespaceID: subjectTestNamespaceID, Status: string(accesscontrol.UserStatusDeleted),
+		Search: "deleted@", PageSize: 10, Scope: scope,
+	})
+	if err != nil || len(deletedPage.Items) != 1 || deletedPage.Items[0].ID != deletedID ||
+		deletedPage.Items[0].Status != accesscontrol.UserStatusDeleted || deletedPage.Items[0].DeletedAt == nil {
+		t.Fatalf("explicitly deleted User page = %#v, %v", deletedPage, err)
+	}
 }
 
 func assertSubjectTeamLifecycle(
@@ -210,6 +317,19 @@ func assertSubjectTeamLifecycle(
 	actor subjectmanagement.Actor,
 	scope accesscontrol.ResultScope,
 ) string {
+	t.Helper()
+	created := assertSubjectTeamCreateAndReplay(t, ctx, service, actor)
+	assertSubjectTeamSearchAndState(t, ctx, db, service, scope, created.ID)
+	assertSubjectTeamPolicyBindings(t, ctx, db, created.ID)
+	return created.ID
+}
+
+func assertSubjectTeamCreateAndReplay(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	actor subjectmanagement.Actor,
+) subjectmanagement.MutationResult {
 	t.Helper()
 	request := subjectmanagement.CreateTeamRequest{
 		NamespaceID: subjectTestNamespaceID, Name: "Platform", Description: "Platform team",
@@ -229,28 +349,43 @@ func assertSubjectTeamLifecycle(
 	if _, err := service.CreateTeam(ctx, request); !errors.Is(err, managementcommand.ErrConflict) {
 		t.Fatalf("conflicting Team policy selection error = %v", err)
 	}
+	return created
+}
+
+func assertSubjectTeamSearchAndState(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+	teamID string,
+) {
+	t.Helper()
 	searched, searchErr := service.ListTeams(ctx, subjectmanagement.ListRequest{
 		NamespaceID: subjectTestNamespaceID, Search: "plat", PageSize: 1, Scope: scope,
 	})
-	if searchErr != nil || len(searched.Items) != 1 || searched.Items[0].ID != created.ID {
+	if searchErr != nil || len(searched.Items) != 1 || searched.Items[0].ID != teamID {
 		t.Fatalf("searched Team page = %#v, %v", searched, searchErr)
 	}
 	var status string
-	if err := db.QueryRowContext(ctx, `SELECT status FROM access_teams WHERE id=$1`, created.ID).Scan(&status); err != nil || status != "active" {
+	if err := db.QueryRowContext(ctx, `SELECT status FROM access_teams WHERE id=$1`, teamID).Scan(&status); err != nil || status != "active" {
 		t.Fatalf("Team status = %q, %v", status, err)
 	}
+}
+
+func assertSubjectTeamPolicyBindings(t *testing.T, ctx context.Context, db *sql.DB, teamID string) {
+	t.Helper()
 	var accessBindings, rateBindings int
 	bindingErr := db.QueryRowContext(ctx, `SELECT
   (SELECT count(*) FROM access_policy_bindings
    WHERE subject_id=$1 AND policy_id IN ($2,$3) AND status='active'),
   (SELECT count(*) FROM rate_limit_bindings
    WHERE subject_id=$1 AND policy_id=$4 AND binding_mode='allocation' AND status='active')`,
-		created.ID, subjectTestAccessID, subjectTestAccessID2, subjectTestRateID,
+		teamID, subjectTestAccessID, subjectTestAccessID2, subjectTestRateID,
 	).Scan(&accessBindings, &rateBindings)
 	if bindingErr != nil || accessBindings != 2 || rateBindings != 1 {
 		t.Fatalf("Team policy bindings = %d/%d, %v", accessBindings, rateBindings, bindingErr)
 	}
-	return created.ID
 }
 
 func assertSubjectTeamPolicyValidation(
@@ -335,6 +470,21 @@ func assertSubjectMembershipAndUpdate(
 	userID, teamID string,
 ) {
 	t.Helper()
+	assertSubjectMembershipCreated(t, ctx, service, actor, userID, teamID)
+	assertSubjectUserMemberships(t, ctx, service, scope, userID)
+	assertSubjectTeamMembers(t, ctx, service, scope, teamID)
+	assertSubjectMembershipScope(t, ctx, service, userID)
+	assertSubjectTeamUpdate(t, ctx, service, actor, teamID)
+}
+
+func assertSubjectMembershipCreated(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	actor subjectmanagement.Actor,
+	userID, teamID string,
+) {
+	t.Helper()
 	membership, err := service.PutMembership(ctx, subjectmanagement.PutMembershipRequest{
 		NamespaceID: subjectTestNamespaceID, TeamID: teamID, UserID: userID,
 		Role: accesscontrol.TeamRoleAdmin, IdempotencyKey: "membership-0123456789", Actor: actor,
@@ -342,6 +492,16 @@ func assertSubjectMembershipAndUpdate(
 	if err != nil || membership.Revision != 1 {
 		t.Fatalf("put membership = %#v, %v", membership, err)
 	}
+}
+
+func assertSubjectUserMemberships(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+	userID string,
+) {
+	t.Helper()
 	userMemberships, err := service.ListUserMemberships(ctx, subjectmanagement.MembershipListRequest{
 		NamespaceID: subjectTestNamespaceID, UserID: userID, PageSize: 10,
 		IncludeTotal: true, Scope: scope,
@@ -350,6 +510,16 @@ func assertSubjectMembershipAndUpdate(
 		userMemberships.TotalCount == nil || *userMemberships.TotalCount != 1 {
 		t.Fatalf("User memberships = %#v, %v", userMemberships, err)
 	}
+}
+
+func assertSubjectTeamMembers(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	scope accesscontrol.ResultScope,
+	teamID string,
+) {
+	t.Helper()
 	teamMembers, err := service.ListTeamMembers(ctx, subjectmanagement.MembershipListRequest{
 		NamespaceID: subjectTestNamespaceID, TeamID: teamID, PageSize: 10,
 		IncludeTotal: true, Scope: scope,
@@ -359,6 +529,15 @@ func assertSubjectMembershipAndUpdate(
 		*teamMembers.TotalCount != 1 {
 		t.Fatalf("Team members = %#v, %v", teamMembers, err)
 	}
+}
+
+func assertSubjectMembershipScope(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	userID string,
+) {
+	t.Helper()
 	hidden, err := service.ListUserMemberships(ctx, subjectmanagement.MembershipListRequest{
 		NamespaceID: subjectTestNamespaceID, UserID: userID, PageSize: 10, IncludeTotal: true,
 		Scope: accesscontrol.ResultScope{NamespaceID: subjectTestNamespaceID},
@@ -366,6 +545,16 @@ func assertSubjectMembershipAndUpdate(
 	if err != nil || len(hidden.Items) != 0 || hidden.TotalCount == nil || *hidden.TotalCount != 0 {
 		t.Fatalf("permission-filtered User memberships = %#v, %v", hidden, err)
 	}
+}
+
+func assertSubjectTeamUpdate(
+	t *testing.T,
+	ctx context.Context,
+	service *subjectmanagement.Service,
+	actor subjectmanagement.Actor,
+	teamID string,
+) {
+	t.Helper()
 	newName := "Platform Engineering"
 	request := subjectmanagement.UpdateTeamRequest{
 		NamespaceID: subjectTestNamespaceID, TeamID: teamID, ExpectedRevision: 1,
@@ -389,7 +578,7 @@ func assertSubjectDurableAccounting(t *testing.T, ctx context.Context, db *sql.D
   (SELECT count(*) FROM policy_outbox)`).Scan(&commands, &audits, &outbox); err != nil {
 		t.Fatal(err)
 	}
-	if commands != 5 || audits < 6 || outbox != audits {
+	if commands != 7 || audits < 8 || outbox != audits {
 		t.Fatalf("durable accounting commands/audits/outbox = %d/%d/%d", commands, audits, outbox)
 	}
 }

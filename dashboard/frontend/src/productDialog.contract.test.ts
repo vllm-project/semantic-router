@@ -18,6 +18,7 @@ describe('dashboard product dialog system', () => {
 
     expect(main).toContain("import './productDialog.css'")
     expect(styles).toContain("[role='dialog'], [role='alertdialog']")
+    expect(styles).toContain('--product-dialog-content-width: 940px;')
     expect(styles).toContain('--product-dialog-border: rgba(255, 255, 255, 0.72);')
     expect(styles).toContain('border: 2px solid var(--product-dialog-border) !important;')
     expect(styles).toContain('backdrop-filter: blur(28px) saturate(140%);')
@@ -43,6 +44,22 @@ describe('dashboard product dialog system', () => {
     expect(editStyles).not.toContain('drawer-in')
     expect(viewStyles).not.toContain('drawer-in')
     expect(viewStyles).not.toContain('drawerShell')
+  })
+
+  it('keeps model and Access management dialogs on one responsive content measure', () => {
+    const styles = [
+      readSource('./pages/ConfigPageAddModelsDialog.module.css'),
+      readSource('./components/EditModal.module.css'),
+      readSource('./components/ViewModal.module.css'),
+      readSource('./pages/AccessControlPage.module.css'),
+    ]
+
+    styles.forEach((source) =>
+      expect(source).toContain('width: min(var(--product-dialog-content-width), 100%);'),
+    )
+    expect(
+      styles[3].match(/width: min\(var\(--product-dialog-content-width\), 100%\);/g),
+    ).toHaveLength(3)
   })
 
   it('uses the same glass material for Builder and DSL import dialogs', () => {
@@ -77,7 +94,6 @@ describe('dashboard product dialog system', () => {
     const dialogSources = sources.filter((source) =>
       /role=["'](?:dialog|alertdialog)["']/.test(source),
     )
-
     expect(dialogSources.length).toBeGreaterThan(20)
     dialogSources.forEach((source) => expect(source).toContain('aria-modal="true"'))
   })

@@ -97,6 +97,7 @@ describe('provider catalog model onboarding', () => {
   it('keeps model onboarding inside the dynamic mobile viewport', () => {
     const styles = readSource('./ConfigPageAddModelsDialog.module.css')
 
+    expect(styles).toContain('width: min(var(--product-dialog-content-width), 100%);')
     expect(styles).toContain('max-height: min(900px, calc(100dvh - 48px));')
     expect(styles).toContain('max-height: calc(100dvh - 0.75rem);')
     expect(styles).toContain('padding-bottom: max(14px, env(safe-area-inset-bottom));')

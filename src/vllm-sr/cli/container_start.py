@@ -3,6 +3,7 @@
 import os
 from collections.abc import Mapping
 from pathlib import Path
+from typing import Any
 
 from cli.bootstrap import local_dashboard_environment
 from cli.commands.runtime_support import sensitive_env_names
@@ -14,13 +15,13 @@ from cli.consts import (
 )
 from cli.container_data_network import router_data_network_commands
 from cli.container_gpu_isolation import router_runtime_env
-from cli.container_issuer_egress import (
-    MANAGEMENT_ISSUER_EGRESS_POLICY_ENV,
-    materialize_management_issuer_egress_policy,
-)
 from cli.container_images import (
     _normalize_platform,
     get_runtime_images,
+)
+from cli.container_issuer_egress import (
+    MANAGEMENT_ISSUER_EGRESS_POLICY_ENV,
+    materialize_management_issuer_egress_policy,
 )
 from cli.container_log_spool import (
     LOG_SPOOL_GID_ENV,
@@ -61,11 +62,16 @@ from cli.container_runtime_preparation import (
 from cli.container_runtime_preparation import (
     router_runtime_mount_specs as _router_runtime_mount_specs,
 )
+from cli.container_start_environment import (
+    DASHBOARD_SECRET_ENV_NAMES,
+    _build_common_runtime_env,
+    _dashboard_secret_environment,
+)
 from cli.container_start_runner import run_container_specs
 from cli.control_plane_deployment import (
     runtime_capabilities,
 )
-from cli.runtime_stack import PORT_OFFSET_ENV, RuntimeStackLayout, resolve_runtime_stack
+from cli.runtime_stack import RuntimeStackLayout, resolve_runtime_stack
 from cli.runtime_topology import resolve_runtime_topology
 from cli.storage_secrets import (
     STORAGE_SECRET_ENV_NAMES,
@@ -73,10 +79,6 @@ from cli.storage_secrets import (
 from cli.utils import get_logger, load_config
 
 log = get_logger(__name__)
-
-DASHBOARD_SECRET_ENV_NAMES = frozenset(
-    {"DASHBOARD_ADMIN_PASSWORD", "DASHBOARD_JWT_SECRET"}
-)
 
 
 def container_start_vllm_sr(
@@ -119,41 +121,23 @@ def container_start_vllm_sr(
         env_vars,
         stack_layout,
     )
-    dashboard_runtime_env = _local_dashboard_runtime_environment(
-        runtime_paths["effective_config_path"], config_dir, stack_layout
+    dashboard_runtime_env = _prepare_dashboard_runtime_environment(
+        runtime=runtime,
+        runtime_network_name=runtime_network_name,
+        config_dir=config_dir,
+        runtime_paths=runtime_paths,
+        stack_layout=stack_layout,
+        common_env=common_env,
+        minimal=minimal,
     )
-    if dashboard_runtime_env and not minimal:
-        issuer_egress = materialize_management_issuer_egress_policy(
-            runtime=runtime,
-            network_name=runtime_network_name,
-            state_root_dir=config_dir,
-            stack_layout=stack_layout,
-        )
-        runtime_paths["management_issuer_egress_policy_mount"] = (
-            issuer_egress.mount_spec
-        )
-        runtime_paths["management_issuer_egress_policy_container_path"] = (
-            issuer_egress.container_path
-        )
-    trust_bundle = dashboard_runtime_env.get("SSL_CERT_FILE", "").strip()
-    if trust_bundle:
-        common_env.setdefault("SSL_CERT_FILE", trust_bundle)
     router_secret_values = _router_child_environment(
         common_env,
         runtime_paths,
         router_child_env or {},
     )
-    dashboard_secret_values = {
-        name: value
-        for name in DASHBOARD_SECRET_ENV_NAMES
-        if (
-            value := (
-                common_env.get(name, "").strip()
-                or os.environ.get(name, "").strip()
-                or dashboard_runtime_env.get(name, "").strip()
-            )
-        )
-    }
+    dashboard_secret_values = _dashboard_secret_environment(
+        common_env, dashboard_runtime_env
+    )
     _render_split_envoy_config(
         runtime_paths["effective_config_path"],
         runtime_paths["envoy_config_path"],
@@ -186,6 +170,39 @@ def container_start_vllm_sr(
         router_secret_values=router_secret_values,
         dashboard_secret_values=dashboard_secret_values,
     )
+
+
+def _prepare_dashboard_runtime_environment(
+    *,
+    runtime: str,
+    runtime_network_name: str,
+    config_dir: str,
+    runtime_paths: dict[str, Any],
+    stack_layout: RuntimeStackLayout,
+    common_env: dict[str, str],
+    minimal: bool,
+) -> dict[str, str]:
+    dashboard_runtime_env = _local_dashboard_runtime_environment(
+        runtime_paths["effective_config_path"], config_dir, stack_layout
+    )
+    if dashboard_runtime_env and not minimal:
+        issuer_egress = materialize_management_issuer_egress_policy(
+            runtime=runtime,
+            network_name=runtime_network_name,
+            state_root_dir=config_dir,
+            stack_layout=stack_layout,
+        )
+        runtime_paths["management_issuer_egress_policy_mount"] = (
+            issuer_egress.mount_spec
+        )
+        runtime_paths["management_issuer_egress_policy_container_path"] = (
+            issuer_egress.container_path
+        )
+
+    trust_bundle = dashboard_runtime_env.get("SSL_CERT_FILE", "").strip()
+    if trust_bundle:
+        common_env.setdefault("SSL_CERT_FILE", trust_bundle)
+    return dashboard_runtime_env
 
 
 def _router_child_environment(
@@ -229,29 +246,6 @@ def _local_dashboard_runtime_environment(
     if not runtime_capabilities(config).durable_management:
         return {}
     return local_dashboard_environment(state_root_dir, stack_layout)
-
-
-def _build_common_runtime_env(
-    env_vars: dict[str, str],
-    stack_layout: RuntimeStackLayout,
-):
-    common_env = dict(env_vars or {})
-    common_env["VLLM_SR_STATE_ROOT_DIR"] = "/app"
-    common_env["VLLM_SR_CONFIG_BASE_DIR"] = "/app"
-    common_env[PORT_OFFSET_ENV] = str(stack_layout.port_offset)
-    stack_name_value = os.getenv("VLLM_SR_STACK_NAME", "").strip()
-    if stack_name_value:
-        common_env.setdefault("VLLM_SR_STACK_NAME", stack_name_value)
-    common_env.setdefault(
-        "VLLM_SR_ROUTER_CONTAINER_NAME", stack_layout.router_container_name
-    )
-    common_env.setdefault(
-        "VLLM_SR_ENVOY_CONTAINER_NAME", stack_layout.envoy_container_name
-    )
-    common_env.setdefault(
-        "VLLM_SR_DASHBOARD_CONTAINER_NAME", stack_layout.dashboard_container_name
-    )
-    return common_env
 
 
 def _resolve_container_specs(

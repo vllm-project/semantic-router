@@ -174,7 +174,14 @@ export default function AccessAsyncResourcePicker<T>({
 
   return (
     <div
-      className={`${styles.asyncPicker} ${compact ? styles.asyncPickerCompact : ''} ${inlineCompactMenu ? styles.asyncPickerInline : ''}`}
+      className={[
+        styles.asyncPicker,
+        compact ? styles.asyncPickerCompact : '',
+        inlineCompactMenu ? styles.asyncPickerInline : '',
+        inlineCompactMenu && expanded ? styles.asyncPickerInlineExpanded : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       onBlur={(event) => {
         if (compact && !event.currentTarget.contains(event.relatedTarget as Node | null)) {
           setExpanded(false)

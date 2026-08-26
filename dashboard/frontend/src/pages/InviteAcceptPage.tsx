@@ -83,27 +83,26 @@ export default function InviteAcceptPage() {
         onboarding: {
           userId: string
           teamId?: string
-          apiKeyId: string
-          apiKey: string
-          deliveryExpiresAt: string
+          apiKeyId?: string
+          apiKey?: string
+          deliveryExpiresAt?: string
         }
       }
-      if (!payload.onboarding?.apiKeyId || !payload.onboarding.apiKey) {
-        throw new Error('Your first API key could not be delivered. Please retry this invitation.')
+      if (payload.onboarding?.apiKeyId && payload.onboarding.apiKey) {
+        const onboardingKey: CreatedAccessAPIKey = {
+          id: payload.onboarding.apiKeyId,
+          name: `${invitation.name}'s API key`,
+          prefix: '',
+          ownerType: 'user',
+          ownerId: payload.onboarding.userId,
+          contextTeamId: payload.onboarding.teamId,
+          status: 'active',
+          accessGroupIds: [],
+          secret: payload.onboarding.apiKey,
+          deliveryExpiresAt: payload.onboarding.deliveryExpiresAt,
+        }
+        stageInvitationOnboarding({ displayName: invitation.name, onboardingKey })
       }
-      const onboardingKey: CreatedAccessAPIKey = {
-        id: payload.onboarding.apiKeyId,
-        name: `${invitation.name}'s API key`,
-        prefix: '',
-        ownerType: 'user',
-        ownerId: payload.onboarding.userId,
-        contextTeamId: payload.onboarding.teamId,
-        status: 'active',
-        accessGroupIds: [],
-        secret: payload.onboarding.apiKey,
-        deliveryExpiresAt: payload.onboarding.deliveryExpiresAt,
-      }
-      stageInvitationOnboarding({ displayName: invitation.name, onboardingKey })
       setSession(payload.user)
       navigate('/dashboard', { replace: true })
     } catch (nextError) {

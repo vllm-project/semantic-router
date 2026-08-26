@@ -54,19 +54,30 @@ func EnsureDashboardAdmin(
 	if status != http.StatusUnauthorized {
 		return "", fmt.Errorf("login: expected 200, got %d: %s", status, boundedText(responseBody, 200))
 	}
+	return registerDashboardAdmin(ctx, client, baseURL, loginPayload, verbose)
+}
 
+func registerDashboardAdmin(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	loginPayload map[string]string,
+	verbose bool,
+) (string, error) {
 	bootstrapPayload := map[string]string{
 		"email": DashboardAdminEmail, "password": DashboardAdminPassword,
 		"name": DashboardAdminName,
 	}
 	deadline := time.Now().Add(90 * time.Second)
+	var responseBody []byte
 	for time.Now().Before(deadline) {
-		token, status, responseBody, err = dashboardSessionRequest(
+		token, status, body, err := dashboardSessionRequest(
 			ctx, client, baseURL, "/api/auth/bootstrap/register", bootstrapPayload, verbose,
 		)
 		if err != nil {
 			return "", err
 		}
+		responseBody = body
 		if status == http.StatusOK {
 			return token, nil
 		}
@@ -74,30 +85,37 @@ func EnsureDashboardAdmin(
 			token, status, responseBody, err = dashboardSessionRequest(
 				ctx, client, baseURL, "/api/auth/login", loginPayload, verbose,
 			)
-			if err != nil {
-				return "", err
-			}
-			if status == http.StatusOK {
-				return token, nil
-			}
+		}
+		if err != nil {
+			return "", err
+		}
+		if status == http.StatusOK {
+			return token, nil
 		}
 		if status != http.StatusServiceUnavailable &&
 			status != http.StatusConflict &&
 			status != http.StatusUnauthorized {
 			return "", fmt.Errorf("bootstrap registration: got %d: %s", status, boundedText(responseBody, 200))
 		}
-		timer := time.NewTimer(2 * time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return "", ctx.Err()
-		case <-timer.C:
+		if err := waitDashboardRetry(ctx, 2*time.Second); err != nil {
+			return "", err
 		}
 	}
 	return "", fmt.Errorf(
 		"Dashboard first-administrator installation did not become ready: %s",
 		boundedText(responseBody, 200),
 	)
+}
+
+func waitDashboardRetry(ctx context.Context, delay time.Duration) error {
+	timer := time.NewTimer(delay)
+	select {
+	case <-ctx.Done():
+		timer.Stop()
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
 
 // WaitForFirstRouterPublication verifies that the Router-backed Dashboard
@@ -127,39 +145,54 @@ func WaitForFirstRouterPublication(
 				Name: dashboardSessionCookie, Value: sessionCookie,
 			}).String(),
 		})
-		if err == nil && response.StatusCode == http.StatusOK {
-			var identity dashboardIdentity
-			if decodeErr := response.DecodeJSON(&identity); decodeErr != nil {
-				return decodeErr
-			}
-			for _, scope := range identity.Namespaces {
-				namespace := scope.Namespace
-				if namespace.NamespaceID != "" && namespace.DesiredRevision > 0 &&
-					namespace.DesiredRevision == namespace.AppliedRevision {
-					return nil
-				}
-			}
-			lastReason = "no namespace has one fully applied revision"
-		} else if err != nil {
-			lastReason = err.Error()
-		} else if response.StatusCode == http.StatusServiceUnavailable {
-			lastReason = boundedText(response.Body, 200)
-		} else {
-			return fmt.Errorf(
-				"read Router-backed Dashboard identity: status %d: %s",
-				response.StatusCode,
-				boundedText(response.Body, 200),
-			)
+		published, reason, err := inspectDashboardPublication(response, err)
+		if err != nil {
+			return err
 		}
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return ctx.Err()
-		case <-timer.C:
+		if published {
+			return nil
+		}
+		lastReason = reason
+		if err := waitDashboardRetry(ctx, time.Second); err != nil {
+			return err
 		}
 	}
 	return fmt.Errorf("first coupled Router publication did not apply: %s", lastReason)
+}
+
+func inspectDashboardPublication(response *HTTPResponse, requestErr error) (bool, string, error) {
+	if requestErr != nil {
+		return false, requestErr.Error(), nil
+	}
+	if response.StatusCode == http.StatusServiceUnavailable {
+		return false, boundedText(response.Body, 200), nil
+	}
+	if response.StatusCode != http.StatusOK {
+		return false, "", fmt.Errorf(
+			"read Router-backed Dashboard identity: status %d: %s",
+			response.StatusCode,
+			boundedText(response.Body, 200),
+		)
+	}
+	var identity dashboardIdentity
+	if err := response.DecodeJSON(&identity); err != nil {
+		return false, "", err
+	}
+	if dashboardIdentityHasAppliedRevision(identity) {
+		return true, "", nil
+	}
+	return false, "no namespace has one fully applied revision", nil
+}
+
+func dashboardIdentityHasAppliedRevision(identity dashboardIdentity) bool {
+	for _, scope := range identity.Namespaces {
+		namespace := scope.Namespace
+		if namespace.NamespaceID != "" && namespace.DesiredRevision > 0 &&
+			namespace.DesiredRevision == namespace.AppliedRevision {
+			return true
+		}
+	}
+	return false
 }
 
 func dashboardSessionRequest(

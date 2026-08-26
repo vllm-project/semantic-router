@@ -11,6 +11,10 @@ import {
   type AccessGroup,
   type QuotaMeter,
 } from '../utils/inferenceAccessApi'
+import {
+  fetchKeyScopedRoutingCatalog,
+  type KeyScopedRoutingCatalog,
+} from '../utils/keyScopedRoutingCatalog'
 import { routerPublicEndpoint } from '../utils/routerPublicApi'
 import {
   EMPTY_USAGE,
@@ -23,6 +27,12 @@ import {
   quotaProgress,
   quotaResetLabel,
 } from './AccessControlDetailSupport'
+import {
+  apiKeyQuickstartModel,
+  apiKeyResourceResolutions,
+  apiKeyVisibleResourceName,
+} from './apiKeyResourceNames'
+import { buildAPIKeyQuickstartSnippets } from './apiKeyQuickstartSnippets'
 import styles from './AccessControlPage.module.css'
 
 const KEY_QUOTA_REFRESH_MS = 5000
@@ -58,6 +68,8 @@ export function APIKeyDetail({
   const [contextTeamName, setContextTeamName] = useState('')
   const [assignedGroups, setAssignedGroups] = useState<AccessGroup[]>([])
   const [assignedBudget, setAssignedBudget] = useState<AccessBudget | null>(null)
+  const [routingCatalog, setRoutingCatalog] = useState<KeyScopedRoutingCatalog | null>()
+  const [routingCatalogAttempt, setRoutingCatalogAttempt] = useState(0)
   const [canSelfManage, setCanSelfManage] = useState(false)
   const [usage, setUsage] = useState(EMPTY_USAGE)
   const [secret, setSecret] = useState('')
@@ -103,6 +115,7 @@ export function APIKeyDetail({
   })
 
   useEffect(() => {
+    let cancelled = false
     setLoading(true)
     setError('')
     setKey(null)
@@ -115,13 +128,45 @@ export function APIKeyDetail({
       : inferenceAccessApi.keyUsage(keyId, { from })
     setUsage(EMPTY_USAGE)
     void keyRequest
-      .then(setKey)
-      .catch((nextError) =>
-        setError(nextError instanceof Error ? nextError.message : 'Could not load API key'),
-      )
-      .finally(() => setLoading(false))
-    void usageRequest.then(setUsage).catch(() => setUsage(EMPTY_USAGE))
+      .then((nextKey) => {
+        if (!cancelled) setKey(nextKey)
+      })
+      .catch((nextError) => {
+        if (!cancelled) {
+          setError(nextError instanceof Error ? nextError.message : 'Could not load API key')
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+    void usageRequest
+      .then((nextUsage) => {
+        if (!cancelled) setUsage(nextUsage)
+      })
+      .catch(() => {
+        if (!cancelled) setUsage(EMPTY_USAGE)
+      })
+    return () => {
+      cancelled = true
+    }
   }, [keyId, selfService])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    setRoutingCatalog(undefined)
+    void fetchKeyScopedRoutingCatalog(keyId, controller.signal)
+      .then((catalog) => {
+        if (controller.signal.aborted) return
+        if (catalog.keyId !== keyId) {
+          throw new Error('Router returned a routing catalog for a different API key.')
+        }
+        setRoutingCatalog(catalog)
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setRoutingCatalog(null)
+      })
+    return () => controller.abort()
+  }, [keyId, routingCatalogAttempt])
 
   useEffect(() => {
     let cancelled = false
@@ -220,6 +265,12 @@ export function APIKeyDetail({
   }, [copied])
 
   const resources = useMemo(() => key?.effectiveAccess ?? [], [key])
+  const resourceResolutions = useMemo(
+    () =>
+      routingCatalog === undefined ? {} : apiKeyResourceResolutions(resources, routingCatalog),
+    [resources, routingCatalog],
+  )
+
   const quotaSource = key?.quota?.source || key?.budgetPolicySource
   const quotaSourceLabel =
     quotaSource === 'key'
@@ -230,18 +281,11 @@ export function APIKeyDetail({
           ? 'Team default'
           : ''
   const effectiveCanManage = Boolean(canManage || (selfService && canSelfManage))
-  const model =
-    resources.find((resource) => resource.resourceType === 'entrypoint')?.resourceId ||
-    resources[0]?.resourceId ||
-    'YOUR_MODEL'
+  const model = apiKeyQuickstartModel(resources, resourceResolutions)
   // Inference is served by the Router's public listener, never by the Dashboard.
   const baseURL = routerPublicEndpoint(routerPublicUrl, '/v1')
   const snippets = useMemo(
-    () => ({
-      python: `import os\nfrom openai import OpenAI\n\nclient = OpenAI(\n    base_url="${baseURL}",\n    api_key=${secret ? `"${secret}"` : 'os.environ["VLLM_SR_API_KEY"]'},\n)\n\nresponse = client.chat.completions.create(\n    model="${model}",\n    messages=[{"role": "user", "content": "Hello"}],\n)\nprint(response.choices[0].message.content)`,
-      javascript: `import OpenAI from "openai";\n\nconst client = new OpenAI({\n  baseURL: "${baseURL}",\n  apiKey: ${secret ? `"${secret}"` : 'process.env.VLLM_SR_API_KEY'},\n});\n\nconst response = await client.chat.completions.create({\n  model: "${model}",\n  messages: [{ role: "user", content: "Hello" }],\n});\nconsole.log(response.choices[0].message.content);`,
-      curl: `curl ${baseURL}/chat/completions \\\n  -H "Authorization: Bearer ${secret || '$VLLM_SR_API_KEY'}" \\\n  -H "Content-Type: application/json" \\\n  -d '{"model":"${model}","messages":[{"role":"user","content":"Hello"}]}'`,
-    }),
+    () => buildAPIKeyQuickstartSnippets(baseURL, model, secret),
     [baseURL, model, secret],
   )
 
@@ -468,13 +512,25 @@ export function APIKeyDetail({
                   <div className={styles.detailGridWide}>
                     <dt>Visible models</dt>
                     <dd className={styles.detailTags}>
-                      {resources.length
-                        ? resources.map((resource) => (
-                            <code key={`${resource.resourceType}:${resource.resourceId}`}>
-                              {resource.resourceId}
-                            </code>
-                          ))
-                        : 'No models assigned'}
+                      {routingCatalog === null ? (
+                        <span className={styles.inlineActions}>
+                          Models unavailable
+                          <button
+                            type="button"
+                            onClick={() => setRoutingCatalogAttempt((attempt) => attempt + 1)}
+                          >
+                            Retry
+                          </button>
+                        </span>
+                      ) : resources.length ? (
+                        resources.map((resource) => (
+                          <code key={`${resource.resourceType}:${resource.resourceId}`}>
+                            {apiKeyVisibleResourceName(resource, resourceResolutions)}
+                          </code>
+                        ))
+                      ) : (
+                        'No models assigned'
+                      )}
                     </dd>
                   </div>
                   <div>

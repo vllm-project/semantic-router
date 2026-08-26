@@ -69,6 +69,32 @@ describe('access-control modal experience', () => {
     expect(styles).not.toContain('.detailDrawer {')
   })
 
+  it('gives every Access editor and detail the shared wide dialog measure', () => {
+    const styles = readSource('./AccessControlPage.module.css')
+
+    expect(
+      styles.match(/width: min\(var\(--product-dialog-content-width\), 100%\);/g),
+    ).toHaveLength(3)
+    expect(styles).toMatch(
+      /@media \(max-width: 760px\)[\s\S]*?\.modal\s*{[\s\S]*?width: 100%;/,
+    )
+  })
+
+  it('presents invitation Team search as one integrated picker surface', () => {
+    const dialog = readSource('./DashboardMemberInviteDialog.tsx')
+    const picker = readSource('./AccessAsyncResourcePicker.tsx')
+    const styles = readSource('./AccessControlPage.module.css')
+
+    expect(dialog).toContain('inlineCompactMenu')
+    expect(picker).toContain('styles.asyncPickerInlineExpanded')
+    expect(styles).toMatch(
+      /\.asyncPickerInlineExpanded \.asyncPickerSearch\s*{[\s\S]*?border: 0;/,
+    )
+    expect(styles).toMatch(
+      /\.asyncPickerInlineExpanded \.asyncPickerMenu\s*{[\s\S]*?border: 0;/,
+    )
+  })
+
   it('returns from entity editing to the same detail dialog', () => {
     const page = readSource('./AccessControlPage.tsx')
 

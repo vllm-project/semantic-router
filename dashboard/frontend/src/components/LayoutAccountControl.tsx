@@ -86,7 +86,7 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
       {isOpen && typeof document !== 'undefined'
         ? createPortal(
             <div
-              className={styles.overlay}
+              className={`${styles.overlay} ${isRail ? styles.overlayRail : styles.overlayHeader}`}
               role="presentation"
               data-testid="layout-account-overlay"
               onMouseDown={onClose}
@@ -108,10 +108,12 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
                     {initials}
                   </div>
                   <div className={styles.headerCopy}>
-                    <span className={styles.eyebrow}>Signed in</span>
-                    <h2 id={dialogTitleId} className={styles.title}>
-                      {accountName}
-                    </h2>
+                    <div className={styles.titleRow}>
+                      <h2 id={dialogTitleId} className={styles.title}>
+                        {accountName}
+                      </h2>
+                      <span className={styles.roleBadge}>{roleLabel}</span>
+                    </div>
                     <p id={dialogDescriptionId} className={styles.email}>
                       {accountEmail}
                     </p>
@@ -130,10 +132,6 @@ const LayoutAccountControl: React.FC<LayoutAccountControlProps> = ({
                 <div className={styles.body}>
                   <section className={styles.permissionsSection}>
                     <div className={styles.sectionHeading}>
-                      <span>Access</span>
-                      <span className={styles.roleBadge}>{roleLabel}</span>
-                    </div>
-                    <div className={styles.permissionSummary}>
                       <span>Session permissions</span>
                       <span className={styles.permissionCount}>{permissionCount}</span>
                     </div>

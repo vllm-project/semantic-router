@@ -17,6 +17,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/kubernetes"
+	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 const (
@@ -40,78 +41,122 @@ func openManagedAccessReplicaSessions(
 	if err != nil {
 		return nil, nil, err
 	}
+	configName, err := createManagedAccessReplicaConfig(ctx, client, routerPods)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pods := client.CoreV1().Pods(managedAccessNamespace)
+	configMaps := client.CoreV1().ConfigMaps(managedAccessNamespace)
+	proxyNames, err := createManagedAccessReplicaProxies(ctx, pods, configName, len(routerPods))
+	cleanupResources := func() {
+		cleanupManagedAccessReplicaResources(pods, configMaps, configName, proxyNames)
+	}
+	if err != nil {
+		cleanupResources()
+		return nil, nil, err
+	}
+	if err := waitManagedAccessReplicaProxies(ctx, client, proxyNames); err != nil {
+		cleanupResources()
+		return nil, nil, err
+	}
+
+	sessions, err := startManagedAccessReplicaSessions(ctx, client, opts, proxyNames)
+	if err != nil {
+		cleanupResources()
+		return nil, nil, err
+	}
+	cleanup := func() {
+		closeManagedAccessReplicaSessions(sessions)
+		cleanupResources()
+	}
+	return sessions, cleanup, nil
+}
+
+func createManagedAccessReplicaConfig(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	routerPods []corev1.Pod,
+) (string, error) {
 	seed, err := managedAccessUUID()
 	if err != nil {
-		return nil, nil, fmt.Errorf("create replica proxy identity: %w", err)
+		return "", fmt.Errorf("create replica proxy identity: %w", err)
 	}
-	seed = strings.ReplaceAll(seed, "-", "")[:12]
-	configName := "managed-access-direct-" + seed
+	configName := "managed-access-direct-" + strings.ReplaceAll(seed, "-", "")[:12]
 	configs := make(map[string]string, len(routerPods))
 	for index := range routerPods {
-		config, configErr := managedAccessReplicaEnvoyConfig(routerPods[index].Status.PodIP)
-		if configErr != nil {
-			return nil, nil, configErr
+		config, err := managedAccessReplicaEnvoyConfig(routerPods[index].Status.PodIP)
+		if err != nil {
+			return "", err
 		}
 		configs["envoy-"+strconv.Itoa(index)+".yaml"] = config
 	}
-	configMaps := client.CoreV1().ConfigMaps(managedAccessNamespace)
-	if _, err := configMaps.Create(ctx, &corev1.ConfigMap{
+	_, err = client.CoreV1().ConfigMaps(managedAccessNamespace).Create(ctx, &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: configName, Namespace: managedAccessNamespace,
 			Labels: map[string]string{"vllm.ai/e2e-managed": "true"},
 		},
 		Data: configs,
-	}, metav1.CreateOptions{}); err != nil {
-		return nil, nil, fmt.Errorf("create exact-replica proxy configuration: %w", err)
+	}, metav1.CreateOptions{})
+	if err != nil {
+		return "", fmt.Errorf("create exact-replica proxy configuration: %w", err)
 	}
+	return configName, nil
+}
 
-	pods := client.CoreV1().Pods(managedAccessNamespace)
-	proxyNames := make([]string, 0, len(routerPods))
-	cleanupResources := func() {
-		for _, name := range proxyNames {
-			_ = pods.Delete(context.Background(), name, metav1.DeleteOptions{})
-		}
-		_ = configMaps.Delete(context.Background(), configName, metav1.DeleteOptions{})
-	}
-	for index := range routerPods {
+func createManagedAccessReplicaProxies(
+	ctx context.Context,
+	pods corev1client.PodInterface,
+	configName string,
+	count int,
+) ([]string, error) {
+	proxyNames := make([]string, 0, count)
+	for index := 0; index < count; index++ {
 		proxyName := configName + "-" + strconv.Itoa(index)
 		proxyNames = append(proxyNames, proxyName)
-		if _, err := pods.Create(ctx, managedAccessReplicaProxyPod(
+		_, err := pods.Create(ctx, managedAccessReplicaProxyPod(
 			proxyName, configName, "envoy-"+strconv.Itoa(index)+".yaml",
-		), metav1.CreateOptions{}); err != nil {
-			cleanupResources()
-			return nil, nil, fmt.Errorf("create exact-replica proxy %d: %w", index, err)
+		), metav1.CreateOptions{})
+		if err != nil {
+			return proxyNames, fmt.Errorf("create exact-replica proxy %d: %w", index, err)
 		}
 	}
+	return proxyNames, nil
+}
+
+func waitManagedAccessReplicaProxies(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	proxyNames []string,
+) error {
 	for _, name := range proxyNames {
 		if err := waitManagedAccessProxyReady(ctx, client, name); err != nil {
-			cleanupResources()
-			return nil, nil, err
+			return err
 		}
 	}
+	return nil
+}
 
+func startManagedAccessReplicaSessions(
+	ctx context.Context,
+	client *kubernetes.Clientset,
+	opts pkgtestcases.TestCaseOptions,
+	proxyNames []string,
+) ([]managedAccessReplicaSession, error) {
 	sessions := make([]managedAccessReplicaSession, 0, len(proxyNames))
-	cleanup := func() {
-		for index := range sessions {
-			if sessions[index].stop != nil {
-				sessions[index].stop()
-			}
-		}
-		cleanupResources()
-	}
 	for _, name := range proxyNames {
 		localPort, err := managedAccessAvailablePort()
 		if err != nil {
-			cleanup()
-			return nil, nil, err
+			closeManagedAccessReplicaSessions(sessions)
+			return nil, err
 		}
 		stop, err := helpers.StartPodPortForward(
 			ctx, client, opts.RestConfig, managedAccessNamespace, name,
 			localPort+":"+strconv.Itoa(managedAccessReplicaProxyPort), opts.Verbose,
 		)
 		if err != nil {
-			cleanup()
-			return nil, nil, fmt.Errorf("open exact-replica proxy session: %w", err)
+			closeManagedAccessReplicaSessions(sessions)
+			return nil, fmt.Errorf("open exact-replica proxy session: %w", err)
 		}
 		sessions = append(sessions, managedAccessReplicaSession{
 			baseURL: "http://127.0.0.1:" + localPort,
@@ -119,7 +164,27 @@ func openManagedAccessReplicaSessions(
 			stop:    stop,
 		})
 	}
-	return sessions, cleanup, nil
+	return sessions, nil
+}
+
+func closeManagedAccessReplicaSessions(sessions []managedAccessReplicaSession) {
+	for index := range sessions {
+		if sessions[index].stop != nil {
+			sessions[index].stop()
+		}
+	}
+}
+
+func cleanupManagedAccessReplicaResources(
+	pods corev1client.PodInterface,
+	configMaps corev1client.ConfigMapInterface,
+	configName string,
+	proxyNames []string,
+) {
+	for _, name := range proxyNames {
+		_ = pods.Delete(context.Background(), name, metav1.DeleteOptions{})
+	}
+	_ = configMaps.Delete(context.Background(), configName, metav1.DeleteOptions{})
 }
 
 func managedAccessReadyRouterPods(

@@ -2,6 +2,7 @@ package dashboard
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"os"
 	"testing"
@@ -10,6 +11,17 @@ import (
 )
 
 func TestDashboardManagedGatewayTargetsPrivateBackendDispatch(t *testing.T) {
+	documents := readManagedInferenceGatewayDocuments(t)
+	assertManagedInferenceBackend(t, documents["Backend"])
+	assertManagedAIServiceBackend(t, documents["AIServiceBackend"])
+	assertManagedAIGatewayRoute(t, documents["AIGatewayRoute"])
+	if resourceManifests[len(resourceManifests)-1] != managedInferenceGatewayManifest {
+		t.Fatal("managed gateway overlay must replace the generic route after its prerequisites")
+	}
+}
+
+func readManagedInferenceGatewayDocuments(t *testing.T) map[string]map[string]interface{} {
+	t.Helper()
 	raw, err := os.ReadFile("managed-inference-gateway.yaml")
 	if err != nil {
 		t.Fatal(err)
@@ -18,10 +30,11 @@ func TestDashboardManagedGatewayTargetsPrivateBackendDispatch(t *testing.T) {
 	documents := make(map[string]map[string]interface{})
 	for {
 		var document map[string]interface{}
-		if err := decoder.Decode(&document); err != nil {
-			if err == io.EOF {
-				break
-			}
+		err := decoder.Decode(&document)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
 			t.Fatal(err)
 		}
 		kind, _ := document["kind"].(string)
@@ -30,8 +43,12 @@ func TestDashboardManagedGatewayTargetsPrivateBackendDispatch(t *testing.T) {
 		}
 		documents[kind] = document
 	}
+	return documents
+}
 
-	backend := requireNestedMap(t, documents["Backend"], "spec")
+func assertManagedInferenceBackend(t *testing.T, document map[string]interface{}) {
+	t.Helper()
+	backend := requireNestedMap(t, document, "spec")
 	endpoints := requireNestedSlice(t, backend, "endpoints")
 	if len(endpoints) != 1 {
 		t.Fatalf("managed Backend endpoints = %d, want 1", len(endpoints))
@@ -43,13 +60,19 @@ func TestDashboardManagedGatewayTargetsPrivateBackendDispatch(t *testing.T) {
 	if got := fqdn["port"]; got != float64(8180) {
 		t.Fatalf("managed Backend port = %v, want 8180", got)
 	}
+}
 
-	serviceBackend := requireNestedMap(t, documents["AIServiceBackend"], "spec", "backendRef")
+func assertManagedAIServiceBackend(t *testing.T, document map[string]interface{}) {
+	t.Helper()
+	serviceBackend := requireNestedMap(t, document, "spec", "backendRef")
 	if got := serviceBackend["name"]; got != "semantic-router-backend-dispatch" {
 		t.Fatalf("managed AIServiceBackend target = %v", got)
 	}
+}
 
-	route := requireNestedMap(t, documents["AIGatewayRoute"], "spec")
+func assertManagedAIGatewayRoute(t *testing.T, document map[string]interface{}) {
+	t.Helper()
+	route := requireNestedMap(t, document, "spec")
 	rules := requireNestedSlice(t, route, "rules")
 	if len(rules) != 1 {
 		t.Fatalf("managed AIGatewayRoute rules = %d, want 1 catch-all", len(rules))
@@ -60,10 +83,6 @@ func TestDashboardManagedGatewayTargetsPrivateBackendDispatch(t *testing.T) {
 	backendRefs := requireNestedSlice(t, requireMap(t, rules[0]), "backendRefs")
 	if len(backendRefs) != 1 || requireMap(t, backendRefs[0])["name"] != "semantic-router-backend-dispatch" {
 		t.Fatalf("managed AIGatewayRoute backendRefs = %#v", backendRefs)
-	}
-
-	if resourceManifests[len(resourceManifests)-1] != managedInferenceGatewayManifest {
-		t.Fatal("managed gateway overlay must replace the generic route after its prerequisites")
 	}
 }
 

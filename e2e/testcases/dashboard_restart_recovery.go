@@ -39,6 +39,22 @@ type dashboardRestartAgentState struct {
 	targetID    string
 }
 
+type dashboardRestartEvent struct {
+	TurnID  string          `json:"turnId"`
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type dashboardRestartTranscript struct {
+	Data []dashboardRestartEvent `json:"data"`
+}
+
+type dashboardRestartTranscriptState struct {
+	foundUserInput         bool
+	foundAssistantOutput   bool
+	foundCompletedTerminal bool
+}
+
 func init() {
 	pkgtestcases.Register("dashboard-restart-recovery", pkgtestcases.TestCase{
 		Description: "Router Agent session and transcript survive a dashboard pod restart",
@@ -96,23 +112,83 @@ func seedDashboardAgentState(
 	baseURL string,
 	verbose bool,
 ) (dashboardRestartAgentState, error) {
-	token, err := dashboardAuthToken(ctx, client, baseURL, verbose)
-	if err != nil {
-		return dashboardRestartAgentState{}, fmt.Errorf("pre-restart login: %w", err)
-	}
-	namespaceID, userID, err := dashboardAgentIdentity(ctx, client, baseURL, token, verbose)
-	if err != nil {
-		return dashboardRestartAgentState{}, err
-	}
-	targetKind, targetID, err := ensureDashboardAgentFixture(
-		ctx, client, baseURL, token, namespaceID, userID, verbose,
+	token, namespaceID, targetKind, targetID, err := prepareDashboardRestartIdentity(
+		ctx, client, baseURL, verbose,
 	)
 	if err != nil {
 		return dashboardRestartAgentState{}, err
 	}
 	seed := fmt.Sprintf("dashboard-restart-%d", time.Now().UTC().UnixNano())
 	profileName := "Dashboard restart " + strings.TrimPrefix(seed, "dashboard-restart-")
-	profileReceipt, err := dashboardManagementMutation(
+	profileID, err := createDashboardRestartProfile(
+		ctx, client, baseURL, token, namespaceID, seed, profileName, verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	sessionID, err := createDashboardRestartSession(
+		ctx, client, baseURL, token, namespaceID, seed, profileID, targetKind, targetID, verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	turnID, err := createDashboardRestartTurn(
+		ctx, client, baseURL, token, namespaceID, seed, sessionID, verbose,
+	)
+	if err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	state := dashboardRestartAgentState{
+		namespaceID: namespaceID,
+		profileID:   profileID,
+		profileName: profileName,
+		sessionID:   sessionID,
+		turnID:      turnID,
+		targetKind:  targetKind,
+		targetID:    targetID,
+	}
+	if err := waitForDashboardAgentState(
+		ctx, client, baseURL, token, state, verbose, "before restart", 90*time.Second,
+	); err != nil {
+		return dashboardRestartAgentState{}, err
+	}
+	return state, nil
+}
+
+func prepareDashboardRestartIdentity(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	verbose bool,
+) (string, string, string, string, error) {
+	token, err := dashboardAuthToken(ctx, client, baseURL, verbose)
+	if err != nil {
+		return "", "", "", "", fmt.Errorf("pre-restart login: %w", err)
+	}
+	namespaceID, userID, err := dashboardAgentIdentity(ctx, client, baseURL, token, verbose)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	targetKind, targetID, err := ensureDashboardAgentFixture(
+		ctx, client, baseURL, token, namespaceID, userID, verbose,
+	)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return token, namespaceID, targetKind, targetID, nil
+}
+
+func createDashboardRestartProfile(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	seed string,
+	profileName string,
+	verbose bool,
+) (string, error) {
+	receipt, err := dashboardManagementMutation(
 		ctx, client, baseURL, token, namespaceID,
 		http.MethodPost, "/agent-profiles", seed+"-profile",
 		map[string]interface{}{
@@ -129,35 +205,48 @@ func seedDashboardAgentState(
 		},
 		verbose,
 	)
-	if err != nil {
-		return dashboardRestartAgentState{}, fmt.Errorf("create pre-restart Agent Profile: %w", err)
-	}
-	if profileReceipt.Resource == nil || profileReceipt.Resource.ID == "" {
-		return dashboardRestartAgentState{}, fmt.Errorf("create Agent Profile returned no resource")
-	}
-	sessionReceipt, err := dashboardManagementMutation(
+	return dashboardRestartResourceID(receipt, err, "Profile")
+}
+
+func createDashboardRestartSession(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	seed string,
+	profileID string,
+	targetKind string,
+	targetID string,
+	verbose bool,
+) (string, error) {
+	receipt, err := dashboardManagementMutation(
 		ctx, client, baseURL, token, namespaceID,
 		http.MethodPost, "/agent-sessions", seed+"-session",
 		map[string]interface{}{
-			"profileId": profileReceipt.Resource.ID,
+			"profileId": profileID,
 			"mode":      "chat",
-			"target": map[string]string{
-				"kind": targetKind,
-				"id":   targetID,
-			},
-			"title": "Dashboard restart recovery",
+			"target":    map[string]string{"kind": targetKind, "id": targetID},
+			"title":     "Dashboard restart recovery",
 		},
 		verbose,
 	)
-	if err != nil {
-		return dashboardRestartAgentState{}, fmt.Errorf("create pre-restart Agent Session: %w", err)
-	}
-	if sessionReceipt.Resource == nil || sessionReceipt.Resource.ID == "" {
-		return dashboardRestartAgentState{}, fmt.Errorf("create Agent Session returned no resource")
-	}
-	turnReceipt, err := dashboardManagementMutation(
+	return dashboardRestartResourceID(receipt, err, "Session")
+}
+
+func createDashboardRestartTurn(
+	ctx context.Context,
+	client *http.Client,
+	baseURL string,
+	token string,
+	namespaceID string,
+	seed string,
+	sessionID string,
+	verbose bool,
+) (string, error) {
+	receipt, err := dashboardManagementMutation(
 		ctx, client, baseURL, token, namespaceID,
-		http.MethodPost, "/agent-sessions/"+sessionReceipt.Resource.ID+"/turns", seed+"-turn",
+		http.MethodPost, "/agent-sessions/"+sessionID+"/turns", seed+"-turn",
 		map[string]interface{}{
 			"input": map[string]interface{}{
 				"content": []map[string]string{{"type": "text", "text": dashboardRestartAgentMessage}},
@@ -165,27 +254,17 @@ func seedDashboardAgentState(
 		},
 		verbose,
 	)
+	return dashboardRestartResourceID(receipt, err, "Turn")
+}
+
+func dashboardRestartResourceID(receipt dashboardMutationReceipt, err error, kind string) (string, error) {
 	if err != nil {
-		return dashboardRestartAgentState{}, fmt.Errorf("create pre-restart Agent Turn: %w", err)
+		return "", fmt.Errorf("create pre-restart Agent %s: %w", kind, err)
 	}
-	if turnReceipt.Resource == nil || turnReceipt.Resource.ID == "" {
-		return dashboardRestartAgentState{}, fmt.Errorf("create Agent Turn returned no resource")
+	if receipt.Resource == nil || receipt.Resource.ID == "" {
+		return "", fmt.Errorf("create Agent %s returned no resource", kind)
 	}
-	state := dashboardRestartAgentState{
-		namespaceID: namespaceID,
-		profileID:   profileReceipt.Resource.ID,
-		profileName: profileName,
-		sessionID:   sessionReceipt.Resource.ID,
-		turnID:      turnReceipt.Resource.ID,
-		targetKind:  targetKind,
-		targetID:    targetID,
-	}
-	if err := waitForDashboardAgentState(
-		ctx, client, baseURL, token, state, verbose, "before restart", 90*time.Second,
-	); err != nil {
-		return dashboardRestartAgentState{}, err
-	}
-	return state, nil
+	return receipt.Resource.ID, nil
 }
 
 func waitForDashboardAgentState(
@@ -320,13 +399,7 @@ func assertDashboardAgentTranscript(
 	verbose bool,
 	phase string,
 ) error {
-	var events struct {
-		Data []struct {
-			TurnID  string          `json:"turnId"`
-			Type    string          `json:"type"`
-			Payload json.RawMessage `json:"payload"`
-		} `json:"data"`
-	}
+	var events dashboardRestartTranscript
 	if err := dashboardManagementJSON(
 		ctx, client, baseURL, token, state.namespaceID, http.MethodGet,
 		"/agent-sessions/"+state.sessionID+"/events?pageSize=100", "", nil,
@@ -334,62 +407,95 @@ func assertDashboardAgentTranscript(
 	); err != nil {
 		return fmt.Errorf("read Agent transcript %s: %w", phase, err)
 	}
-	foundUserInput := false
-	foundAssistantOutput := false
-	foundCompletedTerminal := false
+	observed := dashboardRestartTranscriptState{}
 	for _, event := range events.Data {
-		if event.TurnID != state.turnID {
-			continue
-		}
-		switch event.Type {
-		case "user_input":
-			var payload struct {
-				Content []struct {
-					Type string `json:"type"`
-					Text string `json:"text"`
-				} `json:"content"`
-			}
-			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				return fmt.Errorf("Agent user event %s is invalid: %w", phase, err)
-			}
-			for _, block := range payload.Content {
-				if block.Type == "text" && block.Text == dashboardRestartAgentMessage {
-					foundUserInput = true
-				}
-			}
-		case "assistant_delta":
-			var payload struct {
-				Delta struct {
-					Kind string `json:"kind"`
-					Text string `json:"text"`
-				} `json:"delta"`
-			}
-			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				return fmt.Errorf("Agent assistant event %s is invalid: %w", phase, err)
-			}
-			if payload.Delta.Kind == "text" && strings.TrimSpace(payload.Delta.Text) != "" {
-				foundAssistantOutput = true
-			}
-		case "terminal":
-			var payload struct {
-				Status string `json:"status"`
-			}
-			if err := json.Unmarshal(event.Payload, &payload); err != nil {
-				return fmt.Errorf("Agent terminal event %s is invalid: %w", phase, err)
-			}
-			foundCompletedTerminal = payload.Status == "completed"
+		if err := observeDashboardRestartEvent(event, state.turnID, phase, &observed); err != nil {
+			return err
 		}
 	}
-	if !foundUserInput {
+	if !observed.foundUserInput {
 		return fmt.Errorf("Agent user input event is missing %s", phase)
 	}
-	if !foundAssistantOutput {
+	if !observed.foundAssistantOutput {
 		return fmt.Errorf("Agent assistant output is missing %s", phase)
 	}
-	if !foundCompletedTerminal {
+	if !observed.foundCompletedTerminal {
 		return fmt.Errorf("Agent completed terminal event is missing %s", phase)
 	}
 	return nil
+}
+
+func observeDashboardRestartEvent(
+	event dashboardRestartEvent,
+	turnID string,
+	phase string,
+	observed *dashboardRestartTranscriptState,
+) error {
+	if event.TurnID != turnID {
+		return nil
+	}
+	switch event.Type {
+	case "user_input":
+		found, err := dashboardRestartUserInput(event.Payload)
+		if err != nil {
+			return fmt.Errorf("Agent user event %s is invalid: %w", phase, err)
+		}
+		observed.foundUserInput = observed.foundUserInput || found
+	case "assistant_delta":
+		found, err := dashboardRestartAssistantOutput(event.Payload)
+		if err != nil {
+			return fmt.Errorf("Agent assistant event %s is invalid: %w", phase, err)
+		}
+		observed.foundAssistantOutput = observed.foundAssistantOutput || found
+	case "terminal":
+		found, err := dashboardRestartCompletedTerminal(event.Payload)
+		if err != nil {
+			return fmt.Errorf("Agent terminal event %s is invalid: %w", phase, err)
+		}
+		observed.foundCompletedTerminal = found
+	}
+	return nil
+}
+
+func dashboardRestartUserInput(raw json.RawMessage) (bool, error) {
+	var payload struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"content"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return false, err
+	}
+	for _, block := range payload.Content {
+		if block.Type == "text" && block.Text == dashboardRestartAgentMessage {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func dashboardRestartAssistantOutput(raw json.RawMessage) (bool, error) {
+	var payload struct {
+		Delta struct {
+			Kind string `json:"kind"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return false, err
+	}
+	return payload.Delta.Kind == "text" && strings.TrimSpace(payload.Delta.Text) != "", nil
+}
+
+func dashboardRestartCompletedTerminal(raw json.RawMessage) (bool, error) {
+	var payload struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return false, err
+	}
+	return payload.Status == "completed", nil
 }
 
 func dashboardAgentIdentity(
@@ -506,24 +612,70 @@ func dashboardManagementJSONWithHeaders(
 	requestHeaders http.Header,
 	verbose bool,
 ) (http.Header, error) {
-	var requestBody io.Reader
-	if payload != nil {
-		body, err := json.Marshal(payload)
-		if err != nil {
-			return nil, fmt.Errorf("marshal Management request: %w", err)
-		}
-		requestBody = bytes.NewReader(body)
-	}
 	url := strings.TrimRight(baseURL, "/") + "/api/router/management/v1" + path
 	if verbose {
 		fmt.Printf("[Dashboard] %s %s\n", method, url)
+	}
+	req, err := newDashboardManagementRequest(
+		ctx, method, url, token, namespaceID, idempotencyKey, payload, requestHeaders,
+	)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("Management request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if err := decodeDashboardManagementResponse(resp, expectedStatus, result); err != nil {
+		return nil, err
+	}
+	return resp.Header.Clone(), nil
+}
+
+func newDashboardManagementRequest(
+	ctx context.Context,
+	method string,
+	url string,
+	token string,
+	namespaceID string,
+	idempotencyKey string,
+	payload interface{},
+	requestHeaders http.Header,
+) (*http.Request, error) {
+	requestBody, err := dashboardManagementRequestBody(payload)
+	if err != nil {
+		return nil, err
 	}
 	req, err := http.NewRequestWithContext(ctx, method, url, requestBody)
 	if err != nil {
 		return nil, fmt.Errorf("create Management request: %w", err)
 	}
 	req.Header.Set("Accept", dashboardManagementMediaType)
-	if payload != nil {
+	setDashboardManagementHeaders(req, namespaceID, idempotencyKey, payload != nil, requestHeaders)
+	setDashboardAuth(req, token)
+	return req, nil
+}
+
+func dashboardManagementRequestBody(payload interface{}) (io.Reader, error) {
+	if payload == nil {
+		return nil, nil
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("marshal Management request: %w", err)
+	}
+	return bytes.NewReader(body), nil
+}
+
+func setDashboardManagementHeaders(
+	req *http.Request,
+	namespaceID string,
+	idempotencyKey string,
+	hasPayload bool,
+	requestHeaders http.Header,
+) {
+	if hasPayload {
 		req.Header.Set("Content-Type", dashboardManagementMediaType)
 	}
 	if namespaceID != "" {
@@ -537,27 +689,24 @@ func dashboardManagementJSONWithHeaders(
 			req.Header.Add(name, value)
 		}
 	}
-	setDashboardAuth(req, token)
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("Management request failed: %w", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
+}
+
+func decodeDashboardManagementResponse(resp *http.Response, expectedStatus int, result interface{}) error {
 	body, _ := io.ReadAll(resp.Body)
 	defer clear(body)
 	if resp.StatusCode != expectedStatus {
-		return nil, fmt.Errorf(
+		return fmt.Errorf(
 			"Management request: expected %d, got %d: %s",
 			expectedStatus, resp.StatusCode, truncateString(string(body), 300),
 		)
 	}
 	if result == nil {
-		return resp.Header.Clone(), nil
+		return nil
 	}
 	if err := json.Unmarshal(body, result); err != nil {
-		return nil, fmt.Errorf("Management response is not valid JSON: %w", err)
+		return fmt.Errorf("Management response is not valid JSON: %w", err)
 	}
-	return resp.Header.Clone(), nil
+	return nil
 }
 
 func deleteDashboardPod(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) error {

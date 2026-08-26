@@ -6,9 +6,8 @@ from pathlib import Path
 
 import yaml
 
-from cli.yaml_contract import load_yaml
-
 from cli.runtime_env_names import runtime_env_name_is_allowed
+from cli.yaml_contract import load_yaml
 
 
 def management_credential_env_names(config_path: str | Path | None) -> set[str]:

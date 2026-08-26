@@ -12,8 +12,6 @@ import click
 import requests
 import yaml
 
-from cli.yaml_contract import load_yaml
-
 from cli.commands.common import exit_with_logged_error
 from cli.commands.eval_rendering import render_recipe_learning_artifact
 from cli.commands.recipe_learning_artifacts import (
@@ -38,6 +36,7 @@ from cli.consts import DEFAULT_API_PORT
 from cli.terminal import echo
 from cli.url_display import redact_url
 from cli.utils import get_logger
+from cli.yaml_contract import load_yaml
 
 log = get_logger(__name__)
 

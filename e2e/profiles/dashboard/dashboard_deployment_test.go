@@ -221,41 +221,74 @@ func dashboardTestRouterConfigMap(name string, immutable bool) *corev1.ConfigMap
 }
 
 func (fixture *dashboardKubeAPIFixture) ServeHTTP(writer http.ResponseWriter, request *http.Request) {
+	switch request.Method {
+	case http.MethodGet:
+		fixture.serveGet(writer, request)
+	case http.MethodPost:
+		fixture.servePost(writer, request)
+	default:
+		fixture.writeUnexpectedRequest(writer, request)
+	}
+}
+
+func (fixture *dashboardKubeAPIFixture) serveGet(writer http.ResponseWriter, request *http.Request) {
 	const (
 		deploymentsPath = "/apis/apps/v1/namespaces/" + namespaceRouter + "/deployments"
 		configMapsPath  = "/api/v1/namespaces/" + namespaceRouter + "/configmaps/"
 	)
 	switch {
-	case request.Method == http.MethodGet && request.URL.Path == deploymentsPath+"/semantic-router":
+	case request.URL.Path == deploymentsPath+"/semantic-router":
 		fixture.writeObject(writer, http.StatusOK, fixture.router)
-	case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, configMapsPath):
+	case strings.HasPrefix(request.URL.Path, configMapsPath):
 		name := strings.TrimPrefix(request.URL.Path, configMapsPath)
-		if fixture.configMap == nil || fixture.configMap.Name != name {
-			fixture.writeNotFound(writer, "configmaps", name)
-			return
-		}
-		fixture.writeObject(writer, http.StatusOK, fixture.configMap)
-	case request.Method == http.MethodGet && request.URL.Path == deploymentsPath+"/"+deploymentDashboard:
-		if fixture.existing == nil {
-			fixture.writeNotFound(writer, "deployments", deploymentDashboard)
-			return
-		}
-		fixture.writeObject(writer, http.StatusOK, fixture.existing)
-	case request.Method == http.MethodPost && request.URL.Path == deploymentsPath:
-		var deployment appsv1.Deployment
-		if err := json.NewDecoder(request.Body).Decode(&deployment); err != nil {
-			fixture.writeFailure(writer, http.StatusBadRequest, err.Error())
-			return
-		}
-		fixture.created = deployment.DeepCopy()
-		fixture.writeObject(writer, http.StatusCreated, &deployment)
+		fixture.serveConfigMap(writer, name)
+	case request.URL.Path == deploymentsPath+"/"+deploymentDashboard:
+		fixture.serveExistingDeployment(writer)
 	default:
-		fixture.writeFailure(
-			writer,
-			http.StatusInternalServerError,
-			fmt.Sprintf("unexpected Kubernetes request %s %s", request.Method, request.URL.Path),
-		)
+		fixture.writeUnexpectedRequest(writer, request)
 	}
+}
+
+func (fixture *dashboardKubeAPIFixture) serveConfigMap(writer http.ResponseWriter, name string) {
+	if fixture.configMap == nil || fixture.configMap.Name != name {
+		fixture.writeNotFound(writer, "configmaps", name)
+		return
+	}
+	fixture.writeObject(writer, http.StatusOK, fixture.configMap)
+}
+
+func (fixture *dashboardKubeAPIFixture) serveExistingDeployment(writer http.ResponseWriter) {
+	if fixture.existing == nil {
+		fixture.writeNotFound(writer, "deployments", deploymentDashboard)
+		return
+	}
+	fixture.writeObject(writer, http.StatusOK, fixture.existing)
+}
+
+func (fixture *dashboardKubeAPIFixture) servePost(writer http.ResponseWriter, request *http.Request) {
+	const deploymentsPath = "/apis/apps/v1/namespaces/" + namespaceRouter + "/deployments"
+	if request.URL.Path != deploymentsPath {
+		fixture.writeUnexpectedRequest(writer, request)
+		return
+	}
+	var deployment appsv1.Deployment
+	if err := json.NewDecoder(request.Body).Decode(&deployment); err != nil {
+		fixture.writeFailure(writer, http.StatusBadRequest, err.Error())
+		return
+	}
+	fixture.created = deployment.DeepCopy()
+	fixture.writeObject(writer, http.StatusCreated, &deployment)
+}
+
+func (fixture *dashboardKubeAPIFixture) writeUnexpectedRequest(
+	writer http.ResponseWriter,
+	request *http.Request,
+) {
+	fixture.writeFailure(
+		writer,
+		http.StatusInternalServerError,
+		fmt.Sprintf("unexpected Kubernetes request %s %s", request.Method, request.URL.Path),
+	)
 }
 
 func (fixture *dashboardKubeAPIFixture) writeNotFound(writer http.ResponseWriter, resource string, name string) {

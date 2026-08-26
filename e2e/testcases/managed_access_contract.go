@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -74,28 +73,6 @@ type managedAccessUsage struct {
 		} `json:"costs"`
 	} `json:"totals"`
 	Grain string `json:"grain"`
-}
-
-type managedAccessRuntimeDiagnostics struct {
-	Status    string `json:"status"`
-	Namespace *struct {
-		NamespaceID string `json:"namespaceId"`
-		Publication struct {
-			Readiness struct {
-				Ready           bool   `json:"ready"`
-				RuntimeEpoch    uint64 `json:"runtimeEpoch"`
-				DesiredRevision uint64 `json:"desiredRevision"`
-				AppliedRevision uint64 `json:"appliedRevision"`
-			} `json:"readiness"`
-			ActiveReplicas                  []string `json:"activeReplicas"`
-			RecordedRequiredReplicas        []string `json:"recordedRequiredReplicas"`
-			BarrierAcknowledgementsRequired bool     `json:"barrierAcknowledgementsRequired"`
-			BarrierAcknowledgements         []string `json:"barrierAcknowledgements"`
-			RoutingAcknowledgements         []string `json:"routingAcknowledgements"`
-			MissingBarrierAcks              []string `json:"missingBarrierAcks"`
-			MissingRoutingAcks              []string `json:"missingRoutingAcks"`
-		} `json:"publication"`
-	} `json:"namespace"`
 }
 
 func init() {
@@ -172,125 +149,6 @@ func testDashboardManagedAccessLifecycle(
 		publicationRevision: publicationRevision, startedAt: startedAt, setDetails: opts.SetDetails,
 	}
 	return lifecycle.run()
-}
-
-func waitManagedAccessReplicaConvergence(
-	ctx context.Context,
-	client *managedAccessClient,
-	namespaceID string,
-	afterRevision uint64,
-) (uint64, error) {
-	deadline := time.Now().Add(90 * time.Second)
-	lastReason := "runtime diagnostics are not visible"
-	for time.Now().Before(deadline) {
-		query := url.Values{"namespaceId": []string{namespaceID}}
-		var diagnostics managedAccessRuntimeDiagnostics
-		status, _, err := client.request(
-			ctx, "", http.MethodGet, "/runtime-diagnostics?"+query.Encode(), "", nil, nil,
-			[]int{http.StatusOK}, &diagnostics,
-		)
-		if err != nil {
-			if managedAccessRuntimeDiagnosticsPending(status, err) {
-				lastReason = "runtime diagnostics Namespace is not visible yet"
-			} else {
-				return 0, fmt.Errorf("read public runtime diagnostics: %w", err)
-			}
-		} else {
-			revision, reason := managedAccessReplicaConvergenceReason(
-				diagnostics, namespaceID, afterRevision,
-			)
-			if reason == "" {
-				return revision, nil
-			}
-			lastReason = reason
-		}
-		timer := time.NewTimer(time.Second)
-		select {
-		case <-ctx.Done():
-			timer.Stop()
-			return 0, ctx.Err()
-		case <-timer.C:
-		}
-	}
-	return 0, fmt.Errorf("two-replica publication did not converge: %s", lastReason)
-}
-
-func managedAccessRuntimeDiagnosticsPending(status int, err error) bool {
-	if status != http.StatusNotFound || err == nil {
-		return false
-	}
-	var responseErr *managedAccessResponseError
-	return errors.As(err, &responseErr) && responseErr.code == "not_found"
-}
-
-func managedAccessReplicaConvergenceReason(
-	diagnostics managedAccessRuntimeDiagnostics,
-	namespaceID string,
-	afterRevision uint64,
-) (uint64, string) {
-	if diagnostics.Status != "ready" || diagnostics.Namespace == nil {
-		return 0, "runtime diagnostics are not ready"
-	}
-	if diagnostics.Namespace.NamespaceID != namespaceID {
-		return 0, "runtime diagnostics selected a different Namespace"
-	}
-	publication := diagnostics.Namespace.Publication
-	readiness := publication.Readiness
-	if !readiness.Ready || readiness.RuntimeEpoch == 0 || readiness.DesiredRevision == 0 ||
-		readiness.DesiredRevision != readiness.AppliedRevision || readiness.AppliedRevision <= afterRevision {
-		return readiness.AppliedRevision, fmt.Sprintf(
-			"publication readiness is ready=%t epoch=%d desired=%d applied=%d after=%d",
-			readiness.Ready, readiness.RuntimeEpoch, readiness.DesiredRevision,
-			readiness.AppliedRevision, afterRevision,
-		)
-	}
-	if len(publication.ActiveReplicas) != 2 {
-		return readiness.AppliedRevision, fmt.Sprintf(
-			"active Router replica count is %d, want 2", len(publication.ActiveReplicas),
-		)
-	}
-	if !managedAccessSameReplicaSet(publication.ActiveReplicas, publication.RecordedRequiredReplicas) {
-		return readiness.AppliedRevision, "required Router replicas do not match the active replica set"
-	}
-	if publication.BarrierAcknowledgementsRequired {
-		if !managedAccessSameReplicaSet(publication.ActiveReplicas, publication.BarrierAcknowledgements) {
-			return readiness.AppliedRevision, "access barrier acknowledgements do not cover both Router replicas"
-		}
-		if len(publication.MissingBarrierAcks) != 0 {
-			return readiness.AppliedRevision, "runtime diagnostics still report missing barrier acknowledgements"
-		}
-	} else if len(publication.BarrierAcknowledgements) != 0 || len(publication.MissingBarrierAcks) != 0 {
-		return readiness.AppliedRevision, "non-restrictive publication reported barrier acknowledgement state"
-	}
-	if !managedAccessSameReplicaSet(publication.ActiveReplicas, publication.RoutingAcknowledgements) {
-		return readiness.AppliedRevision, "routing acknowledgements do not cover both Router replicas"
-	}
-	if len(publication.MissingRoutingAcks) != 0 {
-		return readiness.AppliedRevision, "runtime diagnostics still report missing routing acknowledgements"
-	}
-	return readiness.AppliedRevision, ""
-}
-
-func managedAccessSameReplicaSet(left []string, right []string) bool {
-	if len(left) != len(right) || len(left) == 0 {
-		return false
-	}
-	members := make(map[string]struct{}, len(left))
-	for _, replicaID := range left {
-		if strings.TrimSpace(replicaID) == "" {
-			return false
-		}
-		members[replicaID] = struct{}{}
-	}
-	if len(members) != len(left) {
-		return false
-	}
-	for _, replicaID := range right {
-		if _, found := members[replicaID]; !found {
-			return false
-		}
-	}
-	return true
 }
 
 func managedAccessModelsRequest(
@@ -639,9 +497,37 @@ func managedAccessSettlementReason(
 	if detail.Data.Status != "active" || detail.Data.LastUsedAt == nil {
 		return "API-key detail has not observed last use"
 	}
+	if reason := managedAccessUsageSummaryReason(
+		usage, expectedRequests, expectedInput, expectedOutput, expectedCost,
+	); reason != "" {
+		return reason
+	}
+	if err := assertManagedAccessActualQuota(quota, expectedInput+expectedOutput, expectedCost); err != nil {
+		return err.Error()
+	}
+	return ""
+}
+
+func managedAccessUsageSummaryReason(
+	usage managedAccessUsage,
+	expectedRequests int64,
+	expectedInput int64,
+	expectedOutput int64,
+	expectedCost int64,
+) string {
 	if usage.Grain != "minute" || usage.Totals.Completeness != "complete" {
 		return "Usage is not a complete minute summary"
 	}
+	if reason := managedAccessUsageRequestReason(usage, expectedRequests); reason != "" {
+		return reason
+	}
+	if reason := managedAccessUsageTokenReason(usage, expectedInput, expectedOutput); reason != "" {
+		return reason
+	}
+	return managedAccessUsageCostReason(usage, expectedCost)
+}
+
+func managedAccessUsageRequestReason(usage managedAccessUsage, expectedRequests int64) string {
 	if usage.Totals.Requests != strconv.FormatInt(expectedRequests, 10) ||
 		usage.Totals.SuccessfulRequests != strconv.FormatInt(expectedRequests, 10) {
 		return fmt.Sprintf(
@@ -649,6 +535,10 @@ func managedAccessSettlementReason(
 			usage.Totals.Requests, usage.Totals.SuccessfulRequests,
 		)
 	}
+	return ""
+}
+
+func managedAccessUsageTokenReason(usage managedAccessUsage, expectedInput, expectedOutput int64) string {
 	if usage.Totals.InputTokens != strconv.FormatInt(expectedInput, 10) ||
 		usage.Totals.OutputTokens != strconv.FormatInt(expectedOutput, 10) ||
 		usage.Totals.TotalTokens != strconv.FormatInt(expectedInput+expectedOutput, 10) {
@@ -657,13 +547,14 @@ func managedAccessSettlementReason(
 			usage.Totals.InputTokens, usage.Totals.OutputTokens, usage.Totals.TotalTokens,
 		)
 	}
+	return ""
+}
+
+func managedAccessUsageCostReason(usage managedAccessUsage, expectedCost int64) string {
 	if len(usage.Totals.Costs) != 1 || usage.Totals.Costs[0].Currency != "USD" ||
 		usage.Totals.Costs[0].Completeness != "complete" ||
 		!managedAccessDecimalEquals(usage.Totals.Costs[0].KnownAmount, strconv.FormatInt(expectedCost, 10)) {
 		return "Usage cost has not converged to the actual response cost"
-	}
-	if err := assertManagedAccessActualQuota(quota, expectedInput+expectedOutput, expectedCost); err != nil {
-		return err.Error()
 	}
 	return ""
 }
@@ -692,22 +583,11 @@ func assertManagedAccessActualQuota(
 ) error {
 	found := map[string]bool{"served_total_tokens": false, "cost": false}
 	for _, meter := range quota.Meters {
-		switch meter.Metric {
-		case "served_total_tokens":
-			if meter.Algorithm != "calendar_window" || meter.Accounting != "response_actual" ||
-				meter.Enforcement != "enforce" || meter.Limit != "100000" ||
-				meter.Used != strconv.FormatInt(expectedTokens, 10) ||
-				meter.Completeness != "complete" || meter.Capacity != "available" {
-				return fmt.Errorf("served-token meter does not match actual response usage")
-			}
-			found[meter.Metric] = true
-		case "cost":
-			if meter.Algorithm != "calendar_window" || meter.Accounting != "response_actual" ||
-				meter.Enforcement != "enforce" || meter.Limit != "100000" || meter.Currency != "USD" ||
-				!managedAccessDecimalEquals(meter.Used, strconv.FormatInt(expectedCost, 10)) ||
-				meter.Completeness != "complete" || meter.Capacity != "available" {
-				return fmt.Errorf("cost meter does not match actual response pricing")
-			}
+		relevant, err := validateManagedAccessActualMeter(meter, expectedTokens, expectedCost)
+		if err != nil {
+			return err
+		}
+		if relevant {
 			found[meter.Metric] = true
 		}
 	}
@@ -717,6 +597,36 @@ func assertManagedAccessActualQuota(
 		}
 	}
 	return nil
+}
+
+func validateManagedAccessActualMeter(
+	meter managedAccessQuotaMeter,
+	expectedTokens int64,
+	expectedCost int64,
+) (bool, error) {
+	switch meter.Metric {
+	case "served_total_tokens":
+		if !managedAccessActualMeterShapeMatches(meter, "") ||
+			meter.Used != strconv.FormatInt(expectedTokens, 10) {
+			return true, fmt.Errorf("served-token meter does not match actual response usage")
+		}
+		return true, nil
+	case "cost":
+		if !managedAccessActualMeterShapeMatches(meter, "USD") ||
+			!managedAccessDecimalEquals(meter.Used, strconv.FormatInt(expectedCost, 10)) {
+			return true, fmt.Errorf("cost meter does not match actual response pricing")
+		}
+		return true, nil
+	default:
+		return false, nil
+	}
+}
+
+func managedAccessActualMeterShapeMatches(meter managedAccessQuotaMeter, currency string) bool {
+	commonShape := meter.Algorithm == "calendar_window" && meter.Accounting == "response_actual" &&
+		meter.Enforcement == "enforce" && meter.Limit == "100000" &&
+		meter.Completeness == "complete" && meter.Capacity == "available"
+	return commonShape && (currency == "" || meter.Currency == currency)
 }
 
 func managedAccessDecimalEquals(left string, right string) bool {

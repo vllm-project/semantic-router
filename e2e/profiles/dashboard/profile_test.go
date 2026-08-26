@@ -12,6 +12,17 @@ import (
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
 )
 
+type dashboardEgressPolicy struct {
+	Schemes []string              `json:"schemes"`
+	Hosts   []dashboardEgressHost `json:"hosts"`
+}
+
+type dashboardEgressHost struct {
+	Host       string   `json:"host"`
+	Ports      []int    `json:"ports"`
+	AllowCIDRs []string `json:"allow_cidrs"`
+}
+
 func TestDashboardE2EOnlyMountsRouterBootstrapConfigReadOnly(t *testing.T) {
 	raw, err := os.ReadFile("dashboard-deployment.yaml")
 	if err != nil {
@@ -152,19 +163,7 @@ func TestDashboardBootstrapTokenContractMatchesDeployment(t *testing.T) {
 }
 
 func TestDashboardIdentityFilesUsePinnedPrivateSubPathMounts(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Base(dashboardE2EDeploymentManifest))
-	if err != nil {
-		t.Fatalf("read Dashboard deployment: %v", err)
-	}
-	jsonDocument, err := utilyaml.ToJSON(raw)
-	if err != nil {
-		t.Fatalf("convert Dashboard deployment to JSON: %v", err)
-	}
-	var deployment appsv1.Deployment
-	if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
-		t.Fatalf("decode Dashboard deployment: %v", err)
-	}
-
+	deployment := readDashboardDeploymentForTest(t)
 	wantMounts := map[string]string{
 		"/run/vllm-sr-dashboard-assertion-signing-key.pem": "assertion-signing-key.pem",
 		"/run/vllm-sr-dashboard-issuer-tls.crt":            "tls.crt",
@@ -178,12 +177,48 @@ func TestDashboardIdentityFilesUsePinnedPrivateSubPathMounts(t *testing.T) {
 		"DASHBOARD_ISSUER_TLS_KEY_FILE":  "/run/vllm-sr-dashboard-issuer-tls.key",
 		"SSL_CERT_FILE":                  "/run/vllm-sr-dashboard-ca.crt",
 	}
+	assertDashboardIdentityEnvironment(t, dashboard, wantEnvironment)
+	assertDashboardIdentityMounts(t, dashboard.VolumeMounts, wantMounts)
+	assertDashboardIdentityVolume(t, deployment.Spec.Template.Spec.Volumes)
+}
+
+func readDashboardDeploymentForTest(t *testing.T) appsv1.Deployment {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Base(dashboardE2EDeploymentManifest))
+	if err != nil {
+		t.Fatalf("read Dashboard deployment: %v", err)
+	}
+	jsonDocument, err := utilyaml.ToJSON(raw)
+	if err != nil {
+		t.Fatalf("convert Dashboard deployment to JSON: %v", err)
+	}
+	var deployment appsv1.Deployment
+	if err := json.Unmarshal(jsonDocument, &deployment); err != nil {
+		t.Fatalf("decode Dashboard deployment: %v", err)
+	}
+	return deployment
+}
+
+func assertDashboardIdentityEnvironment(
+	t *testing.T,
+	dashboard corev1.Container,
+	wantEnvironment map[string]string,
+) {
+	t.Helper()
 	for name, wantPath := range wantEnvironment {
 		if got := envValue(dashboard.Env, name); got != wantPath {
 			t.Fatalf("Dashboard %s = %q, want %q", name, got, wantPath)
 		}
 	}
-	for _, mount := range dashboard.VolumeMounts {
+}
+
+func assertDashboardIdentityMounts(
+	t *testing.T,
+	mounts []corev1.VolumeMount,
+	wantMounts map[string]string,
+) {
+	t.Helper()
+	for _, mount := range mounts {
 		if mount.Name != "dashboard-identity" {
 			continue
 		}
@@ -205,8 +240,11 @@ func TestDashboardIdentityFilesUsePinnedPrivateSubPathMounts(t *testing.T) {
 	if len(wantMounts) != 0 {
 		t.Fatalf("missing Dashboard identity mounts: %#v", wantMounts)
 	}
+}
 
-	for _, volume := range deployment.Spec.Template.Spec.Volumes {
+func assertDashboardIdentityVolume(t *testing.T, volumes []corev1.Volume) {
+	t.Helper()
+	for _, volume := range volumes {
 		if volume.Name != "dashboard-identity" {
 			continue
 		}
@@ -241,6 +279,24 @@ func TestDashboardIdentitySecretRequiresCleanProfileReplacement(t *testing.T) {
 }
 
 func TestDashboardRouterEgressAllowsExactManagedIssuer(t *testing.T) {
+	policy := readDashboardEgressPolicy(t)
+	if len(policy.Schemes) != 2 || policy.Schemes[0] != "http" || policy.Schemes[1] != "https" {
+		t.Fatalf("Dashboard Router egress schemes = %#v, want [http https]", policy.Schemes)
+	}
+	issuer, found := dashboardIssuerEgress(policy.Hosts)
+	if !found {
+		t.Fatalf("Dashboard Router egress policy does not allow exact issuer %q", dashboardIssuerDNS)
+	}
+	if len(issuer.Ports) != 1 || issuer.Ports[0] != 9443 {
+		t.Fatalf("Dashboard issuer egress ports = %#v, want [9443]", issuer.Ports)
+	}
+	if len(issuer.AllowCIDRs) == 0 {
+		t.Fatal("Dashboard issuer egress must admit the disposable cluster network")
+	}
+}
+
+func readDashboardEgressPolicy(t *testing.T) dashboardEgressPolicy {
+	t.Helper()
 	raw, err := os.ReadFile(filepath.Base(dashboardE2EEgressManifest))
 	if err != nil {
 		t.Fatalf("read Dashboard Router egress policy: %v", err)
@@ -257,33 +313,21 @@ func TestDashboardRouterEgressAllowsExactManagedIssuer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("convert Dashboard Router egress policy to JSON: %v", err)
 	}
-	var policy struct {
-		Schemes []string `json:"schemes"`
-		Hosts   []struct {
-			Host       string   `json:"host"`
-			Ports      []int    `json:"ports"`
-			AllowCIDRs []string `json:"allow_cidrs"`
-		} `json:"hosts"`
-	}
+	var policy dashboardEgressPolicy
 	if err := json.Unmarshal(policyDocument, &policy); err != nil {
 		t.Fatalf("decode Dashboard Router egress policy: %v", err)
 	}
-	if len(policy.Schemes) != 2 || policy.Schemes[0] != "http" || policy.Schemes[1] != "https" {
-		t.Fatalf("Dashboard Router egress schemes = %#v, want [http https]", policy.Schemes)
-	}
-	for _, host := range policy.Hosts {
+	return policy
+}
+
+func dashboardIssuerEgress(hosts []dashboardEgressHost) (dashboardEgressHost, bool) {
+	for _, host := range hosts {
 		if host.Host != dashboardIssuerDNS {
 			continue
 		}
-		if len(host.Ports) != 1 || host.Ports[0] != 9443 {
-			t.Fatalf("Dashboard issuer egress ports = %#v, want [9443]", host.Ports)
-		}
-		if len(host.AllowCIDRs) == 0 {
-			t.Fatal("Dashboard issuer egress must admit the disposable cluster network")
-		}
-		return
+		return host, true
 	}
-	t.Fatalf("Dashboard Router egress policy does not allow exact issuer %q", dashboardIssuerDNS)
+	return dashboardEgressHost{}, false
 }
 
 func requireContainer(t *testing.T, containers []corev1.Container, name string) corev1.Container {

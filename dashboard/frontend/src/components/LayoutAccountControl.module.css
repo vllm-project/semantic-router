@@ -92,19 +92,28 @@
   inset-inline: calc((100vw - 100%) / -2);
   z-index: 1200;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: rgba(3, 3, 4, 0.6);
-  backdrop-filter: blur(18px);
+  padding: 0;
+  background: transparent;
+}
+
+.overlayHeader {
+  align-items: flex-start;
+  justify-content: flex-end;
+  padding: calc(var(--app-header-height) + 0.65rem) var(--app-shell-gutter) 1rem;
+}
+
+.overlayRail {
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 1rem 1rem 4.75rem 4.75rem;
 }
 
 .dialog {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(430px, 100%);
-  max-height: calc(100dvh - 2rem);
+  width: min(380px, 100%);
+  max-height: calc(100dvh - var(--app-header-height) - 1.65rem);
   overflow: hidden;
   color: #f5f5f7;
   background:
@@ -126,21 +135,21 @@
 }
 
 .dialogHeader {
-  top: auto;
-  right: auto;
+  transform-origin: top right;
 }
 
 .dialogRail {
-  bottom: auto;
-  left: auto;
+  width: min(360px, 100%);
+  max-height: calc(100dvh - 5.75rem);
+  transform-origin: bottom left;
 }
 
 .header {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 0.85rem;
+  gap: 0.72rem;
   align-items: center;
-  padding: 1.1rem 1.1rem 1rem;
+  padding: 0.95rem 1rem 0.9rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
@@ -148,8 +157,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   color: #ffffff;
   font-size: 0.78rem;
   font-weight: 780;
@@ -164,18 +173,16 @@
   min-width: 0;
 }
 
-.eyebrow {
-  display: block;
-  margin-bottom: 0.25rem;
-  color: rgba(255, 255, 255, 0.46);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-weight: 720;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+.titleRow {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .title {
+  min-width: 0;
+  flex: 1 1 auto;
   margin: 0;
   overflow: hidden;
   color: #f7f7f8;
@@ -228,7 +235,7 @@
 
 .body {
   min-height: 0;
-  padding: 1rem 1.1rem;
+  padding: 0.9rem 1rem 1rem;
   overflow-y: auto;
   overscroll-behavior: contain;
 }
@@ -236,22 +243,17 @@
 .permissionsSection {
   display: flex;
   flex-direction: column;
-}
-
-.permissionsSection {
   gap: 0.75rem;
 }
 
-.sectionHeading,
-.permissionSummary {
+.sectionHeading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
 }
 
-.sectionHeading > span:first-child,
-.permissionSummary {
+.sectionHeading > span:first-child {
   color: rgba(255, 255, 255, 0.48);
   font-size: 0.67rem;
   font-weight: 720;
@@ -260,7 +262,10 @@
 }
 
 .roleBadge {
-  padding: 0.28rem 0.48rem;
+  flex: 0 0 auto;
+  max-width: 8.5rem;
+  padding: 0.22rem 0.42rem;
+  overflow: hidden;
   color: rgba(255, 255, 255, 0.82);
   font-family: var(--font-mono);
   font-size: 0.64rem;
@@ -268,11 +273,8 @@
   background: rgba(255, 255, 255, 0.055);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 5px;
-}
-
-.permissionSummary {
-  padding-top: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .permissionCount {
@@ -290,13 +292,15 @@
 }
 
 .footer {
-  padding: 0.85rem 1.1rem 1rem;
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.75rem 1rem 0.9rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .logoutButton {
-  width: 100%;
-  min-height: 40px;
+  min-width: 108px;
+  min-height: 38px;
   color: rgba(255, 255, 255, 0.82);
   font-size: 0.78rem;
   font-weight: 680;
@@ -335,9 +339,15 @@
   }
 }
 
-@media (max-width: 1023px) {
-  .overlay {
+@media (max-width: 640px) {
+  .overlayHeader,
+  .overlayRail {
+    align-items: center;
+    justify-content: center;
     padding: 0.5rem;
+    background: rgba(3, 3, 4, 0.56);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
   }
 
   .dialog,

@@ -232,7 +232,7 @@ func (provider *managementSessionProvider) issueManagementToken(
 ) (string, string, time.Time, error) {
 	challenge, err := provider.challenge(ctx)
 	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: create exchange challenge: %v", ErrManagementSessionUnavailable, err)
+		return "", "", time.Time{}, fmt.Errorf("%w: create exchange challenge: %w", ErrManagementSessionUnavailable, err)
 	}
 	if challenge.Nonce == "" || challenge.ExchangeChallengeID == "" || !now.Before(challenge.ExpiresAt) {
 		return "", "", time.Time{}, fmt.Errorf("%w: invalid exchange challenge", ErrManagementSessionUnavailable)
@@ -243,7 +243,7 @@ func (provider *managementSessionProvider) issueManagementToken(
 	}
 	envelope, err := provider.exchange(ctx, challenge.ExchangeChallengeID, assertion)
 	if err != nil {
-		return "", "", time.Time{}, fmt.Errorf("%w: exchange source assertion: %v", ErrManagementSessionUnavailable, err)
+		return "", "", time.Time{}, fmt.Errorf("%w: exchange source assertion: %w", ErrManagementSessionUnavailable, err)
 	}
 	managementSessionID, sessionIDErr := uuid.Parse(envelope.ManagementSessionID)
 	if envelope.AccessToken == "" || envelope.TokenType != "Bearer" || envelope.ExpiresIn <= 0 ||
@@ -448,7 +448,7 @@ func RewriteManagementAuthorization(request *http.Request, provider ManagementSe
 	token, err := provider.ManagementAccessToken(request.Context(), principal)
 	if err != nil || strings.TrimSpace(token) == "" || strings.ContainsAny(token, "\r\n\t ") {
 		if err != nil {
-			return fmt.Errorf("%w: %v", ErrManagementSessionUnavailable, err)
+			return fmt.Errorf("%w: %w", ErrManagementSessionUnavailable, err)
 		}
 		return ErrManagementSessionUnavailable
 	}

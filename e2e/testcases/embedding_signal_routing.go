@@ -176,19 +176,9 @@ func testSingleEmbeddingSignal(ctx context.Context, testCase EmbeddingSignalTest
 	// Check response status
 	// Note: Blocked requests (e.g., PII policy violations) may return non-200 status
 	// but still have the decision header set correctly
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		// Don't treat blocked requests as errors - they have valid decisions
-		if actualDecision != "" {
-			// Decision was made, but request was blocked (this is expected for block_pii, block_security, etc.)
-			if verbose {
-				fmt.Printf("[Test] Request blocked with status %d, decision=%s\n", resp.StatusCode, actualDecision)
-			}
-		} else {
-			// No decision and non-200 status - this is an actual error
-			result.Error = fmt.Sprintf("unexpected status code: %d, body: %s", resp.StatusCode, string(bodyBytes))
-			return result
-		}
+	if statusErr := embeddingSignalResponseError(resp, actualDecision, verbose); statusErr != "" {
+		result.Error = statusErr
+		return result
 	}
 
 	// Semantic-router doesn't set individual signal headers (x-vsr-signal-*).
@@ -205,6 +195,21 @@ func testSingleEmbeddingSignal(ctx context.Context, testCase EmbeddingSignalTest
 	}
 
 	return result
+}
+
+func embeddingSignalResponseError(resp *http.Response, actualDecision string, verbose bool) string {
+	if resp.StatusCode == http.StatusOK {
+		return ""
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if actualDecision == "" {
+		return fmt.Sprintf("unexpected status code: %d, body: %s", resp.StatusCode, string(bodyBytes))
+	}
+	// A policy can block a request after the Router has made a valid decision.
+	if verbose {
+		fmt.Printf("[Test] Request blocked with status %d, decision=%s\n", resp.StatusCode, actualDecision)
+	}
+	return ""
 }
 
 // countCorrectTests counts number of correct test results

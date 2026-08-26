@@ -4,7 +4,6 @@ import re
 import unittest
 from pathlib import Path
 
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ROUTER_DOCKERFILES = (
     REPO_ROOT / "src" / "vllm-sr" / "Dockerfile",
@@ -13,7 +12,9 @@ ROUTER_DOCKERFILES = (
     REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc",
     REPO_ROOT / "tools" / "docker" / "Dockerfile.extproc-rocm",
 )
-CLI_CONTAINER_START = REPO_ROOT / "src" / "vllm-sr" / "cli" / "container_start.py"
+CLI_CONTAINER_START_ENVIRONMENT = (
+    REPO_ROOT / "src" / "vllm-sr" / "cli" / "container_start_environment.py"
+)
 BUILT_IN_RECIPE_ROOT = "/app/recipes/built-in/latest/mom-v1"
 
 
@@ -42,7 +43,7 @@ class RouterImageRecipeLayoutTests(unittest.TestCase):
                     self.assertIn(expected, stage)
 
     def test_cli_uses_the_published_router_asset_root(self) -> None:
-        content = CLI_CONTAINER_START.read_text(encoding="utf-8")
+        content = CLI_CONTAINER_START_ENVIRONMENT.read_text(encoding="utf-8")
         self.assertIn('common_env["VLLM_SR_CONFIG_BASE_DIR"] = "/app"', content)
 
 

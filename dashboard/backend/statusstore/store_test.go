@@ -11,9 +11,9 @@ import (
 func TestStorePersistsAcrossRestartAndFillsUnknownGaps(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "status.sqlite")
 	firstHour := time.Date(2026, time.January, 1, 12, 0, 0, 0, time.UTC)
-	store, err := Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
+	store, openErr := Open(dbPath)
+	if openErr != nil {
+		t.Fatal(openErr)
 	}
 	store.now = func() time.Time { return firstHour }
 	if _, err := store.Observe(context.Background(), []Observation{
@@ -25,9 +25,9 @@ func TestStorePersistsAcrossRestartAndFillsUnknownGaps(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	reopened, err := Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
+	reopened, reopenErr := Open(dbPath)
+	if reopenErr != nil {
+		t.Fatal(reopenErr)
 	}
 	t.Cleanup(func() { _ = reopened.Close() })
 	current := firstHour
@@ -59,14 +59,14 @@ func TestStorePersistsAcrossRestartAndFillsUnknownGaps(t *testing.T) {
 
 func TestStoreKeepsWorstHourlyStateAcrossConcurrentObservations(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "status.sqlite")
-	store, err := Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
+	store, openErr := Open(dbPath)
+	if openErr != nil {
+		t.Fatal(openErr)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	secondStore, err := Open(dbPath)
-	if err != nil {
-		t.Fatal(err)
+	secondStore, secondOpenErr := Open(dbPath)
+	if secondOpenErr != nil {
+		t.Fatal(secondOpenErr)
 	}
 	t.Cleanup(func() { _ = secondStore.Close() })
 	clock := func() time.Time {
@@ -92,7 +92,8 @@ func TestStoreKeepsWorstHourlyStateAcrossConcurrentObservations(t *testing.T) {
 		go func(observation struct {
 			store *Store
 			state State
-		}) {
+		},
+		) {
 			defer wait.Done()
 			<-start
 			_, observeErr := observation.store.Observe(context.Background(), []Observation{
@@ -118,9 +119,9 @@ func TestStoreKeepsWorstHourlyStateAcrossConcurrentObservations(t *testing.T) {
 }
 
 func TestStorePrunesOutsideTheBoundedWindow(t *testing.T) {
-	store, err := Open(filepath.Join(t.TempDir(), "status.sqlite"))
-	if err != nil {
-		t.Fatal(err)
+	store, openErr := Open(filepath.Join(t.TempDir(), "status.sqlite"))
+	if openErr != nil {
+		t.Fatal(openErr)
 	}
 	t.Cleanup(func() { _ = store.Close() })
 

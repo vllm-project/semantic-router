@@ -8,8 +8,6 @@ from pathlib import Path
 
 import yaml
 
-from cli.yaml_contract import load_yaml
-
 from cli.bootstrap import BootstrapResult
 from cli.commands.runtime_kb import (
     _sync_runtime_kb_store,
@@ -37,6 +35,7 @@ from cli.service_defaults import (
 )
 from cli.storage_secrets import POSTGRES_PASSWORD_ENV, REDIS_PASSWORD_ENV
 from cli.utils import get_logger
+from cli.yaml_contract import load_yaml
 
 log = get_logger(__name__)
 

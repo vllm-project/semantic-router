@@ -11,6 +11,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilyaml "k8s.io/apimachinery/pkg/util/yaml"
+	appsv1client "k8s.io/client-go/kubernetes/typed/apps/v1"
 
 	"github.com/vllm-project/semantic-router/e2e/pkg/framework"
 )
@@ -25,18 +26,31 @@ func (p *Profile) applyDashboardDeployment(ctx context.Context, opts *framework.
 	if opts == nil || opts.KubeClient == nil {
 		return fmt.Errorf("Kubernetes client is required to deploy Dashboard")
 	}
+	configMapName, err := dashboardRouterConfigMapName(ctx, opts)
+	if err != nil {
+		return err
+	}
+	desired, err := managedDashboardDeployment(configMapName)
+	if err != nil {
+		return err
+	}
+	return upsertDashboardDeployment(
+		ctx, opts.KubeClient.AppsV1().Deployments(namespaceRouter), desired,
+	)
+}
 
+func dashboardRouterConfigMapName(ctx context.Context, opts *framework.SetupOptions) (string, error) {
 	router, err := opts.KubeClient.AppsV1().Deployments(namespaceRouter).Get(
 		ctx,
 		"semantic-router",
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return fmt.Errorf("read Router deployment: %w", err)
+		return "", fmt.Errorf("read Router deployment: %w", err)
 	}
 	configMapName, err := routerBootstrapConfigMapName(router)
 	if err != nil {
-		return err
+		return "", err
 	}
 	configMap, err := opts.KubeClient.CoreV1().ConfigMaps(namespaceRouter).Get(
 		ctx,
@@ -44,15 +58,18 @@ func (p *Profile) applyDashboardDeployment(ctx context.Context, opts *framework.
 		metav1.GetOptions{},
 	)
 	if err != nil {
-		return fmt.Errorf("read Router bootstrap ConfigMap %q: %w", configMapName, err)
+		return "", fmt.Errorf("read Router bootstrap ConfigMap %q: %w", configMapName, err)
 	}
 	if configMap.Immutable == nil || !*configMap.Immutable {
-		return fmt.Errorf("Router bootstrap ConfigMap %q must be immutable", configMapName)
+		return "", fmt.Errorf("Router bootstrap ConfigMap %q must be immutable", configMapName)
 	}
+	return configMapName, nil
+}
 
+func managedDashboardDeployment(configMapName string) (*appsv1.Deployment, error) {
 	desired, err := loadDashboardDeployment(dashboardE2EDeploymentManifest, configMapName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if desired.Labels == nil {
 		desired.Labels = make(map[string]string)
@@ -60,8 +77,14 @@ func (p *Profile) applyDashboardDeployment(ctx context.Context, opts *framework.
 	for key, value := range e2eManagedLabels {
 		desired.Labels[key] = value
 	}
+	return desired, nil
+}
 
-	deployments := opts.KubeClient.AppsV1().Deployments(namespaceRouter)
+func upsertDashboardDeployment(
+	ctx context.Context,
+	deployments appsv1client.DeploymentInterface,
+	desired *appsv1.Deployment,
+) error {
 	existing, err := deployments.Get(ctx, desired.Name, metav1.GetOptions{})
 	switch {
 	case apierrors.IsNotFound(err):

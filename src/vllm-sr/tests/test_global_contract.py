@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import pytest
-
 from cli.global_contract import _GLOBAL_OBJECT_FIELDS, validate_global_structure
 from cli.models import UserConfig
 from pydantic import ValidationError
-
 from test_human_authoring_contract import human_config
 
 
