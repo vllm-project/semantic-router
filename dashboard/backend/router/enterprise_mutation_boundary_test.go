@@ -58,7 +58,7 @@ func TestConfigDeployPermissionCannotMutateDatabaseOwnedEnterprisePolicy(t *test
 
 	configPath := filepath.Join(tempDir, "config.yaml")
 	originalConfig := []byte("version: v0.3\nrouting: {}\n")
-	if err := os.WriteFile(configPath, originalConfig, 0o600); err != nil {
+	if err = os.WriteFile(configPath, originalConfig, 0o600); err != nil {
 		t.Fatalf("write config: %v", err)
 	}
 	payload, err := json.Marshal(handlers.DeployRequest{YAML: `routing: {}

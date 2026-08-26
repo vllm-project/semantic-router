@@ -370,20 +370,6 @@ func setRolePermission(t *testing.T, svc *Service, role, permission string, allo
 	}
 }
 
-func setUserPermission(t *testing.T, svc *Service, userID, permission string, allowed bool) {
-	t.Helper()
-	if _, err := svc.store.db.ExecContext(
-		t.Context(),
-		`INSERT INTO user_permissions(user_id, permission_key, allowed) VALUES(?,?,?)
-		 ON CONFLICT(user_id, permission_key) DO UPDATE SET allowed = excluded.allowed`,
-		userID,
-		permission,
-		allowed,
-	); err != nil {
-		t.Fatalf("set user permission %s=%v: %v", permission, allowed, err)
-	}
-}
-
 func TestMutationRequestBodyIsBounded(t *testing.T) {
 	t.Parallel()
 
