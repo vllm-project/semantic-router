@@ -165,3 +165,27 @@ func TestSelectionEmbeddingModelTypeNormalizesCase(t *testing.T) {
 		})
 	}
 }
+
+// TestBuildMLSelectionConfigNormalizesModelTypeCase guards the same
+// unnormalized-modelType bug as TestSelectionEmbeddingModelTypeNormalizesCase,
+// but on the sibling ml.model_type path: nothing validates or rewrites it, so
+// it reaches factory.go's mlEmbeddingConfig -- and the same
+// SupportsBatchedEmbedding/FFI dispatch -- independently of the default
+// embedding model type.
+func TestBuildMLSelectionConfigNormalizesModelTypeCase(t *testing.T) {
+	cfg := &config.RouterConfig{
+		IntelligentRouting: config.IntelligentRouting{
+			ModelSelection: config.ModelSelectionConfig{
+				ML: config.MLSelectionConfig{
+					ModelsPath: "models/ml-selection",
+					ModelType:  "Qwen3",
+				},
+			},
+		},
+	}
+
+	mlCfg := buildModelSelectionConfig(cfg).ML
+	if mlCfg.ModelType != config.EmbeddingModelTypeQwen3 {
+		t.Fatalf("ML selection model type = %q, want %q", mlCfg.ModelType, config.EmbeddingModelTypeQwen3)
+	}
+}

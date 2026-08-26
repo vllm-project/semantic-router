@@ -335,6 +335,11 @@ func buildHybridSelectionConfig(
 func buildMLSelectionConfig(cfg *config.RouterConfig) *selection.MLSelectorConfig {
 	intelligentRouting := cfg.IntelligentRouting
 	mlCfg := intelligentRouting.ModelSelection.ML
+	// Same normalization as selectionEmbeddingModelType, and for the same
+	// reason: nothing validates or rewrites ml.model_type, so an unnormalized
+	// "Qwen3" would reach factory.go's mlEmbeddingConfig unnormalized and hit
+	// the identical SupportsBatchedEmbedding/FFI casing mismatch.
+	mlCfg.ModelType = strings.ToLower(strings.TrimSpace(mlCfg.ModelType))
 	if mlCfg.ModelsPath == "" &&
 		mlCfg.KNN.PretrainedPath == "" &&
 		mlCfg.KMeans.PretrainedPath == "" &&
