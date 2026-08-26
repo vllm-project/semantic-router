@@ -83,16 +83,17 @@
   --tech-primary-blue: var(--site-accent-strong);
   --tech-accent-purple: var(--site-accent-violet);
   --tech-shadow: var(--site-shadow-soft);
-  /* Page geometry: --page-max for shell, --measure for readable text. */
-  --page-max: 1760px;
+  /* Page geometry. 1536 = rail 288 + rail-gap 110 + measure 736 +
+   * column-gap 130 + toc 272, so the docs row fills the frame exactly. */
+  --page-max: 1536px;
   --gutter: clamp(1rem, 5vw, 4.5rem);
   --measure: 72ch;
   /* Rail width: 18rem (20rem too wide for label list). */
   --rail: 18rem;
   --toc: 17rem;
-  /* Rail to content. Shared so docs, research and community start their text
-   * on the same x; ramps to its cap at 1920px, where the frame stops growing. */
-  --rail-gap: clamp(var(--space-6), calc(12.19vw - 124px), 6.875rem);
+  /* Rail to content, shared so every page starts its text on the same x.
+   * Caps at 1680px, where the frame stops growing. */
+  --rail-gap: clamp(var(--space-6), calc(13.45vw - 115.9px), 6.875rem);
 
   /* Legacy aliases repointed to shared geometry. --site-content-max removed. */
   --site-grid-max: var(--page-max);

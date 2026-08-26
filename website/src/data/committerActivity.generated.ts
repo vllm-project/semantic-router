@@ -45,10 +45,10 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "yangw",
     "login": "drivebyer",
-    "pullRequests": 22,
+    "pullRequests": 23,
     "reviews": 52,
     "issues": 18,
-    "total": 92,
+    "total": 93,
     "status": "active"
   },
   {
@@ -91,9 +91,9 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "Wilson Wu",
     "login": "wilsonwu",
     "pullRequests": 43,
-    "reviews": 6,
+    "reviews": 7,
     "issues": 29,
-    "total": 78,
+    "total": 79,
     "status": "active"
   },
   {
