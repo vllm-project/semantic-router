@@ -318,7 +318,7 @@ func responseAAD(endpoint, namespaceID, keyID string, revision uint64) []byte {
 }
 
 func revealAAD(namespaceID, keyID, credentialID, kid string) []byte {
-	return []byte("vllm-sr/api-key-reveal/v1\x00" + namespaceID + "\x00" + keyID + "\x00" + credentialID + "\x00" + kid)
+	return accesscredential.APIKeyRevealAAD(namespaceID, keyID, credentialID, kid)
 }
 
 func validatePage(namespaceID string, pageSize int) (int, error) {

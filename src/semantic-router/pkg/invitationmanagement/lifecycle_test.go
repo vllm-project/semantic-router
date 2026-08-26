@@ -32,10 +32,13 @@ func TestInvitationServiceAndFirstKeyIssuerOwnSecretKeyrings(t *testing.T) {
 	responseKEK := accesscredential.KEKKeyring{ActiveVersion: "response-v1", Keys: map[string][]byte{
 		"response-v1": []byte(strings.Repeat("r", 32)),
 	}}
+	revealKEK := accesscredential.KEKKeyring{ActiveVersion: "reveal-v1", Keys: map[string][]byte{
+		"reveal-v1": []byte(strings.Repeat("v", 32)),
+	}}
 	cursorKeyring := securitykeyring.Symmetric{ActiveVersion: "cursor-v1", Keys: map[string][]byte{
 		"cursor-v1": []byte(strings.Repeat("u", 32)),
 	}}
-	firstKeys, err := NewAPIKeyFirstKeyPreparer(apiKeyPeppers, nil)
+	firstKeys, err := NewAPIKeyFirstKeyPreparer(apiKeyPeppers, &revealKEK, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +54,7 @@ func TestInvitationServiceAndFirstKeyIssuerOwnSecretKeyrings(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, source := range []map[string][]byte{
-		invitationPeppers.Keys, apiKeyPeppers.Keys, responseKEK.Keys, cursorKeyring.Keys,
+		invitationPeppers.Keys, apiKeyPeppers.Keys, responseKEK.Keys, revealKEK.Keys, cursorKeyring.Keys,
 	} {
 		for _, key := range source {
 			for index := range key {
@@ -59,7 +62,8 @@ func TestInvitationServiceAndFirstKeyIssuerOwnSecretKeyrings(t *testing.T) {
 			}
 		}
 	}
-	if service.responseKEK.Validate() != nil || firstKeys.peppers.Validate() != nil {
+	if service.responseKEK.Validate() != nil || firstKeys.peppers.Validate() != nil ||
+		firstKeys.revealKEK == nil || firstKeys.revealKEK.Validate() != nil {
 		t.Fatal("invitation service retained caller-owned secret key bytes")
 	}
 	if _, _, _, err := service.tokens.Issue("11111111-1111-4111-8111-111111111111"); err != nil {
@@ -67,9 +71,10 @@ func TestInvitationServiceAndFirstKeyIssuerOwnSecretKeyrings(t *testing.T) {
 	}
 	ownedResponse := service.responseKEK.Keys["response-v1"]
 	ownedFirstKeyPepper := firstKeys.peppers.Keys["api-key-v1"]
+	ownedFirstKeyReveal := firstKeys.revealKEK.Keys["reveal-v1"]
 	ownedCursorKey := service.cursors.keys["cursor-v1"]
 	service.Close()
-	for _, key := range [][]byte{ownedResponse, ownedFirstKeyPepper, ownedCursorKey} {
+	for _, key := range [][]byte{ownedResponse, ownedFirstKeyPepper, ownedFirstKeyReveal, ownedCursorKey} {
 		for _, item := range key {
 			if item != 0 {
 				t.Fatal("invitation service Close did not erase an owned secret key")
@@ -179,7 +184,7 @@ func TestPrivilegedOnboardingDoesNotExposeKeyWhenPublicationFails(t *testing.T) 
 		Keys: map[string][]byte{
 			"api-v1": []byte(strings.Repeat("a", 32)),
 		},
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -463,12 +463,29 @@ VALUES ($1,$2,$3,$4,NULL,NULLIF($5,'')::uuid,'active',1,1,1,$6,$6)`, key.ID,
 		return mapWriteError(err, "create onboarding API key")
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO access_api_key_credentials
-  (id,namespace_id,api_key_id,kid,secret_hmac,pepper_version,status,not_before,created_at)
-VALUES ($1,$2,$3,$4,$5,$6,'active',$7,$7)`, credential.ID, value.NamespaceID,
-		key.ID, credential.KID, credential.SecretHMAC, credential.PepperVersion, value.Now); err != nil {
+  (id,namespace_id,api_key_id,kid,secret_hmac,pepper_version,secret_ciphertext,
+   ciphertext_nonce,kek_version,status,not_before,created_at)
+VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'active',$10,$10)`, credential.ID, value.NamespaceID,
+		key.ID, credential.KID, credential.SecretHMAC, credential.PepperVersion,
+		optionalFirstKeyBytes(credential.SecretCiphertext), optionalFirstKeyBytes(credential.CiphertextNonce),
+		optionalFirstKeyString(credential.KEKVersion), value.Now); err != nil {
 		return mapWriteError(err, "create onboarding API-key credential")
 	}
 	return nil
+}
+
+func optionalFirstKeyBytes(value []byte) any {
+	if len(value) == 0 {
+		return nil
+	}
+	return value
+}
+
+func optionalFirstKeyString(value string) any {
+	if value == "" {
+		return nil
+	}
+	return value
 }
 
 func resolveInvitationPrincipal(ctx context.Context, tx *sql.Tx, mutation invitationmanagement.AcceptMutation,

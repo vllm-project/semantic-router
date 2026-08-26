@@ -516,7 +516,8 @@ func (service *Service) Reveal(ctx context.Context, request RevealRequest) (stri
 	if service == nil || service.revealKEK == nil {
 		return "", ErrRevealDisabled
 	}
-	if validateActor(request.NamespaceID, request.Actor) != nil || !canonicalUUID(request.KeyID) || !canonicalUUID(request.CredentialID) {
+	if validateActor(request.NamespaceID, request.Actor) != nil || !canonicalUUID(request.KeyID) ||
+		!canonicalUUID(request.CredentialID) || request.ExpectedRevision == 0 {
 		return "", ErrInvalidRequest
 	}
 	snapshot, err := service.repository.GetRevealSnapshot(ctx, request.NamespaceID, request.KeyID, request.CredentialID)
@@ -536,7 +537,7 @@ func (service *Service) Reveal(ctx context.Context, request RevealRequest) (stri
 		zero(plaintext)
 		return "", err
 	}
-	if err := service.repository.RecordReveal(ctx, snapshot, request.Actor); err != nil {
+	if err := service.repository.RecordReveal(ctx, snapshot, request.ExpectedRevision, request.Actor); err != nil {
 		zero(plaintext)
 		return "", err
 	}

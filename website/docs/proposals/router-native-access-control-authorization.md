@@ -121,8 +121,12 @@ is compiled from that key's applied grants and exposes only discoverable Models,
 Entrypoints, and their safe topology metadata; it does not require or imply
 namespace-wide `routing.read`. The consumer cannot create, rotate, reassign, or delete
 a key or alter its access/rate bindings. An invitation may materialize the
-namespace's automatic first key in its single authorized acceptance transaction;
-later key lifecycle requires a separately delegated, scope-contained permission.
+namespace's automatic first key in its single authorized acceptance transaction.
+With reveal encryption configured, that transaction persists only the key-scoped
+reveal envelope so the owner can recover the key later without storing plaintext.
+Reveal revalidates the authorized Key revision while locking the credential, so
+an ownership change cannot race a previously authorized recovery request.
+Later key lifecycle requires a separately delegated, scope-contained permission.
 
 ManagementPrincipal bindings are the Dashboard and Management API authority. Access
 Users, Teams, memberships, policies, budgets, and API keys are inference-service

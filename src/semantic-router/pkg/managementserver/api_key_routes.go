@@ -458,14 +458,14 @@ func (routes *APIKeyRoutes) reveal(response http.ResponseWriter, request *http.R
 	if request.URL.RawQuery != "" || !noRequestBody(response, request, requestID) {
 		return
 	}
-	_, session, ok := routes.keyForAuthorizedRequest(response, request, requestID, keyID,
+	key, session, ok := routes.keyForAuthorizedRequest(response, request, requestID, keyID,
 		routes.operation(managementapi.MethodPOST, apiKeysPath+"/{keyId}/credentials/{credentialId}:reveal"), true)
 	if !ok {
 		return
 	}
 	secret, err := routes.service.Reveal(request.Context(), apikeymanagement.RevealRequest{
 		NamespaceID: session.NamespaceID, KeyID: keyID, CredentialID: credentialID,
-		Actor: routes.actor(request, session, requestID),
+		ExpectedRevision: uint64(key.Revision), Actor: routes.actor(request, session, requestID),
 	})
 	if err != nil {
 		writeAPIKeyError(response, err, requestID)

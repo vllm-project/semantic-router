@@ -178,12 +178,53 @@ func TestRevealDoesNotExposeCredentialBeforePublication(t *testing.T) {
 	}
 	secret, err := service.Reveal(context.Background(), RevealRequest{
 		NamespaceID: testNamespaceID, KeyID: testKeyID, CredentialID: testCredentialID,
-		Actor: testAPIKeyActor(),
+		ExpectedRevision: 1, Actor: testAPIKeyActor(),
 	})
 	if !errors.Is(err, ErrUnavailable) || secret != "" || waiter.waits != 1 ||
 		repository.revealRecords != 0 {
 		t.Fatalf("reveal result secret=%q err=%v waiter=%#v records=%d",
 			secret, err, waiter, repository.revealRecords)
+	}
+}
+
+func TestRevealRecordsAuthorizedKeyRevision(t *testing.T) {
+	expectedPlaintext := "vsr_credential-public-id_" + strings.Repeat("0", 43)
+	revealKEK := accesscredential.KEKKeyring{
+		ActiveVersion: "reveal-v1",
+		Keys: map[string][]byte{
+			"reveal-v1": []byte(strings.Repeat("v", 32)),
+		},
+	}
+	t.Cleanup(revealKEK.Close)
+	envelope, err := revealKEK.Seal(
+		[]byte(expectedPlaintext),
+		revealAAD(testNamespaceID, testKeyID, testCredentialID, "credential-public-id"),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository := &apiKeyRepositoryStub{active: RevealSnapshot{
+		NamespaceID: testNamespaceID,
+		Credential: accesscontrol.CredentialVersion{
+			ID: testCredentialID, APIKeyID: testKeyID, KID: "credential-public-id",
+			KEKVersion: envelope.KeyVersion, CiphertextNonce: envelope.Nonce,
+			SecretCiphertext: envelope.Ciphertext,
+		},
+	}}
+	service := &Service{
+		repository: repository, waiter: &apiKeyPublicationWaiterStub{}, revealKEK: &revealKEK,
+		publicationTimeout: time.Second,
+	}
+	secret, err := service.Reveal(context.Background(), RevealRequest{
+		NamespaceID: testNamespaceID, KeyID: testKeyID, CredentialID: testCredentialID,
+		ExpectedRevision: 7, Actor: testAPIKeyActor(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if secret != expectedPlaintext || repository.revealRecords != 1 || repository.revealRevision != 7 {
+		t.Fatalf("reveal did not preserve the authorized key revision: records=%d revision=%d",
+			repository.revealRecords, repository.revealRevision)
 	}
 }
 
@@ -196,6 +237,7 @@ type apiKeyRepositoryStub struct {
 	activeReads           int
 	credentialLists       int
 	revealRecords         int
+	revealRevision        uint64
 }
 
 type apiKeyPublicationWaiterStub struct {
@@ -306,8 +348,9 @@ func (repository *apiKeyRepositoryStub) GetRevealSnapshot(context.Context, strin
 	return repository.active, nil
 }
 
-func (repository *apiKeyRepositoryStub) RecordReveal(context.Context, RevealSnapshot, Actor) error {
+func (repository *apiKeyRepositoryStub) RecordReveal(_ context.Context, _ RevealSnapshot, expectedRevision uint64, _ Actor) error {
 	repository.revealRecords++
+	repository.revealRevision = expectedRevision
 	return nil
 }
 

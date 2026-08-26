@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"net/netip"
 	"net/url"
@@ -21,6 +22,7 @@ import (
 	accesspostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscontrol/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accesscredential"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/accessmanagement"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/apikeymanagement"
 	controlpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/controlplane/postgres"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/invitationmanagement"
 	invitationpostgres "github.com/vllm-project/semantic-router/src/semantic-router/pkg/invitationmanagement/postgres"
@@ -31,19 +33,21 @@ import (
 )
 
 const (
-	testNamespaceID  = "11111111-1111-4111-8111-111111111111"
-	testActorID      = "22222222-2222-4222-8222-222222222222"
-	testTeamID       = "33333333-3333-4333-8333-333333333333"
-	testAccessID     = "44444444-4444-4444-8444-444444444444"
-	testRateID       = "55555555-5555-4555-8555-555555555555"
-	testActorBinding = "66666666-6666-4666-8666-666666666666"
-	testIssuerID     = "77777777-7777-4777-8777-777777777777"
-	testTeamAccess   = "88888888-8888-4888-8888-888888888888"
-	testTeamRate     = "99999999-9999-4999-8999-999999999999"
-	testUserAccess   = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
-	testUserRate     = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
-	testConsumerRole = "10000000-0000-5000-8000-000000000008"
-	testPlatformRole = "10000000-0000-5000-8000-000000000002"
+	testNamespaceID    = "11111111-1111-4111-8111-111111111111"
+	testActorID        = "22222222-2222-4222-8222-222222222222"
+	testTeamID         = "33333333-3333-4333-8333-333333333333"
+	testAccessID       = "44444444-4444-4444-8444-444444444444"
+	testRateID         = "55555555-5555-4555-8555-555555555555"
+	testActorBinding   = "66666666-6666-4666-8666-666666666666"
+	testIssuerID       = "77777777-7777-4777-8777-777777777777"
+	testTeamAccess     = "88888888-8888-4888-8888-888888888888"
+	testTeamRate       = "99999999-9999-4999-8999-999999999999"
+	testUserAccess     = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+	testUserRate       = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+	testConsumerRole   = "10000000-0000-5000-8000-000000000008"
+	testClusterRole    = "10000000-0000-5000-8000-000000000001"
+	testPlatformRole   = "10000000-0000-5000-8000-000000000002"
+	testClusterBinding = "cccccccc-cccc-4ccc-8ccc-cccccccccccc"
 )
 
 func TestInvitationPostgresListsEmptyFirstPage(t *testing.T) {
@@ -283,7 +287,8 @@ func assertInvitationMaterialization(
 	accepted managementauth.IdentityExchangeResult,
 ) {
 	t.Helper()
-	var principalLinks, memberships, userAccess, userRate, teamAccess, teamRate, keys, credentials, invalidAuditChains int
+	var principalLinks, memberships, userAccess, userRate, teamAccess, teamRate int
+	var keys, credentials, revealableCredentials, invalidAuditChains int
 	err := db.QueryRowContext(ctx, `SELECT
   (SELECT count(*) FROM management_principal_user_links WHERE namespace_id=$1 AND user_id=$2),
   (SELECT count(*) FROM access_team_memberships WHERE namespace_id=$1 AND team_id=$3 AND user_id=$2 AND status='active'),
@@ -293,18 +298,24 @@ func assertInvitationMaterialization(
   (SELECT count(*) FROM rate_limit_bindings WHERE namespace_id=$1 AND subject_id=$3 AND policy_id=$5 AND status='active'),
   (SELECT count(*) FROM access_api_keys WHERE namespace_id=$1 AND owner_user_id=$2 AND status='active'),
   (SELECT count(*) FROM access_api_key_credentials c JOIN access_api_keys k ON k.id=c.api_key_id WHERE k.namespace_id=$1 AND k.owner_user_id=$2 AND c.status='active'),
+  (SELECT count(*) FROM access_api_key_credentials c JOIN access_api_keys k ON k.id=c.api_key_id
+    WHERE k.namespace_id=$1 AND k.owner_user_id=$2 AND c.status='active'
+      AND c.secret_ciphertext IS NOT NULL AND c.ciphertext_nonce IS NOT NULL AND c.kek_version IS NOT NULL),
   (SELECT count(*) FROM access_audit_events WHERE namespace_id=$1
     AND jsonb_typeof(actor_chain) IS DISTINCT FROM 'array')`,
 		testNamespaceID, accepted.Onboarding.UserID, testTeamID, testAccessID, testRateID,
-	).Scan(&principalLinks, &memberships, &userAccess, &userRate, &teamAccess, &teamRate, &keys, &credentials, &invalidAuditChains)
+	).Scan(&principalLinks, &memberships, &userAccess, &userRate, &teamAccess, &teamRate,
+		&keys, &credentials, &revealableCredentials, &invalidAuditChains)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if principalLinks != 1 || memberships != 1 || userAccess != 0 || userRate != 0 ||
-		teamAccess != 1 || teamRate != 1 || keys != 1 || credentials != 1 || invalidAuditChains != 0 {
-		t.Fatalf("materialized counts = link:%d membership:%d userAccess:%d userRate:%d teamAccess:%d teamRate:%d key:%d credential:%d invalidAuditChain:%d",
-			principalLinks, memberships, userAccess, userRate, teamAccess, teamRate, keys, credentials, invalidAuditChains)
+		teamAccess != 1 || teamRate != 1 || keys != 1 || credentials != 1 || revealableCredentials != 1 || invalidAuditChains != 0 {
+		t.Fatalf("materialized counts = link:%d membership:%d userAccess:%d userRate:%d teamAccess:%d teamRate:%d key:%d credential:%d revealable:%d invalidAuditChain:%d",
+			principalLinks, memberships, userAccess, userRate, teamAccess, teamRate,
+			keys, credentials, revealableCredentials, invalidAuditChains)
 	}
+	assertInvitationFirstKeyReveal(t, ctx, db, accepted)
 	policyStore, err := accesspostgres.New(db)
 	if err != nil {
 		t.Fatal(err)
@@ -329,6 +340,64 @@ FROM access_namespaces WHERE id=$2`, testUserRate, testNamespaceID,
 	assertInvitationEffectiveSources(t, ctx, policyStore, accepted.Onboarding.APIKeyID,
 		accesscontrol.InheritanceLayerUser, accesscontrol.InheritanceLayerUser)
 	assertSecretsAbsentFromAccounting(t, ctx, db, issued.Token, accepted.Onboarding.APIKey)
+}
+
+func assertInvitationFirstKeyReveal(
+	t *testing.T,
+	ctx context.Context,
+	db *sql.DB,
+	accepted managementauth.IdentityExchangeResult,
+) {
+	t.Helper()
+	var credentialID, kid, kekVersion string
+	var ciphertext, nonce []byte
+	if err := db.QueryRowContext(ctx, `SELECT c.id::text,c.kid,c.secret_ciphertext,c.ciphertext_nonce,c.kek_version
+FROM access_api_key_credentials c
+WHERE c.namespace_id=$1 AND c.api_key_id=$2 AND c.status='active'`,
+		testNamespaceID, accepted.Onboarding.APIKeyID,
+	).Scan(&credentialID, &kid, &ciphertext, &nonce, &kekVersion); err != nil {
+		t.Fatal(err)
+	}
+	revealKEK := firstKeyRevealKeyring()
+	defer revealKEK.Close()
+	plaintext, err := revealKEK.Open(accesscredential.Envelope{
+		KeyVersion: kekVersion,
+		Nonce:      nonce,
+		Ciphertext: ciphertext,
+	}, accesscredential.APIKeyRevealAAD(
+		testNamespaceID, accepted.Onboarding.APIKeyID, credentialID, kid,
+	))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer zeroTestBytes(plaintext)
+	if !bytes.Equal(plaintext, []byte(accepted.Onboarding.APIKey)) {
+		t.Fatal("persisted first-key reveal envelope does not contain the issued secret")
+	}
+	store, err := accesspostgres.New(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repository, err := accesspostgres.NewAPIKeyManagementRepository(store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot, err := repository.GetRevealSnapshot(
+		ctx, testNamespaceID, accepted.Onboarding.APIKeyID, credentialID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	actor := apikeymanagement.Actor{
+		PrincipalID: testActorID, ActorChain: []string{testActorID},
+		RequestID: "first-key-reveal", SourceIP: netip.MustParseAddr("192.0.2.21"),
+	}
+	if err := repository.RecordReveal(ctx, snapshot, 2, actor); !errors.Is(err, apikeymanagement.ErrRevisionConflict) {
+		t.Fatalf("RecordReveal() stale authorization error = %v", err)
+	}
+	if err := repository.RecordReveal(ctx, snapshot, 1, actor); err != nil {
+		t.Fatalf("RecordReveal() authorized revision error = %v", err)
+	}
 }
 
 func assertInvitationDefaultPolicies(
@@ -592,6 +661,10 @@ func assertInvitationEffectiveSources(
 
 func seedInvitationAuthority(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
+	delegationCeiling, err := json.Marshal(accesscontrol.DelegablePermissions().Permissions())
+	if err != nil {
+		t.Fatal(err)
+	}
 	statements := []struct {
 		query string
 		args  []any
@@ -609,6 +682,12 @@ VALUES ($1,'https://issuer.example','oidc','https://issuer.example/.well-known/o
   (id,principal_id,role_id,scope_kind,namespace_id,delegation_ceiling,status,revision)
 SELECT $1,$2,$3,'namespace',$4,permissions,'active',1 FROM management_roles WHERE id=$3`,
 			[]any{testActorBinding, testActorID, testPlatformRole, testNamespaceID},
+		},
+		{
+			`INSERT INTO management_role_bindings
+  (id,principal_id,role_id,scope_kind,delegation_ceiling,status,revision)
+VALUES ($1,$2,$3,'cluster',$4,'active',1)`,
+			[]any{testClusterBinding, testActorID, testClusterRole, delegationCeiling},
 		},
 		{`INSERT INTO access_subjects (namespace_id,id,kind) VALUES ($1,$2,'team')`, []any{testNamespaceID, testTeamID}},
 		{`INSERT INTO access_teams (id,namespace_id,name,description,status)
@@ -665,10 +744,12 @@ func newInvitationService(t *testing.T, db *sql.DB, invitationPeppers accesscred
 	if err != nil {
 		t.Fatal(err)
 	}
+	revealKEK := firstKeyRevealKeyring()
+	defer revealKEK.Close()
 	firstKeys, err := invitationmanagement.NewAPIKeyFirstKeyPreparer(
 		accesscredential.PepperKeyring{ActiveVersion: "api-key-v1", Keys: map[string][]byte{
 			"api-key-v1": []byte(strings.Repeat("k", 32)),
-		}}, nil)
+		}}, &revealKEK, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -694,6 +775,18 @@ func newInvitationService(t *testing.T, db *sql.DB, invitationPeppers accesscred
 	}
 	t.Cleanup(service.Close)
 	return service, exchanges, responseKEK
+}
+
+func firstKeyRevealKeyring() accesscredential.KEKKeyring {
+	return accesscredential.KEKKeyring{ActiveVersion: "reveal-v1", Keys: map[string][]byte{
+		"reveal-v1": []byte(strings.Repeat("v", 32)),
+	}}
+}
+
+func zeroTestBytes(value []byte) {
+	for index := range value {
+		value[index] = 0
+	}
 }
 
 type invitationPublicationWaiter struct{}

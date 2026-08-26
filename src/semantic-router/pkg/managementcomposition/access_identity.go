@@ -97,6 +97,7 @@ func composeInvitationManagement(
 ) (*invitationmanagement.Service, error) {
 	firstKeys, err := invitationmanagement.NewAPIKeyFirstKeyPreparer(
 		dependencies.Keyrings.APIKeyPeppers,
+		dependencies.Keyrings.RevealKEK,
 		nil,
 	)
 	if err != nil {

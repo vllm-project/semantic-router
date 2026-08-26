@@ -226,10 +226,11 @@ type RevokeCredentialRequest struct {
 }
 
 type RevealRequest struct {
-	NamespaceID  string
-	KeyID        string
-	CredentialID string
-	Actor        Actor
+	NamespaceID      string
+	KeyID            string
+	CredentialID     string
+	ExpectedRevision uint64
+	Actor            Actor
 }
 
 type KeyCursor struct {

@@ -223,8 +223,9 @@ type FirstKeyRequest struct {
 }
 
 // PreparedFirstKey is secret-bearing transient transaction input. Plaintext is
-// encrypted only in the invitation acceptance result and never persisted as a
-// column, audit field, outbox payload, log, or trace.
+// encrypted in the invitation acceptance result and is never persisted. When
+// reveal is configured, only its key-scoped reveal envelope is stored with the
+// credential; audit, outbox, log, and trace payloads remain secret-free.
 type PreparedFirstKey struct {
 	Key        accesscontrol.APIKey
 	Credential accesscontrol.CredentialVersion

@@ -548,11 +548,19 @@ func (adapter *apiKeyRepositoryAdapter) GetRevealSnapshot(ctx context.Context, n
 	return apikeymanagement.RevealSnapshot{NamespaceID: namespaceID, Credential: record.Credential}, nil
 }
 
-func (adapter *apiKeyRepositoryAdapter) RecordReveal(ctx context.Context, snapshot apikeymanagement.RevealSnapshot, actor apikeymanagement.Actor) error {
+func (adapter *apiKeyRepositoryAdapter) RecordReveal(
+	ctx context.Context,
+	snapshot apikeymanagement.RevealSnapshot,
+	expectedRevision uint64,
+	actor apikeymanagement.Actor,
+) error {
 	meta, recordRevealErr := apiKeyMutationMeta(actor, "api_key.credential.reveal", "Reveal API-key credential.",
 		map[string]string{"credentialId": string(snapshot.Credential.ID)})
 	if recordRevealErr != nil {
 		return recordRevealErr
+	}
+	if expectedRevision == 0 {
+		return apikeymanagement.ErrInvalidRequest
 	}
 	_, recordRevealErr = inTransaction(ctx, adapter.store, func(tx *sql.Tx) (struct{}, error) {
 		current, err := scanCredential(tx.QueryRowContext(ctx, managementLockRevealCredentialQuery,
@@ -569,6 +577,9 @@ func (adapter *apiKeyRepositoryAdapter) RecordReveal(ctx context.Context, snapsh
 		key, err := scanAPIKey(tx.QueryRowContext(ctx, getAPIKeyQuery, snapshot.NamespaceID, snapshot.Credential.APIKeyID))
 		if err != nil {
 			return struct{}{}, mapAPIKeyReadError(err, "read API key for reveal audit")
+		}
+		if uint64(key.Revision) != expectedRevision {
+			return struct{}{}, apikeymanagement.ErrRevisionConflict
 		}
 		if err := appendObservedAuditEvent(ctx, tx, accesscontrol.NamespaceID(snapshot.NamespaceID), "api_key",
 			string(snapshot.Credential.APIKeyID), key.Revision, meta); err != nil {

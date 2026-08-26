@@ -10,26 +10,43 @@ import (
 )
 
 type APIKeyFirstKeyPreparer struct {
-	peppers accesscredential.PepperKeyring
-	newID   func() string
+	peppers   accesscredential.PepperKeyring
+	revealKEK *accesscredential.KEKKeyring
+	newID     func() string
 }
 
-func NewAPIKeyFirstKeyPreparer(peppers accesscredential.PepperKeyring, newID func() string) (*APIKeyFirstKeyPreparer, error) {
+func NewAPIKeyFirstKeyPreparer(
+	peppers accesscredential.PepperKeyring,
+	revealKEK *accesscredential.KEKKeyring,
+	newID func() string,
+) (*APIKeyFirstKeyPreparer, error) {
 	if err := peppers.Validate(); err != nil {
+		return nil, ErrUnavailable
+	}
+	if revealKEK != nil && revealKEK.Validate() != nil {
 		return nil, ErrUnavailable
 	}
 	if newID == nil {
 		newID = uuid.NewString
 	}
-	return &APIKeyFirstKeyPreparer{peppers: peppers.Clone(), newID: newID}, nil
+	preparer := &APIKeyFirstKeyPreparer{peppers: peppers.Clone(), newID: newID}
+	if revealKEK != nil {
+		owned := revealKEK.Clone()
+		preparer.revealKEK = &owned
+	}
+	return preparer, nil
 }
 
-// Close erases the API-key issuer's process-owned pepper material.
+// Close erases the API-key issuer's process-owned secret key material.
 func (preparer *APIKeyFirstKeyPreparer) Close() {
 	if preparer == nil {
 		return
 	}
 	preparer.peppers.Close()
+	if preparer.revealKEK != nil {
+		preparer.revealKEK.Close()
+		preparer.revealKEK = nil
+	}
 }
 
 func (preparer *APIKeyFirstKeyPreparer) PrepareFirstKey(request FirstKeyRequest) (PreparedFirstKey, error) {
@@ -65,6 +82,20 @@ func (preparer *APIKeyFirstKeyPreparer) PrepareFirstKey(request FirstKeyRequest)
 		KID: issued.Digest.PublicID, SecretHMAC: append([]byte(nil), issued.Digest.HMAC...),
 		PepperVersion: issued.Digest.PepperVersion, Status: accesscontrol.CredentialStatusActive,
 		NotBefore: now, CreatedAt: now,
+	}
+	if preparer.revealKEK != nil {
+		plaintext := []byte(issued.Plaintext)
+		envelope, err := preparer.revealKEK.Seal(
+			plaintext,
+			accesscredential.APIKeyRevealAAD(request.NamespaceID, keyID, credentialID, credential.KID),
+		)
+		zero(plaintext)
+		if err != nil {
+			return PreparedFirstKey{}, ErrUnavailable
+		}
+		credential.SecretCiphertext = envelope.Ciphertext
+		credential.CiphertextNonce = envelope.Nonce
+		credential.KEKVersion = envelope.KeyVersion
 	}
 	if err := key.Validate(); err != nil || credential.Validate() != nil {
 		return PreparedFirstKey{}, ErrUnavailable

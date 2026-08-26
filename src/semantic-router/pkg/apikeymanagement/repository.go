@@ -51,5 +51,5 @@ type CredentialRepository interface {
 
 type CredentialRevealRepository interface {
 	GetRevealSnapshot(context.Context, string, string, string) (RevealSnapshot, error)
-	RecordReveal(context.Context, RevealSnapshot, Actor) error
+	RecordReveal(context.Context, RevealSnapshot, uint64, Actor) error
 }
