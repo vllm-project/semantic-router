@@ -81,7 +81,15 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			return
 		}
 
-		configData, err := decodeYAMLTaggedBody[routerconfig.CanonicalConfig](r.Body)
+		rawBody, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
+			return
+		}
+		if rejectDatabaseOwnedConfigMutation(w, rawBody) {
+			return
+		}
+		configData, err := decodeYAMLTaggedBytes[routerconfig.CanonicalConfig](rawBody)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
@@ -129,6 +137,9 @@ func UpdateConfigHandler(configPath string, readonlyMode bool, configDir string)
 			}
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, yamlData); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return
@@ -199,6 +210,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusBadRequest)
 			return
 		}
+		if rejectDatabaseOwnedConfigMutation(w, rawPatch) {
+			return
+		}
 		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
 		if lockErr != nil {
 			writeRuntimeConfigMutationError(w, lockErr)
@@ -223,6 +237,9 @@ func UpdateRouterDefaultsHandler(configPath string, readonlyMode bool, configDir
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, yamlData); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 	"github.com/vllm-project/semantic-router/dashboard/backend/mcp"
 )
 
@@ -98,13 +97,6 @@ func TestMCPReadResponsesRedactStoredServerSecrets(t *testing.T) {
 		t.Fatal(addErr)
 	}
 	handler := NewMCPHandler(manager, false)
-
-	if got := auth.RequiredPermission(http.MethodGet, "/api/mcp/servers"); got != auth.PermMcpRead {
-		t.Fatalf("list permission = %q, want %q", got, auth.PermMcpRead)
-	}
-	if got := auth.RequiredPermission(http.MethodGet, "/api/mcp/servers/"+config.ID+"/status"); got != auth.PermMcpRead {
-		t.Fatalf("status permission = %q, want %q", got, auth.PermMcpRead)
-	}
 
 	tests := []struct {
 		name    string

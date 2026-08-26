@@ -108,12 +108,15 @@ func adminUserPasswordHandler(svc *Service) http.HandlerFunc {
 			writePasswordHashError(w, err)
 			return
 		}
+		if revalidationErr := RevalidateRequest(r); revalidationErr != nil {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
 		if err := svc.store.UpdatePassword(r.Context(), req.UserID, hash); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
-		writeAudit(r, svc, "user.password", "/api/admin/users/password", ac.UserID)
 		respondJSON(w, map[string]bool{"ok": true})
 	}
 }

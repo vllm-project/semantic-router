@@ -114,6 +114,9 @@ func (h *MCPHandler) CreateServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.AddServer(&config); err != nil {
 			writeMCPInternalError(w, "Add server", err)
 			return
@@ -157,6 +160,9 @@ func (h *MCPHandler) UpdateServerHandler() http.HandlerFunc {
 
 		config.ID = id
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.UpdateServer(&config); err != nil {
 			writeMCPInternalError(w, "Update server", err)
 			return
@@ -196,6 +202,9 @@ func (h *MCPHandler) DeleteServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.DeleteServer(id); err != nil {
 			writeMCPInternalError(w, "Delete server", err)
 			return
@@ -231,6 +240,9 @@ func (h *MCPHandler) ConnectServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		// Use independent context with timeout instead of HTTP request context
 		// This prevents MCP server process from being cancelled when HTTP request ends
 		ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
@@ -271,6 +283,9 @@ func (h *MCPHandler) DisconnectServerHandler() http.HandlerFunc {
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := h.manager.Disconnect(id); err != nil {
 			writeMCPInternalError(w, "Disconnect server", err)
 			return

@@ -56,6 +56,16 @@ func newAuthenticatedRequest(t *testing.T, svc *Service, user *User, method, pat
 	return req
 }
 
+func protectedTestHandler(
+	svc *Service,
+	contract RouteContract,
+	next http.HandlerFunc,
+) http.Handler {
+	routes := NewPolicyMux()
+	routes.HandleFunc(contract, next)
+	return AuthenticateRequest(svc, routes)(routes)
+}
+
 func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 	t.Parallel()
 
@@ -68,9 +78,9 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 			t.Fatalf("UpdateUserRoleOrStatus() error = %v", err)
 		}
 
-		handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handler := protectedTestHandler(svc, ProtectedRoute("/api/admin/users", PermUsersView, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet), func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
-		}))
+		})
 
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/admin/users", ""))
@@ -89,9 +99,9 @@ func TestAuthenticateRequestUsesCurrentDatabaseState(t *testing.T) {
 			t.Fatalf("UpdateUserRoleOrStatus() error = %v", err)
 		}
 
-		handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		handler := protectedTestHandler(svc, ProtectedRoute("/api/status", PermTopologyRead, SensitivityOperational, ResourceOwnerObservability, http.MethodGet), func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusNoContent)
-		}))
+		})
 
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/status", ""))
@@ -117,10 +127,10 @@ func TestAuthenticateRequestRequiresTopologyReadForRecipeValidateTrailingSlash(t
 	}
 
 	nextCalled := false
-	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := protectedTestHandler(svc, ProtectedRoute("/api/recipe/probes/", PermTopologyRead, SensitivityOperational, ResourceOwnerConfig, http.MethodPost), func(w http.ResponseWriter, _ *http.Request) {
 		nextCalled = true
 		w.WriteHeader(http.StatusNoContent)
-	}))
+	})
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(
 		recorder,
@@ -157,10 +167,10 @@ func TestAuthenticateRequestDeniesRecipePackageMutationSubtreesToConfigReader(t 
 	} {
 		t.Run(path, func(t *testing.T) {
 			nextCalled := false
-			handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			handler := protectedTestHandler(svc, ProtectedRoute(path, PermConfigDeploy, SensitivitySensitive, ResourceOwnerConfig, http.MethodPost), func(w http.ResponseWriter, _ *http.Request) {
 				nextCalled = true
 				w.WriteHeader(http.StatusNoContent)
-			}))
+			})
 			recorder := httptest.NewRecorder()
 			handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodPost, path, ""))
 			if recorder.Code != http.StatusForbidden {
@@ -190,9 +200,9 @@ func TestRegisterAdminRoutesHonorsUsersViewAndSelfLockoutGuards(t *testing.T) {
 			t.Fatalf("grant users.view error = %v", err)
 		}
 
-		mux := http.NewServeMux()
+		mux := NewPolicyMux()
 		RegisterAdminRoutes(mux, svc)
-		handler := AuthenticateRequest(svc)(mux)
+		handler := AuthenticateRequest(svc, mux)(mux)
 
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/admin/users", ""))
@@ -208,9 +218,9 @@ func TestRegisterAdminRoutesHonorsUsersViewAndSelfLockoutGuards(t *testing.T) {
 		svc := newTestAuthService(t)
 		user := newTestUser(t, svc, "self-update@example.com", "admin", "active")
 
-		mux := http.NewServeMux()
+		mux := NewPolicyMux()
 		RegisterAdminRoutes(mux, svc)
-		handler := AuthenticateRequest(svc)(mux)
+		handler := AuthenticateRequest(svc, mux)(mux)
 
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(
@@ -236,9 +246,9 @@ func TestRegisterAdminRoutesHonorsUsersViewAndSelfLockoutGuards(t *testing.T) {
 		svc := newTestAuthService(t)
 		user := newTestUser(t, svc, "self-delete@example.com", "admin", "active")
 
-		mux := http.NewServeMux()
+		mux := NewPolicyMux()
 		RegisterAdminRoutes(mux, svc)
-		handler := AuthenticateRequest(svc)(mux)
+		handler := AuthenticateRequest(svc, mux)(mux)
 
 		recorder := httptest.NewRecorder()
 		handler.ServeHTTP(
@@ -316,9 +326,9 @@ func TestMeHandlerReturnsEffectivePermissions(t *testing.T) {
 		t.Fatalf("grant users.view error = %v", err)
 	}
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/auth/me", meHandler(svc))
-	handler := AuthenticateRequest(svc)(mux)
+	mux := NewPolicyMux()
+	mux.HandleFunc(ProtectedRoute("/api/auth/me", PermSessionRead, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet), meHandler(svc))
+	handler := AuthenticateRequest(svc, mux)(mux)
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, newAuthenticatedRequest(t, svc, user, http.MethodGet, "/api/auth/me", ""))

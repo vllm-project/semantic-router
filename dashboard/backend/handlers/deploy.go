@@ -86,6 +86,10 @@ func DeployPreviewHandler(configPath string) http.HandlerFunc {
 			http.Error(w, "YAML content is required", http.StatusBadRequest)
 			return
 		}
+		if rejectDatabaseOwnedConfigMutation(w, []byte(req.YAML)) ||
+			(strings.TrimSpace(req.BaseYAML) != "" && rejectDatabaseOwnedConfigMutation(w, []byte(req.BaseYAML))) {
+			return
+		}
 
 		if _, err := decodeYAMLTaggedBytes[routingFragmentDocument]([]byte(req.YAML)); err != nil {
 			w.Header().Set("Content-Type", "application/json")
@@ -157,10 +161,14 @@ func DeployHandler(configPath string, readonlyMode bool, configDir string) http.
 			http.Error(w, "YAML content is required", http.StatusBadRequest)
 			return
 		}
+		if rejectDatabaseOwnedConfigMutation(w, []byte(req.YAML)) ||
+			(strings.TrimSpace(req.BaseYAML) != "" && rejectDatabaseOwnedConfigMutation(w, []byte(req.BaseYAML))) {
+			return
+		}
 
 		log.Printf("[Deploy] Received: YAML=%d bytes, DSL=%d bytes", len(req.YAML), len(req.DSL))
 
-		deployDirectWrite(w, configPath, configDir, req)
+		deployDirectWrite(w, r, configPath, configDir, req)
 	}
 }
 
@@ -196,7 +204,7 @@ func RollbackHandler(configPath string, readonlyMode bool, configDir string) htt
 			return
 		}
 
-		rollbackDirectWrite(w, configPath, configDir, rollbackReq.Version)
+		rollbackDirectWrite(w, r, configPath, configDir, rollbackReq.Version)
 	}
 }
 
@@ -215,7 +223,7 @@ func ConfigVersionsHandler(configPath string) http.HandlerFunc {
 
 // ==================== Deploy: write canonical config.yaml ====================
 
-func deployDirectWrite(w http.ResponseWriter, configPath string, configDir string, req DeployRequest) {
+func deployDirectWrite(w http.ResponseWriter, r *http.Request, configPath string, configDir string, req DeployRequest) {
 	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
 	if err != nil {
 		writeRuntimeConfigMutationError(w, err)
@@ -268,6 +276,9 @@ func deployDirectWrite(w http.ResponseWriter, configPath string, configDir strin
 	archiveDeployDSL(configDir, req.DSL)
 
 	// Step 5: Atomic write to config.yaml
+	if rejectRevokedMutation(w, r) {
+		return
+	}
 	if err := writeConfigAtomically(configPath, yamlBytes); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 		return
@@ -470,7 +481,7 @@ func looksLikeFullCanonicalDeployBase(raw []byte) (bool, error) {
 	return false, nil
 }
 
-func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir string, version string) {
+func rollbackDirectWrite(w http.ResponseWriter, r *http.Request, configPath string, configDir string, version string) {
 	release, err := beginOrdinaryRuntimeConfigMutation(configDir)
 	if err != nil {
 		writeRuntimeConfigMutationError(w, err)
@@ -505,6 +516,9 @@ func rollbackDirectWrite(w http.ResponseWriter, configPath string, configDir str
 	existingData := snapshotCurrentConfigBeforeRollback(configPath, configDir)
 
 	// Atomic write to config.yaml
+	if rejectRevokedMutation(w, r) {
+		return
+	}
 	if err := writeConfigAtomically(configPath, backupData); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 		return

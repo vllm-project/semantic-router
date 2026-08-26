@@ -31,7 +31,7 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 		t.Fatalf("issueToken() error = %v", err)
 	}
 
-	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := protectedTestHandler(svc, ProtectedRoute("/api/status", PermTopologyRead, SensitivityOperational, ResourceOwnerObservability, http.MethodGet), func(w http.ResponseWriter, r *http.Request) {
 		ac, ok := AuthFromContext(r)
 		if !ok {
 			t.Fatalf("missing auth context")
@@ -40,7 +40,7 @@ func TestAuthenticateRequestAcceptsSessionCookie(t *testing.T) {
 			t.Fatalf("user id = %q, want %q", ac.UserID, user.ID)
 		}
 		w.WriteHeader(http.StatusNoContent)
-	}))
+	})
 
 	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
@@ -153,9 +153,9 @@ func TestLogoutHandlerRevokesSessionToken(t *testing.T) {
 		t.Fatalf("logout status = %d, want %d", logoutRecorder.Code, http.StatusOK)
 	}
 
-	handler := AuthenticateRequest(svc)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	handler := protectedTestHandler(svc, ProtectedRoute("/api/status", PermTopologyRead, SensitivityOperational, ResourceOwnerObservability, http.MethodGet), func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
-	}))
+	})
 	req := httptest.NewRequest(http.MethodGet, "/api/status", nil)
 	req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: token})
 	recorder := httptest.NewRecorder()

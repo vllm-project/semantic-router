@@ -54,12 +54,46 @@ func AuthRoutes(svc *Service) *http.ServeMux {
 	return mux
 }
 
-func RegisterAdminRoutes(mux *http.ServeMux, svc *Service) {
-	mux.HandleFunc("/api/admin/users", adminUsersCollectionHandler(svc))
-	mux.HandleFunc("/api/admin/users/", adminUserItemHandler(svc))
-	mux.HandleFunc("/api/admin/permissions", adminPermissionsHandler(svc))
-	mux.HandleFunc("/api/admin/audit-logs", adminAuditLogsHandler(svc))
-	mux.HandleFunc("/api/admin/users/password", adminUserPasswordHandler(svc))
+func RegisterAdminRoutes(routes *PolicyMux, svc *Service) {
+	const maxAdminBodyBytes int64 = 64 << 10
+
+	routes.HandleFunc(
+		Route(
+			"/api/admin/users",
+			ReadPolicy(http.MethodGet, PermUsersView, SensitivitySensitive, ResourceOwnerAuth),
+			MutationPolicy(http.MethodPost, PermUsersManage, "user.create", SensitivitySecret, ResourceOwnerAuth, maxAdminBodyBytes),
+		),
+		adminUsersCollectionHandler(svc),
+	)
+	routes.HandleFunc(
+		Route(
+			"/api/admin/users/",
+			ReadPolicy(http.MethodGet, PermUsersView, SensitivitySensitive, ResourceOwnerAuth),
+			MutationPolicy(http.MethodPatch, PermUsersManage, "user.update", SensitivitySecret, ResourceOwnerAuth, maxAdminBodyBytes),
+			MutationPolicy(http.MethodDelete, PermUsersManage, "user.delete", SensitivitySecret, ResourceOwnerAuth, NoBodyLimit),
+		),
+		adminUserItemHandler(svc),
+	)
+	routes.HandleFunc(
+		ProtectedRoute("/api/admin/permissions", PermUsersManage, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet),
+		adminPermissionsHandler(svc),
+	)
+	routes.HandleFunc(
+		ProtectedRoute("/api/admin/audit-logs", PermUsersManage, SensitivitySensitive, ResourceOwnerAuth, http.MethodGet),
+		adminAuditLogsHandler(svc),
+	)
+	routes.HandleFunc(
+		ProtectedMutationRoute(
+			"/api/admin/users/password",
+			PermUsersManage,
+			"user.password",
+			SensitivitySecret,
+			ResourceOwnerAuth,
+			maxAdminBodyBytes,
+			http.MethodPost,
+		),
+		adminUserPasswordHandler(svc),
+	)
 }
 
 func writeAudit(r *http.Request, svc *Service, action, resource, actorID string) {

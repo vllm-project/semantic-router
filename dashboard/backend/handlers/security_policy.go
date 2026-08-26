@@ -253,6 +253,10 @@ func HandleUpdateSecurityPolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if rejectRevokedMutation(w, r) {
+		return
+	}
+
 	policy.UpdatedAt = time.Now().UTC().Format(time.RFC3339)
 	fragment := GenerateRouterFragment(&policy)
 	var release func()

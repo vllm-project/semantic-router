@@ -221,6 +221,9 @@ func SetupActivateHandler(
 			log.Printf("Warning: failed to back up current config before setup activation: %v", backupErr)
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		tmpConfigFile := configPath + ".tmp"
 		if writeErr := os.WriteFile(tmpConfigFile, yamlData, 0o644); writeErr != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", writeErr), http.StatusInternalServerError)
@@ -300,6 +303,9 @@ func SetupImportRemoteHandler(configPath string, setupResolver *setupmode.Resolv
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		remoteReq, err := http.NewRequestWithContext(r.Context(), http.MethodGet, importURL, nil)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("failed to create remote import request: %v", err), http.StatusBadRequest)

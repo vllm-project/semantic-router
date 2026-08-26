@@ -115,13 +115,16 @@ func handleAdminUsersCreate(w http.ResponseWriter, r *http.Request, svc *Service
 		return
 	}
 
+	if revalidationErr := RevalidateRequest(r); revalidationErr != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	user, err := svc.store.CreateUser(r.Context(), req.Email, req.Name, hash, normalizedRole, "active")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	writeAudit(r, svc, "user.create", "/api/admin/users", ac.UserID)
 	respondJSON(w, user)
 }
 
@@ -213,13 +216,16 @@ func handleAdminUserPatch(
 		return
 	}
 
+	if revalidationErr := RevalidateRequest(r); revalidationErr != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	user, err := svc.store.UpdateUserRoleOrStatus(r.Context(), userID, normalizedRole, normalizedStatus)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	writeAudit(r, svc, "user.update", "/api/admin/users/", ac.UserID)
 	respondJSON(w, user)
 }
 
@@ -256,12 +262,15 @@ func handleAdminUserDelete(
 		return
 	}
 
+	if revalidationErr := RevalidateRequest(r); revalidationErr != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
 	if err := svc.store.DeleteUser(r.Context(), userID); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	writeAudit(r, svc, "user.delete", "/api/admin/users/", ac.UserID)
 	w.WriteHeader(http.StatusNoContent)
 }
 

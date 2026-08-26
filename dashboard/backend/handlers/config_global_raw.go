@@ -62,6 +62,9 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
 			return
 		}
+		if rejectDatabaseOwnedConfigMutation(w, rawBody) {
+			return
+		}
 		release, lockErr := beginOrdinaryRuntimeConfigMutation(configDir)
 		if lockErr != nil {
 			writeRuntimeConfigMutationError(w, lockErr)
@@ -81,6 +84,9 @@ func UpdateGlobalConfigYAMLHandler(configPath string, readonlyMode bool, configD
 			return
 		}
 
+		if rejectRevokedMutation(w, r) {
+			return
+		}
 		if err := writeConfigAtomically(configPath, updatedYAML); err != nil {
 			http.Error(w, fmt.Sprintf("Failed to write config: %v", err), http.StatusInternalServerError)
 			return

@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/vllm-project/semantic-router/dashboard/backend/auth"
 )
 
 // When the auth service fails to initialize (authSvc == nil), wrapWithAuth must
@@ -18,15 +20,19 @@ func TestWrapWithAuthFailsClosedWhenAuthUnavailable(t *testing.T) {
 	protectedHit := false
 	publicHit := false
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/api/router/config", func(w http.ResponseWriter, _ *http.Request) {
+	mux := auth.NewPolicyMux()
+	mux.HandleFunc(auth.ProtectedRoute("/api/router/config", auth.PermConfigRead, auth.SensitivitySecret, auth.ResourceOwnerConfig, http.MethodGet), func(w http.ResponseWriter, _ *http.Request) {
 		protectedHit = true
 		w.WriteHeader(http.StatusOK)
 	})
-	mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) {
-		publicHit = true
+	mux.HandleFunc(auth.ProtectedRoute("/api/admin/users", auth.PermUsersView, auth.SensitivitySensitive, auth.ResourceOwnerAuth, http.MethodGet), func(w http.ResponseWriter, _ *http.Request) {
+		t.Error("admin handler executed while auth was unavailable")
 		w.WriteHeader(http.StatusOK)
 	})
+	mux.HandleFallback("/", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		publicHit = true
+		w.WriteHeader(http.StatusOK)
+	}))
 
 	handler := wrapWithAuth(mux, nil) // nil => auth store failed to initialize
 
@@ -57,10 +63,6 @@ func TestWrapWithAuthFailsClosedWhenAuthUnavailable(t *testing.T) {
 	})
 
 	t.Run("protected admin route denied", func(t *testing.T) {
-		mux.HandleFunc("/api/admin/users", func(w http.ResponseWriter, _ *http.Request) {
-			t.Error("admin handler executed while auth was unavailable")
-			w.WriteHeader(http.StatusOK)
-		})
 		req := httptest.NewRequest(http.MethodGet, "/api/admin/users", nil)
 		rec := httptest.NewRecorder()
 		handler.ServeHTTP(rec, req)
