@@ -35,6 +35,8 @@ var BaselineRouterContract = []string{
 	"looper-latency-token-headers",
 	// Entrypoint virtual names select routing recipes (issue #2331)
 	"entrypoint-recipe-routing",
+	// json_schema response_format survives auto-routing model rewrite (issue #3024)
+	"chat-completions-structured-output",
 	// Session observability
 	"session-telemetry-metrics",
 	"session-pricing-chat-completions",

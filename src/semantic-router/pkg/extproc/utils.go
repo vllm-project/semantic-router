@@ -50,6 +50,12 @@ func parseOpenAIRequest(data []byte) (*openai.ChatCompletionNewParams, error) {
 	if err := json.Unmarshal(data, &req); err != nil {
 		return nil, err
 	}
+	// The SDK union unmarshal keeps only response_format.type; rebuild the
+	// full union from the raw bytes so re-serialized bodies keep json_schema
+	// payloads (issue #3024).
+	if err := restoreResponseFormat(data, &req); err != nil {
+		return nil, err
+	}
 	return &req, nil
 }
 
