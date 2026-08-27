@@ -37,16 +37,36 @@ func (r *OpenAIRouter) applyToolSelectionBeforeDispatch(
 		ctx.setWorkingRequestBody(anthropicWire)
 		return
 	}
-	if body := requestBodyMutation(response); len(body) > 0 {
-		ctx.setWorkingRequestBody(body)
-	}
+	persistSelectedToolsToWorkingBody(openAIRequest, ctx)
 }
 
-func requestBodyMutation(response *ext_proc.ProcessingResponse) []byte {
-	if response == nil {
-		return nil
+// persistSelectedToolsToWorkingBody copies the IR's selected tools onto the
+// OpenAI-shaped working body so specified/auto dispatch can emit them. Do not
+// derive this from the temporary ExtProc stub: handleToolSelectionForRequest
+// may filter the IR without writing a body mutation.
+func persistSelectedToolsToWorkingBody(
+	openAIRequest *openai.ChatCompletionNewParams,
+	ctx *RequestContext,
+) {
+	if ctx == nil || openAIRequest == nil {
+		return
 	}
-	return response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	serializedRequest, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
+	if err != nil {
+		logging.Errorf("Error serializing selected tools before dispatch: %v", err)
+		return
+	}
+	base := ctx.workingRequestBody()
+	if len(base) == 0 {
+		ctx.setWorkingRequestBody(serializedRequest)
+		return
+	}
+	modifiedBody, err := mergeSerializedToolFields(base, serializedRequest, toolFieldsForUpdate(ctx))
+	if err != nil {
+		logging.Errorf("Error merging selected tools before dispatch: %v", err)
+		return
+	}
+	ctx.setWorkingRequestBody(modifiedBody)
 }
 
 // handleToolSelectionForRequest handles tool selection for the request.
