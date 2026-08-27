@@ -165,6 +165,8 @@ func (r *OpenAIRouter) handleModelRouting(openAIRequest *openai.ChatCompletionNe
 		return directResp, err
 	}
 
+	r.applyToolSelectionBeforeDispatch(openAIRequest, response, ctx)
+
 	// Anthropic model routing
 	if r.Config.GetModelAPIFormat(targetModel) == config.APIFormatAnthropic {
 		return r.handleAnthropicRouting(openAIRequest, originalModel, targetModel, decisionName, ctx)
@@ -322,9 +324,6 @@ func (r *OpenAIRouter) handleAutoModelRouting(openAIRequest *openai.ChatCompleti
 	// Capture router replay information if enabled
 	r.startRouterReplay(ctx, originalModel, matchedModel, decisionName)
 
-	// Handle tool selection
-	r.handleToolSelectionForRequest(openAIRequest, response, ctx)
-
 	// Record routing latency
 	r.recordRoutingLatency(ctx)
 
@@ -392,9 +391,6 @@ func (r *OpenAIRouter) handleSpecifiedModelRouting(openAIRequest *openai.ChatCom
 
 	// Capture router replay information if enabled even when the client pins a model.
 	r.startRouterReplay(ctx, originalModel, originalModel, decisionName)
-
-	// Handle tool selection
-	r.handleToolSelectionForRequest(openAIRequest, response, ctx)
 
 	// Record routing latency
 	r.recordRoutingLatency(ctx)

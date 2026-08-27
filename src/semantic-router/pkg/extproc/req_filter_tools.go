@@ -21,6 +21,34 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
+// applyToolSelectionBeforeDispatch runs semantic tool selection once on the
+// protocol-neutral IR before provider translation or backend dispatch.
+func (r *OpenAIRouter) applyToolSelectionBeforeDispatch(
+	openAIRequest *openai.ChatCompletionNewParams,
+	response *ext_proc.ProcessingResponse,
+	ctx *RequestContext,
+) {
+	var anthropicWire []byte
+	if ctx != nil && ctx.ClientProtocol == config.ClientProtocolAnthropic {
+		anthropicWire = append([]byte(nil), ctx.workingRequestBody()...)
+	}
+	r.handleToolSelectionForRequest(openAIRequest, response, ctx)
+	if len(anthropicWire) > 0 {
+		ctx.setWorkingRequestBody(anthropicWire)
+		return
+	}
+	if body := requestBodyMutation(response); len(body) > 0 {
+		ctx.setWorkingRequestBody(body)
+	}
+}
+
+func requestBodyMutation(response *ext_proc.ProcessingResponse) []byte {
+	if response == nil {
+		return nil
+	}
+	return response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+}
+
 // handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatCompletionNewParams, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
