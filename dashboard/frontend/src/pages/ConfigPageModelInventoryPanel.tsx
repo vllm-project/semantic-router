@@ -6,7 +6,7 @@ import configStyles from './ConfigPage.module.css'
 import styles from './ConfigPageModelsSection.module.css'
 import ConfigPageModelLiveVerification from './ConfigPageModelLiveVerification'
 import ModelProviderLogo from './ModelProviderLogo'
-import { TABLE_COLUMN_WIDTH, type NormalizedModel } from './configPageSupport'
+import type { NormalizedModel } from './configPageSupport'
 import type { ModelEndpointFilter, ModelRoleFilter } from './configPageModelInventory'
 import {
   modelLiveVerificationState,
@@ -103,6 +103,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'name',
       header: 'Model Name',
+      width: '300px',
+      minWidth: '260px',
       sortable: true,
       render: (row) => (
         <div className={styles.modelIdentity}>
@@ -126,7 +128,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'references',
       header: 'Routing Use',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '120px',
+      minWidth: '112px',
       align: 'center',
       render: (row) => {
         const references = modelReferenceCounts.get(row.name) ?? 0
@@ -142,7 +145,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'reasoning_family',
       header: 'Reasoning Family',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '150px',
+      minWidth: '136px',
       sortable: true,
       render: (row) =>
         row.reasoning_family ? (
@@ -154,7 +158,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'endpoints',
       header: 'Endpoints',
-      width: TABLE_COLUMN_WIDTH.compact,
+      width: '112px',
+      minWidth: '104px',
       align: 'center',
       render: (row) => {
         const count = row.endpoints?.length || 0
@@ -168,7 +173,8 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'live_verification',
       header: 'Live',
-      width: '170px',
+      width: '164px',
+      minWidth: '156px',
       render: (row) => (
         <ConfigPageModelLiveVerification
           model={row.name}
@@ -182,14 +188,23 @@ export default function ConfigPageModelInventoryPanel({
     {
       key: 'pricing',
       header: 'Pricing',
-      width: TABLE_COLUMN_WIDTH.medium,
+      width: '132px',
+      minWidth: '124px',
       render: (row) => {
         if (!row.pricing) return <span style={{ color: 'var(--color-text-secondary)' }}>N/A</span>
         const currency = row.pricing.currency || 'USD'
         const prompt = row.pricing.prompt_per_1m?.toFixed(2) || '0.00'
         return (
-          <span style={{ fontSize: '0.875rem', fontFamily: 'var(--font-mono)' }}>
-            {prompt} {currency}/1M
+          <span
+            title={`${prompt} ${currency} per 1M input tokens`}
+            style={{
+              fontSize: '0.8125rem',
+              fontFamily: 'var(--font-mono)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {currency === 'USD' ? '$' : `${currency} `}
+            {prompt} / 1M
           </span>
         )
       },

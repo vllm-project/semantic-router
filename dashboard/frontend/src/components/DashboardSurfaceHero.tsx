@@ -11,7 +11,7 @@ interface DashboardSurfaceHeroProps {
   eyebrow?: string
   title: string
   description: string
-  meta: DashboardSurfaceHeroMeta[]
+  meta?: DashboardSurfaceHeroMeta[]
 }
 
 export default function DashboardSurfaceHero({
@@ -19,29 +19,26 @@ export default function DashboardSurfaceHero({
   eyebrow = 'Manager',
   title,
   description,
-  meta,
+  meta = [],
 }: DashboardSurfaceHeroProps) {
   return (
     <header className={`${styles.hero} ${compact ? styles.heroCompact : ''}`}>
-      <div className={styles.heroGlow} aria-hidden="true" />
       <div className={styles.copy}>
         <div className={styles.topline}>
-          <div className={styles.brandBadge}>
-            <img src="/vllm.png" alt="vLLM" className={styles.brandLogo} />
-            <span>vLLM Semantic Router</span>
-          </div>
           <span className={styles.eyebrow}>{eyebrow}</span>
         </div>
         <h1 className={styles.title}>{title}</h1>
         <p className={styles.description}>{description}</p>
-        <div className={styles.metaRow}>
-          {meta.map((item) => (
-            <div key={item.label} className={styles.metaCard}>
-              <span className={styles.metaLabel}>{item.label}</span>
-              <strong className={styles.metaValue}>{item.value}</strong>
-            </div>
-          ))}
-        </div>
+        {meta.length > 0 ? (
+          <dl className={styles.metaRow}>
+            {meta.map((item) => (
+              <div key={item.label} className={styles.metaItem}>
+                <dt className={styles.metaLabel}>{item.label}</dt>
+                <dd className={styles.metaValue}>{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
       </div>
     </header>
   )

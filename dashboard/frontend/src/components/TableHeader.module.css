@@ -184,8 +184,15 @@
     align-items: stretch;
   }
 
-  .searchInput {
+  .searchControl {
     width: 100%;
+  }
+
+  .searchInput,
+  .embedded .searchInput {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
   }
 
   .addButton,

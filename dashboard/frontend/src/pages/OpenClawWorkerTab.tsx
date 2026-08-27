@@ -348,7 +348,7 @@ export const WorkerTab: React.FC<WorkerTabProps> = ({
                           className={styles.btnSmall}
                           onClick={onSwitchToStatus}
                         >
-                          Status
+                          Runtime
                         </button>
                         {!readOnly ? (
                           <button

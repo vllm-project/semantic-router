@@ -146,3 +146,14 @@
   background-color: rgba(255, 255, 255, 0.05) !important;
   color: rgba(255, 255, 255, 0.6) !important;
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .icon,
+  .expandIcon,
+  .content,
+  .thinkingOrb,
+  .thinkingOrb * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

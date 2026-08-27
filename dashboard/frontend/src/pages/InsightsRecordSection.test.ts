@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getInsightsRecordSectionPresentation } from './InsightsRecordSection'
+import { getInsightsRecordSectionPresentation } from './insightsRecordSectionSupport'
 
 describe('insight record section layout', () => {
   it.each(['Routing Metadata', 'Projection Trace', 'Tool Trace', 'Request / Response'])(

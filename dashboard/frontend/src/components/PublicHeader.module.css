@@ -19,10 +19,7 @@
 
 .brand {
   justify-self: start;
-  width: clamp(7.25rem, 9vw, 9rem);
   min-width: 0;
-  height: 3.35rem;
-  padding: 0.35rem 0;
 }
 
 .brand:hover {

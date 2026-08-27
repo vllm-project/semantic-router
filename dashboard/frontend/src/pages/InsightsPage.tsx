@@ -252,8 +252,6 @@ export default function InsightsPage() {
       eyebrow="Insights"
       title="Insights"
       description="See what the router picked, what signals fired, and how much it saved."
-      configArea="Analysis"
-      scope="Filtered replay intelligence"
     >
       {error ? (
         <div className={styles.error}>

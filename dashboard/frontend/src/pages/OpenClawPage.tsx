@@ -10,32 +10,12 @@ import {
   type LatestOpenClawRequest,
 } from '../utils/openClawRequestSupport'
 import { type OpenClawStatus, type TeamProfile } from './OpenClawPageSupport'
-import { DashboardTab, StatusTab, TeamTab, WorkerTab } from './OpenClawPageTabs'
+import { StatusTab, TeamTab, WorkerTab } from './OpenClawPageTabs'
 import { OpenClawRequestNotice } from './OpenClawRequestNotice'
 
-type OpenClawTab = 'dashboard' | 'team' | 'provision' | 'status'
+type OpenClawTab = 'team' | 'provision' | 'status'
 
 const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }> = [
-  {
-    key: 'dashboard',
-    label: 'Claw Console',
-    icon: (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <line x1="18" y1="20" x2="18" y2="10" />
-        <line x1="12" y1="20" x2="12" y2="4" />
-        <line x1="6" y1="20" x2="6" y2="14" />
-      </svg>
-    ),
-  },
   {
     key: 'team',
     label: 'Claw Team',
@@ -79,7 +59,7 @@ const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }>
   },
   {
     key: 'status',
-    label: 'Claw Dashboard',
+    label: 'Runtime',
     icon: (
       <svg
         width="16"
@@ -106,7 +86,7 @@ const OpenClawPage: React.FC = () => {
   const permissionsLoading = authLoading || readonlyLoading
   const canManage = !permissionsLoading && !serverReadonly && canManageOpenClaw(user)
   const managementDisabled = !canManage
-  const [activeTab, setActiveTab] = useState<OpenClawTab>('dashboard')
+  const [activeTab, setActiveTab] = useState<OpenClawTab>('team')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
@@ -299,25 +279,6 @@ const OpenClawPage: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'dashboard' && (
-        <div
-          id={getPanelId('dashboard')}
-          className={styles.tabContentShell}
-          role="tabpanel"
-          aria-labelledby={getTabId('dashboard')}
-          tabIndex={0}
-        >
-          <DashboardTab
-            containers={containers}
-            teams={teams}
-            loading={statusLoading || teamsLoading}
-            error={statusError || teamsError}
-            onRetry={() => refreshAll(true)}
-            onSwitchToStatus={() => setActiveTab('status')}
-            readOnly={managementDisabled}
-          />
-        </div>
-      )}
       {activeTab === 'team' && (
         <div
           id={getPanelId('team')}

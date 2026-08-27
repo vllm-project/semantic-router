@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
 import { DataTable, type Column } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductIcon from '../components/ProductIcon'
 import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './UsersPage.module.css'
 import UsersPageUserDialog, {
@@ -103,6 +104,7 @@ const UsersPage: React.FC = () => {
   const [showAudit, setShowAudit] = useState(false)
   const [dialogMode, setDialogMode] = useState<UsersPageUserDialogMode | null>(null)
   const [inviteOpen, setInviteOpen] = useState(false)
+  const inviteButtonRef = useRef<HTMLButtonElement>(null)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
   const [dialogSubmitting, setDialogSubmitting] = useState(false)
@@ -247,6 +249,11 @@ const UsersPage: React.FC = () => {
       return
     }
     setInviteOpen(true)
+  }
+
+  const closeInviteDialog = () => {
+    setInviteOpen(false)
+    window.requestAnimationFrame(() => inviteButtonRef.current?.focus({ preventScroll: true }))
   }
 
   const openEditDialog = (user: AdminUser) => {
@@ -418,9 +425,8 @@ const UsersPage: React.FC = () => {
         title="Users"
         description="Invite people, shape dashboard roles, and keep workspace access clear."
         meta={[
-          { label: 'Current surface', value: showAudit ? 'Audit logs' : 'User directory' },
-          { label: 'Active accounts', value: `${activeUserCount} active` },
-          { label: 'Privileged users', value: `${privilegedUserCount} elevated` },
+          { label: 'Active', value: activeUserCount },
+          { label: 'Admins', value: privilegedUserCount },
         ]}
       />
 
@@ -475,8 +481,14 @@ const UsersPage: React.FC = () => {
                 </p>
               </div>
               {canManageUsers ? (
-                <button type="button" className={styles.secondaryButton} onClick={openInviteDialog}>
-                  + Invite user
+                <button
+                  ref={inviteButtonRef}
+                  type="button"
+                  className={styles.secondaryButton}
+                  onClick={openInviteDialog}
+                >
+                  <ProductIcon name="plus" aria-hidden="true" />
+                  Invite user
                 </button>
               ) : null}
             </div>
@@ -628,7 +640,7 @@ const UsersPage: React.FC = () => {
         onSubmit={handleDialogSubmit}
       />
 
-      <DashboardInviteDialog isOpen={inviteOpen} onClose={() => setInviteOpen(false)} />
+      <DashboardInviteDialog isOpen={inviteOpen} onClose={closeInviteDialog} />
 
       <ConfirmDialog
         isOpen={deleteTarget !== null}

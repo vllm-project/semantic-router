@@ -97,8 +97,17 @@
 }
 
 .secondaryButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
   background: transparent;
   color: var(--color-text);
+}
+
+.secondaryButton svg {
+  width: 0.95rem;
+  height: 0.95rem;
 }
 
 .secondaryButton:hover {

@@ -6,7 +6,6 @@ import ProductIcon from '../components/ProductIcon'
 import {
   getLoadedModelCount,
   getModelStatusSummary,
-  getRouterModelAnchor,
   getTotalKnownModelCount,
   type SystemStatus,
 } from '../utils/routerRuntime'
@@ -448,9 +447,7 @@ const DashboardPage: React.FC = () => {
           previewLimit={previewModelLimit > 0 ? previewModelLimit : undefined}
           modelsInfo={status?.models}
           emptyMessage="Router model inventory will appear here after the router reports its active models."
-          onSelectModel={(model) =>
-            navigate(`/status#${encodeURIComponent(getRouterModelAnchor(model))}`)
-          }
+          onSelectModel={() => navigate('/config/models')}
         />
       </div>
 

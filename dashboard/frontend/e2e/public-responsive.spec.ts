@@ -53,7 +53,9 @@ test.describe('Public and transition surfaces on short screens', () => {
 
     await expect(page.getByRole('heading', { name: 'Build your Mixture-of-Models.' })).toBeVisible()
     await expect(
-      page.getByRole('heading', { name: 'Every request. A personalized model path.' }),
+      page.getByRole('heading', {
+        name: 'Match every workload to the right model and hardware.',
+      }),
     ).toBeVisible()
 
     const routingHeadings = [

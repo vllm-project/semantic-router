@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import type { FieldConfig } from '../components/EditModal'
 import { DataTable } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import { StringListEditor } from '../components/StringListEditor'
 import TableHeader from '../components/TableHeader'
 import pageStyles from './ConfigPage.module.css'
@@ -555,7 +556,7 @@ export default function ConfigPageTaxonomyClassifiers({
 
   return (
     <section id="knowledge-bases" className={styles.section}>
-      {loading ? <div className={styles.notice}>Loading knowledge base catalog...</div> : null}
+      {loading ? <ProductLoadingState compact label="Loading knowledge bases" /> : null}
       {error ? <div className={styles.error}>{error}</div> : null}
 
       {activeView === 'bases' ? (

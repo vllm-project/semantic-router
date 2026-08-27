@@ -50,6 +50,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
             <ProductIcon name="search" />
             <input
               type="search"
+              aria-label={searchPlaceholder}
               className={styles.searchInput}
               placeholder={searchPlaceholder}
               value={searchValue}

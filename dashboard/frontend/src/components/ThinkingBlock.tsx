@@ -50,7 +50,11 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
   }
 
   return (
-    <div className={styles.container} translate={getTranslateAttr(isStreaming)}>
+    <div
+      className={styles.container}
+      translate={getTranslateAttr(isStreaming)}
+      data-testid="thinking-block"
+    >
       <button
         className={styles.header}
         onClick={() => setIsExpanded(!isExpanded)}
@@ -97,7 +101,7 @@ const ThinkingBlock = ({ content, isStreaming = false, thinkingTime }: ThinkingB
         </div>
       </button>
       {isExpanded && (
-        <div className={styles.content}>
+        <div className={styles.content} data-testid="thinking-content">
           <MarkdownRenderer content={content} />
         </div>
       )}

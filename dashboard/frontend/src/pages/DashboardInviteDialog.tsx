@@ -191,6 +191,7 @@ export default function DashboardInviteDialog({ isOpen, onClose }: Props) {
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="Ada Lovelace"
+                  data-dialog-initial-focus
                   autoFocus
                   required
                 />

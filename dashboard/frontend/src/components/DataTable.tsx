@@ -8,6 +8,7 @@ export interface Column<T> {
   key: string
   header: string
   width?: string
+  minWidth?: string
   align?: 'left' | 'center' | 'right'
   render?: (row: T) => React.ReactNode
   sortable?: boolean
@@ -197,6 +198,14 @@ export function DataTable<T>({
     <div className={`${styles.tableContainer} ${className}`}>
       <div className={styles.tableViewport}>
         <table className={styles.table}>
+          <colgroup>
+            {selection ? <col className={styles.selectionColumn} /> : null}
+            {expandable ? <col className={styles.expandColumn} /> : null}
+            {columns.map((column) => (
+              <col key={column.key} style={{ width: column.width }} />
+            ))}
+            {hasActions ? <col className={styles.actionsColumn} /> : null}
+          </colgroup>
           <thead className={styles.thead}>
             <tr>
               {selection ? (
@@ -221,7 +230,11 @@ export function DataTable<T>({
                   <th
                     key={column.key}
                     className={`${styles.th} ${column.sortable ? styles.sortable : ''}`}
-                    style={{ width: column.width, textAlign: column.align || 'left' }}
+                    style={{
+                      width: column.width,
+                      minWidth: column.minWidth,
+                      textAlign: column.align || 'left',
+                    }}
                     aria-sort={
                       activeSort
                         ? sortDirection === 'asc'
@@ -308,7 +321,11 @@ export function DataTable<T>({
                         <td
                           key={column.key}
                           className={styles.td}
-                          style={{ textAlign: column.align || 'left' }}
+                          style={{
+                            width: column.width,
+                            minWidth: column.minWidth,
+                            textAlign: column.align || 'left',
+                          }}
                         >
                           {column.render
                             ? column.render(row)

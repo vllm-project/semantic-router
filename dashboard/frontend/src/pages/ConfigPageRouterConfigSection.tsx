@@ -216,8 +216,6 @@ export default function ConfigPageRouterConfigSection({
       eyebrow="Runtime"
       title="Global Config"
       description="Shape how the router runs. Start with a layer, then tune only what you need."
-      configArea="Global"
-      scope="Router-wide settings"
     >
       <div className={styles.globalWorkspace}>
         <header className={styles.workspaceHeader}>

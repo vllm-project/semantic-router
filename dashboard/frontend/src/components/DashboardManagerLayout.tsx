@@ -8,7 +8,7 @@ interface DashboardManagerLayoutProps {
   eyebrow?: string
   title: string
   description: string
-  meta: DashboardSurfaceHeroMeta[]
+  meta?: DashboardSurfaceHeroMeta[]
   children: ReactNode
 }
 

@@ -2094,13 +2094,35 @@
 /* ===== Responsive ===== */
 
 @media (max-width: 768px) {
+  .page {
+    height: calc(100dvh - 56px);
+  }
+
+  .toolbar {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .toolbar::-webkit-scrollbar,
+  .statusBar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .content,
+  .editorArea,
   .visualContainer {
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .visualRow {
     flex-direction: column;
+    min-height: 0;
   }
 
   .sidebar {
-    width: 100%;
-    max-height: 200px;
+    width: 100% !important;
+    max-height: 150px;
     border-right: none;
     border-bottom: 1px solid var(--color-border);
   }
@@ -2110,10 +2132,24 @@
   }
 
   .outputPanel {
-    width: 100%;
-    max-height: 300px;
+    width: 100% !important;
+    max-height: 42dvh;
     border-left: none;
     border-top: 1px solid var(--color-border);
+  }
+
+  .mainPanel {
+    width: 100%;
+    min-height: 180px;
+  }
+
+  .mainPanelContent {
+    padding: 1rem;
+  }
+
+  .statusBar {
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 }
 
@@ -3056,4 +3092,10 @@
   background: var(--color-bg-elevated);
   border-color: var(--color-border-hover);
   color: var(--color-text);
+}
+
+@media (max-width: 768px) {
+  .validationPanel {
+    max-height: 112px;
+  }
 }

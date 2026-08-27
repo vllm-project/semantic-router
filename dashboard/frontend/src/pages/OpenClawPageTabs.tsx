@@ -1,4 +1,3 @@
-export { DashboardTab } from './OpenClawDashboardTab'
 export { StatusTab } from './OpenClawStatusTab'
 export { TeamTab } from './OpenClawTeamTab'
 export { WorkerTab } from './OpenClawWorkerTab'

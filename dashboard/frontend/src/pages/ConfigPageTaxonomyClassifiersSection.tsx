@@ -16,8 +16,6 @@ export default function ConfigPageTaxonomyClassifiersSection({
       eyebrow="Manager"
       title="Knowledge Bases"
       description="Manage router knowledge base packages in a dedicated surface: browse the KB catalog, inspect groups and labels, and update KB assets without mixing them into Global Config."
-      configArea="Knowledge Base"
-      scope="Router-owned KB packages and signal bindings"
     >
       <ConfigPageTaxonomyClassifiers
         isReadonly={isReadonly}

@@ -39,7 +39,9 @@ test.describe('Evaluation page', () => {
 
     await page.goto('/evaluation');
     await expect(page.getByRole('heading', { name: 'Evaluation', exact: true })).toBeVisible();
-    await expect(page.getByText(/signal and system level/i)).toBeVisible();
+    await expect(
+      page.getByText('Measure every Mixture-of-Models from signal quality to system outcomes.'),
+    ).toBeVisible();
     await expect(page.getByRole('tab', { name: /tasks/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: /create/i })).toBeVisible();
     await expect(page.getByRole('tab', { name: /history/i })).toBeVisible();

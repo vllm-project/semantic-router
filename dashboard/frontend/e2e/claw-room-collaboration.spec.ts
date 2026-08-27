@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
-import { mockAuthenticatedSession } from './support/auth'
+import { mockAuthenticatedAppShell } from './support/auth'
 import { openComposerAddMenu } from './support/playground'
 
 const openClawTeam = {
@@ -48,7 +48,7 @@ const initialMessages = [
 ]
 
 async function mockCollaborationBootstrap(page: Page) {
-  await mockAuthenticatedSession(page)
+  await mockAuthenticatedAppShell(page)
 
   await page.route('**/api/setup/state', async (route) => {
     await route.fulfill({
@@ -540,7 +540,7 @@ test.describe('Claw room collaboration', () => {
     })
 
     await page.goto('/openclaw')
-    await page.getByRole('tab', { name: /Claw Dashboard/ }).click()
+    await page.getByRole('tab', { name: /Runtime/ }).click()
     await page.getByRole('button', { name: 'Dashboard', exact: true }).click()
 
     await expect(page.getByTestId('claw-room-bridge-activity')).toBeVisible()

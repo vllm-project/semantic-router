@@ -61,8 +61,6 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
         eyebrow="Knowledge"
         title={meta.title}
         description={meta.description}
-        configArea="Knowledge"
-        scope="Router-owned bases, groups, labels, and metrics"
       >
         <ConfigPageTaxonomyClassifiers
           isReadonly={isReadonly}

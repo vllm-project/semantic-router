@@ -232,7 +232,7 @@
 .footerLeft,
 .footerRight {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.55rem;
 }
 
@@ -246,6 +246,7 @@
   padding: 0 0.85rem;
   font-size: 0.78rem;
   font-weight: 680;
+  white-space: nowrap;
   border-radius: 6px;
   transition:
     color var(--transition-fast),
@@ -357,6 +358,7 @@
   .footerLeft,
   .footerRight {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .footerRight button,

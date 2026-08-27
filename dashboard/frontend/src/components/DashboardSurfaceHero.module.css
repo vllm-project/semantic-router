@@ -1,128 +1,98 @@
 .hero {
   position: relative;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.5rem;
-  padding: 1.55rem;
+  padding: 1.35rem 1.5rem 1.45rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   background: var(--surface-panel);
   box-shadow: none;
-  overflow: hidden;
-}
-
-.heroGlow {
-  display: none;
+  overflow: visible;
 }
 
 .copy {
   position: relative;
   z-index: 1;
   min-width: 0;
-  max-width: 62rem;
+  max-width: 68rem;
 }
 
 .topline {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
-
-.brandBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  min-height: 38px;
-  padding: 0.45rem 0.8rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: var(--surface-shell);
-  color: var(--color-text);
-  font-size: 0.82rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.brandLogo {
-  width: 18px;
-  height: 18px;
-  object-fit: contain;
+  gap: 0.5rem;
 }
 
 .eyebrow {
   display: inline-flex;
   align-items: center;
-  min-height: 30px;
-  padding: 0.3rem 0.7rem;
+  min-height: 18px;
+  padding-left: 0.65rem;
   border: 0;
   border-left: 2px solid var(--brand-amd);
   border-radius: 0;
   background: transparent;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .title {
-  margin: 0.72rem 0 0;
+  margin: 0.55rem 0 0;
   color: var(--color-text);
-  font-size: clamp(2rem, 2.5vw, 2.45rem);
+  font-size: clamp(1.8rem, 2.4vw, 2.3rem);
   font-weight: 700;
   letter-spacing: -0.03em;
 }
 
 .description {
-  margin: 0.55rem 0 0;
+  margin: 0.4rem 0 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
   line-height: 1.55;
-  max-width: 44rem;
+  max-width: 50rem;
 }
 
 .metaRow {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.85rem;
-  margin-top: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 1rem 0 0;
+  padding: 0;
+  flex-wrap: wrap;
 }
 
-.metaCard {
+.metaItem {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
   min-width: 0;
-  padding: 0.9rem 1rem;
-  border-radius: var(--radius-md);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--surface-raised);
-  box-shadow: none;
+  margin: 0;
+  padding: 0 0.9rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.metaItem:first-child {
+  padding-left: 0;
+  border-left: 0;
 }
 
 .metaLabel {
-  display: block;
   color: var(--color-text-secondary);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 500;
 }
 
 .metaValue {
-  display: block;
-  margin-top: 0.38rem;
+  margin: 0;
   color: var(--color-text);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
 .heroCompact {
-  gap: 1rem;
   padding: 0.85rem 1rem;
-}
-
-.heroCompact .brandBadge {
-  display: none;
 }
 
 .heroCompact .title {
@@ -137,12 +107,7 @@
 }
 
 .heroCompact .metaRow {
-  gap: 0.55rem;
-  margin-top: 0.7rem;
-}
-
-.heroCompact .metaCard {
-  padding: 0.5rem 0.7rem;
+  margin-top: 0.65rem;
 }
 
 .heroCompact .metaValue {
@@ -152,11 +117,30 @@
 
 @media (max-width: 900px) {
   .hero {
-    grid-template-columns: 1fr;
     padding: 1.2rem 1.1rem;
   }
 
   .metaRow {
-    grid-template-columns: 1fr;
+    gap: 0.6rem 0;
+  }
+
+  .metaItem {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero {
+    padding: 1rem;
+  }
+
+  .title {
+    font-size: 1.65rem;
+  }
+
+  .metaItem {
+    flex-basis: 100%;
+    padding: 0;
+    border-left: 0;
   }
 }

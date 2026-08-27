@@ -14,10 +14,12 @@ export type ProductIconName =
   | 'eye'
   | 'eye-off'
   | 'link'
+  | 'list'
   | 'plus'
   | 'refresh'
   | 'search'
   | 'settings'
+  | 'chart'
   | 'topology'
   | 'trash'
 
@@ -70,6 +72,12 @@ const paths: Record<ProductIconName, ReactNode> = {
       <path d="m14 11-4 4a3 3 0 1 1-4-4l3-3a3 3 0 0 1 4.2 0" />
     </>
   ),
+  list: (
+    <>
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path d="M4 6h.01M4 12h.01M4 18h.01" />
+    </>
+  ),
   plus: <path d="M12 5v14M5 12h14" />,
   refresh: <path d="M20 7v5h-5M4 17v-5h5M6.1 8A7 7 0 0 1 18.5 6L20 8M4 16l1.5 2A7 7 0 0 0 18 16" />,
   search: (
@@ -82,6 +90,11 @@ const paths: Record<ProductIconName, ReactNode> = {
     <>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21h-4v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3v-4h.1a1.7 1.7 0 0 0 1.5-1A1.7 1.7 0 0 0 4.3 7l-.1-.1L7 4.2l.1.1A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
+    </>
+  ),
+  chart: (
+    <>
+      <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />
     </>
   ),
   topology: (

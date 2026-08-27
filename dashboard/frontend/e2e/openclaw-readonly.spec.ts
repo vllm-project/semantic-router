@@ -471,9 +471,9 @@ test.describe('Readonly OpenClaw', () => {
     await expect(page.getByRole('button', { name: 'New Worker' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Edit' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Delete' })).toHaveCount(0)
-    await expect(page.getByRole('button', { name: 'Status' }).first()).toBeEnabled()
+    await expect(page.getByRole('button', { name: 'Runtime' }).first()).toBeEnabled()
 
-    await page.getByRole('tab', { name: /Claw Dashboard/ }).click()
+    await page.getByRole('tab', { name: /Runtime/ }).click()
     await expect(page.getByRole('button', { name: 'Dashboard', exact: true })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Stop' })).toHaveCount(0)
     await expect(page.getByRole('button', { name: 'Remove' })).toHaveCount(0)

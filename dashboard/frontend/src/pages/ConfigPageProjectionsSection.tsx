@@ -72,7 +72,6 @@ export default function ConfigPageProjectionsSection({
     applyScopedConfig,
     routingScopes,
     scopedConfig,
-    selectedScope,
     selectedScopeId,
     setSelectedScopeId,
   } = useRoutingScopeManager(config)
@@ -629,7 +628,6 @@ export default function ConfigPageProjectionsSection({
     <ConfigPageManagerLayout
       title="Projections"
       description="Coordinate mutually exclusive signal partitions, derive weighted scores, and map them into named routing bands that decisions can reference."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
         <RoutingScopeSelector

@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
-import { DashboardTab, StatusTab } from './OpenClawPageTabs'
+import { StatusTab } from './OpenClawPageTabs'
 import type { OpenClawStatus, TeamProfile } from './OpenClawPageSupport'
 import { TeamTab } from './OpenClawTeamTab'
 import { WorkerTab } from './OpenClawWorkerTab'
@@ -44,7 +44,7 @@ describe('enterprise permission surfaces', () => {
     expect(markup).not.toMatch(/>Delete</)
   })
 
-  it('keeps worker status navigation while hiding worker mutation controls', () => {
+  it('keeps worker runtime navigation while hiding worker mutation controls', () => {
     const markup = renderToStaticMarkup(
       createElement(WorkerTab, {
         containers: [worker],
@@ -57,25 +57,10 @@ describe('enterprise permission surfaces', () => {
     )
 
     expect(markup).toContain('Atlas')
-    expect(markup).toMatch(/>Status</)
+    expect(markup).toMatch(/>Runtime</)
     expect(markup).not.toMatch(/>New Worker</)
     expect(markup).not.toMatch(/>Edit</)
     expect(markup).not.toMatch(/>Delete</)
-  })
-
-  it('labels dashboard navigation as view-only instead of management', () => {
-    const markup = renderToStaticMarkup(
-      createElement(DashboardTab, {
-        containers: [worker],
-        teams: [team],
-        onSwitchToStatus: vi.fn(),
-        readOnly: true,
-      }),
-    )
-
-    expect(markup).toContain('View Claw Status')
-    expect(markup).toContain('View status')
-    expect(markup).not.toMatch(/>Manage</)
   })
 
   it('renders runtime status and refresh without lifecycle actions', () => {
@@ -118,6 +103,8 @@ describe('enterprise permission surfaces', () => {
     expect(pageSource).toContain('role="tab"')
     expect(pageSource).toContain('role="tabpanel"')
     expect(pageSource).toContain('aria-selected=')
+    expect(pageSource).not.toContain('Claw Dashboard')
+    expect(pageSource).not.toContain('Overview')
 
     expect(configSource).toContain("const isMCPSection = activeSection === 'mcp'")
     expect(configSource).toContain('{isMCPSection && (')

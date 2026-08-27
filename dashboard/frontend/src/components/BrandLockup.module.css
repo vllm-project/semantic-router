@@ -25,3 +25,9 @@
   height: 100%;
   object-fit: contain;
 }
+
+@media (max-width: 1023px) {
+  .brand {
+    width: 7rem;
+  }
+}

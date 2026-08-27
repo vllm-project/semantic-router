@@ -8,8 +8,6 @@ export default function ConfigPageMCPSection() {
       eyebrow="Integrations"
       title="MCP Servers"
       description="Manage Model Context Protocol servers, inspect discovered tools, and keep the dashboard tool inventory aligned with router-side integrations."
-      configArea="MCP"
-      scope="Tool and server control"
     >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>

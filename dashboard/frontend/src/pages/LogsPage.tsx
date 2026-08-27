@@ -126,10 +126,10 @@ const LogsPage: React.FC = () => {
         title="System Logs"
         description="Search live output across the router, gateway, and dashboard."
         meta={[
-          { label: 'Active stream', value: activeComponentLabel },
+          { label: 'Stream', value: activeComponentLabel },
           { label: 'Deployment', value: formatDeploymentType(deploymentType) },
-          { label: 'Log access', value: describeLogsAvailability(supported) },
-          { label: 'Entries loaded', value: logs.length },
+          { label: 'Access', value: describeLogsAvailability(supported) },
+          { label: 'Entries', value: logs.length },
         ]}
       >
         <section className={styles.streamToolbar} aria-label="Log filters">

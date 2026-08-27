@@ -239,7 +239,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('speed-first', { exact: true })).toBeVisible();
     await expect(page.getByText('Latency-first routing profile', { exact: true })).toHaveCount(0);
     await expect(page.getByRole('option')).toHaveCount(2);
-    await page.getByRole('option', { name: /vllm-sr\/mom-flash-v1/ }).click();
+    await page.getByRole('option', { name: /vllm-sr\/mom-v1-flash/ }).click();
     await expect(selector).toContainText('vllm-sr/mom-v1-flash');
   });
 
@@ -333,9 +333,13 @@ test.describe('Playground Chat Component', () => {
     const guideBox = await page.getByRole('button', { name: 'Guide' }).boundingBox();
     expect(composerBox).not.toBeNull();
     expect(guideBox).not.toBeNull();
-    expect((guideBox?.y ?? 0) + (guideBox?.height ?? 0)).toBeLessThanOrEqual(
-      (composerBox?.y ?? 0) + 1,
+    const controlsOverlap = !(
+      (guideBox?.x ?? 0) + (guideBox?.width ?? 0) <= (composerBox?.x ?? 0) ||
+      (composerBox?.x ?? 0) + (composerBox?.width ?? 0) <= (guideBox?.x ?? 0) ||
+      (guideBox?.y ?? 0) + (guideBox?.height ?? 0) <= (composerBox?.y ?? 0) ||
+      (composerBox?.y ?? 0) + (composerBox?.height ?? 0) <= (guideBox?.y ?? 0)
     );
+    expect(controlsOverlap).toBe(false);
   });
 
   test('uses the live alias and blocks a restored task with a retired model', async ({ page }) => {
@@ -525,12 +529,12 @@ test.describe('Playground Chat Component', () => {
     }, onboardingStatusKey);
     await page.goto('/playground', { waitUntil: 'domcontentloaded' });
 
-    await expect(page.getByText('Product guide')).toBeVisible();
+    await expect(page.getByText('Getting started')).toBeVisible();
     await page.getByRole('button', { name: 'Next' }).click();
-    await expect(page.getByText('Step 2 of 5')).toBeVisible();
+    await expect(page.getByText('Step 2 of 4')).toBeVisible();
     await page.getByRole('button', { name: 'Pause tour' }).click();
-    await page.getByRole('button', { name: 'Resume guide' }).click();
-    await expect(page.getByText('Step 2 of 5')).toBeVisible();
+    await page.getByRole('button', { name: 'Resume product guide' }).click();
+    await expect(page.getByText('Step 2 of 4')).toBeVisible();
 
     while ((await page.getByRole('button', { name: 'Finish' }).count()) === 0) {
       await page.getByRole('button', { name: 'Next' }).click();
@@ -555,6 +559,11 @@ test.describe('Playground Chat Component', () => {
     const body = page.getByTestId('onboarding-guide-body');
     await expect(actions).toBeVisible();
     await expect(body).toBeVisible();
+
+    await actions.evaluate(async (element) => {
+      const dialog = element.closest('[role="dialog"]');
+      await Promise.all((dialog?.getAnimations() ?? []).map((animation) => animation.finished));
+    });
 
     const initialActionsBox = await actions.boundingBox();
     expect(initialActionsBox).not.toBeNull();
@@ -781,7 +790,7 @@ test.describe('Playground Chat Component', () => {
     await expect(
       page.locator('[data-message-role="user"]').filter({ hasText: 'Clear me' }),
     ).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Welcome, Admin/i })).toBeVisible();
   });
 
   test('keeps streaming in the original session after switching away and shows progress when switching back', async ({
@@ -809,7 +818,7 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByRole('button', { name: 'Stop generating' })).toBeVisible();
 
     await page.getByRole('button', { name: 'New conversation' }).click();
-    await expect(page.getByRole('heading', { name: /Understand every request/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: /Welcome, Admin/i })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Stop generating' })).toHaveCount(0);
     await expect(page.getByText('First visible chunk.')).toHaveCount(0);
 
@@ -1685,7 +1694,7 @@ test.describe('Playground Chat Component', () => {
 
     await expect(page.getByText('Final streamed answer.')).toBeVisible({ timeout: 10000 });
     await expect(page.getByText('Step 1: inspect the prompt.')).toBeVisible({ timeout: 10000 });
-    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: /Reasoning/ })).toBeVisible({ timeout: 10000 });
   });
 
   test('shows streaming reasoning in thinking overlay before completion', async ({ page }) => {
@@ -1700,16 +1709,12 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Stream reasoning');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    const thinkingGrid = page.getByTestId('thinking-grid');
-    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
-    await expect(thinkingGrid.locator('span')).toHaveCount(120);
+    const thinkingBlock = page.getByTestId('thinking-block');
+    await expect(thinkingBlock).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Classifying intent')).toHaveCount(0);
     await expect(page.getByText('Selecting route')).toHaveCount(0);
     await expect(page.getByText('Preparing response')).toHaveCount(0);
-    await expect(page.getByText('Thinking Process:')).toBeVisible({ timeout: 5000 });
-    await expect(page.locator('pre').filter({ hasText: 'The answer' })).toBeVisible({
-      timeout: 5000,
-    });
+    await expect(thinkingBlock.getByText('The answer')).toBeVisible({ timeout: 5000 });
     await expect(page.getByText('Done.')).toBeVisible({ timeout: 10000 });
   });
 
@@ -1732,18 +1737,13 @@ test.describe('Playground Chat Component', () => {
     await page.getByPlaceholder('Ask me anything...').fill('Respect reduced motion');
     await page.getByRole('button', { name: 'Send message' }).click();
 
-    const thinkingGrid = page.getByTestId('thinking-grid');
-    await expect(thinkingGrid).toBeVisible({ timeout: 5000 });
-    await expect(thinkingGrid).toHaveAttribute('data-motion', 'static');
+    const thinkingBlock = page.getByTestId('thinking-block');
+    await expect(thinkingBlock).toBeVisible({ timeout: 5000 });
     await expect(page.getByTestId('playground-motion-background')).toHaveAttribute(
       'data-motion',
       'static',
     );
-    await expect(thinkingGrid.locator('span').first()).toHaveCSS('animation-name', 'none');
-
-    const characters = await thinkingGrid.textContent();
-    await page.waitForTimeout(220);
-    expect(await thinkingGrid.textContent()).toBe(characters);
+    await expect(thinkingBlock.getByTestId('thinking-content')).toHaveCSS('animation-name', 'none');
     await expect(page.getByText('Reduced motion complete.')).toBeVisible({ timeout: 10000 });
   });
 
@@ -1775,6 +1775,6 @@ test.describe('Playground Chat Component', () => {
     await expect(page.getByText('Step 1: parse message.reasoning.')).toBeVisible({
       timeout: 10000,
     });
-    await expect(page.getByText('My Thoughts')).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('button', { name: /Reasoning/ })).toBeVisible({ timeout: 10000 });
   });
 });
