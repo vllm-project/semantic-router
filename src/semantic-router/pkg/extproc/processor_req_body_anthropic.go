@@ -135,6 +135,18 @@ func (r *OpenAIRouter) buildAnthropicRoutingResponse(
 		}
 	}
 
+	// Rewrite the routing alias to the model name the backend expects
+	// (provider_model_id / external_model_ids), mirroring the OpenAI-compatible
+	// path in buildSpecifiedModelBodyMutation (#3064).
+	if upstreamModel := r.resolveModelNameForBackend(targetModel, backendName); upstreamModel != targetModel {
+		rewritten, rwErr := rewriteModelInBodyFast(anthropicBody, upstreamModel)
+		if rwErr != nil {
+			logging.Warnf("Failed to rewrite model in Anthropic body: %v, sending original body", rwErr)
+		} else {
+			anthropicBody = rewritten
+		}
+	}
+
 	bodyLength := len(anthropicBody)
 	var anthropicHeaders []anthropic.HeaderKeyValue
 	if ctx.ExpectStreamingResponse {
