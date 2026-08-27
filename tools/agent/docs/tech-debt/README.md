@@ -60,6 +60,7 @@ Every entry uses these sections:
 - [TD044: Flow tool-state durability](td-044-flow-tool-state-durability-gap.md)
 - [TD045: Reviewed content moderation](td-045-reviewed-content-moderation.md)
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
+- [TD047: Workflows/Ratings panel-executor migration](td-047-looper-panel-executor-workflows-ratings-migration.md)
 
 If a gap becomes release-critical, move ownership to the active release plan
 and update both indexes in the same change.
