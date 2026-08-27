@@ -30,12 +30,13 @@ func init() {
 // that must miss and a paraphrase that must still hit.
 //
 // Every question in a case must classify to a decision that carries the
-// response_cache plugin (default_decision in the profiles that run this case)
-// and the pair must clear similarity_threshold on the profile's embedding
-// model; the shipped cases were calibrated against a live production-stack
-// deployment (mmbert, threshold 0.8). Domain-flavoured wording such as files,
-// timers, or notifications routes to computer_science_decision, which has no
-// cache plugin, and would make the case vacuous.
+// response_cache plugin and the pair must clear similarity_threshold on the
+// profile's embedding model. The shipped cases use everyday wording that the
+// envoy-ai-gateway baseline profile classifies as "other" (other_decision,
+// which carries the plugin) and were calibrated against a live deployment of
+// that profile (mmbert). Domain-flavoured wording such as files, timers, or
+// notifications routes to decisions without a cache plugin and would make the
+// case vacuous.
 type cachePolarityCase struct {
 	Description      string `json:"description"`
 	OriginalQuestion string `json:"original_question"`
@@ -210,8 +211,9 @@ const cachePolarityPrimeAttempts = 4
 // cachePolarityExactMatch is the similarity of an identical cached query.
 const cachePolarityExactMatch = 0.999
 
-// cachePolarityThreshold mirrors global.stores.response_cache.similarity_threshold
-// in the profiles that run this case (production-stack ships 0.8). A rejected
-// contradiction must report at least this score, otherwise the miss came from
-// the threshold and says nothing about the guard.
+// cachePolarityThreshold is the highest similarity_threshold any decision with
+// the response_cache plugin uses in the profiles that run this case (the
+// envoy-ai-gateway baseline ships 0.8 globally and 0.75 on other_decision). A
+// rejected contradiction must report at least this score, otherwise the miss
+// came from the threshold and says nothing about the guard.
 const cachePolarityThreshold = 0.8

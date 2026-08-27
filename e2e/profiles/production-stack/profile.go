@@ -163,7 +163,6 @@ func (p *Profile) GetTestCases() []string {
 			"pii-detection",
 			"jailbreak-detection",
 			"semantic-cache",
-			"semantic-cache-polarity",
 		},
 	)
 }
