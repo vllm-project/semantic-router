@@ -38,11 +38,11 @@ Mixture-of-Models, operating the Playground, and understanding router status.
 - [x] `TASK-03` Replace legacy Playground progress UI and preserve metadata.
 - [x] `TASK-04` Complete real-environment interaction and regression checks.
 - [x] `TASK-05` Audit scope, quality, and repository gates.
-- [ ] `TASK-06` Prepare the signed reviewable change and CI handoff.
+- [x] `TASK-06` Prepare the signed reviewable change and CI handoff.
 
 ## Next Action
 
-Prepare the signed commits, publish the review branch, and resolve CI findings.
+Keep the plan current while review feedback and CI findings are resolved.
 
 ## Operating Rules
 
