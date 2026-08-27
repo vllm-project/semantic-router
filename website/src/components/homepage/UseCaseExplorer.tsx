@@ -390,7 +390,7 @@ export default function UseCaseExplorer(): JSX.Element {
     <section className={shared.bandSection} aria-labelledby="use-case-explorer-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={`${shared.sectionHeader} ${shared.sectionHeaderWide}`}>
+          <header className={`site-section-intro ${shared.sectionHeader}`}>
             <span className={shared.eyebrow}>
               <Translate id="homepage.useCases.label">How it works</Translate>
             </span>
