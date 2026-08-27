@@ -1,5 +1,5 @@
 .recordPage {
-  width: min(1180px, calc(100% - 3rem));
+  width: min(1320px, calc(100% - 3rem));
   margin: 0 auto;
   padding: 1.5rem 0 3rem;
 }
@@ -65,11 +65,11 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 1.5rem;
-  padding: 2rem;
+  padding: 1.65rem 1.8rem;
   border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: 20px;
   background:
-    radial-gradient(circle at 88% 10%, rgba(230, 57, 70, 0.08), transparent 22rem),
+    radial-gradient(circle at 88% 10%, rgba(255, 255, 255, 0.055), transparent 22rem),
     rgba(255, 255, 255, 0.025);
 }
 
@@ -95,10 +95,25 @@
   overflow-wrap: anywhere;
 }
 
-.recordHero p {
-  margin: 0.65rem 0 0;
-  color: rgba(255, 255, 255, 0.56);
-  font-size: 0.9rem;
+.recordRoute {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.48rem;
+  margin-top: 0.8rem;
+  color: rgba(255, 255, 255, 0.52);
+  font-size: 0.8rem;
+}
+
+.recordRoute strong {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 680;
+  text-transform: capitalize;
+}
+
+.recordRoute svg {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.24);
 }
 
 .recordStatus {
@@ -129,17 +144,48 @@
 
 .recordSections {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: 1rem;
   margin-top: 1rem;
 }
 
 .recordSection {
+  grid-column: span 4;
   min-width: 0;
-  padding: 1.2rem;
+  padding: 1.15rem;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.018);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.012)),
+    rgba(6, 7, 8, 0.62);
+}
+
+.recordSectionCompact {
+  grid-column: span 4;
+}
+
+.recordSectionFeature {
+  grid-column: span 8;
+}
+
+.recordSectionWide {
+  grid-column: 1 / -1;
+  padding: 0;
+  overflow: hidden;
+}
+
+.recordSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.recordSectionWide .recordSectionHeader {
+  align-items: center;
+  padding: 1rem 1.15rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.065);
+  background: rgba(255, 255, 255, 0.016);
 }
 
 .recordSection h2 {
@@ -149,6 +195,42 @@
   font-weight: 720;
   letter-spacing: 0.075em;
   text-transform: uppercase;
+}
+
+.recordSectionWide h2 {
+  margin-bottom: 0.18rem;
+}
+
+.recordSectionCount {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.68rem;
+}
+
+.recordSectionToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  min-height: 32px;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.48);
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.recordSectionToggle:hover {
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.recordSectionToggle svg {
+  transition: transform 160ms ease;
+}
+
+.recordSectionChevronOpen {
+  transform: rotate(180deg);
 }
 
 .recordFields {
@@ -182,13 +264,27 @@
   grid-column: 1 / -1;
 }
 
+.recordFieldsWide {
+  max-height: min(42rem, 72vh);
+  padding: 1.15rem;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.recordFieldsWide .recordField > span {
+  margin-bottom: 0.65rem;
+}
+
 @media (max-width: 820px) {
   .recordPage {
     width: min(100% - 1.25rem, 1180px);
   }
 
-  .recordSections {
-    grid-template-columns: 1fr;
+  .recordSection,
+  .recordSectionCompact,
+  .recordSectionFeature,
+  .recordSectionWide {
+    grid-column: 1 / -1;
   }
 
   .recordHero,

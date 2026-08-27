@@ -16,6 +16,7 @@ import {
   getInsightsRecordPath,
 } from './insightsPageSupport'
 import type { InsightsRecord } from './insightsPageTypes'
+import InsightsRecordSection from './InsightsRecordSection'
 
 export default function InsightsRecordPage() {
   const navigate = useNavigate()
@@ -136,7 +137,17 @@ export default function InsightsRecordPage() {
             <div className={styles.recordHeroCopy}>
               <span className={styles.recordEyebrow}>Request insight</span>
               <h1>{buildInsightsRecordTitle(record)}</h1>
-              <p>One request, from routing decision to delivered response.</p>
+              <div className={styles.recordRoute} aria-label="Selected route">
+                <span>{record.original_model || 'Requested model'}</span>
+                <ProductIcon name="arrow-right" width={15} height={15} />
+                <strong>
+                  {record.decision
+                    ? record.decision.replace(/_/g, ' ')
+                    : record.selection_method || 'Route'}
+                </strong>
+                <ProductIcon name="arrow-right" width={15} height={15} />
+                <span>{record.selected_model || 'Selected model'}</span>
+              </div>
             </div>
             {lifecycle ? (
               <span
@@ -155,23 +166,11 @@ export default function InsightsRecordPage() {
 
           <div className={styles.recordSections}>
             {sections.map((section, sectionIndex) => (
-              <section
+              <InsightsRecordSection
                 key={`${section.title ?? 'details'}-${sectionIndex}`}
-                className={styles.recordSection}
-              >
-                {section.title ? <h2>{section.title}</h2> : null}
-                <div className={styles.recordFields}>
-                  {section.fields.map((field, fieldIndex) => (
-                    <div
-                      key={`${field.label}-${fieldIndex}`}
-                      className={`${styles.recordField} ${field.fullWidth ? styles.recordFieldWide : ''}`}
-                    >
-                      <span>{field.label}</span>
-                      <div>{field.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </section>
+                section={section}
+                sectionIndex={sectionIndex}
+              />
             ))}
           </div>
         </>

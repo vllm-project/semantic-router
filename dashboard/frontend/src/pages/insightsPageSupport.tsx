@@ -331,32 +331,6 @@ export function buildInsightsRecordSections(
     ],
   })
 
-  const routingMetadataFields = buildRoutingMetadataFields(record)
-  if (routingMetadataFields.length > 0) {
-    sections.push({
-      title: 'Routing Metadata',
-      fields: routingMetadataFields,
-    })
-  }
-
-  const projectionTraceFields = buildProjectionTraceFields(record)
-  if (projectionTraceFields.length > 0) {
-    sections.push({
-      title: 'Projection trace',
-      fields: projectionTraceFields,
-    })
-  }
-
-  const toolTraceFields = buildToolTraceFields(record, {
-    canViewFlowDetails: options.canViewReplayFlowDetails,
-  })
-  if (toolTraceFields.length > 0) {
-    sections.push({
-      title: 'Tool Trace',
-      fields: toolTraceFields,
-    })
-  }
-
   sections.push({
     title: 'Usage & Cost',
     fields: [
@@ -394,10 +368,36 @@ export function buildInsightsRecordSections(
     ],
   })
 
+  const routingMetadataFields = buildRoutingMetadataFields(record)
+  if (routingMetadataFields.length > 0) {
+    sections.push({
+      title: 'Routing Metadata',
+      fields: routingMetadataFields,
+    })
+  }
+
+  const projectionTraceFields = buildProjectionTraceFields(record)
+  if (projectionTraceFields.length > 0) {
+    sections.push({
+      title: 'Projection Trace',
+      fields: projectionTraceFields,
+    })
+  }
+
+  const toolTraceFields = buildToolTraceFields(record, {
+    canViewFlowDetails: options.canViewReplayFlowDetails,
+  })
+  if (toolTraceFields.length > 0) {
+    sections.push({
+      title: 'Tool Trace',
+      fields: toolTraceFields,
+    })
+  }
+
   const requestResponseFields = buildRequestResponseFields(record, options.isReadonly)
   if (requestResponseFields.length > 0) {
     sections.push({
-      title: 'Request/Response',
+      title: 'Request / Response',
       fields: requestResponseFields,
     })
   }
