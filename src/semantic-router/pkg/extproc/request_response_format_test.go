@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
+	"github.com/openai/openai-go"
 	"github.com/tidwall/sjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
@@ -66,6 +67,24 @@ func expectedResponseFormat(t *testing.T, format string) map[string]any {
 	return expected
 }
 
+func parseRequestWithFormat(t *testing.T, format string) *openai.ChatCompletionNewParams {
+	t.Helper()
+	req, err := parseOpenAIRequest(requestBodyWithResponseFormat(t, format))
+	if err != nil {
+		t.Fatalf("parseOpenAIRequest: %v", err)
+	}
+	return req
+}
+
+func serializeRequest(t *testing.T, req *openai.ChatCompletionNewParams) []byte {
+	t.Helper()
+	serialized, err := serializeOpenAIRequestWithStream(req, false)
+	if err != nil {
+		t.Fatalf("serializeOpenAIRequestWithStream: %v", err)
+	}
+	return serialized
+}
+
 func TestParseOpenAIRequestRestoresJSONSchemaResponseFormat(t *testing.T) {
 	body := requestBodyWithResponseFormat(t, jsonSchemaProbeFormat)
 
@@ -93,66 +112,37 @@ func TestParseOpenAIRequestRestoresJSONSchemaResponseFormat(t *testing.T) {
 
 func TestParseOpenAIRequestResponseFormatVariants(t *testing.T) {
 	t.Run("json_object", func(t *testing.T) {
-		req, err := parseOpenAIRequest(requestBodyWithResponseFormat(t, `{"type":"json_object"}`))
-		if err != nil {
-			t.Fatalf("parseOpenAIRequest: %v", err)
-		}
+		req := parseRequestWithFormat(t, `{"type":"json_object"}`)
 		if req.ResponseFormat.OfJSONObject == nil {
 			t.Fatalf("expected OfJSONObject variant, got %+v", req.ResponseFormat)
 		}
-		serialized, err := serializeOpenAIRequestWithStream(req, false)
-		if err != nil {
-			t.Fatalf("serialize: %v", err)
-		}
-		if got := decodedResponseFormat(t, serialized); got["type"] != "json_object" {
+		if got := decodedResponseFormat(t, serializeRequest(t, req)); got["type"] != "json_object" {
 			t.Fatalf("response_format = %#v, want json_object", got)
 		}
 	})
 
 	t.Run("text", func(t *testing.T) {
-		req, err := parseOpenAIRequest(requestBodyWithResponseFormat(t, `{"type":"text"}`))
-		if err != nil {
-			t.Fatalf("parseOpenAIRequest: %v", err)
-		}
+		req := parseRequestWithFormat(t, `{"type":"text"}`)
 		if req.ResponseFormat.OfText == nil {
 			t.Fatalf("expected OfText variant, got %+v", req.ResponseFormat)
 		}
 	})
 
 	t.Run("payload_free_json_schema_stays_type_only", func(t *testing.T) {
-		req, err := parseOpenAIRequest(requestBodyWithResponseFormat(t, `{"type":"json_schema"}`))
-		if err != nil {
-			t.Fatalf("parseOpenAIRequest: %v", err)
-		}
-		serialized, err := serializeOpenAIRequestWithStream(req, false)
-		if err != nil {
-			t.Fatalf("serialize: %v", err)
-		}
-		got := decodedResponseFormat(t, serialized)
+		got := decodedResponseFormat(t, serializeRequest(t, parseRequestWithFormat(t, `{"type":"json_schema"}`)))
 		if !reflect.DeepEqual(got, map[string]any{"type": "json_schema"}) {
 			t.Fatalf("payload-free json_schema mutated: %#v", got)
 		}
 	})
 
 	t.Run("absent_response_format_untouched", func(t *testing.T) {
-		req, err := parseOpenAIRequest(requestBodyWithResponseFormat(t, ""))
-		if err != nil {
-			t.Fatalf("parseOpenAIRequest: %v", err)
-		}
-		serialized, err := serializeOpenAIRequestWithStream(req, false)
-		if err != nil {
-			t.Fatalf("serialize: %v", err)
-		}
-		if got := decodedResponseFormat(t, serialized); got != nil {
+		if got := decodedResponseFormat(t, serializeRequest(t, parseRequestWithFormat(t, ""))); got != nil {
 			t.Fatalf("unexpected response_format: %#v", got)
 		}
 	})
 
 	t.Run("unknown_type_left_to_sdk_behavior", func(t *testing.T) {
-		req, err := parseOpenAIRequest(requestBodyWithResponseFormat(t, `{"type":"grammar","grammar":"root ::= \"x\""}`))
-		if err != nil {
-			t.Fatalf("parseOpenAIRequest: %v", err)
-		}
+		req := parseRequestWithFormat(t, `{"type":"grammar","grammar":"root ::= \"x\""}`)
 		if req.ResponseFormat.OfJSONSchema != nil || req.ResponseFormat.OfJSONObject != nil {
 			t.Fatalf("unknown type must not be coerced, got %+v", req.ResponseFormat)
 		}
