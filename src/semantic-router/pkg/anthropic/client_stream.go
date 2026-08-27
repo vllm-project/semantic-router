@@ -534,11 +534,19 @@ func buildOpenAIStreamFinishChunk(
 		Model:   model,
 		Choices: []openai.ChatCompletionChunkChoice{choice},
 	}
-	if usage.InputTokens > 0 || usage.OutputTokens > 0 {
+	// message_delta usually reports only output tokens; the input count
+	// arrives once on message_start and is held in InitialUsage. Fall back
+	// to it so the terminal usage carries the upstream's input count.
+	// Deltas that do report cumulative input tokens win over the fallback.
+	inputTokens := usage.InputTokens
+	if inputTokens == 0 {
+		inputTokens = state.InitialUsage.InputTokens
+	}
+	if inputTokens > 0 || usage.OutputTokens > 0 {
 		chunk.Usage = openai.CompletionUsage{
-			PromptTokens:     usage.InputTokens,
+			PromptTokens:     inputTokens,
 			CompletionTokens: usage.OutputTokens,
-			TotalTokens:      usage.InputTokens + usage.OutputTokens,
+			TotalTokens:      inputTokens + usage.OutputTokens,
 		}
 	}
 	return json.Marshal(chunk)

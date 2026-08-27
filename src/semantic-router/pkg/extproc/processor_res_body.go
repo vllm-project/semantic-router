@@ -41,7 +41,11 @@ func (r *OpenAIRouter) handleResponseBody(v *ext_proc.ProcessingRequest_Response
 
 	// Legacy branch: OpenAI client hitting an Anthropic backend. The
 	// extra ClientProtocol guard prevents the new Anthropic-client
-	// branch from being shadowed by this one.
+	// branch from being shadowed by this one. Response API clients also
+	// land here (Responses-ness lives on ctx.ResponseAPICtx, not
+	// ClientProtocol); the handler routes their transformed chunks
+	// through the Response API streaming mutation so a /v1/responses
+	// stream receives Response API events, not chat.completion.chunk.
 	if ctx.IsStreamingResponse && ctx.APIFormat == config.APIFormatAnthropic &&
 		ctx.ClientProtocol != config.ClientProtocolAnthropic {
 		return r.handleAnthropicStreamingResponseBody(v.ResponseBody.Body, ctx), nil
