@@ -2,9 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/vllm-project/semantic-router/dashboard/backend/routerauth"
+	"github.com/vllm-project/semantic-router/dashboard/backend/statusstore"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/startupstatus"
 )
 
@@ -38,11 +41,17 @@ type SystemStatus struct {
 	Models         *RouterModelsInfo    `json:"models,omitempty"`
 	Endpoints      []string             `json:"endpoints,omitempty"`
 	Version        string               `json:"version,omitempty"`
+	History        statusstore.History  `json:"history"`
 }
 
 // StatusHandler returns the status of vLLM-SR services
 // Aligns with the vllm-sr Python CLI by using the same Docker-based detection
 func StatusHandler(routerAPIURL, configDir string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
+	return NewStatusMonitor(routerAPIURL, "", configDir, nil, credentialProvider...).Handler()
+}
+
+// Handler serves the live snapshot together with server-observed hourly history.
+func (m *StatusMonitor) Handler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, `{"error":"Method not allowed"}`, http.StatusMethodNotAllowed)
@@ -50,11 +59,28 @@ func StatusHandler(routerAPIURL, configDir string, credentialProvider ...routera
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		status := detectSystemStatus(routerAPIURL, configDir, credentialProvider...)
+		w.Header().Set("Cache-Control", "no-store")
+		status := detectSystemStatus(m.routerAPIURL, m.envoyURL, m.configDir, m.credentialProvider...)
+		status.History = readStatusHistory(r, m.historyStore, status.Services)
 
 		if err := json.NewEncoder(w).Encode(status); err != nil {
 			http.Error(w, `{"error":"Failed to encode response"}`, http.StatusInternalServerError)
 			return
 		}
 	}
+}
+
+func readStatusHistory(r *http.Request, store *statusstore.Store, services []ServiceStatus) statusstore.History {
+	names := make([]string, 0, len(services))
+	for _, service := range services {
+		names = append(names, service.Name)
+	}
+	if store != nil {
+		history, err := store.Read(r.Context(), names)
+		if err == nil {
+			return history
+		}
+		log.Printf("status history read failed: %v", err)
+	}
+	return statusstore.UnknownHistory(time.Now(), names)
 }

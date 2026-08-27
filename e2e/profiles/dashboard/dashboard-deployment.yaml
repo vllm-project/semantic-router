@@ -15,7 +15,7 @@ spec:
         app: semantic-router-dashboard
     spec:
       # The production ConfigMap is intentionally immutable. Dashboard E2E
-      # exercises deployment and security-policy mutations, so stage a private
+      # exercises deployment and routing-configuration mutations, so stage a private
       # copy into an emptyDir instead of misreporting the ConfigMap as writable.
       initContainers:
         - name: stage-dashboard-runtime-config

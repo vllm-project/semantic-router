@@ -78,6 +78,8 @@ type Config struct {
 
 	// Durable workflow state (ML pipeline jobs, OpenClaw entities)
 	WorkflowDBPath string
+	// Durable hourly availability history for the public status page.
+	StatusDBPath string
 
 	// Durable deployed-config projection read model
 	ConfigProjectionDBPath string
@@ -161,6 +163,7 @@ type parsedFlags struct {
 	mlTrainingDir          *string
 	mlServiceURL           *string
 	workflowDBPath         *string
+	statusDBPath           *string
 	configProjectionDBPath *string
 	auth                   authFlags
 	openClaw               openClawFlags
@@ -196,6 +199,7 @@ func applyFeatureConfig(cfg *Config, flags parsedFlags) {
 	cfg.MLTrainingDir = *flags.mlTrainingDir
 	cfg.MLServiceURL = *flags.mlServiceURL
 	cfg.WorkflowDBPath = *flags.workflowDBPath
+	cfg.StatusDBPath = *flags.statusDBPath
 	cfg.ConfigProjectionDBPath = *flags.configProjectionDBPath
 }
 
@@ -284,6 +288,7 @@ func LoadConfig() (*Config, error) {
 	mlTrainingDir := flag.String("ml-training-dir", env("ML_TRAINING_DIR", ""), "path to src/training/model_selection/ml_model_selection")
 	mlServiceURL := flag.String("ml-service-url", env("ML_SERVICE_URL", ""), "URL of Python ML service sidecar (empty = subprocess mode)")
 	workflowDBPath := flag.String("workflow-db", env("DASHBOARD_WORKFLOW_DB_PATH", "./data/workflow.sqlite"), "SQLite path for durable dashboard workflow state")
+	statusDBPath := flag.String("status-db", env("DASHBOARD_STATUS_DB_PATH", ""), "SQLite path for durable hourly service history")
 	configProjectionDBPath := flag.String("config-projection-db", env("DASHBOARD_CONFIG_PROJECTION_DB_PATH", "./data/config-projection.sqlite"), "SQLite path for deployed config projection state")
 
 	// Authentication configuration
@@ -319,6 +324,7 @@ func LoadConfig() (*Config, error) {
 		mlTrainingDir:          mlTrainingDir,
 		mlServiceURL:           mlServiceURL,
 		workflowDBPath:         workflowDBPath,
+		statusDBPath:           statusDBPath,
 		configProjectionDBPath: configProjectionDBPath,
 		auth:                   auth,
 		openClaw:               openClaw,
@@ -334,6 +340,9 @@ func LoadConfig() (*Config, error) {
 	applyOpenClawConfig(cfg, flags.openClaw)
 	if err := resolveConfigPaths(cfg); err != nil {
 		return nil, err
+	}
+	if strings.TrimSpace(cfg.StatusDBPath) == "" {
+		cfg.StatusDBPath = filepath.Join(filepath.Dir(cfg.AuthDBPath), "status.sqlite")
 	}
 
 	return cfg, nil

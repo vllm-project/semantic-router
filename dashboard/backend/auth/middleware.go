@@ -187,6 +187,8 @@ func routerPermission(method, path string) (string, bool) {
 	switch {
 	case path == "/api/models/catalog":
 		return PermConfigRead, true
+	case path == "/api/models/discover":
+		return PermConfigWrite, true
 	case path == "/api/models/verify":
 		return PermEvalRun, true
 	case path == "/api/router/v1/router/outcomes" && method == http.MethodPost:
@@ -286,18 +288,9 @@ func featurePermission(method, path string) (string, bool) {
 		return openclawPermission(method, path)
 	case strings.HasPrefix(path, "/api/ml-pipeline/"):
 		return PermMlPipeline, true
-	case strings.HasPrefix(path, "/api/security/"):
-		return securityPermission(method), true
 	default:
 		return "", false
 	}
-}
-
-func securityPermission(method string) string {
-	if method == http.MethodGet {
-		return PermConfigRead
-	}
-	return PermSecurityManage
 }
 
 func openclawPermission(method, path string) (string, bool) {
@@ -448,9 +441,13 @@ func requiresAuthentication(path string) bool {
 		return false
 	case strings.HasPrefix(path, "/api/auth/bootstrap/"):
 		return false
+	case strings.HasPrefix(path, "/api/auth/invitations/"):
+		return false
 	case strings.HasPrefix(path, "/api/auth/me"):
 		return true
 	case strings.HasPrefix(path, "/api/setup/state"):
+		return false
+	case path == "/api/status" || path == "/api/status/":
 		return false
 	case strings.HasPrefix(path, "/embedded/wizmap/assets/"):
 		return false

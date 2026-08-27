@@ -21,6 +21,7 @@ import (
 type coreRouteOptions struct {
 	recipeStore              *recipe.Store
 	modelVerificationAuditor handlers.ModelVerificationAuditor
+	statusHandler            http.HandlerFunc
 }
 
 type configRouteOptions struct {
@@ -42,10 +43,9 @@ func registerCoreRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *s
 		modelVerificationAuditor: options.modelVerificationAuditor,
 	})
 	registerToolRoutes(mux, cfg)
-	registerStatusRoutes(mux, cfg, store)
+	registerStatusRoutes(mux, cfg, options.statusHandler, store)
 	registerTopologyRoutes(mux, cfg, store)
 	registerRecipeRoutes(mux, cfg, store)
-	registerSecurityPolicyRoutes(mux, cfg)
 }
 
 func registerRecipeRoutes(mux *http.ServeMux, cfg *config.Config, stores ...*recipe.Store) {
@@ -97,38 +97,6 @@ func recoverRecipeActivationOnStartup(cfg *config.Config, recover func(context.C
 	}
 }
 
-func registerSecurityPolicyRoutes(mux *http.ServeMux, cfg *config.Config) {
-	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
-	handlers.SetSecurityPolicyConfigPaths(cfg.AbsConfigPath, cfg.ConfigDir)
-	mux.HandleFunc("/api/security/policy", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodGet:
-			handlers.HandleGetSecurityPolicy(w, r)
-		case http.MethodPut:
-			if runtimeConfigReadonly {
-				http.Error(w, "Dashboard is in read-only mode", http.StatusForbidden)
-				return
-			}
-			handlers.HandleUpdateSecurityPolicy(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	mux.HandleFunc("/api/security/policy/preview", func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case http.MethodPost:
-			if runtimeConfigReadonly {
-				http.Error(w, "Dashboard runtime configuration is read-only", http.StatusForbidden)
-				return
-			}
-			handlers.HandlePreviewSecurityFragment(w, r)
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		}
-	})
-	log.Printf("Security Policy API endpoints registered: /api/security/policy, /api/security/policy/preview")
-}
-
 func registerHealthAndSetupRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setupmode.Resolver) {
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	mux.HandleFunc("/healthz", handlers.HealthCheck)
@@ -148,6 +116,7 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
 	mux.HandleFunc("/api/models/catalog", handlers.ModelCatalogHandler(handlers.NewCLIModelCatalogSource(cfg.PythonPath)))
+	mux.HandleFunc("/api/models/discover", handlers.ModelDiscoveryHandler(nil))
 	mux.HandleFunc("/api/models/verify", handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/yaml", handlers.ConfigYAMLHandler(cfg.AbsConfigPath))
@@ -159,10 +128,7 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 	mux.HandleFunc("/api/router/config/deployments", handlers.ConfigDeploymentsHandler())
 	mux.HandleFunc("/api/router/config/deployments/", handlers.ConfigDeploymentDetailHandler())
 	mux.HandleFunc("/api/router/config/active-projection", handlers.ActiveConfigProjectionHandler())
-	mux.HandleFunc("/api/router/config/nl/verify", handlers.BuilderNLVerifyHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
-	mux.HandleFunc("/api/router/config/nl/generate/stream", handlers.BuilderNLGenerateStreamHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
-	mux.HandleFunc("/api/router/config/nl/generate", handlers.BuilderNLGenerateHandler(cfg.AbsConfigPath, cfg.EnvoyURL))
-	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/verify, /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/nl/verify, /api/router/config/nl/generate/stream, /api/router/config/nl/generate, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
+	log.Printf("Config API endpoints registered: /api/models/catalog, /api/models/discover, /api/models/verify, /api/router/config/all, /api/router/config/yaml, /api/router/config/update, /api/router/config/deploy, /api/router/config/deploy/preview, /api/router/config/rollback, /api/router/config/versions, /api/router/config/deployments, /api/router/config/active-projection")
 
 	mux.HandleFunc("/api/router/config/global", handlers.RouterDefaultsHandler(cfg.AbsConfigPath))
 	mux.HandleFunc("/api/router/config/global/update", handlers.UpdateRouterDefaultsHandler(cfg.AbsConfigPath, runtimeConfigReadonly, cfg.ConfigDir))
@@ -207,9 +173,12 @@ func resolveToolsDBPath(cfg *config.Config) string {
 	return toolsDBPath
 }
 
-func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, credentialProvider ...*recipe.Store) {
+func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
-	mux.HandleFunc("/api/status", handlers.StatusHandler(cfg.RouterAPIURL, cfg.ConfigDir, store))
+	if statusHandler == nil {
+		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.ConfigDir, store)
+	}
+	mux.HandleFunc("/api/status", statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
 
 	mux.HandleFunc("/api/logs", handlers.LogsHandler(cfg.RouterAPIURL))
