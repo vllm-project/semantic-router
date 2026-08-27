@@ -28,7 +28,7 @@ func testResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clients
 		fmt.Println("[Test] Testing Response API streaming SSE: POST /v1/responses stream:true")
 	}
 
-	result, err := requestResponseAPIStreamingSSE(ctx, client, opts)
+	result, err := requestResponseAPIStreamingSSE(ctx, client, opts, "openai/gpt-oss-20b", "response-api-streaming-sse", "Stream this response through the Responses API.")
 	if err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ type responseAPIStreamingSSEResult struct {
 	body        []byte
 }
 
-func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions) (responseAPIStreamingSSEResult, error) {
+func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clientset, opts pkgtestcases.TestCaseOptions, model string, testName string, input string) (responseAPIStreamingSSEResult, error) {
 	session, err := fixtures.OpenServiceSession(ctx, client, opts)
 	if err != nil {
 		return responseAPIStreamingSSEResult{}, err
@@ -65,12 +65,12 @@ func requestResponseAPIStreamingSSE(ctx context.Context, client *kubernetes.Clie
 	defer session.Close()
 
 	body := map[string]interface{}{
-		"model":  "openai/gpt-oss-20b",
-		"input":  "Stream this response through the Responses API.",
+		"model":  model,
+		"input":  input,
 		"stream": true,
 		"store":  false,
 		"metadata": map[string]string{
-			"test": "response-api-streaming-sse",
+			"test": testName,
 		},
 	}
 	rawBody, err := json.Marshal(body)
