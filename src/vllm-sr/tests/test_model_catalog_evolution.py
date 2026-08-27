@@ -197,6 +197,19 @@ def test_role_validation_scopes_future_generations_to_their_asset_and_recipe() -
         )
 
 
+def test_role_validation_accepts_connection_free_recipe_templates() -> None:
+    document = _asset_document("vllm-sr/mom-v1-blend", "balance", "local/v1")
+    document.pop("providers")
+    document["recipes"][0]["routing"]["decisions"] = []
+
+    model_catalog._validate_catalog_model_role_pool(
+        "vllm-sr/mom-v1-blend",
+        "balance",
+        ({"recommended_pool": ["operator/assigned-model"]},),
+        document,
+    )
+
+
 def test_sync_script_discovers_every_declared_catalog_asset(
     tmp_path: Path, monkeypatch
 ) -> None:
