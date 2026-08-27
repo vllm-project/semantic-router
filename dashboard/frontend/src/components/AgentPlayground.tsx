@@ -4,11 +4,9 @@ import { useAuth } from '../contexts/AuthContext'
 import { useInferenceRoutingAccess } from '../contexts/InferenceRoutingAccessContext'
 import { useDelegatedInferenceSession } from '../hooks/useDelegatedInferenceSession'
 import { useAgentSessionRuntime } from '../hooks/useAgentSessionRuntime'
-import { useOpenAIPlaygroundRuntime } from '../hooks/useOpenAIPlaygroundRuntime'
 import type { PlaygroundInvocation } from '../types/playgroundInvocation'
 import {
   canAccessDashboardPath,
-  canInvokeAgentTools,
   canPublishRouting,
   canReadAgent,
   canUseAgent,
@@ -22,7 +20,6 @@ import ConfirmDialog from './ConfirmDialog'
 import InferenceKeySelector from './InferenceKeySelector'
 import {
   buildPromptWithAttachments,
-  buildPlaygroundUserContent,
   isPlaygroundImageAttachment,
   readPlaygroundAttachmentFile,
   validatePlaygroundAttachmentBudget,
@@ -111,7 +108,7 @@ export default function AgentPlayground({
   const { selectedKey, setSelectedKeyId } = useInferenceRoutingAccess()
   const canUse = canUseDelegatedInference(user)
   const canReadAgentSessions = canReadAgent(user)
-  const agentAvailable = canUseAgent(user) && canInvokeAgentTools(user)
+  const chatAvailable = canUseAgent(user)
   const builderAvailable = canUseBuilderAgent(user)
   const canPublish = canPublishRouting(user)
   const delegated = useDelegatedInferenceSession()
@@ -124,11 +121,6 @@ export default function AgentPlayground({
   const runtime = useAgentSessionRuntime({
     enabled: canReadAgentSessions,
     search,
-  })
-  const inference = useOpenAIPlaygroundRuntime({
-    endpoint,
-    getAccessToken: delegated.getAccessToken,
-    storageScope: user?.id ?? '',
   })
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [draftMode, setDraftMode] = useState<PlaygroundMode>('chat')
@@ -145,45 +137,26 @@ export default function AgentPlayground({
   const initialModelHandled = useRef(false)
   const queueDrainRef = useRef(false)
 
-  const activeRouterSession = runtime.activeSession
-  const activeBuilderSession = activeRouterSession?.mode === 'builder' ? activeRouterSession : null
-  const activeAgentSession = activeRouterSession?.mode === 'chat' ? activeRouterSession : null
-  const activeChatSession = inference.activeSession
-  const activeMode: PlaygroundMode = activeBuilderSession
-    ? 'builder'
-    : activeAgentSession
-      ? 'agent'
-      : activeChatSession
-        ? 'chat'
-        : draftMode
-  const effectiveTeamId = activeRouterSession?.effectiveTeamId ?? selectedKey?.contextTeamId ?? ''
-  const activeSessionId = activeRouterSession?.id ?? activeChatSession?.id ?? null
+  const activeSession = runtime.activeSession
+  const activeMode: PlaygroundMode = activeSession?.mode ?? draftMode
+  const effectiveTeamId = activeSession?.effectiveTeamId ?? selectedKey?.contextTeamId ?? ''
+  const activeSessionId = activeSession?.id ?? null
   const displayName = user?.name.trim() || user?.email.split('@')[0] || 'there'
   const conversationSessions = useMemo<PlaygroundConversationListItem[]>(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase()
-    const browserSessions = inference.sessions
+    return runtime.sessions
       .filter(
         (session) =>
           !normalizedSearch || session.title.toLocaleLowerCase().includes(normalizedSearch),
       )
       .map((session) => ({
         id: session.id,
-        mode: 'chat' as const,
-        source: 'browser' as const,
+        mode: playgroundModeForAgentSession(session.mode),
+        source: 'router' as const,
         title: session.title,
         updatedAt: session.updatedAt,
       }))
-    const agentSessions = runtime.sessions.map((session) => ({
-      id: session.id,
-      mode: playgroundModeForAgentSession(session.mode),
-      source: 'router' as const,
-      title: session.title,
-      updatedAt: session.updatedAt,
-    }))
-    return [...browserSessions, ...agentSessions].sort(
-      (left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt),
-    )
-  }, [inference.sessions, runtime.sessions, search])
+  }, [runtime.sessions, search])
   const activeApproval = useMemo(
     () => (activeMode === 'builder' ? pendingApproval(runtime.events) : null),
     [activeMode, runtime.events],
@@ -198,57 +171,42 @@ export default function AgentPlayground({
   }, [activeApprovalPlanId])
 
   useEffect(() => {
-    if (!activeRouterSession) return
-    inference.selectSession(null)
-    setSelectedKeyId(activeRouterSession.keyId)
-    routing.setModel(activeRouterSession.target.id)
-    setDraftMode(playgroundModeForAgentSession(activeRouterSession.mode))
+    if (!activeSession) return
+    setSelectedKeyId(activeSession.keyId)
+    routing.setModel(activeSession.target.id)
+    setDraftMode(playgroundModeForAgentSession(activeSession.mode))
     setAttachments([])
     setInput('')
     setLocalError(null)
-  }, [activeRouterSession?.id]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!activeChatSession) return
-    runtime.selectSession(null)
-    setSelectedKeyId(activeChatSession.keyId)
-    routing.setModel(activeChatSession.model)
-    setDraftMode('chat')
-    setAttachments([])
-    setInput('')
-    setLocalError(null)
-  }, [activeChatSession?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSession?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!invocation || invocationHandled.current || routing.status !== 'ready') return
     invocationHandled.current = true
     runtime.selectSession(null)
-    inference.selectSession(null)
     if (invocation.intent === 'edit' && builderAvailable) setDraftMode('builder')
     if (invocation.model && routing.models.some((model) => model.id === invocation.model)) {
       routing.setModel(invocation.model)
     }
     setInput(invocationPrompt(invocation))
     onInvocationConsumed?.()
-  }, [builderAvailable, inference, invocation, onInvocationConsumed, routing, runtime])
+  }, [builderAvailable, invocation, onInvocationConsumed, routing, runtime])
 
   useEffect(() => {
     if (!initialModel || initialModelHandled.current || routing.status !== 'ready') return
     initialModelHandled.current = true
     runtime.selectSession(null)
-    inference.selectSession(null)
     if (routing.models.some((model) => model.id === initialModel)) {
       routing.setModel(initialModel)
     } else {
       setLocalError('This model is not available to your account.')
     }
     onInitialModelConsumed?.()
-  }, [inference, initialModel, onInitialModelConsumed, routing, runtime])
+  }, [initialModel, onInitialModelConsumed, routing, runtime])
 
-  const selectedTargetId =
-    activeRouterSession?.target.id ?? activeChatSession?.model ?? routing.model
+  const selectedTargetId = activeSession?.target.id ?? routing.model
   const selectedOption = routing.models.find((model) => model.id === selectedTargetId)
-  const running = activeMode !== 'chat' ? Boolean(runtime.activeTurnId) : inference.running
+  const running = Boolean(runtime.activeTurnId)
   const composerRunning = running || runtime.mutating
   const disabledReason = (() => {
     if (!canUse) return 'Playground access is not available.'
@@ -256,13 +214,10 @@ export default function AgentPlayground({
     if (delegated.status === 'unavailable') return 'Create an API key to use Playground.'
     if (delegated.status === 'error') return 'API access is unavailable.'
     if (routing.status === 'error') return 'Models are unavailable.'
-    if (activeMode === 'agent' && !agentAvailable) return 'Agent access is not available.'
+    if (activeMode === 'chat' && !chatAvailable) return 'Playground access is not available.'
     if (activeMode === 'builder' && !builderAvailable) return 'Builder access is not available.'
-    if (activeChatSession && selectedKey?.keyId !== activeChatSession.keyId) {
+    if (activeSession && selectedKey?.keyId !== activeSession.keyId) {
       return 'The API key for this conversation is no longer available.'
-    }
-    if (activeRouterSession && selectedKey?.keyId !== activeRouterSession.keyId) {
-      return 'The API key for this Agent session is no longer available.'
     }
     if (activeApproval && Date.parse(activeApproval.expiresAt) > Date.now()) {
       return 'Review this plan before continuing.'
@@ -276,23 +231,21 @@ export default function AgentPlayground({
   const startNew = useCallback(
     (mode: PlaygroundMode = 'chat') => {
       runtime.selectSession(null)
-      inference.selectSession(null)
       setDraftMode(mode)
       setInput('')
       setAttachments([])
       setQueuedTurns([])
       setQueuePaused(false)
       setLocalError(null)
-      inference.clearError()
       if (window.innerWidth < 960) setSidebarOpen(false)
     },
-    [inference, runtime],
+    [runtime],
   )
 
   const handleModeChange = (mode: PlaygroundMode) => {
     if (
       activeSessionId ||
-      (mode === 'agent' && !agentAvailable) ||
+      (mode === 'chat' && !chatAvailable) ||
       (mode === 'builder' && !builderAvailable)
     )
       return
@@ -329,49 +282,23 @@ export default function AgentPlayground({
         })),
       ]
       if (!content.length) return
-      if (activeMode !== 'chat') {
-        let sessionId = activeRouterSession?.id ?? null
-        if (!sessionId) {
-          if (!selectedKey) throw new Error('Choose an API key before starting a conversation.')
-          const session = await runtime.createSession(
-            buildAgentSessionInput({
-              keyId: selectedKey.keyId,
-              mode: agentSessionMode(activeMode),
-              effectiveTeamId,
-              model: selectedOption,
-              title: titleFromPrompt(turn.input, activeMode),
-            }),
-          )
-          sessionId = session.id
-        }
-        await runtime.sendTurn(content, sessionId)
-      } else {
-        let sessionId = activeChatSession?.id ?? null
-        if (!sessionId) {
-          if (!selectedKey) throw new Error('Choose an API key before starting a conversation.')
-          sessionId = inference.createSession({
+      let sessionId = activeSession?.id ?? null
+      if (!sessionId) {
+        if (!selectedKey) throw new Error('Choose an API key before starting a conversation.')
+        const session = await runtime.createSession(
+          buildAgentSessionInput({
             keyId: selectedKey.keyId,
-            model: selectedOption.id,
-            title: titleFromPrompt(turn.input, 'chat'),
-          }).id
-        }
-        await inference.send({
-          content: buildPlaygroundUserContent(turn.input, turn.attachments),
-          model: selectedOption.id,
-          sessionId,
-        })
+            mode: agentSessionMode(activeMode),
+            effectiveTeamId,
+            model: selectedOption,
+            title: titleFromPrompt(turn.input, activeMode),
+          }),
+        )
+        sessionId = session.id
       }
+      await runtime.sendTurn(content, sessionId)
     },
-    [
-      activeChatSession?.id,
-      activeMode,
-      activeRouterSession?.id,
-      effectiveTeamId,
-      inference,
-      runtime,
-      selectedKey,
-      selectedOption,
-    ],
+    [activeSession?.id, activeMode, effectiveTeamId, runtime, selectedKey, selectedOption],
   )
 
   const handleSend = () => {
@@ -476,7 +403,7 @@ export default function AgentPlayground({
     >
       <AgentConversationSidebar
         activeSessionId={activeSessionId}
-        busy={runtime.mutating || inference.running}
+        busy={runtime.mutating}
         loading={runtime.loadingSessions}
         open={sidebarOpen}
         search={search}
@@ -487,16 +414,9 @@ export default function AgentPlayground({
         onNewChat={() => startNew('chat')}
         onSearchChange={setSearch}
         onSelect={(session) => {
-          inference.clearError()
           setQueuedTurns([])
           setQueuePaused(false)
-          if (session.source === 'browser') {
-            runtime.selectSession(null)
-            inference.selectSession(session.id)
-          } else {
-            inference.selectSession(null)
-            runtime.selectSession(session.id)
-          }
+          runtime.selectSession(session.id)
           if (window.matchMedia('(max-width: 959px)').matches) setSidebarOpen(false)
         }}
         onToggle={() => setSidebarOpen((current) => !current)}
@@ -516,14 +436,10 @@ export default function AgentPlayground({
             >
               <ProductIcon name="chevron-right" />
             </button>
-            <StreamState
-              status={
-                activeMode !== 'chat' ? runtime.streamStatus : inference.running ? 'live' : 'idle'
-              }
-            />
+            <StreamState status={runtime.streamStatus} />
             <InferenceKeySelector
               className={styles.playgroundKeySelector}
-              disabled={Boolean(activeSessionId) || runtime.mutating || inference.running}
+              disabled={Boolean(activeSessionId) || runtime.mutating}
               label="Use"
             />
             <button
@@ -538,13 +454,11 @@ export default function AgentPlayground({
         </header>
 
         <AgentTimeline
-          events={activeMode !== 'chat' ? runtime.events : []}
-          liveModelSteps={activeMode !== 'chat' ? runtime.liveModelSteps : []}
-          inferenceMessages={
-            activeMode === 'chat' ? inference.messagesForSession(activeChatSession?.id ?? null) : []
-          }
-          hasEarlier={activeMode !== 'chat' && runtime.eventsHaveMore}
-          loading={activeMode !== 'chat' && runtime.loadingEvents}
+          events={runtime.events}
+          liveModelSteps={runtime.liveModelSteps}
+          inferenceMessages={[]}
+          hasEarlier={runtime.eventsHaveMore}
+          loading={runtime.loadingEvents}
           mode={activeMode}
           canLoadArtifactContent={canReadAgent(user)}
           canReadRequestLogs={canAccessDashboardPath(user, '/logs')}
@@ -553,23 +467,15 @@ export default function AgentPlayground({
           onReview={() => setReviewOpen(true)}
         />
 
-        {localError ||
-        inference.error ||
-        (activeMode !== 'chat' ? runtime.error : null) ||
-        routing.error ? (
+        {localError || runtime.error || routing.error ? (
           <div className={styles.errorBanner} role="alert">
             <ProductIcon name="alert" />
-            <span>
-              {localError ||
-                inference.error ||
-                (activeMode !== 'chat' ? runtime.error : null) ||
-                routing.error}
-            </span>
+            <span>{localError || runtime.error || routing.error}</span>
             {routing.status === 'error' ? (
               <button type="button" onClick={() => void routing.refresh().catch(() => undefined)}>
                 Try again
               </button>
-            ) : activeMode !== 'chat' && runtime.streamStatus === 'error' ? (
+            ) : runtime.streamStatus === 'error' ? (
               <button type="button" onClick={runtime.recoverStream}>
                 Reconnect
               </button>
@@ -578,7 +484,6 @@ export default function AgentPlayground({
         ) : null}
 
         <AgentComposer
-          agentAvailable={agentAvailable && !activeSessionId}
           attachments={attachments}
           builderAvailable={builderAvailable && !activeSessionId}
           disabledReason={disabledReason}
@@ -599,7 +504,6 @@ export default function AgentPlayground({
             setQueuedTurns((current) => current.filter((turn) => turn.id !== turnId))
           }
           onQueueResume={() => {
-            inference.clearError()
             setLocalError(null)
             setQueuePaused(false)
           }}
@@ -609,8 +513,7 @@ export default function AgentPlayground({
           onSend={handleSend}
           onStop={() => {
             if (queuedTurns.length) setQueuePaused(true)
-            if (activeMode !== 'chat') void runtime.cancelTurn()
-            else inference.cancel()
+            void runtime.cancelTurn()
           }}
         />
       </div>
@@ -619,17 +522,13 @@ export default function AgentPlayground({
         isOpen={Boolean(deleteTarget)}
         title="Delete this conversation?"
         description="This conversation and its history will be removed."
-        error={deleteTarget?.source === 'router' ? runtime.error : null}
+        error={runtime.error}
         confirmLabel="Delete"
-        pending={deleteTarget?.source === 'router' && runtime.mutating}
+        pending={runtime.mutating}
         onCancel={() => setDeleteTarget(null)}
         onConfirm={async () => {
           if (!deleteTarget) return
-          if (deleteTarget.source === 'browser') {
-            inference.deleteSession(deleteTarget.id)
-          } else {
-            await runtime.deleteSession(deleteTarget.id)
-          }
+          await runtime.deleteSession(deleteTarget.id)
           setDeleteTarget(null)
         }}
       />

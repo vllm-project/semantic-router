@@ -211,9 +211,7 @@ export default function AgentTimeline({
             <p>
               {mode === 'builder'
                 ? 'Describe the outcome. We’ll compose the model path.'
-                : mode === 'agent'
-                  ? 'Search the web. Use the right tools.'
-                  : 'One prompt. The right model path.'}
+                : 'One prompt. The right model path.'}
             </p>
           </div>
         ) : null}

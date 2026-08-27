@@ -51,7 +51,7 @@ const ConfigNav: React.FC<ConfigNavProps> = ({ activeSection, onSectionChange })
       id: 'agent' as ConfigSection,
       icon: 'AG',
       title: 'vLLM-SR Agent',
-      description: 'Profiles, skills, tools, and connections',
+      description: 'Skills, tools, and connections',
     },
   ]
 

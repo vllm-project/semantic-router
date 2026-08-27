@@ -7,30 +7,28 @@ status: Proposal
 
 > **Status:** Proposal appendix · **Created:** 2026-08-23
 
-This appendix is normative for the Agent and Builder experience in
+This appendix is normative for the Playground harness and Builder experience in
 [Router-Native Access Control and Quota Accounting](./router-native-access-control).
-The Dashboard is an optional client. Agent state, authorization, inference, tools,
+The Dashboard is an optional client. Session state, authorization, inference, tools,
 evaluation, and publication are Router services that another console may use through
 the same versioned APIs.
 
 ## Product contract
 
-Playground has three explicit modes:
+Playground has two explicit modes over one session kernel:
 
-- **Chat** calls an authorized Model or Mixture-of-Models.
-- **Agent** adds a durable Router session that may search the public web and use
-  authorized tools.
+- **Chat** calls an authorized Model or Mixture-of-Models and may use the approved
+  general-purpose tool set.
 - **Builder** turns a natural-language routing goal into a validated Recipe and
   Entrypoint, tests it, and asks for one explicit confirmation before publishing.
 
-Chat is not an Agent transport. The client obtains a memory-only delegated inference
-credential, calls the ordinary OpenAI-compatible `/v1/chat/completions` endpoint with
-`stream: true`, and renders standard server-sent deltas as they arrive. Final usage
-and safe routing/request headers attach to the completed response. Conversation
-metadata may use Management CRUD, but no Chat inference request is proxied through a
-Dashboard route or encoded as an Agent Turn/Event protocol. Agent and Builder use the
-durable Agent Turn, Tool, and Artifact contracts below; only Builder receives routing
-mutation tools and the publication approval contract.
+Every conversation is one durable session. Chat and Builder share the same turn,
+event, cancellation, checkpoint, tool, and inference loop. A mode selects a bounded
+capability policy; it does not select another Agent implementation. Every model step
+is a standard streaming OpenAI-compatible `/v1/chat/completions` request through the
+ordinary public inference listener. Final usage and safe routing/request metadata are
+recorded on the completed model step. Only Builder receives routing mutation tools
+and the publication approval contract.
 
 Builder lives in the Playground composer menu and uses authenticated Router Agent
 sessions, the canonical Recipe store, and the public inference path. Users choose an
@@ -47,9 +45,9 @@ complexity remains behind typed tools and durable execution.
 
 ```mermaid
 flowchart LR
-  UI["Playground or another console"] --> Management["Management API"]
-  Management --> Sessions["Agent sessions and events"]
-  Sessions --> Worker["Leased Agent worker"]
+  UI["Playground or another console"] --> SessionAPI["Session API"]
+  SessionAPI --> Sessions["Sessions and events"]
+  Sessions --> Worker["Leased harness worker"]
   Worker --> Inference["Public inference access runtime"]
   Worker --> Tools["Authorized Tool Registry"]
   Tools --> Catalog["Schema and Model catalogs"]
@@ -60,7 +58,7 @@ flowchart LR
   Confirm --> Snapshot["Immutable Router snapshot"]
 ```
 
-The Agent worker is part of the Router control plane when Management services
+The harness worker is part of the Router control plane when session services
 are enabled. Docker does not require an extra Agent container. Kubernetes may
 run workers in the Router Management deployment or in a separately scaled
 deployment using the same binary, queue, lease,
@@ -69,7 +67,7 @@ event sequence, checkpoint, and cancellation flag. Valkey may accelerate wakeups
 cancellation fan-out, and resumable streams, but never becomes a second lease authority.
 Dashboard failure does not interrupt a running turn.
 
-Every Agent model call traverses the ordinary public inference runtime with a
+Every harness model call traverses the ordinary public inference runtime with a
 short-lived delegated credential. It receives the same Model visibility, RPM/TPM,
 token and cost quotas, request logs, actual usage settlement, and Team/User scoping as
 a direct API request. The Agent cannot invoke a hidden backend or use a Dashboard
@@ -91,30 +89,32 @@ Missing or ambiguous endpoints fail Agent startup validation.
 
 ## Resources
 
-### Agent Profile
+### Mode policy
 
-An `AgentProfile` is the reusable execution policy presented on the Agent management
-page:
+Chat and Builder each resolve one Router-owned mode policy:
 
 ```yaml
-name: Recipe Builder
-default_target:
-  kind: model
-  name: remote/reasoning
+mode: builder
 minimum_target_capabilities: [text, tools, streaming]
 skills: [recipe-designer]
 tool_policy:
-  allow: [router.catalog.*, router.skills.read, router.recipe.*, router.entrypoint.prepare, router.publish.prepare]
+  allow:
+    [
+      router.catalog.*,
+      router.skills.read,
+      router.recipe.*,
+      router.entrypoint.prepare,
+      router.publish.prepare,
+    ]
 approval: required
 ```
 
-`default_target` is an optional convenience, not a fixed execution binding. A user
-selects the exact authorized Model or Entrypoint when starting a session; the profile
-may require capabilities such as tools, images, or streaming. Neither reference ever
-embeds connection information or a Provider credential. A profile pins skill
+A user selects the exact authorized Model or Entrypoint when starting a session. The
+policy may require capabilities such as tools, images, or streaming and pins skill
 revisions, tool policy, maximum turn duration, maximum tool steps, context budget,
-and approval policy. Product forms show skills and tool access first; target defaults
-and execution limits are advanced settings.
+and approval policy. It never embeds connection information or a Provider credential.
+Mode policies are an internal safety mechanism, not a collection of user-created
+Agents or a first-class Dashboard resource.
 
 ### Skill
 
@@ -141,9 +141,9 @@ Tool Sources are:
 - reviewed built-in integrations; and
 - namespace-managed remote tool connections.
 
-The Dashboard exposes **vLLM-SR Agent** as the unified management surface for Agent
-Profiles, Skills, Tools, and tool connections. A remote connection is one Tool Source,
-not the Agent architecture. Its URL, transport, authentication reference, egress
+The Dashboard exposes **vLLM-SR Agent** as the unified settings surface for Skills,
+Tools, and tool connections. A remote connection is one Tool Source, not another
+Agent. Its URL, transport, authentication reference, egress
 policy, health, and discovered tool revision are managed by the Router. Secrets use
 the Router credential-vault contract and never enter Agent context, tool arguments,
 Dashboard storage, or logs.
@@ -167,7 +167,7 @@ transport for namespace-managed sources.
 ### Session, Turn, Event, and Artifact
 
 An `AgentSession` binds namespace, actor, effective subject, one selected eligible
-API key, exact execution target, profile revision, mode, and current working
+API key, exact execution target, mode-policy revision, mode, and current working
 Recipe/Entrypoint references. `POST /agent-sessions` requires that key ID; the Router
 rechecks ownership, Team context, target discovery/invocation, and delegation
 authority in the same transaction that creates the short-lived delegated inference
@@ -230,19 +230,19 @@ startup instead of publishing an incomplete or overly broad schema.
 
 The initial tool family is deliberately small:
 
-| Tool | Purpose | Class |
-| --- | --- | --- |
-| `router.catalog.describe` | Read current component schemas and compatibility constraints | Read |
-| `router.skills.read` | Load one authorized Skill at the exact revision pinned by the session Profile | Read |
-| `router.models.list` | List authorized connected Models and semantic ModelCards | Read |
-| `router.recipes.examples` | Read relevant built-in examples without credentials or assignments | Read |
-| `router.recipe.get` | Read the selected draft and ETag | Read |
-| `router.recipe.prepare` | Create a Recipe draft or update one exact draft revision | Write |
-| `router.recipe.validate` | Compile and return structured diagnostics and topology | Read |
-| `router.recipe.probe` | Run bounded multilingual, modality, and boundary probes | Execute |
-| `router.recipe.evaluate` | Run an authorized evaluation suite and store an artifact | Execute |
-| `router.entrypoint.prepare` | Create or update an Entrypoint draft with explicit Model assignments | Write |
-| `router.publish.prepare` | Return the exact diff, diagnostics, revisions, and digest requiring approval | Write |
+| Tool                        | Purpose                                                                           | Class   |
+| --------------------------- | --------------------------------------------------------------------------------- | ------- |
+| `router.catalog.describe`   | Read current component schemas and compatibility constraints                      | Read    |
+| `router.skills.read`        | Load one authorized Skill at the exact revision pinned by the session mode policy | Read    |
+| `router.models.list`        | List authorized connected Models and semantic ModelCards                          | Read    |
+| `router.recipes.examples`   | Read relevant built-in examples without credentials or assignments                | Read    |
+| `router.recipe.get`         | Read the selected draft and ETag                                                  | Read    |
+| `router.recipe.prepare`     | Create a Recipe draft or update one exact draft revision                          | Write   |
+| `router.recipe.validate`    | Compile and return structured diagnostics and topology                            | Read    |
+| `router.recipe.probe`       | Run bounded multilingual, modality, and boundary probes                           | Execute |
+| `router.recipe.evaluate`    | Run an authorized evaluation suite and store an artifact                          | Execute |
+| `router.entrypoint.prepare` | Create or update an Entrypoint draft with explicit Model assignments              | Write   |
+| `router.publish.prepare`    | Return the exact diff, diagnostics, revisions, and digest requiring approval      | Write   |
 
 There is intentionally no model-callable `router.publish.commit` tool. After the
 Agent reaches `waiting_approval`, the UI renders the exact plan and the human invokes
@@ -252,7 +252,7 @@ publishes exactly what was reviewed. The Agent cannot interpret an affirmative c
 message as authorization.
 
 `router.skills.read` cannot browse arbitrary revisions. It resolves only a Skill
-reference already pinned by the session Profile, verifies its digest, and returns a
+reference already pinned by the session mode policy, verifies its digest, and returns a
 bounded instruction document. This preserves progressive disclosure without turning
 the stable prompt into a copy of every installed Skill.
 
@@ -312,8 +312,6 @@ All routes use the proposal's `/management/v1` media type, opaque cursors, ETags
 idempotency keys, typed permissions, and namespace scope:
 
 ```text
-GET|POST        /management/v1/agent-profiles
-GET|PATCH|DELETE /management/v1/agent-profiles/{profile}
 GET|POST        /management/v1/agent-skills
 GET|PATCH|DELETE /management/v1/agent-skills/{skill}
 GET              /management/v1/agent-tools
@@ -352,7 +350,7 @@ Permissions remain composable rather than inventing one super-role:
 
 Tool invocation checks both `tool.invoke` and the tool's underlying permission.
 Read-only users may chat and inspect their own sessions when granted, but cannot
-obtain mutation tools through a writable Agent Profile. Team-scoped users see only
+obtain Builder mutation tools. Team-scoped users see only
 their effective Models, evals, usage, and artifacts.
 
 ## Dashboard experience
@@ -377,10 +375,10 @@ the plan is ready and the current user has `routing.publish`. After commit, the 
 Mixture-of-Models appears through the ordinary authorized `/v1/models` discovery
 path; Builder does not patch local UI state to pretend activation succeeded.
 
-The **vLLM-SR Agent** management page uses the same page banner, tables, centered
+The **vLLM-SR Agent** settings page uses the same page banner, tables, centered
 detail modals, fields, buttons, pagination, keyboard behavior, and icon system as the
-rest of the Dashboard. Profiles are the primary tab; Skills, Tools, and Connections
-follow. Internal protocol terminology is reserved for advanced details.
+rest of the Dashboard. Skills, Tools, and Connections are the only tabs. Internal
+mode policy and protocol terminology are not exposed as product navigation.
 
 ## Failure semantics
 
@@ -427,7 +425,7 @@ publication transaction.
 
 ## Deliberate simplicity
 
-Users see Profiles, Skills, Tools, Sessions, and one Builder workflow. Internally
+Users see Skills, Tools, conversations, and one Builder workflow. Internally
 every client shares one session log, one lease protocol, one Tool Registry, one
 delegated inference path, one Recipe store, and one publication transaction. Human
 confirmation owns publication, and the public inference runtime owns quota settlement.

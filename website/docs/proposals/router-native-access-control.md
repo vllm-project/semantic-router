@@ -1,6 +1,6 @@
 ---
-title: Router-Native Access Control and Quota Accounting
-description: Defines a scalable Router-owned control plane and data plane for inference identities, API keys, model grants, global quotas, usage, and audit.
+title: Access Control and Quota Accounting
+description: Defines a replaceable control plane and a small Router enforcement runtime for API keys, model grants, global quotas, usage, and audit.
 created: 2026-08-22
 status: Proposal
 ---
@@ -12,22 +12,28 @@ Normative appendices: [resources](./router-native-access-control-contracts),
 [Model runtime](./router-native-access-control-model-runtime),
 [neutral protocol](./multi-protocol-adaptor),
 [quota runtime](./router-native-access-control-quota-runtime),
-[Management API](./router-native-access-control-management-api),
+[control-plane and projection APIs](./router-native-access-control-management-api),
 [authorization](./router-native-access-control-authorization), and
 [deployment](./router-native-access-control-deployment), plus the
 [Agent and Playground Builder](./router-native-agent-runtime).
 
 ## Problem
 
-Inference access is a Router responsibility. Because clients call it without the Dashboard, authentication, visibility, quota, and accounting cannot depend on a Dashboard process.
+Inference enforcement is a Router responsibility. Inference desired state is not.
+Clients call the Router without the Dashboard, so credential verification, model
+visibility, quota admission, and accounting must remain in the Router data path.
+Users, Teams, invitations, API-key lifecycle, policies, and budgets are control-plane
+concepts and must not turn the Router into a product directory or administration
+application.
 
-A Dashboard-owned proxy, key checks, quota engine, and authoritative tables would create four structural problems:
+The bundled Dashboard backend is the reference control plane, not a required inference
+hop. A different console may own the same desired-state contract and publish the same
+compiled projection. This separation avoids four structural problems:
 
-- bypassing the Dashboard bypasses the policy boundary;
-- Dashboard availability becomes inference availability;
-- multiple Router replicas do not share one authoritative enforcement state; and
-- another console or automation client cannot manage the same product contract
-  without depending on Dashboard internals.
+- bypassing the Dashboard must not bypass the policy boundary;
+- Dashboard availability must not become inference availability;
+- multiple Router replicas must share one applied enforcement revision; and
+- a custom console must not depend on Dashboard tables or a broad Router CRUD API.
 
 The design must support at least 10,000 API keys with independent model visibility and quota. That state must not expand into Router YAML, gateway routes, xDS, ConfigMaps, or one custom resource per key, which would couple every mutation to configuration distribution and reloads.
 
@@ -35,46 +41,47 @@ The design must support at least 10,000 API keys with independent model visibili
 
 This proposal makes the following decisions:
 
-1. Semantic Router owns the public inference access boundary and the versioned
-   Management API.
-2. PostgreSQL is the authoritative desired-state store for identities, keys,
-   policies, Models, Recipes, Entrypoints, usage, and audit.
-3. Valkey or Redis is the applied runtime store for credential projections,
+1. Semantic Router owns the public inference access boundary. It does not own User,
+   Team, invitation, key-lifecycle, AccessPolicy, or Budget CRUD.
+2. A replaceable control plane owns those product resources, their versioned API,
+   PostgreSQL desired state, secret delivery, policy compilation, and audit.
+   The bundled Dashboard backend is one implementation.
+3. The Router accepts only immutable, versioned access snapshots and exposes a narrow
+   private projection/status contract. It never receives an API-key plaintext secret,
+   email address, invitation, Dashboard role, or form-oriented resource graph.
+4. Valkey or Redis is the applied runtime store for credential projections,
    compiled policies and routing snapshots, global counters, settlement idempotency,
    and the durable usage-ingestion stream.
-4. The Dashboard is an optional Management API client. It never registers or
-   proxies public inference routes and never reads access-control tables directly.
-5. Router YAML is always the static bootstrap contract. Without a Management store
-   it is the active file authority. With a Management store, an empty store is seeded
-   atomically from that contract and PostgreSQL then becomes the only mutable
-   desired-state authority. There is no public deployment-mode switch or implicit
-   merge between file and persisted state.
-6. API-key authentication, model discovery, invocation authorization, and quota
+5. The Dashboard frontend talks only to its control-plane backend. It never registers
+   or proxies public inference routes. Control-plane loss does not stop inference from
+   the last acknowledged snapshot.
+6. Router YAML remains the static routing bootstrap contract. It configures the
+   trusted access-projection source and runtime stores, never individual Users, Teams,
+   keys, grants, or budgets. There is no `standalone`/`managed` product mode.
+7. API-key authentication, model discovery, invocation authorization, and quota
    admission use the same compiled effective policy.
-7. Request counts are admitted before inference. Token quotas use authoritative
+8. Request counts are admitted before inference. Token quotas use authoritative
    response usage only: the current request may cross a token limit, and the next
    request is blocked.
-8. An Entrypoint is the callable Mixture-of-Models. Decision assignments belong
+9. An Entrypoint is the callable Mixture-of-Models. Decision assignments belong
    directly to the Entrypoint; pools and mixtures are derived views, not resources.
-9. An explicit file-only Docker manifest requires neither PostgreSQL nor Valkey.
-   A first `vllm-sr serve` in a directory without `config.yaml` instead creates the
-   secure local Management workspace, whose generated manifest declares PostgreSQL,
-   Valkey, the Management API, and AccessRuntime. Docker and Kubernetes derive both
-   topologies from the same typed blocks; there is no separate deployment mode.
-10. Runtime code accepts exactly the contracts defined here. Each resource has one
+10. A routing-only Docker manifest requires neither PostgreSQL nor Valkey. Enabling
+    dynamic access adds the reference control plane store and Valkey; Kubernetes may
+    replace either with managed services. Both use the same projection protocol.
+11. Runtime code accepts exactly the contracts defined here. Each resource has one
     authoritative writer, one validated read path, and one publication path.
-11. Provider products are application-installed control-plane Integrations. Their
+12. Provider products are application-installed control-plane Integrations. Their
     Definitions and compiler plugins render canonical Model backends; the inference
     data plane receives only a stable wire-format ID, credential-adapter ID, semantic
     capabilities, and compiled non-secret settings. It contains no product-provider
     switch or Dashboard catalog.
-12. Every public and backend format uses one neutral request/response/event IR and an
+13. Every public and backend format uses one neutral request/response/event IR and an
     immutable Codec Registry. Formats compose through the IR; pair-specific
     translators and protocol-specific accounting paths do not exist.
-13. Playground Builder is a durable Router Agent workflow over the same versioned
-    Management and inference APIs. It may prepare a Recipe publication but only an
-    authorized human may commit the exact reviewed plan.
-14. Exact issuer-session reissue preserves one durable Management session and stable
+14. Playground Chat and Builder are two modes of one durable Agent session kernel.
+    Every model step uses the public OpenAI-compatible streaming inference API. Builder
+    may prepare a Recipe publication, but only an authorized human may commit it.
+15. Exact issuer-session reissue preserves one durable control-plane session and stable
     token ID across Dashboard replicas. Changed evidence creates a bounded new
     session, while durable digested SID and subject logout selectors close every
     exchange/logout race.
@@ -93,8 +100,10 @@ This proposal makes the following decisions:
   output, and fully accounted by Router rather than hidden in gateway retries.
 - Preserve complete per-request accounting for streaming, non-streaming, and
   multi-dispatch Mixture-of-Models execution.
-- Expose stable OpenAPI contracts so the Dashboard, CLI, automation, and independent
-  consoles have equal management capability.
+- Expose a stable control-plane API and compiler contract so the bundled Dashboard,
+  automation, and independent consoles can produce the same applied snapshot.
+- Keep the Router projection API private, narrow, idempotent, and independent of
+  product CRUD concepts.
 - Keep the Docker deployment small while preserving a direct path to stateless
   Kubernetes scale-out.
 - Make failure and consistency semantics visible in APIs, health endpoints, and the
@@ -110,7 +119,9 @@ This proposal makes the following decisions:
 ## Non-goals
 
 - Storing inference API keys in static Router configuration or Kubernetes objects.
-- Making the Dashboard an inference proxy, policy engine, or source of truth.
+- Making the Dashboard frontend an inference proxy or policy engine.
+- Making the Router the authoritative User/Team directory or exposing broad
+  product-management CRUD from the data plane.
 - Using inference credentials as management credentials.
 - Conflating inference credentials with the separately encrypted
   ProviderCredentials used by the Router to call model backends.
@@ -122,10 +133,10 @@ This proposal makes the following decisions:
 
 ## Product and trust boundaries
 
-The following diagram shows every optional control-plane component. A minimal
-file-only deployment omits Dashboard, Management, PostgreSQL, Valkey, projector, and
-writers and loads one locally compiled routing snapshot before serving. Launching the
-optional Dashboard beside it does not add a routing authority or dynamic APIs.
+The following diagram separates desired state from enforcement. A minimal routing-only
+deployment omits Dashboard, the reference control plane, PostgreSQL, Valkey, projector,
+and writers. Enabling dynamic access adds a replaceable control plane; it does not put
+the Dashboard in the inference path.
 
 ```mermaid
 flowchart LR
@@ -136,87 +147,98 @@ flowchart LR
     Access <--> Hot["Valkey runtime state"]
     Runtime -->|"actual usage"| Access
 
-    Dashboard["Optional Dashboard"] --> Management["Router Management API"]
-    CLI["CLI / automation / custom console"] --> Management
-    Agent["Router Agent workers"] --> Management
+    Dashboard["Dashboard frontend"] --> Control["Reference control plane"]
+    CLI["CLI / automation / custom console"] --> Control
+    Control --> PG["PostgreSQL desired state"]
+    Control --> Compiler["Policy compiler"]
+    PG --> Compiler
+    Compiler --> Projection["Versioned access snapshot"]
+    Projection --> Access
+    Projection --> Hot
+    Access --> Status["Applied revision / health"]
+    Status --> Control
+    Agent["Agent session workers"] --> Control
     Agent --> Access
-    Integrations["Provider Integration Registry"] --> Management
-    Management --> PG["PostgreSQL desired state"]
-    PG --> Projector["Policy projector"]
-    Projector --> Hot
+    Integrations["Provider Integration Registry"] --> Control
     Hot --> Stream["Usage stream"]
     Stream --> Writer["Usage writer"]
     Writer --> PG
 ```
 
-| Component | Owns | Must not own |
-| --- | --- | --- |
-| Public gateway | Listener, transport filtering, access-service calls, and forwarding | API-key records, policy compilation, quota state, or usage truth |
-| Router access runtime | Credential verification, trusted principal context, grants, admission, settlement, and global quota decisions | Browser sessions or Dashboard presentation state |
-| Router routing runtime | Entrypoint resolution, signals, projections, decisions, algorithms, plugins, neutral protocol processing, codec dispatch, and backend invocation | Product-provider catalogs, Management identity authentication, or mutable policy storage |
-| Router Management API | Versioned CRUD, Provider Integration catalog and compilation, effective-policy evaluation, policy publication, usage queries, and audit | Public inference proxying or product-specific data-plane branches |
-| Router Agent runtime | Durable sessions, leased turns, trusted Skills, authorized Tools, probes/evals, and immutable publication plans | Autonomous publication, backend credentials, or a second Recipe/inference path |
-| PostgreSQL | Authoritative identities, routing resources, policies, revisions, ledger, rollups, and audit | Per-request hot-path reads |
-| Valkey/Redis | Applied credential/policy projections, compiled routing snapshots, global counters, idempotency, and ingestion stream | Long-term analytics or the only copy of desired state |
-| Dashboard | Product UX over the Management and inference APIs | Direct database access or a required data-plane hop |
+| Component                 | Owns                                                                                                                                                        | Must not own                                                                             |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Public gateway            | Listener, transport filtering, access-service calls, and forwarding                                                                                         | API-key records, policy compilation, quota state, or usage truth                         |
+| Router access runtime     | Credential verification, trusted principal context, grants, admission, settlement, and global quota decisions                                               | Browser sessions or Dashboard presentation state                                         |
+| Router routing runtime    | Entrypoint resolution, signals, projections, decisions, algorithms, plugins, neutral protocol processing, codec dispatch, and backend invocation            | Product-provider catalogs, Management identity authentication, or mutable policy storage |
+| Reference control plane   | Dashboard identity, Users, Teams, invitations, API-key lifecycle, AccessPolicy, Budget, Provider Integrations, policy compilation, usage queries, and audit | Public inference proxying or request-time enforcement                                    |
+| Router projection service | Authenticate the trusted publisher, validate and atomically apply immutable access snapshots, report applied revision and health                            | User/Team CRUD, secret reveal, invitations, Dashboard roles, or form validation          |
+| Router Agent runtime      | Durable sessions, leased turns, trusted Skills, authorized Tools, probes/evals, and immutable publication plans                                             | Autonomous publication, backend credentials, or a second Recipe/inference path           |
+| PostgreSQL                | Control-plane identities, routing desired state, policies, revisions, ledger, rollups, and audit                                                            | Per-request hot-path reads                                                               |
+| Valkey/Redis              | Applied credential/policy projections, compiled routing snapshots, global counters, idempotency, and ingestion stream                                       | Long-term analytics or the only copy of desired state                                    |
+| Dashboard frontend        | Product UX over its control-plane backend and public inference API                                                                                          | Direct Router database access or a required data-plane hop                               |
 
-One Router image can expose the ExtProc gRPC service, internal authentication and
-quota gRPC services, Management HTTP, health, and metrics. When native access is
-enabled, every ingress adapter executes access authentication, authorization, and
-quota admission before semantic ExtProc. After verification, the Router removes the
-inference `Authorization` header; backend dispatch injects a separate
-ProviderCredential. No access-enabled adapter may bypass the shared `AccessRuntime`.
-Deployments without native access do not start `AccessRuntime`; their public
-discovery and invocation paths still share the same Entrypoint resolver and active
-routing snapshot.
+One Router image may expose ExtProc, internal authentication and quota services, the
+private projection/status service, health, and metrics. It does not expose the
+control-plane product API. When dynamic access is enabled, every ingress adapter
+executes access authentication, authorization, and quota admission before semantic
+ExtProc. After verification, the Router removes the inference `Authorization` header;
+backend dispatch injects a separate ProviderCredential. No access-enabled adapter may
+bypass the shared `AccessRuntime`. Deployments without dynamic access do not start
+`AccessRuntime`; their public discovery and invocation paths still share the same
+Entrypoint resolver and active routing snapshot.
 
 ### Two identity planes
 
-Management identity and inference identity are intentionally different:
+Control-plane identity and inference identity are intentionally different:
 
-- A **ManagementPrincipal** authenticates to the Management API through OIDC,
-  mTLS, or a service account. Its ManagementRole controls administrative actions.
-- A Router **User** consumes model service. It may belong to teams and own API keys.
-- A Dashboard account is one possible login UX for a ManagementPrincipal. It may be
-  linked to one Router User, but the link is explicit rather than inferred from an
-  email address.
+- A **DashboardMember** authenticates to the control plane. Its DashboardRole controls
+  administrative actions and visible product surfaces.
+- A control-plane **User** consumes model service. It may belong to Teams and own API
+  keys. User and Team records are not projected to the Router as directory objects.
+- One DashboardMember may be linked to one User, but the link is explicit rather than
+  inferred from an email address.
 - An **InferenceAPIKey** authenticates only to public inference APIs unless an
-  explicit, separately issued management credential says otherwise.
+  explicit, separately issued control-plane credential says otherwise.
 
-This keeps Dashboard login state, ManagementRole authority, TeamRole membership, and
+The compiler resolves User, Team, key, AccessPolicy, and Budget inheritance into one
+effective subject. The Router receives opaque subject IDs, grants, meter descriptors,
+and a policy revision. It does not receive names, emails, memberships, invitations,
+or DashboardRole data.
+
+This keeps Dashboard login state, DashboardRole authority, TeamRole membership, and
 inference access policy from sharing an ambiguous `role` field.
 
 ## Terminology
 
-| Term | Meaning |
-| --- | --- |
-| `Namespace` | The top-level isolation boundary for management, policies, routing resources, and analytics. |
-| `DashboardAccount` | Optional browser-login identity and session UX; never an inference principal or Router authority by itself. |
-| `ManagementPrincipal` | An actor authorized to call Management APIs. |
-| `ManagementRole` | A permission preset scoped through a Management role binding. |
-| `ServiceAccount` | A non-human ManagementPrincipal used by automation. |
-| `User` | A model-service consumer identity owned by the Router control plane. |
-| `Team` | A collection of Users with defaults and optionally shared hard caps. |
-| `TeamMembership` | A User's membership and TeamRole in one Team. |
-| `TeamRole` | Membership authority inside one Team; independent of ManagementRole. |
-| `RoutingRole` | A typed routing-context value derived from Router-owned subject state; it grants no Management capability. |
-| `InferenceAPIKey` | A stable logical key resource used for ownership, policy, usage, and URLs. |
-| `APIKeyCredentialVersion` | One secret version for an InferenceAPIKey; rotation creates another version. |
-| `DelegatedInferenceSession` | A short-lived session linking a Management session, User, and permitted logical key. |
-| `DelegatedInferenceCredential` | The non-revealable Bearer secret issued for one DelegatedInferenceSession. |
-| `AccessPolicy` | A reusable set of explicit discover/invoke grants. The Dashboard may label it **Access Group**. |
-| `RateLimitPolicy` | A reusable ordered set of quota rules. The Dashboard may label it **Budget**. |
-| `AccessPolicyBinding` | Attaches an AccessPolicy to a key, User, or Team; it owns no quota counter. |
-| `RateLimitBinding` | Attaches a RateLimitPolicy to a key, User, or Team and owns its counters. |
-| `ModelGrant` | Permission on a stable Entrypoint or Model identifier. |
-| `QuotaCounter` | Live enforcement state in Valkey. |
-| `UsageEvent` | An immutable accounting fact persisted in the analytics ledger. |
-| `ProviderCredential` | A secret used by the Router to call a backend; never an inference key. |
-| `ProviderIntegration` | An application-installed control-plane extension that contributes one immutable Provider Definition. |
-| `ProviderDefinition` | Product metadata, origin rules, typed UX fields, compiler configuration, and references to stable adapters. |
-| `WireFormat` | A stable data-plane contract such as OpenAI Chat or Anthropic Messages, resolved through the immutable Codec Registry; never a product catalog entry. |
-| `CredentialAdapter` | A stable secret materializer such as Bearer or `x-api-key`; never a product catalog entry. |
-| `TenantContext` | Router-issued trusted request identity and policy context. |
+| Term                           | Meaning                                                                                                                                               |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Namespace`                    | The top-level isolation boundary for management, policies, routing resources, and analytics.                                                          |
+| `DashboardMember`              | Browser-login identity governed by a DashboardRole; never an inference principal by itself.                                                           |
+| `DashboardRole`                | A control-plane permission preset for administration and product visibility.                                                                          |
+| `ServiceAccount`               | A non-human control-plane principal used by automation.                                                                                               |
+| `User`                         | A model-service consumer identity owned by the control plane.                                                                                         |
+| `Team`                         | A control-plane collection of Users with defaults and optionally shared hard caps.                                                                    |
+| `TeamMembership`               | A User's membership and TeamRole in one Team.                                                                                                         |
+| `TeamRole`                     | Membership authority inside one Team; independent of DashboardRole.                                                                                   |
+| `RoutingRole`                  | A typed routing-context value compiled from control-plane subject state; it grants no control-plane capability.                                       |
+| `InferenceAPIKey`              | A stable logical key resource used for ownership, policy, usage, and URLs.                                                                            |
+| `APIKeyCredentialVersion`      | One secret version for an InferenceAPIKey; rotation creates another version.                                                                          |
+| `DelegatedInferenceSession`    | A short-lived session linking a Management session, User, and permitted logical key.                                                                  |
+| `DelegatedInferenceCredential` | The non-revealable Bearer secret issued for one DelegatedInferenceSession.                                                                            |
+| `AccessPolicy`                 | A reusable set of explicit discover/invoke grants. The Dashboard may label it **Access Group**.                                                       |
+| `RateLimitPolicy`              | A reusable ordered set of quota rules. The Dashboard may label it **Budget**.                                                                         |
+| `AccessPolicyBinding`          | Attaches an AccessPolicy to a key, User, or Team; it owns no quota counter.                                                                           |
+| `RateLimitBinding`             | Attaches a RateLimitPolicy to a key, User, or Team and owns its counters.                                                                             |
+| `ModelGrant`                   | Permission on a stable Entrypoint or Model identifier.                                                                                                |
+| `QuotaCounter`                 | Live enforcement state in Valkey.                                                                                                                     |
+| `UsageEvent`                   | An immutable accounting fact persisted in the analytics ledger.                                                                                       |
+| `ProviderCredential`           | A secret used by the Router to call a backend; never an inference key.                                                                                |
+| `ProviderIntegration`          | An application-installed control-plane extension that contributes one immutable Provider Definition.                                                  |
+| `ProviderDefinition`           | Product metadata, origin rules, typed UX fields, compiler configuration, and references to stable adapters.                                           |
+| `WireFormat`                   | A stable data-plane contract such as OpenAI Chat or Anthropic Messages, resolved through the immutable Codec Registry; never a product catalog entry. |
+| `CredentialAdapter`            | A stable secret materializer such as Bearer or `x-api-key`; never a product catalog entry.                                                            |
+| `TenantContext`                | Router-issued trusted request identity and policy context.                                                                                            |
+| `AccessSnapshot`               | Immutable compiled credentials, effective grants, quota descriptors, and revision accepted by Router replicas.                                        |
 
 The routing `authz` signal consumes a verified TenantContext as a routing fact.
 API-key authentication and Model authorization belong to the AccessRuntime before
@@ -241,13 +263,13 @@ The manifest extends the existing public `v0.3` sections instead of introducing 
 second top-level Model shape. Human YAML, DSL, and Dashboard authoring use readable
 names. They never expose resource UIDs, revision hashes, backend IDs, catalog digests,
 compiled adapters, or database keys. The importer resolves names within one Namespace
-and generates publication identity internally. The Management API still returns
+and generates publication identity internally. The control-plane API still returns
 stable resource IDs, revisions, and ETags for safe automation and optimistic
 concurrency; those values are never serialized back into human source.
 
 The target v0.3 boundary is deliberately narrow. Users, Teams, inference API keys,
 access policies, quota policies, bindings, counters, usage, and audit are dynamic
-Management resources and never Router YAML. Model rates are exact quoted decimal
+control-plane resources and never Router YAML. Model rates are exact quoted decimal
 strings under `providers.models[].pricing`; per-Model retries and deadlines are
 structured under `providers.models[].control.retry` and
 `providers.models[].control.timeout`. Runtime authority is derived from the configured
@@ -258,15 +280,15 @@ keeps its existing role.
 The three representations share semantics without sharing serialization or exposing
 implementation identity:
 
-| Boundary | Model | Recipe | Entrypoint |
-| --- | --- | --- | --- |
-| Human v0.3 YAML | A readable-name join between `providers.models[]` connections and `routing.modelCards[]` semantics | Connection-free `recipes[].routing`; normally model-free, with complete static-only candidate extraction when assignments are omitted | `model_names`, one readable Recipe name, and Decision-name `assignments` |
-| Management API | One revisioned Model resource whose write contains semantic fields, backend inputs, `control`, and `pricing`; `/routing/model-cards` is its connection-free read projection | One revisioned Recipe resource | One revisioned Entrypoint whose rules pin Recipe and Model resource IDs under optimistic concurrency |
-| Compiled runtime | Immutable Model/backend IDs, catalog provenance, closed connection values, credentials by reference, and effective defaults | Immutable model-free Recipe revision | Immutable resolver rules, complete Decision assignments, and priority tiers |
+| Boundary          | Model                                                                                                                                                                       | Recipe                                                                                                                                | Entrypoint                                                                                           |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Human v0.3 YAML   | A readable-name join between `providers.models[]` connections and `routing.modelCards[]` semantics                                                                          | Connection-free `recipes[].routing`; normally model-free, with complete static-only candidate extraction when assignments are omitted | `model_names`, one readable Recipe name, and Decision-name `assignments`                             |
+| Control-plane API | One revisioned Model resource whose write contains semantic fields, backend inputs, `control`, and `pricing`; `/routing/model-cards` is its connection-free read projection | One revisioned Recipe resource                                                                                                        | One revisioned Entrypoint whose rules pin Recipe and Model resource IDs under optimistic concurrency |
+| Compiled runtime  | Immutable Model/backend IDs, catalog provenance, closed connection values, credentials by reference, and effective defaults                                                 | Immutable model-free Recipe revision                                                                                                  | Immutable resolver rules, complete Decision assignments, and priority tiers                          |
 
 This mapping is one-way at publication: readable authoring values compile into
 internal identity, while a human export resolves that identity back to names and
-omits compiler-owned fields. Management JSON uses camelCase and stable IDs for safe
+omits compiler-owned fields. Control-plane JSON uses camelCase and stable IDs for safe
 automation; YAML and DSL use names and the existing v0.3 field spellings. They are
 not required to be byte-for-byte copies of one another.
 
@@ -292,7 +314,7 @@ the block contains no connection, credential, UID, or revision syntax. Saving a
 Recipe mutates only `Recipe.routing`; executable Model selection remains an
 Entrypoint assignment action.
 
-An Entrypoint is the product's Mixture-of-Models. Management API and DSL authoring
+An Entrypoint is the product's Mixture-of-Models. Control-plane and DSL authoring
 always keep Recipe documents model-free and put the complete mapping for every
 dispatching Decision in Entrypoint `assignments`. Full static v0.3 manifest authoring
 may omit that map only when every Decision in the selected inline Recipe carries a
@@ -311,44 +333,37 @@ disables it. If an explicit Entrypoint claims any established automatic-routing
 name, that explicit Entrypoint is authoritative and the compiler does not create a
 competing implicit one. There is no parallel auto-router runtime.
 
-### Static bootstrap plus optional dynamic API
+### Static routing plus dynamic projections
 
-Startup derives capabilities directly from the presence of typed services and
-stores:
+There are capabilities, not `standalone` and `managed` modes:
 
-| Configuration | Result |
-| --- | --- |
-| no `global.stores.management` | the validated v0.3 file is the active routing authority |
-| Management store | an empty store is seeded from the file; existing PostgreSQL desired state is authoritative |
-| Management API enabled plus Management store | versioned Management identity, Namespace, Provider credential, and routing CRUD/import are exposed over the configured listener |
-| Access enabled plus Management and runtime stores | User, Team, API-key, policy, quota, usage, request-log, and audit APIs are exposed; authentication, authorization, global quota, and settlement run on every inference path |
+| Configuration                            | Result                                                                                                                                   |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| no `global.access` block                 | the validated v0.3 file is the routing authority; public access policy is not enabled                                                    |
+| `global.access.snapshot` configured      | Router watches or pulls signed, versioned access snapshots and enforces the last acknowledged revision                                   |
+| `global.access.runtime_store` configured | replicas share credential projections, exact global counters, idempotency, and usage ingestion                                           |
+| reference control plane deployed         | Dashboard identity, User, Team, key, AccessPolicy, Budget, Provider, and routing authoring APIs are available outside the Router process |
 
-These rows are capability combinations, not `standalone` and `managed` modes. Docker
-uses an existing `config.yaml` or explicit `--config` manifest exactly as authored.
-Only when the default `config.yaml` is absent does the local CLI scaffold a secure
-Management workspace; that generated v0.3 manifest explicitly declares the
-Management and runtime stores, Management API, and native access. Operators that want
-the zero-store path provide a manifest that omits those blocks. Kubernetes always
-requires an explicit manifest and derives the same capabilities from it.
+Docker uses an existing `config.yaml` or explicit `--config` manifest exactly as
+authored. Kubernetes uses the same Router blocks and supplies the snapshot source and
+runtime store as services. The Router file contains the publisher trust, endpoint,
+cache and failure policy only; it never contains the dynamic access resources.
 
-There is never an automatic merge between a later file and existing desired state.
-The explicit `POST /management/v1/routing/imports` operation validates a complete
-manifest, reports the diff, requires optimistic concurrency and idempotency, records
-audit, and publishes the resulting atomic snapshot. Users, Teams, inference API keys,
-Access Policies, and Rate Limit Policies are dynamic Management API state only and
-never appear in the manifest.
+The control plane imports readable routing YAML, validates it, resolves Provider
+Integrations, and publishes an immutable routing snapshot through the same narrow
+projection boundary. Users, Teams, inference API keys, Access Policies, and Budgets
+are always dynamic control-plane state and never appear in the manifest.
 
-Invalid component combinations fail before listeners become ready: Management API
-requires a Management store; native access requires Management and runtime stores;
-and a runtime store without durable Management state is rejected. These are
-capabilities derived by process composition, not authoring modes.
+Dynamic access requires a snapshot source and runtime store. Missing publisher trust,
+an invalid signature, an unsupported schema, a non-monotonic revision, or unavailable
+global counters fails closed before the access-enabled listener becomes ready. Loss of
+the control plane after a snapshot is acknowledged has no inference impact.
 
 Durable routing always requires exactly one
 `backend_credentials.provider_kek_keyring_file|provider_kek_keyring_env` source and
 exactly one `routing_security.hmac_keyring_file|hmac_keyring_env` source. Management
-listener TLS, token signing, service-account, invitation, response-encryption,
-bootstrap, and recovery secrets are required only when `management_api.enabled` is
-true; disabling that listener never disables the PostgreSQL publication authority.
+Control-plane listener TLS, token signing, invitation, response-encryption, bootstrap,
+and recovery secrets belong to the control-plane deployment and are not Router YAML.
 
 ```yaml
 version: v0.3
@@ -392,7 +407,7 @@ routing:
     - name: remote/frontier
       description: Deep reasoning model
       capabilities: [chat, tools, reasoning]
-      reasoning: {type: reasoning_effort, efforts: [high]}
+      reasoning: { type: reasoning_effort, efforts: [high] }
       modality: text
 
 recipes:
@@ -403,29 +418,29 @@ recipes:
         complexity:
           - name: workload
             threshold: 0.15
-            easy: {candidates: [short direct answer]}
-            hard: {candidates: [multi-step analysis with trade-offs]}
+            easy: { candidates: [short direct answer] }
+            hard: { candidates: [multi-step analysis with trade-offs] }
       decisions:
         - name: Simple
           rules:
             operator: NOT
-            conditions: [{type: complexity, name: workload}]
+            conditions: [{ type: complexity, name: workload }]
         - name: Complex
           rules:
             operator: AND
-            conditions: [{type: complexity, name: workload}]
+            conditions: [{ type: complexity, name: workload }]
 
 entrypoints:
   - model_names: [vllm-sr/blend, blend]
     recipe: balance
     assignments:
       Simple:
-        models: [{model: local/fast}]
+        models: [{ model: local/fast }]
       Complex:
         models:
           - model: remote/frontier
             priority: 0
-            reasoning: {enabled: true, effort: high}
+            reasoning: { enabled: true, effort: high }
           - model: local/fast
             priority: 1
         fallback:
@@ -612,7 +627,7 @@ compiler-owned fields are omitted from authoring exports.
 
 Each Model owns only its per-million-token rates. The bootstrap manifest puts the
 single cross-Model denomination in `global.billing.currency`; it is optional until
-any Model is priced. When an empty Management store is initialized, that value
+any Model is priced. When an empty control-plane store is initialized, that value
 becomes the initial Namespace billing currency. The persisted Namespace value is
 then immutable and authoritative for snapshots, usage, and cost quotas. Per-Model
 currencies and implicit conversion are intentionally not part of the contract.
@@ -669,23 +684,23 @@ immutable Codec Registry,
 not on a product name. The complete extension and rolling-update contract is in the
 [Provider catalog appendix](./router-native-access-control-provider-catalog).
 
-When a Management store is configured, PostgreSQL owns Model, Recipe, and Entrypoint desired state. Draft
+When a control-plane store is configured, PostgreSQL owns Model, Recipe, and Entrypoint desired state. Draft
 Models and Recipes can be edited independently, but they do not enter the data plane.
 Publishing an Entrypoint validates the complete referenced chain, compiles a
 content-addressed routing snapshot, stages it in Valkey, and atomically advances the
 namespace routing pointer only after every active Router replica can load it. Only
 resources reachable from a published Entrypoint enter that snapshot.
 
-After store initialization, YAML is an authoring/import manifest for Management API clients, not
+After store initialization, YAML is an authoring/import manifest for control-plane clients, not
 a second runtime source of truth. A Dashboard, custom console, or automation imports
 Models, Recipes, and Entrypoints through the ordinary resource APIs with the same
 ETags, validation, outbox, and publication gates as interactive edits. Built-in
 Recipes are versioned artifacts installed through that same control-plane path.
 
 A file-backed deployment has no PostgreSQL, Valkey, dynamic access control, or routing
-Management mutations. One local manifest is its sole routing authority and is
+control-plane mutations. One local manifest is its sole routing authority and is
 compiled into the identical immutable snapshot shape before readiness. Adding a
-Management store seeds only an empty Namespace from that file; every later change is
+control-plane store seeds only an empty Namespace from that file; every later change is
 an explicit import or resource mutation, never live dual authority or a runtime
 fallback.
 
@@ -698,8 +713,8 @@ entrypoints:
   - model_names: [vllm-sr/blend, blend]
     recipe: balance
     assignments:
-      Simple: {models: [{model: local/fast}]}
-      Complex: {models: [{model: remote/frontier}]}
+      Simple: { models: [{ model: local/fast }] }
+      Complex: { models: [{ model: remote/frontier }] }
 ```
 
 Entrypoint resolution and access authorization remain separate:
@@ -710,12 +725,12 @@ Entrypoint resolution and access authorization remain separate:
   grant table.
 
 The public v0.3 YAML form compiles to one default Entrypoint rule. The versioned
-Management API additionally supports bounded claim and path matchers for clients
+Control-plane API additionally supports bounded claim and path matchers for clients
 that need several assignment actions behind one stable Entrypoint; those rules are
 durable resources, not another YAML shape or persistent association resource.
 
 Routing claims have one authoritative source. With native access enabled, a namespace
-defines a bounded typed claim schema, and the Management API stores values against a
+defines a bounded typed claim schema, and the control plane stores values against a
 Key, User, or Team subject. Effective values resolve field by field at Key, then User,
 then context Team; a Team-owned key resolves Key then owner Team. The policy projector
 validates and compiles those values into the key's active Valkey projection, and AuthN
@@ -747,7 +762,7 @@ encountered at runtime.
 
 The access layer grants `discover` and `invoke` on the resolved Entrypoint identity. It does not
 duplicate or mutate assignments. Recipe and Entrypoint CRUD remain separate in the
-[Management API contract](./router-native-access-control-management-api).
+[control-plane API contract](./router-native-access-control-management-api).
 `resolve` is a permission-checked dry run over path and, with native access, an optional
 subject context. A subject is required only for claim rules. Without native access it
 evaluates path/default rules without a subject; file-only deployments expose no Management resolve.
@@ -764,11 +779,12 @@ only API for that callable routing product and its assignments.
 
 The normative resource relationships, PostgreSQL schema, credential lifecycle,
 policy inheritance, counter ownership, and Valkey projection live in the
-[resource contract appendix](./router-native-access-control-contracts). Management
-identity exchange, delegated inference, exact endpoints, and response rules live in
-the [Management API appendix](./router-native-access-control-management-api).
+[resource contract appendix](./router-native-access-control-contracts). Control-plane
+identity, delegated inference, desired-state endpoints, and the narrow Router
+projection protocol live in the
+[control-plane API appendix](./router-native-access-control-management-api).
 Permissions, exact role presets, scope containment, and operation authorization live
-in the [Management authorization appendix](./router-native-access-control-authorization).
+in the [authorization appendix](./router-native-access-control-authorization).
 In
 particular:
 
@@ -779,7 +795,67 @@ particular:
 - reusable policy definitions never imply shared counters;
 - counter identity is `binding_id + rule_id`;
 - model grants use explicit stable Entrypoint or Model IDs; and
-- the OpenAPI contract, not Dashboard internals, is the management product surface.
+- the control-plane OpenAPI contract, not Dashboard internals or Router CRUD, is the
+  product-management surface.
+
+### Compiled access snapshot
+
+The control plane compiles directory state into a data-plane contract. One key entry
+contains only:
+
+```yaml
+schema: access.v1
+namespace_id: ns_01
+revision: 1842
+credentials:
+  - kid: key_7f3.2
+    secret_digest: hmac-sha256:...
+    status: active
+    not_before: 2026-08-27T00:00:00Z
+    expires_at: 2026-11-27T00:00:00Z
+    subject:
+      key_id: key_7f3
+      user_id: usr_42
+      team_id: team_9
+    grants:
+      discover: [entrypoint:vllm-sr/blend]
+      invoke: [entrypoint:vllm-sr/blend]
+    meters:
+      - meter_id: budget_8h_cost
+        metric: cost
+        algorithm: sliding_window
+        limit: "5.00"
+        currency: USD
+        window: PT8H
+        accounting: response_actual
+```
+
+Names, emails, membership roles, invitation state, Dashboard permissions, plaintext
+credentials, and UI descriptions are forbidden. The envelope carries publisher ID,
+schema version, content digest, previous revision, creation time, and signature. A
+Router replica validates all entries, stages the complete immutable revision, then
+atomically advances one namespace pointer. Partial snapshots never become visible.
+
+The private Router contract is intentionally small:
+
+```text
+WatchAccessSnapshots(namespace, after_revision) -> stream SignedAccessSnapshot
+GetAppliedAccessRevision(namespace) -> revision, digest, applied_at, status
+InstallRestrictionBarrier(namespace, subject, minimum_revision) -> receipt
+```
+
+Push and pull transports implement this contract behind one adapter. The reference
+Docker control plane may publish through authenticated gRPC. Kubernetes may use a
+durable snapshot log plus the same watch semantics. Neither transport exposes User,
+Team, key, policy, or Budget CRUD. A restriction is successful only after the barrier
+is visible to all serving replicas; an expansion is successful only after the new
+snapshot revision is acknowledged.
+
+Ten thousand keys remain rows in PostgreSQL and entries in an immutable snapshot or
+partitioned snapshot log. They never become YAML, Envoy routes, xDS resources,
+ConfigMaps, or CRDs. Router replicas keep an indexed in-memory credential projection;
+Valkey stores global counters and revision barriers. Request-time authorization does
+not query PostgreSQL or join the control-plane directory.
 
 ## Data-plane request flow
 
@@ -790,8 +866,8 @@ snapshot.
 1. The public gateway removes client-supplied identity and policy headers.
 2. Router AuthN identifies an API-key or delegated-session credential by its public
    prefix, loads the corresponding Valkey projection, verifies HMAC in constant
-   time, and checks credential/session, key, User, Team, membership, expiry, and deny
-   barriers.
+   time, and checks the compiled credential status, expiry, subject revision, and deny
+   barriers. It does not load the control-plane directory.
 3. Router AuthZ loads the compiled revision and resolves the requested resource with
    the same evaluator used for discovery.
 4. The Router creates a typed TenantContext containing only the admission ID,
@@ -968,7 +1044,7 @@ can be added later without changing enforcement.
 
 ### Authenticated outcome feedback
 
-Post-response feedback is an inference-plane operation, not a Management mutation.
+Post-response feedback is an inference-plane operation, not a control-plane mutation.
 `POST /v1/router/outcomes` is mounted only on the public inference listener and
 requires an API-key or delegated-inference credential plus an `Idempotency-Key`.
 The Dashboard calls that endpoint with its bounded delegated inference session; it
@@ -985,7 +1061,7 @@ The idempotency key is hashed with the logical key and replay identity. One
 PostgreSQL transaction claims the unique digest, appends the immutable outcome, and
 enqueues any learning projection work. Concurrent submissions to different Router
 replicas therefore produce one logical outcome. Failed transactions release the
-claim; a committed duplicate returns the original receipt. A fixed Router-owned
+claim; a committed duplicate returns the original receipt. A fixed Router-enforced
 Valkey abuse limit applies per logical key across replicas, but feedback does not
 consume inference request/token/cost quota because it performs no Model dispatch.
 Adaptive state is rebuilt from durable outcomes and published through the same
@@ -993,7 +1069,7 @@ revisioned learning boundary; process-local maps are never an authority.
 
 ## Desired-to-applied consistency
 
-Every Management API mutation follows a revisioned outbox protocol:
+Every control-plane mutation follows a revisioned outbox protocol:
 
 1. validate the request and its `If-Match` revision;
 2. in one PostgreSQL transaction, mutate desired state, increment the namespace and
@@ -1017,7 +1093,7 @@ Restrictive mutations require a deny barrier:
 4. activate and finalize the publication operation; and
 5. remove the barrier only after the applied watermark reaches that revision.
 
-The Management API does not report restrictive success until the barrier exists. If
+The control-plane API does not report restrictive success until the barrier exists. If
 Valkey is unavailable, the mutation remains pending or fails; it never claims global
 enforcement. Reconciliation is idempotent and removes stale conservative barriers
 only after proving the desired revision.
@@ -1192,46 +1268,47 @@ replicas become ready. Manifest conversion, validation, and rollback stay offlin
 are defined in [Upgrade and rollback](../installation/upgrade-rollback.md) and the
 [deployment contract](./router-native-access-control-deployment.md).
 
-PostgreSQL uses ordinary forward-only schema migrations. A Router configured with that store verifies
+PostgreSQL uses ordinary forward-only schema migrations. The control plane verifies
 the schema before readiness and never performs destructive automatic conversion.
 Valkey state is a rebuildable projection of PostgreSQL desired state and durable
 usage evidence; a new runtime epoch is published only after policy and routing
 snapshots validate together.
 
-The Dashboard uses only Management and inference APIs. Public discovery, Playground,
-direct inference, topology, access policy, quota, usage, and audit all exercise the
-same Router authority. `vllm-sr serve --config` may select one immutable bootstrap
-manifest; it never selects a Recipe, authors a Model, or creates a second active
-routing pointer. Built-in Recipes are immutable Namespace resources installed by the
-Router and customized by duplication.
+The Dashboard uses only control-plane and public inference APIs. Product identity,
+routing authoring, access policy, quota, usage queries, and audit use the replaceable
+control plane; discovery, Playground inference, and direct inference use the Router's
+public listener and the same compiled access snapshot. `vllm-sr serve --config` may
+select one immutable bootstrap manifest; it never selects a Recipe, authors a Model,
+or creates a second active routing pointer. Built-in Recipes are immutable Namespace
+resources installed by the control plane and customized by duplication.
 
 ## Validation matrix
 
-| Area | Required validation |
-| --- | --- |
-| Credential lifecycle | Create, reveal permission, overlap rotation, expiry, disable, enable, renew, delete, concurrent revoke, and secret redaction. |
-| Ownership | User-owned, Team-owned, context Team, membership removal, disabled owner, and one-of validation. |
-| Model policy | Authenticated discovery, unauthenticated denial, Entrypoint invoke, forbidden/nonexistent nondisclosure, direct Model pinning, and candidate-model escape prevention. |
-| Provider integration | Strict Integration Registry construction, deterministic composition, duplicate/unknown capability failure, fixed/user-supplied origin, secret-field rejection, catalog rolling activation, stale discovery revision, credential binding, compatible Provider added without Dashboard/data-plane code, and new wire-codec rollout before Model publication. |
-| Protocol matrix | Every buffered and streaming source/target codec pair; text, multilingual, images, reasoning, tools and ordering, structured output, stop semantics, authoritative usage/cache buckets, typed errors, bounded preservation, lossy rejection, malformed frames, finalization, cancellation, and proof that no pair-specific translator is reachable. |
-| Inheritance | Key override, User override, Team inheritance, override removal, shared counter ownership, and cumulative hard cap. |
-| RPM | More than 12 requests in an exact rolling minute, boundary timestamps, concurrent admission, and idempotent retry. |
-| Tokens | Actual input/output/total usage, crossing request allowed, next request denied, reset, overshoot bound only with concurrency plus generation caps, and unknown-usage reconciliation. |
-| Cost | Eight-hour sliding and calendar budgets, crossing request then next-request denial, exact decimal arithmetic, API-key breakdown/detail parity, live remaining/reset, inherited bindings, unpriced/incomplete/fenced state, and multi-currency separation. |
-| Execution shapes | File/persisted Model digest parity; defaults/bounds and Dashboard Advanced round-trip; only proven-pre-inference retry, no retry after a visible byte, total request/stream timeout; priority fallback selection, same-Model retry exhaustion, unavailable/proven-zero timeout, deadline preservation, no fallback after output or unknown usage; four exclusive billing buckets, cache inheritance, explicit zero/unpriced state, pinned historical price revision; and non-streaming, streaming, disconnect, fusion, workflow, and looper accounting. |
-| Consistency | Staged expansion gate, restrictive deny barrier, routing snapshot acknowledgements, access/routing dependency order, contiguous watermarks, failed-operation blocking, overlapping mutations, lost projector, duplicate outbox delivery, policy-only rebuild, and stale revision conflict. |
-| Replicas | Identical result from every Router replica with no sticky session and no local cache dependence. |
-| Usage | Counter/ledger agreement, duplicate stream delivery, PostgreSQL outage backlog, rollup reconciliation, retention, and cursor pagination. |
-| Outcome feedback | Public-listener authentication, delegated-session use, exact logical-key replay ownership, served-Model match, bounded payload, cross-replica duplicate submission, failed-claim retry, global abuse limit, and learning projection rebuild. |
-| Docker | File-only manifest, Management store with access off, native access, embedded/external stores, migration ordering, secret files, restart persistence, and optional Dashboard absence. |
-| Kubernetes | File-only manifest, dynamic HPA scale, routing revision rollout, Pod loss, migration Job, NetworkPolicy, Management isolation, store failover, projector contention, and PDB behavior. |
-| Management RBAC | Every permission and subject scope at API level, including self-service and forbidden cross-Team queries. |
-| Dashboard capability UX | Topology for every fully authorized reader; Entrypoint/assignment/publish mutation only for exact manage authority; direct-URL/API denial; aligned accessible icons/actions; and no coarse account-label heuristic. |
-| CLI surface | `vllm-sr serve`, optional immutable-bootstrap selection through `--config`, infrastructure options, and proof that Model/Recipe operands, model command group, catalog materialization, and launch-time algorithm override are absent. |
-| Management identity | OIDC and local-issuer exchange, nonce replay, audience, expiry, principal linking, broker actor chain, invitation onboarding, exact-evidence stable session reissue across replicas, changed-evidence active-session bounds, durable SID/subject logout races, session disable, and service accounts. |
-| Delegated inference | Playground session creation/revocation, current-policy resolution, direct Model grant, counter sharing, usage attribution, and invalidation after key/User/Team/session disable. |
-| Agent and Builder | Dynamic catalog revision, Skill loading, Tool permission composition, durable events, idempotent turns, lease fencing, reconnect/resume, cancellation, context checkpoints, ETag conflicts, probe/eval artifacts, immutable approval, publication rollout, discovery, and direct invocation of the published Entrypoint. |
-| Schema lifecycle | Fresh-schema and forward-only upgrade coverage; operator import receipts, explicit resets, policy equivalence, credential verification, quota state, usage totals, rollback backup, and proof that no duplicate Dashboard authority exists. |
+| Area                    | Required validation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Credential lifecycle    | Create, reveal permission, overlap rotation, expiry, disable, enable, renew, delete, concurrent revoke, and secret redaction.                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| Ownership               | User-owned, Team-owned, context Team, membership removal, disabled owner, and one-of validation.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Model policy            | Authenticated discovery, unauthenticated denial, Entrypoint invoke, forbidden/nonexistent nondisclosure, direct Model pinning, and candidate-model escape prevention.                                                                                                                                                                                                                                                                                                                                                                                   |
+| Provider integration    | Strict Integration Registry construction, deterministic composition, duplicate/unknown capability failure, fixed/user-supplied origin, secret-field rejection, catalog rolling activation, stale discovery revision, credential binding, compatible Provider added without Dashboard/data-plane code, and new wire-codec rollout before Model publication.                                                                                                                                                                                              |
+| Protocol matrix         | Every buffered and streaming source/target codec pair; text, multilingual, images, reasoning, tools and ordering, structured output, stop semantics, authoritative usage/cache buckets, typed errors, bounded preservation, lossy rejection, malformed frames, finalization, cancellation, and proof that no pair-specific translator is reachable.                                                                                                                                                                                                     |
+| Inheritance             | Key override, User override, Team inheritance, override removal, shared counter ownership, and cumulative hard cap.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| RPM                     | More than 12 requests in an exact rolling minute, boundary timestamps, concurrent admission, and idempotent retry.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| Tokens                  | Actual input/output/total usage, crossing request allowed, next request denied, reset, overshoot bound only with concurrency plus generation caps, and unknown-usage reconciliation.                                                                                                                                                                                                                                                                                                                                                                    |
+| Cost                    | Eight-hour sliding and calendar budgets, crossing request then next-request denial, exact decimal arithmetic, API-key breakdown/detail parity, live remaining/reset, inherited bindings, unpriced/incomplete/fenced state, and multi-currency separation.                                                                                                                                                                                                                                                                                               |
+| Execution shapes        | File/persisted Model digest parity; defaults/bounds and Dashboard Advanced round-trip; only proven-pre-inference retry, no retry after a visible byte, total request/stream timeout; priority fallback selection, same-Model retry exhaustion, unavailable/proven-zero timeout, deadline preservation, no fallback after output or unknown usage; four exclusive billing buckets, cache inheritance, explicit zero/unpriced state, pinned historical price revision; and non-streaming, streaming, disconnect, fusion, workflow, and looper accounting. |
+| Consistency             | Staged expansion gate, restrictive deny barrier, routing snapshot acknowledgements, access/routing dependency order, contiguous watermarks, failed-operation blocking, overlapping mutations, lost projector, duplicate outbox delivery, policy-only rebuild, and stale revision conflict.                                                                                                                                                                                                                                                              |
+| Replicas                | Identical result from every Router replica with no sticky session and no local cache dependence.                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| Usage                   | Counter/ledger agreement, duplicate stream delivery, PostgreSQL outage backlog, rollup reconciliation, retention, and cursor pagination.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| Outcome feedback        | Public-listener authentication, delegated-session use, exact logical-key replay ownership, served-Model match, bounded payload, cross-replica duplicate submission, failed-claim retry, global abuse limit, and learning projection rebuild.                                                                                                                                                                                                                                                                                                            |
+| Docker                  | File-only manifest, dynamic access, embedded/external control-plane stores, migration ordering, secret files, restart persistence, and optional Dashboard absence.                                                                                                                                                                                                                                                                                                                                                                                      |
+| Kubernetes              | File-only manifest, dynamic HPA scale, routing revision rollout, Pod loss, migration Job, NetworkPolicy, Management isolation, store failover, projector contention, and PDB behavior.                                                                                                                                                                                                                                                                                                                                                                  |
+| Management RBAC         | Every permission and subject scope at API level, including self-service and forbidden cross-Team queries.                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Dashboard capability UX | Topology for every fully authorized reader; Entrypoint/assignment/publish mutation only for exact manage authority; direct-URL/API denial; aligned accessible icons/actions; and no coarse account-label heuristic.                                                                                                                                                                                                                                                                                                                                     |
+| CLI surface             | `vllm-sr serve`, optional immutable-bootstrap selection through `--config`, infrastructure options, and proof that Model/Recipe operands, model command group, catalog materialization, and launch-time algorithm override are absent.                                                                                                                                                                                                                                                                                                                  |
+| Management identity     | OIDC and local-issuer exchange, nonce replay, audience, expiry, principal linking, broker actor chain, invitation onboarding, exact-evidence stable session reissue across replicas, changed-evidence active-session bounds, durable SID/subject logout races, session disable, and service accounts.                                                                                                                                                                                                                                                   |
+| Delegated inference     | Playground session creation/revocation, current-policy resolution, direct Model grant, counter sharing, usage attribution, and invalidation after key/User/Team/session disable.                                                                                                                                                                                                                                                                                                                                                                        |
+| Agent and Builder       | Dynamic catalog revision, Skill loading, Tool permission composition, durable events, idempotent turns, lease fencing, reconnect/resume, cancellation, context checkpoints, ETag conflicts, probe/eval artifacts, immutable approval, publication rollout, discovery, and direct invocation of the published Entrypoint.                                                                                                                                                                                                                                |
+| Schema lifecycle        | Fresh-schema and forward-only upgrade coverage; operator import receipts, explicit resets, policy equivalence, credential verification, quota state, usage totals, rollback backup, and proof that no duplicate Dashboard authority exists.                                                                                                                                                                                                                                                                                                             |
 
 Performance gates use realistic policy cardinality: 10,000 keys, independent compiled
 policies, hundreds of Users, multiple Team-shared counters, exact and O(1) rules, and
@@ -1257,9 +1334,9 @@ and behavior during store failover.
 - Outcome feedback is accepted only for the caller's durable replay and served Model;
   the same logical submission is recorded once across replicas and survives restart.
 - A custom console can implement the complete product lifecycle using published
-  Management OpenAPI only.
+  control-plane OpenAPI and the snapshot compiler contract only.
 - An ordinary compatible Provider can be registered in the control-plane application
-  and appears in every Management client without a Dashboard or inference-runtime
+  and appears in every control-plane client without a Dashboard or inference-runtime
   product change.
 - A Dashboard cookie has no Router authority until a valid identity exchange, and
   Playground uses a short-lived delegated credential against the public inference
@@ -1268,16 +1345,13 @@ and behavior during store failover.
   cached short-lived tokens; changed evidence cannot evade active-session limits, and
   a concurrent or earlier SID/subject logout cannot be resurrected by late exchange.
 - `vllm-sr serve --config <file-only-manifest>` adds no PostgreSQL or Valkey
-  dependency. In a fresh Docker directory with no default manifest, `vllm-sr serve`
-  creates the secure local Management workspace whose generated config declares both
-  stores. Dynamic routing requires PostgreSQL, and native access cannot start without
-  both stores.
+  dependency. Dynamic access is enabled only by an explicit snapshot source and
+  runtime store; the Router never silently creates product-management state.
 - `vllm-sr serve` starts the selected deployment topology. The optional `--config`
-  flag selects one immutable bootstrap manifest; routing resources are authored
-  through the manifest before store initialization and through the Management API afterward.
-- The Dashboard reads built-in Recipes through the same Router Management API as an
-  independent console; it never shells out to, mirrors, or exports a CLI model
-  catalog.
+  flag selects one immutable bootstrap manifest. A control plane may import that
+  manifest and publish later routing revisions through the projection contract.
+- The Dashboard reads built-in Recipes through the same control-plane API as an
+  independent console; it never shells out to or exports a CLI model catalog.
 - Router and schema-migration images carry only canonical built-in Recipe assets.
   The distribution contains no Models or recommended assignments. Dashboard images,
   ConfigMaps, CRDs, and Helm values carry no copy;
@@ -1287,9 +1361,10 @@ and behavior during store failover.
 - No API key, User, policy, usage event, or audit event is represented in Router YAML,
   gateway routes, xDS, ConfigMaps, or per-resource Kubernetes custom resources.
 - Dashboard inference uses the Router public listener, while Dashboard management uses
-  generated Management API clients.
+  generated control-plane API clients.
 - Router AccessRuntime exclusively owns inference identity, authorization, and global
-  quota enforcement; Dashboard packages remain stateless clients of that authority.
+  quota enforcement; the replaceable control plane owns product desired state and
+  publishes only compiled snapshots.
 - Every installed wire format passes the full buffered and streaming codec matrix;
   usage settlement consumes the same neutral response record before client encoding.
 - A Builder session can survive reconnect and worker replacement, use only authorized

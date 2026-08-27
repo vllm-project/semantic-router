@@ -1,23 +1,24 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
-import type { AgentProfile } from '../generated/managementApiContract'
+import type { AgentSkill } from '../generated/managementApiContract'
 import { AgentResourceRow } from './AgentManagementResourceViews'
 import { resourcesForAgentTab } from './agentManagementResourceProjection'
 
-const profile = {
-  id: 'profile-1',
-  name: 'Builder',
-  description: 'Router-managed default.',
+const skill = {
+  id: 'skill-1',
+  name: 'Recipe designer',
+  description: 'Builds and validates Recipes.',
   status: 'active',
-  supportedModes: ['builder'],
-  skills: [],
-} as unknown as AgentProfile
+  builtin: true,
+  requiredTools: [],
+  minimumCapabilities: [],
+} as unknown as AgentSkill
 
 describe('Agent Management resource transitions', () => {
   it('never renders resources through a different tab shape', () => {
-    expect(resourcesForAgentTab('skills', 'profiles', [profile])).toEqual([])
-    expect(resourcesForAgentTab('profiles', 'profiles', [profile])).toEqual([profile])
+    expect(resourcesForAgentTab('skills', 'tools', [skill])).toEqual([])
+    expect(resourcesForAgentTab('skills', 'skills', [skill])).toEqual([skill])
   })
 
   it('keeps a malformed transition row from crashing the page', () => {
@@ -27,7 +28,7 @@ describe('Agent Management resource transitions', () => {
           <tbody>
             <AgentResourceRow
               tab="skills"
-              resource={profile}
+              resource={skill}
               disabled={false}
               onOpen={() => undefined}
             />

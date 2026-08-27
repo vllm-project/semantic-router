@@ -10,7 +10,6 @@ import {
 } from '../utils/accessControl'
 import { agentManagementApi } from '../utils/agentManagementApi'
 import type {
-  AgentProfileInput,
   AgentSkill,
   AgentSkillInput,
   AgentToolSource,
@@ -34,7 +33,7 @@ import ProductLoadingState from './ProductLoadingState'
 import { resourcesForAgentTab } from './agentManagementResourceProjection'
 import styles from './AgentManagementPanel.module.css'
 
-export type AgentManagementTab = 'profiles' | 'skills' | 'tools' | 'connections'
+export type AgentManagementTab = 'skills' | 'tools' | 'connections'
 
 interface AgentManagementPanelProps {
   activeTab: AgentManagementTab
@@ -52,7 +51,6 @@ const TAB_COPY: Record<
   AgentManagementTab,
   { singular: string; title: string; description: string }
 > = {
-  profiles: { singular: 'profile', title: 'Profiles', description: 'Shape how the Agent works.' },
   skills: { singular: 'skill', title: 'Skills', description: 'Reusable ways of working.' },
   tools: { singular: 'tool', title: 'Tools', description: 'What your Agent can do.' },
   connections: {
@@ -89,7 +87,7 @@ export default function AgentManagementPanel({
 
   const visibleTabs = useMemo<AgentManagementTab[]>(
     () => [
-      ...(readAgent ? ['profiles' as const, 'skills' as const] : []),
+      ...(readAgent ? ['skills' as const] : []),
       ...(readTools ? ['tools' as const, 'connections' as const] : []),
     ],
     [readAgent, readTools],
@@ -102,8 +100,6 @@ export default function AgentManagementPanel({
   const list = useCallback(
     async (nextCursor?: string, signal?: AbortSignal) => {
       const query = search.trim() || undefined
-      if (activeTab === 'profiles')
-        return agentManagementApi.listProfiles(query, nextCursor, 50, signal)
       if (activeTab === 'skills')
         return agentManagementApi.listSkills(query, nextCursor, 50, signal)
       if (activeTab === 'tools') return agentManagementApi.listTools(query, nextCursor, 50, signal)
@@ -186,11 +182,9 @@ export default function AgentManagementPanel({
     try {
       const id = resourceId(activeTab, resource)
       const detail =
-        activeTab === 'profiles'
-          ? await agentManagementApi.getProfile(id)
-          : activeTab === 'skills'
-            ? await agentManagementApi.getSkill(id)
-            : await agentManagementApi.getToolSource(id)
+        activeTab === 'skills'
+          ? await agentManagementApi.getSkill(id)
+          : await agentManagementApi.getToolSource(id)
       setModal({ mode: 'view', tab: activeTab, resource: detail.data, etag: detail.etag })
       setError(null)
     } catch (cause) {
@@ -200,53 +194,41 @@ export default function AgentManagementPanel({
     }
   }
 
-  const canManageTab =
-    activeTab === 'profiles' || activeTab === 'skills' ? manageAgent : manageTools
+  const canManageTab = activeTab === 'skills' ? manageAgent : manageTools
 
   const saveResource = async (input: AgentResourceInput) => {
     if (!modal || modal.tab === 'tools') return
-    if (modal.tab === 'profiles' || modal.tab === 'skills' ? !manageAgent : !manageTools) return
+    if (modal.tab === 'skills' ? !manageAgent : !manageTools) return
     if (modal.tab === 'skills' && (modal.resource as AgentSkill | undefined)?.builtin) return
     setBusy(true)
     setError(null)
     try {
       const existing = modal.resource as AgentEditableResource | undefined
-      const profileInput = input as AgentProfileInput
-      const { approvalPolicy: immutableApprovalPolicy, ...profilePatch } = profileInput
       const sourceInput = input as AgentToolSourceInput
       const { kind: immutableSourceKind, ...sourcePatch } = sourceInput
-      void immutableApprovalPolicy
       void immutableSourceKind
       const detail =
-        modal.tab === 'profiles'
+        modal.tab === 'skills'
           ? existing
-            ? await agentManagementApi.patchProfile(
+            ? await agentManagementApi.patchSkill(
                 existing.id,
-                { ...profilePatch, description: profileInput.description ?? '' },
+                input as AgentSkillInput,
                 modal.etag ?? '',
               )
-            : await agentManagementApi.createProfile(profileInput)
-          : modal.tab === 'skills'
-            ? existing
-              ? await agentManagementApi.patchSkill(
-                  existing.id,
-                  input as AgentSkillInput,
-                  modal.etag ?? '',
-                )
-              : await agentManagementApi.createSkill(input as AgentSkillInput)
-            : existing
-              ? await agentManagementApi.patchToolSource(
-                  existing.id,
-                  {
-                    ...sourcePatch,
-                    description: sourceInput.description ?? '',
-                    ...((existing as AgentToolSource).credentialId && !sourceInput.credentialId
-                      ? { credentialId: null }
-                      : {}),
-                  },
-                  modal.etag ?? '',
-                )
-              : await agentManagementApi.createToolSource(sourceInput)
+            : await agentManagementApi.createSkill(input as AgentSkillInput)
+          : existing
+            ? await agentManagementApi.patchToolSource(
+                existing.id,
+                {
+                  ...sourcePatch,
+                  description: sourceInput.description ?? '',
+                  ...((existing as AgentToolSource).credentialId && !sourceInput.credentialId
+                    ? { credentialId: null }
+                    : {}),
+                },
+                modal.etag ?? '',
+              )
+            : await agentManagementApi.createToolSource(sourceInput)
       setModal({ mode: 'view', tab: modal.tab, resource: detail.data, etag: detail.etag })
       await refresh()
     } catch (cause) {
@@ -258,13 +240,12 @@ export default function AgentManagementPanel({
 
   const deleteResource = async () => {
     if (!deleteTarget || !modal || modal.tab === 'tools') return
-    if (modal.tab === 'profiles' || modal.tab === 'skills' ? !manageAgent : !manageTools) return
+    if (modal.tab === 'skills' ? !manageAgent : !manageTools) return
     if (modal.tab === 'skills' && (deleteTarget as AgentSkill).builtin) return
     setBusy(true)
     try {
       const id = resourceId(modal.tab, deleteTarget)
-      if (modal.tab === 'profiles') await agentManagementApi.deleteProfile(id, modal.etag ?? '')
-      else if (modal.tab === 'skills') await agentManagementApi.deleteSkill(id, modal.etag ?? '')
+      if (modal.tab === 'skills') await agentManagementApi.deleteSkill(id, modal.etag ?? '')
       else await agentManagementApi.deleteToolSource(id, modal.etag ?? '')
       setDeleteTarget(null)
       setModal(null)
@@ -347,8 +328,8 @@ export default function AgentManagementPanel({
 
   const copy = TAB_COPY[activeTab]
   // A tab can change before its debounced request starts. Bind rows to the tab
-  // that produced them so a Profile is never rendered through the Skill (or
-  // Tool Source) shape during that transition.
+  // that produced them so a Skill is never rendered through the Tool Source
+  // shape during that transition.
   const visibleResources = resourcesForAgentTab(activeTab, resourceTab, resources)
   const listIsLoading = loading || resourceTab !== activeTab
   return (
@@ -428,15 +409,7 @@ export default function AgentManagementPanel({
           {!listIsLoading && visibleResources.length === 0 ? (
             <div className={styles.emptyState}>
               <ProductIcon
-                name={
-                  activeTab === 'profiles'
-                    ? 'user'
-                    : activeTab === 'skills'
-                      ? 'puzzle'
-                      : activeTab === 'tools'
-                        ? 'tool'
-                        : 'plug'
-                }
+                name={activeTab === 'skills' ? 'puzzle' : activeTab === 'tools' ? 'tool' : 'plug'}
               />
               <strong>No {copy.title.toLowerCase()}</strong>
               <span>
@@ -485,11 +458,9 @@ export default function AgentManagementPanel({
               tab={modal.tab}
               resource={modal.resource}
               canManage={
-                modal.tab === 'profiles'
-                  ? manageAgent
-                  : modal.tab === 'skills'
-                    ? manageAgent && !(modal.resource as AgentSkill).builtin
-                    : manageTools
+                modal.tab === 'skills'
+                  ? manageAgent && !(modal.resource as AgentSkill).builtin
+                  : manageTools
               }
               busy={busy}
               error={error}
@@ -524,13 +495,7 @@ export default function AgentManagementPanel({
             />
           ) : modal.tab !== 'tools' ? (
             <AgentResourceEditor
-              kind={
-                modal.tab === 'profiles'
-                  ? 'profile'
-                  : modal.tab === 'skills'
-                    ? 'skill'
-                    : 'connection'
-              }
+              kind={modal.tab === 'skills' ? 'skill' : 'connection'}
               value={modal.resource as AgentEditableResource | undefined}
               busy={busy}
               error={error}

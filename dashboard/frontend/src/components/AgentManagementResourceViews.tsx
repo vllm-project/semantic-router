@@ -1,5 +1,4 @@
 import type {
-  AgentProfile,
   AgentSkill,
   AgentToolDefinition,
   AgentToolSource,
@@ -42,21 +41,7 @@ function stringList(value: unknown): string[] {
     : []
 }
 
-function itemCount(value: unknown): number {
-  return Array.isArray(value) ? value.length : 0
-}
-
 export function AgentResourceTableHeader({ tab }: { tab: AgentManagementTab }) {
-  if (tab === 'profiles')
-    return (
-      <tr>
-        <th>Name</th>
-        <th>Modes</th>
-        <th>Skills</th>
-        <th>Status</th>
-        <th>Updated</th>
-      </tr>
-    )
   if (tab === 'skills')
     return (
       <tr>
@@ -99,11 +84,9 @@ export function AgentResourceRow({
   disabled: boolean
   onOpen: () => void
 }) {
-  const profile = resource as AgentProfile
   const skill = resource as AgentSkill
   const tool = resource as AgentToolDefinition
   const connection = resource as AgentToolSource
-  const profileModes = stringList(profile.supportedModes)
   const skillTools = stringList(skill.requiredTools)
   const skillCapabilities = stringList(skill.minimumCapabilities)
   const toolPermissions = stringList(tool.requiredPermissions)
@@ -125,17 +108,7 @@ export function AgentResourceRow({
         >
           <span className={styles.rowIdentity}>
             <span className={styles.rowIcon}>
-              <ProductIcon
-                name={
-                  tab === 'profiles'
-                    ? 'user'
-                    : tab === 'skills'
-                      ? 'puzzle'
-                      : tab === 'tools'
-                        ? 'tool'
-                        : 'plug'
-                }
-              />
+              <ProductIcon name={tab === 'skills' ? 'puzzle' : tab === 'tools' ? 'tool' : 'plug'} />
             </span>
             <span>
               <strong>{resourceName(resource)}</strong>
@@ -150,22 +123,6 @@ export function AgentResourceRow({
           </span>
         </button>
       </td>
-      {tab === 'profiles' ? (
-        <>
-          <td>
-            {profileModes.map((mode) => (
-              <span key={mode} className={styles.chip}>
-                {mode === 'chat' ? 'Chat' : 'Builder'}
-              </span>
-            ))}
-          </td>
-          <td>{itemCount(profile.skills)}</td>
-          <td>
-            <span className={styles.status}>{statusLabel(profile.status)}</span>
-          </td>
-          <td>{formatDate(profile.updatedAt)}</td>
-        </>
-      ) : null}
       {tab === 'skills' ? (
         <>
           <td>{skill.builtin ? 'Built in' : 'Custom'}</td>
@@ -225,13 +182,9 @@ export function AgentResourceView({
   onApprove,
   onToggle,
 }: AgentResourceViewProps) {
-  const profile = resource as AgentProfile
   const skill = resource as AgentSkill
   const tool = resource as AgentToolDefinition
   const connection = resource as AgentToolSource
-  const profileModes = stringList(profile.supportedModes)
-  const profileDefaultModes = stringList(profile.defaultForModes)
-  const profileToolAllow = Array.isArray(profile.toolPolicy?.allow) ? profile.toolPolicy.allow : []
   const skillTools = stringList(skill.requiredTools)
   const skillCapabilities = stringList(skill.minimumCapabilities)
   const toolPermissions = stringList(tool.requiredPermissions)
@@ -241,17 +194,6 @@ export function AgentResourceView({
   return (
     <div className={styles.resourceView}>
       {error ? <AgentInlineError message={error} /> : null}
-      {tab === 'profiles' ? (
-        <div className={styles.detailGrid}>
-          <Detail label="Modes" value={profileModes.join(', ') || 'None'} />
-          <Detail label="Default for" value={profileDefaultModes.join(', ') || 'None'} />
-          <Detail label="Skills" value={String(itemCount(profile.skills))} />
-          <Detail label="Tools" value={String(profileToolAllow.length)} />
-          <Detail label="Publishing" value="Review required" />
-          <Detail label="Turn timeout" value={`${profile.maximumTurnSeconds}s`} />
-          <Detail label="Context" value={`${profile.contextTokenBudget.toLocaleString()} tokens`} />
-        </div>
-      ) : null}
       {tab === 'skills' ? (
         <>
           <div className={styles.detailGrid}>

@@ -1,13 +1,15 @@
 ---
-title: Router-Native Access Control Management API Appendix
-description: Specifies management identity exchange, delegated inference credentials, API resources, effective policy responses, and authorization.
+title: Control Plane and Router Projection API Appendix
+description: Specifies the replaceable control-plane API and the narrow Router snapshot, status, and restriction contract.
 created: 2026-08-22
 status: Proposal
 ---
 
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
-This appendix is normative for Management authentication, endpoints, requests, and responses in [Router-Native Access Control and Quota Accounting](./router-native-access-control).
+This appendix is normative for control-plane authentication, desired-state endpoints,
+and the private Router projection contract in
+[Access Control and Quota Accounting](./router-native-access-control).
 The [resource contract](./router-native-access-control-contracts) owns storage and
 policy; [Provider catalog](./router-native-access-control-provider-catalog) owns the
 Integration Registry, compiler, and adapter boundaries;
@@ -15,27 +17,37 @@ Integration Registry, compiler, and adapter boundaries;
 scopes; [deployment](./router-native-access-control-deployment) owns bootstrap,
 topology, readiness, and recovery.
 
-## Management identity exchange
+The `/management/v1` surface described here belongs to a control-plane service. The
+bundled Dashboard backend is the reference implementation, but an independent console
+may implement or call the same contract. The Router inference process does not expose
+these product CRUD routes and does not store Users, Teams, invitations, key lifecycle,
+AccessPolicies, or Budgets. Its only write surface is the signed projection contract
+defined below.
 
-The Dashboard is an optional browser client, not a trusted session database for the Router. A browser cookie is never accepted directly by the Management API.
+## Control-plane identity exchange
 
-Every authenticated Management request uses a Router-issued access token. External OIDC/local assertions, service credentials, and mTLS identities are bootstrap evidence only; none is accepted directly as a Management bearer token.
+The Dashboard frontend is an optional browser client. Its backend is one control-plane
+implementation. A browser cookie is never accepted by the Router data plane.
+
+Every authenticated management request uses a control-plane-issued access token.
+External OIDC/local assertions, service credentials, and mTLS identities are bootstrap
+evidence only; none is accepted directly as a management bearer token.
 
 An OIDC client may perform the exchange itself. For local login, the Dashboard is one configured issuer and signs a short-lived JWS containing issuer, immutable subject, Management audience/session, verified attributes, authentication time/methods/assurance, expiry, token ID, and one-time nonce. Both use:
 
-~~~text
+```text
 POST /management/v1/auth/exchange-challenges
 POST /management/v1/auth/token-exchange
-~~~
+```
 
 Before starting login, the client requests an exchange challenge with `issuerId`. The
-Router returns a random nonce, opaque `exchangeChallengeId`, and short expiry and
+control plane returns a random nonce, opaque `exchangeChallengeId`, and short expiry and
 stores the issuer, nonce digest, rate-identity digest, expiry, and one-time consumption
 state in PostgreSQL. The raw nonce is never persisted. The client supplies that nonce
 to its OIDC authorization request or local assertion signer. The token-exchange JSON
 is a discriminated union with `issuerId`, `exchangeChallengeId`, `subjectToken`, and
 `subjectTokenType` equal to `oidc_id_token` or `router_local_assertion`; it may also
-carry `invitationToken` on a fresh exchange. The Router loads the expected nonce,
+carry `invitationToken` on a fresh exchange. The control plane loads the expected nonce,
 validates configured issuer, audience, signature algorithm and keys, exact token nonce,
 issuer session state, `iat`, `exp`, and token ID, and atomically consumes the challenge
 before resolving `(issuer, subject)`. Lost/expired challenges restart login; challenge
@@ -48,7 +60,7 @@ pre-created principal, or one-time bootstrap.
 A `router_local_assertion` is a one-time exchange assertion, not the lifetime
 evidence for the resulting Management session. Its `exp` remains short and bounds
 replay exposure. It must also carry integer `source_session_exp`, copied exactly from
-the broker's already verified source session. The Router rejects a missing or expired
+the broker's already verified source session. The control plane rejects a missing or expired
 source expiry, one earlier than the assertion expiry, or one more than 30 days in the
 future, and persists it as the Management session's evidence-expiry ceiling. OIDC
 exchanges continue to use the verified ID token's own `exp` as that ceiling. A local
@@ -59,13 +71,13 @@ it may rotate expired pending evidence but must never invent an unpersisted fall
 Automation uses a distinct credential `vsm_<credential-id>_<256-bit-secret>`.
 `POST /management/v1/auth/service-token` accepts it only through
 `Authorization: VSR-Service <credential>` over TLS. The same endpoint accepts a
-configured mTLS peer when no service credential header is present. The Router performs
+configured mTLS peer when no service credential header is present. The control plane performs
 an O(1) credential-ID lookup and HMAC verification, or maps the verified certificate
 identity, checks principal and role-binding status, and creates a bounded service
 Management session. Service credentials are never valid Bearer tokens and cannot call
 inference. mTLS uses only exact, active `mTLSIdentityMapping` resources after the
 listener validates the client chain against its configured trust bundle; wildcard or
-request-header certificate identities are forbidden. The Router chooses one selector
+request-header certificate identities are forbidden. The control plane chooses one selector
 class deterministically: a single verified SPIFFE ID, else SAN URI, else SAN DNS, else
 the normalized subject-DN hash. It evaluates only that class. Zero matches denies;
 multiple matching values or mappings fail closed and emit an ambiguity audit rather
@@ -99,7 +111,7 @@ separate break-glass route and then use ordinary credential rotation.
 
 Break-glass uses `POST /management/v1/auth/recovery` with
 `Authorization: VSR-Recovery <secret>`. The route is registered only when recovery was
-explicitly enabled at process start, is reachable only from the Router's loopback
+explicitly enabled at process start, is reachable only from the control plane's loopback
 interface, and uses a separate root-readable token file. Its bounded body names one
 existing durable principal and a required reason. It can only reactivate that principal
 and restore its built-in `cluster_admin` binding with the fixed delegation ceiling; it
@@ -109,7 +121,7 @@ nonce, normalized request digest, binding, receipt, and audit. An exact idempote
 can recover the non-secret receipt during its bounded window. The token is spent after
 one successful request, and normal operation requires restart with recovery disabled.
 
-The token-exchange and service-token endpoints commit a Management session and return `{accessToken, tokenType: "Bearer", expiresIn, managementSessionId}`. Bootstrap returns its bounded receipt and, for service-account bootstrap, the first credential; recovery returns only a non-secret receipt. Neither is a Management-session authentication source. The Router-signed JWT has fixed Management audience and `sub`, `sid`, `jti`, `iat`, `exp`, `auth_source_kind`, stable source ID, and exactly one evidence object: human `auth_time|aal|amr` or workload `class|source_assured_at`. The server derives these claims from the persisted issuer, credential, or mTLS mapping; clients cannot supply them. Every request validates signature/audience and principal, authentication-source, and session deny projections. Issuer back-channel
+The token-exchange and service-token endpoints commit a Management session and return `{accessToken, tokenType: "Bearer", expiresIn, managementSessionId}`. Bootstrap returns its bounded receipt and, for service-account bootstrap, the first credential; recovery returns only a non-secret receipt. Neither is a Management-session authentication source. The control-plane-signed JWT has fixed Management audience and `sub`, `sid`, `jti`, `iat`, `exp`, `auth_source_kind`, stable source ID, and exactly one evidence object: human `auth_time|aal|amr` or workload `class|source_assured_at`. The server derives these claims from the persisted issuer, credential, or mTLS mapping; clients cannot supply them. Every request validates signature/audience and principal, authentication-source, and session deny projections. Issuer back-channel
 logout, client logout, credential disablement, or administrator revocation installs
 that barrier before reporting success. When a Dashboard backend or another broker
 performs the human exchange, its service account remains in the actor chain but does
@@ -118,7 +130,7 @@ not replace the human principal. Audit records both actors.
 Access tokens have no refresh token and an old bearer is never sufficient to renew
 itself. Before access-token expiry, a client repeats token exchange with a fresh
 verified issuer assertion or repeats service-token authentication with the live
-credential or mTLS identity. For issuer exchange, the Router reuses an active durable
+credential or mTLS identity. For issuer exchange, the control plane reuses an active durable
 session only when principal, source kind/ID, issuer session ID, audience,
 authentication time, and the complete evidence object match exactly. That reissue
 keeps the durable session ID and `jti` stable, does not extend durable session or
@@ -145,7 +157,7 @@ the broader principal barrier and revokes every source.
 
 `POST /management/v1/auth/backchannel-logout` is authenticated only by a signed logout
 token from the named trusted issuer, never by a browser cookie or Management bearer
-token. The Router validates configured `iss`, Management client `aud`, signature,
+token. The control plane validates configured `iss`, Management client `aud`, signature,
 `iat`, `jti`, and the back-channel logout event claim; `nonce` is forbidden and at
 least one of `sid` or `sub` is required. In one serializable transaction, a `sid`
 revokes matching issuer sessions and installs a durable issuer/SID tombstone; a `sub`
@@ -185,9 +197,9 @@ to reauthenticate through the same source and claim from any
 current non-revoked session meeting the pinned same-kind predicate. It grants no key
 management and is erased on delivery or expiry.
 
-~~~text
+```text
 GET /management/v1/me
-~~~
+```
 
 The response includes the immutable principal ID, current Management session,
 cluster-scoped permissions, every authorized namespace and its role bindings,
@@ -202,13 +214,13 @@ Playground and other first-party experiences call the public inference listener 
 a short-lived delegated inference credential. An authenticated principal linked to a
 User may request that credential through these operations:
 
-~~~text
+```text
 GET    /management/v1/self/inference-keys
 GET    /management/v1/self/inference-keys/{keyId}
 GET    /management/v1/self/inference-sessions
 POST   /management/v1/self/inference-sessions
 DELETE /management/v1/self/inference-sessions/{sessionId}
-~~~
+```
 
 Creation names a namespace and selects either a key owned by the linked User or a
 Team-owned key for an active membership when self-service policy permits that use.
@@ -228,22 +240,48 @@ An administrator may test a Single Model only when the selected key has an expli
 invoke grant for that Model. The request uses the normal public inference path and
 therefore cannot bypass discovery, authorization, quota, logs, or usage accounting.
 
-## Router Management API
+## Control-plane API
 
-The Router publishes one generated OpenAPI contract under
-<code>/management/v1</code>. It is the sole authority for dynamic mutations;
-file-only deployments do not start a mutable Management API.
+The control plane publishes one generated OpenAPI contract under
+<code>/management/v1</code>. It is the sole authority for product desired-state
+mutations. File-only Router deployments do not require or start it.
 
-This is an optional capability of the same v0.3 bootstrap, not a `managed` deployment
-mode. `global.stores.management` selects durable desired state, while
-`global.services.management_api.enabled` exposes its authorized HTTP mutation and
-query surface. With the listener disabled, PostgreSQL publication can remain active
-without a public Management endpoint. With no Management store, the static manifest
-remains the sole routing authority.
+This is an optional component, not a `managed` Router mode. Its PostgreSQL, listener,
+identity, invitation, and secret configuration belong to the control-plane deployment.
+Router YAML names only the trusted snapshot source and runtime store. Disabling the
+control-plane listener leaves the Router serving the last acknowledged projection.
+
+### Router projection contract
+
+The Router accepts no form-oriented CRUD. A mutually authenticated publisher may use
+only these logical operations:
+
+```text
+WatchAccessSnapshots(namespace, after_revision) -> stream SignedAccessSnapshot
+GetAppliedAccessRevision(namespace) -> AppliedAccessRevision
+InstallRestrictionBarrier(namespace, subject, minimum_revision) -> BarrierReceipt
+```
+
+`WatchAccessSnapshots` is resumable and monotonic. Each envelope names its schema,
+namespace, publisher, previous revision, revision, digest, creation time, and
+signature. The Router verifies publisher trust and complete content before staging,
+then atomically advances one active pointer. Gaps, rollback, unknown fields in a
+closed schema, unsupported rule algorithms, digest mismatch, or invalid signatures
+are rejected without changing the active revision.
+
+`GetAppliedAccessRevision` reports the active revision, digest, application time,
+runtime-store epoch, and readiness. It does not return keys or policy content.
+`InstallRestrictionBarrier` is the only imperative mutation. It prevents a named
+compiled subject or credential revision from being admitted until every serving
+replica has acknowledged at least `minimum_revision`; it cannot grant access.
+
+The reference transport is private gRPC over mTLS. A durable-log pull adapter may be
+used in Kubernetes, but it must preserve the same validation, ordering, atomicity,
+and acknowledgment semantics. The transport is not a second product API.
 
 ### Version negotiation
 
-The Management API version is independent from the top-level Router manifest
+The control-plane API version is independent from the top-level Router manifest
 version. Clients select `/management/v1` and
 `application/vnd.vllm-semantic-router.management.v1+json` explicitly in both
 `Accept` and `Content-Type`; there is no release-number negotiation or silent
@@ -255,7 +293,7 @@ fields.
 
 ### Identity and namespace resources
 
-~~~text
+```text
 GET    /management/v1/me
 POST   /management/v1/auth/bootstrap
 POST   /management/v1/auth/exchange-challenges
@@ -327,7 +365,7 @@ GET    /management/v1/invitations/{invitationId}
 DELETE /management/v1/invitations/{invitationId}
 POST   /management/v1/invitations/{invitationId}:rotate-token
 POST   /management/v1/onboarding
-~~~
+```
 
 Namespace create atomically seeds restrictive SelfServicePolicy and
 ManagementSecurityPolicy rows; absence is an error, never an implicit fallback.
@@ -414,7 +452,7 @@ step-up.
 
 ### Users and Teams
 
-~~~text
+```text
 GET    /management/v1/users
 POST   /management/v1/users
 GET    /management/v1/users/{userId}
@@ -440,7 +478,7 @@ GET    /management/v1/teams/{teamId}/members
 PUT    /management/v1/teams/{teamId}/members/{userId}
 PATCH  /management/v1/teams/{teamId}/members/{userId}
 DELETE /management/v1/teams/{teamId}/members/{userId}
-~~~
+```
 
 User memberships are indexed/keyset-paginated and return safe Team/TeamRole fields
 within caller scope. Team members use the inverse index; neither scans all Teams.
@@ -461,7 +499,7 @@ Team update.
 
 `POST /teams` accepts optional `accessPolicyIds` and `rateLimitPolicyId` selections.
 Omitting a field selects its current namespace default; an explicitly empty AccessPolicy
-list or blank RateLimitPolicy ID is invalid. The Router resolves omitted selections before
+list or blank RateLimitPolicy ID is invalid. The control plane resolves omitted selections before
 authorization, requires authority over every resolved policy, and includes the sorted,
 unique AccessPolicy IDs plus the RateLimitPolicy ID in the idempotency digest. The create
 transaction locks any default revision it used, verifies every selected policy is active
@@ -471,7 +509,7 @@ and command result together. Any failed validation rolls back the whole operatio
 
 ### API keys, access, and quota
 
-~~~text
+```text
 GET    /management/v1/api-keys
 POST   /management/v1/api-keys
 GET    /management/v1/api-keys/{keyId}
@@ -520,7 +558,7 @@ POST   /management/v1/access:check
 GET    /management/v1/unknown-usage-fences
 GET    /management/v1/unknown-usage-fences/{fenceId}
 POST   /management/v1/unknown-usage-fences/{fenceId}:reconcile
-~~~
+```
 
 API-key ownership is a required one-of choice: User or Team. Key-level access and
 rate-limit allocations are optional overrides. Without them, a User-owned key
@@ -585,7 +623,7 @@ and audit detail require `audit.read` or `quota.reconcile`. Reconciliation requi
 - `waive` applies zero unknown charge, requires `quota.reconcile` and satisfaction of
   the action's typed authentication predicate, and records justification and evidence.
 
-The response is an Operation. The Router records one immutable reconciliation plan in
+The response is an Operation. The control plane records one immutable reconciliation plan in
 PostgreSQL, atomically applies every binding delta under one Valkey reconciliation ID,
 persists the correction UsageEvent and audit, and only then removes that fence from
 all affected bindings. Until all steps finish, lifecycle remains `reconciling` and
@@ -600,7 +638,7 @@ and limit remain through resolution, and its fixed debit uses the same counter l
 
 ### Routing and provider resources
 
-~~~text
+```text
 GET    /management/v1/routing/models
 GET    /management/v1/routing/model-cards
 POST   /management/v1/routing/imports
@@ -637,7 +675,7 @@ GET    /management/v1/provider-credentials/{credentialId}
 PATCH  /management/v1/provider-credentials/{credentialId}
 DELETE /management/v1/provider-credentials/{credentialId}
 POST   /management/v1/provider-credentials/{credentialId}:rotate
-~~~
+```
 
 Routing APIs expose Model, Recipe, and Entrypoint only; assignments live in rule
 actions. Publish alone activates a snapshot; unpublish uses deny barriers. Writes
@@ -674,7 +712,7 @@ cursor is bound to the path Namespace and returns revision, content digest,
 lifecycle, member count, and publication timestamps without loading compiled
 payloads. Snapshot detail returns the exact ordered Model, Recipe, and Entrypoint
 member revisions plus the validated self-contained routing export stored for that
-revision. The Router verifies the export digest and member closure before returning
+revision. The control plane verifies the export digest and member closure before returning
 it; corruption fails closed, and neither response contains credential material.
 
 `Recipe.document` is authoring source: Decisions are addressed only by their readable
@@ -730,7 +768,7 @@ resources. The coordinator validates installed compiler, protocol, credential, a
 discovery adapter IDs, stores the immutable catalog by digest, and activates it only
 after the declared control-plane and data-plane rollout groups report compatibility.
 
-On a genuinely empty durable store, Router replicas automatically stage and activate
+On a genuinely empty durable store, control-plane replicas automatically stage and activate
 the unique application-installed Integration Registry through the same
 compare-and-swap and rollout-gate contract. Concurrent startup is idempotent: each
 replica ACKs its declared groups, conflicts are reread, and a missing peer ACK leaves
@@ -809,14 +847,14 @@ inference deadline cannot make model verification unbounded.
 The Model create, update, and read surface uses one nested value; flattened retry or
 timeout fields are not accepted:
 
-~~~json
+```json
 {
   "control": {
-    "retry": {"count": 2, "on": ["unavailable", "timeout"]},
-    "timeout": {"request": "60s", "stream": "10m"}
+    "retry": { "count": 2, "on": ["unavailable", "timeout"] },
+    "timeout": { "request": "60s", "stream": "10m" }
   }
 }
-~~~
+```
 
 Provider-specific `connectionFields` are the one deliberately dynamic request
 object in Model and discovery writes. Their effective schema comes from the exact
@@ -852,7 +890,7 @@ that turns a Recipe into a callable Mixture-of-Models.
 
 ### Router-native Agent resources
 
-~~~text
+```text
 GET    /management/v1/agent-profiles
 POST   /management/v1/agent-profiles
 GET    /management/v1/agent-profiles/{profile}
@@ -889,7 +927,7 @@ POST   /management/v1/agent-sessions/{session}/turns/{turn}:cancel
 GET    /management/v1/agent-artifacts/{artifact}
 GET    /management/v1/agent-artifacts/{artifact}/content
 POST   /management/v1/publication-plans/{plan}:commit
-~~~
+```
 
 These routes are the Router-owned durable Agent surface. Profiles select bounded
 capabilities and versioned Skills; Sessions pin one authorized inference target;
@@ -901,7 +939,7 @@ surface and owns no parallel Agent workflow state.
 
 ### Usage, logs, audit, and operations
 
-~~~text
+```text
 GET    /management/v1/statistics
 GET    /management/v1/usage
 GET    /management/v1/usage/series
@@ -913,7 +951,7 @@ GET    /management/v1/runtime-diagnostics
 GET    /management/v1/operations
 GET    /management/v1/operations/{operationId}
 POST   /management/v1/operations/{operationId}:cancel
-~~~
+```
 
 `GET /management/v1/statistics` is the bounded control-plane companion to Usage.
 It returns `asOf`, an inclusive `expiringBefore` boundary fixed by the server, and
@@ -956,7 +994,7 @@ what was spent, while a live `cost` meter shows its limit, exact used/remaining,
 currency, reset, completeness, and capacity state. For example, an eight-hour budget
 is an ordinary response-actual sliding rule:
 
-~~~json
+```json
 {
   "metric": "cost",
   "limit": "20",
@@ -965,7 +1003,7 @@ is an ordinary response-actual sliding rule:
   "accounting": "response_actual",
   "enforcement": "enforce"
 }
-~~~
+```
 
 The Dashboard presents this as `8h` and submits the canonical `PT8H` duration; it
 does not maintain a second fixed RPM/TPM budget schema.
@@ -1040,7 +1078,7 @@ use their resource-specific bounded one-time response envelope.
   revisions. Restriction waits for its deny barrier; expansion waits for its gate.
 - Delete first denies credentials, then removes mutable links under referential
   checks; immutable usage/audit references remain.
-- Management authentication uses Router-issued tokens obtained from verified external
+- Management authentication uses control-plane-issued tokens obtained from verified external
   assertions, scoped service credentials, or mTLS mappings. Inference credentials
   have no Management API authority.
 - Every mutation, secret reveal, role change, access check, and reconciliation stores
@@ -1051,7 +1089,7 @@ use their resource-specific bounded one-time response envelope.
 
 ## Effective policy and quota responses
 
-~~~json
+```json
 {
   "subject": {
     "type": "api_key",
@@ -1066,7 +1104,11 @@ use their resource-specific bounded one-time response envelope.
         "resourceId": "ep_blend_01...",
         "permissions": ["discover", "invoke"],
         "effect": "allow",
-        "source": {"subjectType": "user", "subjectId": "usr_01...", "bindingId": "ab_01..."}
+        "source": {
+          "subjectType": "user",
+          "subjectId": "usr_01...",
+          "bindingId": "ab_01..."
+        }
       }
     ]
   },
@@ -1091,10 +1133,12 @@ use their resource-specific bounded one-time response envelope.
         "used": "2",
         "remaining": "10",
         "resetAt": "2026-08-22T12:01:04Z",
-        "completeness": "complete", "knownDispatches": "2",
-        "incompleteDispatches": "0", "capacityState": "available",
+        "completeness": "complete",
+        "knownDispatches": "2",
+        "incompleteDispatches": "0",
+        "capacityState": "available",
         "activeFenceIds": [],
-        "freshness": {"source": "live", "asOf": "2026-08-22T12:00:05Z"}
+        "freshness": { "source": "live", "asOf": "2026-08-22T12:00:05Z" }
       }
     ],
     "limitingRuleId": "rpm_rolling",
@@ -1102,7 +1146,7 @@ use their resource-specific bounded one-time response envelope.
     "asOf": "2026-08-22T12:00:05Z"
   }
 }
-~~~
+```
 
 Each grant names its source and binding. Each non-cost meter returns whole-unit
 limit/used/remaining; cost meters use the public decimal shape in the
@@ -1118,7 +1162,7 @@ TeamRole entitlements live in the
 [Management authorization appendix](./router-native-access-control-authorization).
 
 Invitation email delivery, welcome-page presentation, password setup, and browser
-session presentation remain issuer/client UX. The Router owns the invitation's
+session presentation remain issuer/client UX. The control plane owns the invitation's
 one-time authorization, expiry, target roles, Team, onboarding transaction, and
 audit. Automatic first-key creation uses the same logical key, Team inheritance,
 publication gate, and secret-envelope path as an administrator or custom console.

@@ -10,7 +10,7 @@ status: Proposal
 This appendix is normative for Model execution and pricing in
 [Router-Native Access Control and Quota Accounting](./router-native-access-control).
 The [resource contract](./router-native-access-control-contracts) owns persistence and
-usage records; the [Management API](./router-native-access-control-management-api)
+usage records; the [control-plane API](./router-native-access-control-management-api)
 owns Model CRUD and Dashboard-facing fields.
 
 ## One readable Model, one compiled revision
@@ -104,18 +104,30 @@ each timeout. Management reads return effective immutable values; readable file
 export keeps default-only values omitted.
 
 The public gateway strips caller-supplied transport-control, destination, identity,
-and credential headers. Envoy forwards every post-ExtProc inference request through
-one stable internal Router backend-invoker cluster; it does not own per-Model routes,
-credentials, timeouts, or retries. The BackendInvoker pins the Model and backend
-revision, verifies that its compiled wire format is installed in the Codec Registry, journals the
-bounded dispatch and attempt plan with the configured durability acknowledgement,
-resolves the ProviderCredential only in process through its credential adapter, and
-then performs the upstream call. Primary, Looper, fusion, workflow, multimodal, and
-future adapter dispatches all use this same interface rather than calling an endpoint
-directly.
+and credential headers. Routing produces one logical dispatch decision, then an
+integration-selected dispatch adapter owns physical forwarding:
 
-File-backed and persisted-snapshot startup inject the same mandatory dispatch-capability runtime
-into each immutable Router generation. The public edge decodes the selected client
+- **Router invoker adapter** is the bundled `vllm-sr serve` path. Envoy forwards
+  post-ExtProc inference through one stable internal Router service cluster. The
+  BackendInvoker pins the Model/backend revision, checks its wire codec, journals the
+  bounded attempt plan, resolves ProviderCredential in process, and performs the call.
+- **Gateway signal adapter** is the external AI-gateway path. ExtProc emits the
+  selected logical Model and immutable routing evidence through the gateway's native
+  metadata/route-selection contract. The gateway continues to own generated routes,
+  endpoint clusters, connection pools, credentials, and transport retries. vLLM-SR
+  does not insert a mandatory reverse-proxy hop or replace that gateway's control
+  plane.
+
+The adapter is deployment integration, not Recipe or Model authoring state. Both
+paths share semantic selection and access context, but advertise different execution
+capabilities. Exact Router-owned fallback, neutral provider translation, credential
+injection, and attempt-level cost evidence require the Router invoker or an external
+adapter that returns the equivalent typed terminal contract. An integration that
+only consumes a route signal cannot claim those capabilities. Multi-dispatch
+algorithms validate the execution contract they require before publication.
+
+File-backed and persisted-snapshot startup inject the selected dispatch adapter into
+each immutable Router generation. On the Router-invoker path, the public edge decodes the selected client
 format into the neutral request IR; ExtProc routes and applies plugins to semantic
 views of that IR, then hands BackendInvoker the neutral request, client format, pinned
 logical Model revision, and a body-bound capability. It never resolves a physical
@@ -124,8 +136,11 @@ BackendInvoker resolves the pinned connection and credential, encodes the reques
 with that connection's installed codec, decodes the upstream response or stream back
 to the neutral IR, and returns terminal evidence for the shared usage finalizer before
 the client codec renders the response. Internal Looper calls use the same typed
-dispatch plan and authorization boundary. Missing generation, capability, codec, or
-immutable Model identity fails closed instead of activating an unmanaged direct call.
+dispatch plan and authorization boundary. Missing generation, adapter capability,
+codec, or immutable Model identity fails closed instead of activating an unmanaged
+direct call. On the gateway-signal path, the external integration validates the
+immutable selection metadata before mapping it to its generated route; client-supplied
+routing headers are never trusted.
 
 The terminal hand-off follows the configured deployment capabilities. A single
 replica without a runtime store uses one bounded, expiring process-local store. A
@@ -177,8 +192,8 @@ is instead an optional value on one Entrypoint decision assignment:
 assignments:
   Complex:
     models:
-      - {model: remote/primary, priority: 0, weight: "1"}
-      - {model: local/secondary, priority: 1, weight: "1"}
+      - { model: remote/primary, priority: 0, weight: "1" }
+      - { model: local/secondary, priority: 1, weight: "1" }
     fallback:
       strategy: priority
       on: [unavailable, timeout]
@@ -199,7 +214,7 @@ unknown usage, or known billable work is terminal. Skipping a tier because every
 Model is already unavailable does not create an attempt. Each real attempt and
 transition is journaled and contributes to latency and diagnostics.
 
-Envoy continues to provide connection management and endpoint health inside one
+On the Router-invoker path, Envoy continues to provide connection management and endpoint health inside one
 physical backend. It does not use an aggregate cluster, retry priority plugin, or
 route retry to move between logical Models. Router owns that boundary so logical
 identity, ProviderCredential selection, timeout budget, authorization, usage, and
@@ -210,6 +225,18 @@ Transport-cluster priority and retry load operate on physical upstream health. T
 do not carry the Router's logical Model revision, pricing evidence, or admission
 dispatch identity, so using them for Model fallback would create an unaccounted
 second routing authority.
+
+The stable Envoy cluster represents the horizontally scalable Router dispatch
+service, not one physical Model or one upstream connection. A catalog with 1,000
+Models therefore does not create 1,000 Envoy routes/clusters or force xDS churn on
+every Model update. Router replicas maintain bounded, per-origin HTTP transports and
+connection pools behind the immutable Model snapshot. Production acceptance includes
+a 1,000-Model catalog, high-concurrency streaming, bounded pool/cache memory, DNS/TLS
+reuse, backpressure, circuit breaking, replica loss, and no-affinity tests. Until
+those gates pass, a stable cluster removes configuration cardinality but does not by
+itself prove that the Router hop is free of CPU, network, or connection pressure.
+External gateways may retain their native per-endpoint/xDS topology through the
+gateway-signal adapter.
 
 ## Pricing and actual cost
 

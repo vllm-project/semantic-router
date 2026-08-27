@@ -8,7 +8,7 @@ import styles from './AgentPlayground.module.css'
 export interface PlaygroundConversationListItem {
   id: string
   mode: PlaygroundMode
-  source: 'browser' | 'router'
+  source: 'router'
   title: string
   updatedAt: string
 }
@@ -214,13 +214,7 @@ export default function AgentConversationSidebar({
                   >
                     <span className={styles.sessionTitle}>{session.title}</span>
                     <span className={styles.sessionMeta}>
-                      <span>
-                        {session.mode === 'builder'
-                          ? 'Builder'
-                          : session.mode === 'agent'
-                            ? 'Agent'
-                            : 'Chat'}
-                      </span>
+                      <span>{session.mode === 'builder' ? 'Builder' : 'Chat'}</span>
                       <span aria-hidden="true">·</span>
                       <time dateTime={session.updatedAt}>{relativeTime(session.updatedAt)}</time>
                     </span>

@@ -46,6 +46,30 @@ const defaultSettings = {
   routerEvalEndpoint: '',
 }
 
+const statusThrough = '2026-08-23T00:00:00Z'
+const statusServices = ['Router', 'Routing access', 'Envoy', 'Dashboard']
+
+function operationalSystemStatus() {
+  const through = Date.parse(statusThrough)
+  return {
+    overall: 'operational',
+    services: statusServices.map((name) => ({ name, status: 'operational', healthy: true })),
+    history: {
+      windowHours: 90,
+      through: statusThrough,
+      services: statusServices.map((name) => ({
+        name,
+        hours: Array.from({ length: 90 }, (_, index) => ({
+          observedAt: new Date(through - (89 - index) * 3_600_000)
+            .toISOString()
+            .replace('.000Z', 'Z'),
+          status: 'operational',
+        })),
+      })),
+    },
+  }
+}
+
 const managementMediaType = 'application/vnd.vllm-semantic-router.management.v1+json'
 const namespaceId = '10000000-0000-4000-8000-000000000001'
 const routerPrincipalId = '10000000-0000-4000-8000-000000000010'
@@ -194,6 +218,14 @@ export async function mockAuthenticatedAppShell(
       status: 200,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
+    })
+  })
+
+  await page.route('**/api/status', async (route) => {
+    await route.fulfill({
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+      body: JSON.stringify(operationalSystemStatus()),
     })
   })
 

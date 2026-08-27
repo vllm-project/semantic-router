@@ -20,7 +20,7 @@ describe('Agent Playground presentation', () => {
     expect(timeline).toContain('src="/vllm.png"')
     expect(timeline).toContain('<h1>Welcome, {userName}</h1>')
     expect(timeline).toContain('One prompt. The right model path.')
-    expect(timeline).toContain('Search the web. Use the right tools.')
+    expect(timeline).toContain('Describe the outcome. We’ll compose the model path.')
     expect(timeline).not.toContain('Put your models to work.')
     expect(playground).toContain('routing.refresh().catch(() => undefined)')
     expect(playground).toContain('Try again')

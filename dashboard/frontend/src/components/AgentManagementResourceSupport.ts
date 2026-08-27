@@ -1,5 +1,4 @@
 import type {
-  AgentProfile,
   AgentSkill,
   AgentToolDefinition,
   AgentToolSource,
@@ -7,7 +6,7 @@ import type {
 import type { AgentManagementTab } from './AgentManagementPanel'
 import type { AgentEditableResource } from './AgentResourceEditor'
 
-export type AgentResource = AgentProfile | AgentSkill | AgentToolDefinition | AgentToolSource
+export type AgentResource = AgentSkill | AgentToolDefinition | AgentToolSource
 
 export function resourceId(tab: AgentManagementTab, resource: AgentResource): string {
   return tab === 'tools'
