@@ -53,7 +53,7 @@ func (c *InMemoryCache) applyPolarityNLI(
 // the skip, so a model hiccup never turns into a cache outage.
 func (c *InMemoryCache) verifyPolarityNLI(ctx context.Context, model, cachedQuery, incomingQuery string) polarityNLIVerdict {
 	start := time.Now()
-	verifier := polarityVerifier
+	verifier := loadPolarityVerifier()
 	if verifier == nil {
 		c.recordPolarityNLISkipped(model, "polarity verifier not configured")
 		return polarityNLIVerdict{Skipped: true}

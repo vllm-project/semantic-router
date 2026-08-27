@@ -47,7 +47,7 @@ func newPolarityTestCache(t *testing.T, useNLI bool) (*InMemoryCache, CacheEntry
 // package state afterwards.
 func installVerifier(t *testing.T, fn PolarityVerifyFunc) {
 	t.Helper()
-	previous := polarityVerifier
+	previous := loadPolarityVerifier()
 	SetPolarityVerifier(fn)
 	t.Cleanup(func() { SetPolarityVerifier(previous) })
 }
@@ -199,6 +199,30 @@ func TestPolarityNLIGuardBelowThresholdSkipsVerifier(t *testing.T) {
 	if result.Found || result.Similarity != 0.42 {
 		t.Fatalf("below-threshold candidate must miss with its score reported, got %+v", result)
 	}
+}
+
+// TestPolarityNLIGuardVerifierReplacementIsRaceFree pins the reload contract:
+// SetPolarityVerifier may be called from another goroutine (a config reload
+// re-running the classifier runtime tasks) while lookups are in flight. Run
+// with -race.
+func TestPolarityNLIGuardVerifierReplacementIsRaceFree(t *testing.T) {
+	c, entry := newPolarityTestCache(t, true)
+	installVerifier(t, func(context.Context, string, string) (float32, error) { return 0.01, nil })
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			score := float32(i%2) * 0.9 // alternate between rejecting and passing verifiers
+			SetPolarityVerifier(func(context.Context, string, string) (float32, error) { return score, nil })
+		}
+	}()
+	for i := 0; i < 200; i++ {
+		if _, err := finishWithCandidate(c, context.Background(), "How can I enable 2FA?", entry); err != nil {
+			t.Fatalf("lookup %d failed: %v", i, err)
+		}
+	}
+	<-done
 }
 
 func TestValidateCacheConfigPolarityThreshold(t *testing.T) {

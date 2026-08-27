@@ -1,6 +1,9 @@
 package cache
 
-import "context"
+import (
+	"context"
+	"sync/atomic"
+)
 
 // PolarityVerifyFunc scores how strongly incomingQuery contradicts cachedQuery as
 // a probability in [0, 1]. The NLI direction is fixed: premise = cached query,
@@ -18,17 +21,31 @@ type PolarityGuardOptions struct {
 	ContradictionThreshold float32
 }
 
-// The verifier is injected once at startup by the classification lifecycle
+// The verifier is injected by the classification lifecycle
 // (classification.initializeSemanticCacheNLI), mirroring
 // looper.SetGroundingBackends, so pkg/cache never imports pkg/classification and
-// the guard stays unit-testable with a fake.
-var polarityVerifier PolarityVerifyFunc
+// the guard stays unit-testable with a fake. It is held atomically because a
+// config reload re-runs the classifier runtime tasks — and therefore this
+// injection — while the previous router is still serving lookups.
+var polarityVerifier atomic.Pointer[PolarityVerifyFunc]
 
 // SetPolarityVerifier wires the NLI backend used by the polarity guard. Safe to
-// call again to replace it; nil leaves the tier unavailable, and lookups then
-// fail open (the threshold-verified hit is served).
+// call again, from any goroutine, to replace it; nil leaves the tier
+// unavailable, and lookups then fail open (the threshold-verified hit is served).
 func SetPolarityVerifier(fn PolarityVerifyFunc) {
-	polarityVerifier = fn
+	if fn == nil {
+		polarityVerifier.Store(nil)
+		return
+	}
+	polarityVerifier.Store(&fn)
+}
+
+// loadPolarityVerifier returns the currently injected verifier, or nil.
+func loadPolarityVerifier() PolarityVerifyFunc {
+	if p := polarityVerifier.Load(); p != nil {
+		return *p
+	}
+	return nil
 }
 
 // polarityGuardTierNLI labels NLI-tier telemetry so it can be told apart from
