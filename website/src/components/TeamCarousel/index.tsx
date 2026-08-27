@@ -11,10 +11,6 @@ import styles from './styles.module.css'
 
 const teamMembers = [...maintainerMembers, ...committerMembers]
 
-interface MemberSequenceProps {
-  duplicate?: boolean
-}
-
 function revealFocusedCard(event: React.FocusEvent<HTMLElement>): void {
   const card = event.currentTarget.closest('article')
   const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -28,17 +24,15 @@ function revealFocusedCard(event: React.FocusEvent<HTMLElement>): void {
 
 function MemberCard({
   member,
-  duplicate = false,
 }: {
   member: TeamMember
-  duplicate?: boolean
 }): JSX.Element {
   return (
     <article
       className={styles.memberCard}
-      aria-label={duplicate ? undefined : `${member.name}`}
-      tabIndex={duplicate ? -1 : 0}
-      onFocus={duplicate ? undefined : revealFocusedCard}
+      aria-label={member.name}
+      tabIndex={0}
+      onFocus={revealFocusedCard}
     >
       <div className={styles.avatarWrapper}>
         <img
@@ -66,14 +60,13 @@ function MemberCard({
   )
 }
 
-function MemberSequence({ duplicate = false }: MemberSequenceProps): JSX.Element {
+function MemberSequence(): JSX.Element {
   return (
-    <div className={styles.sequence} aria-hidden={duplicate || undefined}>
+    <div className={styles.sequence}>
       {teamMembers.map((member, index) => (
         <MemberCard
           key={`${member.name}-${index}`}
           member={member}
-          duplicate={duplicate}
         />
       ))}
     </div>
@@ -85,14 +78,12 @@ const TeamCarousel: React.FC = () => {
     <section className={styles.teamSection} aria-labelledby="team-carousel-title">
       <div className="site-shell-container">
         <div className={styles.teamHeader}>
-          <div>
-            <SectionLabel>
-              <Translate id="teamCarousel.label">Community</Translate>
-            </SectionLabel>
-            <h2 className={styles.title} id="team-carousel-title">
-              <Translate id="teamCarousel.title">Built in the open.</Translate>
-            </h2>
-          </div>
+          <SectionLabel>
+            <Translate id="teamCarousel.label">Community</Translate>
+          </SectionLabel>
+          <h2 className={styles.title} id="team-carousel-title">
+            <Translate id="teamCarousel.title">Built in the open.</Translate>
+          </h2>
           <p className={styles.subtitle}>
             <Translate id="teamCarousel.subtitle">
               Maintainers across research, infrastructure, and model systems shape the project together.
@@ -104,7 +95,6 @@ const TeamCarousel: React.FC = () => {
           <div className={styles.viewport}>
             <div className={styles.track}>
               <MemberSequence />
-              <MemberSequence duplicate />
             </div>
           </div>
         </div>

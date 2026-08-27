@@ -1,6 +1,7 @@
 import React from 'react'
 import Translate from '@docusaurus/Translate'
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext'
+import IconExternalLink from '@theme/Icon/ExternalLink'
 import { PillLink, SectionLabel } from '@site/src/components/site/Chrome'
 import { localizeResearchEntries, researchPapers, sortResearchEntries } from '@site/src/data/researchContent'
 import styles from './index.module.css'
@@ -16,14 +17,12 @@ export default function ResearchPaperCarousel(): JSX.Element {
     <section className={styles.section}>
       <div className="site-shell-container">
         <div className={styles.header}>
-          <div>
-            <SectionLabel>
-              <Translate id="homepage.researchCarousel.label">Research</Translate>
-            </SectionLabel>
-            <h2 className={styles.title}>
-              <Translate id="homepage.researchCarousel.title">Papers behind the router.</Translate>
-            </h2>
-          </div>
+          <SectionLabel>
+            <Translate id="homepage.researchCarousel.label">Research</Translate>
+          </SectionLabel>
+          <h2 className={styles.title}>
+            <Translate id="homepage.researchCarousel.title">Papers behind the router.</Translate>
+          </h2>
           <p className={styles.subtitle}>
             <Translate id="homepage.researchCarousel.subtitle">
               Research threads that trace the router&apos;s evolving ideas across safety,
@@ -70,6 +69,7 @@ export default function ResearchPaperCarousel(): JSX.Element {
                         className={styles.paperLink}
                       >
                         <Translate id="homepage.researchCarousel.paperLink">Read paper</Translate>
+                        <IconExternalLink />
                       </a>
                     </div>
                   </article>

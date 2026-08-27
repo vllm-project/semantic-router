@@ -697,7 +697,7 @@ export default function IntegrationArchitecture(): JSX.Element {
     <section className={shared.bandSection} aria-labelledby="integration-architecture-title">
       <div className={`site-shell-container ${shared.sectionInner}`}>
         <ScrollReveal>
-          <header className={shared.sectionHeader}>
+          <header className={`site-section-intro ${shared.sectionHeader}`}>
             <span className={shared.eyebrow}>
               <Translate id="homepage.integration.eyebrow">How it integrates</Translate>
             </span>
