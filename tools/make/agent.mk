@@ -22,8 +22,13 @@ AGENT_REPORT_WRITE_PATH ?=
 AGENT_REPORT_CONTEXT_DETAIL ?= compact
 AGENT_SKIP_PRECOMMIT_BASELINE ?=
 
-# Repo-local venv for harness deps (avoids PEP 668 / externally-managed-environment on Homebrew Python).
-AGENT_VENV ?= $(CURDIR)/.venv-agent
+# Share harness tooling across linked worktrees. The common Git directory is
+# rooted in the primary worktree for a normal clone; fall back to the current
+# directory outside that layout. AGENT_VENV remains explicitly overridable.
+AGENT_GIT_COMMON_DIR ?= $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+AGENT_PRIMARY_WORKTREE ?= $(if $(filter %/.git,$(AGENT_GIT_COMMON_DIR)),$(patsubst %/.git,%,$(AGENT_GIT_COMMON_DIR)),$(CURDIR))
+AGENT_WORKTREE_VENV ?= $(CURDIR)/.venv-agent
+AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent
 AGENT_PYTHON ?= $(AGENT_VENV)/bin/python
 AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 AGENT_REQUIREMENTS_STAMP ?= $(AGENT_VENV)/.agent-requirements.txt
@@ -69,6 +74,13 @@ agent-venv-install: ## Create $(AGENT_VENV) and install harness Python requireme
 		! cmp -s tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; then \
 		"$(AGENT_PYTHON)" -m pip install -r tools/agent/requirements.txt && \
 		cp tools/agent/requirements.txt "$(AGENT_REQUIREMENTS_STAMP)"; \
+	fi
+	@if [ "$(abspath $(AGENT_WORKTREE_VENV))" != "$(abspath $(AGENT_VENV))" ]; then \
+		if [ -e "$(AGENT_WORKTREE_VENV)" ] && [ ! -L "$(AGENT_WORKTREE_VENV)" ]; then \
+			echo "Error: $(AGENT_WORKTREE_VENV) is a local directory; move or remove it so this worktree can use $(AGENT_VENV)." >&2; \
+			exit 1; \
+		fi; \
+		ln -sfn "$(AGENT_VENV)" "$(AGENT_WORKTREE_VENV)"; \
 	fi
 
 agent-bootstrap: agent-venv-install ## Prepare the shared agent Python environment
