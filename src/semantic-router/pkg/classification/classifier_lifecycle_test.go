@@ -116,15 +116,15 @@ func TestInitializeRuntimeWarmsEmbeddingCandidatesAfterBackendInit(t *testing.T)
 	initializer := &countingEmbeddingInitializer{onInit: func() {
 		backendInitialized = true
 	}}
-	originalFunc := getEmbeddingWithModelType
-	getEmbeddingWithModelType = func(text string, modelType string, targetDim int) (*candle_binding.EmbeddingOutput, error) {
+	originalFunc := getEmbedding2DMatryoshka
+	getEmbedding2DMatryoshka = func(text string, modelType string, targetLayer int, targetDim int) (*candle_binding.EmbeddingOutput, error) {
 		if !backendInitialized {
 			return nil, errors.New("embedding preload ran before backend initialization")
 		}
 		return &candle_binding.EmbeddingOutput{Embedding: makeEmbedding(1.0, 0.0, 0.0)}, nil
 	}
 	t.Cleanup(func() {
-		getEmbeddingWithModelType = originalFunc
+		getEmbedding2DMatryoshka = originalFunc
 	})
 
 	embeddingClassifier, err := NewEmbeddingClassifier(cfg.EmbeddingRules, cfg.EmbeddingConfig)

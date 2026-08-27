@@ -6,6 +6,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AGENT_MAKE = (REPO_ROOT / "tools/make/agent.mk").read_text(encoding="utf-8")
 LINTER_MAKE = (REPO_ROOT / "tools/make/linter.mk").read_text(encoding="utf-8")
+PRECOMMIT_MAKE = (REPO_ROOT / "tools/make/pre-commit.mk").read_text(encoding="utf-8")
+GITIGNORE = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
 AGENT_REQUIREMENTS = (REPO_ROOT / "tools/agent/requirements.txt").read_text(
     encoding="utf-8"
 )
@@ -41,6 +43,23 @@ def local_hook(hook_id: str) -> dict:
 
 
 class AgentMakeContractTests(unittest.TestCase):
+    def test_linked_worktrees_share_the_primary_agent_environment(self) -> None:
+        install = target_block("agent-venv-install")
+
+        self.assertIn(
+            "git rev-parse --path-format=absolute --git-common-dir", AGENT_MAKE
+        )
+        self.assertIn("AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent", AGENT_MAKE)
+        self.assertIn("AGENT_WORKTREE_VENV ?= $(CURDIR)/.venv-agent", AGENT_MAKE)
+        self.assertIn('ln -sfn "$(AGENT_VENV)" "$(AGENT_WORKTREE_VENV)"', install)
+        self.assertIn(
+            "AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit", PRECOMMIT_MAKE
+        )
+        self.assertIn(
+            "AGENT_VENV ?= $(AGENT_PRIMARY_WORKTREE)/.venv-agent", LINTER_MAKE
+        )
+        self.assertIn(".venv-agent", GITIGNORE)
+
     def test_python_requirements_use_a_content_stamp(self) -> None:
         install = target_block("agent-venv-install")
 
