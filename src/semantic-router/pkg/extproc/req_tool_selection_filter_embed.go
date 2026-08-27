@@ -8,9 +8,6 @@ import (
 
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
-
-	candle_binding "github.com/vllm-project/semantic-router/candle-binding"
-	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/embedding"
 )
 
 // toolEmbeddingText builds a phrase for embedding from an OpenAI-format tool (name + optional description).
@@ -48,12 +45,16 @@ type scoredRequestTool struct {
 
 // filterRequestToolsAgainstQuerySemantic scores each OpenAI-format tool definition against queryText
 // using embedding dot-products (same pipeline as ToolDatabase retrieval).
+//
+// The query and every tool are embedded in a single pass through emb, which
+// serves unchanged tool definitions from its memo and batches the remaining
+// misses. Scoring, ordering and threshold semantics are unaffected by whether a
+// vector came from the memo or was just computed.
 func filterRequestToolsAgainstQuerySemantic(
+	ctx context.Context,
 	queryText string,
 	requestTools []openai.ChatCompletionToolParam,
-	modelType string,
-	targetDim int,
-	provider embedding.Provider,
+	emb *cachedToolEmbedder,
 	relevanceThreshold float32,
 	preserveCount int,
 ) ([]openai.ChatCompletionToolParam, float32, error) {
@@ -66,14 +67,31 @@ func filterRequestToolsAgainstQuerySemantic(
 		copy(out, requestTools)
 		return out, 0, nil
 	}
-	queryEmbedding, err := embedToolSelectionText(provider, trimmedQuery, modelType, targetDim)
-	if err != nil {
-		return nil, 0, fmt.Errorf("tool_selection filter: query embedding: %w", err)
+	if emb == nil {
+		return nil, 0, fmt.Errorf("tool_selection filter: embedder is not initialized")
 	}
 
-	scored, err := scoreToolsBySemanticSimilarity(requestTools, queryEmbedding, modelType, targetDim, provider)
+	toolTexts := make([]string, len(requestTools))
+	for i, tool := range requestTools {
+		text := toolEmbeddingText(tool)
+		if text == "" {
+			text = tool.Function.Name
+		}
+		toolTexts[i] = text
+	}
+
+	queryEmbedding, toolEmbeddings, err := emb.embedQueryAndTools(ctx, trimmedQuery, toolTexts)
 	if err != nil {
 		return nil, 0, err
+	}
+
+	scored := make([]scoredRequestTool, 0, len(requestTools))
+	for i, tool := range requestTools {
+		scored = append(scored, scoredRequestTool{
+			tool:  tool,
+			score: dotProductFloat32(queryEmbedding, toolEmbeddings[i]),
+			order: i,
+		})
 	}
 
 	sort.SliceStable(scored, func(i, j int) bool {
@@ -95,43 +113,6 @@ func filterRequestToolsAgainstQuerySemantic(
 
 	kept = preserveTopScoredTools(scored, kept, preserveCount)
 	return kept, maxScore, nil
-}
-
-func scoreToolsBySemanticSimilarity(
-	requestTools []openai.ChatCompletionToolParam,
-	queryEmbedding []float32,
-	modelType string,
-	targetDim int,
-	provider embedding.Provider,
-) ([]scoredRequestTool, error) {
-	scored := make([]scoredRequestTool, 0, len(requestTools))
-	for i, tool := range requestTools {
-		embeddingText := toolEmbeddingText(tool)
-		if embeddingText == "" {
-			embeddingText = tool.Function.Name
-		}
-		toolEmbedding, err := embedToolSelectionText(provider, embeddingText, modelType, targetDim)
-		if err != nil {
-			return nil, fmt.Errorf("tool_selection filter: embedding tool %q: %w", tool.Function.Name, err)
-		}
-		scored = append(scored, scoredRequestTool{
-			tool:  tool,
-			score: dotProductFloat32(queryEmbedding, toolEmbedding),
-			order: i,
-		})
-	}
-	return scored, nil
-}
-
-func embedToolSelectionText(provider embedding.Provider, text string, modelType string, targetDim int) ([]float32, error) {
-	if provider != nil {
-		return provider.Embed(context.Background(), text)
-	}
-	output, err := candle_binding.GetEmbeddingWithModelType(text, modelType, targetDim)
-	if err != nil {
-		return nil, err
-	}
-	return output.Embedding, nil
 }
 
 func keepByRelevanceThreshold(scored []scoredRequestTool, relevanceThreshold float32) []openai.ChatCompletionToolParam {
