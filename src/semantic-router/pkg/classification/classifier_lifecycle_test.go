@@ -530,10 +530,11 @@ func TestInitializeRuntimeReleasesAcquiredResourcesWhenALaterTaskFails(t *testin
 
 func TestRecipeClassifiersInitializeRuntimeRollsBackEarlierRecipes(t *testing.T) {
 	firstMCP := newConnectingMCPInitializer()
+	secondMCP := newConnectingMCPInitializer()
 	failing := &failAfterInitializer{waitFor: firstMCP.initiated}
 
 	first := recipeClassifierWithMCP(firstMCP, nil)
-	second := recipeClassifierWithMCP(newConnectingMCPInitializer(), failing)
+	second := recipeClassifierWithMCP(secondMCP, failing)
 	set := &RecipeClassifiers{
 		byRecipe: map[config.RecipeName]*Classifier{"first": first, "second": second},
 		order:    []config.RecipeName{"first", "second"},
@@ -553,6 +554,12 @@ func TestRecipeClassifiersInitializeRuntimeRollsBackEarlierRecipes(t *testing.T)
 	}
 	if connected {
 		t.Fatal("the first recipe reports a live MCP connection after rollback")
+	}
+	if closes != 1 {
+		t.Fatalf("the first recipe's MCP initializer closed %d times, want exactly 1", closes)
+	}
+	if _, closes := secondMCP.state(); closes != 1 {
+		t.Fatalf("the failing recipe's MCP initializer closed %d times, want exactly 1", closes)
 	}
 }
 

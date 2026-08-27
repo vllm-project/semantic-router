@@ -363,12 +363,15 @@ func (r *Registry) Close() error {
 		return nil
 	}
 
+	r.mu.RLock()
 	closers := make([]io.Closer, 0, len(r.selectors))
 	for _, selector := range r.selectors {
 		if closer, ok := selector.(io.Closer); ok {
 			closers = append(closers, closer)
 		}
 	}
+	r.mu.RUnlock()
+
 	var errs []error
 	for _, closer := range closers {
 		if err := closer.Close(); err != nil {

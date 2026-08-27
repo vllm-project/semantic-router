@@ -3,9 +3,11 @@ package extproc
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/contextcompression"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/selection"
 )
 
@@ -35,7 +37,9 @@ func (c *closeTrackingCache) closeCount() int {
 
 func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 	fakeCache := &closeTrackingCache{}
-	router := &OpenAIRouter{Cache: fakeCache}
+	resources := newResourceScope()
+	resources.add(fakeCache.Close)
+	router := &OpenAIRouter{Cache: fakeCache, resources: resources}
 
 	if err := router.Close(); err != nil {
 		t.Fatalf("router.Close() error = %v", err)
@@ -46,27 +50,56 @@ func TestOpenAIRouterCloseClosesOwnedResources(t *testing.T) {
 	}
 }
 
-func TestOpenAIRouterCloseDelegatesToResourceScope(t *testing.T) {
-	resourceClosers := 0
-	resources := newResourceScope()
-	resources.add(func() error {
-		resourceClosers++
-		return nil
-	})
-
-	fakeCache := &closeTrackingCache{}
-	router := &OpenAIRouter{Cache: fakeCache, resources: resources}
-
-	if err := router.Close(); err != nil {
-		t.Fatalf("router.Close() error = %v", err)
+func TestOpenAIRouterCloseDrainsManagementLeasesBeforeRecoveryStore(t *testing.T) {
+	recovery := &closeTrackingRecoveryStore{closed: make(chan struct{})}
+	router := (&routerComponents{resources: newResourceScope()}).buildRouter()
+	router.CompressionRecovery = recovery
+	release, acquired := router.routerLearningRuntimeState().AcquireLease()
+	if !acquired {
+		t.Fatal("AcquireLease() rejected an active router learning runtime")
 	}
 
-	if resourceClosers != 1 {
-		t.Fatalf("resource closers ran %d times, want exactly 1", resourceClosers)
+	closed := make(chan struct{})
+	go func() {
+		_ = router.Close()
+		close(closed)
+	}()
+
+	select {
+	case <-recovery.closed:
+		t.Fatal("recovery store closed while a management request held its runtime lease")
+	case <-time.After(25 * time.Millisecond):
 	}
-	if got := fakeCache.closeCount(); got != 0 {
-		t.Fatalf("Close() bypassed the resource scope and closed Cache directly %d times", got)
+
+	release()
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("router close did not finish after the management lease was released")
 	}
+}
+
+type closeTrackingRecoveryStore struct {
+	closed chan struct{}
+}
+
+func (*closeTrackingRecoveryStore) Put(context.Context, contextcompression.RecoveryEntry, time.Duration) error {
+	return nil
+}
+
+func (*closeTrackingRecoveryStore) Get(context.Context, string, string) (contextcompression.RecoveryEntry, error) {
+	return contextcompression.RecoveryEntry{}, nil
+}
+
+func (*closeTrackingRecoveryStore) InvalidateScope(context.Context, string) (int64, error) {
+	return 0, nil
+}
+
+func (*closeTrackingRecoveryStore) Health(context.Context) error { return nil }
+
+func (s *closeTrackingRecoveryStore) Close() error {
+	close(s.closed)
+	return nil
 }
 
 func TestCloseRecipeModelSelectorsClosesEveryRecipe(t *testing.T) {

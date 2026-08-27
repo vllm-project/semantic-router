@@ -80,6 +80,7 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 	if s == nil {
 		return fmt.Errorf("recipe classifiers are nil")
 	}
+	initialized := make([]config.RecipeName, 0, len(s.lifecycleOrder()))
 	for _, recipeName := range s.lifecycleOrder() {
 		classifier := s.byRecipe[recipeName]
 		var err error
@@ -89,7 +90,14 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 			err = classifier.InitializeRuntime()
 		}
 		if err != nil {
-			if closeErr := s.Close(); closeErr != nil {
+			var closeErrors []error
+			for i := len(initialized) - 1; i >= 0; i-- {
+				initializedRecipe := initialized[i]
+				if closeErr := s.byRecipe[initializedRecipe].Close(); closeErr != nil {
+					closeErrors = append(closeErrors, fmt.Errorf("close routing recipe %q: %w", initializedRecipe, closeErr))
+				}
+			}
+			if closeErr := errors.Join(closeErrors...); closeErr != nil {
 				logging.ComponentWarnEvent("classifier", "recipe_runtime_initialization_rollback_failed", map[string]interface{}{
 					"recipe": string(recipeName),
 					"error":  closeErr.Error(),
@@ -97,6 +105,7 @@ func (s *RecipeClassifiers) InitializeRuntime() error {
 			}
 			return fmt.Errorf("initialize routing recipe %q: %w", recipeName, err)
 		}
+		initialized = append(initialized, recipeName)
 	}
 	return nil
 }

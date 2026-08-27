@@ -88,60 +88,7 @@ func (r *OpenAIRouter) Close() error {
 	if r == nil {
 		return nil
 	}
-	return r.closeResources()
-}
-
-func (r *OpenAIRouter) closeResources() error {
-	if r.resources != nil {
-		return r.resources.close()
-	}
-	return r.closeOwnedFields()
-}
-
-func (r *OpenAIRouter) closeOwnedFields() error {
-	if r.lookupTableCancel != nil {
-		r.lookupTableCancel()
-	}
-	learningRuntime := r.routerLearningRuntime
-	if learningRuntime != nil {
-		learningRuntime.RetireAndWait()
-	}
-
-	var errs []error
-	collect := func(err error) {
-		if err != nil {
-			errs = append(errs, err)
-		}
-	}
-
-	if r.Cache != nil {
-		collect(r.Cache.Close())
-	}
-	if r.RecipeClassifiers != nil {
-		collect(r.RecipeClassifiers.Close())
-	} else {
-		collect(r.Classifier.Close())
-	}
-	collect(closeReplayRecorders(r.ReplayRecorder, r.ReplayRecorders, r.ReplayStoreShared))
-	if len(r.RecipeModelSelectors) > 0 {
-		collect(closeRecipeModelSelectors(r.RecipeModelSelectors))
-	} else {
-		collect(r.ModelSelector.Close())
-	}
-	if r.MemoryStore != nil {
-		collect(r.MemoryStore.Close())
-	}
-	collect(r.RateLimiter.Close())
-	if r.CompressionRecovery != nil {
-		collect(r.CompressionRecovery.Close())
-	}
-	collect(r.ResponseAPIFilter.Close())
-	if r.routerSessionStateStore != nil {
-		sessiontelemetry.UnpublishRouterSessionStateStore(r.routerSessionStateStore)
-		collect(r.routerSessionStateStore.RetireAndClose())
-	}
-
-	return errors.Join(errs...)
+	return r.resources.close()
 }
 
 func closeReplayRecorders(

@@ -326,16 +326,18 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 	}
 
 	components.resources.add(func() error {
-		learningRuntime := router.routerLearningRuntime
-		if learningRuntime != nil {
-			learningRuntime.RetireAndWait()
+		if router.CompressionRecovery != nil {
+			return router.CompressionRecovery.Close()
 		}
 		return nil
 	})
 
 	components.resources.add(func() error {
-		if router.CompressionRecovery != nil {
-			return router.CompressionRecovery.Close()
+		router.routerLearningMu.Lock()
+		learningRuntime := router.routerLearningRuntime
+		router.routerLearningMu.Unlock()
+		if learningRuntime != nil {
+			learningRuntime.RetireAndWait()
 		}
 		return nil
 	})
