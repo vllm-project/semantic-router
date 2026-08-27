@@ -59,6 +59,11 @@ config:
       clear_route_cache: true
       strategy: priority
     services:
+      response_api:
+        enabled: true
+        store_backend: memory
+        ttl_seconds: 86400
+        max_responses: 1000
       observability:
         metrics:
           enabled: true
