@@ -33,6 +33,11 @@ func newToolEmbedderForConfig(cfg *config.RouterConfig, provider embedding.Provi
 // embedding endpoints commonly reject or badly latency-spike oversized batches.
 const toolEmbedBatchChunkSize = 64
 
+// toolEmbeddingMemoSize bounds the tool embedding memo. Each entry costs
+// roughly embedding_dim * 4 bytes (~3KB at 768 dims), so the default holds the
+// memo under ~6MB even for 768-dim models (entries * dim * 4 bytes).
+const toolEmbeddingMemoSize = 2048
+
 // cachedToolEmbedder embeds tool-selection texts, reusing tool embeddings across
 // requests through a bounded memo and filling misses in batches.
 //
@@ -47,7 +52,7 @@ type cachedToolEmbedder struct {
 	// computed by a different one. Constant for the embedder's lifetime, so it
 	// is computed once here instead of per key() call.
 	keyPrefix string
-	memo      *embedding.ToolEmbeddingMemo
+	memo      *embedding.Memo
 }
 
 // newCachedToolEmbedder constructs an embedder. remoteIdentity distinguishes
@@ -64,7 +69,7 @@ func newCachedToolEmbedder(provider embedding.Provider, modelType string, target
 		modelType: modelType,
 		targetDim: targetDim,
 		keyPrefix: keyPrefix,
-		memo:      embedding.NewToolEmbeddingMemo(embedding.DefaultToolEmbeddingMemoSize),
+		memo:      embedding.NewMemo(toolEmbeddingMemoSize),
 	}
 }
 
