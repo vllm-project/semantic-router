@@ -27,10 +27,11 @@ import (
 )
 
 type blockingEmbedder struct {
-	dim     int
-	once    sync.Once
-	started chan struct{}
-	release chan struct{}
+	dim         int
+	once        sync.Once
+	releaseOnce sync.Once
+	started     chan struct{}
+	release     chan struct{}
 }
 
 func newBlockingEmbedder(dim int) *blockingEmbedder {
@@ -60,6 +61,10 @@ func (e *blockingEmbedder) Embed(_ context.Context, _ string) ([]float32, error)
 
 func (e *blockingEmbedder) Dimension() int {
 	return e.dim
+}
+
+func (e *blockingEmbedder) releaseAll() {
+	e.releaseOnce.Do(func() { close(e.release) })
 }
 
 type pipelineLifecycleFixture struct {
@@ -175,7 +180,7 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 		released := false
 		defer func() {
 			if !released {
-				close(embedder.release)
+				embedder.releaseAll()
 			}
 		}()
 
@@ -213,7 +218,7 @@ var _ = Describe("IngestionPipeline queued shutdown", func() {
 		Expect(secondStatus.LastError).NotTo(BeNil())
 		Expect(secondStatus.LastError.Code).To(Equal("pipeline_stopped"))
 
-		close(embedder.release)
+		embedder.releaseAll()
 		released = true
 		Eventually(stopped, 5*time.Second).Should(BeClosed())
 
@@ -243,7 +248,8 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 
 	AfterEach(func() {
 		// Release the wedged embedder so the worker can unwind, then clean up.
-		close(embedder.release)
+		embedder.releaseAll()
+		_ = f.pipeline.Stop(context.Background())
 		_ = os.RemoveAll(f.tempDir)
 	})
 
@@ -291,7 +297,71 @@ var _ = Describe("IngestionPipeline bounded Stop", func() {
 		defer cancel()
 		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
 
-		// A second Stop on an already-stopped pipeline is a no-op returning nil.
+		// A second Stop must report that the generation is still stopping instead
+		// of falsely claiming a clean shutdown. Once the wedged stage is released,
+		// a retry can observe the worker join and return nil.
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel2()
+		Expect(f.pipeline.Stop(ctx2)).To(MatchError(context.DeadlineExceeded))
+		embedder.releaseAll()
+		Eventually(func() error {
+			ctx3, cancel3 := context.WithTimeout(context.Background(), time.Second)
+			defer cancel3()
+			return f.pipeline.Stop(ctx3)
+		}, 5*time.Second, 50*time.Millisecond).Should(BeNil())
+	})
+})
+
+var _ = Describe("IngestionPipeline restart after timed-out Stop", func() {
+	var (
+		embedder *blockingEmbedder
+		f        *pipelineLifecycleFixture
+	)
+
+	BeforeEach(func() {
+		embedder = newBlockingEmbedder(3)
+		f = newPipelineLifecycleFixture(embedder)
+	})
+
+	AfterEach(func() {
+		embedder.releaseAll()
+		_ = f.pipeline.Stop(context.Background())
+		_ = os.RemoveAll(f.tempDir)
+	})
+
+	It("does not reuse a timed-out generation during restart", func() {
+		vs, err := f.mgr.CreateStore(f.ctx, CreateStoreRequest{Name: "restart-generation"})
+		Expect(err).NotTo(HaveOccurred())
+		record, err := f.store.Save("restart.txt", []byte("content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+		_, err = f.pipeline.AttachFile(vs.ID, record.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(embedder.started, 5*time.Second).Should(BeClosed())
+
+		ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+		defer cancel()
+		Expect(f.pipeline.Stop(ctx)).To(MatchError(context.DeadlineExceeded))
+
+		started := make(chan struct{})
+		go func() {
+			f.pipeline.Start()
+			close(started)
+		}()
+		Consistently(started, 150*time.Millisecond, 20*time.Millisecond).ShouldNot(BeClosed())
+		embedder.releaseAll()
+		Eventually(started, 5*time.Second).Should(BeClosed())
+
+		second, err := f.store.Save("restart-second.txt", []byte("new content"), "assistants")
+		Expect(err).NotTo(HaveOccurred())
+		vsf, err := f.pipeline.AttachFile(vs.ID, second.ID, nil)
+		Expect(err).NotTo(HaveOccurred())
+		Eventually(func() string {
+			status, statusErr := f.pipeline.GetFileStatus(vsf.ID)
+			if statusErr != nil {
+				return ""
+			}
+			return status.Status
+		}, 5*time.Second, 50*time.Millisecond).Should(Equal("completed"))
 		Expect(f.pipeline.Stop(context.Background())).To(BeNil())
 	})
 })
