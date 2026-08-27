@@ -2,7 +2,7 @@
 
 PRECOMMIT_CONTAINER := ghcr.io/vllm-project/semantic-router/precommit:latest
 
-AGENT_PRE_COMMIT ?= $(CURDIR)/.venv-agent/bin/pre-commit
+AGENT_PRE_COMMIT ?= $(AGENT_VENV)/bin/pre-commit
 
 precommit-install: ## Install the repo-local pre-commit hook into the agent harness venv
 precommit-install:

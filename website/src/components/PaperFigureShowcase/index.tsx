@@ -930,10 +930,10 @@ const PaperFigureShowcase: React.FC = () => {
   return (
     <section className={styles.paperFigureSection}>
       <div className="site-shell-container">
-        <div className={styles.paperHeader}>
-          <p className={styles.paperLabel}>
+        <div className={`site-section-intro ${styles.paperHeader}`}>
+          <span className={styles.paperLabel}>
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
-          </p>
+          </span>
           <h2 className={styles.paperTitle}>
             <Translate id="homepage.paperFigures.title">From signal to model path.</Translate>
           </h2>
