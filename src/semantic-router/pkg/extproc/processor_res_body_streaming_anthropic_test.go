@@ -41,6 +41,9 @@ func TestHandleAnthropicStreamingResponseBody_TranslatesSSE(t *testing.T) {
 		"event: message_stop",
 		`data: {"type":"message_stop"}`,
 		"",
+		// SSE frames end with a blank line; the handler buffers an
+		// unterminated final frame while waiting for its delimiter.
+		"",
 	}, "\n")
 
 	resp := router.handleAnthropicStreamingResponseBody([]byte(anthropicChunk), ctx)
