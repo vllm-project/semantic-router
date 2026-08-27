@@ -9,6 +9,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ratelimit"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
@@ -44,6 +45,7 @@ type routerComponents struct {
 	lookupTable          lookuptable.LookupTable
 	memoryStore          memory.Store
 	memoryExtractor      *memory.MemoryExtractor
+	protocolCodecs       *protocolcodec.Registry
 	credentialResolver   *authz.CredentialResolver
 	rateLimiter          *ratelimit.RateLimitResolver
 	lookupTableCancel    func()
@@ -265,6 +267,7 @@ func buildRouterComponents(cfg *config.RouterConfig) (*routerComponents, error) 
 		lookupTable:          lookupTable,
 		memoryStore:          memoryStore,
 		memoryExtractor:      memoryExtractor,
+		protocolCodecs:       protocolcodec.NewBuiltinRegistry(),
 		credentialResolver:   credentialResolver,
 		rateLimiter:          rateLimiter,
 		lookupTableCancel:    lookupTableCancel,
@@ -293,6 +296,7 @@ func (components *routerComponents) buildRouter() *OpenAIRouter {
 		ReplayRecorders:         components.replayRecorders,
 		MemoryStore:             components.memoryStore,
 		MemoryExtractor:         components.memoryExtractor,
+		ProtocolCodecs:          components.protocolCodecs,
 		CredentialResolver:      components.credentialResolver,
 		RateLimiter:             components.rateLimiter,
 		lookupTableCancel:       components.lookupTableCancel,

@@ -28,7 +28,7 @@ var BaselineRouterContract = []string{
 	"decision-fallback-behavior",
 	"plugin-config-variations",
 	"chat-completions-progressive-stress",
-	"anthropic-passthrough-openai-regression",
+	"protocol-codec-openai-regression",
 	// Retention directive response-header contract (issue #2009)
 	"retention-directive",
 	// Looper aggregate latency/token-usage response-header contract (issue #2694)

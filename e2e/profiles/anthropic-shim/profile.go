@@ -29,7 +29,7 @@ var (
 // shim) and points the Envoy AI Gateway routing at it so that Anthropic-
 // protocol requests reach an endpoint that speaks Anthropic Messages natively.
 // This is required for cache-cycle and stop-sequence assertions that exercise
-// the outbound emitter's buildAnthropicUsage and stop-reason mapping paths.
+// the Anthropic response codec's usage and stop-reason mapping paths.
 type Profile struct {
 	stack *gatewaystack.Stack
 }

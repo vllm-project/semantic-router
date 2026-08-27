@@ -1,137 +1,102 @@
-# OpenAI API Type Contracts
+# Inference Protocol Contracts
 
-Inventory of OpenAI-facing request/response types in Semantic Router, their SDK
-alignment status, and documented differences. Policy rules live in
+Inventory of client-facing inference types, neutral Router types, and wire codecs.
+Architecture rules live in
 [architecture-guardrails.md](architecture-guardrails.md#api-type-contracts).
 
-Related issue: [#1217](https://github.com/vllm-project/semantic-router/issues/1217).
+## Runtime boundary
 
-## SDK baseline
+The inference hot path has three type layers:
 
-- Go SDK: `github.com/openai/openai-go`
-- Chat Completions, streaming chunks, and tool calling use SDK types end-to-end
-  in the router hot path (`#1550`, `#1712`).
+1. `pkg/protocolcodec` parses or renders a supported wire format.
+2. `pkg/llmprotocol` carries protocol-neutral semantic state.
+3. `pkg/extproc` evaluates routing and plugin policy against neutral state while
+   Envoy owns upstream transport.
 
-## Inventory
+Router policy must not mutate provider SDK or wire structs. Provider-specific JSON,
+SSE events, stop reasons, and error envelopes belong in codecs.
 
-### Chat Completions (`/v1/chat/completions`)
+## Built-in wire formats
 
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/extproc/utils.go` | parse/serialize via `openai.ChatCompletionNewParams` | SDK | Request ingress |
-| `pkg/extproc/openai_compat_test.go` | round-trip tests | SDK | Regression guard |
-| `pkg/cache/cache.go` | `openai.ChatCompletionNewParams` | SDK | Cache key extraction |
-| `pkg/cache/sdk_compat_test.go` | compat tests | SDK | |
-| `pkg/memory/extractor.go` | `openai.ChatCompletionMessageParamUnion` | SDK | Memory enrichment |
-| `pkg/responseapi/translator.go` | `openai.ChatCompletionNewParams`, `openai.ChatCompletion` | SDK | Response API translation |
-| `pkg/classification/vllm_client.go` | SDK + `extra_body` composition | SDK + extension | vLLM-specific field |
-| `pkg/modelselection/benchmark_runner.go` | SDK + error envelope | SDK + extension | Provider error detection |
-| `pkg/mcp/types.go` | SDK tool types | SDK | Tool conversion |
-| `pkg/utils/http/response.go` | `openai.ChatCompletion`, `openai.ChatCompletionChunk` | SDK | Response normalization |
-| `pkg/extproc/request_context.go` | `ChatCompletionMessage` | Internal | Role + plain text only; not wire format |
-| `dashboard/backend/handlers/openclaw_*.go` | `openAIChat*` structs | Custom | Dashboard proxy; minimal subset |
-| `internal/nlgen/` | `ChatCompletionRequest` | Custom | Standalone NL tool; avoids router import cycle |
-| `e2e/pkg/fixtures/chat.go` | `ChatCompletionsRequest` | Custom | E2E isolation |
+| Format | Buffered codec | Stream codec | Compatibility tests |
+| --- | --- | --- | --- |
+| OpenAI Chat Completions | `pkg/protocolcodec/codec_openai_chat.go` | `pkg/protocolcodec/stream_chat.go` | `pkg/protocolcodec/matrix_test.go`, `stream_contract_test.go` |
+| OpenAI Responses | `pkg/protocolcodec/codec_openai_responses.go` | `pkg/protocolcodec/stream_responses.go` | `pkg/protocolcodec/matrix_test.go`, `stream_contract_test.go` |
+| Anthropic Messages | `pkg/protocolcodec/codec_anthropic_messages.go` | `pkg/protocolcodec/stream_anthropic.go` | `pkg/protocolcodec/matrix_test.go`, `stream_contract_test.go` |
 
-### Streaming
+Each codec declares capabilities. Unsupported tools, multimodal content, reasoning,
+structured output, multiple candidates, or streaming behavior must fail explicitly;
+translation must not silently discard semantic fields.
 
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/extproc/processor_res_body_streaming.go` | `openai.ChatCompletionChunk` | SDK | Chunk accumulation |
-| `pkg/extproc/openai_compat_test.go` | chunk parsing tests | SDK | |
-| `pkg/anthropic/compat_test.go` | OpenAI chunk to Anthropic | SDK source | Cross-protocol |
+The compatibility inventory is pinned to the upstream OpenAI OpenAPI schemas for
+Chat Completions and Responses and the generated Anthropic Messages API types. The
+closed-field tests in `pkg/protocolcodec/official_schema_contract_test.go` fail when
+an upstream top-level field is neither represented by the wire codec nor classified
+as a Router extension. Semantically unsupported request fields fail with a typed
+`unsupported_feature` error; provider response metadata that is not model output is
+reported through bounded diagnostics.
 
-### Models list (`GET /v1/models`)
+## Neutral model
 
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/publicmodels/models.go` | `OpenAIModel`, `OpenAIModelList`, `RoutingMetadata` | Custom | Shared router-generated catalog |
-| `pkg/extproc/req_filter_models.go` | aliases shared catalog types | Custom | ExtProc transport adapter |
-| `pkg/extproc/models_compat_test.go` | wire-format tests | Partial | Core fields match `openai.Model` |
-| `pkg/apiserver/config.go` | aliases shared catalog types | Custom | Router API transport adapter |
+| Location | Contract | Notes |
+| --- | --- | --- |
+| `pkg/llmprotocol/types.go` | Requests, responses, messages, content, tools, sampling | No wire JSON or provider transport |
+| `pkg/llmprotocol/stream.go` | Neutral stream events and request-scoped codec interfaces | Enforces terminal and usage semantics |
+| `pkg/llmprotocol/errors.go` | Typed protocol and transport errors | HTTP errors remain distinct from model response resources |
+| `pkg/llmprotocol/capabilities.go` | Codec feature declarations and requirements | Checked before target encoding |
+| `pkg/llmprotocol/policy.go` | Bounds and unknown-field policy | Same-format preservation is never a cross-format fallback |
 
-**Documented differences from `openai.Model`:**
+Trusted identity and correlation metadata is populated by the transport boundary,
+not decoded from client-controlled fields.
 
-- Extra fields: `description`, `logo_url`, and `routing` (router discovery extensions)
-- `routing.resolution` is the stable `virtual` or `passthrough` request boundary;
-  `selectable`, optional `default_route`, and optional `recipe` are client-facing
-  discovery behavior. `recipe` identifies the isolated routing policy selected
-  by an entrypoint; internal orchestration modes remain outside this contract.
-- `owned_by` is always `vllm-semantic-router` for router-managed entries
+## ExtProc integration
 
-### Response API (`/v1/responses`)
+| Location | Responsibility |
+| --- | --- |
+| `pkg/extproc/processor_protocol_contract.go` | Detect source and target wire contracts and hold the request-scoped codec state |
+| `pkg/extproc/processor_req_body.go` | Decode once, invoke neutral request policy, encode for the selected backend |
+| `pkg/extproc/processor_res_body.go` | Decode provider output and encode the client response |
+| `pkg/extproc/processor_res_semantic_stream.go` | Translate provider stream frames through neutral events |
+| `pkg/extproc/processor_res_terminal.go` | Settle terminal response, usage, replay, cache, and response-side policy |
+| `pkg/extproc/processor_response_object.go` | Handle stored Response objects without introducing wire state into policy |
 
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/responseapi/types.go` | `ResponseAPIRequest`, `ResponseAPIResponse`, items | Custom | Stateful API; SDK `Response` not used yet |
-| `pkg/responseapi/translator.go` | translates to/from Chat Completions SDK types | SDK at boundary | |
-| `pkg/responseapi/*_test.go` | translation + round-trip | Custom + SDK boundary | |
-| `pkg/responseapi/types_compat_test.go` | JSON round-trip | Custom | Wire stability guard |
-| `e2e/pkg/fixtures/response_api.go` | fixture types | Custom | E2E isolation |
+The main processor files remain phase orchestrators. Provider normalization,
+streaming accumulation, terminal settlement, cache persistence, replay persistence,
+and warning shaping stay on separate seams.
 
-**Documented differences:**
+## Other API surfaces
 
-- Router extension fields: `auto_store` (memory e2e)
-- Translation layer uses `openai.ChatCompletionNewParams` / `openai.ChatCompletion`
-  for backend calls; Response API wire types remain custom until SDK coverage is
-  adopted end-to-end
+These APIs are intentionally outside the inference codec matrix:
 
-### Image generation (`/v1/images/generations`)
+| Surface | Location | Contract |
+| --- | --- | --- |
+| Models list | `pkg/publicmodels` | OpenAI-compatible model list plus bounded Router discovery metadata |
+| Stored Responses service | `pkg/responseapi` | Persistence and object lifecycle behind the Responses endpoints |
+| Files and vector stores | `pkg/openai` | Narrow outbound clients covered by wire compatibility tests |
+| Image generation backend | `pkg/imagegen` | Plugin-owned outbound contract |
+| E2E request fixtures | `e2e/pkg/fixtures` | Test-isolated minimal wire structures |
 
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/imagegen/backend_openai.go` | `openAIImageRequest`, `openAIImageResponse` | Custom | Outbound client only |
-| `pkg/imagegen/backend_openai_compat_test.go` | wire-format tests | Partial | Overlaps `openai.ImageGenerateParams`, `openai.ImagesResponse` |
+## Regression requirements
 
-**Documented differences:**
+Any change to `pkg/llmprotocol`, `pkg/protocolcodec`, or the ExtProc protocol seam must
+cover:
 
-- Custom structs cover the subset used by the image-gen plugin (model, prompt,
-  size, quality, style, url/b64_json). SDK types parse the same wire JSON for
-  those fields.
+- malformed and bounded input;
+- buffered request and response translation;
+- transport error translation;
+- all source-to-target format pairs;
+- split streaming frames, tool events, terminal events, and final usage;
+- unknown-field and unsupported-capability failure behavior;
+- trusted metadata isolation; and
+- an ExtProc request/response regression using Envoy's normal transport boundary.
 
-### Files API (`/v1/files`)
+Adding a codec is incomplete until it is registered, declares capabilities, and
+passes the complete pairwise matrix.
 
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/openai/filestore.go` | `File`, `FileListResponse` | Custom | Outbound RAG client |
-| `pkg/openai/wire_compat_test.go` | wire-format tests | Partial | Core fields match `openai.FileObject` |
-| `pkg/openai/openai_validation_e2e_test.go` | live API validation | Custom | `openai_validation` build tag |
+Authoritative upstream contracts used by the current inventory:
 
-### Vector Stores API (`/v1/vector_stores`)
-
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/openai/vectorstore.go` | `VectorStore`, list/create/search types | Custom | Outbound RAG client |
-| `pkg/openai/wire_compat_test.go` | wire-format tests | Partial | Core fields match `openai.VectorStore` |
-| `e2e/testing/09-openai-api-validation-test.py` | live API validation | Custom | Files + Vector Stores |
-
-### Other (config / telemetry / tests only)
-
-| Location | Types | SDK alignment | Notes |
-|----------|-------|---------------|-------|
-| `pkg/config/image_gen_plugin.go` | `OpenAIImageGenConfig` | Config schema | Not wire format |
-| `pkg/config/rag_plugin_backends.go` | `OpenAIRAGConfig` | Config schema | Not wire format |
-| `pkg/sessiontelemetry/telemetry.go` | `ResponseAPIInput` | Internal telemetry | Not client-facing |
-| `pkg/classification/hallucination_detector_test.go` | test-only structs | Custom | Test simulation only |
-
-## Regression tests
-
-| Package | Test file | Coverage |
-|---------|-----------|----------|
-| `pkg/extproc` | `openai_compat_test.go` | Chat Completions request/response/streaming |
-| `pkg/cache` | `sdk_compat_test.go` | Request extraction |
-| `pkg/anthropic` | `compat_test.go` | OpenAI to Anthropic conversion |
-| `pkg/responseapi` | `translator_test.go`, `roundtrip_test.go`, `types_compat_test.go` | Response API wire + translation |
-| `pkg/extproc` | `models_compat_test.go` | Models list wire format |
-| `pkg/imagegen` | `backend_openai_compat_test.go` | Image generation wire format |
-| `pkg/openai` | `wire_compat_test.go` | Files + Vector Stores wire format |
-| `pkg/openai` | `openai_validation_e2e_test.go` | Live API (optional, build tag) |
-| `e2e/testing` | `09-openai-api-validation-test.py` | Live Files/Vector Stores |
-
-## When to adopt SDK types
-
-1. Hot-path request/response handling: always prefer SDK types.
-2. Outbound clients with narrow field usage: custom minimal structs are OK if
-   covered by `wire_compat_test.go` and listed here.
-3. E2E fixtures and standalone tools: custom minimal types OK with a comment
-   citing isolation.
+- OpenAI OpenAPI at `172101000e7be21103c405aa8bedf918039f886f`:
+  <https://github.com/openai/openai-openapi>
+- Anthropic Go SDK generated API types at
+  `f6f796100d7bb958d84580f44060a0a2b21bfe04`:
+  <https://github.com/anthropics/anthropic-sdk-go>

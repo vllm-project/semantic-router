@@ -431,7 +431,8 @@ profiles:
       - e2e/profiles/anthropic-shim/**
       - e2e/testing/anthropic-shim/**
       - deploy/kubernetes/anthropic-backend/**
-      - src/semantic-router/pkg/anthropic/outbound*.go
+      - src/semantic-router/pkg/protocolcodec/codec_anthropic_messages.go
+      - src/semantic-router/pkg/protocolcodec/stream_anthropic.go
   response-api:
     owner: e2e
     coverage_role: responses-api-memory

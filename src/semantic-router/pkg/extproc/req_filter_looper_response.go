@@ -9,6 +9,7 @@ import (
 	typev3 "github.com/envoyproxy/go-control-plane/envoy/type/v3"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/headers"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/looper"
 	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
@@ -18,28 +19,123 @@ func (r *OpenAIRouter) createLooperResponse(
 	resp *looper.Response,
 	reqCtx *RequestContext,
 ) *ext_proc.ProcessingResponse {
+	response, _, _, err := r.prepareLooperResponse(resp, reqCtx)
+	if err != nil {
+		return r.createErrorResponse(502, "Looper returned an invalid response")
+	}
+	return response
+}
+
+//nolint:gocognit,cyclop,nestif // Looper output normalizes buffered and streaming terminal variants at one boundary.
+func (r *OpenAIRouter) prepareLooperResponse(
+	resp *looper.Response,
+	reqCtx *RequestContext,
+) (*ext_proc.ProcessingResponse, *llmprotocol.Response, []byte, error) {
+	if resp == nil || reqCtx == nil {
+		return nil, nil, nil, fmt.Errorf("looper response context is unavailable")
+	}
+	engine, err := r.protocolEngine()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	target := reqCtx.SourceFormat
+	if target == "" {
+		target = llmprotocol.OpenAIChatV1
+	}
+	var semantic *llmprotocol.Response
+	var body []byte
+	contentType := "application/json"
+	if strings.Contains(strings.ToLower(resp.ContentType), "text/event-stream") {
+		stream, streamErr := engine.NewStream(
+			llmprotocol.OpenAIChatV1,
+			target,
+			llmprotocol.StreamContext{
+				Context: reqCtx.TraceContext, PublicModel: resp.Model,
+			},
+		)
+		if streamErr != nil {
+			return nil, nil, nil, streamErr
+		}
+		state := &semanticResponseStreamState{
+			usage: llmprotocol.Usage{State: llmprotocol.UsageUnavailable},
+			items: make(map[int]*semanticStreamItem),
+		}
+		frames, events, diagnostics, streamErr := stream.Push(resp.Body)
+		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, diagnostics...)
+		state.observe(events)
+		for _, frame := range frames {
+			body = append(body, frame...)
+		}
+		finalFrames, finalEvents, finalDiagnostics, finalErr := stream.Finalize(streamErr)
+		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, finalDiagnostics...)
+		state.observe(finalEvents)
+		for _, frame := range finalFrames {
+			body = append(body, frame...)
+		}
+		if streamErr != nil {
+			return nil, nil, nil, streamErr
+		}
+		if finalErr != nil {
+			return nil, nil, nil, finalErr
+		}
+		semantic, err = state.response()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if semantic.Model != resp.Model {
+			semantic.Model = resp.Model
+			semantic.Generation++
+		}
+		contentType = "text/event-stream"
+	} else {
+		translated, translateErr := engine.TranslateResponse(
+			llmprotocol.OpenAIChatV1,
+			target,
+			resp.Body,
+			func(response *llmprotocol.Response) error {
+				if response.Model != resp.Model {
+					response.Model = resp.Model
+				}
+				return nil
+			},
+		)
+		if translateErr != nil {
+			return nil, nil, nil, translateErr
+		}
+		semantic = &translated.Response
+		body = translated.Body
+		reqCtx.ResponseEnvelope = translated.Envelope
+		reqCtx.ProtocolDiagnostics = append(reqCtx.ProtocolDiagnostics, translated.Diagnostics...)
+	}
+	reqCtx.SemanticResponse = semantic
+	reqCtx.ImmediateResponseEncoded = true
 	return &ext_proc.ProcessingResponse{
 		Response: &ext_proc.ProcessingResponse_ImmediateResponse{
 			ImmediateResponse: &ext_proc.ImmediateResponse{
 				Status: &typev3.HttpStatus{Code: typev3.StatusCode_OK},
 				Headers: &ext_proc.HeaderMutation{
-					SetHeaders: buildLooperResponseHeaders(resp, reqCtx),
+					SetHeaders: buildLooperResponseHeaders(resp, reqCtx, contentType),
 				},
-				Body: resp.Body,
+				Body: body,
 			},
 		},
-	}
+	}, semantic, body, nil
 }
 
 func buildLooperResponseHeaders(
 	resp *looper.Response,
 	reqCtx *RequestContext,
+	contentType ...string,
 ) []*core.HeaderValueOption {
 	// content-type is a real response header for the immediate body and always
 	// rides; the v0.4 keystone headers (#2203) and the final routing facts ride
 	// on the default surface.
+	wireContentType := "application/json"
+	if len(contentType) > 0 && contentType[0] != "" {
+		wireContentType = contentType[0]
+	}
 	setHeaders := []*core.HeaderValueOption{
-		newHeaderValueOption("content-type", resp.ContentType),
+		newHeaderValueOption("content-type", wireContentType),
 	}
 	setHeaders = append(setHeaders, httputil.KeystoneHeaderOptions(headers.ResponsePathLooper)...)
 	appendLooperRoutingFacts(&setHeaders, resp, reqCtx)

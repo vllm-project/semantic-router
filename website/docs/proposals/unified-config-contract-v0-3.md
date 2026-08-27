@@ -44,8 +44,9 @@ silently translated at runtime.
 ## Provider and model boundary
 
 `providers.defaults` owns the default provider behavior and default model.
-`providers.models[].backend_refs[]` owns physical backend bindings and reliability
-settings.
+`providers.models[].backend_refs[]` owns physical backend bindings.
+`providers.models[].pricing` owns optional deployment cost metadata used by
+cost-aware selection and accounting. Pricing does not belong to routing model cards.
 
 `routing.modelCards` describes routing-facing model identity. Optional
 `routing.modelCards[].loras` declare LoRA adapters that decisions may select with

@@ -3,18 +3,17 @@ package extproc
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/openai/openai-go"
-
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/memory"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 )
 
 // ConversationMessage represents a message in conversation history.
@@ -23,8 +22,10 @@ type ConversationMessage struct {
 	Content string `json:"content"`
 }
 
-// ResolvedLLMConfig holds resolved LLM endpoint configuration from external_models.
-type ResolvedLLMConfig struct {
+// memoryRewriteServiceConfig describes the optional internal system service
+// used to improve vector-memory queries. It is not a request-selected logical
+// Model backend and cannot participate in routing, fallback, or usage dispatch.
+type memoryRewriteServiceConfig struct {
 	Endpoint       string
 	Model          string
 	AccessKey      string
@@ -79,21 +80,21 @@ History: (no relevant context)
 Query: What is my budget?
 Rewritten: What is my project budget?`
 
-func getMaxTokens(resolved *ResolvedLLMConfig, defaultValue int) int {
+func getMaxTokens(resolved *memoryRewriteServiceConfig, defaultValue int) int {
 	if resolved != nil && resolved.MaxTokens > 0 {
 		return resolved.MaxTokens
 	}
 	return defaultValue
 }
 
-func getTemperature(resolved *ResolvedLLMConfig, defaultValue float64) float64 {
+func getTemperature(resolved *memoryRewriteServiceConfig, defaultValue float64) float64 {
 	if resolved != nil && resolved.Temperature > 0 {
 		return resolved.Temperature
 	}
 	return defaultValue
 }
 
-func getTimeout(resolved *ResolvedLLMConfig) time.Duration {
+func getTimeout(resolved *memoryRewriteServiceConfig) time.Duration {
 	if resolved != nil && resolved.TimeoutSeconds > 0 {
 		return time.Duration(resolved.TimeoutSeconds) * time.Second
 	}
@@ -103,7 +104,7 @@ func getTimeout(resolved *ResolvedLLMConfig) time.Duration {
 // BuildSearchQuery rewrites a query with conversation context for semantic search.
 // It uses an LLM to understand context and produce a self-contained query.
 func BuildSearchQuery(ctx context.Context, history []ConversationMessage, query string, routerCfg *config.RouterConfig) (string, error) {
-	resolved := ResolveQueryRewriteConfig(routerCfg)
+	resolved := resolveMemoryRewriteServiceConfig(routerCfg)
 	if resolved == nil || resolved.Endpoint == "" {
 		logging.Debugf("Memory: Query rewriting not configured, using original query")
 		return query, nil
@@ -114,7 +115,7 @@ func BuildSearchQuery(ctx context.Context, history []ConversationMessage, query 
 
 	logging.Debugf("Memory: query rewrite: original=%s, history_len=%d", logging.ContentDescriptor(query), len(history))
 
-	rewrittenQuery, err := callLLMForQueryRewrite(ctx, resolved, userPrompt)
+	rewrittenQuery, err := callMemoryRewriteService(ctx, resolved, userPrompt)
 	if err != nil {
 		logging.Errorf("Memory: Query rewriting failed, using original (error_class=%T)", err)
 		return query, nil
@@ -146,9 +147,10 @@ func formatHistoryForPrompt(history []ConversationMessage) string {
 	return strings.Join(lines, "\n")
 }
 
-// ResolveQueryRewriteConfig resolves the LLM endpoint configuration for query rewriting.
-// Looks up the external model by ModelRole (defaults to "memory_rewrite").
-func ResolveQueryRewriteConfig(routerCfg *config.RouterConfig) *ResolvedLLMConfig {
+// resolveMemoryRewriteServiceConfig resolves only the internal
+// memory_rewrite system-model role. Request-facing Model assignments and
+// physical backend selection never enter this adapter.
+func resolveMemoryRewriteServiceConfig(routerCfg *config.RouterConfig) *memoryRewriteServiceConfig {
 	if routerCfg == nil {
 		return nil
 	}
@@ -163,7 +165,7 @@ func ResolveQueryRewriteConfig(routerCfg *config.RouterConfig) *ResolvedLLMConfi
 		scheme = "http"
 	}
 	endpoint := fmt.Sprintf("%s://%s:%d", scheme, externalCfg.ModelEndpoint.Address, externalCfg.ModelEndpoint.Port)
-	return &ResolvedLLMConfig{
+	return &memoryRewriteServiceConfig{
 		Endpoint:       endpoint,
 		Model:          externalCfg.ModelName,
 		AccessKey:      externalCfg.AccessKey,
@@ -173,39 +175,35 @@ func ResolveQueryRewriteConfig(routerCfg *config.RouterConfig) *ResolvedLLMConfi
 	}
 }
 
-// callLLMForQueryRewrite calls the LLM endpoint for query rewriting.
-// Uses openai-go typed params. No response_format since rewrite returns plain text.
-func callLLMForQueryRewrite(ctx context.Context, resolved *ResolvedLLMConfig, userPrompt string) (string, error) {
-	params := openai.ChatCompletionNewParams{
-		Model: resolved.Model,
-		Messages: []openai.ChatCompletionMessageParamUnion{
-			{OfSystem: &openai.ChatCompletionSystemMessageParam{
-				Content: openai.ChatCompletionSystemMessageParamContentUnion{
-					OfString: openai.String(queryRewriteSystemPrompt),
-				},
-			}},
-			{OfUser: &openai.ChatCompletionUserMessageParam{
-				Content: openai.ChatCompletionUserMessageParamContentUnion{
-					OfString: openai.String(userPrompt),
-				},
-			}},
+// callMemoryRewriteService invokes the dedicated internal memory helper. It is
+// intentionally outside BackendInvoker because it cannot serve a public Model
+// request and its output is only an input to vector-memory retrieval.
+func callMemoryRewriteService(ctx context.Context, resolved *memoryRewriteServiceConfig, userPrompt string) (string, error) {
+	maxOutput := int64(getMaxTokens(resolved, 512))
+	temperature := getTemperature(resolved, 0.1)
+	request := llmprotocol.Request{
+		Generation: 1,
+		Model:      resolved.Model,
+		Instructions: []llmprotocol.InstructionBlock{{
+			Role:    llmprotocol.RoleSystem,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: queryRewriteSystemPrompt}},
+		}},
+		Messages: []llmprotocol.Message{{
+			Role:    llmprotocol.RoleUser,
+			Content: []llmprotocol.Content{{Kind: llmprotocol.ContentText, Text: userPrompt}},
+		}},
+		Sampling: llmprotocol.Sampling{
+			MaxOutputTokens: &maxOutput,
+			Temperature:     &temperature,
 		},
-		MaxTokens:   openai.Int(int64(getMaxTokens(resolved, 512))),
-		Temperature: openai.Float(getTemperature(resolved, 0.1)),
 	}
-
-	jsonData, err := json.Marshal(params)
+	engine := protocolcodec.NewBuiltinEngine()
+	encoded, err := engine.EncodeRequest(llmprotocol.OpenAIChatV1, request, llmprotocol.Envelope{})
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal request: %w", err)
+		return "", fmt.Errorf("encode memory rewrite request: %w", err)
 	}
-
-	jsonData, err = setJSONField(jsonData, "stream", false)
-	if err != nil {
-		return "", fmt.Errorf("failed to set stream param: %w", err)
-	}
-
 	url := fmt.Sprintf("%s/v1/chat/completions", strings.TrimSuffix(resolved.Endpoint, "/"))
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(jsonData))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(encoded.Body))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -232,52 +230,27 @@ func callLLMForQueryRewrite(ctx context.Context, resolved *ResolvedLLMConfig, us
 		return "", fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var completion openai.ChatCompletion
-	if err := json.Unmarshal(body, &completion); err != nil {
-		return "", fmt.Errorf("failed to parse response: %w", err)
+	decoded, err := engine.TranslateResponse(
+		llmprotocol.OpenAIChatV1, llmprotocol.OpenAIChatV1, body, nil,
+	)
+	if err != nil {
+		return "", fmt.Errorf("decode memory rewrite response: %w", err)
 	}
-
-	if len(completion.Choices) == 0 {
+	content := semanticResponseText(decoded.Response)
+	if content == "" {
 		return "", fmt.Errorf("no choices in LLM response")
 	}
-
-	return memory.StripThinkTags(completion.Choices[0].Message.Content), nil
+	return memory.StripThinkTags(content), nil
 }
 
-func setJSONField(data []byte, key string, value interface{}) ([]byte, error) {
-	var m map[string]interface{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, err
-	}
-	m[key] = value
-	return json.Marshal(m)
-}
-
-// ExtractConversationHistory extracts conversation history from raw request messages.
-// It filters out system messages and returns user/assistant messages for context.
-func ExtractConversationHistory(messagesJSON []byte) ([]ConversationMessage, error) {
-	var messages []map[string]interface{}
-	if err := json.Unmarshal(messagesJSON, &messages); err != nil {
-		return nil, fmt.Errorf("failed to parse messages: %w", err)
-	}
-
-	var history []ConversationMessage
-	for _, msg := range messages {
-		role, ok := msg["role"].(string)
-		if !ok || role == "system" {
-			continue
+func semanticResponseText(response llmprotocol.Response) string {
+	var text strings.Builder
+	for _, item := range response.Output {
+		for _, content := range item.Content {
+			if content.Kind == llmprotocol.ContentText {
+				text.WriteString(content.Text)
+			}
 		}
-
-		content, ok := msg["content"].(string)
-		if !ok || content == "" {
-			continue
-		}
-
-		history = append(history, ConversationMessage{
-			Role:    role,
-			Content: content,
-		})
 	}
-
-	return history, nil
+	return text.String()
 }

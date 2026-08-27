@@ -22,7 +22,7 @@ func init() {
 	})
 }
 
-// testAnthropicMessagesStopSequence asserts that the outbound emitter maps
+// testAnthropicMessagesStopSequence asserts that the response codec maps
 // the upstream finish_reason to "stop_sequence" when the request carried
 // stop_sequences and the model's output triggered one.
 //

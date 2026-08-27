@@ -2,6 +2,7 @@ package extproc
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -10,9 +11,11 @@ import (
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/cache"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/llmprotocol"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/metrics"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/tracing"
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/protocolcodec"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
@@ -59,7 +62,7 @@ func (r *OpenAIRouter) handleCaching(
 		return r.handleLooperCacheSkip(ctx, categoryName, selectedModels...)
 	}
 
-	identity, err := cache.BuildRequestIdentity(cacheRequestBodyForContext(ctx))
+	identity, err := cacheIdentityForContext(ctx)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
@@ -124,7 +127,7 @@ func (r *OpenAIRouter) handleLooperCacheSkip(
 ) (*ext_proc.ProcessingResponse, bool) {
 	logging.Debugf("[Cache] Skipping cache read for looper internal request")
 
-	identity, err := cache.BuildRequestIdentity(cacheRequestBodyForContext(ctx))
+	identity, err := cacheIdentityForContext(ctx)
 	if err != nil {
 		logging.Errorf("Error extracting query from request: %v", err)
 		return nil, false
@@ -165,7 +168,7 @@ func responseCachePolicyFingerprint(ctx *RequestContext) string {
 		"plugins":              ctx.VSRSelectedDecision.Plugins,
 		"output_contract":      ctx.VSRSelectedDecision.OutputContract,
 		"output_contract_spec": ctx.VSRSelectedDecision.OutputContractSpec,
-		"client_protocol":      ctx.ClientProtocol,
+		"client_protocol":      string(ctx.SourceFormat),
 	})
 	if err != nil {
 		return ""
@@ -181,7 +184,7 @@ func semanticCachePartition(ctx *RequestContext, model string) string {
 }
 
 func responseCacheIdentity(ctx *RequestContext, model string) cache.CacheIdentity {
-	protocol := strings.TrimSpace(ctx.ClientProtocol)
+	protocol := strings.TrimSpace(string(ctx.SourceFormat))
 	if protocol == "" {
 		protocol = "openai"
 	}
@@ -307,7 +310,6 @@ func (r *OpenAIRouter) performCacheLookup(
 		cacheCategory, cacheKeywords, cacheSimilarity := cacheDetailForSurface(ctx, categoryName)
 		response := r.createCacheHitResponse(ctx, cachedResponse, cacheCategory, ctx.VSRSelectedDecisionName, cacheKeywords, cacheSimilarity)
 		r.updateRouterReplayStatus(ctx, 200, ctx.ExpectStreamingResponse)
-		r.attachRouterReplayResponse(ctx, cachedResponse, true)
 		ctx.TraceContext = spanCtx
 		return response, true
 	} else {
@@ -322,6 +324,7 @@ func (r *OpenAIRouter) performCacheLookup(
 	return nil, false
 }
 
+//nolint:nestif // Cache-hit output must preserve separate buffered and streaming protocol lifecycles.
 func (r *OpenAIRouter) createCacheHitResponse(
 	ctx *RequestContext,
 	cachedResponse []byte,
@@ -330,34 +333,93 @@ func (r *OpenAIRouter) createCacheHitResponse(
 	matchedKeywords []string,
 	similarity float32,
 ) *ext_proc.ProcessingResponse {
-	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		hydrateAnthropicCacheUsage(ctx, cachedResponse)
+	semanticResponse, err := r.decodeClientResponse(cachedResponse, ctx)
+	if err != nil {
+		logging.ComponentErrorEvent("extproc", "cache_response_decode_failed", map[string]interface{}{
+			"request_id": ctx.RequestID,
+			"format":     ctx.SourceFormat,
+			"error":      err.Error(),
+		})
+		return r.createErrorResponse(502, "The cached response is invalid")
 	}
-	response := http.CreateCacheHitResponse(
-		cachedResponse,
-		ctx.ExpectStreamingResponse,
+	refreshCachedSemanticResponse(semanticResponse, ctx)
+	contentType := "application/json"
+	var responseBody []byte
+	if ctx.ExpectStreamingResponse {
+		engine, engineErr := r.protocolEngine()
+		if engineErr == nil {
+			responseBody, ctx.ProtocolDiagnostics, engineErr = encodeCachedSemanticStream(
+				engine, ctx, *semanticResponse, ctx.ProtocolDiagnostics,
+			)
+		}
+		if engineErr != nil {
+			logging.ComponentErrorEvent("extproc", "cache_stream_encode_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"format":     ctx.SourceFormat,
+				"error":      engineErr.Error(),
+			})
+			return r.createErrorResponse(502, "The cached response cannot be streamed")
+		}
+		contentType = "text/event-stream"
+	} else {
+		responseBody, err = r.encodeClientResponse(*semanticResponse, ctx)
+		if err != nil {
+			logging.ComponentErrorEvent("extproc", "cache_response_encode_failed", map[string]interface{}{
+				"request_id": ctx.RequestID,
+				"format":     ctx.SourceFormat,
+				"error":      err.Error(),
+			})
+			return r.createErrorResponse(502, "The cached response is invalid")
+		}
+	}
+	response := http.CreateCacheHitResponseWithBody(
+		responseBody,
+		contentType,
 		category,
 		decisionName,
 		matchedKeywords,
 		similarity,
 	)
-	if ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		response = translateAnthropicCacheHit(ctx, response)
-	}
-	if isResponseAPIRequest(ctx) {
-		if responseAPIResponse, ok := r.createResponseAPICacheHitResponse(
-			ctx,
-			cachedResponse,
-			category,
-			decisionName,
-			matchedKeywords,
-			similarity,
-		); ok {
-			response = responseAPIResponse
-		}
-	}
+	ctx.ImmediateResponseEncoded = true
+	ctx.SemanticResponse = semanticResponse
 	appendRecipeHeaderToImmediateResponse(response, ctx)
+	r.attachRouterReplayResponse(ctx, responseBody, true)
 	return response
+}
+
+func refreshCachedSemanticResponse(response *llmprotocol.Response, ctx *RequestContext) {
+	if response == nil {
+		return
+	}
+	response.Generation++
+	requestID := ""
+	if ctx != nil {
+		requestID = ctx.RequestID
+	}
+	response.ID = llmprotocol.StableID("cache-response", requestID)
+	if ctx != nil && ctx.SourceFormat == llmprotocol.OpenAIResponsesV1 {
+		response.ID = "resp_" + strings.TrimPrefix(response.ID, "item_")
+	}
+	response.CreatedAt = time.Now().UTC()
+	for index := range response.Output {
+		response.Output[index].ID = llmprotocol.StableID(response.ID, fmt.Sprint(index))
+	}
+}
+
+func encodeCachedSemanticStream(
+	engine *protocolcodec.Engine,
+	ctx *RequestContext,
+	response llmprotocol.Response,
+	diagnostics llmprotocol.Diagnostics,
+) ([]byte, llmprotocol.Diagnostics, error) {
+	format := ctx.SourceFormat
+	if format == "" {
+		format = llmprotocol.OpenAIChatV1
+	}
+	body, emitted, err := engine.EncodeResponseStream(format, response, llmprotocol.StreamContext{
+		Context: ctx.TraceContext, PublicModel: response.Model, ResponseID: response.ID,
+	})
+	return body, append(diagnostics, emitted...), err
 }
 
 func applyCacheHitSelectedModel(ctx *RequestContext) {
@@ -366,11 +428,22 @@ func applyCacheHitSelectedModel(ctx *RequestContext) {
 	}
 }
 
-func cacheRequestBodyForContext(ctx *RequestContext) []byte {
-	if ctx != nil {
-		return ctx.OriginalRequestBody
+func cacheIdentityForContext(ctx *RequestContext) (cache.RequestIdentity, error) {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return cache.RequestIdentity{}, fmt.Errorf("neutral request is unavailable")
 	}
-	return nil
+	return cache.BuildSemanticRequestIdentity(*ctx.SemanticRequest)
+}
+
+func cacheRequestBodyForContext(ctx *RequestContext) []byte {
+	if ctx == nil || ctx.SemanticRequest == nil {
+		return nil
+	}
+	body, err := cache.MarshalSemanticRequest(*ctx.SemanticRequest)
+	if err != nil {
+		return nil
+	}
+	return body
 }
 
 func cacheQueryForContext(ctx *RequestContext) string {

@@ -32,7 +32,8 @@ global: {}
 
 - `listeners` exposes inference and management endpoints.
 - `providers.defaults` defines shared provider behavior;
-  `providers.models[]` binds model names to concrete backends.
+  `providers.models[]` binds model names to concrete backends and owns their
+  deployment pricing metadata.
 - `routing` owns model cards, signals, projections, decisions, and the routing
   strategy for the default profile.
 - `entrypoints` maps request-facing model names to isolated `recipes`. Each
@@ -94,8 +95,8 @@ runtime dependency; they do not define routing behavior by themselves.
 
 - Model backend credentials belong in environment references, not literal YAML
   values.
-- `routing.modelCards` describes semantic capabilities; concrete URLs and
-  credentials belong in `providers.models`.
+- `routing.modelCards` describes semantic capabilities; concrete URLs,
+  credentials, and pricing belong in `providers.models`.
 - `routing.projections` derives named routing outputs from signals. Decisions
   consume those outputs instead of embedding free-form computation.
 - Candidate iteration is bounded policy metadata, not a general scripting
