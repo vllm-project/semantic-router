@@ -35,7 +35,6 @@ const defaultUser: SessionUser = {
     'openclaw.manage',
     'openclaw.read',
     'replay.read',
-    'security.manage',
     'tools.use',
     'topology.read',
     'users.manage',

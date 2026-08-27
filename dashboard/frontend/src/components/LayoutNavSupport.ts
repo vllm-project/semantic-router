@@ -58,80 +58,36 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
     description: 'Design the signal-to-decision path that selects each model route.',
     sections: [
       {
-        title: 'Design',
-        description: 'Author and inspect the routing graph.',
+        title: 'Models',
+        description: 'Connect models and compose public model endpoints.',
         items: [
-          { kind: 'route', label: 'Config Builder', to: '/builder' },
+          { kind: 'config', label: 'Models', configSection: 'models' },
           {
             kind: 'config',
             label: 'Mixture-of-Models',
             configSection: 'entrypoints-recipes',
           },
-          { kind: 'route', label: 'Brain Topology', to: '/topology' },
         ],
       },
       {
-        title: 'Evidence',
-        description: 'Define the facts and projections every decision can use.',
+        title: 'Intelligence',
+        description: 'Shape the evidence and decisions behind every route.',
         items: [
           { kind: 'config', label: 'Signals', configSection: 'signals' },
           { kind: 'config', label: 'Projections', configSection: 'projections' },
-        ],
-      },
-      {
-        title: 'Dispatch',
-        description: 'Bind policy outcomes to the available model fleet.',
-        items: [
           { kind: 'config', label: 'Decisions', configSection: 'decisions' },
-          { kind: 'config', label: 'Models', configSection: 'models' },
         ],
       },
-    ],
-  },
-  {
-    key: 'knowledge',
-    label: 'Knowledge',
-    description: 'Bring governed context into signal extraction and route policy.',
-    sections: [
       {
-        title: 'Knowledge Base',
-        description: 'Manage the retrieval inventory used by knowledge signals.',
+        title: 'Build',
+        description: 'See the whole system or edit its configuration.',
         items: [
-          {
-            kind: 'route',
-            label: 'Bases',
-            to: '/knowledge-bases/bases',
-            activePathPattern: /^\/knowledge-bases\/[^/]+\/map\/?$/,
-          },
-          { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
-          { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
+          { kind: 'route', label: 'Brain', to: '/topology' },
+          { kind: 'route', label: 'Builder', to: '/builder' },
         ],
       },
     ],
   },
-  {
-    key: 'integrations',
-    label: 'Integrations & Policy',
-    description: 'Connect external capabilities and enforce request-path controls.',
-    sections: [
-      {
-        title: 'Integrations',
-        description: 'Extend the control plane with tools and agent runtimes.',
-        items: [
-          { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
-          { kind: 'route', label: 'ClawOS', to: '/clawos' },
-        ],
-      },
-      {
-        title: 'Policy',
-        description: 'Review the security controls applied around routing.',
-        items: [{ kind: 'route', label: 'Security Policy', to: '/security' }],
-      },
-    ],
-  },
-]
-
-export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'outcomes',
     label: 'Outcomes',
@@ -154,6 +110,45 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       },
     ],
   },
+  {
+    key: 'knowledge',
+    label: 'Knowledge Base',
+    description: 'Bring governed context into signal extraction and route policy.',
+    sections: [
+      {
+        title: 'Knowledge Base',
+        description: 'Manage the retrieval inventory used by knowledge signals.',
+        items: [
+          {
+            kind: 'route',
+            label: 'Bases',
+            to: '/knowledge-bases/bases',
+            activePathPattern: /^\/knowledge-bases\/[^/]+\/map\/?$/,
+          },
+          { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
+          { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
+        ],
+      },
+    ],
+  },
+  {
+    key: 'integrations',
+    label: 'Integration',
+    description: 'Connect external capabilities to the routing workspace.',
+    sections: [
+      {
+        title: 'Integrations',
+        description: 'Extend the control plane with tools and agent runtimes.',
+        items: [
+          { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
+          { kind: 'route', label: 'OpenClaw', to: '/openclaw' },
+        ],
+      },
+    ],
+  },
+]
+
+export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
   {
     key: 'fleet-simulation',
     label: 'Fleet Simulation',
@@ -199,10 +194,7 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
-        items: [
-          { kind: 'route', label: 'Status', to: '/status' },
-          { kind: 'route', label: 'Plugin Operations', to: '/plugins', matchMode: 'prefix' },
-        ],
+        items: [{ kind: 'route', label: 'Status', to: '/status' }],
       },
       {
         title: 'Diagnostics',

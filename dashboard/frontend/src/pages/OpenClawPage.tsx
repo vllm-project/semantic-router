@@ -10,32 +10,12 @@ import {
   type LatestOpenClawRequest,
 } from '../utils/openClawRequestSupport'
 import { type OpenClawStatus, type TeamProfile } from './OpenClawPageSupport'
-import { ArchitectureTab, DashboardTab, StatusTab, TeamTab, WorkerTab } from './OpenClawPageTabs'
+import { DashboardTab, StatusTab, TeamTab, WorkerTab } from './OpenClawPageTabs'
 import { OpenClawRequestNotice } from './OpenClawRequestNotice'
 
-type OpenClawTab = 'architecture' | 'dashboard' | 'team' | 'provision' | 'status'
+type OpenClawTab = 'dashboard' | 'team' | 'provision' | 'status'
 
 const tabMeta: Array<{ key: OpenClawTab; label: string; icon: React.ReactNode }> = [
-  {
-    key: 'architecture',
-    label: 'Overview',
-    icon: (
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 2l7 4v8l-7 4-7-4V6l7-4z" />
-        <path d="M12 22v-8" />
-        <path d="M19 6l-7 4-7-4" />
-      </svg>
-    ),
-  },
   {
     key: 'dashboard',
     label: 'Claw Console',
@@ -126,7 +106,7 @@ const OpenClawPage: React.FC = () => {
   const permissionsLoading = authLoading || readonlyLoading
   const canManage = !permissionsLoading && !serverReadonly && canManageOpenClaw(user)
   const managementDisabled = !canManage
-  const [activeTab, setActiveTab] = useState<OpenClawTab>('architecture')
+  const [activeTab, setActiveTab] = useState<OpenClawTab>('dashboard')
   const [containers, setContainers] = useState<OpenClawStatus[]>([])
   const [teams, setTeams] = useState<TeamProfile[]>([])
   const [statusLoading, setStatusLoading] = useState(true)
@@ -251,7 +231,7 @@ const OpenClawPage: React.FC = () => {
             <span className={styles.titleLinePrimary}>
               <span className={styles.titleLead}>Semantic Router</span> Powered
             </span>
-            <span className={styles.titleLineSecondary}>ClawOS</span>
+            <span className={styles.titleLineSecondary}>OpenClaw</span>
           </h1>
           <p className={styles.subtitle}>
             Evolved from vLLM-SR built on Semantic Router with System Intelligence.
@@ -319,17 +299,6 @@ const OpenClawPage: React.FC = () => {
         </div>
       </div>
 
-      {activeTab === 'architecture' && (
-        <div
-          id={getPanelId('architecture')}
-          className={styles.tabContentShell}
-          role="tabpanel"
-          aria-labelledby={getTabId('architecture')}
-          tabIndex={0}
-        >
-          <ArchitectureTab containers={containers} />
-        </div>
-      )}
       {activeTab === 'dashboard' && (
         <div
           id={getPanelId('dashboard')}

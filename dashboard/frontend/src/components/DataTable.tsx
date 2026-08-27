@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 
 import styles from './DataTable.module.css'
+import ProductIcon from './ProductIcon'
 import { getPageWindow, paginateRows, updatePageSelection } from './dataTableSupport'
 
 export interface Column<T> {
@@ -298,7 +299,7 @@ export function DataTable<T>({
                               className={`${styles.expandIcon} ${expanded ? styles.expanded : ''}`}
                               aria-hidden="true"
                             >
-                              ▶
+                              <ProductIcon name="chevron-right" />
                             </span>
                           </button>
                         </td>
@@ -324,6 +325,7 @@ export function DataTable<T>({
                                 onClick={() => onView(row)}
                                 aria-label={`View ${key}`}
                               >
+                                <ProductIcon name="eye" />
                                 View
                               </button>
                             ) : null}
@@ -334,6 +336,7 @@ export function DataTable<T>({
                                 onClick={() => effectiveOnEdit(row)}
                                 aria-label={`Edit ${key}`}
                               >
+                                <ProductIcon name="edit" />
                                 Edit
                               </button>
                             ) : null}
@@ -344,6 +347,7 @@ export function DataTable<T>({
                                 onClick={() => effectiveOnDelete(row)}
                                 aria-label={`Delete ${key}`}
                               >
+                                <ProductIcon name="trash" />
                                 Delete
                               </button>
                             ) : null}

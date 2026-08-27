@@ -1,3 +1,221 @@
+.recordPage {
+  width: min(1180px, calc(100% - 3rem));
+  margin: 0 auto;
+  padding: 1.5rem 0 3rem;
+}
+
+.recordToolbar,
+.recordActions,
+.recordBack,
+.recordAction,
+.recordActionPrimary {
+  display: flex;
+  align-items: center;
+}
+
+.recordToolbar {
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.recordActions {
+  gap: 0.5rem;
+}
+
+.recordBack,
+.recordAction,
+.recordActionPrimary {
+  min-height: 38px;
+  gap: 0.48rem;
+  padding: 0.56rem 0.78rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.035);
+  font-size: 0.8rem;
+  font-weight: 650;
+}
+
+.recordBack {
+  padding-left: 0.65rem;
+  background: transparent;
+  border-color: transparent;
+}
+
+.recordActionPrimary {
+  color: #111214;
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.92);
+}
+
+.recordBack:hover,
+.recordAction:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.recordActionPrimary:hover {
+  background: #fff;
+}
+
+.recordHero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 88% 10%, rgba(230, 57, 70, 0.08), transparent 22rem),
+    rgba(255, 255, 255, 0.025);
+}
+
+.recordHeroCopy {
+  min-width: 0;
+}
+
+.recordEyebrow {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.recordHero h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(1.55rem, 3vw, 2.25rem);
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+}
+
+.recordHero p {
+  margin: 0.65rem 0 0;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 0.9rem;
+}
+
+.recordStatus {
+  flex: 0 0 auto;
+  padding: 0.38rem 0.68rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 0.72rem;
+  font-weight: 680;
+  text-transform: capitalize;
+}
+
+.recordStatusSuccess {
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.recordStatusError {
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.recordStatusNeutral {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.recordSections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.recordSection {
+  min-width: 0;
+  padding: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.018);
+}
+
+.recordSection h2 {
+  margin: 0 0 1rem;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 0.78rem;
+  font-weight: 720;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.recordFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.9rem 1rem;
+}
+
+.recordField {
+  min-width: 0;
+}
+
+.recordField > span {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.66rem;
+  font-weight: 680;
+  letter-spacing: 0.065em;
+  text-transform: uppercase;
+}
+
+.recordField > div {
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.84rem;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.recordFieldWide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 820px) {
+  .recordPage {
+    width: min(100% - 1.25rem, 1180px);
+  }
+
+  .recordSections {
+    grid-template-columns: 1fr;
+  }
+
+  .recordHero,
+  .recordToolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .recordActions {
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 520px) {
+  .recordFields {
+    grid-template-columns: 1fr;
+  }
+
+  .recordFieldWide {
+    grid-column: auto;
+  }
+
+  .recordHero {
+    padding: 1.35rem;
+  }
+}
+
 .loading {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, type ReactNode } from 'react'
 import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import BrandLockup from './BrandLockup'
 import styles from './Layout.module.css'
 import LayoutAccountControl from './LayoutAccountControl'
 import LayoutMegaMenu from './LayoutMegaMenu'
@@ -332,10 +333,7 @@ const Layout: React.FC<LayoutProps> = ({
     <div className={`${styles.container} ${hideHeaderOnMobile ? styles.hideHeaderMobile : ''}`}>
       <header className={`${styles.header} ${hideHeaderOnMobile ? styles.headerHideMobile : ''}`}>
         <div className={styles.headerContent} data-testid="layout-header-content">
-          <NavLink to="/" className={styles.brand}>
-            <img src="/vllm.png" alt="vLLM" className={styles.logo} />
-            <span className={styles.brandText}>Semantic Router</span>
-          </NavLink>
+          <BrandLockup className={styles.brandPlacement} />
 
           <nav className={styles.nav} aria-label="Global navigation">
             <div className={styles.navSection} role="group" aria-label="Primary navigation">
@@ -364,7 +362,7 @@ const Layout: React.FC<LayoutProps> = ({
                 )}
                 {renderDesktopDropdown(
                   'operate',
-                  'Operate',
+                  'System',
                   operateMenuCategories,
                   isOperateActive,
                   activeOperateCategory,
@@ -486,7 +484,7 @@ const Layout: React.FC<LayoutProps> = ({
             sections={[
               { key: 'build', label: 'Build', categories: buildMenuCategories },
               { key: 'analyze', label: 'Analyze', categories: analyzeMenuCategories },
-              { key: 'operate', label: 'Operate', categories: operateMenuCategories },
+              { key: 'operate', label: 'System', categories: operateMenuCategories },
             ]}
             onConfigSelect={handleMenuItemSelect}
             onNavigate={closeMenus}

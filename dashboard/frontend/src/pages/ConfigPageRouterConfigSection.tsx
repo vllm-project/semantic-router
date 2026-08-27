@@ -125,7 +125,9 @@ export default function ConfigPageRouterConfigSection({
   })
 
   const configuredCount = sectionCards.filter((card) => card.data !== undefined).length
-  const routerDefaultsCount = sectionCards.filter((card) => card.sourceLabel === 'router effective defaults').length
+  const routerDefaultsCount = sectionCards.filter(
+    (card) => card.sourceLabel === 'router effective defaults',
+  ).length
   const missingCount = sectionCards.length - configuredCount
   const sectionGroups = useMemo(() => {
     const groups = new Map<string, typeof sectionCards>()
@@ -172,7 +174,7 @@ export default function ConfigPageRouterConfigSection({
     await loadRawGlobalConfig()
   }
 
-  const handleEditSection = (card: typeof sectionCards[number]) => {
+  const handleEditSection = (card: (typeof sectionCards)[number]) => {
     const isConfigured = card.data !== undefined
 
     openEditModal(
@@ -220,13 +222,6 @@ export default function ConfigPageRouterConfigSection({
       description="Router-owned runtime defaults are merged with your `config.yaml` `global` override. This surface edits the canonical `global` block while preserving the router's built-in defaults."
       configArea="Global"
       scope="Router runtime defaults and overrides"
-      panelEyebrow="Runtime"
-      panelTitle="Canonical Global Config"
-      panelDescription="Review the resolved router defaults, edit layered `global` overrides, and keep runtime modules aligned with the canonical v0.3 structure."
-      pills={sectionGroups.map((group, index) => ({
-        label: group.meta?.title || group.layer,
-        active: index === 0,
-      }))}
     >
       <div className={pageStyles.sectionPanel}>
         <div className={pageStyles.sectionTableBlock}>
@@ -239,7 +234,11 @@ export default function ConfigPageRouterConfigSection({
                   : 'Effective router defaults are unavailable right now. Cards below still show the canonical `global` sections and any loaded config.yaml overrides.'}
               </p>
             </div>
-            <div className={styles.modeToggle} role="tablist" aria-label="Global config editor mode">
+            <div
+              className={styles.modeToggle}
+              role="tablist"
+              aria-label="Global config editor mode"
+            >
               <button
                 type="button"
                 className={`${styles.modeButton} ${editorMode === 'visual' ? styles.modeButtonActive : ''}`}
@@ -261,17 +260,23 @@ export default function ConfigPageRouterConfigSection({
             <div className={styles.overviewCard}>
               <span className={styles.overviewLabel}>Global Sections</span>
               <strong className={styles.overviewValue}>{sectionCards.length}</strong>
-              <span className={styles.overviewHint}>Canonical `global` sections tracked by the dashboard.</span>
+              <span className={styles.overviewHint}>
+                Canonical `global` sections tracked by the dashboard.
+              </span>
             </div>
             <div className={styles.overviewCard}>
               <span className={styles.overviewLabel}>Resolved By Router</span>
               <strong className={styles.overviewValue}>{routerDefaultsCount}</strong>
-              <span className={styles.overviewHint}>Sections currently backed by router-owned defaults or effective merged values.</span>
+              <span className={styles.overviewHint}>
+                Sections currently backed by router-owned defaults or effective merged values.
+              </span>
             </div>
             <div className={styles.overviewCard}>
               <span className={styles.overviewLabel}>Missing Or Inactive</span>
               <strong className={styles.overviewValue}>{missingCount}</strong>
-              <span className={styles.overviewHint}>Sections not currently present in the effective `global` surface.</span>
+              <span className={styles.overviewHint}>
+                Sections not currently present in the effective `global` surface.
+              </span>
             </div>
           </div>
         </div>
@@ -283,7 +288,9 @@ export default function ConfigPageRouterConfigSection({
                 <div>
                   <h2 className={styles.blockTitle}>Runtime Global Sections</h2>
                   <p className={styles.blockDescription}>
-                    Cards mirror the layered canonical `global` block. Each editor writes back to the matching `global.router`, `global.services`, `global.stores`, `global.integrations`, or `global.model_catalog` path.
+                    Cards mirror the layered canonical `global` block. Each editor writes back to
+                    the matching `global.router`, `global.services`, `global.stores`,
+                    `global.integrations`, or `global.model_catalog` path.
                   </p>
                 </div>
               </div>
@@ -306,7 +313,9 @@ export default function ConfigPageRouterConfigSection({
                             <p className={styles.cardDescription}>{card.description}</p>
                           </div>
                           <div className={styles.cardBadges}>
-                            <span className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}>
+                            <span
+                              className={`${styles.badge} ${badgeClassName({ label: card.sourceLabel, tone: card.sourceTone })}`}
+                            >
                               {card.sourceLabel}
                             </span>
                             <span className={`${styles.badge} ${badgeClassName(card.status)}`}>
@@ -329,7 +338,10 @@ export default function ConfigPageRouterConfigSection({
                         {card.badges.length > 0 && (
                           <div className={styles.tagRow}>
                             {card.badges.map((badge) => (
-                              <span key={`${card.key}-${badge.label}`} className={`${styles.badge} ${badgeClassName(badge)}`}>
+                              <span
+                                key={`${card.key}-${badge.label}`}
+                                className={`${styles.badge} ${badgeClassName(badge)}`}
+                              >
                                 {badge.label}
                               </span>
                             ))}
@@ -337,7 +349,9 @@ export default function ConfigPageRouterConfigSection({
                         )}
 
                         <div className={styles.cardFooter}>
-                          <code className={styles.sectionKey}>{`global.${card.path.join('.')}`}</code>
+                          <code
+                            className={styles.sectionKey}
+                          >{`global.${card.path.join('.')}`}</code>
                           {!isReadonly ? (
                             <div className={styles.cardActions}>
                               <button
@@ -364,7 +378,9 @@ export default function ConfigPageRouterConfigSection({
               <div>
                 <h2 className={styles.blockTitle}>Raw Global YAML</h2>
                 <p className={styles.blockDescription}>
-                  This editor shows the effective merged `global` block: router defaults plus your current overrides. Saving raw YAML writes the full `global:` block back to `config.yaml`.
+                  This editor shows the effective merged `global` block: router defaults plus your
+                  current overrides. Saving raw YAML writes the full `global:` block back to
+                  `config.yaml`.
                 </p>
               </div>
               <div className={styles.rawToolbar}>
@@ -407,7 +423,8 @@ export default function ConfigPageRouterConfigSection({
               />
               <div className={styles.rawHintRow}>
                 <span className={styles.rawHint}>
-                  Empty content removes the `global:` override block. Router defaults remain available at runtime.
+                  Empty content removes the `global:` override block. Router defaults remain
+                  available at runtime.
                 </span>
                 <span className={styles.rawDirtyState}>
                   {rawLoading ? 'Loading…' : rawDirty ? 'Unsaved changes' : 'Saved'}

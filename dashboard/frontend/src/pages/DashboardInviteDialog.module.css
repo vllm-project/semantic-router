@@ -1,0 +1,298 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(4, 5, 7, 0.72);
+  backdrop-filter: blur(14px);
+}
+
+.modal {
+  width: min(760px, 100%);
+  max-height: min(780px, calc(100dvh - 2rem));
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.19);
+  border-radius: 12px;
+  background: rgba(16, 17, 20, 0.94);
+  box-shadow: 0 34px 100px rgba(0, 0, 0, 0.55);
+}
+
+.header,
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header {
+  padding: 1.2rem 1.35rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.identity img {
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+}
+.identity div {
+  display: grid;
+  gap: 0.2rem;
+}
+.identity span {
+  color: var(--color-text-muted);
+  font-size: 0.66rem;
+  font-weight: 720;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.identity h2 {
+  margin: 0;
+  font-size: 1.2rem;
+  letter-spacing: -0.025em;
+}
+.close {
+  width: 36px;
+  height: 36px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1.35rem;
+}
+.close:hover {
+  border-color: var(--color-border);
+  color: var(--color-text);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.form,
+.ready {
+  display: grid;
+  gap: 1.25rem;
+  padding: 1.35rem;
+}
+.intro {
+  display: grid;
+  gap: 0.3rem;
+}
+.intro strong {
+  font-size: 1rem;
+}
+.intro span {
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.9rem;
+}
+.grid label {
+  display: grid;
+  gap: 0.45rem;
+}
+.grid label > span,
+.roles legend,
+.linkBlock > span {
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+.grid input {
+  min-height: 46px;
+  padding: 0 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  outline: none;
+  background: #0b0c0e;
+  color: var(--color-text);
+}
+.grid input:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.06);
+}
+
+.roles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.roles legend {
+  grid-column: 1 / -1;
+  margin-bottom: 0.1rem;
+}
+.roles label {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.6rem;
+  min-height: 88px;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+}
+.roles label:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.roles input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+.roles label > span {
+  display: grid;
+  align-content: start;
+  gap: 0.28rem;
+}
+.roles strong {
+  font-size: 0.82rem;
+}
+.roles small {
+  color: var(--color-text-muted);
+  font-size: 0.67rem;
+  line-height: 1.4;
+}
+.roles svg {
+  width: 15px;
+  height: 15px;
+  opacity: 0;
+}
+.roleSelected {
+  border-color: rgba(255, 255, 255, 0.42) !important;
+  background: rgba(255, 255, 255, 0.07) !important;
+}
+.roleSelected svg {
+  opacity: 1;
+}
+
+.footer {
+  padding-top: 0.25rem;
+  justify-content: flex-end;
+}
+.primary,
+.secondary {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0 1rem;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  font-weight: 680;
+}
+.primary {
+  border: 1px solid #fff;
+  background: #fff;
+  color: #0a0a0c;
+}
+.secondary {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text);
+}
+.primary svg {
+  width: 14px;
+  height: 14px;
+}
+.primary:disabled,
+.secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.error {
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(248, 113, 113, 0.28);
+  border-radius: 8px;
+  background: rgba(248, 113, 113, 0.08);
+  color: #fca5a5;
+  font-size: 0.76rem;
+}
+
+.readyIntro {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.035);
+}
+.readyIntro > svg {
+  width: 22px;
+  height: 22px;
+}
+.readyIntro div {
+  display: grid;
+  gap: 0.2rem;
+}
+.readyIntro strong {
+  font-size: 0.88rem;
+}
+.readyIntro span {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+}
+.linkBlock {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+.linkBlock > span {
+  grid-column: 1 / -1;
+}
+.linkBlock code {
+  min-width: 0;
+  overflow: hidden;
+  padding: 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: #090a0c;
+  color: var(--color-text-secondary);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.linkBlock button {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.72rem;
+}
+.linkBlock button svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 680px) {
+  .modal {
+    max-height: calc(100dvh - 1rem);
+  }
+  .grid,
+  .roles {
+    grid-template-columns: 1fr;
+  }
+  .linkBlock {
+    grid-template-columns: 1fr;
+  }
+}

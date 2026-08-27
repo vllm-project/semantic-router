@@ -460,7 +460,7 @@ test.describe('Readonly OpenClaw', () => {
   }) => {
     await mockReadonlyOpenClaw(page)
 
-    await page.goto('/clawos')
+    await page.goto('/openclaw')
 
     await page.getByRole('tab', { name: /Claw Team/ }).click()
     await expect(page.getByRole('button', { name: 'New Team' })).toHaveCount(0)

@@ -12,11 +12,60 @@
 
 .headers {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
   width: 100%;
   min-width: 0;
+}
+
+.details {
+  position: relative;
+}
+
+.detailsToggle {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.045);
+  cursor: pointer;
+  list-style: none;
+  transition:
+    color 160ms ease,
+    background 160ms ease,
+    border-color 160ms ease;
+}
+
+.detailsToggle::-webkit-details-marker {
+  display: none;
+}
+
+.detailsToggle:hover,
+.detailsToggle:focus-visible {
+  border-color: rgba(255, 255, 255, 0.18);
+  color: rgba(255, 255, 255, 0.86);
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.detailsPanel {
+  position: absolute;
+  z-index: 12;
+  left: 0;
+  top: calc(100% + 0.45rem);
+  display: flex;
+  width: min(620px, calc(100vw - 4rem));
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  padding: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  background: rgba(14, 15, 18, 0.96);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
 }
 
 .header {
@@ -74,15 +123,15 @@
 }
 
 .header.success {
-  background-color: rgba(16, 185, 129, 0.12);
+  background-color: rgba(143, 148, 156, 0.12);
 }
 
 .header.success .icon {
-  color: #10b981;
+  color: var(--color-text-muted);
 }
 
 .header.success .value {
-  color: #10b981;
+  color: var(--color-text);
 }
 
 .header.warning {

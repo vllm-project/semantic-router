@@ -1,7 +1,7 @@
 .hero {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 360px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 1.5rem;
   padding: 1.55rem;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -19,7 +19,7 @@
   position: relative;
   z-index: 1;
   min-width: 0;
-  max-width: 52rem;
+  max-width: 62rem;
 }
 
 .topline {
@@ -116,127 +116,6 @@
   line-height: 1.35;
 }
 
-.heroPanel {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 1rem;
-  min-width: 0;
-  padding: 1.15rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: var(--surface-shell);
-}
-
-.panelTop {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.9rem;
-}
-
-.logoFrame {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 64px;
-  height: 64px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  background: var(--surface-raised);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: none;
-}
-
-.panelLogo {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-  filter: none;
-}
-
-.panelCopy {
-  min-width: 0;
-}
-
-.panelEyebrow {
-  display: inline-flex;
-  color: rgba(255, 255, 255, 0.62);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.panelTitle {
-  display: block;
-  margin-top: 0.4rem;
-  color: var(--color-text);
-  font-size: 1rem;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.panelDescription {
-  margin: 0.45rem 0 0;
-  color: var(--color-text-secondary);
-  font-size: 0.85rem;
-  line-height: 1.55;
-}
-
-.panelPills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
-}
-
-.panelPill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0.4rem 0.72rem;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-secondary);
-  font-size: 0.76rem;
-  font-weight: 600;
-}
-
-.panelPillActive {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.075);
-  color: #ffffff;
-}
-
-.panelPillButton {
-  cursor: pointer;
-  transition:
-    border-color var(--transition-fast),
-    background var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
-}
-
-.panelPillButton:hover:not(:disabled) {
-  transform: translateY(-1px);
-  border-color: rgba(166, 171, 179, 0.22);
-  color: var(--color-text);
-}
-
-.panelPillButton:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.panelFooter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
 .heroCompact {
   gap: 1rem;
   padding: 0.85rem 1rem;
@@ -269,47 +148,6 @@
 .heroCompact .metaValue {
   margin-top: 0.15rem;
   font-size: 0.85rem;
-}
-
-.heroCompact .heroPanel {
-  gap: 0.5rem;
-  padding: 0.65rem 0.75rem;
-}
-
-.heroCompact .panelTop {
-  align-items: center;
-  gap: 0.65rem;
-}
-
-.heroCompact .logoFrame {
-  width: 42px;
-  height: 42px;
-}
-
-.heroCompact .panelLogo {
-  width: 22px;
-  height: 22px;
-}
-
-.heroCompact .panelTitle {
-  margin-top: 0.15rem;
-}
-
-.heroCompact .panelDescription {
-  display: none;
-}
-
-.heroCompact .panelPills {
-  gap: 0.35rem;
-}
-
-.heroCompact .panelPill {
-  min-height: 28px;
-  padding: 0.25rem 0.55rem;
-}
-
-.heroCompact .panelFooter {
-  gap: 0.45rem;
 }
 
 @media (max-width: 900px) {

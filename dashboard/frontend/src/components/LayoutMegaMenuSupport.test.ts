@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import {
-  ANALYZE_MENU_CATEGORIES,
-  BUILD_MENU_CATEGORIES,
-  type LayoutMenuCategory,
-} from './LayoutNavSupport'
+import { BUILD_MENU_CATEGORIES, type LayoutMenuCategory } from './LayoutNavSupport'
 import { getLayoutMegaMenuGeometry } from './LayoutMegaMenuSupport'
 
 function categoryByKey(categories: LayoutMenuCategory[], key: string): LayoutMenuCategory {
@@ -17,7 +13,7 @@ function categoryByKey(categories: LayoutMenuCategory[], key: string): LayoutMen
 
 describe('layout mega-menu geometry', () => {
   it('keeps sparse multi-section navigation compact', () => {
-    const outcomes = categoryByKey(ANALYZE_MENU_CATEGORIES, 'outcomes')
+    const outcomes = categoryByKey(BUILD_MENU_CATEGORIES, 'outcomes')
 
     expect(getLayoutMegaMenuGeometry(outcomes)).toEqual({
       density: 'compact',

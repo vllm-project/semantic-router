@@ -6,24 +6,12 @@ export interface DashboardSurfaceHeroMeta {
   value: React.ReactNode
 }
 
-export interface DashboardSurfaceHeroPill {
-  label: React.ReactNode
-  active?: boolean
-  onClick?: () => void
-  disabled?: boolean
-}
-
 interface DashboardSurfaceHeroProps {
   compact?: boolean
   eyebrow?: string
   title: string
   description: string
   meta: DashboardSurfaceHeroMeta[]
-  panelEyebrow?: string
-  panelTitle: string
-  panelDescription: string
-  pills?: DashboardSurfaceHeroPill[]
-  panelFooter?: React.ReactNode
 }
 
 export default function DashboardSurfaceHero({
@@ -32,11 +20,6 @@ export default function DashboardSurfaceHero({
   title,
   description,
   meta,
-  panelEyebrow = 'Workspace',
-  panelTitle,
-  panelDescription,
-  pills = [],
-  panelFooter,
 }: DashboardSurfaceHeroProps) {
   return (
     <header className={`${styles.hero} ${compact ? styles.heroCompact : ''}`}>
@@ -60,43 +43,6 @@ export default function DashboardSurfaceHero({
           ))}
         </div>
       </div>
-      <aside className={styles.heroPanel}>
-        <div className={styles.panelTop}>
-          <div className={styles.logoFrame}>
-            <img src="/vllm.png" alt="vLLM" className={styles.panelLogo} />
-          </div>
-          <div className={styles.panelCopy}>
-            <span className={styles.panelEyebrow}>{panelEyebrow}</span>
-            <strong className={styles.panelTitle}>{panelTitle}</strong>
-            <p className={styles.panelDescription}>{panelDescription}</p>
-          </div>
-        </div>
-        {pills.length > 0 ? (
-          <div className={styles.panelPills}>
-            {pills.map((pill) =>
-              pill.onClick ? (
-                <button
-                  key={String(pill.label)}
-                  type="button"
-                  className={`${styles.panelPill} ${pill.active ? styles.panelPillActive : ''} ${styles.panelPillButton}`}
-                  onClick={pill.onClick}
-                  disabled={pill.disabled}
-                >
-                  {pill.label}
-                </button>
-              ) : (
-                <span
-                  key={String(pill.label)}
-                  className={`${styles.panelPill} ${pill.active ? styles.panelPillActive : ''}`}
-                >
-                  {pill.label}
-                </span>
-              ),
-            )}
-          </div>
-        ) : null}
-        {panelFooter ? <div className={styles.panelFooter}>{panelFooter}</div> : null}
-      </aside>
     </header>
   )
 }

@@ -1,4 +1,5 @@
 import { memo } from 'react'
+import { ThinkingOrb } from 'thinking-orbs'
 
 import styles from './ChatComponent.module.css'
 import HeaderDisplay from './HeaderDisplay'
@@ -24,6 +25,14 @@ interface ToolCallsProps {
   message: Message
   onToggleToolCard: (toolCallId: string) => void
   wrapInBoundary?: boolean
+}
+
+function StreamingResponseIndicator() {
+  return (
+    <span className={styles.streamingIndicator} role="status" aria-label="Generating response">
+      <ThinkingOrb state="composing" size={20} theme="dark" />
+    </span>
+  )
 }
 
 function getSearchSources(message: Message) {
@@ -123,7 +132,7 @@ function AssistantRatingsMessage({
                   isStreaming={message.isStreaming}
                 />
               </ErrorBoundary>
-              {message.isStreaming && index === 0 ? <span className={styles.cursor}>▊</span> : null}
+              {message.isStreaming && index === 0 ? <StreamingResponseIndicator /> : null}
             </div>
             {!message.isStreaming && choice.model && message.headers?.['x-vsr-replay-id'] ? (
               <div className={styles.choiceActions}>
@@ -177,10 +186,8 @@ function AssistantSingleMessage({
                 isStreaming={message.isStreaming}
               />
             </ErrorBoundary>
-            {message.isStreaming ? <span className={styles.cursor}>▊</span> : null}
+            {message.isStreaming ? <StreamingResponseIndicator /> : null}
           </>
-        ) : message.isStreaming ? (
-          <span className={styles.cursor}>▊</span>
         ) : null}
       </div>
     </>
@@ -217,7 +224,7 @@ function UserOrSystemMessage({ message }: Pick<MessageCardProps, 'message'>) {
       ) : null}
       <MessageImages message={message} />
       {message.content || message.isStreaming ? <span>{message.content}</span> : null}
-      {message.isStreaming ? <span className={styles.cursor}>▊</span> : null}
+      {message.isStreaming ? <StreamingResponseIndicator /> : null}
     </div>
   )
 }

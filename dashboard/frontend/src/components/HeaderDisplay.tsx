@@ -1,4 +1,5 @@
 import styles from './HeaderDisplay.module.css'
+import ProductIcon from './ProductIcon'
 import { formatLearningHeaderValue, isLearningHeader } from './headerLearningDisplay'
 import { formatRoutingMetadataValue } from './routingMetadataDisplay'
 
@@ -177,6 +178,18 @@ const HEADER_INFO: Record<
     label: 'Looper Total Tokens',
     type: 'info',
   },
+  'x-vsr-latency-ms': {
+    label: 'Latency',
+    type: 'info',
+  },
+  'x-vsr-ttft-ms': {
+    label: 'TTFT',
+    type: 'info',
+  },
+  'x-vsr-tpot-ms': {
+    label: 'TPOT',
+    type: 'info',
+  },
   // Retention directive headers (issue #2009)
   'x-vsr-retention-drop': {
     label: 'Retention: Drop',
@@ -249,23 +262,47 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     return null
   }
 
+  const primaryKeys = [
+    'x-vsr-selected-decision',
+    'x-vsr-selected-algorithm',
+    'x-vsr-looper-algorithm',
+    'x-vsr-selected-model',
+    'x-vsr-looper-model',
+  ]
+  const primaryHeaders = displayHeaders.filter(([key]) => primaryKeys.includes(key))
+  const detailHeaders = displayHeaders.filter(([key]) => !primaryKeys.includes(key))
+
+  const renderHeader = ([key, value]: [string, string]) => {
+    const info = HEADER_INFO[key]
+    const displayValue = summarizeHeaderValue(key, value)
+    const unit = key.endsWith('-ms') ? ' ms' : ''
+    return (
+      <div
+        key={key}
+        className={`${styles.header} ${styles[info.type]}`}
+        title={`${info.label}: ${displayValue}${unit}`}
+      >
+        <span className={styles.label}>{info.label}</span>
+        <span className={styles.value}>
+          {displayValue}
+          {unit}
+        </span>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.headers}>
-        {displayHeaders.map(([key, value]) => {
-          const info = HEADER_INFO[key]
-          const displayValue = summarizeHeaderValue(key, value)
-          return (
-            <div
-              key={key}
-              className={`${styles.header} ${styles[info.type]}`}
-              title={`${info.label}: ${displayValue}`}
-            >
-              <span className={styles.label}>{info.label}</span>
-              <span className={styles.value}>{displayValue}</span>
-            </div>
-          )
-        })}
+        {primaryHeaders.map(renderHeader)}
+        {detailHeaders.length > 0 ? (
+          <details className={styles.details}>
+            <summary className={styles.detailsToggle} aria-label="Show response details">
+              <ProductIcon name="settings" width={14} height={14} />
+            </summary>
+            <div className={styles.detailsPanel}>{detailHeaders.map(renderHeader)}</div>
+          </details>
+        ) : null}
       </div>
     </div>
   )

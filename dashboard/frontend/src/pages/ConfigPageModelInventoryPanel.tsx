@@ -5,12 +5,28 @@ import TableHeader from '../components/TableHeader'
 import configStyles from './ConfigPage.module.css'
 import styles from './ConfigPageModelsSection.module.css'
 import ConfigPageModelLiveVerification from './ConfigPageModelLiveVerification'
+import ModelProviderLogo from './ModelProviderLogo'
 import { TABLE_COLUMN_WIDTH, type NormalizedModel } from './configPageSupport'
 import type { ModelEndpointFilter, ModelRoleFilter } from './configPageModelInventory'
 import {
   modelLiveVerificationState,
   type ModelLiveVerificationState,
 } from './useModelLiveVerification'
+import { findModelProviderPreset } from './modelProviderCatalog'
+
+function ModelProviderMark({ model }: { model: NormalizedModel }) {
+  const backend = model.backend_refs?.[0]
+  const preset = findModelProviderPreset({
+    backendName: backend?.name,
+    baseUrl: backend?.base_url,
+    apiFormat: model.api_format ?? backend?.provider,
+  })
+  return (
+    <span className={styles.modelProviderMark} aria-hidden="true">
+      <ModelProviderLogo provider={preset} size="small" />
+    </span>
+  )
+}
 
 interface ConfigPageModelInventoryPanelProps {
   models: NormalizedModel[]
@@ -90,17 +106,20 @@ export default function ConfigPageModelInventoryPanel({
       sortable: true,
       render: (row) => (
         <div className={styles.modelIdentity}>
-          <div className={styles.modelIdentityPrimary}>
-            <span className={styles.modelName} title={row.name}>
-              {row.name}
+          <ModelProviderMark model={row} />
+          <div className={styles.modelIdentityCopy}>
+            <div className={styles.modelIdentityPrimary}>
+              <span className={styles.modelName} title={row.name}>
+                {row.name}
+              </span>
+              {row.name === defaultModel ? (
+                <span className={styles.defaultBadge}>Default</span>
+              ) : null}
+            </div>
+            <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
+              {row.provider_model_id || row.name}
             </span>
-            {row.name === defaultModel ? (
-              <span className={styles.defaultBadge}>Default</span>
-            ) : null}
           </div>
-          <span className={styles.modelPhysicalId} title={row.provider_model_id || row.name}>
-            {row.provider_model_id || row.name}
-          </span>
         </div>
       ),
     },
@@ -148,8 +167,8 @@ export default function ConfigPageModelInventoryPanel({
     },
     {
       key: 'live_verification',
-      header: 'Live Verification',
-      width: '240px',
+      header: 'Live',
+      width: '170px',
       render: (row) => (
         <ConfigPageModelLiveVerification
           model={row.name}
@@ -176,6 +195,9 @@ export default function ConfigPageModelInventoryPanel({
       },
     },
   ]
+  const visibleColumns = canVerifyModels
+    ? columns
+    : columns.filter((column) => column.key !== 'live_verification')
 
   return (
     <>
@@ -275,7 +297,7 @@ export default function ConfigPageModelInventoryPanel({
       ) : null}
 
       <DataTable
-        columns={columns}
+        columns={visibleColumns}
         data={filteredModels}
         keyExtractor={(row) => row.name}
         onView={onViewModel}

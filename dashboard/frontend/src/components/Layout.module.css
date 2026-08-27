@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   min-height: 100vh;
+  min-height: 100dvh;
   background: transparent;
 }
 
@@ -29,34 +30,8 @@
   width: 100%;
 }
 
-.brand {
-  display: flex;
-  align-items: center;
+.brandPlacement {
   justify-self: start;
-  gap: 0.7rem;
-  text-decoration: none;
-  padding: 0.35rem 0;
-  transition: opacity var(--transition-fast);
-  min-width: 10.4rem;
-}
-
-.brand:hover {
-  opacity: 0.85;
-}
-
-.logo {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-}
-
-.brandText {
-  font-size: 0.8rem;
-  font-weight: 720;
-  color: #f5f5f7;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  white-space: nowrap;
 }
 
 .nav {
@@ -417,11 +392,6 @@ button.navLink {
     gap: 0.75rem;
   }
 
-  .brand {
-    min-width: 0;
-  }
-
-  .brandText,
   .headerBranding {
     display: none;
   }
@@ -445,7 +415,8 @@ button.navLink {
     display: flex;
     justify-content: space-between;
     height: 56px;
-    padding: 0 1rem;
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 
   .headerRight {
@@ -467,8 +438,8 @@ button.navLink {
     overscroll-behavior: contain;
   }
 
-  .brandText {
-    display: none;
+  .brandPlacement {
+    width: 7rem;
   }
 }
 

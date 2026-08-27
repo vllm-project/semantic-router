@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext'
 import DashboardSurfaceHero from '../components/DashboardSurfaceHero'
 import { DataTable, type Column } from '../components/DataTable'
 import ConfirmDialog from '../components/ConfirmDialog'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './UsersPage.module.css'
 import UsersPageUserDialog, {
   type UsersPageUserDialogMode,
@@ -22,6 +23,7 @@ import {
   canViewUsers as canViewDashboardUsers,
 } from '../utils/accessControl'
 import UsersPageAuditPanel from './UsersPageAuditPanel'
+import DashboardInviteDialog from './DashboardInviteDialog'
 
 type AdminUser = {
   id: string
@@ -100,6 +102,7 @@ const UsersPage: React.FC = () => {
 
   const [showAudit, setShowAudit] = useState(false)
   const [dialogMode, setDialogMode] = useState<UsersPageUserDialogMode | null>(null)
+  const [inviteOpen, setInviteOpen] = useState(false)
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
   const [dialogSubmitting, setDialogSubmitting] = useState(false)
@@ -174,7 +177,16 @@ const UsersPage: React.FC = () => {
       }
       request.finish()
     }
-  }, [debouncedQuery, page, pageSize, sortField, sortOrder, statusFilter, userHeaders, userRequests])
+  }, [
+    debouncedQuery,
+    page,
+    pageSize,
+    sortField,
+    sortOrder,
+    statusFilter,
+    userHeaders,
+    userRequests,
+  ])
 
   const fetchRolePermissions = useCallback(async () => {
     if (!canManageUsers) {
@@ -230,18 +242,11 @@ const UsersPage: React.FC = () => {
     setDialogSubmitting(false)
   }
 
-  const openCreateDialog = () => {
+  const openInviteDialog = () => {
     if (!canManageUsers) {
       return
     }
-
-    if (!loadingRolePermissions && Object.keys(rolePermissions).length === 0) {
-      void fetchRolePermissions()
-    }
-
-    setDialogMode('create')
-    setSelectedUser(null)
-    setDialogError(null)
+    setInviteOpen(true)
   }
 
   const openEditDialog = (user: AdminUser) => {
@@ -277,27 +282,6 @@ const UsersPage: React.FC = () => {
     let roleAndStatusSaved = false
 
     try {
-      if (dialogMode === 'create') {
-        const response = await fetch('/api/admin/users', {
-          method: 'POST',
-          headers: userHeaders,
-          body: JSON.stringify({
-            email: values.email,
-            name: values.name,
-            password: values.password,
-            role: values.role,
-          }),
-        })
-        if (!response.ok) {
-          throw new Error(await getResponseError(response))
-        }
-
-        closeDialog()
-        setToast({ type: 'success', message: 'User created.' })
-        await fetchUsers()
-        return
-      }
-
       if (!selectedUser) {
         throw new Error('No user selected for editing.')
       }
@@ -432,38 +416,12 @@ const UsersPage: React.FC = () => {
       <DashboardSurfaceHero
         eyebrow="Access"
         title="Users"
-        description="Manage dashboard users, privileged roles, and lifecycle controls without leaving the admin workspace."
+        description="Invite people, shape dashboard roles, and keep workspace access clear."
         meta={[
           { label: 'Current surface', value: showAudit ? 'Audit logs' : 'User directory' },
           { label: 'Active accounts', value: `${activeUserCount} active` },
           { label: 'Privileged users', value: `${privilegedUserCount} elevated` },
         ]}
-        panelEyebrow="Workspace access"
-        panelTitle="Dashboard user control"
-        panelDescription="Keep account provisioning, role changes, and audit history in one operator-facing surface."
-        pills={[
-          {
-            label: 'User list',
-            active: !showAudit,
-            onClick: () => setShowAudit(false),
-          },
-          ...(canManageUsers
-            ? [
-                {
-                  label: 'Audit logs',
-                  active: showAudit,
-                  onClick: () => setShowAudit(true),
-                },
-              ]
-            : []),
-        ]}
-        panelFooter={
-          canManageUsers ? (
-            <button type="button" className={styles.heroActionButton} onClick={openCreateDialog}>
-              Create user
-            </button>
-          ) : null
-        }
       />
 
       {toast ? (
@@ -475,6 +433,24 @@ const UsersPage: React.FC = () => {
       ) : null}
 
       <div className={styles.body}>
+        {canViewUsers && canManageUsers ? (
+          <nav className={styles.viewTabs} aria-label="User management views">
+            <button
+              type="button"
+              className={!showAudit ? styles.viewTabActive : styles.viewTab}
+              onClick={() => setShowAudit(false)}
+            >
+              Users
+            </button>
+            <button
+              type="button"
+              className={showAudit ? styles.viewTabActive : styles.viewTab}
+              onClick={() => setShowAudit(true)}
+            >
+              Audit log
+            </button>
+          </nav>
+        ) : null}
         {!canViewUsers ? (
           <section className={styles.card}>
             <div className={styles.sectionHeader}>
@@ -499,8 +475,8 @@ const UsersPage: React.FC = () => {
                 </p>
               </div>
               {canManageUsers ? (
-                <button type="button" className={styles.secondaryButton} onClick={openCreateDialog}>
-                  New account
+                <button type="button" className={styles.secondaryButton} onClick={openInviteDialog}>
+                  + Invite user
                 </button>
               ) : null}
             </div>
@@ -599,7 +575,7 @@ const UsersPage: React.FC = () => {
             </div>
 
             {loadingUsers ? (
-              <div className={styles.loading}>Loading users...</div>
+              <ProductLoadingState label="Loading users" compact />
             ) : (
               <DataTable
                 columns={userColumns}
@@ -639,8 +615,8 @@ const UsersPage: React.FC = () => {
       </div>
 
       <UsersPageUserDialog
-        isOpen={dialogMode !== null}
-        mode={dialogMode ?? 'create'}
+        isOpen={dialogMode === 'edit'}
+        mode="edit"
         initialValues={dialogInitialValues}
         roleOptions={ROLE_OPTIONS}
         rolePermissions={rolePermissions}
@@ -651,6 +627,8 @@ const UsersPage: React.FC = () => {
         onClose={closeDialog}
         onSubmit={handleDialogSubmit}
       />
+
+      <DashboardInviteDialog isOpen={inviteOpen} onClose={() => setInviteOpen(false)} />
 
       <ConfirmDialog
         isOpen={deleteTarget !== null}

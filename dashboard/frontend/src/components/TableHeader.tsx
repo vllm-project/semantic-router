@@ -1,4 +1,5 @@
 import React from 'react'
+import ProductIcon from './ProductIcon'
 import styles from './TableHeader.module.css'
 
 interface TableHeaderProps {
@@ -38,18 +39,23 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         {icon && <span className={styles.icon}>{icon}</span>}
         <h3 className={styles.title}>{title}</h3>
         {count !== undefined && (
-          <span className={styles.badge}>{count} {count === 1 ? 'item' : 'items'}</span>
+          <span className={styles.badge}>
+            {count} {count === 1 ? 'item' : 'items'}
+          </span>
         )}
       </div>
       <div className={styles.actions}>
         {showSearch && (
-          <input
-            type="search"
-            className={styles.searchInput}
-            placeholder={searchPlaceholder}
-            value={searchValue}
-            onChange={(e) => onSearchChange?.(e.target.value)}
-          />
+          <label className={styles.searchControl}>
+            <ProductIcon name="search" />
+            <input
+              type="search"
+              className={styles.searchInput}
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(e) => onSearchChange?.(e.target.value)}
+            />
+          </label>
         )}
         {onSecondaryAction && !disabled && (
           <button className={styles.secondaryButton} onClick={onSecondaryAction}>
@@ -58,6 +64,7 @@ const TableHeader: React.FC<TableHeaderProps> = ({
         )}
         {onAdd && !disabled && (
           <button className={styles.addButton} onClick={onAdd}>
+            <ProductIcon name="plus" />
             {addButtonText}
           </button>
         )}

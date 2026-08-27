@@ -1,6 +1,5 @@
 import React from 'react'
 import DashboardManagerLayout from '../components/DashboardManagerLayout'
-import type { DashboardSurfaceHeroPill } from '../components/DashboardSurfaceHero'
 
 interface ConfigPageManagerLayoutProps {
   eyebrow?: string
@@ -8,10 +7,6 @@ interface ConfigPageManagerLayoutProps {
   description: string
   configArea?: string
   scope?: string
-  panelEyebrow?: string
-  panelTitle?: string
-  panelDescription?: string
-  pills?: DashboardSurfaceHeroPill[]
   children: React.ReactNode
 }
 
@@ -21,19 +16,8 @@ export default function ConfigPageManagerLayout({
   description,
   configArea = 'Manager',
   scope = 'Live router control',
-  panelEyebrow = 'Workspace',
-  panelTitle = 'Semantic Router Manager',
-  panelDescription = 'Configure the models, decisions, and signals that shape live routing behavior.',
-  pills,
   children,
 }: ConfigPageManagerLayoutProps) {
-  const defaultPills: DashboardSurfaceHeroPill[] = ['Models', 'Decisions', 'Signals'].map(
-    (section) => ({
-      label: section,
-      active: section === title,
-    }),
-  )
-
   return (
     <DashboardManagerLayout
       eyebrow={eyebrow}
@@ -44,10 +28,6 @@ export default function ConfigPageManagerLayout({
         { label: 'Config area', value: configArea },
         { label: 'Scope', value: scope },
       ]}
-      panelEyebrow={panelEyebrow}
-      panelTitle={panelTitle}
-      panelDescription={panelDescription}
-      pills={pills ?? defaultPills}
     >
       {children}
     </DashboardManagerLayout>

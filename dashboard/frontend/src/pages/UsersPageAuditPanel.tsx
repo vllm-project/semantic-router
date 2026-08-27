@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { DataTable, type Column } from '../components/DataTable'
+import ProductLoadingState from '../components/ProductLoadingState'
 import styles from './UsersPage.module.css'
 import {
   buildAuditLogQuery,
@@ -417,9 +418,7 @@ const UsersPageAuditPanel: React.FC = () => {
       ) : null}
 
       {loading && logs.length === 0 ? (
-        <div className={styles.loading} role="status">
-          Loading audit logs...
-        </div>
+        <ProductLoadingState label="Loading audit logs" compact />
       ) : (
         <DataTable
           columns={columns}

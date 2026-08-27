@@ -414,3 +414,29 @@
     flex: 1;
   }
 }
+.viewTabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.viewTab,
+.viewTabActive {
+  min-height: 34px;
+  padding: 0 0.8rem;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.viewTabActive {
+  background: rgba(255, 255, 255, 0.09);
+  color: var(--color-text);
+}

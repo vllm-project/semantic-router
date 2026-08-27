@@ -564,7 +564,7 @@ test.describe('Layout top navigation', () => {
     )
     const routingTab = buildMenu.getByRole('tab', { name: /Routing/ })
     const knowledgeTab = buildMenu.getByRole('tab', { name: /Knowledge/ })
-    const integrationsTab = buildMenu.getByRole('tab', { name: /Integrations & Policy/ })
+    const integrationsTab = buildMenu.getByRole('tab', { name: /^Integrations/ })
     await expect(routingTab).toBeFocused()
     await expect(routingTab).toHaveAttribute('aria-selected', 'true')
     await expect(routingTab).toHaveAttribute(
@@ -585,7 +585,7 @@ test.describe('Layout top navigation', () => {
     await page.keyboard.press('End')
     await expect(integrationsTab).toBeFocused()
     await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'Security Policy' })).toBeVisible()
+    await expect(buildMenu.getByRole('link', { name: 'OpenClaw' })).toBeVisible()
     await page.keyboard.press('Home')
     await expect(routingTab).toBeFocused()
     await page.keyboard.press('ArrowRight')
@@ -759,7 +759,6 @@ test.describe('Layout top navigation', () => {
           'openclaw.manage',
           'openclaw.read',
           'replay.read',
-          'security.manage',
           'tools.use',
           'topology.read',
           'users.manage',
@@ -964,9 +963,9 @@ test.describe('Layout top navigation', () => {
 
     await workflowGroup.getByRole('button', { name: 'Build' }).click()
     const buildMenu = page.getByRole('navigation', { name: 'Build' })
-    await buildMenu.getByRole('tab', { name: /Integrations & Policy/ }).click()
+    await buildMenu.getByRole('tab', { name: /^Integrations/ }).click()
     await expect(buildMenu.getByRole('button', { name: 'MCP Servers' })).toBeVisible()
-    await expect(buildMenu.getByRole('link', { name: 'ClawOS' })).toBeVisible()
+    await expect(buildMenu.getByRole('link', { name: 'OpenClaw' })).toBeVisible()
 
     await page.goto('/ml-setup')
 

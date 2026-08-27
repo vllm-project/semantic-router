@@ -144,9 +144,13 @@
 }
 
 .expandIcon {
-  display: inline-block;
-  font-size: 0.75rem;
+  display: inline-flex;
   transition: transform var(--transition-fast);
+}
+
+.expandIcon svg {
+  width: 16px;
+  height: 16px;
 }
 
 .expandIcon.expanded {
@@ -195,6 +199,9 @@
 }
 
 .actionButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
   font-weight: 500;
@@ -205,6 +212,11 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   white-space: nowrap;
+}
+
+.actionButton svg {
+  width: 14px;
+  height: 14px;
 }
 
 .viewButton:hover {

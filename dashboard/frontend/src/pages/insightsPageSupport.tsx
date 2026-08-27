@@ -312,12 +312,6 @@ export function buildInsightsRecordSections(
       { label: 'Decision tier', value: formatDecisionNumber(record.decision_tier) },
       { label: 'Decision priority', value: formatDecisionNumber(record.decision_priority) },
       {
-        label: 'Category',
-        value: record.signals?.domain?.length
-          ? record.signals.domain.join(', ')
-          : record.category || '-',
-      },
-      {
         label: 'Confidence score',
         value:
           record.confidence_score !== undefined

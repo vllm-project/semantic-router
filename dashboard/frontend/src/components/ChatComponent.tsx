@@ -1,7 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react'
 import styles from './ChatComponent.module.css'
-import ThinkingAnimation from './ThinkingAnimation'
-import HeaderReveal from './HeaderReveal'
 import ClawRoomChat from './ClawRoomChat'
 import ChatComposerAddMenu from './ChatComposerAddMenu'
 import ChatConversationSidebar from './ChatConversationSidebar'
@@ -66,9 +64,7 @@ const ChatComponent = ({
   const {
     conversationErrors,
     conversationThinking,
-    headerRevealStates,
     setConversationError,
-    setConversationHeaderReveal,
     setConversationThinkingState,
   } = useChatConversationState()
   const [isFullscreen] = useState(isFullscreenMode)
@@ -193,16 +189,6 @@ const ChatComponent = ({
   )
   const clawManagementDisabled =
     authLoading || readonlyLoading || serverReadonly || !canManageMCP(user)
-  const currentHeaderRevealState = headerRevealStates[conversationId]
-
-  useEffect(() => {
-    if (!currentHeaderRevealState || currentHeaderRevealState.visible) {
-      return
-    }
-
-    setConversationHeaderReveal(conversationId, currentHeaderRevealState.headers, true)
-  }, [conversationId, currentHeaderRevealState, setConversationHeaderReveal])
-
   // Toggle fullscreen mode by adding/removing class to body
   useEffect(() => {
     if (isFullscreen) {
@@ -239,7 +225,7 @@ const ChatComponent = ({
         await refreshMCPTools()
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to enable Claw Mode'
-        console.warn(`[ClawOS] UI mode enabled, but MCP bootstrap failed: ${message}`)
+        console.warn(`[OpenClaw] UI mode enabled, but MCP bootstrap failed: ${message}`)
       } finally {
         if (isCurrent) {
           setIsTogglingClawMode(false)
@@ -332,12 +318,6 @@ const ChatComponent = ({
     [baseOtherToolDefinitions, clawManagementDisabled, clawToolDefinitions, searchToolDefinitions],
   )
 
-  const handleThinkingComplete = useCallback(() => {}, [])
-
-  const handleHeaderRevealComplete = useCallback(() => {
-    setConversationHeaderReveal(conversationId, null)
-  }, [conversationId, setConversationHeaderReveal])
-
   const handleSelectConversation = useCallback(
     (id: string) => {
       const target = conversations.find((conv) => conv.id === id)
@@ -368,7 +348,6 @@ const ChatComponent = ({
       registerAbortController(id, null)
       setConversationError(id, null)
       setConversationThinkingState(id, false)
-      setConversationHeaderReveal(id, null)
 
       if (id === conversationId) {
         setExpandedToolCards(new Set())
@@ -392,7 +371,6 @@ const ChatComponent = ({
       removeConversationMessages,
       registerAbortController,
       setConversationError,
-      setConversationHeaderReveal,
       setConversationThinkingState,
     ],
   )
@@ -408,10 +386,8 @@ const ChatComponent = ({
         expandedToolCardCount: expandedToolCards.size,
         generateId,
         getConversationMessagesSnapshot,
-        getCurrentConversationId: () => conversationIdRef.current,
         registerAbortController,
         setConversationError,
-        setConversationHeaderReveal,
         setConversationThinking: setConversationThinkingState,
         setExpandedToolCards,
         task,
@@ -428,7 +404,6 @@ const ChatComponent = ({
       getConversationMessagesSnapshot,
       registerAbortController,
       setConversationError,
-      setConversationHeaderReveal,
       setConversationThinkingState,
       setExpandedToolCards,
       updateConversationMessages,
@@ -664,28 +639,8 @@ const ChatComponent = ({
     ? conversationErrors[visibleErrorConversationId]
     : null
   const shouldShowThinking = !isTeamRoomView && Boolean(conversationThinking[conversationId])
-  const shouldShowHeaderReveal =
-    !isTeamRoomView &&
-    Boolean(currentHeaderRevealState?.visible) &&
-    Boolean(currentHeaderRevealState?.headers)
-
   return (
     <>
-      {shouldShowThinking && (
-        <ThinkingAnimation
-          onComplete={handleThinkingComplete}
-          thinkingProcess={liveThinkingProcess}
-        />
-      )}
-
-      {shouldShowHeaderReveal && currentHeaderRevealState?.headers && (
-        <HeaderReveal
-          headers={currentHeaderRevealState.headers}
-          onComplete={handleHeaderRevealComplete}
-          displayDuration={2000}
-        />
-      )}
-
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
         <div className={styles.mainLayout}>
           <ChatComponentSidebarShell
@@ -743,6 +698,8 @@ const ChatComponent = ({
                   expandedToolCards={expandedToolCards}
                   messages={messages}
                   onToggleToolCard={handleToggleToolCard}
+                  thinking={shouldShowThinking}
+                  thinkingProcess={liveThinkingProcess}
                 />
                 <ChatTaskQueue
                   queuedTasks={queuedTasks}
