@@ -1,0 +1,20 @@
+[
+  {
+    "description": "Antonym flip must not reuse the cached answer (enable/disable)",
+    "original_question": "How do I enable two-factor authentication on my account?",
+    "contradiction": "How do I disable two-factor authentication on my account?",
+    "paraphrase": "How can I enable two-factor authentication on my account?"
+  },
+  {
+    "description": "Antonym flip must not reuse the cached answer (on/off)",
+    "original_question": "How do I turn on dark mode in the settings?",
+    "contradiction": "How do I turn off dark mode in the settings?",
+    "paraphrase": "How can I turn on dark mode in the settings?"
+  },
+  {
+    "description": "Inserted negation must not reuse the cached answer",
+    "original_question": "Should I commit this change before the release?",
+    "contradiction": "Should I not commit this change before the release?",
+    "paraphrase": "Should I commit this change prior to the release?"
+  }
+]
