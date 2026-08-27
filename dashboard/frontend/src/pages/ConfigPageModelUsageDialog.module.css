@@ -12,6 +12,8 @@
 .dialog {
   width: min(var(--product-dialog-content-width), 100%);
   max-height: min(780px, calc(100dvh - 3rem));
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border: 2px solid rgba(255, 255, 255, 0.72);
   border-radius: 18px;
@@ -69,7 +71,7 @@
 
 .endpoint {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.85rem;
   margin: 0 1.5rem 1rem;
@@ -84,6 +86,15 @@
   color: rgba(255, 255, 255, 0.72);
   font-size: 0.72rem;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.endpoint small {
+  padding: 0.28rem 0.48rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.64rem;
   white-space: nowrap;
 }
 
@@ -120,6 +131,9 @@
 
 .codeShell {
   position: relative;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   margin: 1.2rem 1.5rem 1.5rem;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -127,20 +141,32 @@
   background: rgba(6, 7, 9, 0.72);
 }
 
-.codeShell pre {
-  min-height: 300px;
-  max-height: 430px;
-  margin: 0;
-  padding: 1.2rem;
+.codeViewport {
+  max-width: 100%;
+  max-height: min(430px, 50vh);
   overflow: auto;
+  overscroll-behavior: contain;
 }
 
-.codeShell code {
+.codeViewport pre {
+  width: max-content;
+  min-width: 100%;
+  min-height: 300px;
+  margin: 0;
+  padding: 1.2rem;
+  background: transparent !important;
+}
+
+.codeViewport code {
   color: rgba(255, 255, 255, 0.74);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   line-height: 1.7;
   white-space: pre;
+}
+
+.codeViewport :global(.hljs) {
+  background: transparent;
 }
 
 .copyButton {
@@ -181,7 +207,14 @@
   .codeShell {
     margin-inline: 1rem;
   }
-  .codeShell pre {
+  .endpoint {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .endpoint small {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+  .codeViewport pre {
     min-height: 240px;
   }
 }

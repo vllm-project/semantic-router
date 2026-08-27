@@ -275,36 +275,40 @@ export default function ConfigPageConnectModelsDialog({
       >
         <header className={styles.header}>
           <div className={styles.titleGroup}>
+            {stage === 'models' && provider ? (
+              <button
+                type="button"
+                className={styles.backButton}
+                onClick={() => setStage('provider')}
+                disabled={busy}
+                aria-label="Choose another provider"
+              >
+                <ProductIcon name="arrow-left" aria-hidden="true" />
+              </button>
+            ) : null}
+            {stage === 'models' && provider ? (
+              <ModelProviderLogo provider={provider} size="medium" />
+            ) : null}
             <div>
-              <span>Connect a model</span>
               <h2 id={titleId}>
-                {stage === 'provider'
-                  ? 'Choose a provider'
-                  : `Connect ${provider?.name ?? 'provider'}`}
+                {stage === 'provider' ? 'Add models' : (provider?.name ?? 'Connect provider')}
               </h2>
               <p>
                 {stage === 'provider'
-                  ? 'Start with where your models run.'
-                  : 'Add credentials, then choose the models you want.'}
+                  ? 'Choose where your models run.'
+                  : 'Connect once, then import one or many models.'}
               </p>
             </div>
           </div>
-          <div className={styles.headerActions}>
-            <div className={styles.steps} aria-label={`Step ${stage === 'provider' ? 1 : 2} of 2`}>
-              <span className={styles.activeStep}>1</span>
-              <i />
-              <span className={stage === 'models' ? styles.activeStep : ''}>2</span>
-            </div>
-            <button
-              type="button"
-              className={styles.iconButton}
-              onClick={onClose}
-              disabled={busy}
-              aria-label="Close"
-            >
-              <ProductIcon name="close" />
-            </button>
-          </div>
+          <button
+            type="button"
+            className={styles.iconButton}
+            onClick={onClose}
+            disabled={busy}
+            aria-label="Close"
+          >
+            <ProductIcon name="close" />
+          </button>
         </header>
 
         {error ? (
@@ -347,7 +351,6 @@ export default function ConfigPageConnectModelsDialog({
                           <strong>{item.name}</strong>
                           <small>{item.description}</small>
                         </span>
-                        <ProductIcon name="chevron-right" aria-hidden="true" />
                       </button>
                     ))}
                   </div>
@@ -357,71 +360,68 @@ export default function ConfigPageConnectModelsDialog({
           </div>
         ) : provider ? (
           <div className={styles.body}>
-            <div className={styles.selectedProvider}>
-              <ModelProviderLogo provider={provider} size="large" />
-              <span>
-                <small>Provider</small>
-                <strong>{provider.name}</strong>
-              </span>
-              <button type="button" onClick={() => setStage('provider')} disabled={busy}>
-                <ProductIcon name="arrow-left" aria-hidden="true" />
-                Change
-              </button>
-            </div>
-            <div className={styles.connectionGrid}>
-              {!provider.baseUrl ? (
-                <label className={styles.field}>
-                  <span>Base URL</span>
-                  <input
-                    type="url"
-                    value={baseUrl}
-                    onChange={(event) => setBaseUrl(event.target.value)}
-                    placeholder="https://api.example.com/v1"
-                    autoFocus
-                  />
-                </label>
-              ) : (
-                <div className={`${styles.field} ${styles.fixedEndpoint}`}>
-                  <span>API endpoint</span>
-                  <div>
-                    <ProductIcon name="link" aria-hidden="true" />
-                    <code>{provider.baseUrl}</code>
-                  </div>
+            <section className={styles.connectionPanel}>
+              <div className={styles.connectionHeading}>
+                <div>
+                  <strong>Connection</strong>
+                  <span>Credentials stay private and are only used for this provider.</span>
                 </div>
-              )}
-              {provider.authMode !== 'none' ? (
-                <label className={styles.field}>
-                  <span>
-                    API key <small>{provider.baseUrl ? 'Required' : 'Optional'}</small>
-                  </span>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={(event) => setAPIKey(event.target.value)}
-                    placeholder="Paste your key"
-                    autoComplete="new-password"
-                    autoFocus={Boolean(provider.baseUrl)}
-                  />
-                </label>
-              ) : (
-                <div className={`${styles.field} ${styles.noCredential}`}>
-                  <span>Authentication</span>
-                  <div>
-                    <ProductIcon name="check" aria-hidden="true" />
-                    No API key required
+                <button
+                  type="button"
+                  className={styles.discoverButton}
+                  onClick={() => void discover()}
+                  disabled={busy || !baseUrl.trim()}
+                >
+                  <ProductIcon name={models.length > 0 ? 'refresh' : 'search'} aria-hidden="true" />
+                  {discovering ? 'Connecting…' : models.length > 0 ? 'Refresh' : 'List models'}
+                </button>
+              </div>
+              <div className={styles.connectionGrid}>
+                {!provider.baseUrl ? (
+                  <label className={styles.field}>
+                    <span>Base URL</span>
+                    <input
+                      type="url"
+                      value={baseUrl}
+                      onChange={(event) => setBaseUrl(event.target.value)}
+                      placeholder="https://api.example.com/v1"
+                      autoFocus
+                    />
+                  </label>
+                ) : (
+                  <div className={`${styles.field} ${styles.fixedEndpoint}`}>
+                    <span>API endpoint</span>
+                    <div>
+                      <ProductIcon name="link" aria-hidden="true" />
+                      <code>{provider.baseUrl}</code>
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-            <button
-              type="button"
-              className={styles.discoverButton}
-              onClick={() => void discover()}
-              disabled={busy || !baseUrl.trim()}
-            >
-              <ProductIcon name={models.length > 0 ? 'refresh' : 'search'} aria-hidden="true" />
-              {discovering ? 'Connecting…' : models.length > 0 ? 'Refresh models' : 'List models'}
-            </button>
+                )}
+                {provider.authMode !== 'none' ? (
+                  <label className={styles.field}>
+                    <span>
+                      API key <small>{provider.baseUrl ? 'Required' : 'Optional'}</small>
+                    </span>
+                    <input
+                      type="password"
+                      value={apiKey}
+                      onChange={(event) => setAPIKey(event.target.value)}
+                      placeholder="Paste your key"
+                      autoComplete="new-password"
+                      autoFocus={Boolean(provider.baseUrl)}
+                    />
+                  </label>
+                ) : (
+                  <div className={`${styles.field} ${styles.noCredential}`}>
+                    <span>Authentication</span>
+                    <div>
+                      <ProductIcon name="check" aria-hidden="true" />
+                      No API key required
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
 
             <div className={styles.manualRow}>
               <ProductIcon name="plus" aria-hidden="true" />
@@ -520,18 +520,22 @@ export default function ConfigPageConnectModelsDialog({
         ) : null}
 
         <footer className={styles.footer}>
-          <button
-            type="button"
-            className={styles.secondaryButton}
-            onClick={() => {
-              onClose()
-              onManualSetup()
-            }}
-            disabled={busy}
-          >
-            <ProductIcon name="settings" aria-hidden="true" />
-            Manual setup
-          </button>
+          {stage === 'provider' ? (
+            <button
+              type="button"
+              className={styles.secondaryButton}
+              onClick={() => {
+                onClose()
+                onManualSetup()
+              }}
+              disabled={busy}
+            >
+              <ProductIcon name="settings" aria-hidden="true" />
+              Manual setup
+            </button>
+          ) : (
+            <span />
+          )}
           <div>
             <button
               type="button"

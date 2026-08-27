@@ -20,24 +20,26 @@
 }
 
 .details {
-  position: relative;
+  width: 100%;
+  margin-top: 0.35rem;
 }
 
 .detailsToggle {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.32rem;
+  min-height: 24px;
+  padding: 0;
+  border: 0;
   color: rgba(255, 255, 255, 0.48);
-  background: rgba(255, 255, 255, 0.045);
+  background: transparent;
   cursor: pointer;
   list-style: none;
   transition:
     color 160ms ease,
-    background 160ms ease,
-    border-color 160ms ease;
+    opacity 160ms ease;
+  font-size: 0.7rem;
+  font-weight: 560;
 }
 
 .detailsToggle::-webkit-details-marker {
@@ -46,26 +48,77 @@
 
 .detailsToggle:hover,
 .detailsToggle:focus-visible {
-  border-color: rgba(255, 255, 255, 0.18);
   color: rgba(255, 255, 255, 0.86);
-  background: rgba(255, 255, 255, 0.08);
   outline: none;
 }
 
+.detailsToggle svg {
+  transition: transform 160ms ease;
+}
+
+.details[open] .detailsToggle svg {
+  transform: rotate(180deg);
+}
+
 .detailsPanel {
-  position: absolute;
-  z-index: 12;
-  left: 0;
-  top: calc(100% + 0.45rem);
   display: flex;
-  width: min(620px, calc(100vw - 4rem));
+  width: 100%;
   flex-wrap: wrap;
   gap: 0.42rem;
-  padding: 0.65rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  background: rgba(14, 15, 18, 0.96);
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.34);
+  margin-top: 0.4rem;
+  padding: 0.65rem 0 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  animation: detailsOpen 150ms ease-out;
+}
+
+@keyframes detailsOpen {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.performance {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7rem;
+  margin-left: 0.15rem;
+  padding-left: 0.8rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.performanceMetric {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: baseline;
+  gap: 0 0.22rem;
+  min-width: 0;
+}
+
+.performanceMetric span {
+  grid-column: 1 / -1;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.58rem;
+  font-weight: 650;
+  letter-spacing: 0.07em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.performanceMetric strong {
+  color: rgba(255, 255, 255, 0.86);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 620;
+}
+
+.performanceMetric small {
+  color: rgba(255, 255, 255, 0.34);
+  font-size: 0.58rem;
 }
 
 .header {
@@ -156,4 +209,14 @@
 
 .header.danger .value {
   color: var(--color-danger);
+}
+
+@media (max-width: 640px) {
+  .performance {
+    width: 100%;
+    margin-left: 0;
+    padding: 0.25rem 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    border-left: 0;
+  }
 }

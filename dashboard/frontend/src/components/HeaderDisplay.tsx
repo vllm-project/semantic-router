@@ -163,7 +163,7 @@ const HEADER_INFO: Record<
     type: 'info',
   },
   'x-vsr-looper-latency-ms': {
-    label: 'Looper Latency (ms)',
+    label: 'Looper latency',
     type: 'info',
   },
   'x-vsr-looper-prompt-tokens': {
@@ -269,8 +269,17 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     'x-vsr-selected-model',
     'x-vsr-looper-model',
   ]
+  const performanceKeys = [
+    'x-vsr-latency-ms',
+    'x-vsr-ttft-ms',
+    'x-vsr-tpot-ms',
+    'x-vsr-looper-latency-ms',
+  ]
   const primaryHeaders = displayHeaders.filter(([key]) => primaryKeys.includes(key))
-  const detailHeaders = displayHeaders.filter(([key]) => !primaryKeys.includes(key))
+  const performanceHeaders = displayHeaders.filter(([key]) => performanceKeys.includes(key))
+  const detailHeaders = displayHeaders.filter(
+    ([key]) => !primaryKeys.includes(key) && !performanceKeys.includes(key),
+  )
 
   const renderHeader = ([key, value]: [string, string]) => {
     const info = HEADER_INFO[key]
@@ -291,19 +300,39 @@ const HeaderDisplay = ({ headers }: HeaderDisplayProps) => {
     )
   }
 
+  const renderPerformance = ([key, value]: [string, string]) => {
+    const info = HEADER_INFO[key]
+    const displayValue = summarizeHeaderValue(key, value)
+    return (
+      <div
+        key={key}
+        className={styles.performanceMetric}
+        title={`${info.label}: ${displayValue} ms`}
+      >
+        <span>{info.label}</span>
+        <strong>{displayValue}</strong>
+        <small>ms</small>
+      </div>
+    )
+  }
+
   return (
     <div className={styles.container}>
       <div className={styles.headers}>
         {primaryHeaders.map(renderHeader)}
-        {detailHeaders.length > 0 ? (
-          <details className={styles.details}>
-            <summary className={styles.detailsToggle} aria-label="Show response details">
-              <ProductIcon name="settings" width={14} height={14} />
-            </summary>
-            <div className={styles.detailsPanel}>{detailHeaders.map(renderHeader)}</div>
-          </details>
+        {performanceHeaders.length > 0 ? (
+          <div className={styles.performance}>{performanceHeaders.map(renderPerformance)}</div>
         ) : null}
       </div>
+      {detailHeaders.length > 0 ? (
+        <details className={styles.details}>
+          <summary className={styles.detailsToggle} aria-label="Show response details">
+            <span>Response details</span>
+            <ProductIcon name="chevron-down" width={13} height={13} />
+          </summary>
+          <div className={styles.detailsPanel}>{detailHeaders.map(renderHeader)}</div>
+        </details>
+      ) : null}
     </div>
   )
 }

@@ -7,7 +7,7 @@ interface ThinkingAnimationProps {
 }
 
 export default function ThinkingAnimation({ thinkingProcess }: ThinkingAnimationProps) {
-  const label = thinkingProcess ? 'Working through it' : 'Thinking'
+  const label = thinkingProcess ? 'Working' : 'Thinking'
 
   return (
     <div className={styles.row} role="status" aria-live="polite" data-testid="chat-thinking">

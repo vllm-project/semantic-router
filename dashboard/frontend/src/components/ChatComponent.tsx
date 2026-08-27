@@ -639,6 +639,7 @@ const ChatComponent = ({
     ? conversationErrors[visibleErrorConversationId]
     : null
   const shouldShowThinking = !isTeamRoomView && Boolean(conversationThinking[conversationId])
+  const isConversationEmpty = !isTeamRoomView && messages.length === 0 && !shouldShowThinking
   return (
     <>
       <div className={`${styles.container} ${isFullscreen ? styles.fullscreen : ''}`}>
@@ -660,7 +661,7 @@ const ChatComponent = ({
             ) : null}
           </ChatComponentSidebarShell>
 
-          <div className={styles.chatArea}>
+          <div className={`${styles.chatArea} ${isConversationEmpty ? styles.chatAreaEmpty : ''}`}>
             {isTeamRoomView ? (
               <ClawRoomChat
                 isSidebarOpen={isSidebarOpen}

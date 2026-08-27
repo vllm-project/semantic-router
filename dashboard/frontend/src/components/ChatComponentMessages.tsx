@@ -7,12 +7,13 @@ import ThinkingBlock from './ThinkingBlock'
 import ErrorBoundary from './ErrorBoundary'
 import ReMoMResponsesDisplay from './ReMoMResponsesDisplay'
 import FeedbackButtons from './FeedbackButtons'
-import { MessageActionBar, TypingGreeting } from './ChatComponentControls'
+import { MessageActionBar } from './ChatComponentControls'
 import { ContentWithCitations } from './ChatComponentCitations'
 import { ToolCard } from './ChatComponentToolCards'
-import { GREETING_LINES, type Message } from './ChatComponentTypes'
+import type { Message } from './ChatComponentTypes'
 import { formatPlaygroundFileSize } from './playgroundFileAttachments'
 import { getTranslateAttr } from '../hooks/useNoTranslate'
+import { useAuth } from '../contexts/AuthContext'
 
 interface ChatComponentMessagesProps {
   expandedToolCards: Set<string>
@@ -306,11 +307,16 @@ export default function ChatComponentMessages({
   messages,
   onToggleToolCard,
 }: ChatComponentMessagesProps) {
+  const { user } = useAuth()
+
   if (messages.length === 0) {
+    const firstName = user?.name?.trim().split(/\s+/)[0] || 'there'
+
     return (
       <div className={`${styles.messagesContainer} ${styles.messagesContainerEmpty}`}>
         <div className={styles.emptyState}>
-          <TypingGreeting lines={GREETING_LINES} />
+          <h2>Welcome, {firstName}</h2>
+          <p>What should we build, test, or route?</p>
         </div>
       </div>
     )

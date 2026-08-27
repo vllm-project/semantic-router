@@ -34,7 +34,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  padding: 1.25rem 1.5rem;
+  padding: 1.15rem 1.5rem;
   border-color: var(--border-subtle);
 }
 
@@ -53,18 +53,11 @@
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.875rem;
-}
-.titleGroup span {
-  color: var(--text-muted);
-  font-size: 0.6875rem;
-  font-weight: 720;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
+  gap: 0.75rem;
 }
 .titleGroup h2 {
-  margin: 0.125rem 0 0;
-  font-size: 1.25rem;
+  margin: 0;
+  font-size: 1.18rem;
   letter-spacing: -0.025em;
 }
 .titleGroup p {
@@ -73,52 +66,33 @@
   font-size: 0.8125rem;
 }
 
-.headerActions,
-.steps {
+.backButton {
   display: flex;
   align-items: center;
-}
-
-.headerActions {
-  gap: 1rem;
-}
-
-.steps {
-  gap: 0.35rem;
-}
-
-.steps span {
-  display: grid;
-  width: 22px;
-  height: 22px;
-  place-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 999px;
-  color: rgba(255, 255, 255, 0.34);
-  font-size: 0.62rem;
-  font-weight: 700;
+  border-radius: 9px;
 }
 
-.steps i {
-  width: 18px;
-  height: 1px;
-  background: rgba(255, 255, 255, 0.09);
-}
-
-.steps .activeStep {
-  border-color: rgba(255, 255, 255, 0.38);
-  color: rgba(255, 255, 255, 0.88);
+.backButton svg {
+  width: 15px;
+  height: 15px;
 }
 
 .iconButton {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   color: var(--text-secondary);
   font-size: 1.5rem;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
 }
 .iconButton svg {
   width: 16px;
@@ -127,7 +101,7 @@
 .body {
   flex: 1 1 auto;
   min-height: 0;
-  padding: 1.35rem 1.5rem 1.5rem;
+  padding: 1.25rem 1.5rem 1.5rem;
   overflow-y: auto;
 }
 .error {
@@ -221,8 +195,8 @@
 }
 .providerGrid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem;
 }
 
 .providerSection:first-of-type .providerGrid {
@@ -230,12 +204,12 @@
 }
 .providerCard {
   min-width: 0;
-  min-height: 64px;
+  min-height: 76px;
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 0.6rem;
-  padding: 0.65rem;
+  padding: 0.78rem;
   text-align: left;
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.075);
@@ -250,20 +224,17 @@
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.2);
 }
-.providerCard > span:nth-child(2),
-.selectedProvider > span {
+.providerCard > span:nth-child(2) {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
 }
-.providerCard strong,
-.selectedProvider strong {
+.providerCard strong {
   color: var(--text-primary);
   font-size: 0.8rem;
 }
-.providerCard small,
-.selectedProvider small {
+.providerCard small {
   color: var(--text-muted);
   display: -webkit-box;
   overflow: hidden;
@@ -272,43 +243,39 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
-.providerCard > svg {
-  width: 15px;
-  height: 15px;
-  color: var(--text-muted);
+.connectionPanel {
+  padding: 1rem;
+  border: 1px solid var(--border-subtle);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.018);
 }
-.selectedProvider {
+
+.connectionHeading {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 0 0 0.9rem;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--border-subtle);
-  border-radius: 0;
+  justify-content: space-between;
+  gap: 1rem;
 }
-.selectedProvider > span {
-  flex: 1;
+
+.connectionHeading > div {
+  display: grid;
+  gap: 0.2rem;
 }
-.selectedProvider button {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.75rem;
-  color: var(--text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: 8px;
+
+.connectionHeading strong {
+  color: var(--text-primary);
+  font-size: 0.82rem;
 }
-.selectedProvider button svg {
-  width: 14px;
-  height: 14px;
+
+.connectionHeading span {
+  color: var(--text-muted);
+  font-size: 0.7rem;
 }
 .connectionGrid {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 1rem;
-  margin-top: 1.25rem;
+  margin-top: 0.9rem;
 }
 .field {
   display: flex;
@@ -350,9 +317,8 @@
   white-space: nowrap;
 }
 .discoverButton {
-  width: 100%;
-  min-height: 44px;
-  margin-top: 1rem;
+  min-height: 38px;
+  padding: 0 0.85rem;
   color: #09090a;
   font-weight: 700;
   background: #f4f4f5;
@@ -377,7 +343,8 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 0.625rem;
-  margin-top: 0.75rem;
+  margin-top: 0.85rem;
+  padding: 0 0.15rem;
 }
 .manualRow > svg {
   width: 16px;
@@ -385,6 +352,7 @@
   color: var(--text-muted);
 }
 .manualRow button {
+  min-height: 40px;
   padding: 0 0.9rem;
   color: var(--text-primary);
   background: transparent;
@@ -659,8 +627,12 @@
   .providerSection:first-of-type .providerGrid {
     grid-template-columns: 1fr;
   }
-  .steps {
-    display: none;
+  .connectionHeading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .discoverButton {
+    width: 100%;
   }
   .modelSectionHeader,
   .modelActions {

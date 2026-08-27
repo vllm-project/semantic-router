@@ -34,99 +34,145 @@
 }
 
 .playgroundSidebarShell {
-  display: flex;
+  width: var(--playground-sidebar-rail-width);
   flex: 0 0 auto;
   min-height: 0;
   height: 100%;
-  background: #09090a;
+  overflow: hidden;
+  background: #0d0d0f;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  transition: width 180ms ease;
 }
 
-.playgroundSidebarRail {
-  width: var(--playground-sidebar-rail-width);
+.playgroundSidebarShellOpen {
+  width: var(--playground-sidebar-panel-width);
+}
+
+.playgroundSidebarChrome {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
   gap: 0.55rem;
-  padding: 0.72rem 0.55rem 0.9rem;
+  padding: 0.7rem 0.6rem 0.8rem;
 }
 
-.playgroundSidebarRailButton {
-  display: inline-flex;
+.playgroundSidebarBrand {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: #101012;
+  width: 100%;
+  height: 42px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
   color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
   transition:
     background-color var(--transition-fast),
-    border-color var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast);
+    color var(--transition-fast);
 }
 
-.playgroundSidebarRailButton:hover:not(:disabled) {
-  background: #18181b;
-  border-color: rgba(255, 255, 255, 0.16);
-  color: #ffffff;
+.playgroundSidebarBrand:hover {
+  background: rgba(255, 255, 255, 0.055);
 }
 
-.playgroundSidebarRailButton:active:not(:disabled) {
-  transform: scale(0.97);
+.playgroundSidebarBrand img {
+  display: block;
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  object-position: left center;
 }
 
-.playgroundSidebarRailButton:disabled {
+.playgroundSidebarShellOpen .playgroundSidebarBrand {
+  justify-content: flex-start;
+  padding: 0 0.28rem;
+}
+
+.playgroundSidebarShellOpen .playgroundSidebarBrand img {
+  width: 145px;
+  height: 38px;
+}
+
+.playgroundSidebarCreate {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  width: 100%;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.76);
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.playgroundSidebarCreate:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.055);
+  color: #fff;
+}
+
+.playgroundSidebarCreate:disabled {
   opacity: 0.42;
   cursor: not-allowed;
 }
 
-.playgroundSidebarRailButtonActive {
-  background: #18181b;
-  border-color: rgba(227, 27, 35, 0.4);
-  color: #ffffff;
-  box-shadow: inset 3px 0 0 var(--brand-amd);
+.playgroundSidebarCreate svg {
+  flex: 0 0 auto;
 }
 
-.playgroundSidebarRailDivider {
-  width: 28px;
-  height: 1px;
-  margin: 0.1rem 0 0.15rem;
-  background: rgba(255, 255, 255, 0.1);
+.playgroundSidebarCreate span {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.8rem;
+  font-weight: 560;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.playgroundSidebarRailFooter {
-  margin-top: auto;
-  display: flex;
-  width: 100%;
-  justify-content: center;
+.playgroundSidebarShellOpen .playgroundSidebarCreate {
+  justify-content: flex-start;
+  padding: 0 0.7rem;
 }
 
 .playgroundSidebarPanel {
-  width: 0;
-  opacity: 0;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden;
+  opacity: 0;
   pointer-events: none;
-  transition:
-    width 180ms ease,
-    opacity 140ms ease;
-  background: #101012;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  transition: opacity 120ms ease;
 }
 
-.playgroundSidebarPanelVisible {
-  width: var(--playground-sidebar-panel-width);
+.playgroundSidebarShellOpen .playgroundSidebarPanel {
   opacity: 1;
   pointer-events: auto;
 }
 
 .playgroundSidebarPanelInner {
-  width: var(--playground-sidebar-panel-width);
+  width: 100%;
   height: 100%;
   min-height: 0;
+}
+
+.playgroundSidebarFooter {
+  display: flex;
+  width: 100%;
+  margin-top: auto;
+  justify-content: center;
+}
+
+.playgroundSidebarShellOpen .playgroundSidebarFooter {
+  justify-content: flex-start;
 }
 
 .chatTopBar {
@@ -291,8 +337,8 @@
   border-right: none;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  padding: 0.75rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.1rem 0.25rem;
   min-height: 0;
 }
 
@@ -303,25 +349,11 @@
   gap: 0.5rem;
 }
 
-.sidebarEyebrow {
-  font-size: 0.625rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.48);
-}
-
 .sidebarTitle {
-  margin-top: 0.14rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #f5f5f5;
-}
-
-.sidebarSubtitle {
-  margin-top: 0.14rem;
-  font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.54);
+  padding: 0 0.68rem;
+  font-size: 0.72rem;
+  font-weight: 620;
+  color: rgba(255, 255, 255, 0.42);
 }
 
 .sidebarList {
@@ -353,8 +385,7 @@
 
 .sidebarItemActive {
   background-color: #18181b;
-  border-color: rgba(227, 27, 35, 0.36);
-  box-shadow: inset 3px 0 0 var(--brand-amd);
+  border-color: rgba(255, 255, 255, 0.07);
 }
 
 .sidebarItemText {
@@ -662,6 +693,35 @@ body.playground-fullscreen .container {
   align-items: stretch;
 }
 
+.chatAreaEmpty {
+  justify-content: center;
+  padding-bottom: clamp(4rem, 12vh, 8rem);
+}
+
+.chatAreaEmpty .conversationViewport {
+  flex: 0 0 auto;
+  min-height: 0;
+  overflow: visible;
+}
+
+.chatAreaEmpty .conversationViewportContent,
+.chatAreaEmpty .messagesContainer {
+  flex: 0 0 auto;
+  min-height: 0;
+}
+
+.chatAreaEmpty .messagesContainer {
+  padding: 0 1rem;
+}
+
+.chatAreaEmpty .inputContainer {
+  position: relative;
+  bottom: auto;
+  margin-top: 1.4rem;
+  padding: 0 1rem;
+  background: transparent;
+}
+
 .messagesContainerEmpty {
   flex: 1 1 auto;
   min-height: 0;
@@ -685,40 +745,19 @@ body.playground-fullscreen .container {
   padding-bottom: 0;
 }
 
-.emptyState h3 {
-  font-size: clamp(1.7rem, 4vw, 2.4rem);
-  font-weight: 740;
+.emptyState h2 {
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
+  font-weight: 620;
   color: var(--color-text);
   margin: 0;
   letter-spacing: -0.045em;
 }
 
-.typingGreeting h2 {
-  font-size: clamp(1.7rem, 4vw, 2.4rem);
-  font-weight: 740;
-  color: var(--color-text);
-  margin: 0;
-  letter-spacing: -0.045em;
-  min-height: 2.6rem;
-}
-
-.typingCursor {
-  display: inline-block;
-  margin-left: 2px;
-  font-weight: 400;
-  animation: blink 0.8s infinite;
-}
-
-@keyframes blink {
-  0%,
-  50% {
-    opacity: 1;
-  }
-
-  51%,
-  100% {
-    opacity: 0;
-  }
+.emptyState p {
+  margin: 0.7rem 0 0;
+  color: rgba(255, 255, 255, 0.46);
+  font-size: 0.92rem;
+  letter-spacing: -0.01em;
 }
 
 .messages {
@@ -916,8 +955,8 @@ body.playground-fullscreen .container {
 
 .streamingIndicator {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 16px;
+  height: 16px;
   margin-left: 0.2rem;
   vertical-align: -0.26rem;
 }
@@ -951,32 +990,25 @@ body.playground-fullscreen .container {
   width: var(--chat-rail-width);
   max-width: var(--chat-rail-width);
   margin: 0 auto;
-  background: rgba(20, 20, 23, 0.86);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: 18px;
+  background: rgba(24, 24, 27, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 24px;
   overflow: visible;
   transition: all var(--transition-base);
   position: relative;
   z-index: 1;
-  backdrop-filter: blur(20px) saturate(112%);
-  -webkit-backdrop-filter: blur(20px) saturate(112%);
-  box-shadow:
-    0 18px 44px rgba(0, 0, 0, 0.32),
-    inset 0 1px 0 rgba(255, 255, 255, 0.045);
+  backdrop-filter: blur(18px) saturate(108%);
+  -webkit-backdrop-filter: blur(18px) saturate(108%);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.22);
 }
 
 .inputWrapper:focus-within {
-  border-color: rgba(255, 255, 255, 0.2);
-  box-shadow:
-    0 0 0 2px var(--focus-ring),
-    0 10px 22px rgba(0, 0, 0, 0.22),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.24);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
 }
 
 .inputWrapper.hasContent {
-  box-shadow:
-    0 10px 22px rgba(0, 0, 0, 0.22),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.25);
 }
 
 .input {
@@ -1520,22 +1552,18 @@ body.playground-fullscreen .container {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
-  .playgroundSidebarRail {
-    width: 52px;
-    padding: 0.6rem 0.4rem 0.8rem;
+  .container {
+    --playground-sidebar-rail-width: 52px;
+    --playground-sidebar-panel-width: min(240px, 82vw);
   }
 
-  .playgroundSidebarRailButton {
-    width: 36px;
-    height: 36px;
+  .playgroundSidebarChrome {
+    padding: 0.58rem 0.38rem 0.72rem;
   }
 
-  .playgroundSidebarPanelVisible {
-    width: min(220px, calc(100vw - 52px));
-  }
-
-  .playgroundSidebarPanelInner {
-    width: min(220px, calc(100vw - 52px));
+  .playgroundSidebarBrand,
+  .playgroundSidebarCreate {
+    height: 38px;
   }
 
   .header {
@@ -1641,9 +1669,7 @@ body.playground-fullscreen .container {
 
   .inputWrapper:focus-within,
   .inputWrapper.hasContent {
-    box-shadow:
-      0 10px 20px rgba(0, 0, 0, 0.22),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.22) !important;
   }
 
   .input,
@@ -1840,8 +1866,8 @@ body.playground-fullscreen .container {
 .toolCallsContainer {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.65rem;
+  gap: 0.14rem;
+  margin: 0.18rem 0 0.55rem;
   width: min(100%, 680px);
   min-width: 0;
   max-width: min(100%, 680px);
@@ -1868,10 +1894,10 @@ body.playground-fullscreen .container {
 .webSearchHeader {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  gap: 0.46rem;
   width: 100%;
   min-width: 0;
-  padding: 0.4rem 0.25rem;
+  padding: 0.32rem 0.1rem;
   cursor: pointer;
   transition: background-color var(--transition-fast);
   border: 0;
@@ -1887,7 +1913,7 @@ body.playground-fullscreen .container {
 }
 
 .webSearchHeader:hover {
-  background-color: rgba(255, 255, 255, 0.025);
+  background-color: transparent;
 }
 
 .webSearchIcon {
@@ -2475,12 +2501,12 @@ body.playground-fullscreen .container {
     max-height: 100vh;
   }
 
-  .playgroundSidebarPanel {
+  .playgroundSidebarShellOpen {
     position: absolute;
-    left: var(--playground-sidebar-rail-width);
+    left: 0;
     top: 0;
     bottom: 0;
-    z-index: 6;
-    box-shadow: none;
+    z-index: 8;
+    box-shadow: 18px 0 38px rgba(0, 0, 0, 0.34);
   }
 }

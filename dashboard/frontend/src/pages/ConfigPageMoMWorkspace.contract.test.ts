@@ -13,6 +13,8 @@ describe('Mixture-of-Models workspace contracts', () => {
     expect(source).toContain('role="tabpanel"')
     expect(source).toContain('<ConfigPageMoMRoutingPanel')
     expect(source).toContain('<ConfigPageMoMProbesPanel')
+    expect(source.indexOf("id: 'models'")).toBeLessThan(source.indexOf("id: 'recipes'"))
+    expect(source).toContain("useState<MixtureWorkspaceView>('models')")
     expect(source).not.toContain('useBuiltInModelCatalog()')
     expect(source).not.toContain('Built-in Models')
     expect(source).not.toContain('Models & Routing')
@@ -50,6 +52,9 @@ describe('Mixture-of-Models workspace contracts', () => {
     expect(usage).toContain('/v1/chat/completions')
     expect(usage).toContain('from openai import OpenAI')
     expect(usage).toContain('import OpenAI from "openai"')
+    expect(usage).toContain('rehypeHighlight')
+    expect(usage).toContain('No API key required')
+    expect(usage).not.toContain('YOUR_API_KEY')
   })
 
   it('creates a model by choosing a recipe and assigning every decision', () => {

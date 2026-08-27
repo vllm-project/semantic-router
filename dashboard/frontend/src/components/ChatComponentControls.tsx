@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 
 import styles from './ChatComponent.module.css'
 
@@ -55,44 +55,3 @@ export const MessageActionBar = ({ content }: { content: string }) => {
     </div>
   )
 }
-
-export const TypingGreeting = memo(({ lines }: { lines: string[] }) => {
-  const [currentLineIndex, setCurrentLineIndex] = useState(0)
-  const [displayedText, setDisplayedText] = useState('')
-  const [isTyping, setIsTyping] = useState(true)
-
-  useEffect(() => {
-    if (currentLineIndex >= lines.length) return
-
-    const currentLine = lines[currentLineIndex]
-    let charIndex = 0
-    setIsTyping(true)
-    setDisplayedText('')
-
-    const typingInterval = setInterval(() => {
-      if (charIndex < currentLine.length) {
-        setDisplayedText(currentLine.slice(0, charIndex + 1))
-        charIndex++
-      } else {
-        clearInterval(typingInterval)
-        setIsTyping(false)
-        setTimeout(() => {
-          if (currentLineIndex < lines.length - 1) {
-            setCurrentLineIndex(prev => prev + 1)
-          }
-        }, 1500)
-      }
-    }, 60)
-
-    return () => clearInterval(typingInterval)
-  }, [currentLineIndex, lines])
-
-  return (
-    <div className={styles.typingGreeting} translate="no">
-      <h2>
-        {displayedText}
-        {isTyping && <span className={styles.typingCursor}>|</span>}
-      </h2>
-    </div>
-  )
-})

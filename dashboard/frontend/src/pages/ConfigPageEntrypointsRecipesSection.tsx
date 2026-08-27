@@ -22,8 +22,8 @@ interface ConfigPageEntrypointsRecipesSectionProps {
 export type MixtureWorkspaceView = 'recipes' | 'models' | 'probes'
 
 const VIEWS: Array<{ id: MixtureWorkspaceView; label: string }> = [
-  { id: 'recipes', label: 'Recipes' },
   { id: 'models', label: 'Models' },
+  { id: 'recipes', label: 'Recipes' },
   { id: 'probes', label: 'Probes' },
 ]
 
@@ -36,7 +36,7 @@ export default function ConfigPageEntrypointsRecipesSection({
   openViewModal,
 }: ConfigPageEntrypointsRecipesSectionProps) {
   const navigate = useNavigate()
-  const [activeView, setActiveView] = useState<MixtureWorkspaceView>('recipes')
+  const [activeView, setActiveView] = useState<MixtureWorkspaceView>('models')
   const tabRefs = useRef<Array<HTMLButtonElement | null>>([])
 
   const handleTabKeyDown = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {

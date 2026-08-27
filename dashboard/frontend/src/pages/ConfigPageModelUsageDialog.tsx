@@ -1,4 +1,7 @@
 import { useId, useMemo, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
+import remarkGfm from 'remark-gfm'
 
 import ProductIcon from '../components/ProductIcon'
 import useAccessibleDialog from '../hooks/useAccessibleDialog'
@@ -25,7 +28,6 @@ const copyText = async (value: string) => {
 
 const buildExamples = (origin: string, model: string): Record<ExampleKind, string> => ({
   curl: `curl ${origin}/v1/chat/completions \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{
     "model": "${model}",
@@ -36,7 +38,7 @@ const buildExamples = (origin: string, model: string): Record<ExampleKind, strin
 
 client = OpenAI(
     base_url="${origin}/v1",
-    api_key="YOUR_API_KEY",
+    api_key="not-required",
 )
 
 stream = client.chat.completions.create(
@@ -51,7 +53,7 @@ for chunk in stream:
 
 const client = new OpenAI({
   baseURL: "${origin}/v1",
-  apiKey: "YOUR_API_KEY",
+  apiKey: "not-required",
 });
 
 const stream = await client.chat.completions.create({
@@ -64,6 +66,12 @@ for await (const chunk of stream) {
   process.stdout.write(chunk.choices[0]?.delta?.content ?? "");
 }`,
 })
+
+const EXAMPLE_LANGUAGES: Record<ExampleKind, string> = {
+  curl: 'bash',
+  python: 'python',
+  javascript: 'javascript',
+}
 
 interface ConfigPageModelUsageDialogProps {
   entrypoint: EntrypointConfig
@@ -82,6 +90,10 @@ export default function ConfigPageModelUsageDialog({
   const model = entrypoint.model_names[0] ?? ''
   const origin = window.location.origin.replace(/\/$/, '')
   const examples = useMemo(() => buildExamples(origin, model), [model, origin])
+  const highlightedExample = useMemo(
+    () => `\`\`\`${EXAMPLE_LANGUAGES[active]}\n${examples[active]}\n\`\`\``,
+    [active, examples],
+  )
 
   const handleCopy = async () => {
     setCopyError('')
@@ -121,6 +133,7 @@ export default function ConfigPageModelUsageDialog({
         <div className={styles.endpoint}>
           <span>Base URL</span>
           <code>{origin}/v1</code>
+          <small>No API key required</small>
         </div>
 
         <div className={styles.tabs} role="tablist" aria-label="Usage examples">
@@ -146,9 +159,11 @@ export default function ConfigPageModelUsageDialog({
             <ProductIcon name={copied ? 'check' : 'copy'} />
             {copied ? 'Copied' : 'Copy'}
           </button>
-          <pre>
-            <code>{examples[active]}</code>
-          </pre>
+          <div className={styles.codeViewport}>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+              {highlightedExample}
+            </ReactMarkdown>
+          </div>
         </div>
         {copyError ? (
           <p className={styles.copyError} role="alert">
