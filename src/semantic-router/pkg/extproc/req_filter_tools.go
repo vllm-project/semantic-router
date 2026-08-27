@@ -94,7 +94,9 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 
 	case config.ToolsPluginModeFiltered:
 		openAIRequest.Tools = filterToolsByDecisionPolicy(openAIRequest.Tools, toolsCfg.AllowTools, toolsCfg.BlockTools)
-		if openAIRequest.ToolChoice.OfAuto.Value != "auto" {
+		// Omitted tool_choice equals auto when tools remain (OpenAI/Anthropic default).
+		if openAIRequest.ToolChoice.OfAuto.Value != "auto" &&
+			(hasToolChoice(openAIRequest) || len(openAIRequest.Tools) == 0) {
 			logging.Infof("[ToolsPlugin] Decision %q filtered explicit tools to %d entries", ctx.VSRSelectedDecision.Name, len(openAIRequest.Tools))
 			if err := r.updateRequestWithTools(openAIRequest, response, ctx); err != nil {
 				return false, err
@@ -104,7 +106,12 @@ func (r *OpenAIRouter) handleEarlyToolModes(
 		return true, nil
 
 	case config.ToolsPluginModePassthrough:
-		return openAIRequest.ToolChoice.OfAuto.Value == "auto", nil
+		if openAIRequest.ToolChoice.OfAuto.Value == "auto" ||
+			(!hasToolChoice(openAIRequest) && len(openAIRequest.Tools) > 0) {
+			return true, nil
+		}
+		logging.Infof("[ToolsPlugin] Skipping semantic tool selection: tool_choice is not automatic")
+		return false, nil
 
 	default:
 		return false, fmt.Errorf("tools plugin: unsupported mode %q", toolsCfg.Mode)
@@ -189,6 +196,7 @@ func (r *OpenAIRouter) handleToolSelection(
 	}
 
 	if !toolsCfg.SelectionEnabled() {
+		logging.Infof("[ToolsPlugin] Skipping semantic tool selection: semantic selection disabled")
 		return r.updateRequestWithTools(openAIRequest, response, ctx)
 	}
 

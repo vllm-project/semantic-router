@@ -3,10 +3,13 @@ package extproc
 import (
 	"testing"
 
+	ext_proc "github.com/envoyproxy/go-control-plane/envoy/service/ext_proc/v3"
 	"github.com/openai/openai-go"
 	"github.com/openai/openai-go/packages/param"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
+	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/anthropic"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 )
 
@@ -154,4 +157,131 @@ func TestClearToolChoiceWhenNoTools_KeepsChoiceWhenToolsPresent(t *testing.T) {
 
 	assert.False(t, changed)
 	assert.False(t, param.IsOmitted(req.ToolChoice.OfAuto))
+}
+
+func TestHandleEarlyToolModes_ToolChoiceGate(t *testing.T) {
+	weatherTool := `{"type":"function","function":{"name":"lookup_weather"}}`
+	router := &OpenAIRouter{Config: &config.RouterConfig{}}
+	ctx := &RequestContext{VSRSelectedDecision: &config.Decision{Name: "test"}}
+	passthrough := &config.ToolsPluginConfig{Enabled: true, Mode: config.ToolsPluginModePassthrough}
+	filtered := &config.ToolsPluginConfig{
+		Enabled:    true,
+		Mode:       config.ToolsPluginModeFiltered,
+		AllowTools: []string{"lookup_weather"},
+	}
+	filteredBlockAll := &config.ToolsPluginConfig{
+		Enabled:    true,
+		Mode:       config.ToolsPluginModeFiltered,
+		BlockTools: []string{"lookup_weather"},
+	}
+
+	tests := []struct {
+		name           string
+		body           string
+		cfg            *config.ToolsPluginConfig
+		wantContinue   bool
+		parseAnthropic bool
+	}{
+		{
+			name:         "omitted with tools is auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tools":[` + weatherTool + `]}`,
+			cfg:          passthrough,
+			wantContinue: true,
+		},
+		{
+			name:         "explicit auto with tools is auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tool_choice":"auto","tools":[` + weatherTool + `]}`,
+			cfg:          passthrough,
+			wantContinue: true,
+		},
+		{
+			name:         "omitted without tools is not auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}]}`,
+			cfg:          passthrough,
+			wantContinue: false,
+		},
+		{
+			name:         "none is not auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tool_choice":"none","tools":[` + weatherTool + `]}`,
+			cfg:          passthrough,
+			wantContinue: false,
+		},
+		{
+			name:         "required is not auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tool_choice":"required","tools":[` + weatherTool + `]}`,
+			cfg:          passthrough,
+			wantContinue: false,
+		},
+		{
+			name:         "named tool is not auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tool_choice":{"type":"function","function":{"name":"lookup_weather"}},"tools":[` + weatherTool + `]}`,
+			cfg:          passthrough,
+			wantContinue: false,
+		},
+		{
+			name:         "filtered omitted with remaining tools is auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tools":[` + weatherTool + `]}`,
+			cfg:          filtered,
+			wantContinue: true,
+		},
+		{
+			name:         "filtered omitted with no remaining tools is not auto",
+			body:         `{"model":"m","messages":[{"role":"user","content":"weather"}],"tools":[` + weatherTool + `]}`,
+			cfg:          filteredBlockAll,
+			wantContinue: false,
+		},
+		{
+			name:           "anthropic omitted with tools is auto",
+			body:           `{"model":"claude","messages":[{"role":"user","content":"weather"}],"tools":[{"name":"lookup_weather","description":"weather","input_schema":{"type":"object"}}]}`,
+			cfg:            passthrough,
+			wantContinue:   true,
+			parseAnthropic: true,
+		},
+		{
+			name:           "anthropic explicit auto with tools is auto",
+			body:           `{"model":"claude","messages":[{"role":"user","content":"weather"}],"tool_choice":{"type":"auto"},"tools":[{"name":"lookup_weather","input_schema":{"type":"object"}}]}`,
+			cfg:            passthrough,
+			wantContinue:   true,
+			parseAnthropic: true,
+		},
+		{
+			name:           "anthropic none is not auto",
+			body:           `{"model":"claude","messages":[{"role":"user","content":"weather"}],"tool_choice":{"type":"none"},"tools":[{"name":"lookup_weather","input_schema":{"type":"object"}}]}`,
+			cfg:            passthrough,
+			wantContinue:   false,
+			parseAnthropic: true,
+		},
+		{
+			name:           "anthropic any/required is not auto",
+			body:           `{"model":"claude","messages":[{"role":"user","content":"weather"}],"tool_choice":{"type":"any"},"tools":[{"name":"lookup_weather","input_schema":{"type":"object"}}]}`,
+			cfg:            passthrough,
+			wantContinue:   false,
+			parseAnthropic: true,
+		},
+		{
+			name:           "anthropic named tool is not auto",
+			body:           `{"model":"claude","messages":[{"role":"user","content":"weather"}],"tool_choice":{"type":"tool","name":"lookup_weather"},"tools":[{"name":"lookup_weather","input_schema":{"type":"object"}}]}`,
+			cfg:            passthrough,
+			wantContinue:   false,
+			parseAnthropic: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var req *openai.ChatCompletionNewParams
+			var err error
+			if tt.parseAnthropic {
+				req, _, err = anthropic.ParseAnthropicRequest([]byte(tt.body))
+			} else {
+				req, err = parseOpenAIRequest([]byte(tt.body))
+			}
+			require.NoError(t, err)
+
+			var resp *ext_proc.ProcessingResponse
+			got, err := router.handleEarlyToolModes(req, &resp, ctx, tt.cfg)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantContinue, got)
+		})
+	}
 }

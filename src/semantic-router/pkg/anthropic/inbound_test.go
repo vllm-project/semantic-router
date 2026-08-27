@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/openai/openai-go"
+	"github.com/openai/openai-go/packages/param"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/ir"
 )
@@ -366,6 +367,20 @@ func TestParseAnthropicRequest_ToolsWithStrict(t *testing.T) {
 	}
 	if ext.ToolStrict["calc"] {
 		t.Fatalf("expected strict=false (or absent) for calc, got %+v", ext.ToolStrict)
+	}
+}
+
+func TestParseAnthropicRequest_OmittedToolChoiceWithTools(t *testing.T) {
+	body := []byte(`{"model":"claude","messages":[{"role":"user","content":"x"}],"tools":[{"name":"search","input_schema":{"type":"object"}}]}`)
+	params, _, err := ParseAnthropicRequest(body)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(params.Tools) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(params.Tools))
+	}
+	if !param.IsOmitted(params.ToolChoice.OfAuto) || params.ToolChoice.OfChatCompletionNamedToolChoice != nil {
+		t.Fatalf("omitted tool_choice should stay omitted in IR, got %+v", params.ToolChoice)
 	}
 }
 

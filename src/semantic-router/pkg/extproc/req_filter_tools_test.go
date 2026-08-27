@@ -608,6 +608,56 @@ var _ = Describe("Tool Selection Request Filter", func() {
 			// Should not modify tools when tool_choice is not auto
 		})
 
+		It("treats omitted tool_choice as auto when tools are present", func() {
+			requestJSON := []byte(`{
+				"model": "test-model",
+				"messages": [{"role": "user", "content": "What's the weather?"}],
+				"tools": [{"type": "function", "function": {"name": "noise_tool"}}]
+			}`)
+			openAIRequest, err := parseOpenAIRequest(requestJSON)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = router.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(openAIRequest.Tools).NotTo(BeEmpty())
+			names := make([]string, len(openAIRequest.Tools))
+			for i, tool := range openAIRequest.Tools {
+				names[i] = tool.Function.Name
+			}
+			Expect(names).To(ContainElement("get_weather"))
+		})
+
+		It("does not treat omitted tool_choice as auto when no tools are present", func() {
+			requestJSON := []byte(`{
+				"model": "test-model",
+				"messages": [{"role": "user", "content": "What's the weather?"}]
+			}`)
+			openAIRequest, err := parseOpenAIRequest(requestJSON)
+			Expect(err).NotTo(HaveOccurred())
+
+			err = router.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(openAIRequest.Tools).To(BeEmpty())
+		})
+
+		It("does not select tools for explicit none or required", func() {
+			for _, choice := range []string{"none", "required"} {
+				requestJSON := []byte(`{
+					"model": "test-model",
+					"messages": [{"role": "user", "content": "What's the weather?"}],
+					"tool_choice": "` + choice + `",
+					"tools": [{"type": "function", "function": {"name": "noise_tool"}}]
+				}`)
+				openAIRequest, err := parseOpenAIRequest(requestJSON)
+				Expect(err).NotTo(HaveOccurred())
+
+				err = router.handleToolSelection(openAIRequest, "weather", []string{}, &response, ctx)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(openAIRequest.Tools).To(HaveLen(1))
+				Expect(openAIRequest.Tools[0].Function.Name).To(Equal("noise_tool"))
+			}
+		})
+
 		It("should skip processing when content is empty", func() {
 			requestJSON := []byte(`{
 				"model": "test-model",
