@@ -28,6 +28,14 @@ func init() {
 
 // cachePolarityCase pairs a primed question with an opposite-meaning variant
 // that must miss and a paraphrase that must still hit.
+//
+// Every question in a case must classify to a decision that carries the
+// response_cache plugin (default_decision in the profiles that run this case)
+// and the pair must clear similarity_threshold on the profile's embedding
+// model; the shipped cases were calibrated against a live production-stack
+// deployment (mmbert, threshold 0.8). Domain-flavoured wording such as files,
+// timers, or notifications routes to computer_science_decision, which has no
+// cache plugin, and would make the case vacuous.
 type cachePolarityCase struct {
 	Description      string `json:"description"`
 	OriginalQuestion string `json:"original_question"`
@@ -113,28 +121,47 @@ func runCachePolarityCase(ctx context.Context, tc cachePolarityCase, localPort s
 	var out cachePolarityOutcome
 	primeCase := CacheTestCase{Description: tc.Description, OriginalQuestion: tc.OriginalQuestion}
 
-	resp, err := sendChatRequest(ctx, tc.OriginalQuestion, localPort, verbose)
-	if err != nil {
-		out.failures = append(out.failures, fmt.Sprintf("priming %q: %v", tc.OriginalQuestion, err))
-		return out
+	// The in-memory cache is per router replica and the gateway spreads
+	// requests across replicas, so a single priming request only warms the
+	// replica that happened to serve it. Prime repeatedly to cover them all.
+	for i := 0; i < cachePolarityPrimeAttempts; i++ {
+		resp, err := sendChatRequest(ctx, tc.OriginalQuestion, localPort, verbose)
+		if err != nil {
+			out.failures = append(out.failures, fmt.Sprintf("priming %q: %v", tc.OriginalQuestion, err))
+			return out
+		}
+		resp.Body.Close()
 	}
-	resp.Body.Close()
 	time.Sleep(1 * time.Second) // same settling time as the cache hit-rate case
 
-	contra := testSingleCacheRequest(ctx, primeCase, tc.Contradiction, localPort, verbose)
+	contra := probeCachePolarity(ctx, primeCase, tc.Contradiction, localPort, verbose)
 	if msg := assertPolarityContradictionRejected(tc, contra); msg != "" {
 		out.failures = append(out.failures, msg)
 	} else {
 		out.rejected = true
 	}
 
-	para := testSingleCacheRequest(ctx, primeCase, tc.Paraphrase, localPort, verbose)
+	para := probeCachePolarity(ctx, primeCase, tc.Paraphrase, localPort, verbose)
 	if msg := assertPolarityParaphraseServed(tc, para); msg != "" {
 		out.failures = append(out.failures, msg)
 	} else {
 		out.served = true
 	}
 	return out
+}
+
+// probeCachePolarity sends one probe. A miss that carries no similarity at all
+// means the request reached a replica whose cache holds no candidate — not a
+// guard decision — so it is retried once before being judged.
+func probeCachePolarity(ctx context.Context, primeCase CacheTestCase, question, localPort string, verbose bool) CacheResult {
+	r := testSingleCacheRequest(ctx, primeCase, question, localPort, verbose)
+	if r.Error == "" && !r.CacheHit && r.Similarity == 0 {
+		if verbose {
+			fmt.Printf("[Test] probe %q reached an unprimed replica (no similarity reported); retrying once\n", question)
+		}
+		r = testSingleCacheRequest(ctx, primeCase, question, localPort, verbose)
+	}
+	return r
 }
 
 // assertPolarityContradictionRejected returns a failure message unless the
@@ -145,6 +172,12 @@ func assertPolarityContradictionRejected(tc cachePolarityCase, r CacheResult) st
 	switch {
 	case r.Error != "":
 		return fmt.Sprintf("%q: %s", tc.Contradiction, r.Error)
+	case r.CacheHit && r.Similarity >= cachePolarityExactMatch:
+		// An identical entry can only come from an earlier run that answered
+		// the contradiction itself (a kept cluster); serving it is correct
+		// cache behaviour and says nothing about the guard.
+		return fmt.Sprintf("%q matched an identical cached entry (similarity=%.4f); the cache was not fresh, rerun against a clean deployment",
+			tc.Contradiction, r.Similarity)
 	case r.CacheHit:
 		return fmt.Sprintf("%q was served the cached answer for %q (similarity=%.4f)",
 			tc.Contradiction, tc.OriginalQuestion, r.Similarity)
@@ -169,6 +202,13 @@ func assertPolarityParaphraseServed(tc cachePolarityCase, r CacheResult) string 
 		return ""
 	}
 }
+
+// cachePolarityPrimeAttempts is how many times the original question is sent
+// before probing; see runCachePolarityCase.
+const cachePolarityPrimeAttempts = 4
+
+// cachePolarityExactMatch is the similarity of an identical cached query.
+const cachePolarityExactMatch = 0.999
 
 // cachePolarityThreshold mirrors global.stores.response_cache.similarity_threshold
 // in the profiles that run this case (production-stack ships 0.8). A rejected
