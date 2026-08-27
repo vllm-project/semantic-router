@@ -24,14 +24,12 @@ const AcknowledgementsSection: React.FC = () => {
     <section className={styles.section}>
       <div className="site-shell-container">
         <div className={styles.header}>
-          <div>
-            <SectionLabel>
-              <Translate id="acknowledgements.label">Ecosystem</Translate>
-            </SectionLabel>
-            <h2 className={styles.title}>
-              <Translate id="acknowledgements.title">Built with open source.</Translate>
-            </h2>
-          </div>
+          <SectionLabel>
+            <Translate id="acknowledgements.label">Ecosystem</Translate>
+          </SectionLabel>
+          <h2 className={styles.title}>
+            <Translate id="acknowledgements.title">Built with open source.</Translate>
+          </h2>
           <p className={styles.subtitle}>
             <Translate id="acknowledgements.subtitle">
               The libraries and platforms beneath vLLM Semantic Router.
