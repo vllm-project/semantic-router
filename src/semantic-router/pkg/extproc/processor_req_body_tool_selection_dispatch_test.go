@@ -195,7 +195,7 @@ func TestHandleModelRouting_OpenAISpecifiedKeepsSelectedTools(t *testing.T) {
 	}
 	router := &OpenAIRouter{
 		Config:             cfg,
-		CredentialResolver: buildDefaultCredentialResolver(cfg, false),
+		CredentialResolver: buildDefaultCredentialResolver(cfg, true),
 	}
 	req, err := parseOpenAIRequest([]byte(twoToolChatBody))
 	require.NoError(t, err)
