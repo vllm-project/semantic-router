@@ -65,6 +65,9 @@ var DashboardContract = []string{
 var AnthropicShimContract = []string{
 	"anthropic-messages-cache-cycle",
 	"anthropic-messages-stop-sequence",
+	// /v1/responses streaming must emit Response API SSE on Anthropic-format
+	// backends instead of leaking chat.completion.chunk frames (issue #3013)
+	"anthropic-response-api-streaming",
 }
 
 // Combine preserves order while removing duplicate testcase names.

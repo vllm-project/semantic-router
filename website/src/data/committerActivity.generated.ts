@@ -27,10 +27,10 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "FAUST",
     "login": "FAUST-BENCHOU",
-    "pullRequests": 19,
-    "reviews": 74,
+    "pullRequests": 20,
+    "reviews": 87,
     "issues": 28,
-    "total": 121,
+    "total": 135,
     "status": "active"
   },
   {
@@ -54,10 +54,10 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "Ramakrishnan Sathyavageeswaran",
     "login": "ramkrishs",
-    "pullRequests": 1,
+    "pullRequests": 2,
     "reviews": 4,
     "issues": 0,
-    "total": 5,
+    "total": 6,
     "status": "active"
   },
   {
@@ -91,9 +91,9 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
     "name": "Wilson Wu",
     "login": "wilsonwu",
     "pullRequests": 43,
-    "reviews": 9,
+    "reviews": 13,
     "issues": 29,
-    "total": 81,
+    "total": 85,
     "status": "active"
   },
   {
