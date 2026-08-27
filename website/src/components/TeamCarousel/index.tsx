@@ -78,14 +78,12 @@ const TeamCarousel: React.FC = () => {
     <section className={styles.teamSection} aria-labelledby="team-carousel-title">
       <div className="site-shell-container">
         <div className={styles.teamHeader}>
-          <div>
-            <SectionLabel>
-              <Translate id="teamCarousel.label">Community</Translate>
-            </SectionLabel>
-            <h2 className={styles.title} id="team-carousel-title">
-              <Translate id="teamCarousel.title">Built in the open.</Translate>
-            </h2>
-          </div>
+          <SectionLabel>
+            <Translate id="teamCarousel.label">Community</Translate>
+          </SectionLabel>
+          <h2 className={styles.title} id="team-carousel-title">
+            <Translate id="teamCarousel.title">Built in the open.</Translate>
+          </h2>
           <p className={styles.subtitle}>
             <Translate id="teamCarousel.subtitle">
               Maintainers across research, infrastructure, and model systems shape the project together.

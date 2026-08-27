@@ -77,7 +77,7 @@ export default function YouTubeSection(): JSX.Element {
   return (
     <section className={styles.section} aria-labelledby="video-showcase-title">
       <div className="site-shell-container">
-        <header className={styles.heading}>
+        <header className={`site-section-intro ${styles.heading}`}>
           <SectionLabel>
             <Translate id="homepage.videos.label">See it in action</Translate>
           </SectionLabel>
