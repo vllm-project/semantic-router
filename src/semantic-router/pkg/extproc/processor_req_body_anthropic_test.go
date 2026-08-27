@@ -308,3 +308,91 @@ func containsJSONField(t *testing.T, body []byte, key string, want bool) bool {
 	got, ok := parsed[key].(bool)
 	return ok && got == want
 }
+
+// TestAnthropicRoutingRewritesProviderModelID guards #3064: the Anthropic
+// routing path must send the backend the model name from
+// provider_model_id/external_model_ids, not the router alias, mirroring the
+// OpenAI-compatible path.
+func TestAnthropicRoutingRewritesProviderModelID(t *testing.T) {
+	cfg := &config.RouterConfig{}
+	cfg.ModelConfig = map[string]config.ModelParams{
+		"mymodel-code": {
+			ExternalModelIDs: map[string]string{
+				"vllm": "Qwen/Qwen3.6-35B-A3B-FP8",
+			},
+		},
+	}
+	router := &OpenAIRouter{
+		Config: cfg,
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(map[string]string{
+				string(authz.ProviderAnthropic): "x-user-anthropic-key",
+			}),
+		),
+	}
+	router.CredentialResolver.SetFailOpen(true)
+
+	body := []byte(`{"model":"mymodel-code","messages":[{"role":"user","content":"hi"}]}`)
+	request, err := parseOpenAIRequest(body)
+	if err != nil {
+		t.Fatalf("parseOpenAIRequest failed: %v", err)
+	}
+	ctx := &RequestContext{
+		Headers:             map[string]string{},
+		OriginalRequestBody: body,
+	}
+
+	response, err := router.handleAnthropicRouting(request, "mymodel-code", "mymodel-code", "", ctx)
+	if err != nil {
+		t.Fatalf("handleAnthropicRouting failed: %v", err)
+	}
+	outbound := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	if len(outbound) == 0 {
+		t.Fatalf("expected outbound body mutation, got %#v", response)
+	}
+
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(outbound, &decoded); err != nil {
+		t.Fatalf("outbound Anthropic body is invalid: %v", err)
+	}
+	if got := decoded["model"]; got != "Qwen/Qwen3.6-35B-A3B-FP8" {
+		t.Fatalf("outbound model = %v, want provider model ID", got)
+	}
+}
+
+// TestAnthropicRoutingKeepsAliasWithoutExternalModelIDs is the control for
+// #3064: with no external_model_ids mapping the outbound model is unchanged.
+func TestAnthropicRoutingKeepsAliasWithoutExternalModelIDs(t *testing.T) {
+	router := &OpenAIRouter{
+		Config: &config.RouterConfig{},
+		CredentialResolver: authz.NewCredentialResolver(
+			authz.NewHeaderInjectionProvider(map[string]string{
+				string(authz.ProviderAnthropic): "x-user-anthropic-key",
+			}),
+		),
+	}
+	router.CredentialResolver.SetFailOpen(true)
+
+	body := []byte(`{"model":"claude","messages":[{"role":"user","content":"hi"}]}`)
+	request, err := parseOpenAIRequest(body)
+	if err != nil {
+		t.Fatalf("parseOpenAIRequest failed: %v", err)
+	}
+	ctx := &RequestContext{
+		Headers:             map[string]string{},
+		OriginalRequestBody: body,
+	}
+
+	response, err := router.handleAnthropicRouting(request, "claude", "claude-sonnet-4.6", "", ctx)
+	if err != nil {
+		t.Fatalf("handleAnthropicRouting failed: %v", err)
+	}
+	outbound := response.GetRequestBody().GetResponse().GetBodyMutation().GetBody()
+	var decoded map[string]interface{}
+	if err := json.Unmarshal(outbound, &decoded); err != nil {
+		t.Fatalf("outbound Anthropic body is invalid: %v", err)
+	}
+	if got := decoded["model"]; got != "claude-sonnet-4.6" {
+		t.Fatalf("outbound model = %v, want claude-sonnet-4.6", got)
+	}
+}
