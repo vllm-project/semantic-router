@@ -61,9 +61,9 @@ Every entry uses these sections:
 - [TD046: ONNX binding CI coverage](td-046-onnx-binding-ci-coverage-gap.md)
 - [TD048: Go complexity debt ratchet](td-048-router-control-plane-go-complexity.md)
 
-### PL-0038: Router-Native Access Control
+### PL-0038: Replaceable Control Plane and Inference Enforcement
 
-- [TD047: Router-native access control completion](td-047-access-control-control-plane-gap.md)
+- [TD047: Control-plane and data-plane separation](td-047-access-control-control-plane-gap.md)
 
 If a gap becomes release-critical, move ownership to the active release plan
 and update both indexes in the same change.

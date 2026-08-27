@@ -19,6 +19,9 @@
 - Keep dashboard backend handler transport, config persistence/deploy control, and runtime status collection on separate seams
 - Keep runtime config schema families, canonical import/export, semantic validation, and plugin-family contracts on separate seams
 - Keep cross-product control planes on contract-owned seams; CLI, dashboard backend, and operator code should not depend on deep router-runtime internals when a versioned contract or public service can own the boundary
+- Keep Envoy transport, ExtProc semantic selection/policy execution, control-plane
+  authoring/publication, and optional Agent orchestration as four distinct dependency
+  directions. Data-plane packages must not import Agent or product-management packages.
 - Keep fleet-sim analytical sizing, DES verification, power or flexibility analysis, and export policy on separate seams
 - Keep operator CRD schema declaration, admission validation, controller-side canonical translation, and sample or generated contract upkeep on separate seams
 - Keep dashboard frontend route shell, page orchestration, and large interaction containers on separate seams

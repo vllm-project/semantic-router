@@ -31,7 +31,7 @@ the changed-file structure gate rejects unowned additions.
 ## Core Subsystems
 
 - `src/semantic-router/`
-  - Go router, Envoy extproc server, config loading, Kubernetes controller, routing logic
+  - Go Envoy ExtProc service, config loading, semantic selection, compiled access-policy execution, and projection clients; it does not own product CRUD or Agent sessions
 - `src/semantic-router/pkg/milvus/`
   - Shared Milvus dial, collection ensure/load, and retry helpers for memory, cache, vectorstore, replay, and extproc memory wiring (see issue #1601)
 - `src/semantic-router/pkg/looper/`, `modelruntime/`, `routerruntime/`
@@ -45,7 +45,7 @@ the changed-file structure gate rejects unowned additions.
 - `candle-binding/`, `ml-binding/`, `nlp-binding/`
   - Rust-backed inference and ML bindings used by the router
 - `dashboard/`
-  - Dashboard frontend and backend
+  - Dashboard frontend and reference control-plane backend, including optional Agent Chat/Builder services
 - `deploy/operator/`
   - Kubernetes operator, CRD schema, and controller-facing deployment contract
 - `src/training/`

@@ -1,14 +1,14 @@
 ---
-title: Router-Native Access Control Contract Appendix
-description: Specifies the resource, storage, credential, policy, counter, and runtime projection contracts for Router-native access control.
+title: Access Control Resource Contract Appendix
+description: Specifies resource, storage, credential, policy, counter, and immutable data-plane projection contracts.
 created: 2026-08-22
 status: Proposal
 ---
 
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
-This appendix is normative for [Router-Native Access Control and Quota Accounting](./router-native-access-control) resources and runtime. The parent owns boundaries, request semantics, deployment, contract versioning, and acceptance criteria.
-The [Management API appendix](./router-native-access-control-management-api) owns management identity, endpoints, and responses. The [Management authorization appendix](./router-native-access-control-authorization) owns permissions, roles, and scopes.
+This appendix is normative for [Access Control and Quota Accounting](./router-native-access-control) resources and runtime. The parent owns boundaries, request semantics, deployment, contract versioning, and acceptance criteria.
+The [control-plane API appendix](./router-native-access-control-management-api) owns identity, endpoints, and responses. The [authorization appendix](./router-native-access-control-authorization) owns permissions, roles, and scopes.
 Provider Integration, compiler, and adapter semantics live in
 [Provider catalog](./router-native-access-control-provider-catalog);
 invocation-control and pricing semantics live in

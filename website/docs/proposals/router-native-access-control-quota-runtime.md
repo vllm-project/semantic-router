@@ -1,5 +1,5 @@
 ---
-title: Router-Native Quota Runtime Appendix
+title: Global Quota Execution Appendix
 description: Specifies rate-limit counter identity, Valkey projections, exact arithmetic, pending work, and reconciliation.
 created: 2026-08-22
 status: Proposal
@@ -8,7 +8,7 @@ status: Proposal
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
 This appendix is normative for quota runtime behavior in
-[Router-Native Access Control and Quota Accounting](./router-native-access-control).
+[Access Control and Quota Accounting](./router-native-access-control).
 The [resource contract](./router-native-access-control-contracts) owns durable policy
 and ledger schemas; the [deployment contract](./router-native-access-control-deployment)
 owns durability, readiness, and disaster recovery.

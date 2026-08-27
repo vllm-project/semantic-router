@@ -20,7 +20,8 @@ Integration Registry composition and adapter rollout.
 
 ## Router bootstrap configuration
 
-Router YAML declares the v0.3 routing bootstrap and optional data-plane capabilities.
+A Router bootstrap YAML declares the v0.3 semantic-routing configuration and optional
+ExtProc enforcement capabilities.
 A file-only deployment serves that routing value directly. Dynamic access adds a
 trusted snapshot source and shared runtime store. Dashboard identity, Users, Teams,
 invitations, key lifecycle, policies, Budgets, PostgreSQL, and the control-plane HTTP
@@ -212,13 +213,14 @@ control-plane     Dashboard backend, desired-state API, compiler, projector, wor
 postgres          control-plane desired state and ledger
 valkey            policy projection, counters, idempotency, usage stream
 control-migrate   one-shot control-plane schema migration
-router            ExtProc, access runtime, backend invoker, projection watcher
-gateway           public inference endpoint; stable Router invoker or native external dispatch
+router            ExtProc selection, access execution, settlement, projection watcher
+gateway           Envoy public inference endpoint, transport, health, and upstream dispatch
 dashboard         control-plane web client (omitted only with --minimal)
+agent             optional Chat/Builder API and worker; may be linked into control-plane
 ```
 
-The Router distribution composes its supported Provider Integrations in the control
-plane. Docker and Kubernetes deploy the same application capability set; neither
+The reference control-plane application composes its supported Provider Integrations.
+Docker and Kubernetes deploy the same application capability set; neither
 mounts provider definitions or creates one resource per Provider. Changing that set
 is an application rollout followed by catalog activation, not a per-tenant resource
 update. All control-plane replicas read the durable active revision, while data-plane
@@ -230,23 +232,25 @@ writing are control-plane roles. Docker may package the reference roles together
 they remain separate processes and contracts. Dashboard frontend and monitoring are
 explicit opt-ins; neither is an inference dependency.
 
-The bundled gateway never expands a Model into a static route or cluster. ExtProc resolves the
-request and emits only a short-lived, audience-bound dispatch capability for the
-stable internal invoker upstream. The invoker validates that capability, pins the
-active routing revision, and owns backend selection, ProviderCredential injection,
-per-Model deadlines, safe retries, and attempt evidence. In Kubernetes, the capability
-may cross Router Pods and therefore uses the configured tenant-context signing
-keyring; it is bound to namespace, admission, dispatch ordinal, Model revision,
-request digest, audience, and a short expiry. A public request cannot call the
-internal invoker listener or synthesize those fields.
+ExtProc never reverse-proxies a selected Model. It resolves one logical dispatch and
+returns immutable selection evidence through Envoy filter state or an integration's
+native route-hint contract. The bundled Envoy adapter maps that evidence to the active
+gateway route or cluster, injects the projected ProviderCredential, applies compiled
+per-Model timeout and safe retry policy, and owns connection pools, endpoint health,
+backpressure, streaming, and upstream transport.
 
-An external AI gateway may instead install the gateway-signal dispatch adapter. In
-that topology ExtProc emits immutable logical selection evidence through the
-integration's native contract, while the external gateway keeps ownership of route
-generation, clusters, endpoint health, credentials, and transport policy. The Router
-invoker listener is not required. Integrations declare which terminal evidence they
-return; features requiring Router-owned attempt, codec, fallback, or exact cost
-evidence fail validation when the adapter cannot provide it.
+The control plane publishes routing desired state and the gateway adapter compiles the
+transport representation appropriate to the selected gateway. Model count therefore
+does not force one universal cluster shape: a deployment may use explicit clusters,
+aggregate or dynamic clusters, endpoint discovery, or an external gateway's native
+backend resources. ExtProc remains independent of that representation. It identifies
+the logical Model revision and fallback plan, never a socket address or cluster name.
+
+An external gateway installs only the matching selection and response-evidence
+adapter. It retains ownership of route generation, clusters, endpoint health,
+credentials, and transport policy. Integrations declare which attempt and terminal
+evidence they return; exact retry, fallback, usage, or cost features fail validation
+when the adapter cannot prove the required evidence.
 
 The persistent single-host profile starts one PostgreSQL and one Valkey with named
 volumes. It is the smallest persistent topology, not an HA claim. A production HA
@@ -297,11 +301,11 @@ verification rejects an absent, extra, malformed, cross-namespace, cross-partiti
 cross-publication, binding-mismatched, or digest-mismatched document before any replica
 acknowledges the routing snapshot.
 
-The signed dispatch plan carries the namespace, quota partition, and publication ID.
-Inference `Pin` and `ResolvePinned` use those exact values to read the immutable Valkey
-document and never follow a mutable credential pointer or query PostgreSQL. Secret
-decryption and adapter materialization happen only inside the backend invoker and the
-plaintext is zeroed after use. Retained routing publications retain their matching
+The signed selection evidence carries the namespace, quota partition, publication ID,
+and logical Model revision. The gateway credential adapter uses those exact values to
+read the immutable credential document and never follows a mutable pointer or queries
+PostgreSQL. Secret decryption and header materialization happen only at that Envoy
+transport edge, and plaintext is zeroed after use. Retained routing publications retain their matching
 credential documents, allowing an already pinned request to resolve its original active
 or retiring version until that publication is retired; the codec still enforces
 not-before, expiry, binding, and lifecycle rules. Management-only discovery and
@@ -335,7 +339,7 @@ quota counters are one revisioned runtime boundary; no replica serves a pinned
 snapshot with unverifiable credential state. Native access also requires a
 valid epoch and applied policy revision. The same Valkey deployment carries the
 bounded, expiring response-terminal rendezvous used when private backend dispatch and
-the owning ExtProc request land on different Router replicas; its atomic one-time
+the owning ExtProc request land on different ExtProc replicas; its atomic one-time
 consume is an accounting invariant, not a sticky-routing optimization. The Router's
 private applied-revision status exposes runtime-store state, replica acknowledgements,
 usage backlog, projection lag, and recovery details. The cluster summary reads only
@@ -408,9 +412,11 @@ readiness do not participate in browser-account bootstrap.
 
 ```mermaid
 flowchart TB
-    Public["Public Gateway"] --> ES["ExtProc Service"]
-    ES --> R1["Router Pod"]
-    ES --> R2["Router Pod"]
+    Public["Envoy / external gateway"] --> R1["ExtProc Pod"]
+    Public --> R2["ExtProc Pod"]
+    R1 --> Public
+    R2 --> Public
+    Public --> Models["Model backends"]
 
     UI["Dashboard"] --> CP["Control Plane Deployment"]
     Automation["CLI / automation"] --> CP
@@ -427,16 +433,16 @@ In Kubernetes, a file-only installation is one stateless deployment with a mount
 immutable manifest and no control plane or stateful stores. The remaining
 topology shows the optional dynamic components.
 
-The Router Pod remains stateless when stores are configured. It owns ExtProc, the
-private projection watcher, access runtime, settlement, and backend invocation. The
+The ExtProc Pod remains stateless when stores are configured. It owns semantic
+selection, the private projection watcher, access execution, and settlement. Envoy or
+the selected external gateway owns backend invocation. The
 control-plane Deployment owns CRUD, compiler, projector, migration, and analytics
 workers. Workers coordinate through durable claims and consumer groups, so adding a
-replica does not create a second authority. A gateway
-sidecar and Router may communicate over loopback, or a shared gateway may call the
-Router gRPC Service. Both layouts scale the complete Router runtime and require no
-sticky session.
+replica does not create a second authority. A gateway sidecar and ExtProc may
+communicate over loopback, or a shared gateway may call a horizontally scaled ExtProc
+gRPC Service. Both layouts require no sticky session.
 
-Separating the Deployments is intentional: Router replicas scale with inference,
+Separating the Deployments is intentional: ExtProc replicas scale with inference,
 while control-plane replicas scale with authoring, projection, and analytics work.
 Their only shared contracts are signed snapshots, applied-revision acknowledgments,
 Valkey runtime state, and usage events.
@@ -446,7 +452,7 @@ Required Kubernetes resources are:
 - Router Deployment, HPA, PodDisruptionBudget, and topology spread;
 - a public Service or Gateway exposing inference only;
 - a private ClusterIP for the control-plane and projection listeners;
-- a control-plane migration Job, never migration in Router replicas;
+- a control-plane migration Job, never migration in ExtProc replicas;
 - ConfigMap for static Router bootstrap only;
 - Secret or ExternalSecret for PostgreSQL, Valkey, API-key and delegation HMAC
   keyrings, reveal/provider/response KEKs, TenantContext and control-plane token
@@ -570,7 +576,7 @@ operator checklist.
 | Usage writer unavailable                          | Counters continue and events queue in the durable stream                                        | Analytics freshness reports lag.                                                         |
 | Usage backlog over bound                          | New admission fails with `503` to avoid unaccounted traffic                                     | Operators receive explicit backlog health and alerts.                                    |
 | Expired-pending backlog                           | Admission drains a bounded batch, then fails `503` while an expired oldest item remains         | Reconciler lag/backlog marks access unready until each item is fenced.                   |
-| One Router Pod fails                              | Readiness removes it; other replicas continue                                                   | Workers reclaim unacknowledged jobs.                                                     |
+| One ExtProc Pod fails                             | Readiness removes it; other replicas continue                                                   | Workers reclaim unacknowledged jobs.                                                     |
 | Router dies after admission                       | The pending admission expires into an unknown fence                                             | Reconciliation resolves the fence from backend evidence or an audited action.            |
 | Provider omits usage                              | The affected token scope is fenced; usage is never treated as zero                              | Provider health identifies the incompatible path.                                        |
 | Reveal KEK is unavailable                         | Existing HMAC-authenticated keys continue                                                       | Reveal and revealable-key creation fail closed.                                          |

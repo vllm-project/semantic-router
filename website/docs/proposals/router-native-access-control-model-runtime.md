@@ -1,6 +1,6 @@
 ---
-title: Router-Native Model Runtime Appendix
-description: Specifies Model invocation control, retry, timeout, pricing, and cost-accounting contracts for Router-native routing.
+title: Model Dispatch, Reliability, and Pricing Appendix
+description: Specifies readable Model control, Envoy-owned dispatch, fallback, timeout, pricing, and cost-accounting contracts.
 created: 2026-08-22
 status: Proposal
 ---
@@ -8,18 +8,17 @@ status: Proposal
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
 This appendix is normative for Model execution and pricing in
-[Router-Native Access Control and Quota Accounting](./router-native-access-control).
-The [resource contract](./router-native-access-control-contracts) owns persistence and
+[Access Control and Quota Accounting](./router-native-access-control). The
+[resource contract](./router-native-access-control-contracts) owns persistence and
 usage records; the [control-plane API](./router-native-access-control-management-api)
-owns Model CRUD and Dashboard-facing fields.
+owns Model CRUD; the [neutral protocol](./multi-protocol-adaptor) owns wire codecs.
 
-## One readable Model, one compiled revision
+## One readable Model
 
-The existing v0.3 name join remains the public boundary. `providers.models` owns
-connection, invocation control, and pricing fields; `routing.modelCards` owns only semantic
-metadata. Recipe and DSL authors receive the latter and therefore never see an
-endpoint or credential. Control and pricing are optional advanced settings on the
-provider Model:
+The v0.3 readable-name split remains the authoring boundary. `providers.models` owns
+connections, invocation control, and pricing. `routing.modelCards` owns only
+connection-free semantic metadata. Recipe and DSL authors use Model cards and never
+see endpoints or credentials.
 
 ```yaml
 name: local/primary
@@ -42,151 +41,151 @@ pricing:
   cache_write_cost_per_million_tokens: "0.625"
 ```
 
-Static authoring and Management CRUD/import/export use the same Model semantics, not
-the same wire serialization. YAML preserves the readable-name split between the
-provider Model and `routing.modelCards`. A Management write presents the card fields,
-backend inputs, `control`, and `pricing` as one revisioned Model resource, while its
-read-only Model-card projection is the only view exposed to Recipe and DSL authoring.
-Management JSON uses camelCase and resource IDs; human YAML uses the v0.3 names shown
-above. Empty and default-only fields are omitted from human export. A fixed-origin
-Integration lets the control plane fill its default endpoint; a no-auth backend
-omits key fields. The authoring value never contains generated IDs, revisions,
-catalog hashes, or compiled backend data. File authoring preserves three mutually
-exclusive credential inputs: `backend_refs[].credential` references a named
-`global.services.backend_credentials` entry, while `backend_refs[].api_key` and
-`backend_refs[].api_key_env` retain their direct and environment-backed forms.
-Named credentials or environment references are preferred for shared manifests.
-Dynamic resource APIs accept only ProviderCredential references and never return
-secret material in Model responses.
+Static YAML and control-plane CRUD/import/export use the same semantics, not the same
+wire serialization. YAML uses readable names. Control-plane JSON uses stable resource
+IDs and optimistic revisions internally but human export omits generated identity,
+catalog digests, and compiled gateway values. The Dashboard presents one Model form;
+`control` and `pricing` are optional Advanced settings.
 
-Reasoning keeps wire behavior and semantic support separate as well. The physical
-Model selects a named `providers.defaults.reasoning_families` entry through
-`reasoning_family`; its `routing.modelCards` record declares the supported assignment
-values as `reasoning: {type: reasoning_effort, efforts: [medium, high]}`. The type must
-match. An Entrypoint cannot request an effort that its Model card does not declare.
+A fixed-origin Provider Integration fills its default endpoint. A no-auth backend
+omits credential fields. File authoring keeps the existing mutually exclusive named,
+environment, or direct credential inputs. Dynamic Models reference a
+ProviderCredential and never expose its secret in a Model response.
 
-Publication resolves readable names, validates the Provider Integration, creates
-immutable identity and revision state, and compiles each connection into a
-provider-neutral backend. That internal revision pins catalog provenance, protocol
-adapter, canonical origin, provider model, non-secret wire settings, credential
-reference, and weight. Dispatch is selected exclusively by the stable protocol
-adapter. Provider products, logos, form fields, default origins, and discovery
-behavior remain in the control-plane
-[Provider catalog](./router-native-access-control-provider-catalog) and are absent
-from the inference data plane. A manifest requires `global.billing.currency` when
-any Model is priced. Seeding an empty Management store copies that value into the
-initial Namespace; the persisted Namespace value is authoritative thereafter.
-Models own rates, while this single Namespace value owns their shared denomination;
-the Router performs no currency conversion.
+Reasoning wire behavior and semantic support remain separate. A provider Model picks
+a named reasoning family; its Model card declares the assignment values a Recipe may
+request. An Entrypoint cannot assign a reasoning value the Model card does not
+advertise.
 
-One logical Model may reference several physical backends. Their existing positive
-`weight` values are the only public physical traffic-distribution input in this
-contract. Load-balancing algorithms, active health checks, and outlier ejection are
-not authoring fields until a Router-owned implementation can validate, execute,
-observe, and test their complete behavior.
+Publication resolves readable names, validates Provider Integration and codec
+capabilities, and creates one immutable Model revision. That revision contains the
+logical Model identity, semantic capabilities, pricing revision, one or more physical
+backend route descriptors, transport control, credential reference, and codec IDs.
+Provider logos, forms, default URLs, discovery, and product names remain in the
+control plane. ExtProc and Envoy receive only compiled values.
 
-## Retry and timeout semantics
+One logical Model may reference several physical endpoints. Endpoint weight, health,
+and outlier policy compile into the gateway representation; they are not a second
+semantic routing layer. A differently priced endpoint is a different logical Model.
 
-`control.retry.count` is additional attempts after the first and is bounded from zero
-to five. `control.retry.on` is a duplicate-free subset of
-`unavailable|timeout`; when count is positive and `on` is omitted it
-defaults to `unavailable`. A configured trigger applies only to Router's fixed
-safe-retry predicate: transport evidence must prove that neither request nor response
-bytes crossed the backend boundary. Such an attempt is `known_zero`; HTTP status
-codes, including 429 and 503, are response evidence and never imply zero billable
-work. Envoy transport spellings and status-code lists are not user configuration.
-`control.timeout.request` is the total
-non-streaming invocation deadline including retries. `control.timeout.stream` is the total
-streaming lifetime, including retries before the first client-visible byte. Durations
-use positive Go duration syntax, including compound values such as `1h30m`, and are
-bounded from 1 second through 24 hours. Defaults are zero retries and 300 seconds for
-each timeout. Management reads return effective immutable values; readable file
-export keeps default-only values omitted.
+## Selection and transport boundary
 
-The public gateway strips caller-supplied transport-control, destination, identity,
-and credential headers. Routing produces one logical dispatch decision, then an
-integration-selected dispatch adapter owns physical forwarding:
+ExtProc selects; Envoy dispatches.
 
-- **Router invoker adapter** is the bundled `vllm-sr serve` path. Envoy forwards
-  post-ExtProc inference through one stable internal Router service cluster. The
-  BackendInvoker pins the Model/backend revision, checks its wire codec, journals the
-  bounded attempt plan, resolves ProviderCredential in process, and performs the call.
-- **Gateway signal adapter** is the external AI-gateway path. ExtProc emits the
-  selected logical Model and immutable routing evidence through the gateway's native
-  metadata/route-selection contract. The gateway continues to own generated routes,
-  endpoint clusters, connection pools, credentials, and transport retries. vLLM-SR
-  does not insert a mandatory reverse-proxy hop or replace that gateway's control
-  plane.
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant E as Envoy
+    participant X as ExtProc
+    participant M as Model backend
 
-The adapter is deployment integration, not Recipe or Model authoring state. Both
-paths share semantic selection and access context, but advertise different execution
-capabilities. Exact Router-owned fallback, neutral provider translation, credential
-injection, and attempt-level cost evidence require the Router invoker or an external
-adapter that returns the equivalent typed terminal contract. An integration that
-only consumes a route signal cannot claim those capabilities. Multi-dispatch
-algorithms validate the execution contract they require before publication.
+    C->>E: OpenAI-compatible request
+    E->>X: request headers/body
+    X-->>E: encoded upstream request + logical DispatchPlan
+    E->>M: transport dispatch
+    M-->>E: response/stream
+    E->>X: response evidence/chunks
+    X-->>E: client encoding + settlement metadata
+    E-->>C: response/stream
+```
 
-File-backed and persisted-snapshot startup inject the selected dispatch adapter into
-each immutable Router generation. On the Router-invoker path, the public edge decodes the selected client
-format into the neutral request IR; ExtProc routes and applies plugins to semantic
-views of that IR, then hands BackendInvoker the neutral request, client format, pinned
-logical Model revision, and a body-bound capability. It never resolves a physical
-host, provider model ID, provider credential, product dialect, retry, or fallback.
-BackendInvoker resolves the pinned connection and credential, encodes the request
-with that connection's installed codec, decodes the upstream response or stream back
-to the neutral IR, and returns terminal evidence for the shared usage finalizer before
-the client codec renders the response. Internal Looper calls use the same typed
-dispatch plan and authorization boundary. Missing generation, adapter capability,
-codec, or immutable Model identity fails closed instead of activating an unmanaged
-direct call. On the gateway-signal path, the external integration validates the
-immutable selection metadata before mapping it to its generated route; client-supplied
-routing headers are never trusted.
+ExtProc owns:
 
-The terminal hand-off follows the configured deployment capabilities. A single
-replica without a runtime store uses one bounded, expiring process-local store. A
-multi-replica deployment writes the bounded neutral
-terminal to Valkey with `SET NX`, keyed by a digest of the immutable namespace,
-publication, admission, request, dispatch, and Model identities. The owning ExtProc
-replica consumes it exactly once with one atomic get-and-delete operation. This
-short-lived rendezvous stores no response body, credential, provider error cause, or
-source envelope; PostgreSQL usage events remain the durable accounting record. A
-missing, duplicated, malformed, expired, or unavailable terminal fails closed as
-unknown usage. Replica placement therefore cannot change settlement behavior, and
-the public gateway requires no sticky-session policy.
+- decoding the client request to the neutral protocol representation;
+- access-policy execution and semantic selection;
+- choosing one Entrypoint decision and an ordered logical candidate plan;
+- applying Recipe-scoped request/response transformations;
+- encoding the selected upstream request and decoding its response; and
+- settlement from authenticated gateway and provider usage evidence.
 
-Modality classification is routing evidence only. Image-bearing and other
-multimodal requests keep that evidence through decision evaluation, then invoke the
-selected logical Model through the same BackendInvoker boundary. ExtProc has no
-separate omni, autoregressive, diffusion, endpoint-scan, or composite HTTP client.
-An unsupported composite therefore fails at validation or adapter resolution rather
-than falling back to a hidden direct call.
+Envoy or the installed external gateway owns:
 
-Internal retrieval dependencies are a separate boundary. A RAG vector/search
-adapter may retrieve documents, and the optional memory-rewrite system service may
-produce a private search query. Neither is addressable as a public Model, participates
-in Entrypoint assignment, chooses a physical inference backend, or inherits Model
-retry/fallback semantics. Classifier and embedding providers have the same internal
-status. These narrow adapters must remain explicitly inventoried and cannot be used
-to add a second request-facing Provider runtime.
+- route/cluster/backend resolution from the logical dispatch key;
+- connection pools, DNS/TLS, endpoint health, outlier ejection, and backpressure;
+- ProviderCredential injection at the transport edge;
+- request and stream deadlines;
+- physically safe retries and fallback attempts allowed by the compiled plan;
+- upstream HTTP lifecycle and streaming; and
+- a typed, authenticated attempt/terminal receipt returned to ExtProc.
 
-Because the Router owns each attempt, it can prove the fixed safe-retry predicate and
-record `known_zero`, `known_actual`, or `unknown` evidence before another attempt.
-The final inference-capable attempt is one UsageDispatch. A failure not provably
-pre-inference, any timeout after send, or any response after client-visible bytes is
-never retried and becomes unknown usage when authoritative usage is absent. The
-invoker returns a typed terminal record to the request finalizer; no caller or Envoy
-header can claim attempt evidence.
+ExtProc never opens a Model connection. Envoy never evaluates Signals, Decisions, or
+AccessPolicy. Client-supplied route, cluster, credential, identity, timeout, retry, or
+attempt-evidence headers are stripped before either contract is evaluated.
 
-External RPM is charged once. Transport-capacity proofs multiply a Model call by
-`control.retry.count + 1`; billable-dispatch bounds do not because every earlier retry is
-proven pre-inference. Snapshot validation derives a finite whole-admission deadline
-from Recipe control flow, Model timeouts/retries, bounded loops, and parallel critical
-paths. The dispatch journal pins that deadline and heartbeats cannot extend it.
+The control plane compiles a gateway-specific transport projection from the same
+immutable Model revisions. The bundled Envoy integration may use explicit clusters,
+dynamic forward proxy, aggregate clusters, or endpoint discovery. An external gateway
+uses its native backend resources. ExtProc sees only logical route keys, so supporting
+1,000 Models does not force one cluster per Model and does not force all traffic
+through one shared internal reverse-proxy cluster.
+
+The gateway adapter advertises capabilities such as buffered/streaming codec support,
+credential injection, attempt receipts, same-Model retry, cross-Model fallback, and
+usage evidence. Publication fails when a Recipe or Model requires a capability that
+the selected deployment adapter cannot prove. There is no silent degraded execution.
+
+## DispatchPlan
+
+The ExtProc-to-gateway value is a short-lived, request-bound logical plan, not user
+configuration:
+
+```text
+DispatchPlan
+  namespace / publication / admission / request digest
+  client codec and selected decision
+  whole-request deadline
+  ordered candidate tiers
+    logical Model revision
+    gateway route key
+    backend request codec
+    credential projection reference
+    retry and timeout control
+  required terminal-evidence contract
+```
+
+The plan is stored in Envoy filter state when co-located. When it crosses a process
+boundary it is signed, audience-bound, short-lived, and replay-protected. It contains
+no plaintext credential or physical socket address. The gateway adapter validates the
+active routing publication before dispatch.
+
+Each attempt receives a stable dispatch ordinal. The terminal receipt identifies the
+attempts made, Model/backend revisions, timestamps, known-zero or actual usage state,
+provider usage, and final outcome. ExtProc accepts it only for the matching admission,
+request digest, publication, and response stream.
+
+An optional multi-call orchestration service is a separate logical upstream. It is
+required only for Recipes whose algorithm genuinely issues parallel, cascade, fusion,
+or workflow model calls. Its subcalls use the same gateway dispatch contract and it
+returns one signed aggregate receipt. It is not part of ExtProc and is not required
+for ordinary single-dispatch Recipes.
+
+## Retry and timeout
+
+`control.retry.count` is the number of additional attempts for the same immutable
+Model revision and is bounded from zero through five. `control.retry.on` is a
+duplicate-free subset of `unavailable|timeout`; when count is positive and `on` is
+omitted it defaults to `unavailable`.
+
+A retry is allowed only when the gateway's transport evidence proves `known_zero`:
+no request byte reached an inference-capable upstream and no response byte became
+client-visible. HTTP responses, including 429 and 503, are not known-zero evidence.
+An ambiguous timeout, partial write, partial stream, known billable work, or missing
+attempt receipt is terminal. ExtProc and clients cannot assert retry safety.
+
+`control.timeout.request` is the total non-streaming deadline, including all retries
+and fallback. `control.timeout.stream` is the total streaming lifetime, with retries
+allowed only before the first client-visible byte. Durations use positive Go duration
+syntax, are bounded from one second through 24 hours, and default to 300 seconds. A
+retry or fallback never resets the deadline.
+
+Envoy implements the physical timer and retry. ExtProc places the compiled limit in
+the immutable plan and verifies terminal evidence. This keeps transport control in the
+data plane without giving Envoy semantic routing authority.
 
 ## Priority fallback between Models
 
-Model `control.retry.count` repeats the same immutable Model revision. Cross-Model fallback
-is instead an optional value on one Entrypoint decision assignment:
+Same-Model retry belongs to `Model.control`. Cross-Model fallback belongs to one
+Entrypoint decision assignment:
 
 ```yaml
 assignments:
@@ -199,82 +198,82 @@ assignments:
       on: [unavailable, timeout]
 ```
 
-Lower numeric priority wins. The Recipe algorithm chooses only among eligible Models
-in the active tier, using weights within that tier. A fallback-enabled decision must
-have single-dispatch cardinality; this prevents a required fusion or workflow cohort
-from being mistaken for a backup list. Tiers are contiguous from zero, bounded to 32,
-and publication validates that every tier satisfies the decision's modality,
-reasoning, tool, context, and protocol requirements.
+Lower priority wins. The Recipe algorithm chooses only among eligible Models in the
+active tier and may use weights within that tier. Tiers are contiguous from zero,
+bounded to 32, and must all satisfy modality, reasoning, tool, context, and protocol
+requirements.
 
-The invoker exhausts the selected Model's safe same-Model retries before advancing.
-`unavailable` and `timeout` are closed Router evidence classes, not
-user-supplied status-code lists. A transition is allowed only before visible output
-and when the adapter proves `known_zero`; an ambiguous timeout, partial stream,
-unknown usage, or known billable work is terminal. Skipping a tier because every
-Model is already unavailable does not create an attempt. Each real attempt and
-transition is journaled and contributes to latency and diagnostics.
+Fallback is valid only for single-dispatch cardinality. A required fusion or workflow
+cohort is not a backup list. The gateway exhausts safe same-Model retries before moving
+to the next logical tier. Transition requires a known-zero receipt before visible
+output. Every attempted or skipped tier is represented in the terminal receipt.
 
-On the Router-invoker path, Envoy continues to provide connection management and endpoint health inside one
-physical backend. It does not use an aggregate cluster, retry priority plugin, or
-route retry to move between logical Models. Router owns that boundary so logical
-identity, ProviderCredential selection, timeout budget, authorization, usage, and
-cost remain deterministic. The whole request/stream deadline is shared across all
-same-Model retries and fallback tiers; fallback never resets it.
+Cross-codec fallback requires a gateway adapter capable of re-encoding the buffered
+request for each candidate and producing one authenticated receipt. If the gateway
+cannot do that, publication accepts only same-codec fallback or rejects the assignment.
+No ExtProc direct call is used as a compatibility path.
 
-Transport-cluster priority and retry load operate on physical upstream health. They
-do not carry the Router's logical Model revision, pricing evidence, or admission
-dispatch identity, so using them for Model fallback would create an unaccounted
-second routing authority.
+## Neutral protocol matrix
 
-The stable Envoy cluster represents the horizontally scalable Router dispatch
-service, not one physical Model or one upstream connection. A catalog with 1,000
-Models therefore does not create 1,000 Envoy routes/clusters or force xDS churn on
-every Model update. Router replicas maintain bounded, per-origin HTTP transports and
-connection pools behind the immutable Model snapshot. Production acceptance includes
-a 1,000-Model catalog, high-concurrency streaming, bounded pool/cache memory, DNS/TLS
-reuse, backpressure, circuit breaking, replica loss, and no-affinity tests. Until
-those gates pass, a stable cluster removes configuration cardinality but does not by
-itself prove that the Router hop is free of CPU, network, or connection pressure.
-External gateways may retain their native per-endpoint/xDS topology through the
-gateway-signal adapter.
+The public edge decodes the client format to the neutral request representation.
+ExtProc performs semantic processing on that representation and encodes the chosen
+backend format before Envoy forwards it. Response chunks follow the inverse path.
+There are no pair-specific translators and no provider-specific accounting paths.
+
+Each installed codec declares buffered request, buffered response, streaming request,
+streaming response, tool-call, multimodal, reasoning, and usage capabilities. The
+matrix test executes every supported client-codec/backend-codec pair. Publication
+rejects a Model or fallback tier when the active gateway adapter and codecs cannot
+preserve its required features.
+
+Modality classification is routing evidence only. Image-bearing requests select an
+authorized multimodal Model and use the same DispatchPlan. ExtProc has no separate
+omni HTTP client. Retrieval, memory rewriting, classifiers, and embedding adapters are
+internal typed dependencies and cannot masquerade as request-facing Models.
 
 ## Pricing and actual cost
 
-Prices are plain non-negative decimal strings in the namespace's immutable ISO-4217
+Prices are non-negative decimal strings in the Namespace's immutable ISO-4217
 currency, with at most nine fractional digits and a maximum of 1,000,000 currency
-units per million tokens. Exponent, NaN, infinity, overflow, and silent rounding are
-rejected. Explicit `"0"` means free; null input/output means unpriced. Omitted or null
-cache-read and cache-write prices inherit input. All physical backends of one logical Model share
-one price contract; a differently priced endpoint is a different Model.
+units per million tokens. Exponent notation, NaN, infinity, overflow, and silent
+rounding are rejected. Explicit `"0"` means free; null input/output means unpriced.
+Null cache-read and cache-write prices inherit input.
 
-Usage separates uncached input, cache-read input, cache-write input, and output
-tokens. Rates compile to integer nano-currency units per million tokens. The shared
-checked six-limb QuotaInteger accumulates `sum(tokens * pinned_rate)` across
-dispatches. That integer is the exact cost numerator at a fixed `10^-15` currency
-scale. A decimal limit compiles by exact multiplication by `10^15`; quota compares
-numerator to numerator. Public decimals use the exact inverse scale with trailing-zero
-normalization and no rounding, so many tiny requests cannot disappear. A differential cache price without
-authoritative cache buckets, or nonzero tokens without a required rate, makes cost
-unknown rather than zero. Historical events retain their Model/price revision and are
-never recomputed after a price edit.
+Usage separates uncached input, cache-read input, cache-write input, and output tokens.
+Rates compile to integer nano-currency units per million tokens. The checked
+QuotaInteger accumulates `sum(tokens * pinned_rate)` across authenticated dispatch
+receipts. Historical events pin Model and pricing revisions and are never recomputed
+after a price edit.
 
-Valkey represents each unsigned cost numerator as a fixed six-limb base-10,000,000
-integer. The settlement Function performs validated carry/add and high-to-low compare
-without converting the value to a Lua number; every limb intermediate remains below
-the exact-integer limit. Schema/publication validation rejects a Model, token bound,
-or cost limit whose proven maximum exceeds this domain. PostgreSQL stores the same
-canonical numerator as `numeric(42,0)`.
+A differential cache price without authoritative cache buckets, or nonzero tokens
+without a required rate, makes cost unknown rather than zero. `cost` is a
+response-actual quota metric with the same crossing-request, settlement, and
+unknown-fence semantics as token metrics. Publication rejects an enforced cost rule
+whose reachable Models are unpriced or whose adapter cannot prove required billing
+buckets; it may be shadow-only.
 
-`cost` is a response-actual quota metric with the same crossing-request,
-settlement, and unknown-fence semantics as token metrics. Publication rejects an
-enforced cost rule whose reachable Models are unpriced or whose adapters cannot prove
-the billing buckets required by differential cache prices; such a rule may be
-shadow-only.
+Valkey stores the exact fixed-width integer representation used by settlement.
+PostgreSQL stores the canonical numerator. Dashboard formatting is a presentation
+concern and never becomes quota truth.
+
+## Scale and conformance
+
+Production acceptance includes:
+
+- a 1,000-Model catalog without a mandatory 1,000-static-cluster topology;
+- bounded gateway and ExtProc memory per active route, codec, and endpoint;
+- high-concurrency streaming, DNS/TLS reuse, backpressure, circuit breaking, and
+  replica loss without sticky sessions;
+- same-Model retry and cross-Model fallback with exact known-zero proof;
+- no retry after visible output or unknown usage;
+- end-to-end deadline preservation;
+- buffered and streaming neutral-codec matrix coverage;
+- exact actual-token and cost settlement for every authenticated attempt; and
+- equivalent behavior through the bundled Envoy adapter and each supported external
+  gateway adapter.
 
 ## Deliberate simplicity
 
-There is no PriceBook, separate reusable RetryPolicy or TimeoutPolicy resource,
-backend-price override, or second transport API. The bounded `control.retry.on`
-evidence set remains part of the Model itself. Users edit one Model. The Dashboard
-keeps these fields inside **Advanced settings**; the Router compiler, BackendInvoker,
-immutable revisions, usage arithmetic, and consistency gates remain implementation details.
+There is no reusable PriceBook, RetryPolicy, TimeoutPolicy, Router backend invoker, or
+second transport API. Users edit one Model and one Entrypoint assignment. ExtProc
+selects, Envoy dispatches, and the control plane compiles both immutable projections.

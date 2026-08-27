@@ -1,175 +1,158 @@
-# PL-0038: Router-Native Access Control
+# PL-0038: Replaceable Control Plane and Inference Enforcement
 
 ## Goal
 
-Ship one Router-owned management and inference-access contract, with the Dashboard
-as an optional API client and identical enforcement semantics across Docker and
-Kubernetes.
+Ship one clean inference architecture in which Envoy owns transport, ExtProc owns
+semantic selection and execution of compiled policy, a replaceable control plane owns
+all product desired state, and the optional Playground Agent is not part of Router.
+Docker and Kubernetes must enforce the same API-key, authorization, quota, routing,
+usage, and accounting semantics.
 
 ## Scope
 
-- Keep the human-authored Router manifest on `version: v0.3`. Physical connections
-  remain in `providers.models`, semantic metadata remains in
-  `routing.modelCards`, reusable routing logic remains in `recipes`, and callable
-  Mixture-of-Models plus complete Decision assignments remain in `entrypoints`.
-- Expose per-Model invocation policy as structured
-  `providers.models[].control.retry` and `providers.models[].control.timeout`, with
-  exact string pricing under `providers.models[].pricing`.
-- Derive process capabilities from static YAML plus optional configured stores and
-  services. File-only routing has no database dependency; PostgreSQL enables durable
-  resource authority and the optional Management API; PostgreSQL plus Valkey enables
-  Router-native inference access and global quotas. There is no serialized
-  deployment-mode selector.
-- Keep dynamic Users, Teams, API keys, access policies, quota policies, counters,
-  usage, and audit out of Router YAML and Kubernetes resources. PostgreSQL owns
-  desired state and durable facts; Valkey owns applied projections, global counters,
-  admission state, settlement idempotency, and the ingestion stream.
-- Authenticate API keys, authorize discovery and invocation, admit quota, and settle
-  authoritative usage inside the Router on every public inference path. The current
-  request may cross an actual-token or actual-cost limit; the next request is denied.
-- Support at least 10,000 independent API keys without request-time PostgreSQL joins
-  or per-key gateway configuration.
-- Keep Provider Integrations in the control-plane application. They compile typed
-  provider inputs into provider-neutral immutable backends; the data plane depends
-  only on installed wire codecs and credential adapters.
-- Keep Recipe authoring connection-free. Entrypoints select one Recipe, assign Models
-  to its readable Decision names, and optionally define Router-owned priority
-  fallback with bounded safe-failure classes.
-- Publish the versioned `/management/v1` OpenAPI contract for Dashboard, CLI,
-  automation, and independent consoles. Keep manifest, HTTP API, and PostgreSQL
-  schema evolution independently versioned and explicitly upgraded.
-- Keep Management login stable across control-plane replicas: exact issuer SID and
-  evidence reuse one bounded durable session/token ID, changed evidence creates a
-  separately limited session, and durable digested SID/subject logout selectors
-  prevent late exchange from reviving logged-out authority.
-- Cover Dashboard and Playground authorization, delegated inference, Agent Builder,
-  usage/cost visibility, provider onboarding, topology, and accessible responsive UX
-  through the same Router APIs.
-- Validate file-only and durable Docker/Kubernetes deployment, recovery, scale,
-  streaming, tools, images, protocol codecs, fallback, accounting, and publication.
+- Keep human Router configuration on `version: v0.3`: physical connections in
+  `providers.models`, connection-free metadata in `routing.modelCards`, reusable
+  routing logic in `recipes`, and callable Mixture-of-Models plus complete Decision
+  assignments in `entrypoints`.
+- Keep per-Model reliability in structured `providers.models[].control.retry` and
+  `providers.models[].control.timeout`, with exact string pricing in
+  `providers.models[].pricing`.
+- Keep dynamic Dashboard members, Users, Teams, invitations, API keys, AccessPolicy,
+  RateLimitPolicy/Budget, provider catalog, routing desired state, usage, and audit in
+  the replaceable control plane. PostgreSQL is authoritative desired state and ledger.
+- Publish immutable routing and access snapshots to ExtProc. Keep keys and policies
+  out of YAML, Envoy routes, xDS, ConfigMaps, and CRDs. Valkey owns applied projections,
+  global counters, admission state, settlement idempotency, and usage ingestion.
+- Execute API-key verification, discovery/invocation authorization, quota admission,
+  and response-actual settlement in ExtProc without request-time PostgreSQL or
+  synchronous control-plane calls.
+- Return a logical DispatchPlan from ExtProc. Envoy or an external gateway owns
+  upstream route/cluster resolution, credentials, connection pools, health, timeout,
+  safe retry/fallback, streaming, and backend forwarding.
+- Support at least 10,000 API keys and 1,000 Models without one route/resource per key,
+  without mandatory one-cluster-per-Model, and without one shared Router reverse-proxy
+  cluster.
+- Keep Provider Integrations in the control-plane application. They compile authoring
+  input into immutable ExtProc and gateway projections; the data plane has no product
+  provider catalog.
+- Publish the versioned `/management/v1` OpenAPI from the control plane for Dashboard,
+  CLI, automation, and independent consoles. Router exposes only inference, ExtProc,
+  projection/status, health, and metrics contracts.
+- Run Chat and Builder over one optional control-plane Agent kernel. Every model step
+  streams standard `/v1/chat/completions` through Envoy; every Builder tool uses the
+  control-plane API. Router config, binary, and OpenAPI contain no Agent resources.
+- Validate file-only and dynamic Docker/Kubernetes deployment, recovery, scale,
+  streaming, tools, images, neutral codecs, fallback, accounting, and publication.
 
 ## Non-Goals
 
-- Making Dashboard availability part of inference availability.
-- Storing dynamic identity, policy, quota, or usage state in YAML, ConfigMaps, custom
-  resources, xDS, or gateway routes.
-- Introducing another persistent Model-to-Recipe association beside Entrypoint
-  assignments.
-- Using inference API keys as Management API credentials.
-- Letting gateway retries choose another logical Model or create unaccounted work.
-- Maintaining multiple serving-time readers or writers for one public contract.
-- Restoring Dashboard or listener APIs that patch Router YAML or write knowledge-base
-  files into a running replica.
-- Adding a dynamic KnowledgeBase Management resource or Dashboard editor. Reusable
-  knowledge bases remain file-authored under `global.model_catalog.kbs[]`; the missing
-  durable resource is recorded explicitly in TD047 and is not a shipped capability of
-  this plan.
+- Making Dashboard, control-plane, or Agent availability part of direct inference
+  availability.
+- Storing dynamic product state in Router YAML or per-resource infrastructure config.
+- Letting ExtProc reverse-proxy Model traffic or letting Envoy evaluate semantic
+  routing policy.
+- Hosting User/Team/key CRUD, invitations, provider catalog, Agent sessions, Tools, or
+  Skills in Router Management.
+- Introducing another Model-to-Recipe authority beside Entrypoint assignments.
+- Using inference API keys as control-plane credentials.
+- Retrying after visible output, unknown usage, or any attempt without known-zero
+  gateway evidence.
+- Maintaining compatibility readers, dual writers, hidden Dashboard authority, or
+  migration-only branches in steady-state serving code.
+- Adding a dynamic KnowledgeBase resource; the current gap remains TD047.
 
 ## Exit Criteria
 
-- The strict v0.3 manifest, Management OpenAPI, generated clients, schema, examples,
-  and Dashboard forms expose the same Model control, pricing, Recipe, Entrypoint,
-  assignment, and fallback contract.
-- Strict parsing rejects alternate retry/pricing layouts, generated routing identity,
-  dynamic access resources, and deployment-mode selectors in human YAML. The offline
-  migrator is not imported by validation or serving code and its output passes the
-  same strict parser.
-- The generated `/management/v1` route inventory and schemas match the normative API:
-  Model writes use nested `control` and string pricing, Entrypoint writes own complete
-  Decision assignments and fallback, and provider-specific connection fields are
-  validated by the active Integration Definition before compilation.
-- File-only startup compiles one immutable manifest without PostgreSQL, Valkey,
-  Management mutations, or native API-key state.
-- Durable routing seeds only an empty PostgreSQL authority from the manifest; every
-  later change is an explicit revisioned Management mutation or import.
-- Every access-enabled inference endpoint, including discovery, streaming,
-  Playground, direct Model tests, and Mixture-of-Models, uses one Router access
-  runtime and one effective-policy evaluator.
-- Concurrent first exchange and exact-evidence reissue converge on one durable
-  Management session without cross-replica token invalidation; changed evidence is
-  bounded by the active-session policy, and SID/subject logout wins every exchange
-  race while allowing only genuinely newer subject reauthentication.
-- Multiple Router replicas enforce the same API-key lifecycle, model visibility,
-  RPM, actual-token, actual-cost, and concurrency state through Valkey.
-- Settlement records every internal dispatch exactly once, permits the crossing
-  request, blocks the next request while over limit, and fences unknown usage instead
-  of treating it as zero.
-- Provider onboarding changes control-plane Integration composition without adding a
-  product-provider branch to the Dashboard or inference runtime.
-- Entrypoint publication validates the complete Recipe and assignment graph;
-  priority fallback advances only before visible output on Router-proven safe
-  evidence and preserves one request deadline and dispatch ledger.
-- The Dashboard remains removable without changing authentication, authorization,
-  quota, routing, accounting, or Management automation.
-- The API-key and usage views agree with live quota state and durable actual-cost
-  accounting at key, User, Team, and namespace scope.
-- Docker and Kubernetes pass readiness, restart, replica-loss, store-failure,
-  restrictive-policy, recovery, and forward-schema-upgrade scenarios.
-- A 10,000-key capacity gate, complete buffered/streaming codec matrix, remote
-  hardware-backed regression, repository gates, and pull-request CI pass.
+- Static v0.3 YAML, control-plane OpenAPI, generated clients, schema, examples, and
+  Dashboard forms expose one Model/Recipe/Entrypoint contract with readable authoring
+  values and no generated runtime identity.
+- Router config has no Agent, control-plane listener, Dashboard identity, or
+  PostgreSQL desired-state configuration. File-only startup needs no PostgreSQL or
+  Valkey.
+- Router binary and Router OpenAPI contain no product CRUD or Agent endpoints. The
+  reference control plane can be replaced by another implementation of the published
+  API and snapshot contracts.
+- Every access-enabled inference endpoint uses one ExtProc access evaluator and one
+  immutable applied revision. Dashboard outage and request-time PostgreSQL loss do not
+  bypass or interrupt already-applied enforcement.
+- Multiple ExtProc replicas enforce identical API-key lifecycle, visibility, RPM,
+  response-actual token/cost, and concurrency through Valkey.
+- ExtProc performs no upstream Model HTTP call. Bundled Envoy and external gateway
+  adapters dispatch the selected logical Model and return authenticated attempt and
+  usage evidence.
+- Priority fallback uses only gateway-proven known-zero transitions, preserves one
+  deadline, supports required codec transitions only when the adapter proves them,
+  and records every attempt exactly once.
+- Provider onboarding changes control-plane Integration composition without a product
+  provider branch in Dashboard presentation or data-plane selection code.
+- Chat and Builder both stream standard OpenAI-compatible SSE, obey the selected key's
+  policy and quota, and write ordinary logs/usage. Builder cannot publish without an
+  explicit immutable-plan confirmation.
+- API-key detail, live quota, usage, and cost agree at key, User, Team, and namespace
+  scope under concurrency and across replicas.
+- Docker and Kubernetes pass readiness, restart, replica loss, store failure,
+  restrictive mutation, recovery, and forward-schema-upgrade tests.
+- 10,000-key and 1,000-Model capacity gates, the full buffered/streaming codec matrix,
+  remote hardware regression, repository gates, and PR CI pass.
 
 ## Task List
 
-This plan is in progress. The implementation seams exist, but no task below is closed
-until its complete contract, failure, recovery, and release gates pass. In particular,
-the open checkboxes must not be interpreted as shipped-but-undocumented work, and the
-separate KnowledgeBase gap above is not part of the current delivery claim.
-
-- [ ] `RAC-01` Close strict v0.3 parse/export/migration, Management OpenAPI route and
-  schema inventory, generated-client, import/export, and documentation drift gates.
-- [ ] `RAC-02` Close PostgreSQL desired-state, Valkey publication, API-key lifecycle,
-  effective policy, global admission, actual settlement, reconciliation, usage,
-  rollup, and audit tests.
-- [ ] `RAC-03` Close Model control/pricing, Provider Integration compilation,
-  ProviderCredential dispatch, Recipe/Entrypoint publication, priority fallback,
-  protocol codec, and direct-inference tests.
-- [ ] `RAC-04` Close Management authentication, exact-evidence session reissue,
-  SID/subject logout races, authorization, invitations, Team/User inheritance,
-  delegated inference, scoped list/detail/statistics, and independent-console
-  contracts.
-- [ ] `RAC-05` Close Dashboard, Playground, Agent Builder, topology, cost/quota,
-  responsive layout, accessibility, and permission-visibility regression coverage.
-- [ ] `RAC-06` Close file-only and durable Docker/Kubernetes composition, schema
-  upgrade ordering, readiness, failure, recovery, and operator documentation.
-- [ ] `RAC-07` Run `make perf-access-capacity` against an isolated Valkey for the
-  reproducible 10,000-key projection, multi-replica admission, usage-lag, memory,
-  Redis-operation, and Router-replica failover report; then run the separate full
-  protocol, Router/Envoy HTTP, store-failure, remote hardware-backed, repository,
-  and pull-request gates.
+- [ ] `RAC-01` Close strict v0.3 parse/export/migration and remove Agent/control-plane
+  product configuration from Router YAML.
+- [ ] `RAC-02` Extract product CRUD, identity exchange, policy compilation, routing
+  desired state, migrations, usage queries, and audit from Router composition into the
+  reference control-plane service without compatibility forwarding.
+- [ ] `RAC-03` Close immutable routing/access publication, ExtProc verification,
+  effective policy, global admission, response-actual settlement, reconciliation,
+  usage rollup, and audit contracts.
+- [ ] `RAC-04` Replace Router backend invocation with gateway-owned DispatchPlan
+  execution; close Envoy/external-gateway adapters, ProviderCredential injection,
+  control/timeout, fallback, terminal evidence, and neutral codec matrix.
+- [ ] `RAC-05` Move Agent sessions, Skills, Tools, Tool Sources, web search, artifacts,
+  and Builder publication coordination into the optional control-plane Agent service;
+  remove `/management/v1/agent-*` and Router Agent packages.
+- [ ] `RAC-06` Close Dashboard identity, invitations, Team/User inheritance, API-key
+  UX, delegated inference, scoped usage/statistics/logs, Playground, topology,
+  responsive layout, accessibility, and negative permission coverage.
+- [ ] `RAC-07` Close file-only and dynamic Docker/Kubernetes composition, migration
+  ordering, readiness, failure, recovery, and operator docs.
+- [ ] `RAC-08` Run isolated 10,000-key and 1,000-Model capacity tests, full protocol and
+  Router/Envoy HTTP suites, store-failure scenarios, remote AMD regression, repository
+  gates, and PR CI.
 
 ## Next Action
 
-Run the contract and documentation gates, then close the smallest failing runtime
-or end-to-end group in Task List order. Record durable gaps in the linked debt item
-instead of adding transitional behavior to the target contract.
+Complete `RAC-05` dependency extraction first because Router-hosted Agent state is a
+known architecture violation and currently expands Router config and Management API.
+Then complete `RAC-02` using the same control-plane boundary before claiming the
+proposal is implemented.
 
 ## Operating Rules
 
-- PostgreSQL is the desired-state and durable-ledger authority; Valkey is the applied
-  runtime and global-counter authority.
-- Public inference paths never depend on Dashboard availability or request-time SQL
-  joins.
+- PostgreSQL is control-plane desired state and durable ledger; Valkey is applied
+  runtime state and global-counter authority.
+- Public inference never depends on Dashboard, Agent, synchronous control-plane calls,
+  or request-time SQL joins.
+- Envoy transports; ExtProc selects and executes compiled policy; the control plane
+  authors and publishes; Agent orchestrates optional UX only.
 - Human YAML and DSL contain readable names, not generated IDs, revisions, backend
-  identities, catalog digests, or secret material.
-- Same-version authoring normalization applies documented v0.3 defaults and
-  canonical projections only. Removed layouts are handled by the offline migrator,
-  which is never imported by validation, serving, import, or publication.
+  identities, catalog digests, or secrets.
+- Removed layouts use an explicit offline migrator that is never imported by serving,
+  validation, publication, or control-plane steady-state code.
 - Public behavior changes require API-level negative authorization and failure-mode
-  coverage as well as successful-path tests.
-- Main processors, handlers, config loaders, and CLI commands remain small
-  orchestrators over narrow modules.
+  coverage as well as success tests.
 - Private deployment details and credentials remain outside tracked artifacts.
 
 ## Related Docs
 
-- [Router-Native Access Control and Quota Accounting](../../../../website/docs/proposals/router-native-access-control.md)
+- [Access Control and Quota Accounting](../../../../website/docs/proposals/router-native-access-control.md)
 - [Resource Contracts](../../../../website/docs/proposals/router-native-access-control-contracts.md)
 - [Provider Integration Registry](../../../../website/docs/proposals/router-native-access-control-provider-catalog.md)
-- [Model Runtime](../../../../website/docs/proposals/router-native-access-control-model-runtime.md)
+- [Model Dispatch](../../../../website/docs/proposals/router-native-access-control-model-runtime.md)
 - [Quota Runtime](../../../../website/docs/proposals/router-native-access-control-quota-runtime.md)
-- [Management API](../../../../website/docs/proposals/router-native-access-control-management-api.md)
+- [Control-plane API](../../../../website/docs/proposals/router-native-access-control-management-api.md)
 - [Authorization](../../../../website/docs/proposals/router-native-access-control-authorization.md)
 - [Deployment](../../../../website/docs/proposals/router-native-access-control-deployment.md)
 - [Neutral Protocol](../../../../website/docs/proposals/multi-protocol-adaptor.md)
-- [Agent and Playground Builder](../../../../website/docs/proposals/router-native-agent-runtime.md)
+- [Optional Agent Harness](../../../../website/docs/proposals/router-native-agent-runtime.md)
 - [Upgrade and rollback](../../../../website/docs/installation/upgrade-rollback.md)

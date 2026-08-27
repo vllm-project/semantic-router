@@ -2,10 +2,12 @@
 
 This file is the short entrypoint for coding agents. The detailed human-readable system of record lives in [tools/agent/docs/README.md](tools/agent/docs/README.md). The executable rule layer lives in [tools/agent/repo-manifest.yaml](tools/agent/repo-manifest.yaml), [tools/agent/test-domain-registry.yaml](tools/agent/test-domain-registry.yaml), [tools/agent/task-matrix.yaml](tools/agent/task-matrix.yaml), [tools/agent/skill-registry.yaml](tools/agent/skill-registry.yaml), [tools/agent/structure-rules.yaml](tools/agent/structure-rules.yaml), [tools/agent/maintainer-policy.yaml](tools/agent/maintainer-policy.yaml), and [tools/make/agent.mk](tools/make/agent.mk).
 
-vLLM Semantic Router is an Envoy ExtProc request router for LLM inference. It
-resolves a request-facing entrypoint to an isolated recipe, evaluates that
-recipe's signals and projections, applies its decision and algorithm, then
-invokes the selected backend and recipe-scoped plugins.
+vLLM Semantic Router is an Envoy ExtProc semantic-selection and policy-execution
+service for LLM inference. It resolves a request-facing Entrypoint to an isolated
+Recipe, evaluates signals and projections, applies its decision and algorithm, and
+returns a logical Model selection to Envoy. Envoy owns upstream transport and invokes
+the selected backend. Product management and optional Agent services live in the
+replaceable control plane, not in the Router process.
 
 ## Read First
 

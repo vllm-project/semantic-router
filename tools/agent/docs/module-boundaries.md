@@ -5,13 +5,13 @@ This document describes the repository's major subsystem seams and the boundarie
 ## Top-Level Subsystems
 
 - `src/semantic-router/`
-  - owns router runtime, config loading, decision logic, extproc processing, and controller-side integration
+  - owns config loading, ExtProc request processing, semantic selection, immutable projection consumption, and request-time execution of compiled access policy
 - `src/vllm-sr/`
   - owns the Python CLI, config generation, local startup orchestration, and Docker-facing developer flow
 - `candle-binding/`, `ml-binding/`, `nlp-binding/`, `onnx-binding/`
   - own native model and classifier bindings consumed by router-side runtime paths
 - `dashboard/`
-  - owns frontend and backend UI surfaces, topology visualization, and playground/reveal presentation
+  - owns frontend and the reference control-plane backend, including product desired state, topology visualization, Playground presentation, and optional Agent services
 - `deploy/operator/api/`, `deploy/operator/controllers/`, and `deploy/operator/config/crd/`
   - own Kubernetes operator contracts, CRD types, and cluster-facing deployment schema
 - `src/training/`
@@ -27,6 +27,17 @@ This document describes the repository's major subsystem seams and the boundarie
 - Dashboard backend must not depend on dashboard frontend source.
 - Local CLI runtime behavior belongs in `src/vllm-sr/`; router runtime behavior belongs in `src/semantic-router/`.
 - Control-plane surfaces such as the CLI, dashboard backend, and operator should depend on versioned router contracts or explicit public runtime-service seams instead of deep router-runtime internals when the dependency crosses a product boundary.
+- Envoy owns public HTTP/streaming lifecycle, upstream clusters, connection pools,
+  endpoint health, transport retries/timeouts, credential injection, and backend
+  forwarding. ExtProc may return logical selection and compiled policy evidence; it
+  must not become an upstream reverse proxy.
+- ExtProc may verify credentials, authorize Models/Entrypoints, reserve or settle
+  global quotas, and consume immutable snapshots. It must not own User, Team,
+  invitation, API-key lifecycle, AccessPolicy, Budget, provider catalog, or snapshot
+  publication.
+- Agent sessions, tool loops, Skills, Tool Sources, web search, artifacts, and Builder
+  publication coordination belong to an optional control-plane-side Agent service.
+  Router binaries and Router API contracts must not contain Agent resources.
 - Native bindings stay behind runtime seams instead of leaking binding-specific setup across the codebase.
 - Dashboard backend handler files should separate HTTP transport from config persistence, deploy/rollback control, and runtime status collection.
 - Dashboard frontend should separate route-shell/auth gating from page-specific orchestration and from large chat or editor containers.

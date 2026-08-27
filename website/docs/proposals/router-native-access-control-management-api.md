@@ -188,7 +188,7 @@ inviter for Dashboard/Management API authority, and one User-scoped `consumer` r
 for delegated inference and read-only account access. Neither role implies the other.
 This prevents a read-only Dashboard member from acquiring platform mutation authority
 while ensuring that the inherited first key and Playground work through the same
-Router-owned inference boundary as a direct client.
+Envoy and ExtProc inference boundary as a direct client.
 
 Pending first-key creation records a one-time onboarding-claim capability bound to the
 exact principal, issuing authentication source, evidence kind, pinned typed authentication
@@ -888,54 +888,20 @@ Decision authoring contains no physical Model picker: Model priority, weighting,
 reasoning controls, and fallback are configured only in the Entrypoint assignment
 that turns a Recipe into a callable Mixture-of-Models.
 
-### Router-native Agent resources
+### Optional Agent boundary
 
-```text
-GET    /management/v1/agent-profiles
-POST   /management/v1/agent-profiles
-GET    /management/v1/agent-profiles/{profile}
-PATCH  /management/v1/agent-profiles/{profile}
-DELETE /management/v1/agent-profiles/{profile}
-GET    /management/v1/agent-skills
-POST   /management/v1/agent-skills
-GET    /management/v1/agent-skills/{skill}
-PATCH  /management/v1/agent-skills/{skill}
-DELETE /management/v1/agent-skills/{skill}
-GET    /management/v1/agent-tools
-GET    /management/v1/agent-tool-credentials
-POST   /management/v1/agent-tool-credentials
-GET    /management/v1/agent-tool-credentials/{credential}
-PATCH  /management/v1/agent-tool-credentials/{credential}
-DELETE /management/v1/agent-tool-credentials/{credential}
-POST   /management/v1/agent-tool-credentials/{credential}:rotate
-GET    /management/v1/agent-tool-sources
-POST   /management/v1/agent-tool-sources
-GET    /management/v1/agent-tool-sources/{source}
-PATCH  /management/v1/agent-tool-sources/{source}
-DELETE /management/v1/agent-tool-sources/{source}
-POST   /management/v1/agent-tool-sources/{source}:test
-POST   /management/v1/agent-tool-sources/{source}:approve
-GET    /management/v1/agent-sessions
-POST   /management/v1/agent-sessions
-GET    /management/v1/agent-sessions/{session}
-PATCH  /management/v1/agent-sessions/{session}
-DELETE /management/v1/agent-sessions/{session}
-POST   /management/v1/agent-sessions/{session}/turns
-GET    /management/v1/agent-sessions/{session}/turns
-GET    /management/v1/agent-sessions/{session}/events
-POST   /management/v1/agent-sessions/{session}/turns/{turn}:cancel
-GET    /management/v1/agent-artifacts/{artifact}
-GET    /management/v1/agent-artifacts/{artifact}/content
-POST   /management/v1/publication-plans/{plan}:commit
-```
+`/management/v1` contains no Agent sessions, turns, events, Skills, Tools, Tool
+Sources, Tool credentials, or Agent artifacts. Those resources belong to the optional
+control-plane-side Agent service under `/agent/v1`, with a separate OpenAPI document
+and authorization surface. There is no Agent Profile resource.
 
-These routes are the Router-owned durable Agent surface. Profiles select bounded
-capabilities and versioned Skills; Sessions pin one authorized inference target;
-Turns, Events, Artifacts, and publication plans remain namespace- and
-subject-scoped. Tool Sources reference write-only credential resources. Publication
-preparation may produce an immutable plan, but only the separate human-authorized
-commit endpoint may publish it. The Dashboard is only one generated client of this
-surface and owns no parallel Agent workflow state.
+Builder read, validate, probe, evaluate, prepare, and commit Tools call the ordinary
+control-plane operations in this contract using the session principal and stable
+idempotency keys. The human-authorized publication operation remains a control-plane
+routing mutation; the Agent may coordinate it but does not gain another mutation
+path. Every Agent model step uses the public Envoy `/v1/chat/completions` endpoint.
+The complete Agent service contract is specified in
+[Optional Agent Harness and Playground Builder](./router-native-agent-runtime).
 
 ### Usage, logs, audit, and operations
 
@@ -1159,7 +1125,7 @@ identifies the limiting rule; analytics lag cannot alter live quota.
 The normative permission registry, exact built-in roles, scope-containment graph,
 delegation ceiling, per-operation expressions, intrinsic self permissions, and
 TeamRole entitlements live in the
-[Management authorization appendix](./router-native-access-control-authorization).
+[control-plane authorization appendix](./router-native-access-control-authorization).
 
 Invitation email delivery, welcome-page presentation, password setup, and browser
 session presentation remain issuer/client UX. The control plane owns the invitation's

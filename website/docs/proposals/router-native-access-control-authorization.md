@@ -1,5 +1,5 @@
 ---
-title: Router-Native Management Authorization Appendix
+title: Control-Plane Authorization Appendix
 description: Specifies Management permissions, role presets, scope containment, safe delegation, and operation authorization.
 created: 2026-08-22
 status: Proposal
@@ -8,8 +8,8 @@ status: Proposal
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
 This appendix is normative for Management authorization in
-[Router-Native Access Control and Quota Accounting](./router-native-access-control).
-The [Management API appendix](./router-native-access-control-management-api) owns
+[Access Control and Quota Accounting](./router-native-access-control).
+The [control-plane API appendix](./router-native-access-control-management-api) owns
 authentication, endpoints, requests, and responses. The
 [resource contract](./router-native-access-control-contracts) owns persisted role and
 scope shapes.

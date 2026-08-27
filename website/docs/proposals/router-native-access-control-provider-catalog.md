@@ -1,5 +1,5 @@
 ---
-title: Router-Native Provider Catalog Appendix
+title: Provider Integration Registry Appendix
 description: Defines the control-plane Provider Integration registry, backend compilation, immutable catalog publication, and runtime wire-format contract.
 created: 2026-08-22
 status: Proposal
@@ -8,10 +8,10 @@ status: Proposal
 > **Status:** Proposal appendix · **Created:** 2026-08-22
 
 This appendix is normative for provider integration in
-[Router-Native Access Control and Quota Accounting](./router-native-access-control).
-The [Management API](./router-native-access-control-management-api) owns catalog
-reads and discovery. The [Model runtime](./router-native-access-control-model-runtime)
-owns compiled backend execution. The
+[Access Control and Quota Accounting](./router-native-access-control).
+The [control-plane API](./router-native-access-control-management-api) owns catalog
+reads and discovery. The [Model dispatch contract](./router-native-access-control-model-runtime)
+owns ExtProc encoding and gateway execution. The
 [resource contract](./router-native-access-control-contracts) owns persistence and
 ProviderCredential lifecycle.
 
@@ -274,10 +274,10 @@ format and credential adapter. The routing snapshot contains only compiled
 provider-neutral backend values, one stable wire format per backend, and the
 credential adapter ID.
 
-At dispatch, BackendInvoker resolves the compiled wire format in the immutable Codec
-Registry. When a credential is
-present, it verifies provider and origin equality, pins one credential version,
-loads that credential's adapter by ID, decrypts only in process, materializes bounded
+At dispatch, ExtProc resolves the compiled wire format in the immutable Codec Registry
+and encodes the selected backend request. When a credential is present, the Envoy
+credential adapter verifies provider, origin, Model revision, and publication equality,
+pins one credential version, decrypts only at the transport edge, materializes bounded
 authentication state, and erases plaintext. The Provider name is never an execution
 branch.
 

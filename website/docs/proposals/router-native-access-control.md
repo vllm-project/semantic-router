@@ -15,13 +15,14 @@ Normative appendices: [resources](./router-native-access-control-contracts),
 [control-plane and projection APIs](./router-native-access-control-management-api),
 [authorization](./router-native-access-control-authorization), and
 [deployment](./router-native-access-control-deployment), plus the
-[Agent and Playground Builder](./router-native-agent-runtime).
+[optional Agent harness and Playground Builder](./router-native-agent-runtime).
 
 ## Problem
 
-Inference enforcement is a Router responsibility. Inference desired state is not.
-Clients call the Router without the Dashboard, so credential verification, model
-visibility, quota admission, and accounting must remain in the Router data path.
+Inference enforcement is a data-plane responsibility. Inference desired state is not.
+Clients call the public gateway without the Dashboard, so credential verification,
+model visibility, quota admission, semantic selection, and accounting must remain in
+the Envoy and ExtProc request path.
 Users, Teams, invitations, API-key lifecycle, policies, and budgets are control-plane
 concepts and must not turn the Router into a product directory or administration
 application.
@@ -41,12 +42,13 @@ The design must support at least 10,000 API keys with independent model visibili
 
 This proposal makes the following decisions:
 
-1. Semantic Router owns the public inference access boundary. It does not own User,
-   Team, invitation, key-lifecycle, AccessPolicy, or Budget CRUD.
+1. Envoy owns the public inference transport boundary and ExtProc owns semantic
+   selection plus execution of compiled access policy. Neither owns User, Team,
+   invitation, key-lifecycle, AccessPolicy, or Budget CRUD.
 2. A replaceable control plane owns those product resources, their versioned API,
    PostgreSQL desired state, secret delivery, policy compilation, and audit.
    The bundled Dashboard backend is one implementation.
-3. The Router accepts only immutable, versioned access snapshots and exposes a narrow
+3. ExtProc accepts only immutable, versioned access snapshots and exposes a narrow
    private projection/status contract. It never receives an API-key plaintext secret,
    email address, invitation, Dashboard role, or form-oriented resource graph.
 4. Valkey or Redis is the applied runtime store for credential projections,
@@ -140,10 +142,11 @@ the Dashboard in the inference path.
 
 ```mermaid
 flowchart LR
-    Client["Inference client"] --> Gateway["Public gateway"]
-    Gateway --> Access["Router access runtime"]
-    Access --> Runtime["Semantic routing runtime"]
-    Runtime --> Backend["Model backend"]
+    Client["Inference client"] --> Gateway["Envoy data plane"]
+    Gateway --> Access["ExtProc access execution"]
+    Access --> Runtime["ExtProc semantic selection"]
+    Runtime --> Gateway
+    Gateway --> Backend["Selected model backend"]
     Access <--> Hot["Valkey runtime state"]
     Runtime -->|"actual usage"| Access
 
@@ -157,8 +160,8 @@ flowchart LR
     Projection --> Hot
     Access --> Status["Applied revision / health"]
     Status --> Control
-    Agent["Agent session workers"] --> Control
-    Agent --> Access
+    Agent["Optional Agent service"] --> Control
+    Agent --> Gateway
     Integrations["Provider Integration Registry"] --> Control
     Hot --> Stream["Usage stream"]
     Stream --> Writer["Usage writer"]
@@ -167,25 +170,25 @@ flowchart LR
 
 | Component                 | Owns                                                                                                                                                        | Must not own                                                                             |
 | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Public gateway            | Listener, transport filtering, access-service calls, and forwarding                                                                                         | API-key records, policy compilation, quota state, or usage truth                         |
-| Router access runtime     | Credential verification, trusted principal context, grants, admission, settlement, and global quota decisions                                               | Browser sessions or Dashboard presentation state                                         |
-| Router routing runtime    | Entrypoint resolution, signals, projections, decisions, algorithms, plugins, neutral protocol processing, codec dispatch, and backend invocation            | Product-provider catalogs, Management identity authentication, or mutable policy storage |
+| Envoy data plane          | Listener, HTTP and streaming lifecycle, ExtProc calls, gateway-native health/transport policy, credential injection adapter, and upstream forwarding         | API-key records, policy compilation, semantic selection, Agent state, or usage truth      |
+| ExtProc access runtime    | Credential verification, trusted principal context, grants, admission, settlement, and global quota decisions from an immutable compiled snapshot            | Browser sessions, Dashboard presentation state, key CRUD, or policy publication           |
+| ExtProc routing runtime   | Entrypoint resolution, signals, projections, decisions, algorithms, plugins, neutral protocol processing, and one logical dispatch selection                 | Upstream connection pools, product-provider catalogs, Agent loops, or mutable policy state |
 | Reference control plane   | Dashboard identity, Users, Teams, invitations, API-key lifecycle, AccessPolicy, Budget, Provider Integrations, policy compilation, usage queries, and audit | Public inference proxying or request-time enforcement                                    |
-| Router projection service | Authenticate the trusted publisher, validate and atomically apply immutable access snapshots, report applied revision and health                            | User/Team CRUD, secret reveal, invitations, Dashboard roles, or form validation          |
-| Router Agent runtime      | Durable sessions, leased turns, trusted Skills, authorized Tools, probes/evals, and immutable publication plans                                             | Autonomous publication, backend credentials, or a second Recipe/inference path           |
+| ExtProc projection service | Authenticate the trusted publisher, validate and atomically apply immutable routing/access snapshots, report applied revision and health                   | User/Team CRUD, secret reveal, invitations, Dashboard roles, or form validation           |
+| Optional Agent service    | Chat/Builder sessions, tool loop, Skills, artifacts, probes/evals, and publication-plan coordination through control-plane APIs                              | Router internals, Envoy clusters, direct backend invocation, or snapshot publication      |
 | PostgreSQL                | Control-plane identities, routing desired state, policies, revisions, ledger, rollups, and audit                                                            | Per-request hot-path reads                                                               |
 | Valkey/Redis              | Applied credential/policy projections, compiled routing snapshots, global counters, idempotency, and ingestion stream                                       | Long-term analytics or the only copy of desired state                                    |
 | Dashboard frontend        | Product UX over its control-plane backend and public inference API                                                                                          | Direct Router database access or a required data-plane hop                               |
 
-One Router image may expose ExtProc, internal authentication and quota services, the
+One Router image may expose ExtProc, internal authentication and quota execution, the
 private projection/status service, health, and metrics. It does not expose the
-control-plane product API. When dynamic access is enabled, every ingress adapter
-executes access authentication, authorization, and quota admission before semantic
-ExtProc. After verification, the Router removes the inference `Authorization` header;
-backend dispatch injects a separate ProviderCredential. No access-enabled adapter may
-bypass the shared `AccessRuntime`. Deployments without dynamic access do not start
-`AccessRuntime`; their public discovery and invocation paths still share the same
-Entrypoint resolver and active routing snapshot.
+control-plane product API or any Agent API. When dynamic access is enabled, every
+ingress adapter executes authentication, authorization, and quota admission before
+semantic selection. Envoy removes the client credential before upstream dispatch and
+injects the separately resolved ProviderCredential through a gateway-owned adapter.
+No access-enabled listener may bypass the shared access evaluator. Deployments without
+dynamic access do not start that evaluator; discovery and invocation still share the
+same Entrypoint resolver and active routing snapshot.
 
 ### Two identity planes
 
@@ -451,40 +454,33 @@ global:
   billing:
     currency: USD
   services:
-    agent:
-      public_inference_endpoint: https://inference.example.com/v1/chat/completions
     backend_credentials:
       provider_kek_keyring_env: VLLM_SR_PROVIDER_CREDENTIAL_KEKS
     backend_egress:
       policy_file: /etc/vllm-sr/backend-egress-policy.yaml
     routing_security:
       hmac_keyring_env: VLLM_SR_ROUTING_HMAC_KEYS
-    management_api:
-      enabled: true
-      tls:
-        certificate_env: VLLM_SR_MANAGEMENT_TLS_CERTIFICATE
-        private_key_env: VLLM_SR_MANAGEMENT_TLS_PRIVATE_KEY
-      auth:
-        mode: router
-        token_signing_keyring_env: VLLM_SR_MANAGEMENT_SIGNING_KEYS
-        service_account_hmac_keyring_env: VLLM_SR_MANAGEMENT_SERVICE_ACCOUNT_KEYS
-        invitation_hmac_keyring_env: VLLM_SR_INVITATION_KEYS
-        response_kek_keyring_env: VLLM_SR_MANAGEMENT_RESPONSE_KEKS
     access:
       enabled: true
+      snapshot:
+        endpoint: access-control-plane:9443
+        namespace: default
+        publisher_ids: [dashboard-control-plane]
       credentials:
         api_key_hmac_keyring_env: VLLM_SR_API_KEY_HMAC_KEYS
         delegation_hmac_keyring_env: VLLM_SR_DELEGATION_HMAC_KEYS
       tenant_context:
         signing_key_env: VLLM_SR_TENANT_CONTEXT_KEYS
   stores:
-    management:
-      postgres:
-        dsn_env: VLLM_SR_POSTGRES_DSN
     runtime:
       redis:
         url_env: VLLM_SR_REDIS_URL
 ```
+
+This Router bootstrap contains only static routing and data-plane dependencies. The
+control-plane listener, PostgreSQL desired-state store, Dashboard authentication,
+invitations, key reveal encryption, and optional Agent service are configured on the
+control-plane deployment. They are not `global.services` in Router YAML.
 
 The public v0.3 schema is represented by the following typed values. Fields omitted
 from this excerpt retain their documented v0.3 definitions:
@@ -679,8 +675,8 @@ plane resolves a `provider_id` from the active Integration Registry, validates t
 chosen origin and credential, and compiles a backend containing one `wire_format`,
 canonical origin, provider model ID, non-secret connection values, and an optional
 ProviderCredential UID. `provider_id` remains only for attribution and immutable
-credential binding. At dispatch BackendInvoker resolves that wire format in the
-immutable Codec Registry,
+credential binding. At dispatch ExtProc resolves that wire format in the immutable
+Codec Registry and encodes the upstream request before Envoy forwards it,
 not on a product name. The complete extension and rolling-update contract is in the
 [Provider catalog appendix](./router-native-access-control-provider-catalog).
 
@@ -863,29 +859,41 @@ The following flow applies when native access is enabled. A file-only deployment
 inference identity or quota resources and begins from its already compiled routing
 snapshot.
 
-1. The public gateway removes client-supplied identity and policy headers.
-2. Router AuthN identifies an API-key or delegated-session credential by its public
+1. Envoy removes client-supplied internal identity, selection, and policy headers and
+   sends the normalized request to ExtProc.
+2. ExtProc AuthN identifies an API-key or delegated-session credential by its public
    prefix, loads the corresponding Valkey projection, verifies HMAC in constant
    time, and checks the compiled credential status, expiry, subject revision, and deny
    barriers. It does not load the control-plane directory.
-3. Router AuthZ loads the compiled revision and resolves the requested resource with
+3. ExtProc AuthZ loads the compiled revision and resolves the requested resource with
    the same evaluator used for discovery.
-4. The Router creates a typed TenantContext containing only the admission ID,
+4. ExtProc creates a typed TenantContext containing only the admission ID,
    namespace, key, User, Team, compiled effective routing context, and policy revision.
    When it crosses a process boundary it is signed, audience-bound, and
    may start work only within a short window. Accepted work keeps an in-process
    principal for the request lifetime; the context is not reusable authentication.
 5. Quota admission atomically checks every applicable rule and consumes known
    request/concurrency units.
-6. Semantic routing resolves the Entrypoint rule, Recipe, and assignments, then
-   journals each bounded dispatch intent before invoking the allowed backend path.
-7. The dispatch journal and request-scoped ledger aggregate authoritative input and
-   output usage across every backend dispatch made by the Recipe.
-8. On terminal response, settlement atomically applies actual token usage, records
+6. ExtProc resolves the Entrypoint, Recipe, decision, assignment, and one logical
+   Model selection. It returns only signed or filter-state-bound selection evidence;
+   it does not open an upstream model connection.
+7. Envoy's gateway adapter maps that logical selection to the active gateway route or
+   cluster, injects the ProviderCredential, applies the compiled transport timeout and
+   safe retry policy, and forwards the request. External gateways may use an adapter
+   over their native route metadata instead of the bundled Envoy mapping.
+8. Envoy returns response headers, body chunks, and terminal usage evidence through
+   ExtProc. The request-scoped ledger aggregates authoritative usage without making
+   ExtProc the upstream HTTP client.
+9. On terminal response, settlement atomically applies actual token usage, records
    idempotency, and appends the UsageEvent to the stream.
-9. Response metadata identifies the limiting rule and whether the values are the
+10. Response metadata identifies the limiting rule and whether the values are the
    admission snapshot or terminal settlement. Live detail remains in the Management
    API.
+
+An optional multi-call orchestration service is a distinct logical upstream selected
+by ExtProc; it is never hidden inside ExtProc. Its subrequests re-enter the public or
+private authenticated gateway contract and return a signed aggregate dispatch/usage
+receipt. Installations that do not enable multi-call Recipes require no orchestrator.
 
 Invalid credentials return `401`. Valid credentials without resource access receive
 the nondisclosing `404`. An enforced quota returns `429` with a bounded `Retry-After`.
@@ -1327,7 +1335,7 @@ and behavior during store failover.
   concurrency and across replicas.
 - API-key Usage and detail show the same actual cost, while live cost quota reports
   exact independent remaining and reset state for arbitrary bounded windows.
-- Priority fallback advances only through the configured tiers on Router-proven safe
+- Priority fallback advances only through configured tiers on gateway-proven safe
   evidence, preserves the original deadline, and leaves a complete dispatch trail.
 - Streaming and every internal Mixture-of-Models dispatch are accounted once without
   estimates or silent zero usage.
@@ -1360,16 +1368,17 @@ and behavior during store failover.
 - Access-enabled Docker and Kubernetes use one semantic implementation.
 - No API key, User, policy, usage event, or audit event is represented in Router YAML,
   gateway routes, xDS, ConfigMaps, or per-resource Kubernetes custom resources.
-- Dashboard inference uses the Router public listener, while Dashboard management uses
+- Dashboard inference uses the public Envoy listener, while Dashboard management uses
   generated control-plane API clients.
-- Router AccessRuntime exclusively owns inference identity, authorization, and global
-  quota enforcement; the replaceable control plane owns product desired state and
-  publishes only compiled snapshots.
+- ExtProc's access runtime exclusively executes inference identity, authorization,
+  global quota, and settlement decisions from compiled snapshots; the replaceable
+  control plane owns product desired state and publication.
 - Every installed wire format passes the full buffered and streaming codec matrix;
   usage settlement consumes the same neutral response record before client encoding.
 - A Builder session can survive reconnect and worker replacement, use only authorized
-  dynamic Router tools, wait for an explicit immutable approval, publish a complete
-  Recipe and Entrypoint, and invoke it through ordinary discovery and inference.
+  control-plane tools, wait for an explicit immutable approval, publish a complete
+  Recipe and Entrypoint through the control plane, and invoke it through ordinary
+  Envoy discovery and inference. Router Management contains no Agent endpoints.
 
 ## Related documentation
 
