@@ -7,7 +7,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
-from validate_workflows import Workflow, load_workflows, needs
+from validate_workflows import Workflow, load_workflows, needs  # noqa: E402
 
 
 class RecipeDistributionWorkflowTests(unittest.TestCase):

@@ -72,14 +72,14 @@ func migrateInvitationSchema(ctx context.Context, db *sql.DB) error {
 		var cid, notNull, primaryKey int
 		var name, columnType string
 		var defaultValue any
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+		if scanErr := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); scanErr != nil {
 			_ = rows.Close()
-			return err
+			return scanErr
 		}
 		columns[name] = true
 	}
-	if err := rows.Close(); err != nil {
-		return err
+	if closeErr := rows.Close(); closeErr != nil {
+		return closeErr
 	}
 
 	additions := []struct {
@@ -94,8 +94,8 @@ func migrateInvitationSchema(ctx context.Context, db *sql.DB) error {
 		if columns[addition.name] {
 			continue
 		}
-		if _, err := db.ExecContext(ctx, addition.sql); err != nil {
-			return err
+		if _, execErr := db.ExecContext(ctx, addition.sql); execErr != nil {
+			return execErr
 		}
 	}
 	_, err = db.ExecContext(ctx, `UPDATE dashboard_invitations SET used_count=1 WHERE status=? AND used_count=0`, InvitationAccepted)
