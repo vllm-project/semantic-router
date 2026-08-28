@@ -291,8 +291,11 @@ def sync_pull_request(
     )
 
     current_labels = label_names(pull_request)
-    remove = current_labels.intersection(PR_STATE_LABELS) - {evaluation.state_label}
-    add = {evaluation.state_label} - current_labels
+    desired_state = (
+        {evaluation.state_label} if pull_request.get("state") == "open" else set()
+    )
+    remove = current_labels.intersection(PR_STATE_LABELS) - desired_state
+    add = desired_state - current_labels
 
     current_workgroups = current_labels.intersection(WORKGROUP_LABELS)
     desired_workgroups = {evaluation.owner_label} if evaluation.owner_label else set()
@@ -329,8 +332,7 @@ def sync_pull_request_event(client: GitHubClient, event: dict[str, Any]) -> None
     )
 
 
-def sync_open_pull_requests(client: GitHubClient, event: dict[str, Any]) -> None:
-    repo = repository_name(event)
+def sync_open_pull_requests(client: GitHubClient, repo: str) -> None:
     page = 1
     while True:
         pull_requests = (
@@ -344,3 +346,41 @@ def sync_open_pull_requests(client: GitHubClient, event: dict[str, Any]) -> None
         if len(pull_requests) < API_PAGE_SIZE:
             return
         page += 1
+
+
+def sync_labeled_closed_pull_requests(client: GitHubClient, repo: str) -> None:
+    """Strip in-flight state labels from pull requests that already closed.
+
+    A closed pull request appears in these listings only while it still
+    carries a ``pr/*`` state label, so the walk shrinks to one near-empty
+    request per state label once the backlog is clean. The numbers are
+    collected before any write because removing a label while paging
+    through its own listing would shift the pages under the walk.
+    """
+
+    numbers: set[int] = set()
+    for label in sorted(PR_STATE_LABELS):
+        page = 1
+        while True:
+            issues = (
+                client.request(
+                    f"repos/{repo}/issues?state=closed"
+                    f"&labels={quote(label, safe='')}"
+                    f"&per_page={API_PAGE_SIZE}&page={page}"
+                )
+                or []
+            )
+            numbers.update(
+                int(issue["number"]) for issue in issues if "pull_request" in issue
+            )
+            if len(issues) < API_PAGE_SIZE:
+                break
+            page += 1
+    for number in sorted(numbers):
+        sync_pull_request(client, repo, number)
+
+
+def sync_pull_request_queue(client: GitHubClient, event: dict[str, Any]) -> None:
+    repo = repository_name(event)
+    sync_open_pull_requests(client, repo)
+    sync_labeled_closed_pull_requests(client, repo)
