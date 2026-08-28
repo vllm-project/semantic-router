@@ -262,3 +262,50 @@ func TestWSOutboundFromLastRoomEvent(t *testing.T) {
 		t.Fatalf("expected replay message to be copied")
 	}
 }
+
+func TestWSCheckOrigin(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		allowed []string
+		origin  string
+		referer string
+		want    bool
+	}{
+		{name: "same origin", origin: "http://example.com", want: true},
+		{name: "cross origin", origin: "https://evil.example"},
+		{name: "cross origin wins over a same-origin referer", origin: "https://evil.example", referer: "http://example.com/rooms"},
+		{name: "null origin", origin: "null"},
+		// No Origin means a non-browser client; see auth.OriginChecker.
+		{name: "no origin at all", want: true},
+		{name: "no origin, cross-origin referer", referer: "https://evil.example/rooms", want: true},
+
+		// The allowlist must reach the handshake, not just the CSRF middleware: a
+		// split-origin frontend that is allowed to POST must also be able to connect.
+		{name: "configured origin is allowed", allowed: []string{"http://localhost:3001"}, origin: "http://localhost:3001", want: true},
+		{name: "configured origin, matched by referer", allowed: []string{"http://localhost:3001"}, referer: "http://localhost:3001/rooms", want: true},
+		{name: "an allowlist does not admit other origins", allowed: []string{"http://localhost:3001"}, origin: "https://evil.example"},
+		{name: "an allowlist does not admit a null origin", allowed: []string{"http://localhost:3001"}, origin: "null"},
+		{name: "own origin still allowed alongside an allowlist", allowed: []string{"http://localhost:3001"}, origin: "http://example.com", want: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			h := &OpenClawHandler{}
+			h.SetAllowedOrigins(tc.allowed)
+
+			r := httptest.NewRequest(http.MethodGet, "/api/openclaw/rooms/r1/ws", nil)
+			if tc.origin != "" {
+				r.Header.Set("Origin", tc.origin)
+			}
+			if tc.referer != "" {
+				r.Header.Set("Referer", tc.referer)
+			}
+			if got := h.wsUpgrader().CheckOrigin(r); got != tc.want {
+				t.Fatalf("CheckOrigin = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
