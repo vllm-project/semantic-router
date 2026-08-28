@@ -758,6 +758,7 @@ function fieldsForKey(key: RouterSystemKey): FieldConfig[] {
           placeholder: '384',
         },
         { name: 'ingestion_workers', label: 'Ingestion Workers', type: 'number', placeholder: '2' },
+        { name: 'ingestion_batch_size', label: 'Ingestion Batch Size', type: 'number', placeholder: '64' },
         routerStructuredField(key, 'supported_formats'),
         routerStructuredField(key, 'memory'),
         routerStructuredField(key, 'milvus'),

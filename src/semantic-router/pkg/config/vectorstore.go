@@ -46,6 +46,15 @@ type VectorStoreConfig struct {
 	// Default: 2
 	IngestionWorkers int `json:"ingestion_workers,omitempty" yaml:"ingestion_workers,omitempty"`
 
+	// IngestionBatchSize bounds how many chunks are embedded and inserted per
+	// batch during ingestion. Instead of embedding every chunk of a file and
+	// then inserting them all at once — which holds the whole file's text,
+	// chunks, and embedding vectors in memory simultaneously — the pipeline
+	// processes chunks in fixed-size windows. This bounds peak per-job memory to
+	// roughly O(batch_size × embedding_dimension) regardless of file size.
+	// Default: 64.
+	IngestionBatchSize int `json:"ingestion_batch_size,omitempty" yaml:"ingestion_batch_size,omitempty"`
+
 	// IngestionDrainTimeoutSeconds bounds how long shutdown waits for in-flight
 	// ingestion jobs to drain before cancelling them. This is a shutdown grace
 	// window, not a per-file ingest budget: on shutdown the pipeline stops
@@ -315,6 +324,9 @@ func (c *VectorStoreConfig) ApplyDefaults() {
 	}
 	if c.IngestionWorkers <= 0 {
 		c.IngestionWorkers = 2
+	}
+	if c.IngestionBatchSize <= 0 {
+		c.IngestionBatchSize = 64
 	}
 	if c.IngestionDrainTimeoutSeconds <= 0 {
 		c.IngestionDrainTimeoutSeconds = 30

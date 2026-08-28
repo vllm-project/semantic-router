@@ -552,6 +552,7 @@ export interface VectorStoreConfig {
   embedding_model?: string
   embedding_dimension?: number
   ingestion_workers?: number
+  ingestion_batch_size?: number
   supported_formats?: string[]
   milvus?: VectorStoreMilvusConfig
   memory?: VectorStoreMemoryConfig
