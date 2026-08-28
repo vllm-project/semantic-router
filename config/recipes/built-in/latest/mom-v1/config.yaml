@@ -1518,12 +1518,12 @@ recipes:
         operator: OR
     - algorithm:
         type: static
-      description: Finish the current tool turn without opening another tool or model loop.
+      description: Continue the current tool turn on a stable model lane until the model produces a final answer.
       name: resume
       plugins:
       - configuration:
           enabled: true
-          mode: none
+          mode: passthrough
         type: tools
       priority: 600
       rules:

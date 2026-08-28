@@ -742,13 +742,13 @@ RECIPE accuracy (description = "An accuracy-first Recipe for complex reasoning a
     ALGORITHM static
   }
 
-  ROUTE resume (description = "Finish the current tool turn without opening another tool or model loop.") {
+  ROUTE resume (description = "Continue the current tool turn on a stable model lane until the model produces a final answer.") {
     PRIORITY 600
     WHEN conversation("accuracy_active_tool_loop") AND conversation("accuracy_has_tool_result")
     ALGORITHM static
     PLUGIN tools {
       enabled: true
-      mode: "none"
+      mode: "passthrough"
     }
   }
 
