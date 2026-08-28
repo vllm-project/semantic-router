@@ -94,16 +94,17 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	t.Run("falls back to query token", func(t *testing.T) {
+	// Inverted for #2465: this asserted the query token was returned.
+	t.Run("ignores a well-formed query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 
-		if token := extractAccessToken(req); token != "query-token" {
-			t.Fatalf("extractAccessToken() = %q, want query-token", token)
+		if token := extractAccessToken(req); token != "" {
+			t.Fatalf("extractAccessToken() = %q, want empty", token)
 		}
 	})
 
-	t.Run("falls back to cookie token before query token", func(t *testing.T) {
+	t.Run("prefers the cookie token and ignores the query token", func(t *testing.T) {
 		t.Parallel()
 		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=query-token", nil)
 		req.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: "cookie-token"})
@@ -124,12 +125,18 @@ func TestExtractAccessToken(t *testing.T) {
 		}
 	})
 
-	t.Run("rejects malformed query token", func(t *testing.T) {
+	// "Empty" is not enough on its own: assert the source too, or a reinstated query
+	// branch could pass this silently.
+	t.Run("reports no source for any query token shape", func(t *testing.T) {
 		t.Parallel()
-		req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken=invalid%20token", nil)
 
-		if token := extractAccessToken(req); token != "" {
-			t.Fatalf("extractAccessToken() = %q, want empty", token)
+		for _, raw := range []string{"query-token", "invalid%20token", ""} {
+			req := httptest.NewRequest(http.MethodGet, "/embedded/grafana/?authToken="+raw, nil)
+
+			token, source := extractAccessTokenWithSource(req)
+			if token != "" || source != tokenSourceNone {
+				t.Fatalf("authToken=%q: got (%q, %v), want (\"\", tokenSourceNone)", raw, token, source)
+			}
 		}
 	})
 }
