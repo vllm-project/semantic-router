@@ -24,6 +24,7 @@ var BaselineRouterContract = []string{
 	"decision-priority-selection",
 	"plugin-chain-execution",
 	"tool-selection",
+	"tool-selection-anthropic",
 	"rule-condition-logic",
 	"decision-fallback-behavior",
 	"plugin-config-variations",

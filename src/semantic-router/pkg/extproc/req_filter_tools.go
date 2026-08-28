@@ -21,54 +21,6 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/tools"
 )
 
-// applyToolSelectionBeforeDispatch runs semantic tool selection once on the
-// protocol-neutral IR before provider translation or backend dispatch.
-func (r *OpenAIRouter) applyToolSelectionBeforeDispatch(
-	openAIRequest *openai.ChatCompletionNewParams,
-	response *ext_proc.ProcessingResponse,
-	ctx *RequestContext,
-) {
-	var anthropicWire []byte
-	if ctx != nil && ctx.ClientProtocol == config.ClientProtocolAnthropic {
-		anthropicWire = append([]byte(nil), ctx.workingRequestBody()...)
-	}
-	r.handleToolSelectionForRequest(openAIRequest, response, ctx)
-	if len(anthropicWire) > 0 {
-		ctx.setWorkingRequestBody(anthropicWire)
-		return
-	}
-	persistSelectedToolsToWorkingBody(openAIRequest, ctx)
-}
-
-// persistSelectedToolsToWorkingBody copies the IR's selected tools onto the
-// OpenAI-shaped working body so specified/auto dispatch can emit them. Do not
-// derive this from the temporary ExtProc stub: handleToolSelectionForRequest
-// may filter the IR without writing a body mutation.
-func persistSelectedToolsToWorkingBody(
-	openAIRequest *openai.ChatCompletionNewParams,
-	ctx *RequestContext,
-) {
-	if ctx == nil || openAIRequest == nil {
-		return
-	}
-	serializedRequest, err := serializeOpenAIRequestWithStream(openAIRequest, ctx.ExpectStreamingResponse)
-	if err != nil {
-		logging.Errorf("Error serializing selected tools before dispatch: %v", err)
-		return
-	}
-	base := ctx.workingRequestBody()
-	if len(base) == 0 {
-		ctx.setWorkingRequestBody(serializedRequest)
-		return
-	}
-	modifiedBody, err := mergeSerializedToolFields(base, serializedRequest, toolFieldsForUpdate(ctx))
-	if err != nil {
-		logging.Errorf("Error merging selected tools before dispatch: %v", err)
-		return
-	}
-	ctx.setWorkingRequestBody(modifiedBody)
-}
-
 // handleToolSelectionForRequest handles tool selection for the request.
 func (r *OpenAIRouter) handleToolSelectionForRequest(openAIRequest *openai.ChatCompletionNewParams, response *ext_proc.ProcessingResponse, ctx *RequestContext) {
 	userContent, nonUserMessages := extractUserAndNonUserContent(openAIRequest)
@@ -453,6 +405,13 @@ func emitToolObservability(response **ext_proc.ProcessingResponse, ctx *RequestC
 	}
 	if !debugHeadersRequested(ctx) {
 		return
+	}
+	if ctx != nil {
+		ctx.ToolObservability = &toolObservability{
+			Strategy:   strategyID,
+			Confidence: strconv.FormatFloat(float64(confidence), 'f', 4, 32),
+			LatencyMs:  strconv.FormatInt(latency.Milliseconds(), 10),
+		}
 	}
 	commonResponse := ensureRequestBodyCommonResponse(response)
 	if commonResponse.HeaderMutation == nil {

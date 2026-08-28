@@ -108,6 +108,11 @@ type RequestContext struct {
 	// and header builder can replay them on the outbound side.
 	AnthropicPassthrough *anthropic.AnthropicPassthrough
 
+	// ToolObservability holds x-vsr-tools-* values captured during pre-dispatch
+	// selection so the final ExtProc response can emit them after dispatch
+	// replaces the temporary selection response.
+	ToolObservability *toolObservability
+
 	// Semi-streaming body handler (non-nil when Envoy sends STREAMED body chunks)
 	StreamedBody          *StreamedBodyHandler
 	FullDuplexRequestBody bool // true when the data plane negotiated FULL_DUPLEX_STREAMED

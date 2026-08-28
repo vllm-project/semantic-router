@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/packages/param"
 	"github.com/openai/openai-go"
+	"github.com/tidwall/gjson"
 
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/observability/logging"
 )
@@ -101,6 +102,63 @@ func applyToolsCacheControl(params *anthropic.MessageNewParams, pt *AnthropicPas
 			continue
 		}
 	}
+}
+
+// RemapToolsCacheControl rewrites tools[i] cache_control keys to follow the
+// selected tool order. Markers whose original tool was dropped are discarded.
+func RemapToolsCacheControl(pt *AnthropicPassthrough, originalNames, selectedNames []string) {
+	if pt == nil || len(pt.CacheControl) == 0 {
+		return
+	}
+	newIndex := make(map[string]int, len(selectedNames))
+	for i, name := range selectedNames {
+		if name == "" {
+			continue
+		}
+		if _, exists := newIndex[name]; !exists {
+			newIndex[name] = i
+		}
+	}
+	updated := make(map[string]CacheControlSpec, len(pt.CacheControl))
+	for key, spec := range pt.CacheControl {
+		oldIdx, ok := toolsCacheIndex(key)
+		if !ok {
+			updated[key] = spec
+			continue
+		}
+		if oldIdx < 0 || oldIdx >= len(originalNames) {
+			continue
+		}
+		idx, found := newIndex[originalNames[oldIdx]]
+		if !found {
+			continue
+		}
+		updated[fmt.Sprintf("tools[%d]", idx)] = spec
+	}
+	pt.CacheControl = updated
+}
+
+// ToolNamesFromBody returns Anthropic tool names in wire order.
+func ToolNamesFromBody(body []byte) []string {
+	var names []string
+	gjson.GetBytes(body, "tools").ForEach(func(_, tool gjson.Result) bool {
+		if name := tool.Get("name").String(); name != "" {
+			names = append(names, name)
+		}
+		return true
+	})
+	return names
+}
+
+func toolsCacheIndex(key string) (int, bool) {
+	var idx int
+	if _, err := fmt.Sscanf(key, "tools[%d]", &idx); err != nil {
+		return 0, false
+	}
+	if key != fmt.Sprintf("tools[%d]", idx) {
+		return 0, false
+	}
+	return idx, true
 }
 
 // applyMessagesCacheControl attaches per-content-block cache_control markers

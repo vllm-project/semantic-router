@@ -32,6 +32,8 @@ var _ = Describe("emitToolObservability", func() {
 		Expect(headerMap[headers.VSRToolsStrategy]).To(Equal("default"))
 		Expect(headerMap[headers.VSRToolsConfidence]).To(Equal("0.8700"))
 		Expect(headerMap[headers.VSRToolsLatencyMs]).To(Equal("4"))
+		Expect(debugCtx.ToolObservability).NotTo(BeNil())
+		Expect(debugCtx.ToolObservability.Strategy).To(Equal("default"))
 	})
 
 	It("omits the headers on the default (non-debug) surface", func() {
