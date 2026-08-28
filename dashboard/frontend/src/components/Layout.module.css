@@ -77,6 +77,19 @@
   box-sizing: border-box;
 }
 
+.navIcon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  opacity: 0.78;
+  transition: opacity var(--transition-fast);
+}
+
+.navLink:hover .navIcon,
+.navLinkActive .navIcon {
+  opacity: 1;
+}
+
 .navLink:hover {
   color: #f5f5f7;
   background: transparent;
@@ -132,6 +145,8 @@ button.navLink {
 }
 
 .dropdownArrow {
+  width: 12px;
+  height: 12px;
   margin-left: 0.25rem;
   transition: transform var(--transition-fast);
   opacity: 0.6;
@@ -251,6 +266,13 @@ button.navLink {
   text-align: left;
 }
 
+.mobileNavIcon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  opacity: 0.82;
+}
+
 .mobileNavLink:hover,
 .mobileNavLink.active {
   color: var(--color-text);
@@ -309,6 +331,19 @@ button.navLink {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
+}
+
+.mobileNavSectionTitle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.mobileNavChevron {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  opacity: 0.68;
 }
 
 .mobileNavActiveMarker {

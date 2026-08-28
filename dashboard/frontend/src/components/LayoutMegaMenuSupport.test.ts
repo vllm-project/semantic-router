@@ -42,6 +42,7 @@ describe('layout mega-menu geometry', () => {
         items: Array.from({ length: 2 }, (_, itemIndex) => ({
           kind: 'route' as const,
           label: `Item ${sectionIndex + 1}-${itemIndex + 1}`,
+          icon: 'model' as const,
           to: `/item-${sectionIndex + 1}-${itemIndex + 1}`,
         })),
       })),

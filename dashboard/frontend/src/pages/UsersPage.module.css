@@ -435,6 +435,9 @@
 
 .viewTab,
 .viewTabActive {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
   min-height: 34px;
   padding: 0 0.8rem;
   border: 0;
@@ -443,6 +446,13 @@
   color: var(--color-text-secondary);
   font-size: 0.76rem;
   font-weight: 650;
+}
+
+.viewTab svg,
+.viewTabActive svg {
+  width: 14px;
+  height: 14px;
+  opacity: 0.78;
 }
 
 .viewTabActive {

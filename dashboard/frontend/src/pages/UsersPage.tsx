@@ -446,14 +446,16 @@ const UsersPage: React.FC = () => {
               className={!showAudit ? styles.viewTabActive : styles.viewTab}
               onClick={() => setShowAudit(false)}
             >
-              Users
+              <ProductIcon name="user" aria-hidden="true" />
+              <span>Users</span>
             </button>
             <button
               type="button"
               className={showAudit ? styles.viewTabActive : styles.viewTab}
               onClick={() => setShowAudit(true)}
             >
-              Audit log
+              <ProductIcon name="audit" aria-hidden="true" />
+              <span>Audit log</span>
             </button>
           </nav>
         ) : null}

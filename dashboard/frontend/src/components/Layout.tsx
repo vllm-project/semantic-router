@@ -6,6 +6,7 @@ import LayoutAccountControl from './LayoutAccountControl'
 import LayoutMegaMenu from './LayoutMegaMenu'
 import LayoutMobileNavigation from './LayoutMobileNavigation'
 import PlatformBranding from './PlatformBranding'
+import ProductIcon, { type ProductIconName } from './ProductIcon'
 import {
   ANALYZE_MENU_CATEGORIES,
   BUILD_MENU_CATEGORIES,
@@ -199,6 +200,7 @@ const Layout: React.FC<LayoutProps> = ({
       onFocus={() => void preloadDashboardRoute(link.to)}
       onPointerEnter={() => void preloadDashboardRoute(link.to)}
     >
+      <ProductIcon name={link.icon} className={styles.navIcon} />
       {link.label}
     </NavLink>
   )
@@ -206,6 +208,7 @@ const Layout: React.FC<LayoutProps> = ({
   const renderDesktopDropdown = (
     dropdown: LayoutDropdownKey,
     label: string,
+    icon: ProductIconName,
     categories: LayoutMenuCategory[],
     active: boolean,
     activeCategoryKey?: string,
@@ -251,19 +254,12 @@ const Layout: React.FC<LayoutProps> = ({
             }
           }}
         >
+          <ProductIcon name={icon} className={styles.navIcon} />
           {label}
-          <svg
-            width="12"
-            height="12"
-            viewBox="0 0 12 12"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
+          <ProductIcon
+            name="chevron-down"
             className={`${styles.dropdownArrow} ${isOpen ? styles.dropdownArrowOpen : ''}`}
-            aria-hidden="true"
-          >
-            <path d="M3 4.5L6 7.5L9 4.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          />
         </button>
 
         {isOpen ? (
@@ -349,6 +345,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {renderDesktopDropdown(
                   'build',
                   'Build',
+                  'mixture',
                   buildMenuCategories,
                   isBuildActive,
                   activeBuildCategory,
@@ -356,6 +353,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {renderDesktopDropdown(
                   'analyze',
                   'Analyze',
+                  'chart',
                   analyzeMenuCategories,
                   isAnalyzeActive,
                   activeAnalyzeCategory,
@@ -363,6 +361,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {renderDesktopDropdown(
                   'operate',
                   'System',
+                  'status',
                   operateMenuCategories,
                   isOperateActive,
                   activeOperateCategory,

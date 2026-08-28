@@ -66,7 +66,7 @@ describe('LayoutMobileNavigation contract', () => {
       ),
     )
 
-    expect(markup).not.toContain('>Build<')
-    expect(markup).toContain('>System<')
+    expect(markup).not.toContain('Build</span>')
+    expect(markup).toContain('System</span>')
   })
 })

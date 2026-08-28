@@ -1,4 +1,5 @@
 import { FLEET_SIM_NAV_ITEMS } from '../utils/fleetSimApi'
+import type { ProductIconName } from './ProductIcon'
 
 export type LayoutDropdownKey = 'build' | 'analyze' | 'operate'
 
@@ -14,6 +15,7 @@ export type LayoutConfigSection =
 type LayoutRouteMenuItem = {
   kind: 'route'
   label: string
+  icon: ProductIconName
   to: string
   matchMode?: 'exact' | 'prefix'
   activePathPattern?: RegExp
@@ -22,6 +24,7 @@ type LayoutRouteMenuItem = {
 type LayoutConfigMenuItem = {
   kind: 'config'
   label: string
+  icon: ProductIconName
   configSection: LayoutConfigSection
 }
 
@@ -42,13 +45,14 @@ export interface LayoutMenuCategory {
 
 export interface LayoutNavLink {
   label: string
+  icon: ProductIconName
   to: string
   matchMode?: 'exact' | 'prefix'
 }
 
 export const PRIMARY_NAV_LINKS: LayoutNavLink[] = [
-  { label: 'Dashboard', to: '/dashboard' },
-  { label: 'Playground', to: '/playground' },
+  { label: 'Dashboard', icon: 'dashboard', to: '/dashboard' },
+  { label: 'Playground', icon: 'playground', to: '/playground' },
 ]
 
 export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
@@ -61,10 +65,11 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Models',
         description: 'Connect models and compose public model endpoints.',
         items: [
-          { kind: 'config', label: 'Models', configSection: 'models' },
+          { kind: 'config', label: 'Models', icon: 'model', configSection: 'models' },
           {
             kind: 'config',
             label: 'Mixture-of-Models',
+            icon: 'mixture',
             configSection: 'entrypoints-recipes',
           },
         ],
@@ -73,17 +78,22 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Intelligence',
         description: 'Shape the evidence and decisions behind every route.',
         items: [
-          { kind: 'config', label: 'Signals', configSection: 'signals' },
-          { kind: 'config', label: 'Projections', configSection: 'projections' },
-          { kind: 'config', label: 'Decisions', configSection: 'decisions' },
+          { kind: 'config', label: 'Signals', icon: 'signal', configSection: 'signals' },
+          {
+            kind: 'config',
+            label: 'Projections',
+            icon: 'projection',
+            configSection: 'projections',
+          },
+          { kind: 'config', label: 'Decisions', icon: 'decision', configSection: 'decisions' },
         ],
       },
       {
         title: 'Build',
         description: 'See the whole system or edit its configuration.',
         items: [
-          { kind: 'route', label: 'Brain', to: '/topology' },
-          { kind: 'route', label: 'Builder', to: '/builder' },
+          { kind: 'route', label: 'Brain', icon: 'topology', to: '/topology' },
+          { kind: 'route', label: 'Builder', icon: 'code', to: '/builder' },
         ],
       },
     ],
@@ -96,17 +106,25 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Inspect',
         description: 'Understand what the router selected and why.',
-        items: [{ kind: 'route', label: 'Insights', to: '/insights', matchMode: 'prefix' }],
+        items: [
+          {
+            kind: 'route',
+            label: 'Insights',
+            icon: 'insight',
+            to: '/insights',
+            matchMode: 'prefix',
+          },
+        ],
       },
       {
         title: 'Evaluate',
         description: 'Benchmark signal and system-level behavior.',
-        items: [{ kind: 'route', label: 'Evaluation', to: '/evaluation' }],
+        items: [{ kind: 'route', label: 'Evaluation', icon: 'evaluation', to: '/evaluation' }],
       },
       {
         title: 'Tune',
         description: 'Prepare and validate the router model stack.',
-        items: [{ kind: 'route', label: 'ML Setup', to: '/ml-setup' }],
+        items: [{ kind: 'route', label: 'ML Setup', icon: 'compute', to: '/ml-setup' }],
       },
     ],
   },
@@ -122,11 +140,12 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
           {
             kind: 'route',
             label: 'Bases',
+            icon: 'database',
             to: '/knowledge-bases/bases',
             activePathPattern: /^\/knowledge-bases\/[^/]+\/map\/?$/,
           },
-          { kind: 'route', label: 'Groups', to: '/knowledge-bases/groups' },
-          { kind: 'route', label: 'Labels', to: '/knowledge-bases/labels' },
+          { kind: 'route', label: 'Groups', icon: 'database', to: '/knowledge-bases/groups' },
+          { kind: 'route', label: 'Labels', icon: 'label', to: '/knowledge-bases/labels' },
         ],
       },
     ],
@@ -140,8 +159,8 @@ export const BUILD_MENU_CATEGORIES: LayoutMenuCategory[] = [
         title: 'Integrations',
         description: 'Extend the control plane with tools and agent runtimes.',
         items: [
-          { kind: 'config', label: 'MCP Servers', configSection: 'mcp' },
-          { kind: 'route', label: 'OpenClaw', to: '/openclaw' },
+          { kind: 'config', label: 'MCP Servers', icon: 'tool', configSection: 'mcp' },
+          { kind: 'route', label: 'OpenClaw', icon: 'claw', to: '/openclaw' },
         ],
       },
     ],
@@ -160,6 +179,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: FLEET_SIM_NAV_ITEMS.slice(0, 2).map((item) => ({
           kind: 'route' as const,
           label: item.label,
+          icon: 'fleet' as const,
           to: item.to,
         })),
       },
@@ -169,6 +189,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: FLEET_SIM_NAV_ITEMS.slice(2, 3).map((item) => ({
           kind: 'route' as const,
           label: item.label,
+          icon: 'fleet' as const,
           to: item.to,
         })),
       },
@@ -178,6 +199,7 @@ export const ANALYZE_MENU_CATEGORIES: LayoutMenuCategory[] = [
         items: FLEET_SIM_NAV_ITEMS.slice(3).map((item) => ({
           kind: 'route' as const,
           label: item.label,
+          icon: 'fleet' as const,
           to: item.to,
         })),
       },
@@ -194,12 +216,12 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Health',
         description: 'Track router services and loaded model readiness.',
-        items: [{ kind: 'route', label: 'Status', to: '/status' }],
+        items: [{ kind: 'route', label: 'Status', icon: 'status', to: '/status' }],
       },
       {
         title: 'Diagnostics',
         description: 'Read runtime events and investigate failures.',
-        items: [{ kind: 'route', label: 'Logs', to: '/logs' }],
+        items: [{ kind: 'route', label: 'Logs', icon: 'logs', to: '/logs' }],
       },
     ],
   },
@@ -211,12 +233,12 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Metrics',
         description: 'Open the operational dashboard for fleet and router telemetry.',
-        items: [{ kind: 'route', label: 'Grafana', to: '/monitoring' }],
+        items: [{ kind: 'route', label: 'Grafana', icon: 'chart', to: '/monitoring' }],
       },
       {
         title: 'Tracing',
         description: 'Inspect request paths across the serving system.',
-        items: [{ kind: 'route', label: 'Tracing', to: '/tracing' }],
+        items: [{ kind: 'route', label: 'Tracing', icon: 'trace', to: '/tracing' }],
       },
     ],
   },
@@ -228,12 +250,19 @@ export const OPERATE_MENU_CATEGORIES: LayoutMenuCategory[] = [
       {
         title: 'Platform',
         description: 'Configure router-wide defaults and infrastructure bindings.',
-        items: [{ kind: 'config', label: 'Global Config', configSection: 'global-config' }],
+        items: [
+          {
+            kind: 'config',
+            label: 'Global Config',
+            icon: 'settings',
+            configSection: 'global-config',
+          },
+        ],
       },
       {
         title: 'Access',
         description: 'Administer dashboard identities and roles.',
-        items: [{ kind: 'route', label: 'Users', to: '/users' }],
+        items: [{ kind: 'route', label: 'Users', icon: 'user', to: '/users' }],
       },
     ],
   },

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 import type { RecipeProbeRunPlan } from '../types/recipe'
 import { createProbePlaygroundInvocation } from '../types/playgroundInvocation'
+import ProductIcon, { type ProductIconName } from '../components/ProductIcon'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageMoMProbesPanel from './ConfigPageMoMProbesPanel'
 import ConfigPageMoMRoutingPanel from './ConfigPageMoMRoutingPanel'
@@ -21,10 +22,10 @@ interface ConfigPageEntrypointsRecipesSectionProps {
 
 export type MixtureWorkspaceView = 'recipes' | 'models' | 'probes'
 
-const VIEWS: Array<{ id: MixtureWorkspaceView; label: string }> = [
-  { id: 'models', label: 'Models' },
-  { id: 'recipes', label: 'Recipes' },
-  { id: 'probes', label: 'Probes' },
+const VIEWS: Array<{ id: MixtureWorkspaceView; label: string; icon: ProductIconName }> = [
+  { id: 'models', label: 'Models', icon: 'mixture' },
+  { id: 'recipes', label: 'Recipes', icon: 'code' },
+  { id: 'probes', label: 'Probes', icon: 'play' },
 ]
 
 export default function ConfigPageEntrypointsRecipesSection({
@@ -81,7 +82,8 @@ export default function ConfigPageEntrypointsRecipesSection({
             onClick={() => setActiveView(view.id)}
             onKeyDown={(event) => handleTabKeyDown(event, index)}
           >
-            {view.label}
+            <ProductIcon name={view.icon} />
+            <span>{view.label}</span>
           </button>
         ))}
       </div>
