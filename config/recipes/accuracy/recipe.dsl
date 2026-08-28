@@ -23,6 +23,11 @@ SIGNAL context accuracy_long_context {
   max_tokens: "1M"
 }
 
+SIGNAL conversation accuracy_has_images {
+  description: "Request contains at least one image content part."
+  feature: { source: { type: "image_content" }, type: "exists" }
+}
+
 # =============================================================================
 # MODELS
 # =============================================================================
@@ -43,6 +48,11 @@ MODEL gpt55-worker {
   tags: ["deployment:openrouter", "role:worker"]
   quality_score: 0.94
   modality: "text"
+}
+
+MODEL local/omni {
+  capabilities: ["chat", "image_understanding", "multimodal", "omni", "text", "vision"]
+  modality: "omni"
 }
 
 MODEL opus48-worker {
@@ -66,6 +76,13 @@ MODEL qwen-coordinator {
 # =============================================================================
 # ROUTES
 # =============================================================================
+
+ROUTE omni (description = "Understand image-bearing requests with the dedicated visual-language model.") {
+  PRIORITY 200
+  WHEN conversation("accuracy_has_images")
+  MODEL "local/omni" (reasoning = false)
+  ALGORITHM static
+}
 
 ROUTE accuracy_workflow (description = "Decompose evidence-gathering and tool-heavy tasks into a bounded parallel workflow.") {
   PRIORITY 100

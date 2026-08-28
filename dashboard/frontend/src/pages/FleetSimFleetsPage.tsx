@@ -63,7 +63,9 @@ export default function FleetSimFleetsPage() {
   }, [])
 
   const updatePool = (index: number, patch: Partial<PoolConfig>) => {
-    setPools((current) => current.map((pool, poolIndex) => (poolIndex === index ? { ...pool, ...patch } : pool)))
+    setPools((current) =>
+      current.map((pool, poolIndex) => (poolIndex === index ? { ...pool, ...patch } : pool)),
+    )
   }
 
   const addPool = () => {
@@ -117,13 +119,15 @@ export default function FleetSimFleetsPage() {
     }
   }
 
-  const gpuChoices = Array.from(new Set([...gpuProfiles.map((profile) => profile.name), ...GPU_OPTIONS]))
+  const gpuChoices = Array.from(
+    new Set([...gpuProfiles.map((profile) => profile.name), ...GPU_OPTIONS]),
+  )
   const draftTotalGpus = pools.reduce((sum, pool) => sum + pool.n_gpus, 0)
   const draftCostPerHour = pools.reduce((sum, pool) => {
     const profile = gpuProfiles.find((candidate) => candidate.name === pool.gpu)
     return sum + (profile?.cost_per_hr || 0) * pool.n_gpus
   }, 0)
-  const draftAnnualCostKusd = draftCostPerHour * 24 * 365 / 1000
+  const draftAnnualCostKusd = (draftCostPerHour * 24 * 365) / 1000
   const largestContext = pools.reduce((current, pool) => Math.max(current, pool.max_ctx), 0)
   const filteredFleets = useMemo(
     () =>
@@ -172,7 +176,6 @@ export default function FleetSimFleetsPage() {
     <FleetSimSurfaceLayout
       title="Fleets"
       description="Build reusable GPU fleet plans that teams can replay, compare, and stress-test from the dashboard."
-      currentPath="/fleet-sim/fleets"
       meta={[
         { label: 'GPU profiles', value: formatNumber(gpuProfiles.length) },
         { label: 'Saved fleets', value: formatNumber(fleets.length) },
@@ -185,7 +188,10 @@ export default function FleetSimFleetsPage() {
             <div>
               <span className={styles.sectionKicker}>Composer</span>
               <h2 className={styles.sectionTitle}>Fleet Composer</h2>
-              <p className={styles.sectionDescription}>Compose the pools, choose a routing strategy, and save a fleet definition your team can reuse in runs.</p>
+              <p className={styles.sectionDescription}>
+                Compose the pools, choose a routing strategy, and save a fleet definition your team
+                can reuse in runs.
+              </p>
             </div>
           </div>
           <div className={styles.formStack}>
@@ -193,12 +199,20 @@ export default function FleetSimFleetsPage() {
               <div className={styles.formGrid}>
                 <label className={styles.field}>
                   <span className={styles.fieldLabel}>Fleet name</span>
-                  <input className={styles.input} value={fleetName} onChange={(event) => setFleetName(event.target.value)} />
+                  <input
+                    className={styles.input}
+                    value={fleetName}
+                    onChange={(event) => setFleetName(event.target.value)}
+                  />
                 </label>
                 {routerType === 'compress_route' ? (
                   <label className={styles.field}>
                     <span className={styles.fieldLabel}>Compress gamma</span>
-                    <input className={styles.input} value={compressGamma} onChange={(event) => setCompressGamma(event.target.value)} />
+                    <input
+                      className={styles.input}
+                      value={compressGamma}
+                      onChange={(event) => setCompressGamma(event.target.value)}
+                    />
                   </label>
                 ) : null}
               </div>
@@ -207,7 +221,10 @@ export default function FleetSimFleetsPage() {
             <div className={styles.fieldSection}>
               <div>
                 <span className={styles.sectionKicker}>Routing</span>
-                <p className={styles.sectionDescription}>Choose the behavior operators should assume when this fleet is replayed in a planning run.</p>
+                <p className={styles.sectionDescription}>
+                  Choose the behavior operators should assume when this fleet is replayed in a
+                  planning run.
+                </p>
               </div>
               <div className={styles.choiceGrid}>
                 {ROUTER_OPTIONS.map((option) => (
@@ -218,7 +235,9 @@ export default function FleetSimFleetsPage() {
                     onClick={() => setRouterType(option.value)}
                   >
                     <span className={styles.choiceButtonTitle}>{option.title}</span>
-                    <span className={styles.choiceButtonDescription}>{describeRouterType(option.value)}</span>
+                    <span className={styles.choiceButtonDescription}>
+                      {describeRouterType(option.value)}
+                    </span>
                   </button>
                 ))}
               </div>
@@ -229,7 +248,10 @@ export default function FleetSimFleetsPage() {
                 <div>
                   <span className={styles.sectionKicker}>Pools</span>
                   <h3 className={styles.sectionTitle}>GPU pools</h3>
-                  <p className={styles.sectionDescription}>Keep each pool focused: one hardware tier, one capacity target, one max context envelope.</p>
+                  <p className={styles.sectionDescription}>
+                    Keep each pool focused: one hardware tier, one capacity target, one max context
+                    envelope.
+                  </p>
                 </div>
               </div>
               <div className={styles.poolEditorList}>
@@ -238,20 +260,35 @@ export default function FleetSimFleetsPage() {
                     <div className={styles.poolEditorHeader}>
                       <div>
                         <span className={styles.poolEditorEyebrow}>Pool {index + 1}</span>
-                        <h4 className={styles.poolEditorTitle}>{pool.pool_id || `Pool ${index + 1}`}</h4>
+                        <h4 className={styles.poolEditorTitle}>
+                          {pool.pool_id || `Pool ${index + 1}`}
+                        </h4>
                       </div>
-                      <button type="button" className={styles.dangerButton} onClick={() => removePool(index)} disabled={pools.length === 1}>
+                      <button
+                        type="button"
+                        className={styles.dangerButton}
+                        onClick={() => removePool(index)}
+                        disabled={pools.length === 1}
+                      >
                         Remove
                       </button>
                     </div>
                     <div className={styles.poolEditorGrid}>
                       <label className={styles.field}>
                         <span className={styles.fieldLabel}>Pool label</span>
-                        <input className={styles.input} value={pool.pool_id} onChange={(event) => updatePool(index, { pool_id: event.target.value })} />
+                        <input
+                          className={styles.input}
+                          value={pool.pool_id}
+                          onChange={(event) => updatePool(index, { pool_id: event.target.value })}
+                        />
                       </label>
                       <label className={styles.field}>
                         <span className={styles.fieldLabel}>GPU</span>
-                        <select className={styles.select} value={pool.gpu} onChange={(event) => updatePool(index, { gpu: event.target.value })}>
+                        <select
+                          className={styles.select}
+                          value={pool.gpu}
+                          onChange={(event) => updatePool(index, { gpu: event.target.value })}
+                        >
                           {gpuChoices.map((gpu) => (
                             <option key={gpu} value={gpu}>
                               {formatGpuLabel(gpu)}
@@ -266,7 +303,9 @@ export default function FleetSimFleetsPage() {
                           type="number"
                           min={1}
                           value={pool.n_gpus}
-                          onChange={(event) => updatePool(index, { n_gpus: Number(event.target.value) })}
+                          onChange={(event) =>
+                            updatePool(index, { n_gpus: Number(event.target.value) })
+                          }
                         />
                       </label>
                       <label className={styles.field}>
@@ -276,7 +315,9 @@ export default function FleetSimFleetsPage() {
                           type="number"
                           min={512}
                           value={pool.max_ctx}
-                          onChange={(event) => updatePool(index, { max_ctx: Number(event.target.value) })}
+                          onChange={(event) =>
+                            updatePool(index, { max_ctx: Number(event.target.value) })
+                          }
                         />
                       </label>
                     </div>
@@ -290,11 +331,17 @@ export default function FleetSimFleetsPage() {
             <button type="button" className={styles.secondaryButton} onClick={addPool}>
               Add Pool
             </button>
-            <button type="button" className={styles.primaryButton} onClick={() => void handleCreateFleet()}>
+            <button
+              type="button"
+              className={styles.primaryButton}
+              onClick={() => void handleCreateFleet()}
+            >
               Save Fleet
             </button>
           </div>
-          {message ? <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p> : null}
+          {message ? (
+            <p className={`${styles.message} ${styles.messageSuccess}`}>{message}</p>
+          ) : null}
           {error ? <p className={`${styles.message} ${styles.messageError}`}>{error}</p> : null}
         </section>
 
@@ -306,7 +353,9 @@ export default function FleetSimFleetsPage() {
           </div>
           <div className={styles.summaryPillRow}>
             <span className={styles.summaryPill}>{formatRouterType(routerType)}</span>
-            {routerType === 'compress_route' ? <span className={styles.summaryPill}>Gamma {compressGamma}</span> : null}
+            {routerType === 'compress_route' ? (
+              <span className={styles.summaryPill}>Gamma {compressGamma}</span>
+            ) : null}
           </div>
           <dl className={styles.summaryList}>
             <div className={styles.summaryItem}>
@@ -330,7 +379,9 @@ export default function FleetSimFleetsPage() {
           <div className={styles.fieldSection}>
             <div>
               <span className={styles.sectionKicker}>Reference</span>
-              <p className={styles.sectionDescription}>Calibrated hardware assumptions available for this workspace.</p>
+              <p className={styles.sectionDescription}>
+                Calibrated hardware assumptions available for this workspace.
+              </p>
             </div>
             <div className={styles.profileGrid}>
               {gpuProfiles.map((profile) => (
@@ -344,11 +395,15 @@ export default function FleetSimFleetsPage() {
                   </div>
                   <div className={styles.profileMetricRow}>
                     <span className={styles.profileMetricLabel}>Slots</span>
-                    <span className={styles.profileMetricValue}>{formatNumber(profile.max_slots)}</span>
+                    <span className={styles.profileMetricValue}>
+                      {formatNumber(profile.max_slots)}
+                    </span>
                   </div>
                   <div className={styles.profileMetricRow}>
                     <span className={styles.profileMetricLabel}>KV blocks</span>
-                    <span className={styles.profileMetricValue}>{formatNumber(profile.total_kv_blks)}</span>
+                    <span className={styles.profileMetricValue}>
+                      {formatNumber(profile.total_kv_blks)}
+                    </span>
                   </div>
                   <div className={styles.profileMetricRow}>
                     <span className={styles.profileMetricLabel}>Chunk</span>
@@ -375,7 +430,12 @@ export default function FleetSimFleetsPage() {
           data={filteredFleets}
           keyExtractor={(row) => row.id}
           onDelete={setFleetPendingDelete}
-          pagination={{ pageSize: 25, pageSizeOptions: [25, 50, 100], itemLabel: 'fleets', resetKey: search }}
+          pagination={{
+            pageSize: 25,
+            pageSizeOptions: [25, 50, 100],
+            itemLabel: 'fleets',
+            resetKey: search,
+          }}
           expandable
           isRowExpanded={(row) => expandedFleetIDs.has(row.id)}
           onToggleExpand={(row) => {
@@ -399,7 +459,9 @@ export default function FleetSimFleetsPage() {
                 </div>
                 <div className={styles.inlineDetailCell}>
                   <span className={styles.inlineDetailLabel}>Annual cost</span>
-                  <span className={styles.inlineDetailValue}>{formatMoneyKusd(row.estimated_annual_cost_kusd)}</span>
+                  <span className={styles.inlineDetailValue}>
+                    {formatMoneyKusd(row.estimated_annual_cost_kusd)}
+                  </span>
                 </div>
               </div>
               <div className={styles.inlineDetailRows}>
@@ -407,8 +469,12 @@ export default function FleetSimFleetsPage() {
                   <div key={pool.pool_id} className={styles.inlineDetailRow}>
                     <span className={styles.inlineDetailValue}>{pool.pool_id}</span>
                     <span className={styles.inlineDetailText}>{formatGpuLabel(pool.gpu)}</span>
-                    <span className={styles.inlineDetailText}>{formatNumber(pool.n_gpus)} GPUs</span>
-                    <span className={styles.inlineDetailText}>Max context {formatNumber(pool.max_ctx)}</span>
+                    <span className={styles.inlineDetailText}>
+                      {formatNumber(pool.n_gpus)} GPUs
+                    </span>
+                    <span className={styles.inlineDetailText}>
+                      Max context {formatNumber(pool.max_ctx)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -421,7 +487,11 @@ export default function FleetSimFleetsPage() {
         isOpen={Boolean(fleetPendingDelete)}
         title="Delete saved fleet?"
         description="This removes the reusable fleet definition. Existing run history remains available."
-        details={fleetPendingDelete ? `${fleetPendingDelete.name} · ${formatNumber(fleetPendingDelete.total_gpus)} GPUs` : undefined}
+        details={
+          fleetPendingDelete
+            ? `${fleetPendingDelete.name} · ${formatNumber(fleetPendingDelete.total_gpus)} GPUs`
+            : undefined
+        }
         confirmLabel="Delete fleet"
         pending={deletePending}
         tone="danger"

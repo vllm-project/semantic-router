@@ -12,6 +12,7 @@ license: Apache-2.0
 tags:
   - cost
   - local-first
+  - multimodal
   - privacy
   - security
 links:

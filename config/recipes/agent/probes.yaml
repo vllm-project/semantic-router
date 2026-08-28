@@ -7,6 +7,13 @@ description: >
 routing_assets:
   yaml: config/recipes/agent/config.yaml
   dsl: config/recipes/agent/recipe.dsl
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
 router_eval_endpoint: /api/v1/eval
 evaluation:
   request_timeout_seconds: 300
@@ -37,6 +44,24 @@ coverage:
     tools: 100.0
     multi_turn: 100.0
 decisions:
+  - id: omni
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    expected_plugins: [router_replay]
+    variants:
+      - id: image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Inspect the attached image and summarize the visible information.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [agent_has_images]
+        tags: [language:en, multimodal, image, shape:messages]
+
   - id: local_security_containment
     expected_decision: local_security_containment
     expected_algorithm: static

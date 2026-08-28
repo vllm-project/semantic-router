@@ -6,7 +6,7 @@ import ipaddress
 from urllib.parse import SplitResult, urlsplit
 
 from cli.consts import DEFAULT_LISTENER_PORT
-from cli.runtime_stack import RuntimeStackLayout
+from cli.runtime_stack import DEFAULT_ENVOY_CONTAINER_NAME, RuntimeStackLayout
 
 LOOPER_CHAT_COMPLETIONS_PATH = "/v1/chat/completions"
 
@@ -28,7 +28,7 @@ def apply_local_looper_endpoint(
             parsed = _parse_endpoint(endpoint)
         except ValueError:
             return False
-        if not _is_loopback_endpoint(parsed):
+        if not _is_stack_local_endpoint(parsed, stack_layout):
             return False
     else:
         parsed = None
@@ -105,6 +105,23 @@ def _is_loopback_endpoint(parsed: SplitResult) -> bool:
         return ipaddress.ip_address(normalized_host).is_loopback
     except ValueError:
         return False
+
+
+def _is_stack_local_endpoint(
+    parsed: SplitResult, stack_layout: RuntimeStackLayout
+) -> bool:
+    if _is_loopback_endpoint(parsed):
+        return True
+    try:
+        host = parsed.hostname
+    except ValueError:
+        return False
+    if not host:
+        return False
+    return host.rstrip(".").lower() in {
+        DEFAULT_ENVOY_CONTAINER_NAME,
+        stack_layout.envoy_container_name.lower(),
+    }
 
 
 def _endpoint_path_and_query(parsed: SplitResult | None) -> str:

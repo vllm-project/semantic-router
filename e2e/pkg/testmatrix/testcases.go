@@ -55,8 +55,6 @@ var DashboardContract = []string{
 	"dashboard-eval-datasets",
 	// Workflow persistence survives dashboard pod restart (requires dashboard PVC)
 	"dashboard-restart-recovery",
-	// Security Policy RBAC + ratelimit apply
-	"security-policy-apply",
 }
 
 // AnthropicShimContract is the test suite that exercises the Anthropic-

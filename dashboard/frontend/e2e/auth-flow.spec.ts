@@ -363,6 +363,14 @@ test.describe('Dashboard auth flow', () => {
       })
     })
 
+    await page.route('**/api/setup/presets', async (route) => {
+      await route.fulfill({
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ presets: [] }),
+      })
+    })
+
     await page.route('**/api/settings', async (route) => {
       await route.fulfill({
         status: 200,
@@ -677,7 +685,7 @@ test.describe('Dashboard auth flow', () => {
       page.getByRole('button', { name: 'Continue' }).click(),
     ])
     await expect(page).toHaveURL(/\/status$/, { timeout: 12000 })
-    await expect(page.getByRole('heading', { name: 'System Status', exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'System status', exact: true })).toBeVisible()
   })
 
   test('transition route rejects login targets and falls back to dashboard', async ({ page }) => {
@@ -885,6 +893,7 @@ test.describe('Dashboard auth flow', () => {
 
     await page.goto('/insights/replay-sensitive-1')
 
+    await page.getByRole('button', { name: 'Expand Tool Trace' }).click()
     await expect(page.getByText('Tool Call Success Rate')).toBeVisible()
     await expect(page.getByText('100%')).toBeVisible()
     await expect(page.getByText('Tool Calling (fetch_price)')).toBeVisible()
@@ -924,6 +933,7 @@ test.describe('Dashboard auth flow', () => {
 
     await page.goto('/insights/replay-sensitive-1')
 
+    await page.getByRole('button', { name: 'Expand Tool Trace' }).click()
     await expect(page.getByText('Source: User')).toBeVisible()
     await expect(page.getByText('Source: LLM')).toHaveCount(2)
     await expect(page.getByText('Source: Agent')).toBeVisible()
@@ -959,30 +969,14 @@ test.describe('Dashboard auth flow', () => {
     await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible()
   })
 
-  test('users page manages accounts through centered dialogs', async ({ page }) => {
+  test('users page invites and edits accounts through centered dialogs', async ({ page }) => {
     await mockAuthenticatedAppShell(page)
 
-    let createPayload: Record<string, unknown> | null = null
+    let invitationPayload: Record<string, unknown> | null = null
     let patchPayload: Record<string, unknown> | null = null
     let passwordPayload: Record<string, unknown> | null = null
 
     await page.route(/\/api\/admin\/users(?:\?.*)?$/, async (route) => {
-      if (route.request().method() === 'POST') {
-        createPayload = route.request().postDataJSON() as Record<string, unknown>
-        await route.fulfill({
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: 'user-2',
-            email: createPayload.email,
-            name: createPayload.name,
-            role: createPayload.role,
-            status: 'active',
-          }),
-        })
-        return
-      }
-
       await route.fulfill({
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -996,6 +990,24 @@ test.describe('Dashboard auth flow', () => {
               status: 'active',
             },
           ],
+        }),
+      })
+    })
+
+    await page.route('**/api/admin/invitations', async (route) => {
+      invitationPayload = route.request().postDataJSON() as Record<string, unknown>
+      await route.fulfill({
+        status: 201,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invitation: {
+            id: 'invitation-2',
+            email: invitationPayload.email,
+            name: invitationPayload.name,
+            role: invitationPayload.role,
+            expiresAt: 1893456000,
+          },
+          token: 'one-time-invitation-token',
         }),
       })
     })
@@ -1027,24 +1039,24 @@ test.describe('Dashboard auth flow', () => {
     await page.goto('/users')
     await expect(page).toHaveURL(/\/users$/)
 
-    await page.getByRole('button', { name: 'Create user' }).click()
-    const createDialog = page.getByRole('dialog', { name: 'Create user' })
-    await expect(createDialog).toBeVisible()
-    await createDialog.locator('#create-user-email').fill('writer@example.com')
-    await createDialog.locator('#create-user-name').fill('Writer User')
-    await createDialog.locator('#create-user-role').selectOption('write')
-    await createDialog.locator('#create-user-password').fill('writer-password')
-    await createDialog.getByRole('button', { name: 'Create user' }).click()
+    await page.getByRole('button', { name: 'Invite user' }).click()
+    const inviteDialog = page.getByRole('dialog', { name: 'Invite user' })
+    await expect(inviteDialog).toBeVisible()
+    await inviteDialog.getByLabel('Name').fill('Writer User')
+    await inviteDialog.getByLabel('Email').fill('writer@example.com')
+    await inviteDialog.getByText('Builder', { exact: true }).click()
+    await inviteDialog.getByRole('button', { name: 'Create invitation' }).click()
 
     await expect
-      .poll(() => createPayload)
+      .poll(() => invitationPayload)
       .toEqual({
         email: 'writer@example.com',
         name: 'Writer User',
-        password: 'writer-password',
         role: 'write',
       })
-    await expect(page.getByText('User created.')).toBeVisible()
+    const readyDialog = page.getByRole('dialog', { name: 'Welcome Writer User' })
+    await expect(readyDialog).toBeVisible()
+    await readyDialog.getByRole('button', { name: 'Done' }).click()
 
     await page.getByRole('button', { name: 'Edit' }).click()
     const editDialog = page.getByRole('dialog', { name: 'Edit user' })

@@ -296,7 +296,6 @@ export interface RecipeProbeValidationResult {
     status: 'verified' | 'unverified'
     reason?: string
     package_hash: string
-    package_config_hash: string
     before: {
       source_config_hash?: string
       generated_runtime_hash?: string
@@ -317,6 +316,7 @@ export interface RecipeProbeValidationResult {
 export interface RecipeProbeRunPlan {
   probe_id: string
   recipe_digest: string
+  recipe: string
   model?: string
   messages: RecipeProbeMessage[]
   tools?: unknown[]

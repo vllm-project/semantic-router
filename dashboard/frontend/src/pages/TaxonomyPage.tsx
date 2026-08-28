@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useReadonly } from '../contexts/ReadonlyContext'
 import ConfigPageManagerLayout from './ConfigPageManagerLayout'
 import ConfigPageTaxonomyClassifiers from './ConfigPageTaxonomyClassifiers'
@@ -29,13 +28,14 @@ const VIEW_META: Record<KnowledgeBaseView, { title: string; description: string 
 
 export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
   const { isReadonly } = useReadonly()
-  const navigate = useNavigate()
   const [editModalOpen, setEditModalOpen] = useState(false)
   const [editModalTitle, setEditModalTitle] = useState('')
   const [editModalData, setEditModalData] = useState<EditFormData | null>(null)
   const [editModalFields, setEditModalFields] = useState<FieldConfig[]>([])
   const [editModalMode, setEditModalMode] = useState<'edit' | 'add'>('edit')
-  const [editModalCallback, setEditModalCallback] = useState<((data: EditFormData) => Promise<void>) | null>(null)
+  const [editModalCallback, setEditModalCallback] = useState<
+    ((data: EditFormData) => Promise<void>) | null
+  >(null)
 
   const openEditModal: OpenEditModal = (title, data, fields, callback, mode = 'edit') => {
     setEditModalTitle(title)
@@ -61,28 +61,6 @@ export default function TaxonomyPage({ activeView }: TaxonomyPageProps) {
         eyebrow="Knowledge"
         title={meta.title}
         description={meta.description}
-        configArea="Knowledge"
-        scope="Router-owned bases, groups, labels, and metrics"
-        panelEyebrow="Manager"
-        panelTitle="Knowledge Control Plane"
-        panelDescription="Manage the catalog and its routing-facing resources."
-        pills={[
-          {
-            label: 'Bases',
-            active: activeView === 'bases',
-            onClick: () => navigate('/knowledge-bases/bases'),
-          },
-          {
-            label: 'Groups',
-            active: activeView === 'groups',
-            onClick: () => navigate('/knowledge-bases/groups'),
-          },
-          {
-            label: 'Labels',
-            active: activeView === 'labels',
-            onClick: () => navigate('/knowledge-bases/labels'),
-          },
-        ]}
       >
         <ConfigPageTaxonomyClassifiers
           isReadonly={isReadonly}
