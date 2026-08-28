@@ -604,6 +604,10 @@ export default function Home(): JSX.Element {
           <UseCaseExplorer />
         </div>
 
+        <div className={styles.bandRaised}>
+          <DataSovereigntySection />
+        </div>
+
         <div className={styles.bandGraphite}>
           <CompatibilityBand />
         </div>
@@ -624,10 +628,6 @@ export default function Home(): JSX.Element {
           <ScrollReveal delay={40}>
             <AcknowledgementsSection />
           </ScrollReveal>
-        </div>
-
-        <div className={styles.bandBlack}>
-          <DataSovereigntySection />
         </div>
 
         <div className={styles.bandGraphite}>

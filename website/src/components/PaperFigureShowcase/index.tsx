@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import Translate, { translate } from '@docusaurus/Translate'
 import { motion, useInView } from 'motion/react'
+import { SectionLabel } from '@site/src/components/site/Chrome'
 import styles from './index.module.css'
 
 type FigureKey = 'figure1' | 'figure2' | 'figure3' | 'figure4' | 'figure14' | 'figure9'
@@ -931,9 +932,9 @@ const PaperFigureShowcase: React.FC = () => {
     <section className={styles.paperFigureSection}>
       <div className="site-shell-container">
         <div className={`site-section-intro ${styles.paperHeader}`}>
-          <span className={styles.paperLabel}>
+          <SectionLabel>
             <Translate id="homepage.paperFigures.label">Routing Blueprint</Translate>
-          </span>
+          </SectionLabel>
           <h2 className={styles.paperTitle}>
             <Translate id="homepage.paperFigures.title">From signal to model path</Translate>
           </h2>
