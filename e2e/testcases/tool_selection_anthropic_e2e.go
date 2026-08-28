@@ -63,11 +63,15 @@ func testToolSelectionAnthropicE2E(ctx context.Context, client *kubernetes.Clien
 
 	decision := resp.Header.Get("x-vsr-selected-decision")
 	strategy := resp.Header.Get("x-vsr-tools-strategy")
+	confidence := resp.Header.Get("x-vsr-tools-confidence")
+	latencyMs := resp.Header.Get("x-vsr-tools-latency-ms")
 	if opts.SetDetails != nil {
 		opts.SetDetails(map[string]interface{}{
-			"status_code":    resp.StatusCode,
-			"decision":       decision,
-			"tools_strategy": strategy,
+			"status_code":      resp.StatusCode,
+			"decision":         decision,
+			"tools_strategy":   strategy,
+			"tools_confidence": confidence,
+			"tools_latency_ms": latencyMs,
 		})
 	}
 
@@ -79,8 +83,14 @@ func testToolSelectionAnthropicE2E(ctx context.Context, client *kubernetes.Clien
 		return fmt.Errorf("tool-selection-anthropic: decision want %q got %q",
 			"tool_selection_filter_decision", decision)
 	}
-	if strategy != "" && strategy != "filter" {
+	if strategy != "filter" {
 		return fmt.Errorf("tool-selection-anthropic: x-vsr-tools-strategy want %q got %q", "filter", strategy)
+	}
+	if confidence == "" {
+		return fmt.Errorf("tool-selection-anthropic: missing x-vsr-tools-confidence")
+	}
+	if latencyMs == "" {
+		return fmt.Errorf("tool-selection-anthropic: missing x-vsr-tools-latency-ms")
 	}
 	return nil
 }
