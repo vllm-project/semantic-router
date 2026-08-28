@@ -227,31 +227,23 @@ function CapabilitySection(): JSX.Element {
     >
       <div className="site-shell-container">
         <ScrollReveal>
+          <header className={`site-section-intro ${styles.capabilityHeading}`}>
+            <SectionLabel>
+              <Translate id="homepage.capabilities.label">Architecture</Translate>
+            </SectionLabel>
+            <h2 id="mixture-architecture-title">
+              <Translate id="homepage.capabilities.heading">
+                Unify heterogeneous inference
+              </Translate>
+            </h2>
+            <p>
+              <Translate id="homepage.capabilities.description">
+                Unify a fragmented model landscape across four dimensions.
+              </Translate>
+            </p>
+          </header>
+
           <div className={styles.capabilityFrame}>
-            <header className={styles.capabilityHeading}>
-              <SectionLabel className={styles.capabilityLabel}>
-                <Translate id="homepage.capabilities.label">Architecture</Translate>
-              </SectionLabel>
-              <h2 id="mixture-architecture-title">
-                <Translate id="homepage.capabilities.heading">
-                  Unify heterogeneous inference.
-                </Translate>
-              </h2>
-            </header>
-
-            <div className={styles.capabilitySummary}>
-              <p>
-                <Translate id="homepage.capabilities.description">
-                  Unify a fragmented model landscape across four dimensions.
-                </Translate>
-              </p>
-              <PillLink className={styles.capabilityCta} to="/docs/intro">
-                <Translate id="homepage.capabilities.docsCta">
-                  Explore how it works
-                </Translate>
-              </PillLink>
-            </div>
-
             <div
               className={styles.architectureMatrix}
               role="table"
@@ -328,7 +320,7 @@ function MixtureOfModelsProofSection(): JSX.Element {
             <div>
               <h2 id="mom-proof-title">
                 <Translate id="homepage.momProof.title">
-                  One model API can beat frontier models.
+                  One Model API can beat frontier models
                 </Translate>
               </h2>
               <p>
@@ -420,7 +412,7 @@ function DataSovereigntySection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.sovereignty.title">
-                  Keep regulated traffic on approved paths.
+                  Keep regulated traffic on approved paths
                 </Translate>
               </h2>
               <p>
@@ -438,7 +430,7 @@ function DataSovereigntySection(): JSX.Element {
                   className={clsx(styles.constraintStage, {
                     [styles.constraintStageGate]: stage.gate,
                   })}
-                  style={{ '--stage-delay': `${0.15 + index * 0.12}s` } as React.CSSProperties}
+                  style={{ '--stage-delay': `${index * 0.5}s` } as React.CSSProperties}
                 >
                   <span className={styles.constraintStageIndex}>
                     {String(index + 1).padStart(2, '0')}
@@ -478,7 +470,7 @@ function FinalCtaSection(): JSX.Element {
               </SectionLabel>
               <h2>
                 <Translate id="homepage.finalCta.title">
-                  Compose your Mixture-of-Models.
+                  Compose your Mixture-of-Models
                 </Translate>
               </h2>
               <p>
@@ -604,6 +596,10 @@ export default function Home(): JSX.Element {
           <UseCaseExplorer />
         </div>
 
+        <div className={styles.bandRaised}>
+          <DataSovereigntySection />
+        </div>
+
         <div className={styles.bandGraphite}>
           <CompatibilityBand />
         </div>
@@ -624,10 +620,6 @@ export default function Home(): JSX.Element {
           <ScrollReveal delay={40}>
             <AcknowledgementsSection />
           </ScrollReveal>
-        </div>
-
-        <div className={styles.bandBlack}>
-          <DataSovereigntySection />
         </div>
 
         <div className={styles.bandGraphite}>
