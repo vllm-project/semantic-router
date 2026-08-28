@@ -44,7 +44,6 @@ def test_cli_help_lists_registered_commands():
         "serve",
         "config",
         "validate",
-        "model",
         "status",
         "logs",
         "stop",

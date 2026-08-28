@@ -20,6 +20,32 @@ func (f evaluatorFunc) Evaluate(ctx context.Context, request EvalRequest) (json.
 	return f(ctx, request)
 }
 
+type resolvingEvaluator struct {
+	model     string
+	request   EvalRequest
+	requested string
+}
+
+func (e *resolvingEvaluator) ResolveRequestModel(_ context.Context, recipeName string) (string, error) {
+	e.requested = recipeName
+	return e.model, nil
+}
+
+func (e *resolvingEvaluator) Evaluate(_ context.Context, request EvalRequest) (json.RawMessage, error) {
+	e.request = request
+	return json.RawMessage(`{
+  "requested_model":"vllm-sr/mom-test-v1",
+  "selected_model":"leaf-a",
+  "selection_status":"selected",
+  "selection_method":"static",
+  "recipe":"balanced",
+  "routing_decision":"decision-a",
+  "decision_result":{"decision_name":"decision-a","algorithm":"static","plugins":["tools"],"matched_signals":{"keywords":["signal-a"]}},
+  "recommended_models":["leaf-a"],
+  "eval_trace":[{"decision_name":"decision-a","matched":true}]
+}`), nil
+}
+
 func TestRecipeDigestCrossLanguageGolden(t *testing.T) {
 	files := map[string][]byte{
 		"metadata": []byte("schema_version: vllm-sr/recipe-metadata/v1\nid: fixture\n"),
@@ -232,6 +258,33 @@ func TestServiceRunPlanResolvesRequestFacingModelFromConfig(t *testing.T) {
 	}
 }
 
+func TestServiceValidationResolvesModelFreeProbeAgainstActiveRecipe(t *testing.T) {
+	dir := writeManagedRecipe(t)
+	probesPath := filepath.Join(dir, "probes.yaml")
+	probes, err := os.ReadFile(probesPath)
+	if err != nil {
+		t.Fatalf("ReadFile(probes.yaml): %v", err)
+	}
+	writeFile(t, dir, "probes.yaml", strings.Replace(string(probes), "    model: vllm-sr/mom-test-v1\n", "", 1))
+	writeFile(t, dir, "config.yaml", `version: v0.3
+recipes:
+  - name: balanced
+    routing:
+      decisions:
+        - name: decision-a
+`)
+
+	evaluator := &resolvingEvaluator{model: "vllm-sr/mom-test-v1"}
+	service := NewService(Options{Directory: dir, Evaluator: evaluator})
+	result, err := service.Validate(context.Background(), "lane-a", "variant-a")
+	if err != nil || !result.Passed {
+		t.Fatalf("Validate() result=%#v err=%v", result, err)
+	}
+	if evaluator.requested != "balanced" || evaluator.request.Model != evaluator.model {
+		t.Fatalf("resolved recipe=%q request model=%q", evaluator.requested, evaluator.request.Model)
+	}
+}
+
 func TestProjectConfigDistinguishesOmittedAndExplicitAutoModels(t *testing.T) {
 	testCases := []struct {
 		name       string
@@ -239,13 +292,13 @@ func TestProjectConfigDistinguishesOmittedAndExplicitAutoModels(t *testing.T) {
 		want       []string
 	}{
 		{
-			name: "omitted uses historical defaults",
-			want: []string{"vllm-sr/auto", "auto", "MoM"},
+			name: "omitted stays model free",
+			want: nil,
 		},
 		{
-			name:       "omitted includes configured legacy name",
+			name:       "omitted uses configured model name",
 			routerYAML: "    auto_model_name: legacy-mom\n",
-			want:       []string{"vllm-sr/auto", "auto", "legacy-mom"},
+			want:       []string{"legacy-mom"},
 		},
 		{
 			name:       "explicit list ignores legacy",
@@ -529,6 +582,31 @@ func TestHTTPRouterEvaluatorCallsRealEvalTraceEndpoint(t *testing.T) {
 	}
 	if gotPath != "/api/v1/eval" || gotQuery != "trace=true" {
 		t.Fatalf("request = %s?%s", gotPath, gotQuery)
+	}
+}
+
+func TestHTTPRouterEvaluatorResolvesRequestModelByRecipe(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/models" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":[
+  {"id":"leaf-a","routing":{"resolution":"passthrough","selectable":true}},
+  {"id":"vllm-sr/mom-v1-lite","routing":{"resolution":"virtual","selectable":true,"recipe":"cost"}},
+  {"id":"vllm-sr/mom-v1-blend","routing":{"resolution":"virtual","selectable":true,"recipe":"balance"}}
+]}`))
+	}))
+	defer server.Close()
+
+	evaluator := &HTTPRouterEvaluator{BaseURL: server.URL, Client: server.Client()}
+	model, err := evaluator.ResolveRequestModel(context.Background(), "balance")
+	if err != nil {
+		t.Fatalf("ResolveRequestModel(): %v", err)
+	}
+	if model != "vllm-sr/mom-v1-blend" {
+		t.Fatalf("model = %q", model)
 	}
 }
 

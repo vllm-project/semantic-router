@@ -74,6 +74,37 @@ func TestParseStreamingChunk_SkipDoneMarker(t *testing.T) {
 	assert.Equal(t, "Existing content", ctx.StreamingContent)
 }
 
+func TestHandleStreamingResponseBodyReassemblesChatCompletionFrames(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{IsStreamingResponse: true}
+
+	router.handleStreamingResponseBody([]byte(`data: {"id":"chatcmpl-split","created":123,"model":"reasoner","choices":[{"index":0,"delta":{"reasoning":"inspect`), ctx)
+	assert.Empty(t, ctx.StreamingReasoning)
+	assert.NotEmpty(t, ctx.PendingSSEBytes)
+
+	router.handleStreamingResponseBody([]byte(` the evidence"},"finish_reason":null}]}
+
+data: [DONE]
+
+`), ctx)
+	assert.Equal(t, "inspect the evidence", ctx.StreamingReasoning)
+	assert.True(t, ctx.StreamingComplete)
+	assert.Empty(t, ctx.PendingSSEBytes)
+}
+
+func TestParseStreamingChunkAcceptsReasoningAliases(t *testing.T) {
+	router := &OpenAIRouter{}
+	ctx := &RequestContext{StreamingMetadata: make(map[string]interface{})}
+
+	router.parseStreamingChunk("data: {\"choices\":[{\"index\":0,\"delta\":{\"reasoning\":\"first \"}}]}\n\n", ctx)
+	router.parseStreamingChunk("data: {\"choices\":[{\"index\":0,\"delta\":{\"reasoning_content\":\"second\"}}]}\n\n", ctx)
+
+	assert.Equal(t, "first second", ctx.StreamingReasoning)
+	if assert.Contains(t, ctx.StreamingChoices, 0) {
+		assert.Equal(t, "first second", ctx.StreamingChoices[0].Reasoning)
+	}
+}
+
 // TestParseStreamingChunk_MalformedJSON tests that malformed JSON is skipped
 func TestParseStreamingChunk_MalformedJSON(t *testing.T) {
 	router := &OpenAIRouter{}

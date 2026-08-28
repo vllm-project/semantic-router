@@ -34,7 +34,9 @@
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .errorBanner {
@@ -64,10 +66,44 @@
 /* ------------------------------------------------------------------ */
 
 .header {
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
-  padding: 0.4rem 0 0.2rem;
+  gap: 1.5rem;
+  min-height: 148px;
+  padding: 1.5rem 1.65rem;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 8% 10%, rgba(255, 255, 255, 0.09), transparent 30%),
+    linear-gradient(125deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.012));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
+}
+
+.heroIdentity {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1.1rem;
+}
+
+.heroIdentity > img {
+  flex: 0 0 auto;
+  width: 54px;
+  height: 54px;
+  object-fit: contain;
+}
+
+.eyebrow {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.68rem;
+  font-weight: 720;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
 .title {
@@ -108,6 +144,11 @@
   font-size: var(--text-xs);
   cursor: pointer;
   transition: var(--transition-fast);
+}
+
+.refreshBtn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .refreshBtn:hover {
@@ -189,6 +230,7 @@
   flex-direction: column;
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .statValue {
@@ -196,6 +238,10 @@
   font-weight: 740;
   color: var(--color-text);
   line-height: 1.2;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .statLabel {
@@ -231,7 +277,7 @@
 
 .mainGrid {
   display: grid;
-  grid-template-columns: 1.7fr 1fr;
+  grid-template-columns: minmax(0, 1.75fr) minmax(300px, 0.8fr);
   gap: var(--spacing-lg);
   align-items: stretch;
 }
@@ -412,8 +458,12 @@
   flex-shrink: 0;
 }
 
-.svcDotOk { background: var(--color-success); }
-.svcDotFail { background: var(--color-danger); }
+.svcDotOk {
+  background: var(--color-success);
+}
+.svcDotFail {
+  background: var(--color-danger);
+}
 
 .svcName {
   flex: 1;
@@ -429,55 +479,18 @@
   font-family: var(--font-mono);
 }
 
-.svcStatusOk { color: var(--color-success); }
-.svcStatusFail { color: var(--color-danger); }
+.svcStatusOk {
+  color: var(--color-success);
+}
+.svcStatusFail {
+  color: var(--color-danger);
+}
 
 .moreServices {
   font-size: var(--text-xs);
   color: var(--color-text-muted);
   text-align: center;
   padding: 4px 0;
-}
-
-/* ------------------------------------------------------------------ */
-/*  Quick Links                                                        */
-/* ------------------------------------------------------------------ */
-
-.quickLinks {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1px;
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.quickLink {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: #101012;
-  border: none;
-  color: var(--color-text-secondary);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: var(--transition-fast);
-  font-family: inherit;
-  text-align: left;
-}
-
-.quickLink:hover {
-  background: #18181b;
-  color: #ffffff;
-}
-
-.quickLink svg {
-  flex-shrink: 0;
-  opacity: 0.7;
-  transition: var(--transition-fast);
-}
-
-.quickLink:hover svg {
-  opacity: 1;
 }
 
 /* ------------------------------------------------------------------ */
@@ -704,10 +717,6 @@
   .header {
     flex-direction: column;
     gap: var(--spacing-sm);
-  }
-
-  .quickLinks {
-    grid-template-columns: 1fr;
   }
 
   .decisionTableHead,

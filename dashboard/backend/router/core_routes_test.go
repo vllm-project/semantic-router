@@ -225,7 +225,6 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 	mux := http.NewServeMux()
 	registerHealthAndSetupRoutes(mux, cfg, setupmode.New(cfg.AbsConfigPath, cfg.SetupMode))
 	registerConfigRoutes(mux, cfg)
-	registerSecurityPolicyRoutes(mux, cfg)
 
 	for _, target := range []struct {
 		method string
@@ -238,8 +237,6 @@ func TestRuntimeConfigCapabilityGuardsLocalWriteRoutesButNotKBS(t *testing.T) {
 		{method: http.MethodPost, path: "/api/router/config/global/update"},
 		{method: http.MethodPost, path: "/api/router/config/global/raw/update"},
 		{method: http.MethodPost, path: "/api/router/config/defaults/update"},
-		{method: http.MethodPut, path: "/api/security/policy"},
-		{method: http.MethodPost, path: "/api/security/policy/preview"},
 	} {
 		response := httptest.NewRecorder()
 		mux.ServeHTTP(response, httptest.NewRequest(target.method, target.path, strings.NewReader(`{}`)))

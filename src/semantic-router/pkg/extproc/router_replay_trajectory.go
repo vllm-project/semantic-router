@@ -28,21 +28,22 @@ type trajectoryMessage struct {
 	Content    string               `json:"content,omitempty"`
 	ToolCalls  []trajectoryToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string               `json:"tool_call_id,omitempty"`
+	ToolName   string               `json:"tool_name,omitempty"`
+	TurnIndex  int                  `json:"turn_index"`
 }
 
 type routerReplayTrajectoryResponse struct {
 	Object      string              `json:"object"`
 	SessionID   string              `json:"session_id"`
 	RecordCount int                 `json:"record_count"`
+	TurnCount   int                 `json:"turn_count"`
 	Messages    []trajectoryMessage `json:"messages"`
 }
 
 // handleRouterReplayTrajectoryAPI serves GET /v1/router_replay/trajectory?session_id={id}.
-// It converts stored ToolTrace steps into a flat OpenAI Chat Completions message list,
-// coalescing consecutive assistant_tool_call steps into a single assistant message.
-//
-// NOTE: session_id is currently matched against RequestID. A dedicated session index
-// will be added once session tracking lands (Issue 1).
+// It converts stored ToolTrace steps into a flat OpenAI Chat Completions message list.
+// Multiple HTTP requests made by one agent turn are cumulative snapshots; the most
+// complete snapshot is selected before messages are emitted.
 func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 	method string,
 	rawQuery string,
@@ -64,24 +65,26 @@ func (r *OpenAIRouter) handleRouterReplayTrajectoryAPI(
 	records := filterTrajectoryRecordsBySession(r.collectRouterReplayRecords(), sessionID)
 	// collectRouterReplayRecords returns newest-first; trajectory needs chronological order.
 	reverseRoutingRecords(records)
+	turns := buildTrajectoryTurns(records)
 
 	payload := routerReplayTrajectoryResponse{
 		Object:      "router_replay.trajectory",
 		SessionID:   sessionID,
 		RecordCount: len(records),
-		Messages:    buildTrajectoryMessages(records),
+		TurnCount:   len(turns),
+		Messages:    buildTrajectoryMessages(turns),
 	}
 	return r.createRouterReplayJSONResponse(200, payload)
 }
 
-// filterTrajectoryRecordsBySession returns records whose RequestID matches sessionID.
+// filterTrajectoryRecordsBySession returns records captured for one logical session.
 func filterTrajectoryRecordsBySession(
 	records []routerreplay.RoutingRecord,
 	sessionID string,
 ) []routerreplay.RoutingRecord {
 	matched := make([]routerreplay.RoutingRecord, 0)
 	for _, record := range records {
-		if record.RequestID == sessionID {
+		if record.SessionID == sessionID {
 			matched = append(matched, record)
 		}
 	}
@@ -92,12 +95,62 @@ func reverseRoutingRecords(records []routerreplay.RoutingRecord) {
 	slices.Reverse(records)
 }
 
+type trajectoryTurn struct {
+	Index int
+	Steps []routerreplay.ToolTraceStep
+}
+
+// buildTrajectoryTurns collapses the cumulative HTTP requests made by an agent
+// loop into one complete trace per user turn. Later tool-loop requests include
+// the prior call and its result, so the richest snapshot is authoritative.
+func buildTrajectoryTurns(records []routerreplay.RoutingRecord) []trajectoryTurn {
+	turns := make([]trajectoryTurn, 0)
+	turnByIndex := make(map[int]int)
+	for _, record := range records {
+		steps := trajectoryStepsForRecord(record)
+		if len(steps) == 0 {
+			continue
+		}
+
+		turnPosition, exists := turnByIndex[record.TurnIndex]
+		if !exists {
+			turnByIndex[record.TurnIndex] = len(turns)
+			turns = append(turns, trajectoryTurn{
+				Index: record.TurnIndex,
+				Steps: append([]routerreplay.ToolTraceStep(nil), steps...),
+			})
+			continue
+		}
+
+		if trajectorySnapshotScore(steps) >= trajectorySnapshotScore(turns[turnPosition].Steps) {
+			turns[turnPosition].Steps = append([]routerreplay.ToolTraceStep(nil), steps...)
+		}
+	}
+	return turns
+}
+
+func trajectorySnapshotScore(steps []routerreplay.ToolTraceStep) int {
+	score := len(steps)
+	for _, step := range steps {
+		switch step.Type {
+		case replayToolStepAssistantFinalResponse:
+			score += 10_000
+		case replayToolStepClientToolResult:
+			score += 100
+		case replayToolStepAssistantToolCall:
+			score += 10
+		}
+	}
+	return score
+}
+
 // buildTrajectoryMessages converts replay records into an OpenAI-format message list.
 // Consecutive assistant_tool_call steps are coalesced into a single assistant message
 // with multiple tool_calls, matching OpenAI's expected format.
-func buildTrajectoryMessages(records []routerreplay.RoutingRecord) []trajectoryMessage {
+func buildTrajectoryMessages(turns []trajectoryTurn) []trajectoryMessage {
 	messages := make([]trajectoryMessage, 0)
 	var pendingToolCalls []trajectoryToolCall
+	pendingTurnIndex := 0
 
 	flushToolCalls := func() {
 		if len(pendingToolCalls) == 0 {
@@ -106,13 +159,18 @@ func buildTrajectoryMessages(records []routerreplay.RoutingRecord) []trajectoryM
 		messages = append(messages, trajectoryMessage{
 			Role:      "assistant",
 			ToolCalls: pendingToolCalls,
+			TurnIndex: pendingTurnIndex,
 		})
 		pendingToolCalls = nil
 	}
 
-	for _, record := range records {
-		for _, step := range trajectoryStepsForRecord(record) {
+	for _, turn := range turns {
+		for _, step := range turn.Steps {
 			if step.Type == replayToolStepAssistantToolCall {
+				if len(pendingToolCalls) > 0 && pendingTurnIndex != turn.Index {
+					flushToolCalls()
+				}
+				pendingTurnIndex = turn.Index
 				pendingToolCalls = append(pendingToolCalls, trajectoryToolCall{
 					ID:   step.ToolCallID,
 					Type: "function",
@@ -124,7 +182,7 @@ func buildTrajectoryMessages(records []routerreplay.RoutingRecord) []trajectoryM
 				continue
 			}
 			flushToolCalls()
-			if msg := trajectoryMessageFromStep(step); msg != nil {
+			if msg := trajectoryMessageFromStep(step, turn.Index); msg != nil {
 				messages = append(messages, *msg)
 			}
 		}
@@ -154,14 +212,20 @@ func fallbackTrajectoryTrace(record routerreplay.RoutingRecord) *routerreplay.To
 	return mergeReplayToolTraces(requestTrace, responseTrace)
 }
 
-func trajectoryMessageFromStep(step routerreplay.ToolTraceStep) *trajectoryMessage {
+func trajectoryMessageFromStep(step routerreplay.ToolTraceStep, turnIndex int) *trajectoryMessage {
 	switch step.Type {
 	case replayToolStepUserInput:
-		return &trajectoryMessage{Role: "user", Content: step.Text}
+		return &trajectoryMessage{Role: "user", Content: step.Text, TurnIndex: turnIndex}
 	case replayToolStepClientToolResult:
-		return &trajectoryMessage{Role: "tool", Content: step.Text, ToolCallID: step.ToolCallID}
+		return &trajectoryMessage{
+			Role:       "tool",
+			Content:    step.Text,
+			ToolCallID: step.ToolCallID,
+			ToolName:   step.ToolName,
+			TurnIndex:  turnIndex,
+		}
 	case replayToolStepAssistantFinalResponse:
-		return &trajectoryMessage{Role: "assistant", Content: step.Text}
+		return &trajectoryMessage{Role: "assistant", Content: step.Text, TurnIndex: turnIndex}
 	default:
 		return nil
 	}

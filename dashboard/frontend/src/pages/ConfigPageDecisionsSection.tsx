@@ -63,7 +63,6 @@ export default function ConfigPageDecisionsSection({
     applyScopedConfig,
     routingScopes,
     scopedConfig,
-    selectedScope,
     selectedScopeId,
     setSelectedScopeId,
   } = useRoutingScopeManager(config)
@@ -822,7 +821,6 @@ export default function ConfigPageDecisionsSection({
     <ConfigPageManagerLayout
       title="Decisions"
       description="Shape routing outcomes with ordered rules and plugins that map signals to concrete model behavior."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         <div className={styles.sectionTableBlock}>

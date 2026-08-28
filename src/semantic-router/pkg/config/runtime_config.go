@@ -222,6 +222,9 @@ type ResponseCacheStoreConfig struct {
 	Milvus              *MilvusConfig `yaml:"milvus,omitempty"`
 	Qdrant              *QdrantConfig `yaml:"qdrant,omitempty"`
 	EmbeddingModel      string        `yaml:"embedding_model,omitempty"`
+	// PolarityGuard configures the negation/antonym guard; nil means the
+	// lexical default with the NLI tier off.
+	PolarityGuard *PolarityGuardConfig `yaml:"polarity_guard,omitempty"`
 }
 
 // SemanticCache is retained for source compatibility.

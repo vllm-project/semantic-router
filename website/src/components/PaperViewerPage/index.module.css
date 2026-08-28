@@ -13,7 +13,7 @@
   flex-direction: column;
   min-height: 72vh;
   border: 1px solid var(--site-border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--site-surface-alt);
   box-shadow: var(--site-shadow);
@@ -38,6 +38,7 @@
   background:
     radial-gradient(circle at 50% 0%, rgba(48, 162, 255, 0.08), transparent 34rem),
     linear-gradient(180deg, var(--site-surface-alt) 0%, var(--site-bg-alt) 100%);
+  scroll-margin-top: calc(var(--ifm-navbar-height, 3.75rem) + 0.5rem);
 }
 
 .document {
@@ -60,7 +61,7 @@
 
 .pageWrapper {
   box-shadow: var(--site-shadow-soft);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   background: var(--site-surface);
   flex-shrink: 0;
@@ -85,7 +86,7 @@
 
 .pageBtn {
   padding: 0.55rem 1.05rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   border: 1px solid var(--site-border-strong);
   background: var(--site-surface);
   color: var(--site-text);
@@ -141,14 +142,6 @@
   text-underline-offset: 0.18em;
 }
 
-.mobileStack {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
-
 @media (max-width: 768px) {
   .page {
     padding-top: 1rem;
@@ -164,5 +157,21 @@
     background: var(--site-surface);
     padding: 0;
     align-items: flex-start;
+  }
+
+  .pagination {
+    padding: 0.75rem;
+  }
+
+  .paginationCenter {
+    gap: 0.5rem;
+  }
+
+  .pageBtn {
+    padding: 0.55rem 0.75rem;
+  }
+
+  .pageInfo {
+    min-width: 72px;
   }
 }

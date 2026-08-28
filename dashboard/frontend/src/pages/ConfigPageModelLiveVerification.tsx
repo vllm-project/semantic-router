@@ -1,5 +1,6 @@
 import styles from './ConfigPageModelsSection.module.css'
 import type { ModelLiveVerificationState } from './useModelLiveVerification'
+import ProductIcon from '../components/ProductIcon'
 
 interface ConfigPageModelLiveVerificationProps {
   model: string
@@ -7,17 +8,6 @@ interface ConfigPageModelLiveVerificationProps {
   allowed: boolean
   state: ModelLiveVerificationState
   onVerify: () => void
-}
-
-function formatVerificationTime(value: string): string {
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return value
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
 }
 
 export default function ConfigPageModelLiveVerification({
@@ -29,12 +19,12 @@ export default function ConfigPageModelLiveVerification({
 }: ConfigPageModelLiveVerificationProps) {
   const pending = state.status === 'pending'
   const buttonLabel = pending
-    ? 'Verifying…'
+    ? 'Checking…'
     : state.status === 'verified'
-      ? 'Verify again'
+      ? 'Check again'
       : state.status === 'failed'
-        ? 'Retry'
-        : 'Verify'
+        ? 'Check again'
+        : 'Check'
 
   return (
     <div className={styles.liveVerification} aria-live="polite">
@@ -57,24 +47,15 @@ export default function ConfigPageModelLiveVerification({
             : !allowed
               ? 'Run permission required'
               : state.status === 'verified'
-                ? 'Live verified'
+                ? 'Live'
                 : state.status === 'failed'
-                  ? 'Verification failed'
+                  ? 'Unavailable'
                   : pending
-                    ? 'Sending test query'
-                    : 'Not live verified'}
+                    ? 'Checking'
+                    : 'Not checked'}
         </span>
       </div>
 
-      {state.status === 'verified' ? (
-        <div className={styles.liveVerificationEvidence}>
-          <span title={state.evidence.summary}>{state.evidence.summary}</span>
-          <small title={`${state.evidence.providerModel} via ${state.evidence.backend}`}>
-            {state.evidence.provider} · {state.evidence.latencyMs} ms ·{' '}
-            {formatVerificationTime(state.evidence.verifiedAt)}
-          </small>
-        </div>
-      ) : null}
       {state.status === 'failed' ? (
         <span className={styles.liveVerificationError} role="alert" title={state.message}>
           {state.message}
@@ -88,6 +69,7 @@ export default function ConfigPageModelLiveVerification({
         onClick={onVerify}
         aria-label={`${buttonLabel} ${model} with a real inference query`}
       >
+        <ProductIcon name="refresh" width={13} height={13} />
         {buttonLabel}
       </button>
     </div>

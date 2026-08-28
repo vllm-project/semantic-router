@@ -15,11 +15,11 @@ export interface CommitterActivityEntry {
 }
 
 export const committerActivityWindow = {
-  "generatedAt": "2026-08-24",
-  "cutoffDate": "2026-05-24",
+  "generatedAt": "2026-08-26",
+  "cutoffDate": "2026-05-26",
   "months": 3,
   "minimumCommentedIssueThreads": 2,
-  "activeCount": 10,
+  "activeCount": 11,
   "emeritusCount": 20
 }
 
@@ -27,64 +27,73 @@ export const committerActivityEntries: CommitterActivityEntry[] = [
   {
     "name": "FAUST",
     "login": "FAUST-BENCHOU",
-    "pullRequests": 19,
-    "reviews": 73,
-    "issues": 27,
-    "total": 119,
+    "pullRequests": 20,
+    "reviews": 87,
+    "issues": 28,
+    "total": 135,
     "status": "active"
   },
   {
     "name": "David Shrader",
     "login": "shraderdm",
-    "pullRequests": 18,
+    "pullRequests": 17,
     "reviews": 6,
     "issues": 16,
-    "total": 40,
+    "total": 39,
     "status": "active"
   },
   {
     "name": "yangw",
     "login": "drivebyer",
-    "pullRequests": 22,
-    "reviews": 51,
-    "issues": 17,
-    "total": 90,
+    "pullRequests": 23,
+    "reviews": 52,
+    "issues": 18,
+    "total": 93,
     "status": "active"
   },
   {
     "name": "Ramakrishnan Sathyavageeswaran",
     "login": "ramkrishs",
-    "pullRequests": 1,
-    "reviews": 0,
+    "pullRequests": 2,
+    "reviews": 4,
     "issues": 0,
-    "total": 1,
+    "total": 6,
     "status": "active"
   },
   {
-    "name": "siloteemu",
+    "name": "Teemu Kuusisto",
     "login": "siloteemu",
-    "pullRequests": 11,
+    "pullRequests": 6,
     "reviews": 1,
     "issues": 5,
-    "total": 17,
+    "total": 12,
+    "status": "active"
+  },
+  {
+    "name": "Akshay Viswanathan",
+    "login": "akshayv",
+    "pullRequests": 1,
+    "reviews": 0,
+    "issues": 2,
+    "total": 3,
     "status": "active"
   },
   {
     "name": "Theo Hsiung",
     "login": "theohsiung",
     "pullRequests": 55,
-    "reviews": 13,
-    "issues": 76,
-    "total": 144,
+    "reviews": 14,
+    "issues": 77,
+    "total": 146,
     "status": "active"
   },
   {
     "name": "Wilson Wu",
     "login": "wilsonwu",
-    "pullRequests": 40,
-    "reviews": 3,
-    "issues": 26,
-    "total": 69,
+    "pullRequests": 43,
+    "reviews": 13,
+    "issues": 29,
+    "total": 85,
     "status": "active"
   },
   {

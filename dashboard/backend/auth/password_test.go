@@ -24,7 +24,7 @@ func TestValidatePasswordMeasuresBytesNotCharacters(t *testing.T) {
 		password string
 		wantErr  error
 	}{
-		{name: "empty", password: "", wantErr: nil},
+		{name: "empty", password: "", wantErr: ErrPasswordTooShort},
 		{name: "at the limit", password: strings.Repeat("a", MaxPasswordBytes), wantErr: nil},
 		{name: "one byte over", password: strings.Repeat("a", MaxPasswordBytes+1), wantErr: ErrPasswordTooLong},
 		{name: "short in runes but long in bytes", password: multibyte, wantErr: ErrPasswordTooLong},
@@ -124,7 +124,7 @@ func TestPasswordRotationAcceptsPasswordAtTheLimit(t *testing.T) {
 	}
 }
 
-func TestUserCreationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
+func TestInvitationAcceptanceRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	t.Parallel()
 
 	svc := newTestAuthService(t)
@@ -134,19 +134,36 @@ func TestUserCreationRejectsOversizedPasswordWithBadRequest(t *testing.T) {
 	RegisterAdminRoutes(mux, svc)
 	handler := AuthenticateRequest(svc)(mux)
 
-	body, err := json.Marshal(map[string]string{
-		"email":    "new-user@example.com",
-		"name":     "New User",
-		"password": strings.Repeat("a", MaxPasswordBytes+1),
-		"role":     RoleRead,
+	createBody, err := json.Marshal(map[string]string{
+		"email": "new-user@example.com",
+		"name":  "New User",
+		"role":  RoleRead,
 	})
 	if err != nil {
 		t.Fatalf("Marshal() error = %v", err)
 	}
 
+	createRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(createRecorder, newAuthenticatedRequest(
+		t, svc, admin, http.MethodPost, "/api/admin/invitations", string(createBody),
+	))
+	if createRecorder.Code != http.StatusCreated {
+		t.Fatalf("create invitation status = %d, want %d: %s", createRecorder.Code, http.StatusCreated, createRecorder.Body.String())
+	}
+	var created invitationMutationResponse
+	if unmarshalErr := json.Unmarshal(createRecorder.Body.Bytes(), &created); unmarshalErr != nil {
+		t.Fatalf("Unmarshal() error = %v", unmarshalErr)
+	}
+
+	body, err := json.Marshal(map[string]string{"password": strings.Repeat("a", MaxPasswordBytes+1)})
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
 	recorder := httptest.NewRecorder()
-	handler.ServeHTTP(recorder, newAuthenticatedRequest(
-		t, svc, admin, http.MethodPost, "/api/admin/users", string(body),
+	publicInvitationHandler(svc).ServeHTTP(recorder, httptest.NewRequest(
+		http.MethodPost,
+		"/api/auth/invitations/"+created.Token+"/accept",
+		strings.NewReader(string(body)),
 	))
 
 	if recorder.Code != http.StatusBadRequest {

@@ -1,5 +1,6 @@
 export interface StoredConversation<T> {
   id: string
+  title?: string
   createdAt: number
   updatedAt: number
   payload: T
@@ -87,10 +88,18 @@ export const normalizeStoredConversations = <T = unknown>(
     }
 
     const id = item.id.trim()
-    acc.push({
+    const restored: StoredConversation<T> = {
       ...item,
       id,
-    })
+    }
+    if (typeof item.title === 'string') {
+      const title = item.title.trim().slice(0, 80)
+      if (title) restored.title = title
+      else delete restored.title
+    } else {
+      delete restored.title
+    }
+    acc.push(restored)
     return acc
   }, [])
 
