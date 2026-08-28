@@ -22,29 +22,29 @@ const (
 
 var errModelCatalogOutputTooLarge = errors.New("model catalog output exceeded the size limit")
 
-// ModelCatalogSource supplies the canonical JSON emitted by the installed
-// `vllm-sr model list` implementation. Keeping this seam injectable lets the
-// Dashboard consume the CLI-owned contract without copying catalog parsing or
-// compatibility policy into Go.
+// ModelCatalogSource supplies the canonical JSON emitted from the packaged
+// model assets. Keeping this seam injectable lets the Dashboard consume the
+// Python-owned catalog contract without copying parsing or compatibility
+// policy into Go.
 type ModelCatalogSource interface {
 	Load(context.Context) ([]byte, error)
 }
 
-type cliModelCatalogSource struct {
+type packagedModelCatalogSource struct {
 	pythonPath string
 }
 
-// NewCLIModelCatalogSource reads every catalog channel packaged with the same
-// CLI assets as the Dashboard runtime image.
-func NewCLIModelCatalogSource(pythonPath string) ModelCatalogSource {
+// NewPackagedModelCatalogSource reads every catalog channel packaged in the
+// same runtime image as the Dashboard.
+func NewPackagedModelCatalogSource(pythonPath string) ModelCatalogSource {
 	pythonPath = strings.TrimSpace(pythonPath)
 	if pythonPath == "" {
 		pythonPath = "python3"
 	}
-	return &cliModelCatalogSource{pythonPath: pythonPath}
+	return &packagedModelCatalogSource{pythonPath: pythonPath}
 }
 
-func (source *cliModelCatalogSource) Load(ctx context.Context) ([]byte, error) {
+func (source *packagedModelCatalogSource) Load(ctx context.Context) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(ctx, modelCatalogTimeout)
 	defer cancel()
 	workingDirectory, err := os.MkdirTemp("", "vllm-sr-model-catalog-")
@@ -57,17 +57,10 @@ func (source *cliModelCatalogSource) Load(ctx context.Context) ([]byte, error) {
 		ctx,
 		source.pythonPath,
 		"-m",
-		"cli.main",
-		"model",
-		"list",
-		"--all-versions",
-		"--all",
-		"--output",
-		"json",
+		"cli.model_catalog_export",
 	)
-	// `model list` can merge ./config.yaml for interactive CLI use. Execute in
-	// an empty directory so the Dashboard endpoint is always catalog-only and
-	// cannot be broken or contaminated by its process working directory.
+	// Execute in an empty directory so the catalog endpoint cannot be
+	// contaminated by a process working directory containing config.yaml.
 	command.Dir = workingDirectory
 	command.Env = append(os.Environ(), "PYTHONUNBUFFERED=1")
 	stdout := &boundedCatalogBuffer{limit: maxModelCatalogOutputBytes}
@@ -151,11 +144,11 @@ func ModelCatalogHandler(source ModelCatalogSource) http.HandlerFunc {
 		if err != nil {
 			status := http.StatusServiceUnavailable
 			code := "catalog_unavailable"
-			message := "Built-in model catalog could not be loaded from the installed vllm-sr CLI."
+			message := "Built-in model catalog could not be loaded from the installed vllm-sr package."
 			if errors.Is(err, errInvalidModelCatalogContract) {
 				status = http.StatusBadGateway
 				code = "catalog_contract_invalid"
-				message = "The installed vllm-sr CLI returned an invalid model catalog contract."
+				message = "The installed vllm-sr package returned an invalid model catalog contract."
 			}
 			writeModelCatalogError(w, status, code, message)
 			return

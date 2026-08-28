@@ -164,7 +164,7 @@ func TestModelCatalogHandlerEnforcesCanonicalReadOnlyRoute(t *testing.T) {
 	}
 }
 
-func TestCLIModelCatalogSourceUsesCatalogOnlyCommandFromIsolatedDirectory(t *testing.T) {
+func TestPackagedModelCatalogSourceUsesIsolatedExporter(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("fake executable contract uses a POSIX shell")
 	}
@@ -172,15 +172,9 @@ func TestCLIModelCatalogSourceUsesCatalogOnlyCommandFromIsolatedDirectory(t *tes
 	executable := filepath.Join(t.TempDir(), "python3")
 	script := `#!/bin/sh
 set -eu
-[ "$#" -eq 8 ]
+[ "$#" -eq 2 ]
 [ "$1" = "-m" ]
-[ "$2" = "cli.main" ]
-[ "$3" = "model" ]
-[ "$4" = "list" ]
-[ "$5" = "--all-versions" ]
-[ "$6" = "--all" ]
-[ "$7" = "--output" ]
-[ "$8" = "json" ]
+[ "$2" = "cli.model_catalog_export" ]
 [ ! -e config.yaml ]
 printf '%s' "$MODEL_CATALOG_TEST_PAYLOAD"
 `
@@ -189,7 +183,7 @@ printf '%s' "$MODEL_CATALOG_TEST_PAYLOAD"
 	}
 	t.Setenv("MODEL_CATALOG_TEST_PAYLOAD", validModelCatalogPayload(""))
 
-	payload, err := NewCLIModelCatalogSource(executable).Load(context.Background())
+	payload, err := NewPackagedModelCatalogSource(executable).Load(context.Background())
 	if err != nil {
 		t.Fatalf("load catalog through real command seam: %v", err)
 	}

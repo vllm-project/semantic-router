@@ -115,7 +115,7 @@ func registerConfigRoutes(mux *http.ServeMux, cfg *config.Config, routeOptions .
 		options = routeOptions[0]
 	}
 	runtimeConfigReadonly := cfg.ReadonlyMode || !cfg.RuntimeConfigWritable
-	mux.HandleFunc("/api/models/catalog", handlers.ModelCatalogHandler(handlers.NewCLIModelCatalogSource(cfg.PythonPath)))
+	mux.HandleFunc("/api/models/catalog", handlers.ModelCatalogHandler(handlers.NewPackagedModelCatalogSource(cfg.PythonPath)))
 	mux.HandleFunc("/api/models/discover", handlers.ModelDiscoveryHandler(nil))
 	mux.HandleFunc("/api/models/verify", handlers.ModelVerificationHandler(cfg.AbsConfigPath, options.modelVerificationAuditor))
 	mux.HandleFunc("/api/router/config/all", handlers.ConfigHandler(cfg.AbsConfigPath))

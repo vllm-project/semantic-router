@@ -7,7 +7,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / "tools" / "ci"))
 
-from validate_workflows import Workflow, load_workflows, needs  # noqa: E402
+from validate_workflows import Workflow, load_workflows, needs
 
 
 class RecipeDistributionWorkflowTests(unittest.TestCase):
@@ -35,11 +35,10 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
         for path in (
             "config/recipes/**",
             "src/vllm-sr/MANIFEST.in",
-            "src/vllm-sr/cli/commands/model.py",
-            "src/vllm-sr/cli/commands/model_rendering.py",
             "src/vllm-sr/cli/model_assets/**",
             "src/vllm-sr/cli/model_bundle.py",
             "src/vllm-sr/cli/model_catalog.py",
+            "src/vllm-sr/cli/model_catalog_export.py",
             "src/vllm-sr/cli/model_catalog_types.py",
             "src/vllm-sr/cli/model_catalog_validation.py",
             "src/vllm-sr/pyproject.toml",
@@ -74,8 +73,8 @@ class RecipeDistributionWorkflowTests(unittest.TestCase):
     def test_workflow_checks_source_mirror_and_conformance(self) -> None:
         self.assertIn("sync_model_catalog.py --check", self.text)
         self.assertIn("make recipe-conformance-static", self.text)
-        self.assertIn("vllm-sr model list --all-versions", self.text)
-        self.assertIn("vllm-sr model show vllm-sr/mom-v1-blend", self.text)
+        self.assertIn("python -m cli.model_catalog_export", self.text)
+        self.assertNotIn("vllm-sr model ", self.text)
 
     def test_workflow_keeps_only_a_short_lived_validation_receipt(self) -> None:
         self.assertIn("built-in-model-catalog-receipt-${{ github.run_id }}", self.text)

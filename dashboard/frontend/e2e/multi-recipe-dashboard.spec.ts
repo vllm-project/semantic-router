@@ -84,7 +84,10 @@ const config = {
   ],
 }
 
+let savedConfig: typeof config | undefined
+
 test.beforeEach(async ({ page }) => {
+  savedConfig = undefined
   await mockAuthenticatedAppShell(page)
   await page.route('**/api/router/config/all', async (route) => {
     await route.fulfill({
@@ -98,6 +101,14 @@ test.beforeEach(async ({ page }) => {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({}),
+    })
+  })
+  await page.route('**/api/router/config/update', async (route) => {
+    savedConfig = route.request().postDataJSON() as typeof config
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true }),
     })
   })
   await page.route('**/api/status', async (route) => {
@@ -116,6 +127,44 @@ test.beforeEach(async ({ page }) => {
       }),
     })
   })
+})
+
+test('creates a Mixture-of-Models without clipped aliases or assignments', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/config/entrypoints-recipes')
+
+  await expect(page.getByRole('tab', { name: 'Models' })).toHaveAttribute('aria-selected', 'true')
+  await page.getByRole('button', { name: 'Create model' }).click()
+
+  const dialog = page.getByRole('dialog', { name: 'Create model' })
+  await expect(dialog).toBeVisible()
+  await dialog.getByLabel('Model name').fill('vllm-sr/new-mixture')
+
+  const aliasInput = dialog.getByPlaceholder('Add an alias')
+  await aliasInput.fill('new-mixture')
+  await dialog.getByRole('button', { name: 'Add', exact: true }).click()
+  await expect(dialog.getByText('new-mixture', { exact: true })).toBeVisible()
+
+  const assignment = dialog.getByText('balanced-route', { exact: true }).first()
+  const aliasBox = await aliasInput.boundingBox()
+  const assignmentBox = await assignment.boundingBox()
+  expect(aliasBox).not.toBeNull()
+  expect(assignmentBox).not.toBeNull()
+  expect((aliasBox?.y ?? 0) + (aliasBox?.height ?? 0)).toBeLessThan(assignmentBox?.y ?? 0)
+  expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
+
+  await dialog.getByRole('checkbox').check()
+  await dialog.getByRole('button', { name: 'Create model' }).click()
+  await expect(dialog).toBeHidden()
+
+  await expect.poll(() => savedConfig).toBeDefined()
+  expect(savedConfig?.entrypoints).toContainEqual({
+    model_names: ['vllm-sr/new-mixture', 'new-mixture'],
+    recipe: 'balanced',
+  })
+  expect(savedConfig?.recipes[0].routing.decisions[0].modelRefs).toEqual([
+    { model: 'model-a', use_reasoning: false },
+  ])
 })
 
 test('dashboard and managers expose recipe-owned routing state', async ({ page }) => {
