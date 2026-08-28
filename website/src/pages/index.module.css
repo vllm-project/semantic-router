@@ -93,61 +93,16 @@
   background: var(--site-surface-alt);
 }
 
+/* Section intro above the card; the card holds only the matrix. */
 .capabilityHeading {
-  display: grid;
   gap: 0.65rem;
-}
-
-.capabilityLabel {
-  color: var(--site-muted);
-}
-
-.capabilityLabel::after {
-  color: var(--site-accent);
+  margin-bottom: var(--site-section-gap);
 }
 
 .capabilityHeading h2 {
-  max-width: none;
-  margin: 0;
   color: var(--site-text-strong);
-  font-size: clamp(1.3rem, 2.1vw, 1.7rem);
-  font-weight: 400;
-  line-height: 1.2;
-  letter-spacing: -0.028em;
-  text-wrap: pretty;
-}
-
-.capabilitySummary {
-  display: grid;
-  grid-template-columns: minmax(0, 36rem) auto;
-  align-items: end;
-  justify-content: space-between;
-  gap: 1.25rem;
-}
-
-.capabilitySummary p {
-  max-width: 36rem;
-  margin: 0;
-  color: var(--site-muted-bright);
-  font-size: clamp(0.92rem, 1.05vw, 1rem);
-  line-height: 1.5;
-  letter-spacing: -0.01em;
-}
-
-.capabilitySummary .capabilityCta {
-  flex: 0 0 auto;
-  border-color: rgba(48, 162, 255, 0.38);
-  background: rgba(48, 162, 255, 0.08);
-  color: var(--site-accent-strong);
-  box-shadow: none;
-  backdrop-filter: none;
-}
-
-.capabilitySummary .capabilityCta:hover {
-  border-color: var(--site-accent);
-  background: var(--site-accent);
-  color: #ffffff;
-  box-shadow: none;
+  font-weight: var(--site-font-weight-semibold);
+  letter-spacing: -0.025em;
 }
 
 .architectureMatrix {
@@ -803,16 +758,6 @@
       line-height: 1.22;
   }
 
-  .capabilitySummary {
-      grid-template-columns: 1fr;
-      align-items: start;
-      gap: 1rem;
-  }
-
-  .capabilitySummary .capabilityCta {
-      justify-self: start;
-  }
-
   .matrixHeader {
       display: none;
   }
@@ -884,11 +829,4 @@
       line-height: 1.24;
   }
 
-  .capabilitySummary p {
-      font-size: 0.92rem;
-  }
-
-  .capabilitySummary .capabilityCta {
-      width: 100%;
-  }
 }

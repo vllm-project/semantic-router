@@ -478,9 +478,6 @@
   "homepage.capabilities.preference.value": {
     "message": "将偏好表达为路由策略。"
   },
-  "homepage.capabilities.docsCta": {
-    "message": "了解工作原理"
-  },
   "homepage.capabilities.signal.title": {
     "message": "信号提取"
   },

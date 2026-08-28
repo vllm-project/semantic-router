@@ -227,31 +227,23 @@ function CapabilitySection(): JSX.Element {
     >
       <div className="site-shell-container">
         <ScrollReveal>
+          <header className={`site-section-intro ${styles.capabilityHeading}`}>
+            <SectionLabel>
+              <Translate id="homepage.capabilities.label">Architecture</Translate>
+            </SectionLabel>
+            <h2 id="mixture-architecture-title">
+              <Translate id="homepage.capabilities.heading">
+                Unify heterogeneous inference
+              </Translate>
+            </h2>
+            <p>
+              <Translate id="homepage.capabilities.description">
+                Unify a fragmented model landscape across four dimensions.
+              </Translate>
+            </p>
+          </header>
+
           <div className={styles.capabilityFrame}>
-            <header className={styles.capabilityHeading}>
-              <SectionLabel className={styles.capabilityLabel}>
-                <Translate id="homepage.capabilities.label">Architecture</Translate>
-              </SectionLabel>
-              <h2 id="mixture-architecture-title">
-                <Translate id="homepage.capabilities.heading">
-                  Unify heterogeneous inference
-                </Translate>
-              </h2>
-            </header>
-
-            <div className={styles.capabilitySummary}>
-              <p>
-                <Translate id="homepage.capabilities.description">
-                  Unify a fragmented model landscape across four dimensions.
-                </Translate>
-              </p>
-              <PillLink className={styles.capabilityCta} to="/docs/intro">
-                <Translate id="homepage.capabilities.docsCta">
-                  Explore how it works
-                </Translate>
-              </PillLink>
-            </div>
-
             <div
               className={styles.architectureMatrix}
               role="table"
