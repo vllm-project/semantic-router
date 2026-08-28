@@ -82,7 +82,7 @@ export default function YouTubeSection(): JSX.Element {
             <Translate id="homepage.videos.label">See it in action</Translate>
           </SectionLabel>
           <h2 id="video-showcase-title">
-            <Translate id="homepage.videos.title">Semantic routing in the real world.</Translate>
+            <Translate id="homepage.videos.title">Semantic routing in the real world</Translate>
           </h2>
           <p>
             <Translate id="homepage.videos.description">
