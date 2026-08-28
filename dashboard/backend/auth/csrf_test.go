@@ -14,6 +14,11 @@ import (
 
 var csrfTestSecret = []byte("test-jwt-secret")
 
+// Keep middleware enforcement tests on a protected route. The public status
+// endpoint intentionally bypasses authentication so operators can inspect a
+// degraded dashboard before signing in.
+const csrfProtectedTestPath = "/api/settings"
+
 func TestCSRFTokenDerivation(t *testing.T) {
 	t.Run("deterministic", func(t *testing.T) {
 		first := csrfTokenFor(csrfTestSecret, "session-1")
@@ -350,9 +355,9 @@ func TestCSRFEnforcement(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			path := tc.path
+		path := tc.path
 			if path == "" {
-				path = "/api/status"
+				path = csrfProtectedTestPath
 			}
 			if tc.authVia == "query" {
 				path += "?authToken=" + f.token
@@ -392,7 +397,7 @@ func TestCSRF_BearerAuthenticatedRequestsAreExempt(t *testing.T) {
 
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodDelete} {
 		t.Run(method, func(t *testing.T) {
-			r := httptest.NewRequest(method, "/api/status", nil)
+			r := httptest.NewRequest(method, csrfProtectedTestPath, nil)
 			r.Header.Set("Authorization", "Bearer "+f.token)
 			r.Header.Set("Origin", "https://evil.example")
 
@@ -411,7 +416,7 @@ func TestCSRFCookieBackfill(t *testing.T) {
 	f := newCSRFFixture(t)
 
 	newRequest := func(method string, csrfCookie string) *http.Request {
-		r := httptest.NewRequest(method, "/api/status", nil)
+		r := httptest.NewRequest(method, csrfProtectedTestPath, nil)
 		r.AddCookie(&http.Cookie{Name: authSessionCookieName, Value: f.token})
 		if csrfCookie != "" {
 			r.AddCookie(&http.Cookie{Name: csrfCookieName, Value: csrfCookie})
