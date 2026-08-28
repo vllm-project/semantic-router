@@ -1,4 +1,5 @@
 import React from 'react'
+import clsx from 'clsx'
 import Head from '@docusaurus/Head'
 import Layout from '@theme/Layout'
 import Translate, { translate } from '@docusaurus/Translate'
@@ -75,6 +76,35 @@ const heroStats = [
       },
       { count: paperCount },
     ),
+  },
+]
+
+/* The four beats of the routing decision. The gate stage is the claim: hard
+ * constraints remove paths, and only what survives is ranked. */
+const sovereigntyStages = [
+  {
+    id: 'request',
+    label: translate({ id: 'homepage.sovereignty.stage.request', message: 'Request' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.request.detail', message: 'Identity + context' }),
+    gate: false,
+  },
+  {
+    id: 'constraints',
+    label: translate({ id: 'homepage.sovereignty.stage.constraints', message: 'Hard constraints' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.constraints.detail', message: 'Residency · locality · auth' }),
+    gate: true,
+  },
+  {
+    id: 'eligible',
+    label: translate({ id: 'homepage.sovereignty.stage.eligible', message: 'Eligible pool' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.eligible.detail', message: 'Approved paths only' }),
+    gate: false,
+  },
+  {
+    id: 'rank',
+    label: translate({ id: 'homepage.sovereignty.stage.rank', message: 'Rank' }),
+    detail: translate({ id: 'homepage.sovereignty.stage.rank.detail', message: 'Quality · latency · cost' }),
+    gate: false,
   },
 ]
 
@@ -374,6 +404,68 @@ function MixtureOfModelsProofSection(): JSX.Element {
   )
 }
 
+/* Residency and authorization are eliminated as hard constraints before any
+ * ranking happens. Deliberately no claim that data never leaves your estate —
+ * docs/overview/use-cases.md is explicit that "local" is not an end-to-end
+ * privacy guarantee, and the homepage should not say otherwise. */
+function DataSovereigntySection(): JSX.Element {
+  return (
+    <section className={styles.sovereigntySection}>
+      <div className="site-shell-container">
+        <ScrollReveal>
+          <div className={styles.sovereigntyFrame}>
+            <div className={`site-section-intro ${styles.sovereigntyCopy}`}>
+              <SectionLabel>
+                <Translate id="homepage.sovereignty.label">Data sovereignty</Translate>
+              </SectionLabel>
+              <h2>
+                <Translate id="homepage.sovereignty.title">
+                  Keep regulated traffic on approved paths.
+                </Translate>
+              </h2>
+              <p>
+                <Translate id="homepage.sovereignty.description">
+                  Residency, locality, and authorization are hard constraints, not preferences.
+                  Ineligible paths are removed before ranking ever runs.
+                </Translate>
+              </p>
+            </div>
+
+            <ol className={styles.constraintFlow}>
+              {sovereigntyStages.map((stage, index) => (
+                <li
+                  key={stage.id}
+                  className={clsx(styles.constraintStage, {
+                    [styles.constraintStageGate]: stage.gate,
+                  })}
+                  style={{ '--stage-delay': `${0.15 + index * 0.12}s` } as React.CSSProperties}
+                >
+                  <span className={styles.constraintStageIndex}>
+                    {String(index + 1).padStart(2, '0')}
+                  </span>
+                  <strong>{stage.label}</strong>
+                  <span className={styles.constraintStageDetail}>{stage.detail}</span>
+                </li>
+              ))}
+            </ol>
+
+            <div className={styles.constraintFooter}>
+              <p className={styles.constraintNote}>
+                <Translate id="homepage.sovereignty.note">
+                  A request fails closed instead of reaching a provider your policy does not allow.
+                </Translate>
+              </p>
+              <PillLink className={styles.sovereigntyCta} to="/docs/overview/signal-driven-decisions" muted>
+                <Translate id="homepage.sovereignty.cta">How routing policy works</Translate>
+              </PillLink>
+            </div>
+          </div>
+        </ScrollReveal>
+      </div>
+    </section>
+  )
+}
+
 function FinalCtaSection(): JSX.Element {
   return (
     <section className={styles.finalCtaSection}>
@@ -397,6 +489,7 @@ function FinalCtaSection(): JSX.Element {
             </div>
             <div className={styles.finalCtaActions}>
               <PillLink
+                className={styles.finalCtaPrimary}
                 href="https://app.vllm-sr.ai/playground"
                 rel="noreferrer"
                 target="_blank"
@@ -531,6 +624,10 @@ export default function Home(): JSX.Element {
           <ScrollReveal delay={40}>
             <AcknowledgementsSection />
           </ScrollReveal>
+        </div>
+
+        <div className={styles.bandBlack}>
+          <DataSovereigntySection />
         </div>
 
         <div className={styles.bandGraphite}>
