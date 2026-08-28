@@ -21,7 +21,7 @@ defaults:
 assets:
   - id: mom-v1
     bundle: mom-v1
-    sha256: sha256:ec3b5089929759e6c9db0fc55a306e6ebc2ef9084c627f7c6fb7670efdf28597
+    sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
 models:
   - id: vllm-sr/mom-v1-blend
     display_name: MoM V1 Blend
@@ -53,7 +53,7 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:ec3b5089929759e6c9db0fc55a306e6ebc2ef9084c627f7c6fb7670efdf28597
+      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
   - id: vllm-sr/mom-v1-lite
     display_name: MoM V1 Lite
     description: Economy-first direct answers with bounded opt-in reasoning.
@@ -84,7 +84,7 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:ec3b5089929759e6c9db0fc55a306e6ebc2ef9084c627f7c6fb7670efdf28597
+      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
   - id: vllm-sr/mom-v1-flash
     display_name: MoM V1 Flash
     description: Latency-first interactive, tool, vision, and heavy-workload routing.
@@ -115,7 +115,7 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:ec3b5089929759e6c9db0fc55a306e6ebc2ef9084c627f7c6fb7670efdf28597
+      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
   - id: vllm-sr/mom-v1-ultra
     display_name: MoM V1 Ultra
     description: Accuracy-first direct and bounded multi-model orchestration.
@@ -146,7 +146,7 @@ models:
         recommended_pool: [local/qwen3.6-35b, local/step-3.7-flash, local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:ec3b5089929759e6c9db0fc55a306e6ebc2ef9084c627f7c6fb7670efdf28597
+      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
   - id: vllm-sr/mom-v1-vault
     display_name: MoM V1 Vault
     description: Local-only privacy, containment, and tool-history minimization.
@@ -177,4 +177,4 @@ models:
         recommended_pool: [local/glm-5.2]
     verification:
       authority: vllm-sr-maintainers
-      asset_sha256: sha256:ec3b5089929759e6c9db0fc55a306e6ebc2ef9084c627f7c6fb7670efdf28597
+      asset_sha256: sha256:3a6c08e86cb730b63e09c256234c9f8b6701c6acdd5d97a93e9d53dd1bf0b154
