@@ -74,8 +74,11 @@ func TestDefaultHeaderMap(t *testing.T) {
 	if m["minimax"] != headers.UserMiniMaxKey {
 		t.Errorf("DefaultHeaderMap[minimax] = %q, want %q", m["minimax"], headers.UserMiniMaxKey)
 	}
-	if len(m) != 7 {
-		t.Errorf("DefaultHeaderMap has %d entries, want 7", len(m))
+	if m["orcarouter"] != headers.UserOrcaRouterKey {
+		t.Errorf("DefaultHeaderMap[orcarouter] = %q, want %q", m["orcarouter"], headers.UserOrcaRouterKey)
+	}
+	if len(m) != 8 {
+		t.Errorf("DefaultHeaderMap has %d entries, want 8", len(m))
 	}
 }
 
@@ -647,5 +650,81 @@ func TestMiniMaxProvider_CustomHeaderMap(t *testing.T) {
 	got := p.GetKey(ProviderMiniMax, "MiniMax-M3", reqHeaders)
 	if got != "custom-minimax-key" {
 		t.Errorf("GetKey(MiniMax, custom) = %q, want %q", got, "custom-minimax-key")
+	}
+}
+
+// ===========================================================================
+// OrcaRouter provider integration
+// ===========================================================================
+
+func TestOrcaRouterProvider_HeaderInjection(t *testing.T) {
+	// OrcaRouter credentials are resolved via header injection, same as other providers.
+	p := NewHeaderInjectionProvider(nil)
+
+	reqHeaders := map[string]string{
+		headers.UserOrcaRouterKey: "orc-key-123",
+	}
+
+	got := p.GetKey(ProviderOrcaRouter, "orc-model", reqHeaders)
+	if got != "orc-key-123" {
+		t.Errorf("GetKey(OrcaRouter) = %q, want %q", got, "orc-key-123")
+	}
+
+	// OrcaRouter header should be in strip list
+	strip := p.HeadersToStrip()
+	found := false
+	for _, h := range strip {
+		if h == headers.UserOrcaRouterKey {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("HeadersToStrip missing %s", headers.UserOrcaRouterKey)
+	}
+}
+
+func TestOrcaRouterProvider_CredentialResolver(t *testing.T) {
+	// End-to-end: OrcaRouter key resolved through the credential chain.
+	headerProvider := NewHeaderInjectionProvider(nil)
+	resolver := NewCredentialResolver(headerProvider)
+
+	reqHeaders := map[string]string{
+		headers.UserOrcaRouterKey: "orc-key-from-authz",
+	}
+
+	key, err := resolver.KeyForProvider(ProviderOrcaRouter, "orc-model", reqHeaders)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if key != "orc-key-from-authz" {
+		t.Errorf("KeyForProvider(OrcaRouter) = %q, want %q", key, "orc-key-from-authz")
+	}
+}
+
+func TestOrcaRouterProvider_FailClosed_NoKey(t *testing.T) {
+	// fail-closed: missing OrcaRouter key → error
+	resolver := NewCredentialResolver(NewHeaderInjectionProvider(nil))
+
+	_, err := resolver.KeyForProvider(ProviderOrcaRouter, "orc-model", map[string]string{})
+	if err == nil {
+		t.Fatal("expected error when OrcaRouter key is missing in fail-closed mode")
+	}
+}
+
+func TestOrcaRouterProvider_CustomHeaderMap(t *testing.T) {
+	// Custom header map with OrcaRouter
+	customMap := map[string]string{
+		"orcarouter": "x-custom-orcarouter-token",
+	}
+	p := NewHeaderInjectionProvider(customMap)
+
+	reqHeaders := map[string]string{
+		"x-custom-orcarouter-token": "custom-orcarouter-key",
+	}
+
+	got := p.GetKey(ProviderOrcaRouter, "orc-model", reqHeaders)
+	if got != "custom-orcarouter-key" {
+		t.Errorf("GetKey(OrcaRouter, custom) = %q, want %q", got, "custom-orcarouter-key")
 	}
 }

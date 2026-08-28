@@ -597,6 +597,7 @@ var providerTypeRegistry = map[string]providerTypeInfo{
 	"gemini":       {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 	"vertex-ai":    {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 	"minimax":      {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/v1/chat/completions"},
+	"orcarouter":   {AuthHeader: "Authorization", AuthPrefix: "Bearer", ChatPath: "/chat/completions"},
 }
 
 // ValidProviderTypes returns the set of recognised type strings (for error messages).

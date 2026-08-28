@@ -334,6 +334,10 @@ const (
 	// Used by the ext_proc when routing requests to MiniMax models.
 	UserMiniMaxKey = "x-user-minimax-key"
 
+	// UserOrcaRouterKey carries the user's OrcaRouter API key, injected by the auth backend.
+	// Used by the ext_proc when routing requests to OrcaRouter models.
+	UserOrcaRouterKey = "x-user-orcarouter-key"
+
 	// AuthzUserID is the default header for the authenticated user's identity.
 	// Default for Authorino (K8s Secret metadata.name).
 	// Override via authz.identity.user_id_header for other backends:

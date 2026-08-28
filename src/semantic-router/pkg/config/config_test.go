@@ -3560,7 +3560,7 @@ model_config:
 
 		Context("ProviderType", func() {
 			It("should return correct provider type", func() {
-				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax"} {
+				for _, t := range []string{"openai", "anthropic", "azure-openai", "bedrock", "gemini", "vertex-ai", "minimax", "orcarouter"} {
 					pt, err := (&ProviderProfile{Type: t}).ProviderType()
 					Expect(err).NotTo(HaveOccurred())
 					Expect(pt).To(Equal(t))
@@ -3613,6 +3613,11 @@ model_config:
 				Expect(err).NotTo(HaveOccurred())
 				Expect(h).To(Equal("Authorization"))
 				Expect(p).To(Equal("Bearer"))
+
+				h, p, err = (&ProviderProfile{Type: "orcarouter"}).ResolveAuthHeader()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(h).To(Equal("Authorization"))
+				Expect(p).To(Equal("Bearer"))
 			})
 
 			It("should allow explicit overrides", func() {
@@ -3645,6 +3650,10 @@ model_config:
 				Expect(path).To(Equal("/v1/messages"))
 
 				path, err = (&ProviderProfile{Type: "minimax", BaseURL: "https://api.minimax.io"}).ResolveChatPath()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(path).To(Equal("/v1/chat/completions"))
+
+				path, err = (&ProviderProfile{Type: "orcarouter", BaseURL: "https://api.orcarouter.ai/v1"}).ResolveChatPath()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(path).To(Equal("/v1/chat/completions"))
 			})

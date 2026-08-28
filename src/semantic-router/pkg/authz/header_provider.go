@@ -36,6 +36,7 @@ func DefaultHeaderMap() map[string]string {
 		string(ProviderGemini):      headers.UserGeminiKey,
 		string(ProviderVertexAI):    headers.UserVertexAIKey,
 		string(ProviderMiniMax):     headers.UserMiniMaxKey,
+		string(ProviderOrcaRouter):  headers.UserOrcaRouterKey,
 	}
 }
 

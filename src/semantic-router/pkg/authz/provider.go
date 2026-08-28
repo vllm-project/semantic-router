@@ -31,6 +31,7 @@ const (
 	ProviderGemini      LLMProvider = "gemini"
 	ProviderVertexAI    LLMProvider = "vertex-ai"
 	ProviderMiniMax     LLMProvider = "minimax"
+	ProviderOrcaRouter  LLMProvider = "orcarouter"
 )
 
 // Credentials holds per-user API keys for all known LLM providers.
