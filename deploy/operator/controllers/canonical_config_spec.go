@@ -53,6 +53,10 @@ func (r *SemanticRouterReconciler) applyOperatorModelCatalog(canonical *routerco
 		if promptGuard.Variant == "" && promptGuard.Protocol == "" {
 			promptGuard.Variant = routerconfig.PromptGuardVariantMmBERT32K
 		}
+		if promptGuard.Enabled && promptGuard.JailbreakMappingPath == "" {
+			promptGuard.JailbreakMappingPath = routerconfig.DefaultCanonicalGlobal().
+				ModelCatalog.Modules.PromptGuard.JailbreakMappingPath
+		}
 		canonical.Global.ModelCatalog.Modules.PromptGuard = promptGuard
 	}
 
