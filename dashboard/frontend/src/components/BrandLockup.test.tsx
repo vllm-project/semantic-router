@@ -20,13 +20,11 @@ describe('shared brand lockup', () => {
   it('keeps the dashboard asset identical to the website navigation asset', () => {
     const dashboardLogo = readFileSync(
       new URL('../../public/vllm-sr-logo.white.png', import.meta.url),
-      'utf8',
     )
     const websiteLogo = readFileSync(
       new URL('../../../../website/static/img/vllm-sr-logo.white.png', import.meta.url),
-      'utf8',
     )
 
-    expect(dashboardLogo).toBe(websiteLogo)
+    expect(dashboardLogo.equals(websiteLogo)).toBe(true)
   })
 })

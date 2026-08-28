@@ -46,8 +46,8 @@ type SystemStatus struct {
 
 // StatusHandler returns the status of vLLM-SR services
 // Aligns with the vllm-sr Python CLI by using the same Docker-based detection
-func StatusHandler(routerAPIURL, configDir string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
-	return NewStatusMonitor(routerAPIURL, "", configDir, nil, credentialProvider...).Handler()
+func StatusHandler(routerAPIURL, envoyURL, configDir string, credentialProvider ...routerauth.CredentialProvider) http.HandlerFunc {
+	return NewStatusMonitor(routerAPIURL, envoyURL, configDir, nil, credentialProvider...).Handler()
 }
 
 // Handler serves the live snapshot together with server-observed hourly history.

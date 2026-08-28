@@ -176,7 +176,7 @@ func resolveToolsDBPath(cfg *config.Config) string {
 func registerStatusRoutes(mux *http.ServeMux, cfg *config.Config, statusHandler http.HandlerFunc, credentialProvider ...*recipe.Store) {
 	store := selectedRecipeStore(cfg, credentialProvider)
 	if statusHandler == nil {
-		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.ConfigDir, store)
+		statusHandler = handlers.StatusHandler(cfg.RouterAPIURL, cfg.EnvoyURL, cfg.ConfigDir, store)
 	}
 	mux.HandleFunc("/api/status", statusHandler)
 	log.Printf("Status API endpoint registered: /api/status")
