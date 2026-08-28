@@ -21,7 +21,9 @@ import {
   type ClawPlaygroundView,
   findQueuedErrorConversationId,
   getLiveThinkingProcess,
+  readActiveConversationPreference,
   readClawModePreference,
+  writeActiveConversationPreference,
   writeClawModePreference,
 } from './chatComponentSupport'
 import { useToolRegistry } from '../tools'
@@ -83,13 +85,21 @@ const ChatComponent = ({
   const hasHydratedConversation = useRef(false)
   const activeTasksRef = useRef<Record<string, PlaygroundTask>>({})
   const conversationIdRef = useRef(conversationId)
+  const persistedConversationMessagesRef = useRef<Record<string, Message[]>>({})
+  const hydratingConversationMessagesRef = useRef<Record<string, Message[]> | null>(null)
 
-  const { conversations, saveConversation, getConversation, deleteConversation } =
-    useConversationStorage<Message[]>({
-      storageKey: 'sr:chat:conversations',
-      maxConversations: 20,
-      preparePayloadForPersistence: sanitizeMessagesForPersistence,
-    })
+  const {
+    conversations,
+    isHydrated: areConversationsHydrated,
+    saveConversation,
+    getConversation,
+    deleteConversation,
+    renameConversation,
+  } = useConversationStorage<Message[]>({
+    storageKey: 'sr:chat:conversations',
+    maxConversations: 20,
+    preparePayloadForPersistence: sanitizeMessagesForPersistence,
+  })
   const {
     clearConversationQueue,
     enqueueTask,
@@ -246,11 +256,10 @@ const ChatComponent = ({
     }
   }, [enableClawMode, clawView])
 
-  // Hydrate the most recent conversation from localStorage once
+  // Hydrate saved conversations once. Only restore a conversation the user
+  // explicitly selected; otherwise keep the stable blank starting state.
   useEffect(() => {
-    if (hasHydratedConversation.current) return
-
-    if (conversations.length === 0) return
+    if (hasHydratedConversation.current || !areConversationsHydrated) return
 
     const restoredConversationMessages = conversations.reduce<Record<string, Message[]>>(
       (acc, conv) => {
@@ -262,24 +271,41 @@ const ChatComponent = ({
       {},
     )
 
+    hydratingConversationMessagesRef.current = restoredConversationMessages
     setConversationMessages(restoredConversationMessages)
 
-    const latestConversation = getConversation()
-    if (latestConversation?.payload && Array.isArray(latestConversation.payload)) {
-      setConversationId(latestConversation.id)
+    const selectedConversationId = readActiveConversationPreference(conversations)
+    if (selectedConversationId) {
+      conversationIdRef.current = selectedConversationId
+      setConversationId(selectedConversationId)
     }
 
     hasHydratedConversation.current = true
-  }, [conversations, getConversation, restoreMessages])
+  }, [areConversationsHydrated, conversations, restoreMessages])
+
+  useEffect(() => {
+    if (!hasHydratedConversation.current) return
+    writeActiveConversationPreference(conversationId)
+  }, [conversationId])
 
   // Persist changed conversations whenever in-memory messages change
   useEffect(() => {
+    const hydratedMessages = hydratingConversationMessagesRef.current
+    if (hydratedMessages) {
+      if (conversationMessages === hydratedMessages) {
+        persistedConversationMessagesRef.current = conversationMessages
+        hydratingConversationMessagesRef.current = null
+      }
+      return
+    }
+
     Object.entries(conversationMessages).forEach(([id, payload]) => {
-      if (payload.length === 0) {
+      if (payload.length === 0 || persistedConversationMessagesRef.current[id] === payload) {
         return
       }
       saveConversation(id, payload)
     })
+    persistedConversationMessagesRef.current = conversationMessages
   }, [conversationMessages, saveConversation])
 
   const conversationPreviews = useMemo(
@@ -373,6 +399,11 @@ const ChatComponent = ({
       setConversationError,
       setConversationThinkingState,
     ],
+  )
+
+  const handleRenameConversation = useCallback(
+    (id: string, title: string) => renameConversation(id, title),
+    [renameConversation],
   )
 
   const executeTask = useCallback(
@@ -656,6 +687,7 @@ const ChatComponent = ({
                 conversationId={conversationId}
                 conversationPreviews={conversationPreviews}
                 onDeleteConversation={handleDeleteConversation}
+                onRenameConversation={handleRenameConversation}
                 onSelectConversation={handleSelectConversation}
               />
             ) : null}

@@ -6,7 +6,7 @@
   min-height: 0;
   --chat-rail-width: min(100%, 760px);
   --playground-sidebar-rail-width: 58px;
-  --playground-sidebar-panel-width: 252px;
+  --playground-sidebar-panel-width: 236px;
   background: transparent;
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -366,18 +366,42 @@
   gap: 0.2rem;
   overflow-y: auto;
   min-height: 0;
-  padding-right: 0.1rem;
+  padding-right: 0.05rem;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.sidebarList::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebarList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebarList::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.sidebarListScrolling {
+  scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.sidebarListScrolling::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .sidebarItem {
+  position: relative;
   display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-  padding: 0.62rem 0.7rem;
+  align-items: center;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0.15rem 0.2rem 0.15rem 0.62rem;
   border-radius: 6px;
   background: transparent;
   border: 1px solid transparent;
-  cursor: pointer;
   transition: all var(--transition-fast);
 }
 
@@ -391,12 +415,18 @@
   border-color: rgba(255, 255, 255, 0.07);
 }
 
-.sidebarItemText {
+.sidebarItemSelect {
   flex: 1;
   min-width: 0;
   display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
+  align-items: center;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .sidebarItemTitle {
@@ -408,18 +438,40 @@
   text-overflow: ellipsis;
 }
 
-.sidebarItemMeta {
-  font-size: 0.7rem;
-  color: rgba(255, 255, 255, 0.46);
+.sidebarRenameRow {
+  flex: 1;
+  min-width: 0;
+  padding-right: 0.25rem;
 }
 
-.sidebarDeleteButton {
+.sidebarRenameRow input {
+  width: 100%;
+  height: 30px;
+  padding: 0 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 5px;
+  outline: none;
+  background: #0b0b0d;
+  color: #fff;
+  font-size: 0.78rem;
+}
+
+.sidebarRenameRow input:focus {
+  border-color: rgba(255, 255, 255, 0.46);
+}
+
+.sidebarMenu {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.sidebarMenuTrigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: var(--radius-sm);
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.4);
@@ -429,14 +481,65 @@
   opacity: 0;
 }
 
-.sidebarItem:hover .sidebarDeleteButton,
-.sidebarItemActive .sidebarDeleteButton {
+.sidebarMenuTrigger svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sidebarItem:hover .sidebarMenuTrigger,
+.sidebarItem:focus-within .sidebarMenuTrigger {
   opacity: 1;
 }
 
-.sidebarDeleteButton:hover {
+.sidebarMenuTrigger:hover {
   background: rgba(255, 255, 255, 0.06);
   color: #ffffff;
+}
+
+.sidebarMenuPopover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  width: 128px;
+  padding: 0.3rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(24, 24, 27, 0.98);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.38);
+}
+
+.sidebarMenuPopover button {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 32px;
+  padding: 0 0.55rem;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.84);
+  font-size: 0.72rem;
+  text-align: left;
+}
+
+.sidebarMenuPopover button:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.sidebarMenuPopover button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.sidebarMenuPopover .sidebarMenuDanger {
+  color: #fca5a5;
+}
+
+.sidebarItem:nth-last-child(-n + 2) .sidebarMenuPopover {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .sidebarEmpty {
