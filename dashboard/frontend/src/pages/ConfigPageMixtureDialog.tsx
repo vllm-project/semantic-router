@@ -260,11 +260,7 @@ export default function ConfigPageMixtureDialog({
             </div>
             {decisions.length > 0 && activeDecision ? (
               <div className={styles.assignmentWorkspace}>
-                <div
-                  className={styles.decisionRail}
-                  role="tablist"
-                  aria-label="Recipe decisions"
-                >
+                <div className={styles.decisionRail} role="tablist" aria-label="Recipe decisions">
                   {decisions.map((decision, decisionIndex) => {
                     const selected = assignments[decision.name] ?? []
                     const isActive = decision.name === activeDecision.name
@@ -302,7 +298,9 @@ export default function ConfigPageMixtureDialog({
                   <div className={styles.assignmentPanelHeader}>
                     <div>
                       <strong>{activeDecision.name}</strong>
-                      <span>{activeDecision.description || 'Choose the models for this path.'}</span>
+                      <span>
+                        {activeDecision.description || 'Choose the models for this path.'}
+                      </span>
                     </div>
                     <span>
                       {activeSelection.length
