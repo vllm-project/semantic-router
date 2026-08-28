@@ -1,0 +1,57 @@
+schema_version: vllm-sr/mom-evaluation/v1
+mom:
+  recipe_id: multi-objective
+  recipe_version: 0.1.0
+  description: Multi-objective MoM recipe exposing five virtual entrypoints over one shared pool.
+core_suite_ref: config/evaluation/mom-core-suite/v1/manifest.yaml
+baseline_protocol_ref: config/evaluation/baseline-protocol/v1.yaml
+runtime:
+  api_url: http://127.0.0.1:8899/v1
+  generation:
+    temperature: 0
+    max_tokens: 8192
+  concurrency: 4
+  timeout_seconds: 900
+entrypoints:
+  vllm-sr/mom-v1-blend:
+    objective: general-purpose
+    extension_packs: []
+    baselines:
+      - model: local/qwen3.6-27b-coder
+        match: qualified_standalone
+        role: balanced_standalone
+  vllm-sr/mom-v1-lite:
+    objective: cost-optimized
+    extension_packs:
+      - cost/v1
+    baselines:
+      - model: local/qwen3.5-9b-economy
+        match: qualified_standalone
+        role: economy_standalone
+  vllm-sr/mom-v1-flash:
+    objective: latency-focused
+    extension_packs:
+      - latency/v1
+    baselines:
+      - model: local/qwen3.5-9b-economy-replica
+        match: qualified_standalone
+        role: latency_standalone
+  vllm-sr/mom-v1-ultra:
+    objective: quality-orchestration
+    extension_packs:
+      - orchestration/v1
+    baselines:
+      - model: local/qwen3.5-122b-frontier
+        match: qualified_standalone
+        role: quality_standalone
+  vllm-sr/mom-v1-vault:
+    objective: security-first
+    extension_packs:
+      - security/v1
+    baselines:
+      - model: local/qwen3.5-9b-private
+        match: qualified_standalone
+        role: security_standalone
+
+provenance:
+  router_image: local-dev

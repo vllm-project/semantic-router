@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vllm-sr.ai/schemas/mom-eval-result/v1",
+  "title": "MoM Evaluation Result Bundle",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "identity",
+    "contract",
+    "environment",
+    "metrics",
+    "baselines",
+    "publication"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "vllm-sr/mom-eval-result/v1"
+    },
+    "identity": {
+      "type": "object",
+      "required": [
+        "recipe_id",
+        "recipe_version",
+        "entrypoint",
+        "run_mode"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "recipe_id": { "type": "string" },
+        "recipe_version": { "type": "string" },
+        "entrypoint": { "type": "string" },
+        "objective": { "type": "string" },
+        "recipe_digest": { "type": "string" },
+        "pool_membership": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "run_mode": {
+          "type": "string",
+          "enum": ["smoke", "formal", "release-candidate"]
+        },
+        "run_id": { "type": "string" },
+        "generated_at": { "type": "string" }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "required": ["core_suite_version"],
+      "additionalProperties": true,
+      "properties": {
+        "core_suite_version": { "type": "string" },
+        "extension_packs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "version"],
+            "properties": {
+              "id": { "type": "string" },
+              "version": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "platform": { "type": "string" },
+        "router_image": { "type": "string" },
+        "dataset_revisions": { "type": "object" },
+        "generation": { "type": "object" },
+        "api_url": { "type": "string" }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "number" },
+          "unit": { "type": "string" },
+          "num_samples": { "type": "integer" },
+          "classification": {
+            "type": "string",
+            "enum": ["blocking", "diagnostic"]
+          },
+          "benchmark_id": { "type": "string" },
+          "layer": { "type": "string" }
+        }
+      }
+    },
+    "baselines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["model", "role", "metrics"],
+        "properties": {
+          "model": { "type": "string" },
+          "role": { "type": "string" },
+          "match": { "type": "string" },
+          "metrics": { "type": "object" }
+        }
+      }
+    },
+    "regression": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "baseline_version": { "type": ["string", "null"] },
+        "deltas": { "type": "object" },
+        "blocking_failures": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "passed": { "type": "boolean" }
+      }
+    },
+    "diagnostics": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "failure_slices": { "type": "array" }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "required": ["publishable"],
+      "properties": {
+        "publishable": { "type": "boolean" },
+        "classification": {
+          "type": "string",
+          "enum": ["launch", "diagnostic", "blocked"]
+        },
+        "blocking_reasons": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}

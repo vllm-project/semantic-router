@@ -1,0 +1,34 @@
+name: MoM Evaluation
+
+on:
+  pull_request:
+    paths:
+      - "config/evaluation/**"
+      - "config/recipes/**/mom-evaluation.yaml"
+      - "bench/mom_eval/**"
+      - "tools/agent/scripts/mom_evaluation_validate.py"
+      - "tools/make/mom-eval.mk"
+      - ".github/workflows/mom-eval-rc.yml"
+
+jobs:
+  mom-eval-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install agent harness requirements
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r tools/agent/requirements.txt
+
+      - name: Validate MoM evaluation contracts
+        run: make mom-eval-validate
+
+      - name: Run smoke MoM evaluation for blend entrypoint
+        run: |
+          make mom-eval-smoke MOM_EVAL_ENTRYPOINT=vllm-sr/mom-v1-blend

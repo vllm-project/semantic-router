@@ -16,7 +16,9 @@ recipe-conformance-static: ## Validate all maintained recipe assets and probe co
 	@$(RECIPE_CONFORMANCE_PYTHON) -m unittest \
 		tools/agent/scripts/router_calibration_fixture_test.py \
 		tools/agent/scripts/router_calibration_support_test.py \
-		tools/agent/scripts/recipe_conformance_test.py
+		tools/agent/scripts/recipe_conformance_test.py \
+		tools/agent/scripts/mom_evaluation_validate_test.py
+	@$(RECIPE_CONFORMANCE_PYTHON) tools/agent/scripts/mom_evaluation_validate.py --all-mom-recipes --check-model-cards
 	@$(RECIPE_CONFORMANCE_PYTHON) tools/agent/scripts/recipe_conformance.py \
 		--output-dir "$(RECIPE_CONFORMANCE_REPORT_DIR)" \
 		static

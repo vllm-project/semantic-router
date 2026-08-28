@@ -121,11 +121,32 @@ for catalog versions and selection behavior.
 
 ## Evaluation
 
+MoM V1 publishes versioned end-to-end evaluation scorecards under the
+`vllm-sr/mom-evaluation/v1` contract. Decision-level routing probes remain in
+[`probes.yaml`](probes.yaml); the scorecards below measure complete system
+quality, operational behavior, baseline comparison, and objective-specific
+extension packs.
+
+Evaluation contract: `vllm-sr/mom-evaluation/v1`
+
+See [evaluation-scorecard.md](evaluation-scorecard.md) for the aggregate launch
+scorecard summary, baseline comparison, and known limitations.
+
 [`probes.yaml`](probes.yaml) covers all five virtual models and their route
 families. The scenarios include multilingual requests, negative and collision
 cases, tools, images, multi-turn history, feedback recovery, privacy signals,
 and context boundaries. They validate routing independently of backend answer
 quality.
+
+Per-entrypoint launch scorecards:
+
+| Entrypoint | Scorecard |
+| --- | --- |
+| `vllm-sr/mom-v1-blend` | [blend/1.0.0](../../../evaluation/scorecards/mom-v1/mom-v1-blend/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-lite` | [lite/1.0.0](../../../evaluation/scorecards/mom-v1/mom-v1-lite/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-flash` | [flash/1.0.0](../../../evaluation/scorecards/mom-v1/mom-v1-flash/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-ultra` | [ultra/1.0.0](../../../evaluation/scorecards/mom-v1/mom-v1-ultra/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-vault` | [vault/1.0.0](../../../evaluation/scorecards/mom-v1/mom-v1-vault/1.0.0/scorecard.md) |
 
 The checked-in image is a small synthetic fixture used only to exercise
 multimodal request shape; probes do not grade its visual content. Large context

@@ -1,0 +1,24 @@
+schema_version: vllm-sr/evaluation-pack-registry/v1
+version: 1.0.0
+description: Registry of objective-specific MoM evaluation extension packs.
+
+packs:
+  cost/v1:
+    manifest: config/evaluation/packs/cost/v1/manifest.yaml
+    objective: cost-optimized
+    module: bench.mom_eval.packs.cost
+
+  latency/v1:
+    manifest: config/evaluation/packs/latency/v1/manifest.yaml
+    objective: latency-focused
+    module: bench.mom_eval.packs.latency
+
+  security/v1:
+    manifest: config/evaluation/packs/security/v1/manifest.yaml
+    objective: security-first
+    module: bench.mom_eval.packs.security
+
+  orchestration/v1:
+    manifest: config/evaluation/packs/orchestration/v1/manifest.yaml
+    objective: quality-orchestration
+    module: bench.mom_eval.packs.orchestration

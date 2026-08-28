@@ -1,0 +1,11 @@
+{
+  "metrics": {
+    "gpqa_d": {
+      "value": 81.0
+    },
+    "mmlu_pro": {
+      "value": 70.0
+    }
+  },
+  "synthetic": true
+}

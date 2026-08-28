@@ -1,0 +1,79 @@
+schema_version: vllm-sr/mom-core-suite/v1
+version: 1.0.0
+description: >-
+  Mandatory core evaluation suite for every published Mixture-of-Models.
+  Covers general quality, instruction following, robustness, baseline safety,
+  operational metrics, and regression against the previous release.
+
+evalscope_suite_ref: bench/router_flow/real_eval/evalscope_suite.yaml
+
+layers:
+  general_quality:
+    description: Answer quality on representative reasoning benchmarks.
+    blocking: true
+    benchmarks:
+      - id: gpqa_d
+        metric: mean_acc
+        smoke_limit: 20
+        formal_limit: 198
+        regression_threshold: -2.0
+      - id: mmlu_pro
+        harness: src/training/model_eval/mmlu_pro_vllm_eval.py
+        metric: accuracy
+        smoke_limit: 50
+        formal_limit: 500
+        regression_threshold: -2.0
+
+  instruction_following:
+    description: Instruction adherence on structured prompts.
+    blocking: true
+    benchmarks:
+      - id: ifeval
+        metric: pass_rate
+        smoke_limit: 20
+        formal_limit: 200
+        regression_threshold: -2.0
+        notes: Uses EvalScope IFEval adapter when available; otherwise reasoning bench fallback.
+
+  robustness:
+    description: Consistency across representative request classes.
+    blocking: false
+    benchmarks:
+      - id: robustness_matrix
+        harness: bench/mom_eval/harnesses/robustness_matrix.py
+        metric: consistency_rate
+        smoke_limit: 12
+        formal_limit: 48
+        regression_threshold: -3.0
+
+  safety_baseline:
+    description: Baseline harmful-request containment via chat completions.
+    blocking: true
+    benchmarks:
+      - id: safety_baseline
+        harness: bench/mom_eval/harnesses/safety_baseline.py
+        metric: contain_rate
+        smoke_limit: 10
+        formal_limit: 50
+        regression_threshold: -5.0
+
+  operational:
+    description: End-to-end latency, token usage, and failure rate.
+    blocking: false
+    metrics:
+      - p50_latency_ms
+      - p99_latency_ms
+      - avg_total_tokens
+      - failure_rate
+    failure_rate_block_threshold: 0.10
+
+  regression:
+    description: Compare against the previous released scorecard for the same entrypoint.
+    blocking: true
+    source: config/evaluation/scorecards/index.yaml
+
+publication_rules:
+  core_blocking_metrics_must_pass: true
+  extension_cannot_override_core_failure: true
+  minimum_run_mode_for_publication: formal
+  smoke_run_classification: diagnostic

@@ -37,6 +37,10 @@ DEFAULT_REPORT_ROOT = REPO_ROOT / ".agent-harness" / "recipe-conformance"
 REQUIRED_RECIPE_FILES = frozenset(
     {"README.md", "config.yaml", "metadata.yaml", "probes.yaml", "recipe.dsl"}
 )
+MOM_EVAL_FILE = "mom-evaluation.yaml"
+MOM_TAG = "mixture-of-models"
+MOM_EVAL_CONTRACT = "vllm-sr/mom-evaluation/v1"
+OPTIONAL_MOM_FILES = frozenset({MOM_EVAL_FILE, "evaluation-scorecard.md"})
 REQUIRED_MODEL_CARD_HEADINGS = (
     "## Overview",
     "## Model details",
@@ -122,7 +126,7 @@ def validate_recipe_directory(path: Path) -> None:
         if not (entry.is_dir() and entry.name in RUNTIME_RECIPE_DIRECTORIES)
     }
     missing = sorted(REQUIRED_RECIPE_FILES - files)
-    extra = sorted(catalog_entries - REQUIRED_RECIPE_FILES)
+    extra = sorted(catalog_entries - REQUIRED_RECIPE_FILES - OPTIONAL_MOM_FILES)
     if missing or extra:
         raise ValueError(
             f"{path}: recipe files differ from the five-file contract; "
@@ -151,6 +155,51 @@ def validate_recipe_model_card(path: Path) -> None:
     if positions != sorted(positions):
         raise ValueError(
             f"{readme_path}: Model Card sections must follow the documented order"
+        )
+
+
+def is_mom_recipe(identity: RecipeIdentity) -> bool:
+    tags = {tag.lower() for tag in identity.tags}
+    return MOM_TAG in tags
+
+
+def validate_mom_evaluation(path: Path, identity: RecipeIdentity) -> None:
+    if not is_mom_recipe(identity):
+        return
+    eval_path = path / MOM_EVAL_FILE
+    if not eval_path.is_file():
+        raise ValueError(f"{path}: MoM recipe requires {MOM_EVAL_FILE}")
+    manifest = load_yaml_mapping(eval_path)
+    if str(manifest.get("schema_version") or "") != MOM_EVAL_CONTRACT:
+        raise ValueError(
+            f"{eval_path}: schema_version must be {MOM_EVAL_CONTRACT!r}"
+        )
+    if str((manifest.get("mom") or {}).get("recipe_id") or "") != identity.id:
+        raise ValueError(
+            f"{eval_path}: mom.recipe_id must match recipe id {identity.id!r}"
+        )
+    if str((manifest.get("mom") or {}).get("recipe_version") or "") != identity.version:
+        raise ValueError(
+            f"{eval_path}: mom.recipe_version must match metadata version "
+            f"{identity.version!r}"
+        )
+    is_published_catalog = "built-in" in path.parts
+    if not is_published_catalog:
+        return
+    readme_path = path / "README.md"
+    readme = readme_path.read_text(encoding="utf-8")
+    if MOM_EVAL_CONTRACT not in readme:
+        raise ValueError(
+            f"{readme_path}: Evaluation section must reference {MOM_EVAL_CONTRACT}"
+        )
+    if "evaluation-scorecard.md" not in readme:
+        raise ValueError(
+            f"{readme_path}: Evaluation section must include evaluation-scorecard.md"
+        )
+    scorecard_fragment = path / "evaluation-scorecard.md"
+    if not scorecard_fragment.is_file():
+        raise ValueError(
+            f"{path}: missing generated scorecard fragment evaluation-scorecard.md"
         )
 
 
@@ -431,6 +480,7 @@ def build_recipe_inventory(path: Path) -> RecipeInventory:
     dsl_path = path / "recipe.dsl"
     probes_path = path / "probes.yaml"
     identity = load_recipe_identity(metadata_path, path.name)
+    validate_mom_evaluation(path, identity)
     config = load_yaml_mapping(config_path)
     manifest, probes = load_probe_manifest(probes_path)
     probes = bind_default_entrypoints(config, probes)

@@ -22,6 +22,7 @@ implementations. Their results are not directly comparable.
 | How well does hallucination detection perform? | Hallucination evaluation | `make bench-hallucination` |
 | Does grounding-aware fusion improve scored answers? | Grounded fusion | `bench/grounded_fusion/run_ab.sh` |
 | Do I need formal Router Flow evaluation rather than a development smoke? | EvalScope-backed Router Flow suite | `bench/router_flow/real_eval/` |
+| Does a published MoM beat qualified standalone models end-to-end? | MoM evaluation contract | [`benchmarking/mom-evaluation.md`](mom-evaluation.md) |
 | Did a native backend or GPU path change signal-extraction performance? | CPU/GPU comparison | `bench/cpu-vs-gpu/` |
 | Which response-cache store or inference binding performs better here? | Backend Make targets | [Backend comparisons](#backend-comparisons) |
 
