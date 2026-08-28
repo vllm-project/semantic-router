@@ -18,8 +18,9 @@ package looper
 
 import (
 	"fmt"
-	"io"
 	"net/http"
+
+	httputil "github.com/vllm-project/semantic-router/src/semantic-router/pkg/utils/http"
 )
 
 // maxErrorBodyBytes bounds how much of a non-2xx upstream response is read for
@@ -27,48 +28,23 @@ import (
 // one is truncated rather than treated as a failure.
 const maxErrorBodyBytes int64 = 8 * 1024
 
-// readLimitedBody reads at most maxBytes from r. If the stream exceeds
-// maxBytes it returns an error rather than a silently truncated body, so an
-// oversized or malicious upstream response cannot be mis-parsed or exhaust
-// memory (amplified N-fold by the parallel fan-out algorithms).
-//
-// maxBytes must be positive; a non-positive ceiling is a caller bug (callers
-// resolve their default via config.LooperConfig.GetMaxResponseBytes) and is
-// rejected explicitly so it can never silently disable the guard or overflow
-// the maxBytes+1 below.
-func readLimitedBody(r io.Reader, maxBytes int64) ([]byte, error) {
-	if maxBytes <= 0 {
-		return nil, fmt.Errorf("read limit must be positive, got %d bytes", maxBytes)
-	}
-	// Read one byte past the cap so an exactly-at-cap body is accepted while an
-	// over-cap body is detectable.
-	data, err := io.ReadAll(io.LimitReader(r, maxBytes+1))
-	if err != nil {
-		return nil, err
-	}
-	if int64(len(data)) > maxBytes {
-		return nil, fmt.Errorf("response body exceeds limit of %d bytes", maxBytes)
-	}
-	return data, nil
-}
-
 // readResponseBody reads and bounds the body of a model-call HTTP response.
 // A non-2xx response yields content-free size/truncation diagnostics; a
 // success body is read in full up to the configured ceiling and errors
-// (rather than silently truncating) when oversized.
+// (rather than silently truncating) when oversized. The ceiling matters here
+// because the parallel fan-out algorithms amplify one oversized body N-fold.
 func (c *Client) readResponseBody(resp *http.Response) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
-		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrorBodyBytes+1))
-		truncated := int64(len(errBody)) > maxErrorBodyBytes
+		errBody, truncated := httputil.ReadTruncatedBody(resp.Body, maxErrorBodyBytes)
 		return nil, fmt.Errorf(
 			"request failed with status %d (error_body_bytes=%d, truncated=%t)",
 			resp.StatusCode,
-			min(len(errBody), int(maxErrorBodyBytes)),
+			len(errBody),
 			truncated,
 		)
 	}
 
-	respBody, err := readLimitedBody(resp.Body, c.maxResponseBytes)
+	respBody, err := httputil.ReadLimitedBody(resp.Body, c.maxResponseBytes)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
