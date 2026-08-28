@@ -1,5 +1,7 @@
+import DecisionRuleEditor from '../components/DecisionRuleEditor'
+import { buildAvailableSignals } from './configPageDecisionSignalCatalog'
 import type {
-  DecisionCondition,
+  ConfigSignals,
   DecisionConfig,
   DecisionModelRef,
   NormalizedModel,
@@ -9,6 +11,7 @@ import styles from './ConfigPageEntrypointsRecipesSection.module.css'
 interface ConfigPageRecipeDecisionsEditorProps {
   value: DecisionConfig[]
   models: NormalizedModel[]
+  signals?: ConfigSignals
   onChange: (value: DecisionConfig[]) => void
 }
 
@@ -25,38 +28,10 @@ const emptyDecision = (): DecisionConfig => ({
   modelRefs: [emptyReference()],
 })
 
-const emptyCondition = (): DecisionCondition => ({
-  type: 'metadata',
-  name: '',
-})
-
-const conditionTypes = [
-  'metadata',
-  'classifier',
-  'keyword',
-  'embedding',
-  'domain',
-  'fact_check',
-  'user_feedback',
-  'reask',
-  'preference',
-  'language',
-  'context',
-  'structure',
-  'complexity',
-  'modality',
-  'authz',
-  'jailbreak',
-  'pii',
-  'kb',
-  'conversation',
-  'event',
-  'projection',
-]
-
 export default function ConfigPageRecipeDecisionsEditor({
   value,
   models,
+  signals,
   onChange,
 }: ConfigPageRecipeDecisionsEditorProps) {
   const rows = Array.isArray(value) ? value : []
@@ -64,6 +39,9 @@ export default function ConfigPageRecipeDecisionsEditor({
     model.name,
     ...(model.loras ?? []).map((adapter) => adapter.name),
   ])
+  // `signals` is a snapshot of this recipe's policy signals taken when the modal opened (the
+  // same convention `models` already follows here), not a live read of a sibling form field.
+  const availableSignals = buildAvailableSignals(signals)
 
   const updateDecision = (index: number, patch: Partial<DecisionConfig>) => {
     onChange(
@@ -94,35 +72,6 @@ export default function ConfigPageRecipeDecisionsEditor({
     const decision = rows[decisionIndex]
     updateDecision(decisionIndex, {
       modelRefs: (decision.modelRefs ?? []).filter((_, index) => index !== referenceIndex),
-    })
-  }
-
-  const updateCondition = (
-    decisionIndex: number,
-    conditionIndex: number,
-    patch: Partial<DecisionCondition>,
-  ) => {
-    const decision = rows[decisionIndex]
-    const conditions = (decision.rules?.conditions ?? []).map((condition, index) =>
-      index === conditionIndex ? { ...condition, ...patch } : condition,
-    )
-    updateDecision(decisionIndex, {
-      rules: {
-        operator: decision.rules?.operator ?? 'AND',
-        conditions,
-      },
-    })
-  }
-
-  const removeCondition = (decisionIndex: number, conditionIndex: number) => {
-    const decision = rows[decisionIndex]
-    updateDecision(decisionIndex, {
-      rules: {
-        operator: decision.rules?.operator ?? 'AND',
-        conditions: (decision.rules?.conditions ?? []).filter(
-          (_, index) => index !== conditionIndex,
-        ),
-      },
     })
   }
 
@@ -183,151 +132,12 @@ export default function ConfigPageRecipeDecisionsEditor({
 
           <div className={styles.modelPoolHeader}>
             <span>Policy conditions</span>
-            <button
-              type="button"
-              className={styles.secondaryButton}
-              onClick={() => {
-                const rules = decision.rules ?? { operator: 'AND', conditions: [] }
-                updateDecision(decisionIndex, {
-                  rules: {
-                    ...rules,
-                    conditions: [...(rules.conditions ?? []), emptyCondition()],
-                  },
-                })
-              }}
-            >
-              Add condition
-            </button>
           </div>
-          <label>
-            <span>Condition operator</span>
-            <select
-              value={decision.rules?.operator ?? 'AND'}
-              onChange={(event) =>
-                updateDecision(decisionIndex, {
-                  rules: {
-                    operator: event.target.value as 'AND' | 'OR' | 'NOT',
-                    conditions: decision.rules?.conditions ?? [],
-                  },
-                })
-              }
-            >
-              <option value="AND">AND</option>
-              <option value="OR">OR</option>
-              <option value="NOT">NOT</option>
-            </select>
-          </label>
-          <div className={styles.modelPool}>
-            {(decision.rules?.conditions ?? []).map((condition, conditionIndex) => {
-              const isComposite =
-                Boolean(condition.operator) || (condition.conditions?.length ?? 0) > 0
-              return (
-                <div
-                  key={`${condition.name || condition.operator || 'condition'}-${conditionIndex}`}
-                  className={styles.modelReferenceCard}
-                >
-                  {isComposite ? (
-                    <p className={styles.editorHint}>
-                      Nested condition preserved. Use the DSL/YAML editor to modify its tree.
-                    </p>
-                  ) : (
-                    <>
-                      <label>
-                        <span>Type</span>
-                        <select
-                          value={condition.type ?? ''}
-                          onChange={(event) =>
-                            updateCondition(decisionIndex, conditionIndex, {
-                              type: event.target.value,
-                              label: undefined,
-                              predicate: undefined,
-                              on_error: undefined,
-                            })
-                          }
-                        >
-                          {conditionTypes.map((type) => (
-                            <option key={type} value={type}>
-                              {type}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <label>
-                        <span>Signal name</span>
-                        <input
-                          value={condition.name ?? ''}
-                          onChange={(event) =>
-                            updateCondition(decisionIndex, conditionIndex, {
-                              name: event.target.value,
-                            })
-                          }
-                          placeholder="signal_name"
-                        />
-                      </label>
-                      {condition.type === 'classifier' ? (
-                        <>
-                          <label>
-                            <span>Label</span>
-                            <input
-                              value={condition.label ?? ''}
-                              onChange={(event) =>
-                                updateCondition(decisionIndex, conditionIndex, {
-                                  label: event.target.value,
-                                })
-                              }
-                              placeholder="RISKY"
-                            />
-                          </label>
-                          <label>
-                            <span>Minimum score (gte)</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="1"
-                              step="0.01"
-                              value={condition.predicate?.gte ?? ''}
-                              onChange={(event) =>
-                                updateCondition(decisionIndex, conditionIndex, {
-                                  predicate: {
-                                    gte:
-                                      event.target.value === ''
-                                        ? undefined
-                                        : Number(event.target.value),
-                                  },
-                                })
-                              }
-                            />
-                          </label>
-                          <label>
-                            <span>On error</span>
-                            <select
-                              value={condition.on_error ?? 'no_match'}
-                              onChange={(event) =>
-                                updateCondition(decisionIndex, conditionIndex, {
-                                  on_error: event.target.value as 'no_match' | 'match',
-                                })
-                              }
-                            >
-                              <option value="no_match">No match</option>
-                              <option value="match">Match</option>
-                            </select>
-                          </label>
-                        </>
-                      ) : null}
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    className={styles.iconDangerButton}
-                    aria-label={`Remove condition ${conditionIndex + 1}`}
-                    onClick={() => removeCondition(decisionIndex, conditionIndex)}
-                  >
-                    ×
-                  </button>
-                </div>
-              )
-            })}
-          </div>
+          <DecisionRuleEditor
+            value={decision.rules ?? { operator: 'AND', conditions: [] }}
+            onChange={(rules) => updateDecision(decisionIndex, { rules })}
+            availableSignals={availableSignals}
+          />
 
           <div className={styles.modelPoolHeader}>
             <span>Target model pool</span>

@@ -1262,8 +1262,7 @@ export interface DecisionFormState {
   name: string
   description: string
   priority: number
-  operator: 'AND' | 'OR' | 'NOT'
-  conditions: DecisionCondition[]
+  rules: DecisionRuleSet
   modelRefs: DecisionModelRef[]
   plugins: { type: string; configuration: string | DecisionPluginConfiguration }[]
 }
@@ -1278,24 +1277,10 @@ export function mergeDecisionForSave(
   }
 }
 
-export function decisionRulesForSave(
-  existing: DecisionRuleSet | undefined,
-  next: DecisionRuleSet,
-): DecisionRuleSet {
-  if (existing?.conditions.some(conditionHasNestedRules)) {
-    return JSON.parse(JSON.stringify(existing)) as DecisionRuleSet
-  }
-  return next
-}
-
-export function cloneDecisionConditions(
-  conditions: DecisionCondition[] | undefined,
-): DecisionCondition[] {
-  return JSON.parse(JSON.stringify(conditions || [])) as DecisionCondition[]
-}
-
-export function conditionHasNestedRules(condition: DecisionCondition): boolean {
-  return Boolean(condition.operator || condition.conditions?.length)
+export function cloneDecisionRuleSet(rules: DecisionRuleSet | undefined): DecisionRuleSet {
+  return rules
+    ? (JSON.parse(JSON.stringify(rules)) as DecisionRuleSet)
+    : { operator: 'AND', conditions: [] }
 }
 
 export interface AddSignalFormState {
