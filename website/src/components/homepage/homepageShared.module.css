@@ -25,33 +25,6 @@
   margin-bottom: var(--site-section-gap);
 }
 
-.eyebrow {
-  display: inline-flex;
-  width: fit-content;
-  align-items: center;
-  padding: 0.35rem 0.75rem;
-  border: 1px solid var(--site-border);
-  border-radius: 999px;
-  background: var(--site-surface-soft);
-  color: var(--site-muted);
-  font-size: var(--site-text-caption);
-  font-weight: var(--site-font-weight-semibold);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition:
-    border-color var(--site-transition-fast),
-    background var(--site-transition-fast),
-    color var(--site-transition-fast),
-    box-shadow var(--site-transition-fast);
-}
-
-.eyebrow:hover {
-  border-color: var(--site-hover-border);
-  background: var(--site-hover-surface-bg);
-  color: var(--site-brand-blue);
-  box-shadow: var(--site-hover-glow);
-}
-
 .sectionTitle {
   margin: 0;
   font-size: var(--site-text-h2);
