@@ -55,14 +55,13 @@ Historical scorecards: `config/evaluation/scorecards/`
 
 | Entrypoint | Scorecard |
 | --- | --- |
-| `vllm-sr/mom-v1-blend` | [blend/1.0.0](../../../config/evaluation/scorecards/mom-v1/mom-v1-blend/1.0.0/scorecard.md) |
-| `vllm-sr/mom-v1-lite` | [lite/1.0.0](../../../config/evaluation/scorecards/mom-v1/mom-v1-lite/1.0.0/scorecard.md) |
-| `vllm-sr/mom-v1-flash` | [flash/1.0.0](../../../config/evaluation/scorecards/mom-v1/mom-v1-flash/1.0.0/scorecard.md) |
-| `vllm-sr/mom-v1-ultra` | [ultra/1.0.0](../../../config/evaluation/scorecards/mom-v1/mom-v1-ultra/1.0.0/scorecard.md) |
-| `vllm-sr/mom-v1-vault` | [vault/1.0.0](../../../config/evaluation/scorecards/mom-v1/mom-v1-vault/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-blend` | [blend/1.0.0](https://github.com/vllm-project/semantic-router/blob/main/config/evaluation/scorecards/mom-v1/mom-v1-blend/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-lite` | [lite/1.0.0](https://github.com/vllm-project/semantic-router/blob/main/config/evaluation/scorecards/mom-v1/mom-v1-lite/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-flash` | [flash/1.0.0](https://github.com/vllm-project/semantic-router/blob/main/config/evaluation/scorecards/mom-v1/mom-v1-flash/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-ultra` | [ultra/1.0.0](https://github.com/vllm-project/semantic-router/blob/main/config/evaluation/scorecards/mom-v1/mom-v1-ultra/1.0.0/scorecard.md) |
+| `vllm-sr/mom-v1-vault` | [vault/1.0.0](https://github.com/vllm-project/semantic-router/blob/main/config/evaluation/scorecards/mom-v1/mom-v1-vault/1.0.0/scorecard.md) |
 
 ## Maintainer workflow
 
-See [bench/mom_eval/README.md](../../../bench/mom_eval/README.md) and the
-maintainer skill at
-[`tools/agent/skills/maintainer/mom-evaluation/SKILL.md`](../../../tools/agent/skills/maintainer/mom-evaluation/SKILL.md).
+See the [MoM evaluation runner guide](https://github.com/vllm-project/semantic-router/blob/main/bench/mom_eval/README.md)
+and the [maintainer skill](https://github.com/vllm-project/semantic-router/blob/main/tools/agent/skills/maintainer/mom-evaluation/SKILL.md).
