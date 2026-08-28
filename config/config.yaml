@@ -1833,6 +1833,14 @@ global:
       ttl_seconds: 7200
       eviction_policy: lru
       embedding_model: mmbert
+      # Negation/antonym guard for the in-memory backend. "lexical" is the
+      # model-free default; "nli" or "lexical+nli" additionally verifies the
+      # winning candidate once with the hallucination explainer NLI model and
+      # rejects it above nli.contradiction_threshold (~70 ms/hit on CPU).
+      polarity_guard:
+        mode: lexical
+        nli:
+          contradiction_threshold: 0.5
       milvus:
         connection:
           host: milvus
