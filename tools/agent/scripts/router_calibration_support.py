@@ -221,6 +221,7 @@ def evaluate_probes(
 
     def evaluate_one(probe: Probe) -> dict[str, Any]:
         probe_started = time.perf_counter()
+        print(f"[recipe-conformance] probe started: {probe.probe_id}", flush=True)
         try:
             recipe_key = probe.expected_recipe or "default"
             result = evaluate_probe(
@@ -231,7 +232,14 @@ def evaluate_probes(
             )
         except RuntimeError as exc:
             result = failed_probe_result(probe, exc)
-        result["latency_ms"] = round((time.perf_counter() - probe_started) * 1000, 3)
+        latency_ms = round((time.perf_counter() - probe_started) * 1000, 3)
+        result["latency_ms"] = latency_ms
+        status = "passed" if result.get("matched") else "failed"
+        print(
+            f"[recipe-conformance] probe {status}: {probe.probe_id} "
+            f"({latency_ms:.3f} ms)",
+            flush=True,
+        )
         return result
 
     if settings.concurrency == 1:

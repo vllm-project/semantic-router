@@ -13,9 +13,13 @@ The router may create a temporary `.vllm-sr/` directory while running; it is not
 part of the maintained contract.
 
 `config/recipes/built-in/` is the reserved versioned catalog container, not a
-Recipe. The default standalone inventory skips that directory and CI runs the
-same five-file conformance checks separately for every bundle under
-`built-in/latest/` and every release snapshot.
+Recipe. The default standalone inventory skips that directory. CI validates
+the same five-file contract for every bundle under `built-in/latest/`. A
+source-aware live matrix discovers both standalone Recipes and latest built-in
+bundles, then shards each source by probe count. Adding a Recipe below either
+live source requires no workflow edit. Immutable release snapshots retain their
+separate catalog and release checks instead of repeating the live matrix for
+every historical version.
 
 ## Write the Model Card
 
@@ -90,6 +94,13 @@ receipt—not expanded filler or fixture binary. Do not check in repeated
 content objects, duplicate data URIs, YAML anchors, aliases, merge keys, or
 explicit tags; conformance and package admission reject YAML indirection.
 
+Set `evaluation.request_timeout_seconds` and `evaluation.concurrency` when
+long-context probes need more than the defaults. The timeout is bounded at 20
+minutes and the Eval endpoint preserves that response window without relaxing
+other management APIs. Live runs print each probe ID as it starts and finishes;
+transport failures are attached to that probe in `eval-report.json` instead of
+aborting the remaining report.
+
 Dashboard Validate sends the same materialized messages to Router Eval without
 rendering binary payloads. Dashboard Run preserves that exact request while
 Playground presents text parts as text and verified inline image parts as real
@@ -134,11 +145,13 @@ make recipe-conformance-eval \
   RECIPE_CONFORMANCE_RECIPE=<name> \
   RECIPE_CONFORMANCE_ROUTER_URL=http://127.0.0.1:8080
 
-# Build the CPU router and run every maintained recipe.
+# Build the CPU router and run every standalone recipe plus built-in/latest.
 make recipe-conformance-live-cpu-all
 ```
 
-CI publishes coverage in the job summary and uploads the consolidated
-`recipe-conformance-report` artifact for 30 days. `inventory.json` contains the
-configured, asserted, and uncovered surfaces; per-recipe `eval-report.json`
-contains exact live results and T3 receipts.
+CI publishes coverage for every discovered source in the job summary and
+uploads the consolidated `recipe-conformance-report` artifact for 30 days. Each
+source keeps an independent inventory and report namespace so Recipe names do
+not collide. Inventories contain the configured, asserted, and uncovered
+surfaces; per-recipe `eval-report.json` contains exact live results and T3
+receipts.

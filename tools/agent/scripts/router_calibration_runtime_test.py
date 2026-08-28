@@ -108,6 +108,29 @@ class RecipeScopedProbeRuntimeTest(unittest.TestCase):
                 {"evaluation": {"concurrency": 65}}
             )
 
+    def test_evaluate_probes_records_transport_failure_per_probe(self) -> None:
+        probe = router_calibration_manifest.Probe(
+            decision_id="direct",
+            variant_id="disconnect",
+            probe_id="direct:disconnect",
+            expected_decision="direct",
+            query="probe disconnect handling",
+        )
+        with mock.patch.object(
+            router_calibration_support,
+            "http_json",
+            side_effect=RuntimeError("connection closed before response"),
+        ):
+            report = router_calibration_support.evaluate_probes(
+                "http://router.example:8080",
+                [probe],
+            )
+
+        self.assertFalse(report["passed"])
+        self.assertEqual(report["performance"]["errors"], 1)
+        self.assertEqual(report["results"][0]["id"], probe.probe_id)
+        self.assertIn("connection closed", report["results"][0]["error"])
+
     def test_evaluate_probe_rejects_wrong_recipe(self) -> None:
         probe = router_calibration_manifest.Probe(
             decision_id="balanced",

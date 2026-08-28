@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -20,6 +21,16 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/config"
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/services"
 )
+
+type evalDeadlineRecorder struct {
+	*httptest.ResponseRecorder
+	deadline time.Time
+}
+
+func (r *evalDeadlineRecorder) SetWriteDeadline(deadline time.Time) error {
+	r.deadline = deadline
+	return nil
+}
 
 type evalCaptureClassificationService struct {
 	lastEvalReq services.IntentRequest
@@ -121,6 +132,30 @@ func TestHandleEvalClassification_AcceptsMessagesArray(t *testing.T) {
 	resp := decodeEvalResponse(t, rr)
 	if resp.OriginalText != "Still wrong. Explain inflation vs recession in plain English." {
 		t.Fatalf("unexpected response payload: %+v", resp)
+	}
+}
+
+func TestHandleEvalClassification_ExtendsWriteDeadline(t *testing.T) {
+	fakeSvc := &evalCaptureClassificationService{}
+	apiServer := &ClassificationAPIServer{classificationSvc: fakeSvc}
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/eval",
+		strings.NewReader(`{"text":"evaluate every configured signal"}`),
+	)
+	recorder := &evalDeadlineRecorder{ResponseRecorder: httptest.NewRecorder()}
+	started := time.Now()
+
+	apiServer.handleEvalClassification(recorder, req)
+
+	requireEvalHTTPStatus(t, recorder.ResponseRecorder)
+	minimumDeadline := started.Add(apiEvalWriteTimeout - time.Second)
+	if recorder.deadline.Before(minimumDeadline) {
+		t.Fatalf(
+			"eval write deadline = %s, want at least %s",
+			recorder.deadline,
+			minimumDeadline,
+		)
 	}
 }
 

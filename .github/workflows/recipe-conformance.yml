@@ -33,7 +33,7 @@ jobs:
         name: Materialize live CPU shards
         run: |
           python tools/agent/scripts/recipe_conformance.py \
-            plan \
+            plan-all \
             --shards 3 \
             --github-output "$GITHUB_OUTPUT"
 
@@ -50,7 +50,7 @@ jobs:
           retention-days: 30
 
   live-cpu:
-    name: Live CPU shard ${{ matrix.shard }}
+    name: Live CPU ${{ matrix.shard }}
     needs: inventory
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -92,11 +92,14 @@ jobs:
       - name: Run maintained recipe probes
         env:
           RECIPE_CONFORMANCE_RECIPES: ${{ matrix.recipes }}
+          RECIPE_CONFORMANCE_RECIPES_ROOT: >-
+            ${{ github.workspace }}/${{ matrix.recipes_root }}
           RECIPE_CONFORMANCE_REPORT_DIR: >-
-            ${{ github.workspace }}/.agent-harness/recipe-conformance
+            ${{ github.workspace }}/.agent-harness/recipe-conformance/${{ matrix.report_dir }}
         run: |
           make recipe-conformance-live-cpu \
             RECIPE_CONFORMANCE_RECIPES="$RECIPE_CONFORMANCE_RECIPES" \
+            RECIPE_CONFORMANCE_RECIPES_ROOT="$RECIPE_CONFORMANCE_RECIPES_ROOT" \
             RECIPE_CONFORMANCE_REPORT_DIR="$RECIPE_CONFORMANCE_REPORT_DIR"
 
       - name: Add shard summaries
@@ -151,8 +154,11 @@ jobs:
 
       - name: Publish consolidated summary
         run: |
-          cat .agent-harness/recipe-conformance/conformance-report.md \
-            >> "$GITHUB_STEP_SUMMARY"
+          while IFS= read -r report; do
+            cat "$report" >> "$GITHUB_STEP_SUMMARY"
+            printf '\n---\n' >> "$GITHUB_STEP_SUMMARY"
+          done < <(find .agent-harness/recipe-conformance \
+            -name conformance-report.md -type f | sort)
 
       - name: Upload consolidated report
         uses: actions/upload-artifact@v4
