@@ -1333,7 +1333,6 @@ export default function ConfigPageSignalsSection({
     <ConfigPageManagerLayout
       title="Signals"
       description="Review the signal catalog that drives semantic routing, guardrails, and context-aware behavior."
-      scope={selectedScope?.label ?? 'Routing profile'}
     >
       <div className={styles.sectionPanel}>
         {actionError ? (

@@ -69,14 +69,13 @@ export const runToolLoop = async ({
   toolCallsMap,
   updateConversationMessages,
 }: RunToolLoopOptions): Promise<string> => {
-  const MAX_TOOL_ITERATIONS = 6
   let iteration = 0
   let allToolCalls = Array.from(toolCallsMap.values())
   let allToolResults: ToolResult[] = []
   let finalContent = ''
   let currentMessages: OutboundChatMessage[] = [...initialMessages]
 
-  while (iteration < MAX_TOOL_ITERATIONS) {
+  while (toolCallsMap.size > 0) {
     iteration += 1
     const currentToolCalls = iteration === 1 ? allToolCalls : Array.from(toolCallsMap.values())
     if (currentToolCalls.length === 0) break

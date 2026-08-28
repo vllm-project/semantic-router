@@ -7,6 +7,13 @@ description: >
 routing_assets:
   yaml: config/recipes/privacy/config.yaml
   dsl: config/recipes/privacy/recipe.dsl
+fixtures:
+  images:
+    routing_pixel:
+      description: Minimal PNG fixture used to exercise image-bearing request routing.
+      media_type: image/png
+      sha256: sha256:431ced6916a2a21a156e38701afe55bbd7f88969fbbfc56d7fe099d47f265460
+      data_base64: iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=
 router_eval_endpoint: /api/v1/eval
 evaluation:
   request_timeout_seconds: 300
@@ -19,7 +26,7 @@ coverage:
   min_projection_assertion_percent: 25.0
   min_algorithm_assertion_percent: 100.0
   min_plugin_assertion_percent: 100.0
-  required_request_shapes: [text, tools]
+  required_request_shapes: [text, messages, tools]
   min_tag_counts:
     language: 3
     collision: 2
@@ -29,6 +36,24 @@ coverage:
     collision: 100.0
     tools: 100.0
 decisions:
+  - id: omni
+    expected_decision: omni
+    expected_algorithm: static
+    expected_alias: local/omni
+    expected_plugins: [tools, router_replay]
+    variants:
+      - id: private_image_understanding
+        messages:
+          - role: user
+            content:
+              - type: text
+                text: Summarize this private image without sending it to a cloud service.
+              - type: image_fixture
+                fixture: routing_pixel
+        expected_signals:
+          conversation: [privacy_has_images]
+        tags: [language:en, privacy, multimodal, image, shape:messages]
+
   - id: local_security_containment
     expected_decision: local_security_containment
     expected_algorithm: static

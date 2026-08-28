@@ -10,7 +10,7 @@ import (
 	"github.com/vllm-project/semantic-router/src/semantic-router/pkg/routerreplay/store"
 )
 
-// newTrajectoryTestRouter builds a router with two records sharing a session ID.
+// newTrajectoryTestRouter builds a router with two turns sharing a session ID.
 // The first record has a user_input + assistant_tool_call + client_tool_result.
 // The second record has an assistant_final_response.
 func newTrajectoryTestRouter(t *testing.T) (*OpenAIRouter, string) {
@@ -20,7 +20,9 @@ func newTrajectoryTestRouter(t *testing.T) (*OpenAIRouter, string) {
 
 	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
 		ID:        "traj-1",
-		RequestID: sessionID,
+		RequestID: "request-1",
+		SessionID: sessionID,
+		TurnIndex: 0,
 		Timestamp: time.Unix(1, 0).UTC(),
 		ToolTrace: &routerreplay.ToolTrace{
 			Steps: []routerreplay.ToolTraceStep{
@@ -36,7 +38,9 @@ func newTrajectoryTestRouter(t *testing.T) (*OpenAIRouter, string) {
 
 	_, err = recorder.AddRecord(routerreplay.RoutingRecord{
 		ID:        "traj-2",
-		RequestID: sessionID,
+		RequestID: "request-2",
+		SessionID: sessionID,
+		TurnIndex: 1,
 		Timestamp: time.Unix(2, 0).UTC(),
 		ToolTrace: &routerreplay.ToolTrace{
 			Steps: []routerreplay.ToolTraceStep{
@@ -65,6 +69,7 @@ func TestHandleRouterReplayTrajectoryConvertsToolTraceToOpenAIMessages(t *testin
 	assertStringField(t, body, "object", "router_replay.trajectory")
 	assertStringField(t, body, "session_id", sessionID)
 	assertIntField(t, body, "record_count", 2)
+	assertIntField(t, body, "turn_count", 2)
 
 	messages := mustTrajectoryMessages(t, body)
 	if len(messages) != 4 {
@@ -99,7 +104,8 @@ func TestHandleRouterReplayTrajectoryCoalescesConsecutiveToolCalls(t *testing.T)
 
 	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
 		ID:        "traj-multi",
-		RequestID: sessionID,
+		RequestID: "request-multi",
+		SessionID: sessionID,
 		Timestamp: time.Unix(1, 0).UTC(),
 		ToolTrace: &routerreplay.ToolTrace{
 			Steps: []routerreplay.ToolTraceStep{
@@ -166,7 +172,8 @@ func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
 
 	_, err := recorder.AddRecord(routerreplay.RoutingRecord{
 		ID:           "traj-fallback",
-		RequestID:    sessionID,
+		RequestID:    "request-fallback",
+		SessionID:    sessionID,
 		Timestamp:    time.Unix(1, 0).UTC(),
 		RequestBody:  requestBody,
 		ResponseBody: responseBody,
@@ -197,6 +204,50 @@ func TestHandleRouterReplayTrajectoryFallsBackToBodyParsing(t *testing.T) {
 	last := messages[len(messages)-1]
 	assertStringField(t, last, "role", "assistant")
 	assertStringField(t, last, "content", "final")
+}
+
+func TestHandleRouterReplayTrajectoryCollapsesCumulativeToolLoopRecords(t *testing.T) {
+	recorder := routerreplay.NewRecorder(store.NewMemoryStore(10, 0))
+	sessionID := "sess-tool-loop"
+	records := []routerreplay.RoutingRecord{
+		{
+			ID: "tool-loop-1", RequestID: "request-a", SessionID: sessionID, TurnIndex: 2,
+			Timestamp: time.Unix(1, 0).UTC(),
+			ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{
+				{Type: replayToolStepUserInput, Text: "what do you know?"},
+				{Type: replayToolStepAssistantToolCall, ToolName: "web_search", ToolCallID: "call-1", Arguments: `{"q":"vllm-sr"}`},
+			}},
+		},
+		{
+			ID: "tool-loop-2", RequestID: "request-b", SessionID: sessionID, TurnIndex: 2,
+			Timestamp: time.Unix(2, 0).UTC(),
+			ToolTrace: &routerreplay.ToolTrace{Steps: []routerreplay.ToolTraceStep{
+				{Type: replayToolStepUserInput, Text: "what do you know?"},
+				{Type: replayToolStepAssistantToolCall, ToolName: "web_search", ToolCallID: "call-1", Arguments: `{"q":"vllm-sr"}`},
+				{Type: replayToolStepClientToolResult, ToolName: "web_search", ToolCallID: "call-1", Text: "search result"},
+				{Type: replayToolStepAssistantFinalResponse, Text: "Here is the answer."},
+			}},
+		},
+	}
+	for _, record := range records {
+		if _, err := recorder.AddRecord(record); err != nil {
+			t.Fatalf("failed to add replay record: %v", err)
+		}
+	}
+
+	router := &OpenAIRouter{ReplayRecorders: map[string]*routerreplay.Recorder{"default": recorder}}
+	response := router.handleRouterReplayAPI("GET", "/v1/router_replay/trajectory?session_id="+sessionID)
+	body := decodeJSONBody(t, response.GetImmediateResponse().Body)
+	assertIntField(t, body, "record_count", 2)
+	assertIntField(t, body, "turn_count", 1)
+	messages := mustTrajectoryMessages(t, body)
+	if len(messages) != 4 {
+		t.Fatalf("expected one complete four-message turn, got %#v", messages)
+	}
+	assertStringField(t, messages[0], "content", "what do you know?")
+	assertStringField(t, messages[2], "tool_name", "web_search")
+	assertStringField(t, messages[2], "content", "search result")
+	assertStringField(t, messages[3], "content", "Here is the answer.")
 }
 
 func TestHandleRouterReplayTrajectoryReturnsEmptyMessagesForUnknownSession(t *testing.T) {

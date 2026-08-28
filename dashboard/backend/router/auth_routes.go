@@ -21,6 +21,7 @@ var dashboardAuthRouteSpecs = []authRouteSpec{
 	{path: "/api/auth/me", method: http.MethodGet},
 	{path: "/api/auth/bootstrap/can-register", method: http.MethodGet},
 	{path: "/api/auth/bootstrap/register", method: http.MethodPost},
+	{path: "/api/auth/invitations", method: "*"},
 }
 
 const authUnavailableResponse = `{"error":"Service not available","message":"Authentication service is not configured"}`
@@ -35,6 +36,7 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setu
 
 	authSvc := auth.NewService(store, cfg.JWTSecret, cfg.JWTExpiryHours)
 	authSvc.SetAllowOpenBootstrap(cfg.AllowOpenBootstrap)
+	authSvc.SetAllowedOrigins(cfg.AllowedOrigins)
 	// The bootstrap gate reads the resolver on every unauthenticated
 	// can-register / register call, so setup mode tracks the config file.
 	if setupResolver != nil {
@@ -60,6 +62,12 @@ func setupAuthRoutes(mux *http.ServeMux, cfg *config.Config, setupResolver *setu
 
 func registerAuthUnavailableRoutes(mux *http.ServeMux) {
 	for _, spec := range dashboardAuthRouteSpecs {
+		if spec.method == "*" {
+			mux.HandleFunc(spec.path+"/", func(w http.ResponseWriter, r *http.Request) {
+				http.Error(w, authUnavailableResponse, http.StatusServiceUnavailable)
+			})
+			continue
+		}
 		registerAuthMethodRoute(mux, spec.path, spec.method, func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, authUnavailableResponse, http.StatusServiceUnavailable)
 		})
@@ -69,6 +77,12 @@ func registerAuthUnavailableRoutes(mux *http.ServeMux) {
 func registerAuthProxyRoutes(mux *http.ServeMux, authSvc *auth.Service) {
 	authRoutes := auth.AuthRoutes(authSvc)
 	for _, spec := range dashboardAuthRouteSpecs {
+		if spec.method == "*" {
+			mux.HandleFunc(spec.path+"/", func(w http.ResponseWriter, r *http.Request) {
+				authRoutes.ServeHTTP(w, r)
+			})
+			continue
+		}
 		path := spec.path
 		registerAuthMethodRoute(mux, path, spec.method, func(w http.ResponseWriter, r *http.Request) {
 			cloneReq := *r

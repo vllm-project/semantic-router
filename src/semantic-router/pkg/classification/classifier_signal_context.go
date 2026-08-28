@@ -23,7 +23,7 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeStructure:    c.structureClassifier != nil,
 		config.SignalTypeComplexity:   c.complexityClassifier != nil,
 		config.SignalTypeModality:     len(c.Config.ModalityRules) > 0 && c.Config.ModalityDetector.Enabled,
-		config.SignalTypeJailbreak:    len(c.Config.JailbreakRules) > 0 && c.IsJailbreakEnabled(),
+		config.SignalTypeJailbreak:    c.isJailbreakSignalReady(),
 		config.SignalTypePII:          len(c.Config.PIIRules) > 0 && c.IsPIIEnabled(),
 		config.SignalTypeKB:           len(c.kbClassifiers) > 0,
 		config.SignalTypeConversation: len(c.Config.ConversationRules) > 0,
@@ -31,6 +31,29 @@ func (c *Classifier) signalReadiness() map[string]bool {
 		config.SignalTypeMetadata:     len(c.Config.MetadataRules) > 0,
 		config.SignalTypeClassifier:   len(c.genericClassifiers) > 0,
 	}
+}
+
+// isJailbreakSignalReady keeps the two jailbreak backends independent. The
+// BERT classifier requires Prompt Guard and its model assets; contrastive rules
+// require only their preloaded embedding classifiers. Coupling both paths to
+// IsJailbreakEnabled silently skipped otherwise healthy contrastive rules when
+// the optional Prompt Guard model was disabled.
+func (c *Classifier) isJailbreakSignalReady() bool {
+	if len(c.Config.JailbreakRules) == 0 {
+		return false
+	}
+
+	requiresBERT := false
+	for _, rule := range c.Config.JailbreakRules {
+		if rule.Method == "contrastive" {
+			if _, ready := c.contrastiveJailbreakClassifiers[rule.Name]; !ready {
+				return false
+			}
+			continue
+		}
+		requiresBERT = true
+	}
+	return !requiresBERT || (c.IsJailbreakEnabled() && c.jailbreakInference != nil)
 }
 
 // textForSignalFunc returns a function that resolves the correct text for a given signal type,

@@ -154,6 +154,28 @@ def test_resolve_effective_config_path_rewrites_local_looper_endpoint(
     )
 
 
+def test_resolve_effective_config_path_rewrites_default_envoy_service_for_named_stack(
+    write_local_looper_config,
+    monkeypatch,
+):
+    monkeypatch.setenv("VLLM_SR_STACK_NAME", "test-stack")
+    config_path = write_local_looper_config(
+        "http://vllm-sr-envoy-container:8899/v1/chat/completions"
+    )
+
+    effective_path = resolve_effective_config_path(
+        config_path=config_path,
+        algorithm=None,
+        setup_mode=False,
+        platform=None,
+    )
+
+    effective = yaml.safe_load(effective_path.read_text())
+    assert effective["global"]["integrations"]["looper"]["endpoint"] == (
+        "http://test-stack-vllm-sr-envoy-container:9011/v1/chat/completions"
+    )
+
+
 def test_resolve_effective_config_path_preserves_external_looper_endpoint(
     write_local_looper_config,
     monkeypatch,

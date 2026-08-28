@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@dagrejs/dagre": "^1.1.8",
+    "@lobehub/icons-static-svg": "^1.94.0",
     "@monaco-editor/react": "^4.7.0",
     "framer-motion": "^11.18.2",
     "ogl": "^1.0.11",
@@ -25,6 +26,7 @@
     "recharts": "^2.15.4",
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
+    "thinking-orbs": "^0.3.1",
     "three": "^0.183.2",
     "zustand": "^5.0.11"
   },

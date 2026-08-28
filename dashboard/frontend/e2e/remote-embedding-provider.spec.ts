@@ -106,11 +106,12 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     })
 
     await page.goto('/config/global-config')
+    await page.getByRole('button', { name: /Model Catalog/ }).click()
     const card = page.locator('article').filter({
       has: page.getByRole('heading', { name: 'Embedding Models' }),
     })
     await expect(card).toContainText('Local / candle')
-    await card.getByRole('button', { name: 'Edit Section' }).click()
+    await card.getByRole('button', { name: 'Edit' }).click()
 
     const modal = page.getByRole('dialog', { name: 'Edit Embedding Models' })
     await expect(modal.getByLabel('mmBERT Model Path')).toBeVisible()
@@ -152,7 +153,7 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
     })
   })
 
-  test('shows provider health without overflowing desktop or mobile layouts', async ({ page }) => {
+  test('keeps service availability inside desktop and mobile layouts', async ({ page }) => {
     await mockRemoteEmbeddingDashboard(page)
 
     for (const viewport of [
@@ -162,11 +163,10 @@ test.describe('Remote embedding provider Dashboard workflow', () => {
       await page.setViewportSize(viewport)
       await page.goto('/status')
 
-      const panel = page.getByTestId('embedding-provider-status')
+      const panel = page.getByTestId('status-availability')
       await expect(panel).toBeVisible()
-      await expect(panel).toContainText('Healthy')
-      await expect(panel).toContainText('text-embedding-3-small')
-      await expect(panel).toContainText('OPENAI_API_KEY')
+      await expect(panel).toContainText('All systems operational')
+      await expect(panel).toContainText('Router')
       const panelBox = await panel.boundingBox()
       expect(panelBox).not.toBeNull()
       expect(panelBox!.x).toBeGreaterThanOrEqual(0)

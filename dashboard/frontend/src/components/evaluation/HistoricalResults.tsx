@@ -4,6 +4,7 @@ import { getPageWindow, paginateRows } from '../dataTableSupport'
 import type { EvaluationLevel, EvaluationStatus, EvaluationTask } from '../../types/evaluation'
 import { LEVEL_INFO, STATUS_INFO, formatDate, formatDuration } from '../../types/evaluation'
 import EvaluationPagination from './EvaluationPagination'
+import ProductLoadingState from '../ProductLoadingState'
 import {
   EVALUATION_HISTORY_PAGE_SIZE,
   filterAndSortEvaluationTasks,
@@ -83,7 +84,7 @@ export function HistoricalResults({
   }
 
   if (loading && historicalTasks.length === 0) {
-    return <div className={styles.loading} role="status">Loading evaluation history…</div>
+    return <ProductLoadingState label="Loading evaluation history" compact />
   }
 
   if (error && historicalTasks.length === 0) {
@@ -91,7 +92,11 @@ export function HistoricalResults({
       <div className={styles.errorState} role="alert">
         <h3>Evaluation history is unavailable</h3>
         <p>{error}</p>
-        {onRefresh ? <button type="button" onClick={onRefresh}>Retry</button> : null}
+        {onRefresh ? (
+          <button type="button" onClick={onRefresh}>
+            Retry
+          </button>
+        ) : null}
       </div>
     )
   }
@@ -99,7 +104,6 @@ export function HistoricalResults({
   if (historicalTasks.length === 0) {
     return (
       <div className={styles.empty}>
-        <div className={styles.emptyIcon}>📊</div>
         <h3>No Historical Results</h3>
         <p>Complete an evaluation to see results here.</p>
       </div>
@@ -137,7 +141,9 @@ export function HistoricalResults({
           >
             <option value="all">All levels</option>
             {Object.entries(LEVEL_INFO).map(([level, info]) => (
-              <option key={level} value={level}>{info.label}</option>
+              <option key={level} value={level}>
+                {info.label}
+              </option>
             ))}
           </select>
           <select
@@ -155,9 +161,16 @@ export function HistoricalResults({
           <span className={styles.resultCount}>
             {formatEvaluationResultCount(filteredTasks.length, historicalTasks.length, 'runs')}
           </span>
-          <span className={styles.clientPagingNote}>Client view · {EVALUATION_HISTORY_PAGE_SIZE}/page</span>
+          <span className={styles.clientPagingNote}>
+            Client view · {EVALUATION_HISTORY_PAGE_SIZE}/page
+          </span>
           {onRefresh ? (
-            <button type="button" className={styles.refreshButton} onClick={onRefresh} disabled={loading}>
+            <button
+              type="button"
+              className={styles.refreshButton}
+              onClick={onRefresh}
+              disabled={loading}
+            >
               {loading ? 'Refreshing…' : 'Refresh'}
             </button>
           ) : null}
@@ -169,7 +182,11 @@ export function HistoricalResults({
         </div>
       </div>
 
-      {error ? <div className={styles.inlineError} role="alert">Refresh failed: {error}</div> : null}
+      {error ? (
+        <div className={styles.inlineError} role="alert">
+          Refresh failed: {error}
+        </div>
+      ) : null}
 
       {visibleTasks.length === 0 ? (
         <div className={styles.noMatches}>
@@ -183,7 +200,10 @@ export function HistoricalResults({
             const isSelected = selectedTasks.has(task.id)
 
             return (
-              <article key={task.id} className={`${styles.card} ${isSelected ? styles.selected : ''}`}>
+              <article
+                key={task.id}
+                className={`${styles.card} ${isSelected ? styles.selected : ''}`}
+              >
                 {onCompare ? (
                   <input
                     type="checkbox"
@@ -204,7 +224,9 @@ export function HistoricalResults({
                     </span>
                   </div>
                   <span className={styles.taskId}>{task.id}</span>
-                  {task.description ? <p className={styles.description}>{task.description}</p> : null}
+                  {task.description ? (
+                    <p className={styles.description}>{task.description}</p>
+                  ) : null}
                   <div className={styles.cardMeta}>
                     <span>Finished: {formatDate(task.completed_at || task.created_at)}</span>
                     <span>Duration: {formatDuration(task.started_at, task.completed_at)}</span>
@@ -212,7 +234,11 @@ export function HistoricalResults({
                     <span>Dimensions: {task.config.dimensions.length}</span>
                   </div>
                 </div>
-                <button type="button" className={styles.viewButton} onClick={() => onViewResults(task)}>
+                <button
+                  type="button"
+                  className={styles.viewButton}
+                  onClick={() => onViewResults(task)}
+                >
                   View Results
                 </button>
               </article>
